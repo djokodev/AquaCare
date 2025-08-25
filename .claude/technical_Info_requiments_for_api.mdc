@@ -1,0 +1,60 @@
+---
+alwaysApply: true
+---
+
+# Documentation Technique d'Exécution – API MAVECAM AquaCare (MVP)
+
+
+
+Version : 1.0
+Périmètre : Minimum Viable Product (MVP)
+
+
+## Vision d'Ensemble et Principes Architecturaux
+
+L'API RESTful pour AquaCare sert de cerveau central pour l'application mobile. 
+Elle doit être conçue en gardant à l'esprit un principe fondamental : le client mobile est semi-autonome. 
+L'utilisateur doit pouvoir réaliser ses tâches quotidiennes essentielles (saisie de données) sans connexion internet. 
+L'API est donc le point de consolidation, de sauvegarde et d'orchestration des données.
+
+
+
+## Stack Technique :
+
+Framework : Django & Django Rest Framework (DRF)
+Base de Données : PostgreSQL
+Authentification : JSON Web Tokens (JWT)
+
+
+
+## Règles Transverses de l'API
+
+Ces principes s'appliquent à tous les endpoints pour garantir la cohérence.
+
+Authentification : 
+
+Toute requête nécessitant l'identité de l'utilisateur sera protégée et devra contenir l'en-tête Authorization: Bearer <access_token>. 
+
+Un endpoint de login fournira un access_token (courte durée) et un refresh_token (longue durée).
+
+Internationalisation: L'API doit supporter le français (fr) et l'anglais (en) dès le MVP. 
+
+Le client spécifiera la langue via l'en-tête Accept-Language: fr. 
+
+Les modèles de données contenant du texte visible par l'utilisateur (noms de produits, titres de guides) seront conçus pour stocker les traductions.
+
+Gestion des Erreurs : Les réponses d'erreur seront standardisées avec des codes HTTP appropriés (400, 401, 403, 404) et un corps de réponse JSON clair : { "detail": "Description de l'erreur." }.
+
+
+Stratégie de Synchronisation (Point Crucial) : 
+
+C'est le mécanisme le plus critique.
+
+Sens : La synchronisation est principalement ascendante (du mobile vers le serveur). 
+Les données créées hors-ligne par l'utilisateur sont envoyées en masse.
+
+Mécanisme : L'API exposera des endpoints spécifiques de type .../sync/ qui acceptent un tableau d'objets.
+
+Déduplication : Pour chaque enregistrement créé hors-ligne (ex: une saisie de mortalité), l'application mobile doit générer un identifiant unique (UUID). 
+
+Cet UUID est envoyé avec l'objet lors de la synchronisation. L'API l'utilisera pour s'assurer qu'un même enregistrement, envoyé plusieurs fois à cause d'une coupure réseau, ne soit traité qu'une seule fois.

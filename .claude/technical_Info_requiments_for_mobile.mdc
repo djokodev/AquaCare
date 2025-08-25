@@ -1,0 +1,100 @@
+---
+alwaysApply: true
+---
+
+Documentation Technique d'Exécution – Application Mobile AquaCare (MVP)
+
+
+Version : 1.0
+Périmètre : Minimum Viable Product (MVP) - Phase 1
+
+
+Technologie : React Native (pour le cross-platform Android/iOS).
+
+
+1. Vision d'Ensemble et Principes Architecturaux
+
+La philosophie de l'application mobile est "Offline-First". 
+L'utilisateur ne doit jamais être bloqué par un manque de réseau pour ses tâches quotidiennes. 
+L'application doit être perçue comme un outil fiable qui fonctionne partout, tout le temps. 
+La connectivité est utilisée pour enrichir l'expérience et synchroniser les données, pas pour la rendre possible.
+
+
+Principes Clés :
+
+UI Réactive et Optimiste : Chaque action de l'utilisateur (ex: ajouter une mortalité) doit avoir un effet immédiat sur l'interface, sans attendre la réponse du serveur. 
+La donnée est d'abord sauvée localement; UI simple, intuitive, avec pictogrammes et texte clair; Polices lisibles même en plein soleil (pour usage en ferme)
+
+Performance sur Appareils d'Entrée de Gamme : L'application doit rester fluide et consommer un minimum de batterie et de mémoire, conformément au public cible.
+
+Clarté Visuelle : L'état de synchronisation des données doit être visible et compréhensible par l'utilisateur (ex: petite icône "cloud", "en attente", "synchronisé").
+
+
+
+2. Architecture Générale de l'Application Mobile
+
+
+L'application sera organisée autour d'une couche de données robuste qui la rend indépendante du réseau.
+
+
+Couche de Données (Le Cœur) :
+
+Base de Données Locale : Une base de données embarquée (SQLite via WatermelonDB pour React Native) est non négociable. 
+C'est la source unique de vérité pour l'interface. Toute donnée affichée à l'écran provient de cette base locale.
+
+Service de Synchronisation : Un module dédié, fonctionnant en arrière-plan, dont le seul rôle est de communiquer avec l'API. 
+Il détecte la disponibilité du réseau, envoie les données locales en attente aux endpoints /sync/, et récupère les mises à jour du serveur (ex: nouveaux guides, réponses du support) 
+pour les insérer dans la base de données locale.
+
+
+Couche de Logique Métier / State Management :
+
+Gère l'état de l'application. C'est ici que sont implémentés les calculs qui n'ont pas besoin du serveur (calcul de biomasse, suggestion de ration alimentaire basée sur les données locales).
+
+
+Couche de Présentation (UI) :
+
+Les écrans et composants qui affichent les données. Elle ne fait que lire depuis la base de données locale et déclencher des actions vers la couche de logique métier.
+
+
+
+3. Structure des Modules par Fonctionnalité
+
+
+Rôle : Permettre le pilotage quotidien.
+
+Fonctionnement :
+
+Affiche les données (biomasse, FCR, historique) en lisant exclusivement la base de données locale.
+Les formulaires de saisie (poids, mortalité) écrivent directement dans la base de données locale.
+Le Service de Synchronisation se chargera d'envoyer ces nouvelles entrées à l'API plus tard.
+
+
+Rôle : Guider l'utilisateur sur la nutrition.
+
+Implémentation Cruciale :
+
+Logique de suggestion : La règle de calcul (Si poids moyen = Xg et espèce = Tilapia, alors ration = Yg) est codée dans l'application mobile.
+Données de référence : Les guides nutritionnels sont pré-chargés depuis l'API et stockés dans la base locale pour un accès hors-ligne.
+Notifications : Les rappels journaliers sont gérés par un service de notifications locales de l'OS (ex: react-native-push-notification), déclenchés par l'application elle-même.
+Rôle : Permettre la commande d'intrants.
+
+Fonctionnement Hybride :
+
+Hors-ligne : L'application met en cache la liste des produits pour que l'utilisateur puisse la consulter.
+En-ligne : Le processus de finalisation de la commande (panier -> confirmation) requiert une connexion internet active, car il doit interagir en temps réel avec l'API /api/orders/.
+Rôle : Faciliter la communication avec MAVECAM.
+
+Implémentation Cruciale (Chat "Asynchrone") :
+
+Quand un utilisateur envoie un message, il est d'abord inséré dans la base locale avec un statut "envoi en cours".
+L'UI affiche ce message immédiatement.
+Le Service de Synchronisation tente d'envoyer le message à l'API. S'il réussit, il met à jour le statut du message local à "envoyé".
+
+
+Rôle : Suivre la santé des poissons.
+
+Implémentation Cruciale (Gestion des Médias) :
+
+Lorsqu'un utilisateur prend une photo, l'application doit impérativement la compresser à une résolution raisonnable (ex: 1280x720) avant de la stocker localement.
+Le Service de Synchronisation enverra ce fichier compressé à l'API, préservant ainsi le forfait data et accélérant l'envoi.

@@ -1,0 +1,102 @@
+---
+alwaysApply: true
+---
+Cahier des Charges (MVP AquaCare) : 
+Version : 1.0
+
+1. Contexte du projet
+MAVECAM souhaite doter ses clients pisciculteurs d’une application mobile simple et robuste pour le suivi technique et économique de leur production, la commande d’intrants, et l’accès à un accompagnement technique à distance. 
+
+2. Objectifs principaux
+o	Offrir un outil de pilotage simple et fiable pour les pisciculteurs.
+o	Permettre l’achat récurrent des aliments pour poisson MAVECAM.
+o	Intégrer un accompagnement technique à distance.
+o	Générer des données terrains utiles pour MAVECAM.
+
+3. Public cible
+o	Petits / moyens pisciculteurs (Afrique centrale, zone rurale/ semi urbaine).
+o	Clients existants de MAVECAM.
+o	Agriculteurs souhaitant se lancer en aquaculture.
+
+4. Plateformes visées
+o	Mobile Multi-platform (Android & IOS) 
+
+5. Fonctionnalités principales
+5.1 Tableau de bord
+o	Saisie manuelle : nombre de poissons, poids moyen, mortalité.
+o	Affichage automatique : biomasse estimée, FCR, courbe de croissance.
+o	Historique par cycle de production.
+5.2 Planificateur d’alimentation
+o	Suggestion de ration quotidienne selon poids moyen.
+o	Notifications journalières
+o	Guide nutritionnel par espèce et stade
+
+5.3 Commande d’intrants
+o	Catalogue des produits MAVECAM.
+o	Système de commande simple.
+o	Paiement hors-ligne (à la livraison).
+5.4 Assistance technique
+o	Chat simple avec technicien MAVECAM 
+o	Système de ticket.
+o	Fiches conseils
+5.5 Journal sanitaire
+o	Enregistrement des traitements et événements sanitaires.
+o	Possibilité d’ajouter une photo.
+o	Alertes de suivi sanitaire.
+5.6 Espace personnel
+o	Création de compte utilisateur.
+o	Accès à l’historique des commandes et cycles.
+o	Affichage du statut de certification “éleveur suivi MAVECAM”.
+
+6. Spécifications techniques
+Backend API :
+o	Framework: Django & Django Rest Framework
+o	Base de données : PostgreSQL
+o	Internationalisation : Français/anglais 
+Mobile :
+o	Framework: React Native 
+o	Base de données locale : SQLite (via WatermelonDB ou équivalent)
+o	UI simple, adaptée aux utilisateurs peu alphabétisés (beaucoup d’icônes).
+o	Fonctionnement fluide sur smartphone bas de gamme (7.0).
+7. Charte graphique
+o	Branding MAVECAM (logo, couleurs).
+o	UI simple, intuitive.
+o	Polices lisibles (en journée ensoleillée).
+
+
+
+
+9. Livrables attendus
+
+Livrables 
+
+- Code source (API & Mobile) ; Zip ou dépôt Git ; Permet de faire évoluer, maintenir ou redéployer l’API
+
+- Fichier APK .apk	Pour installation et test immédiat sur Android
+
+- Documentations technique	README / Markdown / PDF	Pour comprendre l’architecture, les endpoints, l’installation etc
+
+- Session de formation Présentation en visio (Zoom, Meet…)	Pour garantir l’autonomie de l’équipe MAVECAM
+
+
+NB : Maquettes UX/UI (Le design sera proposé par moi au fur et à mesure de l’avancement. Les ajustements se feront en collaboration avec l’équipe MAVECAM, sans recours à un designer professionnel externe, sauf si un budget spécifique est alloué à cet effet.).
+
+
+10. Délais de livraison
+Phase	Délai	
+Phase 1(API)	3 mois	
+Phase 2(Mobile)	3 mois	
+
+
+11. Budget et modalités de paiement
+Coût total du projet (MVP) : 750 000 FCFA
+
+Échéancier de paiement : 6 mensualités de 125 00 FCFA, à régler en fin de chaque mois.
+
+Premier paiement : à effectuer dès validation du présent cahier des charges (pour me permettre l’achat de certains outils personnel nécessaires pour le développement).
+
+Maintenance corrective gratuite : 6 mois après livraison (corrections de bugs, petits ajustements hors infrastructure serveur).
+
+
+
+Rédigé par Djoko Christian

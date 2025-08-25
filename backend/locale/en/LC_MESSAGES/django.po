@@ -1,0 +1,263 @@
+# English translations for MAVECAM AquaCare API
+# Copyright (C) 2025 MAVECAM
+# This file is distributed under the same license as the PACKAGE package.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: MAVECAM AquaCare 1.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2025-08-13 12:00+0000\n"
+"PO-Revision-Date: 2025-08-13 12:00+0000\n"
+"Last-Translator: MAVECAM Team\n"
+"Language: en\n"
+"Language-Team: English\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+# User model field labels
+msgid "Numéro de téléphone"
+msgstr "Phone Number"
+
+msgid "Format : +237XXXXXXXXX ou format international"
+msgstr "Format: +237XXXXXXXXX or international format"
+
+msgid "Type de compte"
+msgstr "Account Type"
+
+msgid "Type d'utilisateur : personne physique ou entreprise"
+msgstr "User type: individual or company"
+
+msgid "Nom de l'entreprise"
+msgstr "Company Name"
+
+msgid "Nom de l'entreprise pour les comptes de type \"company\""
+msgstr "Company name for \"company\" type accounts"
+
+msgid "Téléphone vérifié"
+msgstr "Phone Verified"
+
+msgid "Indique si le numéro de téléphone a été vérifié par SMS"
+msgstr "Indicates if the phone number has been verified by SMS"
+
+msgid "Langue préférée"
+msgstr "Preferred Language"
+
+msgid "Langue d'interface préférée de l'utilisateur"
+msgstr "User's preferred interface language"
+
+msgid "Type d'activité"
+msgstr "Activity Type"
+
+msgid "Maillon d'activité : producteur d'alevins, poisson de table, etc."
+msgstr "Activity link: fry producer, table fish, etc."
+
+msgid "Région"
+msgstr "Region"
+
+msgid "Région du Cameroun"
+msgstr "Region of Cameroon"
+
+msgid "Département"
+msgstr "Department"
+
+msgid "Département dans la région choisie"
+msgstr "Department in the selected region"
+
+msgid "Arrondissement"
+msgstr "District"
+
+msgid "Arrondissement dans le département"
+msgstr "District in the department"
+
+msgid "Quartier"
+msgstr "Neighborhood"
+
+msgid "Quartier ou localité spécifique"
+msgstr "Neighborhood or specific locality"
+
+msgid "Statut juridique"
+msgstr "Legal Status"
+
+msgid "Statut juridique de l'entreprise (SARL, SCOOP, etc.)"
+msgstr "Legal status of the company (SARL, COOP, etc.)"
+
+msgid "Nom du promoteur"
+msgstr "Promoter Name"
+
+msgid "Nom du promoteur ou dirigeant de l'entreprise"
+msgstr "Name of the promoter or company manager"
+
+msgid "Classe d'âge"
+msgstr "Age Group"
+
+msgid "Tranche d'âge de la personne"
+msgstr "Person's age range"
+
+msgid "Zone d'intervention"
+msgstr "Intervention Zone"
+
+msgid "Zone géographique d'intervention de l'activité"
+msgstr "Geographic area of activity intervention"
+
+msgid "Utilisateur MAVECAM"
+msgstr "MAVECAM User"
+
+msgid "Utilisateurs MAVECAM"
+msgstr "MAVECAM Users"
+
+# User validation messages
+msgid "Le nom de l'entreprise est requis pour les comptes entreprise."
+msgstr "Company name is required for business accounts."
+
+msgid "Le statut juridique est requis pour les entreprises."
+msgstr "Legal status is required for companies."
+
+msgid "Le nom du promoteur est requis pour les entreprises."
+msgstr "Promoter name is required for companies."
+
+msgid "La classe d'âge ne s'applique qu'aux personnes physiques."
+msgstr "Age group only applies to individuals."
+
+msgid "Le prénom est requis pour les comptes individuels."
+msgstr "First name is required for individual accounts."
+
+msgid "Le nom est requis pour les comptes individuels."
+msgstr "Last name is required for individual accounts."
+
+msgid "La classe d'âge est requise pour les personnes physiques."
+msgstr "Age group is required for individuals."
+
+msgid "Le nom d'entreprise ne s'applique qu'aux comptes entreprise."
+msgstr "Company name only applies to business accounts."
+
+msgid "Le statut juridique ne s'applique qu'aux entreprises."
+msgstr "Legal status only applies to companies."
+
+msgid "Le nom du promoteur ne s'applique qu'aux entreprises."
+msgstr "Promoter name only applies to companies."
+
+msgid "La région est requise si le département est spécifié."
+msgstr "Region is required if department is specified."
+
+msgid "Le département est requis si l'arrondissement est spécifié."
+msgstr "Department is required if district is specified."
+
+msgid "La région est requise si l'arrondissement est spécifié."
+msgstr "Region is required if district is specified."
+
+# Manager messages
+msgid "Le numéro de téléphone doit être fourni"
+msgstr "Phone number must be provided"
+
+msgid "Les superutilisateurs doivent avoir is_staff=True."
+msgstr "Superusers must have is_staff=True."
+
+msgid "Les superutilisateurs doivent avoir is_superuser=True."
+msgstr "Superusers must have is_superuser=True."
+
+# Middleware messages
+msgid "Trop de tentatives de connexion. Veuillez patienter."
+msgstr "Too many login attempts. Please wait."
+
+# Validator messages
+msgid "Le numéro de téléphone est requis."
+msgstr "Phone number is required."
+
+msgid "Format de numéro invalide. Formats acceptés : +237XXXXXXXXX (Cameroun) ou +XXX format international."
+msgstr "Invalid phone format. Accepted formats: +237XXXXXXXXX (Cameroon) or +XXX international format."
+
+# Farm Profile model
+msgid "En attente"
+msgstr "Pending"
+
+msgid "Certifiée"
+msgstr "Certified"
+
+msgid "Suspendue"
+msgstr "Suspended"
+
+msgid "Rejetée"
+msgstr "Rejected"
+
+msgid "Identifiant unique UUID pour la synchronisation mobile"
+msgstr "Unique UUID identifier for mobile synchronization"
+
+msgid "Utilisateur"
+msgstr "User"
+
+msgid "Utilisateur propriétaire de cette ferme"
+msgstr "User who owns this farm"
+
+msgid "Nom de la ferme"
+msgstr "Farm Name"
+
+msgid "Nom commercial ou descriptif de l'exploitation"
+msgstr "Commercial or descriptive name of the farm"
+
+msgid "Statut de certification"
+msgstr "Certification Status"
+
+msgid "Statut de certification géré uniquement par les admins MAVECAM"
+msgstr "Certification status managed only by MAVECAM admins"
+
+msgid "Nombre total de bassins"
+msgstr "Total Number of Ponds"
+
+msgid "Nombre total de bassins d'élevage disponibles"
+msgstr "Total number of available breeding ponds"
+
+msgid "Superficie totale (m²)"
+msgstr "Total Area (m²)"
+
+msgid "Superficie totale de l'exploitation en mètres carrés"
+msgstr "Total farm area in square meters"
+
+msgid "Source d'eau"
+msgstr "Water Source"
+
+msgid "Principale source d'approvisionnement en eau"
+msgstr "Main water supply source"
+
+msgid "Espèce principale"
+msgstr "Main Species"
+
+msgid "Principale espèce de poisson élevée"
+msgstr "Main fish species raised"
+
+msgid "Production annuelle (kg)"
+msgstr "Annual Production (kg)"
+
+msgid "Production annuelle estimée en kilogrammes"
+msgstr "Estimated annual production in kilograms"
+
+msgid "Date de création"
+msgstr "Creation Date"
+
+msgid "Date de création automatique du profil"
+msgstr "Automatic profile creation date"
+
+msgid "Dernière modification"
+msgstr "Last Modified"
+
+msgid "Date de dernière modification du profil"
+msgstr "Profile last modification date"
+
+msgid "Supprimé"
+msgstr "Deleted"
+
+msgid "Marqueur de suppression pour la synchronisation mobile"
+msgstr "Deletion marker for mobile synchronization"
+
+msgid "Profil de ferme"
+msgstr "Farm Profile"
+
+msgid "Profils de fermes"
+msgstr "Farm Profiles"
+
+msgid "Le nom de la ferme ne peut pas être vide."
+msgstr "Farm name cannot be empty."
+
+msgid "Le nombre de bassins doit être supérieur à 0 si il y a une production."
+msgstr "Number of ponds must be greater than 0 if there is production."

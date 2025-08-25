@@ -1,0 +1,26 @@
+{
+  "expo": {
+    "name": "MAVECAM AquaCare",
+    "slug": "mavecam-aquacare",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "backgroundColor": "#2563eb"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "cm.mavecam.aquacare"
+    },
+    "android": {
+      "package": "cm.mavecam.aquacare"
+    },
+    "plugins": [
+      "expo-secure-store",
+      "expo-localization"
+    ],
+    "extra": {
+      "apiUrl": "http://172.20.10.2:8000/api"
+    }
+  }
+}

@@ -1,0 +1,72 @@
+# French translations for MAVECAM AquaCare API
+# Copyright (C) 2025 MAVECAM
+# This file is distributed under the same license as the PACKAGE package.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: MAVECAM AquaCare 1.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2025-08-19 14:00+0000\n"
+"PO-Revision-Date: 2025-08-19 14:00+0000\n"
+"Last-Translator: MAVECAM Team\n"
+"Language: fr\n"
+"Language-Team: French\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n > 1);\n"
+
+# === AQUACULTURE MODULE TRANSLATIONS ===
+# Note: Most field labels are already in French in the code
+# Only translating messages that need actual translation
+
+# API Error Messages (already in French in code)
+# These msgid/msgstr pairs are kept for completeness but text is the same
+msgid "Ce cycle a déjà été récolté"
+msgstr "Ce cycle a déjà été récolté"
+
+msgid "Cycle récolté avec succès"
+msgstr "Cycle récolté avec succès"
+
+msgid "Cycle non trouvé"
+msgstr "Cycle non trouvé"
+
+msgid "Paramètre species requis"
+msgstr "Paramètre species requis"
+
+msgid "Aucune donnée environnementale disponible"
+msgstr "Aucune donnée environnementale disponible"
+
+msgid "Données insuffisantes"
+msgstr "Données insuffisantes"
+
+msgid "Excellent"
+msgstr "Excellent"
+
+msgid "Bon"
+msgstr "Bon"
+
+msgid "Moyen"
+msgstr "Moyen"
+
+msgid "À améliorer"
+msgstr "À améliorer"
+
+msgid "Améliorer le suivi sanitaire et la qualité de l'eau"
+msgstr "Améliorer le suivi sanitaire et la qualité de l'eau"
+
+msgid "Optimiser l'alimentation et réduire le gaspillage"
+msgstr "Optimiser l'alimentation et réduire le gaspillage"
+
+msgid "Performance conforme aux cycles précédents"
+msgstr "Performance conforme aux cycles précédents"
+
+# Notifications
+msgid "Nourrissage - %(cycle_name)s"
+msgstr "Nourrissage - %(cycle_name)s"
+
+msgid "Donnez %(amount).1f kg d'aliment ce matin"
+msgstr "Donnez %(amount).1f kg d'aliment ce matin"
+
+msgid "Donnez %(amount).1f kg d'aliment ce soir"
+msgstr "Donnez %(amount).1f kg d'aliment ce soir"

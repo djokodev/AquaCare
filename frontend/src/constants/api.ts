@@ -1,0 +1,42 @@
+import Constants from 'expo-constants';
+
+// Configuration API basée sur votre backend Django
+export const API_CONFIG = {
+  baseURL: Constants.expoConfig?.extra?.apiUrl || 'http://172.20.10.2:8000/api',
+  timeout: 10000,
+  headers: {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json',
+  },
+};
+
+// Endpoints basés sur votre API Django
+export const API_ENDPOINTS = {
+  // Authentication (accounts module)
+  AUTH: {
+    REGISTER: '/accounts/register/',
+    LOGIN: '/accounts/login/',
+    PROFILE: '/accounts/profile/',
+    FARM_PROFILE: '/accounts/farm/',
+    TOKEN_REFRESH: '/accounts/token/refresh/',
+    TOKEN_VERIFY: '/accounts/token/verify/',
+  },
+  
+  // Aquaculture module (pour plus tard)
+  AQUACULTURE: {
+    CYCLES: '/aquaculture/cycles/',
+    LOGS: '/aquaculture/cycle-logs/',
+    FEEDING_PLANS: '/aquaculture/feeding-plans/',
+    SANITARY_LOGS: '/aquaculture/sanitary-logs/',
+    DASHBOARD: '/aquaculture/dashboard/',
+    SYNC: '/aquaculture/sync/',
+  },
+};
+
+// Storage keys for SecureStore (alphanumeric, ".", "-", "_" only)
+export const STORAGE_KEYS = {
+  ACCESS_TOKEN: 'aquacare_access_token',
+  REFRESH_TOKEN: 'aquacare_refresh_token',
+  USER_DATA: 'aquacare_user_data',
+  LANGUAGE: 'aquacare_language',
+};
