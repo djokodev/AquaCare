@@ -214,7 +214,7 @@ export default function LoginScreen({ navigation }: Props) {
                   autoComplete="tel"
                 />
               </View>
-              <Text style={styles.phoneHint}>Saisissez votre numéro sans l'indicatif</Text>
+              <Text style={styles.phoneHint}>{t('phoneHint')}</Text>
               {errors.phoneNumber && <Text style={styles.errorText}>{errors.phoneNumber}</Text>}
             </View>
           )}
@@ -253,7 +253,7 @@ export default function LoginScreen({ navigation }: Props) {
 
           {/* Register Link */}
           <View style={styles.registerContainer}>
-            <Text style={styles.registerText}>Pas encore de compte ? </Text>
+            <Text style={styles.registerText}>{t('noAccount')}</Text>
             <TouchableOpacity onPress={() => navigation.navigate('Register')}>
               <Text style={styles.registerLink}>{t('signUp')}</Text>
             </TouchableOpacity>

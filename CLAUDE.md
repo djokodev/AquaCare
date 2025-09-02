@@ -47,7 +47,13 @@ WebFetch(
 )
 ```
 
-4. **Toujours analyser la code base actuelle lors d'une nouvelle requette dans un nouveau chat et pour chaque fonctionnalites developper, tu dois mettre cela a jour dans ce fichier afin que la comprehension par n nouveau chat soit parfaite, donc toujours mettre ce fichier a jour en fonction de l'avancement actuel (apres ma confirmation biensur)**
+4. **APRÈS chaque modification de fichier** :
+   - OBLIGATOIRE: Exécuter `npx tsc --noEmit` pour vérifier les erreurs TypeScript
+   - OBLIGATOIRE: Tester la compilation avec `npm run web` pour les modifications critiques
+   - OBLIGATOIRE: Ne jamais marquer une tâche comme terminée sans vérification
+   - OBLIGATOIRE: Signaler immédiatement toute erreur détectée
+
+5. **Toujours analyser la code base actuelle lors d'une nouvelle requette dans un nouveau chat et pour chaque fonctionnalites developper, tu dois mettre cela a jour dans ce fichier afin que la comprehension par n nouveau chat soit parfaite, donc toujours mettre ce fichier a jour en fonction de l'avancement actuel (apres ma confirmation biensur)**
 
 ### 🚨 **Interdictions Strictes**
 - ❌ Écrire du code sans consulter la documentation officielle
@@ -271,3 +277,62 @@ $mavecam-gray-dark: #1e293b;         // Texte principal
 - Backend: Django i18n with locale files in `backend/locale/`
 - Frontend: i18next configuration in `frontend/src/i18n/`
 - Primary language: French (Cameroon target market)
+
+## 🔍 **PROCESSUS DE VÉRIFICATION AUTOMATIQUE**
+
+### **🚨 RÈGLE CRITIQUE - VÉRIFICATION POST-MODIFICATION**
+**OBLIGATOIRE : Après chaque modification de code, effectuer une vérification complète pour éviter les erreurs TypeScript et les bugs de runtime.**
+
+### **✅ Processus de Vérification Systématique**
+
+#### **1. APRÈS CHAQUE EDIT/MULTIEDIT**
+```bash
+1. ✅ Read automatique du fichier modifié
+2. ✅ Vérification des types TypeScript dans le code
+3. ✅ Identification proactive des erreurs potentielles
+4. ✅ Correction immédiate si problème détecté
+5. ✅ Confirmation par nouvelle lecture
+```
+
+#### **2. TYPES D'ERREURS À SURVEILLER**
+- **Propriétés optionnelles** : `object.prop` → `(object.prop || defaultValue)`
+- **Types undefined** : Vérifier tous les `?` dans les interfaces
+- **Imports manquants** : S'assurer que tous les imports sont présents
+- **Erreurs de syntax** : Parenthèses, accolades, virgules
+- **Props React** : Types corrects et propriétés requises
+
+#### **3. COMMANDES DE VÉRIFICATION DISPONIBLES**
+```bash
+# Frontend - Vérification TypeScript
+cd frontend
+npx tsc --noEmit --pretty
+
+# Backend - Vérification Python
+cd backend
+python -m py_compile apps/module/file.py
+
+# Tests globaux
+npm test
+pytest
+```
+
+#### **4. CORRECTIONS TYPES COURANTES**
+```typescript
+// ❌ PROBLÉMATIQUE
+farmProfile.total_area_m2 > 0
+
+// ✅ SÉCURISÉE  
+(farmProfile.total_area_m2 || 0) > 0
+
+// ❌ PROBLÉMATIQUE
+user.first_name + " " + user.last_name
+
+// ✅ SÉCURISÉE
+`${user.first_name || ''} ${user.last_name || ''}`.trim()
+```
+
+### **🎯 ENGAGEMENT QUALITÉ**
+- **Zéro erreur TypeScript** tolérée après modification
+- **Lecture systématique** de chaque fichier édité
+- **Correction proactive** avant passage à la tâche suivante
+- **Vérification des types** optionnels et undefined

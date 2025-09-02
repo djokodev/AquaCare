@@ -85,20 +85,20 @@ export default function ProfileScreen({ navigation }: Props) {
     try {
       await updateProfile(editData);
       setIsEditing(false);
-      Alert.alert('Succès', 'Profil mis à jour avec succès');
+      Alert.alert(t('success'), t('profileUpdatedSuccess'));
     } catch (err) {
-      Alert.alert('Erreur', 'Erreur lors de la mise à jour du profil');
+      Alert.alert(t('error'), t('profileUpdateError'));
     }
   };
 
   const handleLogout = () => {
     Alert.alert(
-      'Déconnexion',
-      'Êtes-vous sûr de vouloir vous déconnecter ?',
+      t('logoutConfirm'),
+      t('logoutMessage'),
       [
-        { text: 'Annuler', style: 'cancel' },
+        { text: t('cancel'), style: 'cancel' },
         { 
-          text: 'Déconnexion', 
+          text: t('logoutConfirm'), 
           style: 'destructive',
           onPress: () => logout()
         },
@@ -118,7 +118,7 @@ export default function ProfileScreen({ navigation }: Props) {
   if (!user) {
     return (
       <View style={styles.loadingContainer}>
-        <Text>Chargement du profil utilisateur...</Text>
+        <Text>{t('loadingUserProfile')}</Text>
       </View>
     );
   }
@@ -126,7 +126,7 @@ export default function ProfileScreen({ navigation }: Props) {
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <Text>Chargement des données...</Text>
+        <Text>{t('loading')}</Text>
       </View>
     );
   }
@@ -134,7 +134,7 @@ export default function ProfileScreen({ navigation }: Props) {
   if (error) {
     return (
       <View style={styles.loadingContainer}>
-        <Text style={{ color: 'red' }}>Erreur: {error}</Text>
+        <Text style={{ color: 'red' }}>{t('error')}: {error}</Text>
       </View>
     );
   }
@@ -159,13 +159,13 @@ export default function ProfileScreen({ navigation }: Props) {
   };
 
   const getCertificationText = () => {
-    if (!farmProfile) return 'Aucun profil ferme';
+    if (!farmProfile) return t('noFarmProfile');
     switch (farmProfile.certification_status) {
-      case 'certified': return 'Ferme Certifiée MAVECAM';
-      case 'pending': return 'Certification en cours';
-      case 'suspended': return 'Certification suspendue';
-      case 'rejected': return 'Certification refusée';
-      default: return 'Statut inconnu';
+      case 'certified': return t('farmCertified');
+      case 'pending': return t('certificationPending');
+      case 'suspended': return t('certificationSuspended');
+      case 'rejected': return t('certificationRejected');
+      default: return t('statusUnknown');
     }
   };
 
@@ -189,7 +189,7 @@ export default function ProfileScreen({ navigation }: Props) {
           </View>
           <Text style={styles.displayName}>{displayName}</Text>
           <Text style={styles.accountType}>
-            {isIndividual ? 'Personne physique' : 'Entreprise'}
+            {isIndividual ? t('individualAccount') : t('companyAccount')}
           </Text>
           
           {farmProfile && (
@@ -209,7 +209,7 @@ export default function ProfileScreen({ navigation }: Props) {
         {/* Informations Personnelles/Entreprise */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Informations {isIndividual ? 'Personnelles' : 'Entreprise'}</Text>
+            <Text style={styles.sectionTitle}>{isIndividual ? t('personalInfo') : t('companyInfo')}</Text>
             <TouchableOpacity
               onPress={() => setIsEditing(!isEditing)}
               style={styles.editButton}
@@ -220,38 +220,38 @@ export default function ProfileScreen({ navigation }: Props) {
           <View style={styles.infoCard}>
             <InfoRow
               icon="call"
-              label="Numéro de téléphone"
+              label={t('phoneNumber')}
               value={user.phone_number}
               editable={false}
             />
             <InfoRow
               icon="mail"
-              label="Email"
-              value={isEditing ? undefined : (user.email || 'Non renseigné')}
+              label={t('email')}
+              value={isEditing ? undefined : (user.email || t('notProvided'))}
               editable={isEditing}
               onChangeText={(value) => setEditData(prev => ({ ...prev, email: value }))}
               inputValue={editData.email}
-              placeholder="Votre email"
+              placeholder={t('yourEmail')}
             />
             
             {isIndividual ? (
               <>
                 <InfoRow
                   icon="person"
-                  label="Prénom"
-                  value={user.first_name || 'Non renseigné'}
+                  label={t('firstName')}
+                  value={user.first_name || t('notProvided')}
                   editable={false}
                 />
                 <InfoRow
                   icon="person"
-                  label="Nom"
-                  value={user.last_name || 'Non renseigné'}
+                  label={t('lastName')}
+                  value={user.last_name || t('notProvided')}
                   editable={false}
                 />
                 {user.age_group && (
                   <InfoRow
                     icon="calendar"
-                    label="Tranche d'âge"
+                    label={t('ageGroup')}
                     value={user.age_group}
                     editable={false}
                   />
@@ -261,14 +261,14 @@ export default function ProfileScreen({ navigation }: Props) {
               <>
                 <InfoRow
                   icon="business"
-                  label="Nom de l'entreprise"
-                  value={user.business_name || 'Non renseigné'}
+                  label={t('businessName')}
+                  value={user.business_name || t('notProvided')}
                   editable={false}
                 />
                 {user.legal_status && (
                   <InfoRow
                     icon="document-text"
-                    label="Statut juridique"
+                    label={t('legalStatus')}
                     value={user.legal_status}
                     editable={false}
                   />
@@ -276,7 +276,7 @@ export default function ProfileScreen({ navigation }: Props) {
                 {user.promoter_name && (
                   <InfoRow
                     icon="person-circle"
-                    label="Nom du promoteur"
+                    label={t('promoterName')}
                     value={user.promoter_name}
                     editable={false}
                   />
@@ -287,7 +287,7 @@ export default function ProfileScreen({ navigation }: Props) {
             {user.activity_type && (
               <InfoRow
                 icon="fish"
-                label="Type d'activité"
+                label={t('activityType')}
                 value={user.activity_type}
                 editable={false}
               />
@@ -297,51 +297,51 @@ export default function ProfileScreen({ navigation }: Props) {
 
         {/* Localisation */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Localisation</Text>
+          <Text style={styles.sectionTitle}>{t('location')}</Text>
           <View style={styles.infoCard}>
             {user.region && (
               <InfoRow
                 icon="location"
-                label="Région"
+                label={t('region')}
                 value={user.region}
                 editable={false}
               />
             )}
             <InfoRow
               icon="map"
-              label="Département"
-              value={isEditing ? undefined : (user.department || 'Non renseigné')}
+              label={t('department')}
+              value={isEditing ? undefined : (user.department || t('notProvided'))}
               editable={isEditing}
               onChangeText={(value) => setEditData(prev => ({ ...prev, department: value }))}
               inputValue={editData.department}
-              placeholder="Département"
+              placeholder={t('department')}
             />
             <InfoRow
               icon="pin"
-              label="Arrondissement"
-              value={isEditing ? undefined : (user.district || 'Non renseigné')}
+              label={t('district')}
+              value={isEditing ? undefined : (user.district || t('notProvided'))}
               editable={isEditing}
               onChangeText={(value) => setEditData(prev => ({ ...prev, district: value }))}
               inputValue={editData.district}
-              placeholder="Arrondissement"
+              placeholder={t('district')}
             />
             <InfoRow
               icon="home"
-              label="Quartier"
-              value={isEditing ? undefined : (user.neighborhood || 'Non renseigné')}
+              label={t('neighborhood')}
+              value={isEditing ? undefined : (user.neighborhood || t('notProvided'))}
               editable={isEditing}
               onChangeText={(value) => setEditData(prev => ({ ...prev, neighborhood: value }))}
               inputValue={editData.neighborhood}
-              placeholder="Quartier"
+              placeholder={t('neighborhood')}
             />
             <InfoRow
               icon="business"
-              label="Zone d'intervention"
-              value={isEditing ? undefined : (user.intervention_zone || 'Non renseigné')}
+              label={t('interventionZone')}
+              value={isEditing ? undefined : (user.intervention_zone || t('notProvided'))}
               editable={isEditing}
               onChangeText={(value) => setEditData(prev => ({ ...prev, intervention_zone: value }))}
               inputValue={editData.intervention_zone}
-              placeholder="Zone d'intervention"
+              placeholder={t('interventionZone')}
             />
           </View>
         </View>
@@ -349,32 +349,32 @@ export default function ProfileScreen({ navigation }: Props) {
         {/* Informations Ferme Détaillées */}
         {farmProfile && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Profil de la Ferme</Text>
+            <Text style={styles.sectionTitle}>{t('farmInfo')}</Text>
             <View style={styles.infoCard}>
               <InfoRow
                 icon="business"
-                label="Nom de la ferme"
+                label={t('farmName')}
                 value={farmProfile.farm_name}
                 editable={false}
               />
               <InfoRow
                 icon="water"
-                label="Nombre de bassins"
+                label={t('totalPonds')}
                 value={farmProfile.total_ponds.toString()}
                 editable={false}
               />
               {farmProfile.total_area_m2 && (
                 <InfoRow
                   icon="resize"
-                  label="Superficie totale"
+                  label={t('totalArea')}
                   value={`${farmProfile.total_area_m2} m²`}
                   editable={false}
                 />
               )}
               {farmProfile.water_source && (
                 <InfoRow
-                  icon="drop"
-                  label="Source d'eau"
+                  icon="water"
+                  label={t('waterSource')}
                   value={farmProfile.water_source}
                   editable={false}
                 />
@@ -382,7 +382,7 @@ export default function ProfileScreen({ navigation }: Props) {
               {farmProfile.main_species && (
                 <InfoRow
                   icon="fish"
-                  label="Espèce principale"
+                  label={t('mainSpecies')}
                   value={farmProfile.main_species}
                   editable={false}
                 />
@@ -390,7 +390,7 @@ export default function ProfileScreen({ navigation }: Props) {
               {farmProfile.annual_production_kg && (
                 <InfoRow
                   icon="scale"
-                  label="Production annuelle"
+                  label={t('annualProduction')}
                   value={`${farmProfile.annual_production_kg} kg`}
                   editable={false}
                 />
@@ -399,54 +399,11 @@ export default function ProfileScreen({ navigation }: Props) {
           </View>
         )}
 
-        {/* Certification MAVECAM */}
-        {farmProfile && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Certification MAVECAM</Text>
-            <View style={styles.certificationCard}>
-              <View style={styles.certificationHeader}>
-                <Ionicons 
-                  name={getCertificationIcon()} 
-                  size={32} 
-                  color={getCertificationColor()} 
-                />
-                <View style={styles.certificationInfo}>
-                  <Text style={styles.certificationTitle}>
-                    {getCertificationText()}
-                  </Text>
-                  <Text style={styles.certificationDate}>
-                    Créé le : {formatDate(farmProfile.created_at)}
-                  </Text>
-                  {farmProfile.updated_at !== farmProfile.created_at && (
-                    <Text style={styles.certificationDate}>
-                      Mis à jour le : {formatDate(farmProfile.updated_at)}
-                    </Text>
-                  )}
-                </View>
-              </View>
-              
-              <Text style={styles.certificationDescription}>
-                {farmProfile.certification_status === 'certified' && 
-                  'Félicitations ! Votre ferme est certifiée MAVECAM. Vous bénéficiez de tous les avantages du programme.'
-                }
-                {farmProfile.certification_status === 'pending' && 
-                  'Votre demande de certification est en cours d\'examen par l\'équipe MAVECAM. Nous vous contacterons bientôt.'
-                }
-                {farmProfile.certification_status === 'suspended' && 
-                  'Votre certification a été temporairement suspendue. Contactez l\'équipe MAVECAM pour plus d\'informations.'
-                }
-                {farmProfile.certification_status === 'rejected' && 
-                  'Votre demande de certification n\'a pas été acceptée. Vous pouvez nous contacter pour connaître les critères requis.'
-                }
-              </Text>
-            </View>
-          </View>
-        )}
 
         {/* Métriques de Performance (si données disponibles) */}
         {farmProfile && farmProfile.total_ponds > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Métriques de Performance</Text>
+            <Text style={styles.sectionTitle}>{t('performanceMetrics')}</Text>
             <View style={styles.metricsContainer}>
               <View style={styles.metricCard}>
                 <Text style={styles.metricValue}>
@@ -454,7 +411,7 @@ export default function ProfileScreen({ navigation }: Props) {
                     ? Math.round(farmProfile.total_area_m2 / farmProfile.total_ponds) 
                     : 0} m²
                 </Text>
-                <Text style={styles.metricLabel}>Superficie moyenne par bassin</Text>
+                <Text style={styles.metricLabel}>{t('averageAreaPerPond')}</Text>
               </View>
               
               {farmProfile.annual_production_kg && farmProfile.total_area_m2 && (
@@ -462,7 +419,7 @@ export default function ProfileScreen({ navigation }: Props) {
                   <Text style={styles.metricValue}>
                     {(farmProfile.annual_production_kg / farmProfile.total_area_m2).toFixed(1)} kg/m²
                   </Text>
-                  <Text style={styles.metricLabel}>Rendement par m²</Text>
+                  <Text style={styles.metricLabel}>{t('yieldPerSquareMeter')}</Text>
                 </View>
               )}
             </View>
@@ -471,18 +428,18 @@ export default function ProfileScreen({ navigation }: Props) {
 
         {/* Préférences */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Préférences</Text>
+          <Text style={styles.sectionTitle}>{t('preferences')}</Text>
           <View style={styles.infoCard}>
             <InfoRow
               icon="language"
-              label="Langue préférée"
-              value={user.language_preference === 'fr' ? 'Français' : 'English'}
+              label={t('preferredLanguage')}
+              value={user.language_preference === 'fr' ? t('french') : t('english')}
               editable={false}
             />
             <InfoRow
               icon="shield-checkmark"
-              label="Compte vérifié"
-              value={user.is_verified ? 'Oui' : 'Non'}
+              label={t('accountVerified')}
+              value={user.is_verified ? t('yes') : t('no')}
               editable={false}
             />
           </View>
@@ -497,7 +454,7 @@ export default function ProfileScreen({ navigation }: Props) {
               disabled={isLoading}
             >
               <Text style={styles.buttonText}>
-                {isLoading ? 'Enregistrement...' : 'Enregistrer les modifications'}
+                {isLoading ? t('saving') : t('saveChanges')}
               </Text>
             </TouchableOpacity>
           </View>
@@ -507,19 +464,19 @@ export default function ProfileScreen({ navigation }: Props) {
         <View style={styles.section}>
           <TouchableOpacity style={styles.actionButton} onPress={handleNavigateToFarm}>
             <Ionicons name="analytics" size={20} color={MAVECAM_COLORS.GREEN_PRIMARY} />
-            <Text style={styles.actionText}>Gestion de la Ferme</Text>
+            <Text style={styles.actionText}>{t('farmManagement')}</Text>
             <Ionicons name="chevron-forward" size={20} color={MAVECAM_COLORS.GRAY_LIGHT} />
           </TouchableOpacity>
           
           <TouchableOpacity style={styles.actionButton} onPress={handleNavigateToSettings}>
             <Ionicons name="settings" size={20} color={MAVECAM_COLORS.GREEN_PRIMARY} />
-            <Text style={styles.actionText}>Paramètres</Text>
+            <Text style={styles.actionText}>{t('settings')}</Text>
             <Ionicons name="chevron-forward" size={20} color={MAVECAM_COLORS.GRAY_LIGHT} />
           </TouchableOpacity>
           
           <TouchableOpacity style={styles.dangerButton} onPress={handleLogout}>
             <Ionicons name="log-out" size={20} color={MAVECAM_COLORS.WHITE} />
-            <Text style={styles.dangerText}>Déconnexion</Text>
+            <Text style={styles.dangerText}>{t('disconnect')}</Text>
           </TouchableOpacity>
         </View>
 
@@ -737,41 +694,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  certificationCard: {
-    backgroundColor: MAVECAM_COLORS.WHITE,
-    borderRadius: 12,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  certificationHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  certificationInfo: {
-    flex: 1,
-    marginLeft: 16,
-  },
-  certificationTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: MAVECAM_COLORS.GRAY_DARK,
-    marginBottom: 4,
-  },
-  certificationDate: {
-    fontSize: 12,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
-    marginBottom: 2,
-  },
-  certificationDescription: {
-    fontSize: 14,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
-    lineHeight: 20,
-  },
   metricsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -799,10 +721,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: MAVECAM_COLORS.GRAY_LIGHT,
     textAlign: 'center',
-  },
-  buttonContainer: {
-    padding: 20,
-    paddingTop: 0,
   },
   errorContainer: {
     margin: 20,

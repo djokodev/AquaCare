@@ -16,6 +16,7 @@ export const API_ENDPOINTS = {
   AUTH: {
     REGISTER: '/accounts/register/',
     LOGIN: '/accounts/login/',
+    LOGOUT: '/accounts/logout/',
     PROFILE: '/accounts/profile/',
     FARM_PROFILE: '/accounts/farm/',
     TOKEN_REFRESH: '/accounts/token/refresh/',

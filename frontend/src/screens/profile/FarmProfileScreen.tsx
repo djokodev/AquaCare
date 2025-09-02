@@ -37,7 +37,8 @@ export default function FarmProfileScreen() {
     isLoading, 
     error, 
     updateFarm,
-    isFarmCertified 
+    isFarmCertified,
+    loadProfile
   } = useAuth();
 
   const [isEditing, setIsEditing] = useState(false);
@@ -60,16 +61,16 @@ export default function FarmProfileScreen() {
     try {
       await updateFarm(editData);
       setIsEditing(false);
-      Alert.alert('Succès', 'Profil ferme mis à jour avec succès');
+      Alert.alert(t('success'), t('profileUpdatedSuccess'));
     } catch (err) {
-      Alert.alert('Erreur', 'Erreur lors de la mise à jour du profil ferme');
+      Alert.alert(t('error'), t('profileUpdateError'));
     }
   };
 
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <Text>Chargement du profil ferme...</Text>
+        <Text>{t('loading')}...</Text>
       </View>
     );
   }
@@ -77,8 +78,8 @@ export default function FarmProfileScreen() {
   if (error) {
     return (
       <View style={styles.loadingContainer}>
-        <Text>Erreur: {error}</Text>
-        <Text>Impossible de charger le profil ferme</Text>
+        <Text>{t('error')}: {error}</Text>
+        <Text>{t('unableToLoadFarmProfile')}</Text>
       </View>
     );
   }
@@ -86,7 +87,18 @@ export default function FarmProfileScreen() {
   if (!farmProfile) {
     return (
       <View style={styles.loadingContainer}>
-        <Text>Aucun profil ferme trouvé</Text>
+        <Ionicons name="business-outline" size={64} color="#64748b" />
+        <Text style={styles.noProfileText}>{t('noFarmProfile')}</Text>
+        <Text style={styles.noProfileSubtext}>{t('loadingFarmProfile')}</Text>
+        <TouchableOpacity
+          style={[styles.button, styles.primaryButton, { marginTop: 20 }]}
+          onPress={() => loadProfile()}
+          disabled={isLoading}
+        >
+          <Text style={styles.buttonText}>
+            {isLoading ? t('loading') : t('reloadProfile')}
+          </Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -109,15 +121,15 @@ export default function FarmProfileScreen() {
   const getCertificationText = () => {
     switch (farmProfile.certification_status) {
       case 'certified':
-        return 'Ferme Certifiée MAVECAM';
+        return t('farmCertified');
       case 'pending':
-        return 'Certification en cours d\'examen';
+        return t('certificationPending');
       case 'suspended':
-        return 'Certification suspendue';
+        return t('certificationSuspended');
       case 'rejected':
-        return 'Certification refusée';
+        return t('certificationRejected');
       default:
-        return 'Statut de certification inconnu';
+        return t('statusUnknown');
     }
   };
 
@@ -143,7 +155,7 @@ export default function FarmProfileScreen() {
         <View style={styles.farmIcon}>
           <Ionicons name="business" size={32} color="#ffffff" />
         </View>
-        <Text style={styles.farmName}>{farmProfile.farm_name || 'Ma Ferme'}</Text>
+        <Text style={styles.farmName}>{farmProfile.farm_name || t('myFarm')}</Text>
         
         <View style={[styles.certificationBadge, { backgroundColor: getCertificationColor() }]}>
           <Ionicons 
@@ -160,7 +172,7 @@ export default function FarmProfileScreen() {
       {/* Farm Information */}
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Informations de la ferme</Text>
+          <Text style={styles.sectionTitle}>{t('farmInfo')}</Text>
           <TouchableOpacity
             onPress={() => setIsEditing(!isEditing)}
             style={styles.editButton}
@@ -172,115 +184,73 @@ export default function FarmProfileScreen() {
         <View style={styles.infoCard}>
           <FarmInfoRow
             icon="business"
-            label="Nom de la ferme"
-            value={isEditing ? undefined : farmProfile.farm_name || 'Non renseigné'}
+            label={t('farmName')}
+            value={isEditing ? undefined : farmProfile.farm_name || t('notProvided')}
             editable={isEditing}
             onChangeText={(value) => setEditData(prev => ({ ...prev, farm_name: value }))}
             inputValue={editData.farm_name?.toString()}
-            placeholder="Nom de votre ferme"
+            placeholder={t('farmNamePlaceholder')}
           />
           
           <FarmInfoRow
             icon="water"
-            label="Nombre de bassins"
+            label={t('totalPonds')}
             value={isEditing ? undefined : farmProfile.total_ponds?.toString() || '0'}
             editable={isEditing}
             onChangeText={(value) => setEditData(prev => ({ ...prev, total_ponds: parseInt(value) || 0 }))}
             inputValue={editData.total_ponds?.toString()}
-            placeholder="Nombre de bassins"
+            placeholder={t('totalPonds')}
             keyboardType="numeric"
           />
           
           <FarmInfoRow
             icon="resize"
-            label="Superficie totale (m²)"
+            label={t('totalArea')}
             value={isEditing ? undefined : farmProfile.total_area_m2?.toString() || '0'}
             editable={isEditing}
             onChangeText={(value) => setEditData(prev => ({ ...prev, total_area_m2: parseFloat(value) || 0 }))}
             inputValue={editData.total_area_m2?.toString()}
-            placeholder="Superficie en m²"
+            placeholder={t('areaPlaceholder')}
             keyboardType="numeric"
           />
           
           <FarmInfoRow
-            icon="drop"
-            label="Source d'eau"
-            value={isEditing ? undefined : farmProfile.water_source || 'Non renseigné'}
+            icon="water"
+            label={t('waterSource')}
+            value={isEditing ? undefined : farmProfile.water_source || t('notProvided')}
             editable={isEditing}
             onChangeText={(value) => setEditData(prev => ({ ...prev, water_source: value }))}
             inputValue={editData.water_source}
-            placeholder="Source d'approvisionnement en eau"
+            placeholder={t('waterSourcePlaceholder')}
           />
           
           <FarmInfoRow
             icon="fish"
-            label="Espèce principale"
-            value={isEditing ? undefined : farmProfile.main_species || 'Non renseigné'}
+            label={t('mainSpecies')}
+            value={isEditing ? undefined : farmProfile.main_species || t('notProvided')}
             editable={isEditing}
             onChangeText={(value) => setEditData(prev => ({ ...prev, main_species: value }))}
             inputValue={editData.main_species}
-            placeholder="Tilapia, Clarias, etc."
+            placeholder={t('speciesPlaceholder')}
           />
           
           <FarmInfoRow
             icon="scale"
-            label="Production annuelle (kg)"
+            label={t('annualProduction')}
             value={isEditing ? undefined : farmProfile.annual_production_kg?.toString() || '0'}
             editable={isEditing}
             onChangeText={(value) => setEditData(prev => ({ ...prev, annual_production_kg: parseFloat(value) || 0 }))}
             inputValue={editData.annual_production_kg?.toString()}
-            placeholder="Production en kg/an"
+            placeholder={t('productionPlaceholder')}
             keyboardType="numeric"
           />
         </View>
       </View>
 
-      {/* Certification Info */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Certification MAVECAM</Text>
-        
-        <View style={styles.certificationCard}>
-          <View style={styles.certificationHeader}>
-            <Ionicons 
-              name={getCertificationIcon()} 
-              size={32} 
-              color={getCertificationColor()} 
-            />
-            <View style={styles.certificationInfo}>
-              <Text style={styles.certificationTitle}>
-                {getCertificationText()}
-              </Text>
-              <Text style={styles.certificationDate}>
-                Créé le : {new Date(farmProfile.created_at).toLocaleDateString('fr-FR')}
-              </Text>
-              {farmProfile.updated_at !== farmProfile.created_at && (
-                <Text style={styles.certificationDate}>
-                  Mis à jour le : {new Date(farmProfile.updated_at).toLocaleDateString('fr-FR')}
-                </Text>
-              )}
-            </View>
-          </View>
-          
-          <Text style={styles.certificationDescription}>
-            {farmProfile.certification_status === 'certified' && 
-              'Félicitations ! Votre ferme est certifiée MAVECAM. Vous bénéficiez de tous les avantages du programme.'
-            }
-            {farmProfile.certification_status === 'pending' && 
-              'Votre demande de certification est en cours d\'examen par l\'équipe MAVECAM. Nous vous contacterons bientôt.'
-            }
-            {farmProfile.certification_status === 'suspended' && 
-              'Votre certification a été temporairement suspendue. Contactez l\'équipe MAVECAM pour plus d\'informations.'
-            }
-            {farmProfile.certification_status === 'rejected' && 
-              'Votre demande de certification n\'a pas été acceptée. Vous pouvez nous contacter pour connaître les critères requis.'
-            }
-          </Text>
-        </View>
-      </View>
 
       {/* Performance Metrics */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Métriques de performance</Text>
+        <Text style={styles.sectionTitle}>{t('performanceMetrics')}</Text>
         
         <View style={styles.metricsContainer}>
           <View style={styles.metricCard}>
@@ -290,17 +260,17 @@ export default function FarmProfileScreen() {
                 : 0
               } m²
             </Text>
-            <Text style={styles.metricLabel}>Superficie moyenne par bassin</Text>
+            <Text style={styles.metricLabel}>{t('averageAreaPerPond')}</Text>
           </View>
           
           <View style={styles.metricCard}>
             <Text style={styles.metricValue}>
-              {farmProfile.total_area_m2 > 0 
-                ? ((farmProfile.annual_production_kg || 0) / farmProfile.total_area_m2).toFixed(1)
+              {(farmProfile.total_area_m2 || 0) > 0 
+                ? ((farmProfile.annual_production_kg || 0) / (farmProfile.total_area_m2 || 1)).toFixed(1)
                 : '0'
               } kg/m²
             </Text>
-            <Text style={styles.metricLabel}>Rendement par m²</Text>
+            <Text style={styles.metricLabel}>{t('yieldPerSquareMeter')}</Text>
           </View>
         </View>
       </View>
@@ -314,7 +284,7 @@ export default function FarmProfileScreen() {
             disabled={isLoading}
           >
             <Text style={styles.buttonText}>
-              {isLoading ? 'Enregistrement...' : 'Enregistrer les modifications'}
+              {isLoading ? t('saving') : t('saveChanges')}
             </Text>
           </TouchableOpacity>
         </View>
@@ -383,6 +353,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: MAVECAM_COLORS.CREAM,
+    padding: 40,
+  },
+  noProfileText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: MAVECAM_COLORS.GRAY_DARK,
+    marginTop: 16,
+    textAlign: 'center',
+  },
+  noProfileSubtext: {
+    fontSize: 14,
+    color: MAVECAM_COLORS.GRAY_LIGHT,
+    marginTop: 8,
+    textAlign: 'center',
+    lineHeight: 20,
   },
   header: {
     backgroundColor: MAVECAM_COLORS.GREEN_PRIMARY,
@@ -483,41 +468,6 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     paddingHorizontal: 8,
     paddingVertical: 4,
-  },
-  certificationCard: {
-    backgroundColor: MAVECAM_COLORS.WHITE,
-    borderRadius: 12,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  certificationHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  certificationInfo: {
-    flex: 1,
-    marginLeft: 16,
-  },
-  certificationTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: MAVECAM_COLORS.GRAY_DARK,
-    marginBottom: 4,
-  },
-  certificationDate: {
-    fontSize: 12,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
-    marginBottom: 2,
-  },
-  certificationDescription: {
-    fontSize: 14,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
-    lineHeight: 20,
   },
   metricsContainer: {
     flexDirection: 'row',

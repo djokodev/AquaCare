@@ -31,45 +31,32 @@ export default function DashboardScreen() {
   const { t } = useTranslation();
   const { user, displayName } = useAuth();
 
-  // Debug logging
-  console.log('🔍 Dashboard Debug:', {
-    user: user ? { 
-      phone: user.phone_number, 
-      display_name: user.display_name, 
-      first_name: user.first_name, 
-      last_name: user.last_name,
-      business_name: user.business_name,
-      account_type: user.account_type
-    } : null,
-    computed_displayName: displayName,
-    timestamp: new Date().toLocaleTimeString()
-  });
 
   return (
     <ScrollView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.greeting}>
-          Bonjour, {displayName}! 👋
+          {t('hello')}, {displayName}! 👋
         </Text>
         <Text style={styles.subtitle}>
-          Bienvenue sur votre tableau de bord AquaCare
+          {t('welcomeBoard')}
         </Text>
       </View>
 
       <View style={styles.quickStatsContainer}>
-        <Text style={styles.sectionTitle}>Aperçu Rapide</Text>
+        <Text style={styles.sectionTitle}>{t('quickOverview')}</Text>
         
         <View style={styles.statsGrid}>
           <View style={styles.statCard}>
             <Ionicons name="fish" size={32} color={MAVECAM_COLORS.GREEN_PRIMARY} />
             <Text style={styles.statNumber}>0</Text>
-            <Text style={styles.statLabel}>Cycles Actifs</Text>
+            <Text style={styles.statLabel}>{t('activeCycles')}</Text>
           </View>
           
           <View style={styles.statCard}>
             <Ionicons name="water" size={32} color={MAVECAM_COLORS.GREEN_LIGHT} />
             <Text style={styles.statNumber}>0</Text>
-            <Text style={styles.statLabel}>Bassins</Text>
+            <Text style={styles.statLabel}>{t('ponds')}</Text>
           </View>
           
           <View style={styles.statCard}>
@@ -87,41 +74,24 @@ export default function DashboardScreen() {
       </View>
 
       <View style={styles.actionContainer}>
-        <Text style={styles.sectionTitle}>Actions Rapides</Text>
+        <Text style={styles.sectionTitle}>{t('quickActions')}</Text>
         
         <TouchableOpacity style={styles.actionButton}>
           <Ionicons name="add-circle" size={24} color={MAVECAM_COLORS.GREEN_PRIMARY} />
-          <Text style={styles.actionText}>Nouveau Cycle</Text>
+          <Text style={styles.actionText}>{t('newCycle')}</Text>
         </TouchableOpacity>
         
         <TouchableOpacity style={styles.actionButton}>
           <Ionicons name="create" size={24} color={MAVECAM_COLORS.GREEN_LIGHT} />
-          <Text style={styles.actionText}>Ajouter Log Quotidien</Text>
+          <Text style={styles.actionText}>{t('dailyLog')}</Text>
         </TouchableOpacity>
         
         <TouchableOpacity style={styles.actionButton}>
           <Ionicons name="medical" size={24} color={MAVECAM_COLORS.GREEN_DARK} />
-          <Text style={styles.actionText}>Log Sanitaire</Text>
+          <Text style={styles.actionText}>{t('sanitaryLog')}</Text>
         </TouchableOpacity>
       </View>
 
-      <View style={styles.infoContainer}>
-        <Text style={styles.infoTitle}>🌱 MAVECAM AquaCare - Votre Assistant Piscicole</Text>
-        <Text style={styles.infoText}>
-          Bienvenue dans l'écosystème MAVECAM ! L'application mobile complète sera bientôt disponible avec :
-        </Text>
-        <Text style={styles.infoText}>
-          🐟 Gestion complète des cycles de production{'\n'}
-          📊 Suivi de la croissance et calculs automatiques FCR{'\n'}
-          🍽️ Planificateur d'alimentation intelligent{'\n'}
-          🏥 Journal sanitaire avec photos{'\n'}
-          📱 Synchronisation offline-first{'\n'}
-          🛒 Commande d'intrants MAVECAM
-        </Text>
-        <Text style={styles.mavecamNote}>
-          Développé selon les standards MAVECAM pour l'aquaculture camerounaise
-        </Text>
-      </View>
     </ScrollView>
   );
 }
@@ -206,32 +176,5 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: MAVECAM_COLORS.GRAY_DARK,
     marginLeft: 12,
-  },
-  infoContainer: {
-    margin: 20,
-    padding: 20,
-    backgroundColor: 'rgba(5, 150, 105, 0.1)',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: MAVECAM_COLORS.GREEN_LIGHT,
-  },
-  infoTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: MAVECAM_COLORS.GREEN_DARK,
-    marginBottom: 12,
-  },
-  infoText: {
-    fontSize: 14,
-    color: MAVECAM_COLORS.GREEN_DARK,
-    lineHeight: 20,
-    marginBottom: 8,
-  },
-  mavecamNote: {
-    fontSize: 12,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
-    fontStyle: 'italic',
-    marginTop: 8,
-    textAlign: 'center',
   },
 });

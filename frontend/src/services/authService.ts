@@ -55,19 +55,27 @@ class AuthService {
   }
 
   /**
-   * Déconnexion
+   * Déconnexion sécurisée
    */
   async logout(): Promise<void> {
     try {
-      // Optionnel: Notifier le backend (blacklist du token)
-      // await apiService.post(API_ENDPOINTS.AUTH.LOGOUT);
+      // Récupérer le refresh token pour l'invalider côté serveur
+      const refreshToken = await SecureStore.getItemAsync(STORAGE_KEYS.REFRESH_TOKEN);
+      
+      if (refreshToken) {
+        // Notifier le backend pour blacklist du token
+        await apiService.post(API_ENDPOINTS.AUTH.LOGOUT, { 
+          refresh: refreshToken 
+        });
+      }
       
       // Supprimer les données locales
       await apiService.clearTokens();
     } catch (error) {
-      // Even if backend call fails, clear local data
+      // Même en cas d'erreur API, on nettoie les données locales
+      console.warn('Logout API failed, proceeding with local cleanup:', error);
       await apiService.clearTokens();
-      throw error;
+      // Ne pas propager l'erreur car la déconnexion locale est réussie
     }
   }
 

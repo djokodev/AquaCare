@@ -1,5 +1,5 @@
 import { useSelector, useDispatch } from 'react-redux';
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { RootState, AppDispatch } from '@/store/store';
 import { setLogoutCallback } from '@/services/api';
 import {
@@ -24,7 +24,6 @@ export const useAuth = () => {
   // Configuration de la déconnexion automatique
   useEffect(() => {
     const handleAutoLogout = () => {
-      console.log('🔐 Déconnexion automatique déclenchée (token expiré)');
       dispatch(logoutUser());
     };
 
@@ -36,6 +35,42 @@ export const useAuth = () => {
       setLogoutCallback(() => {});
     };
   }, [dispatch]);
+
+  // Chargement automatique du profil ferme lors de la connexion (une seule fois)
+  const [profileLoadAttempted, setProfileLoadAttempted] = useState(false);
+  const [lastUserId, setLastUserId] = useState<string | null>(null);
+  
+  useEffect(() => {
+    // Si l'utilisateur change, reset le flag
+    const currentUserId = authState.user?.id;
+    if (currentUserId !== lastUserId) {
+      setLastUserId(currentUserId || null);
+      setProfileLoadAttempted(false);
+    }
+    
+    // Charger le profil seulement si:
+    // 1. Utilisateur authentifié ET
+    // 2. Utilisateur existe ET  
+    // 3. Pas de profil ferme ET
+    // 4. Pas en cours de chargement ET
+    // 5. Pas encore tenté pour cet utilisateur ET
+    // 6. Pas d'erreur d'authentification en cours
+    if (authState.isAuthenticated && 
+        authState.user && 
+        !authState.farmProfile && 
+        !authState.isLoading && 
+        !profileLoadAttempted &&
+        !authState.error) {
+      setProfileLoadAttempted(true);
+      dispatch(loadUserProfile());
+    }
+    
+    // Reset complètement si déconnexion
+    if (!authState.isAuthenticated) {
+      setProfileLoadAttempted(false);
+      setLastUserId(null);
+    }
+  }, [authState.isAuthenticated, authState.user?.id, authState.farmProfile, authState.isLoading, authState.error, profileLoadAttempted, lastUserId, dispatch]);
 
   // Actions
   const login = useCallback(

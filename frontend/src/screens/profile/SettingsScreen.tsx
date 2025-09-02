@@ -5,7 +5,6 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Switch,
   Alert,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
@@ -15,51 +14,88 @@ import * as SecureStore from 'expo-secure-store';
 import { useAuth } from '@/hooks/useAuth';
 import { STORAGE_KEYS } from '@/constants/api';
 
+// Couleurs MAVECAM selon spécifications
+const MAVECAM_COLORS = {
+  GREEN_PRIMARY: '#059669',
+  GREEN_LIGHT: '#10b981',
+  GREEN_DARK: '#047857',
+  WHITE: '#ffffff',
+  CREAM: '#f8fafc',
+  SUCCESS: '#059669',
+  WARNING: '#f59e0b',
+  ERROR: '#dc2626',
+  INFO: '#0ea5e9',
+  GRAY_LIGHT: '#64748b',
+  GRAY_DARK: '#1e293b',
+};
+
 export default function SettingsScreen() {
   const { t, i18n } = useTranslation();
   const { user, updateProfile, logout } = useAuth();
 
   const [settings, setSettings] = useState({
     language: i18n.language,
-    notifications: true,
-    darkMode: false,
-    autoSync: true,
   });
+
+  // Synchroniser avec i18n au montage et aux changements
+  React.useEffect(() => {
+    const currentLang = i18n.language;
+    if (currentLang !== settings.language) {
+      setSettings(prev => ({ ...prev, language: currentLang }));
+    }
+
+    // Écouter les changements de langue
+    const handleLanguageChanged = (lng: string) => {
+      console.log('🌍 i18n langue changée vers:', lng);
+      setSettings(prev => ({ ...prev, language: lng }));
+    };
+
+    i18n.on('languageChanged', handleLanguageChanged);
+    
+    return () => {
+      i18n.off('languageChanged', handleLanguageChanged);
+    };
+  }, [settings.language]);
 
   const handleLanguageChange = async (newLanguage: 'fr' | 'en') => {
     try {
-      // Update in Redux store and API
-      await updateProfile({ language_preference: newLanguage });
+      console.log('🌍 Changement de langue vers:', newLanguage);
+      console.log('🌍 Langue actuelle i18n:', i18n.language);
       
-      // Update i18n
-      i18n.changeLanguage(newLanguage);
-      
-      // Save to secure storage
-      await SecureStore.setItemAsync(STORAGE_KEYS.LANGUAGE, newLanguage);
-      
+      // 1. Update local state first
       setSettings(prev => ({ ...prev, language: newLanguage }));
       
+      // 2. Change i18n language immediately
+      await i18n.changeLanguage(newLanguage);
+      console.log('🌍 Nouvelle langue i18n:', i18n.language);
+      
+      // 3. Save to secure storage for persistence
+      await SecureStore.setItemAsync(STORAGE_KEYS.LANGUAGE, newLanguage);
+      console.log('🌍 Langue sauvegardée dans SecureStore');
+      
+      // 4. Update profile (non-blocking)
+      updateProfile({ language_preference: newLanguage }).catch(error => {
+        console.warn('Erreur lors de la mise à jour du profil:', error);
+      });
+      
       Alert.alert(
-        'Langue mise à jour',
-        `La langue a été changée vers ${newLanguage === 'fr' ? 'Français' : 'English'}`
+        newLanguage === 'fr' ? 'Langue mise à jour' : 'Language Updated',
+        newLanguage === 'fr' 
+          ? 'La langue a été changée vers Français' 
+          : 'Language changed to English'
       );
     } catch (error) {
-      Alert.alert('Erreur', 'Impossible de changer la langue');
+      console.error('❌ Erreur changement langue:', error);
+      Alert.alert(
+        'Erreur', 
+        'Impossible de changer la langue. Veuillez réessayer.'
+      );
+      // Revert local state on error
+      setSettings(prev => ({ ...prev, language: i18n.language }));
     }
   };
 
-  const toggleSetting = (key: keyof typeof settings, value: boolean) => {
-    setSettings(prev => ({ ...prev, [key]: value }));
-    // Here you could also save to AsyncStorage for persistence
-  };
 
-  const handleDataExport = () => {
-    Alert.alert(
-      'Export des données',
-      'Cette fonctionnalité sera disponible dans une prochaine version.',
-      [{ text: 'OK' }]
-    );
-  };
 
   const handleAccountDeletion = () => {
     Alert.alert(
@@ -111,7 +147,7 @@ export default function SettingsScreen() {
             🇫🇷 Français
           </Text>
           {settings.language === 'fr' && (
-            <Ionicons name="checkmark" size={20} color="#2563eb" />
+            <Ionicons name="checkmark" size={20} color={MAVECAM_COLORS.GREEN_PRIMARY} />
           )}
         </TouchableOpacity>
 
@@ -129,162 +165,28 @@ export default function SettingsScreen() {
             🇺🇸 English
           </Text>
           {settings.language === 'en' && (
-            <Ionicons name="checkmark" size={20} color="#2563eb" />
+            <Ionicons name="checkmark" size={20} color={MAVECAM_COLORS.GREEN_PRIMARY} />
           )}
         </TouchableOpacity>
       </View>
 
-      {/* App Preferences */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Préférences de l'application</Text>
-        
-        <View style={styles.preferenceItem}>
-          <View style={styles.preferenceLeft}>
-            <Ionicons name="notifications" size={24} color="#64748b" />
-            <View style={styles.preferenceText}>
-              <Text style={styles.preferenceTitle}>Notifications</Text>
-              <Text style={styles.preferenceSubtitle}>
-                Recevoir des rappels et alertes
-              </Text>
-            </View>
-          </View>
-          <Switch
-            value={settings.notifications}
-            onValueChange={(value) => toggleSetting('notifications', value)}
-            trackColor={{ false: '#d1d5db', true: '#3b82f6' }}
-            thumbColor={settings.notifications ? '#ffffff' : '#f3f4f6'}
-          />
-        </View>
 
-        <View style={styles.preferenceItem}>
-          <View style={styles.preferenceLeft}>
-            <Ionicons name="moon" size={24} color="#64748b" />
-            <View style={styles.preferenceText}>
-              <Text style={styles.preferenceTitle}>Mode sombre</Text>
-              <Text style={styles.preferenceSubtitle}>
-                Activer le thème sombre (bientôt disponible)
-              </Text>
-            </View>
-          </View>
-          <Switch
-            value={settings.darkMode}
-            onValueChange={(value) => toggleSetting('darkMode', value)}
-            disabled={true}
-            trackColor={{ false: '#d1d5db', true: '#3b82f6' }}
-            thumbColor={settings.darkMode ? '#ffffff' : '#f3f4f6'}
-          />
-        </View>
-
-        <View style={styles.preferenceItem}>
-          <View style={styles.preferenceLeft}>
-            <Ionicons name="sync" size={24} color="#64748b" />
-            <View style={styles.preferenceText}>
-              <Text style={styles.preferenceTitle}>Synchronisation automatique</Text>
-              <Text style={styles.preferenceSubtitle}>
-                Synchroniser les données en arrière-plan
-              </Text>
-            </View>
-          </View>
-          <Switch
-            value={settings.autoSync}
-            onValueChange={(value) => toggleSetting('autoSync', value)}
-            trackColor={{ false: '#d1d5db', true: '#3b82f6' }}
-            thumbColor={settings.autoSync ? '#ffffff' : '#f3f4f6'}
-          />
-        </View>
-      </View>
-
-      {/* Data & Privacy */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Données et confidentialité</Text>
-        
-        <TouchableOpacity style={styles.actionItem} onPress={handleDataExport}>
-          <Ionicons name="download" size={24} color="#2563eb" />
-          <View style={styles.actionText}>
-            <Text style={styles.actionTitle}>Exporter mes données</Text>
-            <Text style={styles.actionSubtitle}>
-              Télécharger une copie de vos données
-            </Text>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color="#94a3b8" />
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.actionItem}>
-          <Ionicons name="shield-checkmark" size={24} color="#059669" />
-          <View style={styles.actionText}>
-            <Text style={styles.actionTitle}>Politique de confidentialité</Text>
-            <Text style={styles.actionSubtitle}>
-              Consulter notre politique de protection des données
-            </Text>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color="#94a3b8" />
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.actionItem}>
-          <Ionicons name="document-text" size={24} color="#059669" />
-          <View style={styles.actionText}>
-            <Text style={styles.actionTitle}>Conditions d'utilisation</Text>
-            <Text style={styles.actionSubtitle}>
-              Lire les termes et conditions
-            </Text>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color="#94a3b8" />
-        </TouchableOpacity>
-      </View>
-
-      {/* Support */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Support</Text>
-        
-        <TouchableOpacity style={styles.actionItem}>
-          <Ionicons name="help-circle" size={24} color="#7c3aed" />
-          <View style={styles.actionText}>
-            <Text style={styles.actionTitle}>Centre d'aide</Text>
-            <Text style={styles.actionSubtitle}>
-              FAQ et guides d'utilisation
-            </Text>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color="#94a3b8" />
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.actionItem}>
-          <Ionicons name="mail" size={24} color="#7c3aed" />
-          <View style={styles.actionText}>
-            <Text style={styles.actionTitle}>Contacter le support</Text>
-            <Text style={styles.actionSubtitle}>
-              support@mavecam.com
-            </Text>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color="#94a3b8" />
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.actionItem}>
-          <Ionicons name="star" size={24} color="#f59e0b" />
-          <View style={styles.actionText}>
-            <Text style={styles.actionTitle}>Noter l'application</Text>
-            <Text style={styles.actionSubtitle}>
-              Donnez-nous votre avis sur les stores
-            </Text>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color="#94a3b8" />
-        </TouchableOpacity>
-      </View>
 
       {/* Account Management */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Gestion du compte</Text>
+        <Text style={styles.sectionTitle}>{t('accountManagement')}</Text>
         
         <TouchableOpacity 
           style={styles.dangerActionItem} 
           onPress={handleAccountDeletion}
         >
-          <Ionicons name="trash" size={24} color="#dc2626" />
+          <Ionicons name="trash" size={24} color={MAVECAM_COLORS.ERROR} />
           <View style={styles.actionText}>
-            <Text style={[styles.actionTitle, { color: '#dc2626' }]}>
-              Supprimer mon compte
+            <Text style={[styles.actionTitle, { color: MAVECAM_COLORS.ERROR }]}>
+              {t('deleteAccount')}
             </Text>
             <Text style={styles.actionSubtitle}>
-              Suppression définitive de toutes vos données
+              {t('deleteAccountDesc')}
             </Text>
           </View>
         </TouchableOpacity>
@@ -292,14 +194,20 @@ export default function SettingsScreen() {
 
       {/* App Info */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>À propos</Text>
+        <Text style={styles.sectionTitle}>{t('about')}</Text>
         
-        <View style={styles.appInfo}>
-          <Text style={styles.appName}>MAVECAM AquaCare</Text>
-          <Text style={styles.appVersion}>Version 1.0.0 MVP</Text>
+        {/* App Info Card */}
+        <View style={styles.aboutCard}>
+          {/* Header */}
+          <View style={styles.aboutHeader}>
+            <View style={styles.appInfoText}>
+              <Text style={styles.appName}>MAVECAM AquaCare</Text>
+            </View>
+          </View>
+          
+          {/* Description */}
           <Text style={styles.appDescription}>
-            Application de gestion aquacole pour les pisciculteurs camerounais.
-            Développée par MAVECAM en partenariat avec l'expertise technique locale.
+            {t('appDescription')}
           </Text>
         </View>
       </View>
@@ -324,7 +232,7 @@ export default function SettingsScreen() {
           }}
         >
           <Ionicons name="log-out" size={20} color="#ffffff" />
-          <Text style={styles.logoutText}>Déconnexion</Text>
+          <Text style={styles.logoutText}>{t('disconnect')}</Text>
         </TouchableOpacity>
       </View>
     </ScrollView>
@@ -334,10 +242,10 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: MAVECAM_COLORS.CREAM,
   },
   userSection: {
-    backgroundColor: '#2563eb',
+    backgroundColor: MAVECAM_COLORS.GREEN_PRIMARY,
     padding: 20,
     paddingTop: 60,
     alignItems: 'center',
@@ -373,8 +281,8 @@ const styles = StyleSheet.create({
     borderColor: '#e2e8f0',
   },
   languageOptionSelected: {
-    borderColor: '#2563eb',
-    backgroundColor: '#f0f9ff',
+    borderColor: MAVECAM_COLORS.GREEN_PRIMARY,
+    backgroundColor: '#f0fdf4',
   },
   languageText: {
     fontSize: 16,
@@ -382,35 +290,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   languageTextSelected: {
-    color: '#2563eb',
-  },
-  preferenceItem: {
-    backgroundColor: '#ffffff',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 16,
-    borderRadius: 8,
-    marginBottom: 8,
-  },
-  preferenceLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  preferenceText: {
-    marginLeft: 12,
-    flex: 1,
-  },
-  preferenceTitle: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#1e293b',
-    marginBottom: 2,
-  },
-  preferenceSubtitle: {
-    fontSize: 12,
-    color: '#64748b',
+    color: MAVECAM_COLORS.GREEN_PRIMARY,
   },
   actionItem: {
     backgroundColor: '#ffffff',
@@ -444,34 +324,40 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#64748b',
   },
-  appInfo: {
+  aboutCard: {
     backgroundColor: '#ffffff',
     padding: 20,
-    borderRadius: 8,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  aboutHeader: {
+    flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: 16,
+  },
+  appInfoText: {
+    flex: 1,
   },
   appName: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#2563eb',
-    marginBottom: 4,
-  },
-  appVersion: {
-    fontSize: 14,
-    color: '#64748b',
-    marginBottom: 12,
+    color: MAVECAM_COLORS.GRAY_DARK,
+    marginBottom: 6,
   },
   appDescription: {
-    fontSize: 12,
-    color: '#64748b',
-    textAlign: 'center',
-    lineHeight: 18,
+    fontSize: 14,
+    color: MAVECAM_COLORS.GRAY_LIGHT,
+    lineHeight: 20,
   },
   buttonContainer: {
     padding: 20,
   },
   logoutButton: {
-    backgroundColor: '#dc2626',
+    backgroundColor: MAVECAM_COLORS.ERROR,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',

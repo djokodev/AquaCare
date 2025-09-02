@@ -202,7 +202,7 @@ export default function RegisterScreen({ navigation }: Props) {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.header}>
           <Text style={styles.title}>{t('register')}</Text>
-          <Text style={styles.subtitle}>Créez votre compte MAVECAM AquaCare</Text>
+          <Text style={styles.subtitle}>{t('createAccount')}</Text>
         </View>
 
         <View style={styles.form}>
@@ -259,7 +259,6 @@ export default function RegisterScreen({ navigation }: Props) {
                 maxLength={9}
               />
             </View>
-            <Text style={styles.phoneHint}>Format automatique : +237 + votre numéro</Text>
             {errors.phone_number && <Text style={styles.errorText}>{errors.phone_number}</Text>}
           </View>
 
@@ -418,7 +417,7 @@ export default function RegisterScreen({ navigation }: Props) {
 
           {/* Login Link */}
           <View style={styles.loginContainer}>
-            <Text style={styles.loginText}>Déjà un compte ? </Text>
+            <Text style={styles.loginText}>{t('haveAccount')}</Text>
             <TouchableOpacity onPress={() => navigation.navigate('Login')}>
               <Text style={styles.loginLink}>{t('signIn')}</Text>
             </TouchableOpacity>

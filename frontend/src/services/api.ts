@@ -65,7 +65,6 @@ class ApiService {
             }
           } catch (refreshError) {
             // Refresh failed - déconnexion automatique
-            console.log('🔄 Refresh token expiré ou invalide - déconnexion automatique');
             await this.clearTokens();
             
             // Notifier l'app pour déconnexion automatique

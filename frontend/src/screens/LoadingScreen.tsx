@@ -8,6 +8,17 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
+// Couleurs MAVECAM selon spécifications
+const MAVECAM_COLORS = {
+  GREEN_PRIMARY: '#059669',
+  GREEN_LIGHT: '#10b981',
+  GREEN_DARK: '#047857',
+  WHITE: '#ffffff',
+  CREAM: '#f8fafc',
+  GRAY_LIGHT: '#64748b',
+  GRAY_DARK: '#1e293b',
+};
+
 export default function LoadingScreen() {
   const { t } = useTranslation();
 
@@ -20,7 +31,7 @@ export default function LoadingScreen() {
           <Text style={styles.logoSubText}>AquaCare</Text>
         </View>
         
-        <ActivityIndicator size="large" color="#2563eb" style={styles.spinner} />
+        <ActivityIndicator size="large" color={MAVECAM_COLORS.GREEN_PRIMARY} style={styles.spinner} />
         <Text style={styles.loadingText}>{t('loading')}</Text>
       </View>
     </View>
@@ -30,7 +41,7 @@ export default function LoadingScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#ffffff',
+    backgroundColor: MAVECAM_COLORS.WHITE,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -45,13 +56,13 @@ const styles = StyleSheet.create({
   logoText: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: '#2563eb',
+    color: MAVECAM_COLORS.GREEN_PRIMARY,
     letterSpacing: 2,
   },
   logoSubText: {
     fontSize: 18,
     fontWeight: '300',
-    color: '#64748b',
+    color: MAVECAM_COLORS.GRAY_LIGHT,
     marginTop: 4,
   },
   spinner: {
@@ -59,6 +70,6 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 16,
-    color: '#64748b',
+    color: MAVECAM_COLORS.GRAY_LIGHT,
   },
 });

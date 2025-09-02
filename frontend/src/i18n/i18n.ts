@@ -12,41 +12,49 @@ const resources = {
   fr: { translation: fr },
 };
 
-const initI18n = async () => {
-  let savedLanguage = 'fr'; // Default to French
-  
+// Initialize i18n immediately with default configuration
+i18n.use(initReactI18next).init({
+  resources,
+  lng: 'fr', // Default to French initially
+  fallbackLng: 'fr',
+  compatibilityJSON: 'v3', // Fix for Intl.PluralRules compatibility
+  interpolation: {
+    escapeValue: false,
+  },
+  react: {
+    useSuspense: false, // Disable suspense for better performance
+  },
+});
+
+// Load saved language asynchronously after initialization
+const loadSavedLanguage = async () => {
   try {
+    console.log('🌍 Chargement de la langue sauvegardée...');
+    
     // Try to get saved language preference
     const storedLang = await SecureStore.getItemAsync(STORAGE_KEYS.LANGUAGE);
     if (storedLang && ['en', 'fr'].includes(storedLang)) {
-      savedLanguage = storedLang;
-    } else {
-      // Fallback to device language if supported
-      const deviceLanguage = Localization.locale.slice(0, 2);
-      if (['en', 'fr'].includes(deviceLanguage)) {
-        savedLanguage = deviceLanguage;
-      }
+      console.log('🌍 Langue trouvée dans SecureStore:', storedLang);
+      await i18n.changeLanguage(storedLang);
+      return;
+    }
+
+    // Fallback to device language if supported
+    const locales = Localization.getLocales();
+    const deviceLanguage = locales[0]?.languageCode || 'fr';
+    console.log('🌍 Langue du device:', deviceLanguage);
+    
+    if (['en', 'fr'].includes(deviceLanguage) && deviceLanguage !== 'fr') {
+      await i18n.changeLanguage(deviceLanguage);
+      // Save device language to SecureStore for next time
+      await SecureStore.setItemAsync(STORAGE_KEYS.LANGUAGE, deviceLanguage);
     }
   } catch (error) {
-    console.warn('Error loading saved language, using default (fr):', error);
-    savedLanguage = 'fr'; // Ensure we have a valid language
+    console.warn('⚠️ Erreur lors du chargement de la langue, utilisation du français par défaut:', error);
   }
-
-  i18n.use(initReactI18next).init({
-    resources,
-    lng: savedLanguage,
-    fallbackLng: 'fr',
-    compatibilityJSON: 'v3', // Fix for Intl.PluralRules compatibility
-    interpolation: {
-      escapeValue: false,
-    },
-    react: {
-      useSuspense: false, // Disable suspense for better performance
-    },
-  });
 };
 
-// Initialize i18n
-initI18n();
+// Load saved language after a short delay to ensure SecureStore is ready
+setTimeout(loadSavedLanguage, 100);
 
 export default i18n;

@@ -2,6 +2,7 @@ from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.exceptions import TokenError
 from django.contrib.auth import login
 from drf_spectacular.utils import extend_schema, OpenApiResponse, OpenApiExample
 
@@ -205,6 +206,85 @@ class ProfileView(generics.RetrieveUpdateAPIView):
     
     def get_object(self):
         return self.request.user
+
+
+class LogoutView(APIView):
+    """
+    🔑 Déconnexion sécurisée des pisciculteurs MAVECAM.
+    
+    Invalide le refresh token côté serveur pour empêcher toute réutilisation.
+    Cette approche garantit une déconnexion complète et sécurisée.
+    
+    **Processus de déconnexion :**
+    1. Réception du refresh token depuis le client
+    2. Blacklist du token pour invalidation permanente
+    3. Confirmation de déconnexion
+    
+    **Sécurité :**
+    - Prévient la réutilisation de tokens compromis
+    - Déconnexion immédiate côté serveur
+    - Compatible avec l'architecture JWT stateless
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    
+    @extend_schema(
+        summary="Déconnexion sécurisée",
+        description="Invalide le refresh token pour une déconnexion complète et sécurisée",
+        request={
+            'application/json': {
+                'type': 'object',
+                'properties': {
+                    'refresh': {
+                        'type': 'string',
+                        'description': 'Token de rafraîchissement à invalider'
+                    }
+                },
+                'required': ['refresh']
+            }
+        },
+        examples=[
+            OpenApiExample(
+                'Déconnexion standard',
+                value={
+                    "refresh": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                },
+                request_only=True
+            )
+        ],
+        responses={
+            200: OpenApiResponse(description="Déconnexion réussie"),
+            400: OpenApiResponse(description="Token invalide ou manquant"),
+        }
+    )
+    def post(self, request):
+        try:
+            refresh_token = request.data.get('refresh')
+            
+            if not refresh_token:
+                return Response(
+                    {'error': 'Token de rafraîchissement requis'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Blacklist du refresh token
+            token = RefreshToken(refresh_token)
+            token.blacklist()
+            
+            return Response(
+                {'message': 'Déconnexion réussie'},
+                status=status.HTTP_200_OK
+            )
+            
+        except TokenError:
+            return Response(
+                {'error': 'Token invalide'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            return Response(
+                {'error': 'Erreur lors de la déconnexion'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 class FarmProfileView(generics.RetrieveUpdateAPIView):

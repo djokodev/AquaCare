@@ -42,7 +42,21 @@ const Tab = createBottomTabNavigator<MainTabParamList>();
 const ProfileStack = createStackNavigator<ProfileStackParamList>();
 
 function ProfileNavigator() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const [currentLanguage, setCurrentLanguage] = React.useState(i18n.language);
+
+  // Listen to language changes without force re-render
+  React.useEffect(() => {
+    const handleLanguageChanged = (lng: string) => {
+      console.log('🌍 ProfileNavigator: Langue changée vers:', lng);
+      setCurrentLanguage(lng);
+    };
+
+    i18n.on('languageChanged', handleLanguageChanged);
+    return () => {
+      i18n.off('languageChanged', handleLanguageChanged);
+    };
+  }, [i18n]);
 
   return (
     <ProfileStack.Navigator
@@ -72,7 +86,21 @@ function ProfileNavigator() {
 }
 
 export default function MainNavigator() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const [currentLanguage, setCurrentLanguage] = React.useState(i18n.language);
+
+  // Listen to language changes without force re-render
+  React.useEffect(() => {
+    const handleLanguageChanged = (lng: string) => {
+      console.log('🌍 MainNavigator: Langue changée vers:', lng);
+      setCurrentLanguage(lng);
+    };
+
+    i18n.on('languageChanged', handleLanguageChanged);
+    return () => {
+      i18n.off('languageChanged', handleLanguageChanged);
+    };
+  }, [i18n]);
 
   return (
     <Tab.Navigator
