@@ -57,6 +57,7 @@ const ACTIVITY_TYPES = [
   { value: 'alevins', label: "Producteur d'alevins" },
   { value: 'poisson_table', label: 'Producteur de poisson de table' },
   { value: 'mixte', label: 'Production mixte' },
+  { value: 'commercant', label: 'Commerçant de poisson' },
 ];
 
 const AGE_GROUPS = [
@@ -66,6 +67,21 @@ const AGE_GROUPS = [
   { value: '46_55', label: '46-55 ans' },
   { value: '56_65', label: '56-65 ans' },
   { value: '65_plus', label: '65 ans et plus' },
+];
+
+const LEGAL_STATUS_OPTIONS = [
+  { value: 'ei', label: 'Entreprise Individuelle (EI)' },
+  { value: 'scoop', label: 'Coopérative Simplifiée (SCOOP)' },
+  { value: 'coop_ca', label: 'Coopérative avec CA (Coop-CA)' },
+  { value: 'sarl', label: 'SARL' },
+  { value: 'sarlu', label: 'SARL Unipersonnelle (SARLU)' },
+  { value: 'sa', label: 'Société Anonyme (SA)' },
+  { value: 'sas', label: 'SAS' },
+  { value: 'sasu', label: 'SAS Unipersonnelle (SASU)' },
+  { value: 'snc', label: 'Société en Nom Collectif (SNC)' },
+  { value: 'scs', label: 'Société en Commandite Simple (SCS)' },
+  { value: 'sci', label: 'Société Civile Immobilière (SCI)' },
+  { value: 'autre', label: 'Autre statut juridique' },
 ];
 
 export default function RegisterScreen({ navigation }: Props) {
@@ -85,6 +101,8 @@ export default function RegisterScreen({ navigation }: Props) {
     language_preference: 'fr',
     password: '',
     password_confirm: '',
+    legal_status: '',
+    promoter_name: '',
   });
 
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
@@ -130,6 +148,12 @@ export default function RegisterScreen({ navigation }: Props) {
     if (formData.account_type === 'company') {
       if (!formData.business_name?.trim()) {
         newErrors.business_name = t('required');
+      }
+      if (!formData.legal_status) {
+        newErrors.legal_status = t('required');
+      }
+      if (!formData.promoter_name?.trim()) {
+        newErrors.promoter_name = t('required');
       }
     }
 
@@ -324,17 +348,48 @@ export default function RegisterScreen({ navigation }: Props) {
 
           {/* Company Fields */}
           {formData.account_type === 'company' && (
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>{t('businessName')} *</Text>
-              <TextInput
-                style={[styles.input, errors.business_name && styles.inputError]}
-                value={formData.business_name}
-                onChangeText={(value) => updateField('business_name', value)}
-                placeholder="AquaFerme SARL"
-                autoCapitalize="words"
-              />
-              {errors.business_name && <Text style={styles.errorText}>{errors.business_name}</Text>}
-            </View>
+            <>
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>{t('businessName')} *</Text>
+                <TextInput
+                  style={[styles.input, errors.business_name && styles.inputError]}
+                  value={formData.business_name}
+                  onChangeText={(value) => updateField('business_name', value)}
+                  placeholder="AquaFerme SARL"
+                  autoCapitalize="words"
+                />
+                {errors.business_name && <Text style={styles.errorText}>{errors.business_name}</Text>}
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>{t('legalStatus')} *</Text>
+                <View style={styles.pickerContainer}>
+                  <Picker
+                    selectedValue={formData.legal_status}
+                    onValueChange={(value) => updateField('legal_status', value)}
+                    style={styles.picker}
+                  >
+                    <Picker.Item label={t('selectLegalStatus')} value="" />
+                    {LEGAL_STATUS_OPTIONS.map((option) => (
+                      <Picker.Item key={option.value} label={option.label} value={option.value} />
+                    ))}
+                  </Picker>
+                </View>
+                {errors.legal_status && <Text style={styles.errorText}>{errors.legal_status}</Text>}
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>{t('promoterName')} *</Text>
+                <TextInput
+                  style={[styles.input, errors.promoter_name && styles.inputError]}
+                  value={formData.promoter_name}
+                  onChangeText={(value) => updateField('promoter_name', value)}
+                  placeholder="Jean Dubois"
+                  autoCapitalize="words"
+                />
+                {errors.promoter_name && <Text style={styles.errorText}>{errors.promoter_name}</Text>}
+              </View>
+            </>
           )}
 
           {/* Activity Type */}

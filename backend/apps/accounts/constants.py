@@ -16,6 +16,7 @@ ACTIVITY_TYPE_CHOICES = [
     ('alevins', 'Producteur d\'alevins'),
     ('poisson_table', 'Producteur de poisson de table'),
     ('mixte', 'Production mixte (alevins et poisson de table)'),
+    ('commercant', 'Commerçant de poisson'),
 ]
 
 # Statuts juridiques camerounais (basé sur recherche 2024)

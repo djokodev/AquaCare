@@ -31,6 +31,23 @@ const MAVECAM_COLORS = {
 import { ProfileStackParamList } from '@/navigation/MainNavigator';
 import { useAuth } from '@/hooks/useAuth';
 import { User } from '@/types/auth';
+import { 
+  CAMEROON_REGIONS, 
+  INTERVENTION_ZONES, 
+  getAllDepartments, 
+  getAllDistricts,
+  getDepartmentsByRegion,
+  getDistrictsByDepartment,
+  getRegionByCode,
+  getQuartiersDouala,
+  getAllAvailableNeighborhoods,
+  isDoualaDistrict
+} from '@/constants/cameroon';
+
+interface PickerOption {
+  value: string;
+  label: string;
+}
 
 type ProfileScreenNavigationProp = StackNavigationProp<ProfileStackParamList, 'ProfileMain'>;
 
@@ -57,11 +74,16 @@ export default function ProfileScreen({ navigation }: Props) {
   const [editData, setEditData] = useState<Partial<User>>({});
   const [showAllDetails, setShowAllDetails] = useState(false);
 
+  // États pour les sélections géographiques en cascade
+  const [availableDepartments, setAvailableDepartments] = useState<PickerOption[]>([]);
+  const [availableDistricts, setAvailableDistricts] = useState<PickerOption[]>([]);
+  const [availableNeighborhoods, setAvailableNeighborhoods] = useState<PickerOption[]>([]);
+
   useEffect(() => {
     // Load profile data only if we really need it
     // Don't reload if we already have user data from login
     if (!user && !farmProfile && !isLoading) {
-      console.log('🔄 ProfileScreen: Loading profile data...');
+      console.log('ProfileScreen: Loading profile data...');
       loadProfile();
     }
   }, []); // Empty dependency array - load only once on mount
@@ -80,6 +102,74 @@ export default function ProfileScreen({ navigation }: Props) {
       });
     }
   }, [user]);
+
+  // Mettre à jour les départements disponibles selon la région
+  useEffect(() => {
+    if (user?.region) {
+      const departments = getDepartmentsByRegion(user.region);
+      setAvailableDepartments(
+        departments.map(dept => ({
+          value: dept.name,
+          label: dept.name
+        }))
+      );
+    } else {
+      // Si pas de région, afficher tous les départements
+      const allDepartments = getAllDepartments();
+      setAvailableDepartments(
+        allDepartments.map(dept => ({
+          value: dept.label,
+          label: `${dept.label} (${dept.region})`
+        }))
+      );
+    }
+  }, [user?.region]);
+
+  // Mettre à jour les arrondissements selon le département sélectionné
+  useEffect(() => {
+    if (user?.region && editData.department) {
+      const region = getRegionByCode(user.region);
+      const department = region?.departments.find(d => d.name === editData.department);
+      if (department) {
+        setAvailableDistricts(
+          department.districts.map(district => ({
+            value: district.name,
+            label: district.name
+          }))
+        );
+      }
+    } else if (editData.department) {
+      // Si pas de région mais département sélectionné, chercher dans toutes les régions
+      const allDistricts = getAllDistricts();
+      const filteredDistricts = allDistricts.filter(d => d.department === editData.department);
+      setAvailableDistricts(
+        filteredDistricts.map(district => ({
+          value: district.label,
+          label: district.label
+        }))
+      );
+    } else {
+      setAvailableDistricts([]);
+    }
+  }, [user?.region, editData.department]);
+
+  // Mettre à jour les quartiers selon l'arrondissement sélectionné
+  useEffect(() => {
+    if (editData.district) {
+      // Si c'est un arrondissement de Douala, utiliser les quartiers spécifiques
+      if (isDoualaDistrict(editData.district)) {
+        const quartiers = getQuartiersDouala(editData.district);
+        setAvailableNeighborhoods(quartiers);
+      } else {
+        // Pour les autres villes, pas de quartiers prédéfinis pour l'instant
+        setAvailableNeighborhoods([]);
+      }
+    } else {
+      // Si pas d'arrondissement, afficher tous les quartiers de Douala pour simplifier
+      const allNeighborhoods = getAllAvailableNeighborhoods();
+      setAvailableNeighborhoods(allNeighborhoods.map(n => ({ value: n.value, label: n.label })));
+    }
+  }, [editData.district]);
 
   const handleSave = async () => {
     try {
@@ -312,7 +402,10 @@ export default function ProfileScreen({ navigation }: Props) {
               label={t('department')}
               value={isEditing ? undefined : (user.department || t('notProvided'))}
               editable={isEditing}
-              onChangeText={(value) => setEditData(prev => ({ ...prev, department: value }))}
+              pickerOptions={isEditing ? availableDepartments : undefined}
+              onPickerChange={isEditing ? (value) => {
+                setEditData(prev => ({ ...prev, department: value, district: '' }));
+              } : undefined}
               inputValue={editData.department}
               placeholder={t('department')}
             />
@@ -321,25 +414,28 @@ export default function ProfileScreen({ navigation }: Props) {
               label={t('district')}
               value={isEditing ? undefined : (user.district || t('notProvided'))}
               editable={isEditing}
-              onChangeText={(value) => setEditData(prev => ({ ...prev, district: value }))}
+              pickerOptions={isEditing ? availableDistricts : undefined}
+              onPickerChange={isEditing ? (value) => setEditData(prev => ({ ...prev, district: value, neighborhood: '' })) : undefined}
               inputValue={editData.district}
-              placeholder={t('district')}
+              placeholder={availableDistricts.length > 0 ? t('district') : 'Sélectionnez d\'abord un département'}
             />
             <InfoRow
               icon="home"
               label={t('neighborhood')}
               value={isEditing ? undefined : (user.neighborhood || t('notProvided'))}
               editable={isEditing}
-              onChangeText={(value) => setEditData(prev => ({ ...prev, neighborhood: value }))}
+              pickerOptions={isEditing ? availableNeighborhoods : undefined}
+              onPickerChange={isEditing ? (value) => setEditData(prev => ({ ...prev, neighborhood: value })) : undefined}
               inputValue={editData.neighborhood}
-              placeholder={t('neighborhood')}
+              placeholder={availableNeighborhoods.length > 0 ? t('neighborhood') : 'Sélectionnez d\'abord un arrondissement'}
             />
             <InfoRow
               icon="business"
               label={t('interventionZone')}
-              value={isEditing ? undefined : (user.intervention_zone || t('notProvided'))}
+              value={isEditing ? undefined : (user.intervention_zone ? (INTERVENTION_ZONES.find(z => z.value === user.intervention_zone) ? t(INTERVENTION_ZONES.find(z => z.value === user.intervention_zone)!.labelKey) : user.intervention_zone) : t('notProvided'))}
               editable={isEditing}
-              onChangeText={(value) => setEditData(prev => ({ ...prev, intervention_zone: value }))}
+              pickerOptions={isEditing ? INTERVENTION_ZONES.map(zone => ({ value: zone.value, label: t(zone.labelKey) })) : undefined}
+              onPickerChange={isEditing ? (value) => setEditData(prev => ({ ...prev, intervention_zone: value })) : undefined}
               inputValue={editData.intervention_zone}
               placeholder={t('interventionZone')}
             />
@@ -498,6 +594,9 @@ interface InfoRowProps {
   inputValue?: string;
   placeholder?: string;
   keyboardType?: 'default' | 'numeric';
+  // Nouvelles props pour les sélecteurs
+  pickerOptions?: { value: string; label: string }[];
+  onPickerChange?: (value: string) => void;
 }
 
 function InfoRow({ 
@@ -508,8 +607,12 @@ function InfoRow({
   onChangeText, 
   inputValue, 
   placeholder,
-  keyboardType = 'default'
+  keyboardType = 'default',
+  pickerOptions,
+  onPickerChange
 }: InfoRowProps) {
+  const { Picker } = require('@react-native-picker/picker');
+  
   return (
     <View style={styles.infoRow}>
       <View style={styles.infoRowLeft}>
@@ -518,14 +621,35 @@ function InfoRow({
       </View>
       
       {editable ? (
-        <TextInput
-          style={styles.infoInput}
-          value={inputValue}
-          onChangeText={onChangeText}
-          placeholder={placeholder}
-          keyboardType={keyboardType}
-          autoCapitalize="words"
-        />
+        pickerOptions && pickerOptions.length > 0 ? (
+          <View style={styles.pickerWrapper}>
+            <Picker
+              selectedValue={inputValue || ''}
+              onValueChange={onPickerChange}
+              style={styles.pickerStyle}
+              mode="dropdown"
+            >
+              <Picker.Item label={placeholder || 'Sélectionner...'} value="" color={MAVECAM_COLORS.GRAY_LIGHT} />
+              {pickerOptions.map((option) => (
+                <Picker.Item
+                  key={option.value}
+                  label={option.label}
+                  value={option.value}
+                  color={MAVECAM_COLORS.GRAY_DARK}
+                />
+              ))}
+            </Picker>
+          </View>
+        ) : (
+          <TextInput
+            style={styles.infoInput}
+            value={inputValue}
+            onChangeText={onChangeText}
+            placeholder={placeholder}
+            keyboardType={keyboardType}
+            autoCapitalize="words"
+          />
+        )
       ) : (
         <Text style={styles.infoValue}>{value}</Text>
       )}
@@ -653,6 +777,19 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     paddingHorizontal: 8,
     paddingVertical: 4,
+  },
+  pickerWrapper: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 6,
+    backgroundColor: MAVECAM_COLORS.WHITE,
+    minHeight: 40,
+    justifyContent: 'center',
+  },
+  pickerStyle: {
+    fontSize: 14,
+    color: MAVECAM_COLORS.GRAY_DARK,
   },
   actionButton: {
     backgroundColor: MAVECAM_COLORS.WHITE,

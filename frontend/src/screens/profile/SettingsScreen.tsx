@@ -46,7 +46,7 @@ export default function SettingsScreen() {
 
     // Écouter les changements de langue
     const handleLanguageChanged = (lng: string) => {
-      console.log('🌍 i18n langue changée vers:', lng);
+      console.log('i18n langue changée vers:', lng);
       setSettings(prev => ({ ...prev, language: lng }));
     };
 
@@ -59,19 +59,19 @@ export default function SettingsScreen() {
 
   const handleLanguageChange = async (newLanguage: 'fr' | 'en') => {
     try {
-      console.log('🌍 Changement de langue vers:', newLanguage);
-      console.log('🌍 Langue actuelle i18n:', i18n.language);
+      console.log('Changement de langue vers:', newLanguage);
+      console.log('Langue actuelle i18n:', i18n.language);
       
       // 1. Update local state first
       setSettings(prev => ({ ...prev, language: newLanguage }));
       
       // 2. Change i18n language immediately
       await i18n.changeLanguage(newLanguage);
-      console.log('🌍 Nouvelle langue i18n:', i18n.language);
+      console.log('Nouvelle langue i18n:', i18n.language);
       
       // 3. Save to secure storage for persistence
       await SecureStore.setItemAsync(STORAGE_KEYS.LANGUAGE, newLanguage);
-      console.log('🌍 Langue sauvegardée dans SecureStore');
+      console.log('Langue sauvegardée dans SecureStore');
       
       // 4. Update profile (non-blocking)
       updateProfile({ language_preference: newLanguage }).catch(error => {
@@ -85,7 +85,7 @@ export default function SettingsScreen() {
           : 'Language changed to English'
       );
     } catch (error) {
-      console.error('❌ Erreur changement langue:', error);
+      console.error('Erreur changement langue:', error);
       Alert.alert(
         'Erreur', 
         'Impossible de changer la langue. Veuillez réessayer.'

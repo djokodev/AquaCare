@@ -17,6 +17,9 @@ export const en = {
   firstName: 'First Name',
   lastName: 'Last Name',
   businessName: 'Business Name',
+  legalStatus: 'Legal Status',
+  promoterName: 'Promoter Name',
+  selectLegalStatus: 'Select legal status',
 
   // Account Types
   accountType: 'Account Type',
@@ -28,9 +31,7 @@ export const en = {
   region: 'Region',
   department: 'Department',
   district: 'District',
-  neighborhood: 'Neighborhood',
-  legalStatus: 'Legal Status',
-  promoterName: 'Promoter Name',
+  neighborhood: 'Neighborhood',  
   ageGroup: 'Age Group',
   interventionZone: 'Intervention Zone',
   language: 'Language',
@@ -192,6 +193,18 @@ export const en = {
   productionPlaceholder: 'Production in kg/year',
   averageAreaPerPond: 'Average area per pond',
   yieldPerSquareMeter: 'Yield per m²',
+
+  // Intervention Zones
+  urbaine: 'Urban area',
+  periurbaine: 'Peri-urban area',
+  rurale: 'Rural area',
+  fluviale: 'River area',
+  lacustre: 'Lake area',
+  cotiere: 'Coastal area',
+  montagnarde: 'Mountain area',
+  nationale: 'National',
+  regionale: 'Regional',
+  departementale: 'Departmental',
 
   // Common
   loading: 'Loading...',

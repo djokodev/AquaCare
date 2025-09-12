@@ -17,6 +17,9 @@ export const fr = {
   firstName: 'Prénom',
   lastName: 'Nom',
   businessName: "Nom de l'entreprise",
+  legalStatus: 'Statut juridique',
+  promoterName: 'Nom du promoteur',
+  selectLegalStatus: 'Sélectionnez le statut juridique',
 
   // Account Types
   accountType: 'Type de compte',
@@ -29,8 +32,6 @@ export const fr = {
   department: 'Département',
   district: 'Arrondissement',
   neighborhood: 'Quartier',
-  legalStatus: 'Statut juridique',
-  promoterName: 'Nom du promoteur',
   ageGroup: "Classe d'âge",
   interventionZone: "Zone d'intervention",
   language: 'Langue',
@@ -192,6 +193,18 @@ export const fr = {
   productionPlaceholder: 'Production en kg/an',
   averageAreaPerPond: 'Superficie moyenne par bassin',
   yieldPerSquareMeter: 'Rendement par m²',
+
+  // Intervention Zones
+  urbaine: 'Zone urbaine',
+  periurbaine: 'Zone périurbaine',
+  rurale: 'Zone rurale',
+  fluviale: 'Zone fluviale',
+  lacustre: 'Zone lacustre',
+  cotiere: 'Zone côtière',
+  montagnarde: 'Zone montagnarde',
+  nationale: 'Nationale',
+  regionale: 'Régionale',
+  departementale: 'Départementale',
 
   // Common
   loading: 'Chargement...',

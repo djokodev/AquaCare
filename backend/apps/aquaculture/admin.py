@@ -112,9 +112,7 @@ class ProductionCycleAdmin(admin.ModelAdmin):
     
     def species_display(self, obj):
         """Display species with icon."""
-        icons = {'clarias': '🐟', 'tilapia': '🐠'}
-        icon = icons.get(obj.species, '🐟')
-        return f"{icon} {obj.get_species_display()}"
+        return obj.get_species_display()
     species_display.short_description = _('Espèce')
     species_display.admin_order_field = 'species'
     
@@ -401,17 +399,11 @@ class SanitaryLogAdmin(admin.ModelAdmin):
     cycle_display.short_description = _('Cycle')
     
     def event_type_display(self, obj):
-        """Display event type with icon."""
-        icons = {
-            'disease': '🦠',
-            'treatment': '💊',
-            'vaccination': '💉',
-            'abnormal_mortality': '⚠️',
-            'water_quality': '🌊',
-            'other': '📝'
-        }
-        icon = icons.get(obj.event_type, '📝')
-        return f"{icon} {obj.get_event_type_display()}"
+        """Display event type."""
+        # Garder seulement l'emoji d'alerte pour mortalité anormale
+        if obj.event_type == 'abnormal_mortality':
+            return f"⚠️ {obj.get_event_type_display()}"
+        return obj.get_event_type_display()
     event_type_display.short_description = _('Type')
     
     def resolution_status(self, obj):
@@ -437,7 +429,7 @@ class SanitaryLogAdmin(admin.ModelAdmin):
         """Indicate if photo is attached."""
         if obj.photo:
             return format_html(
-                '<a href="{}" target="_blank">📷 Voir photo</a>',
+                '<a href="{}" target="_blank"> Voir photo</a>',
                 obj.photo.url
             )
         return "-"
@@ -530,21 +522,12 @@ class NutritionalGuideAdmin(admin.ModelAdmin):
     
     def species_display(self, obj):
         """Display species with icon."""
-        icons = {'clarias': '🐟', 'tilapia': '🐠'}
-        icon = icons.get(obj.species, '🐟')
-        return f"{icon} {obj.get_species_display()}"
+        return obj.get_species_display()
     species_display.short_description = _('Espèce')
     
     def growth_stage_display(self, obj):
-        """Display growth stage with icon."""
-        icons = {
-            'alevin': '🥚',
-            'juvenile': '🐣',
-            'croissance': '🐟',
-            'finition': '🐠'
-        }
-        icon = icons.get(obj.growth_stage, '🐟')
-        return f"{icon} {obj.get_growth_stage_display()}"
+        """Display growth stage."""
+        return obj.get_growth_stage_display()
     growth_stage_display.short_description = _('Stade')
     
     def weight_range(self, obj):
@@ -596,7 +579,7 @@ class NotificationAdmin(admin.ModelAdmin):
         if obj.is_read:
             return format_html('<span style="color: #28A745;">✓ Lu</span>')
         elif obj.is_sent:
-            return format_html('<span style="color: #007BFF;">📱 Envoyé</span>')
+            return format_html('<span style="color: #007BFF;"> Envoyé</span>')
         elif obj.scheduled_for < timezone.now():
             return format_html('<span style="color: #DC3545;">⏰ En retard</span>')
         else:

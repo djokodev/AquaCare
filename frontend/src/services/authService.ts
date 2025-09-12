@@ -1,7 +1,7 @@
 import * as SecureStore from 'expo-secure-store';
 
 import { apiService } from './api';
-import { API_ENDPOINTS, STORAGE_KEYS } from '@/constants/api';
+import { API_ENDPOINTS, API_CONFIG, STORAGE_KEYS } from '@/constants/api';
 import { 
   LoginRequest, 
   RegisterRequest, 
@@ -36,8 +36,9 @@ class AuthService {
   async register(userData: RegisterRequest): Promise<AuthResponse> {
     try {
       // Debug: Log des données envoyées
-      console.log('🔍 DEBUG - Données d\'inscription envoyées:', userData);
-      console.log('🔍 DEBUG - URL d\'inscription:', API_ENDPOINTS.AUTH.REGISTER);
+      console.log('DEBUG - Données d\'inscription envoyées:', userData);
+      console.log('DEBUG - URL d\'inscription:', API_ENDPOINTS.AUTH.REGISTER);
+      console.log('DEBUG - Base URL:', API_CONFIG.baseURL);
       
       const response = await apiService.post<AuthResponse>(
         API_ENDPOINTS.AUTH.REGISTER, 
@@ -49,7 +50,7 @@ class AuthService {
       
       return response.data;
     } catch (error: any) {
-      console.error('❌ ERROR - Inscription échouée:', error.response?.data || error.message);
+      console.error('ERROR - Inscription échouée:', error.response?.data || error.message);
       throw this.handleAuthError(error);
     }
   }
@@ -193,22 +194,61 @@ class AuthService {
    * Gestion des erreurs d'authentification
    */
   private handleAuthError(error: any): Error {
+    // Log détaillé pour le développement
+    console.error('AUTH ERROR DETAILS:', {
+      status: error.response?.status,
+      data: error.response?.data,
+      message: error.message,
+      stack: error.stack
+    });
+
     if (error.response) {
       const { status, data } = error.response;
       
       switch (status) {
         case 400:
-          return new Error(data.message || 'Données invalides');
+          // Traiter les erreurs de validation spécifiques
+          if (data && typeof data === 'object') {
+            // Si c'est un objet avec des erreurs de champs
+            if (data.phone_number) {
+              return new Error(`Numéro de téléphone : ${data.phone_number[0]}`);
+            }
+            if (data.email) {
+              return new Error(`Email : ${data.email[0]}`);
+            }
+            if (data.password) {
+              return new Error(`Mot de passe : ${data.password[0]}`);
+            }
+            if (data.non_field_errors) {
+              return new Error(data.non_field_errors[0]);
+            }
+            // Si on a un message direct
+            if (data.message) {
+              return new Error(data.message);
+            }
+            // Sinon combiner tous les messages d'erreur
+            const errorMessages = Object.entries(data)
+              .map(([field, messages]: [string, any]) => {
+                if (Array.isArray(messages)) {
+                  return `${field}: ${messages[0]}`;
+                }
+                return `${field}: ${messages}`;
+              })
+              .join(', ');
+            return new Error(errorMessages || 'Données invalides');
+          }
+          return new Error(data?.message || 'Données invalides');
+          
         case 401:
-          return new Error('Identifiants incorrects');
+          return new Error('Identifiants incorrects ou session expirée');
         case 403:
           return new Error('Accès interdit');
         case 404:
           return new Error('Utilisateur non trouvé');
         case 500:
-          return new Error('Erreur serveur. Veuillez réessayer.');
+          return new Error('Erreur serveur. Veuillez réessayer plus tard.');
         default:
-          return new Error(data.message || 'Une erreur est survenue');
+          return new Error(data?.message || `Erreur ${status}: Une erreur est survenue`);
       }
     } else if (error.request) {
       return new Error('Impossible de contacter le serveur. Vérifiez votre connexion internet.');

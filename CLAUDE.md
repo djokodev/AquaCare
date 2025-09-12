@@ -2,12 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## 📚 RÈGLES DE DÉVELOPPEMENT OBLIGATOIRES
-
-### 🔒 **RÈGLE FONDAMENTALE**
+### **RÈGLE FONDAMENTALE**
 **TOUJOURS consulter et utiliser la documentation officielle de chaque librairie/framework avant d'écrire du code.**
 
-### 🌐 **Documentations Officielles à Consulter Systématiquement**
+### **Documentations Officielles à Consulter Systématiquement**
 
 #### **Backend Django/Python**
 - **Django REST Framework** : https://www.django-rest-framework.org/
@@ -27,7 +25,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Expo SecureStore** : https://docs.expo.dev/versions/latest/sdk/securestore/
 - **i18next** : https://www.i18next.com/
 
-### ⚡ **Processus de Développement Obligatoire**
+
+### **Processus de Développement Obligatoire**
 
 1. **AVANT d'écrire du code** :
    - Utiliser WebFetch ou WebSearch pour consulter la documentation officielle
@@ -55,11 +54,12 @@ WebFetch(
 
 5. **Toujours analyser la code base actuelle lors d'une nouvelle requette dans un nouveau chat et pour chaque fonctionnalites developper, tu dois mettre cela a jour dans ce fichier afin que la comprehension par n nouveau chat soit parfaite, donc toujours mettre ce fichier a jour en fonction de l'avancement actuel (apres ma confirmation biensur)**
 
-### 🚨 **Interdictions Strictes**
+### **Interdictions Strictes**
 - ❌ Écrire du code sans consulter la documentation officielle
 - ❌ Utiliser des patterns obsolètes ou non-officiels  
 - ❌ Solutions "qui marchent" mais non-conformes aux standards
 - ❌ Code basé uniquement sur la mémoire ou des exemples non-officiels
+
 
 ## Project Overview
 
@@ -69,9 +69,10 @@ MAVECAM AquaCare is a comprehensive aquaculture management platform consisting o
 
 This is a French-language application targeting aquaculture farmers in Cameroon, featuring offline-first architecture with multilingual support (French/English).
 
-## 📊 **État d'Avancement du Projet** *(vs Cahier des Charges - Mise à jour : 25/08/2025)*
 
-### 📋 **ANALYSE CAHIER DES CHARGES vs RÉALISÉ**
+## **État d'Avancement du Projet** 
+
+### **ANALYSE CAHIER DES CHARGES vs RÉALISÉ**
 
 #### **5.1 TABLEAU DE BORD** *(Objectif MVP)*
 - ✅ **Modèles Backend** : ProductionCycle, CycleLog (saisie poissons, poids, mortalité)
@@ -79,7 +80,7 @@ This is a French-language application targeting aquaculture farmers in Cameroon,
 - ✅ **Historique** : cycles avec indexation optimisée
 - ❌ **Interface Mobile** : Screens créés mais pas connectés aux APIs
 - ❌ **Saisie Fonctionnelle** : Formulaires à implémenter
-- **📊 AVANCEMENT : 60%** *(Backend OK, Frontend à connecter)*
+- **AVANCEMENT : 60%** *(Backend OK, Frontend à connecter)*
 
 #### **5.2 PLANIFICATEUR D'ALIMENTATION** *(Objectif MVP)*
 - ✅ **Modèles Backend** : FeedingPlan, NutritionalGuide avec calculs automatiques
@@ -87,19 +88,19 @@ This is a French-language application targeting aquaculture farmers in Cameroon,
 - ✅ **Système Notifications** : Modèle Notification implémenté
 - ❌ **Interface Mobile** : Planificateur à développer
 - ❌ **Notifications Push** : Pas encore configurées
-- **📊 AVANCEMENT : 50%** *(Base solide, UI manquante)*
+- **AVANCEMENT : 50%** *(Base solide, UI manquante)*
 
 #### **5.3 COMMANDE D'INTRANTS** *(Objectif MVP)*
 - ❌ **Module Commerce** : Pas encore développé (Phase 3 prévue)
 - ❌ **Catalogue Produits** : À créer
 - ❌ **Système Commandes** : À développer
-- **📊 AVANCEMENT : 0%** *(Module prévu Phase 3)*
+- **AVANCEMENT : 0%** *(Module prévu Phase 3)*
 
 #### **5.4 ASSISTANCE TECHNIQUE** *(Objectif MVP)*
 - ❌ **Module Support** : Pas encore développé (Phase 4 prévue)
 - ❌ **Chat Technicien** : À créer
 - ❌ **Système Tickets** : À développer
-- **📊 AVANCEMENT : 0%** *(Module prévu Phase 4)*
+- **AVANCEMENT : 0%** *(Module prévu Phase 4)*
 
 #### **5.5 JOURNAL SANITAIRE** *(Objectif MVP)*
 - ✅ **Modèles Backend** : SanitaryLog avec support photos
@@ -107,7 +108,7 @@ This is a French-language application targeting aquaculture farmers in Cameroon,
 - ✅ **Upload Photos** : Modèle prêt avec compression
 - ❌ **Interface Mobile** : Formulaires sanitaires à créer
 - ❌ **Alertes Sanitaires** : Logique à connecter
-- **📊 AVANCEMENT : 70%** *(Backend complet, UI manquante)*
+- **AVANCEMENT : 70%** *(Backend complet, UI manquante)*
 
 #### **5.6 ESPACE PERSONNEL** *(Objectif MVP)*
 - ✅ **Authentification** : JWT + téléphone Cameroun (+237)
@@ -115,9 +116,10 @@ This is a French-language application targeting aquaculture farmers in Cameroon,
 - ✅ **Statut Certification** : "éleveur suivi MAVECAM" implémenté
 - ✅ **Écrans Mobile** : ProfileScreen, SettingsScreen, FarmProfileScreen
 - ❌ **Historique Commandes** : Module commerce pas encore fait
-- **📊 AVANCEMENT : 80%** *(Quasi-complet)*
+- **AVANCEMENT : 80%** *(Quasi-complet)*
 
-### 🎯 **BILAN GLOBAL MVP**
+
+### **BILAN GLOBAL MVP**
 
 #### ✅ **POINTS FORTS (Ce qui fonctionne)**
 - **Architecture Solide** : Offline-first avec UUID + sync metadata
@@ -139,16 +141,6 @@ This is a French-language application targeting aquaculture farmers in Cameroon,
 - **Intégration Mobile** : Connexion Frontend ↔ Backend
 - **Tests E2E** : Validation complète du flux utilisateur
 
-### 🚀 **PROCHAINES PRIORITÉS POUR MVP FONCTIONNEL**
-1. ⚡ **Créer les API ViewSets** manquants (ProductionCycle, CycleLog, etc.)
-2. ⚡ **Connecter les screens mobile** aux endpoints
-3. ⚡ **Implémenter la saisie** dans le tableau de bord
-4. ⚡ **Activer les notifications** du planificateur
-5. ⚡ **Tester le flux complet** auth + saisie + sync
-
-### 📈 **AVANCEMENT GLOBAL MVP : ~45%**
-- **Phase 1 (API)** : 75% ✅ *(modèles OK, views partielles)*
-- **Phase 2 (Mobile)** : 35% 🔄 *(structure OK, intégration manquante)*
 
 ## Common Development Commands
 
@@ -190,11 +182,6 @@ npm install
 
 # Start development server
 npm start
-
-# Platform-specific builds
-npm run android
-npm run ios
-npm run web
 ```
 
 ## Core Architecture
@@ -233,6 +220,7 @@ npm run web
 - Automatic deduplication on sync
 - SecureStore for persistent authentication
 
+
 ## 🎨 CHARTE GRAPHIQUE MAVECAM
 
 ### **Couleurs Officielles**
@@ -268,19 +256,16 @@ $mavecam-gray-dark: #1e293b;         // Texte principal
 - Coverage requirements: 80% minimum
 - Test structure: `backend/tests/unit/` and `backend/tests/fixtures/`
 
-### API Integration
-- Base URL: `http://localhost:8000/api`
-- Swagger documentation: `/api/docs/`
-- API client: `frontend/src/services/api.ts` with interceptors
 
 ### Localization
 - Backend: Django i18n with locale files in `backend/locale/`
 - Frontend: i18next configuration in `frontend/src/i18n/`
 - Primary language: French (Cameroon target market)
 
-## 🔍 **PROCESSUS DE VÉRIFICATION AUTOMATIQUE**
 
-### **🚨 RÈGLE CRITIQUE - VÉRIFICATION POST-MODIFICATION**
+## **PROCESSUS DE VÉRIFICATION AUTOMATIQUE**
+
+### **RÈGLE CRITIQUE - VÉRIFICATION POST-MODIFICATION**
 **OBLIGATOIRE : Après chaque modification de code, effectuer une vérification complète pour éviter les erreurs TypeScript et les bugs de runtime.**
 
 ### **✅ Processus de Vérification Systématique**
@@ -292,7 +277,33 @@ $mavecam-gray-dark: #1e293b;         // Texte principal
 3. ✅ Identification proactive des erreurs potentielles
 4. ✅ Correction immédiate si problème détecté
 5. ✅ Confirmation par nouvelle lecture
+6. ✅ VÉRIFICATION OBLIGATOIRE DE LA TRADUCTION (voir section dédiée)
 ```
+
+#### **🌍 VÉRIFICATION TRADUCTION OBLIGATOIRE**
+**RÈGLE ABSOLUE : Notre application doit être PARFAITEMENT bilingue (Français/Anglais)**
+
+**✅ APRÈS CHAQUE NOUVELLE IMPLÉMENTATION :**
+1. **Identifier tous les textes affichés** à l'utilisateur
+2. **Vérifier que TOUS utilisent t('key')** et non du texte hardcodé
+3. **Ajouter les traductions manquantes** dans `frontend/src/i18n/locales/fr.ts` ET `en.ts`
+4. **Tester le changement de langue** pour s'assurer que TOUT se traduit
+5. **Aucun texte français/anglais hardcodé** ne doit rester dans les composants
+
+**❌ ERREURS À ÉVITER :**
+```typescript
+// ❌ INTERDIT - Texte hardcodé
+<Text>Statut juridique *</Text>
+
+// ✅ OBLIGATOIRE - Traduction
+<Text>{t('legalStatus')} *</Text>
+```
+
+**FICHIERS DE TRADUCTION :**
+- `frontend/src/i18n/locales/fr.ts` : Traductions françaises
+- `frontend/src/i18n/locales/en.ts` : Traductions anglaises
+
+**OBJECTIF :** Utilisateur camerounais ET anglophone doivent avoir exactement la même expérience.
 
 #### **2. TYPES D'ERREURS À SURVEILLER**
 - **Propriétés optionnelles** : `object.prop` → `(object.prop || defaultValue)`

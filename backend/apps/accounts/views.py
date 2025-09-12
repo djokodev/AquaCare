@@ -84,13 +84,13 @@ class RegisterView(generics.CreateAPIView):
     )
     def create(self, request, *args, **kwargs):
         # Debug: Log des données reçues
-        print(f"🔍 DEBUG - Données reçues pour inscription: {request.data}")
-        print(f"🔍 DEBUG - Content-Type: {request.content_type}")
+        print(f"DEBUG - Donnees recues pour inscription: {request.data}")
+        print(f"DEBUG - Content-Type: {request.content_type}")
         
         serializer = self.get_serializer(data=request.data)
         
         if not serializer.is_valid():
-            print(f"❌ ERROR - Erreurs de validation: {serializer.errors}")
+            print(f"ERROR - Erreurs de validation: {serializer.errors}")
             
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
@@ -109,7 +109,7 @@ class RegisterView(generics.CreateAPIView):
 
 class LoginView(APIView):
     """
-    🔑 Authentification flexible des pisciculteurs MAVECAM.
+    Authentification flexible des pisciculteurs MAVECAM.
     
     Système de connexion supportant deux méthodes :
     1. **Nom d'affichage + mot de passe** (UX optimisée)
@@ -210,7 +210,7 @@ class ProfileView(generics.RetrieveUpdateAPIView):
 
 class LogoutView(APIView):
     """
-    🔑 Déconnexion sécurisée des pisciculteurs MAVECAM.
+    Déconnexion sécurisée des pisciculteurs MAVECAM.
     
     Invalide le refresh token côté serveur pour empêcher toute réutilisation.
     Cette approche garantit une déconnexion complète et sécurisée.
@@ -289,7 +289,7 @@ class LogoutView(APIView):
 
 class FarmProfileView(generics.RetrieveUpdateAPIView):
     """
-    🏡 Gestion spécialisée du profil ferme piscicole.
+    Gestion spécialisée du profil ferme piscicole.
     
     **GET :** Consultation des informations techniques :
     - Infrastructure : nombre de bassins, superficie totale
