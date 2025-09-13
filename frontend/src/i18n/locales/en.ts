@@ -35,6 +35,20 @@ export const en = {
   ageGroup: 'Age Group',
   interventionZone: 'Intervention Zone',
   language: 'Language',
+  
+  // Geographic Selection
+  selectRegion: 'Select a region',
+  selectDepartment: 'Select a department',
+  selectDistrict: 'Select a district',
+  selectCity: 'Select a city',
+  selectNeighborhood: 'Select a neighborhood',
+  selectRegionFirst: 'Select a region first',
+  selectDepartmentFirst: 'Select a department first',
+  selectInterventionZone: 'Select an intervention zone',
+  selectDistrictFirst: 'Select a district first',
+  selectCityFirst: 'Select a city first',
+  noNeighborhoodsAvailable: 'No neighborhoods available',
+  city: 'City',
 
   // Activity Types
   alevins: 'Fingerling Producer',

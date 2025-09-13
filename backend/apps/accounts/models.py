@@ -84,6 +84,14 @@ class User(AbstractUser):
         help_text=_('Arrondissement dans le département')
     )
     
+    city = models.CharField(
+        _('Ville'),
+        max_length=100,
+        blank=True,
+        null=True,
+        help_text=_('Ville dans l\'arrondissement')
+    )
+    
     neighborhood = models.CharField(
         _('Quartier'),
         max_length=100,

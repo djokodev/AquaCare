@@ -21,7 +21,7 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
             'phone_number', 'email', 'first_name', 'last_name',
             'business_name', 'account_type', 'language_preference',
             'password', 'password_confirm', 'activity_type',
-            'region', 'department', 'district', 'neighborhood',
+            'region', 'department', 'district', 'city', 'neighborhood',
             'legal_status', 'promoter_name', 'age_group', 'intervention_zone'
         )
     
@@ -68,7 +68,7 @@ class UserProfileSimpleSerializer(serializers.ModelSerializer):
         fields = (
             'id', 'phone_number', 'email', 'first_name', 'last_name',
             'business_name', 'account_type', 'is_verified', 'language_preference',
-            'activity_type', 'region', 'department', 'district', 'neighborhood',
+            'activity_type', 'region', 'department', 'district', 'city', 'neighborhood',
             'legal_status', 'promoter_name', 'age_group', 'intervention_zone',
             'date_joined', 'is_active'
         )
@@ -177,7 +177,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'id', 'phone_number', 'email', 'first_name', 'last_name',
             'business_name', 'account_type', 'is_verified', 'language_preference',
             'full_name', 'login_name', 'display_name', 'is_individual', 'is_company',
-            'activity_type', 'region', 'department', 'district', 'neighborhood',
+            'activity_type', 'region', 'department', 'district', 'city', 'neighborhood',
             'legal_status', 'promoter_name', 'age_group', 'intervention_zone',
             'farm_profile','date_joined', 'is_active'
         )

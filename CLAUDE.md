@@ -126,13 +126,15 @@ This is a French-language application targeting aquaculture farmers in Cameroon,
 - **Backend Aquaculture** : Modèles complets et bien pensés
 - **Authentification Robuste** : JWT + validation téléphone Cameroun
 - **i18n Configurée** : FR/EN prêt pour l'Afrique centrale
+- **Sélection Géographique** : LocationSelector optimisé avec sélection cascade Cameroun
+- **UX/UI Améliorée** : Interface MAVECAM avec modales intuitives pour sélection localisation
 - **Tests Framework** : pytest configuré
 
 #### 🔄 **EN COURS (Partiellement fait)**
 - **Tableau de Bord** : Backend OK, Frontend à connecter (60%)
 - **Planificateur** : Modèles OK, notifications à activer (50%)
 - **Journal Sanitaire** : Backend OK, UI à créer (70%)
-- **Espace Personnel** : Quasi-complet (80%)
+- **Espace Personnel** : Quasi-complet avec sélection géographique optimisée (85%)
 
 #### ❌ **MANQUANT (À développer)**
 - **Module Commerce** : Commande intrants (0% - Phase 3)

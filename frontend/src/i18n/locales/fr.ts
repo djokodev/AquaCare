@@ -35,6 +35,20 @@ export const fr = {
   ageGroup: "Classe d'âge",
   interventionZone: "Zone d'intervention",
   language: 'Langue',
+  
+  // Sélection géographique
+  selectRegion: 'Sélectionner une région',
+  selectDepartment: 'Sélectionner un département',
+  selectDistrict: 'Sélectionner un arrondissement',
+  selectCity: 'Sélectionner une ville',
+  selectNeighborhood: 'Sélectionner un quartier',
+  selectRegionFirst: "Sélectionnez d'abord une région",
+  selectDepartmentFirst: "Sélectionnez d'abord un département",
+  selectInterventionZone: "Sélectionner une zone d'intervention",
+  selectDistrictFirst: "Sélectionnez d'abord un arrondissement",
+  selectCityFirst: "Sélectionnez d'abord une ville",
+  noNeighborhoodsAvailable: 'Aucun quartier disponible',
+  city: 'Ville',
 
   // Activity Types
   alevins: "Producteur d'alevins",

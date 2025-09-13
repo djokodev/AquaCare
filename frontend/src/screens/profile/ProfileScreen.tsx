@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   TextInput,
   Alert,
+  Modal,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
@@ -31,22 +32,15 @@ const MAVECAM_COLORS = {
 import { ProfileStackParamList } from '@/navigation/MainNavigator';
 import { useAuth } from '@/hooks/useAuth';
 import { User } from '@/types/auth';
-import { 
-  CAMEROON_REGIONS, 
-  INTERVENTION_ZONES, 
-  getAllDepartments, 
-  getAllDistricts,
-  getDepartmentsByRegion,
-  getDistrictsByDepartment,
-  getRegionByCode,
-  getQuartiersDouala,
-  getAllAvailableNeighborhoods,
-  isDoualaDistrict
-} from '@/constants/cameroon';
+import { INTERVENTION_ZONES } from '@/constants/cameroon';
+import LocationSelector from '@/components/common/LocationSelector';
 
-interface PickerOption {
-  value: string;
-  label: string;
+interface LocationData {
+  region?: string;
+  department?: string;
+  arrondissement?: string;
+  city?: string;
+  neighborhood?: string;
 }
 
 type ProfileScreenNavigationProp = StackNavigationProp<ProfileStackParamList, 'ProfileMain'>;
@@ -73,11 +67,10 @@ export default function ProfileScreen({ navigation }: Props) {
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState<Partial<User>>({});
   const [showAllDetails, setShowAllDetails] = useState(false);
+  const [showInterventionZoneModal, setShowInterventionZoneModal] = useState(false);
 
-  // États pour les sélections géographiques en cascade
-  const [availableDepartments, setAvailableDepartments] = useState<PickerOption[]>([]);
-  const [availableDistricts, setAvailableDistricts] = useState<PickerOption[]>([]);
-  const [availableNeighborhoods, setAvailableNeighborhoods] = useState<PickerOption[]>([]);
+  // État pour la localisation géographique
+  const [locationData, setLocationData] = useState<LocationData>({});
 
   useEffect(() => {
     // Load profile data only if we really need it
@@ -93,87 +86,40 @@ export default function ProfileScreen({ navigation }: Props) {
     if (user) {
       setEditData({
         email: user.email || '',
-        district: user.district || '',
-        neighborhood: user.neighborhood || '',
         intervention_zone: user.intervention_zone || '',
-        department: user.department || '',
         legal_status: user.legal_status || '',
         promoter_name: user.promoter_name || '',
+      });
+      
+      // Initialize location data separately
+      setLocationData({
+        region: user.region || '',
+        department: user.department || '',
+        arrondissement: user.district || '', // Mapping ancien district vers arrondissement
+        city: user.city || '',
+        neighborhood: user.neighborhood || '',
       });
     }
   }, [user]);
 
-  // Mettre à jour les départements disponibles selon la région
-  useEffect(() => {
-    if (user?.region) {
-      const departments = getDepartmentsByRegion(user.region);
-      setAvailableDepartments(
-        departments.map(dept => ({
-          value: dept.name,
-          label: dept.name
-        }))
-      );
-    } else {
-      // Si pas de région, afficher tous les départements
-      const allDepartments = getAllDepartments();
-      setAvailableDepartments(
-        allDepartments.map(dept => ({
-          value: dept.label,
-          label: `${dept.label} (${dept.region})`
-        }))
-      );
-    }
-  }, [user?.region]);
-
-  // Mettre à jour les arrondissements selon le département sélectionné
-  useEffect(() => {
-    if (user?.region && editData.department) {
-      const region = getRegionByCode(user.region);
-      const department = region?.departments.find(d => d.name === editData.department);
-      if (department) {
-        setAvailableDistricts(
-          department.districts.map(district => ({
-            value: district.name,
-            label: district.name
-          }))
-        );
-      }
-    } else if (editData.department) {
-      // Si pas de région mais département sélectionné, chercher dans toutes les régions
-      const allDistricts = getAllDistricts();
-      const filteredDistricts = allDistricts.filter(d => d.department === editData.department);
-      setAvailableDistricts(
-        filteredDistricts.map(district => ({
-          value: district.label,
-          label: district.label
-        }))
-      );
-    } else {
-      setAvailableDistricts([]);
-    }
-  }, [user?.region, editData.department]);
-
-  // Mettre à jour les quartiers selon l'arrondissement sélectionné
-  useEffect(() => {
-    if (editData.district) {
-      // Si c'est un arrondissement de Douala, utiliser les quartiers spécifiques
-      if (isDoualaDistrict(editData.district)) {
-        const quartiers = getQuartiersDouala(editData.district);
-        setAvailableNeighborhoods(quartiers);
-      } else {
-        // Pour les autres villes, pas de quartiers prédéfinis pour l'instant
-        setAvailableNeighborhoods([]);
-      }
-    } else {
-      // Si pas d'arrondissement, afficher tous les quartiers de Douala pour simplifier
-      const allNeighborhoods = getAllAvailableNeighborhoods();
-      setAvailableNeighborhoods(allNeighborhoods.map(n => ({ value: n.value, label: n.label })));
-    }
-  }, [editData.district]);
+  // Gestionnaire pour les changements de localisation
+  const handleLocationChange = (newLocation: LocationData) => {
+    setLocationData(newLocation);
+  };
 
   const handleSave = async () => {
     try {
-      await updateProfile(editData);
+      // Combiner les données de profil et de localisation
+      const combinedData = {
+        ...editData,
+        region: locationData.region,
+        department: locationData.department,
+        district: locationData.arrondissement, // Mapping arrondissement vers district pour compatibilité
+        city: locationData.city,
+        neighborhood: locationData.neighborhood,
+      };
+      
+      await updateProfile(combinedData);
       setIsEditing(false);
       Alert.alert(t('success'), t('profileUpdatedSuccess'));
     } catch (err) {
@@ -397,48 +343,41 @@ export default function ProfileScreen({ navigation }: Props) {
                 editable={false}
               />
             )}
-            <InfoRow
-              icon="map"
-              label={t('department')}
-              value={isEditing ? undefined : (user.department || t('notProvided'))}
+            
+            <LocationSelector
+              value={locationData}
+              onChange={handleLocationChange}
+              userRegion={user?.region}
               editable={isEditing}
-              pickerOptions={isEditing ? availableDepartments : undefined}
-              onPickerChange={isEditing ? (value) => {
-                setEditData(prev => ({ ...prev, department: value, district: '' }));
-              } : undefined}
-              inputValue={editData.department}
-              placeholder={t('department')}
             />
-            <InfoRow
-              icon="pin"
-              label={t('district')}
-              value={isEditing ? undefined : (user.district || t('notProvided'))}
-              editable={isEditing}
-              pickerOptions={isEditing ? availableDistricts : undefined}
-              onPickerChange={isEditing ? (value) => setEditData(prev => ({ ...prev, district: value, neighborhood: '' })) : undefined}
-              inputValue={editData.district}
-              placeholder={availableDistricts.length > 0 ? t('district') : 'Sélectionnez d\'abord un département'}
-            />
-            <InfoRow
-              icon="home"
-              label={t('neighborhood')}
-              value={isEditing ? undefined : (user.neighborhood || t('notProvided'))}
-              editable={isEditing}
-              pickerOptions={isEditing ? availableNeighborhoods : undefined}
-              onPickerChange={isEditing ? (value) => setEditData(prev => ({ ...prev, neighborhood: value })) : undefined}
-              inputValue={editData.neighborhood}
-              placeholder={availableNeighborhoods.length > 0 ? t('neighborhood') : 'Sélectionnez d\'abord un arrondissement'}
-            />
-            <InfoRow
-              icon="business"
-              label={t('interventionZone')}
-              value={isEditing ? undefined : (user.intervention_zone ? (INTERVENTION_ZONES.find(z => z.value === user.intervention_zone) ? t(INTERVENTION_ZONES.find(z => z.value === user.intervention_zone)!.labelKey) : user.intervention_zone) : t('notProvided'))}
-              editable={isEditing}
-              pickerOptions={isEditing ? INTERVENTION_ZONES.map(zone => ({ value: zone.value, label: t(zone.labelKey) })) : undefined}
-              onPickerChange={isEditing ? (value) => setEditData(prev => ({ ...prev, intervention_zone: value })) : undefined}
-              inputValue={editData.intervention_zone}
-              placeholder={t('interventionZone')}
-            />
+            
+            {isEditing ? (
+              <TouchableOpacity
+                style={[styles.selectorRow, editData.intervention_zone && styles.selectedSelector]}
+                onPress={() => setShowInterventionZoneModal(true)}
+              >
+                <View style={styles.selectorLeft}>
+                  <Ionicons name="business-outline" size={20} color={MAVECAM_COLORS.SUCCESS} />
+                  <View style={styles.selectorTextContainer}>
+                    <Text style={styles.selectorLabel}>{t('interventionZone')} *</Text>
+                    <Text style={[styles.selectorValue, !editData.intervention_zone && styles.placeholderText]}>
+                      {editData.intervention_zone 
+                        ? t(INTERVENTION_ZONES.find(z => z.value === editData.intervention_zone)?.labelKey || 'notProvided')
+                        : t('selectInterventionZone')
+                      }
+                    </Text>
+                  </View>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color={MAVECAM_COLORS.GRAY_LIGHT} />
+              </TouchableOpacity>
+            ) : (
+              <InfoRow
+                icon="business"
+                label={t('interventionZone')}
+                value={user.intervention_zone ? t(INTERVENTION_ZONES.find(z => z.value === user.intervention_zone)?.labelKey || 'notProvided') : t('notProvided')}
+                editable={false}
+              />
+            )}
           </View>
         </View>
 
@@ -581,6 +520,54 @@ export default function ProfileScreen({ navigation }: Props) {
             <Text style={styles.errorText}>{error}</Text>
           </View>
         )}
+
+        {/* Modal Zone d'Intervention */}
+        <Modal
+          visible={showInterventionZoneModal}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={() => setShowInterventionZoneModal(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContainer}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>{t('selectInterventionZone')}</Text>
+                <TouchableOpacity
+                  onPress={() => setShowInterventionZoneModal(false)}
+                  style={styles.closeButton}
+                >
+                  <Ionicons name="close" size={24} color={MAVECAM_COLORS.GRAY_DARK} />
+                </TouchableOpacity>
+              </View>
+              
+              <ScrollView style={styles.modalContent}>
+                {INTERVENTION_ZONES.map((zone) => (
+                  <TouchableOpacity
+                    key={zone.value}
+                    style={[
+                      styles.modalOption,
+                      editData.intervention_zone === zone.value && styles.selectedOption
+                    ]}
+                    onPress={() => {
+                      setEditData(prev => ({ ...prev, intervention_zone: zone.value }));
+                      setShowInterventionZoneModal(false);
+                    }}
+                  >
+                    <Text style={[
+                      styles.modalOptionText,
+                      editData.intervention_zone === zone.value && styles.selectedOptionText
+                    ]}>
+                      {t(zone.labelKey)}
+                    </Text>
+                    {editData.intervention_zone === zone.value && (
+                      <Ionicons name="checkmark" size={20} color={MAVECAM_COLORS.GREEN_PRIMARY} />
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
       </ScrollView>
   );
 }
@@ -890,5 +877,132 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     marginLeft: 8,
+  },
+  // Styles pour le modal de zone d'intervention (identique à LocationSelector)
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContainer: {
+    backgroundColor: MAVECAM_COLORS.WHITE,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '80%',
+    paddingBottom: 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: MAVECAM_COLORS.GRAY_DARK,
+  },
+  closeButton: {
+    padding: 4,
+  },
+  modalContent: {
+    maxHeight: 400,
+    minHeight: 200,
+  },
+  modalOption: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f8fafc',
+    minHeight: 50,
+    backgroundColor: MAVECAM_COLORS.WHITE,
+  },
+  selectedOption: {
+    backgroundColor: '#f0fdf4',
+  },
+  modalOptionText: {
+    fontSize: 16,
+    color: MAVECAM_COLORS.GRAY_DARK,
+    flex: 1,
+  },
+  selectedOptionText: {
+    color: MAVECAM_COLORS.GREEN_DARK,
+    fontWeight: '600',
+  },
+  locationSelectorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f3f4f6',
+  },
+  iconContainer: {
+    width: 24,
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  labelContainer: {
+    flex: 1,
+  },
+  fieldLabel: {
+    fontSize: 14,
+    color: MAVECAM_COLORS.GRAY_LIGHT,
+    marginBottom: 2,
+  },
+  fieldValue: {
+    fontSize: 16,
+    color: MAVECAM_COLORS.GRAY_DARK,
+  },
+  placeholderText: {
+    color: MAVECAM_COLORS.GRAY_LIGHT,
+    fontStyle: 'italic',
+  },
+  // Styles pour zone d'intervention (copiés de LocationSelector)
+  selectorRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    marginVertical: 4,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#e2e8f0',
+    backgroundColor: MAVECAM_COLORS.WHITE,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  selectedSelector: {
+    borderColor: MAVECAM_COLORS.GREEN_PRIMARY,
+    backgroundColor: '#f0fdf4',
+  },
+  selectorLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  selectorTextContainer: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  selectorLabel: {
+    fontSize: 14,
+    color: MAVECAM_COLORS.GRAY_DARK,
+    fontWeight: '500',
+    marginBottom: 2,
+  },
+  selectorValue: {
+    fontSize: 14,
+    color: MAVECAM_COLORS.GREEN_DARK,
+    fontWeight: '400',
   },
 });

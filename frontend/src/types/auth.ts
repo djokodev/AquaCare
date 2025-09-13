@@ -13,6 +13,7 @@ export interface User {
   region?: string;
   department?: string;
   district?: string;
+  city?: string;
   neighborhood?: string;
   legal_status?: string;
   promoter_name?: string;
@@ -56,6 +57,7 @@ export interface RegisterRequest {
   region?: string;
   department?: string;
   district?: string;
+  city?: string;
   neighborhood?: string;
   legal_status?: string;
   promoter_name?: string;

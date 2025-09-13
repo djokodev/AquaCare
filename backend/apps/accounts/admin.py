@@ -61,7 +61,7 @@ class UserAdmin(BaseUserAdmin):
             'fields': ('activity_type', 'intervention_zone')
         }),
         ('Localisation', {
-            'fields': ('region', 'department', 'district', 'neighborhood'),
+            'fields': ('region', 'department', 'district', 'city', 'neighborhood'),
             'classes': ('collapse',)
         }),
         ('Entreprise', {
