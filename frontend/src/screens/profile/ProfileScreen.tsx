@@ -150,6 +150,26 @@ export default function ProfileScreen({ navigation }: Props) {
     navigation.navigate('Settings');
   };
 
+  // Fonction pour afficher seulement le nom (sans prénom) dans le nom de ferme
+  const formatFarmName = (farmName: string | undefined) => {
+    if (!farmName) return '';
+    
+    // Si le nom commence par "Ferme de " et contient plusieurs mots
+    if (farmName.startsWith('Ferme de ') && farmName.includes(' ')) {
+      const nameAfterFermeDe = farmName.replace('Ferme de ', '');
+      const nameParts = nameAfterFermeDe.split(' ');
+      
+      // Si il y a plusieurs mots, prendre le dernier (nom de famille)
+      if (nameParts.length > 1) {
+        const lastName = nameParts[nameParts.length - 1];
+        return `Ferme de ${lastName}`;
+      }
+    }
+    
+    // Retourner le nom original si pas de format reconnu
+    return farmName;
+  };
+
 
   if (!user) {
     return (
@@ -378,7 +398,7 @@ export default function ProfileScreen({ navigation }: Props) {
               <InfoRow
                 icon="business"
                 label={t('farmName')}
-                value={farmProfile.farm_name}
+                value={formatFarmName(farmProfile.farm_name)}
                 editable={false}
               />
               <InfoRow
