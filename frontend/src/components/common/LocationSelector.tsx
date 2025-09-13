@@ -255,24 +255,20 @@ export default function LocationSelector({
     return (
       <View style={styles.container}>
         <LocationDisplayRow
-          icon="map"
           label={t('department')}
           value={value.department || t('notProvided')}
         />
         <LocationDisplayRow
-          icon="pin"
           label={t('district')}
           value={value.arrondissement || t('notProvided')}
         />
         {value.city && (
           <LocationDisplayRow
-            icon="business"
             label={t('city')}
             value={value.city || t('notProvided')}
           />
         )}
         <LocationDisplayRow
-          icon="home"
           label={t('neighborhood')}
           value={value.neighborhood || t('notProvided')}
         />
@@ -284,7 +280,6 @@ export default function LocationSelector({
     <View style={styles.container}>
       {/* Sélection Région */}
       <LocationSelectorRow
-        icon="globe-outline"
         label={t('region') + ' *'}
         value={value.region ? CAMEROON_REGIONS.find(r => r.code === value.region)?.name : undefined}
         placeholder={t('selectRegion')}
@@ -294,7 +289,6 @@ export default function LocationSelector({
 
       {/* Sélection Département */}
       <LocationSelectorRow
-        icon="map-outline"
         label={t('department') + ' *'}
         value={value.department}
         placeholder={value.region ? t('selectDepartment') : t('selectRegionFirst')}
@@ -305,7 +299,6 @@ export default function LocationSelector({
 
       {/* Sélection Arrondissement */}
       <LocationSelectorRow
-        icon="pin-outline"
         label={t('district')}
         value={value.arrondissement}
         placeholder={value.department ? t('selectDistrict') : t('selectDepartmentFirst')}
@@ -317,7 +310,6 @@ export default function LocationSelector({
       {/* Sélection Ville */}
       {cityOptions.length > 0 && (
         <LocationSelectorRow
-          icon="business"
           label={t('city')}
           value={value.city}
           placeholder={value.arrondissement ? t('selectCity') : t('selectDistrictFirst')}
@@ -330,7 +322,6 @@ export default function LocationSelector({
       {/* Sélection Quartier */}
       {neighborhoodOptions.length > 0 && (
         <LocationSelectorRow
-          icon="home"
           label={t('neighborhood')}
           value={value.neighborhood}
           placeholder={value.arrondissement 
@@ -399,7 +390,7 @@ export default function LocationSelector({
 
 // Composant pour affichage en lecture seule
 interface LocationDisplayRowProps {
-  icon: keyof typeof Ionicons.glyphMap;
+  icon?: keyof typeof Ionicons.glyphMap;
   label: string;
   value: string;
 }
@@ -408,8 +399,8 @@ function LocationDisplayRow({ icon, label, value }: LocationDisplayRowProps) {
   return (
     <View style={styles.infoRow}>
       <View style={styles.infoRowLeft}>
-        <Ionicons name={icon} size={20} color={MAVECAM_COLORS.GRAY_LIGHT} />
-        <Text style={styles.infoLabel}>{label}</Text>
+        {icon && <Ionicons name={icon} size={20} color={MAVECAM_COLORS.GRAY_LIGHT} />}
+        <Text style={[styles.infoLabel, !icon && styles.infoLabelNoIcon]}>{label}</Text>
       </View>
       <Text style={styles.infoValue}>{value}</Text>
     </View>
@@ -418,7 +409,7 @@ function LocationDisplayRow({ icon, label, value }: LocationDisplayRowProps) {
 
 // Composant pour sélecteur interactif
 interface LocationSelectorRowProps {
-  icon: keyof typeof Ionicons.glyphMap;
+  icon?: keyof typeof Ionicons.glyphMap;
   label: string;
   value?: string;
   placeholder: string;
@@ -459,12 +450,12 @@ function LocationSelectorRow({
       activeOpacity={0.7}
     >
       <View style={styles.selectorLeft}>
-        <Ionicons 
+        {icon && <Ionicons 
           name={icon} 
           size={20} 
           color={disabled ? MAVECAM_COLORS.GRAY_LIGHT : MAVECAM_COLORS.GREEN_PRIMARY} 
-        />
-        <Text style={styles.selectorLabel}>{label}</Text>
+        />}
+        <Text style={[styles.selectorLabel, !icon && styles.selectorLabelNoIcon]}>{label}</Text>
       </View>
       
       <View style={styles.selectorRight}>
@@ -596,6 +587,9 @@ const styles = StyleSheet.create({
     marginLeft: 12,
     flex: 1,
   },
+  infoLabelNoIcon: {
+    marginLeft: 0,
+  },
   infoValue: {
     fontSize: 14,
     color: MAVECAM_COLORS.GRAY_DARK,
@@ -638,6 +632,9 @@ const styles = StyleSheet.create({
     color: MAVECAM_COLORS.GRAY_DARK,
     marginLeft: 12,
     fontWeight: '500',
+  },
+  selectorLabelNoIcon: {
+    marginLeft: 0,
   },
   selectorRight: {
     flexDirection: 'row',

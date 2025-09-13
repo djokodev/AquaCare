@@ -255,38 +255,34 @@ export default function ProfileScreen({ navigation }: Props) {
           </View>
           <View style={styles.infoCard}>
             <InfoRow
-              icon="call"
               label={t('phoneNumber')}
               value={user.phone_number}
               editable={false}
             />
             <InfoRow
-              icon="mail"
               label={t('email')}
               value={isEditing ? undefined : (user.email || t('notProvided'))}
               editable={isEditing}
               onChangeText={(value) => setEditData(prev => ({ ...prev, email: value }))}
               inputValue={editData.email}
               placeholder={t('yourEmail')}
+              isEmail={true}
             />
             
             {isIndividual ? (
               <>
                 <InfoRow
-                  icon="person"
                   label={t('firstName')}
                   value={user.first_name || t('notProvided')}
                   editable={false}
                 />
                 <InfoRow
-                  icon="person"
                   label={t('lastName')}
                   value={user.last_name || t('notProvided')}
                   editable={false}
                 />
                 {user.age_group && (
                   <InfoRow
-                    icon="calendar"
                     label={t('ageGroup')}
                     value={user.age_group}
                     editable={false}
@@ -296,14 +292,12 @@ export default function ProfileScreen({ navigation }: Props) {
             ) : (
               <>
                 <InfoRow
-                  icon="business"
                   label={t('businessName')}
                   value={user.business_name || t('notProvided')}
                   editable={false}
                 />
                 {user.legal_status && (
                   <InfoRow
-                    icon="document-text"
                     label={t('legalStatus')}
                     value={user.legal_status}
                     editable={false}
@@ -311,7 +305,6 @@ export default function ProfileScreen({ navigation }: Props) {
                 )}
                 {user.promoter_name && (
                   <InfoRow
-                    icon="person-circle"
                     label={t('promoterName')}
                     value={user.promoter_name}
                     editable={false}
@@ -322,7 +315,6 @@ export default function ProfileScreen({ navigation }: Props) {
             
             {user.activity_type && (
               <InfoRow
-                icon="fish"
                 label={t('activityType')}
                 value={user.activity_type}
                 editable={false}
@@ -337,7 +329,6 @@ export default function ProfileScreen({ navigation }: Props) {
           <View style={styles.infoCard}>
             {user.region && (
               <InfoRow
-                icon="location"
                 label={t('region')}
                 value={user.region}
                 editable={false}
@@ -357,8 +348,7 @@ export default function ProfileScreen({ navigation }: Props) {
                 onPress={() => setShowInterventionZoneModal(true)}
               >
                 <View style={styles.selectorLeft}>
-                  <Ionicons name="business-outline" size={20} color={MAVECAM_COLORS.SUCCESS} />
-                  <View style={styles.selectorTextContainer}>
+                  <View style={[styles.selectorTextContainer, styles.selectorTextContainerNoIcon]}>
                     <Text style={styles.selectorLabel}>{t('interventionZone')} *</Text>
                     <Text style={[styles.selectorValue, !editData.intervention_zone && styles.placeholderText]}>
                       {editData.intervention_zone 
@@ -372,7 +362,6 @@ export default function ProfileScreen({ navigation }: Props) {
               </TouchableOpacity>
             ) : (
               <InfoRow
-                icon="business"
                 label={t('interventionZone')}
                 value={user.intervention_zone ? t(INTERVENTION_ZONES.find(z => z.value === user.intervention_zone)?.labelKey || 'notProvided') : t('notProvided')}
                 editable={false}
@@ -573,7 +562,7 @@ export default function ProfileScreen({ navigation }: Props) {
 }
 
 interface InfoRowProps {
-  icon: keyof typeof Ionicons.glyphMap;
+  icon?: keyof typeof Ionicons.glyphMap;
   label: string;
   value?: string;
   editable: boolean;
@@ -584,6 +573,8 @@ interface InfoRowProps {
   // Nouvelles props pour les sélecteurs
   pickerOptions?: { value: string; label: string }[];
   onPickerChange?: (value: string) => void;
+  // Style spécifique pour email
+  isEmail?: boolean;
 }
 
 function InfoRow({ 
@@ -596,15 +587,16 @@ function InfoRow({
   placeholder,
   keyboardType = 'default',
   pickerOptions,
-  onPickerChange
+  onPickerChange,
+  isEmail = false
 }: InfoRowProps) {
   const { Picker } = require('@react-native-picker/picker');
   
   return (
     <View style={styles.infoRow}>
       <View style={styles.infoRowLeft}>
-        <Ionicons name={icon} size={20} color={MAVECAM_COLORS.GRAY_LIGHT} />
-        <Text style={styles.infoLabel}>{label}</Text>
+        {icon && <Ionicons name={icon} size={20} color={MAVECAM_COLORS.GRAY_LIGHT} />}
+        <Text style={[styles.infoLabel, !icon && styles.infoLabelNoIcon]}>{label}</Text>
       </View>
       
       {editable ? (
@@ -638,7 +630,12 @@ function InfoRow({
           />
         )
       ) : (
-        <Text style={styles.infoValue}>{value}</Text>
+        <Text 
+          style={isEmail ? styles.infoValueEmail : styles.infoValue}
+          selectable={isEmail ? true : false}
+        >
+          {value}
+        </Text>
       )}
     </View>
   );
@@ -746,12 +743,23 @@ const styles = StyleSheet.create({
     marginLeft: 12,
     flex: 1,
   },
+  infoLabelNoIcon: {
+    marginLeft: 0,
+  },
   infoValue: {
     fontSize: 14,
     color: MAVECAM_COLORS.GRAY_DARK,
     fontWeight: '500',
     flex: 1,
     textAlign: 'right',
+  },
+  infoValueEmail: {
+    fontSize: 14,
+    color: MAVECAM_COLORS.GRAY_DARK,
+    fontWeight: '500',
+    flex: 1,
+    textAlign: 'right',
+    lineHeight: 18,
   },
   infoInput: {
     fontSize: 14,
@@ -993,6 +1001,9 @@ const styles = StyleSheet.create({
   selectorTextContainer: {
     flex: 1,
     marginLeft: 12,
+  },
+  selectorTextContainerNoIcon: {
+    marginLeft: 0,
   },
   selectorLabel: {
     fontSize: 14,
