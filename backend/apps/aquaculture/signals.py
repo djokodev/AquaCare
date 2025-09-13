@@ -53,6 +53,10 @@ def calculate_initial_biomass(sender, instance, **kwargs):
         if instance.current_biomass is None:
             instance.current_biomass = instance.initial_biomass
 
+        # Initialize survival rate to 100% for new cycles
+        if instance.survival_rate is None:
+            instance.survival_rate = Decimal('100.00')
+
 
 @receiver(post_save, sender=ProductionCycle)
 def create_cycle_metrics(sender, instance, created, **kwargs):

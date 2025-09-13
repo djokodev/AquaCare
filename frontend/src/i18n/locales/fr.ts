@@ -111,12 +111,12 @@ export const fr = {
   startCycle: 'Démarrer votre premier cycle',
   viewAll: 'Voir Tout',
   quickActions: 'Actions Rapides',
-  newCycle: 'Nouveau Cycle',
+  newCycle: 'Nouvel élevage',
   feedingPlan: 'Plan d\'Alimentation',
   healthCheck: 'Contrôle Sanitaire',
   reports: 'Rapports',
-  dailyLog: 'Log Quotidien',
-  sanitaryLog: 'Log Sanitaire',
+  dailyLog: 'Saisie du jour',
+  sanitaryLog: 'Problème de santé',
 
   // Profile
   profileUpdatedSuccess: 'Profil mis à jour avec succès',

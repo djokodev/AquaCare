@@ -1,13 +1,18 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
+import { useDispatch, useSelector } from 'react-redux';
+import { AppDispatch, RootState } from '@/store/store';
+import { fetchDashboardData } from '@/store/slices/aquacultureSlice';
 
 // Couleurs MAVECAM selon spécifications
 const MAVECAM_COLORS = {
@@ -30,10 +35,84 @@ import { useAuth } from '@/hooks/useAuth';
 export default function DashboardScreen() {
   const { t } = useTranslation();
   const { user, displayName } = useAuth();
+  const dispatch = useDispatch<AppDispatch>();
 
+  // Sélecteurs Redux
+  const {
+    dashboardData,
+    loading,
+    error
+  } = useSelector((state: RootState) => state.aquaculture);
+
+  // Chargement initial des données
+  useEffect(() => {
+    dispatch(fetchDashboardData());
+  }, [dispatch]);
+
+  // Fonction de rafraîchissement
+  const onRefresh = React.useCallback(() => {
+    dispatch(fetchDashboardData());
+  }, [dispatch]);
+
+  // Calcul des métriques avec données réelles ou valeurs par défaut
+  const summary = {
+    active_cycles_count: dashboardData?.active_cycles_count || 0,
+    total_biomass: dashboardData?.total_biomass || 0,
+    average_fcr: dashboardData?.average_fcr || 0,
+    average_survival_rate: dashboardData?.average_survival_rate || 0,
+    total_fish_count: dashboardData?.total_fish_count || 0,
+  };
+
+  const activeCycles = dashboardData?.active_cycles || [];
+  const recentLogs = dashboardData?.recent_logs || [];
+
+  // Formatage des nombres
+  const formatNumber = (num: number, unit?: string) => {
+    if (num === 0) return `0${unit ? ` ${unit}` : ''}`;
+    return `${num.toLocaleString('fr-FR')}${unit ? ` ${unit}` : ''}`;
+  };
+
+  const formatPercentage = (num: number) => {
+    if (num === 0) return '0%';
+    return `${num.toFixed(1)}%`;
+  };
+
+  // Affichage d'erreur
+  if (error && !dashboardData) {
+    return (
+      <ScrollView
+        style={styles.container}
+        refreshControl={
+          <RefreshControl refreshing={loading.dashboard} onRefresh={onRefresh} />
+        }
+      >
+        <View style={styles.header}>
+          <Text style={styles.greeting}>
+            {t('hello')}, {displayName}! 👋
+          </Text>
+          <Text style={styles.subtitle}>
+            {t('welcomeBoard')}
+          </Text>
+        </View>
+
+        <View style={styles.errorContainer}>
+          <Ionicons name="alert-circle" size={48} color={MAVECAM_COLORS.ERROR} />
+          <Text style={styles.errorText}>{error}</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={onRefresh}>
+            <Text style={styles.retryButtonText}>Réessayer</Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+    );
+  }
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView
+      style={styles.container}
+      refreshControl={
+        <RefreshControl refreshing={loading.dashboard} onRefresh={onRefresh} />
+      }
+    >
       <View style={styles.header}>
         <Text style={styles.greeting}>
           {t('hello')}, {displayName}! 👋
@@ -45,32 +124,39 @@ export default function DashboardScreen() {
 
       <View style={styles.quickStatsContainer}>
         <Text style={styles.sectionTitle}>{t('quickOverview')}</Text>
-        
-        <View style={styles.statsGrid}>
-          <View style={styles.statCard}>
-            <Ionicons name="fish" size={32} color={MAVECAM_COLORS.GREEN_PRIMARY} />
-            <Text style={styles.statNumber}>0</Text>
-            <Text style={styles.statLabel}>{t('activeCycles')}</Text>
+
+        {loading.dashboard && !dashboardData ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={MAVECAM_COLORS.GREEN_PRIMARY} />
+            <Text style={styles.loadingText}>Chargement des données...</Text>
           </View>
-          
-          <View style={styles.statCard}>
-            <Ionicons name="water" size={32} color={MAVECAM_COLORS.GREEN_LIGHT} />
-            <Text style={styles.statNumber}>0</Text>
-            <Text style={styles.statLabel}>{t('ponds')}</Text>
+        ) : (
+          <View style={styles.statsGrid}>
+            <View style={styles.statCard}>
+              <Ionicons name="fish" size={32} color={MAVECAM_COLORS.GREEN_PRIMARY} />
+              <Text style={styles.statNumber}>{summary.active_cycles_count}</Text>
+              <Text style={styles.statLabel}>{t('activeCycles')}</Text>
+            </View>
+
+            <View style={styles.statCard}>
+              <Ionicons name="water" size={32} color={MAVECAM_COLORS.GREEN_LIGHT} />
+              <Text style={styles.statNumber}>{activeCycles.length}</Text>
+              <Text style={styles.statLabel}>{t('ponds')}</Text>
+            </View>
+
+            <View style={styles.statCard}>
+              <Ionicons name="scale" size={32} color={MAVECAM_COLORS.GREEN_DARK} />
+              <Text style={styles.statNumber}>{formatNumber(summary.total_biomass, 'kg')}</Text>
+              <Text style={styles.statLabel}>Biomasse</Text>
+            </View>
+
+            <View style={styles.statCard}>
+              <Ionicons name="trending-up" size={32} color={MAVECAM_COLORS.SUCCESS} />
+              <Text style={styles.statNumber}>{formatPercentage(summary.average_survival_rate)}</Text>
+              <Text style={styles.statLabel}>Survie</Text>
+            </View>
           </View>
-          
-          <View style={styles.statCard}>
-            <Ionicons name="scale" size={32} color={MAVECAM_COLORS.GREEN_DARK} />
-            <Text style={styles.statNumber}>0 kg</Text>
-            <Text style={styles.statLabel}>Biomasse</Text>
-          </View>
-          
-          <View style={styles.statCard}>
-            <Ionicons name="trending-up" size={32} color={MAVECAM_COLORS.SUCCESS} />
-            <Text style={styles.statNumber}>0%</Text>
-            <Text style={styles.statLabel}>Survie</Text>
-          </View>
-        </View>
+        )}
       </View>
 
       <View style={styles.actionContainer}>
@@ -87,7 +173,7 @@ export default function DashboardScreen() {
         </TouchableOpacity>
         
         <TouchableOpacity style={styles.actionButton}>
-          <Ionicons name="medical" size={24} color={MAVECAM_COLORS.GREEN_DARK} />
+          <Ionicons name="warning-outline" size={24} color={MAVECAM_COLORS.ERROR} />
           <Text style={styles.actionText}>{t('sanitaryLog')}</Text>
         </TouchableOpacity>
       </View>
@@ -176,5 +262,43 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: MAVECAM_COLORS.GRAY_DARK,
     marginLeft: 12,
+  },
+  // Styles pour le chargement
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: MAVECAM_COLORS.GRAY_LIGHT,
+    marginTop: 12,
+  },
+  // Styles pour l'erreur
+  errorContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+    paddingHorizontal: 20,
+  },
+  errorText: {
+    fontSize: 16,
+    color: MAVECAM_COLORS.ERROR,
+    textAlign: 'center',
+    marginTop: 12,
+    marginBottom: 20,
+  },
+  retryButton: {
+    backgroundColor: MAVECAM_COLORS.GREEN_PRIMARY,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: MAVECAM_COLORS.WHITE,
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

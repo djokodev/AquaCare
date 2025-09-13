@@ -183,12 +183,14 @@ class ProductionCycle(models.Model):
     def days_active(self):
         """
         Calcule le nombre de jours depuis le début du cycle.
-        
+
         Retourne la durée en jours entre la date de début et la date de fin
         (ou la date actuelle si le cycle est toujours actif).
         Utilisé pour calculer les taux de croissance et performances.
         """
-        # from django.utils import timezone
+        if not self.start_date:
+            return 0
+
         end_date = self.end_date or timezone.now().date()
         return (end_date - self.start_date).days
 

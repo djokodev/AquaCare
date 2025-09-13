@@ -156,8 +156,8 @@ class ProductionCycleAdmin(admin.ModelAdmin):
                 color = '#DC3545'  # Red
             
             return format_html(
-                '<span style="color: {}; font-weight: bold;">{:.1f}%</span>',
-                color, obj.survival_rate
+                '<span style="color: {}; font-weight: bold;">{}%</span>',
+                color, f"{obj.survival_rate:.1f}"
             )
         return "-"
     survival_rate_display.short_description = _('Taux survie')
@@ -174,8 +174,8 @@ class ProductionCycleAdmin(admin.ModelAdmin):
                 color = '#DC3545'  # Red - Poor
             
             return format_html(
-                '<span style="color: {}; font-weight: bold;">{:.2f}</span>',
-                color, obj.fcr
+                '<span style="color: {}; font-weight: bold;">{}</span>',
+                color, f"{obj.fcr:.2f}"
             )
         return "-"
     fcr_display.short_description = _('FCR')
@@ -235,12 +235,12 @@ class ProductionCycleAdmin(admin.ModelAdmin):
                 duration,
                 cycle.initial_count,
                 cycle.final_count or cycle.current_count,
-                f"{cycle.survival_rate:.1f}" if cycle.survival_rate else '-',
+                f"{cycle.survival_rate:.1f}" if cycle.survival_rate is not None else '-',
                 cycle.initial_average_weight,
                 cycle.final_average_weight or cycle.current_average_weight,
                 f"{daily_gain:.2f}" if daily_gain != '-' else '-',
                 cycle.total_feed_consumed,
-                f"{cycle.fcr:.2f}" if cycle.fcr else '-',
+                f"{cycle.fcr:.2f}" if cycle.fcr is not None else '-',
                 cycle.final_biomass or cycle.current_biomass
             ])
         
@@ -256,12 +256,16 @@ class ProductionCycleAdmin(admin.ModelAdmin):
             cycle_count=Count('id')
         )
         
+        avg_survival = stats['avg_survival'] or 0
+        avg_fcr = stats['avg_fcr'] or 0
+        total_biomass = stats['total_biomass'] or 0
+
         self.message_user(
             request,
             f"Rapport: {stats['cycle_count']} cycles, "
-            f"Survie moyenne: {stats['avg_survival']:.1f}%, "
-            f"FCR moyen: {stats['avg_fcr']:.2f}, "
-            f"Biomasse totale: {stats['total_biomass']:.1f} kg"
+            f"Survie moyenne: {avg_survival:.1f}%, "
+            f"FCR moyen: {avg_fcr:.2f}, "
+            f"Biomasse totale: {total_biomass:.1f} kg"
         )
     generate_performance_report.short_description = _("Générer rapport performance")
     
@@ -345,8 +349,8 @@ class CycleLogAdmin(admin.ModelAdmin):
             status = '✗'
         
         return format_html(
-            '<span style="color: {};">{} {:.1f}°C</span>',
-            color, status, temp
+            '<span style="color: {};">{} {}°C</span>',
+            color, status, f"{temp:.1f}"
         )
     water_temp_status.short_description = _('Température')
 
@@ -610,12 +614,12 @@ class CycleMetricsAdmin(admin.ModelAdmin):
     cycle_display.short_description = _('Cycle')
     
     def has_add_permission(self, request):
-        """Disable manual creation of metrics."""
-        return False
+        """Disable manual creation of metrics, except for superusers."""
+        return request.user.is_superuser
     
     def has_delete_permission(self, request, obj=None):
-        """Disable deletion of metrics."""
-        return False
+        """Allow deletion of metrics only for superusers (when deleting cycles)."""
+        return request.user.is_superuser
 
 
 # Customize admin site
