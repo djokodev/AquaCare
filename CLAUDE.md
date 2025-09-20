@@ -56,9 +56,40 @@ WebFetch(
 
 ### **Interdictions Strictes**
 - ❌ Écrire du code sans consulter la documentation officielle
-- ❌ Utiliser des patterns obsolètes ou non-officiels  
+- ❌ Utiliser des patterns obsolètes ou non-officiels
 - ❌ Solutions "qui marchent" mais non-conformes aux standards
 - ❌ Code basé uniquement sur la mémoire ou des exemples non-officiels
+- ❌ **CRITIQUE : Utiliser des packages NON compatibles avec Expo et Expo Go**
+
+### **RÈGLE FONDAMENTALE - COMPATIBILITÉ EXPO**
+
+**🚨 CONTRAINTE TECHNIQUE OBLIGATOIRE :**
+
+**TOUS les packages utilisés dans ce projet DOIVENT être compatibles avec Expo et Expo Go.**
+
+#### ✅ Packages autorisés
+- Packages officiels Expo (`expo-*`)
+- Packages listés dans [Expo SDK Documentation](https://docs.expo.dev/versions/latest/)
+- Packages supportés par Expo Go ([vérifier ici](https://docs.expo.dev/workflow/using-libraries/))
+
+#### ❌ Packages interdits
+- Packages nécessitant des modifications natives
+- Modules React Native non supportés par Expo Go
+- Packages avec code natif personnalisé
+
+#### 🔍 Processus de vérification avant ajout de package
+```bash
+# 1. Consulter https://reactnative.directory/
+# 2. Chercher le tag "✅ Expo Go"
+# 3. Utiliser : expo install nom-du-package
+# 4. Tester sur Expo Go avant validation
+# 5. Si non supporté → chercher alternative Expo-compatible
+```
+
+#### **Si absolument nécessaire d'utiliser package non-Expo :**
+1. **Chercher d'abord une alternative Expo-compatible**
+2. **Si impossible, basculer vers EAS Development Builds**
+3. **Documenter le changement et obtenir validation utilisateur**
 
 
 ## Project Overview
@@ -78,9 +109,11 @@ This is a French-language application targeting aquaculture farmers in Cameroon,
 - ✅ **Modèles Backend** : ProductionCycle, CycleLog (saisie poissons, poids, mortalité)
 - ✅ **Calculs Auto** : biomasse, FCR, courbes de croissance (CycleMetrics)
 - ✅ **Historique** : cycles avec indexation optimisée
-- ❌ **Interface Mobile** : Screens créés mais pas connectés aux APIs
-- ❌ **Saisie Fonctionnelle** : Formulaires à implémenter
-- **AVANCEMENT : 60%** *(Backend OK, Frontend à connecter)*
+- ✅ **Interface Mobile** : DashboardScreen connecté via Redux à fetchDashboardData
+- ✅ **Affichage Données** : Cycles actifs, métriques, aperçu fonctionnel
+- ❌ **Actions Rapides** : Boutons non-fonctionnels (écrans de destination manquants)
+- ❌ **Navigation** : Pas de liens vers saisie quotidienne, journal sanitaire, nouveaux cycles
+- **AVANCEMENT : 75%** *(Frontend connecté, navigation manquante)*
 
 #### **5.2 PLANIFICATEUR D'ALIMENTATION** *(Objectif MVP)*
 - ✅ **Modèles Backend** : FeedingPlan, NutritionalGuide avec calculs automatiques
@@ -115,8 +148,11 @@ This is a French-language application targeting aquaculture farmers in Cameroon,
 - ✅ **Profils Utilisateurs** : User + FarmProfile complets
 - ✅ **Statut Certification** : "éleveur suivi MAVECAM" implémenté
 - ✅ **Écrans Mobile** : ProfileScreen, SettingsScreen, FarmProfileScreen
+- ✅ **UX Optimisée** : Icônes supprimées section ferme, superficie auto-calculée
+- ✅ **Métriques Performance** : Calculs biomasse, densité, rendement depuis cycles réels
+- ✅ **Cohérence Affichage** : Noms ferme standardisés (nom famille uniquement)
 - ❌ **Historique Commandes** : Module commerce pas encore fait
-- **AVANCEMENT : 80%** *(Quasi-complet)*
+- **AVANCEMENT : 95%** *(Quasi-parfait)*
 
 
 ### **BILAN GLOBAL MVP**
@@ -127,21 +163,32 @@ This is a French-language application targeting aquaculture farmers in Cameroon,
 - **Authentification Robuste** : JWT + validation téléphone Cameroun
 - **i18n Configurée** : FR/EN prêt pour l'Afrique centrale
 - **Sélection Géographique** : LocationSelector optimisé avec sélection cascade Cameroun
-- **UX/UI Améliorée** : Interface MAVECAM avec modales intuitives pour sélection localisation
+- **UX/UI Optimisée** : Interface MAVECAM cohérente, métriques auto-calculées
+- **Dashboard Fonctionnel** : Connecté à l'API, affichage cycles actifs et métriques
+- **Espace Personnel Complet** : Profils, ferme, paramètres entièrement fonctionnels
 - **Tests Framework** : pytest configuré
 
 #### 🔄 **EN COURS (Partiellement fait)**
-- **Tableau de Bord** : Backend OK, Frontend à connecter (60%)
+- **Tableau de Bord** : Frontend connecté, actions rapides sans navigation (75%)
 - **Planificateur** : Modèles OK, notifications à activer (50%)
 - **Journal Sanitaire** : Backend OK, UI à créer (70%)
-- **Espace Personnel** : Quasi-complet avec sélection géographique optimisée (85%)
 
 #### ❌ **MANQUANT (À développer)**
+- **Écrans Aquaculture** : DailyLogScreen, SanitaryLogScreen, NewCycleScreen
+- **Navigation Fonctionnelle** : Actions rapides Dashboard vers écrans spécialisés
+- **API Endpoints** : CycleLog POST, SanitaryLog POST (backend prêt, pas exposé)
 - **Module Commerce** : Commande intrants (0% - Phase 3)
 - **Module Support** : Chat + tickets (0% - Phase 4)
-- **API Views** : Endpoints aquaculture pas tous exposés
-- **Intégration Mobile** : Connexion Frontend ↔ Backend
 - **Tests E2E** : Validation complète du flux utilisateur
+
+### **PROCHAINE ÉTAPE CRITIQUE**
+**🎯 PRIORITÉ ABSOLUE : Créer les écrans manquants pour rendre les Actions Rapides fonctionnelles**
+
+1. **DailyLogScreen** : Interface saisie quotidienne (poissons, poids, mortalité, température, pH)
+2. **SanitaryLogScreen** : Interface journal sanitaire avec photos
+3. **NewCycleScreen** : Interface création nouveaux cycles d'élevage
+4. **Navigation** : Connecter les boutons Dashboard vers ces écrans
+5. **API Integration** : Connecter les formulaires aux endpoints backend
 
 
 ## Common Development Commands

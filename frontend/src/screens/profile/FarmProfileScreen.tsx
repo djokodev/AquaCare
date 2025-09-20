@@ -28,21 +28,34 @@ const MAVECAM_COLORS = {
 };
 
 import { useAuth } from '@/hooks/useAuth';
+import { useSelector, useDispatch } from 'react-redux';
+import { RootState, AppDispatch } from '@/store/store';
+import { fetchDashboardData } from '@/store/slices/aquacultureSlice';
 import { FarmProfile } from '@/types/auth';
 
 export default function FarmProfileScreen() {
   const { t } = useTranslation();
-  const { 
-    farmProfile, 
-    isLoading, 
-    error, 
+  const dispatch = useDispatch<AppDispatch>();
+  const {
+    farmProfile,
+    isLoading,
+    error,
     updateFarm,
     isFarmCertified,
     loadProfile
   } = useAuth();
 
+  // Récupérer les données aquaculture comme dans le dashboard
+  const { dashboardData } = useSelector((state: RootState) => state.aquaculture);
+  const activeCycles = dashboardData?.active_cycles || [];
+
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState<Partial<FarmProfile>>({});
+
+  // Chargement initial des données aquaculture comme dans le dashboard
+  useEffect(() => {
+    dispatch(fetchDashboardData());
+  }, [dispatch]);
 
   useEffect(() => {
     if (farmProfile) {
@@ -56,6 +69,26 @@ export default function FarmProfileScreen() {
       });
     }
   }, [farmProfile]);
+
+  // Fonction pour afficher seulement le nom (sans prénom) dans le nom de ferme
+  const formatFarmName = (farmName: string | undefined) => {
+    if (!farmName) return '';
+
+    // Si le nom commence par "Ferme de " et contient plusieurs mots
+    if (farmName.startsWith('Ferme de ') && farmName.includes(' ')) {
+      const nameAfterFermeDe = farmName.replace('Ferme de ', '');
+      const nameParts = nameAfterFermeDe.split(' ');
+
+      // Si il y a plusieurs mots, prendre le dernier (nom de famille)
+      if (nameParts.length > 1) {
+        const lastName = nameParts[nameParts.length - 1];
+        return `Ferme de ${lastName}`;
+      }
+    }
+
+    // Retourner le nom original si pas de format reconnu
+    return farmName;
+  };
 
   const handleSave = async () => {
     try {
@@ -148,6 +181,11 @@ export default function FarmProfileScreen() {
     }
   };
 
+  // Calculs des métriques communes
+  const totalSurface = activeCycles.reduce((total, cycle) => {
+    return total + (Number(cycle.pond_surface_m2) || 0);
+  }, 0);
+
   return (
     <ScrollView style={styles.container}>
       {/* Header */}
@@ -155,7 +193,7 @@ export default function FarmProfileScreen() {
         <View style={styles.farmIcon}>
           <Ionicons name="business" size={32} color="#ffffff" />
         </View>
-        <Text style={styles.farmName}>{farmProfile.farm_name || t('myFarm')}</Text>
+        <Text style={styles.farmName}>{formatFarmName(farmProfile.farm_name) || t('myFarm')}</Text>
         
         <View style={[styles.certificationBadge, { backgroundColor: getCertificationColor() }]}>
           <Ionicons 
@@ -183,9 +221,8 @@ export default function FarmProfileScreen() {
 
         <View style={styles.infoCard}>
           <FarmInfoRow
-            icon="business"
             label={t('farmName')}
-            value={isEditing ? undefined : farmProfile.farm_name || t('notProvided')}
+            value={isEditing ? undefined : formatFarmName(farmProfile.farm_name) || t('notProvided')}
             editable={isEditing}
             onChangeText={(value) => setEditData(prev => ({ ...prev, farm_name: value }))}
             inputValue={editData.farm_name?.toString()}
@@ -193,9 +230,8 @@ export default function FarmProfileScreen() {
           />
           
           <FarmInfoRow
-            icon="water"
             label={t('totalPonds')}
-            value={isEditing ? undefined : farmProfile.total_ponds?.toString() || '0'}
+            value={isEditing ? undefined : activeCycles.length.toString()}
             editable={isEditing}
             onChangeText={(value) => setEditData(prev => ({ ...prev, total_ponds: parseInt(value) || 0 }))}
             inputValue={editData.total_ponds?.toString()}
@@ -204,10 +240,9 @@ export default function FarmProfileScreen() {
           />
           
           <FarmInfoRow
-            icon="resize"
             label={t('totalArea')}
-            value={isEditing ? undefined : farmProfile.total_area_m2?.toString() || '0'}
-            editable={isEditing}
+            value={isEditing ? undefined : `${totalSurface} m²`}
+            editable={false}
             onChangeText={(value) => setEditData(prev => ({ ...prev, total_area_m2: parseFloat(value) || 0 }))}
             inputValue={editData.total_area_m2?.toString()}
             placeholder={t('areaPlaceholder')}
@@ -215,7 +250,6 @@ export default function FarmProfileScreen() {
           />
           
           <FarmInfoRow
-            icon="water"
             label={t('waterSource')}
             value={isEditing ? undefined : farmProfile.water_source || t('notProvided')}
             editable={isEditing}
@@ -225,7 +259,6 @@ export default function FarmProfileScreen() {
           />
           
           <FarmInfoRow
-            icon="fish"
             label={t('mainSpecies')}
             value={isEditing ? undefined : farmProfile.main_species || t('notProvided')}
             editable={isEditing}
@@ -235,7 +268,6 @@ export default function FarmProfileScreen() {
           />
           
           <FarmInfoRow
-            icon="scale"
             label={t('annualProduction')}
             value={isEditing ? undefined : farmProfile.annual_production_kg?.toString() || '0'}
             editable={isEditing}
@@ -255,19 +287,62 @@ export default function FarmProfileScreen() {
         <View style={styles.metricsContainer}>
           <View style={styles.metricCard}>
             <Text style={styles.metricValue}>
-              {farmProfile.total_ponds > 0 
-                ? (farmProfile.total_area_m2 || 0) / farmProfile.total_ponds 
-                : 0
+              {(() => {
+                if (activeCycles.length === 0) return '0';
+
+                // Utiliser la somme des surfaces des cycles actifs au lieu du profil
+                const totalSurface = activeCycles.reduce((total, cycle) => {
+                  return total + (Number(cycle.pond_surface_m2) || 0);
+                }, 0);
+
+                return (totalSurface / activeCycles.length).toFixed(1);
+              })()
               } m²
             </Text>
             <Text style={styles.metricLabel}>{t('averageAreaPerPond')}</Text>
           </View>
-          
+
           <View style={styles.metricCard}>
             <Text style={styles.metricValue}>
-              {(farmProfile.total_area_m2 || 0) > 0 
-                ? ((farmProfile.annual_production_kg || 0) / (farmProfile.total_area_m2 || 1)).toFixed(1)
-                : '0'
+              {(() => {
+                if (activeCycles.length === 0) return '0';
+
+                const totalBiomass = activeCycles.reduce((total, cycle) => {
+                  return total + (Number(cycle.current_biomass) || 0);
+                }, 0);
+
+                const totalSurface = activeCycles.reduce((total, cycle) => {
+                  return total + (Number(cycle.pond_surface_m2) || 0);
+                }, 0);
+
+                if (totalSurface === 0) return '0';
+
+                return (totalBiomass / totalSurface).toFixed(1);
+              })()
+              } kg/m²
+            </Text>
+            <Text style={styles.metricLabel}>{t('currentDensity')}</Text>
+          </View>
+
+          <View style={styles.metricCard}>
+            <Text style={styles.metricValue}>
+              {(() => {
+                console.log('DEBUG - farmProfile.annual_production_kg:', farmProfile.annual_production_kg);
+                console.log('DEBUG - farmProfile.total_area_m2 (yield):', farmProfile.total_area_m2);
+
+                const production = Number(farmProfile.annual_production_kg) || 0;
+                const area = Number(farmProfile.total_area_m2) || 0;
+
+                console.log('DEBUG - production converted:', production);
+                console.log('DEBUG - area converted:', area);
+
+                if (area === 0) return '0';
+
+                const yield_result = (production / area).toFixed(1);
+                console.log('DEBUG - yield result:', yield_result);
+
+                return yield_result;
+              })()
               } kg/m²
             </Text>
             <Text style={styles.metricLabel}>{t('yieldPerSquareMeter')}</Text>
@@ -300,7 +375,7 @@ export default function FarmProfileScreen() {
 }
 
 interface FarmInfoRowProps {
-  icon: keyof typeof Ionicons.glyphMap;
+  icon?: keyof typeof Ionicons.glyphMap;
   label: string;
   value?: string;
   editable: boolean;
@@ -310,20 +385,20 @@ interface FarmInfoRowProps {
   keyboardType?: 'default' | 'numeric';
 }
 
-function FarmInfoRow({ 
-  icon, 
-  label, 
-  value, 
-  editable, 
-  onChangeText, 
-  inputValue, 
+function FarmInfoRow({
+  icon,
+  label,
+  value,
+  editable,
+  onChangeText,
+  inputValue,
   placeholder,
   keyboardType = 'default'
 }: FarmInfoRowProps) {
   return (
     <View style={styles.infoRow}>
       <View style={styles.infoRowLeft}>
-        <Ionicons name={icon} size={20} color="#64748b" />
+        {icon && <Ionicons name={icon} size={20} color="#64748b" />}
         <Text style={styles.infoLabel}>{label}</Text>
       </View>
       
@@ -476,10 +551,10 @@ const styles = StyleSheet.create({
   metricCard: {
     backgroundColor: MAVECAM_COLORS.WHITE,
     flex: 1,
-    padding: 16,
+    padding: 12,
     borderRadius: 12,
     alignItems: 'center',
-    marginHorizontal: 4,
+    marginHorizontal: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
@@ -487,10 +562,12 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   metricValue: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 'bold',
     color: MAVECAM_COLORS.GREEN_PRIMARY,
     marginBottom: 4,
+    textAlign: 'center',
+    lineHeight: 22,
   },
   metricLabel: {
     fontSize: 12,

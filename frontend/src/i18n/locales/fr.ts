@@ -206,6 +206,7 @@ export const fr = {
   speciesPlaceholder: 'Tilapia, Clarias, etc.',
   productionPlaceholder: 'Production en kg/an',
   averageAreaPerPond: 'Superficie moyenne par bassin',
+  currentDensity: 'Densité actuelle',
   yieldPerSquareMeter: 'Rendement par m²',
 
   // Intervention Zones

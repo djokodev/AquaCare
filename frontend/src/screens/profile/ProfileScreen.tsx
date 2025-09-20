@@ -31,6 +31,9 @@ const MAVECAM_COLORS = {
 
 import { ProfileStackParamList } from '@/navigation/MainNavigator';
 import { useAuth } from '@/hooks/useAuth';
+import { useSelector, useDispatch } from 'react-redux';
+import { RootState, AppDispatch } from '@/store/store';
+import { fetchDashboardData } from '@/store/slices/aquacultureSlice';
 import { User } from '@/types/auth';
 import { INTERVENTION_ZONES } from '@/constants/cameroon';
 import LocationSelector from '@/components/common/LocationSelector';
@@ -51,18 +54,23 @@ interface Props {
 
 export default function ProfileScreen({ navigation }: Props) {
   const { t } = useTranslation();
-  const { 
-    user, 
-    farmProfile, 
-    isLoading, 
-    error, 
-    updateProfile, 
-    loadProfile, 
+  const dispatch = useDispatch<AppDispatch>();
+  const {
+    user,
+    farmProfile,
+    isLoading,
+    error,
+    updateProfile,
+    loadProfile,
     logout,
     displayName,
     isIndividual,
-    isFarmCertified 
+    isFarmCertified
   } = useAuth();
+
+  // Récupérer les données aquaculture comme dans le dashboard
+  const { dashboardData } = useSelector((state: RootState) => state.aquaculture);
+  const activeCycles = dashboardData?.active_cycles || [];
 
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState<Partial<User>>({});
@@ -71,6 +79,11 @@ export default function ProfileScreen({ navigation }: Props) {
 
   // État pour la localisation géographique
   const [locationData, setLocationData] = useState<LocationData>({});
+
+  // Chargement initial des données aquaculture comme dans le dashboard
+  useEffect(() => {
+    dispatch(fetchDashboardData());
+  }, [dispatch]);
 
   useEffect(() => {
     // Load profile data only if we really need it
@@ -404,7 +417,7 @@ export default function ProfileScreen({ navigation }: Props) {
               <InfoRow
                 icon="water"
                 label={t('totalPonds')}
-                value={farmProfile.total_ponds.toString()}
+                value={activeCycles.length.toString()}
                 editable={false}
               />
               {farmProfile.total_area_m2 && (
@@ -444,31 +457,6 @@ export default function ProfileScreen({ navigation }: Props) {
         )}
 
 
-        {/* Métriques de Performance (si données disponibles) */}
-        {farmProfile && farmProfile.total_ponds > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('performanceMetrics')}</Text>
-            <View style={styles.metricsContainer}>
-              <View style={styles.metricCard}>
-                <Text style={styles.metricValue}>
-                  {farmProfile.total_area_m2 
-                    ? Math.round(farmProfile.total_area_m2 / farmProfile.total_ponds) 
-                    : 0} m²
-                </Text>
-                <Text style={styles.metricLabel}>{t('averageAreaPerPond')}</Text>
-              </View>
-              
-              {farmProfile.annual_production_kg && farmProfile.total_area_m2 && (
-                <View style={styles.metricCard}>
-                  <Text style={styles.metricValue}>
-                    {(farmProfile.annual_production_kg / farmProfile.total_area_m2).toFixed(1)} kg/m²
-                  </Text>
-                  <Text style={styles.metricLabel}>{t('yieldPerSquareMeter')}</Text>
-                </View>
-              )}
-            </View>
-          </View>
-        )}
 
         {/* Préférences */}
         <View style={styles.section}>
