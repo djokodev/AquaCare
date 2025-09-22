@@ -14,6 +14,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState, AppDispatch } from '@/store/store';
 import { fetchDashboardData } from '@/store/slices/aquacultureSlice';
+import { aquacultureService } from '@/services/aquacultureService';
+import { offlineService } from '@/services/offlineService';
+import { DailyLogForm } from '@/types/aquaculture';
 
 // Couleurs MAVECAM selon spécifications
 const MAVECAM_COLORS = {
@@ -33,11 +36,12 @@ const MAVECAM_COLORS = {
 
 interface DailyLogData {
   cycle_id: string;
-  average_weight: string;
+  sample_count: string;
+  sample_total_weight: string;
   mortality_count: string;
   water_temperature: string;
   ph_level: string;
-  notes: string;
+  observations: string;
 }
 
 export default function DailyLogScreen({ navigation }: any) {
@@ -49,17 +53,45 @@ export default function DailyLogScreen({ navigation }: any) {
   const [selectedCycle, setSelectedCycle] = useState<string>('');
   const [formData, setFormData] = useState<DailyLogData>({
     cycle_id: '',
-    average_weight: '',
+    sample_count: '',
+    sample_total_weight: '',
     mortality_count: '',
     water_temperature: '',
     ph_level: '',
-    notes: '',
+    observations: '',
   });
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     dispatch(fetchDashboardData());
+
+    // Tenter la synchronisation des données offline
+    tryOfflineSync();
   }, [dispatch]);
+
+  const tryOfflineSync = async () => {
+    try {
+      const hasPending = await offlineService.hasPendingSync();
+      if (hasPending) {
+        console.log('🔄 Synchronisation des données offline...');
+
+        const result = await offlineService.syncOfflineLogs();
+
+        if (result.success > 0) {
+          console.log(`✅ ${result.success} saisies synchronisées`);
+          // Rafraîchir le dashboard après sync
+          dispatch(fetchDashboardData());
+        }
+
+        if (result.failed > 0) {
+          console.log(`❌ ${result.failed} saisies non synchronisées`);
+        }
+      }
+    } catch (error) {
+      console.error('Erreur synchronisation silencieuse:', error);
+      // Ne pas alerter l'utilisateur, juste log
+    }
+  };
 
   useEffect(() => {
     if (activeCycles.length > 0 && !selectedCycle) {
@@ -70,23 +102,75 @@ export default function DailyLogScreen({ navigation }: any) {
 
   const handleSave = async () => {
     if (!selectedCycle) {
-      Alert.alert(t('error'), 'Veuillez sélectionner un cycle');
+      Alert.alert(t('error'), t('noCycleSelected'));
       return;
     }
 
     setSaving(true);
     try {
-      // TODO: Implémenter l'API call POST /api/aquaculture/cycle-logs/
-      console.log('Saving daily log:', formData);
+      // Calculer le poids moyen à partir de l'échantillon
+      const sampleCount = parseFloat(formData.sample_count) || 0;
+      const sampleWeight = parseFloat(formData.sample_total_weight) || 0;
+      const averageWeight = sampleCount > 0 ? sampleWeight / sampleCount : 0;
 
-      // Simulation d'une sauvegarde
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Préparer les données pour l'API
+      const logData: DailyLogForm = {
+        log_date: new Date().toISOString().split('T')[0], // Format YYYY-MM-DD
+        mortality_count: formData.mortality_count ? parseInt(formData.mortality_count) : undefined,
+        sample_count: sampleCount > 0 ? sampleCount : undefined,
+        sample_total_weight: sampleWeight > 0 ? sampleWeight : undefined,
+        water_temperature: formData.water_temperature ? parseFloat(formData.water_temperature) : undefined,
+        ph_level: formData.ph_level ? parseFloat(formData.ph_level) : undefined,
+        observations: formData.observations || undefined,
+      };
 
-      Alert.alert(t('success'), 'Saisie enregistrée avec succès', [
-        { text: 'OK', onPress: () => navigation.goBack() }
-      ]);
-    } catch (error) {
-      Alert.alert(t('error'), 'Erreur lors de l\'enregistrement');
+      try {
+        // Tentative d'appel API en ligne
+        await aquacultureService.createCycleLog(selectedCycle, logData);
+
+        // Rafraîchir le Dashboard pour afficher les nouvelles données
+        dispatch(fetchDashboardData());
+
+        Alert.alert(t('success'), t('recordSaved'), [
+          { text: 'OK', onPress: () => navigation.goBack() }
+        ]);
+
+      } catch (apiError: any) {
+        // Vérifier si c'est une erreur réseau
+        const isNetworkError =
+          apiError.code === 'NETWORK_ERROR' ||
+          apiError.message?.toLowerCase().includes('network') ||
+          apiError.message?.toLowerCase().includes('connection') ||
+          !apiError.response;
+
+        if (isNetworkError) {
+          console.log('📱 Pas de connexion, sauvegarde offline...');
+
+          // Sauvegarder en offline
+          await offlineService.saveCycleLogOffline(selectedCycle, logData);
+
+          Alert.alert(t('success'), t('recordSavedOffline'), [
+            { text: 'OK', onPress: () => navigation.goBack() }
+          ]);
+
+        } else {
+          // Erreur API réelle
+          throw apiError;
+        }
+      }
+    } catch (error: any) {
+      console.error('Error creating daily log:', error);
+
+      let errorMessage = t('recordSaveError');
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.response?.data?.detail) {
+        errorMessage = error.response.data.detail;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+
+      Alert.alert(t('error'), errorMessage);
     } finally {
       setSaving(false);
     }
@@ -106,13 +190,13 @@ export default function DailyLogScreen({ navigation }: any) {
     return (
       <View style={styles.emptyContainer}>
         <Ionicons name="fish-outline" size={64} color={MAVECAM_COLORS.GRAY_LIGHT} />
-        <Text style={styles.emptyTitle}>Aucun cycle actif</Text>
-        <Text style={styles.emptySubtitle}>Créez un cycle d'élevage pour commencer la saisie</Text>
+        <Text style={styles.emptyTitle}>{t('noActiveCycles')}</Text>
+        <Text style={styles.emptySubtitle}>{t('createCycleToStart')}</Text>
         <TouchableOpacity
           style={styles.primaryButton}
           onPress={() => navigation.navigate('NewCycle')}
         >
-          <Text style={styles.buttonText}>Créer un cycle</Text>
+          <Text style={styles.buttonText}>{t('createCycle')}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -127,13 +211,13 @@ export default function DailyLogScreen({ navigation }: any) {
         >
           <Ionicons name="arrow-back" size={24} color={MAVECAM_COLORS.WHITE} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{t('dailyLog')}</Text>
+        <Text style={styles.headerTitle}>{t('dailyLogTitle')}</Text>
       </View>
 
       <View style={styles.content}>
         {/* Sélection du cycle */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Cycle d'élevage</Text>
+          <Text style={styles.sectionTitle}>{t('cycleSelection')}</Text>
           {activeCycles.map((cycle) => (
             <TouchableOpacity
               key={cycle.id}
@@ -161,22 +245,35 @@ export default function DailyLogScreen({ navigation }: any) {
 
         {/* Formulaire de saisie */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Données du jour</Text>
+          <Text style={styles.sectionTitle}>{t('dailyData')}</Text>
 
-          <View style={styles.formGroup}>
-            <Text style={styles.label}>Poids moyen (g)</Text>
-            <TextInput
-              style={styles.input}
-              value={formData.average_weight}
-              onChangeText={(value) => setFormData(prev => ({ ...prev, average_weight: value }))}
-              placeholder="Ex: 120"
-              keyboardType="numeric"
-            />
+          <View style={styles.formRow}>
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>{t('sampleCount')}</Text>
+              <TextInput
+                style={styles.input}
+                value={formData.sample_count}
+                onChangeText={(value) => setFormData(prev => ({ ...prev, sample_count: value }))}
+                placeholder="Ex: 10"
+                keyboardType="numeric"
+              />
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>{t('sampleWeight')}</Text>
+              <TextInput
+                style={styles.input}
+                value={formData.sample_total_weight}
+                onChangeText={(value) => setFormData(prev => ({ ...prev, sample_total_weight: value }))}
+                placeholder="Ex: 1200"
+                keyboardType="numeric"
+              />
+            </View>
           </View>
 
           <View style={styles.formRow}>
             <View style={styles.formGroup}>
-              <Text style={styles.label}>Mortalité</Text>
+              <Text style={styles.label}>{t('mortality')}</Text>
               <TextInput
                 style={styles.input}
                 value={formData.mortality_count}
@@ -187,7 +284,7 @@ export default function DailyLogScreen({ navigation }: any) {
             </View>
 
             <View style={styles.formGroup}>
-              <Text style={styles.label}>Température (°C)</Text>
+              <Text style={styles.label}>{t('waterTemperatureUnit')}</Text>
               <TextInput
                 style={styles.input}
                 value={formData.water_temperature}
@@ -199,7 +296,7 @@ export default function DailyLogScreen({ navigation }: any) {
           </View>
 
           <View style={styles.formGroup}>
-            <Text style={styles.label}>pH de l'eau</Text>
+            <Text style={styles.label}>{t('phLevel')}</Text>
             <TextInput
               style={styles.input}
               value={formData.ph_level}
@@ -210,17 +307,32 @@ export default function DailyLogScreen({ navigation }: any) {
           </View>
 
           <View style={styles.formGroup}>
-            <Text style={styles.label}>Observations</Text>
+            <Text style={styles.label}>{t('observations')}</Text>
             <TextInput
               style={[styles.input, styles.textArea]}
-              value={formData.notes}
-              onChangeText={(value) => setFormData(prev => ({ ...prev, notes: value }))}
-              placeholder="Notes, observations particulières..."
+              value={formData.observations}
+              onChangeText={(value) => setFormData(prev => ({ ...prev, observations: value }))}
+              placeholder={t('observationsPlaceholder')}
               multiline
               numberOfLines={4}
             />
           </View>
         </View>
+
+        {/* Calculs automatiques */}
+        {formData.sample_count && formData.sample_total_weight && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>{t('autoCalculations')}</Text>
+            <View style={styles.calculationsCard}>
+              <View style={styles.calculationRow}>
+                <Text style={styles.calculationLabel}>{t('averageWeight')} :</Text>
+                <Text style={styles.calculationValue}>
+                  {(parseFloat(formData.sample_total_weight) / parseFloat(formData.sample_count)).toFixed(1)} g
+                </Text>
+              </View>
+            </View>
+          </View>
+        )}
 
         <TouchableOpacity
           style={[styles.saveButton, saving && styles.buttonDisabled]}
@@ -232,7 +344,7 @@ export default function DailyLogScreen({ navigation }: any) {
           ) : (
             <>
               <Ionicons name="checkmark" size={20} color={MAVECAM_COLORS.WHITE} />
-              <Text style={styles.buttonText}>Enregistrer</Text>
+              <Text style={styles.buttonText}>{t('save')}</Text>
             </>
           )}
         </TouchableOpacity>
@@ -382,5 +494,26 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     opacity: 0.6,
+  },
+  calculationsCard: {
+    backgroundColor: MAVECAM_COLORS.WHITE,
+    padding: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: MAVECAM_COLORS.GREEN_LIGHT,
+  },
+  calculationRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  calculationLabel: {
+    fontSize: 14,
+    color: MAVECAM_COLORS.GRAY_LIGHT,
+  },
+  calculationValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: MAVECAM_COLORS.GREEN_PRIMARY,
   },
 });

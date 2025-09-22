@@ -148,6 +148,7 @@ export const en = {
   createCycle: 'Create cycle',
   fillRequiredFields: 'Please fill all required fields with valid values',
   cycleCreatedSuccess: 'New cycle created successfully!',
+  cycleCreatedOffline: 'Cycle saved offline (will sync when connected)',
   cycleCreationError: 'Error creating cycle',
   requiredField: '*',
 
@@ -253,6 +254,44 @@ export const en = {
   nationale: 'National',
   regionale: 'Regional',
   departementale: 'Departmental',
+
+  // DailyLog Screen
+  dailyLogTitle: 'Daily Entry',
+  cycleSelection: 'Breeding cycle',
+  noCycleSelected: 'Please select a cycle',
+  dailyData: 'Daily data',
+  averageWeight: 'Average weight',
+  averageWeightUnit: 'Average weight (g)',
+  sampleCount: 'Sample (count)',
+  sampleWeight: 'Total weight (g)',
+  mortality: 'Mortality',
+  waterTemperature: 'Water temperature',
+  waterTemperatureUnit: 'Temperature (°C)',
+  phLevel: 'Water pH',
+  observations: 'Observations',
+  observationsPlaceholder: 'Notes, special observations...',
+  recordSaved: 'Record saved successfully',
+  recordSaveError: 'Error saving record',
+  recordSavedOffline: 'Record saved offline (will sync when connected)',
+  syncInProgress: 'Synchronizing...',
+  syncSuccess: 'Synchronization successful',
+  syncFailed: 'Synchronization failed',
+  createCycleToStart: 'Create a breeding cycle to start logging',
+
+  // DailyLogHistory Screen
+  dailyLogHistory: 'Daily Logs History',
+  filterByCycle: 'Filter by cycle',
+  allCycles: 'All cycles',
+  noLogsYet: 'No logs yet',
+  startLoggingData: 'Start recording your daily data',
+  viewDailyLogHistory: 'View daily logs history',
+
+  // SanitaryLog Screen
+  sanitaryLogTitle: 'Sanitary Log',
+  selectEventType: 'Please select an event type',
+  sanitaryRecordSaved: 'Sanitary record saved successfully',
+  sanitaryRecordSavedOffline: 'Sanitary record saved offline (will sync when connected)',
+  sanitaryRecordSaveError: 'Error saving sanitary record',
 
   // Common
   loading: 'Loading...',

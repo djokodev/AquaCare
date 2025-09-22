@@ -10,6 +10,9 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
+import type { RootStackParamList } from '@/navigation/MainNavigator';
+import type { StackNavigationProp } from '@react-navigation/stack';
 
 // Couleurs MAVECAM selon spécifications
 const MAVECAM_COLORS = {
@@ -33,8 +36,11 @@ import { RootState, AppDispatch } from '@/store/store';
 import { fetchDashboardData } from '@/store/slices/aquacultureSlice';
 import { FarmProfile } from '@/types/auth';
 
+type NavigationProp = StackNavigationProp<RootStackParamList>;
+
 export default function FarmProfileScreen() {
   const { t } = useTranslation();
+  const navigation = useNavigation<NavigationProp>();
   const dispatch = useDispatch<AppDispatch>();
   const {
     farmProfile,
@@ -343,6 +349,14 @@ export default function FarmProfileScreen() {
             })}
           </View>
         )}
+
+        {/* Bouton Historique des saisies */}
+        <TouchableOpacity
+          onPress={() => navigation.navigate('DailyLogHistory')}
+          style={styles.historyButton}
+        >
+          <Text style={styles.historyButtonText}>{t('viewDailyLogHistory')}</Text>
+        </TouchableOpacity>
       </View>
 
 
@@ -540,6 +554,19 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     paddingHorizontal: 8,
     paddingVertical: 4,
+  },
+  historyButton: {
+    backgroundColor: MAVECAM_COLORS.GREEN_PRIMARY,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    marginTop: 16,
+    alignItems: 'center',
+  },
+  historyButtonText: {
+    fontSize: 16,
+    color: MAVECAM_COLORS.WHITE,
+    fontWeight: '600',
   },
   // Styles pour la section Cycles en cours
   emptyState: {

@@ -29,6 +29,7 @@ import SettingsScreen from '@/screens/profile/SettingsScreen';
 
 // Aquaculture Screens
 import DailyLogScreen from '@/screens/aquaculture/DailyLogScreen';
+import DailyLogHistoryScreen from '@/screens/aquaculture/DailyLogHistoryScreen';
 import SanitaryLogScreen from '@/screens/aquaculture/SanitaryLogScreen';
 import NewCycleScreen from '@/screens/aquaculture/NewCycleScreen';
 
@@ -40,6 +41,7 @@ export type MainTabParamList = {
 export type RootStackParamList = {
   MainTabs: undefined;
   DailyLog: undefined;
+  DailyLogHistory: undefined;
   SanitaryLog: undefined;
   NewCycle: undefined;
 };
@@ -172,6 +174,10 @@ export default function MainNavigator() {
       <RootStack.Screen
         name="DailyLog"
         component={DailyLogScreen}
+      />
+      <RootStack.Screen
+        name="DailyLogHistory"
+        component={DailyLogHistoryScreen}
       />
       <RootStack.Screen
         name="SanitaryLog"

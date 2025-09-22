@@ -13,6 +13,7 @@ import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/hooks/useAuth';
 import { aquacultureService } from '@/services/aquacultureService';
+import { offlineService } from '@/services/offlineService';
 import { CreateCycleForm } from '@/types/aquaculture';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState, AppDispatch } from '@/store/store';
@@ -148,17 +149,42 @@ export default function NewCycleScreen({ navigation }: any) {
 
       console.log('Creating new cycle with data:', cycleData);
 
-      // Appel API backend
-      const newCycle = await aquacultureService.createProductionCycle(cycleData);
+      try {
+        // Tentative d'appel API en ligne
+        const newCycle = await aquacultureService.createProductionCycle(cycleData);
 
-      console.log('Cycle created successfully:', newCycle);
+        console.log('Cycle created successfully:', newCycle);
 
-      // Rafraîchir le Dashboard pour afficher le nouveau cycle
-      dispatch(fetchDashboardData());
+        // Rafraîchir le Dashboard pour afficher le nouveau cycle
+        dispatch(fetchDashboardData());
 
-      Alert.alert(t('success'), t('cycleCreatedSuccess'), [
-        { text: 'OK', onPress: () => navigation.goBack() }
-      ]);
+        Alert.alert(t('success'), t('cycleCreatedSuccess'), [
+          { text: 'OK', onPress: () => navigation.goBack() }
+        ]);
+
+      } catch (apiError: any) {
+        // Vérifier si c'est une erreur réseau
+        const isNetworkError =
+          apiError.code === 'NETWORK_ERROR' ||
+          apiError.message?.toLowerCase().includes('network') ||
+          apiError.message?.toLowerCase().includes('connection') ||
+          !apiError.response;
+
+        if (isNetworkError) {
+          console.log('📱 Pas de connexion, sauvegarde cycle offline...');
+
+          // Sauvegarder en offline
+          await offlineService.saveNewCycleOffline(cycleData);
+
+          Alert.alert(t('success'), t('cycleCreatedOffline'), [
+            { text: 'OK', onPress: () => navigation.goBack() }
+          ]);
+
+        } else {
+          // Erreur API réelle
+          throw apiError;
+        }
+      }
     } catch (error: any) {
       console.error('Error creating cycle:', error);
 

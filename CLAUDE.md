@@ -51,6 +51,7 @@ WebFetch(
    - OBLIGATOIRE: Tester la compilation avec `npm run web` pour les modifications critiques
    - OBLIGATOIRE: Ne jamais marquer une tâche comme terminée sans vérification
    - OBLIGATOIRE: Signaler immédiatement toute erreur détectée
+   - OBLIGATOIRE: Supprimer TOUS les console.log de débogage après validation du code
 
 5. **Toujours analyser la code base actuelle lors d'une nouvelle requette dans un nouveau chat et pour chaque fonctionnalites developper, tu dois mettre cela a jour dans ce fichier afin que la comprehension par n nouveau chat soit parfaite, donc toujours mettre ce fichier a jour en fonction de l'avancement actuel (apres ma confirmation biensur)**
 
@@ -327,7 +328,25 @@ $mavecam-gray-dark: #1e293b;         // Texte principal
 4. ✅ Correction immédiate si problème détecté
 5. ✅ Confirmation par nouvelle lecture
 6. ✅ VÉRIFICATION OBLIGATOIRE DE LA TRADUCTION (voir section dédiée)
+7. ✅ SUPPRESSION de tous les console.log de débogage ajoutés
 ```
+
+#### **🧹 RÈGLE CRITIQUE - NETTOYAGE DES LOGS DE DÉBOGAGE**
+**OBLIGATION ABSOLUE : Supprimer tous les console.log ajoutés pour le débogage**
+
+**❌ PROBLÈMES DES LOGS DE DÉBOGAGE :**
+- Pollution de la console en production
+- Performance dégradée sur mobile
+- Informations sensibles exposées
+- Code non-professionnel
+
+**✅ APRÈS VALIDATION DU CODE :**
+1. **Identifier tous les console.log ajoutés** pour débogage
+2. **Les supprimer systématiquement** avant finalisation
+3. **Garder uniquement** les logs métier essentiels
+4. **Vérifier** qu'aucun log temporaire ne reste
+
+**EXCEPTION :** Logs métier permanents (erreurs, analytics) sont autorisés.
 
 #### **🌍 VÉRIFICATION TRADUCTION OBLIGATOIRE**
 **RÈGLE ABSOLUE : Notre application doit être PARFAITEMENT bilingue (Français/Anglais)**

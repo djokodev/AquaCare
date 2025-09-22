@@ -148,6 +148,7 @@ export const fr = {
   createCycle: 'Créer le cycle',
   fillRequiredFields: 'Veuillez remplir tous les champs obligatoires avec des valeurs valides',
   cycleCreatedSuccess: 'Nouveau cycle créé avec succès !',
+  cycleCreatedOffline: 'Cycle sauvegardé (sera synchronisé à la reconnexion)',
   cycleCreationError: 'Erreur lors de la création du cycle',
   requiredField: '*',
 
@@ -253,6 +254,44 @@ export const fr = {
   nationale: 'Nationale',
   regionale: 'Régionale',
   departementale: 'Départementale',
+
+  // DailyLog Screen
+  dailyLogTitle: 'Saisie du Jour',
+  cycleSelection: 'Cycle d\'élevage',
+  noCycleSelected: 'Veuillez sélectionner un cycle',
+  dailyData: 'Données du jour',
+  averageWeight: 'Poids moyen',
+  averageWeightUnit: 'Poids moyen (g)',
+  sampleCount: 'Échantillon (nb)',
+  sampleWeight: 'Poids total (g)',
+  mortality: 'Mortalité',
+  waterTemperature: 'Température de l\'eau',
+  waterTemperatureUnit: 'Température (°C)',
+  phLevel: 'pH de l\'eau',
+  observations: 'Observations',
+  observationsPlaceholder: 'Notes, observations particulières...',
+  recordSaved: 'Saisie enregistrée avec succès',
+  recordSaveError: 'Erreur lors de l\'enregistrement',
+  recordSavedOffline: 'Saisie sauvegardée (sera synchronisée à la reconnexion)',
+  syncInProgress: 'Synchronisation en cours...',
+  syncSuccess: 'Synchronisation réussie',
+  syncFailed: 'Erreur de synchronisation',
+  createCycleToStart: 'Créez un cycle d\'élevage pour commencer la saisie',
+
+  // DailyLogHistory Screen
+  dailyLogHistory: 'Historique des Saisies',
+  filterByCycle: 'Filtrer par cycle',
+  allCycles: 'Tous les cycles',
+  noLogsYet: 'Aucune saisie encore',
+  startLoggingData: 'Commencez à enregistrer vos données quotidiennes',
+  viewDailyLogHistory: 'Voir l\'historique des saisies',
+
+  // SanitaryLog Screen
+  sanitaryLogTitle: 'Journal Sanitaire',
+  selectEventType: 'Veuillez sélectionner un type d\'événement',
+  sanitaryRecordSaved: 'Journal sanitaire enregistré avec succès',
+  sanitaryRecordSavedOffline: 'Journal sanitaire sauvegardé (sera synchronisé à la reconnexion)',
+  sanitaryRecordSaveError: 'Erreur lors de l\'enregistrement du journal sanitaire',
 
   // Common
   loading: 'Chargement...',

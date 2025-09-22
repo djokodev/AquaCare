@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useDispatch, useSelector } from 'react-redux';
 import { AppDispatch, RootState } from '@/store/store';
 import { fetchDashboardData } from '@/store/slices/aquacultureSlice';
+import { offlineService } from '@/services/offlineService';
 
 // Couleurs MAVECAM selon spécifications
 const MAVECAM_COLORS = {
@@ -44,10 +45,42 @@ export default function DashboardScreen({ navigation }: any) {
     error
   } = useSelector((state: RootState) => state.aquaculture);
 
-  // Chargement initial des données
+  // Chargement initial des données + synchronisation offline
   useEffect(() => {
-    dispatch(fetchDashboardData());
+    const initializeDashboard = async () => {
+      // Tenter la synchronisation offline en arrière-plan
+      tryGlobalOfflineSync();
+
+      // Charger les données du dashboard
+      dispatch(fetchDashboardData());
+    };
+
+    initializeDashboard();
   }, [dispatch]);
+
+  const tryGlobalOfflineSync = async () => {
+    try {
+      const hasPending = await offlineService.hasAnyPendingSync();
+      if (hasPending) {
+        console.log('🔄 Synchronisation globale des données offline...');
+
+        const result = await offlineService.syncAllOfflineData();
+
+        if (result.success > 0) {
+          console.log(`✅ ${result.success} éléments synchronisés`);
+          // Rafraîchir le dashboard après sync
+          dispatch(fetchDashboardData());
+        }
+
+        if (result.failed > 0) {
+          console.log(`❌ ${result.failed} éléments non synchronisés`);
+        }
+      }
+    } catch (error) {
+      console.error('Erreur synchronisation globale silencieuse:', error);
+      // Ne pas alerter l'utilisateur, juste log
+    }
+  };
 
   // Fonction de rafraîchissement
   const onRefresh = React.useCallback(() => {

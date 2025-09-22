@@ -15,6 +15,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState, AppDispatch } from '@/store/store';
 import { fetchDashboardData } from '@/store/slices/aquacultureSlice';
+import { aquacultureService } from '@/services/aquacultureService';
+import { offlineService } from '@/services/offlineService';
+import { SanitaryLogForm, SanitaryEventType } from '@/types/aquaculture';
 // import * as ImagePicker from 'expo-image-picker';
 
 // Couleurs MAVECAM selon spécifications
@@ -35,10 +38,10 @@ const MAVECAM_COLORS = {
 
 const SANITARY_EVENT_TYPES = [
   { value: 'disease', label: 'Maladie', icon: 'medical' },
-  { value: 'mortality', label: 'Mortalité élevée', icon: 'skull' },
   { value: 'treatment', label: 'Traitement', icon: 'medical-outline' },
+  { value: 'vaccination', label: 'Vaccination', icon: 'shield-checkmark' },
+  { value: 'abnormal_mortality', label: 'Mortalité anormale', icon: 'skull' },
   { value: 'water_quality', label: 'Qualité eau', icon: 'water' },
-  { value: 'feeding_issue', label: 'Problème alimentation', icon: 'nutrition' },
   { value: 'other', label: 'Autre', icon: 'help-circle' },
 ];
 
@@ -49,6 +52,9 @@ interface SanitaryLogData {
   description: string;
   symptoms: string;
   treatment_applied: string;
+  medication_used: string;
+  dosage: string;
+  treatment_duration_days: string;
   affected_count: string;
   photos: string[];
 }
@@ -67,6 +73,9 @@ export default function SanitaryLogScreen({ navigation }: any) {
     description: '',
     symptoms: '',
     treatment_applied: '',
+    medication_used: '',
+    dosage: '',
+    treatment_duration_days: '',
     affected_count: '',
     photos: [],
   });
@@ -104,28 +113,82 @@ export default function SanitaryLogScreen({ navigation }: any) {
 
   const handleSave = async () => {
     if (!selectedCycle) {
-      Alert.alert(t('error'), 'Veuillez sélectionner un cycle');
+      Alert.alert(t('error'), t('noCycleSelected'));
       return;
     }
 
     if (!formData.event_type) {
-      Alert.alert(t('error'), 'Veuillez sélectionner un type d\'événement');
+      Alert.alert(t('error'), t('selectEventType'));
+      return;
+    }
+
+    if (!formData.symptoms.trim()) {
+      Alert.alert(t('error'), t('fillRequiredFields'));
       return;
     }
 
     setSaving(true);
     try {
-      // TODO: Implémenter l'API call POST /api/aquaculture/sanitary-logs/
-      console.log('Saving sanitary log:', formData);
+      // Préparer les données pour l'API
+      const sanitaryData: SanitaryLogForm = {
+        event_date: new Date().toISOString().split('T')[0],
+        event_type: formData.event_type as SanitaryEventType,
+        symptoms: formData.symptoms,
+        affected_count: formData.affected_count ? parseInt(formData.affected_count) : undefined,
+        treatment_applied: formData.treatment_applied || undefined,
+        medication_used: formData.medication_used || undefined,
+        dosage: formData.dosage || undefined,
+        treatment_duration_days: formData.treatment_duration_days ? parseInt(formData.treatment_duration_days) : undefined,
+        // TODO: Ajouter photo si présente
+      };
 
-      // Simulation d'une sauvegarde
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      try {
+        // Tentative d'appel API en ligne
+        await aquacultureService.createSanitaryLog(selectedCycle, sanitaryData);
 
-      Alert.alert(t('success'), 'Journal sanitaire enregistré avec succès', [
-        { text: 'OK', onPress: () => navigation.goBack() }
-      ]);
-    } catch (error) {
-      Alert.alert(t('error'), 'Erreur lors de l\'enregistrement');
+        // Rafraîchir le Dashboard pour afficher les nouvelles données
+        dispatch(fetchDashboardData());
+
+        Alert.alert(t('success'), t('sanitaryRecordSaved'), [
+          { text: 'OK', onPress: () => navigation.goBack() }
+        ]);
+
+      } catch (apiError: any) {
+        // Vérifier si c'est une erreur réseau
+        const isNetworkError =
+          apiError.code === 'NETWORK_ERROR' ||
+          apiError.message?.toLowerCase().includes('network') ||
+          apiError.message?.toLowerCase().includes('connection') ||
+          !apiError.response;
+
+        if (isNetworkError) {
+          console.log('📱 Pas de connexion, sauvegarde log sanitaire offline...');
+
+          // Sauvegarder en offline
+          await offlineService.saveSanitaryLogOffline(selectedCycle, sanitaryData);
+
+          Alert.alert(t('success'), t('sanitaryRecordSavedOffline'), [
+            { text: 'OK', onPress: () => navigation.goBack() }
+          ]);
+
+        } else {
+          // Erreur API réelle
+          throw apiError;
+        }
+      }
+    } catch (error: any) {
+      console.error('Error creating sanitary log:', error);
+
+      let errorMessage = t('sanitaryRecordSaveError');
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.response?.data?.detail) {
+        errorMessage = error.response.data.detail;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+
+      Alert.alert(t('error'), errorMessage);
     } finally {
       setSaving(false);
     }
