@@ -279,76 +279,72 @@ export default function FarmProfileScreen() {
         </View>
       </View>
 
-
-      {/* Performance Metrics */}
+      {/* Cycles en cours */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>{t('performanceMetrics')}</Text>
-        
-        <View style={styles.metricsContainer}>
-          <View style={styles.metricCard}>
-            <Text style={styles.metricValue}>
-              {(() => {
-                if (activeCycles.length === 0) return '0';
+        <Text style={styles.sectionTitle}>{t('currentCycles')}</Text>
 
-                // Utiliser la somme des surfaces des cycles actifs au lieu du profil
-                const totalSurface = activeCycles.reduce((total, cycle) => {
-                  return total + (Number(cycle.pond_surface_m2) || 0);
-                }, 0);
-
-                return (totalSurface / activeCycles.length).toFixed(1);
-              })()
-              } m²
-            </Text>
-            <Text style={styles.metricLabel}>{t('averageAreaPerPond')}</Text>
+        {activeCycles.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyStateText}>{t('noActiveCycles')}</Text>
+            <Text style={styles.emptyStateSubtext}>{t('startCycle')}</Text>
           </View>
+        ) : (
+          <View style={styles.cyclesContainer}>
+            {activeCycles.map((cycle) => {
+              // Calculer les jours depuis le début
+              const startDate = new Date(cycle.start_date);
+              const currentDate = new Date();
+              const daysSinceStart = Math.floor((currentDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
 
-          <View style={styles.metricCard}>
-            <Text style={styles.metricValue}>
-              {(() => {
-                if (activeCycles.length === 0) return '0';
+              // Durée du cycle selon l'espèce
+              const cycleDuration = cycle.species === 'clarias' ? 120 : 180;
 
-                const totalBiomass = activeCycles.reduce((total, cycle) => {
-                  return total + (Number(cycle.current_biomass) || 0);
-                }, 0);
+              return (
+                <View key={cycle.id} style={styles.cycleCard}>
+                  <View style={styles.cycleHeader}>
+                    <Text style={styles.cycleName}>{cycle.cycle_name}</Text>
+                    <View style={styles.cycleStatusBadge}>
+                      <Text style={styles.cycleStatusText}>
+                        {t('dayProgress', { day: daysSinceStart, duration: cycleDuration })}
+                      </Text>
+                    </View>
+                  </View>
 
-                const totalSurface = activeCycles.reduce((total, cycle) => {
-                  return total + (Number(cycle.pond_surface_m2) || 0);
-                }, 0);
+                  <View style={styles.cycleDetails}>
+                    <View style={styles.cycleDetailRow}>
+                      <Text style={styles.cycleDetailLabel}>{t('pond')} :</Text>
+                      <Text style={styles.cycleDetailValue}>{cycle.pond_identifier}</Text>
+                    </View>
 
-                if (totalSurface === 0) return '0';
+                    <View style={styles.cycleDetailRow}>
+                      <Text style={styles.cycleDetailLabel}>{t('area')} :</Text>
+                      <Text style={styles.cycleDetailValue}>{cycle.pond_surface_m2} m²</Text>
+                    </View>
 
-                return (totalBiomass / totalSurface).toFixed(1);
-              })()
-              } kg/m²
-            </Text>
-            <Text style={styles.metricLabel}>{t('currentDensity')}</Text>
+                    <View style={styles.cycleDetailRow}>
+                      <Text style={styles.cycleDetailLabel}>{t('species')} :</Text>
+                      <Text style={styles.cycleDetailValue}>
+                        {cycle.species === 'clarias' ? 'Clarias' : 'Tilapia'}
+                      </Text>
+                    </View>
+
+                    <View style={styles.cycleDetailRow}>
+                      <Text style={styles.cycleDetailLabel}>{t('currentFish')} :</Text>
+                      <Text style={styles.cycleDetailValue}>{cycle.current_count}</Text>
+                    </View>
+
+                    <View style={styles.cycleDetailRow}>
+                      <Text style={styles.cycleDetailLabel}>{t('currentBiomass')} :</Text>
+                      <Text style={styles.cycleDetailValue}>{cycle.current_biomass} kg</Text>
+                    </View>
+                  </View>
+                </View>
+              );
+            })}
           </View>
-
-          <View style={styles.metricCard}>
-            <Text style={styles.metricValue}>
-              {(() => {
-                console.log('DEBUG - farmProfile.annual_production_kg:', farmProfile.annual_production_kg);
-                console.log('DEBUG - farmProfile.total_area_m2 (yield):', farmProfile.total_area_m2);
-
-                const production = Number(farmProfile.annual_production_kg) || 0;
-                const area = Number(farmProfile.total_area_m2) || 0;
-
-                console.log('DEBUG - production converted:', production);
-                console.log('DEBUG - area converted:', area);
-
-                if (area === 0) return '0';
-
-                const yield_result = (production / area).toFixed(1);
-                console.log('DEBUG - yield result:', yield_result);
-
-                return yield_result;
-              })()
-              } kg/m²
-            </Text>
-            <Text style={styles.metricLabel}>{t('yieldPerSquareMeter')}</Text>
-          </View>
-        </View>
+        )}
       </View>
+
 
       {/* Save Button */}
       {isEditing && (
@@ -492,6 +488,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: MAVECAM_COLORS.GRAY_DARK,
+    marginBottom: 16,
   },
   editButton: {
     padding: 8,
@@ -544,35 +541,76 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
   },
-  metricsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  metricCard: {
-    backgroundColor: MAVECAM_COLORS.WHITE,
-    flex: 1,
-    padding: 12,
-    borderRadius: 12,
+  // Styles pour la section Cycles en cours
+  emptyState: {
     alignItems: 'center',
-    marginHorizontal: 2,
+    padding: 24,
+  },
+  emptyStateText: {
+    fontSize: 16,
+    color: MAVECAM_COLORS.GRAY_DARK,
+    marginBottom: 8,
+  },
+  emptyStateSubtext: {
+    fontSize: 14,
+    color: MAVECAM_COLORS.GRAY_LIGHT,
+  },
+  cyclesContainer: {
+    gap: 12,
+  },
+  cycleCard: {
+    backgroundColor: MAVECAM_COLORS.WHITE,
+    borderRadius: 12,
+    padding: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 2,
     elevation: 2,
+    borderLeftWidth: 4,
+    borderLeftColor: MAVECAM_COLORS.GREEN_PRIMARY,
   },
-  metricValue: {
-    fontSize: 18,
+  cycleHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  cycleName: {
+    fontSize: 16,
     fontWeight: 'bold',
-    color: MAVECAM_COLORS.GREEN_PRIMARY,
-    marginBottom: 4,
-    textAlign: 'center',
-    lineHeight: 22,
+    color: MAVECAM_COLORS.GRAY_DARK,
+    flex: 1,
   },
-  metricLabel: {
+  cycleStatusBadge: {
+    backgroundColor: MAVECAM_COLORS.GREEN_LIGHT,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  cycleStatusText: {
     fontSize: 12,
+    color: MAVECAM_COLORS.WHITE,
+    fontWeight: '600',
+  },
+  cycleDetails: {
+    gap: 6,
+  },
+  cycleDetailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  cycleDetailLabel: {
+    fontSize: 14,
     color: MAVECAM_COLORS.GRAY_LIGHT,
-    textAlign: 'center',
+    flex: 1,
+  },
+  cycleDetailValue: {
+    fontSize: 14,
+    color: MAVECAM_COLORS.GRAY_DARK,
+    fontWeight: '600',
+    textAlign: 'right',
   },
   buttonContainer: {
     padding: 20,

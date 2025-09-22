@@ -32,7 +32,7 @@ const MAVECAM_COLORS = {
 
 import { useAuth } from '@/hooks/useAuth';
 
-export default function DashboardScreen() {
+export default function DashboardScreen({ navigation }: any) {
   const { t } = useTranslation();
   const { user, displayName } = useAuth();
   const dispatch = useDispatch<AppDispatch>();
@@ -162,17 +162,26 @@ export default function DashboardScreen() {
       <View style={styles.actionContainer}>
         <Text style={styles.sectionTitle}>{t('quickActions')}</Text>
         
-        <TouchableOpacity style={styles.actionButton}>
+        <TouchableOpacity
+          style={styles.actionButton}
+          onPress={() => navigation.navigate('NewCycle')}
+        >
           <Ionicons name="add-circle" size={24} color={MAVECAM_COLORS.GREEN_PRIMARY} />
           <Text style={styles.actionText}>{t('newCycle')}</Text>
         </TouchableOpacity>
-        
-        <TouchableOpacity style={styles.actionButton}>
+
+        <TouchableOpacity
+          style={styles.actionButton}
+          onPress={() => navigation.navigate('DailyLog')}
+        >
           <Ionicons name="create" size={24} color={MAVECAM_COLORS.GREEN_LIGHT} />
           <Text style={styles.actionText}>{t('dailyLog')}</Text>
         </TouchableOpacity>
-        
-        <TouchableOpacity style={styles.actionButton}>
+
+        <TouchableOpacity
+          style={styles.actionButton}
+          onPress={() => navigation.navigate('SanitaryLog')}
+        >
           <Ionicons name="warning-outline" size={24} color={MAVECAM_COLORS.ERROR} />
           <Text style={styles.actionText}>{t('sanitaryLog')}</Text>
         </TouchableOpacity>

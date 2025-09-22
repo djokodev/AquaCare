@@ -27,9 +27,21 @@ import ProfileScreen from '@/screens/profile/ProfileScreen';
 import FarmProfileScreen from '@/screens/profile/FarmProfileScreen';
 import SettingsScreen from '@/screens/profile/SettingsScreen';
 
+// Aquaculture Screens
+import DailyLogScreen from '@/screens/aquaculture/DailyLogScreen';
+import SanitaryLogScreen from '@/screens/aquaculture/SanitaryLogScreen';
+import NewCycleScreen from '@/screens/aquaculture/NewCycleScreen';
+
 export type MainTabParamList = {
   Dashboard: undefined;
   ProfileStack: undefined;
+};
+
+export type RootStackParamList = {
+  MainTabs: undefined;
+  DailyLog: undefined;
+  SanitaryLog: undefined;
+  NewCycle: undefined;
 };
 
 export type ProfileStackParamList = {
@@ -40,6 +52,7 @@ export type ProfileStackParamList = {
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
 const ProfileStack = createStackNavigator<ProfileStackParamList>();
+const RootStack = createStackNavigator<RootStackParamList>();
 
 function ProfileNavigator() {
   const { t, i18n } = useTranslation();
@@ -85,7 +98,7 @@ function ProfileNavigator() {
   );
 }
 
-export default function MainNavigator() {
+function MainTabNavigator() {
   const { t, i18n } = useTranslation();
   const [currentLanguage, setCurrentLanguage] = React.useState(i18n.language);
 
@@ -144,5 +157,30 @@ export default function MainNavigator() {
         }}
       />
     </Tab.Navigator>
+  );
+}
+
+export default function MainNavigator() {
+  const { t } = useTranslation();
+
+  return (
+    <RootStack.Navigator screenOptions={{ headerShown: false }}>
+      <RootStack.Screen
+        name="MainTabs"
+        component={MainTabNavigator}
+      />
+      <RootStack.Screen
+        name="DailyLog"
+        component={DailyLogScreen}
+      />
+      <RootStack.Screen
+        name="SanitaryLog"
+        component={SanitaryLogScreen}
+      />
+      <RootStack.Screen
+        name="NewCycle"
+        component={NewCycleScreen}
+      />
+    </RootStack.Navigator>
   );
 }
