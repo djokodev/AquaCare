@@ -41,8 +41,8 @@ class ProductionCycleAdmin(admin.ModelAdmin):
     Avec indicateurs visuels colorés pour évaluation rapide des performances.
     """
     list_display = [
-        'cycle_name', 'farm_display', 'species_display', 'status_display',
-        'start_date', 'days_active', 'current_biomass_display', 
+        'id_short', 'cycle_name', 'farm_display', 'species_display', 'status_display',
+        'start_date', 'days_active', 'current_biomass_display',
         'survival_rate_display', 'fcr_display', 'performance_indicator'
     ]
     list_filter = [
@@ -202,7 +202,12 @@ class ProductionCycleAdmin(admin.ModelAdmin):
         else:
             return format_html('<span style="color: #DC3545;">✗ Faible</span>')
     performance_indicator.short_description = _('Performance')
-    
+
+    def id_short(self, obj):
+        """Display short ID for easy reference."""
+        return str(obj.id)[:8] + "..."
+    id_short.short_description = _('ID')
+
     def export_cycles_csv(self, request, queryset):
         """Export selected cycles to CSV."""
         response = HttpResponse(content_type='text/csv')
@@ -283,7 +288,7 @@ class ProductionCycleAdmin(admin.ModelAdmin):
 class CycleLogAdmin(admin.ModelAdmin):
     """Admin interface for daily cycle logs."""
     list_display = [
-        'cycle_display', 'log_date', 'mortality_count', 'average_weight',
+        'id_short', 'cycle_display', 'log_date', 'mortality_count', 'average_weight',
         'feed_quantity', 'water_temp_status', 'created_offline'
     ]
     list_filter = [
@@ -354,12 +359,17 @@ class CycleLogAdmin(admin.ModelAdmin):
         )
     water_temp_status.short_description = _('Température')
 
+    def id_short(self, obj):
+        """Display short ID for easy reference."""
+        return str(obj.id)[:8] + "..."
+    id_short.short_description = _('ID')
+
 
 @admin.register(SanitaryLog)
 class SanitaryLogAdmin(admin.ModelAdmin):
     """Admin interface for sanitary logs."""
     list_display = [
-        'cycle_display', 'event_date', 'event_type_display', 
+        'id_short', 'cycle_display', 'farmer_contact', 'event_date', 'event_type_display',
         'affected_count', 'resolution_status', 'has_photo'
     ]
     list_filter = [
@@ -368,50 +378,55 @@ class SanitaryLogAdmin(admin.ModelAdmin):
     search_fields = [
         'cycle__cycle_name', 'symptoms', 'treatment_applied'
     ]
-    readonly_fields = ['id', 'created_at']
+    readonly_fields = ['id', 'created_at', 'farmer_contact']
     date_hierarchy = 'event_date'
-    
+
+    def get_queryset(self, request):
+        """Optimize queries with select_related for farmer contact info."""
+        return super().get_queryset(request).select_related(
+            'cycle__farm_profile__user'
+        )
+
     fieldsets = (
         (_('Informations de base'), {
-            'fields': ('cycle', 'event_date', 'event_type')
+            'fields': ('cycle', 'farmer_contact', 'event_date', 'event_type')
         }),
-        (_('Description du problème'), {
+        (_('Détails de l\'événement'), {
             'fields': ('symptoms', 'affected_count')
         }),
         (_('Traitement'), {
             'fields': (
-                'treatment_applied', 'medication_used', 'dosage', 
-                'treatment_duration_days'
+                'treatment_applied', 'medication_used',
+                'dosage', 'treatment_duration_days', 'notes'
             )
         }),
         (_('Documentation'), {
-            'fields': ('photo', 'notes')
+            'fields': ('photo',)
         }),
         (_('Suivi'), {
             'fields': ('resolved', 'resolution_date')
         }),
         (_('Métadonnées'), {
-            'fields': ('created_offline', 'created_at'),
+            'fields': ('id', 'created_offline', 'created_at'),
             'classes': ('collapse',)
         })
     )
-    
+
     def cycle_display(self, obj):
         """Display cycle name with link."""
         url = reverse('admin:aquaculture_productioncycle_change', args=[obj.cycle.id])
         return format_html('<a href="{}">{}</a>', url, obj.cycle.cycle_name)
     cycle_display.short_description = _('Cycle')
-    
+
     def event_type_display(self, obj):
-        """Display event type."""
-        # Garder seulement l'emoji d'alerte pour mortalité anormale
+        """Display event type with warning for abnormal mortality."""
         if obj.event_type == 'abnormal_mortality':
             return f"⚠️ {obj.get_event_type_display()}"
         return obj.get_event_type_display()
     event_type_display.short_description = _('Type')
-    
+
     def resolution_status(self, obj):
-        """Display resolution status."""
+        """Display resolution status with color coding."""
         if obj.resolved:
             return format_html(
                 '<span style="color: #28A745;">✓ Résolu ({})</span>',
@@ -428,23 +443,47 @@ class SanitaryLogAdmin(admin.ModelAdmin):
                 color, days_since
             )
     resolution_status.short_description = _('Statut résolution')
-    
+
     def has_photo(self, obj):
-        """Indicate if photo is attached."""
+        """Display photo link if available."""
         if obj.photo:
             return format_html(
-                '<a href="{}" target="_blank"> Voir photo</a>',
+                '<a href="{}" target="_blank">📷 Voir photo</a>',
                 obj.photo.url
             )
         return "-"
     has_photo.short_description = _('Photo')
+
+    def farmer_contact(self, obj):
+        """Display farmer contact information for communication."""
+        user = obj.cycle.farm_profile.user
+        farm = obj.cycle.farm_profile
+
+        return format_html(
+            '<div style="font-size: 12px; line-height: 1.4;">'
+            '<strong style="color: #059669;">{}</strong><br>'
+            '<span style="color: #666;">Tel: {}</span><br>'
+            '<span style="color: #666;">Ferme: {}</span><br>'
+            '<span style="color: #999; font-size: 10px;">Lieu: {}</span>'
+            '</div>',
+            user.display_name or f"{user.first_name} {user.last_name}",
+            user.phone_number,
+            farm.farm_name[:30] + ('...' if len(farm.farm_name) > 30 else ''),
+            f"{user.region}, {user.city}" if user.region and user.city else user.region or user.city or 'N/A'
+        )
+    farmer_contact.short_description = _('Éleveur (Contact)')
+
+    def id_short(self, obj):
+        """Display short ID for easy reference."""
+        return str(obj.id)[:8] + "..."
+    id_short.short_description = _('ID')
 
 
 @admin.register(FeedingPlan)
 class FeedingPlanAdmin(admin.ModelAdmin):
     """Admin interface for feeding plans."""
     list_display = [
-        'cycle_display', 'week_number', 'period_display', 
+        'id_short', 'cycle_display', 'week_number', 'period_display',
         'biomass', 'daily_feed_amount', 'feeding_rate', 'is_active'
     ]
     list_filter = [
@@ -487,12 +526,17 @@ class FeedingPlanAdmin(admin.ModelAdmin):
         return f"{obj.start_date} → {obj.end_date}"
     period_display.short_description = _('Période')
 
+    def id_short(self, obj):
+        """Display short ID for easy reference."""
+        return str(obj.id)[:8] + "..."
+    id_short.short_description = _('ID')
+
 
 @admin.register(NutritionalGuide)
 class NutritionalGuideAdmin(admin.ModelAdmin):
     """Admin interface for nutritional guides (reference data)."""
     list_display = [
-        'species_display', 'growth_stage_display', 'weight_range',
+        'id_short', 'species_display', 'growth_stage_display', 'weight_range',
         'feeding_rate_percentage', 'protein_requirement', 'meals_per_day'
     ]
     list_filter = ['species', 'growth_stage', 'protein_requirement']
@@ -539,12 +583,17 @@ class NutritionalGuideAdmin(admin.ModelAdmin):
         return f"{obj.min_weight}-{obj.max_weight}g"
     weight_range.short_description = _('Plage de poids')
 
+    def id_short(self, obj):
+        """Display short ID for easy reference."""
+        return str(obj.id)[:8] + "..."
+    id_short.short_description = _('ID')
+
 
 @admin.register(Notification)
 class NotificationAdmin(admin.ModelAdmin):
     """Admin interface for notifications."""
     list_display = [
-        'user_display', 'title', 'notification_type', 
+        'id_short', 'user_display', 'title', 'notification_type',
         'scheduled_for', 'delivery_status'
     ]
     list_filter = [
@@ -590,12 +639,17 @@ class NotificationAdmin(admin.ModelAdmin):
             return format_html('<span style="color: #FFC107;">⏳ Programmé</span>')
     delivery_status.short_description = _('Statut')
 
+    def id_short(self, obj):
+        """Display short ID for easy reference."""
+        return str(obj.id)[:8] + "..."
+    id_short.short_description = _('ID')
+
 
 @admin.register(CycleMetrics)
 class CycleMetricsAdmin(admin.ModelAdmin):
     """Admin interface for cycle metrics (read-only analytics)."""
     list_display = [
-        'cycle_display', 'daily_growth_rate', 'specific_growth_rate',
+        'id_short', 'cycle_display', 'daily_growth_rate', 'specific_growth_rate',
         'performance_score', 'last_calculated'
     ]
     list_filter = ['last_calculated']
@@ -612,7 +666,12 @@ class CycleMetricsAdmin(admin.ModelAdmin):
         url = reverse('admin:aquaculture_productioncycle_change', args=[obj.cycle.id])
         return format_html('<a href="{}">{}</a>', url, obj.cycle.cycle_name)
     cycle_display.short_description = _('Cycle')
-    
+
+    def id_short(self, obj):
+        """Display short ID for easy reference."""
+        return str(obj.id)[:8] + "..."
+    id_short.short_description = _('ID')
+
     def has_add_permission(self, request):
         """Disable manual creation of metrics, except for superusers."""
         return request.user.is_superuser

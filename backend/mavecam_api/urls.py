@@ -12,6 +12,8 @@ Structure de l'API:
 from django.contrib import admin
 from django.urls import path, include
 from django.http import JsonResponse
+from django.conf import settings
+from django.conf.urls.static import static
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
 
 def api_root(request):
@@ -50,3 +52,7 @@ urlpatterns = [
     # path('api/support/', include('support.urls')),            # Phase 4
     # path('api/education/', include('education.urls')),        # Phase 5
 ]
+
+# Servir les fichiers media en développement
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

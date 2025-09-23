@@ -294,6 +294,7 @@ export interface SanitaryLogForm {
   medication_used?: string;
   dosage?: string;
   treatment_duration_days?: number;
+  notes?: string; // Commentaires additionnels
   photo?: File | string; // File pour upload, string pour URL existante
 }
 

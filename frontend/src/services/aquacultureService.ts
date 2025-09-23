@@ -330,9 +330,29 @@ class AquacultureService {
         formData.append('treatment_duration_days', logData.treatment_duration_days.toString());
       }
 
-      // Ajouter la photo si présente
-      if (logData.photo && logData.photo instanceof File) {
-        formData.append('photo', logData.photo);
+      // Ajouter la photo si présente (React Native format)
+      if (logData.photo) {
+        if (logData.photo instanceof File) {
+          // Format web standard
+          formData.append('photo', logData.photo);
+          console.log('📸 Photo ajoutée (File):', logData.photo.name, logData.photo.size, 'bytes');
+        } else if (typeof logData.photo === 'object' && 'uri' in logData.photo) {
+          // Format React Native
+          formData.append('photo', logData.photo as any);
+          console.log('📸 Photo ajoutée (RN):', (logData.photo as any).name, (logData.photo as any).uri);
+        } else {
+          console.warn('⚠️ Format photo non reconnu:', typeof logData.photo);
+        }
+      }
+
+      // Debug: Afficher le contenu du FormData
+      console.log('📦 FormData à envoyer:');
+      try {
+        for (let [key, value] of (formData as any).entries()) {
+          console.log(`  ${key}:`, value instanceof File ? `FILE(${value.name})` : value);
+        }
+      } catch (error) {
+        console.log('  (FormData entries non disponible en React Native)');
       }
 
       const response = await apiService.post<SanitaryLog>(

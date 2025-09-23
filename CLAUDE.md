@@ -415,3 +415,79 @@ user.first_name + " " + user.last_name
 - **Lecture systématique** de chaque fichier édité
 - **Correction proactive** avant passage à la tâche suivante
 - **Vérification des types** optionnels et undefined
+
+## **📁 CONFIGURATION PRODUCTION - FICHIERS STATIQUES**
+
+### **🌐 Architecture Production Prévue**
+
+**DÉCISION TECHNIQUE :** Utilisation de **Nginx** pour servir les fichiers statiques et media en production.
+
+#### **📸 Gestion des Photos (Media Files)**
+- **Développement** : Django dev server (`settings.DEBUG = True`)
+- **Production** : Nginx sert directement `/media/` sans passer par Django
+- **Structure** :
+  ```
+  /var/www/mavecam/
+  ├── api/              # Code Django
+  ├── media/            # Fichiers uploadés (photos journal sanitaire, etc.)
+  │   └── sanitary_logs/
+  │       └── 2024/12/  # Photos par année/mois
+  └── static/           # CSS, JS, assets Django
+  ```
+
+#### **🔧 Configuration Nginx Prévue**
+```nginx
+server {
+    listen 80;
+    server_name api.mavecam.com;
+
+    # Servir les fichiers media directement (photos, uploads)
+    location /media/ {
+        alias /var/www/mavecam/media/;
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+        access_log off;
+    }
+
+    # Servir les fichiers static directement (CSS, JS)
+    location /static/ {
+        alias /var/www/mavecam/static/;
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+        access_log off;
+    }
+
+    # Proxy vers Django pour API uniquement
+    location / {
+        proxy_pass http://django:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}
+```
+
+#### **⚙️ Settings Django Production**
+```python
+# settings/production.py
+STATIC_URL = '/static/'
+STATIC_ROOT = '/var/www/mavecam/static/'
+
+MEDIA_URL = '/media/'
+MEDIA_ROOT = '/var/www/mavecam/media/'
+
+# Ne pas servir les fichiers via Django en production
+# (Les URLs static() sont uniquement pour DEBUG=True)
+```
+
+#### **📊 Avantages Nginx vs Django**
+- **Performance** : Nginx sert fichiers 10x+ rapide que Django
+- **Ressources** : Django libéré pour traiter API uniquement
+- **Cache** : Headers de cache optimisés pour photos
+- **Sécurité** : Pas d'exécution Python pour fichiers statiques
+
+#### **🚀 Migration Prévue**
+1. **Phase Actuelle** : Django dev server (OK pour développement)
+2. **Phase Production** : Docker + Nginx + Volume persistant
+3. **Phase Scale** : Optionnel CDN (AWS CloudFront) si besoin global
+
+**Note** : Cette configuration est optimale pour l'infrastructure MAVECAM et compatible avec le contexte camerounais.

@@ -18,7 +18,7 @@ import { fetchDashboardData } from '@/store/slices/aquacultureSlice';
 import { aquacultureService } from '@/services/aquacultureService';
 import { offlineService } from '@/services/offlineService';
 import { SanitaryLogForm, SanitaryEventType } from '@/types/aquaculture';
-// import * as ImagePicker from 'expo-image-picker';
+import * as ImagePicker from 'expo-image-picker';
 
 // Couleurs MAVECAM selon spécifications
 const MAVECAM_COLORS = {
@@ -48,15 +48,14 @@ const SANITARY_EVENT_TYPES = [
 interface SanitaryLogData {
   cycle_id: string;
   event_type: string;
-  severity: string;
-  description: string;
   symptoms: string;
   treatment_applied: string;
   medication_used: string;
   dosage: string;
   treatment_duration_days: string;
   affected_count: string;
-  photos: string[];
+  comments: string; // Commentaires additionnels (correspond à notes backend)
+  photo: string | null; // URI de l'image ou null
 }
 
 export default function SanitaryLogScreen({ navigation }: any) {
@@ -69,17 +68,39 @@ export default function SanitaryLogScreen({ navigation }: any) {
   const [formData, setFormData] = useState<SanitaryLogData>({
     cycle_id: '',
     event_type: '',
-    severity: 'medium',
-    description: '',
     symptoms: '',
     treatment_applied: '',
     medication_used: '',
     dosage: '',
     treatment_duration_days: '',
     affected_count: '',
-    photos: [],
+    comments: '',
+    photo: null,
   });
   const [saving, setSaving] = useState(false);
+
+  // Détermine si les champs de traitement doivent être affichés
+  const shouldShowTreatmentFields = ['treatment', 'vaccination', 'disease'].includes(formData.event_type);
+
+  // Génère un message de confirmation personnalisé selon le type d'événement
+  const getSuccessMessage = (eventType: string) => {
+    switch (eventType) {
+      case 'disease':
+        return 'Maladie signalée avec succès.\nL\'équipe MAVECAM va analyser votre rapport et vous contacter si nécessaire.';
+      case 'treatment':
+        return 'Traitement enregistré avec succès.\nContinuez à surveiller l\'évolution et informez-nous des résultats.';
+      case 'vaccination':
+        return 'Vaccination enregistrée avec succès.\nVotre programme de prévention est à jour.';
+      case 'abnormal_mortality':
+        return 'Mortalité anormale signalée avec succès.\n⚠️ L\'équipe MAVECAM va vous contacter rapidement pour assistance.';
+      case 'water_quality':
+        return 'Problème de qualité d\'eau signalé avec succès.\nVérifiez les paramètres et appliquez les corrections nécessaires.';
+      case 'other':
+        return 'Événement enregistré avec succès.\nL\'équipe MAVECAM examinera votre rapport.';
+      default:
+        return t('sanitaryRecordSaved');
+    }
+  };
 
   useEffect(() => {
     dispatch(fetchDashboardData());
@@ -92,23 +113,121 @@ export default function SanitaryLogScreen({ navigation }: any) {
     }
   }, [activeCycles, selectedCycle]);
 
-  const pickImage = async () => {
-    // TODO: Implémenter ImagePicker une fois expo-image-picker installé
-    Alert.alert('Photo', 'Fonctionnalité photos à implémenter');
+  // Nettoie les champs de traitement quand on change vers un type d'événement qui n'en a pas besoin
+  useEffect(() => {
+    if (!shouldShowTreatmentFields) {
+      setFormData(prev => ({
+        ...prev,
+        treatment_applied: '',
+        medication_used: '',
+        dosage: '',
+        treatment_duration_days: ''
+      }));
+    }
+  }, [shouldShowTreatmentFields]);
 
-    // Simulation pour le moment
-    const fakeUri = `https://via.placeholder.com/300x200?text=Photo${Date.now()}`;
-    setFormData(prev => ({
-      ...prev,
-      photos: [...prev.photos, fakeUri]
-    }));
+  // Fonction pour demander les permissions
+  const requestPermissions = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert(t('error'), 'Permission d\'accès aux photos requise');
+      return false;
+    }
+    return true;
   };
 
-  const removePhoto = (index: number) => {
-    setFormData(prev => ({
-      ...prev,
-      photos: prev.photos.filter((_, i) => i !== index)
-    }));
+  // Fonction pour compresser et convertir l'image en File
+  const processImage = async (uri: string): Promise<string> => {
+    // Pour l'instant, on retourne l'URI directement
+    // La conversion en File se fait dans handleSave
+    return uri;
+  };
+
+  // Fonction pour convertir URI React Native en objet pour FormData
+  const createFormDataFile = (uri: string, name: string) => {
+    // Pour React Native, on utilise un objet spécial pour FormData
+    return {
+      uri: uri,
+      type: 'image/jpeg',
+      name: name,
+    };
+  };
+
+  // Fonction pour sélectionner une image depuis la galerie
+  const pickImage = async () => {
+    try {
+      const hasPermission = await requestPermissions();
+      if (!hasPermission) return;
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [16, 9], // Format paysage recommandé pour photos aquaculture
+        quality: 0.8, // Compression à 80%
+        base64: false, // Pas besoin de base64 pour l'affichage
+      });
+
+      if (!result.canceled && result.assets && result.assets[0]) {
+        const processedUri = await processImage(result.assets[0].uri);
+        setFormData(prev => ({ ...prev, photo: processedUri }));
+      }
+    } catch (error) {
+      console.error('Erreur sélection image:', error);
+      Alert.alert(t('error'), 'Erreur lors de la sélection de l\'image');
+    }
+  };
+
+  // Fonction pour prendre une photo avec l'appareil
+  const takePhoto = async () => {
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(t('error'), 'Permission d\'accès à l\'appareil photo requise');
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        aspect: [16, 9],
+        quality: 0.8,
+        base64: false,
+      });
+
+      if (!result.canceled && result.assets && result.assets[0]) {
+        const processedUri = await processImage(result.assets[0].uri);
+        setFormData(prev => ({ ...prev, photo: processedUri }));
+      }
+    } catch (error) {
+      console.error('Erreur prise photo:', error);
+      Alert.alert(t('error'), 'Erreur lors de la prise de photo');
+    }
+  };
+
+  // Fonction pour choisir la source de l'image
+  const chooseImageSource = () => {
+    Alert.alert(
+      'Ajouter une photo',
+      'Choisissez la source de votre photo',
+      [
+        {
+          text: 'Galerie',
+          onPress: pickImage,
+        },
+        {
+          text: 'Appareil photo',
+          onPress: takePhoto,
+        },
+        {
+          text: 'Annuler',
+          style: 'cancel',
+        },
+      ]
+    );
+  };
+
+  // Fonction pour supprimer la photo
+  const removePhoto = () => {
+    setFormData(prev => ({ ...prev, photo: null }));
   };
 
   const handleSave = async () => {
@@ -139,17 +258,42 @@ export default function SanitaryLogScreen({ navigation }: any) {
         medication_used: formData.medication_used || undefined,
         dosage: formData.dosage || undefined,
         treatment_duration_days: formData.treatment_duration_days ? parseInt(formData.treatment_duration_days) : undefined,
-        // TODO: Ajouter photo si présente
+        notes: formData.comments || undefined, // Commentaires → notes backend
       };
 
+      // Préparer la photo pour React Native FormData si présente
+      if (formData.photo) {
+        try {
+          const photoFile = createFormDataFile(
+            formData.photo,
+            `sanitary_log_${Date.now()}.jpg`
+          );
+          sanitaryData.photo = photoFile as any; // TypeScript workaround pour React Native
+          console.log('📸 Photo préparée:', photoFile);
+        } catch (error) {
+          console.error('Erreur préparation photo:', error);
+          // Continuer sans photo en cas d'erreur
+          sanitaryData.photo = undefined;
+        }
+      }
+
       try {
+        // Debug: Log des données envoyées
+        console.log('🔍 Données sanitaires à envoyer:', {
+          selectedCycle,
+          sanitaryData: {
+            ...sanitaryData,
+            photo: sanitaryData.photo ? 'FILE_OBJECT' : undefined
+          }
+        });
+
         // Tentative d'appel API en ligne
         await aquacultureService.createSanitaryLog(selectedCycle, sanitaryData);
 
         // Rafraîchir le Dashboard pour afficher les nouvelles données
         dispatch(fetchDashboardData());
 
-        Alert.alert(t('success'), t('sanitaryRecordSaved'), [
+        Alert.alert(t('success'), getSuccessMessage(formData.event_type), [
           { text: 'OK', onPress: () => navigation.goBack() }
         ]);
 
@@ -167,7 +311,7 @@ export default function SanitaryLogScreen({ navigation }: any) {
           // Sauvegarder en offline
           await offlineService.saveSanitaryLogOffline(selectedCycle, sanitaryData);
 
-          Alert.alert(t('success'), t('sanitaryRecordSavedOffline'), [
+          Alert.alert(t('success'), getSuccessMessage(formData.event_type) + '\n\n📱 Sauvegardé hors ligne - Sera synchronisé dès que possible.', [
             { text: 'OK', onPress: () => navigation.goBack() }
           ]);
 
@@ -179,11 +323,26 @@ export default function SanitaryLogScreen({ navigation }: any) {
     } catch (error: any) {
       console.error('Error creating sanitary log:', error);
 
+      // Debug détaillé de l'erreur
+      if (error.response) {
+        console.error('🚨 Erreur HTTP:', error.response.status);
+        console.error('🚨 Données erreur:', error.response.data);
+        console.error('🚨 Headers erreur:', error.response.headers);
+      }
+
       let errorMessage = t('sanitaryRecordSaveError');
-      if (error.response?.data?.message) {
-        errorMessage = error.response.data.message;
-      } else if (error.response?.data?.detail) {
-        errorMessage = error.response.data.detail;
+      if (error.response?.data) {
+        // Afficher les erreurs de validation Django
+        if (typeof error.response.data === 'object') {
+          const errors = Object.entries(error.response.data)
+            .map(([field, messages]) => `${field}: ${Array.isArray(messages) ? messages.join(', ') : messages}`)
+            .join('\n');
+          errorMessage = `Erreurs de validation:\n${errors}`;
+        } else if (error.response.data.message) {
+          errorMessage = error.response.data.message;
+        } else if (error.response.data.detail) {
+          errorMessage = error.response.data.detail;
+        }
       } else if (error.message) {
         errorMessage = error.message;
       }
@@ -288,52 +447,33 @@ export default function SanitaryLogScreen({ navigation }: any) {
               </TouchableOpacity>
             ))}
           </View>
-        </View>
 
-        {/* Gravité */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Gravité</Text>
-          <View style={styles.severityButtons}>
-            {[
-              { value: 'low', label: 'Faible', color: MAVECAM_COLORS.SUCCESS },
-              { value: 'medium', label: 'Modérée', color: MAVECAM_COLORS.WARNING },
-              { value: 'high', label: 'Élevée', color: MAVECAM_COLORS.ERROR },
-            ].map((severity) => (
-              <TouchableOpacity
-                key={severity.value}
-                style={[
-                  styles.severityButton,
-                  { borderColor: severity.color },
-                  formData.severity === severity.value && { backgroundColor: severity.color }
-                ]}
-                onPress={() => setFormData(prev => ({ ...prev, severity: severity.value }))}
-              >
-                <Text style={[
-                  styles.severityLabel,
-                  { color: formData.severity === severity.value ? MAVECAM_COLORS.WHITE : severity.color }
-                ]}>
-                  {severity.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+          {/* Message informatif pour les champs de traitement */}
+          {formData.event_type && (
+            <View style={[
+              styles.infoBox,
+              shouldShowTreatmentFields ? styles.infoBoxTreatment : styles.infoBoxNoTreatment
+            ]}>
+              <Ionicons
+                name={shouldShowTreatmentFields ? "medical" : "information-circle"}
+                size={16}
+                color={shouldShowTreatmentFields ? MAVECAM_COLORS.GREEN_PRIMARY : MAVECAM_COLORS.BLUE}
+              />
+              <Text style={[
+                styles.infoText,
+                shouldShowTreatmentFields ? styles.infoTextTreatment : styles.infoTextNoTreatment
+              ]}>
+                {shouldShowTreatmentFields
+                  ? "Les champs de traitement sont disponibles ci-dessous"
+                  : "Aucun traitement requis pour ce type d'événement"}
+              </Text>
+            </View>
+          )}
         </View>
 
         {/* Formulaire de saisie */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Détails</Text>
-
-          <View style={styles.formGroup}>
-            <Text style={styles.label}>Description du problème *</Text>
-            <TextInput
-              style={[styles.input, styles.textArea]}
-              value={formData.description}
-              onChangeText={(value) => setFormData(prev => ({ ...prev, description: value }))}
-              placeholder="Décrivez le problème observé..."
-              multiline
-              numberOfLines={3}
-            />
-          </View>
 
           <View style={styles.formGroup}>
             <Text style={styles.label}>Symptômes observés</Text>
@@ -360,13 +500,63 @@ export default function SanitaryLogScreen({ navigation }: any) {
             </View>
           </View>
 
+          {/* Section traitement - Affichée conditionnellement */}
+          {shouldShowTreatmentFields && (
+            <>
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Traitement appliqué</Text>
+                <TextInput
+                  style={[styles.input, styles.textArea]}
+                  value={formData.treatment_applied}
+                  onChangeText={(value) => setFormData(prev => ({ ...prev, treatment_applied: value }))}
+                  placeholder="Décrivez le traitement appliqué..."
+                  multiline
+                  numberOfLines={3}
+                />
+              </View>
+
+              <View style={styles.formRow}>
+                <View style={styles.formGroup}>
+                  <Text style={styles.label}>Médicament utilisé</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={formData.medication_used}
+                    onChangeText={(value) => setFormData(prev => ({ ...prev, medication_used: value }))}
+                    placeholder="Ex: Antibiotique XYZ"
+                  />
+                </View>
+
+                <View style={styles.formGroup}>
+                  <Text style={styles.label}>Dosage</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={formData.dosage}
+                    onChangeText={(value) => setFormData(prev => ({ ...prev, dosage: value }))}
+                    placeholder="Ex: 5mg/L"
+                  />
+                </View>
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Durée du traitement (jours)</Text>
+                <TextInput
+                  style={styles.input}
+                  value={formData.treatment_duration_days}
+                  onChangeText={(value) => setFormData(prev => ({ ...prev, treatment_duration_days: value }))}
+                  placeholder="Ex: 7"
+                  keyboardType="numeric"
+                />
+              </View>
+            </>
+          )}
+
           <View style={styles.formGroup}>
-            <Text style={styles.label}>Traitement appliqué</Text>
+            <Text style={styles.label}>Commentaires additionnels</Text>
             <TextInput
               style={[styles.input, styles.textArea]}
-              value={formData.treatment_applied}
-              onChangeText={(value) => setFormData(prev => ({ ...prev, treatment_applied: value }))}
-              placeholder="Décrivez le traitement appliqué..."
+              value={formData.comments}
+              onChangeText={(value) => setFormData(prev => ({ ...prev, comments: value }))}
+              placeholder="Notes, observations supplémentaires..."
               multiline
               numberOfLines={3}
             />
@@ -375,26 +565,22 @@ export default function SanitaryLogScreen({ navigation }: any) {
 
         {/* Photos */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Photos</Text>
+          <Text style={styles.sectionTitle}>Photo</Text>
 
-          <TouchableOpacity style={styles.addPhotoButton} onPress={pickImage}>
-            <Ionicons name="camera" size={24} color={MAVECAM_COLORS.GREEN_PRIMARY} />
-            <Text style={styles.addPhotoText}>Ajouter une photo</Text>
-          </TouchableOpacity>
-
-          {formData.photos.length > 0 && (
-            <View style={styles.photoGrid}>
-              {formData.photos.map((photo, index) => (
-                <View key={index} style={styles.photoContainer}>
-                  <Image source={{ uri: photo }} style={styles.photo} />
-                  <TouchableOpacity
-                    style={styles.removePhotoButton}
-                    onPress={() => removePhoto(index)}
-                  >
-                    <Ionicons name="close-circle" size={24} color={MAVECAM_COLORS.ERROR} />
-                  </TouchableOpacity>
-                </View>
-              ))}
+          {!formData.photo ? (
+            <TouchableOpacity style={styles.addPhotoButton} onPress={chooseImageSource}>
+              <Ionicons name="camera" size={24} color={MAVECAM_COLORS.GREEN_PRIMARY} />
+              <Text style={styles.addPhotoText}>Ajouter une photo</Text>
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.photoContainer}>
+              <Image source={{ uri: formData.photo }} style={styles.photo} />
+              <TouchableOpacity
+                style={styles.removePhotoButton}
+                onPress={removePhoto}
+              >
+                <Ionicons name="close-circle" size={24} color={MAVECAM_COLORS.ERROR} />
+              </TouchableOpacity>
             </View>
           )}
         </View>
@@ -536,20 +722,33 @@ const styles = StyleSheet.create({
   eventTypeLabelSelected: {
     color: MAVECAM_COLORS.WHITE,
   },
-  severityButtons: {
+  infoBox: {
     flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    marginTop: 16,
+    borderRadius: 8,
     gap: 8,
   },
-  severityButton: {
-    flex: 1,
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 2,
-    alignItems: 'center',
+  infoBoxTreatment: {
+    backgroundColor: '#f0fdf4', // Vert très clair
+    borderWidth: 1,
+    borderColor: MAVECAM_COLORS.GREEN_LIGHT,
   },
-  severityLabel: {
+  infoBoxNoTreatment: {
+    backgroundColor: '#eff6ff', // Bleu très clair
+    borderWidth: 1,
+    borderColor: MAVECAM_COLORS.BLUE,
+  },
+  infoText: {
     fontSize: 14,
-    fontWeight: '500',
+    flex: 1,
+  },
+  infoTextTreatment: {
+    color: MAVECAM_COLORS.GREEN_DARK,
+  },
+  infoTextNoTreatment: {
+    color: MAVECAM_COLORS.BLUE,
   },
   formRow: {
     flexDirection: 'row',
@@ -596,25 +795,30 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
   },
-  photoGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
   photoContainer: {
     position: 'relative',
+    marginTop: 12,
   },
   photo: {
-    width: 100,
-    height: 100,
+    width: '100%',
+    height: 200,
     borderRadius: 8,
+    backgroundColor: MAVECAM_COLORS.CREAM,
   },
   removePhotoButton: {
     position: 'absolute',
-    top: -8,
-    right: -8,
+    top: 8,
+    right: 8,
     backgroundColor: MAVECAM_COLORS.WHITE,
     borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
   },
   saveButton: {
     backgroundColor: MAVECAM_COLORS.GREEN_PRIMARY,
