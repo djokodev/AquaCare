@@ -436,6 +436,20 @@ class AquacultureService {
   }
 
   /**
+   * Marque une notification comme lue
+   * PATCH /api/aquaculture/notifications/{id}/
+   */
+  async markNotificationAsRead(id: string): Promise<any> {
+    try {
+      const response = await apiService.patch<any>(`${this.baseUrl}/notifications/${id}/`, { is_read: true });
+      return response.data;
+    } catch (error) {
+      console.error('Erreur lors du marquage de la notification comme lue:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Marque toutes les notifications comme lues
    * POST /api/aquaculture/notifications/mark_all_read/
    */
@@ -449,17 +463,39 @@ class AquacultureService {
   }
 
   /**
-   * Marque une notification spécifique comme lue
-   * POST /api/aquaculture/notifications/{id}/mark_read/
+   * Supprime une notification spécifique
+   * DELETE /api/aquaculture/notifications/{id}/
    */
-  async markNotificationAsRead(id: string): Promise<void> {
+  async deleteNotification(id: string): Promise<void> {
     try {
-      await apiService.post(`${this.baseUrl}/notifications/${id}/mark_read/`);
+      await apiService.delete(`${this.baseUrl}/notifications/${id}/`);
     } catch (error) {
-      console.error(`Erreur lors du marquage de la notification ${id} comme lue:`, error);
+      console.error(`Erreur lors de la suppression de la notification ${id}:`, error);
       throw error;
     }
   }
+
+  /**
+   * Supprime toutes les notifications lues (simule via suppression individuelle)
+   */
+  async deleteAllReadNotifications(): Promise<void> {
+    try {
+      // Récupérer d'abord toutes les notifications
+      const allNotifications = await this.getNotifications();
+      const readNotifications = allNotifications.filter(n => n.is_read);
+
+      // Supprimer individuellement chaque notification lue
+      const deletePromises = readNotifications.map(notification =>
+        this.deleteNotification(notification.id)
+      );
+
+      await Promise.all(deletePromises);
+    } catch (error) {
+      console.error('Erreur lors de la suppression des notifications lues:', error);
+      throw error;
+    }
+  }
+
 
   // =================== UTILITAIRES PRIVÉS ===================
 

@@ -184,7 +184,7 @@ def handle_sanitary_event(sender, instance, created, **kwargs):
     
     Signal post_save déclenché après la création d'un log sanitaire.
     Analyse la gravité de l'événement et crée des notifications adaptées :
-    - Alertes critiques (🚨) pour maladies et mortalités anormales
+    - Alertes critiques pour maladies et mortalités anormales
     - Notifications info (📋) pour traitements et vaccinations
     
     Permet une réaction rapide aux problèmes sanitaires critiques.
@@ -204,7 +204,7 @@ def handle_sanitary_event(sender, instance, created, **kwargs):
         severity = severity_map.get(instance.event_type, 'info')
         
         if severity == 'critique':
-            title = f"🚨 Alerte sanitaire - {instance.cycle.cycle_name}"
+            title = f"Alerte sanitaire - {instance.cycle.cycle_name}"
             message = f"Problème {instance.get_event_type_display().lower()} détecté. " \
                      f"Intervention recommandée rapidement."
         else:

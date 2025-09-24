@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useDispatch, useSelector } from 'react-redux';
 import { AppDispatch, RootState } from '@/store/store';
 import { fetchDashboardData } from '@/store/slices/aquacultureSlice';
+import { fetchNotifications } from '@/store/slices/notificationSlice';
 import { offlineService } from '@/services/offlineService';
 import HarvestModal from '@/components/modals/HarvestModal';
 import { ProductionCycle } from '@/types/aquaculture';
@@ -51,6 +52,8 @@ export default function DashboardScreen({ navigation }: any) {
     error
   } = useSelector((state: RootState) => state.aquaculture);
 
+  const { unreadCount } = useSelector((state: RootState) => state.notifications);
+
   // Chargement initial des données + synchronisation offline
   useEffect(() => {
     const initializeDashboard = async () => {
@@ -59,6 +62,9 @@ export default function DashboardScreen({ navigation }: any) {
 
       // Charger les données du dashboard
       dispatch(fetchDashboardData());
+
+      // Charger les notifications pour le badge
+      dispatch(fetchNotifications());
     };
 
     initializeDashboard();
@@ -260,6 +266,21 @@ export default function DashboardScreen({ navigation }: any) {
           <Ionicons name="time-outline" size={24} color={MAVECAM_COLORS.INFO} />
           <Text style={styles.actionText}>{t('cycleHistoryButton')}</Text>
         </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.actionButton}
+          onPress={() => navigation.navigate('Notifications')}
+        >
+          <View style={styles.actionButtonWithBadge}>
+            <Ionicons name="notifications-outline" size={24} color={MAVECAM_COLORS.WARNING} />
+            <Text style={styles.actionText}>{t('notifications')}</Text>
+            {unreadCount > 0 && (
+              <View style={styles.notificationBadge}>
+                <Text style={styles.notificationBadgeText}>{unreadCount}</Text>
+              </View>
+            )}
+          </View>
+        </TouchableOpacity>
       </View>
 
       {/* Section des cycles actifs */}
@@ -422,6 +443,29 @@ const styles = StyleSheet.create({
     color: MAVECAM_COLORS.WHITE,
     fontSize: 16,
     fontWeight: '600',
+  },
+  // Styles pour le bouton notifications avec badge
+  actionButtonWithBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  notificationBadge: {
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    backgroundColor: MAVECAM_COLORS.ERROR,
+    borderRadius: 12,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    minWidth: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  notificationBadgeText: {
+    color: MAVECAM_COLORS.WHITE,
+    fontSize: 10,
+    fontWeight: 'bold',
   },
   // Styles pour les cycles actifs
   activeCyclesContainer: {

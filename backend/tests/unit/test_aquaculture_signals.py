@@ -404,7 +404,7 @@ class TestSanitaryLogSignals:
         ).first()
         
         assert alert is not None
-        assert "🚨" in alert.title
+        assert "Alerte sanitaire" in alert.title
         assert "critique" in alert.message or "Problème" in alert.message
 
     def test_info_sanitary_notification_creation(self, production_cycle):

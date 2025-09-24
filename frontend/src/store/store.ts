@@ -1,11 +1,13 @@
 import { configureStore } from '@reduxjs/toolkit';
 import { authSlice } from './slices/authSlice';
 import { aquacultureSlice } from './slices/aquacultureSlice';
+import notificationReducer from './slices/notificationSlice';
 
 export const store = configureStore({
   reducer: {
     auth: authSlice.reducer,
     aquaculture: aquacultureSlice.reducer,
+    notifications: notificationReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
