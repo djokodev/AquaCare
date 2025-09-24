@@ -9,6 +9,7 @@ import {
   CreateCycleForm,
   DailyLogForm,
   SanitaryLogForm,
+  HarvestData,
   SyncPayload,
   SyncResponse
 } from '@/types/aquaculture';
@@ -138,6 +139,21 @@ export const deleteProductionCycle = createAsyncThunk(
       return id;
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.detail || 'Erreur lors de la suppression du cycle');
+    }
+  }
+);
+
+/**
+ * Finalise un cycle (récolte)
+ */
+export const harvestCycle = createAsyncThunk(
+  'aquaculture/harvestCycle',
+  async ({ id, harvestData }: { id: string; harvestData: HarvestData }, { rejectWithValue }) => {
+    try {
+      const cycle = await aquacultureService.harvestCycle(id, harvestData);
+      return cycle;
+    } catch (error: any) {
+      return rejectWithValue(error.response?.data?.detail || 'Erreur lors de la récolte du cycle');
     }
   }
 );
@@ -417,6 +433,24 @@ export const aquacultureSlice = createSlice({
         state.activeCycles = state.activeCycles.filter(cycle => cycle.id !== action.payload);
         if (state.currentCycle?.id === action.payload) {
           state.currentCycle = undefined;
+        }
+      })
+
+      .addCase(harvestCycle.fulfilled, (state, action) => {
+        const harvestedCycle = action.payload;
+
+        // Mettre à jour dans la liste des cycles
+        const cycleIndex = state.cycles.findIndex(cycle => cycle.id === harvestedCycle.id);
+        if (cycleIndex !== -1) {
+          state.cycles[cycleIndex] = harvestedCycle;
+        }
+
+        // Retirer des cycles actifs car il est maintenant récolté
+        state.activeCycles = state.activeCycles.filter(cycle => cycle.id !== harvestedCycle.id);
+
+        // Mettre à jour le cycle actuel s'il correspond
+        if (state.currentCycle?.id === harvestedCycle.id) {
+          state.currentCycle = harvestedCycle;
         }
       })
 

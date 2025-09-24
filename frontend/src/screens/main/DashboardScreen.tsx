@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -14,6 +14,8 @@ import { useDispatch, useSelector } from 'react-redux';
 import { AppDispatch, RootState } from '@/store/store';
 import { fetchDashboardData } from '@/store/slices/aquacultureSlice';
 import { offlineService } from '@/services/offlineService';
+import HarvestModal from '@/components/modals/HarvestModal';
+import { ProductionCycle } from '@/types/aquaculture';
 
 // Couleurs MAVECAM selon spécifications
 const MAVECAM_COLORS = {
@@ -37,6 +39,10 @@ export default function DashboardScreen({ navigation }: any) {
   const { t } = useTranslation();
   const { user, displayName } = useAuth();
   const dispatch = useDispatch<AppDispatch>();
+
+  // États pour le modal de récolte
+  const [harvestModalVisible, setHarvestModalVisible] = useState(false);
+  const [selectedCycle, setSelectedCycle] = useState<ProductionCycle | null>(null);
 
   // Sélecteurs Redux
   const {
@@ -100,14 +106,42 @@ export default function DashboardScreen({ navigation }: any) {
   const recentLogs = dashboardData?.recent_logs || [];
 
   // Formatage des nombres
-  const formatNumber = (num: number, unit?: string) => {
-    if (num === 0) return `0${unit ? ` ${unit}` : ''}`;
-    return `${num.toLocaleString('fr-FR')}${unit ? ` ${unit}` : ''}`;
+  const formatNumber = (num: any, unit?: string) => {
+    // Conversion sécurisée vers number
+    const numValue = typeof num === 'number' ? num : parseFloat(num);
+
+    if (isNaN(numValue) || numValue === undefined || numValue === null || numValue === 0) {
+      return `0${unit ? ` ${unit}` : ''}`;
+    }
+
+    return `${numValue.toLocaleString('fr-FR')}${unit ? ` ${unit}` : ''}`;
   };
 
-  const formatPercentage = (num: number) => {
-    if (num === 0) return '0%';
-    return `${num.toFixed(1)}%`;
+  const formatPercentage = (num: any) => {
+    // Conversion sécurisée vers number
+    const numValue = typeof num === 'number' ? num : parseFloat(num);
+
+    if (isNaN(numValue) || numValue === undefined || numValue === null || numValue === 0) {
+      return '0%';
+    }
+
+    return `${numValue.toFixed(1)}%`;
+  };
+
+  // Fonctions pour le modal de récolte
+  const openHarvestModal = (cycle: ProductionCycle) => {
+    setSelectedCycle(cycle);
+    setHarvestModalVisible(true);
+  };
+
+  const closeHarvestModal = () => {
+    setHarvestModalVisible(false);
+    setSelectedCycle(null);
+  };
+
+  const handleHarvestSuccess = () => {
+    // Rafraîchir le dashboard après récolte réussie
+    dispatch(fetchDashboardData());
   };
 
   // Affichage d'erreur
@@ -218,7 +252,53 @@ export default function DashboardScreen({ navigation }: any) {
           <Ionicons name="warning-outline" size={24} color={MAVECAM_COLORS.ERROR} />
           <Text style={styles.actionText}>{t('sanitaryLog')}</Text>
         </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.actionButton}
+          onPress={() => navigation.navigate('CycleHistory')}
+        >
+          <Ionicons name="time-outline" size={24} color={MAVECAM_COLORS.INFO} />
+          <Text style={styles.actionText}>{t('cycleHistoryButton')}</Text>
+        </TouchableOpacity>
       </View>
+
+      {/* Section des cycles actifs */}
+      {activeCycles.length > 0 && (
+        <View style={styles.activeCyclesContainer}>
+          <Text style={styles.sectionTitle}>{t('activeCycles')}</Text>
+
+          {activeCycles.map((cycle) => (
+            <View key={cycle.id} style={styles.cycleCard}>
+              <View style={styles.cycleHeader}>
+                <View style={styles.cycleInfo}>
+                  <Text style={styles.cycleName}>{cycle.cycle_name}</Text>
+                  <Text style={styles.cycleDetails}>
+                    {cycle.species === 'clarias' ? 'Silure africain (Clarias)' : 'Tilapia'} • {cycle.pond_identifier}
+                  </Text>
+                  <Text style={styles.cycleMetrics}>
+                    {Math.floor((new Date().getTime() - new Date(cycle.start_date).getTime()) / (1000 * 60 * 60 * 24))} jours • {formatNumber(cycle.current_biomass, 'kg')} • {formatPercentage(cycle.survival_rate || 0)} survie
+                  </Text>
+                </View>
+
+                <TouchableOpacity
+                  style={styles.harvestButton}
+                  onPress={() => openHarvestModal(cycle)}
+                >
+                  <Text style={styles.harvestButtonText}>{t('harvest')}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ))}
+        </View>
+      )}
+
+      {/* Modal de récolte */}
+      <HarvestModal
+        visible={harvestModalVisible}
+        onClose={closeHarvestModal}
+        cycle={selectedCycle}
+        onSuccess={handleHarvestSuccess}
+      />
 
     </ScrollView>
   );
@@ -342,5 +422,58 @@ const styles = StyleSheet.create({
     color: MAVECAM_COLORS.WHITE,
     fontSize: 16,
     fontWeight: '600',
+  },
+  // Styles pour les cycles actifs
+  activeCyclesContainer: {
+    padding: 20,
+  },
+  cycleCard: {
+    backgroundColor: MAVECAM_COLORS.WHITE,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  cycleHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  cycleInfo: {
+    flex: 1,
+    marginRight: 12,
+  },
+  cycleName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: MAVECAM_COLORS.GRAY_DARK,
+    marginBottom: 4,
+  },
+  cycleDetails: {
+    fontSize: 14,
+    color: MAVECAM_COLORS.GRAY_LIGHT,
+    marginBottom: 6,
+  },
+  cycleMetrics: {
+    fontSize: 12,
+    color: MAVECAM_COLORS.GRAY_LIGHT,
+  },
+  harvestButton: {
+    backgroundColor: MAVECAM_COLORS.SUCCESS,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+  },
+  harvestButtonText: {
+    color: MAVECAM_COLORS.WHITE,
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 4,
   },
 });

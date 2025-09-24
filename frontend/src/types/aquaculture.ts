@@ -298,6 +298,14 @@ export interface SanitaryLogForm {
   photo?: File | string; // File pour upload, string pour URL existante
 }
 
+export interface HarvestData {
+  harvest_date: string;
+  final_count: number;
+  final_average_weight: number;
+  total_harvested_weight: number;
+  harvest_notes?: string;
+}
+
 // =================== STATISTIQUES ===================
 
 export interface CycleStatistics {

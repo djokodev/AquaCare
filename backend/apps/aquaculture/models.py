@@ -33,6 +33,8 @@ class ProductionCycle(models.Model):
     class Meta:
         app_label = 'aquaculture'
         ordering = ['-start_date']
+        verbose_name = _("Cycle de production")
+        verbose_name_plural = _("Cycles de production")
         indexes = [
             models.Index(fields=['farm_profile', 'status']),
             models.Index(fields=['start_date', 'end_date']),
@@ -221,6 +223,8 @@ class CycleLog(models.Model):
         app_label = 'aquaculture'
         unique_together = ['cycle', 'log_date']
         ordering = ['-log_date']
+        verbose_name = _("Journal quotidien")
+        verbose_name_plural = _("Journaux quotidiens")
         indexes = [
             models.Index(fields=['cycle', 'log_date']),
             models.Index(fields=['client_uuid']),
@@ -401,6 +405,8 @@ class FeedingPlan(models.Model):
         app_label = 'aquaculture'
         unique_together = ['cycle', 'week_number']
         ordering = ['cycle', 'week_number']
+        verbose_name = _("Plan d'alimentation")
+        verbose_name_plural = _("Plans d'alimentation")
 
     cycle = models.ForeignKey(
         ProductionCycle, 
@@ -490,6 +496,8 @@ class SanitaryLog(models.Model):
     class Meta:
         app_label = 'aquaculture'
         ordering = ['-event_date']
+        verbose_name = _("Journal sanitaire")
+        verbose_name_plural = _("Journaux sanitaires")
         indexes = [
             models.Index(fields=['cycle', 'event_date']),
             models.Index(fields=['event_type', 'resolved']),
@@ -592,6 +600,8 @@ class NutritionalGuide(models.Model):
         app_label = 'aquaculture'
         unique_together = ['species', 'growth_stage']
         ordering = ['species', 'min_weight']
+        verbose_name = _("Guide nutritionnel")
+        verbose_name_plural = _("Guides nutritionnels")
 
     species = models.CharField(
         max_length=50, 
@@ -668,6 +678,8 @@ class CycleMetrics(models.Model):
     """
     class Meta:
         app_label = 'aquaculture'
+        verbose_name = _("Métrique de cycle")
+        verbose_name_plural = _("Métriques de cycles")
 
     cycle = models.OneToOneField(
         ProductionCycle, 
@@ -743,6 +755,8 @@ class Notification(models.Model):
     class Meta:
         app_label = 'aquaculture'
         ordering = ['-scheduled_for']
+        verbose_name = _("Notification")
+        verbose_name_plural = _("Notifications")
         indexes = [
             models.Index(fields=['user', 'is_read', 'scheduled_for']),
             models.Index(fields=['notification_type', 'is_sent']),
