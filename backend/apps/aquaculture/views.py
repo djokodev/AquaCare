@@ -978,6 +978,8 @@ class FeedingPlanViewSet(viewsets.ModelViewSet):
             ).first()
             
             if existing_plan:
+                # Régénérer les notifications même pour un plan existant
+                self._create_feeding_notifications(existing_plan)
                 plans.append(existing_plan)
                 continue
             
@@ -1019,40 +1021,87 @@ class FeedingPlanViewSet(viewsets.ModelViewSet):
         )
     
     def _create_feeding_notifications(self, plan):
-        """Crée des notifications de rappel d'alimentation quotidiens."""
+        """Crée des notifications de rappel d'alimentation intelligentes avec double rappel."""
         from datetime import datetime, time
-        
+
+        # Supprimer TOUTES les anciennes notifications de feeding pour ce cycle (futures ET passées)
+        Notification.objects.filter(
+            cycle=plan.cycle,
+            notification_type='feeding_reminder'
+        ).delete()
+
+        # Définir les heures de repas selon le nombre de repas par jour
+        feeding_times = self._get_feeding_times(plan.meals_per_day)
+
         for day in range(7):
             notification_date = plan.start_date + timedelta(days=day)
-            
+
             # Skip past dates
             if notification_date < date.today():
                 continue
-            
-            # Morning feeding notification (8:00 AM)
-            Notification.objects.create(
-                user=plan.cycle.farm_profile.user,
-                cycle=plan.cycle,
-                notification_type='feeding_reminder',
-                title=_('Nourrissage - %(cycle_name)s') % {'cycle_name': plan.cycle.cycle_name},
-                message=_('Donnez %(amount).1f kg d\'aliment ce matin') % {'amount': plan.feed_per_meal},
-                scheduled_for=timezone.make_aware(
-                    datetime.combine(notification_date, time(8, 0))
-                )
-            )
-            
-            # Evening feeding if multiple meals per day
-            if plan.meals_per_day >= 2:
-                Notification.objects.create(
-                    user=plan.cycle.farm_profile.user,
-                    cycle=plan.cycle,
-                    notification_type='feeding_reminder',
-                    title=_('Nourrissage - %(cycle_name)s') % {'cycle_name': plan.cycle.cycle_name},
-                    message=_('Donnez %(amount).1f kg d\'aliment ce soir') % {'amount': plan.feed_per_meal},
-                    scheduled_for=timezone.make_aware(
-                        datetime.combine(notification_date, time(17, 0))
+
+            # Skip if today and meal time already passed
+            daily_feeding_times = feeding_times
+            if notification_date == date.today():
+                current_time = timezone.now().time()
+                daily_feeding_times = [ft for ft in feeding_times if ft >= current_time.replace(second=0, microsecond=0)]
+
+            # Skip this day if no meals remaining
+            if not daily_feeding_times:
+                continue
+
+            # Créer les notifications pour chaque repas
+            for meal_index, meal_time in enumerate(daily_feeding_times):
+                meal_names = ['matin', 'midi', 'soir', 'nuit']
+                meal_name = meal_names[meal_index] if meal_index < len(meal_names) else f'repas {meal_index + 1}'
+
+                # Notification 30 minutes avant
+                notification_30min = timezone.make_aware(
+                    datetime.combine(notification_date, meal_time)
+                ) - timedelta(minutes=30)
+
+                if notification_30min > timezone.now():
+                    Notification.objects.create(
+                        user=plan.cycle.farm_profile.user,
+                        cycle=plan.cycle,
+                        notification_type='feeding_reminder',
+                        title=_('Nourrissage dans 30min - %(cycle_name)s') % {'cycle_name': plan.cycle.cycle_name},
+                        message=_('Préparez %(amount).1f kg d\'aliment pour le %(meal)s') % {
+                            'amount': plan.feed_per_meal,
+                            'meal': meal_name
+                        },
+                        scheduled_for=notification_30min
                     )
-                )
+                # Notification 15 minutes avant
+                notification_15min = timezone.make_aware(
+                    datetime.combine(notification_date, meal_time)
+                ) - timedelta(minutes=15)
+
+                if notification_15min > timezone.now():
+                    Notification.objects.create(
+                        user=plan.cycle.farm_profile.user,
+                        cycle=plan.cycle,
+                        notification_type='feeding_reminder',
+                        title=_('Nourrissage dans 15min - %(cycle_name)s') % {'cycle_name': plan.cycle.cycle_name},
+                        message=_('Donnez %(amount).1f kg d\'aliment maintenant (%(meal)s)') % {
+                            'amount': plan.feed_per_meal,
+                            'meal': meal_name
+                        },
+                        scheduled_for=notification_15min
+                    )
+
+    def _get_feeding_times(self, meals_per_day):
+        """Retourne les heures de repas optimales selon le nombre de repas par jour."""
+        from datetime import time
+
+        feeding_schedules = {
+            1: [time(13, 0)],  # 13h
+            2: [time(8, 0), time(17, 0)],  # 8h, 17h
+            3: [time(8, 0), time(13, 0), time(18, 0)],  # 8h, 13h, 18h
+            4: [time(7, 0), time(11, 0), time(15, 0), time(18, 0)]  # 7h, 11h, 15h, 18h
+        }
+
+        return feeding_schedules.get(meals_per_day, feeding_schedules[2])  # Default à 2 repas
 
 
 @extend_schema_view(
@@ -1429,9 +1478,10 @@ class NotificationViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
     
     def get_queryset(self):
-        """Retourne les notifications pour l'utilisateur authentifié."""
+        """Retourne les notifications pour l'utilisateur authentifié (seulement celles qui doivent être affichées)."""
         return Notification.objects.filter(
-            user=self.request.user
+            user=self.request.user,
+            scheduled_for__lte=timezone.now()  # Seulement les notifications dont l'heure est arrivée
         ).order_by('-scheduled_for')
     
     @extend_schema(
