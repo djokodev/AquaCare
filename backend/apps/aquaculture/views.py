@@ -897,10 +897,17 @@ class FeedingPlanViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         """Retourne les plans d'alimentation actifs pour les cycles de l'utilisateur."""
-        return FeedingPlan.objects.filter(
+        queryset = FeedingPlan.objects.filter(
             cycle__farm_profile__user=self.request.user,
             is_active=True
         ).select_related('cycle').order_by('cycle', 'week_number')
+
+        # Filtrer par cycle si spécifié dans les paramètres URL
+        cycle_id = self.request.query_params.get('cycle')
+        if cycle_id:
+            queryset = queryset.filter(cycle_id=cycle_id)
+
+        return queryset
     
     @extend_schema(
         summary="Générer plans d'alimentation automatiques",

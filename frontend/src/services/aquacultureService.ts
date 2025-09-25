@@ -248,42 +248,6 @@ class AquacultureService {
     }
   }
 
-  // =================== FEEDING PLANS ===================
-
-  /**
-   * Récupère les plans d'alimentation actifs
-   * GET /api/aquaculture/feeding-plans/
-   */
-  async getFeedingPlans(cycleId?: string): Promise<FeedingPlan[]> {
-    try {
-      const params = cycleId ? `?cycle_id=${cycleId}` : '';
-      const response = await apiService.get<{ results: FeedingPlan[] }>(`${this.baseUrl}/feeding-plans/${params}`);
-      return response.data.results || response.data;
-    } catch (error) {
-      console.error('Erreur lors de la récupération des plans d\'alimentation:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Génère automatiquement un plan d'alimentation
-   * POST /api/aquaculture/feeding-plans/generate/
-   */
-  async generateFeedingPlan(cycleId: string, weeksAhead: number = 1): Promise<FeedingPlan[]> {
-    try {
-      const response = await apiService.post<FeedingPlan[]>(
-        `${this.baseUrl}/feeding-plans/generate/`,
-        {
-          cycle_id: cycleId,
-          weeks_ahead: weeksAhead
-        }
-      );
-      return response.data;
-    } catch (error) {
-      console.error('Erreur lors de la génération du plan d\'alimentation:', error);
-      throw error;
-    }
-  }
 
   // =================== SANITARY LOGS ===================
 
@@ -471,6 +435,52 @@ class AquacultureService {
       await apiService.delete(`${this.baseUrl}/notifications/${id}/`);
     } catch (error) {
       console.error(`Erreur lors de la suppression de la notification ${id}:`, error);
+      throw error;
+    }
+  }
+
+  // =================== PLANS D'ALIMENTATION ===================
+
+  /**
+   * Récupère les cycles actifs pour les plans d'alimentation
+   * GET /api/aquaculture/cycles/?status=active
+   */
+  async getActiveCycles(): Promise<any[]> {
+    try {
+      const response = await apiService.get<any>(`${this.baseUrl}/cycles/?status=active`);
+      return response.data.results || response.data;
+    } catch (error) {
+      console.error('Erreur lors de la récupération des cycles actifs:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Récupère les plans d'alimentation d'un cycle
+   * GET /api/aquaculture/feeding-plans/?cycle={cycleId}
+   */
+  async getFeedingPlans(cycleId: string): Promise<any[]> {
+    try {
+      const response = await apiService.get<any>(`${this.baseUrl}/feeding-plans/?cycle=${cycleId}`);
+      return response.data.results || response.data;
+    } catch (error) {
+      console.error('Erreur lors de la récupération des plans d\'alimentation:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Génère un nouveau plan d'alimentation pour un cycle
+   * POST /api/aquaculture/feeding-plans/generate/
+   */
+  async generateFeedingPlan(cycleId: string): Promise<any[]> {
+    try {
+      const response = await apiService.post<any[]>(`${this.baseUrl}/feeding-plans/generate/`, {
+        cycle_id: cycleId
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Erreur lors de la génération du plan d\'alimentation:', error);
       throw error;
     }
   }

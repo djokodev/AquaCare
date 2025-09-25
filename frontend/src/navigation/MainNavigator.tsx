@@ -34,6 +34,7 @@ import SanitaryLogScreen from '@/screens/aquaculture/SanitaryLogScreen';
 import NewCycleScreen from '@/screens/aquaculture/NewCycleScreen';
 import CycleHistoryScreen from '@/screens/aquaculture/CycleHistoryScreen';
 import NotificationsScreen from '@/screens/aquaculture/NotificationsScreen';
+import FeedingPlanScreen from '@/screens/aquaculture/FeedingPlanScreen';
 
 export type MainTabParamList = {
   Dashboard: undefined;
@@ -48,6 +49,7 @@ export type RootStackParamList = {
   NewCycle: undefined;
   CycleHistory: undefined;
   Notifications: undefined;
+  FeedingPlan: undefined;
 };
 
 export type ProfileStackParamList = {
@@ -198,6 +200,10 @@ export default function MainNavigator() {
       <RootStack.Screen
         name="Notifications"
         component={NotificationsScreen}
+      />
+      <RootStack.Screen
+        name="FeedingPlan"
+        component={FeedingPlanScreen}
       />
     </RootStack.Navigator>
   );

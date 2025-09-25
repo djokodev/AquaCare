@@ -108,6 +108,9 @@ export interface FeedingPlan {
   end_date: string;
   is_active: boolean;
 
+  // Notes optionnelles
+  notes?: string;
+
   created_at: string;
 }
 

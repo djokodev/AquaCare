@@ -281,6 +281,14 @@ export default function DashboardScreen({ navigation }: any) {
             )}
           </View>
         </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.actionButton}
+          onPress={() => navigation.navigate('FeedingPlan')}
+        >
+          <Ionicons name="restaurant-outline" size={24} color={MAVECAM_COLORS.INFO} />
+          <Text style={styles.actionText}>{t('feedingPlan')}</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Section des cycles actifs */}
