@@ -42,6 +42,7 @@ export interface ProductionCycle {
   // Métriques calculées
   survival_rate?: number;
   fcr?: number;
+  days_active?: number; // Calculé par l'API backend
   status: CycleStatus;
 
   // Métadonnées
@@ -152,7 +153,9 @@ export interface NutritionalGuide {
   feeding_rate_percentage: number;
   protein_requirement: number;
   meals_per_day: number;
+  feed_size_mm: number;
   recommended_products: string[];
+  expected_fcr: number;
   feeding_notes?: string;
 }
 

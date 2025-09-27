@@ -35,6 +35,8 @@ import NewCycleScreen from '@/screens/aquaculture/NewCycleScreen';
 import CycleHistoryScreen from '@/screens/aquaculture/CycleHistoryScreen';
 import NotificationsScreen from '@/screens/aquaculture/NotificationsScreen';
 import FeedingPlanScreen from '@/screens/aquaculture/FeedingPlanScreen';
+import StatisticsScreen from '@/screens/aquaculture/StatisticsScreen';
+import NutritionalGuidesScreen from '@/screens/aquaculture/NutritionalGuidesScreen';
 
 export type MainTabParamList = {
   Dashboard: undefined;
@@ -50,6 +52,8 @@ export type RootStackParamList = {
   CycleHistory: undefined;
   Notifications: undefined;
   FeedingPlan: undefined;
+  Statistics: undefined;
+  NutritionalGuides: undefined;
 };
 
 export type ProfileStackParamList = {
@@ -204,6 +208,21 @@ export default function MainNavigator() {
       <RootStack.Screen
         name="FeedingPlan"
         component={FeedingPlanScreen}
+      />
+      <RootStack.Screen
+        name="Statistics"
+        component={StatisticsScreen}
+        options={{
+          headerShown: true,
+          headerStyle: { backgroundColor: MAVECAM_COLORS.GREEN_PRIMARY },
+          headerTintColor: MAVECAM_COLORS.WHITE,
+          headerTitleStyle: { fontWeight: 'bold' },
+          headerTitle: 'Statistiques'
+        }}
+      />
+      <RootStack.Screen
+        name="NutritionalGuides"
+        component={NutritionalGuidesScreen}
       />
     </RootStack.Navigator>
   );

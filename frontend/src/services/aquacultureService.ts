@@ -400,6 +400,20 @@ class AquacultureService {
   }
 
   /**
+   * Récupère les cycles récoltés pour les statistiques
+   * GET /api/aquaculture/cycles/?status=harvested
+   */
+  async getHarvestedCycles(): Promise<any[]> {
+    try {
+      const response = await apiService.get<any>(`${this.baseUrl}/cycles/?status=harvested`);
+      return response.data.results || response.data;
+    } catch (error) {
+      console.error('Erreur lors de la récupération des cycles récoltés:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Marque une notification comme lue
    * PATCH /api/aquaculture/notifications/{id}/
    */
@@ -502,6 +516,76 @@ class AquacultureService {
       await Promise.all(deletePromises);
     } catch (error) {
       console.error('Erreur lors de la suppression des notifications lues:', error);
+      throw error;
+    }
+  }
+
+  // =================== GUIDES NUTRITIONNELS ===================
+
+  /**
+   * Récupère tous les guides nutritionnels
+   * GET /api/aquaculture/nutritional-guides/
+   */
+  async getAllNutritionalGuides(): Promise<any[]> {
+    try {
+      const response = await apiService.get<any>(`${this.baseUrl}/nutritional-guides/`);
+      return response.data.results || response.data;
+    } catch (error) {
+      console.error('Erreur lors de la récupération des guides nutritionnels:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Récupère les guides nutritionnels pour une espèce spécifique
+   * GET /api/aquaculture/nutritional-guides/?species={species}
+   */
+  async getNutritionalGuidesBySpecies(species: 'tilapia' | 'clarias'): Promise<any[]> {
+    try {
+      const response = await apiService.get<any>(`${this.baseUrl}/nutritional-guides/?species=${species}`);
+      return response.data.results || response.data;
+    } catch (error) {
+      console.error(`Erreur lors de la récupération des guides pour ${species}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Récupère un guide nutritionnel spécifique par ID
+   * GET /api/aquaculture/nutritional-guides/{id}/
+   */
+  async getNutritionalGuideById(id: string): Promise<any> {
+    try {
+      const response = await apiService.get<any>(`${this.baseUrl}/nutritional-guides/${id}/`);
+      return response.data;
+    } catch (error) {
+      console.error(`Erreur lors de la récupération du guide ${id}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Trouve le guide nutritionnel approprié selon le poids actuel
+   * Utility function qui utilise getAllNutritionalGuides()
+   */
+  async findGuideForWeight(species: 'tilapia' | 'clarias', currentWeight: number): Promise<any | null> {
+    try {
+      const guides = await this.getNutritionalGuidesBySpecies(species);
+
+      // Trier par poids minimum croissant
+      const sortedGuides = guides.sort((a, b) => a.min_weight - b.min_weight);
+
+      // Trouver le guide correspondant au poids
+      for (const guide of sortedGuides) {
+        if (currentWeight >= guide.min_weight && currentWeight <= guide.max_weight) {
+          return guide;
+        }
+      }
+
+      // Si aucun guide exact, retourner le dernier (pour poissons très gros)
+      return sortedGuides[sortedGuides.length - 1] || null;
+    } catch (error) {
+      console.error('Erreur lors de la recherche du guide par poids:', error);
       throw error;
     }
   }

@@ -289,6 +289,22 @@ export default function DashboardScreen({ navigation }: any) {
           <Ionicons name="restaurant-outline" size={24} color={MAVECAM_COLORS.INFO} />
           <Text style={styles.actionText}>{t('feedingPlan')}</Text>
         </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.actionButton}
+          onPress={() => navigation.navigate('NutritionalGuides')}
+        >
+          <Ionicons name="library-outline" size={24} color={MAVECAM_COLORS.GREEN_DARK} />
+          <Text style={styles.actionText}>{t('nutritionalGuides')}</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.actionButton}
+          onPress={() => navigation.navigate('Statistics')}
+        >
+          <Ionicons name="bar-chart-outline" size={24} color={MAVECAM_COLORS.SUCCESS} />
+          <Text style={styles.actionText}>{t('statistics')}</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Section des cycles actifs */}

@@ -225,6 +225,9 @@ export const fetchFeedingPlans = createAsyncThunk(
   'aquaculture/fetchFeedingPlans',
   async (cycleId: string | undefined, { rejectWithValue }) => {
     try {
+      if (!cycleId) {
+        return rejectWithValue('ID de cycle requis');
+      }
       const plans = await aquacultureService.getFeedingPlans(cycleId);
       return plans;
     } catch (error: any) {
@@ -238,9 +241,9 @@ export const fetchFeedingPlans = createAsyncThunk(
  */
 export const generateFeedingPlan = createAsyncThunk(
   'aquaculture/generateFeedingPlan',
-  async ({ cycleId, weeksAhead }: { cycleId: string; weeksAhead?: number }, { rejectWithValue }) => {
+  async ({ cycleId }: { cycleId: string }, { rejectWithValue }) => {
     try {
-      const plans = await aquacultureService.generateFeedingPlan(cycleId, weeksAhead);
+      const plans = await aquacultureService.generateFeedingPlan(cycleId);
       return plans;
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.detail || 'Erreur lors de la génération du plan d\'alimentation');

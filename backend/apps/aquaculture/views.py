@@ -142,11 +142,18 @@ class ProductionCycleViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         """Retourne les cycles uniquement pour la ferme de l'utilisateur authentifié."""
-        return ProductionCycle.objects.filter(
+        queryset = ProductionCycle.objects.filter(
             farm_profile__user=self.request.user
         ).select_related('farm_profile').prefetch_related(
             'logs', 'feeding_plans', 'sanitary_logs', 'metrics'
         )
+
+        # Filtrage par status si spécifié dans les query parameters
+        status_filter = self.request.query_params.get('status', None)
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+
+        return queryset
     
     def perform_create(self, serializer):
         """Assure que le cycle est créé pour le profil de ferme de l'utilisateur."""
