@@ -54,11 +54,17 @@ class ApiService {
             if (refreshToken) {
               // Tenter de refresh le token
               const response = await this.refreshToken(refreshToken);
-              const { access } = response.data.tokens;
-              
-              // Sauvegarder le nouveau token
+
+              // CORRECTION: Simple JWT retourne directement { access, refresh }
+              // PAS { tokens: { access, refresh } } comme le login custom
+              const { access, refresh: newRefresh } = response.data;
+
+              // Sauvegarder les nouveaux tokens (rotation activée)
               await SecureStore.setItemAsync(STORAGE_KEYS.ACCESS_TOKEN, access);
-              
+              if (newRefresh) {
+                await SecureStore.setItemAsync(STORAGE_KEYS.REFRESH_TOKEN, newRefresh);
+              }
+
               // Retry la requête originale
               originalRequest.headers.Authorization = `Bearer ${access}`;
               return this.api(originalRequest);
@@ -80,6 +86,8 @@ class ApiService {
   }
 
   private async refreshToken(refreshToken: string) {
+    // Endpoint Simple JWT retourne directement { access, refresh }
+    // PAS { tokens: { access, refresh } } comme le login custom
     return axios.post(`${API_CONFIG.baseURL}/accounts/token/refresh/`, {
       refresh: refreshToken,
     });

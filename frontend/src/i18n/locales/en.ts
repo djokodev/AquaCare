@@ -134,6 +134,7 @@ export const en = {
   pondNamePlaceholder: 'Ex: Pond A, Tank 1, BP001...',
   surface: 'Surface (m²)',
   volume: 'Volume (m³)',
+  pondDimensionsInfo: 'Enter at least the surface OR the volume of the pond',
   initialStocking: 'Initial stocking',
   initialCount: 'Number of fingerlings',
   initialWeight: 'Average weight (g)',

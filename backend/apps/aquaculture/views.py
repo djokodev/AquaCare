@@ -670,9 +670,13 @@ class CycleLogViewSet(viewsets.ModelViewSet):
         return queryset
     
     def perform_create(self, serializer):
-        """Après création du log, met à jour les métriques de cycle."""
-        log = serializer.save()
-        self._update_cycle_metrics(log)
+        """
+        Crée le log quotidien.
+
+        Note: Les métriques de cycle sont mises à jour automatiquement
+        via le signal post_save dans signals.py (pas de duplication).
+        """
+        serializer.save()
     
     @extend_schema(
         summary="Création en bulk de logs (sync offline)",
@@ -751,43 +755,9 @@ class CycleLogViewSet(viewsets.ModelViewSet):
             'logs': CycleLogSerializer(logs, many=True).data
         }, status=status.HTTP_201_CREATED)
     
-    def _update_cycle_metrics(self, log):
-        """Met à jour les métriques de cycle après nouvelle entrée de log."""
-        cycle = log.cycle
-        
-        # Update current fish count if mortality
-        if log.mortality_count:
-            cycle.current_count = max(0, cycle.current_count - log.mortality_count)
-        
-        # Update average weight if sampling data
-        if log.average_weight:
-            cycle.current_average_weight = log.average_weight
-        
-        # Recalculate biomass
-        cycle.current_biomass = AquacultureCalculator.calculate_biomass(
-            cycle.current_count,
-            cycle.current_average_weight
-        )
-        
-        # Update total feed consumed
-        if log.feed_quantity:
-            cycle.total_feed_consumed += log.feed_quantity
-        
-        # Recalculate survival rate
-        cycle.survival_rate = AquacultureCalculator.calculate_survival_rate(
-            cycle.initial_count,
-            cycle.current_count
-        )
-        
-        # Calculate FCR if possible
-        weight_gain = cycle.current_biomass - cycle.initial_biomass
-        if weight_gain > 0 and cycle.total_feed_consumed > 0:
-            cycle.fcr = AquacultureCalculator.calculate_fcr(
-                cycle.total_feed_consumed,
-                weight_gain
-            )
-        
-        cycle.save()
+    # SUPPRIMÉ: _update_cycle_metrics() - duplication avec signal post_save
+    # Les mises à jour de cycle sont gérées automatiquement par le signal
+    # update_cycle_after_log() dans signals.py pour éviter la duplication
     
     def _recalculate_cycle_metrics(self, cycle):
         """Recalcule toutes les métriques de cycle à partir des logs."""

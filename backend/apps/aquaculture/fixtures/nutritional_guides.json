@@ -12,7 +12,7 @@
       "meals_per_day": 4,
       "feed_size_mm": "1.0",
       "recommended_products": [
-        "MAVECAM Starter Premium 1.0mm",
+        "MAVECAM Starter Premium 1.0mm",  
         "MAVECAM Alevin High Energy"
       ],
       "expected_fcr": "0.90",

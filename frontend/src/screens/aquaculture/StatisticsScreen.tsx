@@ -250,14 +250,24 @@ export default function StatisticsScreen({ navigation }: any) {
   }
 
   return (
-    <ScrollView
-      style={styles.container}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-    >
+    <View style={styles.container}>
+      {/* Header avec flèche retour */}
+      <View style={styles.header}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
+        >
+          <Ionicons name="arrow-back" size={24} color={MAVECAM_COLORS.WHITE} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>{t('statistics')}</Text>
+      </View>
 
-
-      {/* Sélecteur de cycle */}
-      <View style={styles.cycleSelector}>
+      <ScrollView
+        style={styles.scrollContent}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      >
+        {/* Sélecteur de cycle */}
+        <View style={styles.cycleSelector}>
         <Text style={styles.sectionTitle}>Cycles récoltés disponibles</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.cycleList}>
           {harvestedCycles.map((cycle) => (
@@ -368,7 +378,8 @@ export default function StatisticsScreen({ navigation }: any) {
 
         </>
       )}
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
@@ -432,19 +443,27 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: MAVECAM_COLORS.GREEN_PRIMARY,
-    padding: 20,
-    paddingTop: 60,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingTop: 50,
+    paddingBottom: 16,
+    paddingHorizontal: 16,
+  },
+  backButton: {
+    marginRight: 16,
   },
   headerTitle: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: 'bold',
     color: MAVECAM_COLORS.WHITE,
-    marginBottom: 4,
   },
   headerSubtitle: {
     fontSize: 16,
     color: MAVECAM_COLORS.WHITE,
     opacity: 0.9,
+  },
+  scrollContent: {
+    flex: 1,
   },
   cycleSelector: {
     backgroundColor: MAVECAM_COLORS.WHITE,

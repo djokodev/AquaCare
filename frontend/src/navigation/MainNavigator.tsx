@@ -213,7 +213,7 @@ export default function MainNavigator() {
         name="Statistics"
         component={StatisticsScreen}
         options={{
-          headerShown: true,
+          headerShown: false, // Header personnalisé dans le composant
           headerStyle: { backgroundColor: MAVECAM_COLORS.GREEN_PRIMARY },
           headerTintColor: MAVECAM_COLORS.WHITE,
           headerTitleStyle: { fontWeight: 'bold' },

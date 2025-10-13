@@ -134,6 +134,7 @@ export const fr = {
   pondNamePlaceholder: 'Ex: Bassin A, Étang 1, BP001...',
   surface: 'Surface (m²)',
   volume: 'Volume (m³)',
+  pondDimensionsInfo: 'Renseignez au moins la surface OU le volume du bassin',
   initialStocking: 'Empoissonnement initial',
   initialCount: 'Nombre d\'alevins',
   initialWeight: 'Poids moyen (g)',

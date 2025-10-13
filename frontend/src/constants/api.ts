@@ -26,7 +26,7 @@ export const API_ENDPOINTS = {
   // Aquaculture module (pour plus tard)
   AQUACULTURE: {
     CYCLES: '/aquaculture/cycles/',
-    LOGS: '/aquaculture/cycle-logs/',
+    LOGS: '/aquaculture/cycle-logs/', 
     FEEDING_PLANS: '/aquaculture/feeding-plans/',
     SANITARY_LOGS: '/aquaculture/sanitary-logs/',
     DASHBOARD: '/aquaculture/dashboard/',

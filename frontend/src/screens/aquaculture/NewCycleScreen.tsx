@@ -80,9 +80,31 @@ export default function NewCycleScreen({ navigation }: any) {
 
   const calculateDensity = () => {
     const biomass = parseFloat(calculateInitialBiomass());
-    const surface = parseFloat(formData.pond_surface_m2) || 0;
-    if (surface === 0) return '0';
-    return (biomass / surface).toFixed(2);
+
+    // Priorité au volume (plus précis) si disponible
+    const volume = parseFloat(formData.pond_volume_m3);
+    if (volume > 0) {
+      return (biomass / volume).toFixed(2); // Densité volumique kg/m³
+    }
+
+    // Sinon utiliser la surface
+    const surface = parseFloat(formData.pond_surface_m2);
+    if (surface > 0) {
+      return (biomass / surface).toFixed(2); // Densité surfacique kg/m²
+    }
+
+    return '0';
+  };
+
+  const getDensityUnit = () => {
+    // Retourne l'unité appropriée selon ce qui est renseigné
+    if (formData.pond_volume_m3 && parseFloat(formData.pond_volume_m3) > 0) {
+      return 'kg/m³';
+    }
+    if (formData.pond_surface_m2 && parseFloat(formData.pond_surface_m2) > 0) {
+      return 'kg/m²';
+    }
+    return 'kg/m²';
   };
 
   const generateCycleName = () => {
@@ -108,7 +130,6 @@ export default function NewCycleScreen({ navigation }: any) {
       'cycle_name',
       'species',
       'pond_identifier',
-      'pond_surface_m2',
       'initial_count',
       'initial_average_weight'
     ];
@@ -119,10 +140,17 @@ export default function NewCycleScreen({ navigation }: any) {
       }
     }
 
-    // Validation des valeurs numériques
-    if (parseFloat(formData.pond_surface_m2) <= 0) return false;
+    // Validation des valeurs numériques obligatoires
     if (parseFloat(formData.initial_count) <= 0) return false;
     if (parseFloat(formData.initial_average_weight) <= 0) return false;
+
+    // CRITIQUE: Au moins surface OU volume doit être renseigné
+    const hasSurface = formData.pond_surface_m2.trim() !== '' && parseFloat(formData.pond_surface_m2) > 0;
+    const hasVolume = formData.pond_volume_m3.trim() !== '' && parseFloat(formData.pond_volume_m3) > 0;
+
+    if (!hasSurface && !hasVolume) {
+      return false; // Ni surface ni volume = formulaire invalide
+    }
 
     return true;
   };
@@ -272,9 +300,17 @@ export default function NewCycleScreen({ navigation }: any) {
             />
           </View>
 
+          {/* Message informatif */}
+          <View style={styles.infoBox}>
+            <Ionicons name="information-circle" size={18} color={MAVECAM_COLORS.INFO} />
+            <Text style={styles.infoText}>
+              {t('pondDimensionsInfo') || 'Renseignez au moins la surface OU le volume du bassin'}
+            </Text>
+          </View>
+
           <View style={styles.formRow}>
             <View style={styles.formGroup}>
-              <Text style={styles.label}>{t('surface')} {t('requiredField')}</Text>
+              <Text style={styles.label}>{t('surface')}</Text>
               <TextInput
                 style={styles.input}
                 value={formData.pond_surface_m2}
@@ -356,10 +392,10 @@ export default function NewCycleScreen({ navigation }: any) {
                 <Text style={styles.calculationValue}>{calculateInitialBiomass()} kg</Text>
               </View>
 
-              {formData.pond_surface_m2 && (
+              {(formData.pond_surface_m2 || formData.pond_volume_m3) && (
                 <View style={styles.calculationRow}>
                   <Text style={styles.calculationLabel}>{t('initialDensity')} :</Text>
-                  <Text style={styles.calculationValue}>{calculateDensity()} kg/m²</Text>
+                  <Text style={styles.calculationValue}>{calculateDensity()} {getDensityUnit()}</Text>
                 </View>
               )}
 
@@ -534,5 +570,19 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     opacity: 0.6,
+  },
+  infoBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#e0f2fe',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+    gap: 8,
+  },
+  infoText: {
+    flex: 1,
+    fontSize: 13,
+    color: MAVECAM_COLORS.INFO,
   },
 });
