@@ -24,17 +24,33 @@ from .models import (
     ProductionCycle, CycleLog, FeedingPlan, SanitaryLog,
     NutritionalGuide, CycleMetrics, Notification
 )
-from .calculators import AquacultureCalculator
+from .domain.calculators import AquacultureCalculator
 
 
 class ProductionCycleSerializer(serializers.ModelSerializer):
     """
     Sérialiseur pour les cycles de production avec calculs automatiques.
     Inclut des champs calculés en lecture seule et validation logique métier.
+
+    Architecture refactorée (Octobre 2025):
+    - Expose les métriques CycleMetrics pour éviter recalculs frontend
+    - Calcule total_feed_cost avec prix configurable
+    - Source unique de vérité pour toutes les métriques aquacoles
     """
+    # Champs calculés depuis modèle ProductionCycle
     days_active = serializers.SerializerMethodField()
     current_density_kg_m3 = serializers.SerializerMethodField()
-    
+
+    # Champs calculés depuis CycleMetrics (métriques avancées)
+    daily_growth_rate = serializers.SerializerMethodField()
+    specific_growth_rate = serializers.SerializerMethodField()
+    average_daily_feed = serializers.SerializerMethodField()
+    performance_score = serializers.SerializerMethodField()
+
+    # Champs calculés pour coûts
+    total_feed_cost = serializers.SerializerMethodField()
+
+    # Champs display
     species_display = serializers.CharField(source='get_species_display', read_only=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     farm_name = serializers.CharField(source='farm_profile.farm_name', read_only=True)
@@ -49,6 +65,10 @@ class ProductionCycleSerializer(serializers.ModelSerializer):
             'total_feed_consumed', 'end_date', 'final_count', 'final_average_weight',
             'final_biomass', 'survival_rate', 'fcr', 'status', 'status_display',
             'days_active', 'current_density_kg_m3', 'farm_name',
+            # Métriques CycleMetrics exposées
+            'daily_growth_rate', 'specific_growth_rate', 'average_daily_feed', 'performance_score',
+            # Coûts calculés
+            'total_feed_cost',
             'created_at', 'updated_at'
         ]
         read_only_fields = [
@@ -65,6 +85,64 @@ class ProductionCycleSerializer(serializers.ModelSerializer):
         """Calcule la densité d'élevage actuelle."""
         density = obj.current_density_kg_m3()
         return float(density) if density else None
+
+    def get_daily_growth_rate(self, obj):
+        """
+        Taux de croissance journalier (g/jour) depuis CycleMetrics.
+        Évite recalcul frontend - Backend est source unique de vérité.
+        """
+        if hasattr(obj, 'metrics') and obj.metrics and obj.metrics.daily_growth_rate:
+            return float(obj.metrics.daily_growth_rate)
+        return None
+
+    def get_specific_growth_rate(self, obj):
+        """
+        Taux de croissance spécifique SGR (%/jour) depuis CycleMetrics.
+        Formule scientifique: ((ln(Pf) - ln(Pi)) / jours) × 100
+        Évite recalcul frontend - Backend est source unique de vérité.
+        """
+        if hasattr(obj, 'metrics') and obj.metrics and obj.metrics.specific_growth_rate:
+            return float(obj.metrics.specific_growth_rate)
+        return None
+
+    def get_average_daily_feed(self, obj):
+        """
+        Alimentation journalière moyenne (kg/jour) depuis CycleMetrics.
+        Évite recalcul frontend - Backend est source unique de vérité.
+        """
+        if hasattr(obj, 'metrics') and obj.metrics and obj.metrics.average_daily_feed:
+            return float(obj.metrics.average_daily_feed)
+        return None
+
+    def get_performance_score(self, obj):
+        """
+        Score de performance global (0-100) depuis CycleMetrics.
+        Évite recalcul frontend - Backend est source unique de vérité.
+        """
+        if hasattr(obj, 'metrics') and obj.metrics and obj.metrics.performance_score:
+            return float(obj.metrics.performance_score)
+        return None
+
+    def get_total_feed_cost(self, obj):
+        """
+        Calcule le coût total de l'aliment consommé (FCFA).
+        Utilise prix configurable depuis FarmProfile ou défaut 500 FCFA/kg.
+        Évite hardcoding frontend - Backend gère prix configurable.
+        """
+        if not obj.total_feed_consumed or obj.total_feed_consumed <= 0:
+            return None
+
+        # Récupère prix depuis FarmProfile ou défaut
+        price_per_kg = Decimal('500')  # Défaut FCFA/kg
+        if hasattr(obj.farm_profile, 'default_feed_price_per_kg') and obj.farm_profile.default_feed_price_per_kg:
+            price_per_kg = obj.farm_profile.default_feed_price_per_kg
+
+        # Calcul via domain calculator
+        total_cost = AquacultureCalculator.calculate_feed_cost(
+            obj.total_feed_consumed,
+            price_per_kg
+        )
+        return float(total_cost)
 
     def validate(self, attrs):
         if attrs.get('end_date') and attrs.get('start_date'):

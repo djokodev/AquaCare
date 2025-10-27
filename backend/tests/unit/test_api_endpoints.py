@@ -114,16 +114,16 @@ class TestRegistrationEndpoint:
             last_name="User",
             account_type="individual",
             age_group="26_35",
-            password="test123"
+            password="test12345"
         )
-        
+
         # Essayer de créer avec le même téléphone
         data = {
             "phone_number": "+237690000000",  # Même téléphone
             "first_name": "New",
             "last_name": "User",
-            "password": "test456",
-            "password_confirm": "test456",
+            "password": "test45678",
+            "password_confirm": "test45678",
             "account_type": "individual",
             "age_group": "36_45"
         }
@@ -163,8 +163,8 @@ class TestRegistrationEndpoint:
             "phone_number": "+237690222222",
             "first_name": "Test",
             "last_name": "User",
-            "password": "test123",
-            "password_confirm": "test123",
+            "password": "test12345",
+            "password_confirm": "test12345",
             "account_type": "individual"
             # age_group manquant
         }
@@ -185,8 +185,8 @@ class TestRegistrationEndpoint:
             "last_name": "User",
             "business_name": "Test Company",
             "promoter_name": "Test User",
-            "password": "test123",
-            "password_confirm": "test123",
+            "password": "test12345",
+            "password_confirm": "test12345",
             "account_type": "company"
             # legal_status manquant
         }

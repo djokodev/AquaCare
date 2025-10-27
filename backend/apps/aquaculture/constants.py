@@ -58,7 +58,6 @@ OPTIMAL_PARAMETERS = {
 }
 
 FEED_RECOMMENDATIONS = {
-    # Weight range (g) -> Feed size (mm), Protein %, Feeding rate %
     (0, 10): {'size_mm': 1.0, 'protein_pct': 45, 'feeding_rate_pct': 8},
     (10, 50): {'size_mm': 1.8, 'protein_pct': 42, 'feeding_rate_pct': 7},
     (50, 150): {'size_mm': 2.5, 'protein_pct': 38, 'feeding_rate_pct': 5},
@@ -66,7 +65,6 @@ FEED_RECOMMENDATIONS = {
     (500, 1000): {'size_mm': 6.0, 'protein_pct': 32, 'feeding_rate_pct': 2},
 }
 
-# Meal frequency by weight (from technical guides)
 MEALS_PER_DAY = {
     (0, 25): 4,      # Very small fish need frequent feeding
     (25, 170): 3,    # Medium fish

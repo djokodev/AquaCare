@@ -349,7 +349,15 @@ class FarmProfile(models.Model):
         blank=True,
         help_text=_('Production annuelle estimée en kilogrammes')
     )
-        
+
+    default_feed_price_per_kg = models.DecimalField(
+        _('Prix aliment par défaut (FCFA/kg)'),
+        max_digits=8,
+        decimal_places=2,
+        default=500,
+        help_text=_('Prix unitaire de l\'aliment en FCFA par kg (utilisé pour calcul coûts)')
+    )
+
     created_at = models.DateTimeField(
         _('Date de création'),
         auto_now_add=True,

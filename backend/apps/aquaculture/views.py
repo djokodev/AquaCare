@@ -40,7 +40,15 @@ from .serializers import (
     HarvestSerializer, CycleStatisticsSerializer, CycleComparisonSerializer,
     SyncRequestSerializer, SyncResponseSerializer
 )
-from .calculators import AquacultureCalculator
+from .domain.calculators import AquacultureCalculator
+from .services import (
+    ProductionCycleService, AnalyticsService, NotificationService,
+    SanitaryService, SyncService
+)
+from .domain.exceptions import (
+    CycleAlreadyHarvestedError,
+    InvalidHarvestDataError,
+)
 
 
 @extend_schema_view(
@@ -156,8 +164,20 @@ class ProductionCycleViewSet(viewsets.ModelViewSet):
         return queryset
     
     def perform_create(self, serializer):
-        """Assure que le cycle est créé pour le profil de ferme de l'utilisateur."""
-        serializer.save(farm_profile=self.request.user.farm_profile)
+        """
+        Crée un nouveau cycle de production via la couche service.
+
+        Délègue la logique métier à ProductionCycleService pour garantir
+        la cohérence des validations et calculs (biomasse, densité, etc.).
+        """
+        # Delegate business logic to service layer
+        cycle = ProductionCycleService.create_cycle(
+            farm_profile=self.request.user.farm_profile,
+            cycle_data=serializer.validated_data
+        )
+
+        # Update serializer instance with created cycle
+        serializer.instance = cycle
     
     @extend_schema(
         summary="Finaliser un cycle (récolte)",
@@ -190,53 +210,40 @@ class ProductionCycleViewSet(viewsets.ModelViewSet):
     def harvest(self, request, pk=None):
         """
         Finalise un cycle de production (récolte).
+
+        Délègue la logique métier au ProductionCycleService pour
+        garantir la cohérence et la réutilisabilité des règles métier.
         """
         cycle = self.get_object()
-        
-        if cycle.status == 'harvested':
-            return Response(
-                {'error': _('Ce cycle a déjà été récolté')},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
+
         # Validate harvest data
         serializer = HarvestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        
+
         harvest_data = serializer.validated_data
-        
-        # Update cycle with harvest data
-        cycle.end_date = harvest_data['harvest_date']
-        cycle.final_count = harvest_data['final_count']
-        cycle.final_average_weight = harvest_data['final_average_weight']
-        cycle.final_biomass = AquacultureCalculator.calculate_biomass(
-            cycle.final_count,
-            cycle.final_average_weight
-        )
-        cycle.status = 'harvested'
-        
-        # Calculate final metrics
-        cycle.survival_rate = AquacultureCalculator.calculate_survival_rate(
-            cycle.initial_count,
-            cycle.final_count
-        )
-        
-        total_weight_gain = cycle.final_biomass - cycle.initial_biomass
-        if total_weight_gain > 0 and cycle.total_feed_consumed > 0:
-            cycle.fcr = AquacultureCalculator.calculate_fcr(
-                cycle.total_feed_consumed,
-                total_weight_gain
+
+        try:
+            # Delegate business logic to service layer
+            harvested_cycle = ProductionCycleService.harvest_cycle(
+                cycle=cycle,
+                harvest_date=harvest_data['harvest_date'],
+                final_count=harvest_data['final_count'],
+                final_average_weight=harvest_data['final_average_weight'],
+                harvest_notes=harvest_data.get('harvest_notes', '')
             )
-        
-        cycle.save()
-        
-        return Response(
-            {
-                'message': _('Cycle récolté avec succès'),
-                'cycle': ProductionCycleSerializer(cycle).data
-            },
-            status=status.HTTP_200_OK
-        )
+
+            return Response(
+                {
+                    'message': _('Cycle récolté avec succès'),
+                    'cycle': ProductionCycleSerializer(harvested_cycle).data
+                },
+                status=status.HTTP_200_OK
+            )
+        except (CycleAlreadyHarvestedError, InvalidHarvestDataError) as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
     
     @extend_schema(
         summary="Statistiques détaillées d'un cycle",
@@ -278,66 +285,15 @@ class ProductionCycleViewSet(viewsets.ModelViewSet):
     def statistics(self, request, pk=None):
         """
         Obtient les statistiques détaillées pour un cycle de production.
+
+        Délègue toute la logique analytique au AnalyticsService pour
+        maintenir une séparation claire des responsabilités.
         """
         cycle = self.get_object()
-        
-        # Calculate cycle duration
-        end_date = cycle.end_date or date.today()
-        days_active = (end_date - cycle.start_date).days
-        
-        # Current metrics
-        current_metrics = {
-            'survival_rate': float(cycle.survival_rate or AquacultureCalculator.calculate_survival_rate(
-                cycle.initial_count, cycle.current_count
-            )),
-            'biomass': float(cycle.current_biomass),
-            'average_weight': float(cycle.current_average_weight),
-            'fcr': float(cycle.fcr or 0),
-            'daily_growth_rate': float(AquacultureCalculator.calculate_daily_growth_rate(
-                cycle.initial_average_weight,
-                cycle.current_average_weight,
-                days_active
-            )),
-            'specific_growth_rate': float(AquacultureCalculator.calculate_specific_growth_rate(
-                cycle.initial_average_weight,
-                cycle.current_average_weight,
-                days_active
-            )),
-            'stocking_density': float(cycle.current_density_kg_m3() or 0)
-        }
-        
-        # Feed metrics
-        feed_metrics = {
-            'total_consumed': float(cycle.total_feed_consumed),
-            'average_daily': float(cycle.total_feed_consumed / days_active) if days_active > 0 else 0,
-            'cost_estimate': float(cycle.total_feed_consumed) * 1500,  # 1500 FCFA/kg estimate
-            'feed_efficiency': float(cycle.fcr) if cycle.fcr else None
-        }
-        
-        # Mortality analysis
-        mortality_analysis = self._analyze_mortality(cycle)
-        
-        # Growth performance
-        growth_performance = self._analyze_growth(cycle)
-        
-        # Environmental summary
-        environmental_summary = self._analyze_environment(cycle)
-        
-        statistics = {
-            'cycle_id': cycle.id,
-            'cycle_name': cycle.cycle_name,
-            'days_active': days_active,
-            'current_metrics': current_metrics,
-            'feed_metrics': feed_metrics,
-            'mortality_analysis': mortality_analysis,
-            'growth_performance': growth_performance,
-            'environmental_summary': environmental_summary,
-            'estimated_costs': {
-                'feed_cost': feed_metrics['cost_estimate'],
-                'cost_per_kg': feed_metrics['cost_estimate'] / float(cycle.current_biomass) if cycle.current_biomass > 0 else 0
-            }
-        }
-        
+
+        # Delegate analytics to service layer
+        statistics = AnalyticsService.get_cycle_statistics(cycle)
+
         return Response(statistics)
     
     @extend_schema(
@@ -391,175 +347,19 @@ class ProductionCycleViewSet(viewsets.ModelViewSet):
     def comparison(self, request, pk=None):
         """
         Compare le cycle avec les cycles précédents de la même espèce.
+
+        Délègue toute la logique de comparaison au AnalyticsService pour
+        maintenir une séparation claire des responsabilités.
         """
         current_cycle = self.get_object()
-        
-        # Get previous cycles of same species
-        previous_cycles = ProductionCycle.objects.filter(
-            farm_profile=current_cycle.farm_profile,
-            species=current_cycle.species,
-            status='harvested'
-        ).exclude(id=current_cycle.id).order_by('-end_date')[:3]
-        
-        # Calculate historical averages
-        historical_avg = ProductionCycle.objects.filter(
-            farm_profile=current_cycle.farm_profile,
-            species=current_cycle.species,
-            status='harvested'
-        ).aggregate(
-            avg_survival_rate=Avg('survival_rate'),
-            avg_fcr=Avg('fcr'),
-            avg_final_weight=Avg('final_average_weight'),
-            avg_duration=Avg(F('end_date') - F('start_date'))
+
+        # Delegate comparison to service layer
+        comparison_data = AnalyticsService.compare_with_previous_cycles(
+            current_cycle,
+            limit=3
         )
-        
-        comparison_data = {
-            'current_cycle': self._get_cycle_summary(current_cycle),
-            'previous_cycles': [
-                self._get_cycle_summary(cycle) for cycle in previous_cycles
-            ],
-            'historical_averages': {
-                'survival_rate': float(historical_avg['avg_survival_rate'] or 0),
-                'fcr': float(historical_avg['avg_fcr'] or 0),
-                'final_weight': float(historical_avg['avg_final_weight'] or 0),
-                'duration_days': historical_avg['avg_duration'].days if historical_avg['avg_duration'] else 0
-            },
-            'performance_ranking': self._calculate_performance_ranking(current_cycle, previous_cycles),
-            'improvement_suggestions': self._generate_improvement_suggestions(current_cycle, historical_avg)
-        }
-        
+
         return Response(comparison_data)
-    
-    def _analyze_mortality(self, cycle):
-        """Analyse les schémas de mortalité pour le cycle."""
-        logs = cycle.logs.filter(mortality_count__gt=0)
-        
-        total_mortality = logs.aggregate(Sum('mortality_count'))['mortality_count__sum'] or 0
-        
-        # Weekly mortality breakdown
-        weekly_mortality = {}
-        for log in logs:
-            week = (log.log_date - cycle.start_date).days // 7 + 1
-            if week not in weekly_mortality:
-                weekly_mortality[week] = 0
-            weekly_mortality[week] += log.mortality_count
-        
-        # Main causes
-        main_causes = logs.values('mortality_reason').annotate(
-            count=Sum('mortality_count')
-        ).order_by('-count')[:5]
-        
-        return {
-            'total': total_mortality,
-            'percentage': (total_mortality / cycle.initial_count * 100) if cycle.initial_count > 0 else 0,
-            'by_week': weekly_mortality,
-            'main_causes': list(main_causes),
-            'daily_average': total_mortality / cycle.days_active() if cycle.days_active() > 0 else 0
-        }
-    
-    def _analyze_growth(self, cycle):
-        """Analyse les schémas de croissance pour le cycle."""
-        logs = cycle.logs.filter(average_weight__isnull=False).order_by('log_date')
-        
-        growth_data = []
-        for log in logs:
-            days_elapsed = (log.log_date - cycle.start_date).days
-            daily_gain = float(log.average_weight - cycle.initial_average_weight) / days_elapsed if days_elapsed > 0 else 0
-            
-            growth_data.append({
-                'day': days_elapsed,
-                'date': log.log_date.isoformat(),
-                'weight': float(log.average_weight),
-                'daily_gain': daily_gain
-            })
-        
-        return growth_data
-    
-    def _analyze_environment(self, cycle):
-        """Analyse les conditions environnementales pour le cycle."""
-        logs = cycle.logs.exclude(
-            water_temperature__isnull=True,
-            ph_level__isnull=True,
-            dissolved_oxygen__isnull=True
-        )
-        
-        if not logs:
-            return {'message': _('Aucune donnée environnementale disponible')}
-        
-        env_data = logs.aggregate(
-            avg_temperature=Avg('water_temperature'),
-            min_temperature=Min('water_temperature'),
-            max_temperature=Max('water_temperature'),
-            avg_ph=Avg('ph_level'),
-            min_ph=Min('ph_level'),
-            max_ph=Max('ph_level'),
-            avg_oxygen=Avg('dissolved_oxygen'),
-            min_oxygen=Min('dissolved_oxygen')
-        )
-        
-        # Generate alerts for out-of-range values
-        alerts = AquacultureCalculator.check_environmental_alerts(
-            cycle.species,
-            temperature_c=env_data['avg_temperature'],
-            ph=env_data['avg_ph'],
-            oxygen_mg_l=env_data['avg_oxygen']
-        )
-        
-        return {
-            'averages': env_data,
-            'alerts': alerts,
-            'measurements_count': logs.count()
-        }
-    
-    def _get_cycle_summary(self, cycle):
-        """Obtient le résumé de cycle pour comparaison."""
-        return {
-            'id': str(cycle.id),
-            'name': cycle.cycle_name,
-            'duration_days': (cycle.end_date - cycle.start_date).days if cycle.end_date else None,
-            'survival_rate': float(cycle.survival_rate) if cycle.survival_rate else None,
-            'fcr': float(cycle.fcr) if cycle.fcr else None,
-            'final_average_weight': float(cycle.final_average_weight) if cycle.final_average_weight else None,
-            'total_biomass': float(cycle.final_biomass) if cycle.final_biomass else None
-        }
-    
-    def _calculate_performance_ranking(self, current_cycle, previous_cycles):
-        """Calcule le classement de performance comparé aux cycles précédents."""
-        if not previous_cycles or not current_cycle.survival_rate:
-            return _('Données insuffisantes')
-        
-        # Simple ranking based on survival rate
-        better_cycles = sum(1 for c in previous_cycles 
-                          if c.survival_rate and c.survival_rate > current_cycle.survival_rate)
-        
-        total_cycles = len(previous_cycles)
-        percentile = ((total_cycles - better_cycles) / total_cycles) * 100
-        
-        if percentile >= 80:
-            return _('Excellent')
-        elif percentile >= 60:
-            return _('Bon')
-        elif percentile >= 40:
-            return _('Moyen')
-        else:
-            return _('À améliorer')
-    
-    def _generate_improvement_suggestions(self, cycle, historical_avg):
-        """Génère des suggestions d'amélioration basées sur la performance."""
-        suggestions = []
-        
-        if cycle.survival_rate and historical_avg['avg_survival_rate']:
-            if cycle.survival_rate < historical_avg['avg_survival_rate'] - 5:
-                suggestions.append(_("Améliorer le suivi sanitaire et la qualité de l'eau"))
-        
-        if cycle.fcr and historical_avg['avg_fcr']:
-            if cycle.fcr > historical_avg['avg_fcr'] + 0.2:
-                suggestions.append(_("Optimiser l'alimentation et réduire le gaspillage"))
-        
-        if not suggestions:
-            suggestions.append(_("Performance conforme aux cycles précédents"))
-        
-        return suggestions
 
 
 @extend_schema_view(
@@ -758,44 +558,15 @@ class CycleLogViewSet(viewsets.ModelViewSet):
     # SUPPRIMÉ: _update_cycle_metrics() - duplication avec signal post_save
     # Les mises à jour de cycle sont gérées automatiquement par le signal
     # update_cycle_after_log() dans signals.py pour éviter la duplication
-    
+
     def _recalculate_cycle_metrics(self, cycle):
-        """Recalcule toutes les métriques de cycle à partir des logs."""
-        # Reset to initial values
-        cycle.current_count = cycle.initial_count
-        cycle.current_average_weight = cycle.initial_average_weight
-        cycle.total_feed_consumed = Decimal('0')
-        
-        # Process all logs in chronological order
-        for log in cycle.logs.order_by('log_date'):
-            if log.mortality_count:
-                cycle.current_count = max(0, cycle.current_count - log.mortality_count)
-            
-            if log.average_weight:
-                cycle.current_average_weight = log.average_weight
-            
-            if log.feed_quantity:
-                cycle.total_feed_consumed += log.feed_quantity
-        
-        # Recalculate derived metrics
-        cycle.current_biomass = AquacultureCalculator.calculate_biomass(
-            cycle.current_count,
-            cycle.current_average_weight
-        )
-        
-        cycle.survival_rate = AquacultureCalculator.calculate_survival_rate(
-            cycle.initial_count,
-            cycle.current_count
-        )
-        
-        weight_gain = cycle.current_biomass - cycle.initial_biomass
-        if weight_gain > 0 and cycle.total_feed_consumed > 0:
-            cycle.fcr = AquacultureCalculator.calculate_fcr(
-                cycle.total_feed_consumed,
-                weight_gain
-            )
-        
-        cycle.save()
+        """
+        Recalcule toutes les métriques de cycle à partir des logs.
+
+        Délègue la logique métier au ProductionCycleService pour
+        garantir la cohérence avec les autres méthodes de calcul.
+        """
+        ProductionCycleService.recalculate_all_metrics(cycle)
 
 
 @extend_schema_view(
@@ -998,87 +769,13 @@ class FeedingPlanViewSet(viewsets.ModelViewSet):
         )
     
     def _create_feeding_notifications(self, plan):
-        """Crée des notifications de rappel d'alimentation intelligentes avec double rappel."""
-        from datetime import datetime, time
+        """
+        Crée des notifications de rappel d'alimentation intelligentes.
 
-        # Supprimer TOUTES les anciennes notifications de feeding pour ce cycle (futures ET passées)
-        Notification.objects.filter(
-            cycle=plan.cycle,
-            notification_type='feeding_reminder'
-        ).delete()
-
-        # Définir les heures de repas selon le nombre de repas par jour
-        feeding_times = self._get_feeding_times(plan.meals_per_day)
-
-        for day in range(7):
-            notification_date = plan.start_date + timedelta(days=day)
-
-            # Skip past dates
-            if notification_date < date.today():
-                continue
-
-            # Skip if today and meal time already passed
-            daily_feeding_times = feeding_times
-            if notification_date == date.today():
-                current_time = timezone.now().time()
-                daily_feeding_times = [ft for ft in feeding_times if ft >= current_time.replace(second=0, microsecond=0)]
-
-            # Skip this day if no meals remaining
-            if not daily_feeding_times:
-                continue
-
-            # Créer les notifications pour chaque repas
-            for meal_index, meal_time in enumerate(daily_feeding_times):
-                meal_names = ['matin', 'midi', 'soir', 'nuit']
-                meal_name = meal_names[meal_index] if meal_index < len(meal_names) else f'repas {meal_index + 1}'
-
-                # Notification 30 minutes avant
-                notification_30min = timezone.make_aware(
-                    datetime.combine(notification_date, meal_time)
-                ) - timedelta(minutes=30)
-
-                if notification_30min > timezone.now():
-                    Notification.objects.create(
-                        user=plan.cycle.farm_profile.user,
-                        cycle=plan.cycle,
-                        notification_type='feeding_reminder',
-                        title=_('Nourrissage dans 30min - %(cycle_name)s') % {'cycle_name': plan.cycle.cycle_name},
-                        message=_('Préparez %(amount).1f kg d\'aliment pour le %(meal)s') % {
-                            'amount': plan.feed_per_meal,
-                            'meal': meal_name
-                        },
-                        scheduled_for=notification_30min
-                    )
-                # Notification 15 minutes avant
-                notification_15min = timezone.make_aware(
-                    datetime.combine(notification_date, meal_time)
-                ) - timedelta(minutes=15)
-
-                if notification_15min > timezone.now():
-                    Notification.objects.create(
-                        user=plan.cycle.farm_profile.user,
-                        cycle=plan.cycle,
-                        notification_type='feeding_reminder',
-                        title=_('Nourrissage dans 15min - %(cycle_name)s') % {'cycle_name': plan.cycle.cycle_name},
-                        message=_('Donnez %(amount).1f kg d\'aliment maintenant (%(meal)s)') % {
-                            'amount': plan.feed_per_meal,
-                            'meal': meal_name
-                        },
-                        scheduled_for=notification_15min
-                    )
-
-    def _get_feeding_times(self, meals_per_day):
-        """Retourne les heures de repas optimales selon le nombre de repas par jour."""
-        from datetime import time
-
-        feeding_schedules = {
-            1: [time(13, 0)],  # 13h
-            2: [time(8, 0), time(17, 0)],  # 8h, 17h
-            3: [time(8, 0), time(13, 0), time(18, 0)],  # 8h, 13h, 18h
-            4: [time(7, 0), time(11, 0), time(15, 0), time(18, 0)]  # 7h, 11h, 15h, 18h
-        }
-
-        return feeding_schedules.get(meals_per_day, feeding_schedules[2])  # Default à 2 repas
+        Délègue toute la logique de création de notifications au NotificationService
+        pour maintenir une séparation claire des responsabilités.
+        """
+        NotificationService.create_feeding_reminders(plan, regenerate=True)
 
 
 @extend_schema_view(
@@ -1194,16 +891,33 @@ class SanitaryLogViewSet(viewsets.ModelViewSet):
     def resolve(self, request, pk=None):
         """
         Marque un problème sanitaire comme résolu.
+
+        Délègue toute la logique de résolution au SanitaryService
+        pour maintenir une séparation claire des responsabilités.
         """
         log = self.get_object()
-        log.resolved = True
-        log.resolution_date = date.today()
-        log.save()
-        
-        return Response(
-            SanitaryLogSerializer(log, context={'request': request}).data,
-            status=status.HTTP_200_OK
-        )
+
+        # Extract resolution data from request
+        resolution_date = request.data.get('resolution_date')
+        resolution_notes = request.data.get('resolution_notes', '')
+
+        try:
+            # Delegate business logic to service layer
+            resolved_log = SanitaryService.resolve_sanitary_issue(
+                sanitary_log_id=str(log.id),
+                resolution_date=resolution_date,
+                resolution_notes=resolution_notes
+            )
+
+            return Response(
+                SanitaryLogSerializer(resolved_log, context={'request': request}).data,
+                status=status.HTTP_200_OK
+            )
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
     
     @extend_schema(
         summary="Problèmes sanitaires actifs",
@@ -1237,24 +951,22 @@ class SanitaryLogViewSet(viewsets.ModelViewSet):
     def active_issues(self, request):
         """
         Obtient tous les problèmes sanitaires non résolus groupés par cycle.
+
+        Délègue toute la logique de groupement au SanitaryService
+        pour maintenir une séparation claire des responsabilités.
         """
-        active_logs = self.get_queryset().filter(resolved=False)
-        
-        # Group by cycle
-        by_cycle = {}
-        for log in active_logs:
-            cycle_id = str(log.cycle.id)
-            if cycle_id not in by_cycle:
-                by_cycle[cycle_id] = {
-                    'cycle_name': log.cycle.cycle_name,
-                    'cycle_id': cycle_id,
-                    'issues': []
-                }
-            by_cycle[cycle_id]['issues'].append(
-                SanitaryLogSerializer(log, context={'request': request}).data
-            )
-        
-        return Response(list(by_cycle.values()))
+        # Delegate business logic to service layer
+        active_issues_by_cycle = SanitaryService.get_active_issues_by_cycle(request.user)
+
+        # Serialize issues for API response
+        for cycle_data in active_issues_by_cycle:
+            cycle_data['issues'] = SanitaryLogSerializer(
+                cycle_data['issues'],
+                many=True,
+                context={'request': request}
+            ).data
+
+        return Response(active_issues_by_cycle)
 
 
 @extend_schema_view(
@@ -1860,147 +1572,36 @@ class SyncView(APIView):
     def post(self, request):
         """
         Gère les requêtes de synchronisation offline.
+
+        Délègue toute la logique de synchronisation au SyncService
+        pour maintenir une séparation claire des responsabilités.
+
         POST /api/aquaculture/sync/
         """
-        sync_result = {
-            'status': 'success',
-            'timestamp': timezone.now(),
-            'processed': {
-                'cycle_logs': 0,
-                'sanitary_logs': 0,
-                'new_cycles': 0
-            },
-            'errors': [],
-            'server_updates': {}
-        }
-        
-        try:
-            with transaction.atomic():
-                # Process new cycles
-                new_cycles = request.data.get('new_cycles', [])
-                for cycle_data in new_cycles:
-                    try:
-                        cycle_data['farm_profile'] = request.user.farm_profile.id
-                        serializer = ProductionCycleSerializer(data=cycle_data)
-                        if serializer.is_valid():
-                            serializer.save(farm_profile=request.user.farm_profile)
-                            sync_result['processed']['new_cycles'] += 1
-                        else:
-                            sync_result['errors'].append({
-                                'type': 'cycle',
-                                'data': cycle_data,
-                                'errors': serializer.errors
-                            })
-                    except Exception as e:
-                        sync_result['errors'].append({
-                            'type': 'cycle',
-                            'error': str(e)
-                        })
-                
-                # Process cycle logs
-                cycle_logs = request.data.get('cycle_logs', [])
-                for log_data in cycle_logs:
-                    try:
-                        client_uuid = log_data.get('client_uuid')
-                        
-                        # Deduplication check
-                        if client_uuid:
-                            existing = CycleLog.objects.filter(
-                                client_uuid=client_uuid
-                            ).first()
-                            if existing:
-                                # Update existing log
-                                for key, value in log_data.items():
-                                    if key not in ['id', 'created_at']:
-                                        setattr(existing, key, value)
-                                existing.synced_at = timezone.now()
-                                existing.save()
-                                sync_result['processed']['cycle_logs'] += 1
-                                continue
-                        
-                        # Create new log
-                        serializer = CycleLogSerializer(data=log_data)
-                        if serializer.is_valid():
-                            log = serializer.save(
-                                created_offline=True,
-                                synced_at=timezone.now()
-                            )
-                            sync_result['processed']['cycle_logs'] += 1
-                        else:
-                            sync_result['errors'].append({
-                                'type': 'cycle_log',
-                                'data': log_data,
-                                'errors': serializer.errors
-                            })
-                    except Exception as e:
-                        sync_result['errors'].append({
-                            'type': 'cycle_log',
-                            'error': str(e)
-                        })
-                
-                # Process sanitary logs
-                sanitary_logs = request.data.get('sanitary_logs', [])
-                for log_data in sanitary_logs:
-                    try:
-                        serializer = SanitaryLogSerializer(data=log_data)
-                        if serializer.is_valid():
-                            serializer.save(created_offline=True)
-                            sync_result['processed']['sanitary_logs'] += 1
-                        else:
-                            sync_result['errors'].append({
-                                'type': 'sanitary_log',
-                                'data': log_data,
-                                'errors': serializer.errors
-                            })
-                    except Exception as e:
-                        sync_result['errors'].append({
-                            'type': 'sanitary_log',
-                            'error': str(e)
-                        })
-                
-                # Prepare server updates for client
-                last_sync = request.data.get('last_sync')
-                if last_sync:
-                    last_sync_dt = timezone.datetime.fromisoformat(last_sync.replace('Z', '+00:00'))
-                    
-                    # Get updated cycles
-                    updated_cycles = ProductionCycle.objects.filter(
-                        farm_profile__user=request.user,
-                        updated_at__gt=last_sync_dt
-                    )
-                    
-                    # Get new server-side logs
-                    new_server_logs = CycleLog.objects.filter(
-                        cycle__farm_profile__user=request.user,
-                        created_at__gt=last_sync_dt,
-                        created_offline=False
-                    )
-                    
-                    # Get new feeding plans
-                    new_plans = FeedingPlan.objects.filter(
-                        cycle__farm_profile__user=request.user,
-                        created_at__gt=last_sync_dt
-                    )
-                    
-                    sync_result['server_updates'] = {
-                        'cycles': ProductionCycleSerializer(
-                            updated_cycles, many=True
-                        ).data,
-                        'logs': CycleLogSerializer(
-                            new_server_logs, many=True
-                        ).data,
-                        'feeding_plans': FeedingPlanSerializer(
-                            new_plans, many=True
-                        ).data
-                    }
-        
-        except Exception as e:
-            sync_result['status'] = 'error'
-            sync_result['errors'].append({
-                'type': 'general',
-                'error': str(e)
-            })
-            return Response(sync_result, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
-        return Response(sync_result, status=status.HTTP_200_OK)
+        # Validate sync data structure
+        validation_errors = SyncService.validate_sync_data(request.data)
+        if validation_errors:
+            return Response(
+                {
+                    'status': 'error',
+                    'errors': [{'type': 'validation', 'error': err} for err in validation_errors]
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Delegate full sync to service layer
+        sync_result = SyncService.perform_full_sync(
+            user=request.user,
+            sync_data=request.data
+        )
+
+        # Determine HTTP status code based on sync result
+        if sync_result['status'] == 'error':
+            http_status = status.HTTP_500_INTERNAL_SERVER_ERROR
+        elif sync_result['status'] == 'partial_success':
+            http_status = status.HTTP_207_MULTI_STATUS
+        else:
+            http_status = status.HTTP_200_OK
+
+        return Response(sync_result, status=http_status)
 

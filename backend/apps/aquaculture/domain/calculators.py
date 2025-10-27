@@ -20,7 +20,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from datetime import date, timedelta
 from typing import Dict, Optional, Tuple
 
-from .constants import (
+from ..constants import (
     FEED_RECOMMENDATIONS, MEALS_PER_DAY, OPTIMAL_PARAMETERS,
     GROWTH_STAGES
 )
@@ -47,26 +47,29 @@ class AquacultureCalculator:
     def calculate_biomass(fish_count: int, average_weight_g: Decimal) -> Decimal:
         """
         Calcule la biomasse totale en kilogrammes.
-        
+
         Formule : Biomasse (kg) = (Nombre de poissons × Poids moyen (g)) / 1000
-        
-        La biomasse est un indicateur clé pour l'alimentation et la gestion 
+
+        La biomasse est un indicateur clé pour l'alimentation et la gestion
         de la densité d'élevage. Elle détermine la quantité d'aliment nécessaire
         et permet de surveiller la croissance du stock.
-        
+
         Args:
             fish_count: Nombre de poissons dans le bassin
             average_weight_g: Poids moyen par poisson en grammes
-            
+
         Returns:
             Decimal: Biomasse totale en kilogrammes (arrondie à 2 décimales)
         """
         if fish_count <= 0 or average_weight_g <= 0:
             return Decimal('0')
-        
+
+        # Ensure Decimal type
+        average_weight_g = Decimal(str(average_weight_g)) if not isinstance(average_weight_g, Decimal) else average_weight_g
+
         biomass_g = Decimal(fish_count) * average_weight_g
         biomass_kg = biomass_g / Decimal('1000')
-        
+
         return biomass_kg.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
     
     @staticmethod
@@ -97,90 +100,102 @@ class AquacultureCalculator:
     def calculate_fcr(feed_consumed_kg: Decimal, weight_gain_kg: Decimal) -> Decimal:
         """
         Calculate Feed Conversion Ratio.
-        
+
         Formula: FCR = Feed consumed (kg) / Weight gain (kg)
-        
+
         Lower FCR is better (more efficient conversion).
         Typical targets: 0.9-1.2 for optimal conditions.
-        
+
         Args:
             feed_consumed_kg: Total feed distributed in kg
             weight_gain_kg: Total weight gain in kg
-            
+
         Returns:
             Decimal: FCR value (typically 0.8-3.0)
         """
         if weight_gain_kg <= 0 or feed_consumed_kg <= 0:
             return Decimal('0')
-        
+
+        # Ensure Decimal type
+        feed_consumed_kg = Decimal(str(feed_consumed_kg)) if not isinstance(feed_consumed_kg, Decimal) else feed_consumed_kg
+        weight_gain_kg = Decimal(str(weight_gain_kg)) if not isinstance(weight_gain_kg, Decimal) else weight_gain_kg
+
         fcr = feed_consumed_kg / weight_gain_kg
-        
+
         return fcr.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
     
     @staticmethod
     def calculate_daily_growth_rate(
-        initial_weight_g: Decimal, 
-        current_weight_g: Decimal, 
+        initial_weight_g: Decimal,
+        current_weight_g: Decimal,
         days: int
     ) -> Decimal:
         """
         Calculate daily growth rate.
-        
+
         Formula: DGR (g/day) = (Current weight - Initial weight) / Days
-        
+
         Typical ranges:
         - Clarias: 1.5-3.0 g/day in optimal conditions
         - Tilapia: 1.0-2.5 g/day in optimal conditions
-        
+
         Args:
             initial_weight_g: Initial average weight in grams
             current_weight_g: Current average weight in grams
             days: Number of days elapsed
-            
+
         Returns:
             Decimal: Daily growth rate in g/day
         """
         if days <= 0 or current_weight_g <= initial_weight_g:
             return Decimal('0')
-        
+
+        # Ensure Decimal type
+        initial_weight_g = Decimal(str(initial_weight_g)) if not isinstance(initial_weight_g, Decimal) else initial_weight_g
+        current_weight_g = Decimal(str(current_weight_g)) if not isinstance(current_weight_g, Decimal) else current_weight_g
+
         weight_gain = current_weight_g - initial_weight_g
         dgr = weight_gain / Decimal(days)
-        
+
         return dgr.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
     
     @staticmethod
     def calculate_specific_growth_rate(
-        initial_weight_g: Decimal, 
-        final_weight_g: Decimal, 
+        initial_weight_g: Decimal,
+        final_weight_g: Decimal,
         days: int
     ) -> Decimal:
         """
         Calculate Specific Growth Rate (SGR).
-        
+
         Formula: SGR (%/day) = [(ln(Final weight) - ln(Initial weight)) / Days] × 100
-        
+
         SGR is weight-independent and better for comparing different size classes.
         Typical ranges: 2-5 %/day for healthy fish.
-        
+
         Args:
             initial_weight_g: Initial weight in grams
             final_weight_g: Final weight in grams
             days: Number of days
-            
+
         Returns:
             Decimal: SGR as %/day
         """
         if days <= 0 or initial_weight_g <= 0 or final_weight_g <= 0:
             return Decimal('0')
-        
+
         if final_weight_g <= initial_weight_g:
             return Decimal('0')
-        
+
+        # Ensure Decimal type
+        initial_weight_g = Decimal(str(initial_weight_g)) if not isinstance(initial_weight_g, Decimal) else initial_weight_g
+        final_weight_g = Decimal(str(final_weight_g)) if not isinstance(final_weight_g, Decimal) else final_weight_g
+
         try:
             ln_final = math.log(float(final_weight_g))
             ln_initial = math.log(float(initial_weight_g))
             sgr = ((ln_final - ln_initial) / days) * 100
-            
+
             return Decimal(str(sgr)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
         except (ValueError, OverflowError):
             return Decimal('0')
@@ -189,74 +204,86 @@ class AquacultureCalculator:
     def calculate_condition_factor(weight_g: Decimal, length_cm: Decimal) -> Decimal:
         """
         Calculate Fulton's Condition Factor (K).
-        
+
         Formula: K = (Weight (g) / Length³ (cm)) × 100
-        
+
         Indicates fish health and nutritional status.
         Normal range: 1.0-1.5 for most species.
-        
+
         Args:
             weight_g: Fish weight in grams
             length_cm: Fish length in centimeters
-            
+
         Returns:
             Decimal: Condition factor
         """
         if length_cm <= 0 or weight_g <= 0:
             return Decimal('0')
-        
+
+        # Ensure Decimal type for exponentiation
+        length_cm = Decimal(str(length_cm)) if not isinstance(length_cm, Decimal) else length_cm
+        weight_g = Decimal(str(weight_g)) if not isinstance(weight_g, Decimal) else weight_g
+
         length_cubed = length_cm ** 3
         condition_factor = (weight_g / length_cubed) * Decimal('100')
-        
+
         return condition_factor.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
     
     @staticmethod
     def calculate_stocking_density(biomass_kg: Decimal, volume_m3: Decimal) -> Decimal:
         """
         Calculate stocking density.
-        
+
         Formula: Density (kg/m³) = Biomass (kg) / Volume (m³)
-        
+
         Recommended maximums:
         - Clarias: 150 kg/m³
         - Tilapia: 100 kg/m³
-        
+
         Args:
             biomass_kg: Total biomass in kg
             volume_m3: Pond volume in cubic meters
-            
+
         Returns:
             Decimal: Stocking density in kg/m³
         """
         if volume_m3 <= 0 or biomass_kg <= 0:
             return Decimal('0')
-        
+
+        # Ensure Decimal type
+        biomass_kg = Decimal(str(biomass_kg)) if not isinstance(biomass_kg, Decimal) else biomass_kg
+        volume_m3 = Decimal(str(volume_m3)) if not isinstance(volume_m3, Decimal) else volume_m3
+
         density = biomass_kg / volume_m3
-        
+
         return density.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
     
     @staticmethod
     def suggest_daily_feed_amount(
-        biomass_kg: Decimal, 
+        biomass_kg: Decimal,
         feeding_rate_percentage: Decimal
     ) -> Decimal:
         """
         Calculate daily feed amount based on biomass and feeding rate.
-        
+
         Formula: Daily feed (kg) = Biomass (kg) × (Feeding rate (%) / 100)
-        
+
         Args:
             biomass_kg: Current biomass in kg
             feeding_rate_percentage: Feeding rate as percentage of biomass
-            
+
         Returns:
             Decimal: Daily feed amount in kg
         """
         if biomass_kg <= 0 or feeding_rate_percentage <= 0:
             return Decimal('0')
-        
+
+        # Ensure Decimal type
+        biomass_kg = Decimal(str(biomass_kg)) if not isinstance(biomass_kg, Decimal) else biomass_kg
+        feeding_rate_percentage = Decimal(str(feeding_rate_percentage)) if not isinstance(feeding_rate_percentage, Decimal) else feeding_rate_percentage
+
         daily_feed = biomass_kg * (feeding_rate_percentage / Decimal('100'))
-        
+
         return daily_feed.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
     
     @staticmethod
@@ -523,7 +550,42 @@ class AquacultureCalculator:
                 score += Decimal('5')   # 20% of max
         
         return min(score, max_score).quantize(Decimal('0.1'), rounding=ROUND_HALF_UP)
-    
+
+    @staticmethod
+    def calculate_feed_cost(
+        total_feed_consumed_kg: Decimal,
+        price_per_kg_fcfa: Decimal = Decimal('500')
+    ) -> Decimal:
+        """
+        Calcule le coût total de l'aliment consommé.
+
+        Formule: Coût total = Aliment consommé (kg) × Prix unitaire (FCFA/kg)
+
+        Args:
+            total_feed_consumed_kg: Quantité totale d'aliment consommé en kg
+            price_per_kg_fcfa: Prix unitaire de l'aliment en FCFA/kg (défaut: 500 FCFA)
+
+        Returns:
+            Decimal: Coût total en FCFA
+
+        Notes:
+            - Prix par défaut 500 FCFA/kg basé sur moyenne marché Cameroun (2024-2025)
+            - Prix peut être configuré par ferme dans FarmProfile
+            - Retourne 0 si aliment consommé <= 0
+
+        Exemple:
+            >>> calculate_feed_cost(Decimal('100'), Decimal('500'))
+            Decimal('50000.00')  # 100 kg × 500 FCFA/kg = 50,000 FCFA
+        """
+        if total_feed_consumed_kg <= 0:
+            return Decimal('0')
+
+        if price_per_kg_fcfa <= 0:
+            raise ValueError("Le prix de l'aliment doit être positif")
+
+        cost = total_feed_consumed_kg * price_per_kg_fcfa
+        return cost.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
     @staticmethod
     def project_harvest_date(
         start_date: date,

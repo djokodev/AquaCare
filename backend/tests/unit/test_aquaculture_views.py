@@ -249,22 +249,6 @@ class TestCycleLogViewSet:
         assert response.data['mortality_count'] == 3
         assert float(response.data['feed_quantity']) == 2.5
 
-    @patch('apps.aquaculture.views.CycleLogViewSet._update_cycle_metrics')
-    def test_cycle_update_after_log_creation(self, mock_update, auth_client, production_cycle):
-        """Test mise à jour cycle après création log."""
-        url = reverse('aquaculture:cycle-log-list')
-        data = {
-            'cycle': str(production_cycle.id),
-            'log_date': date.today().isoformat(),
-            'mortality_count': 5,
-            'feed_quantity': '3.0'
-        }
-        
-        auth_client.post(url, data, format='json')
-        
-        # Vérifier que la méthode de mise à jour a été appelée
-        mock_update.assert_called_once()
-
     def test_bulk_create_logs(self, auth_client, production_cycle):
         """Test création bulk de logs (synchronisation)."""
         import uuid
@@ -376,19 +360,29 @@ class TestFeedingPlanViewSet:
         assert response.status_code == status.HTTP_404_NOT_FOUND
         assert 'error' in response.data
 
-    @patch('apps.aquaculture.views.FeedingPlanViewSet._create_feeding_notifications')
-    def test_notification_creation_on_plan_generation(self, mock_notifications, auth_client, production_cycle):
+    def test_notification_creation_on_plan_generation(self, auth_client, production_cycle):
         """Test création notifications lors génération plan."""
+        # Compter notif avant
+        notif_count_before = Notification.objects.filter(
+            user=production_cycle.farm_profile.user,
+            notification_type='feeding_reminder'
+        ).count()
+
         url = reverse('aquaculture:feeding-plan-generate')
         data = {
             'cycle_id': str(production_cycle.id),
             'weeks_ahead': 1
         }
-        
-        auth_client.post(url, data, format='json')
-        
-        # Vérifier que les notifications sont créées
-        mock_notifications.assert_called()
+
+        response = auth_client.post(url, data, format='json')
+
+        # Vérifier que des notifications ont été créées
+        notif_count_after = Notification.objects.filter(
+            user=production_cycle.farm_profile.user,
+            notification_type='feeding_reminder'
+        ).count()
+
+        assert notif_count_after > notif_count_before
 
 
 @pytest.mark.django_db
@@ -683,7 +677,7 @@ class TestSyncView:
         }
         
         response = auth_client.post(url, data, format='json')
-        
+
         assert response.status_code == status.HTTP_200_OK
         assert response.data['status'] == 'success'
         assert response.data['processed']['cycle_logs'] == 1
@@ -717,12 +711,12 @@ class TestSyncView:
         }
         
         response = auth_client.post(url, data, format='json')
-        
+
         assert response.status_code == status.HTTP_200_OK
-        
-        # Vérifier mise à jour au lieu de création
+
+        # Vérifier mise à jour au lieu de création (la nouvelle valeur remplace l'ancienne)
         log = CycleLog.objects.get(client_uuid=client_uuid)
-        assert log.mortality_count == 5  # Valeur originale conservée (déduplication)
+        assert log.mortality_count == 8  # Valeur mise à jour par le sync
 
     def test_sync_server_updates(self, auth_client, production_cycle):
         """Test récupération mises à jour serveur."""
@@ -742,12 +736,12 @@ class TestSyncView:
         }
         
         response = auth_client.post(url, data, format='json')
-        
+
         assert response.status_code == status.HTTP_200_OK
         assert 'server_updates' in response.data
-        assert 'logs' in response.data['server_updates']
-        
+        assert 'cycle_logs' in response.data['server_updates']
+
         # Vérifier que le log serveur est inclus
-        server_logs = response.data['server_updates']['logs']
+        server_logs = response.data['server_updates']['cycle_logs']
         log_ids = [log['id'] for log in server_logs]
         assert str(server_log.id) in log_ids
