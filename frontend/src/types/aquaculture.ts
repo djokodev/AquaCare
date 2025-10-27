@@ -39,10 +39,21 @@ export interface ProductionCycle {
   current_biomass: number;
   total_feed_consumed: number;
 
-  // Métriques calculées
+  // Métriques calculées par backend (source unique de vérité)
   survival_rate?: number;
   fcr?: number;
-  days_active?: number; // Calculé par l'API backend
+  days_active?: number;
+  current_density_kg_m3?: number;
+
+  // Métriques avancées depuis CycleMetrics (backend)
+  daily_growth_rate?: number; // g/jour
+  specific_growth_rate?: number; // %/jour (SGR)
+  average_daily_feed?: number; // kg/jour
+  performance_score?: number; // 0-100
+
+  // Coûts calculés (backend avec prix configurable)
+  total_feed_cost?: number; // FCFA
+
   status: CycleStatus;
 
   // Métadonnées

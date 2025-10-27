@@ -29,12 +29,9 @@ i18n.use(initReactI18next).init({
 // Load saved language asynchronously after initialization
 const loadSavedLanguage = async () => {
   try {
-    console.log('Chargement de la langue sauvegardée...');
-    
     // Try to get saved language preference
     const storedLang = await SecureStore.getItemAsync(STORAGE_KEYS.LANGUAGE);
     if (storedLang && ['en', 'fr'].includes(storedLang)) {
-      console.log('Langue trouvée dans SecureStore:', storedLang);
       await i18n.changeLanguage(storedLang);
       return;
     }
@@ -42,7 +39,6 @@ const loadSavedLanguage = async () => {
     // Fallback to device language if supported
     const locales = Localization.getLocales();
     const deviceLanguage = locales[0]?.languageCode || 'fr';
-    console.log('Langue du device:', deviceLanguage);
     
     if (['en', 'fr'].includes(deviceLanguage) && deviceLanguage !== 'fr') {
       await i18n.changeLanguage(deviceLanguage);

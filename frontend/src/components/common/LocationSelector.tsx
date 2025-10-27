@@ -86,7 +86,6 @@ export default function LocationSelector({
 
   // Initialiser les régions disponibles
   useEffect(() => {
-    console.log('LocationSelector: Loading all regions');
     const regions = CAMEROON_REGIONS.map(region => ({
       value: region.code,
       label: region.name
@@ -97,12 +96,10 @@ export default function LocationSelector({
   // Mettre à jour les départements selon la région sélectionnée
   useEffect(() => {
     setIsLoading(true);
-    console.log('LocationSelector: Updating departments for region:', value.region);
-    
+
     try {
       if (value.region) {
         const departments = getDepartmentsByRegion(value.region);
-        console.log('LocationSelector: Found departments for region', value.region, ':', departments.length);
         const options = departments.map(dept => ({
           value: dept.name,
           label: dept.name
@@ -124,7 +121,6 @@ export default function LocationSelector({
   useEffect(() => {
     if (value.department && value.region) {
       const arrondissements = getArrondissementsByDepartment(value.region, value.department);
-      console.log('LocationSelector: Found arrondissements for department', value.department, 'in region', value.region, ':', arrondissements.length);
       setArrondissementOptions(
         arrondissements.map(arr => ({
           value: arr.name,
@@ -150,7 +146,6 @@ export default function LocationSelector({
   useEffect(() => {
     if (value.arrondissement && value.region && value.department) {
       const cities = getCitiesByArrondissement(value.region, value.department, value.arrondissement);
-      console.log('LocationSelector: Found cities for arrondissement', value.arrondissement, ':', cities.length);
       setCityOptions(
         cities.map(city => ({
           value: city.name,
@@ -180,11 +175,10 @@ export default function LocationSelector({
     }
   }, [value.arrondissement, value.region, value.department]);
 
-  // Mettre à jour les quartiers selon l'arrondissement sélectionné 
+  // Mettre à jour les quartiers selon l'arrondissement sélectionné
   useEffect(() => {
     if (value.arrondissement && value.region && value.department) {
       const quartiers = getNeighborhoodsByArrondissement(value.region, value.department, value.arrondissement);
-      console.log('LocationSelector: Found neighborhoods for arrondissement', value.arrondissement, ':', quartiers.length);
       setNeighborhoodOptions(
         quartiers.map(q => ({ value: q, label: q }))
       );
@@ -202,11 +196,10 @@ export default function LocationSelector({
   }, [value.arrondissement, value.region, value.department]);
 
   const handleRegionSelect = (regionCode: string) => {
-    console.log('LocationSelector: Region selected:', regionCode);
     onChange({
       region: regionCode,
       department: undefined, // Reset département
-      arrondissement: undefined, // Reset arrondissement 
+      arrondissement: undefined, // Reset arrondissement
       city: undefined, // Reset ville
       neighborhood: undefined // Reset quartier
     });
@@ -494,8 +487,6 @@ function PickerModal({
 }: PickerModalProps) {
   const { t } = useTranslation();
 
-  console.log('PickerModal rendering with options:', options.length, 'visible:', visible, 'isLoading:', isLoading);
-  
   return (
     <Modal
       visible={visible}
@@ -523,9 +514,7 @@ function PickerModal({
           ) : (
             <View style={styles.optionsContainer}>
               <ScrollView style={styles.optionsList} showsVerticalScrollIndicator={false}>
-                {options.map((option, index) => {
-                  console.log(`Rendering option ${index}:`, option.label);
-                  return (
+                {options.map((option, index) => (
                     <TouchableOpacity
                       key={`${option.value}-${index}`}
                       style={[
@@ -533,7 +522,6 @@ function PickerModal({
                         selectedValue === option.value && styles.selectedOption
                       ]}
                       onPress={() => {
-                        console.log('Option selected:', option.label);
                         onSelect(option.value);
                       }}
                       disabled={option.disabled}
@@ -553,8 +541,7 @@ function PickerModal({
                         />
                       )}
                     </TouchableOpacity>
-                  );
-                })}
+                ))}
               </ScrollView>
             </View>
           )}

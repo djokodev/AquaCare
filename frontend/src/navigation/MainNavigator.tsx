@@ -73,7 +73,6 @@ function ProfileNavigator() {
   // Listen to language changes without force re-render
   React.useEffect(() => {
     const handleLanguageChanged = (lng: string) => {
-      console.log('ProfileNavigator: Langue changée vers:', lng);
       setCurrentLanguage(lng);
     };
 
@@ -117,7 +116,6 @@ function MainTabNavigator() {
   // Listen to language changes without force re-render
   React.useEffect(() => {
     const handleLanguageChanged = (lng: string) => {
-      console.log('MainNavigator: Langue changée vers:', lng);
       setCurrentLanguage(lng);
     };
 
@@ -149,7 +147,6 @@ function MainTabNavigator() {
       })}
       screenListeners={({ navigation, route }) => ({
         tabPress: (e) => {
-          console.log('Tab pressed:', route.name);
           // Allow the default behavior
         },
       })}

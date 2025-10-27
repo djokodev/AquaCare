@@ -15,21 +15,8 @@ import { useDispatch, useSelector } from 'react-redux';
 import { AppDispatch, RootState } from '@/store/store';
 import { aquacultureService } from '@/services/aquacultureService';
 import { ProductionCycle, FeedingPlan } from '@/types/aquaculture';
-
-// Couleurs MAVECAM selon spécifications
-const MAVECAM_COLORS = {
-  GREEN_PRIMARY: '#059669',
-  GREEN_LIGHT: '#10b981',
-  GREEN_DARK: '#047857',
-  WHITE: '#ffffff',
-  CREAM: '#f8fafc',
-  SUCCESS: '#059669',
-  WARNING: '#f59e0b',
-  ERROR: '#dc2626',
-  INFO: '#0ea5e9',
-  GRAY_LIGHT: '#64748b',
-  GRAY_DARK: '#1e293b',
-};
+import { MAVECAM_COLORS } from '@/constants/colors';
+import { formatNumber, formatPercentage } from '@/utils';
 
 export default function FeedingPlanScreen({ navigation }: any) {
   const { t } = useTranslation();
@@ -129,26 +116,6 @@ export default function FeedingPlanScreen({ navigation }: any) {
         }
       ]
     );
-  };
-
-  const formatNumber = (num: any, unit?: string) => {
-    const numValue = typeof num === 'number' ? num : parseFloat(num);
-
-    if (isNaN(numValue) || numValue === undefined || numValue === null || numValue === 0) {
-      return `0${unit ? ` ${unit}` : ''}`;
-    }
-
-    return `${numValue.toLocaleString('fr-FR', { maximumFractionDigits: 1 })}${unit ? ` ${unit}` : ''}`;
-  };
-
-  const formatPercentage = (num: any) => {
-    const numValue = typeof num === 'number' ? num : parseFloat(num);
-
-    if (isNaN(numValue) || numValue === undefined || numValue === null || numValue === 0) {
-      return '0%';
-    }
-
-    return `${numValue.toFixed(1)}%`;
   };
 
   const getDaysBetween = (startDate: string, endDate?: string) => {

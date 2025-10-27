@@ -12,23 +12,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { StackNavigationProp } from '@react-navigation/stack';
-
-// Couleurs MAVECAM selon spécifications
-const MAVECAM_COLORS = {
-  GREEN_PRIMARY: '#059669',
-  GREEN_LIGHT: '#10b981',
-  GREEN_DARK: '#047857',
-  WHITE: '#ffffff',
-  CREAM: '#f8fafc',
-  BLUE: '#2563eb',
-  SUCCESS: '#059669',
-  WARNING: '#f59e0b',
-  ERROR: '#dc2626',
-  INFO: '#0ea5e9',
-  GRAY_LIGHT: '#64748b',
-  GRAY_DARK: '#1e293b',
-};
-
+import { MAVECAM_COLORS } from '@/constants/colors';
 import { ProfileStackParamList } from '@/navigation/MainNavigator';
 import { useAuth } from '@/hooks/useAuth';
 import { useSelector, useDispatch } from 'react-redux';
@@ -89,7 +73,6 @@ export default function ProfileScreen({ navigation }: Props) {
     // Load profile data only if we really need it
     // Don't reload if we already have user data from login
     if (!user && !farmProfile && !isLoading) {
-      console.log('ProfileScreen: Loading profile data...');
       loadProfile();
     }
   }, []); // Empty dependency array - load only once on mount

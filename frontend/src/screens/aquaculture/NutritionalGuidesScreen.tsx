@@ -15,22 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { aquacultureService } from '../../services/aquacultureService';
 import { NutritionalGuide, Species } from '../../types/aquaculture';
-
-// Couleurs MAVECAM selon spécifications
-const MAVECAM_COLORS = {
-  GREEN_PRIMARY: '#059669',
-  GREEN_LIGHT: '#10b981',
-  GREEN_DARK: '#047857',
-  WHITE: '#ffffff',
-  CREAM: '#f8fafc',
-  BLUE: '#2563eb',
-  SUCCESS: '#059669',
-  WARNING: '#f59e0b',
-  ERROR: '#dc2626',
-  INFO: '#0ea5e9',
-  GRAY_LIGHT: '#64748b',
-  GRAY_DARK: '#1e293b',
-};
+import { MAVECAM_COLORS } from '@/constants/colors';
 
 interface FilterState {
   species: 'all' | Species;

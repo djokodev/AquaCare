@@ -1,0 +1,258 @@
+/**
+ * Utilitaires de formatage pour l'affichage des données.
+ *
+ * IMPORTANT: Ces fonctions NE CALCULENT PAS de logique métier.
+ * Elles formattent uniquement des valeurs déjà calculées par le backend.
+ */
+
+/**
+ * Formate un nombre avec gestion défensive des valeurs nulles/undefined.
+ *
+ * @param value - Valeur numérique à formatter
+ * @param unit - Unité optionnelle à ajouter
+ * @param decimals - Nombre de décimales (défaut: 1)
+ * @returns Chaîne formatée (ex: "123.5 kg")
+ */
+export const formatNumber = (
+  value: number | string | null | undefined,
+  unit?: string,
+  decimals: number = 1
+): string => {
+  // Conversion sécurisée vers number
+  const numValue = typeof value === 'number' ? value : parseFloat(value as string);
+
+  // Gestion des valeurs invalides
+  if (isNaN(numValue) || numValue === undefined || numValue === null) {
+    return `0${unit ? ` ${unit}` : ''}`;
+  }
+
+  // Formatage avec décimales
+  const formatted = numValue.toFixed(decimals);
+
+  return unit ? `${formatted} ${unit}` : formatted;
+};
+
+/**
+ * Formate un pourcentage avec gestion défensive.
+ *
+ * @param value - Valeur numérique (0-100)
+ * @param decimals - Nombre de décimales (défaut: 1)
+ * @returns Chaîne formatée (ex: "85.5%")
+ */
+export const formatPercentage = (
+  value: number | string | null | undefined,
+  decimals: number = 1
+): string => {
+  const numValue = typeof value === 'number' ? value : parseFloat(value as string);
+
+  if (isNaN(numValue) || numValue === undefined || numValue === null) {
+    return '0%';
+  }
+
+  return `${numValue.toFixed(decimals)}%`;
+};
+
+/**
+ * Formate une date selon la locale actuelle.
+ *
+ * @param dateString - Chaîne de date ISO 8601
+ * @param locale - Locale (défaut: 'fr-FR')
+ * @returns Date formatée (ex: "15 janv. 2025")
+ */
+export const formatDate = (
+  dateString: string | null | undefined,
+  locale: string = 'fr-FR'
+): string => {
+  if (!dateString) return '-';
+
+  try {
+    const date = new Date(dateString);
+    return date.toLocaleDateString(locale, {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    });
+  } catch (error) {
+    return '-';
+  }
+};
+
+/**
+ * Formate une date avec l'heure.
+ *
+ * @param dateString - Chaîne de date ISO 8601
+ * @param locale - Locale (défaut: 'fr-FR')
+ * @returns Date et heure formatées (ex: "15 janv. 2025, 14:30")
+ */
+export const formatDateTime = (
+  dateString: string | null | undefined,
+  locale: string = 'fr-FR'
+): string => {
+  if (!dateString) return '-';
+
+  try {
+    const date = new Date(dateString);
+    return date.toLocaleDateString(locale, {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  } catch (error) {
+    return '-';
+  }
+};
+
+/**
+ * Formate une durée en jours depuis une date de départ.
+ *
+ * @param startDate - Date de départ (ISO 8601)
+ * @param endDate - Date de fin (défaut: aujourd'hui)
+ * @returns Nombre de jours (ex: "45")
+ */
+export const formatDaysSince = (
+  startDate: string | null | undefined,
+  endDate?: string
+): string => {
+  if (!startDate) return '0';
+
+  try {
+    const start = new Date(startDate);
+    const end = endDate ? new Date(endDate) : new Date();
+    const diffTime = Math.abs(end.getTime() - start.getTime());
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays.toString();
+  } catch (error) {
+    return '0';
+  }
+};
+
+/**
+ * Formate un montant en FCFA (devise camerounaise).
+ *
+ * @param amount - Montant en FCFA
+ * @param decimals - Nombre de décimales (défaut: 0)
+ * @returns Montant formaté (ex: "150 000 FCFA")
+ */
+export const formatCurrency = (
+  amount: number | string | null | undefined,
+  decimals: number = 0
+): string => {
+  const numValue = typeof amount === 'number' ? amount : parseFloat(amount as string);
+
+  if (isNaN(numValue) || numValue === undefined || numValue === null) {
+    return '0 FCFA';
+  }
+
+  // Format avec espaces pour les milliers
+  const formatted = numValue.toLocaleString('fr-FR', {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
+
+  return `${formatted} FCFA`;
+};
+
+// =================== FORMATTERS AQUACULTURE SPÉCIFIQUES ===================
+
+/**
+ * Formate une biomasse avec unité.
+ * @param biomassKg - Biomasse en kg (calculée par backend)
+ * @param unit - Unité ('kg' ou 'tonnes')
+ * @returns Biomasse formatée (ex: "250.50 kg")
+ */
+export const formatBiomass = (
+  biomassKg: number | null | undefined,
+  unit: 'kg' | 'tonnes' = 'kg'
+): string => {
+  if (biomassKg === null || biomassKg === undefined) return 'N/A';
+  const value = unit === 'tonnes' ? biomassKg / 1000 : biomassKg;
+  return `${value.toFixed(2)} ${unit}`;
+};
+
+/**
+ * Formate une densité d'élevage.
+ * @param densityValue - Densité (calculée par backend)
+ * @param unit - Unité ('kg/m³' ou 'kg/m²')
+ * @returns Densité formatée (ex: "125.30 kg/m³")
+ */
+export const formatDensity = (
+  densityValue: number | null | undefined,
+  unit: 'kg/m³' | 'kg/m²' = 'kg/m³'
+): string => {
+  if (densityValue === null || densityValue === undefined) return 'N/A';
+  return `${densityValue.toFixed(2)} ${unit}`;
+};
+
+/**
+ * Formate un FCR (Feed Conversion Ratio).
+ * @param fcr - FCR calculé par backend
+ * @returns FCR formaté (ex: "1.85")
+ */
+export const formatFCR = (
+  fcr: number | null | undefined
+): string => {
+  if (fcr === null || fcr === undefined) return 'N/A';
+  return fcr.toFixed(2);
+};
+
+/**
+ * Formate un taux de survie.
+ * @param survivalRate - Taux en % (calculé par backend)
+ * @returns Taux formaté (ex: "85.50%")
+ */
+export const formatSurvivalRate = (
+  survivalRate: number | null | undefined
+): string => {
+  if (survivalRate === null || survivalRate === undefined) return 'N/A';
+  return `${survivalRate.toFixed(2)}%`;
+};
+
+/**
+ * Formate un taux de croissance journalier.
+ * @param dailyGrowthRate - Taux en g/jour (calculé par backend)
+ * @returns Taux formaté (ex: "2.30 g/jour")
+ */
+export const formatDailyGrowthRate = (
+  dailyGrowthRate: number | null | undefined
+): string => {
+  if (dailyGrowthRate === null || dailyGrowthRate === undefined) return 'N/A';
+  return `${dailyGrowthRate.toFixed(2)} g/jour`;
+};
+
+/**
+ * Formate un taux de croissance spécifique (SGR).
+ * @param specificGrowthRate - SGR en %/jour (calculé par backend)
+ * @returns SGR formaté (ex: "1.50%/jour")
+ */
+export const formatSpecificGrowthRate = (
+  specificGrowthRate: number | null | undefined
+): string => {
+  if (specificGrowthRate === null || specificGrowthRate === undefined) return 'N/A';
+  return `${specificGrowthRate.toFixed(2)}%/jour`;
+};
+
+/**
+ * Formate une quantité d'aliment.
+ * @param feedAmount - Quantité en kg (calculée par backend)
+ * @returns Quantité formatée (ex: "12.50 kg")
+ */
+export const formatFeedAmount = (
+  feedAmount: number | null | undefined
+): string => {
+  if (feedAmount === null || feedAmount === undefined) return 'N/A';
+  return `${feedAmount.toFixed(2)} kg`;
+};
+
+/**
+ * Formate un score de performance.
+ * @param score - Score 0-100 (calculé par backend)
+ * @returns Score formaté (ex: "85.0/100")
+ */
+export const formatPerformanceScore = (
+  score: number | null | undefined
+): string => {
+  if (score === null || score === undefined) return 'N/A';
+  return `${score.toFixed(1)}/100`;
+};

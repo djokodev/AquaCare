@@ -12,23 +12,7 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { StackNavigationProp } from '@react-navigation/stack';
-
-// Couleurs MAVECAM selon spécifications
-const MAVECAM_COLORS = {
-  GREEN_PRIMARY: '#059669',
-  GREEN_LIGHT: '#10b981',
-  GREEN_DARK: '#047857',
-  WHITE: '#ffffff',
-  CREAM: '#f8fafc',
-  BLUE: '#2563eb',
-  SUCCESS: '#059669',
-  WARNING: '#f59e0b',
-  ERROR: '#dc2626',
-  INFO: '#0ea5e9',
-  GRAY_LIGHT: '#64748b',
-  GRAY_DARK: '#1e293b',
-};
-
+import { MAVECAM_COLORS } from '@/constants/colors';
 import { AuthStackParamList } from '@/navigation/AuthNavigator';
 import { useAuth } from '@/hooks/useAuth';
 import { LoginRequest } from '@/types/auth';
@@ -93,10 +77,9 @@ export default function LoginScreen({ navigation }: Props) {
       }
 
       const result = await login(credentials);
-      
+
       if (result.meta.requestStatus === 'fulfilled') {
         // Navigation will be handled automatically by AppNavigator
-        console.log('Login successful');
       }
     } catch (err) {
       console.error('Login error:', err);

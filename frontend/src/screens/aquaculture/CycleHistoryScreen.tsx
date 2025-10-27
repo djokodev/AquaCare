@@ -15,21 +15,8 @@ import { useDispatch, useSelector } from 'react-redux';
 import { AppDispatch, RootState } from '@/store/store';
 import { fetchProductionCycles } from '@/store/slices/aquacultureSlice';
 import { ProductionCycle } from '@/types/aquaculture';
-
-// Couleurs MAVECAM selon spécifications
-const MAVECAM_COLORS = {
-  GREEN_PRIMARY: '#059669',
-  GREEN_LIGHT: '#10b981',
-  GREEN_DARK: '#047857',
-  WHITE: '#ffffff',
-  CREAM: '#f8fafc',
-  SUCCESS: '#059669',
-  WARNING: '#f59e0b',
-  ERROR: '#dc2626',
-  INFO: '#0ea5e9',
-  GRAY_LIGHT: '#64748b',
-  GRAY_DARK: '#1e293b',
-};
+import { MAVECAM_COLORS } from '@/constants/colors';
+import { formatNumber, formatPercentage, formatDate, formatDaysSince } from '@/utils';
 
 export default function CycleHistoryScreen({ navigation }: any) {
   const { t } = useTranslation();
@@ -70,32 +57,12 @@ export default function CycleHistoryScreen({ navigation }: any) {
     return new Date(b.end_date).getTime() - new Date(a.end_date).getTime();
   });
 
-  // Formatage des données
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('fr-FR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric'
-    });
-  };
-
-  const formatNumber = (num: any, unit?: string) => {
-    const numValue = typeof num === 'number' ? num : parseFloat(num);
-    if (isNaN(numValue) || numValue === undefined || numValue === null) {
-      return `0${unit ? ` ${unit}` : ''}`;
-    }
-    return `${numValue.toLocaleString('fr-FR')}${unit ? ` ${unit}` : ''}`;
-  };
-
-  const formatPercentage = (num: any) => {
-    const numValue = typeof num === 'number' ? num : parseFloat(num);
-    if (isNaN(numValue) || numValue === undefined || numValue === null) {
-      return '0%';
-    }
-    return `${numValue.toFixed(1)}%`;
-  };
-
-  const calculateDuration = (startDate: string, endDate: string) => {
+  /**
+   * ✅ Utilisation des utilitaires centralisés
+   * - formatDate() depuis @/utils/formatters
+   * - formatDaysSince() depuis @/utils/formatters (calcule la durée)
+   */
+  const getDurationInDays = (startDate: string, endDate: string): number => {
     const start = new Date(startDate);
     const end = new Date(endDate);
     return Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
@@ -124,7 +91,23 @@ export default function CycleHistoryScreen({ navigation }: any) {
   //   // Fonctionnalité à implémenter plus tard
   // };
 
-  // Statistiques résumées
+  /**
+   * ⚠️ TODO BACKEND - CALCULS TEMPORAIRES
+   * Ces aggregations DOIVENT être calculées par le backend.
+   *
+   * Backend devrait fournir: GET /aquaculture/cycles/?status=harvested&summary=true
+   * Response: {
+   *   cycles: [...],
+   *   summary: {
+   *     total_cycles: number,
+   *     avg_survival_rate: number,
+   *     avg_fcr: number,
+   *     total_harvested_biomass: number
+   *   }
+   * }
+   *
+   * Pour l'instant, calcul temporaire frontend jusqu'à implémentation backend.
+   */
   const totalCycles = sortedCycles.length;
   const avgSurvival = totalCycles > 0
     ? sortedCycles.reduce((sum, c) => sum + (c.survival_rate || 0), 0) / totalCycles
@@ -226,7 +209,7 @@ export default function CycleHistoryScreen({ navigation }: any) {
             </View>
           ) : (
             sortedCycles.map((cycle) => {
-              const duration = calculateDuration(cycle.start_date, cycle.end_date!);
+              const duration = getDurationInDays(cycle.start_date, cycle.end_date!);
               const performanceColor = getPerformanceColor(cycle.survival_rate, cycle.fcr);
               const performanceText = getPerformanceText(cycle.survival_rate, cycle.fcr);
 

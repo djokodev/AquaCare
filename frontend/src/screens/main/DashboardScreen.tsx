@@ -17,23 +17,8 @@ import { fetchNotifications } from '@/store/slices/notificationSlice';
 import { offlineService } from '@/services/offlineService';
 import HarvestModal from '@/components/modals/HarvestModal';
 import { ProductionCycle } from '@/types/aquaculture';
-
-// Couleurs MAVECAM selon spécifications
-const MAVECAM_COLORS = {
-  GREEN_PRIMARY: '#059669',
-  GREEN_LIGHT: '#10b981',
-  GREEN_DARK: '#047857',
-  WHITE: '#ffffff',
-  CREAM: '#f8fafc',
-  BLUE: '#2563eb',
-  SUCCESS: '#059669',
-  WARNING: '#f59e0b',
-  ERROR: '#dc2626',
-  INFO: '#0ea5e9',
-  GRAY_LIGHT: '#64748b',
-  GRAY_DARK: '#1e293b',
-};
-
+import { MAVECAM_COLORS } from '@/constants/colors';
+import { formatNumber, formatPercentage } from '@/utils';
 import { useAuth } from '@/hooks/useAuth';
 
 export default function DashboardScreen({ navigation }: any) {
@@ -110,29 +95,6 @@ export default function DashboardScreen({ navigation }: any) {
 
   const activeCycles = dashboardData?.active_cycles || [];
   const recentLogs = dashboardData?.recent_logs || [];
-
-  // Formatage des nombres
-  const formatNumber = (num: any, unit?: string) => {
-    // Conversion sécurisée vers number
-    const numValue = typeof num === 'number' ? num : parseFloat(num);
-
-    if (isNaN(numValue) || numValue === undefined || numValue === null || numValue === 0) {
-      return `0${unit ? ` ${unit}` : ''}`;
-    }
-
-    return `${numValue.toLocaleString('fr-FR')}${unit ? ` ${unit}` : ''}`;
-  };
-
-  const formatPercentage = (num: any) => {
-    // Conversion sécurisée vers number
-    const numValue = typeof num === 'number' ? num : parseFloat(num);
-
-    if (isNaN(numValue) || numValue === undefined || numValue === null || numValue === 0) {
-      return '0%';
-    }
-
-    return `${numValue.toFixed(1)}%`;
-  };
 
   // Fonctions pour le modal de récolte
   const openHarvestModal = (cycle: ProductionCycle) => {

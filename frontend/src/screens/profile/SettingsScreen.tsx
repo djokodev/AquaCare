@@ -46,12 +46,11 @@ export default function SettingsScreen() {
 
     // Écouter les changements de langue
     const handleLanguageChanged = (lng: string) => {
-      console.log('i18n langue changée vers:', lng);
       setSettings(prev => ({ ...prev, language: lng }));
     };
 
     i18n.on('languageChanged', handleLanguageChanged);
-    
+
     return () => {
       i18n.off('languageChanged', handleLanguageChanged);
     };
@@ -59,20 +58,15 @@ export default function SettingsScreen() {
 
   const handleLanguageChange = async (newLanguage: 'fr' | 'en') => {
     try {
-      console.log('Changement de langue vers:', newLanguage);
-      console.log('Langue actuelle i18n:', i18n.language);
-      
       // 1. Update local state first
       setSettings(prev => ({ ...prev, language: newLanguage }));
-      
+
       // 2. Change i18n language immediately
       await i18n.changeLanguage(newLanguage);
-      console.log('Nouvelle langue i18n:', i18n.language);
-      
+
       // 3. Save to secure storage for persistence
       await SecureStore.setItemAsync(STORAGE_KEYS.LANGUAGE, newLanguage);
-      console.log('Langue sauvegardée dans SecureStore');
-      
+
       // 4. Update profile (non-blocking)
       updateProfile({ language_preference: newLanguage }).catch(error => {
         console.warn('Erreur lors de la mise à jour du profil:', error);

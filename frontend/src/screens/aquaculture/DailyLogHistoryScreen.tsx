@@ -14,22 +14,9 @@ import { useSelector } from 'react-redux';
 import { RootState } from '@/store/store';
 import { aquacultureService } from '@/services/aquacultureService';
 import { CycleLog } from '@/types/aquaculture';
-
-// Couleurs MAVECAM selon spécifications
-const MAVECAM_COLORS = {
-  GREEN_PRIMARY: '#059669',
-  GREEN_LIGHT: '#10b981',
-  GREEN_DARK: '#047857',
-  WHITE: '#ffffff',
-  CREAM: '#f8fafc',
-  BLUE: '#2563eb',
-  SUCCESS: '#059669',
-  WARNING: '#f59e0b',
-  ERROR: '#dc2626',
-  INFO: '#0ea5e9',
-  GRAY_LIGHT: '#64748b',
-  GRAY_DARK: '#1e293b',
-};
+import { MAVECAM_COLORS } from '@/constants/colors';
+import { formatDate } from '@/utils';
+import { estimateAverageWeight } from '@/domain';
 
 export default function DailyLogHistoryScreen({ navigation }: any) {
   const { t } = useTranslation();
@@ -64,15 +51,10 @@ export default function DailyLogHistoryScreen({ navigation }: any) {
     setRefreshing(false);
   };
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('fr-FR', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
-  };
+  /**
+   * ✅ Utilisation de formatDate() centralisé depuis @/utils
+   * Note: formatDate supporte options personnalisées si nécessaire
+   */
 
   const getCycleName = (cycleId: string) => {
     const cycle = activeCycles.find(c => c.id === cycleId);
@@ -93,7 +75,7 @@ export default function DailyLogHistoryScreen({ navigation }: any) {
           <View style={styles.dataItem}>
             <Text style={styles.dataLabel}>{t('averageWeight')} :</Text>
             <Text style={styles.dataValue}>
-              {(log.sample_total_weight / log.sample_count).toFixed(1)} g
+              {estimateAverageWeight(log.sample_total_weight, log.sample_count).toFixed(1)} g
             </Text>
           </View>
         )}

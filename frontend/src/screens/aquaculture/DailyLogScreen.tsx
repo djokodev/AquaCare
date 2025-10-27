@@ -17,22 +17,8 @@ import { fetchDashboardData } from '@/store/slices/aquacultureSlice';
 import { aquacultureService } from '@/services/aquacultureService';
 import { offlineService } from '@/services/offlineService';
 import { DailyLogForm } from '@/types/aquaculture';
-
-// Couleurs MAVECAM selon spécifications
-const MAVECAM_COLORS = {
-  GREEN_PRIMARY: '#059669',
-  GREEN_LIGHT: '#10b981',
-  GREEN_DARK: '#047857',
-  WHITE: '#ffffff',
-  CREAM: '#f8fafc',
-  BLUE: '#2563eb',
-  SUCCESS: '#059669',
-  WARNING: '#f59e0b',
-  ERROR: '#dc2626',
-  INFO: '#0ea5e9',
-  GRAY_LIGHT: '#64748b',
-  GRAY_DARK: '#1e293b',
-};
+import { MAVECAM_COLORS } from '@/constants/colors';
+import { estimateAverageWeight } from '@/domain';
 
 interface DailyLogData {
   cycle_id: string;
@@ -47,7 +33,7 @@ interface DailyLogData {
 export default function DailyLogScreen({ navigation }: any) {
   const { t } = useTranslation();
   const dispatch = useDispatch<AppDispatch>();
-  const { dashboardData, loading } = useSelector((state: RootState) => state.aquaculture);
+  const { dashboardData } = useSelector((state: RootState) => state.aquaculture);
   const activeCycles = dashboardData?.active_cycles || [];
 
   const [selectedCycle, setSelectedCycle] = useState<string>('');
@@ -108,10 +94,12 @@ export default function DailyLogScreen({ navigation }: any) {
 
     setSaving(true);
     try {
-      // Calculer le poids moyen à partir de l'échantillon
+      /**
+       * ⚠️ ESTIMATION TEMPORAIRE UX (avant envoi backend)
+       * Backend recalcule le poids moyen avec AquacultureCalculator
+       */
       const sampleCount = parseFloat(formData.sample_count) || 0;
       const sampleWeight = parseFloat(formData.sample_total_weight) || 0;
-      const averageWeight = sampleCount > 0 ? sampleWeight / sampleCount : 0;
 
       // Préparer les données pour l'API
       const logData: DailyLogForm = {
@@ -320,19 +308,29 @@ export default function DailyLogScreen({ navigation }: any) {
         </View>
 
         {/* Calculs automatiques */}
-        {formData.sample_count && formData.sample_total_weight && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('autoCalculations')}</Text>
-            <View style={styles.calculationsCard}>
-              <View style={styles.calculationRow}>
-                <Text style={styles.calculationLabel}>{t('averageWeight')} :</Text>
-                <Text style={styles.calculationValue}>
-                  {(parseFloat(formData.sample_total_weight) / parseFloat(formData.sample_count)).toFixed(1)} g
-                </Text>
+        {formData.sample_count && formData.sample_total_weight && (() => {
+          /**
+           * ⚠️ ESTIMATION TEMPORAIRE UX uniquement
+           * Backend recalcule le poids moyen officiel lors de la sauvegarde
+           */
+          const sampleWeight = parseFloat(formData.sample_total_weight) || 0;
+          const sampleCount = parseFloat(formData.sample_count) || 0;
+          const avgWeight = estimateAverageWeight(sampleWeight, sampleCount);
+
+          return (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>{t('autoCalculations')}</Text>
+              <View style={styles.calculationsCard}>
+                <View style={styles.calculationRow}>
+                  <Text style={styles.calculationLabel}>{t('averageWeight')} :</Text>
+                  <Text style={styles.calculationValue}>
+                    {avgWeight.toFixed(1)} g
+                  </Text>
+                </View>
               </View>
             </View>
-          </View>
-        )}
+          );
+        })()}
 
         <TouchableOpacity
           style={[styles.saveButton, saving && styles.buttonDisabled]}

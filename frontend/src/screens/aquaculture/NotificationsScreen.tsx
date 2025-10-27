@@ -20,21 +20,7 @@ import {
   deleteAllReadNotifications
 } from '@/store/slices/notificationSlice';
 import { Notification } from '@/types/aquaculture';
-
-// Couleurs MAVECAM selon spécifications
-const MAVECAM_COLORS = {
-  GREEN_PRIMARY: '#059669',
-  GREEN_LIGHT: '#10b981',
-  GREEN_DARK: '#047857',
-  WHITE: '#ffffff',
-  CREAM: '#f8fafc',
-  SUCCESS: '#059669',
-  WARNING: '#f59e0b',
-  ERROR: '#dc2626',
-  INFO: '#0ea5e9',
-  GRAY_LIGHT: '#64748b',
-  GRAY_DARK: '#1e293b',
-};
+import { MAVECAM_COLORS } from '@/constants/colors';
 
 const NOTIFICATION_COLORS = {
   feeding_reminder: MAVECAM_COLORS.INFO,
@@ -81,8 +67,12 @@ export default function NotificationsScreen({ navigation }: any) {
     return new Date(b.scheduled_for).getTime() - new Date(a.scheduled_for).getTime();
   });
 
-  // Formatage des données
-  const formatDate = (dateString: string) => {
+  /**
+   * ✅ Format de date RELATIF (spécifique aux notifications)
+   * Différent de formatDate() générique dans utils.
+   * Affiche: "À l'instant", "3h", "Hier", ou date complète.
+   */
+  const formatRelativeDate = (dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();
     const diffHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
@@ -361,7 +351,7 @@ export default function NotificationsScreen({ navigation }: any) {
 
                       <View style={styles.notificationFooter}>
                         <Text style={styles.notificationDate}>
-                          {formatDate(notification.scheduled_for)}
+                          {formatRelativeDate(notification.scheduled_for)}
                         </Text>
                         <Text style={[styles.notificationType, { color }]}>
                           {t(`notificationType_${notification.notification_type}`) || notification.notification_type}

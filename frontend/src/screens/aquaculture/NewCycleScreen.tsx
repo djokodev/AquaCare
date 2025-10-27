@@ -15,25 +15,11 @@ import { useAuth } from '@/hooks/useAuth';
 import { aquacultureService } from '@/services/aquacultureService';
 import { offlineService } from '@/services/offlineService';
 import { CreateCycleForm } from '@/types/aquaculture';
-import { useSelector, useDispatch } from 'react-redux';
-import { RootState, AppDispatch } from '@/store/store';
+import { useDispatch } from 'react-redux';
+import { AppDispatch } from '@/store/store';
 import { fetchDashboardData } from '@/store/slices/aquacultureSlice';
-
-// Couleurs MAVECAM selon spécifications
-const MAVECAM_COLORS = {
-  GREEN_PRIMARY: '#059669',
-  GREEN_LIGHT: '#10b981',
-  GREEN_DARK: '#047857',
-  WHITE: '#ffffff',
-  CREAM: '#f8fafc',
-  BLUE: '#2563eb',
-  SUCCESS: '#059669',
-  WARNING: '#f59e0b',
-  ERROR: '#dc2626',
-  INFO: '#0ea5e9',
-  GRAY_LIGHT: '#64748b',
-  GRAY_DARK: '#1e293b',
-};
+import { MAVECAM_COLORS } from '@/constants/colors';
+import { estimateBiomass, estimateDensityWithUnit } from '@/domain';
 
 const SPECIES_OPTIONS = [
   { value: 'clarias', label: 'Clarias', duration: '120 jours' },
@@ -72,39 +58,26 @@ export default function NewCycleScreen({ navigation }: any) {
     return SPECIES_OPTIONS.find(option => option.value === formData.species);
   };
 
-  const calculateInitialBiomass = () => {
+  /**
+   * ⚠️ ESTIMATIONS TEMPORAIRES UX (avant envoi backend)
+   * Ces valeurs sont JETÉES dès que le backend répond.
+   * Backend recalcule TOUT avec AquacultureCalculator.
+   */
+  const estimateInitialBiomass = () => {
     const count = parseFloat(formData.initial_count) || 0;
     const weight = parseFloat(formData.initial_average_weight) || 0;
-    return (count * weight / 1000).toFixed(2); // En kg
+    // Utilise estimateur centralisé
+    return estimateBiomass(count, weight).toFixed(2);
   };
 
-  const calculateDensity = () => {
-    const biomass = parseFloat(calculateInitialBiomass());
+  const estimateDensityValue = () => {
+    const biomass = parseFloat(estimateInitialBiomass());
+    const volume = parseFloat(formData.pond_volume_m3) || undefined;
+    const surface = parseFloat(formData.pond_surface_m2) || undefined;
 
-    // Priorité au volume (plus précis) si disponible
-    const volume = parseFloat(formData.pond_volume_m3);
-    if (volume > 0) {
-      return (biomass / volume).toFixed(2); // Densité volumique kg/m³
-    }
-
-    // Sinon utiliser la surface
-    const surface = parseFloat(formData.pond_surface_m2);
-    if (surface > 0) {
-      return (biomass / surface).toFixed(2); // Densité surfacique kg/m²
-    }
-
-    return '0';
-  };
-
-  const getDensityUnit = () => {
-    // Retourne l'unité appropriée selon ce qui est renseigné
-    if (formData.pond_volume_m3 && parseFloat(formData.pond_volume_m3) > 0) {
-      return 'kg/m³';
-    }
-    if (formData.pond_surface_m2 && parseFloat(formData.pond_surface_m2) > 0) {
-      return 'kg/m²';
-    }
-    return 'kg/m²';
+    // Utilise estimateur centralisé avec gestion volume/surface
+    const { value, unit } = estimateDensityWithUnit(biomass, volume, surface);
+    return { value: value.toFixed(2), unit };
   };
 
   const generateCycleName = () => {
@@ -175,13 +148,9 @@ export default function NewCycleScreen({ navigation }: any) {
         initial_average_weight: parseFloat(formData.initial_average_weight),
       };
 
-      console.log('Creating new cycle with data:', cycleData);
-
       try {
         // Tentative d'appel API en ligne
-        const newCycle = await aquacultureService.createProductionCycle(cycleData);
-
-        console.log('Cycle created successfully:', newCycle);
+        await aquacultureService.createProductionCycle(cycleData);
 
         // Rafraîchir le Dashboard pour afficher le nouveau cycle
         dispatch(fetchDashboardData());
@@ -383,31 +352,38 @@ export default function NewCycleScreen({ navigation }: any) {
         </View>
 
         {/* Calculs automatiques */}
-        {formData.initial_count && formData.initial_average_weight && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('autoCalculations')}</Text>
-            <View style={styles.calculationsCard}>
-              <View style={styles.calculationRow}>
-                <Text style={styles.calculationLabel}>{t('initialBiomass')} :</Text>
-                <Text style={styles.calculationValue}>{calculateInitialBiomass()} kg</Text>
+        {formData.initial_count && formData.initial_average_weight && (() => {
+          const density = estimateDensityValue();
+          const selectedSpecies = getSelectedSpecies();
+
+          return (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>{t('autoCalculations')}</Text>
+              <View style={styles.calculationsCard}>
+                <View style={styles.calculationRow}>
+                  <Text style={styles.calculationLabel}>{t('initialBiomass')} :</Text>
+                  <Text style={styles.calculationValue}>{estimateInitialBiomass()} kg</Text>
+                </View>
+
+                {(formData.pond_surface_m2 || formData.pond_volume_m3) && (
+                  <View style={styles.calculationRow}>
+                    <Text style={styles.calculationLabel}>{t('initialDensity')} :</Text>
+                    <Text style={styles.calculationValue}>
+                      {density.value} {density.unit}
+                    </Text>
+                  </View>
+                )}
+
+                {selectedSpecies && (
+                  <View style={styles.calculationRow}>
+                    <Text style={styles.calculationLabel}>{t('expectedDuration')} :</Text>
+                    <Text style={styles.calculationValue}>{selectedSpecies.duration}</Text>
+                  </View>
+                )}
               </View>
-
-              {(formData.pond_surface_m2 || formData.pond_volume_m3) && (
-                <View style={styles.calculationRow}>
-                  <Text style={styles.calculationLabel}>{t('initialDensity')} :</Text>
-                  <Text style={styles.calculationValue}>{calculateDensity()} {getDensityUnit()}</Text>
-                </View>
-              )}
-
-              {getSelectedSpecies() && (
-                <View style={styles.calculationRow}>
-                  <Text style={styles.calculationLabel}>{t('expectedDuration')} :</Text>
-                  <Text style={styles.calculationValue}>{getSelectedSpecies()?.duration}</Text>
-                </View>
-              )}
             </View>
-          </View>
-        )}
+          );
+        })()}
 
         <TouchableOpacity
           style={[styles.saveButton, (!validateForm() || saving) && styles.buttonDisabled]}

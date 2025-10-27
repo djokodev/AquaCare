@@ -6,30 +6,17 @@ import {
   ScrollView,
   RefreshControl,
   TouchableOpacity,
-  Alert,
-  Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { aquacultureService } from '../../services/aquacultureService';
 import { ProductionCycle, CycleStatistics } from '../../types/aquaculture';
-
-const { width: screenWidth } = Dimensions.get('window');
-
-// Couleurs MAVECAM
-const MAVECAM_COLORS = {
-  GREEN_PRIMARY: '#059669',
-  GREEN_LIGHT: '#10b981',
-  GREEN_DARK: '#047857',
-  WHITE: '#ffffff',
-  CREAM: '#f8fafc',
-  SUCCESS: '#059669',
-  WARNING: '#f59e0b',
-  ERROR: '#dc2626',
-  INFO: '#0ea5e9',
-  GRAY_LIGHT: '#64748b',
-  GRAY_DARK: '#1e293b',
-};
+import { MAVECAM_COLORS } from '@/constants/colors';
+import {
+  formatNumber,
+  formatPercentage,
+  formatCurrency,
+} from '@/utils';
 
 export default function StatisticsScreen({ navigation }: any) {
   const { t } = useTranslation();
@@ -66,106 +53,59 @@ export default function StatisticsScreen({ navigation }: any) {
 
   const loadCycleStatistics = async (cycleId: string) => {
     try {
-      // TODO: Implémenter l'endpoint de statistiques détaillées
-      // Pour l'instant, calculons des stats basiques à partir du cycle
+      /**
+       * ✅ REFACTORÉ : Utilise UNIQUEMENT les données calculées par le backend.
+       * Backend est la source unique de vérité pour TOUS les calculs métier.
+       *
+       * Métriques fournies par ProductionCycleSerializer (backend) :
+       * - daily_growth_rate (depuis CycleMetrics)
+       * - specific_growth_rate (depuis CycleMetrics)
+       * - average_daily_feed (depuis CycleMetrics)
+       * - total_feed_cost (calculé avec prix configurable)
+       * - fcr, survival_rate, biomass, etc. (déjà calculés)
+       */
       const cycle = harvestedCycles.find(c => c.id === cycleId);
       if (cycle) {
         const mockStats: CycleStatistics = {
           cycle_id: cycleId,
-          // Utiliser days_active directement de l'API (calculé par le backend)
           days_active: Number(cycle.days_active) || 0,
           current_metrics: {
+            // ✅ Données DIRECTES du backend (pas de recalcul)
             survival_rate: Number(cycle.survival_rate) || 0,
             biomass: Number(cycle.final_biomass || cycle.current_biomass) || 0,
             average_weight: Number(cycle.final_average_weight || cycle.current_average_weight) || 0,
             fcr: Number(cycle.fcr) || 0,
-            daily_growth_rate: calculateDailyGrowthRate(cycle),
-            specific_growth_rate: calculateSpecificGrowthRate(cycle),
+            // ✅ Métriques CycleMetrics exposées par backend
+            daily_growth_rate: Number(cycle.daily_growth_rate) || 0,
+            specific_growth_rate: Number(cycle.specific_growth_rate) || 0,
           },
           feed_metrics: {
             total_consumed: Number(cycle.total_feed_consumed) || 0,
-            average_daily: calculateAverageDailyFeed(cycle),
-            cost_estimate: estimateFeedCost(cycle),
+            // ✅ Backend calcule la moyenne quotidienne
+            average_daily: Number(cycle.average_daily_feed) || 0,
+            // ✅ Backend calcule le coût avec prix configurable
+            cost_estimate: Number(cycle.total_feed_cost) || 0,
           },
           mortality_analysis: {
+            /**
+             * ⚠️ TODO BACKEND - Ces valeurs DOIVENT venir du backend
+             * Backend devrait exposer:
+             * - total_mortality_count (initial_count - final_count)
+             * - mortality_percentage (100 - survival_rate)
+             *
+             * Pour l'instant, calcul temporaire frontend jusqu'à implémentation backend.
+             */
             total: Math.max(0, (Number(cycle.initial_count) || 0) - (Number(cycle.final_count || cycle.current_count) || 0)),
             percentage: Math.max(0, 100 - (Number(cycle.survival_rate) || 0)),
-            by_week: {}, // TODO: Implémenter avec données détaillées
-            main_causes: [], // TODO: Implémenter avec journal sanitaire
+            by_week: {}, // TODO: Implémenter avec données détaillées backend
+            main_causes: [], // TODO: Implémenter avec journal sanitaire backend
           },
-          growth_performance: [], // TODO: Implémenter avec logs quotidiens
+          growth_performance: [], // TODO: Implémenter avec logs quotidiens backend
         };
         setCycleStats(mockStats);
       }
     } catch (error: any) {
       console.error('Erreur chargement stats cycle:', error);
-    }
-  };
-
-  // Fonctions de calcul utilitaires défensives
-
-  const calculateDailyGrowthRate = (cycle: ProductionCycle): number => {
-    try {
-      // Utiliser days_active directement de l'API
-      const days = Number(cycle.days_active) || 0;
-      if (days === 0) return 0;
-      const initialWeight = Number(cycle.initial_average_weight) || 0;
-      const finalWeight = Number(cycle.final_average_weight || cycle.current_average_weight) || 0;
-      const rate = (finalWeight - initialWeight) / days;
-      return isNaN(rate) ? 0 : rate;
-    } catch {
-      return 0;
-    }
-  };
-
-  const calculateSpecificGrowthRate = (cycle: ProductionCycle): number => {
-    try {
-      // Utiliser days_active directement de l'API
-      const days = Number(cycle.days_active) || 0;
-      if (days === 0) return 0;
-      const initialWeight = Number(cycle.initial_average_weight) || 0;
-      const finalWeight = Number(cycle.final_average_weight || cycle.current_average_weight) || 0;
-      if (initialWeight <= 0 || finalWeight <= 0) return 0;
-      const rate = (Math.log(finalWeight) - Math.log(initialWeight)) / days * 100;
-      return isNaN(rate) ? 0 : rate;
-    } catch {
-      return 0;
-    }
-  };
-
-  const calculateAverageDailyFeed = (cycle: ProductionCycle): number => {
-    try {
-      // Utiliser days_active directement de l'API
-      const days = Number(cycle.days_active) || 0;
-      if (days === 0) return 0;
-      const totalFeed = Number(cycle.total_feed_consumed) || 0;
-      const average = totalFeed / days;
-      return isNaN(average) ? 0 : average;
-    } catch {
-      return 0;
-    }
-  };
-
-  const estimateFeedCost = (cycle: ProductionCycle): number => {
-    try {
-      // Estimation basée sur 500 FCFA/kg d'aliment
-      const totalFeed = Number(cycle.total_feed_consumed) || 0;
-      console.log('Debug Feed Cost - totalFeed:', totalFeed, 'cycle.total_feed_consumed:', cycle.total_feed_consumed);
-
-      // Si pas de données d'aliment du backend, estimons basé sur la biomasse et FCR
-      if (totalFeed === 0) {
-        const finalBiomass = Number(cycle.final_biomass || cycle.current_biomass) || 0;
-        const fcr = Number(cycle.fcr) || 1.5; // FCR typique si pas de donnée
-        const estimatedFeed = finalBiomass * fcr;
-        console.log('Debug Feed Cost - Estimation par FCR:', estimatedFeed, 'biomasse:', finalBiomass, 'fcr:', fcr);
-        const cost = estimatedFeed * 500;
-        return isNaN(cost) ? 0 : cost;
-      }
-
-      const cost = totalFeed * 500;
-      return isNaN(cost) ? 0 : cost;
-    } catch {
-      return 0;
     }
   };
 
@@ -179,39 +119,6 @@ export default function StatisticsScreen({ navigation }: any) {
     await loadData();
     setRefreshing(false);
   }, []);
-
-  // Fonctions de formatage défensives
-  const formatNumber = (value: number | undefined | null, unit?: string): string => {
-    if (value === undefined || value === null || isNaN(Number(value))) return '0' + (unit ? ` ${unit}` : '');
-    const numValue = Number(value);
-    return numValue.toFixed(1) + (unit ? ` ${unit}` : '');
-  };
-
-  const formatPercentage = (value: number | undefined | null): string => {
-    if (value === undefined || value === null || isNaN(Number(value))) return '0%';
-    const numValue = Number(value);
-    return `${numValue.toFixed(1)}%`;
-  };
-
-  const formatCurrency = (value: number | undefined | null): string => {
-    if (value === undefined || value === null || isNaN(Number(value))) return '0 FCFA';
-    const numValue = Number(value);
-    return `${Math.round(numValue).toLocaleString()} FCFA`;
-  };
-
-  const formatDate = (dateString: string | null | undefined): string => {
-    if (!dateString) return 'N/A';
-    try {
-      const date = new Date(dateString);
-      return date.toLocaleDateString('fr-FR', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric'
-      });
-    } catch {
-      return 'N/A';
-    }
-  };
 
   if (loading) {
     return (

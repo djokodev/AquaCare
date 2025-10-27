@@ -82,6 +82,136 @@ Ce repertoire contient les commandes personnalisees pour optimiser le workflow d
 
 ---
 
+### 🔧 `/create-backend-feature` - Creation Feature Backend Complete
+**Utilisation:** Developper une nouvelle fonctionnalite backend Django/DRF
+
+**Cas d'usage:**
+- Nouveau module backend (API endpoints, models, serializers)
+- Extension module existant (nouvelles fonctionnalites aquaculture, accounts)
+- Refactoring backend avec nouvelle architecture
+
+**Actions executees:**
+1. **Analyse prerequis:**
+   - Lecture CLAUDE.md (regles projet)
+   - Lecture ARCHITECTURE.md (architecture actuelle)
+   - Lecture PROJECT_CONTEXT.md (progression projet)
+   - Lecture DESIGN_SYSTEM.md (si impact UI/UX)
+   - Lecture DONT_DO.md (erreurs a eviter)
+
+2. **Planification (Deep Think):**
+   - Architecture proposee (models, serializers, views)
+   - Integration avec modules existants
+   - Gestion offline-first (UUIDs, sync metadata)
+   - Schema base de donnees (migrations)
+   - Endpoints API (routes, permissions)
+   - **Rapport detaille pour validation utilisateur**
+
+3. **Implementation:**
+   - Creation models Django avec UUIDs
+   - Serializers DRF avec validation
+   - ViewSets/APIViews avec permissions
+   - Migrations base de donnees
+   - Integration signals si necessaire
+   - Documentation code (docstrings)
+
+4. **Tests unitaires (Coverage >90%):**
+   - Tests models (validation, contraintes)
+   - Tests serializers (serialization/deserialization)
+   - Tests API endpoints (permissions, responses)
+   - Fixtures factories (backend/tests/fixtures/factories.py)
+
+5. **Validation:**
+   - Execution pytest avec coverage
+   - Verification migrations
+   - Test API avec curl/Postman
+   - **Feedback utilisateur pour iteration**
+
+**Verification:**
+- ✅ Architecture respectee (Clean Architecture, DRY)
+- ✅ Offline-first (UUIDs, sync metadata)
+- ✅ Tests coverage >90%
+- ✅ Documentation complete (docstrings, README)
+- ✅ Migrations Django propres
+- ✅ Permissions API securisees
+
+**Workflow:**
+1. Description fonctionnalite (utilisateur)
+2. Deep think + rapport planification (Claude)
+3. Validation plan (utilisateur)
+4. Implementation + tests (Claude)
+5. Validation finale (utilisateur)
+
+**Reference:** [create-backend-feature.md](.claude/commands/create-backend-feature.md)
+
+---
+
+### ⚛️ `/create-frontend-feature` - Creation Feature Frontend Complete
+**Utilisation:** Developper une nouvelle fonctionnalite frontend React Native/Expo
+
+**Cas d'usage:**
+- Nouvel ecran mobile (aquaculture, commerce, support)
+- Nouveau composant reutilisable (UI/UX)
+- Refactoring frontend avec nouvelle architecture
+
+**Actions executees:**
+1. **Analyse prerequis:**
+   - Lecture CLAUDE.md (regles projet)
+   - Lecture ARCHITECTURE.md (architecture actuelle)
+   - Lecture PROJECT_CONTEXT.md (progression projet)
+   - Lecture DESIGN_SYSTEM.md (charte graphique MAVECAM)
+   - Lecture DONT_DO.md (erreurs a eviter)
+
+2. **Planification (Deep Think):**
+   - Architecture proposee (screens, components, navigation)
+   - Integration Redux Toolkit (slices, thunks)
+   - Services API (axios, offline sync)
+   - Gestion erreurs et states (loading, error, success)
+   - Traductions i18next (FR/EN)
+   - Charte graphique MAVECAM (#059669)
+   - **Rapport detaille pour validation utilisateur**
+
+3. **Implementation:**
+   - Screens React Native avec TypeScript
+   - Composants reutilisables
+   - Redux slices + thunks
+   - Services API avec gestion offline
+   - Traductions FR/EN (i18n/locales/)
+   - Navigation React Navigation 6
+   - Charte graphique respectee
+
+4. **Verification TypeScript:**
+   - `npx tsc --noEmit` apres chaque modification
+   - Gestion types optionnels (null/undefined)
+   - Props React correctes
+   - Imports complets
+
+5. **Tests:**
+   - Test compilation TypeScript
+   - Test navigation entre ecrans
+   - Test changement langue FR/EN
+   - Test offline/online sync
+   - **Validation utilisateur finale**
+
+**Verification:**
+- ✅ TypeScript strict (zero erreur tsc)
+- ✅ Traductions FR/EN completes
+- ✅ Charte MAVECAM respectee (#059669)
+- ✅ Offline-first (sync metadata)
+- ✅ Navigation fluide
+- ✅ Gestion erreurs defensive
+- ✅ Aucun console.log de debug restant
+
+**Workflow:**
+1. Description fonctionnalite (utilisateur)
+2. Deep think + rapport planification (Claude)
+3. Validation plan (utilisateur)
+4. Implementation + verification TS (Claude)
+5. Validation finale (utilisateur)
+
+**Reference:** [create-frontend-feature.md](.claude/commands/create-frontend-feature.md)
+
+---
+
 ## Workflow Recommande
 
 ### 1. Avant d'installer un package:
@@ -89,49 +219,23 @@ Ce repertoire contient les commandes personnalisees pour optimiser le workflow d
 /check-package nom-du-package
 ```
 
-### 2. Apres validation feature complete:
+### 2. Developper nouvelle fonctionnalite backend:
+```
+/create-backend-feature
+```
+
+### 3. Developper nouvelle fonctionnalite frontend:
+```
+/create-frontend-feature
+```
+
+### 4. Apres validation feature complete:
 ```
 /update-changelog
 ```
 
 ---
 
-## Regles de Commit Atomiques
 
-**OBLIGATION :** Commiter apres CHAQUE fonctionnalite qui marche
-
-**Exemples de commits atomiques:**
-- ✅ "feat: Add NutritionalGuidesScreen with species filtering"
-- ✅ "fix: Secure optional properties in StatisticsScreen"
-- ✅ "refactor: Extract feeding calculation to utils"
-
-**Eviter commits massifs:**
-- ❌ "feat: Complete aquaculture module" (trop large)
-- ❌ "fix: Various bugs" (non descriptif)
-
----
-
-## Best Practices Implementees
-
-1. ✅ **Context7** - Recherche packages matures + doc officielle
-2. ✅ **Changelog** - Mise a jour PROJECT_CONTEXT.md systematique
-3. ✅ **Commandes personnalisees** - Workflow automatise
-4. ✅ **"Fix sans tout casser"** - Modifications limitees au scope
-5. ✅ **Commits atomiques** - Feature par feature
-6. ✅ **DONT_DO.md** - Memoire erreurs passees
-7. ✅ **Expo-first** - Verification compatibilite packages
-
----
-
-## References
-
-- **CLAUDE.md** : Regles developpement globales
-- **PROJECT_CONTEXT.md** : Changelog + roadmap
-- **DONT_DO.md** : Erreurs a ne plus repeter
-- **ARCHITECTURE.md** : Architecture technique complete
-- **DESIGN_SYSTEM.md** : Systeme design UI/UX
-
----
-
-**Derniere mise a jour :** 2025-10-13
+**Derniere mise a jour :** 2025-10-27
 **Maintenu par :** Djoko Christian

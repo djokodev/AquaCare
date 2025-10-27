@@ -19,22 +19,7 @@ import { aquacultureService } from '@/services/aquacultureService';
 import { offlineService } from '@/services/offlineService';
 import { SanitaryLogForm, SanitaryEventType } from '@/types/aquaculture';
 import * as ImagePicker from 'expo-image-picker';
-
-// Couleurs MAVECAM selon spécifications
-const MAVECAM_COLORS = {
-  GREEN_PRIMARY: '#059669',
-  GREEN_LIGHT: '#10b981',
-  GREEN_DARK: '#047857',
-  WHITE: '#ffffff',
-  CREAM: '#f8fafc',
-  BLUE: '#2563eb',
-  SUCCESS: '#059669',
-  WARNING: '#f59e0b',
-  ERROR: '#dc2626',
-  INFO: '#0ea5e9',
-  GRAY_LIGHT: '#64748b',
-  GRAY_DARK: '#1e293b',
-};
+import { MAVECAM_COLORS } from '@/constants/colors';
 
 const SANITARY_EVENT_TYPES = [
   { value: 'disease', label: 'Maladie', icon: 'medical' },
@@ -269,7 +254,6 @@ export default function SanitaryLogScreen({ navigation }: any) {
             `sanitary_log_${Date.now()}.jpg`
           );
           sanitaryData.photo = photoFile as any; // TypeScript workaround pour React Native
-          console.log('📸 Photo préparée:', photoFile);
         } catch (error) {
           console.error('Erreur préparation photo:', error);
           // Continuer sans photo en cas d'erreur
@@ -278,15 +262,6 @@ export default function SanitaryLogScreen({ navigation }: any) {
       }
 
       try {
-        // Debug: Log des données envoyées
-        console.log('🔍 Données sanitaires à envoyer:', {
-          selectedCycle,
-          sanitaryData: {
-            ...sanitaryData,
-            photo: sanitaryData.photo ? 'FILE_OBJECT' : undefined
-          }
-        });
-
         // Tentative d'appel API en ligne
         await aquacultureService.createSanitaryLog(selectedCycle, sanitaryData);
 

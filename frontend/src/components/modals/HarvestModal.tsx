@@ -52,7 +52,14 @@ export default function HarvestModal({ visible, onClose, cycle, onSuccess }: Har
     harvest_notes: '',
   });
 
-  // Calcul automatique du poids total
+  /**
+   * ⚠️ TODO BACKEND - CALCUL TEMPORAIRE
+   * Ce calcul de poids total DOIT être fait par le backend.
+   * Backend recalcule: final_biomass = final_count × final_average_weight
+   *
+   * Pour l'instant, calcul UX temporaire pour feedback immédiat.
+   * Backend écrasera cette valeur avec son propre calcul.
+   */
   React.useEffect(() => {
     const totalWeight = formData.final_count * formData.final_average_weight;
     setFormData(prev => ({
@@ -138,7 +145,14 @@ export default function HarvestModal({ visible, onClose, cycle, onSuccess }: Har
 
   if (!cycle) return null;
 
-  // Calculs de performance pour affichage
+  /**
+   * ⚠️ CALCULS TEMPORAIRES UX UNIQUEMENT
+   * Ces valeurs sont pour AFFICHAGE IMMÉDIAT pendant saisie.
+   * Backend recalcule survival_rate et weight_gain officiels après récolte.
+   *
+   * Note: weightGain est OK (simple différence pour UX).
+   * survivalRate devrait idéalement venir du backend après calcul.
+   */
   const survivalRate = cycle.initial_count > 0
     ? ((formData.final_count / cycle.initial_count) * 100).toFixed(1)
     : '0';
