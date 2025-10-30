@@ -3,7 +3,6 @@ Commande de management pour charger les données de guides nutritionnels pour MA
 Basée sur les spécifications techniques de la documentation Skretting et Aller Aqua.
 """
 from django.core.management.base import BaseCommand
-from django.core.management import call_command
 from decimal import Decimal
 
 from apps.aquaculture.models import NutritionalGuide
@@ -26,20 +25,12 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         self.stdout.write("Loading nutritional guide data...")
-        
-        # Load from fixture file first
-        try:
-            call_command('loaddata', 'nutritional_guides.json', verbosity=0)
-            self.stdout.write(
-                self.style.SUCCESS("Successfully loaded nutritional guides from fixtures")
-            )
-        except Exception as e:
-            self.stdout.write(
-                self.style.WARNING(f"Could not load from fixtures: {e}")
-            )
-            # Create manually if fixture loading fails
-            self.create_nutritional_guides(options)
-        
+
+        # ⚠️ PATCH: Ne pas utiliser loaddata avec auto_now_add (bug Django connu)
+        # Django loaddata force created_at=NULL au lieu d'utiliser auto_now_add
+        # Solution: Créer directement via ORM pour que Django gère auto_now_add
+        self.create_nutritional_guides(options)
+
         # Display summary
         total_guides = NutritionalGuide.objects.count()
         clarias_guides = NutritionalGuide.objects.filter(species='clarias').count()

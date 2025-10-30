@@ -1,0 +1,61 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+venv/
+env/
+ENV/
+
+# Django
+db.sqlite3
+db.sqlite3-journal
+*.log
+local_settings.py
+/staticfiles/
+/media/
+
+# Development
+.env
+.env.local
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Documentation
+*.md
+docs/
+
+# Tests
+tests/
+pytest.ini
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+
+# Backup files
+*.backup
+*.bak
+*.sql
+*.dump
+
+# OS
+.DS_Store
+Thumbs.db

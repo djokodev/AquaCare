@@ -33,24 +33,38 @@ def api_root(request):
         },
     })
 
+def health_check(request):
+    """Health check endpoint pour Docker healthchecks et monitoring."""
+    from django.db import connection
+    try:
+        # Test connexion database
+        connection.ensure_connection()
+        return JsonResponse({
+            'status': 'healthy',
+            'database': 'connected',
+            'api': 'operational'
+        }, status=200)
+    except Exception as e:
+        return JsonResponse({
+            'status': 'unhealthy',
+            'database': 'disconnected',
+            'error': str(e)
+        }, status=503)
+
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', api_root, name='api-root'),
-    
+    path('api/health/', health_check, name='health-check'),  # Health check pour Docker
+
     # Documentation Swagger/OpenAPI
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
     path('api/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
-    
+
     # API Endpoints
     path('api/accounts/', include('accounts.urls')),
     path('api/aquaculture/', include('apps.aquaculture.urls')),  # Phase 2
     
-    # Modules à venir :
-    # path('api/aquaculture/', include('aquaculture.urls')),    # Phase 2 - COMPLETED
-    # path('api/commerce/', include('commerce.urls')),          # Phase 3  
-    # path('api/support/', include('support.urls')),            # Phase 4
-    # path('api/education/', include('education.urls')),        # Phase 5
 ]
 
 # Servir les fichiers media en développement

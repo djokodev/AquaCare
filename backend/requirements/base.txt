@@ -1,0 +1,25 @@
+# Django Core
+Django==5.1.11
+python-decouple==3.8
+
+# Django REST Framework
+djangorestframework==3.16.1
+djangorestframework_simplejwt==5.5.1
+django-cors-headers==4.7.0
+
+# Database
+psycopg2-binary==2.9.10
+
+# API Documentation
+drf-spectacular==0.28.0
+
+# Image Processing
+pillow==11.3.0
+
+# JWT
+PyJWT==2.10.1
+
+# Utilities
+tzdata==2025.2
+PyYAML==6.0.2
+sqlparse==0.5.3

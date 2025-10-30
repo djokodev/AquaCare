@@ -3,6 +3,8 @@
 venv/
 env/
 .env
+.env.local
+.env.production
 .venv
 CLAUDE.md
 
@@ -33,3 +35,17 @@ htmlcov/
 # Migrations (à commiter mais utile pour reset)
 # */migrations/__pycache__/
 # */migrations/*.pyc
+
+# Docker - Fichiers de développement local uniquement
+docker-compose.yml          
+Dockerfile.dev            
+.env                       
+.env.local
+backups/
+*.backup
+*.sql
+*.dump
+
+# Logs
+logs/
+*.log
