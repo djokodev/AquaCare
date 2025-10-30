@@ -173,11 +173,11 @@ jobs:
           ssh -i ~/.ssh/deploy_key ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << 'EOF'
             cd /root/aquacare
 
-            echo "Pulling latest images from Docker Hub..."
-            docker-compose -f docker-compose.prod.yml pull
+            echo "Pulling latest images from GitHub Container Registry..."
+            docker compose -f docker-compose.prod.yml pull
 
             echo "Starting services..."
-            docker-compose -f docker-compose.prod.yml up -d
+            docker compose -f docker-compose.prod.yml up -d
 
             echo "Waiting for services to be ready (30s)..."
             sleep 30
@@ -189,7 +189,7 @@ jobs:
             # Vérifier que les containers tournent
             if ! docker ps | grep aquacare_api; then
               echo "❌ API container not running!"
-              docker-compose -f /root/aquacare/docker-compose.prod.yml logs api
+              docker compose -f /root/aquacare/docker-compose.prod.yml logs api
               exit 1
             fi
 
@@ -204,7 +204,7 @@ jobs:
             done
 
             echo "❌ Health check failed after 5 attempts"
-            docker-compose -f /root/aquacare/docker-compose.prod.yml logs api
+            docker compose -f /root/aquacare/docker-compose.prod.yml logs api
             exit 1
           EOF
 
@@ -217,7 +217,7 @@ jobs:
             echo "⚠️  Deployment failed, rolling back..."
 
             # Arrêter les nouveaux containers
-            docker-compose -f docker-compose.prod.yml down
+            docker compose -f docker-compose.prod.yml down
 
             # Restaurer dernier backup (si existe)
             LATEST_BACKUP=$(ls -t backups/*.sql 2>/dev/null | head -n1)
@@ -230,7 +230,7 @@ jobs:
             fi
 
             # Redémarrer avec anciennes images (utiliser image locale, pas re-pull)
-            docker-compose -f docker-compose.prod.yml up -d --no-build --no-pull
+            docker compose -f docker-compose.prod.yml up -d --no-build --no-pull
 
             echo "✅ Rollback completed"
           EOF
