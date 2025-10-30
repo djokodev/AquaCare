@@ -1,0 +1,240 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main
+
+# Permissions pour GITHUB_TOKEN (nécessaire pour push sur GHCR)
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  DOCKER_IMAGE_API: ghcr.io/${{ github.repository_owner }}/aquacare-api
+  DOCKER_IMAGE_NGINX: ghcr.io/${{ github.repository_owner }}/aquacare-nginx
+
+jobs:
+  tests:
+    name: Tests Unitaires
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install Dependencies
+        working-directory: ./backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements/development.txt
+
+      - name: Run Tests with Coverage
+        working-directory: ./backend
+        env:
+          DJANGO_SETTINGS_MODULE: mavecam_api.settings.development
+        run: |
+          pytest --cov=apps --cov-report=term --cov-report=xml --cov-fail-under=50 -v
+
+      - name: Upload Coverage Report
+        if: always()
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./backend/coverage.xml
+          fail_ci_if_error: false
+
+
+  build:
+    name: Build & Push Docker Images
+    runs-on: ubuntu-latest
+    needs: tests
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build API Image
+        working-directory: ./backend
+        run: |
+          docker build \
+            -t ${{ env.DOCKER_IMAGE_API }}:latest \
+            -t ${{ env.DOCKER_IMAGE_API }}:${{ github.sha }} \
+            -f Dockerfile \
+            .
+
+      - name: Build Nginx Image
+        working-directory: ./backend/nginx
+        run: |
+          docker build \
+            -t ${{ env.DOCKER_IMAGE_NGINX }}:latest \
+            -t ${{ env.DOCKER_IMAGE_NGINX }}:${{ github.sha }} \
+            -f Dockerfile \
+            .
+
+      - name: Push Images to GitHub Container Registry
+        run: |
+          docker push ${{ env.DOCKER_IMAGE_API }}:latest
+          docker push ${{ env.DOCKER_IMAGE_API }}:${{ github.sha }}
+          docker push ${{ env.DOCKER_IMAGE_NGINX }}:latest
+          docker push ${{ env.DOCKER_IMAGE_NGINX }}:${{ github.sha }}
+
+      - name: Cleanup Local Images
+        if: always()
+        run: |
+          docker image prune -af
+
+
+  deploy:
+    name: Deploy to VPS
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup SSH Key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Create .env on VPS
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << 'EOF'
+            mkdir -p /root/aquacare
+            cd /root/aquacare
+
+            # Créer .env avec secrets GitHub
+            cat > .env << 'ENVEOF'
+          DJANGO_SECRET_KEY=${{ secrets.DJANGO_SECRET_KEY }}
+          DJANGO_DEBUG=False
+          DJANGO_ALLOWED_HOSTS=${{ secrets.VPS_HOST }}
+          DJANGO_SETTINGS_MODULE=mavecam_api.settings.production
+          POSTGRES_DB=${{ secrets.POSTGRES_DB }}
+          POSTGRES_USER=${{ secrets.POSTGRES_USER }}
+          POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_HOST=db
+          POSTGRES_PORT=5432
+          JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}
+          COMPOSE_PROJECT_NAME=aquacare
+          ENVEOF
+
+            chmod 600 .env
+          EOF
+
+      - name: Copy docker-compose.prod.yml to VPS
+        run: |
+          scp -i ~/.ssh/deploy_key \
+            backend/docker-compose.prod.yml \
+            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/root/aquacare/
+
+      - name: Backup PostgreSQL Database
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << 'EOF'
+            cd /root/aquacare
+
+            # Créer dossier backups si inexistant
+            mkdir -p backups
+
+            # Backup uniquement si container existe et tourne
+            if docker ps -q -f name=aquacare_postgresDB_prod > /dev/null 2>&1; then
+              echo "📦 Creating PostgreSQL backup..."
+              docker exec aquacare_postgresDB_prod pg_dump \
+                -U ${{ secrets.POSTGRES_USER }} \
+                -d ${{ secrets.POSTGRES_DB }} \
+                > backups/backup_$(date +%Y%m%d_%H%M%S).sql
+
+              # Garder seulement les 5 derniers backups
+              ls -t backups/*.sql | tail -n +6 | xargs -r rm
+              echo "✅ Backup completed"
+            else
+              echo "ℹ️ No existing database to backup (first deployment)"
+            fi
+          EOF
+
+      - name: Pull Latest Images & Deploy
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << 'EOF'
+            cd /root/aquacare
+
+            echo "Pulling latest images from Docker Hub..."
+            docker-compose -f docker-compose.prod.yml pull
+
+            echo "Starting services..."
+            docker-compose -f docker-compose.prod.yml up -d
+
+            echo "Waiting for services to be ready (30s)..."
+            sleep 30
+          EOF
+
+      - name: Health Check
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << 'EOF'
+            # Vérifier que les containers tournent
+            if ! docker ps | grep aquacare_api; then
+              echo "❌ API container not running!"
+              docker-compose -f /root/aquacare/docker-compose.prod.yml logs api
+              exit 1
+            fi
+
+            # Test health check endpoint (retry 5 fois)
+            for i in {1..5}; do
+              if curl -f http://localhost/api/health/ > /dev/null 2>&1; then
+                echo "✅ Health check passed!"
+                exit 0
+              fi
+              echo "Health check attempt $i/5 failed, retrying..."
+              sleep 5
+            done
+
+            echo "❌ Health check failed after 5 attempts"
+            docker-compose -f /root/aquacare/docker-compose.prod.yml logs api
+            exit 1
+          EOF
+
+      - name: Rollback on Failure
+        if: failure()
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << 'EOF'
+            cd /root/aquacare
+
+            echo "⚠️  Deployment failed, rolling back..."
+
+            # Arrêter les nouveaux containers
+            docker-compose -f docker-compose.prod.yml down
+
+            # Restaurer dernier backup (si existe)
+            LATEST_BACKUP=$(ls -t backups/*.sql 2>/dev/null | head -n1)
+            if [ -n "$LATEST_BACKUP" ]; then
+              echo "Restoring database from $LATEST_BACKUP..."
+              docker exec -i aquacare_postgresDB_prod psql \
+                -U ${{ secrets.POSTGRES_USER }} \
+                -d ${{ secrets.POSTGRES_DB }} \
+                < "$LATEST_BACKUP"
+            fi
+
+            # Redémarrer avec anciennes images (utiliser image locale, pas re-pull)
+            docker-compose -f docker-compose.prod.yml up -d --no-build --no-pull
+
+            echo "✅ Rollback completed"
+          EOF
+
+      - name: Cleanup SSH Key
+        if: always()
+        run: rm -f ~/.ssh/deploy_key
