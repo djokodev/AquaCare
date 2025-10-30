@@ -7,8 +7,9 @@ partagée entre tous les tests du projet.
 import os
 import django
 
-# Configuration Django pour les tests
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'mavecam_api.settings')
+# Configuration Django pour les tests (utilise pytest.ini ou variable d'environnement)
+# Ne pas forcer 'mavecam_api.settings' car pytest.ini définit déjà 'mavecam_api.settings.test'
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'mavecam_api.settings.test')
 django.setup()
 
 import pytest

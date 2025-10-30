@@ -216,7 +216,9 @@ class TestFarmProfileManager:
     
     def test_farm_profile_ordering(self):
         """Test ordre des profils ferme."""
-        # Créer plusieurs fermes
+        import time
+
+        # Créer plusieurs fermes avec délai pour garantir l'ordre created_at
         users = []
         for i in range(3):
             user = User.objects.create_user(
@@ -227,7 +229,10 @@ class TestFarmProfileManager:
                 age_group='26_35'
             )
             users.append(user)
-        
+            # Petit délai pour garantir que created_at est différent
+            if i < 2:  # Pas besoin d'attendre après le dernier
+                time.sleep(0.01)  # 10ms suffisent
+
         # Vérifier l'ordre (plus récent en premier)
         farms = FarmProfile.objects.all()
         assert farms[0].user == users[2]  # Plus récent
