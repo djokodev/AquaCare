@@ -32,20 +32,27 @@ describe('store/slices/authSlice', () => {
 
   const mockUser: User = {
     id: '123',
-    phone: '+237670000000',
+    phone_number: '+237670000000',
     first_name: 'John',
     last_name: 'Doe',
     email: 'john@example.com',
+    account_type: 'individual',
+    language_preference: 'fr',
+    is_verified: false,
+    display_name: 'John Doe',
+    is_individual: true,
+    is_company: false,
   };
 
   const mockFarmProfile: FarmProfile = {
     id: '456',
-    user: '123',
     farm_name: 'Ferme Test',
-    region: 'Centre',
-    department: 'Mfoundi',
+    certification_status: 'pending',
+    total_ponds: 5,
     total_area_m2: 5000,
-    activity_type: 'aquaculture',
+    is_certified: false,
+    created_at: '2025-01-01T00:00:00Z',
+    updated_at: '2025-01-01T00:00:00Z',
   };
 
   describe('reducers synchrones', () => {
