@@ -29,6 +29,7 @@ def api_root(request):
         'endpoints': {
             'accounts': '/api/accounts/',
             'aquaculture': '/api/aquaculture/',
+            'commerce': '/api/commerce/',
             'admin': '/admin/',
         },
     })
@@ -63,8 +64,9 @@ urlpatterns = [
 
     # API Endpoints
     path('api/accounts/', include('accounts.urls')),
-    path('api/aquaculture/', include('apps.aquaculture.urls')),  # Phase 2
-    
+    path('api/aquaculture/', include('apps.aquaculture.urls')),
+    path('api/commerce/', include('commerce.urls')),  # Module commerce
+
 ]
 
 # Servir les fichiers media en développement

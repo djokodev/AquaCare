@@ -26,6 +26,7 @@ INSTALLED_APPS = [
     # Local apps
     "accounts",
     "apps.aquaculture",
+    "commerce",  # Module commerce MAVECAM
 ]
 
 MIDDLEWARE = [

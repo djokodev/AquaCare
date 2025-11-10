@@ -1,0 +1,392 @@
+"""
+Modèles de données pour le module commerce MAVECAM AquaCare.
+
+Architecture offline-first avec support synchronisation mobile via UUID.
+Gestion catalogue produits alimentaires et commandes aquaculteurs.
+
+Workflow commande (MVP simplifié) :
+1. Aquaculteur crée commande → Status 'confirmed' automatiquement
+2. MAVECAM gère livraison hors application
+3. Paiement à la livraison (cash)
+"""
+import uuid
+from decimal import Decimal
+from django.db import models
+from django.core.validators import MinValueValidator
+from django.utils.translation import gettext_lazy as _
+from django.utils import timezone
+
+from .constants import (
+    SPECIES_CHOICES, PHASE_CHOICES, BRAND_CHOICES,
+    ORDER_STATUS_CHOICES, DELIVERY_METHOD_CHOICES,
+    PICKUP_LOCATION_CHOICES
+)
+
+
+class Product(models.Model):
+    """
+    Produit du catalogue MAVECAM (aliments pour poissons).
+
+    Catalogue fixe de 22 produits :
+    - Aller Aqua : INFA, FUTURA, CLARIAS FLOAT, TIL-PRO
+    - DIBAQ : Catfish et Tilapia (différentes tailles)
+
+    Pas de gestion de stock pour MVP (toujours disponible).
+    """
+
+    class Meta:
+        app_label = 'commerce'
+        verbose_name = _("Produit")
+        verbose_name_plural = _("Produits")
+        ordering = ['species', 'phase', 'pellet_size_mm']
+        indexes = [
+            models.Index(fields=['species', 'phase']),
+            models.Index(fields=['brand', 'is_available']),
+        ]
+
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+        help_text=_('Identifiant unique UUID pour synchronisation mobile')
+    )
+
+    # Identification produit
+    brand = models.CharField(
+        _('Marque'),
+        max_length=50,
+        choices=BRAND_CHOICES,
+        help_text=_('Marque de l\'aliment')
+    )
+    name = models.CharField(
+        _('Nom commercial'),
+        max_length=200,
+        help_text=_('Ex: CLARIAS FLOAT 3MM, TIL-PRO SANA 2MM')
+    )
+
+    # Classification (pour filtres et recherche)
+    species = models.CharField(
+        _('Espèce cible'),
+        max_length=20,
+        choices=SPECIES_CHOICES,
+        help_text=_('Espèce de poisson visée')
+    )
+    phase = models.CharField(
+        _('Phase d\'élevage'),
+        max_length=30,
+        choices=PHASE_CHOICES,
+        help_text=_('Phase de croissance du poisson')
+    )
+
+    # Caractéristiques techniques (données catalogue MAVECAM)
+    pellet_size_mm = models.DecimalField(
+        _('Taille granulé (mm)'),
+        max_digits=4,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal('0.1'))],
+        help_text=_('Diamètre du granulé en millimètres')
+    )
+    protein_percentage = models.PositiveIntegerField(
+        _('Taux de protéines (%)'),
+        validators=[MinValueValidator(1)],
+        help_text=_('Pourcentage de protéines brutes')
+    )
+    lipid_percentage = models.PositiveIntegerField(
+        _('Taux de lipides (%)'),
+        validators=[MinValueValidator(1)],
+        help_text=_('Pourcentage de matières grasses')
+    )
+
+    # Conditionnement et prix
+    package_weight_kg = models.PositiveIntegerField(
+        _('Poids conditionnement (kg)'),
+        help_text=_('Poids d\'un sac (15, 20 ou 25 kg selon produit)')
+    )
+    price_per_package = models.DecimalField(
+        _('Prix par sac (FCFA)'),
+        max_digits=10,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal('0.01'))],
+        help_text=_('Prix unitaire d\'un sac en Francs CFA')
+    )
+
+    # Disponibilité (toujours True pour MVP, champ pour futur usage)
+    is_available = models.BooleanField(
+        _('Disponible'),
+        default=True,
+        help_text=_('Si False, produit retiré temporairement du catalogue')
+    )
+
+    # Timestamps
+    created_at = models.DateTimeField(
+        _('Créé le'),
+        auto_now_add=True
+    )
+    updated_at = models.DateTimeField(
+        _('Modifié le'),
+        auto_now=True
+    )
+
+    def __str__(self):
+        return f"{self.name} ({self.package_weight_kg}kg)"
+
+    @property
+    def price_per_kg(self):
+        """Calcule le prix au kilogramme."""
+        return self.price_per_package / self.package_weight_kg
+
+
+class Order(models.Model):
+    """
+    Commande de produits MAVECAM par un aquaculteur.
+
+    Workflow MVP simplifié :
+    - Statut unique 'confirmed' dès la création
+    - Adresse snapshot depuis User/FarmProfile au moment de la commande
+    - Calcul automatique frais de livraison
+    - Paiement à la livraison (géré hors app)
+
+    Support synchronisation offline avec déduplication via client_uuid.
+    """
+
+    class Meta:
+        app_label = 'commerce'
+        verbose_name = _("Commande")
+        verbose_name_plural = _("Commandes")
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', 'status']),
+            models.Index(fields=['order_number']),
+            models.Index(fields=['client_uuid']),
+            models.Index(fields=['created_offline', 'synced_at']),
+        ]
+
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+        help_text=_('Identifiant unique UUID pour synchronisation mobile')
+    )
+
+    # Offline sync metadata
+    client_uuid = models.UUIDField(
+        _('UUID client'),
+        unique=True,
+        null=True,
+        blank=True,
+        help_text=_('UUID généré côté mobile pour déduplication lors de la sync')
+    )
+
+    # Relations utilisateur
+    user = models.ForeignKey(
+        'accounts.User',
+        on_delete=models.PROTECT,
+        related_name='orders',
+        verbose_name=_('Client'),
+        help_text=_('Aquaculteur ayant passé la commande')
+    )
+    farm_profile = models.ForeignKey(
+        'accounts.FarmProfile',
+        on_delete=models.PROTECT,
+        related_name='orders',
+        verbose_name=_('Ferme'),
+        help_text=_('Ferme associée à la commande')
+    )
+
+    # Identification commande
+    order_number = models.CharField(
+        _('Numéro de commande'),
+        max_length=20,
+        unique=True,
+        help_text=_('Format: ORD-YYYYMMDD-XXXX (généré automatiquement)')
+    )
+
+    # Statut (MVP : uniquement 'confirmed')
+    status = models.CharField(
+        _('Statut'),
+        max_length=20,
+        choices=ORDER_STATUS_CHOICES,
+        default='confirmed',
+        help_text=_('Statut de la commande')
+    )
+
+    # Livraison (snapshot adresse au moment de la commande)
+    delivery_method = models.CharField(
+        _('Mode de livraison'),
+        max_length=20,
+        choices=DELIVERY_METHOD_CHOICES,
+        help_text=_('Livraison à domicile ou retrait en magasin')
+    )
+    pickup_location = models.CharField(
+        _('Point de retrait'),
+        max_length=50,
+        choices=PICKUP_LOCATION_CHOICES,
+        blank=True,
+        help_text=_('Marché Ndokoti ou Ndogpasi (si retrait)')
+    )
+
+    # Snapshot adresse utilisateur (immutable après création)
+    delivery_name = models.CharField(
+        _('Nom destinataire'),
+        max_length=200,
+        help_text=_('Nom complet du destinataire')
+    )
+    delivery_phone = models.CharField(
+        _('Téléphone destinataire'),
+        max_length=20,
+        help_text=_('Numéro de téléphone pour contact livraison')
+    )
+    delivery_region = models.CharField(
+        _('Région'),
+        max_length=50,
+        help_text=_('Région Cameroun (ex: Littoral, Centre)')
+    )
+    delivery_city = models.CharField(
+        _('Ville'),
+        max_length=100,
+        help_text=_('Ville de livraison')
+    )
+    delivery_full_address = models.TextField(
+        _('Adresse complète'),
+        help_text=_('Adresse complète de livraison (région, département, ville, quartier)')
+    )
+
+    # Montants (calculés automatiquement, immutables après création)
+    subtotal = models.DecimalField(
+        _('Sous-total (FCFA)'),
+        max_digits=10,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal('0'))],
+        help_text=_('Somme des articles avant frais de livraison')
+    )
+    delivery_fee = models.DecimalField(
+        _('Frais de livraison (FCFA)'),
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal('0'),
+        validators=[MinValueValidator(Decimal('0'))],
+        help_text=_('Frais de livraison calculés automatiquement')
+    )
+    total = models.DecimalField(
+        _('Total (FCFA)'),
+        max_digits=10,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal('0'))],
+        help_text=_('Montant total = sous-total + frais de livraison')
+    )
+
+    # Synchronization metadata
+    created_offline = models.BooleanField(
+        _('Créée hors ligne'),
+        default=False,
+        help_text=_('True si commande créée en mode offline mobile')
+    )
+    synced_at = models.DateTimeField(
+        _('Synchronisée le'),
+        null=True,
+        blank=True,
+        help_text=_('Date/heure de synchronisation avec le serveur')
+    )
+
+    # Timestamps
+    created_at = models.DateTimeField(
+        _('Créée le'),
+        auto_now_add=True
+    )
+    updated_at = models.DateTimeField(
+        _('Modifiée le'),
+        auto_now=True
+    )
+
+    def __str__(self):
+        return f"{self.order_number} - {self.user.display_name}"
+
+    @property
+    def total_bags(self):
+        """Calcule le nombre total de sacs commandés."""
+        return sum(item.quantity for item in self.items.all())
+
+    @property
+    def is_free_delivery(self):
+        """Vérifie si la livraison est gratuite."""
+        return self.delivery_fee == 0
+
+
+class OrderItem(models.Model):
+    """
+    Ligne de commande (article dans une commande).
+
+    Snapshot des données produit au moment de la commande (prix, nom)
+    pour traçabilité historique (même si produit modifié ultérieurement).
+    """
+
+    class Meta:
+        app_label = 'commerce'
+        verbose_name = _("Article commande")
+        verbose_name_plural = _("Articles commande")
+        ordering = ['order', 'id']
+
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False
+    )
+
+    order = models.ForeignKey(
+        Order,
+        on_delete=models.CASCADE,
+        related_name='items',
+        verbose_name=_('Commande'),
+        help_text=_('Commande parente')
+    )
+    product = models.ForeignKey(
+        Product,
+        on_delete=models.PROTECT,
+        verbose_name=_('Produit'),
+        help_text=_('Référence produit (lien vers catalogue)')
+    )
+
+    # Snapshot produit (immutable après création commande)
+    product_name = models.CharField(
+        _('Nom produit'),
+        max_length=200,
+        help_text=_('Nom du produit au moment de la commande')
+    )
+    unit_price = models.DecimalField(
+        _('Prix unitaire (FCFA)'),
+        max_digits=10,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal('0.01'))],
+        help_text=_('Prix du sac au moment de la commande')
+    )
+    quantity = models.PositiveIntegerField(
+        _('Quantité'),
+        validators=[MinValueValidator(1)],
+        help_text=_('Nombre de sacs commandés')
+    )
+    line_total = models.DecimalField(
+        _('Total ligne (FCFA)'),
+        max_digits=10,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal('0.01'))],
+        help_text=_('Total de la ligne = prix unitaire × quantité')
+    )
+
+    def __str__(self):
+        return f"{self.product_name} x{self.quantity} ({self.line_total} FCFA)"
+
+    def clean(self):
+        """Validation métier : line_total doit correspondre à unit_price × quantity."""
+        from django.core.exceptions import ValidationError
+        expected_total = self.unit_price * self.quantity
+        if self.line_total != expected_total:
+            raise ValidationError(
+                f"Total ligne incohérent: attendu {expected_total}, reçu {self.line_total}"
+            )
+
+    def save(self, *args, **kwargs):
+        """Calcul automatique du line_total si non fourni."""
+        if not self.line_total:
+            self.line_total = self.unit_price * self.quantity
+        self.full_clean()
+        super().save(*args, **kwargs)
