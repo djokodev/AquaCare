@@ -67,6 +67,7 @@ export const formatDate = (
 
   try {
     const date = new Date(dateString);
+    if (isNaN(date.getTime())) return '-';
     return date.toLocaleDateString(locale, {
       day: 'numeric',
       month: 'short',
@@ -119,7 +120,9 @@ export const formatDaysSince = (
 
   try {
     const start = new Date(startDate);
+    if (isNaN(start.getTime())) return '0';
     const end = endDate ? new Date(endDate) : new Date();
+    if (isNaN(end.getTime())) return '0';
     const diffTime = Math.abs(end.getTime() - start.getTime());
     const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
     return diffDays.toString();

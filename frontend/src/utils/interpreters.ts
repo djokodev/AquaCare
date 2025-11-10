@@ -1,27 +1,27 @@
 /**
- * Helpers d'interprétation métier pour affichage frontend.
+ * Helpers d'interprï¿½tation mï¿½tier pour affichage frontend.
  *
- *   RÈGLE IMPORTANTE :
- * Ces fonctions N'effectuent PAS de calculs métier.
- * Elles INTERPRÈTENT des valeurs déjà calculées par le backend.
- * Logique LÉGÈRE d'affichage seulement (badges, couleurs, messages).
+ * ï¿½ Rï¿½GLE IMPORTANTE :
+ * Ces fonctions N'effectuent PAS de calculs mï¿½tier.
+ * Elles INTERPRï¿½TENT des valeurs dï¿½jï¿½ calculï¿½es par le backend.
+ * Logique Lï¿½Gï¿½RE d'affichage seulement (badges, couleurs, messages).
  */
 
-export type FCRInterpretation = 'excellent' | 'bon' | 'acceptable' | 'nécessite amélioration';
+export type FCRInterpretation = 'excellent' | 'bon' | 'acceptable' | 'necessite amelioration';
 export type SurvivalRateInterpretation = 'excellent' | 'bon' | 'moyen' | 'faible';
 export type PerformanceLevel = 'excellent' | 'bon' | 'moyen' | 'faible';
 
 /**
- * Interprète un FCR selon standards MAVECAM.
+ * Interprï¿½te un FCR selon standards MAVECAM.
  *
- * @param fcr - FCR calculé par backend
- * @returns Interprétation textuelle
+ * @param fcr - FCR calculï¿½ par backend
+ * @returns Interprï¿½tation textuelle
  *
- * Références:
- * - FCR < 1.2 = excellent (efficacité >83%)
- * - FCR 1.2-1.5 = bon (efficacité 67-83%)
- * - FCR 1.5-2.0 = acceptable (efficacité 50-67%)
- * - FCR > 2.0 = nécessite amélioration (efficacité <50%)
+ * Rï¿½fï¿½rences:
+ * - FCR < 1.2 = excellent (efficacitï¿½ >83%)
+ * - FCR 1.2-1.5 = bon (efficacitï¿½ 67-83%)
+ * - FCR 1.5-2.0 = acceptable (efficacitï¿½ 50-67%)
+ * - FCR > 2.0 = nï¿½cessite amï¿½lioration (efficacitï¿½ <50%)
  */
 export const interpretFCR = (
   fcr: number | null | undefined
@@ -31,16 +31,16 @@ export const interpretFCR = (
   if (fcr <= 1.2) return 'excellent';
   if (fcr <= 1.5) return 'bon';
   if (fcr <= 2.0) return 'acceptable';
-  return 'nécessite amélioration';
+  return 'necessite amelioration';
 };
 
 /**
- * Interprète un taux de survie selon standards aquaculture.
+ * Interprï¿½te un taux de survie selon standards aquaculture.
  *
- * @param survivalRate - Taux en % (calculé par backend)
- * @returns Interprétation textuelle
+ * @param survivalRate - Taux en % (calculï¿½ par backend)
+ * @returns Interprï¿½tation textuelle
  *
- * Références:
+ * Rï¿½fï¿½rences:
  * - e85% = excellent
  * - 70-85% = bon
  * - 50-70% = moyen
@@ -58,15 +58,15 @@ export const interpretSurvivalRate = (
 };
 
 /**
- * Vérifie si densité est optimale pour l'espèce.
+ * Vï¿½rifie si densitï¿½ est optimale pour l'espï¿½ce.
  *
- * @param density - Densité en kg/m³ (calculée par backend)
- * @param species - Espèce ('tilapia' ou 'clarias')
- * @returns true si densité optimale
+ * @param density - Densitï¿½ en kg/mï¿½ (calculï¿½e par backend)
+ * @param species - Espï¿½ce ('tilapia' ou 'clarias')
+ * @returns true si densitï¿½ optimale
  *
  * Plages optimales MAVECAM:
- * - Tilapia: 100-300 kg/m³
- * - Clarias: 200-500 kg/m³
+ * - Tilapia: 100-300 kg/mï¿½
+ * - Clarias: 200-500 kg/mï¿½
  */
 export const isDensityOptimal = (
   density: number | null | undefined,
@@ -84,10 +84,10 @@ export const isDensityOptimal = (
 };
 
 /**
- * Interprète un score de performance global.
+ * Interprï¿½te un score de performance global.
  *
- * @param score - Score 0-100 (calculé par backend)
- * @returns Interprétation textuelle
+ * @param score - Score 0-100 (calculï¿½ par backend)
+ * @returns Interprï¿½tation textuelle
  */
 export const interpretPerformanceScore = (
   score: number | null | undefined
@@ -101,10 +101,10 @@ export const interpretPerformanceScore = (
 };
 
 /**
- * Retourne la couleur associée à une interprétation FCR.
+ * Retourne la couleur associï¿½e ï¿½ une interprï¿½tation FCR.
  *
- * @param interpretation - Interprétation FCR
- * @returns Couleur hexadécimale
+ * @param interpretation - Interprï¿½tation FCR
+ * @returns Couleur hexadï¿½cimale
  */
 export const getFCRColor = (
   interpretation: FCRInterpretation | null
@@ -113,17 +113,17 @@ export const getFCRColor = (
     'excellent': '#059669',         // Vert MAVECAM
     'bon': '#10b981',              // Vert clair
     'acceptable': '#f59e0b',       // Orange
-    'nécessite amélioration': '#dc2626' // Rouge
+    'necessite amelioration': '#dc2626' // Rouge
   };
 
-  return interpretation ? colors[interpretation] : '#64748b'; // Gris par défaut
+  return interpretation ? colors[interpretation] : '#64748b'; // Gris par dï¿½faut
 };
 
 /**
- * Retourne la couleur associée à une interprétation taux survie.
+ * Retourne la couleur associï¿½e ï¿½ une interprï¿½tation taux survie.
  *
- * @param interpretation - Interprétation survie
- * @returns Couleur hexadécimale
+ * @param interpretation - Interprï¿½tation survie
+ * @returns Couleur hexadï¿½cimale
  */
 export const getSurvivalRateColor = (
   interpretation: SurvivalRateInterpretation | null
@@ -135,14 +135,14 @@ export const getSurvivalRateColor = (
     'faible': '#dc2626'     // Rouge
   };
 
-  return interpretation ? colors[interpretation] : '#64748b'; // Gris par défaut
+  return interpretation ? colors[interpretation] : '#64748b'; // Gris par dï¿½faut
 };
 
 /**
- * Retourne la couleur associée à un niveau de performance.
+ * Retourne la couleur associï¿½e ï¿½ un niveau de performance.
  *
  * @param level - Niveau de performance
- * @returns Couleur hexadécimale
+ * @returns Couleur hexadï¿½cimale
  */
 export const getPerformanceLevelColor = (
   level: PerformanceLevel | null
@@ -154,13 +154,13 @@ export const getPerformanceLevelColor = (
     'faible': '#dc2626'     // Rouge
   };
 
-  return level ? colors[level] : '#64748b'; // Gris par défaut
+  return level ? colors[level] : '#64748b'; // Gris par dï¿½faut
 };
 
 /**
- * Génère un message de recommandation basé sur FCR.
+ * Gï¿½nï¿½re un message de recommandation basï¿½ sur FCR.
  *
- * @param fcr - FCR calculé par backend
+ * @param fcr - FCR calculï¿½ par backend
  * @returns Message de recommandation
  */
 export const getFCRRecommendation = (
@@ -172,16 +172,16 @@ export const getFCRRecommendation = (
     'excellent': 'FCR optimal ! Continuez cette gestion.',
     'bon': 'FCR satisfaisant. Maintenir ce niveau.',
     'acceptable': 'FCR acceptable. Optimisation possible.',
-    'nécessite amélioration': 'FCR élevé. Consultez un technicien MAVECAM.'
+    'necessite amelioration': 'FCR eleve. Consultez un technicien MAVECAM.'
   };
 
-  return interpretation ? recommendations[interpretation] : 'Données insuffisantes';
+  return interpretation ? recommendations[interpretation] : 'Donnees insuffisantes';
 };
 
 /**
- * Génère un message de recommandation basé sur taux survie.
+ * Gï¿½nï¿½re un message de recommandation basï¿½ sur taux survie.
  *
- * @param survivalRate - Taux en % (calculé par backend)
+ * @param survivalRate - Taux en % (calculï¿½ par backend)
  * @returns Message de recommandation
  */
 export const getSurvivalRateRecommendation = (
@@ -192,9 +192,9 @@ export const getSurvivalRateRecommendation = (
   const recommendations = {
     'excellent': 'Taux de survie excellent ! Bonnes pratiques.',
     'bon': 'Taux de survie satisfaisant.',
-    'moyen': 'Taux de survie moyen. Surveillance recommandée.',
+    'moyen': 'Taux de survie moyen. Surveillance recommandï¿½e.',
     'faible': 'Taux de survie faible. Contactez MAVECAM.'
   };
 
-  return interpretation ? recommendations[interpretation] : 'Données insuffisantes';
+  return interpretation ? recommendations[interpretation] : 'Donnees insuffisantes';
 };
