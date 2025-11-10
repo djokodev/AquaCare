@@ -241,3 +241,4 @@ export const authSlice = createSlice({
 });
 
 export const { clearError, setUser, setFarmProfile } = authSlice.actions;
+export default authSlice.reducer;
