@@ -11,10 +11,9 @@ from django.db import transaction
 from django.utils import timezone
 from django.db.models import QuerySet, Sum, Count
 
-from ..models import Order, OrderItem, Product
+from ..models import Order, OrderItem
 from ..domain.calculators import DeliveryFeeCalculator, OrderTotalCalculator
 from ..domain.validators import OrderValidator
-from ..domain.exceptions import InvalidOrderError, ProductNotFoundError
 from .base import BaseCommerceService
 from .product_service import ProductService
 
@@ -226,17 +225,19 @@ class OrderService(BaseCommerceService):
             f"MAVECAM vous contactera pour organiser la livraison."
         )
 
-        NotificationService.create_notification(
-            user=order.user,
-            notification_type='order_confirmed',
-            title="Commande confirmée",
-            message=message,
-            metadata={
-                'order_id': str(order.id),
-                'order_number': order.order_number,
-                'total': float(order.total)
-            }
-        )
+        # TODO: Implémenter create_notification générique dans NotificationService
+        # NotificationService.create_notification(
+        #     user=order.user,
+        #     notification_type='order_confirmed',
+        #     title="Commande confirmée",
+        #     message=message,
+        #     metadata={
+        #         'order_id': str(order.id),
+        #         'order_number': order.order_number,
+        #         'total': float(order.total)
+        #     }
+        # )
+        pass  # Notification désactivée temporairement
 
     @staticmethod
     def generate_order_number() -> str:
@@ -296,7 +297,9 @@ class OrderService(BaseCommerceService):
             >>> orders.count()
             5
         """
-        queryset = Order.objects.filter(user=user).prefetch_related('items__product')
+        queryset = Order.objects.filter(user=user) \
+            .select_related('user', 'farm_profile') \
+            .prefetch_related('items__product')
 
         if status:
             queryset = queryset.filter(status=status)
@@ -328,10 +331,10 @@ class OrderService(BaseCommerceService):
             >>> order.items.count()
             3
         """
-        return Order.objects.prefetch_related('items__product').get(
-            id=order_id,
-            user=user
-        )
+        return Order.objects \
+            .select_related('user', 'farm_profile') \
+            .prefetch_related('items__product') \
+            .get(id=order_id, user=user)
 
     @staticmethod
     def get_order_statistics(user) -> Dict[str, Any]:

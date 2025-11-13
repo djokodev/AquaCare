@@ -9,7 +9,7 @@ from unittest.mock import Mock, patch
 from django.http import HttpRequest, JsonResponse
 from django.contrib.auth import get_user_model
 from django.test import RequestFactory
-from apps.accounts.middleware import (
+from accounts.middleware import (
     UserLanguageMiddleware, 
     APIResponseLanguageMiddleware,
     LoginRateLimitMiddleware

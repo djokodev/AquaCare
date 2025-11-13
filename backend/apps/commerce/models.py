@@ -14,7 +14,6 @@ from decimal import Decimal
 from django.db import models
 from django.core.validators import MinValueValidator
 from django.utils.translation import gettext_lazy as _
-from django.utils import timezone
 
 from .constants import (
     SPECIES_CHOICES, PHASE_CHOICES, BRAND_CHOICES,
@@ -129,6 +128,36 @@ class Product(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.package_weight_kg}kg)"
+
+    def clean(self):
+        """Validation métier du produit."""
+        from django.core.exceptions import ValidationError
+        errors = {}
+
+        # Valider taille granulé
+        if self.pellet_size_mm and self.pellet_size_mm <= 0:
+            errors['pellet_size_mm'] = _("La taille du granulé doit être supérieure à 0")
+
+        # Valider taux protéines
+        if self.protein_percentage and (self.protein_percentage < 20 or self.protein_percentage > 50):
+            errors['protein_percentage'] = _("Le taux de protéines doit être entre 20% et 50%")
+
+        # Valider taux lipides
+        if self.lipid_percentage and (self.lipid_percentage < 1 or self.lipid_percentage > 20):
+            errors['lipid_percentage'] = _("Le taux de lipides doit être entre 1% et 20%")
+
+        # Valider poids package (1, 20 ou 25 kg standard MAVECAM)
+        if self.package_weight_kg is not None and self.package_weight_kg <= 0:
+            errors['package_weight_kg'] = _("Le poids du conditionnement doit être supérieur à 0")
+        elif self.package_weight_kg and self.package_weight_kg not in [1, 20, 25]:
+            errors['package_weight_kg'] = _("Le poids du conditionnement doit être 1, 20 ou 25 kg")
+
+        # Valider prix cohérent
+        if self.price_per_package and self.price_per_package <= 0:
+            errors['price_per_package'] = _("Le prix doit être supérieur à 0")
+
+        if errors:
+            raise ValidationError(errors)
 
     @property
     def price_per_kg(self):
@@ -300,6 +329,44 @@ class Order(models.Model):
 
     def __str__(self):
         return f"{self.order_number} - {self.user.display_name}"
+
+    def clean(self):
+        """Validation métier de la commande."""
+        from django.core.exceptions import ValidationError
+        errors = {}
+
+        # Valider cohérence livraison domicile
+        if self.delivery_method == 'home':
+            if not self.delivery_full_address or not self.delivery_full_address.strip():
+                errors['delivery_full_address'] = _("L'adresse complète est requise pour la livraison à domicile")
+
+        # Valider cohérence retrait en point de vente
+        if self.delivery_method == 'pickup':
+            if not self.pickup_location:
+                errors['pickup_location'] = _("Le lieu de retrait est requis pour le retrait en magasin")
+
+        # Valider cohérence montants (total = subtotal + delivery_fee)
+        if self.subtotal is not None and self.delivery_fee is not None and self.total is not None:
+            expected_total = self.subtotal + self.delivery_fee
+            if abs(self.total - expected_total) > Decimal('0.01'):  # tolérance arrondi
+                errors['total'] = _(
+                    f"Total incohérent: attendu {expected_total} FCFA "
+                    f"(sous-total {self.subtotal} + frais livraison {self.delivery_fee}), "
+                    f"reçu {self.total} FCFA"
+                )
+
+        # Valider montants positifs
+        if self.subtotal is not None and self.subtotal < 0:
+            errors['subtotal'] = _("Le sous-total doit être positif")
+
+        if self.delivery_fee is not None and self.delivery_fee < 0:
+            errors['delivery_fee'] = _("Les frais de livraison doivent être positifs")
+
+        if self.total is not None and self.total <= 0:
+            errors['total'] = _("Le total doit être strictement positif")
+
+        if errors:
+            raise ValidationError(errors)
 
     @property
     def total_bags(self):

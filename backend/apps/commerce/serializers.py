@@ -5,7 +5,6 @@ Architecture minimaliste : Serializers pour validation/transformation données,
 logique métier déléguée aux Services.
 """
 from rest_framework import serializers
-from decimal import Decimal
 
 from .models import Product, Order, OrderItem
 from .services import OrderService
@@ -245,3 +244,84 @@ class OrderStatisticsSerializer(serializers.Serializer):
     average_order_value = serializers.DecimalField(max_digits=12, decimal_places=2)
     last_order_date = serializers.DateTimeField(allow_null=True)
     last_order_number = serializers.CharField(allow_null=True)
+
+
+class CycleSimulationInputSerializer(serializers.Serializer):
+    """
+    Serializer pour input de simulation de cycle aquacole.
+
+    Permet à l'aquaculteur de planifier son budget AVANT démarrage.
+    """
+    species = serializers.ChoiceField(
+        choices=['tilapia', 'catfish'],
+        required=True,
+        help_text="Espèce de poisson"
+    )
+    initial_fish_count = serializers.IntegerField(
+        required=True,
+        min_value=10,
+        max_value=100000,
+        help_text="Nombre d'alevins au départ"
+    )
+    initial_weight_g = serializers.FloatField(
+        required=False,
+        allow_null=True,
+        min_value=0.1,
+        max_value=100,
+        help_text="Poids initial en grammes (défaut: 5g)"
+    )
+    target_weight_g = serializers.FloatField(
+        required=False,
+        allow_null=True,
+        min_value=50,
+        max_value=1000,
+        help_text="Poids cible en grammes (défaut: 300g tilapia, 400g catfish)"
+    )
+    cycle_duration_days = serializers.IntegerField(
+        required=False,
+        allow_null=True,
+        min_value=30,
+        max_value=365,
+        help_text="Durée du cycle en jours (défaut: 120j tilapia, 150j catfish)"
+    )
+    survival_rate = serializers.FloatField(
+        required=False,
+        allow_null=True,
+        min_value=0.5,
+        max_value=1.0,
+        help_text="Taux de survie estimé (défaut: 0.85)"
+    )
+
+    def validate(self, attrs):
+        """Validation cohérence des paramètres."""
+        initial_weight = attrs.get('initial_weight_g', 5)
+        target_weight = attrs.get('target_weight_g')
+
+        # Vérifier que poids cible > poids initial
+        if target_weight and target_weight <= initial_weight:
+            raise serializers.ValidationError({
+                'target_weight_g': "Le poids cible doit être supérieur au poids initial"
+            })
+
+        return attrs
+
+
+class CycleSimulationOutputSerializer(serializers.Serializer):
+    """
+    Serializer pour output de simulation de cycle.
+
+    Affiche estimation complète : phases, coûts, ROI.
+    """
+    simulation_type = serializers.CharField(read_only=True)
+
+    # Paramètres utilisés
+    parameters = serializers.DictField(read_only=True)
+
+    # Phases d'alimentation avec produits
+    feeding_phases = serializers.ListField(
+        child=serializers.DictField(),
+        read_only=True
+    )
+
+    # Résumé financier et technique
+    summary = serializers.DictField(read_only=True)

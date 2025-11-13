@@ -25,7 +25,7 @@ INSTALLED_APPS = [
     "drf_spectacular",
     # Local apps
     "accounts",
-    "apps.aquaculture",
+    "aquaculture",
     "commerce",  # Module commerce MAVECAM
 ]
 

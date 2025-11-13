@@ -15,9 +15,9 @@ Références :
 - Domain-Driven Design (Eric Evans)
 - Value Objects Pattern (Martin Fowler)
 """
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from decimal import Decimal, ROUND_HALF_UP
-from typing import Optional, Dict, Tuple
+from typing import Optional, Dict
 from django.utils.translation import gettext_lazy as _
 
 

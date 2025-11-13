@@ -1,0 +1,83 @@
+"""
+Commande de management pour charger les produits MAVECAM dans le catalogue.
+27 produits au total : 18 Aller Aqua + 9 DIBAQ.
+"""
+from django.core.management.base import BaseCommand
+import json
+from pathlib import Path
+
+from apps.commerce.models import Product
+
+
+class Command(BaseCommand):
+    help = 'Charge les 27 produits MAVECAM dans le catalogue depuis fixtures JSON'
+
+    def add_arguments(self, parser):
+        parser.add_argument(
+            '--clear',
+            action='store_true',
+            help='Clear all existing products before loading',
+        )
+
+    def handle(self, *args, **options):
+        self.stdout.write("Loading MAVECAM product catalog...")
+
+        # Clear existing products if requested
+        if options.get('clear'):
+            deleted_count = Product.objects.all().delete()[0]
+            self.stdout.write(f"Cleared {deleted_count} existing products")
+
+        # Load products from JSON fixtures
+        json_path = Path(__file__).parent.parent.parent / 'fixtures' / 'products.json'
+        
+        if not json_path.exists():
+            self.stdout.write(
+                self.style.ERROR(f"Fixtures file not found: {json_path}")
+            )
+            return
+
+        with open(json_path, 'r', encoding='utf-8') as f:
+            products_data = json.load(f)
+
+        created_count = 0
+        existing_count = 0
+
+        for item in products_data:
+            pk = item['pk']
+            fields = item['fields']
+            
+            # Use get_or_create to avoid duplicates (idempotent)
+            product, created = Product.objects.get_or_create(
+                id=pk,
+                defaults=fields
+            )
+            
+            if created:
+                created_count += 1
+                self.stdout.write(
+                    f"  ✓ Created: {fields['name']} ({fields['package_weight_kg']}kg)"
+                )
+            else:
+                existing_count += 1
+
+        # Display summary
+        total_products = Product.objects.count()
+        aller_aqua = Product.objects.filter(brand='aller_aqua').count()
+        dibaq = Product.objects.filter(brand='dibaq').count()
+        available = Product.objects.filter(is_available=True).count()
+
+        self.stdout.write(
+            self.style.SUCCESS(
+                f"\n{'='*50}\n"
+                f"MAVECAM Product Catalog Summary:\n"
+                f"{'='*50}\n"
+                f"Total products: {total_products}\n"
+                f"  - Aller Aqua: {aller_aqua}\n"
+                f"  - DIBAQ: {dibaq}\n"
+                f"Available products: {available}\n"
+                f"\nOperation result:\n"
+                f"  - Created: {created_count}\n"
+                f"  - Already existed: {existing_count}\n"
+                f"{'='*50}"
+            )
+        )

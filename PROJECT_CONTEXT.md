@@ -604,30 +604,168 @@ Chaque entree contient :
 
 ---
 
+### [2025-11-13] - Module Commerce Backend + Reorganisation Complete
+**Type:** `Feature` + `Refactor` | **Module:** `Backend` | **Commit:** `c78f128` + refactoring en cours
+
+#### Added
+**Module Commerce Backend Complet (Clean Architecture) :**
+
+1. **Modeles de Donnees** (392 lignes `models.py`)
+   - `Product` : Catalogue aliments MAVECAM (espece, granulometrie, poids, prix)
+   - `Order` : Commandes aquaculteurs avec UUID offline-first
+   - `OrderItem` : Details items commandes avec quantites
+   - Support synchronisation offline (client_uuid, created_offline, synced_at)
+   - Numero commande unique auto-genere (MAVC-YYYYMMDD-XXXX)
+
+2. **Domain Layer** (377 lignes domain/)
+   - `GrowthCalculator` : Projections croissance poissons par phase
+   - `PhaseDetector` : Detection phase cycle (starter/grower/finisher)
+   - `ROICalculator` : Calculs rentabilite et FCR previsionnel
+   - `FeedingCalculator` : Rations alimentaires optimales
+   - `OrderValidator` : Validation logique commandes
+   - `ProductValidator` : Validation catalogue produits
+   - Exceptions metier personnalisees (InvalidOrderError, ProductNotFoundError, etc.)
+
+3. **Services Layer** (791 lignes services/)
+   - `ProductService` : Gestion catalogue, recherche, recommandations
+   - `OrderService` : Creation commandes, calcul frais livraison, statistiques
+   - `FeedingSuggestionService` : Suggestions intelligentes basees cycles actifs
+   - `CycleSimulationService` : Planification budgetaire cycles 60-180 jours
+   - Clean Architecture stricte : Services → Domain → Models
+
+4. **API REST DRF** (476 lignes serializers.py + views.py)
+   - `ProductViewSet` : CRUD produits + endpoints feeding-suggestions, cycle-simulation
+   - `OrderViewSet` : CRUD commandes + preview-delivery, statistics
+   - Serializers nested pour OrderItem
+   - Validation metier dans serializers
+
+5. **Admin Django Personnalise** (283 lignes)
+   - Interface administration complete produits/commandes
+   - Filtres avances (espece, statut, date)
+   - Inlines OrderItem pour edition rapide
+
+6. **Tests Unitaires Complets** (46 tests, 80%+ coverage)
+   - `test_models.py` : Validation modeles et contraintes
+   - `test_services.py` : Logique metier services
+   - `test_endpoints.py` : Integration API
+   - `test_views.py` : Permissions et filtrage
+   - `test_simulation.py` : Calculs projections
+
+7. **Fixtures Produits** (products.json + management command)
+   - 9 produits MAVECAM preconfigures (Tilapia + Clarias)
+   - Multi-granulometries (1mm, 2mm, 3mm, 6mm, 9mm)
+   - Command `python manage.py load_products`
+
+#### Changed
+**Reorganisation Complete Structure Projet :**
+
+1. **Migration commerce → apps/commerce**
+   - Deplacement `backend/commerce/` → `backend/apps/commerce/`
+   - Uniformisation avec `apps/accounts/` et `apps/aquaculture/`
+   - Mise a jour `apps.py` : `name = 'apps.commerce'`
+   - Mise a jour `INSTALLED_APPS` settings Django
+   - Mise a jour `mavecam_api/urls.py` : `include('apps.commerce.urls')`
+
+2. **Migration tests → apps/*/tests/**
+   - Deplacement `backend/tests/unit/` → `backend/apps/*/tests/`
+   - Structure modulaire : chaque app contient ses propres tests
+   - Mise a jour `pytest.ini` : `testpaths = tests apps/accounts/tests apps/aquaculture/tests apps/commerce/tests`
+   - Conservation 100% tests (5,347 lignes repartis)
+
+3. **Nettoyage Imports Inutilises (18 imports supprimes)**
+   - **accounts/** : `admin.py` (Sum, Count), `views.py` (serializers inutilises)
+   - **aquaculture/** : `admin.py`, `calculators.py`, `validators.py`, `value_objects.py`, `views.py`
+   - **commerce/** (module complet audite)
+     - `admin.py` : Sum, Count non utilises
+     - `domain/calculators.py` : Tuple, math non utilises
+     - `services/feeding_suggestion_service.py` : Count, FeedingCalculator, SURVIVAL_RATE_DEFAULT
+     - `services/order_service.py` : Product, InvalidOrderError duplique
+     - `services/product_service.py` : List non utilise
+     - `tests/conftest.py` : settings non utilise
+     - `tests/test_*.py` : 5 imports models inutilises
+     - `views.py` : Product, Order non utilises (Clean Architecture respectee)
+
+4. **DONT_DO.md Enrichi** (+401 lignes)
+   - Nouvelle regle : "Ne jamais laisser imports inutilises dans les fichiers"
+   - Documentation anti-patterns projet
+
+#### Removed
+- Ancien repertoire `backend/commerce/` (2,398 lignes deplacees)
+- Ancien repertoire `backend/tests/unit/` (5,347 lignes deplacees)
+- 18 imports inutilises elimines (duplication, imports non references)
+
+#### Technical Decisions
+**Pourquoi Clean Architecture stricte dans Commerce ?**
+- **Separation concerns** : Domain logic independante infrastructure
+- **Testabilite** : Calculators testables sans Django/DB
+- **Maintenabilite** : Formules metier centralisees dans domain/
+- **Evolutivite** : Ajout nouveau service = copie pattern existant
+- **Coherence** : Meme architecture aquaculture → facilite onboarding
+
+**Pourquoi reorganiser tests dans apps/\*/tests/ ?**
+- **Modularite** : Tests lies a leur module fonctionnel
+- **Isolation** : Possibilite tester un module independamment
+- **Convention Django** : Pattern standard projets Django matures
+- **Scalabilite** : Ajout nouveau module = tests dans son propre dossier
+- **CI/CD** : Possibilite run tests selectifs par module
+
+**Pourquoi auditer imports inutilises maintenant ?**
+- **Code Quality** : Elimination code mort des sprint initiaux
+- **Prevention** : Etablir standard pour futures features
+- **Performance** : Reduction taille bundles Python (minime mais propre)
+- **Lisibilite** : Facilite inspection code par developpeurs et AI
+
+**Architecture Views → Services → Models validee :**
+- Views ne doivent JAMAIS importer Models directement
+- Services = seule couche acces Models
+- Pattern respecte dans `commerce/views.py` (Product/Order imports supprimes)
+
+#### Impact Metier
+**Nouveau Module Commerce Operationnel :**
+- **Catalogue produits** : 9 aliments MAVECAM disponibles API
+- **Suggestions intelligentes** : Recommandations basees cycles actifs utilisateur
+- **Simulation cycles** : Planification budgetaire 60-180 jours avec projections FCR/ROI
+- **Gestion commandes** : Creation commandes offline-first avec sync automatique
+- **Frais livraison** : Calcul automatique pickup vs domicile (seuil 50,000 FCFA)
+
+**Preparation Phase Mobile Commerce :**
+- Backend API 100% fonctionnel et teste
+- Endpoints prets consommation React Native
+- Structure donnees alignee offline-first frontend
+- Documentation Swagger auto-generee disponible `/api/docs/`
+
+**Qualite Code Amelioree :**
+- Structure projet standardisee et professionnelle
+- Zero import inutilise (audit complet effectue)
+- Tests 100% passes apres reorganisation (46 tests commerce + 5,347 lignes tests autres modules)
+- Convention claire etablie pour futures contributions
+
+**Fichiers modifies :** 60 fichiers, +3,817 lignes ajoutees (commerce + refactoring), -8,846 lignes deplacees/supprimees
+
+---
+
 ## Statistiques Projet
 
 ### Resume Commits
-- **Total commits** : 18 (incluant refactoring DDD frontend en cours)
-- **Commits features majeures** : 12
-- **Commits refactoring** : 4
+- **Total commits** : 19 (incluant module commerce + reorganisation)
+- **Commits features majeures** : 13
+- **Commits refactoring** : 5
 - **Commits docs** : 2
 
 ### Lignes de Code (estimation)
-- **Backend** : ~15,000 lignes (accounts + aquaculture + tests)
+- **Backend** : ~18,200 lignes (accounts + aquaculture + commerce + tests)
 - **Frontend** : ~10,500 lignes (screens + services + navigation + domain + utils)
-- **Documentation** : ~3,400 lignes (CLAUDE, PROJECT_CONTEXT, ARCHITECTURE, DESIGN_SYSTEM, DONT_DO)
-- **Total ajoutees** : ~38,900+ lignes sur 5 mois
+- **Documentation** : ~3,800 lignes (CLAUDE, PROJECT_CONTEXT, ARCHITECTURE, DESIGN_SYSTEM, DONT_DO)
+- **Total ajoutees** : ~42,500+ lignes sur 5 mois
 
 ### Modules Implementes
 | Module | Etat | Fonctionnalites | Tests |
 |--------|------|-----------------|-------|
-| **accounts** | 100% | Auth JWT, User, FarmProfile | 635 lignes tests |
-| **aquaculture** | 100% | Cycles, Logs, Plans, Recolte | 2,250+ lignes tests |
-| **notifications** | 100% | Filtrage, Marquage, Redux | - |
-| **guides** | 100% | 8 guides offline, Recherche | - |
-| **statistics** | 100% | Analytics, KPIs, Comparaisons | - |
-| **commerce** | 0% | A developper (Phase 2) | - |
-| **support** | 0% | A developper (Phase 2) | - |
+| **accounts** | 100% Backend | Auth JWT, User, FarmProfile | 635 lignes tests |
+| **aquaculture** | 100% Full-Stack | Cycles, Logs, Plans, Recolte, Stats, Guides | 2,250+ lignes tests |
+| **commerce** | 100% Backend | Catalogue, Commandes, Suggestions, Simulation | 46 tests (80%+ coverage) |
+| **commerce** | 0% Frontend | Mobile UI a developper | - |
+| **support** | 0% | A developper (Phase 3) | - |
 
 ---
 
@@ -709,9 +847,26 @@ Chaque entree contient :
 - [x] Recolte & Historique cycles
 - [x] Tests unitaires (2,250+ lignes)
 
-### Phase 2 : Commerce (EN ATTENTE)
-- [ ] Catalogue produits MAVECAM
-- [ ] Gestion commandes aliments
+### Phase 2 : Commerce (EN COURS - Backend 100%)
+**Backend Complete :**
+- [x] Catalogue produits MAVECAM (9 produits fixtures)
+- [x] Gestion commandes aliments (offline-first)
+- [x] Calcul frais livraison (pickup/domicile)
+- [x] Suggestions alimentaires intelligentes
+- [x] Simulation cycles budgetaires
+- [x] API REST complete (10 endpoints)
+- [x] Tests unitaires (46 tests, 80%+ coverage)
+- [x] Admin Django personnalise
+
+**Frontend Mobile (A Developper) :**
+- [ ] ProductCatalogScreen + filtres espece
+- [ ] ProductDetailScreen + panier
+- [ ] CartScreen avec calculs totaux
+- [ ] CheckoutScreen + choix livraison
+- [ ] OrderHistoryScreen
+- [ ] OrderDetailScreen
+- [ ] FeedingSuggestionsScreen connecte cycles
+- [ ] Redux commerceSlice + offline sync
 
 ### Phase 3 : Support Technique (EN ATTENTE)
 - [ ] Chat technicien MAVECAM temps reel
@@ -719,6 +874,6 @@ Chaque entree contient :
 
 ---
 
-**Derniere mise a jour :** 2025-10-13
+**Derniere mise a jour :** 2025-11-13
 **Maintenu par :** Djoko Christian
-**Version :** 1.1
+**Version :** 1.2

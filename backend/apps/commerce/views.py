@@ -10,12 +10,12 @@ from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
 
-from .models import Product, Order
 from .serializers import (
     ProductSerializer, OrderSerializer, OrderCreateSerializer,
-    DeliveryFeePreviewSerializer, OrderStatisticsSerializer
+    DeliveryFeePreviewSerializer, OrderStatisticsSerializer,
+    CycleSimulationInputSerializer, CycleSimulationOutputSerializer
 )
-from .services import ProductService, OrderService
+from .services import ProductService, OrderService, FeedingSuggestionService, CycleSimulationService
 
 
 class ProductViewSet(viewsets.ReadOnlyModelViewSet):
@@ -113,6 +113,172 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+    @action(detail=False, methods=['get'])
+    def feeding_suggestions(self, request):
+        """
+        Génère suggestions intelligentes d'achat d'aliments.
+
+        Analyse la consommation des cycles actifs et suggère les quantités optimales
+        de produits MAVECAM à commander.
+
+        Query params :
+        - farm_profile_id: UUID du profil ferme (optionnel, filtre si fourni)
+
+        Response :
+        {
+            "has_suggestions": true,
+            "suggestions": [
+                {
+                    "species": "tilapia",
+                    "active_cycles_count": 2,
+                    "estimated_need_kg": 150.5,
+                    "days_coverage": 37,
+                    "products": [
+                        {
+                            "product_id": "uuid",
+                            "product_name": "ALLER AQUA TILAPIA 3MM 20KG",
+                            "package_weight_kg": 20.0,
+                            "quantity_bags": 7,
+                            "total_kg": 140.0,
+                            "unit_price": 30000.0,
+                            "total_price": 210000.0,
+                            "brand": "aller_aqua"
+                        },
+                        {
+                            "product_id": "uuid",
+                            "product_name": "ALLER AQUA TILAPIA 3MM 1KG",
+                            "package_weight_kg": 1.0,
+                            "quantity_bags": 11,
+                            "total_kg": 11.0,
+                            "unit_price": 1500.0,
+                            "total_price": 16500.0,
+                            "brand": "aller_aqua"
+                        }
+                    ],
+                    "summary": {
+                        "total_bags": 18,
+                        "total_kg": 151.0,
+                        "total_price": 226500.0,
+                        "coverage_days": 37
+                    }
+                }
+            ],
+            "analysis": {
+                "total_cycles": 3,
+                "cycles_with_data": 2,
+                "confidence_score": 70,
+                "analysis_period_days": 30,
+                "safety_buffer_days": 7
+            },
+            "generated_at": "2025-01-10T14:30:00Z"
+        }
+        """
+        farm_profile_id = request.query_params.get('farm_profile_id')
+
+        suggestions = FeedingSuggestionService.get_feeding_suggestions(
+            user_id=request.user.id,
+            farm_profile_id=farm_profile_id
+        )
+
+        return Response(suggestions)
+
+    @action(detail=False, methods=['post'])
+    def cycle_simulation(self, request):
+        """
+        Simule un cycle aquacole complet AVANT démarrage.
+
+        Permet à l'aquaculteur de planifier son budget en visualisant :
+        - Aliments nécessaires par phase (multi-granulométrie automatique)
+        - Coûts détaillés
+        - Revenus et profit estimés
+        - ROI et FCR
+
+        Body (JSON) :
+        {
+            "species": "tilapia",
+            "initial_fish_count": 1000,
+            "initial_weight_g": 5,          // Optionnel (défaut: 5g)
+            "target_weight_g": 300,         // Optionnel (défaut: 300g tilapia, 400g catfish)
+            "cycle_duration_days": 120,     // Optionnel (défaut: 120j tilapia, 150j catfish)
+            "survival_rate": 0.85           // Optionnel (défaut: 0.85)
+        }
+
+        Response :
+        {
+            "simulation_type": "predictive",
+            "parameters": {
+                "species": "tilapia",
+                "initial_fish_count": 1000,
+                "initial_weight_g": 5.0,
+                "target_weight_g": 300.0,
+                "cycle_duration_days": 120,
+                "survival_rate": 0.85
+            },
+            "feeding_phases": [
+                {
+                    "phase_name": "alevinage",
+                    "days_range": [1, 28],
+                    "weight_range_g": [5.0, 19.8],
+                    "pellet_size_mm": 2.0,
+                    "duration_days": 28,
+                    "total_consumption_kg": 145.5,
+                    "daily_avg_kg": 5.2,
+                    "products": [
+                        {
+                            "product_id": "uuid",
+                            "product_name": "ALLER AQUA TILAPIA 2MM 20KG",
+                            "package_weight_kg": 20.0,
+                            "quantity_bags": 7,
+                            "total_kg": 140.0,
+                            "unit_price": 30000.0,
+                            "total_price": 210000.0,
+                            "brand": "aller_aqua"
+                        }
+                    ],
+                    "total_bags": 7,
+                    "total_price": 210000.0
+                },
+                // ... autres phases
+            ],
+            "summary": {
+                "total_feed_kg": 1600.0,
+                "total_cost_fcfa": 2400000.0,
+                "initial_fish_count": 1000,
+                "estimated_final_count": 850,
+                "survival_rate": 0.85,
+                "biomass_gain_kg": 252.5,
+                "estimated_fcr": 1.88,
+                "estimated_revenue_fcfa": 4500000.0,
+                "estimated_profit_fcfa": 2100000.0,
+                "roi_percentage": 87.5
+            }
+        }
+        """
+        # Validation input
+        input_serializer = CycleSimulationInputSerializer(data=request.data)
+        input_serializer.is_valid(raise_exception=True)
+
+        # Exécuter simulation
+        try:
+            simulation_result = CycleSimulationService.simulate_cycle(
+                species=input_serializer.validated_data['species'],
+                initial_fish_count=input_serializer.validated_data['initial_fish_count'],
+                initial_weight_g=input_serializer.validated_data.get('initial_weight_g'),
+                target_weight_g=input_serializer.validated_data.get('target_weight_g'),
+                cycle_duration_days=input_serializer.validated_data.get('cycle_duration_days'),
+                survival_rate=input_serializer.validated_data.get('survival_rate')
+            )
+
+            # Sérialiser output
+            output_serializer = CycleSimulationOutputSerializer(simulation_result)
+            return Response(output_serializer.data, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response(
+                {'error': f'Erreur lors de la simulation : {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
 
 class OrderViewSet(viewsets.ModelViewSet):
     """
@@ -140,6 +306,23 @@ class OrderViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         """Retourne uniquement les commandes de l'utilisateur."""
         return OrderService.get_user_orders(self.request.user)
+
+    def retrieve(self, request, *args, **kwargs):
+        """
+        Récupère détail d'une commande avec vérification de propriété.
+
+        Sécurité : Vérifie explicitement que la commande appartient à l'utilisateur
+        pour éviter l'accès à des commandes d'autres utilisateurs.
+        """
+        order = self.get_object()
+
+        # Vérification explicite de propriété (défense en profondeur)
+        if order.user != request.user:
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("Vous n'avez pas accès à cette commande")
+
+        serializer = self.get_serializer(order)
+        return Response(serializer.data)
 
     def create(self, request, *args, **kwargs):
         """

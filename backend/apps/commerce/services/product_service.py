@@ -4,7 +4,7 @@ Service de gestion des produits du catalogue MAVECAM AquaCare.
 Architecture Clean : Service stateless avec méthodes statiques.
 Gère recherche, filtrage et recommandations de produits alimentaires.
 """
-from typing import Optional, List
+from typing import Optional
 from decimal import Decimal
 from django.db.models import QuerySet, Q
 

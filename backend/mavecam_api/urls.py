@@ -65,7 +65,7 @@ urlpatterns = [
     # API Endpoints
     path('api/accounts/', include('accounts.urls')),
     path('api/aquaculture/', include('apps.aquaculture.urls')),
-    path('api/commerce/', include('commerce.urls')),  # Module commerce
+    path('api/commerce/', include('apps.commerce.urls')),  # Module commerce
 
 ]
 
