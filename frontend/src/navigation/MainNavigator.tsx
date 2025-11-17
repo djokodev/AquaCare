@@ -38,6 +38,16 @@ import FeedingPlanScreen from '@/screens/aquaculture/FeedingPlanScreen';
 import StatisticsScreen from '@/screens/aquaculture/StatisticsScreen';
 import NutritionalGuidesScreen from '@/screens/aquaculture/NutritionalGuidesScreen';
 
+// Commerce Screens
+import {
+  ProductCatalogScreen,
+  ProductDetailScreen,
+  CartScreen,
+  OrdersHistoryScreen,
+  FeedingSuggestionsScreen,
+  CycleSimulatorScreen,
+} from '@/screens/commerce';
+
 export type MainTabParamList = {
   Dashboard: undefined;
   ProfileStack: undefined;
@@ -54,6 +64,13 @@ export type RootStackParamList = {
   FeedingPlan: undefined;
   Statistics: undefined;
   NutritionalGuides: undefined;
+  // Commerce Screens
+  ProductCatalog: undefined;
+  ProductDetail: { productId: string };
+  Cart: undefined;
+  OrdersHistory: undefined;
+  FeedingSuggestions: undefined;
+  CycleSimulator: undefined;
 };
 
 export type ProfileStackParamList = {
@@ -220,6 +237,31 @@ export default function MainNavigator() {
       <RootStack.Screen
         name="NutritionalGuides"
         component={NutritionalGuidesScreen}
+      />
+      {/* Commerce Screens */}
+      <RootStack.Screen
+        name="ProductCatalog"
+        component={ProductCatalogScreen}
+      />
+      <RootStack.Screen
+        name="ProductDetail"
+        component={ProductDetailScreen}
+      />
+      <RootStack.Screen
+        name="Cart"
+        component={CartScreen}
+      />
+      <RootStack.Screen
+        name="OrdersHistory"
+        component={OrdersHistoryScreen}
+      />
+      <RootStack.Screen
+        name="FeedingSuggestions"
+        component={FeedingSuggestionsScreen}
+      />
+      <RootStack.Screen
+        name="CycleSimulator"
+        component={CycleSimulatorScreen}
       />
     </RootStack.Navigator>
   );

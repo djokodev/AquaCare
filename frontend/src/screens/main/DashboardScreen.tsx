@@ -23,7 +23,7 @@ import { useAuth } from '@/hooks/useAuth';
 
 export default function DashboardScreen({ navigation }: any) {
   const { t } = useTranslation();
-  const { user, displayName } = useAuth();
+  const { displayName } = useAuth();
   const dispatch = useDispatch<AppDispatch>();
 
   // États pour le modal de récolte
@@ -94,7 +94,6 @@ export default function DashboardScreen({ navigation }: any) {
   };
 
   const activeCycles = dashboardData?.active_cycles || [];
-  const recentLogs = dashboardData?.recent_logs || [];
 
   // Fonctions pour le modal de récolte
   const openHarvestModal = (cycle: ProductionCycle) => {
@@ -195,7 +194,7 @@ export default function DashboardScreen({ navigation }: any) {
       </View>
 
       <View style={styles.actionContainer}>
-        <Text style={styles.sectionTitle}>{t('quickActions')}</Text>
+        <Text style={styles.sectionTitle}>Actions</Text>
         
         <TouchableOpacity
           style={styles.actionButton}
@@ -266,6 +265,51 @@ export default function DashboardScreen({ navigation }: any) {
         >
           <Ionicons name="bar-chart-outline" size={24} color={MAVECAM_COLORS.SUCCESS} />
           <Text style={styles.actionText}>{t('statistics')}</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Section Module Commerce */}
+      <View style={styles.actionContainer}>
+        <Text style={styles.sectionTitle}>🛒 Commerce</Text>
+
+        <TouchableOpacity
+          style={styles.actionButton}
+          onPress={() => navigation.navigate('ProductCatalog')}
+        >
+          <Ionicons name="storefront-outline" size={24} color={MAVECAM_COLORS.GREEN_PRIMARY} />
+          <Text style={styles.actionText}>{t('productCatalog')}</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.actionButton}
+          onPress={() => navigation.navigate('Cart')}
+        >
+          <Ionicons name="cart-outline" size={24} color={MAVECAM_COLORS.WARNING} />
+          <Text style={styles.actionText}>{t('cart')}</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.actionButton}
+          onPress={() => navigation.navigate('OrdersHistory')}
+        >
+          <Ionicons name="receipt-outline" size={24} color={MAVECAM_COLORS.INFO} />
+          <Text style={styles.actionText}>{t('ordersHistory')}</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.actionButton}
+          onPress={() => navigation.navigate('FeedingSuggestions')}
+        >
+          <Ionicons name="bulb-outline" size={24} color={MAVECAM_COLORS.SUCCESS} />
+          <Text style={styles.actionText}>{t('feedingSuggestions')}</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.actionButton}
+          onPress={() => navigation.navigate('CycleSimulator')}
+        >
+          <Ionicons name="calculator-outline" size={24} color={MAVECAM_COLORS.BLUE} />
+          <Text style={styles.actionText}>{t('cycleSimulator')}</Text>
         </TouchableOpacity>
       </View>
 

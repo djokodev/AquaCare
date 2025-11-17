@@ -150,14 +150,50 @@ class AuthService {
 
   /**
    * Vérifier si l'utilisateur est authentifié
+   * IMPORTANT : Valide le token côté backend pour éviter les tokens invalides/expirés
    */
   async isAuthenticated(): Promise<boolean> {
     try {
       const token = await SecureStore.getItemAsync(STORAGE_KEYS.ACCESS_TOKEN);
-      const user = await SecureStore.getItemAsync(STORAGE_KEYS.USER_DATA);
-      
-      return !!(token && user);
+      if (!token) {
+        return false;
+      }
+
+      // ✅ VALIDATION CÔTÉ BACKEND : Vérifier que le token est valide
+      try {
+        await apiService.post(API_ENDPOINTS.AUTH.TOKEN_VERIFY, { token });
+        return true;
+      } catch (verifyError: any) {
+        // Token invalide/expiré → Tenter refresh
+        const refreshToken = await SecureStore.getItemAsync(STORAGE_KEYS.REFRESH_TOKEN);
+        if (!refreshToken) {
+          // Pas de refresh token → Déconnexion
+          await apiService.clearTokens();
+          return false;
+        }
+
+        try {
+          // Tenter de refresh le token
+          const refreshResponse = await apiService.post<{ access: string; refresh?: string }>(
+            API_ENDPOINTS.AUTH.TOKEN_REFRESH,
+            { refresh: refreshToken }
+          );
+
+          const { access, refresh: newRefresh } = refreshResponse.data;
+          await SecureStore.setItemAsync(STORAGE_KEYS.ACCESS_TOKEN, access);
+          if (newRefresh) {
+            await SecureStore.setItemAsync(STORAGE_KEYS.REFRESH_TOKEN, newRefresh);
+          }
+
+          return true;
+        } catch (refreshError) {
+          // Refresh échoué → Déconnexion
+          await apiService.clearTokens();
+          return false;
+        }
+      }
     } catch (error) {
+      console.warn('[Auth] Erreur vérification authentification:', error);
       return false;
     }
   }

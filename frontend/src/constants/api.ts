@@ -1,8 +1,18 @@
-import Constants from 'expo-constants';
+import environmentConfig from '@/config/environment';
 
-// Configuration API basée sur votre backend Django
+/**
+ * Configuration API avec détection automatique d'environnement
+ *
+ * DÉVELOPPEMENT (npm start) :
+ *   → Backend Docker local (172.20.10.2:8000)
+ *
+ * PRODUCTION (eas build) :
+ *   → API en ligne (77.237.241.223)
+ *
+ * Pas besoin de toucher au fichier .env !
+ */
 export const API_CONFIG = {
-  baseURL: Constants.expoConfig?.extra?.apiUrl || 'http://172.20.10.2:8000/api',
+  baseURL: environmentConfig.apiUrl,
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',

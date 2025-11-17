@@ -74,7 +74,9 @@ class Product(models.Model):
         _('Phase d\'élevage'),
         max_length=30,
         choices=PHASE_CHOICES,
-        help_text=_('Phase de croissance du poisson')
+        null=True,
+        blank=True,
+        help_text=_('Phase de croissance du poisson (optionnel si non-vérifié)')
     )
 
     # Caractéristiques techniques (données catalogue MAVECAM)
@@ -87,13 +89,17 @@ class Product(models.Model):
     )
     protein_percentage = models.PositiveIntegerField(
         _('Taux de protéines (%)'),
+        null=True,
+        blank=True,
         validators=[MinValueValidator(1)],
-        help_text=_('Pourcentage de protéines brutes')
+        help_text=_('Pourcentage de protéines brutes (optionnel si non-vérifié)')
     )
     lipid_percentage = models.PositiveIntegerField(
         _('Taux de lipides (%)'),
+        null=True,
+        blank=True,
         validators=[MinValueValidator(1)],
-        help_text=_('Pourcentage de matières grasses')
+        help_text=_('Pourcentage de matières grasses (optionnel si non-vérifié)')
     )
 
     # Conditionnement et prix

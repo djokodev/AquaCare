@@ -18,6 +18,11 @@ class Command(BaseCommand):
             action='store_true',
             help='Clear all existing products before loading',
         )
+        parser.add_argument(
+            '--update',
+            action='store_true',
+            help='Update existing products with new data from fixtures',
+        )
 
     def handle(self, *args, **options):
         self.stdout.write("Loading MAVECAM product catalog...")
@@ -40,25 +45,44 @@ class Command(BaseCommand):
             products_data = json.load(f)
 
         created_count = 0
+        updated_count = 0
         existing_count = 0
 
         for item in products_data:
             pk = item['pk']
             fields = item['fields']
-            
-            # Use get_or_create to avoid duplicates (idempotent)
-            product, created = Product.objects.get_or_create(
-                id=pk,
-                defaults=fields
-            )
-            
-            if created:
-                created_count += 1
-                self.stdout.write(
-                    f"  ✓ Created: {fields['name']} ({fields['package_weight_kg']}kg)"
+
+            if options.get('update'):
+                # Update existing products or create new ones
+                product, created = Product.objects.update_or_create(
+                    id=pk,
+                    defaults=fields
                 )
+
+                if created:
+                    created_count += 1
+                    self.stdout.write(
+                        f"  ✓ Created: {fields['name']} ({fields['package_weight_kg']}kg)"
+                    )
+                else:
+                    updated_count += 1
+                    self.stdout.write(
+                        f"  ↻ Updated: {fields['name']} ({fields['package_weight_kg']}kg)"
+                    )
             else:
-                existing_count += 1
+                # Use get_or_create to avoid duplicates (idempotent)
+                product, created = Product.objects.get_or_create(
+                    id=pk,
+                    defaults=fields
+                )
+
+                if created:
+                    created_count += 1
+                    self.stdout.write(
+                        f"  ✓ Created: {fields['name']} ({fields['package_weight_kg']}kg)"
+                    )
+                else:
+                    existing_count += 1
 
         # Display summary
         total_products = Product.objects.count()
@@ -77,6 +101,7 @@ class Command(BaseCommand):
                 f"Available products: {available}\n"
                 f"\nOperation result:\n"
                 f"  - Created: {created_count}\n"
+                f"  - Updated: {updated_count}\n"
                 f"  - Already existed: {existing_count}\n"
                 f"{'='*50}"
             )
