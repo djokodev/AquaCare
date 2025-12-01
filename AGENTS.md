@@ -28,6 +28,7 @@ Guide rapide pour Codex sur le projet AquaCare. Lis ce fichier avant toute tache
 - PowerShell: preferer `Set-Location frontend; npx tsc --noEmit` (plutot que `cd frontend && ...`) pour eviter l'erreur de separateur `&&`.
 - Encodage: garder les fichiers frontend en UTF-8/ASCII (eviter caracteres speciaux qui s'affichent en �?); privilegier separateurs ASCII (`-`, `|`) au lieu de puces exotiques.
 - Git/branche: travailler sur la branche courante `feature/commerce-module`; faire des commits frequents apres chaque bloc de modifs stable (refactor ecran, setup) pour pouvoir revenir a un etat sain.
+- Langue reponses: repondre en francais.
 
 ## Rappels critiques (frontend)
 - Expo/Expo Go only: verifier compatibilite sur https://reactnative.directory/ et preferer `expo install`.

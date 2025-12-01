@@ -1,25 +1,10 @@
-/**
- * ProductDetailScreen - Détails Produit MAVECAM
- *
- * Écran de détails d'un produit alimentaire avec :
- * - Informations produit vérifiées (taille, prix, conditionnement)
- * - Composition nutritionnelle (si disponible - Aller Aqua uniquement)
- * - Image placeholder
- * - Sélection quantité
- * - Ajout au panier
- * - Recommandations produits similaires
- *
- * Note: Seules les données du catalogue PDF MAVECAM sont affichées
- * Les produits DIBAQ n'affichent pas de données nutritionnelles (non-vérifiées)
- *
- * @screen commerce/ProductDetailScreen
+﻿/**
+ * ProductDetailScreen - Details Produit MAVECAM (NativeWind)
  */
-
 import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
@@ -49,26 +34,21 @@ export default function ProductDetailScreen() {
 
   const { productId } = route.params;
 
-  // Redux state
   const { products, cart } = useSelector((state: RootState) => state.commerce);
   const { items: allProducts } = products;
 
-  // Local state
   const [product, setProduct] = useState<Product | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Fetch product details
   useEffect(() => {
     const loadProduct = async () => {
       setIsLoading(true);
       try {
-        // Check if product already in Redux store
         const existingProduct = allProducts.find((p) => p.id === productId);
         if (existingProduct) {
           setProduct(existingProduct);
         } else {
-          // Fetch from API
           const result = await dispatch(fetchProductDetail(productId)).unwrap();
           setProduct(result);
         }
@@ -82,7 +62,6 @@ export default function ProductDetailScreen() {
     loadProduct();
   }, [productId]);
 
-  // Add to cart
   const handleAddToCart = () => {
     if (!product) return;
 
@@ -100,41 +79,31 @@ export default function ProductDetailScreen() {
     );
   };
 
-  // Increment quantity
-  const handleIncrement = () => {
-    setQuantity((prev) => prev + 1);
-  };
-
-  // Decrement quantity
+  const handleIncrement = () => setQuantity((prev) => prev + 1);
   const handleDecrement = () => {
-    if (quantity > 1) {
-      setQuantity((prev) => prev - 1);
-    }
+    if (quantity > 1) setQuantity((prev) => prev - 1);
   };
 
-  // Get similar products (same species, different phase/size)
   const getSimilarProducts = () => {
     if (!product) return [];
     return allProducts
-      .filter(
-        (p) => p.species === product.species && p.id !== product.id && p.is_available
-      )
+      .filter((p) => p.species === product.species && p.id !== product.id && p.is_available)
       .slice(0, 3);
   };
 
   if (isLoading || !product) {
     return (
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+      <View className="flex-1 bg-cream">
+        <View className="bg-white px-5 pt-16 pb-5 flex-row items-center justify-between shadow">
+          <TouchableOpacity onPress={() => navigation.goBack()} className="w-10">
             <Ionicons name="arrow-back" size={24} color={MAVECAM_COLORS.GRAY_DARK} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>{t('productDetails')}</Text>
-          <View style={styles.backButton} />
+          <Text className="text-lg font-bold text-gray-dark">{t('productDetails')}</Text>
+          <View className="w-10" />
         </View>
-        <View style={styles.loadingContainer}>
+        <View className="flex-1 items-center justify-center">
           <ActivityIndicator size="large" color={MAVECAM_COLORS.GREEN_PRIMARY} />
-          <Text style={styles.loadingText}>{t('loading')}</Text>
+          <Text className="mt-3 text-base text-gray-light">{t('loading')}</Text>
         </View>
       </View>
     );
@@ -146,18 +115,17 @@ export default function ProductDetailScreen() {
   const totalPrice = pricePerPackage * quantity;
 
   return (
-    <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+    <View className="flex-1 bg-cream">
+      <View className="bg-white px-5 pt-16 pb-5 flex-row items-center justify-between shadow">
+        <TouchableOpacity onPress={() => navigation.goBack()} className="w-10">
           <Ionicons name="arrow-back" size={24} color={MAVECAM_COLORS.GRAY_DARK} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{t('productDetails')}</Text>
-        <TouchableOpacity onPress={() => navigation.navigate('Cart' as never)}>
+        <Text className="text-lg font-bold text-gray-dark">{t('productDetails')}</Text>
+        <TouchableOpacity onPress={() => navigation.navigate('Cart' as never)} className="relative">
           <Ionicons name="cart-outline" size={24} color={MAVECAM_COLORS.GREEN_PRIMARY} />
           {cart.items.length > 0 && (
-            <View style={styles.cartBadge}>
-              <Text style={styles.cartBadgeText}>
+            <View className="absolute -top-2 -right-2 bg-[#dc2626] rounded-full min-w-[20px] h-5 justify-center items-center px-1">
+              <Text className="text-white text-[10px] font-bold">
                 {cart.items.reduce((sum, item) => sum + item.quantity, 0)}
               </Text>
             </View>
@@ -165,74 +133,74 @@ export default function ProductDetailScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        {/* Product Image */}
-        <View style={styles.imageContainer}>
-          <View style={styles.imagePlaceholder}>
+      <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
+        <View className="bg-white items-center py-10">
+          <View className="w-48 h-48 bg-cream rounded-full items-center justify-center">
             <Ionicons name="cube" size={80} color={MAVECAM_COLORS.GREEN_PRIMARY} />
           </View>
         </View>
 
-        {/* Product Info */}
-        <View style={styles.infoSection}>
-          <Text style={styles.brandText}>{product.brand.toUpperCase()}</Text>
-          <Text style={styles.productName}>{product.name}</Text>
+        <View className="bg-white px-5 py-5 mt-2">
+          <Text className="text-xs text-gray-light font-semibold mb-1">{product.brand.toUpperCase()}</Text>
+          <Text className="text-2xl font-bold text-gray-dark mb-4">{product.name}</Text>
 
-          {/* Specs */}
-          <View style={styles.specsContainer}>
-            <View style={styles.specChip}>
+          <View className="flex-row flex-wrap gap-2 mb-5">
+            <View className="flex-row items-center bg-cream px-3 py-2 rounded-xl gap-2">
               <Ionicons name="fish" size={16} color={MAVECAM_COLORS.GREEN_PRIMARY} />
-              <Text style={styles.specChipText}>{t(product.species)}</Text>
+              <Text className="text-sm text-gray-dark font-semibold">{t(product.species)}</Text>
             </View>
-            <View style={styles.specChip}>
+            <View className="flex-row items-center bg-cream px-3 py-2 rounded-xl gap-2">
               <Ionicons name="resize" size={16} color={MAVECAM_COLORS.GREEN_PRIMARY} />
-              <Text style={styles.specChipText}>{product.pellet_size_mm}mm</Text>
+              <Text className="text-sm text-gray-dark font-semibold">{product.pellet_size_mm}mm</Text>
             </View>
             {product.phase && (
-              <View style={styles.specChip}>
+              <View className="flex-row items-center bg-cream px-3 py-2 rounded-xl gap-2">
                 <Ionicons name="water" size={16} color={MAVECAM_COLORS.GREEN_PRIMARY} />
-                <Text style={styles.specChipText}>{t(product.phase)}</Text>
+                <Text className="text-sm text-gray-dark font-semibold">{t(product.phase)}</Text>
               </View>
             )}
           </View>
 
-          {/* Price */}
-          <View style={styles.priceSection}>
-            <View>
-              <Text style={styles.priceLabel}>{t('pricePerBag')}</Text>
-              <Text style={styles.priceValue}>{pricePerPackage.toLocaleString()} FCFA</Text>
-              <Text style={styles.priceSecondary}>
-                {pricePerKg.toLocaleString()} FCFA/kg • {product.package_weight_kg}kg
-              </Text>
-            </View>
+          <View className="pt-4 border-t border-[#f1f5f9]">
+            <Text className="text-sm text-gray-light mb-1">{t('pricePerBag')}</Text>
+            <Text className="text-3xl font-bold text-mavecam-primary mb-1">
+              {pricePerPackage.toLocaleString()} FCFA
+            </Text>
+            <Text className="text-sm text-gray-light">
+              {pricePerKg.toLocaleString()} FCFA/kg - {product.package_weight_kg}kg
+            </Text>
           </View>
         </View>
 
-        {/* Nutritional Specs - Affiché seulement si données vérifiées */}
         {product.protein_percentage && product.lipid_percentage && (
-          <View style={styles.nutritionSection}>
-            <Text style={styles.sectionTitle}>{t('nutritionalComposition')}</Text>
-            <View style={styles.nutritionGrid}>
-              <View style={styles.nutritionItem}>
+          <View className="bg-white px-5 py-5 mt-2">
+            <Text className="text-lg font-bold text-gray-dark mb-4">{t('nutritionalComposition')}</Text>
+            <View className="flex-row gap-4">
+              <View className="flex-1 bg-cream rounded-xl p-5 items-center">
                 <Ionicons name="nutrition" size={24} color={MAVECAM_COLORS.GREEN_PRIMARY} />
-                <Text style={styles.nutritionValue}>{product.protein_percentage}%</Text>
-                <Text style={styles.nutritionLabel}>{t('protein')}</Text>
+                <Text className="text-2xl font-bold text-mavecam-primary mt-2">
+                  {product.protein_percentage}%
+                </Text>
+                <Text className="text-xs text-gray-light mt-1">{t('protein')}</Text>
               </View>
-              <View style={styles.nutritionItem}>
+              <View className="flex-1 bg-cream rounded-xl p-5 items-center">
                 <Ionicons name="water" size={24} color={MAVECAM_COLORS.GREEN_PRIMARY} />
-                <Text style={styles.nutritionValue}>{product.lipid_percentage}%</Text>
-                <Text style={styles.nutritionLabel}>{t('lipids')}</Text>
+                <Text className="text-2xl font-bold text-mavecam-primary mt-2">
+                  {product.lipid_percentage}%
+                </Text>
+                <Text className="text-xs text-gray-light mt-1">{t('lipids')}</Text>
               </View>
             </View>
           </View>
         )}
 
-        {/* Quantity Selector */}
-        <View style={styles.quantitySection}>
-          <Text style={styles.sectionTitle}>{t('quantity')}</Text>
-          <View style={styles.quantityControls}>
+        <View className="bg-white px-5 py-5 mt-2">
+          <Text className="text-lg font-bold text-gray-dark mb-3">{t('quantity')}</Text>
+          <View className="flex-row items-center justify-center gap-5 mb-4">
             <TouchableOpacity
-              style={[styles.quantityButton, quantity === 1 && styles.quantityButtonDisabled]}
+              className={`w-12 h-12 rounded-full items-center justify-center ${
+                quantity === 1 ? 'bg-cream' : 'bg-mavecam-primary'
+              }`}
               onPress={handleDecrement}
               disabled={quantity === 1}
             >
@@ -242,39 +210,45 @@ export default function ProductDetailScreen() {
                 color={quantity === 1 ? MAVECAM_COLORS.GRAY_LIGHT : MAVECAM_COLORS.WHITE}
               />
             </TouchableOpacity>
-            <View style={styles.quantityDisplay}>
-              <Text style={styles.quantityText}>{quantity}</Text>
-              <Text style={styles.quantityUnit}>{t(quantity > 1 ? 'bags' : 'bag')}</Text>
+            <View className="items-center min-w-[80px]">
+              <Text className="text-3xl font-bold text-gray-dark">{quantity}</Text>
+              <Text className="text-sm text-gray-light mt-1">
+                {t(quantity > 1 ? 'bags' : 'bag')}
+              </Text>
             </View>
-            <TouchableOpacity style={styles.quantityButton} onPress={handleIncrement}>
+            <TouchableOpacity
+              className="w-12 h-12 rounded-full items-center justify-center bg-mavecam-primary"
+              onPress={handleIncrement}
+            >
               <Ionicons name="add" size={24} color={MAVECAM_COLORS.WHITE} />
             </TouchableOpacity>
           </View>
-          <Text style={styles.totalPriceLabel}>{t('total')}</Text>
-          <Text style={styles.totalPriceValue}>{totalPrice.toLocaleString()} FCFA</Text>
+          <Text className="text-sm text-gray-light text-center mb-1">{t('total')}</Text>
+          <Text className="text-2xl font-bold text-mavecam-primary text-center">
+            {totalPrice.toLocaleString()} FCFA
+          </Text>
         </View>
 
-        {/* Similar Products */}
         {similarProducts.length > 0 && (
-          <View style={styles.similarSection}>
-            <Text style={styles.sectionTitle}>{t('similarProducts')}</Text>
+          <View className="bg-white px-5 py-5 mt-2 mb-24">
+            <Text className="text-lg font-bold text-gray-dark mb-4">{t('similarProducts')}</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
               {similarProducts.map((similarProduct) => (
                 <TouchableOpacity
                   key={similarProduct.id}
-                  style={styles.similarCard}
-                  onPress={() =>
-                    navigation.setParams({ productId: similarProduct.id } as never)
-                  }
+                  className="w-36 bg-cream rounded-xl p-3 mr-3"
+                  onPress={() => navigation.setParams({ productId: similarProduct.id } as never)}
                 >
-                  <View style={styles.similarImagePlaceholder}>
+                  <View className="w-full h-24 bg-white rounded-lg items-center justify-center mb-2">
                     <Ionicons name="cube-outline" size={32} color={MAVECAM_COLORS.GREEN_PRIMARY} />
                   </View>
-                  <Text style={styles.similarBrand}>{similarProduct.brand.toUpperCase()}</Text>
-                  <Text style={styles.similarName} numberOfLines={2}>
+                  <Text className="text-[10px] text-gray-light font-semibold mb-1">
+                    {similarProduct.brand.toUpperCase()}
+                  </Text>
+                  <Text className="text-sm text-gray-dark font-semibold mb-2 min-h-[36px]" numberOfLines={2}>
                     {similarProduct.name}
                   </Text>
-                  <Text style={styles.similarPrice}>
+                  <Text className="text-sm font-bold text-mavecam-primary">
                     {parseFloat(similarProduct.price_per_package).toLocaleString()} FCFA
                   </Text>
                 </TouchableOpacity>
@@ -284,294 +258,17 @@ export default function ProductDetailScreen() {
         )}
       </ScrollView>
 
-      {/* Add to Cart Button */}
       {product.is_available && (
-        <View style={styles.footer}>
-          <TouchableOpacity style={styles.addToCartButton} onPress={handleAddToCart}>
+        <View className="absolute bottom-0 left-0 right-0 bg-white p-4 shadow">
+          <TouchableOpacity
+            className="bg-mavecam-primary flex-row items-center justify-center py-4 rounded-lg gap-3"
+            onPress={handleAddToCart}
+          >
             <Ionicons name="cart" size={24} color={MAVECAM_COLORS.WHITE} />
-            <Text style={styles.addToCartText}>{t('addToCart')}</Text>
+            <Text className="text-white text-lg font-bold">{t('addToCart')}</Text>
           </TouchableOpacity>
         </View>
       )}
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: MAVECAM_COLORS.CREAM,
-  },
-  header: {
-    backgroundColor: MAVECAM_COLORS.WHITE,
-    paddingHorizontal: 20,
-    paddingTop: 60,
-    paddingBottom: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3,
-  },
-  backButton: {
-    width: 40,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: MAVECAM_COLORS.GRAY_DARK,
-  },
-  cartBadge: {
-    position: 'absolute',
-    top: -8,
-    right: -8,
-    backgroundColor: MAVECAM_COLORS.ERROR,
-    borderRadius: 12,
-    minWidth: 24,
-    height: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 6,
-  },
-  cartBadgeText: {
-    color: MAVECAM_COLORS.WHITE,
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 16,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  imageContainer: {
-    backgroundColor: MAVECAM_COLORS.WHITE,
-    alignItems: 'center',
-    paddingVertical: 40,
-    position: 'relative',
-  },
-  imagePlaceholder: {
-    width: 200,
-    height: 200,
-    backgroundColor: MAVECAM_COLORS.CREAM,
-    borderRadius: 100,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  infoSection: {
-    backgroundColor: MAVECAM_COLORS.WHITE,
-    padding: 20,
-    marginTop: 8,
-  },
-  brandText: {
-    fontSize: 12,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  productName: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: MAVECAM_COLORS.GRAY_DARK,
-    marginBottom: 16,
-  },
-  specsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 20,
-  },
-  specChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: MAVECAM_COLORS.CREAM,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    gap: 6,
-  },
-  specChipText: {
-    fontSize: 13,
-    color: MAVECAM_COLORS.GRAY_DARK,
-    fontWeight: '600',
-  },
-  priceSection: {
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#f1f5f9',
-  },
-  priceLabel: {
-    fontSize: 14,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
-    marginBottom: 4,
-  },
-  priceValue: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: MAVECAM_COLORS.GREEN_PRIMARY,
-    marginBottom: 4,
-  },
-  priceSecondary: {
-    fontSize: 14,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
-  },
-  nutritionSection: {
-    backgroundColor: MAVECAM_COLORS.WHITE,
-    padding: 20,
-    marginTop: 8,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: MAVECAM_COLORS.GRAY_DARK,
-    marginBottom: 16,
-  },
-  nutritionGrid: {
-    flexDirection: 'row',
-    gap: 16,
-  },
-  nutritionItem: {
-    flex: 1,
-    backgroundColor: MAVECAM_COLORS.CREAM,
-    borderRadius: 12,
-    padding: 20,
-    alignItems: 'center',
-  },
-  nutritionValue: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: MAVECAM_COLORS.GREEN_PRIMARY,
-    marginTop: 8,
-  },
-  nutritionLabel: {
-    fontSize: 13,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
-    marginTop: 4,
-  },
-  quantitySection: {
-    backgroundColor: MAVECAM_COLORS.WHITE,
-    padding: 20,
-    marginTop: 8,
-  },
-  quantityControls: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 20,
-    marginBottom: 20,
-  },
-  quantityButton: {
-    backgroundColor: MAVECAM_COLORS.GREEN_PRIMARY,
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  quantityButtonDisabled: {
-    backgroundColor: MAVECAM_COLORS.CREAM,
-  },
-  quantityDisplay: {
-    alignItems: 'center',
-    minWidth: 80,
-  },
-  quantityText: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: MAVECAM_COLORS.GRAY_DARK,
-  },
-  quantityUnit: {
-    fontSize: 14,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
-    marginTop: 4,
-  },
-  totalPriceLabel: {
-    fontSize: 14,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
-    textAlign: 'center',
-    marginBottom: 4,
-  },
-  totalPriceValue: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: MAVECAM_COLORS.GREEN_PRIMARY,
-    textAlign: 'center',
-  },
-  similarSection: {
-    backgroundColor: MAVECAM_COLORS.WHITE,
-    padding: 20,
-    marginTop: 8,
-    marginBottom: 100,
-  },
-  similarCard: {
-    width: 140,
-    backgroundColor: MAVECAM_COLORS.CREAM,
-    borderRadius: 12,
-    padding: 12,
-    marginRight: 12,
-  },
-  similarImagePlaceholder: {
-    width: '100%',
-    height: 100,
-    backgroundColor: MAVECAM_COLORS.WHITE,
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  similarBrand: {
-    fontSize: 10,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  similarName: {
-    fontSize: 13,
-    color: MAVECAM_COLORS.GRAY_DARK,
-    fontWeight: '600',
-    marginBottom: 8,
-    minHeight: 36,
-  },
-  similarPrice: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: MAVECAM_COLORS.GREEN_PRIMARY,
-  },
-  footer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: MAVECAM_COLORS.WHITE,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3,
-  },
-  addToCartButton: {
-    backgroundColor: MAVECAM_COLORS.GREEN_PRIMARY,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 16,
-    borderRadius: 8,
-    gap: 12,
-  },
-  addToCartText: {
-    color: MAVECAM_COLORS.WHITE,
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-});

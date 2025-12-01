@@ -1,22 +1,7 @@
-/**
- * FeedingSuggestionsScreen - Suggestions Alimentation Intelligentes MAVECAM
- *
- * Feature phare : Recommandations automatiques basées sur cycles actifs
- * - Analyse historique logs 30 derniers jours
- * - Projection besoins multi-granulométrie
- * - Détection automatique changements taille aliment
- * - Buffer sécurité +7 jours
- * - Ajout rapide au panier
- * - Score confiance qualité données
- *
- * @screen commerce/FeedingSuggestionsScreen
- */
-
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
@@ -38,26 +23,20 @@ export default function FeedingSuggestionsScreen() {
   const navigation = useNavigation();
   const dispatch = useDispatch<AppDispatch>();
 
-  // Redux state
   const { suggestions, cart, products } = useSelector((state: RootState) => state.commerce);
   const { data: suggestionsData, loading, error } = suggestions;
   const { user, farmProfile } = useSelector((state: RootState) => state.auth);
 
-  // Local state
   const [refreshing, setRefreshing] = useState(false);
   const [expandedCycleId, setExpandedCycleId] = useState<string | null>(null);
-  const [expandedPhaseIndex, setExpandedPhaseIndex] = useState<{ [key: string]: number | null }>(
-    {}
-  );
+  const [expandedPhaseIndex, setExpandedPhaseIndex] = useState<{ [key: string]: number | null }>({});
 
-  // Fetch suggestions au mount
   useEffect(() => {
     if (farmProfile) {
       dispatch(fetchFeedingSuggestions(farmProfile.id));
     }
   }, [farmProfile]);
 
-  // Pull-to-refresh
   const handleRefresh = async () => {
     if (!farmProfile) return;
     setRefreshing(true);
@@ -65,12 +44,10 @@ export default function FeedingSuggestionsScreen() {
     setRefreshing(false);
   };
 
-  // Toggle cycle expansion
   const toggleCycleExpansion = (cycleId: string) => {
     setExpandedCycleId(expandedCycleId === cycleId ? null : cycleId);
   };
 
-  // Toggle phase expansion
   const togglePhaseExpansion = (cycleId: string, phaseIndex: number) => {
     setExpandedPhaseIndex({
       ...expandedPhaseIndex,
@@ -78,7 +55,6 @@ export default function FeedingSuggestionsScreen() {
     });
   };
 
-  // Ajout produit au panier
   const handleAddToCart = (productId: string, quantity: number) => {
     const product = products.items.find((p) => p.id === productId);
     if (!product) {
@@ -90,7 +66,6 @@ export default function FeedingSuggestionsScreen() {
     Alert.alert(t('success'), t('productAddedToCart', { quantity }), [{ text: t('ok') }]);
   };
 
-  // Ajout tous produits cycle au panier
   const handleAddCycleToCart = (cycle: CycleSuggestion) => {
     let totalProducts = 0;
     cycle.phases.forEach((phase) => {
@@ -107,16 +82,12 @@ export default function FeedingSuggestionsScreen() {
       t('success'),
       t('cycleProductsAddedToCart', { count: totalProducts, cycleName: cycle.cycle_name }),
       [
-        {
-          text: t('viewCart'),
-          onPress: () => navigation.navigate('Cart' as never),
-        },
+        { text: t('viewCart'), onPress: () => navigation.navigate('Cart' as never) },
         { text: t('ok') },
       ]
     );
   };
 
-  // Render confidence score
   const renderConfidenceScore = () => {
     if (!suggestionsData?.analysis) return null;
 
@@ -129,26 +100,26 @@ export default function FeedingSuggestionsScreen() {
         : MAVECAM_COLORS.ERROR;
 
     return (
-      <View style={styles.confidenceCard}>
-        <View style={styles.confidenceHeader}>
+      <View className="bg-white rounded-xl p-4 mb-4 shadow">
+        <View className="flex-row items-center mb-3 gap-2">
           <Ionicons name="analytics-outline" size={24} color={scoreColor} />
-          <Text style={styles.confidenceTitle}>{t('dataQuality')}</Text>
+          <Text className="text-base font-bold text-gray-dark">{t('dataQuality')}</Text>
         </View>
-        <View style={styles.confidenceContent}>
-          <View style={styles.confidenceScoreContainer}>
-            <Text style={[styles.confidenceScoreValue, { color: scoreColor }]}>
+        <View className="flex-row gap-4">
+          <View className="items-center px-4">
+            <Text className="text-3xl font-bold" style={{ color: scoreColor }}>
               {confidence_score}%
             </Text>
-            <Text style={styles.confidenceScoreLabel}>{t('confidenceScore')}</Text>
+            <Text className="text-xs text-gray-light mt-1">{t('confidenceScore')}</Text>
           </View>
-          <View style={styles.confidenceDetails}>
-            <Text style={styles.confidenceDetailText}>
+          <View className="flex-1 justify-center gap-1">
+            <Text className="text-sm text-gray-dark">
               {t('cyclesAnalyzed')}: {cycles_with_data}/{total_cycles}
             </Text>
-            <Text style={styles.confidenceDetailText}>
+            <Text className="text-sm text-gray-dark">
               {t('analysisPeriod')}: {suggestionsData.analysis.analysis_period_days} {t('days')}
             </Text>
-            <Text style={styles.confidenceDetailText}>
+            <Text className="text-sm text-gray-dark">
               {t('safetyBuffer')}: +{suggestionsData.analysis.safety_buffer_days} {t('days')}
             </Text>
           </View>
@@ -157,34 +128,27 @@ export default function FeedingSuggestionsScreen() {
     );
   };
 
-  // Render suggested product
-  const renderSuggestedProduct = (
-    suggestedProduct: SuggestedProduct,
-    cycleId: string,
-    phaseIndex: number
-  ) => {
+  const renderSuggestedProduct = (suggestedProduct: SuggestedProduct) => {
     const totalPrice = suggestedProduct.total_price;
 
     return (
-      <View key={suggestedProduct.product_id} style={styles.suggestedProduct}>
-        <View style={styles.suggestedProductLeft}>
-          <Text style={styles.suggestedProductBrand}>
-            {suggestedProduct.brand.toUpperCase()}
-          </Text>
-          <Text style={styles.suggestedProductName} numberOfLines={2}>
+      <View key={suggestedProduct.product_id} className="flex-row justify-between bg-white p-3 rounded-lg mb-2">
+        <View className="flex-1 mr-3">
+          <Text className="text-[10px] text-gray-light font-semibold mb-1">{suggestedProduct.brand.toUpperCase()}</Text>
+          <Text className="text-sm text-gray-dark mb-1" numberOfLines={2}>
             {suggestedProduct.product_name}
           </Text>
-          <Text style={styles.suggestedProductQuantity}>
-            {suggestedProduct.quantity_bags} {t('bags')} • {suggestedProduct.total_kg}kg
+          <Text className="text-xs text-gray-light">
+            {suggestedProduct.quantity_bags} {t('bags')} - {suggestedProduct.total_kg}kg
           </Text>
         </View>
-        <View style={styles.suggestedProductRight}>
-          <Text style={styles.suggestedProductPrice}>{totalPrice.toLocaleString()} FCFA</Text>
+        <View className="items-end justify-between">
+          <Text className="text-sm font-semibold text-mavecam-primary">
+            {totalPrice.toLocaleString()} FCFA
+          </Text>
           <TouchableOpacity
-            style={styles.addToCartButton}
-            onPress={() =>
-              handleAddToCart(suggestedProduct.product_id, suggestedProduct.quantity_bags)
-            }
+            className="bg-mavecam-primary w-8 h-8 rounded-full items-center justify-center"
+            onPress={() => handleAddToCart(suggestedProduct.product_id, suggestedProduct.quantity_bags)}
           >
             <Ionicons name="cart-outline" size={16} color={MAVECAM_COLORS.WHITE} />
           </TouchableOpacity>
@@ -193,30 +157,32 @@ export default function FeedingSuggestionsScreen() {
     );
   };
 
-  // Render feeding phase
   const renderFeedingPhase = (phase: FeedingPhase, cycleId: string, index: number) => {
     const isExpanded = expandedPhaseIndex[cycleId] === index;
+    const totalBags = phase.products.reduce((sum, p) => sum + p.quantity_bags, 0);
 
     return (
-      <View key={index} style={styles.phaseCard}>
+      <View key={index} className="bg-cream rounded-lg p-3 mb-3">
         <TouchableOpacity
-          style={styles.phaseHeader}
+          className="flex-row justify-between items-center"
           onPress={() => togglePhaseExpansion(cycleId, index)}
-          activeOpacity={0.7}
+          activeOpacity={0.8}
         >
-          <View style={styles.phaseHeaderLeft}>
-            <View style={styles.phaseIconContainer}>
+          <View className="flex-row items-center flex-1 gap-3">
+            <View className="w-10 h-10 bg-white rounded-full items-center justify-center">
               <Ionicons name="fast-food-outline" size={20} color={MAVECAM_COLORS.GREEN_PRIMARY} />
             </View>
             <View>
-              <Text style={styles.phaseName}>{phase.phase_name}</Text>
-              <Text style={styles.phaseSpecs}>
-                {phase.pellet_size_mm}mm • {phase.weight_range_g[0]}-{phase.weight_range_g[1]}g
+              <Text className="text-sm font-semibold text-gray-dark">{phase.phase_name}</Text>
+              <Text className="text-xs text-gray-light">
+                {phase.pellet_size_mm}mm - {phase.weight_range_g[0]}-{phase.weight_range_g[1]}g
               </Text>
             </View>
           </View>
-          <View style={styles.phaseHeaderRight}>
-            <Text style={styles.phaseTotalPrice}>{phase.total_price.toLocaleString()} FCFA</Text>
+          <View className="items-end gap-1">
+            <Text className="text-sm font-semibold text-mavecam-primary">
+              {phase.total_price.toLocaleString()} FCFA
+            </Text>
             <Ionicons
               name={isExpanded ? 'chevron-up' : 'chevron-down'}
               size={20}
@@ -225,54 +191,48 @@ export default function FeedingSuggestionsScreen() {
           </View>
         </TouchableOpacity>
 
-        <View style={styles.phaseQuickInfo}>
-          <View style={styles.phaseInfoItem}>
+        <View className="flex-row mt-3 gap-4">
+          <View className="flex-row items-center gap-1">
             <Ionicons name="calendar-outline" size={14} color={MAVECAM_COLORS.GRAY_LIGHT} />
-            <Text style={styles.phaseInfoText}>
-              {phase.days_coverage} {t('days')}
-            </Text>
+            <Text className="text-xs text-gray-light">{phase.days_coverage} {t('days')}</Text>
           </View>
-          <View style={styles.phaseInfoItem}>
+          <View className="flex-row items-center gap-1">
             <Ionicons name="scale-outline" size={14} color={MAVECAM_COLORS.GRAY_LIGHT} />
-            <Text style={styles.phaseInfoText}>{phase.estimated_need_kg}kg</Text>
+            <Text className="text-xs text-gray-light">{phase.estimated_need_kg}kg</Text>
           </View>
-          <View style={styles.phaseInfoItem}>
+          <View className="flex-row items-center gap-1">
             <Ionicons name="cube-outline" size={14} color={MAVECAM_COLORS.GRAY_LIGHT} />
-            <Text style={styles.phaseInfoText}>
-              {phase.products.reduce((sum, p) => sum + p.quantity_bags, 0)} {t('bags')}
-            </Text>
+            <Text className="text-xs text-gray-light">{totalBags} {t('bags')}</Text>
           </View>
         </View>
 
         {isExpanded && (
-          <View style={styles.phaseProducts}>
-            <Text style={styles.productsTitle}>{t('recommendedProducts')}</Text>
-            {phase.products.map((product) => renderSuggestedProduct(product, cycleId, index))}
+          <View className="mt-3 pt-3 border-t border-[#e5e7eb]">
+            <Text className="text-xs font-semibold text-gray-dark mb-2">{t('recommendedProducts')}</Text>
+            {phase.products.map((product) => renderSuggestedProduct(product))}
           </View>
         )}
       </View>
     );
   };
 
-  // Render cycle suggestion
   const renderCycleSuggestion = ({ item: cycle }: { item: CycleSuggestion }) => {
     const isExpanded = expandedCycleId === cycle.cycle_id;
 
     return (
-      <View style={styles.cycleCard}>
+      <View className="bg-white rounded-xl p-4 mb-4 shadow">
         <TouchableOpacity
-          style={styles.cycleHeader}
+          className="flex-row items-center justify-between"
           onPress={() => toggleCycleExpansion(cycle.cycle_id)}
-          activeOpacity={0.7}
+          activeOpacity={0.8}
         >
-          <View style={styles.cycleHeaderLeft}>
+          <View className="flex-row items-center flex-1 gap-3">
             <Ionicons name="water-outline" size={28} color={MAVECAM_COLORS.GREEN_PRIMARY} />
-            <View style={styles.cycleInfo}>
-              <Text style={styles.cycleName}>{cycle.cycle_name}</Text>
-              <Text style={styles.cycleSpecies}>{t(cycle.species)}</Text>
-              <Text style={styles.cycleDetails}>
-                {t('currentPhase')}: {cycle.current_phase} • {cycle.current_avg_weight_g}g •{' '}
-                {cycle.days_remaining} {t('daysRemaining')}
+            <View className="flex-1">
+              <Text className="text-base font-bold text-gray-dark">{cycle.cycle_name}</Text>
+              <Text className="text-sm text-mavecam-primary">{t(cycle.species)}</Text>
+              <Text className="text-xs text-gray-light mt-1">
+                {t('currentPhase')}: {cycle.current_phase} - {cycle.current_avg_weight_g}g - {cycle.days_remaining} {t('daysRemaining')}
               </Text>
             </View>
           </View>
@@ -283,43 +243,38 @@ export default function FeedingSuggestionsScreen() {
           />
         </TouchableOpacity>
 
-        {/* Summary */}
-        <View style={styles.cycleSummary}>
-          <View style={styles.summaryItem}>
-            <Text style={styles.summaryLabel}>{t('totalNeeded')}</Text>
-            <Text style={styles.summaryValue}>{cycle.summary.total_needed_kg}kg</Text>
+        <View className="flex-row flex-wrap bg-cream rounded-lg p-3 mt-3 gap-3">
+          <View className="flex-1 min-w-[45%] items-center">
+            <Text className="text-xs text-gray-light">{t('totalNeeded')}</Text>
+            <Text className="text-sm font-bold text-gray-dark">{cycle.summary.total_needed_kg}kg</Text>
           </View>
-          <View style={styles.summaryItem}>
-            <Text style={styles.summaryLabel}>{t('totalBags')}</Text>
-            <Text style={styles.summaryValue}>{cycle.summary.total_bags}</Text>
+          <View className="flex-1 min-w-[45%] items-center">
+            <Text className="text-xs text-gray-light">{t('totalBags')}</Text>
+            <Text className="text-sm font-bold text-gray-dark">{cycle.summary.total_bags}</Text>
           </View>
-          <View style={styles.summaryItem}>
-            <Text style={styles.summaryLabel}>{t('totalCost')}</Text>
-            <Text style={styles.summaryValuePrice}>
+          <View className="flex-1 min-w-[45%] items-center">
+            <Text className="text-xs text-gray-light">{t('totalCost')}</Text>
+            <Text className="text-sm font-bold text-mavecam-primary">
               {cycle.summary.total_price.toLocaleString()} FCFA
             </Text>
           </View>
-          <View style={styles.summaryItem}>
-            <Text style={styles.summaryLabel}>{t('coverage')}</Text>
-            <Text style={styles.summaryValue}>
-              {cycle.summary.coverage_days} {t('days')}
-            </Text>
+          <View className="flex-1 min-w-[45%] items-center">
+            <Text className="text-xs text-gray-light">{t('coverage')}</Text>
+            <Text className="text-sm font-bold text-gray-dark">{cycle.summary.coverage_days} {t('days')}</Text>
           </View>
         </View>
 
-        {/* Add all to cart button */}
         <TouchableOpacity
-          style={styles.addCycleToCartButton}
+          className="bg-mavecam-primary flex-row items-center justify-center py-3 rounded-lg mt-3 gap-2"
           onPress={() => handleAddCycleToCart(cycle)}
         >
           <Ionicons name="cart" size={20} color={MAVECAM_COLORS.WHITE} />
-          <Text style={styles.addCycleToCartText}>{t('addAllToCart')}</Text>
+          <Text className="text-white text-base font-semibold">{t('addAllToCart')}</Text>
         </TouchableOpacity>
 
-        {/* Phases détaillées */}
         {isExpanded && (
-          <View style={styles.phasesContainer}>
-            <Text style={styles.phasesTitle}>{t('feedingPhases')}</Text>
+          <View className="mt-4">
+            <Text className="text-sm font-bold text-gray-dark mb-3">{t('feedingPhases')}</Text>
             {cycle.phases.map((phase, index) => renderFeedingPhase(phase, cycle.cycle_id, index))}
           </View>
         )}
@@ -327,38 +282,36 @@ export default function FeedingSuggestionsScreen() {
     );
   };
 
-  // Empty state
   const renderEmptyState = () => (
-    <View style={styles.emptyState}>
+    <View className="py-16 items-center">
       <Ionicons name="bulb-outline" size={100} color={MAVECAM_COLORS.GRAY_LIGHT} />
-      <Text style={styles.emptyTitle}>{t('noSuggestionsYet')}</Text>
-      <Text style={styles.emptyDescription}>{t('noSuggestionsDescription')}</Text>
+      <Text className="mt-5 text-2xl font-bold text-gray-dark">{t('noSuggestionsYet')}</Text>
+      <Text className="mt-3 text-base text-gray-light text-center px-8">{t('noSuggestionsDescription')}</Text>
       <TouchableOpacity
-        style={styles.createCycleButton}
+        className="mt-6 bg-mavecam-primary flex-row items-center px-6 py-3 rounded-lg gap-2"
         onPress={() => navigation.navigate('NewCycle' as never)}
       >
         <Ionicons name="add-circle-outline" size={20} color={MAVECAM_COLORS.WHITE} />
-        <Text style={styles.createCycleButtonText}>{t('startNewCycle')}</Text>
+        <Text className="text-white text-base font-semibold">{t('startNewCycle')}</Text>
       </TouchableOpacity>
     </View>
   );
 
   return (
-    <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+    <View className="flex-1 bg-cream">
+      <View className="bg-white px-5 pt-16 pb-5 flex-row items-center justify-between shadow">
+        <TouchableOpacity onPress={() => navigation.goBack()} className="w-10">
           <Ionicons name="arrow-back" size={24} color={MAVECAM_COLORS.GRAY_DARK} />
         </TouchableOpacity>
-        <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>{t('feedingSuggestions')}</Text>
-          <Text style={styles.headerSubtitle}>{t('intelligentRecommendations')}</Text>
+        <View className="flex-1 items-center">
+          <Text className="text-xl font-bold text-gray-dark">{t('feedingSuggestions')}</Text>
+          <Text className="text-xs text-gray-light mt-1">{t('intelligentRecommendations')}</Text>
         </View>
-        <TouchableOpacity onPress={() => navigation.navigate('Cart' as never)}>
+        <TouchableOpacity onPress={() => navigation.navigate('Cart' as never)} className="relative">
           <Ionicons name="cart-outline" size={24} color={MAVECAM_COLORS.GREEN_PRIMARY} />
           {cart.items.length > 0 && (
-            <View style={styles.cartBadge}>
-              <Text style={styles.cartBadgeText}>
+            <View className="absolute -top-2 -right-2 bg-[#dc2626] rounded-full min-w-[20px] h-5 items-center justify-center px-1">
+              <Text className="text-white text-[10px] font-bold">
                 {cart.items.reduce((sum, item) => sum + item.quantity, 0)}
               </Text>
             </View>
@@ -366,26 +319,25 @@ export default function FeedingSuggestionsScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Content */}
       {loading && !refreshing ? (
-        <View style={styles.loadingContainer}>
+        <View className="flex-1 items-center justify-center">
           <ActivityIndicator size="large" color={MAVECAM_COLORS.GREEN_PRIMARY} />
-          <Text style={styles.loadingText}>{t('analyzingCycles')}</Text>
+          <Text className="mt-3 text-base text-gray-light">{t('analyzingCycles')}</Text>
         </View>
       ) : error ? (
-        <View style={styles.errorContainer}>
+        <View className="flex-1 items-center justify-center px-10 py-10">
           <Ionicons name="alert-circle-outline" size={48} color={MAVECAM_COLORS.ERROR} />
-          <Text style={styles.errorText}>{error}</Text>
+          <Text className="mt-3 text-base text-[#dc2626] text-center">{error}</Text>
           <TouchableOpacity
-            style={styles.retryButton}
+            className="mt-5 bg-mavecam-primary px-6 py-3 rounded-lg"
             onPress={() => farmProfile && dispatch(fetchFeedingSuggestions(farmProfile.id))}
           >
-            <Text style={styles.retryButtonText}>{t('retry')}</Text>
+            <Text className="text-white text-base font-semibold">{t('retry')}</Text>
           </TouchableOpacity>
         </View>
       ) : (
         <ScrollView
-          style={styles.scrollView}
+          className="flex-1"
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -397,17 +349,16 @@ export default function FeedingSuggestionsScreen() {
           showsVerticalScrollIndicator={false}
         >
           {suggestionsData?.has_suggestions ? (
-            <View style={styles.content}>
-              {/* Info banner */}
-              <View style={styles.infoBanner}>
+            <View className="p-4">
+              <View className="flex-row bg-[#dbeafe] p-3 rounded-lg mb-4 gap-3">
                 <Ionicons name="information-circle" size={24} color={MAVECAM_COLORS.INFO} />
-                <Text style={styles.infoBannerText}>{t('suggestionsInfoBanner')}</Text>
+                <Text className="flex-1 text-sm text-mavecam-primary">
+                  {t('suggestionsInfoBanner')}
+                </Text>
               </View>
 
-              {/* Confidence score */}
               {renderConfidenceScore()}
 
-              {/* Cycle suggestions */}
               {suggestionsData.suggestions.map((cycle) => (
                 <View key={cycle.cycle_id}>{renderCycleSuggestion({ item: cycle })}</View>
               ))}
@@ -420,399 +371,3 @@ export default function FeedingSuggestionsScreen() {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: MAVECAM_COLORS.CREAM,
-  },
-  header: {
-    backgroundColor: MAVECAM_COLORS.WHITE,
-    paddingHorizontal: 20,
-    paddingTop: 60,
-    paddingBottom: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3,
-  },
-  backButton: {
-    width: 40,
-  },
-  headerCenter: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: MAVECAM_COLORS.GRAY_DARK,
-  },
-  headerSubtitle: {
-    fontSize: 12,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
-    marginTop: 2,
-  },
-  cartBadge: {
-    position: 'absolute',
-    top: -8,
-    right: -8,
-    backgroundColor: MAVECAM_COLORS.ERROR,
-    borderRadius: 12,
-    minWidth: 24,
-    height: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 6,
-  },
-  cartBadgeText: {
-    color: MAVECAM_COLORS.WHITE,
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  scrollView: {
-    flex: 1,
-  },
-  content: {
-    padding: 16,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 16,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 40,
-  },
-  errorText: {
-    marginTop: 12,
-    fontSize: 16,
-    color: MAVECAM_COLORS.ERROR,
-    textAlign: 'center',
-  },
-  retryButton: {
-    marginTop: 20,
-    backgroundColor: MAVECAM_COLORS.GREEN_PRIMARY,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
-  retryButtonText: {
-    color: MAVECAM_COLORS.WHITE,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  infoBanner: {
-    flexDirection: 'row',
-    backgroundColor: '#dbeafe',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 16,
-    gap: 12,
-  },
-  infoBannerText: {
-    flex: 1,
-    fontSize: 13,
-    color: MAVECAM_COLORS.INFO,
-    lineHeight: 18,
-  },
-  confidenceCard: {
-    backgroundColor: MAVECAM_COLORS.WHITE,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  confidenceHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-    gap: 8,
-  },
-  confidenceTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: MAVECAM_COLORS.GRAY_DARK,
-  },
-  confidenceContent: {
-    flexDirection: 'row',
-    gap: 16,
-  },
-  confidenceScoreContainer: {
-    alignItems: 'center',
-    paddingHorizontal: 16,
-  },
-  confidenceScoreValue: {
-    fontSize: 32,
-    fontWeight: 'bold',
-  },
-  confidenceScoreLabel: {
-    fontSize: 12,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
-    marginTop: 4,
-  },
-  confidenceDetails: {
-    flex: 1,
-    justifyContent: 'center',
-    gap: 4,
-  },
-  confidenceDetailText: {
-    fontSize: 13,
-    color: MAVECAM_COLORS.GRAY_DARK,
-  },
-  cycleCard: {
-    backgroundColor: MAVECAM_COLORS.WHITE,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  cycleHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  cycleHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-    gap: 12,
-  },
-  cycleInfo: {
-    flex: 1,
-  },
-  cycleName: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: MAVECAM_COLORS.GRAY_DARK,
-  },
-  cycleSpecies: {
-    fontSize: 14,
-    color: MAVECAM_COLORS.GREEN_PRIMARY,
-    marginTop: 2,
-  },
-  cycleDetails: {
-    fontSize: 12,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
-    marginTop: 4,
-  },
-  cycleSummary: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    backgroundColor: MAVECAM_COLORS.CREAM,
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 12,
-    gap: 12,
-  },
-  summaryItem: {
-    flex: 1,
-    minWidth: '45%',
-    alignItems: 'center',
-  },
-  summaryLabel: {
-    fontSize: 12,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
-    marginBottom: 4,
-  },
-  summaryValue: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: MAVECAM_COLORS.GRAY_DARK,
-  },
-  summaryValuePrice: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: MAVECAM_COLORS.GREEN_PRIMARY,
-  },
-  addCycleToCartButton: {
-    backgroundColor: MAVECAM_COLORS.GREEN_PRIMARY,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    borderRadius: 8,
-    gap: 8,
-  },
-  addCycleToCartText: {
-    color: MAVECAM_COLORS.WHITE,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  phasesContainer: {
-    marginTop: 16,
-  },
-  phasesTitle: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: MAVECAM_COLORS.GRAY_DARK,
-    marginBottom: 12,
-  },
-  phaseCard: {
-    backgroundColor: MAVECAM_COLORS.CREAM,
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 12,
-  },
-  phaseHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  phaseHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-    gap: 12,
-  },
-  phaseIconContainer: {
-    width: 40,
-    height: 40,
-    backgroundColor: MAVECAM_COLORS.WHITE,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  phaseName: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: MAVECAM_COLORS.GRAY_DARK,
-  },
-  phaseSpecs: {
-    fontSize: 12,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
-    marginTop: 2,
-  },
-  phaseHeaderRight: {
-    alignItems: 'flex-end',
-    gap: 4,
-  },
-  phaseTotalPrice: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: MAVECAM_COLORS.GREEN_PRIMARY,
-  },
-  phaseQuickInfo: {
-    flexDirection: 'row',
-    marginTop: 12,
-    gap: 16,
-  },
-  phaseInfoItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  phaseInfoText: {
-    fontSize: 12,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
-  },
-  phaseProducts: {
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
-  },
-  productsTitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: MAVECAM_COLORS.GRAY_DARK,
-    marginBottom: 8,
-  },
-  suggestedProduct: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    backgroundColor: MAVECAM_COLORS.WHITE,
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 8,
-  },
-  suggestedProductLeft: {
-    flex: 1,
-    marginRight: 12,
-  },
-  suggestedProductBrand: {
-    fontSize: 10,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
-    fontWeight: '600',
-    marginBottom: 2,
-  },
-  suggestedProductName: {
-    fontSize: 13,
-    color: MAVECAM_COLORS.GRAY_DARK,
-    marginBottom: 4,
-  },
-  suggestedProductQuantity: {
-    fontSize: 12,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
-  },
-  suggestedProductRight: {
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-  },
-  suggestedProductPrice: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: MAVECAM_COLORS.GREEN_PRIMARY,
-    marginBottom: 8,
-  },
-  addToCartButton: {
-    backgroundColor: MAVECAM_COLORS.GREEN_PRIMARY,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  emptyState: {
-    padding: 40,
-    alignItems: 'center',
-  },
-  emptyTitle: {
-    marginTop: 20,
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: MAVECAM_COLORS.GRAY_DARK,
-  },
-  emptyDescription: {
-    marginTop: 12,
-    fontSize: 16,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
-    textAlign: 'center',
-  },
-  createCycleButton: {
-    marginTop: 24,
-    backgroundColor: MAVECAM_COLORS.GREEN_PRIMARY,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
-    gap: 8,
-  },
-  createCycleButtonText: {
-    color: MAVECAM_COLORS.WHITE,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-});

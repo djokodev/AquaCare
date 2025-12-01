@@ -1,22 +1,7 @@
-/**
- * OrdersHistoryScreen - Historique Commandes MAVECAM
- *
- * Écran d'affichage de l'historique des commandes avec :
- * - Liste commandes triées par date (plus récentes en premier)
- * - Filtrage par période et statut
- * - Détails commande (items, montants, livraison)
- * - Statistiques globales (total dépensé, nb commandes)
- * - Pull-to-refresh
- * - États vide/erreur/loading gérés
- *
- * @screen commerce/OrdersHistoryScreen
- */
-
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
   FlatList,
   TouchableOpacity,
   ActivityIndicator,
@@ -38,52 +23,37 @@ export default function OrdersHistoryScreen() {
   const navigation = useNavigation();
   const dispatch = useDispatch<AppDispatch>();
 
-  // Redux state
   const { orders } = useSelector((state: RootState) => state.commerce);
   const { items: ordersList, statistics, loading, error } = orders;
 
-  // Local state
   const [refreshing, setRefreshing] = useState(false);
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
 
-  // Fetch orders au mount
   useEffect(() => {
     dispatch(fetchOrders());
     dispatch(fetchOrderStatistics());
   }, []);
 
-  // Pull-to-refresh
   const handleRefresh = async () => {
     setRefreshing(true);
     await Promise.all([dispatch(fetchOrders()), dispatch(fetchOrderStatistics())]);
     setRefreshing(false);
   };
 
-  // Toggle expansion détails commande
   const toggleOrderExpansion = (orderId: string) => {
     setExpandedOrderId(expandedOrderId === orderId ? null : orderId);
   };
 
-  // Format date
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
-    return date.toLocaleDateString('fr-FR', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-    });
+    return date.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
   };
 
-  // Format heure
   const formatTime = (dateString: string) => {
     const date = new Date(dateString);
-    return date.toLocaleTimeString('fr-FR', {
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    return date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
   };
 
-  // Render order card
   const renderOrderCard = ({ item: order }: { item: Order }) => {
     const isExpanded = expandedOrderId === order.id;
     const subtotal = parseFloat(order.subtotal);
@@ -92,18 +62,17 @@ export default function OrdersHistoryScreen() {
 
     return (
       <TouchableOpacity
-        style={styles.orderCard}
+        className="bg-white rounded-xl p-4 mb-3 shadow"
         onPress={() => toggleOrderExpansion(order.id)}
-        activeOpacity={0.7}
+        activeOpacity={0.8}
       >
-        {/* Header commande */}
-        <View style={styles.orderHeader}>
-          <View style={styles.orderHeaderLeft}>
+        <View className="flex-row justify-between items-center mb-3">
+          <View className="flex-row items-center flex-1">
             <Ionicons name="receipt-outline" size={24} color={MAVECAM_COLORS.GREEN_PRIMARY} />
-            <View style={styles.orderHeaderInfo}>
-              <Text style={styles.orderNumber}>{order.order_number}</Text>
-              <Text style={styles.orderDate}>
-                {formatDate(order.created_at)} • {formatTime(order.created_at)}
+            <View className="ml-3 flex-1">
+              <Text className="text-base font-bold text-gray-dark">{order.order_number}</Text>
+              <Text className="text-xs text-gray-light mt-1">
+                {formatDate(order.created_at)} - {formatTime(order.created_at)}
               </Text>
             </View>
           </View>
@@ -114,120 +83,113 @@ export default function OrdersHistoryScreen() {
           />
         </View>
 
-        {/* Badge statut + montant */}
-        <View style={styles.orderSummaryRow}>
-          <View style={[styles.statusBadge, styles.statusConfirmed]}>
+        <View className="flex-row justify-between items-center mb-3">
+          <View className="flex-row items-center px-3 py-2 rounded-full bg-cream gap-2">
             <Ionicons name="checkmark-circle" size={16} color={MAVECAM_COLORS.SUCCESS} />
-            <Text style={styles.statusText}>{t('confirmed')}</Text>
+            <Text className="text-xs font-semibold text-mavecam-primary">{t('confirmed')}</Text>
           </View>
-          <Text style={styles.orderTotal}>{total.toLocaleString()} FCFA</Text>
+          <Text className="text-lg font-bold text-mavecam-primary">{total.toLocaleString()} FCFA</Text>
         </View>
 
-        {/* Info rapide */}
-        <View style={styles.quickInfo}>
-          <View style={styles.quickInfoItem}>
+        <View className="flex-row flex-wrap gap-3">
+          <View className="flex-row items-center gap-2">
             <Ionicons name="cube-outline" size={16} color={MAVECAM_COLORS.GRAY_LIGHT} />
-            <Text style={styles.quickInfoText}>
+            <Text className="text-sm text-gray-light">
               {order.total_bags} {t(order.total_bags > 1 ? 'bags' : 'bag')}
             </Text>
           </View>
-          <View style={styles.quickInfoItem}>
+          <View className="flex-row items-center gap-2">
             <Ionicons
               name={order.delivery_method === 'home' ? 'home-outline' : 'storefront-outline'}
               size={16}
               color={MAVECAM_COLORS.GRAY_LIGHT}
             />
-            <Text style={styles.quickInfoText}>
+            <Text className="text-sm text-gray-light">
               {t(order.delivery_method === 'home' ? 'homeDelivery' : 'pickupStore')}
             </Text>
           </View>
           {order.is_free_delivery && (
-            <View style={[styles.quickInfoItem, styles.freeDeliveryBadge]}>
+            <View className="flex-row items-center bg-cream px-2 py-1 rounded-full gap-1.5">
               <Ionicons name="gift-outline" size={16} color={MAVECAM_COLORS.SUCCESS} />
-              <Text style={styles.freeDeliveryText}>{t('free')}</Text>
+              <Text className="text-xs font-semibold text-mavecam-primary">{t('free')}</Text>
             </View>
           )}
         </View>
 
-        {/* Détails expandable */}
         {isExpanded && (
-          <View style={styles.orderDetails}>
-            <View style={styles.divider} />
+          <View className="mt-3">
+            <View className="h-px bg-[#f1f5f9] my-4" />
 
-            {/* Items commande */}
-            <Text style={styles.detailsTitle}>{t('orderItems')}</Text>
+            <Text className="text-sm font-semibold text-gray-dark mb-3">{t('orderItems')}</Text>
             {order.items.map((item, index) => (
-              <View key={index} style={styles.orderItem}>
-                <View style={styles.orderItemLeft}>
-                  <Text style={styles.orderItemBrand}>{item.product_brand.toUpperCase()}</Text>
-                  <Text style={styles.orderItemName} numberOfLines={2}>
+              <View key={index} className="flex-row justify-between mb-3">
+                <View className="flex-1 mr-3">
+                  <Text className="text-[10px] text-gray-light font-semibold mb-1">
+                    {item.product_brand.toUpperCase()}
+                  </Text>
+                  <Text className="text-sm text-gray-dark mb-1" numberOfLines={2}>
                     {item.product_name}
                   </Text>
-                  <Text style={styles.orderItemSpecs}>
-                    {item.product_package_weight}kg • {item.quantity}x
+                  <Text className="text-xs text-gray-light">
+                    {item.product_package_weight}kg - {item.quantity}x
                   </Text>
                 </View>
-                <View style={styles.orderItemRight}>
-                  <Text style={styles.orderItemPrice}>
+                <View className="items-end">
+                  <Text className="text-xs text-gray-light mb-1">
                     {parseFloat(item.unit_price).toLocaleString()} FCFA
                   </Text>
-                  <Text style={styles.orderItemTotal}>
+                  <Text className="text-sm font-semibold text-mavecam-primary">
                     {parseFloat(item.line_total).toLocaleString()} FCFA
                   </Text>
                 </View>
               </View>
             ))}
 
-            <View style={styles.divider} />
+            <View className="h-px bg-[#f1f5f9] my-4" />
 
-            {/* Montants détaillés */}
-            <View style={styles.amountsSection}>
-              <View style={styles.amountRow}>
-                <Text style={styles.amountLabel}>{t('subtotal')}</Text>
-                <Text style={styles.amountValue}>{subtotal.toLocaleString()} FCFA</Text>
+            <View className="gap-2">
+              <View className="flex-row justify-between items-center">
+                <Text className="text-sm text-gray-dark">{t('subtotal')}</Text>
+                <Text className="text-sm font-semibold text-gray-dark">{subtotal.toLocaleString()} FCFA</Text>
               </View>
-              <View style={styles.amountRow}>
-                <Text style={styles.amountLabel}>{t('deliveryFee')}</Text>
+              <View className="flex-row justify-between items-center">
+                <Text className="text-sm text-gray-dark">{t('deliveryFee')}</Text>
                 {deliveryFee === 0 ? (
-                  <Text style={[styles.amountValue, styles.freeText]}>{t('free')}</Text>
+                  <Text className="text-sm font-semibold text-mavecam-primary">{t('free')}</Text>
                 ) : (
-                  <Text style={styles.amountValue}>{deliveryFee.toLocaleString()} FCFA</Text>
+                  <Text className="text-sm font-semibold text-gray-dark">{deliveryFee.toLocaleString()} FCFA</Text>
                 )}
               </View>
-              <View style={[styles.amountRow, styles.totalRow]}>
-                <Text style={styles.totalLabel}>{t('total')}</Text>
-                <Text style={styles.totalValue}>{total.toLocaleString()} FCFA</Text>
+              <View className="flex-row justify-between items-center mt-2 pt-2 border-t border-[#f1f5f9]">
+                <Text className="text-base font-bold text-gray-dark">{t('total')}</Text>
+                <Text className="text-lg font-bold text-mavecam-primary">{total.toLocaleString()} FCFA</Text>
               </View>
             </View>
 
-            {/* Adresse livraison */}
             {order.delivery_method === 'home' && (
-              <>
-                <View style={styles.divider} />
-                <Text style={styles.detailsTitle}>{t('deliveryAddress')}</Text>
-                <View style={styles.addressSection}>
-                  <Text style={styles.addressName}>{order.delivery_name}</Text>
-                  <Text style={styles.addressPhone}>{order.delivery_phone}</Text>
-                  <Text style={styles.addressText}>
-                    {order.delivery_full_address}, {order.delivery_city}
-                  </Text>
-                  <Text style={styles.addressText}>{order.delivery_region}</Text>
+              <View className="mt-4">
+                <View className="h-px bg-[#f1f5f9] my-3" />
+                <Text className="text-sm font-semibold text-gray-dark mb-2">{t('deliveryAddress')}</Text>
+                <View className="bg-cream p-3 rounded-lg">
+                  <Text className="text-sm font-semibold text-gray-dark mb-1">{order.delivery_name}</Text>
+                  <Text className="text-xs text-gray-light mb-2">{order.delivery_phone}</Text>
+                  <Text className="text-xs text-gray-dark">{order.delivery_full_address}, {order.delivery_city}</Text>
+                  <Text className="text-xs text-gray-dark">{order.delivery_region}</Text>
                 </View>
-              </>
+              </View>
             )}
 
-            {/* Point retrait */}
             {order.delivery_method === 'pickup' && order.pickup_location && (
-              <>
-                <View style={styles.divider} />
-                <Text style={styles.detailsTitle}>{t('pickupPoint')}</Text>
-                <View style={styles.pickupSection}>
+              <View className="mt-4">
+                <View className="h-px bg-[#f1f5f9] my-3" />
+                <Text className="text-sm font-semibold text-gray-dark mb-2">{t('pickupPoint')}</Text>
+                <View className="flex-row items-center bg-cream p-3 rounded-lg gap-2">
                   <Ionicons name="location" size={20} color={MAVECAM_COLORS.GREEN_PRIMARY} />
-                  <Text style={styles.pickupLocation}>
+                  <Text className="text-sm font-semibold text-mavecam-primary">
                     MAVECAM {order.pickup_location === 'ndokoti' ? 'Ndokoti' : 'Ndogpasi'}
                   </Text>
                 </View>
-              </>
+              </View>
             )}
           </View>
         )}
@@ -235,7 +197,6 @@ export default function OrdersHistoryScreen() {
     );
   };
 
-  // Render statistics header
   const renderStatisticsHeader = () => {
     if (!statistics) return null;
 
@@ -243,84 +204,81 @@ export default function OrdersHistoryScreen() {
     const avgOrderValue = parseFloat(statistics.average_order_value);
 
     return (
-      <View style={styles.statisticsContainer}>
-        <Text style={styles.statisticsTitle}>{t('orderStatistics')}</Text>
-        <View style={styles.statisticsGrid}>
-          <View style={styles.statCard}>
+      <View className="bg-white rounded-xl p-4 mb-4 shadow">
+        <Text className="text-lg font-bold text-gray-dark mb-3">{t('orderStatistics')}</Text>
+        <View className="flex-row flex-wrap gap-3">
+          <View className="flex-1 min-w-[45%] bg-cream rounded-lg p-4 items-center">
             <Ionicons name="receipt-outline" size={32} color={MAVECAM_COLORS.GREEN_PRIMARY} />
-            <Text style={styles.statValue}>{statistics.total_orders}</Text>
-            <Text style={styles.statLabel}>{t('totalOrders')}</Text>
+            <Text className="text-xl font-bold text-mavecam-primary mt-2">{statistics.total_orders}</Text>
+            <Text className="text-xs text-gray-light mt-1 text-center">{t('totalOrders')}</Text>
           </View>
-          <View style={styles.statCard}>
+          <View className="flex-1 min-w-[45%] bg-cream rounded-lg p-4 items-center">
             <Ionicons name="wallet-outline" size={32} color={MAVECAM_COLORS.GREEN_PRIMARY} />
-            <Text style={styles.statValue}>{totalSpent.toLocaleString()}</Text>
-            <Text style={styles.statLabel}>{t('totalSpent')}</Text>
+            <Text className="text-xl font-bold text-mavecam-primary mt-2">{totalSpent.toLocaleString()}</Text>
+            <Text className="text-xs text-gray-light mt-1 text-center">{t('totalSpent')}</Text>
           </View>
-          <View style={styles.statCard}>
+          <View className="flex-1 min-w-[45%] bg-cream rounded-lg p-4 items-center">
             <Ionicons name="cube-outline" size={32} color={MAVECAM_COLORS.GREEN_PRIMARY} />
-            <Text style={styles.statValue}>{statistics.total_bags_ordered}</Text>
-            <Text style={styles.statLabel}>{t('totalBags')}</Text>
+            <Text className="text-xl font-bold text-mavecam-primary mt-2">{statistics.total_bags_ordered}</Text>
+            <Text className="text-xs text-gray-light mt-1 text-center">{t('totalBags')}</Text>
           </View>
-          <View style={styles.statCard}>
+          <View className="flex-1 min-w-[45%] bg-cream rounded-lg p-4 items-center">
             <Ionicons name="trending-up-outline" size={32} color={MAVECAM_COLORS.GREEN_PRIMARY} />
-            <Text style={styles.statValue}>{avgOrderValue.toLocaleString()}</Text>
-            <Text style={styles.statLabel}>{t('averageOrder')}</Text>
+            <Text className="text-xl font-bold text-mavecam-primary mt-2">{avgOrderValue.toLocaleString()}</Text>
+            <Text className="text-xs text-gray-light mt-1 text-center">{t('averageOrder')}</Text>
           </View>
         </View>
       </View>
     );
   };
 
-  // Empty state
   const renderEmptyState = () => (
-    <View style={styles.emptyState}>
+    <View className="py-16 items-center">
       <Ionicons name="receipt-outline" size={100} color={MAVECAM_COLORS.GRAY_LIGHT} />
-      <Text style={styles.emptyTitle}>{t('noOrdersYet')}</Text>
-      <Text style={styles.emptyDescription}>{t('noOrdersDescription')}</Text>
+      <Text className="mt-5 text-2xl font-bold text-gray-dark">{t('noOrdersYet')}</Text>
+      <Text className="mt-3 text-base text-gray-light text-center px-10">{t('noOrdersDescription')}</Text>
       <TouchableOpacity
-        style={styles.browseCatalogButton}
+        className="mt-6 bg-mavecam-primary flex-row items-center px-6 py-3 rounded-lg gap-2"
         onPress={() => navigation.navigate('ProductCatalog' as never)}
       >
         <Ionicons name="albums-outline" size={20} color={MAVECAM_COLORS.WHITE} />
-        <Text style={styles.browseCatalogButtonText}>{t('browseCatalog')}</Text>
+        <Text className="text-white text-base font-semibold">{t('browseCatalog')}</Text>
       </TouchableOpacity>
     </View>
   );
 
   return (
-    <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+    <View className="flex-1 bg-cream">
+      <View className="bg-white px-5 pt-16 pb-5 flex-row items-center justify-between shadow">
+        <TouchableOpacity onPress={() => navigation.goBack()} className="w-10">
           <Ionicons name="arrow-back" size={24} color={MAVECAM_COLORS.GRAY_DARK} />
         </TouchableOpacity>
-        <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>{t('ordersHistory')}</Text>
-          <Text style={styles.headerSubtitle}>
+        <View className="flex-1 items-center">
+          <Text className="text-2xl font-bold text-gray-dark">{t('ordersHistory')}</Text>
+          <Text className="text-sm text-gray-light mt-1">
             {ordersList.length} {t(ordersList.length > 1 ? 'orders' : 'order')}
           </Text>
         </View>
-        <View style={styles.backButton} />
+        <View className="w-10" />
       </View>
 
-      {/* Content */}
       {loading && !refreshing ? (
-        <View style={styles.loadingContainer}>
+        <View className="flex-1 items-center justify-center">
           <ActivityIndicator size="large" color={MAVECAM_COLORS.GREEN_PRIMARY} />
-          <Text style={styles.loadingText}>{t('loading')}</Text>
+          <Text className="mt-3 text-base text-gray-light">{t('loading')}</Text>
         </View>
       ) : error ? (
-        <View style={styles.errorContainer}>
+        <View className="flex-1 items-center justify-center px-10 py-10">
           <Ionicons name="alert-circle-outline" size={48} color={MAVECAM_COLORS.ERROR} />
-          <Text style={styles.errorText}>{error}</Text>
+          <Text className="mt-3 text-base text-[#dc2626] text-center">{error}</Text>
           <TouchableOpacity
-            style={styles.retryButton}
+            className="mt-5 bg-mavecam-primary px-6 py-3 rounded-lg"
             onPress={() => {
               dispatch(fetchOrders());
               dispatch(fetchOrderStatistics());
             }}
           >
-            <Text style={styles.retryButtonText}>{t('retry')}</Text>
+            <Text className="text-white text-base font-semibold">{t('retry')}</Text>
           </TouchableOpacity>
         </View>
       ) : (
@@ -328,7 +286,7 @@ export default function OrdersHistoryScreen() {
           data={ordersList}
           renderItem={renderOrderCard}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={{ padding: 16, paddingBottom: 16 }}
           ListHeaderComponent={renderStatisticsHeader}
           ListEmptyComponent={renderEmptyState}
           refreshControl={
@@ -345,361 +303,3 @@ export default function OrdersHistoryScreen() {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: MAVECAM_COLORS.CREAM,
-  },
-  header: {
-    backgroundColor: MAVECAM_COLORS.WHITE,
-    paddingHorizontal: 20,
-    paddingTop: 60,
-    paddingBottom: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3,
-  },
-  backButton: {
-    width: 40,
-  },
-  headerCenter: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: MAVECAM_COLORS.GRAY_DARK,
-  },
-  headerSubtitle: {
-    fontSize: 14,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
-    marginTop: 4,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 16,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 40,
-  },
-  errorText: {
-    marginTop: 12,
-    fontSize: 16,
-    color: MAVECAM_COLORS.ERROR,
-    textAlign: 'center',
-  },
-  retryButton: {
-    marginTop: 20,
-    backgroundColor: MAVECAM_COLORS.GREEN_PRIMARY,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
-  retryButtonText: {
-    color: MAVECAM_COLORS.WHITE,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  listContent: {
-    padding: 16,
-  },
-  statisticsContainer: {
-    backgroundColor: MAVECAM_COLORS.WHITE,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  statisticsTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: MAVECAM_COLORS.GRAY_DARK,
-    marginBottom: 16,
-  },
-  statisticsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  statCard: {
-    flex: 1,
-    minWidth: '45%',
-    backgroundColor: MAVECAM_COLORS.CREAM,
-    borderRadius: 8,
-    padding: 16,
-    alignItems: 'center',
-  },
-  statValue: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: MAVECAM_COLORS.GREEN_PRIMARY,
-    marginTop: 8,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
-    marginTop: 4,
-    textAlign: 'center',
-  },
-  orderCard: {
-    backgroundColor: MAVECAM_COLORS.WHITE,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  orderHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  orderHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  orderHeaderInfo: {
-    marginLeft: 12,
-    flex: 1,
-  },
-  orderNumber: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: MAVECAM_COLORS.GRAY_DARK,
-  },
-  orderDate: {
-    fontSize: 12,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
-    marginTop: 2,
-  },
-  orderSummaryRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    gap: 6,
-  },
-  statusConfirmed: {
-    backgroundColor: '#d1fae5',
-  },
-  statusText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: MAVECAM_COLORS.SUCCESS,
-  },
-  orderTotal: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: MAVECAM_COLORS.GREEN_PRIMARY,
-  },
-  quickInfo: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  quickInfoItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  quickInfoText: {
-    fontSize: 13,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
-  },
-  freeDeliveryBadge: {
-    backgroundColor: '#d1fae5',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  freeDeliveryText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: MAVECAM_COLORS.SUCCESS,
-  },
-  orderDetails: {
-    marginTop: 8,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: '#f1f5f9',
-    marginVertical: 16,
-  },
-  detailsTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: MAVECAM_COLORS.GRAY_DARK,
-    marginBottom: 12,
-  },
-  orderItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  orderItemLeft: {
-    flex: 1,
-    marginRight: 12,
-  },
-  orderItemBrand: {
-    fontSize: 10,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
-    fontWeight: '600',
-    marginBottom: 2,
-  },
-  orderItemName: {
-    fontSize: 14,
-    color: MAVECAM_COLORS.GRAY_DARK,
-    marginBottom: 4,
-  },
-  orderItemSpecs: {
-    fontSize: 12,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
-  },
-  orderItemRight: {
-    alignItems: 'flex-end',
-  },
-  orderItemPrice: {
-    fontSize: 12,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
-    marginBottom: 4,
-  },
-  orderItemTotal: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: MAVECAM_COLORS.GREEN_PRIMARY,
-  },
-  amountsSection: {
-    gap: 8,
-  },
-  amountRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  amountLabel: {
-    fontSize: 14,
-    color: MAVECAM_COLORS.GRAY_DARK,
-  },
-  amountValue: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: MAVECAM_COLORS.GRAY_DARK,
-  },
-  freeText: {
-    color: MAVECAM_COLORS.SUCCESS,
-  },
-  totalRow: {
-    marginTop: 8,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#f1f5f9',
-  },
-  totalLabel: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: MAVECAM_COLORS.GRAY_DARK,
-  },
-  totalValue: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: MAVECAM_COLORS.GREEN_PRIMARY,
-  },
-  addressSection: {
-    backgroundColor: MAVECAM_COLORS.CREAM,
-    padding: 12,
-    borderRadius: 8,
-  },
-  addressName: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: MAVECAM_COLORS.GRAY_DARK,
-    marginBottom: 4,
-  },
-  addressPhone: {
-    fontSize: 13,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
-    marginBottom: 8,
-  },
-  addressText: {
-    fontSize: 13,
-    color: MAVECAM_COLORS.GRAY_DARK,
-    marginBottom: 2,
-  },
-  pickupSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: MAVECAM_COLORS.CREAM,
-    padding: 12,
-    borderRadius: 8,
-    gap: 8,
-  },
-  pickupLocation: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: MAVECAM_COLORS.GREEN_PRIMARY,
-  },
-  emptyState: {
-    paddingVertical: 60,
-    alignItems: 'center',
-  },
-  emptyTitle: {
-    marginTop: 20,
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: MAVECAM_COLORS.GRAY_DARK,
-  },
-  emptyDescription: {
-    marginTop: 12,
-    fontSize: 16,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
-    textAlign: 'center',
-    paddingHorizontal: 40,
-  },
-  browseCatalogButton: {
-    marginTop: 24,
-    backgroundColor: MAVECAM_COLORS.GREEN_PRIMARY,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
-    gap: 8,
-  },
-  browseCatalogButtonText: {
-    color: MAVECAM_COLORS.WHITE,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-});
