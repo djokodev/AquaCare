@@ -7,6 +7,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { store } from '@/store/store';
 import AppNavigator from '@/navigation/AppNavigator';
 import '@/i18n/i18n';
+import './global.css';
 
 export default function App() {
   return (

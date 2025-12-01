@@ -1,8 +1,7 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
@@ -26,29 +25,16 @@ export default function DashboardScreen({ navigation }: any) {
   const { displayName } = useAuth();
   const dispatch = useDispatch<AppDispatch>();
 
-  // États pour le modal de récolte
   const [harvestModalVisible, setHarvestModalVisible] = useState(false);
   const [selectedCycle, setSelectedCycle] = useState<ProductionCycle | null>(null);
 
-  // Sélecteurs Redux
-  const {
-    dashboardData,
-    loading,
-    error
-  } = useSelector((state: RootState) => state.aquaculture);
-
+  const { dashboardData, loading, error } = useSelector((state: RootState) => state.aquaculture);
   const { unreadCount } = useSelector((state: RootState) => state.notifications);
 
-  // Chargement initial des données + synchronisation offline
   useEffect(() => {
     const initializeDashboard = async () => {
-      // Tenter la synchronisation offline en arrière-plan
       tryGlobalOfflineSync();
-
-      // Charger les données du dashboard
       dispatch(fetchDashboardData());
-
-      // Charger les notifications pour le badge
       dispatch(fetchNotifications());
     };
 
@@ -59,32 +45,21 @@ export default function DashboardScreen({ navigation }: any) {
     try {
       const hasPending = await offlineService.hasAnyPendingSync();
       if (hasPending) {
-        console.log('🔄 Synchronisation globale des données offline...');
-
         const result = await offlineService.syncAllOfflineData();
 
         if (result.success > 0) {
-          console.log(`✅ ${result.success} éléments synchronisés`);
-          // Rafraîchir le dashboard après sync
           dispatch(fetchDashboardData());
         }
-
-        if (result.failed > 0) {
-          console.log(`❌ ${result.failed} éléments non synchronisés`);
-        }
       }
-    } catch (error) {
-      console.error('Erreur synchronisation globale silencieuse:', error);
-      // Ne pas alerter l'utilisateur, juste log
+    } catch (err) {
+      console.error('Erreur synchronisation globale silencieuse:', err);
     }
   };
 
-  // Fonction de rafraîchissement
-  const onRefresh = React.useCallback(() => {
+  const onRefresh = useCallback(() => {
     dispatch(fetchDashboardData());
   }, [dispatch]);
 
-  // Calcul des métriques avec données réelles ou valeurs par défaut
   const summary = {
     active_cycles_count: dashboardData?.active_cycles_count || 0,
     total_biomass: dashboardData?.total_biomass || 0,
@@ -95,7 +70,6 @@ export default function DashboardScreen({ navigation }: any) {
 
   const activeCycles = dashboardData?.active_cycles || [];
 
-  // Fonctions pour le modal de récolte
   const openHarvestModal = (cycle: ProductionCycle) => {
     setSelectedCycle(cycle);
     setHarvestModalVisible(true);
@@ -107,33 +81,32 @@ export default function DashboardScreen({ navigation }: any) {
   };
 
   const handleHarvestSuccess = () => {
-    // Rafraîchir le dashboard après récolte réussie
     dispatch(fetchDashboardData());
   };
 
-  // Affichage d'erreur
   if (error && !dashboardData) {
     return (
       <ScrollView
-        style={styles.container}
+        className="flex-1 bg-cream"
         refreshControl={
           <RefreshControl refreshing={loading.dashboard} onRefresh={onRefresh} />
         }
       >
-        <View style={styles.header}>
-          <Text style={styles.greeting}>
-            {t('hello')}, {displayName}! 👋
+        <View className="bg-mavecam-primary px-5 pt-16 pb-5">
+          <Text className="text-2xl font-bold text-white mb-1">
+            {t('hello')}, {displayName}!
           </Text>
-          <Text style={styles.subtitle}>
-            {t('welcomeBoard')}
-          </Text>
+          <Text className="text-base text-white/80">{t('welcomeBoard')}</Text>
         </View>
 
-        <View style={styles.errorContainer}>
+        <View className="flex-1 items-center justify-center px-5 py-10">
           <Ionicons name="alert-circle" size={48} color={MAVECAM_COLORS.ERROR} />
-          <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={onRefresh}>
-            <Text style={styles.retryButtonText}>Réessayer</Text>
+          <Text className="text-base text-[#dc2626] text-center mt-3 mb-5">{error}</Text>
+          <TouchableOpacity
+            className="bg-mavecam-primary px-6 py-3 rounded-lg"
+            onPress={onRefresh}
+          >
+            <Text className="text-white text-base font-semibold">{t('retry', { defaultValue: 'Réessayer' })}</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -142,200 +115,214 @@ export default function DashboardScreen({ navigation }: any) {
 
   return (
     <ScrollView
-      style={styles.container}
+      className="flex-1 bg-cream"
       refreshControl={
         <RefreshControl refreshing={loading.dashboard} onRefresh={onRefresh} />
       }
     >
-      <View style={styles.header}>
-        <Text style={styles.greeting}>
-          {t('hello')}, {displayName}! 👋
+      <View className="bg-mavecam-primary px-5 pt-16 pb-5">
+        <Text className="text-2xl font-bold text-white mb-1">
+          {t('hello')}, {displayName}!
         </Text>
-        <Text style={styles.subtitle}>
-          {t('welcomeBoard')}
-        </Text>
+        <Text className="text-base text-white/80">{t('welcomeBoard')}</Text>
       </View>
 
-      <View style={styles.quickStatsContainer}>
-        <Text style={styles.sectionTitle}>{t('quickOverview')}</Text>
+      <View className="px-5 py-5">
+        <Text className="text-xl font-bold text-gray-dark mb-4">{t('quickOverview')}</Text>
 
         {loading.dashboard && !dashboardData ? (
-          <View style={styles.loadingContainer}>
+          <View className="items-center justify-center py-10">
             <ActivityIndicator size="large" color={MAVECAM_COLORS.GREEN_PRIMARY} />
-            <Text style={styles.loadingText}>Chargement des données...</Text>
+            <Text className="text-base text-gray-light mt-3">
+              {t('loadingData', { defaultValue: 'Chargement des données...' })}
+            </Text>
           </View>
         ) : (
-          <View style={styles.statsGrid}>
-            <View style={styles.statCard}>
+          <View className="flex-row flex-wrap justify-between">
+            <View className="w-[48%] items-center mb-3 bg-white rounded-2xl p-4 shadow-sm">
               <Ionicons name="fish" size={32} color={MAVECAM_COLORS.GREEN_PRIMARY} />
-              <Text style={styles.statNumber}>{summary.active_cycles_count}</Text>
-              <Text style={styles.statLabel}>{t('activeCycles')}</Text>
+              <Text className="text-2xl font-bold text-gray-dark mt-2">
+                {summary.active_cycles_count}
+              </Text>
+              <Text className="text-sm text-gray-light text-center mt-1">
+                {t('activeCycles')}
+              </Text>
             </View>
 
-            <View style={styles.statCard}>
+            <View className="w-[48%] items-center mb-3 bg-white rounded-2xl p-4 shadow-sm">
               <Ionicons name="water" size={32} color={MAVECAM_COLORS.GREEN_LIGHT} />
-              <Text style={styles.statNumber}>{activeCycles.length}</Text>
-              <Text style={styles.statLabel}>{t('ponds')}</Text>
+              <Text className="text-2xl font-bold text-gray-dark mt-2">
+                {activeCycles.length}
+              </Text>
+              <Text className="text-sm text-gray-light text-center mt-1">
+                {t('ponds')}
+              </Text>
             </View>
 
-            <View style={styles.statCard}>
+            <View className="w-[48%] items-center mb-3 bg-white rounded-2xl p-4 shadow-sm">
               <Ionicons name="scale" size={32} color={MAVECAM_COLORS.GREEN_DARK} />
-              <Text style={styles.statNumber}>{formatNumber(summary.total_biomass, 'kg')}</Text>
-              <Text style={styles.statLabel}>Biomasse</Text>
+              <Text className="text-2xl font-bold text-gray-dark mt-2">
+                {formatNumber(summary.total_biomass, 'kg')}
+              </Text>
+              <Text className="text-sm text-gray-light text-center mt-1">Biomasse</Text>
             </View>
 
-            <View style={styles.statCard}>
+            <View className="w-[48%] items-center mb-3 bg-white rounded-2xl p-4 shadow-sm">
               <Ionicons name="trending-up" size={32} color={MAVECAM_COLORS.SUCCESS} />
-              <Text style={styles.statNumber}>{formatPercentage(summary.average_survival_rate)}</Text>
-              <Text style={styles.statLabel}>Survie</Text>
+              <Text className="text-2xl font-bold text-gray-dark mt-2">
+                {formatPercentage(summary.average_survival_rate)}
+              </Text>
+              <Text className="text-sm text-gray-light text-center mt-1">Survie</Text>
             </View>
           </View>
         )}
       </View>
 
-      <View style={styles.actionContainer}>
-        <Text style={styles.sectionTitle}>Actions</Text>
-        
+      <View className="px-5 py-5">
+        <Text className="text-xl font-bold text-gray-dark mb-4">Actions</Text>
         <TouchableOpacity
-          style={styles.actionButton}
+          className="bg-white flex-row items-center p-4 rounded-xl mb-3 shadow-sm"
           onPress={() => navigation.navigate('NewCycle')}
         >
           <Ionicons name="add-circle" size={24} color={MAVECAM_COLORS.GREEN_PRIMARY} />
-          <Text style={styles.actionText}>{t('newCycle')}</Text>
+          <Text className="text-base font-medium text-gray-dark ml-3">{t('newCycle')}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.actionButton}
+          className="bg-white flex-row items-center p-4 rounded-xl mb-3 shadow-sm"
           onPress={() => navigation.navigate('DailyLog')}
         >
           <Ionicons name="create" size={24} color={MAVECAM_COLORS.GREEN_LIGHT} />
-          <Text style={styles.actionText}>{t('dailyLog')}</Text>
+          <Text className="text-base font-medium text-gray-dark ml-3">{t('dailyLog')}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.actionButton}
+          className="bg-white flex-row items-center p-4 rounded-xl mb-3 shadow-sm"
           onPress={() => navigation.navigate('SanitaryLog')}
         >
           <Ionicons name="warning-outline" size={24} color={MAVECAM_COLORS.ERROR} />
-          <Text style={styles.actionText}>{t('sanitaryLog')}</Text>
+          <Text className="text-base font-medium text-gray-dark ml-3">{t('sanitaryLog')}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.actionButton}
+          className="bg-white flex-row items-center p-4 rounded-xl mb-3 shadow-sm"
           onPress={() => navigation.navigate('CycleHistory')}
         >
           <Ionicons name="time-outline" size={24} color={MAVECAM_COLORS.INFO} />
-          <Text style={styles.actionText}>{t('cycleHistoryButton')}</Text>
+          <Text className="text-base font-medium text-gray-dark ml-3">{t('cycleHistoryButton')}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.actionButton}
+          className="bg-white flex-row items-center p-4 rounded-xl mb-3 shadow-sm"
           onPress={() => navigation.navigate('Notifications')}
         >
-          <View style={styles.actionButtonWithBadge}>
+          <View className="flex-row items-center relative">
             <Ionicons name="notifications-outline" size={24} color={MAVECAM_COLORS.WARNING} />
-            <Text style={styles.actionText}>{t('notifications')}</Text>
+            <Text className="text-base font-medium text-gray-dark ml-3">{t('notifications')}</Text>
             {unreadCount > 0 && (
-              <View style={styles.notificationBadge}>
-                <Text style={styles.notificationBadgeText}>{unreadCount}</Text>
+              <View className="absolute -top-2 -right-2 bg-[#dc2626] rounded-full px-1.5 py-0.5 min-w-[20px] items-center justify-center">
+                <Text className="text-white text-[10px] font-bold">{unreadCount}</Text>
               </View>
             )}
           </View>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.actionButton}
+          className="bg-white flex-row items-center p-4 rounded-xl mb-3 shadow-sm"
           onPress={() => navigation.navigate('FeedingPlan')}
         >
           <Ionicons name="restaurant-outline" size={24} color={MAVECAM_COLORS.INFO} />
-          <Text style={styles.actionText}>{t('feedingPlan')}</Text>
+          <Text className="text-base font-medium text-gray-dark ml-3">{t('feedingPlan')}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.actionButton}
+          className="bg-white flex-row items-center p-4 rounded-xl mb-3 shadow-sm"
           onPress={() => navigation.navigate('NutritionalGuides')}
         >
           <Ionicons name="library-outline" size={24} color={MAVECAM_COLORS.GREEN_DARK} />
-          <Text style={styles.actionText}>{t('nutritionalGuides')}</Text>
+          <Text className="text-base font-medium text-gray-dark ml-3">{t('nutritionalGuides')}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.actionButton}
+          className="bg-white flex-row items-center p-4 rounded-xl mb-3 shadow-sm"
           onPress={() => navigation.navigate('Statistics')}
         >
           <Ionicons name="bar-chart-outline" size={24} color={MAVECAM_COLORS.SUCCESS} />
-          <Text style={styles.actionText}>{t('statistics')}</Text>
+          <Text className="text-base font-medium text-gray-dark ml-3">{t('statistics')}</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Section Module Commerce */}
-      <View style={styles.actionContainer}>
-        <Text style={styles.sectionTitle}>🛒 Commerce</Text>
+      <View className="px-5 py-5">
+        <Text className="text-xl font-bold text-gray-dark mb-4">
+          {t('commerceModule', { defaultValue: 'Commerce' })}
+        </Text>
 
         <TouchableOpacity
-          style={styles.actionButton}
+          className="bg-white flex-row items-center p-4 rounded-xl mb-3 shadow-sm"
           onPress={() => navigation.navigate('ProductCatalog')}
         >
           <Ionicons name="storefront-outline" size={24} color={MAVECAM_COLORS.GREEN_PRIMARY} />
-          <Text style={styles.actionText}>{t('productCatalog')}</Text>
+          <Text className="text-base font-medium text-gray-dark ml-3">{t('productCatalog')}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.actionButton}
+          className="bg-white flex-row items-center p-4 rounded-xl mb-3 shadow-sm"
           onPress={() => navigation.navigate('Cart')}
         >
           <Ionicons name="cart-outline" size={24} color={MAVECAM_COLORS.WARNING} />
-          <Text style={styles.actionText}>{t('cart')}</Text>
+          <Text className="text-base font-medium text-gray-dark ml-3">{t('cart')}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.actionButton}
+          className="bg-white flex-row items-center p-4 rounded-xl mb-3 shadow-sm"
           onPress={() => navigation.navigate('OrdersHistory')}
         >
           <Ionicons name="receipt-outline" size={24} color={MAVECAM_COLORS.INFO} />
-          <Text style={styles.actionText}>{t('ordersHistory')}</Text>
+          <Text className="text-base font-medium text-gray-dark ml-3">{t('ordersHistory')}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.actionButton}
+          className="bg-white flex-row items-center p-4 rounded-xl mb-3 shadow-sm"
           onPress={() => navigation.navigate('FeedingSuggestions')}
         >
           <Ionicons name="bulb-outline" size={24} color={MAVECAM_COLORS.SUCCESS} />
-          <Text style={styles.actionText}>{t('feedingSuggestions')}</Text>
+          <Text className="text-base font-medium text-gray-dark ml-3">{t('feedingSuggestions')}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.actionButton}
+          className="bg-white flex-row items-center p-4 rounded-xl mb-3 shadow-sm"
           onPress={() => navigation.navigate('CycleSimulator')}
         >
           <Ionicons name="calculator-outline" size={24} color={MAVECAM_COLORS.BLUE} />
-          <Text style={styles.actionText}>{t('cycleSimulator')}</Text>
+          <Text className="text-base font-medium text-gray-dark ml-3">{t('cycleSimulator')}</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Section des cycles actifs */}
       {activeCycles.length > 0 && (
-        <View style={styles.activeCyclesContainer}>
-          <Text style={styles.sectionTitle}>{t('activeCycles')}</Text>
+        <View className="px-5 py-5">
+          <Text className="text-xl font-bold text-gray-dark mb-4">{t('activeCycles')}</Text>
 
           {activeCycles.map((cycle) => (
-            <View key={cycle.id} style={styles.cycleCard}>
-              <View style={styles.cycleHeader}>
-                <View style={styles.cycleInfo}>
-                  <Text style={styles.cycleName}>{cycle.cycle_name}</Text>
-                  <Text style={styles.cycleDetails}>
-                    {cycle.species === 'clarias' ? 'Silure africain (Clarias)' : 'Tilapia'} • {cycle.pond_identifier}
+            <View
+              key={cycle.id}
+              className="bg-white rounded-xl p-4 mb-3 shadow"
+            >
+              <View className="flex-row justify-between items-start">
+                <View className="flex-1 mr-3">
+                  <Text className="text-base font-bold text-gray-dark mb-1">{cycle.cycle_name}</Text>
+                  <Text className="text-sm text-gray-light mb-1">
+                    {cycle.species === 'clarias' ? 'Silure africain (Clarias)' : 'Tilapia'} - {cycle.pond_identifier}
                   </Text>
-                  <Text style={styles.cycleMetrics}>
-                    {Math.floor((new Date().getTime() - new Date(cycle.start_date).getTime()) / (1000 * 60 * 60 * 24))} jours • {formatNumber(cycle.current_biomass, 'kg')} • {formatPercentage(cycle.survival_rate || 0)} survie
+                  <Text className="text-xs text-gray-light">
+                    {Math.floor((new Date().getTime() - new Date(cycle.start_date).getTime()) / (1000 * 60 * 60 * 24))} jours - {formatNumber(cycle.current_biomass, 'kg')} - {formatPercentage(cycle.survival_rate || 0)} survie
                   </Text>
                 </View>
 
                 <TouchableOpacity
-                  style={styles.harvestButton}
+                  className="bg-mavecam-primary flex-row items-center py-2 px-3 rounded-lg"
                   onPress={() => openHarvestModal(cycle)}
                 >
-                  <Text style={styles.harvestButtonText}>{t('harvest')}</Text>
+                  <Text className="text-white text-sm font-semibold ml-1">{t('harvest')}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -343,211 +330,13 @@ export default function DashboardScreen({ navigation }: any) {
         </View>
       )}
 
-      {/* Modal de récolte */}
       <HarvestModal
         visible={harvestModalVisible}
         onClose={closeHarvestModal}
         cycle={selectedCycle}
         onSuccess={handleHarvestSuccess}
       />
-
     </ScrollView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: MAVECAM_COLORS.CREAM,
-  },
-  header: {
-    backgroundColor: MAVECAM_COLORS.GREEN_PRIMARY,
-    padding: 20,
-    paddingTop: 60,
-  },
-  greeting: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: MAVECAM_COLORS.WHITE,
-    marginBottom: 4,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: 'rgba(255, 255, 255, 0.8)',
-  },
-  quickStatsContainer: {
-    padding: 20,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: MAVECAM_COLORS.GRAY_DARK,
-    marginBottom: 16,
-  },
-  statsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-  },
-  statCard: {
-    backgroundColor: MAVECAM_COLORS.WHITE,
-    width: '48%',
-    padding: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  statNumber: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: MAVECAM_COLORS.GRAY_DARK,
-    marginTop: 8,
-  },
-  statLabel: {
-    fontSize: 14,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
-    marginTop: 4,
-    textAlign: 'center',
-  },
-  actionContainer: {
-    padding: 20,
-  },
-  actionButton: {
-    backgroundColor: MAVECAM_COLORS.WHITE,
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  actionText: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: MAVECAM_COLORS.GRAY_DARK,
-    marginLeft: 12,
-  },
-  // Styles pour le chargement
-  loadingContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 40,
-  },
-  loadingText: {
-    fontSize: 16,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
-    marginTop: 12,
-  },
-  // Styles pour l'erreur
-  errorContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 40,
-    paddingHorizontal: 20,
-  },
-  errorText: {
-    fontSize: 16,
-    color: MAVECAM_COLORS.ERROR,
-    textAlign: 'center',
-    marginTop: 12,
-    marginBottom: 20,
-  },
-  retryButton: {
-    backgroundColor: MAVECAM_COLORS.GREEN_PRIMARY,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
-  retryButtonText: {
-    color: MAVECAM_COLORS.WHITE,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  // Styles pour le bouton notifications avec badge
-  actionButtonWithBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    position: 'relative',
-  },
-  notificationBadge: {
-    position: 'absolute',
-    top: -8,
-    right: -8,
-    backgroundColor: MAVECAM_COLORS.ERROR,
-    borderRadius: 12,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    minWidth: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  notificationBadgeText: {
-    color: MAVECAM_COLORS.WHITE,
-    fontSize: 10,
-    fontWeight: 'bold',
-  },
-  // Styles pour les cycles actifs
-  activeCyclesContainer: {
-    padding: 20,
-  },
-  cycleCard: {
-    backgroundColor: MAVECAM_COLORS.WHITE,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3,
-  },
-  cycleHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  cycleInfo: {
-    flex: 1,
-    marginRight: 12,
-  },
-  cycleName: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: MAVECAM_COLORS.GRAY_DARK,
-    marginBottom: 4,
-  },
-  cycleDetails: {
-    fontSize: 14,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
-    marginBottom: 6,
-  },
-  cycleMetrics: {
-    fontSize: 12,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
-  },
-  harvestButton: {
-    backgroundColor: MAVECAM_COLORS.SUCCESS,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-  },
-  harvestButtonText: {
-    color: MAVECAM_COLORS.WHITE,
-    fontSize: 14,
-    fontWeight: '600',
-    marginLeft: 4,
-  },
-});
