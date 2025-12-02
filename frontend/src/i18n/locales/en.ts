@@ -35,8 +35,9 @@ export const en = {
   ageGroup: 'Age Group',
   interventionZone: 'Intervention Zone',
   language: 'Language',
-  
+
   // Geographic Selection
+  selectOption: 'Select...',
   selectRegion: 'Select a region',
   selectDepartment: 'Select a department',
   selectDistrict: 'Select a district',

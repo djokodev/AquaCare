@@ -1,12 +1,11 @@
 ﻿import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
-import { Picker } from '@react-native-picker/picker';
 import { useTranslation } from 'react-i18next';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { MAVECAM_COLORS } from '@/constants/colors';
 import { AuthStackParamList } from '@/navigation/AuthNavigator';
 import { useAuth } from '@/hooks/useAuth';
 import { RegisterRequest } from '@/types/auth';
+import SelectField from '@/components/SelectField';
 
 type RegisterScreenNavigationProp = StackNavigationProp<AuthStackParamList, 'Register'>;
 
@@ -160,25 +159,6 @@ export default function RegisterScreen({ navigation }: Props) {
   const renderError = (field: keyof typeof errors) =>
     errors[field] ? <Text className="text-sm text-error mt-1">{errors[field]}</Text> : null;
 
-  const renderPicker = (
-    label: string,
-    value: string | undefined,
-    onChange: (val: string) => void,
-    items: { value: string; label: string }[],
-  ) => (
-    <View className="mb-4">
-      <Text className="text-base font-medium text-gray-dark mb-2">{label}</Text>
-      <View className="border border-gray-300 rounded-lg bg-white">
-        <Picker selectedValue={value} onValueChange={(val) => onChange(val)} style={{ height: 48 }}>
-          <Picker.Item label={t('selectRegion') || 'Selectionnez...'} value="" />
-          {items.map((item) => (
-            <Picker.Item key={item.value} label={item.label} value={item.value} />
-          ))}
-        </Picker>
-      </View>
-    </View>
-  );
-
   return (
     <KeyboardAvoidingView
       className="flex-1 bg-cream"
@@ -288,22 +268,15 @@ export default function RegisterScreen({ navigation }: Props) {
                 {renderError('last_name')}
               </View>
 
-              <View className="mb-4">
-                <Text className="text-base font-medium text-gray-dark mb-2">{t('ageGroup')} *</Text>
-                <View className="border border-gray-300 rounded-lg bg-white">
-                  <Picker
-                    selectedValue={formData.age_group}
-                    onValueChange={(value) => updateField('age_group', value as string)}
-                    style={{ height: 48 }}
-                  >
-                    <Picker.Item label={t('selectRegion') || 'Selectionnez...'} value="" />
-                    {AGE_GROUPS.map((group) => (
-                      <Picker.Item key={group.value} label={group.label} value={group.value} />
-                    ))}
-                  </Picker>
-                </View>
-                {renderError('age_group')}
-              </View>
+              <SelectField
+                label={t('ageGroup')}
+                value={formData.age_group}
+                onChange={(value) => updateField('age_group', value)}
+                options={AGE_GROUPS}
+                placeholder={t('selectOption')}
+                error={errors.age_group}
+                required
+              />
             </>
           )}
 
@@ -323,22 +296,15 @@ export default function RegisterScreen({ navigation }: Props) {
                 {renderError('business_name')}
               </View>
 
-              <View className="mb-4">
-                <Text className="text-base font-medium text-gray-dark mb-2">{t('legalStatus')} *</Text>
-                <View className="border border-gray-300 rounded-lg bg-white">
-                  <Picker
-                    selectedValue={formData.legal_status}
-                    onValueChange={(value) => updateField('legal_status', value as string)}
-                    style={{ height: 48 }}
-                  >
-                    <Picker.Item label={t('selectLegalStatus')} value="" />
-                    {LEGAL_STATUS_OPTIONS.map((option) => (
-                      <Picker.Item key={option.value} label={option.label} value={option.value} />
-                    ))}
-                  </Picker>
-                </View>
-                {renderError('legal_status')}
-              </View>
+              <SelectField
+                label={t('legalStatus')}
+                value={formData.legal_status}
+                onChange={(value) => updateField('legal_status', value)}
+                options={LEGAL_STATUS_OPTIONS}
+                placeholder={t('selectLegalStatus')}
+                error={errors.legal_status}
+                required
+              />
 
               <View className="mb-4">
                 <Text className="text-base font-medium text-gray-dark mb-2">{t('promoterName')} *</Text>
@@ -356,23 +322,21 @@ export default function RegisterScreen({ navigation }: Props) {
             </>
           )}
 
-          <View className="mb-4">
-            <Text className="text-base font-medium text-gray-dark mb-2">{t('activityType')}</Text>
-            <View className="border border-gray-300 rounded-lg bg-white">
-              <Picker
-                selectedValue={formData.activity_type}
-                onValueChange={(value) => updateField('activity_type', value as string)}
-                style={{ height: 48 }}
-              >
-                <Picker.Item label={t('selectRegion') || 'Selectionnez...'} value="" />
-                {ACTIVITY_TYPES.map((type) => (
-                  <Picker.Item key={type.value} label={type.label} value={type.value} />
-                ))}
-              </Picker>
-            </View>
-          </View>
+          <SelectField
+            label={t('activityType')}
+            value={formData.activity_type}
+            onChange={(value) => updateField('activity_type', value)}
+            options={ACTIVITY_TYPES}
+            placeholder={t('selectOption')}
+          />
 
-          {renderPicker(t('region'), formData.region, (v) => updateField('region', v), REGIONS)}
+          <SelectField
+            label={t('region')}
+            value={formData.region}
+            onChange={(value) => updateField('region', value)}
+            options={REGIONS}
+            placeholder={t('selectRegion')}
+          />
 
           <View className="mb-4">
             <Text className="text-base font-medium text-gray-dark mb-2">{t('password')} *</Text>

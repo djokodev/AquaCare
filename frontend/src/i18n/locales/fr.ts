@@ -35,8 +35,9 @@ export const fr = {
   ageGroup: "Classe d'âge",
   interventionZone: "Zone d'intervention",
   language: 'Langue',
-  
+
   // Sélection géographique
+  selectOption: 'Sélectionnez...',
   selectRegion: 'Sélectionner une région',
   selectDepartment: 'Sélectionner un département',
   selectDistrict: 'Sélectionner un arrondissement',
