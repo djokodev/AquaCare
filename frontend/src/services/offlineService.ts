@@ -1,14 +1,14 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { aquacultureService } from './aquacultureService';
+﻿import AsyncStorage from '@react-native-async-storage/async-storage';
+import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
 import { DailyLogForm, CreateCycleForm, SanitaryLogForm } from '@/types/aquaculture';
 
 /**
- * Service de gestion des données offline pour MAVECAM AquaCare
+ * Service de gestion des donnÃ©es offline pour MAVECAM AquaCare
  *
- * Fonctionnalités :
+ * FonctionnalitÃ©s :
  * - Sauvegarde locale des saisies quand pas de connexion
- * - Synchronisation automatique à la reconnexion
- * - Gestion des conflits et déduplication
+ * - Synchronisation automatique Ã  la reconnexion
+ * - Gestion des conflits et dÃ©duplication
  * - Support offline-first selon architecture backend
  */
 
@@ -62,7 +62,7 @@ class OfflineService {
         synced: false,
       };
 
-      // Récupérer les logs existants
+      // RÃ©cupÃ©rer les logs existants
       const existingLogs = await this.getOfflineCycleLogs();
 
       // Ajouter le nouveau log
@@ -74,30 +74,30 @@ class OfflineService {
         JSON.stringify(updatedLogs)
       );
 
-      console.log('📱 Log sauvegardé offline:', logId);
+      console.log('ðŸ“± Log sauvegardÃ© offline:', logId);
       return logId;
 
     } catch (error) {
-      console.error('❌ Erreur sauvegarde offline:', error);
+      console.error('âŒ Erreur sauvegarde offline:', error);
       throw new Error('Impossible de sauvegarder en local');
     }
   }
 
   /**
-   * Récupère tous les logs offline non synchronisés
+   * RÃ©cupÃ¨re tous les logs offline non synchronisÃ©s
    */
   async getOfflineCycleLogs(): Promise<OfflineCycleLog[]> {
     try {
       const stored = await AsyncStorage.getItem(STORAGE_KEYS.OFFLINE_CYCLE_LOGS);
       return stored ? JSON.parse(stored) : [];
     } catch (error) {
-      console.error('❌ Erreur lecture logs offline:', error);
+      console.error('âŒ Erreur lecture logs offline:', error);
       return [];
     }
   }
 
   /**
-   * Récupère les logs offline non synchronisés
+   * RÃ©cupÃ¨re les logs offline non synchronisÃ©s
    */
   async getPendingSyncLogs(): Promise<OfflineCycleLog[]> {
     const logs = await this.getOfflineCycleLogs();
@@ -111,11 +111,11 @@ class OfflineService {
     const pendingLogs = await this.getPendingSyncLogs();
 
     if (pendingLogs.length === 0) {
-      console.log('✅ Aucun log à synchroniser');
+      console.log('âœ… Aucun log Ã  synchroniser');
       return { success: 0, failed: 0 };
     }
 
-    console.log(`🔄 Synchronisation de ${pendingLogs.length} logs...`);
+    console.log(`ðŸ”„ Synchronisation de ${pendingLogs.length} logs...`);
 
     let successCount = 0;
     let failedCount = 0;
@@ -125,28 +125,28 @@ class OfflineService {
         // Tentative de synchronisation avec le backend
         await aquacultureService.createCycleLog(log.cycleId, log.logData);
 
-        // Marquer comme synchronisé
+        // Marquer comme synchronisÃ©
         await this.markLogAsSynced(log.id);
         successCount++;
 
-        console.log(`✅ Log ${log.id} synchronisé`);
+        console.log(`âœ… Log ${log.id} synchronisÃ©`);
 
       } catch (error) {
-        console.error(`❌ Erreur sync log ${log.id}:`, error);
+        console.error(`âŒ Erreur sync log ${log.id}:`, error);
         failedCount++;
       }
     }
 
-    // Sauvegarder timestamp dernière sync
+    // Sauvegarder timestamp derniÃ¨re sync
     await AsyncStorage.setItem(STORAGE_KEYS.LAST_SYNC, Date.now().toString());
 
-    console.log(`📊 Sync terminée: ${successCount} succès, ${failedCount} échecs`);
+    console.log(`ðŸ“Š Sync terminÃ©e: ${successCount} succÃ¨s, ${failedCount} Ã©checs`);
 
     return { success: successCount, failed: failedCount };
   }
 
   /**
-   * Marque un log comme synchronisé
+   * Marque un log comme synchronisÃ©
    */
   async markLogAsSynced(logId: string): Promise<void> {
     try {
@@ -160,12 +160,12 @@ class OfflineService {
         JSON.stringify(updatedLogs)
       );
     } catch (error) {
-      console.error('❌ Erreur marquage sync:', error);
+      console.error('âŒ Erreur marquage sync:', error);
     }
   }
 
   /**
-   * Nettoie les logs synchronisés anciens (> 30 jours)
+   * Nettoie les logs synchronisÃ©s anciens (> 30 jours)
    */
   async cleanupSyncedLogs(): Promise<number> {
     try {
@@ -183,18 +183,18 @@ class OfflineService {
           STORAGE_KEYS.OFFLINE_CYCLE_LOGS,
           JSON.stringify(activeLogs)
         );
-        console.log(`🧹 Nettoyage: ${removedCount} logs supprimés`);
+        console.log(`ðŸ§¹ Nettoyage: ${removedCount} logs supprimÃ©s`);
       }
 
       return removedCount;
     } catch (error) {
-      console.error('❌ Erreur nettoyage:', error);
+      console.error('âŒ Erreur nettoyage:', error);
       return 0;
     }
   }
 
   /**
-   * Vérifie s'il y a des logs en attente de synchronisation
+   * VÃ©rifie s'il y a des logs en attente de synchronisation
    */
   async hasPendingSync(): Promise<boolean> {
     const pending = await this.getPendingSyncLogs();
@@ -202,7 +202,7 @@ class OfflineService {
   }
 
   /**
-   * Récupère le nombre de logs en attente
+   * RÃ©cupÃ¨re le nombre de logs en attente
    */
   async getPendingCount(): Promise<number> {
     const pending = await this.getPendingSyncLogs();
@@ -210,7 +210,7 @@ class OfflineService {
   }
 
   /**
-   * Récupère la date de dernière synchronisation
+   * RÃ©cupÃ¨re la date de derniÃ¨re synchronisation
    */
   async getLastSyncDate(): Promise<Date | null> {
     try {
@@ -222,7 +222,7 @@ class OfflineService {
   }
 
   /**
-   * Vérifie si on a une connexion réseau
+   * VÃ©rifie si on a une connexion rÃ©seau
    */
   async isOnline(): Promise<boolean> {
     try {
@@ -238,7 +238,7 @@ class OfflineService {
   }
 
   /**
-   * Génère un ID unique pour les données offline
+   * GÃ©nÃ¨re un ID unique pour les donnÃ©es offline
    */
   private generateOfflineId(): string {
     return `offline_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -271,24 +271,24 @@ class OfflineService {
         JSON.stringify(updatedCycles)
       );
 
-      console.log('📱 Nouveau cycle sauvegardé offline:', cycleId);
+      console.log('ðŸ“± Nouveau cycle sauvegardÃ© offline:', cycleId);
       return cycleId;
 
     } catch (error) {
-      console.error('❌ Erreur sauvegarde cycle offline:', error);
+      console.error('âŒ Erreur sauvegarde cycle offline:', error);
       throw new Error('Impossible de sauvegarder le cycle en local');
     }
   }
 
   /**
-   * Récupère tous les nouveaux cycles offline
+   * RÃ©cupÃ¨re tous les nouveaux cycles offline
    */
   async getOfflineNewCycles(): Promise<OfflineNewCycle[]> {
     try {
       const stored = await AsyncStorage.getItem(STORAGE_KEYS.OFFLINE_NEW_CYCLES);
       return stored ? JSON.parse(stored) : [];
     } catch (error) {
-      console.error('❌ Erreur lecture cycles offline:', error);
+      console.error('âŒ Erreur lecture cycles offline:', error);
       return [];
     }
   }
@@ -321,24 +321,24 @@ class OfflineService {
         JSON.stringify(updatedLogs)
       );
 
-      console.log('📱 Log sanitaire sauvegardé offline:', logId);
+      console.log('ðŸ“± Log sanitaire sauvegardÃ© offline:', logId);
       return logId;
 
     } catch (error) {
-      console.error('❌ Erreur sauvegarde log sanitaire offline:', error);
+      console.error('âŒ Erreur sauvegarde log sanitaire offline:', error);
       throw new Error('Impossible de sauvegarder le log sanitaire en local');
     }
   }
 
   /**
-   * Récupère tous les logs sanitaires offline
+   * RÃ©cupÃ¨re tous les logs sanitaires offline
    */
   async getOfflineSanitaryLogs(): Promise<OfflineSanitaryLog[]> {
     try {
       const stored = await AsyncStorage.getItem(STORAGE_KEYS.OFFLINE_SANITARY_LOGS);
       return stored ? JSON.parse(stored) : [];
     } catch (error) {
-      console.error('❌ Erreur lecture logs sanitaires offline:', error);
+      console.error('âŒ Erreur lecture logs sanitaires offline:', error);
       return [];
     }
   }
@@ -346,10 +346,10 @@ class OfflineService {
   // ================== SYNCHRONISATION GLOBALE ==================
 
   /**
-   * Synchronise TOUS les types de données offline
+   * Synchronise TOUS les types de donnÃ©es offline
    */
   async syncAllOfflineData(): Promise<{ success: number; failed: number; details: any }> {
-    console.log('🔄 Début synchronisation globale...');
+    console.log('ðŸ”„ DÃ©but synchronisation globale...');
 
     const results = {
       success: 0,
@@ -368,7 +368,7 @@ class OfflineService {
       results.failed += cycleLogsResult.failed;
       results.details.cycleLogs = cycleLogsResult;
     } catch (error) {
-      console.error('❌ Erreur sync cycle logs:', error);
+      console.error('âŒ Erreur sync cycle logs:', error);
     }
 
     // 2. Synchroniser les nouveaux cycles
@@ -378,7 +378,7 @@ class OfflineService {
       results.failed += newCyclesResult.failed;
       results.details.newCycles = newCyclesResult;
     } catch (error) {
-      console.error('❌ Erreur sync nouveaux cycles:', error);
+      console.error('âŒ Erreur sync nouveaux cycles:', error);
     }
 
     // 3. Synchroniser les logs sanitaires
@@ -388,12 +388,12 @@ class OfflineService {
       results.failed += sanitaryLogsResult.failed;
       results.details.sanitaryLogs = sanitaryLogsResult;
     } catch (error) {
-      console.error('❌ Erreur sync logs sanitaires:', error);
+      console.error('âŒ Erreur sync logs sanitaires:', error);
     }
 
     await AsyncStorage.setItem(STORAGE_KEYS.LAST_SYNC, Date.now().toString());
 
-    console.log(`📊 Sync globale terminée: ${results.success} succès, ${results.failed} échecs`);
+    console.log(`ðŸ“Š Sync globale terminÃ©e: ${results.success} succÃ¨s, ${results.failed} Ã©checs`);
     return results;
   }
 
@@ -408,22 +408,22 @@ class OfflineService {
       return { success: 0, failed: 0 };
     }
 
-    console.log(`🔄 Synchronisation de ${unsyncedCycles.length} nouveaux cycles...`);
+    console.log(`ðŸ”„ Synchronisation de ${unsyncedCycles.length} nouveaux cycles...`);
 
     let successCount = 0;
     let failedCount = 0;
 
     for (const cycle of unsyncedCycles) {
       try {
-        // Appel API pour créer le cycle
+        // Appel API pour crÃ©er le cycle
         await aquacultureService.createProductionCycle(cycle.cycleData);
 
         await this.markNewCycleAsSynced(cycle.id);
         successCount++;
-        console.log(`✅ Cycle ${cycle.id} synchronisé`);
+        console.log(`âœ… Cycle ${cycle.id} synchronisÃ©`);
 
       } catch (error) {
-        console.error(`❌ Erreur sync cycle ${cycle.id}:`, error);
+        console.error(`âŒ Erreur sync cycle ${cycle.id}:`, error);
         failedCount++;
       }
     }
@@ -442,22 +442,22 @@ class OfflineService {
       return { success: 0, failed: 0 };
     }
 
-    console.log(`🔄 Synchronisation de ${unsyncedLogs.length} logs sanitaires...`);
+    console.log(`ðŸ”„ Synchronisation de ${unsyncedLogs.length} logs sanitaires...`);
 
     let successCount = 0;
     let failedCount = 0;
 
     for (const log of unsyncedLogs) {
       try {
-        // Appel API pour créer le log sanitaire
+        // Appel API pour crÃ©er le log sanitaire
         await aquacultureService.createSanitaryLog(log.cycleId, log.sanitaryData);
 
         await this.markSanitaryLogAsSynced(log.id);
         successCount++;
-        console.log(`✅ Log sanitaire ${log.id} synchronisé`);
+        console.log(`âœ… Log sanitaire ${log.id} synchronisÃ©`);
 
       } catch (error) {
-        console.error(`❌ Erreur sync log sanitaire ${log.id}:`, error);
+        console.error(`âŒ Erreur sync log sanitaire ${log.id}:`, error);
         failedCount++;
       }
     }
@@ -466,7 +466,7 @@ class OfflineService {
   }
 
   /**
-   * Marque un nouveau cycle comme synchronisé
+   * Marque un nouveau cycle comme synchronisÃ©
    */
   async markNewCycleAsSynced(cycleId: string): Promise<void> {
     try {
@@ -480,12 +480,12 @@ class OfflineService {
         JSON.stringify(updatedCycles)
       );
     } catch (error) {
-      console.error('❌ Erreur marquage cycle sync:', error);
+      console.error('âŒ Erreur marquage cycle sync:', error);
     }
   }
 
   /**
-   * Marque un log sanitaire comme synchronisé
+   * Marque un log sanitaire comme synchronisÃ©
    */
   async markSanitaryLogAsSynced(logId: string): Promise<void> {
     try {
@@ -499,12 +499,12 @@ class OfflineService {
         JSON.stringify(updatedLogs)
       );
     } catch (error) {
-      console.error('❌ Erreur marquage log sanitaire sync:', error);
+      console.error('âŒ Erreur marquage log sanitaire sync:', error);
     }
   }
 
   /**
-   * Vérifie s'il y a des données en attente (tous types)
+   * VÃ©rifie s'il y a des donnÃ©es en attente (tous types)
    */
   async hasAnyPendingSync(): Promise<boolean> {
     const pendingCycleLogs = await this.hasPendingSync();
@@ -515,7 +515,7 @@ class OfflineService {
   }
 
   /**
-   * Récupère le nombre total de données en attente
+   * RÃ©cupÃ¨re le nombre total de donnÃ©es en attente
    */
   async getTotalPendingCount(): Promise<number> {
     const pendingCycleLogs = await this.getPendingCount();
@@ -526,15 +526,18 @@ class OfflineService {
   }
 
   /**
-   * Reset complet des données offline (pour débogage)
+   * Reset complet des donnÃ©es offline (pour dÃ©bogage)
    */
   async resetOfflineData(): Promise<void> {
     await AsyncStorage.removeItem(STORAGE_KEYS.OFFLINE_CYCLE_LOGS);
     await AsyncStorage.removeItem(STORAGE_KEYS.OFFLINE_NEW_CYCLES);
     await AsyncStorage.removeItem(STORAGE_KEYS.OFFLINE_SANITARY_LOGS);
     await AsyncStorage.removeItem(STORAGE_KEYS.LAST_SYNC);
-    console.log('🔄 Données offline réinitialisées');
+    console.log('ðŸ”„ DonnÃ©es offline rÃ©initialisÃ©es');
   }
 }
 
 export const offlineService = new OfflineService();
+
+
+

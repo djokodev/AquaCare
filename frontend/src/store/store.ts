@@ -1,13 +1,13 @@
-import { configureStore } from '@reduxjs/toolkit';
-import { authSlice } from './slices/authSlice';
-import { aquacultureSlice } from './slices/aquacultureSlice';
-import notificationReducer from './slices/notificationSlice';
-import commerceReducer from './slices/commerceSlice';
+﻿import { configureStore } from '@reduxjs/toolkit';
+import aquacultureReducer, { aquacultureSlice } from '@/features/aquaculture/store/aquacultureSlice';
+import authReducer, { authSlice } from '@/features/auth/store/authSlice';
+import commerceReducer from '@/features/commerce/store/commerceSlice';
+import notificationReducer from '@/features/notifications/store/notificationSlice';
 
 export const store = configureStore({
   reducer: {
-    auth: authSlice.reducer,
-    aquaculture: aquacultureSlice.reducer,
+    auth: authReducer,
+    aquaculture: aquacultureReducer,
     notifications: notificationReducer,
     commerce: commerceReducer,
   },
@@ -22,3 +22,6 @@ export const store = configureStore({
 
 export type RootState = ReturnType<typeof store.getState>;
 export type AppDispatch = typeof store.dispatch;
+
+
+
