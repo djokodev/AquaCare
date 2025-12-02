@@ -1,12 +1,12 @@
-/**
- * Point d'entrée centralisé pour tous les utilitaires frontend.
+﻿/**
+ * Point d'entrÃ©e centralisÃ© pour tous les utilitaires frontend.
  *
  * Architecture:
  * - formatters: Fonctions de formatage d'affichage uniquement
- * - validators: Validations UX légères (la vraie validation est backend)
+ * - validators: Validations UX lÃ©gÃ¨res (la vraie validation est backend)
  */
 
-// Formatters généraux
+// Formatters gÃ©nÃ©raux
 export {
   formatNumber,
   formatPercentage,
@@ -16,7 +16,7 @@ export {
   formatCurrency,
 } from './formatters';
 
-// Formatters aquaculture spécifiques
+// Formatters aquaculture spÃ©cifiques
 export {
   formatBiomass,
   formatDensity,
@@ -28,7 +28,7 @@ export {
   formatPerformanceScore,
 } from './formatters';
 
-// Interpreters (logique légère d'affichage)
+// Interpreters (logique lÃ©gÃ¨re d'affichage)
 export {
   interpretFCR,
   interpretSurvivalRate,
@@ -63,3 +63,7 @@ export {
   isValidFishWeight,
   isValidFishCount,
 } from './validators';
+
+
+
+

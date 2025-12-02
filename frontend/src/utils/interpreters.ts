@@ -1,10 +1,10 @@
-/**
- * Helpers d'interpr�tation m�tier pour affichage frontend.
+﻿/**
+ * Helpers d'interprï¿½tation mï¿½tier pour affichage frontend.
  *
- * � R�GLE IMPORTANTE :
- * Ces fonctions N'effectuent PAS de calculs m�tier.
- * Elles INTERPR�TENT des valeurs d�j� calcul�es par le backend.
- * Logique L�G�RE d'affichage seulement (badges, couleurs, messages).
+ * ï¿½ Rï¿½GLE IMPORTANTE :
+ * Ces fonctions N'effectuent PAS de calculs mï¿½tier.
+ * Elles INTERPRï¿½TENT des valeurs dï¿½jï¿½ calculï¿½es par le backend.
+ * Logique Lï¿½Gï¿½RE d'affichage seulement (badges, couleurs, messages).
  */
 
 export type FCRInterpretation = 'excellent' | 'bon' | 'acceptable' | 'necessite amelioration';
@@ -12,16 +12,16 @@ export type SurvivalRateInterpretation = 'excellent' | 'bon' | 'moyen' | 'faible
 export type PerformanceLevel = 'excellent' | 'bon' | 'moyen' | 'faible';
 
 /**
- * Interpr�te un FCR selon standards MAVECAM.
+ * Interprï¿½te un FCR selon standards MAVECAM.
  *
- * @param fcr - FCR calcul� par backend
- * @returns Interpr�tation textuelle
+ * @param fcr - FCR calculï¿½ par backend
+ * @returns Interprï¿½tation textuelle
  *
- * R�f�rences:
- * - FCR < 1.2 = excellent (efficacit� >83%)
- * - FCR 1.2-1.5 = bon (efficacit� 67-83%)
- * - FCR 1.5-2.0 = acceptable (efficacit� 50-67%)
- * - FCR > 2.0 = n�cessite am�lioration (efficacit� <50%)
+ * Rï¿½fï¿½rences:
+ * - FCR < 1.2 = excellent (efficacitï¿½ >83%)
+ * - FCR 1.2-1.5 = bon (efficacitï¿½ 67-83%)
+ * - FCR 1.5-2.0 = acceptable (efficacitï¿½ 50-67%)
+ * - FCR > 2.0 = nï¿½cessite amï¿½lioration (efficacitï¿½ <50%)
  */
 export const interpretFCR = (
   fcr: number | null | undefined
@@ -35,12 +35,12 @@ export const interpretFCR = (
 };
 
 /**
- * Interpr�te un taux de survie selon standards aquaculture.
+ * Interprï¿½te un taux de survie selon standards aquaculture.
  *
- * @param survivalRate - Taux en % (calcul� par backend)
- * @returns Interpr�tation textuelle
+ * @param survivalRate - Taux en % (calculï¿½ par backend)
+ * @returns Interprï¿½tation textuelle
  *
- * R�f�rences:
+ * Rï¿½fï¿½rences:
  * - e85% = excellent
  * - 70-85% = bon
  * - 50-70% = moyen
@@ -58,15 +58,15 @@ export const interpretSurvivalRate = (
 };
 
 /**
- * V�rifie si densit� est optimale pour l'esp�ce.
+ * Vï¿½rifie si densitï¿½ est optimale pour l'espï¿½ce.
  *
- * @param density - Densit� en kg/m� (calcul�e par backend)
- * @param species - Esp�ce ('tilapia' ou 'clarias')
- * @returns true si densit� optimale
+ * @param density - Densitï¿½ en kg/mï¿½ (calculï¿½e par backend)
+ * @param species - Espï¿½ce ('tilapia' ou 'clarias')
+ * @returns true si densitï¿½ optimale
  *
  * Plages optimales MAVECAM:
- * - Tilapia: 100-300 kg/m�
- * - Clarias: 200-500 kg/m�
+ * - Tilapia: 100-300 kg/mï¿½
+ * - Clarias: 200-500 kg/mï¿½
  */
 export const isDensityOptimal = (
   density: number | null | undefined,
@@ -84,10 +84,10 @@ export const isDensityOptimal = (
 };
 
 /**
- * Interpr�te un score de performance global.
+ * Interprï¿½te un score de performance global.
  *
- * @param score - Score 0-100 (calcul� par backend)
- * @returns Interpr�tation textuelle
+ * @param score - Score 0-100 (calculï¿½ par backend)
+ * @returns Interprï¿½tation textuelle
  */
 export const interpretPerformanceScore = (
   score: number | null | undefined
@@ -101,10 +101,10 @@ export const interpretPerformanceScore = (
 };
 
 /**
- * Retourne la couleur associ�e � une interpr�tation FCR.
+ * Retourne la couleur associï¿½e ï¿½ une interprï¿½tation FCR.
  *
- * @param interpretation - Interpr�tation FCR
- * @returns Couleur hexad�cimale
+ * @param interpretation - Interprï¿½tation FCR
+ * @returns Couleur hexadï¿½cimale
  */
 export const getFCRColor = (
   interpretation: FCRInterpretation | null
@@ -116,14 +116,14 @@ export const getFCRColor = (
     'necessite amelioration': '#dc2626' // Rouge
   };
 
-  return interpretation ? colors[interpretation] : '#64748b'; // Gris par d�faut
+  return interpretation ? colors[interpretation] : '#64748b'; // Gris par dï¿½faut
 };
 
 /**
- * Retourne la couleur associ�e � une interpr�tation taux survie.
+ * Retourne la couleur associï¿½e ï¿½ une interprï¿½tation taux survie.
  *
- * @param interpretation - Interpr�tation survie
- * @returns Couleur hexad�cimale
+ * @param interpretation - Interprï¿½tation survie
+ * @returns Couleur hexadï¿½cimale
  */
 export const getSurvivalRateColor = (
   interpretation: SurvivalRateInterpretation | null
@@ -135,14 +135,14 @@ export const getSurvivalRateColor = (
     'faible': '#dc2626'     // Rouge
   };
 
-  return interpretation ? colors[interpretation] : '#64748b'; // Gris par d�faut
+  return interpretation ? colors[interpretation] : '#64748b'; // Gris par dï¿½faut
 };
 
 /**
- * Retourne la couleur associ�e � un niveau de performance.
+ * Retourne la couleur associï¿½e ï¿½ un niveau de performance.
  *
  * @param level - Niveau de performance
- * @returns Couleur hexad�cimale
+ * @returns Couleur hexadï¿½cimale
  */
 export const getPerformanceLevelColor = (
   level: PerformanceLevel | null
@@ -154,13 +154,13 @@ export const getPerformanceLevelColor = (
     'faible': '#dc2626'     // Rouge
   };
 
-  return level ? colors[level] : '#64748b'; // Gris par d�faut
+  return level ? colors[level] : '#64748b'; // Gris par dï¿½faut
 };
 
 /**
- * G�n�re un message de recommandation bas� sur FCR.
+ * Gï¿½nï¿½re un message de recommandation basï¿½ sur FCR.
  *
- * @param fcr - FCR calcul� par backend
+ * @param fcr - FCR calculï¿½ par backend
  * @returns Message de recommandation
  */
 export const getFCRRecommendation = (
@@ -179,9 +179,9 @@ export const getFCRRecommendation = (
 };
 
 /**
- * G�n�re un message de recommandation bas� sur taux survie.
+ * Gï¿½nï¿½re un message de recommandation basï¿½ sur taux survie.
  *
- * @param survivalRate - Taux en % (calcul� par backend)
+ * @param survivalRate - Taux en % (calculï¿½ par backend)
  * @returns Message de recommandation
  */
 export const getSurvivalRateRecommendation = (
@@ -192,9 +192,13 @@ export const getSurvivalRateRecommendation = (
   const recommendations = {
     'excellent': 'Taux de survie excellent ! Bonnes pratiques.',
     'bon': 'Taux de survie satisfaisant.',
-    'moyen': 'Taux de survie moyen. Surveillance recommand�e.',
+    'moyen': 'Taux de survie moyen. Surveillance recommandï¿½e.',
     'faible': 'Taux de survie faible. Contactez MAVECAM.'
   };
 
   return interpretation ? recommendations[interpretation] : 'Donnees insuffisantes';
 };
+
+
+
+

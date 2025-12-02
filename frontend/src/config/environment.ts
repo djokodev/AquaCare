@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Configuration automatique de l'environnement
  * Detecte si on est en DEV (Expo Dev Server) ou PRODUCTION (Build compile)
  *
@@ -68,3 +68,7 @@ if (config.debug) {
 }
 
 export default config;
+
+
+
+

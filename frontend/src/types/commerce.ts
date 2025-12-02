@@ -1,7 +1,7 @@
-/**
+﻿/**
  * Types TypeScript pour le module Commerce MAVECAM AquaCare
  *
- * Ce fichier définit tous les types pour :
+ * Ce fichier dÃ©finit tous les types pour :
  * - Produits alimentaires (catalogue MAVECAM)
  * - Commandes et items de commandes
  * - Panier et livraison
@@ -21,12 +21,12 @@
 export type ProductBrand = 'aller_aqua' | 'dibaq';
 
 /**
- * Espèces de poissons ciblées
+ * EspÃ¨ces de poissons ciblÃ©es
  */
 export type ProductSpecies = 'tilapia' | 'catfish' | 'mixed';
 
 /**
- * Phases d'élevage aquacole
+ * Phases d'Ã©levage aquacole
  */
 export type ProductPhase = 'larvae' | 'juvenile' | 'growing' | 'fattening' | 'finishing';
 
@@ -36,20 +36,20 @@ export type ProductPhase = 'larvae' | 'juvenile' | 'growing' | 'fattening' | 'fi
  *
  * Note: Les champs nutritionnels (phase, protein_percentage, lipid_percentage)
  * sont optionnels car non-disponibles pour certains produits (ex: DIBAQ)
- * Seules les données du catalogue PDF MAVECAM sont garanties
+ * Seules les donnÃ©es du catalogue PDF MAVECAM sont garanties
  */
 export interface Product {
   id: string;
   brand: ProductBrand;
   name: string;
   species: ProductSpecies;
-  phase: ProductPhase | null; // Optionnel si non-vérifié
+  phase: ProductPhase | null; // Optionnel si non-vÃ©rifiÃ©
   pellet_size_mm: string; // Decimal as string
-  protein_percentage: number | null; // Optionnel si non-vérifié
-  lipid_percentage: number | null; // Optionnel si non-vérifié
+  protein_percentage: number | null; // Optionnel si non-vÃ©rifiÃ©
+  lipid_percentage: number | null; // Optionnel si non-vÃ©rifiÃ©
   package_weight_kg: number;
   price_per_package: string; // Decimal as string (FCFA)
-  price_per_kg: string; // Decimal as string (calculé backend)
+  price_per_kg: string; // Decimal as string (calculÃ© backend)
   is_available: boolean;
   created_at: string; // ISO datetime
   updated_at: string; // ISO datetime
@@ -78,7 +78,7 @@ export interface CartItem {
 }
 
 /**
- * Méthode de livraison
+ * MÃ©thode de livraison
  */
 export type DeliveryMethod = 'home' | 'pickup';
 
@@ -120,7 +120,7 @@ export interface OrderItem {
   product_package_weight: number;
   unit_price: string; // Decimal as string (prix au moment commande)
   quantity: number;
-  line_total: string; // Decimal as string (unit_price × quantity)
+  line_total: string; // Decimal as string (unit_price Ã— quantity)
 }
 
 /**
@@ -147,7 +147,7 @@ export interface Order {
   delivery_city: string;
   delivery_full_address: string;
 
-  // Montants (immutables après création)
+  // Montants (immutables aprÃ¨s crÃ©ation)
   subtotal: string; // Decimal as string
   delivery_fee: string; // Decimal as string
   total: string; // Decimal as string
@@ -158,7 +158,7 @@ export interface Order {
   items: OrderItem[];
 
   // Offline sync
-  client_uuid?: string; // UUID généré client-side pour déduplication
+  client_uuid?: string; // UUID gÃ©nÃ©rÃ© client-side pour dÃ©duplication
   created_offline: boolean;
   synced_at?: string; // ISO datetime
 
@@ -168,7 +168,7 @@ export interface Order {
 }
 
 /**
- * Payload création commande
+ * Payload crÃ©ation commande
  * Endpoint : POST /api/commerce/orders/
  */
 export interface CreateOrderPayload {
@@ -178,7 +178,7 @@ export interface CreateOrderPayload {
   }>;
   delivery_method: DeliveryMethod;
   pickup_location?: PickupLocation;
-  client_uuid?: string; // Généré client-side pour offline
+  client_uuid?: string; // GÃ©nÃ©rÃ© client-side pour offline
   created_offline?: boolean;
 }
 
@@ -200,7 +200,7 @@ export interface OrderStatistics {
 // ============================================================================
 
 /**
- * Produit recommandé dans une suggestion
+ * Produit recommandÃ© dans une suggestion
  */
 export interface SuggestedProduct {
   product_id: string;
@@ -239,23 +239,23 @@ export interface CycleSuggestion {
     total_needed_kg: number;
     total_bags: number;
     total_price: number;
-    coverage_days: number; // Durée couverte (jours restants + buffer)
+    coverage_days: number; // DurÃ©e couverte (jours restants + buffer)
   };
 }
 
 /**
- * Analyse qualité suggestions
+ * Analyse qualitÃ© suggestions
  */
 export interface SuggestionAnalysis {
   total_cycles: number;
   cycles_with_data: number;
-  confidence_score: number; // 0-100 (qualité données)
+  confidence_score: number; // 0-100 (qualitÃ© donnÃ©es)
   analysis_period_days: number;
   safety_buffer_days: number;
 }
 
 /**
- * Réponse complète suggestions alimentation
+ * RÃ©ponse complÃ¨te suggestions alimentation
  * Endpoint : GET /api/commerce/products/feeding_suggestions/
  */
 export interface FeedingSuggestion {
@@ -271,16 +271,16 @@ export interface FeedingSuggestion {
 // ============================================================================
 
 /**
- * Paramètres simulation cycle
+ * ParamÃ¨tres simulation cycle
  * Endpoint : POST /api/commerce/products/cycle_simulation/
  */
 export interface CycleSimulationParams {
   species: 'tilapia' | 'catfish';
   initial_fish_count: number;
-  initial_weight_g?: number; // Défaut : 5g
-  target_weight_g?: number; // Défaut : 300g tilapia, 400g catfish
-  cycle_duration_days?: number; // Défaut : 120j tilapia, 150j catfish
-  survival_rate?: number; // Défaut : 0.85
+  initial_weight_g?: number; // DÃ©faut : 5g
+  target_weight_g?: number; // DÃ©faut : 300g tilapia, 400g catfish
+  cycle_duration_days?: number; // DÃ©faut : 120j tilapia, 150j catfish
+  survival_rate?: number; // DÃ©faut : 0.85
 }
 
 /**
@@ -298,11 +298,11 @@ export interface SimulatedProduct {
 }
 
 /**
- * Phase alimentation simulée
+ * Phase alimentation simulÃ©e
  */
 export interface SimulatedFeedingPhase {
   phase_name: string;
-  days_range: [number, number]; // [jour_début, jour_fin]
+  days_range: [number, number]; // [jour_dÃ©but, jour_fin]
   weight_range_g: [number, number]; // [poids_min, poids_max]
   pellet_size_mm: number;
   duration_days: number;
@@ -314,7 +314,7 @@ export interface SimulatedFeedingPhase {
 }
 
 /**
- * Résumé simulation cycle
+ * RÃ©sumÃ© simulation cycle
  */
 export interface SimulationSummary {
   total_feed_kg: number;
@@ -330,7 +330,7 @@ export interface SimulationSummary {
 }
 
 /**
- * Résultat complet simulation cycle
+ * RÃ©sultat complet simulation cycle
  * Endpoint : POST /api/commerce/products/cycle_simulation/
  */
 export interface SimulationResult {
@@ -352,7 +352,7 @@ export interface SimulationResult {
 // ============================================================================
 
 /**
- * État Redux pour le module Commerce
+ * Ã‰tat Redux pour le module Commerce
  */
 export interface CommerceState {
   // Produits
@@ -394,3 +394,7 @@ export interface CommerceState {
     error: string | null;
   };
 }
+
+
+
+

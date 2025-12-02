@@ -1,4 +1,4 @@
-// Types basés sur votre API Django accounts
+﻿// Types basÃ©s sur votre API Django accounts
 
 export interface User {
   id: string;
@@ -80,3 +80,6 @@ export interface ApiError {
   message: string;
   details?: Record<string, string[]>;
 }
+
+
+

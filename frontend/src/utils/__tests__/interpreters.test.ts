@@ -1,8 +1,8 @@
-/**
+﻿/**
  * Tests unitaires pour utils/interpreters.ts
  *
- * Ces tests vérifient l'interprétation de valeurs backend pour affichage UI.
- * Logique légère de badges/couleurs uniquement.
+ * Ces tests vÃ©rifient l'interprÃ©tation de valeurs backend pour affichage UI.
+ * Logique lÃ©gÃ¨re de badges/couleurs uniquement.
  */
 
 import {
@@ -74,26 +74,26 @@ describe('utils/interpreters', () => {
 
   describe('isDensityOptimal', () => {
     describe('pour tilapia', () => {
-      it('retourne true si densité entre 100-300 kg/m³', () => {
+      it('retourne true si densitÃ© entre 100-300 kg/mÂ³', () => {
         expect(isDensityOptimal(100, 'tilapia')).toBe(true);
         expect(isDensityOptimal(200, 'tilapia')).toBe(true);
         expect(isDensityOptimal(300, 'tilapia')).toBe(true);
       });
 
-      it('retourne false si densité hors plage optimale', () => {
+      it('retourne false si densitÃ© hors plage optimale', () => {
         expect(isDensityOptimal(50, 'tilapia')).toBe(false);
         expect(isDensityOptimal(350, 'tilapia')).toBe(false);
       });
     });
 
     describe('pour clarias', () => {
-      it('retourne true si densité entre 200-500 kg/m³', () => {
+      it('retourne true si densitÃ© entre 200-500 kg/mÂ³', () => {
         expect(isDensityOptimal(200, 'clarias')).toBe(true);
         expect(isDensityOptimal(350, 'clarias')).toBe(true);
         expect(isDensityOptimal(500, 'clarias')).toBe(true);
       });
 
-      it('retourne false si densité hors plage optimale', () => {
+      it('retourne false si densitÃ© hors plage optimale', () => {
         expect(isDensityOptimal(150, 'clarias')).toBe(false);
         expect(isDensityOptimal(600, 'clarias')).toBe(false);
       });
@@ -177,7 +177,7 @@ describe('utils/interpreters', () => {
   });
 
   describe('getPerformanceLevelColor', () => {
-    it('retourne couleurs appropriées pour chaque niveau', () => {
+    it('retourne couleurs appropriÃ©es pour chaque niveau', () => {
       expect(getPerformanceLevelColor('excellent')).toBe('#059669');
       expect(getPerformanceLevelColor('bon')).toBe('#10b981');
       expect(getPerformanceLevelColor('moyen')).toBe('#f59e0b');
@@ -214,7 +214,7 @@ describe('utils/interpreters', () => {
       expect(result).toContain('technicien MAVECAM');
     });
 
-    it('retourne message par défaut pour valeurs nulles', () => {
+    it('retourne message par dÃ©faut pour valeurs nulles', () => {
       expect(getFCRRecommendation(null)).toBe('Donnees insuffisantes');
       expect(getFCRRecommendation(undefined)).toBe('Donnees insuffisantes');
     });
@@ -244,9 +244,13 @@ describe('utils/interpreters', () => {
       expect(result).toContain('MAVECAM');
     });
 
-    it('retourne message par défaut pour valeurs nulles', () => {
+    it('retourne message par dÃ©faut pour valeurs nulles', () => {
       expect(getSurvivalRateRecommendation(null)).toBe('Donnees insuffisantes');
       expect(getSurvivalRateRecommendation(undefined)).toBe('Donnees insuffisantes');
     });
   });
 });
+
+
+
+

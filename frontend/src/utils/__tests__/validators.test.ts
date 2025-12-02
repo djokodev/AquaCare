@@ -1,8 +1,8 @@
-/**
+﻿/**
  * Tests unitaires pour utils/validators.ts
  *
- * Ces tests vérifient les validations UX pour feedback immédiat.
- * Rappel : Backend effectue la validation métier réelle.
+ * Ces tests vÃ©rifient les validations UX pour feedback immÃ©diat.
+ * Rappel : Backend effectue la validation mÃ©tier rÃ©elle.
  */
 
 import {
@@ -22,33 +22,33 @@ import {
 
 describe('utils/validators', () => {
   describe('isValidCameroonPhone', () => {
-    it('accepte numéro camerounais avec +237', () => {
+    it('accepte numÃ©ro camerounais avec +237', () => {
       expect(isValidCameroonPhone('+237670000000')).toBe(true);
       expect(isValidCameroonPhone('+237690000000')).toBe(true);
       expect(isValidCameroonPhone('+237650000000')).toBe(true);
     });
 
-    it('accepte numéro camerounais sans +237', () => {
+    it('accepte numÃ©ro camerounais sans +237', () => {
       expect(isValidCameroonPhone('670000000')).toBe(true);
       expect(isValidCameroonPhone('690000000')).toBe(true);
     });
 
-    it('accepte numéros avec espaces', () => {
+    it('accepte numÃ©ros avec espaces', () => {
       expect(isValidCameroonPhone('+237 670 000 000')).toBe(true);
       expect(isValidCameroonPhone('670 000 000')).toBe(true);
     });
 
-    it('rejette numéros non-camerounais', () => {
+    it('rejette numÃ©ros non-camerounais', () => {
       expect(isValidCameroonPhone('+33612345678')).toBe(false);
       expect(isValidCameroonPhone('+1234567890')).toBe(false);
     });
 
-    it('rejette numéros ne commençant pas par 6', () => {
+    it('rejette numÃ©ros ne commenÃ§ant pas par 6', () => {
       expect(isValidCameroonPhone('+237770000000')).toBe(false);
       expect(isValidCameroonPhone('770000000')).toBe(false);
     });
 
-    it('rejette numéros trop courts/longs', () => {
+    it('rejette numÃ©ros trop courts/longs', () => {
       expect(isValidCameroonPhone('+23767000000')).toBe(false); // 8 chiffres
       expect(isValidCameroonPhone('+2376700000000')).toBe(false); // 10 chiffres
     });
@@ -89,7 +89,7 @@ describe('utils/validators', () => {
       expect(isInRange(100, 0, 100)).toBe(true); // Limite max
     });
 
-    it('accepte strings numériques', () => {
+    it('accepte strings numÃ©riques', () => {
       expect(isInRange('50', 0, 100)).toBe(true);
     });
 
@@ -104,7 +104,7 @@ describe('utils/validators', () => {
       expect(isInRange('abc', 0, 100)).toBe(false);
     });
 
-    it('gère plages négatives', () => {
+    it('gÃ¨re plages nÃ©gatives', () => {
       expect(isInRange(-5, -10, 0)).toBe(true);
       expect(isInRange(-11, -10, 0)).toBe(false);
     });
@@ -121,11 +121,11 @@ describe('utils/validators', () => {
       expect(isPositive('50')).toBe(true);
     });
 
-    it('rejette zéro', () => {
+    it('rejette zÃ©ro', () => {
       expect(isPositive(0)).toBe(false);
     });
 
-    it('rejette nombres négatifs', () => {
+    it('rejette nombres nÃ©gatifs', () => {
       expect(isPositive(-1)).toBe(false);
       expect(isPositive(-0.1)).toBe(false);
     });
@@ -138,12 +138,12 @@ describe('utils/validators', () => {
   });
 
   describe('isNotEmpty', () => {
-    it('accepte chaînes non-vides', () => {
+    it('accepte chaÃ®nes non-vides', () => {
       expect(isNotEmpty('test')).toBe(true);
       expect(isNotEmpty('a')).toBe(true);
     });
 
-    it('rejette chaînes vides', () => {
+    it('rejette chaÃ®nes vides', () => {
       expect(isNotEmpty('')).toBe(false);
       expect(isNotEmpty('   ')).toBe(false); // Espaces uniquement
     });
@@ -161,7 +161,7 @@ describe('utils/validators', () => {
       expect(isFutureDate(futureDate.toISOString())).toBe(true);
     });
 
-    it('rejette dates passées', () => {
+    it('rejette dates passÃ©es', () => {
       const pastDate = new Date();
       pastDate.setDate(pastDate.getDate() - 10);
       expect(isFutureDate(pastDate.toISOString())).toBe(false);
@@ -169,7 +169,7 @@ describe('utils/validators', () => {
 
     it('rejette date actuelle (environ)', () => {
       const now = new Date().toISOString();
-      // Peut être true ou false selon timing exact, on teste juste qu'il n'y a pas d'erreur
+      // Peut Ãªtre true ou false selon timing exact, on teste juste qu'il n'y a pas d'erreur
       expect(typeof isFutureDate(now)).toBe('boolean');
     });
 
@@ -181,7 +181,7 @@ describe('utils/validators', () => {
   });
 
   describe('isPastDate', () => {
-    it('accepte dates passées', () => {
+    it('accepte dates passÃ©es', () => {
       const pastDate = new Date();
       pastDate.setDate(pastDate.getDate() - 10);
       expect(isPastDate(pastDate.toISOString())).toBe(true);
@@ -201,14 +201,14 @@ describe('utils/validators', () => {
   });
 
   describe('isValidTemperature', () => {
-    it('accepte températures raisonnables (15-35°C)', () => {
+    it('accepte tempÃ©ratures raisonnables (15-35Â°C)', () => {
       expect(isValidTemperature(20)).toBe(true);
       expect(isValidTemperature(15)).toBe(true); // Min
       expect(isValidTemperature(35)).toBe(true); // Max
       expect(isValidTemperature(28)).toBe(true); // Optimal aquaculture
     });
 
-    it('rejette températures hors plage', () => {
+    it('rejette tempÃ©ratures hors plage', () => {
       expect(isValidTemperature(10)).toBe(false); // Trop froid
       expect(isValidTemperature(40)).toBe(false); // Trop chaud
     });
@@ -239,14 +239,14 @@ describe('utils/validators', () => {
   });
 
   describe('isValidOxygen', () => {
-    it('accepte oxygène raisonnable (0-20 mg/L)', () => {
+    it('accepte oxygÃ¨ne raisonnable (0-20 mg/L)', () => {
       expect(isValidOxygen(5)).toBe(true);
       expect(isValidOxygen(0)).toBe(true); // Min
       expect(isValidOxygen(20)).toBe(true); // Max
       expect(isValidOxygen(7)).toBe(true); // Optimal aquaculture
     });
 
-    it('rejette oxygène hors plage', () => {
+    it('rejette oxygÃ¨ne hors plage', () => {
       expect(isValidOxygen(-1)).toBe(false);
       expect(isValidOxygen(25)).toBe(false);
     });
@@ -297,3 +297,7 @@ describe('utils/validators', () => {
     });
   });
 });
+
+
+
+

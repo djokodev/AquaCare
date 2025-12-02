@@ -1,8 +1,8 @@
-/**
+﻿/**
  * Constantes Commerce MAVECAM AquaCare
  *
- * Constantes métier pour le module Commerce.
- * Utilisées pour affichage UI uniquement - backend a les vraies règles.
+ * Constantes mÃ©tier pour le module Commerce.
+ * UtilisÃ©es pour affichage UI uniquement - backend a les vraies rÃ¨gles.
  *
  * @module domain/commerce/constants
  */
@@ -14,7 +14,7 @@ import { DeliveryMethod, PickupLocation } from '../../types/commerce';
 // ============================================================================
 
 /**
- * Méthodes de livraison disponibles
+ * MÃ©thodes de livraison disponibles
  */
 export const DELIVERY_METHODS: Array<{ value: DeliveryMethod; labelKey: string }> = [
   { value: 'home', labelKey: 'homeDelivery' },
@@ -42,7 +42,7 @@ export const FREE_DELIVERY_THRESHOLD = 20;
 export const DELIVERY_FEE_FCFA = 3000;
 
 // ============================================================================
-// MARQUES & ESPÈCES
+// MARQUES & ESPÃˆCES
 // ============================================================================
 
 /**
@@ -54,8 +54,8 @@ export const PRODUCT_BRANDS = [
 ];
 
 /**
- * Espèces cibles produits
- * Note: Certains produits sont compatibles avec les deux espèces,
+ * EspÃ¨ces cibles produits
+ * Note: Certains produits sont compatibles avec les deux espÃ¨ces,
  * mais backend filtre uniquement par tilapia/catfish
  */
 export const PRODUCT_SPECIES = [
@@ -64,7 +64,7 @@ export const PRODUCT_SPECIES = [
 ];
 
 /**
- * Phases d'élevage aquacole
+ * Phases d'Ã©levage aquacole
  */
 export const PRODUCT_PHASES = [
   { value: 'larvae', labelKey: 'larvaePhase' },
@@ -75,11 +75,11 @@ export const PRODUCT_PHASES = [
 ];
 
 // ============================================================================
-// SIMULATION CYCLE - VALEURS PAR DÉFAUT
+// SIMULATION CYCLE - VALEURS PAR DÃ‰FAUT
 // ============================================================================
 
 /**
- * Valeurs par défaut simulation cycle
+ * Valeurs par dÃ©faut simulation cycle
  * Backend calcule les vraies projections - ces valeurs sont pour UI uniquement
  */
 export const CYCLE_SIMULATION_DEFAULTS = {
@@ -99,7 +99,7 @@ export const CYCLE_SIMULATION_DEFAULTS = {
 
 /**
  * FCR cible MAVECAM (Feed Conversion Ratio)
- * Objectif qualité aliments MAVECAM
+ * Objectif qualitÃ© aliments MAVECAM
  */
 export const FCR_TARGET = {
   tilapia: 1.8, // kg aliment / kg gain biomasse
@@ -107,10 +107,14 @@ export const FCR_TARGET = {
 };
 
 /**
- * Prix marché camerounais (FCFA/kg) - indicatif uniquement
- * Backend a les vrais prix actualisés
+ * Prix marchÃ© camerounais (FCFA/kg) - indicatif uniquement
+ * Backend a les vrais prix actualisÃ©s
  */
 export const MARKET_PRICE_PER_KG = {
   tilapia: 2500,
   catfish: 2800,
 };
+
+
+
+

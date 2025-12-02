@@ -1,8 +1,8 @@
-/**
+﻿/**
  * Tests unitaires pour utils/formatters.ts
  *
- * Ces tests vérifient le formatage d'affichage uniquement.
- * Aucune logique métier n'est testée ici.
+ * Ces tests vÃ©rifient le formatage d'affichage uniquement.
+ * Aucune logique mÃ©tier n'est testÃ©e ici.
  */
 
 import {
@@ -24,15 +24,15 @@ import {
 
 describe('utils/formatters', () => {
   describe('formatNumber', () => {
-    it('formate un nombre avec 1 décimale par défaut', () => {
+    it('formate un nombre avec 1 dÃ©cimale par dÃ©faut', () => {
       expect(formatNumber(123.456)).toBe('123.5');
     });
 
-    it('formate un nombre avec unité', () => {
+    it('formate un nombre avec unitÃ©', () => {
       expect(formatNumber(123.456, 'kg')).toBe('123.5 kg');
     });
 
-    it('formate avec nombre de décimales personnalisé', () => {
+    it('formate avec nombre de dÃ©cimales personnalisÃ©', () => {
       expect(formatNumber(123.456, 'kg', 2)).toBe('123.46 kg');
     });
 
@@ -41,25 +41,25 @@ describe('utils/formatters', () => {
       expect(formatNumber(undefined)).toBe('0');
     });
 
-    it('retourne "0 unit" pour valeurs nulles avec unité', () => {
+    it('retourne "0 unit" pour valeurs nulles avec unitÃ©', () => {
       expect(formatNumber(null, 'kg')).toBe('0 kg');
     });
 
-    it('gère les strings numériques', () => {
+    it('gÃ¨re les strings numÃ©riques', () => {
       expect(formatNumber('123.456', 'kg')).toBe('123.5 kg');
     });
 
-    it('retourne "0" pour strings non-numériques', () => {
+    it('retourne "0" pour strings non-numÃ©riques', () => {
       expect(formatNumber('abc')).toBe('0');
     });
   });
 
   describe('formatPercentage', () => {
-    it('formate un pourcentage avec 1 décimale', () => {
+    it('formate un pourcentage avec 1 dÃ©cimale', () => {
       expect(formatPercentage(85.567)).toBe('85.6%');
     });
 
-    it('formate avec nombre de décimales personnalisé', () => {
+    it('formate avec nombre de dÃ©cimales personnalisÃ©', () => {
       expect(formatPercentage(85.567, 2)).toBe('85.57%');
     });
 
@@ -68,18 +68,18 @@ describe('utils/formatters', () => {
       expect(formatPercentage(undefined)).toBe('0%');
     });
 
-    it('gère les strings numériques', () => {
+    it('gÃ¨re les strings numÃ©riques', () => {
       expect(formatPercentage('75.5')).toBe('75.5%');
     });
 
-    it('gère les pourcentages 0 et 100', () => {
+    it('gÃ¨re les pourcentages 0 et 100', () => {
       expect(formatPercentage(0)).toBe('0.0%');
       expect(formatPercentage(100)).toBe('100.0%');
     });
   });
 
   describe('formatDate', () => {
-    it('formate une date ISO 8601 en français', () => {
+    it('formate une date ISO 8601 en franÃ§ais', () => {
       const result = formatDate('2025-01-15');
       // Format attendu : "15 janv. 2025" ou similaire selon locale
       expect(result).toContain('15');
@@ -95,7 +95,7 @@ describe('utils/formatters', () => {
       expect(formatDate('invalid-date')).toBe('-');
     });
 
-    it('gère différentes locales', () => {
+    it('gÃ¨re diffÃ©rentes locales', () => {
       const result = formatDate('2025-01-15', 'en-US');
       expect(result).toContain('15');
       expect(result).toContain('2025');
@@ -118,7 +118,7 @@ describe('utils/formatters', () => {
   });
 
   describe('formatDaysSince', () => {
-    it('calcule et formate les jours écoulés', () => {
+    it('calcule et formate les jours Ã©coulÃ©s', () => {
       const date30DaysAgo = new Date();
       date30DaysAgo.setDate(date30DaysAgo.getDate() - 30);
 
@@ -130,7 +130,7 @@ describe('utils/formatters', () => {
       expect(formatDaysSince(undefined)).toBe('0');
     });
 
-    it('gère une date de fin personnalisée', () => {
+    it('gÃ¨re une date de fin personnalisÃ©e', () => {
       const start = '2025-01-01';
       const end = '2025-01-31';
       expect(formatDaysSince(start, end)).toBe('30');
@@ -149,14 +149,14 @@ describe('utils/formatters', () => {
       expect(result).toContain('FCFA');
     });
 
-    it('formate avec 0 décimale par défaut', () => {
+    it('formate avec 0 dÃ©cimale par dÃ©faut', () => {
       const result = formatCurrency(150000.75);
       expect(result).toContain('150');
       expect(result).toContain('001');
       expect(result).toContain('FCFA');
     });
 
-    it('formate avec décimales personnalisées', () => {
+    it('formate avec dÃ©cimales personnalisÃ©es', () => {
       const result = formatCurrency(150000.75, 2);
       expect(result).toContain('150');
       expect(result).toContain('000');
@@ -169,7 +169,7 @@ describe('utils/formatters', () => {
       expect(formatCurrency(undefined)).toBe('0 FCFA');
     });
 
-    it('gère les montants négatifs', () => {
+    it('gÃ¨re les montants nÃ©gatifs', () => {
       const result = formatCurrency(-5000);
       expect(result).toContain('-5');
       expect(result).toContain('000');
@@ -191,18 +191,18 @@ describe('utils/formatters', () => {
       expect(formatBiomass(undefined)).toBe('N/A');
     });
 
-    it('gère les petites biomasses', () => {
+    it('gÃ¨re les petites biomasses', () => {
       expect(formatBiomass(0.75)).toBe('0.75 kg');
     });
   });
 
   describe('formatDensity', () => {
-    it('formate densité volumétrique', () => {
-      expect(formatDensity(125.30)).toBe('125.30 kg/m³');
+    it('formate densitÃ© volumÃ©trique', () => {
+      expect(formatDensity(125.30)).toBe('125.30 kg/mÂ³');
     });
 
-    it('formate densité superficielle', () => {
-      expect(formatDensity(15.75, 'kg/m²')).toBe('15.75 kg/m²');
+    it('formate densitÃ© superficielle', () => {
+      expect(formatDensity(15.75, 'kg/mÂ²')).toBe('15.75 kg/mÂ²');
     });
 
     it('retourne "N/A" pour valeurs nulles', () => {
@@ -212,7 +212,7 @@ describe('utils/formatters', () => {
   });
 
   describe('formatFCR', () => {
-    it('formate FCR avec 2 décimales', () => {
+    it('formate FCR avec 2 dÃ©cimales', () => {
       expect(formatFCR(1.856)).toBe('1.86');
     });
 
@@ -221,17 +221,17 @@ describe('utils/formatters', () => {
       expect(formatFCR(undefined)).toBe('N/A');
     });
 
-    it('gère les FCR excellents', () => {
+    it('gÃ¨re les FCR excellents', () => {
       expect(formatFCR(1.2)).toBe('1.20');
     });
 
-    it('gère les FCR élevés', () => {
+    it('gÃ¨re les FCR Ã©levÃ©s', () => {
       expect(formatFCR(3.5)).toBe('3.50');
     });
   });
 
   describe('formatSurvivalRate', () => {
-    it('formate taux de survie avec 2 décimales', () => {
+    it('formate taux de survie avec 2 dÃ©cimales', () => {
       expect(formatSurvivalRate(85.567)).toBe('85.57%');
     });
 
@@ -240,11 +240,11 @@ describe('utils/formatters', () => {
       expect(formatSurvivalRate(undefined)).toBe('N/A');
     });
 
-    it('gère taux 100%', () => {
+    it('gÃ¨re taux 100%', () => {
       expect(formatSurvivalRate(100)).toBe('100.00%');
     });
 
-    it('gère taux 0%', () => {
+    it('gÃ¨re taux 0%', () => {
       expect(formatSurvivalRate(0)).toBe('0.00%');
     });
   });
@@ -259,13 +259,13 @@ describe('utils/formatters', () => {
       expect(formatDailyGrowthRate(undefined)).toBe('N/A');
     });
 
-    it('gère les faibles taux de croissance', () => {
+    it('gÃ¨re les faibles taux de croissance', () => {
       expect(formatDailyGrowthRate(0.5)).toBe('0.50 g/jour');
     });
   });
 
   describe('formatSpecificGrowthRate', () => {
-    it('formate SGR avec 2 décimales', () => {
+    it('formate SGR avec 2 dÃ©cimales', () => {
       expect(formatSpecificGrowthRate(1.56)).toBe('1.56%/jour');
     });
 
@@ -276,7 +276,7 @@ describe('utils/formatters', () => {
   });
 
   describe('formatFeedAmount', () => {
-    it('formate quantité d\'aliment', () => {
+    it('formate quantitÃ© d\'aliment', () => {
       expect(formatFeedAmount(12.567)).toBe('12.57 kg');
     });
 
@@ -285,7 +285,7 @@ describe('utils/formatters', () => {
       expect(formatFeedAmount(undefined)).toBe('N/A');
     });
 
-    it('gère les petites quantités', () => {
+    it('gÃ¨re les petites quantitÃ©s', () => {
       expect(formatFeedAmount(0.25)).toBe('0.25 kg');
     });
   });
@@ -300,12 +300,16 @@ describe('utils/formatters', () => {
       expect(formatPerformanceScore(undefined)).toBe('N/A');
     });
 
-    it('gère les scores parfaits', () => {
+    it('gÃ¨re les scores parfaits', () => {
       expect(formatPerformanceScore(100)).toBe('100.0/100');
     });
 
-    it('gère les scores faibles', () => {
+    it('gÃ¨re les scores faibles', () => {
       expect(formatPerformanceScore(25.3)).toBe('25.3/100');
     });
   });
 });
+
+
+
+

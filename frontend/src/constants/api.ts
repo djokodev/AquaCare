@@ -1,13 +1,13 @@
-import environmentConfig from '@/config/environment';
+﻿import environmentConfig from '@/config/environment';
 
 /**
- * Configuration API avec détection automatique d'environnement
+ * Configuration API avec dÃ©tection automatique d'environnement
  *
- * DÉVELOPPEMENT (npm start) :
- *   → Backend Docker local (172.20.10.2:8000)
+ * DÃ‰VELOPPEMENT (npm start) :
+ *   â†’ Backend Docker local (172.20.10.2:8000)
  *
  * PRODUCTION (eas build) :
- *   → API en ligne (77.237.241.223)
+ *   â†’ API en ligne (77.237.241.223)
  *
  * Pas besoin de toucher au fichier .env !
  */
@@ -20,7 +20,7 @@ export const API_CONFIG = {
   },
 };
 
-// Endpoints basés sur votre API Django
+// Endpoints basÃ©s sur votre API Django
 export const API_ENDPOINTS = {
   // Authentication (accounts module)
   AUTH: {
@@ -51,3 +51,6 @@ export const STORAGE_KEYS = {
   USER_DATA: 'aquacare_user_data',
   LANGUAGE: 'aquacare_language',
 };
+
+
+

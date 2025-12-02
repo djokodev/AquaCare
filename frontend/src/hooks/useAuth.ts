@@ -1,4 +1,4 @@
-import { useSelector, useDispatch } from 'react-redux';
+﻿import { useSelector, useDispatch } from 'react-redux';
 import { useCallback, useEffect, useState } from 'react';
 import { RootState, AppDispatch } from '@/store/store';
 import { setLogoutCallback } from '@/services/api';
@@ -11,26 +11,26 @@ import {
   updateUserProfile,
   updateFarmProfile,
   clearError,
-} from '@/store/slices/authSlice';
+} from '@/features/auth/store/authSlice';
 import { LoginRequest, RegisterRequest, User, FarmProfile } from '@/types/auth';
 
 /**
- * Hook personnalisé pour la gestion de l'authentification
+ * Hook personnalisÃ© pour la gestion de l'authentification
  */
 export const useAuth = () => {
   const dispatch = useDispatch<AppDispatch>();
   const authState = useSelector((state: RootState) => state.auth);
 
-  // Configuration de la déconnexion automatique
+  // Configuration de la dÃ©connexion automatique
   useEffect(() => {
     const handleAutoLogout = () => {
       dispatch(logoutUser());
     };
 
-    // S'enregistrer pour la déconnexion automatique
+    // S'enregistrer pour la dÃ©connexion automatique
     setLogoutCallback(handleAutoLogout);
 
-    // Cleanup au démontage du composant
+    // Cleanup au dÃ©montage du composant
     return () => {
       setLogoutCallback(() => {});
     };
@@ -49,11 +49,11 @@ export const useAuth = () => {
     }
     
     // Charger le profil seulement si:
-    // 1. Utilisateur authentifié ET
+    // 1. Utilisateur authentifiÃ© ET
     // 2. Utilisateur existe ET  
     // 3. Pas de profil ferme ET
     // 4. Pas en cours de chargement ET
-    // 5. Pas encore tenté pour cet utilisateur ET
+    // 5. Pas encore tentÃ© pour cet utilisateur ET
     // 6. Pas d'erreur d'authentification en cours
     if (authState.isAuthenticated && 
         authState.user && 
@@ -65,7 +65,7 @@ export const useAuth = () => {
       dispatch(loadUserProfile());
     }
     
-    // Reset complètement si déconnexion
+    // Reset complÃ¨tement si dÃ©connexion
     if (!authState.isAuthenticated) {
       setProfileLoadAttempted(false);
       setLastUserId(null);
@@ -142,7 +142,7 @@ export const useAuth = () => {
       const user = authState.user;
       if (!user) return '';
       
-      // Priorité: display_name > business_name (pour entreprises) > first_name + last_name > phone_number
+      // PrioritÃ©: display_name > business_name (pour entreprises) > first_name + last_name > phone_number
       if (user.display_name) return user.display_name;
       if (user.account_type === 'company' && user.business_name) return user.business_name;
       if (user.first_name && user.last_name) return `${user.first_name} ${user.last_name}`;
@@ -152,3 +152,6 @@ export const useAuth = () => {
     isFarmCertified: authState.farmProfile?.is_certified || false,
   };
 };
+
+
+
