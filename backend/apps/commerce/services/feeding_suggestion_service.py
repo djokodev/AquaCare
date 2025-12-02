@@ -129,7 +129,7 @@ class FeedingSuggestionService:
         start_date = end_date - timedelta(days=FeedingSuggestionService.MAX_ANALYSIS_DAYS)
 
         logs = CycleLog.objects.filter(
-            production_cycle=cycle,
+            cycle=cycle,
             log_date__gte=start_date.date(),
             log_date__lte=end_date.date(),
             feed_quantity__isnull=False,
