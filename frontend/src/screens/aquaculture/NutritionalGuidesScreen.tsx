@@ -1,20 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  ActivityIndicator,
-  RefreshControl,
-  Alert,
-  TextInput,
-  FlatList,
-} from 'react-native';
+﻿import React, { useState, useEffect } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl, Alert, TextInput, FlatList } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
-import { aquacultureService } from '../../services/aquacultureService';
-import { NutritionalGuide, Species } from '../../types/aquaculture';
+import { aquacultureService } from '@/services/aquacultureService';
+import { NutritionalGuide, Species } from '@/types/aquaculture';
 import { MAVECAM_COLORS } from '@/constants/colors';
 
 interface FilterState {
@@ -26,7 +15,6 @@ interface FilterState {
 export default function NutritionalGuidesScreen({ navigation }: any) {
   const { t } = useTranslation();
 
-  // États locaux
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [guides, setGuides] = useState<NutritionalGuide[]>([]);
@@ -34,26 +22,22 @@ export default function NutritionalGuidesScreen({ navigation }: any) {
   const [error, setError] = useState<string | null>(null);
   const [selectedGuide, setSelectedGuide] = useState<NutritionalGuide | null>(null);
 
-  // États des filtres
   const [filters, setFilters] = useState<FilterState>({
     species: 'all',
     searchText: '',
     selectedStage: null,
   });
 
-  // Options disponibles
   const speciesOptions = [
     { key: 'all', label: t('allSpecies') },
     { key: 'tilapia', label: t('tilapia') },
     { key: 'clarias', label: t('clarias') },
   ];
 
-  // Chargement initial
   useEffect(() => {
     loadNutritionalGuides();
   }, []);
 
-  // Filtrage des guides
   useEffect(() => {
     applyFilters();
   }, [guides, filters]);
@@ -61,7 +45,6 @@ export default function NutritionalGuidesScreen({ navigation }: any) {
   const loadNutritionalGuides = async () => {
     try {
       setError(null);
-
       const data = await aquacultureService.getAllNutritionalGuides();
       setGuides(data);
     } catch (err: any) {
@@ -81,29 +64,24 @@ export default function NutritionalGuidesScreen({ navigation }: any) {
   const applyFilters = () => {
     let filtered = [...guides];
 
-    // Filtrer par espèce
     if (filters.species !== 'all') {
-      filtered = filtered.filter(guide => guide.species === filters.species);
+      filtered = filtered.filter((guide) => guide.species === filters.species);
     }
 
-    // Filtrer par recherche textuelle
     if (filters.searchText.trim()) {
       const searchLower = filters.searchText.toLowerCase();
-      filtered = filtered.filter(guide =>
-        guide.growth_stage.toLowerCase().includes(searchLower) ||
-        guide.feeding_notes?.toLowerCase().includes(searchLower) ||
-        guide.recommended_products.some(product =>
-          product.toLowerCase().includes(searchLower)
-        )
+      filtered = filtered.filter(
+        (guide) =>
+          guide.growth_stage.toLowerCase().includes(searchLower) ||
+          guide.feeding_notes?.toLowerCase().includes(searchLower) ||
+          guide.recommended_products.some((product) => product.toLowerCase().includes(searchLower))
       );
     }
 
-    // Filtrer par stade sélectionné
     if (filters.selectedStage) {
-      filtered = filtered.filter(guide => guide.growth_stage === filters.selectedStage);
+      filtered = filtered.filter((guide) => guide.growth_stage === filters.selectedStage);
     }
 
-    // Trier par espèce puis par poids minimum
     filtered.sort((a, b) => {
       if (a.species !== b.species) {
         return a.species.localeCompare(b.species);
@@ -115,7 +93,7 @@ export default function NutritionalGuidesScreen({ navigation }: any) {
   };
 
   const updateFilter = (key: keyof FilterState, value: any) => {
-    setFilters(prev => ({
+    setFilters((prev) => ({
       ...prev,
       [key]: value,
     }));
@@ -151,21 +129,19 @@ export default function NutritionalGuidesScreen({ navigation }: any) {
   };
 
   const renderSpeciesFilter = () => (
-    <View style={styles.filterRow}>
+    <View className="flex-row mb-3">
       {speciesOptions.map((option) => (
         <TouchableOpacity
           key={option.key}
-          style={[
-            styles.filterButton,
-            filters.species === option.key && styles.filterButtonActive,
-          ]}
+          className={`flex-row items-center justify-center px-4 py-2 rounded-full border mr-2 ${
+            filters.species === option.key ? 'bg-mavecam-primary border-mavecam-primary' : 'bg-white border-mavecam-primary'
+          }`}
           onPress={() => updateFilter('species', option.key)}
         >
           <Text
-            style={[
-              styles.filterButtonText,
-              filters.species === option.key && styles.filterButtonTextActive,
-            ]}
+            className={`text-sm font-medium ${
+              filters.species === option.key ? 'text-white' : 'text-mavecam-primary'
+            }`}
           >
             {option.label}
           </Text>
@@ -175,10 +151,10 @@ export default function NutritionalGuidesScreen({ navigation }: any) {
   );
 
   const renderSearchBar = () => (
-    <View style={styles.searchContainer}>
+    <View className="flex-row items-center bg-cream rounded-lg px-3 py-2 mb-2">
       <Ionicons name="search" size={20} color={MAVECAM_COLORS.GRAY_LIGHT} />
       <TextInput
-        style={styles.searchInput}
+        className="flex-1 ml-2 text-base text-gray-dark"
         placeholder={t('searchInGuides')}
         placeholderTextColor={MAVECAM_COLORS.GRAY_LIGHT}
         value={filters.searchText}
@@ -194,69 +170,62 @@ export default function NutritionalGuidesScreen({ navigation }: any) {
 
   const renderGuideCard = ({ item: guide }: { item: NutritionalGuide }) => (
     <TouchableOpacity
-      style={[
-        styles.guideCard,
-        selectedGuide?.id === guide.id && styles.guideCardSelected,
-      ]}
+      className={`bg-white rounded-xl p-4 mb-3 shadow ${selectedGuide?.id === guide.id ? 'border-2 border-mavecam-primary' : ''}`}
       onPress={() => setSelectedGuide(selectedGuide?.id === guide.id ? null : guide)}
     >
-      <View style={styles.guideCardHeader}>
-        <View style={styles.guideCardHeaderLeft}>
-          <View style={[styles.stageBadge, { backgroundColor: getStageColor(guide.growth_stage) }]}>
-            <Text style={styles.stageBadgeText}>{t(guide.growth_stage)}</Text>
+      <View className="flex-row justify-between items-center mb-3">
+        <View className="flex-row items-center flex-1">
+          <View className="px-2 py-1 rounded-full mr-2" style={{ backgroundColor: getStageColor(guide.growth_stage) }}>
+            <Text className="text-xs font-semibold text-white">{t(guide.growth_stage)}</Text>
           </View>
-          <Text style={styles.speciesText}>{t(guide.species)}</Text>
+          <Text className="text-base font-semibold text-gray-dark capitalize">{t(guide.species)}</Text>
         </View>
-        <View style={styles.guideCardHeaderRight}>
-          <Text style={styles.weightRange}>{formatWeight(guide.min_weight, guide.max_weight)}</Text>
+        <View className="flex-row items-center">
+          <Text className="text-sm font-semibold text-mavecam-primary mr-2">{formatWeight(guide.min_weight, guide.max_weight)}</Text>
           <Ionicons
-            name={selectedGuide?.id === guide.id ? "chevron-up" : "chevron-down"}
+            name={selectedGuide?.id === guide.id ? 'chevron-up' : 'chevron-down'}
             size={20}
             color={MAVECAM_COLORS.GRAY_LIGHT}
-            style={styles.expandIconInline}
           />
         </View>
       </View>
 
-      <View style={styles.guideCardContent}>
-        <View style={styles.nutritionRow}>
-          <View style={styles.nutritionItem}>
-            <Text style={styles.nutritionLabel}>{t('feedingRate')}</Text>
-            <Text style={styles.nutritionValue}>{guide.feeding_rate_percentage}%</Text>
+      <View>
+        <View className="flex-row justify-between">
+          <View className="items-center flex-1">
+            <Text className="text-xs text-gray-light mb-1">{t('feedingRate')}</Text>
+            <Text className="text-sm font-semibold text-gray-dark">{guide.feeding_rate_percentage}%</Text>
           </View>
-          <View style={styles.nutritionItem}>
-            <Text style={styles.nutritionLabel}>{t('protein')}</Text>
-            <Text style={styles.nutritionValue}>{guide.protein_requirement}%</Text>
+          <View className="items-center flex-1">
+            <Text className="text-xs text-gray-light mb-1">{t('protein')}</Text>
+            <Text className="text-sm font-semibold text-gray-dark">{guide.protein_requirement}%</Text>
           </View>
-          <View style={styles.nutritionItem}>
-            <Text style={styles.nutritionLabel}>{t('mealsPerDay')}</Text>
-            <Text style={styles.nutritionValue}>{guide.meals_per_day}</Text>
+          <View className="items-center flex-1">
+            <Text className="text-xs text-gray-light mb-1">{t('mealsPerDay')}</Text>
+            <Text className="text-sm font-semibold text-gray-dark">{guide.meals_per_day}</Text>
           </View>
         </View>
 
-        {/* Détails expansibles */}
         {selectedGuide?.id === guide.id && (
-          <View style={styles.expandedContent}>
-            <View style={styles.divider} />
-
+          <View className="mt-3 pt-3 border-t border-slate-200">
             {guide.recommended_products && guide.recommended_products.length > 0 && (
-              <View style={styles.detailSection}>
-                <Text style={styles.detailTitle}>{t('recommendedProducts')}</Text>
+              <View className="mb-3">
+                <Text className="text-sm font-semibold text-gray-dark mb-1">{t('recommendedProducts')}</Text>
                 {guide.recommended_products.map((product, index) => (
-                  <Text key={index} style={styles.productItem}>• {product}</Text>
+                  <Text key={index} className="text-sm text-gray-dark mb-1">- {product}</Text>
                 ))}
               </View>
             )}
 
-            <View style={styles.detailSection}>
-              <Text style={styles.detailTitle}>{t('expectedFCR')}</Text>
-              <Text style={styles.detailValue}>{guide.expected_fcr}</Text>
+            <View className="mb-3">
+              <Text className="text-sm font-semibold text-gray-dark mb-1">{t('expectedFCR')}</Text>
+              <Text className="text-sm text-mavecam-primary font-semibold">{guide.expected_fcr}</Text>
             </View>
 
             {guide.feeding_notes && (
-              <View style={styles.detailSection}>
-                <Text style={styles.detailTitle}>{t('feedingNotes')}</Text>
-                <Text style={styles.notesText}>{guide.feeding_notes}</Text>
+              <View>
+                <Text className="text-sm font-semibold text-gray-dark mb-1">{t('feedingNotes')}</Text>
+                <Text className="text-sm text-gray-light leading-5">{guide.feeding_notes}</Text>
               </View>
             )}
           </View>
@@ -268,20 +237,20 @@ export default function NutritionalGuidesScreen({ navigation }: any) {
   const renderContent = () => {
     if (loading) {
       return (
-        <View style={styles.centerContainer}>
+        <View className="flex-1 items-center justify-center p-8">
           <ActivityIndicator size="large" color={MAVECAM_COLORS.GREEN_PRIMARY} />
-          <Text style={styles.loadingText}>{t('loadingGuides')}</Text>
+          <Text className="mt-4 text-base text-gray-light">{t('loadingGuides')}</Text>
         </View>
       );
     }
 
     if (error) {
       return (
-        <View style={styles.centerContainer}>
+        <View className="flex-1 items-center justify-center p-8">
           <Ionicons name="alert-circle" size={60} color={MAVECAM_COLORS.ERROR} />
-          <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={loadNutritionalGuides}>
-            <Text style={styles.retryButtonText}>{t('retry')}</Text>
+          <Text className="mt-4 text-base text-error text-center">{error}</Text>
+          <TouchableOpacity className="mt-4 bg-mavecam-primary px-5 py-3 rounded-lg" onPress={loadNutritionalGuides}>
+            <Text className="text-white text-base font-semibold">{t('retry')}</Text>
           </TouchableOpacity>
         </View>
       );
@@ -289,11 +258,11 @@ export default function NutritionalGuidesScreen({ navigation }: any) {
 
     if (filteredGuides.length === 0) {
       return (
-        <View style={styles.centerContainer}>
+        <View className="flex-1 items-center justify-center p-8">
           <Ionicons name="document-outline" size={60} color={MAVECAM_COLORS.GRAY_LIGHT} />
-          <Text style={styles.emptyText}>{t('noGuidesFound')}</Text>
-          <TouchableOpacity style={styles.clearFiltersButton} onPress={resetFilters}>
-            <Text style={styles.clearFiltersText}>{t('clearFilters')}</Text>
+          <Text className="mt-4 text-base text-gray-light text-center">{t('noGuidesFound')}</Text>
+          <TouchableOpacity className="mt-4 px-5 py-3 rounded-lg border border-mavecam-primary" onPress={resetFilters}>
+            <Text className="text-mavecam-primary text-base font-semibold">{t('clearFilters')}</Text>
           </TouchableOpacity>
         </View>
       );
@@ -304,324 +273,49 @@ export default function NutritionalGuidesScreen({ navigation }: any) {
         data={filteredGuides}
         renderItem={renderGuideCard}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.listContainer}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={[MAVECAM_COLORS.GREEN_PRIMARY]}
-            tintColor={MAVECAM_COLORS.GREEN_PRIMARY}
-          />
-        }
+        contentContainerStyle={{ padding: 16 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[MAVECAM_COLORS.GREEN_PRIMARY]} tintColor={MAVECAM_COLORS.GREEN_PRIMARY} />}
         showsVerticalScrollIndicator={false}
       />
     );
   };
 
   return (
-    <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
+    <View className="flex-1 bg-cream">
+      <View className="bg-mavecam-primary flex-row items-center justify-between px-4 pt-14 pb-4">
+        <TouchableOpacity className="p-2" onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={24} color={MAVECAM_COLORS.WHITE} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{t('nutritionalGuides')}</Text>
-        <TouchableOpacity style={styles.infoButton} onPress={() => {
-          Alert.alert(
-            t('aboutGuides'),
-            t('nutritionalGuidesDescription'),
-            [{ text: t('understood'), style: 'default' }]
-          );
-        }}>
+        <Text className="text-xl font-bold text-white flex-1 text-center">{t('nutritionalGuides')}</Text>
+        <TouchableOpacity
+          className="p-2"
+          onPress={() => {
+            Alert.alert(t('aboutGuides'), t('nutritionalGuidesDescription'), [{ text: t('understood'), style: 'default' }]);
+          }}
+        >
           <Ionicons name="information-circle-outline" size={24} color={MAVECAM_COLORS.WHITE} />
         </TouchableOpacity>
       </View>
 
-      {/* Filtres */}
-      <View style={styles.filtersContainer}>
+      <View className="bg-white px-4 py-3 border-b border-slate-200">
         {renderSpeciesFilter()}
         {renderSearchBar()}
 
         {(filters.species !== 'all' || filters.searchText || filters.selectedStage) && (
-          <TouchableOpacity style={styles.resetFiltersButton} onPress={resetFilters}>
+          <TouchableOpacity className="flex-row items-center" onPress={resetFilters}>
             <Ionicons name="refresh" size={16} color={MAVECAM_COLORS.GREEN_PRIMARY} />
-            <Text style={styles.resetFiltersText}>{t('resetFilters')}</Text>
+            <Text className="ml-2 text-sm font-medium text-mavecam-primary">{t('resetFilters')}</Text>
           </TouchableOpacity>
         )}
       </View>
 
-      {/* Statistiques */}
-      <View style={styles.statsContainer}>
-        <Text style={styles.statsText}>
+      <View className="bg-white px-4 py-2 border-b border-slate-200">
+        <Text className="text-sm text-gray-light text-center">
           {t('guidesCount', { count: filteredGuides.length, total: guides.length })}
         </Text>
       </View>
 
-      {/* Contenu principal */}
       {renderContent()}
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: MAVECAM_COLORS.CREAM,
-  },
-  header: {
-    backgroundColor: MAVECAM_COLORS.GREEN_PRIMARY,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingTop: 50,
-    paddingBottom: 16,
-  },
-  backButton: {
-    padding: 8,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: MAVECAM_COLORS.WHITE,
-    flex: 1,
-    textAlign: 'center',
-  },
-  infoButton: {
-    padding: 8,
-  },
-  filtersContainer: {
-    backgroundColor: MAVECAM_COLORS.WHITE,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e5e5',
-  },
-  filterRow: {
-    flexDirection: 'row',
-    marginBottom: 12,
-  },
-  filterButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: MAVECAM_COLORS.GREEN_PRIMARY,
-    marginRight: 8,
-    backgroundColor: MAVECAM_COLORS.WHITE,
-  },
-  filterButtonActive: {
-    backgroundColor: MAVECAM_COLORS.GREEN_PRIMARY,
-  },
-  filterButtonText: {
-    fontSize: 14,
-    color: MAVECAM_COLORS.GREEN_PRIMARY,
-    fontWeight: '500',
-    textAlign: 'center',
-  },
-  filterButtonTextActive: {
-    color: MAVECAM_COLORS.WHITE,
-  },
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: MAVECAM_COLORS.CREAM,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    marginBottom: 8,
-  },
-  searchInput: {
-    flex: 1,
-    marginLeft: 8,
-    fontSize: 16,
-    color: MAVECAM_COLORS.GRAY_DARK,
-  },
-  resetFiltersButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-  },
-  resetFiltersText: {
-    marginLeft: 4,
-    fontSize: 14,
-    color: MAVECAM_COLORS.GREEN_PRIMARY,
-    fontWeight: '500',
-  },
-  statsContainer: {
-    backgroundColor: MAVECAM_COLORS.WHITE,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e5e5',
-  },
-  statsText: {
-    fontSize: 14,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
-    textAlign: 'center',
-  },
-  listContainer: {
-    padding: 16,
-  },
-  guideCard: {
-    backgroundColor: MAVECAM_COLORS.WHITE,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  guideCardSelected: {
-    borderWidth: 2,
-    borderColor: MAVECAM_COLORS.GREEN_PRIMARY,
-  },
-  guideCardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  guideCardHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  guideCardHeaderRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  stageBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    marginRight: 8,
-  },
-  stageBadgeText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: MAVECAM_COLORS.WHITE,
-  },
-  speciesText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: MAVECAM_COLORS.GRAY_DARK,
-    textTransform: 'capitalize',
-  },
-  weightRange: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: MAVECAM_COLORS.GREEN_PRIMARY,
-  },
-  guideCardContent: {
-    flex: 1,
-  },
-  nutritionRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  nutritionItem: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  nutritionLabel: {
-    fontSize: 12,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
-    marginBottom: 4,
-  },
-  nutritionValue: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: MAVECAM_COLORS.GRAY_DARK,
-  },
-  expandIconInline: {
-    marginLeft: 4,
-  },
-  expandedContent: {
-    marginTop: 16,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: '#e5e5e5',
-    marginBottom: 16,
-  },
-  detailSection: {
-    marginBottom: 12,
-  },
-  detailTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: MAVECAM_COLORS.GRAY_DARK,
-    marginBottom: 4,
-  },
-  detailValue: {
-    fontSize: 14,
-    color: MAVECAM_COLORS.GREEN_PRIMARY,
-    fontWeight: '500',
-  },
-  productItem: {
-    fontSize: 14,
-    color: MAVECAM_COLORS.GRAY_DARK,
-    marginBottom: 2,
-  },
-  notesText: {
-    fontSize: 14,
-    color: MAVECAM_COLORS.GRAY_DARK,
-    lineHeight: 20,
-  },
-  centerContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 32,
-  },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
-  },
-  errorText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: MAVECAM_COLORS.ERROR,
-    textAlign: 'center',
-  },
-  retryButton: {
-    marginTop: 16,
-    backgroundColor: MAVECAM_COLORS.GREEN_PRIMARY,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
-  retryButtonText: {
-    color: MAVECAM_COLORS.WHITE,
-    fontWeight: '600',
-  },
-  emptyText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
-    textAlign: 'center',
-  },
-  clearFiltersButton: {
-    marginTop: 16,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: MAVECAM_COLORS.GREEN_PRIMARY,
-  },
-  clearFiltersText: {
-    color: MAVECAM_COLORS.GREEN_PRIMARY,
-    fontWeight: '600',
-  },
-});

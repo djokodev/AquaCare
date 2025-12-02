@@ -1,13 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  ActivityIndicator,
-  RefreshControl,
-} from 'react-native';
+﻿import React, { useState, useEffect } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { useSelector } from 'react-redux';
@@ -51,62 +43,54 @@ export default function DailyLogHistoryScreen({ navigation }: any) {
     setRefreshing(false);
   };
 
-  /**
-   * ✅ Utilisation de formatDate() centralisé depuis @/utils
-   * Note: formatDate supporte options personnalisées si nécessaire
-   */
-
   const getCycleName = (cycleId: string) => {
-    const cycle = activeCycles.find(c => c.id === cycleId);
+    const cycle = activeCycles.find((c) => c.id === cycleId);
     return cycle ? cycle.pond_identifier : `Cycle ${cycleId.slice(-4)}`;
   };
 
   const renderLogCard = (log: CycleLog) => (
-    <View key={log.id} style={styles.logCard}>
-      {/* Header carte */}
-      <View style={styles.logHeader}>
-        <Text style={styles.logDate}>{formatDate(log.log_date)}</Text>
-        <Text style={styles.logCycle}>{getCycleName(log.cycle)}</Text>
+    <View key={log.id} className="bg-white rounded-xl p-4 mb-3 shadow">
+      <View className="flex-row justify-between items-center mb-3 pb-2 border-b border-slate-100">
+        <Text className="text-base font-semibold text-gray-dark">{formatDate(log.log_date)}</Text>
+        <Text className="text-sm font-medium text-mavecam-primary">{getCycleName(log.cycle)}</Text>
       </View>
 
-      {/* Données principales */}
-      <View style={styles.logData}>
+      <View className="mb-2">
         {log.sample_count && log.sample_total_weight && (
-          <View style={styles.dataItem}>
-            <Text style={styles.dataLabel}>{t('averageWeight')} :</Text>
-            <Text style={styles.dataValue}>
+          <View className="flex-row items-center mb-2">
+            <Text className="text-sm text-gray-light flex-1">{t('averageWeight')} :</Text>
+            <Text className="text-sm font-semibold text-gray-dark">
               {estimateAverageWeight(log.sample_total_weight, log.sample_count).toFixed(1)} g
             </Text>
           </View>
         )}
 
         {log.mortality_count && log.mortality_count > 0 && (
-          <View style={styles.dataItem}>
-            <Text style={styles.dataLabel}>{t('mortality')} :</Text>
-            <Text style={styles.dataValue}>{log.mortality_count}</Text>
+          <View className="flex-row items-center mb-2">
+            <Text className="text-sm text-gray-light flex-1">{t('mortality')} :</Text>
+            <Text className="text-sm font-semibold text-gray-dark">{log.mortality_count}</Text>
           </View>
         )}
 
         {log.water_temperature && (
-          <View style={styles.dataItem}>
-            <Text style={styles.dataLabel}>{t('waterTemperature')} :</Text>
-            <Text style={styles.dataValue}>{log.water_temperature}°C</Text>
+          <View className="flex-row items-center mb-2">
+            <Text className="text-sm text-gray-light flex-1">{t('waterTemperature')} :</Text>
+            <Text className="text-sm font-semibold text-gray-dark">{log.water_temperature}\u00B0C</Text>
           </View>
         )}
 
         {log.ph_level && (
-          <View style={styles.dataItem}>
-            <Text style={styles.dataLabel}>pH :</Text>
-            <Text style={styles.dataValue}>{log.ph_level}</Text>
+          <View className="flex-row items-center mb-2">
+            <Text className="text-sm text-gray-light flex-1">pH :</Text>
+            <Text className="text-sm font-semibold text-gray-dark">{log.ph_level}</Text>
           </View>
         )}
       </View>
 
-      {/* Observations */}
       {log.observations && (
-        <View style={styles.observationsSection}>
-          <Text style={styles.observationsLabel}>{t('observations')} :</Text>
-          <Text style={styles.observationsText}>{log.observations}</Text>
+        <View className="mt-2 pt-2 border-t border-slate-100">
+          <Text className="text-sm font-medium text-gray-dark mb-1">{t('observations')} :</Text>
+          <Text className="text-sm text-gray-light italic">{log.observations}</Text>
         </View>
       )}
     </View>
@@ -114,41 +98,42 @@ export default function DailyLogHistoryScreen({ navigation }: any) {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
+      <View className="flex-1 items-center justify-center bg-cream">
         <ActivityIndicator size="large" color={MAVECAM_COLORS.GREEN_PRIMARY} />
-        <Text style={styles.loadingText}>{t('loading')}...</Text>
+        <Text className="mt-3 text-gray-dark text-base">{t('loading')}...</Text>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
+    <View className="flex-1 bg-cream">
+      <View className="bg-mavecam-primary flex-row items-center pt-14 pb-4 px-4">
+        <TouchableOpacity className="mr-4" onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={24} color={MAVECAM_COLORS.WHITE} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{t('dailyLogHistory')}</Text>
+        <Text className="text-xl font-bold text-white">{t('dailyLogHistory')}</Text>
       </View>
 
-      {/* Filtres */}
-      <View style={styles.filtersSection}>
-        <Text style={styles.filterLabel}>{t('filterByCycle')} :</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll}>
+      <View className="bg-white p-4 border-b border-slate-200">
+        <Text className="text-sm font-medium text-gray-dark mb-2">{t('filterByCycle')} :</Text>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ flexDirection: 'row' }}
+        >
           <TouchableOpacity
-            style={[
-              styles.filterChip,
-              selectedCycle === 'all' && styles.filterChipSelected
-            ]}
+            className={`px-4 py-2 mr-2 rounded-full border ${
+              selectedCycle === 'all'
+                ? 'bg-mavecam-primary border-mavecam-primary'
+                : 'bg-cream border-gray-light'
+            }`}
             onPress={() => setSelectedCycle('all')}
           >
-            <Text style={[
-              styles.filterChipText,
-              selectedCycle === 'all' && styles.filterChipTextSelected
-            ]}>
+            <Text
+              className={`text-sm ${
+                selectedCycle === 'all' ? 'text-white' : 'text-gray-dark'
+              }`}
+            >
               {t('allCycles')}
             </Text>
           </TouchableOpacity>
@@ -156,16 +141,18 @@ export default function DailyLogHistoryScreen({ navigation }: any) {
           {activeCycles.map((cycle) => (
             <TouchableOpacity
               key={cycle.id}
-              style={[
-                styles.filterChip,
-                selectedCycle === cycle.id && styles.filterChipSelected
-              ]}
+              className={`px-4 py-2 mr-2 rounded-full border ${
+                selectedCycle === cycle.id
+                  ? 'bg-mavecam-primary border-mavecam-primary'
+                  : 'bg-cream border-gray-light'
+              }`}
               onPress={() => setSelectedCycle(cycle.id)}
             >
-              <Text style={[
-                styles.filterChipText,
-                selectedCycle === cycle.id && styles.filterChipTextSelected
-              ]}>
+              <Text
+                className={`text-sm ${
+                  selectedCycle === cycle.id ? 'text-white' : 'text-gray-dark'
+                }`}
+              >
                 {t('pond')} {cycle.pond_identifier}
               </Text>
             </TouchableOpacity>
@@ -173,182 +160,20 @@ export default function DailyLogHistoryScreen({ navigation }: any) {
         </ScrollView>
       </View>
 
-      {/* Liste des logs */}
       <ScrollView
-        style={styles.content}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
+        className="flex-1 px-4"
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         {logs.length === 0 ? (
-          <View style={styles.emptyContainer}>
+          <View className="flex-1 items-center justify-center py-24 px-6">
             <Ionicons name="document-outline" size={64} color={MAVECAM_COLORS.GRAY_LIGHT} />
-            <Text style={styles.emptyTitle}>{t('noLogsYet')}</Text>
-            <Text style={styles.emptySubtitle}>{t('startLoggingData')}</Text>
+            <Text className="text-xl font-bold text-gray-dark mt-4 mb-2">{t('noLogsYet')}</Text>
+            <Text className="text-sm text-gray-light text-center">{t('startLoggingData')}</Text>
           </View>
         ) : (
-          logs.map(log => renderLogCard(log))
+          logs.map((log) => renderLogCard(log))
         )}
       </ScrollView>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: MAVECAM_COLORS.CREAM,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: MAVECAM_COLORS.CREAM,
-  },
-  loadingText: {
-    marginTop: 10,
-    color: MAVECAM_COLORS.GRAY_DARK,
-    fontSize: 16,
-  },
-  header: {
-    backgroundColor: MAVECAM_COLORS.GREEN_PRIMARY,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingTop: 50,
-    paddingBottom: 16,
-    paddingHorizontal: 16,
-  },
-  backButton: {
-    marginRight: 16,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: MAVECAM_COLORS.WHITE,
-  },
-  filtersSection: {
-    backgroundColor: MAVECAM_COLORS.WHITE,
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
-  },
-  filterLabel: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: MAVECAM_COLORS.GRAY_DARK,
-    marginBottom: 8,
-  },
-  filterScroll: {
-    flexDirection: 'row',
-  },
-  filterChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    marginRight: 8,
-    backgroundColor: MAVECAM_COLORS.CREAM,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  filterChipSelected: {
-    backgroundColor: MAVECAM_COLORS.GREEN_PRIMARY,
-    borderColor: MAVECAM_COLORS.GREEN_PRIMARY,
-  },
-  filterChipText: {
-    fontSize: 14,
-    color: MAVECAM_COLORS.GRAY_DARK,
-  },
-  filterChipTextSelected: {
-    color: MAVECAM_COLORS.WHITE,
-  },
-  content: {
-    flex: 1,
-    padding: 16,
-  },
-  logCard: {
-    backgroundColor: MAVECAM_COLORS.WHITE,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-    elevation: 5,
-  },
-  logHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-    paddingBottom: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
-  },
-  logDate: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: MAVECAM_COLORS.GRAY_DARK,
-  },
-  logCycle: {
-    fontSize: 14,
-    color: MAVECAM_COLORS.GREEN_PRIMARY,
-    fontWeight: '500',
-  },
-  logData: {
-    marginBottom: 8,
-  },
-  dataItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  dataLabel: {
-    fontSize: 14,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
-    flex: 1,
-  },
-  dataValue: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: MAVECAM_COLORS.GRAY_DARK,
-  },
-  observationsSection: {
-    marginTop: 8,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#f1f5f9',
-  },
-  observationsLabel: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: MAVECAM_COLORS.GRAY_DARK,
-    marginBottom: 4,
-  },
-  observationsText: {
-    fontSize: 14,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
-    fontStyle: 'italic',
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 100,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: MAVECAM_COLORS.GRAY_DARK,
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  emptySubtitle: {
-    fontSize: 14,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
-    textAlign: 'center',
-  },
-});

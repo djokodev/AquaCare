@@ -1,14 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  ActivityIndicator,
-  RefreshControl,
-  Alert,
-} from 'react-native';
+﻿import React, { useEffect, useState } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl, Alert } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { useDispatch, useSelector } from 'react-redux';
@@ -22,7 +13,6 @@ export default function FeedingPlanScreen({ navigation }: any) {
   const { t } = useTranslation();
   const dispatch = useDispatch<AppDispatch>();
 
-  // États locaux
   const [loading, setLoading] = useState(true);
   const [loadingPlans, setLoadingPlans] = useState(false);
   const [generatingPlan, setGeneratingPlan] = useState(false);
@@ -32,7 +22,6 @@ export default function FeedingPlanScreen({ navigation }: any) {
   const [feedingPlans, setFeedingPlans] = useState<FeedingPlan[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  // Chargement initial
   useEffect(() => {
     loadData();
   }, []);
@@ -42,18 +31,16 @@ export default function FeedingPlanScreen({ navigation }: any) {
       setLoading(true);
       setError(null);
 
-      // Charger les cycles actifs
       const cycles = await aquacultureService.getActiveCycles();
       setActiveCycles(cycles);
 
-      // Sélectionner automatiquement le premier cycle actif
       if (cycles.length > 0 && !selectedCycle) {
         setSelectedCycle(cycles[0]);
         await loadFeedingPlans(cycles[0].id);
       }
     } catch (error: any) {
-      console.error('Erreur chargement données:', error);
-      setError('Erreur lors du chargement des données');
+      console.error('Erreur chargement donnees:', error);
+      setError('Erreur lors du chargement des donnees');
     } finally {
       setLoading(false);
     }
@@ -61,14 +48,13 @@ export default function FeedingPlanScreen({ navigation }: any) {
 
   const loadFeedingPlans = async (cycleId: string) => {
     try {
-      // Réinitialiser les plans avant de charger les nouveaux
       setFeedingPlans([]);
       const plans = await aquacultureService.getFeedingPlans(cycleId);
       setFeedingPlans(plans);
     } catch (error: any) {
       console.error('Erreur chargement plans:', error);
-      setFeedingPlans([]); // Réinitialiser même en cas d'erreur
-      setError('Erreur lors du chargement des plans d\'alimentation');
+      setFeedingPlans([]);
+      setError("Erreur lors du chargement des plans d'alimentation");
     }
   };
 
@@ -88,34 +74,25 @@ export default function FeedingPlanScreen({ navigation }: any) {
   const generateFeedingPlan = async () => {
     if (!selectedCycle) return;
 
-    Alert.alert(
-      t('generateFeedingPlan'),
-      t('generateFeedingPlanConfirm'),
-      [
-        { text: t('cancel'), style: 'cancel' },
-        {
-          text: t('confirm'),
-          onPress: async () => {
-            try {
-              setGeneratingPlan(true);
-
-              // Appel API pour générer le plan
-              await aquacultureService.generateFeedingPlan(selectedCycle.id);
-
-              // Recharger les plans
-              await loadFeedingPlans(selectedCycle.id);
-
-              Alert.alert(t('success'), t('feedingPlanGenerated'));
-            } catch (error: any) {
-              console.error('Erreur génération plan:', error);
-              Alert.alert(t('error'), t('feedingPlanGenerationError'));
-            } finally {
-              setGeneratingPlan(false);
-            }
+    Alert.alert(t('generateFeedingPlan'), t('generateFeedingPlanConfirm'), [
+      { text: t('cancel'), style: 'cancel' },
+      {
+        text: t('confirm'),
+        onPress: async () => {
+          try {
+            setGeneratingPlan(true);
+            await aquacultureService.generateFeedingPlan(selectedCycle.id);
+            await loadFeedingPlans(selectedCycle.id);
+            Alert.alert(t('success'), t('feedingPlanGenerated'));
+          } catch (error: any) {
+            console.error('Erreur generation plan:', error);
+            Alert.alert(t('error'), t('feedingPlanGenerationError'));
+          } finally {
+            setGeneratingPlan(false);
           }
-        }
-      ]
-    );
+        },
+      },
+    ]);
   };
 
   const getDaysBetween = (startDate: string, endDate?: string) => {
@@ -130,22 +107,22 @@ export default function FeedingPlanScreen({ navigation }: any) {
     return Math.ceil(days / 7);
   };
 
+  const renderHeader = () => (
+    <View className="bg-mavecam-primary flex-row items-center pt-14 pb-4 px-4">
+      <TouchableOpacity className="mr-4" onPress={() => navigation.goBack()}>
+        <Ionicons name="arrow-back" size={24} color={MAVECAM_COLORS.WHITE} />
+      </TouchableOpacity>
+      <Text className="text-xl font-bold text-white flex-1">{t('feedingPlan')}</Text>
+    </View>
+  );
+
   if (loading) {
     return (
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-          >
-            <Ionicons name="arrow-back" size={24} color={MAVECAM_COLORS.WHITE} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>{t('feedingPlan')}</Text>
-        </View>
-
-        <View style={styles.loadingContainer}>
+      <View className="flex-1 bg-cream">
+        {renderHeader()}
+        <View className="flex-1 items-center justify-center p-10">
           <ActivityIndicator size="large" color={MAVECAM_COLORS.GREEN_PRIMARY} />
-          <Text style={styles.loadingText}>{t('loading')}...</Text>
+          <Text className="text-base text-gray-light mt-3">{t('loading')}...</Text>
         </View>
       </View>
     );
@@ -153,29 +130,18 @@ export default function FeedingPlanScreen({ navigation }: any) {
 
   if (activeCycles.length === 0) {
     return (
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-          >
-            <Ionicons name="arrow-back" size={24} color={MAVECAM_COLORS.WHITE} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>{t('feedingPlan')}</Text>
-        </View>
-
-        <ScrollView
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        >
-          <View style={styles.emptyContainer}>
+      <View className="flex-1 bg-cream">
+        {renderHeader()}
+        <ScrollView refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
+          <View className="flex-1 items-center justify-center py-20 px-6">
             <Ionicons name="restaurant-outline" size={64} color={MAVECAM_COLORS.GRAY_LIGHT} />
-            <Text style={styles.emptyText}>{t('noActiveCycles')}</Text>
-            <Text style={styles.emptySubtext}>{t('createCycleToGeneratePlan')}</Text>
+            <Text className="text-xl font-bold text-gray-dark mt-4 mb-2 text-center">{t('noActiveCycles')}</Text>
+            <Text className="text-sm text-gray-light text-center mb-6">{t('createCycleToGeneratePlan')}</Text>
             <TouchableOpacity
-              style={styles.primaryButton}
+              className="bg-mavecam-primary px-6 py-3 rounded-lg"
               onPress={() => navigation.navigate('NewCycle')}
             >
-              <Text style={styles.primaryButtonText}>{t('newCycle')}</Text>
+              <Text className="text-white text-base font-semibold">{t('newCycle')}</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -184,103 +150,74 @@ export default function FeedingPlanScreen({ navigation }: any) {
   }
 
   return (
-    <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Ionicons name="arrow-back" size={24} color={MAVECAM_COLORS.WHITE} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>{t('feedingPlan')}</Text>
-      </View>
+    <View className="flex-1 bg-cream">
+      {renderHeader()}
 
-      <ScrollView
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-      >
-        {/* Sélection du cycle */}
-        <View style={styles.sectionContainer}>
-          <Text style={styles.sectionTitle}>{t('selectCycle')}</Text>
+      <ScrollView refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
+        <View className="bg-white mx-4 mt-4 mb-4 p-4 rounded-xl shadow">
+          <Text className="text-lg font-bold text-gray-dark mb-4">{t('selectCycle')}</Text>
 
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            {activeCycles.map((cycle) => (
-              <TouchableOpacity
-                key={cycle.id}
-                style={[
-                  styles.cycleCard,
-                  selectedCycle?.id === cycle.id && styles.cycleCardSelected
-                ]}
-                onPress={() => handleCycleSelection(cycle)}
-              >
-                <Text style={[
-                  styles.cycleName,
-                  selectedCycle?.id === cycle.id && styles.cycleNameSelected
-                ]}>
-                  {cycle.cycle_name}
-                </Text>
-                <Text style={[
-                  styles.cycleDetails,
-                  selectedCycle?.id === cycle.id && styles.cycleDetailsSelected
-                ]}>
-                  {cycle.species === 'clarias' ? 'Silure' : 'Tilapia'} • {cycle.pond_identifier}
-                </Text>
-                <Text style={[
-                  styles.cycleMetrics,
-                  selectedCycle?.id === cycle.id && styles.cycleMetricsSelected
-                ]}>
-                  J{getDaysBetween(cycle.start_date)} • {formatNumber(cycle.current_biomass, 'kg')}
-                </Text>
-              </TouchableOpacity>
-            ))}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-row">
+            {activeCycles.map((cycle) => {
+              const isSelected = selectedCycle?.id === cycle.id;
+              return (
+                <TouchableOpacity
+                  key={cycle.id}
+                  className={`mr-3 p-3 min-w-[200px] rounded-xl border-2 ${
+                    isSelected ? 'bg-[#ecfdf3] border-mavecam-primary' : 'bg-cream border-transparent'
+                  }`}
+                  onPress={() => handleCycleSelection(cycle)}
+                >
+                  <Text className={`text-base font-bold ${isSelected ? 'text-mavecam-primary' : 'text-gray-dark'}`}>
+                    {cycle.cycle_name}
+                  </Text>
+                  <Text className={`text-sm mt-1 ${isSelected ? 'text-mavecam-primary' : 'text-gray-light'}`}>
+                    {cycle.species === 'clarias' ? 'Silure' : 'Tilapia'} - {cycle.pond_identifier}
+                  </Text>
+                  <Text className={`text-xs mt-1 ${isSelected ? 'text-mavecam-primary' : 'text-gray-light'}`}>
+                    J{getDaysBetween(cycle.start_date)} - {formatNumber(cycle.current_biomass, 'kg')}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </ScrollView>
         </View>
 
         {selectedCycle && (
           <>
-            {/* Informations du cycle sélectionné */}
-            <View style={styles.sectionContainer}>
-              <Text style={styles.sectionTitle}>{t('cycleInformation')}</Text>
+            <View className="bg-white mx-4 mb-4 p-4 rounded-xl shadow">
+              <Text className="text-lg font-bold text-gray-dark mb-4">{t('cycleInformation')}</Text>
 
-              <View style={styles.infoCard}>
-                <View style={styles.infoRow}>
-                  <View style={styles.infoItem}>
-                    <Text style={styles.infoLabel}>{t('currentWeek')}</Text>
-                    <Text style={styles.infoValue}>
-                      {t('week')} {getCurrentWeek(selectedCycle.start_date)}
-                    </Text>
+              <View className="bg-cream rounded-lg p-4">
+                <View className="flex-row justify-between mb-4">
+                  <View className="flex-1 items-center">
+                    <Text className="text-xs text-gray-light mb-1">{t('currentWeek')}</Text>
+                    <Text className="text-lg font-bold text-gray-dark">{t('week')} {getCurrentWeek(selectedCycle.start_date)}</Text>
                   </View>
-                  <View style={styles.infoItem}>
-                    <Text style={styles.infoLabel}>{t('currentBiomass')}</Text>
-                    <Text style={styles.infoValue}>
-                      {formatNumber(selectedCycle.current_biomass, 'kg')}
-                    </Text>
+                  <View className="flex-1 items-center">
+                    <Text className="text-xs text-gray-light mb-1">{t('currentBiomass')}</Text>
+                    <Text className="text-lg font-bold text-gray-dark">{formatNumber(selectedCycle.current_biomass, 'kg')}</Text>
                   </View>
                 </View>
 
-                <View style={styles.infoRow}>
-                  <View style={styles.infoItem}>
-                    <Text style={styles.infoLabel}>{t('averageWeight')}</Text>
-                    <Text style={styles.infoValue}>
-                      {formatNumber(selectedCycle.current_average_weight, 'g')}
-                    </Text>
+                <View className="flex-row justify-between">
+                  <View className="flex-1 items-center">
+                    <Text className="text-xs text-gray-light mb-1">{t('averageWeight')}</Text>
+                    <Text className="text-lg font-bold text-gray-dark">{formatNumber(selectedCycle.current_average_weight, 'g')}</Text>
                   </View>
-                  <View style={styles.infoItem}>
-                    <Text style={styles.infoLabel}>{t('survivalRate')}</Text>
-                    <Text style={styles.infoValue}>
-                      {formatPercentage(selectedCycle.survival_rate)}
-                    </Text>
+                  <View className="flex-1 items-center">
+                    <Text className="text-xs text-gray-light mb-1">{t('survivalRate')}</Text>
+                    <Text className="text-lg font-bold text-gray-dark">{formatPercentage(selectedCycle.survival_rate)}</Text>
                   </View>
                 </View>
               </View>
             </View>
 
-            {/* Plans d'alimentation */}
-            <View style={styles.sectionContainer}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>{t('feedingPlans')}</Text>
+            <View className="bg-white mx-4 mb-6 p-4 rounded-xl shadow">
+              <View className="flex-row items-center justify-between mb-4">
+                <Text className="text-lg font-bold text-gray-dark">{t('feedingPlans')}</Text>
                 <TouchableOpacity
-                  style={[styles.generateButton, generatingPlan && styles.generateButtonDisabled]}
+                  className={`flex-row items-center px-3 py-2 rounded-lg bg-mavecam-primary ${generatingPlan ? 'opacity-60' : ''}`}
                   onPress={generateFeedingPlan}
                   disabled={generatingPlan}
                 >
@@ -289,70 +226,58 @@ export default function FeedingPlanScreen({ navigation }: any) {
                   ) : (
                     <Ionicons name="refresh" size={16} color={MAVECAM_COLORS.WHITE} />
                   )}
-                  <Text style={styles.generateButtonText}>
+                  <Text className="text-white text-sm font-semibold ml-2">
                     {generatingPlan ? t('generating') : t('generatePlan')}
                   </Text>
                 </TouchableOpacity>
               </View>
 
               {loadingPlans ? (
-                <View style={styles.noPlanContainer}>
+                <View className="items-center py-10">
                   <ActivityIndicator size="large" color={MAVECAM_COLORS.GREEN_PRIMARY} />
-                  <Text style={styles.noPlanText}>{t('loading')}...</Text>
+                  <Text className="text-sm text-gray-light mt-3">{t('loading')}...</Text>
                 </View>
               ) : feedingPlans.length === 0 ? (
-                <View style={styles.noPlanContainer}>
+                <View className="items-center py-10">
                   <Ionicons name="restaurant-outline" size={48} color={MAVECAM_COLORS.GRAY_LIGHT} />
-                  <Text style={styles.noPlanText}>{t('noFeedingPlans')}</Text>
-                  <Text style={styles.noPlanSubtext}>{t('generateFirstPlan')}</Text>
+                  <Text className="text-base font-bold text-gray-dark mt-3">{t('noFeedingPlans')}</Text>
+                  <Text className="text-sm text-gray-light text-center mt-1">{t('generateFirstPlan')}</Text>
                 </View>
               ) : (
                 feedingPlans.map((plan) => (
-                  <View key={plan.id} style={styles.planCard}>
-                    <View style={styles.planHeader}>
-                      <Text style={styles.planTitle}>
-                        {t('week')} {plan.week_number}
-                      </Text>
-                      <Text style={styles.planDate}>
-                        {new Date(plan.start_date).toLocaleDateString('fr-FR')}
-                      </Text>
+                  <View key={plan.id} className="bg-cream rounded-lg p-4 mb-3 border-l-4 border-l-mavecam-primary">
+                    <View className="flex-row justify-between items-center mb-3">
+                      <Text className="text-base font-bold text-gray-dark">{t('week')} {plan.week_number}</Text>
+                      <Text className="text-sm text-gray-light">{new Date(plan.start_date).toLocaleDateString('fr-FR')}</Text>
                     </View>
 
-                    <View style={styles.planContent}>
-                      <View style={styles.planRow}>
-                        <View style={styles.planItem}>
-                          <Text style={styles.planLabel}>{t('dailyRation')}</Text>
-                          <Text style={styles.planValue}>
-                            {formatNumber(plan.daily_feed_amount, 'kg/j')}
-                          </Text>
+                    <View className="gap-3">
+                      <View className="flex-row justify-between">
+                        <View className="flex-1 items-center">
+                          <Text className="text-xs text-gray-light mb-1">{t('dailyRation')}</Text>
+                          <Text className="text-sm font-semibold text-gray-dark">{formatNumber(plan.daily_feed_amount, 'kg/j')}</Text>
                         </View>
-                        <View style={styles.planItem}>
-                          <Text style={styles.planLabel}>{t('feedingPercentage')}</Text>
-                          <Text style={styles.planValue}>
-                            {formatPercentage(plan.feeding_rate)}
-                          </Text>
+                        <View className="flex-1 items-center">
+                          <Text className="text-xs text-gray-light mb-1">{t('feedingPercentage')}</Text>
+                          <Text className="text-sm font-semibold text-gray-dark">{formatPercentage(plan.feeding_rate)}</Text>
                         </View>
                       </View>
 
-                      <View style={styles.planRow}>
-                        <View style={styles.planItem}>
-                          <Text style={styles.planLabel}>{t('feedingFrequency')}</Text>
-                          <Text style={styles.planValue}>
-                            {plan.meals_per_day}x/{t('day')}
-                          </Text>
+                      <View className="flex-row justify-between">
+                        <View className="flex-1 items-center">
+                          <Text className="text-xs text-gray-light mb-1">{t('feedingFrequency')}</Text>
+                          <Text className="text-sm font-semibold text-gray-dark">{plan.meals_per_day}x/{t('day')}</Text>
                         </View>
-                        <View style={styles.planItem}>
-                          <Text style={styles.planLabel}>{t('feedPerMeal')}</Text>
-                          <Text style={styles.planValue}>
-                            {formatNumber(plan.feed_per_meal, 'kg')}
-                          </Text>
+                        <View className="flex-1 items-center">
+                          <Text className="text-xs text-gray-light mb-1">{t('feedPerMeal')}</Text>
+                          <Text className="text-sm font-semibold text-gray-dark">{formatNumber(plan.feed_per_meal, 'kg')}</Text>
                         </View>
                       </View>
 
                       {plan.notes && (
-                        <View style={styles.notesContainer}>
-                          <Text style={styles.notesLabel}>{t('notes')}:</Text>
-                          <Text style={styles.notesText}>{plan.notes}</Text>
+                        <View className="bg-white rounded-md p-3">
+                          <Text className="text-xs font-bold text-gray-dark mb-1">{t('notes')}:</Text>
+                          <Text className="text-sm text-gray-light">{plan.notes}</Text>
                         </View>
                       )}
                     </View>
@@ -366,251 +291,3 @@ export default function FeedingPlanScreen({ navigation }: any) {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: MAVECAM_COLORS.CREAM,
-  },
-  header: {
-    backgroundColor: MAVECAM_COLORS.GREEN_PRIMARY,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingTop: 50,
-    paddingBottom: 16,
-    paddingHorizontal: 16,
-  },
-  backButton: {
-    marginRight: 16,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: MAVECAM_COLORS.WHITE,
-    flex: 1,
-  },
-  loadingContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 40,
-  },
-  loadingText: {
-    fontSize: 16,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
-    marginTop: 12,
-  },
-  emptyContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 40,
-  },
-  emptyText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: MAVECAM_COLORS.GRAY_DARK,
-    marginTop: 16,
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  emptySubtext: {
-    fontSize: 14,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
-    textAlign: 'center',
-    marginBottom: 24,
-  },
-  primaryButton: {
-    backgroundColor: MAVECAM_COLORS.GREEN_PRIMARY,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
-  primaryButtonText: {
-    color: MAVECAM_COLORS.WHITE,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  sectionContainer: {
-    backgroundColor: MAVECAM_COLORS.WHITE,
-    margin: 16,
-    padding: 16,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: MAVECAM_COLORS.GRAY_DARK,
-    marginBottom: 16,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  cycleCard: {
-    backgroundColor: MAVECAM_COLORS.CREAM,
-    borderRadius: 12,
-    padding: 12,
-    marginRight: 12,
-    minWidth: 200,
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  cycleCardSelected: {
-    backgroundColor: MAVECAM_COLORS.GREEN_PRIMARY + '10',
-    borderColor: MAVECAM_COLORS.GREEN_PRIMARY,
-  },
-  cycleName: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: MAVECAM_COLORS.GRAY_DARK,
-    marginBottom: 4,
-  },
-  cycleNameSelected: {
-    color: MAVECAM_COLORS.GREEN_DARK,
-  },
-  cycleDetails: {
-    fontSize: 14,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
-    marginBottom: 6,
-  },
-  cycleDetailsSelected: {
-    color: MAVECAM_COLORS.GREEN_PRIMARY,
-  },
-  cycleMetrics: {
-    fontSize: 12,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
-  },
-  cycleMetricsSelected: {
-    color: MAVECAM_COLORS.GREEN_PRIMARY,
-  },
-  infoCard: {
-    backgroundColor: MAVECAM_COLORS.CREAM,
-    borderRadius: 8,
-    padding: 16,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-  },
-  infoItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  infoLabel: {
-    fontSize: 12,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
-    marginBottom: 4,
-    textAlign: 'center',
-  },
-  infoValue: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: MAVECAM_COLORS.GRAY_DARK,
-    textAlign: 'center',
-  },
-  generateButton: {
-    backgroundColor: MAVECAM_COLORS.GREEN_PRIMARY,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  generateButtonDisabled: {
-    opacity: 0.6,
-  },
-  generateButtonText: {
-    color: MAVECAM_COLORS.WHITE,
-    fontSize: 14,
-    fontWeight: '600',
-    marginLeft: 6,
-  },
-  noPlanContainer: {
-    alignItems: 'center',
-    paddingVertical: 32,
-  },
-  noPlanText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: MAVECAM_COLORS.GRAY_DARK,
-    marginTop: 12,
-    marginBottom: 6,
-  },
-  noPlanSubtext: {
-    fontSize: 14,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
-    textAlign: 'center',
-  },
-  planCard: {
-    backgroundColor: MAVECAM_COLORS.CREAM,
-    borderRadius: 8,
-    padding: 16,
-    marginBottom: 12,
-    borderLeftWidth: 4,
-    borderLeftColor: MAVECAM_COLORS.GREEN_PRIMARY,
-  },
-  planHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  planTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: MAVECAM_COLORS.GRAY_DARK,
-  },
-  planDate: {
-    fontSize: 14,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
-  },
-  planContent: {
-    gap: 12,
-  },
-  planRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  planItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  planLabel: {
-    fontSize: 12,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
-    marginBottom: 4,
-    textAlign: 'center',
-  },
-  planValue: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: MAVECAM_COLORS.GRAY_DARK,
-    textAlign: 'center',
-  },
-  notesContainer: {
-    backgroundColor: MAVECAM_COLORS.WHITE,
-    padding: 12,
-    borderRadius: 6,
-    marginTop: 8,
-  },
-  notesLabel: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: MAVECAM_COLORS.GRAY_DARK,
-    marginBottom: 4,
-  },
-  notesText: {
-    fontSize: 14,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
-    lineHeight: 20,
-  },
-});
