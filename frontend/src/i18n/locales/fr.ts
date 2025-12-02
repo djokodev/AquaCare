@@ -75,15 +75,15 @@ export const fr = {
   noAccount: "Pas encore de compte ? ",
   haveAccount: "Déjà un compte ? ",
   phoneHint: "Saisissez votre numéro sans l'indicatif",
-  createAccount: "Créez votre compte MAVECAM AquaCare",
+  createAccount: "Créez votre compte AQUACARE",
   hello: "Bonjour",
   welcome: "Bienvenue dans",
   goodMorning: "Bonjour",
-  goodAfternoon: "Bon après-midi", 
+  goodAfternoon: "Bon après-midi",
   goodEvening: "Bonsoir",
 
   // Messages
-  welcomeMessage: 'Bienvenue dans MAVECAM AquaCare',
+  welcomeMessage: 'Bienvenue sur AquaCare',
   loginSuccess: 'Connexion réussie',
   loginError: 'Erreur de connexion',
   registerSuccess: 'Inscription réussie',

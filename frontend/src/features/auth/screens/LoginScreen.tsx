@@ -5,7 +5,6 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { AuthStackParamList } from '@/navigation/AuthNavigator';
 import { useAuth } from '@/hooks/useAuth';
 import { LoginRequest } from '@/types/auth';
-import { MAVECAM_COLORS } from '@/constants/colors';
 
 type LoginScreenNavigationProp = StackNavigationProp<AuthStackParamList, 'Login'>;
 
@@ -117,11 +116,9 @@ export default function LoginScreen({ navigation }: Props) {
       className="flex-1 bg-cream"
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <ScrollView contentContainerStyle={{ flexGrow: 1 }} className="px-5 py-10">
+      <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }} className="px-5">
         <View className="items-center mb-10">
-          <Text className="text-3xl font-bold text-mavecam-primary tracking-widest">MAVECAM</Text>
-          <Text className="text-lg font-light text-green-dark mt-1">AquaCare</Text>
-          <Text className="text-base text-gray-light mt-5 text-center">{t('welcomeMessage')}</Text>
+          <Text className="text-3xl font-bold text-mavecam-primary text-center">{t('welcomeMessage')}</Text>
         </View>
 
         <View className="bg-white p-5 rounded-2xl shadow">
@@ -180,7 +177,6 @@ export default function LoginScreen({ navigation }: Props) {
                   autoComplete="tel"
                 />
               </View>
-              <Text className="text-xs text-gray-light mt-1 italic">{t('phoneHint')}</Text>
               {renderError('phoneNumber')}
             </View>
           )}
