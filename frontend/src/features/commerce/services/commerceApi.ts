@@ -165,8 +165,9 @@ export const simulateCycle = async (params: CycleSimulationParams) => {
  * @returns Liste commandes avec items prÃ©-chargÃ©s
  */
 export const getOrders = async () => {
-  const response = await api.get<Order[]>('/commerce/orders/');
-  return response.data;
+  const response = await api.get<Order[] | { results: Order[] }>('/commerce/orders/');
+  const data = response.data as any;
+  return Array.isArray(data) ? data : data.results;
 };
 
 /**

@@ -155,14 +155,18 @@ export default function ProductCatalogScreen() {
   return (
     <View className="flex-1 bg-cream">
       <View className="bg-white px-5 pt-16 pb-5 flex-row justify-between items-center shadow">
-        <View>
+        <TouchableOpacity onPress={() => navigation.goBack()} className="w-10">
+          <Ionicons name="arrow-back" size={24} color={MAVECAM_COLORS.GRAY_DARK} />
+        </TouchableOpacity>
+
+        <View className="flex-1 items-center">
           <Text className="text-2xl font-bold text-gray-dark">{t('productCatalog')}</Text>
           <Text className="text-sm text-gray-light mt-1">
             {productsList.length} {t('products')}
           </Text>
         </View>
 
-        <TouchableOpacity className="relative" onPress={handleCartPress}>
+        <TouchableOpacity className="relative w-10 items-end" onPress={handleCartPress}>
           <Ionicons name="cart-outline" size={28} color={MAVECAM_COLORS.GREEN_PRIMARY} />
           {cartItemsCount > 0 && (
             <View className="absolute -top-2 -right-2 bg-[#dc2626] rounded-full min-w-[24px] h-6 justify-center items-center px-1.5">
