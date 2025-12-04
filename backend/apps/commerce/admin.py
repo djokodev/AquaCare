@@ -69,7 +69,7 @@ class ProductAdmin(admin.ModelAdmin):
         }
         color = colors.get(obj.brand, '#6b7280')
         return format_html(
-            '<span style="background-color: {}; color: white; padding: 3px 10px; border-radius: 3px;">{}</span>',
+            '<span style="display:inline-block; min-width:90px; text-align:center; white-space:nowrap; background-color: {}; color: white; padding: 4px 10px; border-radius: 6px;">{}</span>',
             color,
             obj.get_brand_display()
         )
@@ -83,7 +83,7 @@ class ProductAdmin(admin.ModelAdmin):
         }
         color = colors.get(obj.species, '#6b7280')
         return format_html(
-            '<span style="background-color: {}; color: white; padding: 3px 10px; border-radius: 3px;">{}</span>',
+            '<span style="display:inline-block; min-width:90px; text-align:center; white-space:nowrap; background-color: {}; color: white; padding: 4px 10px; border-radius: 6px;">{}</span>',
             color,
             obj.get_species_display()
         )
@@ -100,11 +100,11 @@ class ProductAdmin(admin.ModelAdmin):
         """Badge disponibilité."""
         if obj.is_available:
             return format_html(
-                '<span style="background-color: #10b981; color: white; padding: 3px 10px; border-radius: 3px;">✓ Disponible</span>'
+                '<span style="display:inline-block; min-width:110px; text-align:center; white-space:nowrap; background-color: #10b981; color: white; padding: 4px 10px; border-radius: 6px;">✓ Disponible</span>'
             )
         else:
             return format_html(
-                '<span style="background-color: #ef4444; color: white; padding: 3px 10px; border-radius: 3px;">✗ Indisponible</span>'
+                '<span style="display:inline-block; min-width:120px; text-align:center; white-space:nowrap; background-color: #ef4444; color: white; padding: 4px 10px; border-radius: 6px;">✗ Indisponible</span>'
             )
     availability_badge.short_description = _('Disponibilité')
 
