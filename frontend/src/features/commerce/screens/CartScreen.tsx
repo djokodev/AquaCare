@@ -4,7 +4,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
 import { useDispatch, useSelector } from 'react-redux';
-import { v4 as uuidv4 } from 'uuid';
 
 import { AppDispatch, RootState } from '@/store/store';
 import {
@@ -19,12 +18,40 @@ import {
 import { CartItem, DeliveryMethod, PickupLocation } from '@/types/commerce';
 import { MAVECAM_COLORS } from '@/constants/colors';
 import { DELIVERY_METHODS, PICKUP_LOCATIONS, FREE_DELIVERY_THRESHOLD } from '@/domain/commerce';
-import CustomPicker from '@/components/common/CustomPicker';
+import SelectField from '@/components/SelectField';
 
 export default function CartScreen() {
   const { t } = useTranslation();
   const navigation = useNavigation();
   const dispatch = useDispatch<AppDispatch>();
+
+  const debugLog = (...args: unknown[]) => console.log('[CartScreen]', ...args);
+  const generateClientUuid = () => {
+    const cryptoObj = typeof globalThis !== 'undefined' ? (globalThis as any).crypto : undefined;
+    if (cryptoObj?.randomUUID) return cryptoObj.randomUUID();
+
+    const getRandomValues = cryptoObj?.getRandomValues?.bind(cryptoObj);
+    if (getRandomValues) {
+      const bytes = new Uint8Array(16);
+      getRandomValues(bytes);
+      bytes[6] = (bytes[6] & 0x0f) | 0x40;
+      bytes[8] = (bytes[8] & 0x3f) | 0x80;
+      const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0'));
+      return [
+        hex.slice(0, 4).join(''),
+        hex.slice(4, 6).join(''),
+        hex.slice(6, 8).join(''),
+        hex.slice(8, 10).join(''),
+        hex.slice(10, 16).join(''),
+      ].join('-');
+    }
+
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+      const r = Math.floor(Math.random() * 16);
+      const v = c === 'x' ? r : (r & 0x3) | 0x8;
+      return v.toString(16);
+    });
+  };
 
   const { cart } = useSelector((state: RootState) => state.commerce);
   const { user, farmProfile } = useSelector((state: RootState) => state.auth);
@@ -78,6 +105,13 @@ export default function CartScreen() {
   };
 
   const handleConfirmOrder = async () => {
+    debugLog('CTA confirm tapped', {
+      cartItems: cartItems.length,
+      delivery_method,
+      pickup_location,
+      hasPreview: Boolean(deliveryPreview),
+    });
+
     if (cartItems.length === 0) {
       Alert.alert(t('error'), t('emptyCartError'));
       return;
@@ -110,17 +144,37 @@ export default function CartScreen() {
                 items: cartItems.map((item) => ({ product_id: item.product.id, quantity: item.quantity })),
                 delivery_method,
                 pickup_location: delivery_method === 'pickup' ? pickup_location : undefined,
-                client_uuid: uuidv4(),
+                client_uuid: generateClientUuid(),
                 created_offline: false,
               };
 
+              debugLog('Submitting order', orderData);
+
               await dispatch(createOrder(orderData)).unwrap();
 
+              debugLog('Order success, showing success alert');
+
+              // Vider le panier dans les callbacks pour eviter les re-renders pendant l'alerte
               Alert.alert(t('success'), t('orderCreatedSuccess'), [
-                { text: t('viewOrder'), onPress: () => navigation.navigate('OrdersHistory' as never) },
-                { text: t('ok') },
+                {
+                  text: t('viewOrder'),
+                  onPress: () => {
+                    debugLog('Clear cart -> OrdersHistory');
+                    dispatch(clearCart());
+                    navigation.navigate('OrdersHistory' as never);
+                  },
+                },
+                {
+                  text: t('ok'),
+                  onPress: () => {
+                    debugLog('Clear cart -> ProductCatalog');
+                    dispatch(clearCart());
+                    navigation.navigate('ProductCatalog' as never);
+                  },
+                },
               ]);
             } catch (error: any) {
+              console.error('[CartScreen] Order error', error);
               Alert.alert(t('error'), error || t('orderCreationError'));
             } finally {
               setIsSubmitting(false);
@@ -269,13 +323,13 @@ export default function CartScreen() {
 
           {delivery_method === 'pickup' && (
             <View className="mt-2">
-              <Text className="text-sm font-semibold text-gray-dark mb-2">{t('selectPickupPoint')}</Text>
-              <CustomPicker
-                icon="location-outline"
+              <SelectField
                 label={t('selectPickupPoint')}
-                value={pickup_location || ''}
+                value={pickup_location}
+                onChange={(value) => handlePickupLocationChange(value as PickupLocation)}
                 options={PICKUP_LOCATIONS.map((loc) => ({ label: loc.label, value: loc.value }))}
-                onValueChange={(value) => handlePickupLocationChange(value as PickupLocation)}
+                placeholder={t('selectOption')}
+                required
               />
             </View>
           )}
@@ -367,7 +421,4 @@ export default function CartScreen() {
     </View>
   );
 }
-
-
-
 

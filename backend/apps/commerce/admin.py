@@ -91,7 +91,8 @@ class ProductAdmin(admin.ModelAdmin):
 
     def price_display(self, obj):
         """Affichage formaté du prix."""
-        return format_html('{:,.0f} FCFA', obj.price_per_package)
+        formatted_price = f"{obj.price_per_package:,.0f}"
+        return format_html('{} FCFA', formatted_price)
     price_display.short_description = _('Prix')
     price_display.admin_order_field = 'price_per_package'
 
@@ -223,9 +224,10 @@ class OrderAdmin(admin.ModelAdmin):
 
     def total_display(self, obj):
         """Affichage formaté du total."""
+        formatted_total = f"{obj.total:,.0f}"
         return format_html(
-            '<strong style="color: #059669;">{:,.0f} FCFA</strong>',
-            obj.total
+            '<strong style="color: #059669;">{} FCFA</strong>',
+            formatted_total
         )
     total_display.short_description = _('Total')
     total_display.admin_order_field = 'total'
@@ -262,14 +264,16 @@ class OrderItemAdmin(admin.ModelAdmin):
 
     def unit_price_display(self, obj):
         """Affichage formaté prix unitaire."""
-        return format_html('{:,.0f} FCFA', obj.unit_price)
+        formatted_unit_price = f"{obj.unit_price:,.0f}"
+        return format_html('{} FCFA', formatted_unit_price)
     unit_price_display.short_description = _('Prix unitaire')
 
     def line_total_display(self, obj):
         """Affichage formaté total ligne."""
+        formatted_line_total = f"{obj.line_total:,.0f}"
         return format_html(
-            '<strong>{:,.0f} FCFA</strong>',
-            obj.line_total
+            '<strong>{} FCFA</strong>',
+            formatted_line_total
         )
     line_total_display.short_description = _('Total')
 

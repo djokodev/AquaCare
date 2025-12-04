@@ -457,9 +457,6 @@ const commerceSlice = createSlice({
         state.orders.loading = false;
         // Ajoute commande crÃ©Ã©e en tÃªte de liste
         state.orders.items.unshift(action.payload);
-        // Vide panier aprÃ¨s crÃ©ation rÃ©ussie
-        state.cart.items = [];
-        state.cart.deliveryPreview = null;
       })
       .addCase(createOrder.rejected, (state, action) => {
         state.orders.loading = false;
