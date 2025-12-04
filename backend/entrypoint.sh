@@ -17,6 +17,10 @@ python manage.py collectstatic --noinput --clear
 echo "📚 Loading nutritional guides..."
 python manage.py load_nutritional_data || echo "⚠️  Nutritional data already loaded or error occurred"
 
+# Charger les produits MAVECAM (27 produits : 18 Aller Aqua + 9 DIBAQ)
+echo "🛒 Loading MAVECAM product catalog..."
+python manage.py load_products || echo "⚠️  Product catalog already loaded or error occurred"
+
 echo "=========================="
 echo "AquaCare API it's Ready"
 echo "=========================="

@@ -1,6 +1,6 @@
-/**
+﻿/**
  * Types TypeScript pour le module aquaculture
- * Basés sur les modèles Django backend et l'API REST
+ * BasÃ©s sur les modÃ¨les Django backend et l'API REST
  */
 
 // =================== TYPES DE BASE ===================
@@ -10,7 +10,7 @@ export type CycleStatus = 'planned' | 'active' | 'harvested' | 'cancelled';
 export type SanitaryEventType = 'disease' | 'treatment' | 'vaccination' | 'abnormal_mortality' | 'water_quality' | 'other';
 export type NotificationType = 'feeding_reminder' | 'sampling_reminder' | 'treatment_reminder' | 'cycle_milestone';
 
-// =================== MODÈLES PRINCIPAUX ===================
+// =================== MODÃˆLES PRINCIPAUX ===================
 
 export interface ProductionCycle {
   id: string;
@@ -21,42 +21,42 @@ export interface ProductionCycle {
   pond_surface_m2: number;
   pond_volume_m3?: number;
 
-  // Données initiales
+  // DonnÃ©es initiales
   start_date: string;
   initial_count: number;
   initial_average_weight: number;
   initial_biomass: number;
 
-  // Données finales (récolte)
+  // DonnÃ©es finales (rÃ©colte)
   end_date?: string;
   final_count?: number;
   final_average_weight?: number;
   final_biomass?: number;
 
-  // Données courantes
+  // DonnÃ©es courantes
   current_count: number;
   current_average_weight: number;
   current_biomass: number;
   total_feed_consumed: number;
 
-  // Métriques calculées par backend (source unique de vérité)
+  // MÃ©triques calculÃ©es par backend (source unique de vÃ©ritÃ©)
   survival_rate?: number;
   fcr?: number;
   days_active?: number;
   current_density_kg_m3?: number;
 
-  // Métriques avancées depuis CycleMetrics (backend)
+  // MÃ©triques avancÃ©es depuis CycleMetrics (backend)
   daily_growth_rate?: number; // g/jour
   specific_growth_rate?: number; // %/jour (SGR)
   average_daily_feed?: number; // kg/jour
   performance_score?: number; // 0-100
 
-  // Coûts calculés (backend avec prix configurable)
+  // CoÃ»ts calculÃ©s (backend avec prix configurable)
   total_feed_cost?: number; // FCFA
 
   status: CycleStatus;
 
-  // Métadonnées
+  // MÃ©tadonnÃ©es
   created_at: string;
   updated_at: string;
 }
@@ -68,11 +68,11 @@ export interface CycleLog {
   log_time?: string;
   client_uuid?: string; // Pour synchronisation offline
 
-  // Données de mortalité
+  // DonnÃ©es de mortalitÃ©
   mortality_count?: number;
   mortality_reason?: string;
 
-  // Données de croissance (échantillonnage)
+  // DonnÃ©es de croissance (Ã©chantillonnage)
   sample_count?: number;
   sample_total_weight?: number;
   average_weight?: number;
@@ -81,7 +81,7 @@ export interface CycleLog {
   feed_quantity?: number;
   feed_type?: string;
 
-  // Paramètres environnementaux
+  // ParamÃ¨tres environnementaux
   water_temperature?: number;
   dissolved_oxygen?: number;
   ph_level?: number;
@@ -89,7 +89,7 @@ export interface CycleLog {
   // Observations
   observations?: string;
 
-  // Métadonnées synchronisation
+  // MÃ©tadonnÃ©es synchronisation
   created_offline: boolean;
   synced_at?: string;
   created_at: string;
@@ -100,22 +100,22 @@ export interface FeedingPlan {
   cycle: string;
   week_number: number;
 
-  // Paramètres de base
+  // ParamÃ¨tres de base
   estimated_fish_count: number;
   average_weight: number;
   biomass: number;
 
-  // Recommandations calculées
+  // Recommandations calculÃ©es
   daily_feed_amount: number;
   feeding_rate: number;
   meals_per_day: number;
   feed_per_meal: number;
 
-  // Type d'aliment recommandé
+  // Type d'aliment recommandÃ©
   recommended_feed: string;
   protein_percentage: number;
 
-  // Période de validité
+  // PÃ©riode de validitÃ©
   start_date: string;
   end_date: string;
   is_active: boolean;
@@ -132,17 +132,17 @@ export interface SanitaryLog {
   event_date: string;
   event_type: SanitaryEventType;
 
-  // Description détaillée
+  // Description dÃ©taillÃ©e
   symptoms: string;
   affected_count?: number;
 
-  // Traitement appliqué
+  // Traitement appliquÃ©
   treatment_applied?: string;
   medication_used?: string;
   dosage?: string;
   treatment_duration_days?: number;
 
-  // Photo (URL vers l'image uploadée)
+  // Photo (URL vers l'image uploadÃ©e)
   photo?: string;
   photo_url?: string;
 
@@ -150,7 +150,7 @@ export interface SanitaryLog {
   resolved: boolean;
   resolution_date?: string;
 
-  // Métadonnées
+  // MÃ©tadonnÃ©es
   created_at: string;
   created_offline: boolean;
 }
@@ -184,7 +184,7 @@ export interface Notification {
   is_read: boolean;
 }
 
-// =================== DONNÉES DASHBOARD ===================
+// =================== DONNÃ‰ES DASHBOARD ===================
 
 export interface DashboardSummary {
   active_cycles_count: number;
@@ -221,14 +221,14 @@ export interface ChartData {
 }
 
 export interface DashboardData {
-  // Métriques directes (selon l'API Django)
+  // MÃ©triques directes (selon l'API Django)
   active_cycles_count: number;
   total_biomass: number;
   total_fish_count: number;
   average_fcr: number;
   average_survival_rate: number;
 
-  // Données détaillées
+  // DonnÃ©es dÃ©taillÃ©es
   active_cycles: ProductionCycle[];
   recent_logs: CycleLog[];
   current_feeding_plans: FeedingPlan[];
@@ -358,10 +358,10 @@ export interface CycleStatistics {
   }>;
 }
 
-// =================== ÉTATS REDUX ===================
+// =================== Ã‰TATS REDUX ===================
 
 export interface AquacultureState {
-  // Données principales
+  // DonnÃ©es principales
   cycles: ProductionCycle[];
   activeCycles: ProductionCycle[];
   currentCycle?: ProductionCycle;
@@ -374,7 +374,7 @@ export interface AquacultureState {
   // Dashboard
   dashboardData?: DashboardData;
 
-  // État de chargement
+  // Ã‰tat de chargement
   loading: {
     dashboard: boolean;
     cycles: boolean;
@@ -393,3 +393,6 @@ export interface AquacultureState {
   };
   lastSyncTime?: string;
 }
+
+
+

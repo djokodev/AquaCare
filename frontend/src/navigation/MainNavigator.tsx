@@ -1,11 +1,11 @@
-import React from 'react';
+﻿import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useFocusEffect } from '@react-navigation/native';
 
-// Couleurs MAVECAM selon spécifications
+// Couleurs MAVECAM selon spÃ©cifications
 const MAVECAM_COLORS = {
   GREEN_PRIMARY: '#059669',
   GREEN_LIGHT: '#10b981',
@@ -22,21 +22,31 @@ const MAVECAM_COLORS = {
 };
 
 // Screens
-import DashboardScreen from '@/screens/main/DashboardScreen';
-import ProfileScreen from '@/screens/profile/ProfileScreen';
-import FarmProfileScreen from '@/screens/profile/FarmProfileScreen';
-import SettingsScreen from '@/screens/profile/SettingsScreen';
+import { DashboardScreen } from '@/features/main';
+import { ProfileScreen, FarmProfileScreen, SettingsScreen } from '@/features/profile';
 
 // Aquaculture Screens
-import DailyLogScreen from '@/screens/aquaculture/DailyLogScreen';
-import DailyLogHistoryScreen from '@/screens/aquaculture/DailyLogHistoryScreen';
-import SanitaryLogScreen from '@/screens/aquaculture/SanitaryLogScreen';
-import NewCycleScreen from '@/screens/aquaculture/NewCycleScreen';
-import CycleHistoryScreen from '@/screens/aquaculture/CycleHistoryScreen';
-import NotificationsScreen from '@/screens/aquaculture/NotificationsScreen';
-import FeedingPlanScreen from '@/screens/aquaculture/FeedingPlanScreen';
-import StatisticsScreen from '@/screens/aquaculture/StatisticsScreen';
-import NutritionalGuidesScreen from '@/screens/aquaculture/NutritionalGuidesScreen';
+import {
+  DailyLogScreen,
+  DailyLogHistoryScreen,
+  SanitaryLogScreen,
+  NewCycleScreen,
+  CycleHistoryScreen,
+  NotificationsScreen,
+  FeedingPlanScreen,
+  StatisticsScreen,
+  NutritionalGuidesScreen,
+} from '@/features/aquaculture';
+
+// Commerce Screens
+import {
+  ProductCatalogScreen,
+  ProductDetailScreen,
+  CartScreen,
+  OrdersHistoryScreen,
+  FeedingSuggestionsScreen,
+  CycleSimulatorScreen,
+} from '@/features/commerce';
 
 export type MainTabParamList = {
   Dashboard: undefined;
@@ -54,6 +64,13 @@ export type RootStackParamList = {
   FeedingPlan: undefined;
   Statistics: undefined;
   NutritionalGuides: undefined;
+  // Commerce Screens
+  ProductCatalog: undefined;
+  ProductDetail: { productId: string };
+  Cart: undefined;
+  OrdersHistory: undefined;
+  FeedingSuggestions: undefined;
+  CycleSimulator: undefined;
 };
 
 export type ProfileStackParamList = {
@@ -210,7 +227,7 @@ export default function MainNavigator() {
         name="Statistics"
         component={StatisticsScreen}
         options={{
-          headerShown: false, // Header personnalisé dans le composant
+          headerShown: false, // Header personnalisÃ© dans le composant
           headerStyle: { backgroundColor: MAVECAM_COLORS.GREEN_PRIMARY },
           headerTintColor: MAVECAM_COLORS.WHITE,
           headerTitleStyle: { fontWeight: 'bold' },
@@ -221,6 +238,35 @@ export default function MainNavigator() {
         name="NutritionalGuides"
         component={NutritionalGuidesScreen}
       />
+      {/* Commerce Screens */}
+      <RootStack.Screen
+        name="ProductCatalog"
+        component={ProductCatalogScreen}
+      />
+      <RootStack.Screen
+        name="ProductDetail"
+        component={ProductDetailScreen}
+      />
+      <RootStack.Screen
+        name="Cart"
+        component={CartScreen}
+      />
+      <RootStack.Screen
+        name="OrdersHistory"
+        component={OrdersHistoryScreen}
+      />
+      <RootStack.Screen
+        name="FeedingSuggestions"
+        component={FeedingSuggestionsScreen}
+      />
+      <RootStack.Screen
+        name="CycleSimulator"
+        component={CycleSimulatorScreen}
+      />
     </RootStack.Navigator>
   );
 }
+
+
+
+

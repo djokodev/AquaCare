@@ -1,4 +1,4 @@
-import i18n from 'i18next';
+﻿import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import * as Localization from 'expo-localization';
 import * as SecureStore from 'expo-secure-store';
@@ -46,7 +46,7 @@ const loadSavedLanguage = async () => {
       await SecureStore.setItemAsync(STORAGE_KEYS.LANGUAGE, deviceLanguage);
     }
   } catch (error) {
-    console.warn('⚠️ Erreur lors du chargement de la langue, utilisation du français par défaut:', error);
+    console.warn('âš ï¸ Erreur lors du chargement de la langue, utilisation du franÃ§ais par dÃ©faut:', error);
   }
 };
 
@@ -54,3 +54,6 @@ const loadSavedLanguage = async () => {
 setTimeout(loadSavedLanguage, 100);
 
 export default i18n;
+
+
+

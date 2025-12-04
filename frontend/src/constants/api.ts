@@ -1,8 +1,18 @@
-import Constants from 'expo-constants';
+﻿import environmentConfig from '@/config/environment';
 
-// Configuration API basée sur votre backend Django
+/**
+ * Configuration API avec dÃ©tection automatique d'environnement
+ *
+ * DÃ‰VELOPPEMENT (npm start) :
+ *   â†’ Backend Docker local (172.20.10.2:8000)
+ *
+ * PRODUCTION (eas build) :
+ *   â†’ API en ligne (77.237.241.223)
+ *
+ * Pas besoin de toucher au fichier .env !
+ */
 export const API_CONFIG = {
-  baseURL: Constants.expoConfig?.extra?.apiUrl || 'http://172.20.10.2:8000/api',
+  baseURL: environmentConfig.apiUrl,
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
@@ -10,7 +20,7 @@ export const API_CONFIG = {
   },
 };
 
-// Endpoints basés sur votre API Django
+// Endpoints basÃ©s sur votre API Django
 export const API_ENDPOINTS = {
   // Authentication (accounts module)
   AUTH: {
@@ -41,3 +51,6 @@ export const STORAGE_KEYS = {
   USER_DATA: 'aquacare_user_data',
   LANGUAGE: 'aquacare_language',
 };
+
+
+

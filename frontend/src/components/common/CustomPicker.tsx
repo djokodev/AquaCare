@@ -1,10 +1,10 @@
-import React from 'react';
+﻿import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 
-// Couleurs MAVECAM selon spécifications
+// Couleurs MAVECAM selon spÃ©cifications
 const MAVECAM_COLORS = {
   GREEN_PRIMARY: '#059669',
   GREEN_LIGHT: '#10b981',
@@ -108,7 +108,7 @@ export default function CustomPicker({
 }
 
 /**
- * Composant pour les sélections en cascade (exemple: région → département → arrondissement)
+ * Composant pour les sÃ©lections en cascade (exemple: rÃ©gion â†’ dÃ©partement â†’ arrondissement)
  */
 interface CascadingPickerProps {
   icon: keyof typeof Ionicons.glyphMap;
@@ -222,3 +222,5 @@ const styles = StyleSheet.create({
     backgroundColor: MAVECAM_COLORS.WHITE,
   },
 });
+
+

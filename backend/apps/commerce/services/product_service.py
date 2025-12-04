@@ -1,0 +1,286 @@
+"""
+Service de gestion des produits du catalogue MAVECAM AquaCare.
+
+Architecture Clean : Service stateless avec méthodes statiques.
+Gère recherche, filtrage et recommandations de produits alimentaires.
+"""
+from typing import Optional
+from decimal import Decimal
+from django.db.models import QuerySet, Q
+
+from ..models import Product
+from ..domain.calculators import ProductRecommendationCalculator
+from ..domain.exceptions import ProductNotFoundError, ProductNotAvailableError
+from .base import BaseCommerceService
+
+
+class ProductService(BaseCommerceService):
+    """
+    Service de gestion du catalogue produits MAVECAM.
+
+    Responsabilités :
+    - Recherche et filtrage produits (espèce, phase, marque)
+    - Recommandation produit selon poids poisson
+    - Validation disponibilité
+    """
+
+    @staticmethod
+    def get_all_products(include_unavailable: bool = False) -> QuerySet:
+        """
+        Retourne tous les produits du catalogue.
+
+        Args:
+            include_unavailable: Si True, inclut produits indisponibles
+
+        Returns:
+            QuerySet: Produits triés par espèce, phase, taille
+
+        Examples:
+            >>> products = ProductService.get_all_products()
+            >>> products.count()
+            22
+        """
+        ProductService.log_operation('get_all_products', {'include_unavailable': include_unavailable})
+
+        queryset = Product.objects.all()
+        if not include_unavailable:
+            queryset = queryset.filter(is_available=True)
+
+        return queryset.order_by('species', 'phase', 'pellet_size_mm')
+
+    @staticmethod
+    def get_product_by_id(product_id: str, check_availability: bool = True) -> Product:
+        """
+        Récupère un produit par son UUID.
+
+        Args:
+            product_id: UUID du produit
+            check_availability: Si True, vérifie que produit est disponible
+
+        Returns:
+            Product: Instance produit
+
+        Raises:
+            ProductNotFoundError: Si produit introuvable
+            ProductNotAvailableError: Si produit indisponible
+
+        Examples:
+            >>> product = ProductService.get_product_by_id('uuid-here')
+            >>> product.name
+            'CLARIAS FLOAT 3MM'
+        """
+        try:
+            product = Product.objects.get(id=product_id)
+        except Product.DoesNotExist:
+            raise ProductNotFoundError(f"Produit introuvable: {product_id}")
+
+        if check_availability and not product.is_available:
+            raise ProductNotAvailableError(
+                f"Produit temporairement indisponible: {product.name}"
+            )
+
+        return product
+
+    @staticmethod
+    def filter_by_species(species: str) -> QuerySet:
+        """
+        Filtre produits par espèce.
+
+        Args:
+            species: 'tilapia' ou 'catfish'
+
+        Returns:
+            QuerySet: Produits de l'espèce spécifiée
+
+        Examples:
+            >>> catfish_products = ProductService.filter_by_species('catfish')
+            >>> catfish_products.count()
+            15
+        """
+        return Product.objects.filter(
+            species=species,
+            is_available=True
+        ).order_by('phase', 'pellet_size_mm')
+
+    @staticmethod
+    def filter_by_phase(phase: str, species: Optional[str] = None) -> QuerySet:
+        """
+        Filtre produits par phase d'élevage.
+
+        Args:
+            phase: 'alevinage', 'pre_grossissement', 'grossissement'
+            species: Optionnel, filtre aussi par espèce
+
+        Returns:
+            QuerySet: Produits de la phase spécifiée
+
+        Examples:
+            >>> grossissement = ProductService.filter_by_phase('grossissement', 'catfish')
+            >>> grossissement.first().name
+            'CLARIAS FLOAT 3MM'
+        """
+        queryset = Product.objects.filter(phase=phase, is_available=True)
+
+        if species:
+            queryset = queryset.filter(species=species)
+
+        return queryset.order_by('pellet_size_mm')
+
+    @staticmethod
+    def filter_by_brand(brand: str) -> QuerySet:
+        """
+        Filtre produits par marque.
+
+        Args:
+            brand: 'aller_aqua' ou 'dibaq'
+
+        Returns:
+            QuerySet: Produits de la marque spécifiée
+
+        Examples:
+            >>> aller_aqua = ProductService.filter_by_brand('aller_aqua')
+            >>> aller_aqua.count()
+            13
+        """
+        return Product.objects.filter(
+            brand=brand,
+            is_available=True
+        ).order_by('species', 'phase', 'pellet_size_mm')
+
+    @staticmethod
+    def search_products(query: str) -> QuerySet:
+        """
+        Recherche textuelle dans le catalogue (nom produit).
+
+        Args:
+            query: Texte de recherche
+
+        Returns:
+            QuerySet: Produits correspondants
+
+        Examples:
+            >>> results = ProductService.search_products('CLARIAS')
+            >>> results.count()
+            5
+            >>> results = ProductService.search_products('3mm')
+            >>> results.count()
+            4
+        """
+        if not query or len(query) < 2:
+            return Product.objects.none()
+
+        return Product.objects.filter(
+            Q(name__icontains=query) | Q(brand__icontains=query),
+            is_available=True
+        ).order_by('species', 'phase', 'pellet_size_mm')
+
+    @staticmethod
+    def get_recommended_product(species: str, weight_g: float) -> Optional[Product]:
+        """
+        Recommande le produit adapté selon espèce et poids poisson.
+
+        Utilise ProductRecommendationCalculator pour déterminer
+        la taille de granulé optimale, puis trouve le produit correspondant.
+
+        Args:
+            species: 'tilapia' ou 'catfish'
+            weight_g: Poids moyen du poisson en grammes
+
+        Returns:
+            Product ou None: Produit recommandé (priorité Aller Aqua)
+
+        Examples:
+            >>> product = ProductService.get_recommended_product('catfish', 150)
+            >>> product.pellet_size_mm
+            Decimal('4.5')
+            >>> product.name
+            'CLARIAS FLOAT 4.5MM'
+        """
+        ProductService.log_operation('get_recommended_product', {
+            'species': species,
+            'weight_g': weight_g
+        })
+
+        # Calculer taille granulé recommandée
+        recommended_size = ProductRecommendationCalculator.get_recommended_pellet_size(
+            species, weight_g
+        )
+
+        # Chercher produit correspondant (priorité Aller Aqua)
+        product = Product.objects.filter(
+            species=species,
+            pellet_size_mm=Decimal(str(recommended_size)),
+            is_available=True
+        ).order_by(
+            # Priorité Aller Aqua
+            '-brand'  # 'aller_aqua' avant 'dibaq' alphabétiquement inversé
+        ).first()
+
+        if not product:
+            # Fallback : chercher taille proche (±0.5mm)
+            product = Product.objects.filter(
+                species=species,
+                pellet_size_mm__gte=Decimal(str(recommended_size - 0.5)),
+                pellet_size_mm__lte=Decimal(str(recommended_size + 0.5)),
+                is_available=True
+            ).order_by('-brand', 'pellet_size_mm').first()
+
+        return product
+
+    @staticmethod
+    def get_products_for_cycle(cycle) -> QuerySet:
+        """
+        Retourne produits adaptés pour un cycle de production donné.
+
+        Args:
+            cycle: Instance ProductionCycle
+
+        Returns:
+            QuerySet: Produits recommandés
+
+        Examples:
+            >>> from apps.aquaculture.models import ProductionCycle
+            >>> cycle = ProductionCycle.objects.first()
+            >>> products = ProductService.get_products_for_cycle(cycle)
+            >>> products.count()
+            5
+        """
+        return ProductService.filter_by_species(cycle.species)
+
+    @staticmethod
+    def get_price_range(species: Optional[str] = None, phase: Optional[str] = None) -> dict:
+        """
+        Calcule la fourchette de prix (min/max) selon filtres.
+
+        Args:
+            species: Optionnel, filtre par espèce
+            phase: Optionnel, filtre par phase
+
+        Returns:
+            dict: {'min': Decimal, 'max': Decimal, 'avg': Decimal}
+
+        Examples:
+            >>> range_catfish = ProductService.get_price_range(species='catfish')
+            >>> range_catfish
+            {'min': Decimal('17500'), 'max': Decimal('100000'), 'avg': Decimal('30000')}
+        """
+        from django.db.models import Min, Max, Avg
+
+        queryset = Product.objects.filter(is_available=True)
+
+        if species:
+            queryset = queryset.filter(species=species)
+        if phase:
+            queryset = queryset.filter(phase=phase)
+
+        aggregates = queryset.aggregate(
+            min_price=Min('price_per_package'),
+            max_price=Max('price_per_package'),
+            avg_price=Avg('price_per_package')
+        )
+
+        return {
+            'min': aggregates['min_price'] or Decimal('0'),
+            'max': aggregates['max_price'] or Decimal('0'),
+            'avg': aggregates['avg_price'] or Decimal('0')
+        }

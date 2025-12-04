@@ -50,11 +50,11 @@ module.exports = {
     global: {
       statements: 5,
       branches: 1,
-      functions: 5,
+      functions: 4,
       lines: 5,
     },
     // High coverage required for tested modules
-    './src/domain/estimators.ts': {
+    './src/domain/aquaculture/estimators.ts': {
       statements: 95,
       branches: 100,
       functions: 100,

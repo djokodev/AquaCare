@@ -1,9 +1,9 @@
-import axios, { AxiosInstance, AxiosError } from 'axios';
+﻿import axios, { AxiosInstance, AxiosError } from 'axios';
 import * as SecureStore from 'expo-secure-store';
 
 import { API_CONFIG, STORAGE_KEYS } from '@/constants/api';
 
-// Event listener pour la déconnexion automatique
+// Event listener pour la dÃ©connexion automatique
 type LogoutCallback = () => void;
 let logoutCallback: LogoutCallback | null = null;
 
@@ -33,7 +33,7 @@ class ApiService {
             config.headers.Authorization = `Bearer ${token}`;
           }
         } catch (error) {
-          console.warn('Erreur lors de la récupération du token:', error);
+          console.warn('Erreur lors de la rÃ©cupÃ©ration du token:', error);
         }
         return config;
       },
@@ -45,7 +45,7 @@ class ApiService {
       async (error: AxiosError) => {
         const originalRequest = error.config as any;
 
-        // Si erreur 401 et pas déjà en train de refresh
+        // Si erreur 401 et pas dÃ©jÃ  en train de refresh
         if (error.response?.status === 401 && !originalRequest._retry) {
           originalRequest._retry = true;
 
@@ -59,21 +59,21 @@ class ApiService {
               // PAS { tokens: { access, refresh } } comme le login custom
               const { access, refresh: newRefresh } = response.data;
 
-              // Sauvegarder les nouveaux tokens (rotation activée)
+              // Sauvegarder les nouveaux tokens (rotation activÃ©e)
               await SecureStore.setItemAsync(STORAGE_KEYS.ACCESS_TOKEN, access);
               if (newRefresh) {
                 await SecureStore.setItemAsync(STORAGE_KEYS.REFRESH_TOKEN, newRefresh);
               }
 
-              // Retry la requête originale
+              // Retry la requÃªte originale
               originalRequest.headers.Authorization = `Bearer ${access}`;
               return this.api(originalRequest);
             }
           } catch (refreshError) {
-            // Refresh failed - déconnexion automatique
+            // Refresh failed - dÃ©connexion automatique
             await this.clearTokens();
             
-            // Notifier l'app pour déconnexion automatique
+            // Notifier l'app pour dÃ©connexion automatique
             if (logoutCallback) {
               logoutCallback();
             }
@@ -103,7 +103,7 @@ class ApiService {
     }
   }
 
-  // Méthodes HTTP génériques
+  // MÃ©thodes HTTP gÃ©nÃ©riques
   get<T>(url: string, config?: any) {
     return this.api.get<T>(url, config);
   }
@@ -126,3 +126,6 @@ class ApiService {
 }
 
 export const apiService = new ApiService();
+
+
+

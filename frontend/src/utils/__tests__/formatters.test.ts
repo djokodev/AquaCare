@@ -198,11 +198,11 @@ describe('utils/formatters', () => {
 
   describe('formatDensity', () => {
     it('formate densité volumétrique', () => {
-      expect(formatDensity(125.30)).toBe('125.30 kg/m³');
+      expect(formatDensity(125.30)).toBe('125.30 kg/m3');
     });
 
     it('formate densité superficielle', () => {
-      expect(formatDensity(15.75, 'kg/m²')).toBe('15.75 kg/m²');
+      expect(formatDensity(15.75, 'kg/m2')).toBe('15.75 kg/m2');
     });
 
     it('retourne "N/A" pour valeurs nulles', () => {

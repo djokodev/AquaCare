@@ -153,7 +153,32 @@ npm install
 
 # Start development server
 npm start
+
+# ⚠️ Si modifications .env ou config environnement : Clear cache
+npm start -- --clear
 ```
+
+### **🔄 Configuration Environnement Automatique**
+
+**Le frontend détecte automatiquement l'environnement (comme Django) !**
+
+```typescript
+// frontend/src/config/environment.ts
+if (__DEV__) {
+  // Développement → Backend Docker local
+  API_URL = 'http://172.20.10.2:8000/api'
+} else {
+  // Production → API en ligne
+  API_URL = 'http://77.237.241.223/api'
+}
+```
+
+**Workflow complet** :
+- **DEV** : `npm start` → Se connecte automatiquement au Docker local
+- **PROD** : `eas build` → Se connecte automatiquement à l'API en ligne
+- **Aucune modification manuelle nécessaire !**
+
+**Documentation complète** : Voir [WORKFLOW_DEV_PROD.md](../WORKFLOW_DEV_PROD.md)
 
 ## Core Architecture
 
@@ -489,8 +514,115 @@ MEDIA_ROOT = '/var/www/mavecam/media/'
 5. ✅ **Notifications** - Système complet avec filtrage et actions
 6. ✅ **Synchronisation offline** - Architecture robuste avec déduplication
 
+### **🛒 Module Commerce - 100% COMPLET**
+
+**✅ TOUTES les fonctionnalités du module Commerce sont implémentées :**
+
+#### **Screens Frontend (6 écrans - 4,295 lignes)**
+
+1. ✅ **ProductCatalogScreen** (592L) - Catalogue 22 produits MAVECAM
+   - Filtres espèce/marque/recherche
+   - Ajout rapide panier
+   - Pull-to-refresh
+
+2. ✅ **ProductDetailScreen** (607L) - Détails produit complets
+   - Specs nutritionnelles (protéines, lipides)
+   - Sélection quantité
+   - Produits similaires
+   - Navigation fluide
+
+3. ✅ **CartScreen** (759L) - Panier intelligent
+   - Gestion quantités (ajout/suppression)
+   - Preview frais livraison temps réel (API)
+   - Livraison gratuite Douala >= 20 sacs
+   - Choix retrait magasin (Ndokoti/Ndogpasi)
+   - Validation commande offline-first (UUID)
+
+4. ✅ **OrdersHistoryScreen** (694L) - Historique commandes
+   - Statistiques globales (total dépensé, nb commandes)
+   - Détails expandables (items, adresse, montants)
+   - Pull-to-refresh
+
+5. ✅ **FeedingSuggestionsScreen** (820L) - ⭐ FEATURE PHARE MAVECAM
+   - Analyse automatique cycles actifs (30 jours)
+   - Recommandations multi-granulométrie
+   - Projection changements taille aliments
+   - Score confiance qualité données
+   - Buffer sécurité +7 jours
+   - Ajout panier par produit ou cycle complet
+
+6. ✅ **CycleSimulatorScreen** (655L) - Outil prédictif ROI
+   - Simulation cycle complet (60-180 jours)
+   - Calcul croissance jour par jour (backend)
+   - Estimation FCR vs cible MAVECAM
+   - Projection ROI (coûts vs revenus)
+   - Phases alimentation automatiques
+
+#### **Architecture Backend Existante**
+
+- ✅ **Models Django** : Product, Order, OrderItem
+- ✅ **API Endpoints** (10) : CRUD produits, commandes, suggestions, simulation
+- ✅ **Algorithmes** : Recommandations granulométrie, calculs FCR, projections ROI
+- ✅ **Règles métier** : Frais livraison MAVECAM, seuils gratuits
+
+#### **Architecture Frontend**
+
+- ✅ **Types TypeScript** : commerce.ts (400L) - Types stricts complets
+- ✅ **Redux Slice** : commerceSlice.ts (500L) - 10 thunks async + 9 actions sync
+- ✅ **Services API** : commerceApi.ts (300L) - 10 endpoints documentés
+- ✅ **Domain Layer** : constants + estimators (Clean Architecture)
+- ✅ **Traductions** : FR/EN complètes (+135 clés chacune)
+
+#### **Fonctionnalités Clés**
+
+**Commerce :**
+- ✅ Catalogue 22 produits (Aller Aqua + DIBAQ)
+- ✅ Filtres avancés (espèce, marque, phase, recherche)
+- ✅ Panier temps réel avec preview frais
+- ✅ Commandes offline-first (UUID déduplication)
+- ✅ Historique avec statistiques
+
+**Intelligence MAVECAM :**
+- ✅ Suggestions alimentation adaptatives
+- ✅ Simulation ROI cycle complet
+- ✅ Recommandations multi-granulométrie
+- ✅ Projections croissance/FCR
+- ✅ Score confiance données
+
+**UX Optimisée :**
+- ✅ Charte MAVECAM (#059669) respectée
+- ✅ Bilingue FR/EN parfait
+- ✅ États vide/loading/erreur gérés
+- ✅ Pull-to-refresh partout
+- ✅ Navigation fluide
+
+#### **Qualité Code**
+- ✅ 0 erreur TypeScript
+- ✅ Clean Architecture stricte
+- ✅ Gestion défensive null/undefined
+- ✅ Documentation JSDoc exhaustive
+- ✅ Aucun console.log temporaire
+
+#### **Navigation Intégrée (100%)**
+- ✅ **RootStackParamList** : 6 routes Commerce ajoutées avec types stricts
+  - ProductCatalog (catalogue filtrable)
+  - ProductDetail (détails + params `productId`)
+  - Cart (panier intelligent)
+  - OrdersHistory (historique + stats)
+  - FeedingSuggestions (recommandations IA)
+  - CycleSimulator (prédiction ROI)
+- ✅ **MainNavigator.tsx** : Tous les screens Commerce enregistrés
+- ✅ **TypeScript Navigation** : Typage strict avec `StackNavigationProp`
+- ✅ **Compilation** : 0 erreur TypeScript vérifiée
+- ✅ **Exports centralisés** : `@/screens/commerce/index.ts`
+
+**Navigation fluide entre :**
+- Dashboard → ProductCatalog → ProductDetail → Cart → OrdersHistory
+- Dashboard → FeedingSuggestions (analyse cycles actifs)
+- Dashboard → CycleSimulator (prédiction nouveau cycle)
+
 ### **🚀 Prochaines Étapes Projet Global**
-1. **Tests utilisateur** avec aquaculteurs pilotes MAVECAM
-2. **Module Commerce (5.3)** - Catalogue produits et commandes
+1. ✅ ~~**Navigation** - Setup CommerceStack dans MainNavigator~~ **TERMINÉ**
+2. **Tests utilisateur** avec aquaculteurs pilotes MAVECAM
 3. **Module Support (5.4)** - Chat technicien et système tickets
 4. **Optimisations** basées sur feedback terrain

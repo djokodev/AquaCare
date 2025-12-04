@@ -1,10 +1,10 @@
-import React, { useEffect } from 'react';
+﻿import React, { useEffect } from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
 
 import { useAuth } from '@/hooks/useAuth';
 import AuthNavigator from './AuthNavigator';
 import MainNavigator from './MainNavigator';
-import LoadingScreen from '@/screens/LoadingScreen';
+import { LoadingScreen } from '@/features/main';
 
 const Stack = createStackNavigator();
 
@@ -30,3 +30,7 @@ export default function AppNavigator() {
     </Stack.Navigator>
   );
 }
+
+
+
+

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -24,7 +24,7 @@ import {
   getRegionByCode,
 } from '@/constants/cameroon';
 
-// Couleurs MAVECAM selon spécifications
+// Couleurs MAVECAM selon spÃ©cifications
 const MAVECAM_COLORS = {
   GREEN_PRIMARY: '#059669',
   GREEN_LIGHT: '#10b981',
@@ -49,7 +49,7 @@ interface LocationData {
 interface LocationSelectorProps {
   value: LocationData;
   onChange: (location: LocationData) => void;
-  userRegion?: string; // Région de l'utilisateur pour filtrer
+  userRegion?: string; // RÃ©gion de l'utilisateur pour filtrer
   editable?: boolean;
 }
 
@@ -69,14 +69,14 @@ export default function LocationSelector({
 }: LocationSelectorProps) {
   const { t } = useTranslation();
 
-  // États pour les options disponibles
+  // Ã‰tats pour les options disponibles
   const [regionOptions, setRegionOptions] = useState<PickerOption[]>([]);
   const [departmentOptions, setDepartmentOptions] = useState<PickerOption[]>([]);
   const [arrondissementOptions, setArrondissementOptions] = useState<PickerOption[]>([]);
   const [cityOptions, setCityOptions] = useState<PickerOption[]>([]);
   const [neighborhoodOptions, setNeighborhoodOptions] = useState<PickerOption[]>([]);
 
-  // États pour les modales de sélection
+  // Ã‰tats pour les modales de sÃ©lection
   const [showRegionModal, setShowRegionModal] = useState(false);
   const [showDepartmentModal, setShowDepartmentModal] = useState(false);
   const [showArrondissementModal, setShowArrondissementModal] = useState(false);
@@ -84,7 +84,7 @@ export default function LocationSelector({
   const [showNeighborhoodModal, setShowNeighborhoodModal] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Initialiser les régions disponibles
+  // Initialiser les rÃ©gions disponibles
   useEffect(() => {
     const regions = CAMEROON_REGIONS.map(region => ({
       value: region.code,
@@ -93,7 +93,7 @@ export default function LocationSelector({
     setRegionOptions(regions);
   }, []);
 
-  // Mettre à jour les départements selon la région sélectionnée
+  // Mettre Ã  jour les dÃ©partements selon la rÃ©gion sÃ©lectionnÃ©e
   useEffect(() => {
     setIsLoading(true);
 
@@ -106,7 +106,7 @@ export default function LocationSelector({
         }));
         setDepartmentOptions(options);
       } else {
-        // Si pas de région sélectionnée, vider les départements
+        // Si pas de rÃ©gion sÃ©lectionnÃ©e, vider les dÃ©partements
         setDepartmentOptions([]);
       }
     } catch (error) {
@@ -117,7 +117,7 @@ export default function LocationSelector({
     }
   }, [value.region]);
 
-  // Mettre à jour les arrondissements selon le département
+  // Mettre Ã  jour les arrondissements selon le dÃ©partement
   useEffect(() => {
     if (value.department && value.region) {
       const arrondissements = getArrondissementsByDepartment(value.region, value.department);
@@ -131,7 +131,7 @@ export default function LocationSelector({
       setArrondissementOptions([]);
     }
     
-    // Reset les niveaux inférieurs
+    // Reset les niveaux infÃ©rieurs
     if (value.arrondissement || value.city || value.neighborhood) {
       onChange({
         ...value,
@@ -142,7 +142,7 @@ export default function LocationSelector({
     }
   }, [value.department, value.region]);
 
-  // Mettre à jour les villes selon l'arrondissement sélectionné
+  // Mettre Ã  jour les villes selon l'arrondissement sÃ©lectionnÃ©
   useEffect(() => {
     if (value.arrondissement && value.region && value.department) {
       const cities = getCitiesByArrondissement(value.region, value.department, value.arrondissement);
@@ -153,7 +153,7 @@ export default function LocationSelector({
         }))
       );
       
-      // Si une seule ville, la sélectionner automatiquement
+      // Si une seule ville, la sÃ©lectionner automatiquement
       if (cities.length === 1 && !value.city) {
         onChange({
           ...value,
@@ -165,7 +165,7 @@ export default function LocationSelector({
       setCityOptions([]);
     }
     
-    // Reset les niveaux inférieurs si on change d'arrondissement
+    // Reset les niveaux infÃ©rieurs si on change d'arrondissement
     if (value.city || value.neighborhood) {
       onChange({
         ...value,
@@ -175,7 +175,7 @@ export default function LocationSelector({
     }
   }, [value.arrondissement, value.region, value.department]);
 
-  // Mettre à jour les quartiers selon l'arrondissement sélectionné
+  // Mettre Ã  jour les quartiers selon l'arrondissement sÃ©lectionnÃ©
   useEffect(() => {
     if (value.arrondissement && value.region && value.department) {
       const quartiers = getNeighborhoodsByArrondissement(value.region, value.department, value.arrondissement);
@@ -198,7 +198,7 @@ export default function LocationSelector({
   const handleRegionSelect = (regionCode: string) => {
     onChange({
       region: regionCode,
-      department: undefined, // Reset département
+      department: undefined, // Reset dÃ©partement
       arrondissement: undefined, // Reset arrondissement
       city: undefined, // Reset ville
       neighborhood: undefined // Reset quartier
@@ -271,7 +271,7 @@ export default function LocationSelector({
 
   return (
     <View style={styles.container}>
-      {/* Sélection Région */}
+      {/* SÃ©lection RÃ©gion */}
       <LocationSelectorRow
         label={t('region') + ' *'}
         value={value.region ? CAMEROON_REGIONS.find(r => r.code === value.region)?.name : undefined}
@@ -280,7 +280,7 @@ export default function LocationSelector({
         hasOptions={regionOptions.length > 0}
       />
 
-      {/* Sélection Département */}
+      {/* SÃ©lection DÃ©partement */}
       <LocationSelectorRow
         label={t('department') + ' *'}
         value={value.department}
@@ -290,7 +290,7 @@ export default function LocationSelector({
         disabled={!value.region}
       />
 
-      {/* Sélection Arrondissement */}
+      {/* SÃ©lection Arrondissement */}
       <LocationSelectorRow
         label={t('district')}
         value={value.arrondissement}
@@ -300,7 +300,7 @@ export default function LocationSelector({
         disabled={!value.department}
       />
 
-      {/* Sélection Ville */}
+      {/* SÃ©lection Ville */}
       {cityOptions.length > 0 && (
         <LocationSelectorRow
           label={t('city')}
@@ -312,7 +312,7 @@ export default function LocationSelector({
         />
       )}
 
-      {/* Sélection Quartier */}
+      {/* SÃ©lection Quartier */}
       {neighborhoodOptions.length > 0 && (
         <LocationSelectorRow
           label={t('neighborhood')}
@@ -327,7 +327,7 @@ export default function LocationSelector({
         />
       )}
 
-      {/* Modal Région */}
+      {/* Modal RÃ©gion */}
       <PickerModal
         visible={showRegionModal}
         title={t('selectRegion')}
@@ -337,7 +337,7 @@ export default function LocationSelector({
         onClose={() => setShowRegionModal(false)}
       />
 
-      {/* Modal Département */}
+      {/* Modal DÃ©partement */}
       <PickerModal
         visible={showDepartmentModal}
         title={t('selectDepartment')}
@@ -400,7 +400,7 @@ function LocationDisplayRow({ icon, label, value }: LocationDisplayRowProps) {
   );
 }
 
-// Composant pour sélecteur interactif
+// Composant pour sÃ©lecteur interactif
 interface LocationSelectorRowProps {
   icon?: keyof typeof Ionicons.glyphMap;
   label: string;
@@ -465,7 +465,7 @@ function LocationSelectorRow({
   );
 }
 
-// Modal de sélection
+// Modal de sÃ©lection
 interface PickerModalProps {
   visible: boolean;
   title: string;
@@ -717,3 +717,5 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 });
+
+

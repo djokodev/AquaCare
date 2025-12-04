@@ -3,7 +3,6 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import TokenError
-from django.contrib.auth import login
 from drf_spectacular.utils import extend_schema, OpenApiResponse, OpenApiExample
 
 from .models import User
@@ -166,12 +165,11 @@ class LoginView(APIView):
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        
+
         user = serializer.validated_data['user']
-        login(request, user)
-        
+
         refresh = RefreshToken.for_user(user)
-        
+
         return Response({
             'user': UserProfileSerializer(user).data,
             'tokens': {

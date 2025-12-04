@@ -18,11 +18,10 @@ Basé sur les guides techniques Skretting et Aller Aqua.
 import math
 from decimal import Decimal, ROUND_HALF_UP
 from datetime import date, timedelta
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional
 
 from ..constants import (
-    FEED_RECOMMENDATIONS, MEALS_PER_DAY, OPTIMAL_PARAMETERS,
-    GROWTH_STAGES
+    FEED_RECOMMENDATIONS, MEALS_PER_DAY, OPTIMAL_PARAMETERS
 )
 
 

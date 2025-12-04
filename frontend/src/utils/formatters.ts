@@ -1,24 +1,24 @@
-/**
- * Utilitaires de formatage pour l'affichage des données.
+﻿/**
+ * Utilitaires de formatage pour l'affichage des donnÃ©es.
  *
- * IMPORTANT: Ces fonctions NE CALCULENT PAS de logique métier.
- * Elles formattent uniquement des valeurs déjà calculées par le backend.
+ * IMPORTANT: Ces fonctions NE CALCULENT PAS de logique mÃ©tier.
+ * Elles formattent uniquement des valeurs dÃ©jÃ  calculÃ©es par le backend.
  */
 
 /**
- * Formate un nombre avec gestion défensive des valeurs nulles/undefined.
+ * Formate un nombre avec gestion dÃ©fensive des valeurs nulles/undefined.
  *
- * @param value - Valeur numérique à formatter
- * @param unit - Unité optionnelle à ajouter
- * @param decimals - Nombre de décimales (défaut: 1)
- * @returns Chaîne formatée (ex: "123.5 kg")
+ * @param value - Valeur numÃ©rique Ã  formatter
+ * @param unit - UnitÃ© optionnelle Ã  ajouter
+ * @param decimals - Nombre de dÃ©cimales (dÃ©faut: 1)
+ * @returns ChaÃ®ne formatÃ©e (ex: "123.5 kg")
  */
 export const formatNumber = (
   value: number | string | null | undefined,
   unit?: string,
   decimals: number = 1
 ): string => {
-  // Conversion sécurisée vers number
+  // Conversion sÃ©curisÃ©e vers number
   const numValue = typeof value === 'number' ? value : parseFloat(value as string);
 
   // Gestion des valeurs invalides
@@ -26,18 +26,18 @@ export const formatNumber = (
     return `0${unit ? ` ${unit}` : ''}`;
   }
 
-  // Formatage avec décimales
+  // Formatage avec dÃ©cimales
   const formatted = numValue.toFixed(decimals);
 
   return unit ? `${formatted} ${unit}` : formatted;
 };
 
 /**
- * Formate un pourcentage avec gestion défensive.
+ * Formate un pourcentage avec gestion dÃ©fensive.
  *
- * @param value - Valeur numérique (0-100)
- * @param decimals - Nombre de décimales (défaut: 1)
- * @returns Chaîne formatée (ex: "85.5%")
+ * @param value - Valeur numÃ©rique (0-100)
+ * @param decimals - Nombre de dÃ©cimales (dÃ©faut: 1)
+ * @returns ChaÃ®ne formatÃ©e (ex: "85.5%")
  */
 export const formatPercentage = (
   value: number | string | null | undefined,
@@ -55,9 +55,9 @@ export const formatPercentage = (
 /**
  * Formate une date selon la locale actuelle.
  *
- * @param dateString - Chaîne de date ISO 8601
- * @param locale - Locale (défaut: 'fr-FR')
- * @returns Date formatée (ex: "15 janv. 2025")
+ * @param dateString - ChaÃ®ne de date ISO 8601
+ * @param locale - Locale (dÃ©faut: 'fr-FR')
+ * @returns Date formatÃ©e (ex: "15 janv. 2025")
  */
 export const formatDate = (
   dateString: string | null | undefined,
@@ -81,9 +81,9 @@ export const formatDate = (
 /**
  * Formate une date avec l'heure.
  *
- * @param dateString - Chaîne de date ISO 8601
- * @param locale - Locale (défaut: 'fr-FR')
- * @returns Date et heure formatées (ex: "15 janv. 2025, 14:30")
+ * @param dateString - ChaÃ®ne de date ISO 8601
+ * @param locale - Locale (dÃ©faut: 'fr-FR')
+ * @returns Date et heure formatÃ©es (ex: "15 janv. 2025, 14:30")
  */
 export const formatDateTime = (
   dateString: string | null | undefined,
@@ -106,10 +106,10 @@ export const formatDateTime = (
 };
 
 /**
- * Formate une durée en jours depuis une date de départ.
+ * Formate une durÃ©e en jours depuis une date de dÃ©part.
  *
- * @param startDate - Date de départ (ISO 8601)
- * @param endDate - Date de fin (défaut: aujourd'hui)
+ * @param startDate - Date de dÃ©part (ISO 8601)
+ * @param endDate - Date de fin (dÃ©faut: aujourd'hui)
  * @returns Nombre de jours (ex: "45")
  */
 export const formatDaysSince = (
@@ -135,8 +135,8 @@ export const formatDaysSince = (
  * Formate un montant en FCFA (devise camerounaise).
  *
  * @param amount - Montant en FCFA
- * @param decimals - Nombre de décimales (défaut: 0)
- * @returns Montant formaté (ex: "150 000 FCFA")
+ * @param decimals - Nombre de dÃ©cimales (dÃ©faut: 0)
+ * @returns Montant formatÃ© (ex: "150 000 FCFA")
  */
 export const formatCurrency = (
   amount: number | string | null | undefined,
@@ -157,13 +157,13 @@ export const formatCurrency = (
   return `${formatted} FCFA`;
 };
 
-// =================== FORMATTERS AQUACULTURE SPÉCIFIQUES ===================
+// =================== FORMATTERS AQUACULTURE SPÃ‰CIFIQUES ===================
 
 /**
- * Formate une biomasse avec unité.
- * @param biomassKg - Biomasse en kg (calculée par backend)
- * @param unit - Unité ('kg' ou 'tonnes')
- * @returns Biomasse formatée (ex: "250.50 kg")
+ * Formate une biomasse avec unitÃ©.
+ * @param biomassKg - Biomasse en kg (calculÃ©e par backend)
+ * @param unit - UnitÃ© ('kg' ou 'tonnes')
+ * @returns Biomasse formatÃ©e (ex: "250.50 kg")
  */
 export const formatBiomass = (
   biomassKg: number | null | undefined,
@@ -175,14 +175,14 @@ export const formatBiomass = (
 };
 
 /**
- * Formate une densité d'élevage.
- * @param densityValue - Densité (calculée par backend)
- * @param unit - Unité ('kg/m³' ou 'kg/m²')
- * @returns Densité formatée (ex: "125.30 kg/m³")
+ * Formate une densite d'elevage.
+ * @param densityValue - Densite (calculee par backend)
+ * @param unit - Unite ('kg/m3' ou 'kg/m2')
+ * @returns Densite formatee (ex: "125.30 kg/m3")
  */
 export const formatDensity = (
   densityValue: number | null | undefined,
-  unit: 'kg/m³' | 'kg/m²' = 'kg/m³'
+  unit: 'kg/m3' | 'kg/m2' = 'kg/m3'
 ): string => {
   if (densityValue === null || densityValue === undefined) return 'N/A';
   return `${densityValue.toFixed(2)} ${unit}`;
@@ -190,8 +190,8 @@ export const formatDensity = (
 
 /**
  * Formate un FCR (Feed Conversion Ratio).
- * @param fcr - FCR calculé par backend
- * @returns FCR formaté (ex: "1.85")
+ * @param fcr - FCR calculÃ© par backend
+ * @returns FCR formatÃ© (ex: "1.85")
  */
 export const formatFCR = (
   fcr: number | null | undefined
@@ -202,8 +202,8 @@ export const formatFCR = (
 
 /**
  * Formate un taux de survie.
- * @param survivalRate - Taux en % (calculé par backend)
- * @returns Taux formaté (ex: "85.50%")
+ * @param survivalRate - Taux en % (calculÃ© par backend)
+ * @returns Taux formatÃ© (ex: "85.50%")
  */
 export const formatSurvivalRate = (
   survivalRate: number | null | undefined
@@ -214,8 +214,8 @@ export const formatSurvivalRate = (
 
 /**
  * Formate un taux de croissance journalier.
- * @param dailyGrowthRate - Taux en g/jour (calculé par backend)
- * @returns Taux formaté (ex: "2.30 g/jour")
+ * @param dailyGrowthRate - Taux en g/jour (calculÃ© par backend)
+ * @returns Taux formatÃ© (ex: "2.30 g/jour")
  */
 export const formatDailyGrowthRate = (
   dailyGrowthRate: number | null | undefined
@@ -225,9 +225,9 @@ export const formatDailyGrowthRate = (
 };
 
 /**
- * Formate un taux de croissance spécifique (SGR).
- * @param specificGrowthRate - SGR en %/jour (calculé par backend)
- * @returns SGR formaté (ex: "1.50%/jour")
+ * Formate un taux de croissance spÃ©cifique (SGR).
+ * @param specificGrowthRate - SGR en %/jour (calculÃ© par backend)
+ * @returns SGR formatÃ© (ex: "1.50%/jour")
  */
 export const formatSpecificGrowthRate = (
   specificGrowthRate: number | null | undefined
@@ -237,9 +237,9 @@ export const formatSpecificGrowthRate = (
 };
 
 /**
- * Formate une quantité d'aliment.
- * @param feedAmount - Quantité en kg (calculée par backend)
- * @returns Quantité formatée (ex: "12.50 kg")
+ * Formate une quantitÃ© d'aliment.
+ * @param feedAmount - QuantitÃ© en kg (calculÃ©e par backend)
+ * @returns QuantitÃ© formatÃ©e (ex: "12.50 kg")
  */
 export const formatFeedAmount = (
   feedAmount: number | null | undefined
@@ -250,8 +250,8 @@ export const formatFeedAmount = (
 
 /**
  * Formate un score de performance.
- * @param score - Score 0-100 (calculé par backend)
- * @returns Score formaté (ex: "85.0/100")
+ * @param score - Score 0-100 (calculÃ© par backend)
+ * @returns Score formatÃ© (ex: "85.0/100")
  */
 export const formatPerformanceScore = (
   score: number | null | undefined
@@ -259,3 +259,7 @@ export const formatPerformanceScore = (
   if (score === null || score === undefined) return 'N/A';
   return `${score.toFixed(1)}/100`;
 };
+
+
+
+

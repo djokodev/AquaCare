@@ -20,23 +20,22 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
-from django.db.models import Avg, Sum, Q, F, Min, Max
+from django.db.models import Avg, Sum, Q
 from django.db import transaction
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from datetime import date, timedelta
-from decimal import Decimal
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiExample
 from drf_spectacular.types import OpenApiTypes
 
 from .models import (
     ProductionCycle, CycleLog, FeedingPlan, SanitaryLog,
-    NutritionalGuide, CycleMetrics, Notification
+    NutritionalGuide, Notification
 )
 from .serializers import (
     ProductionCycleSerializer, CycleLogSerializer, CycleLogSyncSerializer,
     FeedingPlanSerializer, SanitaryLogSerializer, NutritionalGuideSerializer,
-    CycleMetricsSerializer, NotificationSerializer, DashboardSerializer,
+    NotificationSerializer, DashboardSerializer,
     HarvestSerializer, CycleStatisticsSerializer, CycleComparisonSerializer,
     SyncRequestSerializer, SyncResponseSerializer
 )
