@@ -548,6 +548,7 @@ export const en = {
   orderItems: 'Order Items',
   deliveryAddress: 'Delivery Address',
   pickupPoint: 'Pickup Point',
+  confirmed: 'Confirmed',
   productNotFound: 'Product not found',
 
   // Commerce - Feeding Suggestions
@@ -580,6 +581,7 @@ export const en = {
   simulationInitialWeight: 'Initial Weight',
   targetWeight: 'Target Weight',
   cycleDuration: 'Cycle Duration',
+  survivalRate: 'Survival Rate',
   simulate: 'Simulate',
   simulationResults: 'Simulation Results',
   totalFeed: 'Total Feed',
