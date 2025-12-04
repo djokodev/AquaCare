@@ -318,29 +318,29 @@ export default function SanitaryLogScreen({ navigation }: any) {
 
         <View className="mb-6">
           <Text className="text-base font-bold text-gray-dark mb-3">{t('eventType')}</Text>
-          <View className="flex-row flex-wrap gap-2">
-            {SANITARY_EVENT_TYPES.map((type) => (
-              <TouchableOpacity
-                key={type.value}
-                className={`bg-white p-3 rounded-lg border items-center min-w-[30%] gap-2 ${
-                  formData.event_type === type.value ? 'bg-mavecam-primary border-mavecam-primary' : 'border-gray-200'
-                }`}
-                onPress={() => setFormData((prev) => ({ ...prev, event_type: type.value }))}
-              >
-                <Ionicons
-                  name={type.icon as any}
-                  size={24}
-                  color={formData.event_type === type.value ? MAVECAM_COLORS.WHITE : MAVECAM_COLORS.GRAY_LIGHT}
-                />
-                <Text
-                  className={`text-xs text-center ${
-                    formData.event_type === type.value ? 'text-white' : 'text-gray-dark'
-                  }`}
-                >
-                  {type.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
+          <View className="flex-row flex-wrap">
+            {SANITARY_EVENT_TYPES.map((type) => {
+              const isSelected = formData.event_type === type.value;
+              return (
+                <View key={type.value} style={{ width: '31%', marginRight: '2%', marginBottom: 8 }}>
+                  <TouchableOpacity
+                    className={`p-3 rounded-lg border items-center ${
+                      isSelected ? 'bg-mavecam-primary border-mavecam-primary' : 'bg-white border-gray-200'
+                    }`}
+                    onPress={() => setFormData((prev) => ({ ...prev, event_type: type.value }))}
+                  >
+                    <Ionicons
+                      name={type.icon as any}
+                      size={32}
+                      color={isSelected ? MAVECAM_COLORS.WHITE : MAVECAM_COLORS.GRAY_LIGHT}
+                    />
+                    <Text className={`text-xs text-center mt-2 ${isSelected ? 'text-white' : 'text-gray-dark'}`}>
+                      {type.label}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              );
+            })}
           </View>
 
           {formData.event_type && (
@@ -407,8 +407,8 @@ export default function SanitaryLogScreen({ navigation }: any) {
                 />
               </View>
 
-              <View className="flex-row gap-3 mb-4">
-                <View className="flex-1">
+              <View className="flex-row mb-4">
+                <View className="flex-1" style={{ marginRight: 12 }}>
                   <Text className="text-sm font-medium text-gray-dark mb-2">{t('medicationUsed')}</Text>
                   <TextInput
                     className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
@@ -460,10 +460,10 @@ export default function SanitaryLogScreen({ navigation }: any) {
 
           {!formData.photo ? (
             <TouchableOpacity
-              className="bg-white border-2 border-dashed border-mavecam-primary rounded-lg p-5 items-center justify-center flex-row gap-2 mb-4"
+              className="bg-white border-2 border-dashed border-mavecam-primary rounded-lg p-5 items-center justify-center flex-row mb-4"
               onPress={chooseImageSource}
             >
-              <Ionicons name="camera" size={24} color={MAVECAM_COLORS.GREEN_PRIMARY} />
+              <Ionicons name="camera" size={24} color={MAVECAM_COLORS.GREEN_PRIMARY} style={{ marginRight: 8 }} />
               <Text className="text-mavecam-primary text-base font-semibold">{t('addPhoto')}</Text>
             </TouchableOpacity>
           ) : (
@@ -477,7 +477,7 @@ export default function SanitaryLogScreen({ navigation }: any) {
         </View>
 
         <TouchableOpacity
-          className={`bg-mavecam-primary flex-row items-center justify-center py-4 rounded-lg mt-2 gap-2 ${saving ? 'opacity-60' : ''}`}
+          className={`bg-mavecam-primary flex-row items-center justify-center py-4 rounded-lg mt-2 ${saving ? 'opacity-60' : ''}`}
           onPress={handleSave}
           disabled={saving}
         >
@@ -485,7 +485,7 @@ export default function SanitaryLogScreen({ navigation }: any) {
             <ActivityIndicator size="small" color={MAVECAM_COLORS.WHITE} />
           ) : (
             <>
-              <Ionicons name="checkmark" size={20} color={MAVECAM_COLORS.WHITE} />
+              <Ionicons name="checkmark" size={20} color={MAVECAM_COLORS.WHITE} style={{ marginRight: 8 }} />
               <Text className="text-white text-base font-semibold">{t('save')}</Text>
             </>
           )}

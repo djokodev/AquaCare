@@ -115,6 +115,17 @@ export default function CycleSimulatorScreen() {
     ]);
   };
 
+  const getPhaseLabel = (phaseName: string) => {
+    const key = `phase.${phaseName}`;
+    const translated = t(key);
+    if (translated !== key) return translated;
+    return phaseName
+      .replace(/_/g, ' ')
+      .split(' ')
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(' ');
+  };
+
   const renderPhaseCard = (phase: SimulatedFeedingPhase, index: number) => {
     const totalBags = phase.products.reduce((sum, p) => sum + p.quantity_bags, 0);
 
@@ -125,7 +136,7 @@ export default function CycleSimulatorScreen() {
             <Ionicons name="fast-food" size={20} color={MAVECAM_COLORS.GREEN_PRIMARY} />
           </View>
           <View className="flex-1">
-            <Text className="text-sm font-bold text-gray-dark">{phase.phase_name}</Text>
+            <Text className="text-sm font-bold text-gray-dark">{getPhaseLabel(phase.phase_name)}</Text>
             <Text className="text-xs text-gray-light">
               {t('days')} {phase.days_range[0]}-{phase.days_range[1]} - {phase.pellet_size_mm}mm - {phase.weight_range_g[0]}-{phase.weight_range_g[1]}g
             </Text>
@@ -352,7 +363,7 @@ export default function CycleSimulatorScreen() {
               <View className="flex-1 min-w-[45%] bg-white rounded-xl p-4 items-center shadow">
                 <Ionicons name="trending-up-outline" size={24} color={MAVECAM_COLORS.GREEN_PRIMARY} />
                 <Text className="text-lg font-bold text-mavecam-primary mt-2">
-                  {simulationResult.summary.estimated_fcr.toFixed(2)}
+                  {simulationResult.summary.estimated_fcr.toFixed(1)}
                 </Text>
                 <Text className="text-xs text-gray-light mt-1 text-center">{t('estimatedFCR')}</Text>
               </View>
@@ -411,6 +422,15 @@ export default function CycleSimulatorScreen() {
           </View>
         )}
       </ScrollView>
+
+      {loading && (
+        <View className="absolute inset-0 bg-black/10 items-center justify-center">
+          <View className="bg-white px-4 py-3 rounded-lg shadow flex-row items-center gap-3">
+            <ActivityIndicator size="small" color={MAVECAM_COLORS.GREEN_PRIMARY} />
+            <Text className="text-base text-gray-dark">{t('loading')}</Text>
+          </View>
+        </View>
+      )}
     </View>
   );
 }

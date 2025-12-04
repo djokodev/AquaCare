@@ -5,6 +5,19 @@ module.exports = {
     './src/**/*.{js,jsx,ts,tsx}',
   ],
   presets: [require('nativewind/preset')],
+  safelist: [
+    // Couleurs custom MAVECAM - empêche tree-shaking des classes dynamiques
+    'bg-mavecam-primary',
+    'bg-mavecam-primary-light',
+    'bg-mavecam-primary-dark',
+    'border-mavecam-primary',
+    'border-mavecam-primary-light',
+    'border-mavecam-primary-dark',
+    'text-mavecam-primary',
+    'text-white',
+    'text-gray-dark',
+    'text-gray-light',
+  ],
   theme: {
     extend: {
       colors: {
