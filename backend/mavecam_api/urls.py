@@ -19,7 +19,7 @@ from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, Sp
 def api_root(request):
     """Endpoint racine fournissant les informations sur l'API."""
     return JsonResponse({
-        'api': 'MAVECAM AquaCare API',
+        'api': 'AquaCare API',
         'version': '1.0.0 MVP',
         'documentation': {
             'swagger': '/api/docs/',
