@@ -175,14 +175,14 @@ export const formatBiomass = (
 };
 
 /**
- * Formate une densitÃ© d'Ã©levage.
- * @param densityValue - DensitÃ© (calculÃ©e par backend)
- * @param unit - UnitÃ© ('kg/mÂ³' ou 'kg/mÂ²')
- * @returns DensitÃ© formatÃ©e (ex: "125.30 kg/mÂ³")
+ * Formate une densite d'elevage.
+ * @param densityValue - Densite (calculee par backend)
+ * @param unit - Unite ('kg/m3' ou 'kg/m2')
+ * @returns Densite formatee (ex: "125.30 kg/m3")
  */
 export const formatDensity = (
   densityValue: number | null | undefined,
-  unit: 'kg/mÂ³' | 'kg/mÂ²' = 'kg/mÂ³'
+  unit: 'kg/m3' | 'kg/m2' = 'kg/m3'
 ): string => {
   if (densityValue === null || densityValue === undefined) return 'N/A';
   return `${densityValue.toFixed(2)} ${unit}`;
