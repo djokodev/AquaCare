@@ -177,40 +177,40 @@ describe('domain/estimators', () => {
       // 150kg / 10mÂ³ = 15 kg/mÂ³
       const result = estimateDensityWithUnit(150, 10, 50);
       expect(result.value).toBe(15);
-      expect(result.unit).toBe('kg/mÂ³');
+      expect(result.unit).toBe('kg/m3');
     });
 
     it('retourne densitÃ© superficielle si seulement surface fournie', () => {
       // 150kg / 50mÂ² = 3 kg/mÂ²
       const result = estimateDensityWithUnit(150, undefined, 50);
       expect(result.value).toBe(3);
-      expect(result.unit).toBe('kg/mÂ²');
+      expect(result.unit).toBe('kg/m2');
     });
 
     it('retourne 0 si ni volume ni surface', () => {
       const result = estimateDensityWithUnit(150);
       expect(result.value).toBe(0);
-      expect(result.unit).toBe('kg/mÂ²');
+      expect(result.unit).toBe('kg/m2');
     });
 
     it('prioritise volume sur surface', () => {
       // Volume prioritaire : 150kg / 10mÂ³ = 15 kg/mÂ³
       const result = estimateDensityWithUnit(150, 10, 50);
       expect(result.value).toBe(15);
-      expect(result.unit).toBe('kg/mÂ³');
+      expect(result.unit).toBe('kg/m3');
     });
 
     it('retourne 0 si volume est 0', () => {
       const result = estimateDensityWithUnit(150, 0, 50);
       // Devrait fallback sur surface
       expect(result.value).toBe(3); // 150/50
-      expect(result.unit).toBe('kg/mÂ²');
+      expect(result.unit).toBe('kg/m2');
     });
 
     it('retourne 0 si surface est 0', () => {
       const result = estimateDensityWithUnit(150, undefined, 0);
       expect(result.value).toBe(0);
-      expect(result.unit).toBe('kg/mÂ²');
+      expect(result.unit).toBe('kg/m2');
     });
   });
 

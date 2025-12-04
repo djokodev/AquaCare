@@ -69,8 +69,8 @@ export const estimateSurvivalRate = (
  * Backend recalcule avec AquacultureCalculator.calculate_stocking_density()
  *
  * @param biomassKg - Biomasse en kg
- * @param volumeM3 - Volume en mÂ³
- * @returns DensitÃ© estimÃ©e en kg/mÂ³
+ * @param volumeM3 - Volume en mÂ3
+ * @returns DensitÃ© estimÃ©e en kg/mÂ3
  */
 export const estimateDensity = (
   biomassKg: number,
@@ -135,24 +135,24 @@ export const estimateDailyFeed = (
 
 /**
  * Estime la densitÃ© d'Ã©levage (mode offline temporaire).
- * GÃ¨re densitÃ© volumÃ©trique (kg/mÂ³) et superficielle (kg/mÂ²).
+ * Gere densite volumetrique (kg/m3) et superficielle (kg/m2).
  * Backend recalcule avec AquacultureCalculator.calculate_stocking_density()
  *
  * @param biomassKg - Biomasse en kg
- * @param volumeM3 - Volume en mÂ³ (optionnel)
- * @param surfaceM2 - Surface en mÂ² (optionnel)
- * @returns Objet avec valeur et unitÃ©
+ * @param volumeM3 - Volume en m3 (optionnel)
+ * @param surfaceM2 - Surface en m2 (optionnel)
+ * @returns Objet avec valeur et unite
  */
 export const estimateDensityWithUnit = (
   biomassKg: number,
   volumeM3?: number,
   surfaceM2?: number
 ): { value: number; unit: string } => {
-  // PrioritÃ© au volume (plus prÃ©cis)
+  // Priorite au volume (plus precis)
   if (volumeM3 && volumeM3 > 0) {
     return {
       value: biomassKg / volumeM3,
-      unit: 'kg/mÂ³'
+      unit: 'kg/m3'
     };
   }
 
@@ -160,11 +160,11 @@ export const estimateDensityWithUnit = (
   if (surfaceM2 && surfaceM2 > 0) {
     return {
       value: biomassKg / surfaceM2,
-      unit: 'kg/mÂ²'
+      unit: 'kg/m2'
     };
   }
 
-  return { value: 0, unit: 'kg/mÂ²' };
+  return { value: 0, unit: 'kg/m2' };
 };
 
 /**

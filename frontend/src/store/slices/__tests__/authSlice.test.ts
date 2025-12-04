@@ -15,11 +15,11 @@ import authSliceReducer, {
   loadUserProfile,
   updateUserProfile,
   updateFarmProfile,
-} from '../authSlice';
+} from '@/features/auth/store/authSlice';
 import { User, FarmProfile } from '@/types/auth';
 
 // Mock des services
-jest.mock('@/services/authService');
+jest.mock('@/features/auth/services/authService');
 
 describe('store/slices/authSlice', () => {
   const initialState = {
