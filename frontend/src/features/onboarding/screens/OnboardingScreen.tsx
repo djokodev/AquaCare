@@ -86,11 +86,14 @@ export default function OnboardingScreen() {
     try {
       setIsProcessing(true);
       await OnboardingService.setCompleted();
-      // Navigation remplace la stack pour éviter retour arrière
-      navigation.reset({
-        index: 0,
-        routes: [{ name: 'Main' }],
-      });
+      // Navigation vers Main via parent navigator
+      const parentNav = navigation.getParent();
+      if (parentNav) {
+        parentNav.reset({
+          index: 0,
+          routes: [{ name: 'Main' }],
+        });
+      }
     } catch (error) {
       console.error('[OnboardingScreen] Erreur handleSkip:', error);
       Alert.alert(
@@ -111,10 +114,14 @@ export default function OnboardingScreen() {
     try {
       setIsProcessing(true);
       await OnboardingService.setCompleted();
-      navigation.reset({
-        index: 0,
-        routes: [{ name: 'Main' }],
-      });
+      // Navigation vers Main via parent navigator
+      const parentNav = navigation.getParent();
+      if (parentNav) {
+        parentNav.reset({
+          index: 0,
+          routes: [{ name: 'Main' }],
+        });
+      }
     } catch (error) {
       console.error('[OnboardingScreen] Erreur handleStart:', error);
       Alert.alert(
@@ -241,8 +248,8 @@ const styles = StyleSheet.create({
 
   skipText: {
     fontSize: 16,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
-    fontWeight: '500',
+    color: MAVECAM_COLORS.GRAY_DARK,
+    fontWeight: '600',
   },
 
   pageIndicator: {
