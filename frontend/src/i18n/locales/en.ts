@@ -625,7 +625,7 @@ export const en = {
   onboardingNext: 'Next',
   onboardingStart: 'Get Started',
   onboardingSlide1Title: 'Welcome to AquaCare',
-  onboardingSlide1Description: 'A complete application to manage your fish farm: track production cycles, manage ponds, optimize feeding and order inputs online',
+  onboardingSlide1Description: 'Manage your farm, track your cycles, manage your ponds, optimize your feed, and order your inputs online.',
   onboardingSlide2Title: 'Track Your Production Cycles',
   onboardingSlide2Description: 'Record your fish, monitor their growth, and optimize your results in real-time',
   onboardingSlide3Title: 'Optimize Your Feeding',

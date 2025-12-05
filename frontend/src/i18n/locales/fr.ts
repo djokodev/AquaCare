@@ -625,7 +625,7 @@ export const fr = {
   onboardingNext: 'Suivant',
   onboardingStart: 'Commencer',
   onboardingSlide1Title: 'Bienvenue dans AquaCare',
-  onboardingSlide1Description: 'Une application complète pour gérer votre ferme aquacole : suivez vos cycles de production, gérez vos bassins, optimisez votre alimentation et commandez vos intrants en ligne',
+  onboardingSlide1Description: 'Gérez votre ferme, suivez vos cycles, gérez vos bassins, optimisez votre alimentation et commandez vos intrants en ligne.',
   onboardingSlide2Title: 'Suivez vos cycles de production',
   onboardingSlide2Description: 'Enregistrez vos poissons, suivez leur croissance et optimisez vos résultats en temps réel',
   onboardingSlide3Title: 'Optimisez votre alimentation',

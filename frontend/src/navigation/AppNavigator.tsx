@@ -1,19 +1,25 @@
-﻿import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
 
 import { useAuth } from '@/hooks/useAuth';
 import AuthNavigator from './AuthNavigator';
 import MainNavigator from './MainNavigator';
-import OnboardingNavigator from './OnboardingNavigator';
 import { LoadingScreen } from '@/features/main';
 import OnboardingService from '@/features/onboarding/services/onboardingService';
+import OnboardingScreen from '@/features/onboarding/screens/OnboardingScreen';
 
-const Stack = createStackNavigator();
+type AppStackParamList = {
+  Auth: undefined;
+  Onboarding: undefined;
+  Main: undefined;
+};
+
+const Stack = createStackNavigator<AppStackParamList>();
 
 export default function AppNavigator() {
   const { isAuthenticated, isLoading, checkAuth } = useAuth();
 
-  // \u00c9tat onboarding
+  // Etat onboarding
   const [isCheckingOnboarding, setIsCheckingOnboarding] = useState(true);
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
 
@@ -22,7 +28,7 @@ export default function AppNavigator() {
     checkAuth();
   }, [checkAuth]);
 
-  // V\u00e9rifier onboarding au montage
+  // Verifier onboarding au montage
   useEffect(() => {
     async function checkOnboarding() {
       try {
@@ -40,23 +46,28 @@ export default function AppNavigator() {
   }, []);
 
   // Loading pendant auth + onboarding
+  const initialRouteName = useMemo(() => {
+    if (!isAuthenticated) return 'Auth';
+    if (!hasCompletedOnboarding) return 'Onboarding';
+    return 'Main';
+  }, [isAuthenticated, hasCompletedOnboarding]);
+
+  // Force un reset du navigator quand l'état change (auth ou onboarding)
+  const navigatorKey = `${isAuthenticated}-${hasCompletedOnboarding}`;
+
   if (isLoading || isCheckingOnboarding) {
     return <LoadingScreen />;
   }
 
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
-      {!isAuthenticated ? (
-        <Stack.Screen name="Auth" component={AuthNavigator} />
-      ) : !hasCompletedOnboarding ? (
-        <Stack.Screen name="Onboarding" component={OnboardingNavigator} />
-      ) : (
-        <Stack.Screen name="Main" component={MainNavigator} />
-      )}
+    <Stack.Navigator
+      key={navigatorKey}
+      initialRouteName={initialRouteName}
+      screenOptions={{ headerShown: false }}
+    >
+      <Stack.Screen name="Auth" component={AuthNavigator} />
+      <Stack.Screen name="Onboarding" component={OnboardingScreen} />
+      <Stack.Screen name="Main" component={MainNavigator} />
     </Stack.Navigator>
   );
 }
-
-
-
-
