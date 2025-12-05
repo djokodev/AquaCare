@@ -101,9 +101,9 @@ export const fr = {
   disconnect: 'Déconnexion',
 
   // Dashboard
-  welcomeBoard: 'Bienvenue sur votre tableau de bord',
+  welcomeBoard: 'Heureux de vous revoir ☺️',
   quickOverview: 'Aperçu Rapide',
-  activeCycles: 'Cycles Actifs',
+  activeCycles: 'Élevages en cours',
   currentCycles: 'Cycles en cours',
   ponds: 'Bassins',
   production: 'Production',
@@ -126,6 +126,18 @@ export const fr = {
   species: 'Espèce',
   currentFish: 'Poissons actuels',
   currentBiomass: 'Biomasse actuelle',
+
+  // Dashboard Header & Quick Actions
+  notificationsBell: 'Notifications',
+  languageToggle: 'Langue',
+  settingsButton: 'Paramètres',
+  quickActionsSubtitle: 'Choisissez une action',
+  viewAllActions: 'Voir toutes les actions',
+  collapseActions: 'Réduire',
+  categoryAquaculture: 'Aquaculture',
+  categoryCommerce: 'Commerce',
+  suggestedActions: 'Actions suggérées pour vous',
+  noActionsYet: 'Explorez nos fonctionnalités',
 
   // NewCycle Screen
   newCycleTitle: 'Nouveau Cycle d\'Élevage',

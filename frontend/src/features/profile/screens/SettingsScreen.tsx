@@ -113,7 +113,7 @@ export default function SettingsScreen() {
         <View className="bg-white p-4 rounded-xl shadow">
           <View className="flex-row items-center mb-3">
             <View className="flex-1">
-              <Text className="text-lg font-bold text-gray-dark">MAVECAM AquaCare</Text>
+              <Text className="text-lg font-bold text-gray-dark">AquaCare</Text>
             </View>
           </View>
           <Text className="text-sm text-gray-light leading-5">{t("appDescription")}</Text>

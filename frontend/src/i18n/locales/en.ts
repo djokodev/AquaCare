@@ -101,9 +101,9 @@ export const en = {
   disconnect: 'Sign Out',
 
   // Dashboard
-  welcomeBoard: 'Welcome to your dashboard',
+  welcomeBoard: 'Nice to see you again ☺️',
   quickOverview: 'Quick Overview',
-  activeCycles: 'Active Cycles',
+  activeCycles: 'Active Farms',
   currentCycles: 'Current Cycles',
   ponds: 'Ponds',
   production: 'Production',
@@ -126,6 +126,18 @@ export const en = {
   species: 'Species',
   currentFish: 'Current fish',
   currentBiomass: 'Current biomass',
+
+  // Dashboard Header & Quick Actions
+  notificationsBell: 'Notifications',
+  languageToggle: 'Language',
+  settingsButton: 'Settings',
+  quickActionsSubtitle: 'Choose an action',
+  viewAllActions: 'View all actions',
+  collapseActions: 'Collapse',
+  categoryAquaculture: 'Aquaculture',
+  categoryCommerce: 'Commerce',
+  suggestedActions: 'Suggested actions for you',
+  noActionsYet: 'Explore our features',
 
   // NewCycle Screen
   newCycleTitle: 'New Breeding Cycle',

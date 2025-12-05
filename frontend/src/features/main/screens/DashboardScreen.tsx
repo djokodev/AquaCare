@@ -15,6 +15,9 @@ import { fetchDashboardData } from '@/features/aquaculture/store/aquacultureSlic
 import { fetchNotifications } from '@/features/notifications/store/notificationSlice';
 import { offlineService } from '@/services/offlineService';
 import HarvestModal from '@/components/modals/HarvestModal';
+import DashboardHeader from '../components/DashboardHeader';
+import QuickActionsPreview from '../components/QuickActionsPreview';
+import QuickActionsSheet from '../components/QuickActionsSheet';
 import { ProductionCycle } from '@/types/aquaculture';
 import { MAVECAM_COLORS } from '@/constants/colors';
 import { formatNumber, formatPercentage } from '@/utils';
@@ -27,6 +30,7 @@ export default function DashboardScreen({ navigation }: any) {
 
   const [harvestModalVisible, setHarvestModalVisible] = useState(false);
   const [selectedCycle, setSelectedCycle] = useState<ProductionCycle | null>(null);
+  const [actionsSheetVisible, setActionsSheetVisible] = useState(false);
 
   const { dashboardData, loading, error } = useSelector((state: RootState) => state.aquaculture);
   const { unreadCount } = useSelector((state: RootState) => state.notifications);
@@ -84,6 +88,14 @@ export default function DashboardScreen({ navigation }: any) {
     dispatch(fetchDashboardData());
   };
 
+  const handleNotificationsPress = () => {
+    navigation.navigate('Notifications');
+  };
+
+  const handleSettingsPress = () => {
+    navigation.navigate('ProfileStack', { screen: 'Settings' });
+  };
+
   if (error && !dashboardData) {
     return (
       <ScrollView
@@ -92,12 +104,12 @@ export default function DashboardScreen({ navigation }: any) {
           <RefreshControl refreshing={loading.dashboard} onRefresh={onRefresh} />
         }
       >
-        <View className="bg-mavecam-primary px-5 pt-16 pb-5">
-          <Text className="text-2xl font-bold text-white mb-1">
-            {t('hello')}, {displayName}!
-          </Text>
-          <Text className="text-base text-white/80">{t('welcomeBoard')}</Text>
-        </View>
+        <DashboardHeader
+          displayName={displayName}
+          unreadCount={unreadCount}
+          onNotificationsPress={handleNotificationsPress}
+          onSettingsPress={handleSettingsPress}
+        />
 
         <View className="flex-1 items-center justify-center px-5 py-10">
           <Ionicons name="alert-circle" size={48} color={MAVECAM_COLORS.ERROR} />
@@ -120,16 +132,14 @@ export default function DashboardScreen({ navigation }: any) {
         <RefreshControl refreshing={loading.dashboard} onRefresh={onRefresh} />
       }
     >
-      <View className="bg-mavecam-primary px-5 pt-16 pb-5">
-        <Text className="text-2xl font-bold text-white mb-1">
-          {t('hello')}, {displayName}!
-        </Text>
-        <Text className="text-base text-white/80">{t('welcomeBoard')}</Text>
-      </View>
+      <DashboardHeader
+        displayName={displayName}
+        unreadCount={unreadCount}
+        onNotificationsPress={handleNotificationsPress}
+        onSettingsPress={handleSettingsPress}
+      />
 
       <View className="px-5 py-5">
-        <Text className="text-xl font-bold text-gray-dark mb-4">{t('quickOverview')}</Text>
-
         {loading.dashboard && !dashboardData ? (
           <View className="items-center justify-center py-10">
             <ActivityIndicator size="large" color={MAVECAM_COLORS.GREEN_PRIMARY} />
@@ -178,125 +188,12 @@ export default function DashboardScreen({ navigation }: any) {
         )}
       </View>
 
-      <View className="px-5 py-5">
-        <Text className="text-xl font-bold text-gray-dark mb-4">Actions</Text>
-        <TouchableOpacity
-          className="bg-white flex-row items-center p-4 rounded-xl mb-3 shadow-sm"
-          onPress={() => navigation.navigate('NewCycle')}
-        >
-          <Ionicons name="add-circle" size={24} color={MAVECAM_COLORS.GREEN_PRIMARY} />
-          <Text className="text-base font-medium text-gray-dark ml-3">{t('newCycle')}</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          className="bg-white flex-row items-center p-4 rounded-xl mb-3 shadow-sm"
-          onPress={() => navigation.navigate('DailyLog')}
-        >
-          <Ionicons name="create" size={24} color={MAVECAM_COLORS.GREEN_LIGHT} />
-          <Text className="text-base font-medium text-gray-dark ml-3">{t('dailyLog')}</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          className="bg-white flex-row items-center p-4 rounded-xl mb-3 shadow-sm"
-          onPress={() => navigation.navigate('SanitaryLog')}
-        >
-          <Ionicons name="warning-outline" size={24} color={MAVECAM_COLORS.ERROR} />
-          <Text className="text-base font-medium text-gray-dark ml-3">{t('sanitaryLog')}</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          className="bg-white flex-row items-center p-4 rounded-xl mb-3 shadow-sm"
-          onPress={() => navigation.navigate('CycleHistory')}
-        >
-          <Ionicons name="time-outline" size={24} color={MAVECAM_COLORS.INFO} />
-          <Text className="text-base font-medium text-gray-dark ml-3">{t('cycleHistoryButton')}</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          className="bg-white flex-row items-center p-4 rounded-xl mb-3 shadow-sm"
-          onPress={() => navigation.navigate('Notifications')}
-        >
-          <View className="flex-row items-center relative">
-            <Ionicons name="notifications-outline" size={24} color={MAVECAM_COLORS.WARNING} />
-            <Text className="text-base font-medium text-gray-dark ml-3">{t('notifications')}</Text>
-            {unreadCount > 0 && (
-              <View className="absolute -top-2 -right-2 bg-[#dc2626] rounded-full px-1.5 py-0.5 min-w-[20px] items-center justify-center">
-                <Text className="text-white text-[10px] font-bold">{unreadCount}</Text>
-              </View>
-            )}
-          </View>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          className="bg-white flex-row items-center p-4 rounded-xl mb-3 shadow-sm"
-          onPress={() => navigation.navigate('FeedingPlan')}
-        >
-          <Ionicons name="restaurant-outline" size={24} color={MAVECAM_COLORS.INFO} />
-          <Text className="text-base font-medium text-gray-dark ml-3">{t('feedingPlan')}</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          className="bg-white flex-row items-center p-4 rounded-xl mb-3 shadow-sm"
-          onPress={() => navigation.navigate('NutritionalGuides')}
-        >
-          <Ionicons name="library-outline" size={24} color={MAVECAM_COLORS.GREEN_DARK} />
-          <Text className="text-base font-medium text-gray-dark ml-3">{t('nutritionalGuides')}</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          className="bg-white flex-row items-center p-4 rounded-xl mb-3 shadow-sm"
-          onPress={() => navigation.navigate('Statistics')}
-        >
-          <Ionicons name="bar-chart-outline" size={24} color={MAVECAM_COLORS.SUCCESS} />
-          <Text className="text-base font-medium text-gray-dark ml-3">{t('statistics')}</Text>
-        </TouchableOpacity>
-      </View>
-
-      <View className="px-5 py-5">
-        <Text className="text-xl font-bold text-gray-dark mb-4">
-          {t('commerceModule', { defaultValue: 'Commerce' })}
-        </Text>
-
-        <TouchableOpacity
-          className="bg-white flex-row items-center p-4 rounded-xl mb-3 shadow-sm"
-          onPress={() => navigation.navigate('ProductCatalog')}
-        >
-          <Ionicons name="storefront-outline" size={24} color={MAVECAM_COLORS.GREEN_PRIMARY} />
-          <Text className="text-base font-medium text-gray-dark ml-3">{t('productCatalog')}</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          className="bg-white flex-row items-center p-4 rounded-xl mb-3 shadow-sm"
-          onPress={() => navigation.navigate('Cart')}
-        >
-          <Ionicons name="cart-outline" size={24} color={MAVECAM_COLORS.WARNING} />
-          <Text className="text-base font-medium text-gray-dark ml-3">{t('cart')}</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          className="bg-white flex-row items-center p-4 rounded-xl mb-3 shadow-sm"
-          onPress={() => navigation.navigate('OrdersHistory')}
-        >
-          <Ionicons name="receipt-outline" size={24} color={MAVECAM_COLORS.INFO} />
-          <Text className="text-base font-medium text-gray-dark ml-3">{t('ordersHistory')}</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          className="bg-white flex-row items-center p-4 rounded-xl mb-3 shadow-sm"
-          onPress={() => navigation.navigate('FeedingSuggestions')}
-        >
-          <Ionicons name="bulb-outline" size={24} color={MAVECAM_COLORS.SUCCESS} />
-          <Text className="text-base font-medium text-gray-dark ml-3">{t('feedingSuggestions')}</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          className="bg-white flex-row items-center p-4 rounded-xl mb-3 shadow-sm"
-          onPress={() => navigation.navigate('CycleSimulator')}
-        >
-          <Ionicons name="calculator-outline" size={24} color={MAVECAM_COLORS.BLUE} />
-          <Text className="text-base font-medium text-gray-dark ml-3">{t('cycleSimulator')}</Text>
-        </TouchableOpacity>
-      </View>
+      <QuickActionsPreview
+        onOpenSheet={() => setActionsSheetVisible(true)}
+        hasActiveCycles={activeCycles.length > 0}
+        unreadCount={unreadCount}
+        navigation={navigation}
+      />
 
       {activeCycles.length > 0 && (
         <View className="px-5 py-5">
@@ -335,6 +232,13 @@ export default function DashboardScreen({ navigation }: any) {
         onClose={closeHarvestModal}
         cycle={selectedCycle}
         onSuccess={handleHarvestSuccess}
+      />
+
+      <QuickActionsSheet
+        visible={actionsSheetVisible}
+        onClose={() => setActionsSheetVisible(false)}
+        unreadCount={unreadCount}
+        navigation={navigation}
       />
     </ScrollView>
   );
