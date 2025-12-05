@@ -619,4 +619,15 @@ export const en = {
   productLoadError: 'Product loading error',
   productAddedToCartWithQuantity: '{{quantity}} bag(s) of {{name}} added to cart',
   continueShopping: 'Continue shopping',
+
+  // Onboarding
+  onboardingSkip: 'Skip',
+  onboardingNext: 'Next',
+  onboardingStart: 'Get Started',
+  onboardingSlide1Title: 'Welcome to MAVECAM AquaCare',
+  onboardingSlide1Description: 'Manage your fish farm easily with professional tools',
+  onboardingSlide2Title: 'Track Your Production Cycles',
+  onboardingSlide2Description: 'Record your fish, monitor their growth, and optimize your results in real-time',
+  onboardingSlide3Title: 'Optimize Your Feeding',
+  onboardingSlide3Description: 'Order your feed, plan your rations, and maximize your profitability',
 };
