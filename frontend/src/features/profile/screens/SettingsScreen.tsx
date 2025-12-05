@@ -7,6 +7,7 @@ import * as SecureStore from "expo-secure-store";
 import { useAuth } from "@/hooks/useAuth";
 import { STORAGE_KEYS } from "@/constants/api";
 import { MAVECAM_COLORS } from "@/constants/colors";
+import OnboardingService from "@/features/onboarding/services/onboardingService";
 
 export default function SettingsScreen() {
   const { t, i18n } = useTranslation();
@@ -64,6 +65,35 @@ export default function SettingsScreen() {
     ]);
   };
 
+  const handleResetOnboarding = async () => {
+    Alert.alert(
+      t('language') === 'fr' ? "Réinitialiser l'onboarding" : "Reset Onboarding",
+      t('language') === 'fr'
+        ? "Cela réinitialisera l'onboarding pour le revoir au prochain démarrage. Continuer ?"
+        : "This will reset onboarding to show it on next app start. Continue?",
+      [
+        { text: t('cancel'), style: "cancel" },
+        {
+          text: "OK",
+          onPress: async () => {
+            try {
+              await OnboardingService.reset();
+              Alert.alert(
+                t('language') === 'fr' ? "Succès" : "Success",
+                t('language') === 'fr'
+                  ? "L'onboarding a été réinitialisé. Redémarrez l'app pour le revoir."
+                  : "Onboarding has been reset. Restart the app to see it again."
+              );
+            } catch (error) {
+              console.error("Erreur reset onboarding:", error);
+              Alert.alert("Erreur", "Impossible de réinitialiser l'onboarding");
+            }
+          },
+        },
+      ]
+    );
+  };
+
   return (
     <ScrollView className="flex-1 bg-cream">
       <View className="bg-mavecam-primary items-center pt-14 pb-6 px-5">
@@ -107,6 +137,28 @@ export default function SettingsScreen() {
           </View>
         </TouchableOpacity>
       </View>
+
+      {__DEV__ && (
+        <View className="px-5 py-4">
+          <Text className="text-lg font-bold text-gray-dark mb-3">
+            {t('language') === 'fr' ? '🧪 Développement' : '🧪 Development'}
+          </Text>
+          <TouchableOpacity
+            className="flex-row items-center p-4 rounded-lg mb-2 bg-[#eff6ff] border border-[#93c5fd]"
+            onPress={handleResetOnboarding}
+          >
+            <Ionicons name="refresh" size={24} color="#3b82f6" />
+            <View className="ml-3 flex-1">
+              <Text className="text-base font-semibold text-[#3b82f6]">
+                {t('language') === 'fr' ? 'Réinitialiser Onboarding' : 'Reset Onboarding'}
+              </Text>
+              <Text className="text-xs text-gray-light">
+                {t('language') === 'fr' ? 'Revoir les slides au prochain démarrage' : 'See slides again on next start'}
+              </Text>
+            </View>
+          </TouchableOpacity>
+        </View>
+      )}
 
       <View className="px-5 py-4">
         <Text className="text-lg font-bold text-gray-dark mb-3">{t("about")}</Text>

@@ -619,4 +619,15 @@ export const fr = {
   productLoadError: 'Erreur chargement produit',
   productAddedToCartWithQuantity: '{{quantity}} sac(s) de {{name}} ajouté(s) au panier',
   continueShopping: 'Continuer mes achats',
+
+  // Onboarding
+  onboardingSkip: 'Ignorer',
+  onboardingNext: 'Suivant',
+  onboardingStart: 'Commencer',
+  onboardingSlide1Title: 'Bienvenue dans AquaCare',
+  onboardingSlide1Description: 'Gérez votre ferme, suivez vos cycles, gérez vos bassins, optimisez votre alimentation et commandez vos intrants en ligne.',
+  onboardingSlide2Title: 'Suivez vos cycles de production',
+  onboardingSlide2Description: 'Enregistrez vos poissons, suivez leur croissance et optimisez vos résultats en temps réel',
+  onboardingSlide3Title: 'Optimisez votre alimentation',
+  onboardingSlide3Description: 'Commandez vos aliments, planifiez vos rations et maximisez votre rentabilité',
 };
