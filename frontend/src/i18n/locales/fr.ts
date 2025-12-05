@@ -127,6 +127,18 @@ export const fr = {
   currentFish: 'Poissons actuels',
   currentBiomass: 'Biomasse actuelle',
 
+  // Dashboard Header & Quick Actions
+  notificationsBell: 'Notifications',
+  languageToggle: 'Langue',
+  settingsButton: 'Paramètres',
+  quickActionsSubtitle: 'Choisissez une action',
+  viewAllActions: 'Voir toutes les actions',
+  collapseActions: 'Réduire',
+  categoryAquaculture: 'Aquaculture',
+  categoryCommerce: 'Commerce',
+  suggestedActions: 'Actions suggérées pour vous',
+  noActionsYet: 'Explorez nos fonctionnalités',
+
   // NewCycle Screen
   newCycleTitle: 'Nouveau Cycle d\'Élevage',
   speciesSelection: 'Espèce à élever',

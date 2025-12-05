@@ -127,6 +127,18 @@ export const en = {
   currentFish: 'Current fish',
   currentBiomass: 'Current biomass',
 
+  // Dashboard Header & Quick Actions
+  notificationsBell: 'Notifications',
+  languageToggle: 'Language',
+  settingsButton: 'Settings',
+  quickActionsSubtitle: 'Choose an action',
+  viewAllActions: 'View all actions',
+  collapseActions: 'Collapse',
+  categoryAquaculture: 'Aquaculture',
+  categoryCommerce: 'Commerce',
+  suggestedActions: 'Suggested actions for you',
+  noActionsYet: 'Explore our features',
+
   // NewCycle Screen
   newCycleTitle: 'New Breeding Cycle',
   speciesSelection: 'Species to breed',
