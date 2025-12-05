@@ -122,14 +122,12 @@ export default function DashboardScreen({ navigation }: any) {
     >
       <View className="bg-mavecam-primary px-5 pt-16 pb-5">
         <Text className="text-2xl font-bold text-white mb-1">
-          {t('hello')}, {displayName}!
+          {t('hello')}, {displayName}
         </Text>
         <Text className="text-base text-white/80">{t('welcomeBoard')}</Text>
       </View>
 
       <View className="px-5 py-5">
-        <Text className="text-xl font-bold text-gray-dark mb-4">{t('quickOverview')}</Text>
-
         {loading.dashboard && !dashboardData ? (
           <View className="items-center justify-center py-10">
             <ActivityIndicator size="large" color={MAVECAM_COLORS.GREEN_PRIMARY} />

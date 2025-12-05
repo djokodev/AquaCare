@@ -101,9 +101,9 @@ export const en = {
   disconnect: 'Sign Out',
 
   // Dashboard
-  welcomeBoard: 'Welcome to your dashboard',
+  welcomeBoard: 'Nice to see you again ☺️',
   quickOverview: 'Quick Overview',
-  activeCycles: 'Active Cycles',
+  activeCycles: 'Active Farms',
   currentCycles: 'Current Cycles',
   ponds: 'Ponds',
   production: 'Production',

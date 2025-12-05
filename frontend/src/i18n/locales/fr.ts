@@ -101,9 +101,9 @@ export const fr = {
   disconnect: 'Déconnexion',
 
   // Dashboard
-  welcomeBoard: 'Bienvenue sur votre tableau de bord',
+  welcomeBoard: 'Heureux de vous revoir ☺️',
   quickOverview: 'Aperçu Rapide',
-  activeCycles: 'Cycles Actifs',
+  activeCycles: 'Élevages en cours',
   currentCycles: 'Cycles en cours',
   ponds: 'Bassins',
   production: 'Production',
