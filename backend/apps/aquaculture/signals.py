@@ -18,14 +18,15 @@ from decimal import Decimal
 from datetime import date, timedelta
 
 from .models import (
-    ProductionCycle, CycleLog, SanitaryLog, CycleMetrics, Notification
+    ProductionCycle, CycleLog, SanitaryLog, CycleMetrics
 )
+# Notification model moved to apps/notifications/models.py
 from .domain.calculators import AquacultureCalculator
 from .services import (
     ProductionCycleService,
-    NotificationService,
     AnalyticsService
 )
+# NotificationService will be migrated to use apps.notifications.services.NotificationService
 
 
 # =============================================================================

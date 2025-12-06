@@ -22,8 +22,9 @@ from django.utils import timezone
 
 from .models import (
     ProductionCycle, CycleLog, FeedingPlan, SanitaryLog,
-    NutritionalGuide, CycleMetrics, Notification
+    NutritionalGuide, CycleMetrics
 )
+# Notification model moved to apps/notifications/models.py
 from .domain.calculators import AquacultureCalculator
 
 
@@ -516,29 +517,12 @@ class CycleComparisonSerializer(serializers.Serializer):
     )
 
 
-class NotificationSerializer(serializers.ModelSerializer):
-    """
-    Sérialiseur pour les notifications push.
-    """
-    cycle_name = serializers.CharField(source='cycle.cycle_name', read_only=True)
-    type_display = serializers.CharField(source='get_notification_type_display', read_only=True)
-    is_overdue = serializers.SerializerMethodField()
-
-    class Meta:
-        model = Notification
-        fields = [
-            'id', 'user', 'cycle', 'cycle_name', 'notification_type',
-            'type_display', 'title', 'message', 'scheduled_for',
-            'sent_at', 'read_at', 'is_sent', 'is_read', 'is_overdue',
-            'created_at'
-        ]
-        read_only_fields = ['id', 'sent_at', 'created_at']
-
-    def get_is_overdue(self, obj):
-        """Vérifie si la notification est en retard."""
-        from django.utils import timezone
-        return obj.scheduled_for < timezone.now() and not obj.is_sent
-
+# =============================================================================
+# NOTIFICATION SERIALIZER REMOVED
+# =============================================================================
+# NotificationSerializer a été déplacé vers apps/notifications/serializers.py
+# Utilisez apps.notifications.serializers.NotificationSerializer à la place
+# =============================================================================
 
 class DashboardSerializer(serializers.Serializer):
     """
@@ -553,7 +537,7 @@ class DashboardSerializer(serializers.Serializer):
     active_cycles = ProductionCycleSerializer(many=True)
     recent_logs = CycleLogSerializer(many=True)
     current_feeding_plans = FeedingPlanSerializer(many=True)
-    pending_notifications = NotificationSerializer(many=True)
+    # pending_notifications moved to apps/notifications/ - use NotificationViewSet API
     active_sanitary_issues = SanitaryLogSerializer(many=True)
     
     growth_chart_data = serializers.ListField()

@@ -681,8 +681,9 @@ class AnalyticsService(BaseService):
             >>> AnalyticsService.check_and_create_environmental_alerts(daily_log)
             # Crée notifications si température < 24°C pour clarias
         """
-        from ..models import Notification
-        from .notification_service import NotificationService
+        # TODO Phase 1B: Migrer vers apps.notifications.services.NotificationService
+        # from ..models import Notification
+        # from .notification_service import NotificationService
 
         try:
             cycle = log.cycle
@@ -694,17 +695,18 @@ class AnalyticsService(BaseService):
                 density_kg_m3=cycle.current_density_kg_m3()
             )
 
+            # TODO Phase 1B: Migrer vers NotificationService
             # Create notifications for each alert
-            for alert_message in alerts:
-                Notification.objects.create(
-                    user=cycle.farm_profile.user,
-                    cycle=cycle,
-                    notification_type='environmental_alert',
-                    title=_('Alerte paramètres environnementaux'),
-                    message=alert_message,
-                    severity='warning',
-                    scheduled_for=timezone.now()
-                )
+            # for alert_message in alerts:
+            #     NotificationService.create_notification(
+            #         user=cycle.farm_profile.user,
+            #         notification_type='water_quality_alert',
+            #         title=_('Alerte paramètres environnementaux'),
+            #         message=alert_message,
+            #         content_object=cycle,
+            #         priority='high',
+            #         scheduled_for=timezone.now()
+            #     )
 
             if alerts:
                 AnalyticsService.log_operation(

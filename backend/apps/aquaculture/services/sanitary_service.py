@@ -17,7 +17,9 @@ from django.db import transaction
 from django.db.models import Q, Count, Avg
 from django.utils import timezone
 
-from ..models import SanitaryLog, ProductionCycle, Notification
+from ..models import SanitaryLog, ProductionCycle
+# Notification model moved to apps/notifications/models.py
+# Will be migrated to use NotificationService in Phase 1B
 from .base import BaseService
 from ..domain.exceptions import (
     InvalidSanitaryDataException,
@@ -215,16 +217,17 @@ class SanitaryService(BaseService):
             sanitary_log.resolution_notes = resolution_notes
         sanitary_log.save()
 
+        # TODO Phase 1B: Migrer vers NotificationService
         # Créer notification de résolution
-        Notification.objects.create(
-            user=sanitary_log.cycle.farm_profile.user,
-            cycle=sanitary_log.cycle,
-            notification_type='info',
-            title=f"✅ Problème résolu - {sanitary_log.cycle.cycle_name}",
-            message=f"Le problème {sanitary_log.get_event_type_display().lower()} du {sanitary_log.event_date} "
-                   f"a été marqué comme résolu.",
-            scheduled_for=timezone.now()
-        )
+        # NotificationService.create_notification(
+        #     user=sanitary_log.cycle.farm_profile.user,
+        #     notification_type='ticket_resolved',
+        #     title=f"✅ Problème résolu - {sanitary_log.cycle.cycle_name}",
+        #     message=f"Le problème {sanitary_log.get_event_type_display().lower()} du {sanitary_log.event_date} "
+        #            f"a été marqué comme résolu.",
+        #     content_object=sanitary_log,
+        #     scheduled_for=timezone.now()
+        # )
 
         return sanitary_log
 
@@ -394,14 +397,15 @@ class SanitaryService(BaseService):
             message = f"Événement {sanitary_log.get_event_type_display().lower()} enregistré."
             notification_type = 'info'
 
-        Notification.objects.create(
-            user=cycle.farm_profile.user,
-            cycle=cycle,
-            notification_type=notification_type,
-            title=title,
-            message=message,
-            scheduled_for=timezone.now()
-        )
+        # TODO Phase 1B: Migrer vers NotificationService
+        # NotificationService.create_notification(
+        #     user=cycle.farm_profile.user,
+        #     notification_type=notification_type,
+        #     title=title,
+        #     message=message,
+        #     content_object=sanitary_log,
+        #     scheduled_for=timezone.now()
+        # )
 
     @staticmethod
     def _create_critical_alert(sanitary_log: SanitaryLog, affected_rate: float) -> None:
@@ -415,20 +419,22 @@ class SanitaryService(BaseService):
         cycle = sanitary_log.cycle
         percentage = affected_rate * 100
 
-        Notification.objects.create(
-            user=cycle.farm_profile.user,
-            cycle=cycle,
-            notification_type='alert',
-            title=f"🚨 ALERTE CRITIQUE - {cycle.cycle_name}",
-            message=f"⚠️ {percentage:.1f}% de l'effectif affecté ({sanitary_log.affected_count} poissons).\n"
-                   f"Type: {sanitary_log.get_event_type_display()}\n"
-                   f"ACTION URGENTE REQUISE:\n"
-                   f"1. Isoler les poissons malades si possible\n"
-                   f"2. Vérifier qualité de l'eau immédiatement\n"
-                   f"3. Contacter le support technique MAVECAM\n"
-                   f"4. Suspendre l'alimentation si maladie grave",
-            scheduled_for=timezone.now()
-        )
+        # TODO Phase 1B: Migrer vers NotificationService
+        # NotificationService.create_notification(
+        #     user=cycle.farm_profile.user,
+        #     notification_type='mortality_alert',
+        #     title=f"🚨 ALERTE CRITIQUE - {cycle.cycle_name}",
+        #     message=f"⚠️ {percentage:.1f}% de l'effectif affecté ({sanitary_log.affected_count} poissons).\n"
+        #            f"Type: {sanitary_log.get_event_type_display()}\n"
+        #            f"ACTION URGENTE REQUISE:\n"
+        #            f"1. Isoler les poissons malades si possible\n"
+        #            f"2. Vérifier qualité de l'eau immédiatement\n"
+        #            f"3. Contacter le support technique MAVECAM\n"
+        #            f"4. Suspendre l'alimentation si maladie grave",
+        #     content_object=cycle,
+        #     priority='urgent',
+        #     scheduled_for=timezone.now()
+        # )
 
     @staticmethod
     def _calculate_health_score(

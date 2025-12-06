@@ -30,18 +30,22 @@ from drf_spectacular.types import OpenApiTypes
 
 from .models import (
     ProductionCycle, CycleLog, FeedingPlan, SanitaryLog,
-    NutritionalGuide, Notification
+    NutritionalGuide
 )
+# Notification model moved to apps/notifications/models.py
+
 from .serializers import (
     ProductionCycleSerializer, CycleLogSerializer, CycleLogSyncSerializer,
     FeedingPlanSerializer, SanitaryLogSerializer, NutritionalGuideSerializer,
-    NotificationSerializer, DashboardSerializer,
+    DashboardSerializer,
     HarvestSerializer, CycleStatisticsSerializer, CycleComparisonSerializer,
     SyncRequestSerializer, SyncResponseSerializer
 )
+# NotificationSerializer moved to apps/notifications/serializers.py
+
 from .domain.calculators import AquacultureCalculator
 from .services import (
-    ProductionCycleService, AnalyticsService, NotificationService,
+    ProductionCycleService, AnalyticsService,
     SanitaryService, SyncService
 )
 from .domain.exceptions import (
@@ -1155,81 +1159,14 @@ class NutritionalGuideViewSet(viewsets.ReadOnlyModelViewSet):
         ]
     )
 )
-class NotificationViewSet(viewsets.ModelViewSet):
-    """
-    Gestion des notifications et rappels.
-    
-    Gère les notifications automatiques (alimentation, santé) et personnalisées.
-    Supporte la programmation et le marquage comme lu/non lu.
-    """
-    serializer_class = NotificationSerializer
-    permission_classes = [permissions.IsAuthenticated]
-    
-    def get_queryset(self):
-        """Retourne les notifications pour l'utilisateur authentifié (seulement celles qui doivent être affichées)."""
-        return Notification.objects.filter(
-            user=self.request.user,
-            scheduled_for__lte=timezone.now()  # Seulement les notifications dont l'heure est arrivée
-        ).order_by('-scheduled_for')
-    
-    @extend_schema(
-        summary="Marquer notification comme lue",
-        description="""
-        Marque une notification spécifique comme lue et enregistre l'horodatage.
-        Utile pour le suivi de l'engagement utilisateur avec les notifications.
-        """,
-        responses={
-            200: NotificationSerializer,
-            404: OpenApiExample(
-                'Notification non trouvée',
-                value={'detail': 'Notification non trouvée'}
-            )
-        }
-    )
-    @action(detail=True, methods=['post'])
-    def mark_read(self, request, pk=None):
-        """
-        Marque une notification comme lue.
-        """
-        notification = self.get_object()
-        notification.is_read = True
-        notification.read_at = timezone.now()
-        notification.save()
-        
-        return Response(
-            NotificationSerializer(notification).data,
-            status=status.HTTP_200_OK
-        )
-    
-    @extend_schema(
-        summary="Marquer toutes notifications comme lues",
-        description="""
-        Marque toutes les notifications non lues de l'utilisateur comme lues en une seule opération.
-        Optimisé pour les actions en bulk depuis l'interface mobile.
-        """,
-        responses={
-            200: OpenApiExample(
-                'Notifications marquées',
-                value={
-                    'message': '5 notifications marquées comme lues'
-                }
-            )
-        }
-    )
-    @action(detail=False, methods=['post'])
-    def mark_all_read(self, request):
-        """
-        Marque toutes les notifications comme lues.
-        """
-        count = self.get_queryset().filter(is_read=False).update(
-            is_read=True,
-            read_at=timezone.now()
-        )
-        
-        return Response({
-            'message': f'{count} notifications marquées comme lues'
-        })
 
+# =============================================================================
+# NOTIFICATION VIEWSET REMOVED
+# =============================================================================
+# NotificationViewSet a été déplacé vers apps/notifications/views.py
+# Utilisez /api/notifications/ pour accéder aux notifications
+# Le nouveau ViewSet supporte tous les modules (aquaculture, commerce, chat, etc.)
+# =============================================================================
 
 @extend_schema(
     summary="Dashboard aquaculture complet",
