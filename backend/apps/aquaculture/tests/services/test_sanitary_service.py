@@ -8,6 +8,7 @@ from datetime import date
 
 from apps.aquaculture.services.sanitary_service import SanitaryService
 from apps.aquaculture.models import SanitaryLog
+from apps.notifications.models import Notification
 from tests.fixtures.factories import ProductionCycleFactory
 
 

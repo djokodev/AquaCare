@@ -217,7 +217,7 @@ class OrderService(BaseCommerceService):
         Examples:
             >>> OrderService._create_order_notification(order)
         """
-        from apps.aquaculture.services import NotificationService
+        from apps.notifications.services import NotificationService
 
         message = (
             f"Votre commande {order.order_number} a été confirmée. "
@@ -225,19 +225,20 @@ class OrderService(BaseCommerceService):
             f"MAVECAM vous contactera pour organiser la livraison."
         )
 
-        # TODO: Implémenter create_notification générique dans NotificationService
-        # NotificationService.create_notification(
-        #     user=order.user,
-        #     notification_type='order_confirmed',
-        #     title="Commande confirmée",
-        #     message=message,
-        #     metadata={
-        #         'order_id': str(order.id),
-        #         'order_number': order.order_number,
-        #         'total': float(order.total)
-        #     }
-        # )
-        pass  # Notification désactivée temporairement
+        NotificationService.create_notification(
+            user=order.user,
+            notification_type='order_confirmed',
+            title="Commande confirmée",
+            message=message,
+            content_object=order,
+            metadata={
+                'order_id': str(order.id),
+                'order_number': order.order_number,
+                'total': float(order.total)
+            },
+            channels=['in_app', 'email'],
+            send_immediately=True
+        )
 
     @staticmethod
     def generate_order_number() -> str:

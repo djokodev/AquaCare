@@ -24,7 +24,7 @@ from django.db.models import Avg, Sum, Q
 from django.db import transaction
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiExample
 from drf_spectacular.types import OpenApiTypes
 
@@ -32,7 +32,10 @@ from .models import (
     ProductionCycle, CycleLog, FeedingPlan, SanitaryLog,
     NutritionalGuide
 )
-# Notification model moved to apps/notifications/models.py
+# Notifications: utiliser le module central
+from apps.notifications.models import Notification
+from apps.notifications.services import NotificationService
+from apps.notifications.serializers import NotificationSerializer
 
 from .serializers import (
     ProductionCycleSerializer, CycleLogSerializer, CycleLogSyncSerializer,
@@ -773,13 +776,60 @@ class FeedingPlanViewSet(viewsets.ModelViewSet):
     
     def _create_feeding_notifications(self, plan):
         """
-        Crée des notifications de rappel d'alimentation intelligentes.
+        Cr?e des notifications de rappel d'alimentation intelligentes (J ? J+6).
 
-        Délègue toute la logique de création de notifications au NotificationService
-        pour maintenir une séparation claire des responsabilités.
+        Logique adapt?e au service centralis? de notifications pour ?viter
+        la d?pendance ? l'ancien mod?le aquaculture.
         """
-        NotificationService.create_feeding_reminders(plan, regenerate=True)
+        feeding_schedules = {
+            1: [time(13, 0)],
+            2: [time(8, 0), time(17, 0)],
+            3: [time(8, 0), time(13, 0), time(18, 0)],
+            4: [time(7, 0), time(11, 0), time(15, 0), time(18, 0)],
+        }
+        meal_names = ['matin', 'midi', 'soir', 'nuit']
 
+        feeding_times = feeding_schedules.get(plan.meals_per_day, feeding_schedules[2])
+
+        for day_offset in range(7):
+            notification_date = plan.start_date + timedelta(days=day_offset)
+
+            if notification_date < date.today():
+                continue
+
+            daily_feeding_times = feeding_times
+            if notification_date == date.today():
+                now_time = timezone.now().time().replace(second=0, microsecond=0)
+                daily_feeding_times = [ft for ft in feeding_times if ft >= now_time]
+
+            if not daily_feeding_times:
+                continue
+
+            for meal_index, meal_time in enumerate(daily_feeding_times):
+                meal_label = meal_names[meal_index] if meal_index < len(meal_names) else f'repas {meal_index + 1}'
+
+                scheduled_dt = timezone.make_aware(datetime.combine(notification_date, meal_time))
+
+                for minutes_before, msg_suffix in [(30, "dans 30min"), (15, "dans 15min")]:
+                    scheduled_for = scheduled_dt - timedelta(minutes=minutes_before)
+                    if scheduled_for <= timezone.now():
+                        continue
+
+                    NotificationService.create_notification(
+                        user=plan.cycle.farm_profile.user,
+                        notification_type='feeding_reminder',
+                        title=f"Nourrissage {msg_suffix} - {plan.cycle.cycle_name}",
+                        message=f"Pr?parez {plan.feed_per_meal:.1f} kg d'aliment ({meal_label}).",
+                        content_object=plan.cycle,
+                        metadata={
+                            'cycle_id': str(plan.cycle.id),
+                            'plan_id': str(plan.id),
+                            'meal': meal_label,
+                            'minutes_before': minutes_before,
+                        },
+                        channels=['in_app', 'push'],
+                        scheduled_for=scheduled_for,
+                    )
 
 @extend_schema_view(
     list=extend_schema(
@@ -1540,4 +1590,3 @@ class SyncView(APIView):
             http_status = status.HTTP_200_OK
 
         return Response(sync_result, status=http_status)
-

@@ -15,8 +15,9 @@ from unittest.mock import patch, MagicMock
 
 from apps.aquaculture.models import (
     ProductionCycle, CycleLog, FeedingPlan, SanitaryLog, 
-    NutritionalGuide, Notification
+    NutritionalGuide
 )
+from apps.notifications.models import Notification
 
 
 @pytest.mark.django_db
@@ -539,77 +540,7 @@ class TestNutritionalGuideViewSet:
 
 
 @pytest.mark.django_db
-class TestNotificationViewSet:
-    """Tests pour le ViewSet Notification."""
-
-    def test_list_user_notifications(self, auth_client, authenticated_user, production_cycle):
-        """Test liste notifications utilisateur."""
-        # Supprimer toutes les notifications existantes pour un test propre
-        Notification.objects.filter(user=authenticated_user).delete()
-        
-        # Créer notifications
-        Notification.objects.create(
-            user=authenticated_user,
-            cycle=production_cycle,
-            notification_type='feeding_reminder',
-            title='Rappel nourrissage',
-            message='Il est temps de nourrir les poissons',
-            scheduled_for=timezone.now()
-        )
-        
-        url = reverse('aquaculture:notification-list')
-        response = auth_client.get(url)
-        
-        assert response.status_code == status.HTTP_200_OK
-        assert len(response.data['results']) == 1
-        assert response.data['results'][0]['title'] == 'Rappel nourrissage'
-
-    def test_mark_notification_read(self, auth_client, authenticated_user):
-        """Test marquer notification comme lue."""
-        notification = Notification.objects.create(
-            user=authenticated_user,
-            notification_type='alert',
-            title='Alerte test',
-            message='Message test',
-            scheduled_for=timezone.now()
-        )
-        
-        url = reverse('aquaculture:notification-mark-read', kwargs={'pk': notification.id})
-        response = auth_client.post(url)
-        
-        assert response.status_code == status.HTTP_200_OK
-        
-        # Vérifier notification marquée comme lue
-        notification.refresh_from_db()
-        assert notification.is_read
-        assert notification.read_at is not None
-
-    def test_mark_all_notifications_read(self, auth_client, authenticated_user):
-        """Test marquer toutes notifications comme lues."""
-        # Créer plusieurs notifications
-        for i in range(3):
-            Notification.objects.create(
-                user=authenticated_user,
-                notification_type='feeding_reminder',
-                title=f'Notification {i}',
-                message=f'Message {i}',
-                scheduled_for=timezone.now()
-            )
-        
-        url = reverse('aquaculture:notification-mark-all-read')
-        response = auth_client.post(url)
-        
-        assert response.status_code == status.HTTP_200_OK
-        assert '3 notifications' in response.data['message']
-        
-        # Vérifier toutes marquées comme lues
-        unread_count = Notification.objects.filter(
-            user=authenticated_user,
-            is_read=False
-        ).count()
-        assert unread_count == 0
-
-
+class TestDashboardView
 @pytest.mark.django_db
 class TestDashboardView:
     """Tests pour la vue Dashboard."""

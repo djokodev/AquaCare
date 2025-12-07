@@ -18,6 +18,21 @@ services:
     networks:
       - aquacare_network
 
+  redis:
+    image: redis:7-alpine
+    container_name: aquacare_redis_prod
+    restart: always
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    networks:
+      - aquacare_network
+
   api:
     image: ghcr.io/djokodev/aquacare-api:latest
     container_name: aquacare_api
@@ -45,6 +60,68 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - aquacare_network
+
+  celery_worker:
+    image: ghcr.io/djokodev/aquacare-api:latest
+    container_name: aquacare_celery_worker
+    restart: always
+    command: >
+      bash -c "
+      celery -A mavecam_api worker --loglevel=info --concurrency=2
+      "
+    environment:
+      - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}
+      - DJANGO_DEBUG=${DJANGO_DEBUG}
+      - DJANGO_ALLOWED_HOSTS=${DJANGO_ALLOWED_HOSTS}
+      - DJANGO_SETTINGS_MODULE=${DJANGO_SETTINGS_MODULE}
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_HOST=${POSTGRES_HOST}
+      - POSTGRES_PORT=${POSTGRES_PORT}
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - EMAIL_HOST=${EMAIL_HOST:-smtp.sendgrid.net}
+      - EMAIL_PORT=${EMAIL_PORT:-587}
+      - SENDGRID_API_KEY=${SENDGRID_API_KEY:-}
+      - DEFAULT_FROM_EMAIL=${DEFAULT_FROM_EMAIL:-noreply@mavecam.com}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - aquacare_network
+
+  celery_beat:
+    image: ghcr.io/djokodev/aquacare-api:latest
+    container_name: aquacare_celery_beat
+    restart: always
+    command: >
+      bash -c "
+      celery -A mavecam_api beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+      "
+    environment:
+      - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}
+      - DJANGO_DEBUG=${DJANGO_DEBUG}
+      - DJANGO_ALLOWED_HOSTS=${DJANGO_ALLOWED_HOSTS}
+      - DJANGO_SETTINGS_MODULE=${DJANGO_SETTINGS_MODULE}
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_HOST=${POSTGRES_HOST}
+      - POSTGRES_PORT=${POSTGRES_PORT}
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - aquacare_network
 
@@ -68,6 +145,8 @@ volumes:
   media_data:
     driver: local
   static_data:
+    driver: local
+  redis_data:
     driver: local
 
 

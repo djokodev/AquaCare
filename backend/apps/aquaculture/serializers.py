@@ -26,6 +26,7 @@ from .models import (
 )
 # Notification model moved to apps/notifications/models.py
 from .domain.calculators import AquacultureCalculator
+from apps.notifications.serializers import NotificationSerializer as GlobalNotificationSerializer
 
 
 class ProductionCycleSerializer(serializers.ModelSerializer):
@@ -537,7 +538,7 @@ class DashboardSerializer(serializers.Serializer):
     active_cycles = ProductionCycleSerializer(many=True)
     recent_logs = CycleLogSerializer(many=True)
     current_feeding_plans = FeedingPlanSerializer(many=True)
-    # pending_notifications moved to apps/notifications/ - use NotificationViewSet API
+    pending_notifications = GlobalNotificationSerializer(many=True)
     active_sanitary_issues = SanitaryLogSerializer(many=True)
     
     growth_chart_data = serializers.ListField()
@@ -625,5 +626,3 @@ class CycleComparisonSerializer(serializers.Serializer):
     historical_averages = serializers.DictField()
     performance_ranking = serializers.CharField()
     improvement_suggestions = serializers.ListField()
-
-
