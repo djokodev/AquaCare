@@ -50,7 +50,7 @@ export const STORAGE_KEYS = {
   REFRESH_TOKEN: 'aquacare_refresh_token',
   USER_DATA: 'aquacare_user_data',
   LANGUAGE: 'aquacare_language',
+  PUSH_DEVICE_ID: 'aquacare_push_device_id',
 };
-
 
 

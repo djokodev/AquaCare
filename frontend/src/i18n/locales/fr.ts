@@ -619,4 +619,16 @@ export const fr = {
   productLoadError: 'Erreur chargement produit',
   productAddedToCartWithQuantity: '{{quantity}} sac(s) de {{name}} ajouté(s) au panier',
   continueShopping: 'Continuer mes achats',
+
+  // Notifications push
+  pushNotifications: 'Notifications push',
+  pushNotificationsDescription: 'Collez votre token Expo push pour recevoir les alertes sur cet appareil.',
+  pushTokenPlaceholder: 'ExponentPushToken[...]',
+  registerPushToken: 'Enregistrer le token push',
+  pushTokenSuccessTitle: 'Token enregistré',
+  pushTokenSuccessMessage: 'Cet appareil recevra désormais les notifications push.',
+  pushTokenError: 'Impossible d’enregistrer le token push. Réessayez.',
+  pushTokenMissingTitle: 'Token manquant',
+  pushTokenMissingMessage: 'Collez un token Expo push valide pour continuer.',
+  pushDeviceIdLabel: 'Identifiant appareil: {{deviceId}}',
 };

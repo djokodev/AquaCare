@@ -28,7 +28,7 @@ INSTALLED_APPS = [
     "accounts",
     "aquaculture",
     "commerce",  # Module commerce MAVECAM
-    "notifications",  # Module notifications multi-canal
+    "apps.notifications",  # Module notifications multi-canal
 ]
 
 MIDDLEWARE = [

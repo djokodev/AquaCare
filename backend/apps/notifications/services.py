@@ -291,8 +291,7 @@ class NotificationService:
         """
         cutoff_date = timezone.now() - timezone.timedelta(days=days)
         count, _ = Notification.objects.filter(
-            is_read=True,
-            read_at__lt=cutoff_date
+            scheduled_for__lt=cutoff_date
         ).delete()
         return count
 
@@ -343,4 +342,4 @@ class NotificationService:
         if notification_type:
             queryset = queryset.filter(notification_type=notification_type)
 
-        return list(queryset[:limit])
+        return queryset[:limit]

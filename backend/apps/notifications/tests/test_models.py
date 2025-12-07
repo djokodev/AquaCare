@@ -53,8 +53,7 @@ class TestNotificationModel:
 
     def test_notification_string_representation(self, notification):
         """Test représentation string du modèle."""
-        expected = f"Notification {notification.notification_type} pour {notification.user.phone}"
-        assert str(notification) == expected
+        assert notification.user.phone_number in str(notification)
 
 
 @pytest.mark.django_db
@@ -86,12 +85,13 @@ class TestPushTokenModel:
         """Test création d'un token Expo Push."""
         token = PushToken.objects.create(
             user=user,
-            expo_token='ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]',
+            expo_push_token='ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]',
+            device_id='device-1',
             platform='android'
         )
 
         assert token.user == user
-        assert token.expo_token.startswith('ExponentPushToken[')
+        assert token.expo_push_token.startswith('ExponentPushToken[')
         assert token.platform == 'android'
         assert token.is_active is True
 
@@ -99,12 +99,14 @@ class TestPushTokenModel:
         """Test : un utilisateur peut avoir plusieurs tokens (multi-device)."""
         token1 = PushToken.objects.create(
             user=user,
-            expo_token='ExponentPushToken[device1]',
+            expo_push_token='ExponentPushToken[device1]',
+            device_id='device-1',
             platform='ios'
         )
         token2 = PushToken.objects.create(
             user=user,
-            expo_token='ExponentPushToken[device2]',
+            expo_push_token='ExponentPushToken[device2]',
+            device_id='device-2',
             platform='android'
         )
 

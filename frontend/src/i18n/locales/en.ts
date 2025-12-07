@@ -619,4 +619,16 @@ export const en = {
   productLoadError: 'Product loading error',
   productAddedToCartWithQuantity: '{{quantity}} bag(s) of {{name}} added to cart',
   continueShopping: 'Continue shopping',
+
+  // Push notifications
+  pushNotifications: 'Push notifications',
+  pushNotificationsDescription: 'Paste your Expo push token to receive alerts on this device.',
+  pushTokenPlaceholder: 'ExponentPushToken[...]',
+  registerPushToken: 'Register push token',
+  pushTokenSuccessTitle: 'Token saved',
+  pushTokenSuccessMessage: 'This device will now receive push notifications.',
+  pushTokenError: 'Unable to register the push token. Please try again.',
+  pushTokenMissingTitle: 'Missing token',
+  pushTokenMissingMessage: 'Paste a valid Expo push token to continue.',
+  pushDeviceIdLabel: 'Device id: {{deviceId}}',
 };

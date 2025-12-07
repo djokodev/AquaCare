@@ -1,5 +1,5 @@
 ﻿import React, { useState, useEffect } from "react";
-import { View, Text, ScrollView, TouchableOpacity, Alert } from "react-native";
+import { View, Text, ScrollView, TouchableOpacity, Alert, TextInput, Platform, ActivityIndicator } from "react-native";
 import { useTranslation } from "react-i18next";
 import { Ionicons } from "@expo/vector-icons";
 import * as SecureStore from "expo-secure-store";
@@ -7,11 +7,15 @@ import * as SecureStore from "expo-secure-store";
 import { useAuth } from "@/hooks/useAuth";
 import { STORAGE_KEYS } from "@/constants/api";
 import { MAVECAM_COLORS } from "@/constants/colors";
+import { notificationsService } from "@/services/notificationsService";
 
 export default function SettingsScreen() {
   const { t, i18n } = useTranslation();
   const { user, updateProfile, logout } = useAuth();
   const [settings, setSettings] = useState({ language: i18n.language });
+  const [pushTokenInput, setPushTokenInput] = useState("");
+  const [pushDeviceId, setPushDeviceId] = useState<string | null>(null);
+  const [registeringPush, setRegisteringPush] = useState(false);
 
   useEffect(() => {
     const currentLang = i18n.language;
@@ -22,6 +26,26 @@ export default function SettingsScreen() {
     i18n.on("languageChanged", handleLanguageChanged);
     return () => i18n.off("languageChanged", handleLanguageChanged);
   }, [i18n, settings.language]);
+
+  useEffect(() => {
+    const ensureDeviceId = async () => {
+      try {
+        const existing = await SecureStore.getItemAsync(STORAGE_KEYS.PUSH_DEVICE_ID);
+        if (existing) {
+          setPushDeviceId(existing);
+          return;
+        }
+
+        const generated = `device-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        await SecureStore.setItemAsync(STORAGE_KEYS.PUSH_DEVICE_ID, generated);
+        setPushDeviceId(generated);
+      } catch (error) {
+        console.warn("Impossible d'initialiser l'identifiant appareil push", error);
+      }
+    };
+
+    ensureDeviceId();
+  }, []);
 
   const handleLanguageChange = async (newLanguage: "fr" | "en") => {
     try {
@@ -37,6 +61,34 @@ export default function SettingsScreen() {
       console.error("Erreur changement langue:", error);
       Alert.alert("Erreur", "Impossible de changer la langue. Veuillez réessayer.");
       setSettings((prev) => ({ ...prev, language: i18n.language }));
+    }
+  };
+
+  const handleRegisterPushToken = async () => {
+    if (!pushTokenInput.trim()) {
+      Alert.alert(t("pushTokenMissingTitle"), t("pushTokenMissingMessage"));
+      return;
+    }
+
+    if (!pushDeviceId) {
+      Alert.alert(t("error"), t("pushTokenError"));
+      return;
+    }
+
+    setRegisteringPush(true);
+    try {
+      await notificationsService.registerPushToken({
+        expo_push_token: pushTokenInput.trim(),
+        device_id: pushDeviceId,
+        device_name: user?.display_name || user?.phone_number || "AquaCare device",
+        platform: Platform.OS === "ios" ? "ios" : "android",
+      });
+      Alert.alert(t("pushTokenSuccessTitle"), t("pushTokenSuccessMessage"));
+    } catch (error) {
+      console.error("Erreur enregistrement token push:", error);
+      Alert.alert(t("error"), t("pushTokenError"));
+    } finally {
+      setRegisteringPush(false);
     }
   };
 
@@ -93,6 +145,35 @@ export default function SettingsScreen() {
             )}
           </TouchableOpacity>
         ))}
+      </View>
+
+      <View className="px-5 py-4">
+        <Text className="text-lg font-bold text-gray-dark mb-2">{t("pushNotifications")}</Text>
+        <Text className="text-sm text-gray-light mb-3">{t("pushNotificationsDescription")}</Text>
+
+        <TextInput
+          value={pushTokenInput}
+          onChangeText={setPushTokenInput}
+          placeholder={t("pushTokenPlaceholder")}
+          placeholderTextColor={MAVECAM_COLORS.GRAY_LIGHT}
+          className="bg-white border border-gray-200 rounded-lg px-4 py-3 text-gray-dark"
+          autoCapitalize="none"
+        />
+        <Text className="text-xs text-gray-light mt-2">
+          {t("pushDeviceIdLabel", { deviceId: pushDeviceId || "..." })}
+        </Text>
+
+        <TouchableOpacity
+          className="mt-3 bg-mavecam-primary rounded-lg py-3 items-center flex-row justify-center"
+          onPress={handleRegisterPushToken}
+          disabled={registeringPush}
+        >
+          {registeringPush ? (
+            <ActivityIndicator color={MAVECAM_COLORS.WHITE} />
+          ) : (
+            <Text className="text-white text-base font-semibold">{t("registerPushToken")}</Text>
+          )}
+        </TouchableOpacity>
       </View>
 
       <View className="px-5 py-4">

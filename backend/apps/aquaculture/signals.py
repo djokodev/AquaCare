@@ -15,12 +15,14 @@ from django.db.models.signals import post_save, pre_save, post_delete
 from django.dispatch import receiver
 from django.utils import timezone
 from decimal import Decimal
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 from .models import (
     ProductionCycle, CycleLog, SanitaryLog, CycleMetrics
 )
-# Notification model moved to apps/notifications/models.py
+# Notifications centralisées
+from apps.notifications.services import NotificationService
+from apps.notifications.models import Notification
 from .domain.calculators import AquacultureCalculator
 from .services import (
     ProductionCycleService,
@@ -79,20 +81,33 @@ def create_cycle_metrics(sender, instance, created, **kwargs):
         )
 
         # Create welcome notification
-        Notification.objects.create(
+        NotificationService.create_notification(
             user=instance.farm_profile.user,
-            cycle=instance,
             notification_type='cycle_milestone',
-            title=f"Nouveau cycle démarré - {instance.cycle_name}",
-            message=f"Votre cycle {instance.cycle_name} a été créé avec succès. "
-                   f"Nous vous accompagnerons tout au long de ces {instance.species}.",
-            scheduled_for=timezone.now()
+            title=f"Nouveau cycle demarre - {instance.cycle_name}",
+            message=(
+                f"Votre cycle {instance.cycle_name} a ete cree avec succes. "
+                f"Nous vous accompagnerons tout au long de ces {instance.species}."
+            ),
+            content_object=instance,
+            metadata={'cycle_id': str(instance.id)},
+            channels=['in_app', 'push'],
+            scheduled_for=timezone.now(),
         )
 
         # Create first week sampling reminder
         sampling_date = instance.start_date + timedelta(days=7)
         if sampling_date >= date.today():
-            NotificationService.create_sampling_reminder(instance, sampling_date)
+            NotificationService.create_notification(
+                user=instance.farm_profile.user,
+                notification_type='sampling_reminder',
+                title=f"Echantillonnage - {instance.cycle_name}",
+                message="Planifiez la premiere pesee pour suivre la croissance.",
+                content_object=instance,
+                metadata={'cycle_id': str(instance.id)},
+                channels=['in_app', 'push'],
+                scheduled_for=timezone.make_aware(datetime.combine(sampling_date, datetime.min.time()).replace(hour=9, minute=0)),
+            )
 
 
 @receiver(post_save, sender=ProductionCycle)
@@ -103,20 +118,36 @@ def check_cycle_completion(sender, instance, **kwargs):
     DÉLÉGATION : NotificationService pour notifications
     """
     if instance.status == 'harvested' and instance.end_date:
-        # Delegate to NotificationService
-        NotificationService.create_cycle_completion_notification(instance)
-
-        # Create recommendation for next cycle
-        next_cycle_message = "Vous pouvez maintenant démarrer un nouveau cycle. " \
-                           "Utilisez les données de ce cycle pour optimiser le prochain."
-
-        Notification.objects.create(
+        # Notification de cl?ture du cycle
+        NotificationService.create_notification(
             user=instance.farm_profile.user,
-            cycle=None,
             notification_type='cycle_milestone',
-            title="💡 Prêt pour un nouveau cycle",
+            title=f"Cycle termine - {instance.cycle_name}",
+            message=(
+                f"Felicitations ! Cycle {instance.cycle_name} recolte. "
+                f"Taux de survie: {float(instance.survival_rate or 0):.1f}%, FCR: {float(instance.fcr or 0):.2f}."
+            ),
+            content_object=instance,
+            metadata={'cycle_id': str(instance.id)},
+            channels=['in_app', 'push'],
+            scheduled_for=timezone.now(),
+        )
+
+        # Recommandation pour le prochain cycle (J+1)
+        next_cycle_message = (
+            "Vous pouvez maintenant demarrer un nouveau cycle. "
+            "Utilisez les donnees de ce cycle pour optimiser le prochain."
+        )
+
+        NotificationService.create_notification(
+            user=instance.farm_profile.user,
+            notification_type='cycle_milestone',
+            title="Pret pour un nouveau cycle",
             message=next_cycle_message,
-            scheduled_for=timezone.now() + timedelta(days=1)
+            content_object=instance,
+            metadata={'cycle_id': str(instance.id)},
+            channels=['in_app', 'push'],
+            scheduled_for=timezone.now() + timedelta(days=1),
         )
 
 
@@ -145,7 +176,27 @@ def update_cycle_after_log(sender, instance, created, **kwargs):
         # 2. Check for abnormal mortality and create alert if needed
         if instance.mortality_count and instance.mortality_count > 0:
             mortality_rate = (instance.mortality_count / cycle.current_count * 100) if cycle.current_count > 0 else 0
-            NotificationService.create_mortality_alert(cycle, instance.mortality_count, mortality_rate)
+
+            if mortality_rate > 2.0:
+                severity = 'high' if mortality_rate > 5.0 else 'medium'
+                message = (
+                    f"Mortalite anormale detectee : {instance.mortality_count} morts ({mortality_rate:.1f}%). "
+                    "Verifier la qualite de l'eau et l'etat sanitaire."
+                )
+                NotificationService.create_notification(
+                    user=cycle.farm_profile.user,
+                    notification_type='mortality_alert',
+                    title=f"Alerte mortalite - {cycle.cycle_name}",
+                    message=message,
+                    content_object=cycle,
+                    metadata={
+                        'cycle_id': str(cycle.id),
+                        'mortality_count': instance.mortality_count,
+                        'mortality_rate': mortality_rate,
+                    },
+                    channels=['in_app', 'push'],
+                    priority='urgent' if mortality_rate > 5.0 else 'high',
+                )
 
         # 3. Delegate environmental parameter checks to AnalyticsService
         AnalyticsService.check_and_create_environmental_alerts(instance)
@@ -154,7 +205,38 @@ def update_cycle_after_log(sender, instance, created, **kwargs):
         AnalyticsService.update_cycle_metrics_data(cycle)
 
         # 5. Check if weekly sampling reminder needed
-        NotificationService.check_and_create_sampling_reminders(cycle, instance)
+        last_sampling = cycle.logs.filter(
+            average_weight__isnull=False
+        ).exclude(id=instance.id).order_by('-log_date').first()
+
+        if last_sampling:
+            days_since_sampling = (instance.log_date - last_sampling.log_date).days
+        else:
+            days_since_sampling = (instance.log_date - cycle.start_date).days
+
+        if days_since_sampling >= 7 and not instance.average_weight:
+            next_sampling_date = instance.log_date + timedelta(days=7)
+
+            if next_sampling_date > date.today():
+                exists = Notification.objects.filter(
+                    user=cycle.farm_profile.user,
+                    notification_type='sampling_reminder',
+                    scheduled_for__date=next_sampling_date
+                ).exists()
+
+                if not exists:
+                    NotificationService.create_notification(
+                        user=cycle.farm_profile.user,
+                        notification_type='sampling_reminder',
+                        title=f"Échantillonnage hebdomadaire - {cycle.cycle_name}",
+                        message="Effectuer une pesée pour suivre la croissance (minimum 20 poissons).",
+                        content_object=cycle,
+                        metadata={'cycle_id': str(cycle.id)},
+                        channels=['in_app', 'push'],
+                        scheduled_for=timezone.make_aware(
+                            datetime.combine(next_sampling_date, datetime.min.time()).replace(hour=9, minute=0)
+                        ),
+                    )
 
 
 @receiver(post_delete, sender=CycleLog)

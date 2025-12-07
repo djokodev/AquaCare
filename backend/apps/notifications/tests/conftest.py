@@ -12,7 +12,7 @@ from django.utils import timezone
 from datetime import timedelta
 from decimal import Decimal
 
-from apps.accounts.models import User, FarmProfile
+from accounts.models import User, FarmProfile
 from apps.aquaculture.models import ProductionCycle
 from apps.notifications.models import Notification, NotificationPreference, PushToken
 
@@ -21,10 +21,11 @@ from apps.notifications.models import Notification, NotificationPreference, Push
 def user(db):
     """Utilisateur de test."""
     user = User.objects.create_user(
-        phone="+237677777777",
+        phone_number="+237677777777",
         password="testpass123",
         first_name="Test",
-        last_name="User"
+        last_name="User",
+        age_group="26_35",
     )
     return user
 
@@ -33,10 +34,11 @@ def user(db):
 def user2(db):
     """Deuxième utilisateur de test."""
     user = User.objects.create_user(
-        phone="+237688888888",
+        phone_number="+237688888888",
         password="testpass123",
         first_name="Test2",
-        last_name="User2"
+        last_name="User2",
+        age_group="26_35",
     )
     return user
 
@@ -44,14 +46,8 @@ def user2(db):
 @pytest.fixture
 def farm_profile(user):
     """Profil de ferme pour l'utilisateur de test."""
-    profile = FarmProfile.objects.create(
-        user=user,
-        farm_name="Ferme Test MAVECAM",
-        region="Littoral",
-        department="Wouri",
-        total_area_m2=Decimal("500.00")
-    )
-    return profile
+    # Le profil est créé automatiquement lors de la création de l'utilisateur
+    return user.farm_profile
 
 
 @pytest.fixture
@@ -61,11 +57,12 @@ def production_cycle(farm_profile):
         farm_profile=farm_profile,
         cycle_name="Cycle Test Tilapia",
         species="tilapia",
+        pond_identifier="Bassin A",
+        pond_surface_m2=Decimal("100.00"),
         start_date=timezone.now().date() - timedelta(days=30),
         initial_count=1000,
         initial_average_weight=Decimal("5.00"),
-        target_weight=Decimal("250.00"),
-        pond_area_m2=Decimal("100.00"),
+        initial_biomass=Decimal("5.00") * 1000 / Decimal("1000"),  # kg
         status="active"
     )
     return cycle
@@ -105,7 +102,9 @@ def push_token(user):
     """Token Expo Push pour les tests."""
     token = PushToken.objects.create(
         user=user,
-        expo_token='ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]',
+        expo_push_token='ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]',
+        device_id='device-123',
+        device_name='Test Device',
         platform='android',
         is_active=True
     )

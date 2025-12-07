@@ -3,12 +3,13 @@
  * BasÃ©s sur les modÃ¨les Django backend et l'API REST
  */
 
+import { Notification as NotificationPayload } from './notifications';
+
 // =================== TYPES DE BASE ===================
 
 export type Species = 'tilapia' | 'clarias';
 export type CycleStatus = 'planned' | 'active' | 'harvested' | 'cancelled';
 export type SanitaryEventType = 'disease' | 'treatment' | 'vaccination' | 'abnormal_mortality' | 'water_quality' | 'other';
-export type NotificationType = 'feeding_reminder' | 'sampling_reminder' | 'treatment_reminder' | 'cycle_milestone';
 
 // =================== MODÃˆLES PRINCIPAUX ===================
 
@@ -170,19 +171,6 @@ export interface NutritionalGuide {
   feeding_notes?: string;
 }
 
-export interface Notification {
-  id: string;
-  user: string;
-  cycle?: string;
-  notification_type: NotificationType;
-  title: string;
-  message: string;
-  scheduled_for: string;
-  sent_at?: string;
-  read_at?: string;
-  is_sent: boolean;
-  is_read: boolean;
-}
 
 // =================== DONNÃ‰ES DASHBOARD ===================
 
@@ -232,13 +220,7 @@ export interface DashboardData {
   active_cycles: ProductionCycle[];
   recent_logs: CycleLog[];
   current_feeding_plans: FeedingPlan[];
-  pending_notifications: Array<{
-    id: string;
-    title: string;
-    message: string;
-    type: NotificationType;
-    scheduled_for: string;
-  }>;
+  pending_notifications: NotificationPayload[];
   charts?: ChartData;
 }
 
@@ -393,6 +375,3 @@ export interface AquacultureState {
   };
   lastSyncTime?: string;
 }
-
-
-

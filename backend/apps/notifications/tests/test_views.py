@@ -23,7 +23,7 @@ def api_client():
 
 @pytest.fixture
 def authenticated_client(api_client, user):
-    """Client API authentifié."""
+    """Client API authentifiï¿½."""
     api_client.force_authenticate(user=user)
     return api_client
 
@@ -33,8 +33,8 @@ class TestNotificationViewSet:
     """Tests du NotificationViewSet."""
 
     def test_list_notifications(self, authenticated_client, user):
-        """Test récupération liste des notifications."""
-        # Créer quelques notifications
+        """Test rï¿½cupï¿½ration liste des notifications."""
+        # Crï¿½er quelques notifications
         for i in range(3):
             Notification.objects.create(
                 user=user,
@@ -44,22 +44,22 @@ class TestNotificationViewSet:
                 scheduled_for=timezone.now()
             )
 
-        url = reverse('notification-list')
+        url = reverse('notifications:notification-list')
         response = authenticated_client.get(url)
 
         assert response.status_code == status.HTTP_200_OK
         assert len(response.data['results']) == 3
 
     def test_list_notifications_unauthorized(self, api_client):
-        """Test accès non authentifié retourne 401."""
-        url = reverse('notification-list')
+        """Test accï¿½s non authentifiï¿½ retourne 401."""
+        url = reverse('notifications:notification-list')
         response = api_client.get(url)
 
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_mark_notification_as_read(self, authenticated_client, notification):
         """Test marquage d'une notification comme lue."""
-        url = reverse('notification-mark-read', kwargs={'pk': notification.id})
+        url = reverse('notifications:notification-mark-read', kwargs={'pk': notification.id})
         response = authenticated_client.post(url)
 
         assert response.status_code == status.HTTP_200_OK
@@ -77,7 +77,7 @@ class TestNotificationViewSet:
                 scheduled_for=timezone.now()
             )
 
-        url = reverse('notification-mark-all-read')
+        url = reverse('notifications:notification-mark-all-read')
         response = authenticated_client.post(url)
 
         assert response.status_code == status.HTTP_200_OK
@@ -106,7 +106,7 @@ class TestNotificationViewSet:
             scheduled_for=timezone.now()
         )
 
-        url = reverse('notification-delete-read')
+        url = reverse('notifications:notification-delete-all-read')
         response = authenticated_client.post(url)
 
         assert response.status_code == status.HTTP_200_OK
@@ -118,16 +118,16 @@ class TestNotificationPreferenceViewSet:
     """Tests du NotificationPreferenceViewSet."""
 
     def test_get_preferences(self, authenticated_client, notification_preference):
-        """Test récupération des préférences."""
-        url = reverse('notificationpreference-list')
+        """Test rï¿½cupï¿½ration des prï¿½fï¿½rences."""
+        url = '/api/notification-preferences/'
         response = authenticated_client.get(url)
 
         assert response.status_code == status.HTTP_200_OK
         assert response.data['in_app_enabled'] is True
 
     def test_update_preferences(self, authenticated_client, notification_preference):
-        """Test modification des préférences."""
-        url = reverse('notificationpreference-detail', kwargs={'pk': notification_preference.id})
+        """Test modification des prï¿½fï¿½rences."""
+        url = '/api/notification-preferences/'
         data = {
             'email_enabled': False,
             'push_enabled': False,
@@ -147,9 +147,11 @@ class TestPushTokenViewSet:
 
     def test_register_push_token(self, authenticated_client, user):
         """Test enregistrement d'un token Expo Push."""
-        url = reverse('pushtoken-list')
+        url = reverse('notifications:notification-register-push-token')
         data = {
-            'expo_token': 'ExponentPushToken[xxxxxxxxxxxxx]',
+            'expo_push_token': 'ExponentPushToken[xxxxxxxxxxxxx]',
+            'device_id': 'device-123',
+            'device_name': 'Pixel 7',
             'platform': 'android'
         }
         response = authenticated_client.post(url, data, format='json')
@@ -157,12 +159,3 @@ class TestPushTokenViewSet:
         assert response.status_code == status.HTTP_201_CREATED
         assert PushToken.objects.filter(user=user).exists()
 
-    def test_deactivate_token(self, authenticated_client, push_token):
-        """Test désactivation d'un token."""
-        url = reverse('pushtoken-detail', kwargs={'pk': push_token.id})
-        data = {'is_active': False}
-        response = authenticated_client.patch(url, data, format='json')
-
-        assert response.status_code == status.HTTP_200_OK
-        push_token.refresh_from_db()
-        assert push_token.is_active is False

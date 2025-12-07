@@ -11,6 +11,11 @@ Architecture:
     - Réutilisable pour API, tâches Celery, webhooks, etc.
 
 Author: MAVECAM AquaCare Team
+
+Legacy:
+Ce module est conservé uniquement pour référence historique depuis la
+migration vers le module générique `apps.notifications`. Ne pas l'importer
+dans le code actif.
 """
 from typing import List, Optional
 from datetime import datetime, date, time, timedelta

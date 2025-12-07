@@ -18,8 +18,9 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from ..models import FeedingPlan, ProductionCycle, NutritionalGuide
-# Notification model moved to apps/notifications/models.py
-# Will be migrated to use NotificationService in Phase 1B
+from apps.notifications.models import Notification
+from apps.notifications.services import NotificationService
+from django.contrib.contenttypes.models import ContentType
 from ..domain.calculators import AquacultureCalculator
 from ..domain.exceptions import (
     FeedingPlanGenerationError,
@@ -227,7 +228,7 @@ class FeedingPlanService(BaseService):
     @transaction.atomic
     def deactivate_future_plans(cycle: ProductionCycle) -> int:
         """
-        Désactive tous les plans d'alimentation futurs d'un cycle.
+        Désactive tous les plans d'alimentation futurs d'un cycle et nettoie les rappels.
 
         Utilisé après :
         - Récolte du cycle
@@ -251,13 +252,15 @@ class FeedingPlanService(BaseService):
             start_date__gt=date.today()
         ).update(is_active=False)
 
-        # TODO Phase 1B: Migrer vers NotificationService
-        # Supprimer notifications futures associées
-        # NotificationService.delete_cycle_notifications(
-        #     cycle=cycle,
-        #     notification_type='feeding_reminder',
-        #     scheduled_for__gt=timezone.now()
-        # )
+        # Supprimer notifications futures associées (rappels alimentation)
+        content_type = ContentType.objects.get_for_model(cycle)
+        now = timezone.now()
+        Notification.objects.filter(
+            content_type=content_type,
+            object_id=cycle.id,
+            notification_type='feeding_reminder',
+            scheduled_for__gt=now
+        ).delete()
 
         FeedingPlanService.log_operation(
             "future_plans_deactivated",
@@ -294,13 +297,13 @@ class FeedingPlanService(BaseService):
             {"plan_id": str(plan.id), "regenerate": regenerate}
         )
 
-        # TODO Phase 1B: Migrer vers NotificationService
         # Supprimer anciennes notifications si régénération
-        # if regenerate:
-        #     NotificationService.delete_cycle_notifications(
-        #         cycle=plan.cycle,
-        #         notification_type='feeding_reminder'
-        #     )
+        if regenerate:
+            Notification.objects.filter(
+                content_type=ContentType.objects.get_for_model(plan.cycle),
+                object_id=plan.cycle.id,
+                notification_type='feeding_reminder'
+            ).delete()
 
         # Obtenir heures de repas
         feeding_times = FeedingPlanService.FEEDING_SCHEDULES.get(
@@ -310,15 +313,12 @@ class FeedingPlanService(BaseService):
 
         notifications_created = 0
 
-        # Pour chaque jour de la semaine
         for day_offset in range(7):
             notification_date = plan.start_date + timedelta(days=day_offset)
 
-            # Skip dates passées
             if notification_date < date.today():
                 continue
 
-            # Filtrer heures passées si aujourd'hui
             daily_feeding_times = feeding_times
             if notification_date == date.today():
                 current_time = timezone.now().time()
@@ -327,62 +327,58 @@ class FeedingPlanService(BaseService):
                     if ft >= current_time.replace(second=0, microsecond=0)
                 ]
 
-            # Skip ce jour si plus de repas
             if not daily_feeding_times:
                 continue
 
-            # TODO Phase 1B: Migrer vers NotificationService
-            # Créer notifications pour chaque repas
-            # for meal_index, meal_time in enumerate(daily_feeding_times):
-            #     meal_names = ['matin', 'midi', 'soir', 'nuit']
-            #     meal_name = (
-            #         meal_names[meal_index]
-            #         if meal_index < len(meal_names)
-            #         else f'repas {meal_index + 1}'
-            #     )
-            #
-            #     # Notification 30min avant
-            #     notification_30min = timezone.make_aware(
-            #         datetime.combine(notification_date, meal_time)
-            #     ) - timedelta(minutes=30)
-            #
-            #     if notification_30min > timezone.now():
-            #         NotificationService.create_notification(
-            #             user=plan.cycle.farm_profile.user,
-            #             notification_type='feeding_reminder',
-            #             title=_('Nourrissage dans 30min - %(cycle_name)s') % {
-            #                 'cycle_name': plan.cycle.cycle_name
-            #             },
-            #             message=_('Préparez %(amount).1f kg d\'aliment pour le %(meal)s') % {
-            #                 'amount': plan.feed_per_meal,
-            #                 'meal': meal_name
-            #             },
-            #             content_object=plan.cycle,
-            #             scheduled_for=notification_30min
-            #         )
-            #         notifications_created += 1
-            #
-            #     # Notification 15min avant
-            #     notification_15min = timezone.make_aware(
-            #         datetime.combine(notification_date, meal_time)
-            #     ) - timedelta(minutes=15)
-            #
-            #     if notification_15min > timezone.now():
-            #         NotificationService.create_notification(
-            #             user=plan.cycle.farm_profile.user,
-            #             notification_type='feeding_reminder',
-            #             title=_('Nourrissage dans 15min - %(cycle_name)s') % {
-            #                 'cycle_name': plan.cycle.cycle_name
-            #             },
-            #             message=_('Donnez %(amount).1f kg d\'aliment maintenant (%(meal)s)') % {
-            #                 'amount': plan.feed_per_meal,
-            #                 'meal': meal_name
-            #             },
-            #             content_object=plan.cycle,
-            #             scheduled_for=notification_15min
-            #         )
-            #         notifications_created += 1
+            for meal_index, meal_time in enumerate(daily_feeding_times):
+                meal_names = ['matin', 'midi', 'soir', 'nuit']
+                meal_name = meal_names[meal_index] if meal_index < len(meal_names) else f'repas {meal_index + 1}'
 
+                notification_30min = timezone.make_aware(
+                    datetime.combine(notification_date, meal_time)
+                ) - timedelta(minutes=30)
+
+                if notification_30min > timezone.now():
+                    NotificationService.create_notification(
+                        user=plan.cycle.farm_profile.user,
+                        notification_type='feeding_reminder',
+                        title=_('Nourrissage dans 30min - %(cycle_name)s') % {
+                            'cycle_name': plan.cycle.cycle_name
+                        },
+                        message=_("Preparez %(amount).1f kg d'aliment pour le %(meal)s") % {
+                            'amount': plan.feed_per_meal,
+                            'meal': meal_name
+                        },
+                        content_object=plan.cycle,
+                        metadata={'cycle_id': str(plan.cycle.id), 'plan_id': str(plan.id), 'meal': meal_name, 'minutes_before': 30},
+                        channels=['in_app', 'push'],
+                        priority='medium',
+                        scheduled_for=notification_30min
+                    )
+                    notifications_created += 1
+
+                notification_15min = timezone.make_aware(
+                    datetime.combine(notification_date, meal_time)
+                ) - timedelta(minutes=15)
+
+                if notification_15min > timezone.now():
+                    NotificationService.create_notification(
+                        user=plan.cycle.farm_profile.user,
+                        notification_type='feeding_reminder',
+                        title=_('Nourrissage dans 15min - %(cycle_name)s') % {
+                            'cycle_name': plan.cycle.cycle_name
+                        },
+                        message=_("Donnez %(amount).1f kg d'aliment maintenant (%(meal)s)") % {
+                            'amount': plan.feed_per_meal,
+                            'meal': meal_name
+                        },
+                        content_object=plan.cycle,
+                        metadata={'cycle_id': str(plan.cycle.id), 'plan_id': str(plan.id), 'meal': meal_name, 'minutes_before': 15},
+                        channels=['in_app', 'push'],
+                        priority='medium',
+                        scheduled_for=notification_15min
+                    )
+                    notifications_created += 1
         FeedingPlanService.log_operation(
             "notifications_created",
             {"plan_id": str(plan.id), "count": notifications_created},

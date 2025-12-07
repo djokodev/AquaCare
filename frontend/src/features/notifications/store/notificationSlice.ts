@@ -1,6 +1,6 @@
 ﻿import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
-import { Notification } from '@/types/aquaculture';
-import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
+import { Notification } from '@/types/notifications';
+import { notificationsService } from '@/services/notificationsService';
 
 // =================== Ã‰TAT INITIAL ===================
 
@@ -27,8 +27,8 @@ export const fetchNotifications = createAsyncThunk(
   'notifications/fetchNotifications',
   async (_, { rejectWithValue }) => {
     try {
-      const notifications = await aquacultureService.getNotifications();
-      return notifications;
+      const notifications = await notificationsService.getNotifications();
+      return notifications as Notification[];
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.detail || 'Erreur lors du chargement des notifications');
     }
@@ -42,7 +42,7 @@ export const markNotificationAsRead = createAsyncThunk(
   'notifications/markAsRead',
   async (notificationId: string, { rejectWithValue }) => {
     try {
-      const notification = await aquacultureService.markNotificationAsRead(notificationId);
+      const notification = await notificationsService.markNotificationAsRead(notificationId);
       return notification;
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.detail || 'Erreur lors du marquage de la notification');
@@ -55,18 +55,10 @@ export const markNotificationAsRead = createAsyncThunk(
  */
 export const markAllNotificationsAsRead = createAsyncThunk(
   'notifications/markAllAsRead',
-  async (_, { getState, rejectWithValue }) => {
+  async (_, { rejectWithValue }) => {
     try {
-      const state = getState() as { notifications: NotificationState };
-      const unreadNotifications = state.notifications.notifications.filter(n => !n.is_read);
-
-      // Marquer toutes les notifications non lues
-      const promises = unreadNotifications.map(notification =>
-        aquacultureService.markNotificationAsRead(notification.id)
-      );
-
-      const updatedNotifications = await Promise.all(promises);
-      return updatedNotifications;
+      const result = await notificationsService.markAllNotificationsAsRead();
+      return result?.count ?? 0;
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.detail || 'Erreur lors du marquage de toutes les notifications');
     }
@@ -80,7 +72,7 @@ export const deleteNotification = createAsyncThunk(
   'notifications/deleteNotification',
   async (notificationId: string, { rejectWithValue }) => {
     try {
-      await aquacultureService.deleteNotification(notificationId);
+      await notificationsService.deleteNotification(notificationId);
       return notificationId;
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.detail || 'Erreur lors de la suppression de la notification');
@@ -95,7 +87,7 @@ export const deleteAllReadNotifications = createAsyncThunk(
   'notifications/deleteAllRead',
   async (_, { rejectWithValue }) => {
     try {
-      await aquacultureService.deleteAllReadNotifications();
+      await notificationsService.deleteAllReadNotifications();
       return;
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.detail || 'Erreur lors de la suppression des notifications');
@@ -131,8 +123,8 @@ export const notificationSlice = createSlice({
       })
       .addCase(fetchNotifications.fulfilled, (state, action) => {
         state.loading = false;
-        state.notifications = action.payload;
-        state.unreadCount = action.payload.filter(n => !n.is_read).length;
+        state.notifications = action.payload as Notification[];
+        state.unreadCount = state.notifications.filter(n => !n.is_read).length;
       })
       .addCase(fetchNotifications.rejected, (state, action) => {
         state.loading = false;
@@ -155,16 +147,12 @@ export const notificationSlice = createSlice({
 
       // ========== MARK ALL AS READ ==========
       .addCase(markAllNotificationsAsRead.fulfilled, (state, action) => {
-        const updatedNotifications = action.payload;
-
-        // Mettre Ã  jour chaque notification marquÃ©e comme lue
-        updatedNotifications.forEach(updatedNotification => {
-          const index = state.notifications.findIndex(n => n.id === updatedNotification.id);
-          if (index !== -1) {
-            state.notifications[index] = updatedNotification;
-          }
-        });
-
+        const now = new Date().toISOString();
+        state.notifications = state.notifications.map(n => ({
+          ...n,
+          is_read: true,
+          read_at: n.read_at || now,
+        }));
         state.unreadCount = 0;
       })
       .addCase(markAllNotificationsAsRead.rejected, (state, action) => {
@@ -208,6 +196,5 @@ export const {
 } = notificationSlice.actions;
 
 export default notificationSlice.reducer;
-
 
 

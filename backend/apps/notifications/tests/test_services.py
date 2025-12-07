@@ -2,11 +2,11 @@
 Tests unitaires pour NotificationService.
 
 Couvre :
-- Création de notifications (simple, bulk, avec content_object)
+- CrÃ©ation de notifications (simple, bulk, avec content_object)
 - Marquage lu/non-lu
 - Suppression (unitaire, bulk, anciennes)
 - Compteurs (non lues)
-- Récupération filtrée
+- RÃ©cupÃ©ration filtrÃ©e
 """
 import pytest
 from django.utils import timezone
@@ -19,10 +19,10 @@ from apps.notifications.models import Notification
 
 @pytest.mark.django_db
 class TestNotificationServiceCreate:
-    """Tests de création de notifications."""
+    """Tests de crÃ©ation de notifications."""
 
     def test_create_notification_basic(self, user):
-        """Test création notification basique."""
+        """Test crÃ©ation notification basique."""
         notif = NotificationService.create_notification(
             user=user,
             notification_type='system_update',
@@ -37,7 +37,7 @@ class TestNotificationServiceCreate:
         assert not notif.is_sent
 
     def test_create_notification_with_content_object(self, user, production_cycle):
-        """Test création avec objet lié (GenericForeignKey)."""
+        """Test crÃ©ation avec objet liÃ© (GenericForeignKey)."""
         notif = NotificationService.create_notification(
             user=user,
             notification_type='feeding_reminder',
@@ -49,7 +49,7 @@ class TestNotificationServiceCreate:
         assert notif.content_object == production_cycle
 
     def test_create_notification_with_metadata(self, user):
-        """Test création avec métadonnées."""
+        """Test crÃ©ation avec mÃ©tadonnÃ©es."""
         metadata = {'order_id': '12345', 'amount': 150000}
 
         notif = NotificationService.create_notification(
@@ -79,7 +79,7 @@ class TestNotificationServiceRead:
 
     def test_mark_all_as_read(self, user):
         """Test marquage de toutes les notifications comme lues."""
-        # Créer plusieurs notifications non lues
+        # CrÃ©er plusieurs notifications non lues
         for i in range(3):
             Notification.objects.create(
                 user=user,
@@ -110,7 +110,7 @@ class TestNotificationServiceDelete:
 
     def test_delete_old_notifications(self, user):
         """Test suppression des notifications anciennes (> 90 jours)."""
-        # Notification récente
+        # Notification rÃ©cente
         Notification.objects.create(
             user=user,
             notification_type='alert',
@@ -136,7 +136,7 @@ class TestNotificationServiceDelete:
 
 @pytest.mark.django_db
 class TestNotificationServiceQuery:
-    """Tests de récupération et compteurs."""
+    """Tests de rÃ©cupÃ©ration et compteurs."""
 
     def test_get_unread_count(self, user):
         """Test compteur de notifications non lues."""
@@ -154,7 +154,7 @@ class TestNotificationServiceQuery:
         assert count == 5
 
     def test_get_user_notifications_all(self, user):
-        """Test récupération de toutes les notifications."""
+        """Test rÃ©cupÃ©ration de toutes les notifications."""
         for i in range(3):
             Notification.objects.create(
                 user=user,

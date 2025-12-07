@@ -10,7 +10,7 @@ import {
   deleteNotification,
   deleteAllReadNotifications,
 } from '@/features/notifications/store/notificationSlice';
-import { Notification } from '@/types/aquaculture';
+import { Notification } from '@/types/notifications';
 import { MAVECAM_COLORS } from '@/constants/colors';
 
 const NOTIFICATION_COLORS = {
@@ -328,7 +328,6 @@ export default function NotificationsScreen({ navigation }: any) {
     </View>
   );
 }
-
 
 
 
