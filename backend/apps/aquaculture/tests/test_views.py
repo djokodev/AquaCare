@@ -540,8 +540,6 @@ class TestNutritionalGuideViewSet:
 
 
 @pytest.mark.django_db
-class TestDashboardView
-@pytest.mark.django_db
 class TestDashboardView:
     """Tests pour la vue Dashboard."""
 
