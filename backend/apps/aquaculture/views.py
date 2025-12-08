@@ -475,14 +475,46 @@ class CycleLogViewSet(viewsets.ModelViewSet):
         
         return queryset
     
-    def perform_create(self, serializer):
+    def create(self, request, *args, **kwargs):
         """
-        Crée le log quotidien.
+        Crée ou met à jour le log quotidien (upsert par cycle/log_date).
 
-        Note: Les métriques de cycle sont mises à jour automatiquement
-        via le signal post_save dans signals.py (pas de duplication).
+        - Si un log existe déjà pour (cycle, log_date) du même utilisateur,
+          on le met à jour pour éviter une erreur 400 côté mobile.
+        - Sinon on crée un nouveau log.
         """
-        serializer.save()
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        cycle = serializer.validated_data.get('cycle')
+        log_date = serializer.validated_data.get('log_date')
+
+        # Sécurité : s'assurer que le cycle appartient bien à l'utilisateur
+        if cycle.farm_profile.user_id != request.user.id:
+            return Response(
+                {"detail": "Cycle non autorisé."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        existing_log = CycleLog.objects.filter(
+            cycle=cycle,
+            log_date=log_date
+        ).first()
+
+        if existing_log:
+            # Mettre à jour les champs fournis
+            for field, value in serializer.validated_data.items():
+                setattr(existing_log, field, value)
+            existing_log.save()
+            # Recalculer les métriques du cycle
+            self._recalculate_cycle_metrics(cycle)
+
+            output_serializer = self.get_serializer(existing_log)
+            return Response(output_serializer.data, status=status.HTTP_200_OK)
+
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
     
     @extend_schema(
         summary="Création en bulk de logs (sync offline)",
