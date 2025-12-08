@@ -20,6 +20,11 @@ pillow==11.3.0
 # JWT
 PyJWT==2.10.1
 
+# Task queue
+celery==5.4.0
+django-celery-beat==2.7.0
+redis==5.0.4
+
 # Utilities
 tzdata==2025.2
 PyYAML==6.0.2
