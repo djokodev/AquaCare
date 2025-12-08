@@ -203,6 +203,9 @@ class CycleLogSerializer(serializers.ModelSerializer):
             'observations', 'created_offline', 'synced_at', 'created_at'
         ]
         read_only_fields = ['id', 'log_time', 'synced_at', 'created_at']
+        # On gère l'upsert (cycle/log_date) au niveau de la vue, donc on retire
+        # la validation unique automatique pour éviter un 400 avant la mise à jour.
+        validators = []
 
     def get_calculated_average_weight(self, obj):
         """Calcule le poids moyen à partir des données d'échantillonnage."""
