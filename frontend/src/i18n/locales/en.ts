@@ -437,6 +437,9 @@ export const en = {
   notificationType_treatment_reminder: 'Treatment Reminder',
   notificationType_cycle_milestone: 'Cycle Milestone',
   notificationType_alert: 'Alert',
+  notificationType_order_confirmed: 'Order Confirmed',
+  notificationType_order_shipped: 'Order Shipped',
+  notificationType_order_delivered: 'Order Delivered',
 
   // Feeding Plans
   feedingPlan: 'Feeding Plan',

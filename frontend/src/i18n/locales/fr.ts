@@ -437,6 +437,9 @@ export const fr = {
   notificationType_treatment_reminder: 'Rappel Traitement',
   notificationType_cycle_milestone: 'Jalon de Cycle',
   notificationType_alert: 'Alerte',
+  notificationType_order_confirmed: 'Commande confirmée',
+  notificationType_order_shipped: 'Commande expédiée',
+  notificationType_order_delivered: 'Commande livrée',
 
   // Feeding Plans
   feedingPlan: 'Plan d\'Alimentation',

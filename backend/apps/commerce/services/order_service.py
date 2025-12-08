@@ -222,7 +222,7 @@ class OrderService(BaseCommerceService):
         message = (
             f"Votre commande {order.order_number} a été confirmée. "
             f"Montant total : {order.total:,.0f} FCFA. "
-            f"MAVECAM vous contactera pour organiser la livraison."
+            f"Notre équipe vous contactera pour organiser la livraison."
         )
 
         NotificationService.create_notification(
