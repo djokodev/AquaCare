@@ -286,6 +286,8 @@ export const fr = {
   recordSaved: 'Saisie enregistrée avec succès',
   recordSaveError: 'Erreur lors de l\'enregistrement',
   recordSavedOffline: 'Saisie sauvegardée (sera synchronisée à la reconnexion)',
+  sampleCountTooLow: 'Nombre de poissons pesés insuffisant (min {min}).',
+  sampleCountRequiredWithWeight: 'Veuillez indiquer le nombre de poissons pesés avec le poids total.',
   syncInProgress: 'Synchronisation en cours...',
   syncSuccess: 'Synchronisation réussie',
   syncFailed: 'Erreur de synchronisation',
