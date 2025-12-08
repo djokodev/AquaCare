@@ -287,7 +287,7 @@ class AuthService {
           return new Error(data?.message || `Erreur ${status}: Une erreur est survenue`);
       }
     } else if (error.request) {
-      return new Error('Impossible de contacter le serveur. VÃ©rifiez votre connexion internet.');
+      return new Error('Impossible de contacter le serveur. Vérifiez votre connexion internet.');
     } else {
       return new Error(error.message || 'Une erreur inattendue est survenue');
     }
@@ -295,7 +295,6 @@ class AuthService {
 }
 
 export const authService = new AuthService();
-
 
 
 
