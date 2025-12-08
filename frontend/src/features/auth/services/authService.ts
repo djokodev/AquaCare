@@ -276,13 +276,13 @@ class AuthService {
           return new Error(data?.message || 'DonnÃ©es invalides');
           
         case 401:
-          return new Error('Identifiants incorrects ou session expirÃ©e');
+          return new Error('Identifiants incorrects ou session expirée');
         case 403:
           return new Error('AccÃ¨s interdit');
         case 404:
           return new Error('Utilisateur non trouvÃ©');
         case 500:
-          return new Error('Erreur serveur. Veuillez rÃ©essayer plus tard.');
+          return new Error('Erreur serveur. Veuillez réessayer plus tard.');
         default:
           return new Error(data?.message || `Erreur ${status}: Une erreur est survenue`);
       }
@@ -295,6 +295,5 @@ class AuthService {
 }
 
 export const authService = new AuthService();
-
 
 
