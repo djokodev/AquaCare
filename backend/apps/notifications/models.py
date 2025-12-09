@@ -360,19 +360,49 @@ class NotificationPreference(models.Model):
         """
         # Mapping types → champs preferences
         type_field_map = {
+            # Aquaculture
             'feeding_reminder': 'feeding_reminders',
             'sampling_reminder': 'sampling_reminders',
+            'treatment_reminder': 'sampling_reminders',  # Regroupe avec sampling pour l'instant
             'mortality_alert': 'mortality_alerts',
+            'growth_alert': 'mortality_alerts',  # Regroupe avec mortality (alertes élevage)
             'water_quality_alert': 'water_quality_alerts',
             'cycle_milestone': 'cycle_milestones',
+            'harvest_reminder': 'cycle_milestones',  # Regroupe avec milestones
+            'alert': 'sanitary_alerts',  # Alerte générique sanitaire
+
+            # Commerce
             'order_confirmed': 'order_confirmations',
             'order_shipped': 'order_status_updates',
             'order_delivered': 'order_status_updates',
+            'order_cancelled': 'order_status_updates',
+            'payment_received': 'order_confirmations',
+            'delivery_scheduled': 'delivery_notifications',
+            'product_recommendation': 'product_recommendations',  # ✅ CORRECTION CRITIQUE
+            'low_stock_alert': 'product_recommendations',
+            'price_drop': 'price_alerts',
+
+            # Support
+            'ticket_created': 'ticket_updates',
             'ticket_reply': 'ticket_updates',
+            'ticket_resolved': 'ticket_updates',
+            'ticket_reopened': 'ticket_updates',
+            'ticket_assigned': 'ticket_updates',
+
+            # Chat
             'new_message': 'chat_messages',
+            'message_reply': 'chat_messages',
             'mention': 'chat_mentions',
+            'chat_invitation': 'chat_messages',
+            'group_created': 'chat_messages',
+
+            # Système
             'system_update': 'system_alerts',
+            'maintenance': 'system_alerts',
+            'welcome': 'system_alerts',
             'account_security': 'account_security',
+            'password_reset': 'account_security',
+            'email_verification': 'account_security',
         }
 
         field_name = type_field_map.get(notification_type)

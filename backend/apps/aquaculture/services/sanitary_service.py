@@ -22,7 +22,6 @@ from ..models import SanitaryLog, ProductionCycle
 # Will be migrated to use NotificationService in Phase 1B
 from .base import BaseService
 from apps.notifications.services import NotificationService
-from django.utils import timezone
 from ..domain.exceptions import (
     InvalidSanitaryDataException,
     SanitaryLogNotFoundException,

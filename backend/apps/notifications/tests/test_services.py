@@ -165,4 +165,4 @@ class TestNotificationServiceQuery:
             )
 
         notifications = NotificationService.get_user_notifications(user)
-        assert notifications.count() == 3
+        assert len(notifications) == 3

@@ -1,0 +1,329 @@
+/**
+ * Utilitaire de parsing et formatage des erreurs API Django REST Framework.
+ *
+ * Parse les erreurs de validation 400 pour les rendre exploitables côté utilisateur
+ * avec messages détaillés par champ et aide contextuelle.
+ *
+ * @module errorParser
+ */
+
+/**
+ * Détails d'erreur pour un champ spécifique.
+ */
+export interface ApiErrorDetails {
+  field: string;
+  messages: string[];
+}
+
+/**
+ * Erreur API parsée avec tous les détails.
+ */
+export interface ParsedApiError {
+  status: number;
+  message: string;
+  details: ApiErrorDetails[];
+  rawError: any;
+}
+
+/**
+ * Parse les erreurs API Django REST Framework.
+ *
+ * Django retourne les erreurs 400 sous forme :
+ * ```json
+ * {
+ *   "field_name": ["Error message 1", "Error message 2"],
+ *   "another_field": ["Error message"]
+ * }
+ * ```
+ *
+ * @param error - Erreur Axios à parser
+ * @returns Erreur parsée avec détails exploitables
+ *
+ * @example
+ * ```typescript
+ * try {
+ *   await createCycle(data);
+ * } catch (error) {
+ *   const parsedError = parseApiError(error);
+ *   console.log(parsedError.status); // 400
+ *   console.log(parsedError.details); // [{field: 'initial_count', messages: [...]}]
+ * }
+ * ```
+ */
+export const parseApiError = (error: any): ParsedApiError => {
+  // Cas 1 : Erreur réseau (pas de réponse du serveur)
+  if (!error.response) {
+    return {
+      status: 0,
+      message: 'Erreur de connexion au serveur. Vérifiez votre connexion internet.',
+      details: [],
+      rawError: error,
+    };
+  }
+
+  const { status, data } = error.response;
+
+  // Cas 2 : Erreur 400 avec détails de validation
+  if (status === 400 && data && typeof data === 'object') {
+    const details: ApiErrorDetails[] = [];
+
+    // Parser chaque champ d'erreur
+    Object.keys(data).forEach((field) => {
+      const fieldErrors = data[field];
+
+      if (Array.isArray(fieldErrors)) {
+        details.push({
+          field,
+          messages: fieldErrors,
+        });
+      } else if (typeof fieldErrors === 'string') {
+        details.push({
+          field,
+          messages: [fieldErrors],
+        });
+      }
+    });
+
+    return {
+      status,
+      message: 'Erreur de validation des données',
+      details,
+      rawError: data,
+    };
+  }
+
+  // Cas 3 : Erreur 401 (non authentifié)
+  if (status === 401) {
+    return {
+      status,
+      message: 'Session expirée, veuillez vous reconnecter',
+      details: [],
+      rawError: data,
+    };
+  }
+
+  // Cas 4 : Erreur 403 (non autorisé)
+  if (status === 403) {
+    return {
+      status,
+      message: "Vous n'avez pas les permissions nécessaires pour cette action",
+      details: [],
+      rawError: data,
+    };
+  }
+
+  // Cas 5 : Erreur 404
+  if (status === 404) {
+    return {
+      status,
+      message: 'Ressource non trouvée',
+      details: [],
+      rawError: data,
+    };
+  }
+
+  // Cas 6 : Erreur 500+ (erreur serveur)
+  if (status >= 500) {
+    return {
+      status,
+      message: 'Erreur serveur, veuillez réessayer plus tard',
+      details: [],
+      rawError: data,
+    };
+  }
+
+  // Cas par défaut
+  return {
+    status,
+    message: data?.detail || data?.message || 'Une erreur est survenue',
+    details: [],
+    rawError: data,
+  };
+};
+
+/**
+ * Formate une erreur parsée pour affichage utilisateur.
+ *
+ * Transforme les détails techniques en message lisible avec :
+ * - Labels français pour les champs
+ * - Messages d'erreur clairs
+ * - Formatage multi-lignes si plusieurs champs
+ *
+ * @param parsedError - Erreur parsée
+ * @returns Message formaté pour Alert.alert() ou console
+ *
+ * @example
+ * ```typescript
+ * const parsedError = parseApiError(error);
+ * const message = formatErrorForDisplay(parsedError);
+ * Alert.alert('Erreur', message);
+ * ```
+ */
+export const formatErrorForDisplay = (parsedError: ParsedApiError): string => {
+  if (parsedError.details.length === 0) {
+    return parsedError.message;
+  }
+
+  const errorLines = parsedError.details.map((detail) => {
+    const fieldLabel = getFieldLabel(detail.field);
+    return `• ${fieldLabel} : ${detail.messages.join(', ')}`;
+  });
+
+  return `${parsedError.message}\n\n${errorLines.join('\n')}`;
+};
+
+/**
+ * Mapping des noms de champs techniques (snake_case) vers labels utilisateur (français).
+ *
+ * Utilisé pour traduire les champs d'erreur Django en texte compréhensible.
+ */
+const getFieldLabel = (field: string): string => {
+  const fieldLabels: Record<string, string> = {
+    // Cycle de production
+    cycle_name: 'Nom du cycle',
+    species: 'Espèce',
+    pond_identifier: 'Identifiant bassin',
+    pond_surface_m2: 'Surface bassin (m²)',
+    pond_volume_m3: 'Volume bassin (m³)',
+    start_date: 'Date de début',
+    end_date: 'Date de fin',
+    initial_count: 'Nombre initial de poissons',
+    initial_average_weight: 'Poids moyen initial (g)',
+    target_weight: 'Poids cible (g)',
+    status: 'Statut',
+
+    // Log quotidien
+    log_date: 'Date du log',
+    mortality_count: 'Nombre de morts',
+    water_temperature: 'Température eau (°C)',
+    ph_level: 'Niveau pH',
+    dissolved_oxygen: 'Oxygène dissous (mg/L)',
+    feed_amount_kg: 'Quantité aliment (kg)',
+    notes: 'Notes',
+
+    // Journal sanitaire
+    event_type: 'Type d\'événement',
+    event_date: 'Date événement',
+    affected_count: 'Nombre affecté',
+    symptoms: 'Symptômes',
+    treatment: 'Traitement',
+    diagnosis: 'Diagnostic',
+    veterinarian: 'Vétérinaire',
+    photo: 'Photo',
+    location: 'Localisation',
+
+    // Action de récolte
+    harvest_date: 'Date de récolte',
+    harvested_count: 'Nombre récolté',
+    total_weight_kg: 'Poids total (kg)',
+    average_weight_g: 'Poids moyen (g)',
+    selling_price_per_kg: 'Prix vente/kg',
+    total_revenue: 'Revenu total',
+    buyer_name: 'Nom acheteur',
+    buyer_contact: 'Contact acheteur',
+
+    // Commandes (commerce)
+    delivery_address: 'Adresse livraison',
+    delivery_city: 'Ville livraison',
+    delivery_phone: 'Téléphone livraison',
+    payment_method: 'Méthode paiement',
+    items: 'Articles',
+    quantity: 'Quantité',
+
+    // Erreurs génériques
+    non_field_errors: 'Erreur générale',
+    detail: 'Détail',
+  };
+
+  return fieldLabels[field] || field.replace(/_/g, ' ');
+};
+
+/**
+ * Log détaillé de l'erreur pour debugging (dev uniquement).
+ *
+ * Affiche dans la console :
+ * - Code status HTTP
+ * - Message principal
+ * - Détails de validation par champ
+ * - Erreur brute complète
+ *
+ * **Note** : Ne log que si `__DEV__` est true (environnement développement).
+ *
+ * @param error - Erreur Axios originale
+ * @param context - Contexte de l'erreur (ex: "Création cycle")
+ *
+ * @example
+ * ```typescript
+ * try {
+ *   await createCycle(data);
+ * } catch (error) {
+ *   logApiError(error, 'Création cycle de production');
+ *   // En dev, affiche :
+ *   // 🔴 API Error - Création cycle de production
+ *   //   Status: 400
+ *   //   Message: Erreur de validation
+ *   //   Validation Errors:
+ *   //     - initial_count: ["Densité initiale trop élevée"]
+ * }
+ * ```
+ */
+export const logApiError = (error: any, context: string): void => {
+  if (__DEV__) {
+    const parsedError = parseApiError(error);
+    console.group(`🔴 API Error - ${context}`);
+    console.log('Status:', parsedError.status);
+    console.log('Message:', parsedError.message);
+    if (parsedError.details.length > 0) {
+      console.log('Validation Errors:');
+      parsedError.details.forEach((detail) => {
+        console.log(`  - ${detail.field}:`, detail.messages);
+      });
+    }
+    console.log('Raw Error:', parsedError.rawError);
+    console.groupEnd();
+  }
+};
+
+/**
+ * Vérifie si une erreur parsée contient un champ d'erreur spécifique.
+ *
+ * Utile pour afficher des aides contextuelles basées sur le champ en erreur.
+ *
+ * @param parsedError - Erreur parsée
+ * @param fieldName - Nom du champ à chercher
+ * @returns true si le champ a une erreur, false sinon
+ *
+ * @example
+ * ```typescript
+ * if (hasFieldError(parsedError, 'initial_count')) {
+ *   // Afficher aide sur densité maximale
+ * }
+ * ```
+ */
+export const hasFieldError = (
+  parsedError: ParsedApiError,
+  fieldName: string
+): boolean => {
+  return parsedError.details.some((detail) => detail.field === fieldName);
+};
+
+/**
+ * Extrait le premier message d'erreur pour un champ spécifique.
+ *
+ * @param parsedError - Erreur parsée
+ * @param fieldName - Nom du champ
+ * @returns Premier message d'erreur ou undefined
+ *
+ * @example
+ * ```typescript
+ * const error = getFieldErrorMessage(parsedError, 'initial_count');
+ * console.log(error); // "Densité initiale trop élevée (max 500 poissons/m²)"
+ * ```
+ */
+export const getFieldErrorMessage = (
+  parsedError: ParsedApiError,
+  fieldName: string
+): string | undefined => {
+  const fieldDetail = parsedError.details.find((d) => d.field === fieldName);
+  return fieldDetail?.messages[0];
+};

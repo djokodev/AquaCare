@@ -11,6 +11,7 @@ import { AppDispatch } from '@/store/store';
 import { fetchDashboardData } from '@/features/aquaculture/store/aquacultureSlice';
 import { MAVECAM_COLORS } from '@/constants/colors';
 import { estimateBiomass, estimateDensityWithUnit } from '@/domain';
+import { parseApiError, formatErrorForDisplay, logApiError, hasFieldError } from '@/utils/errorParser';
 
 const SPECIES_OPTIONS = [
   { value: 'clarias', label: 'Clarias', duration: '120 jours' },
@@ -173,18 +174,36 @@ export default function NewCycleScreen({ navigation }: any) {
         }
       }
     } catch (error: any) {
-      console.error('Error creating cycle:', error);
+      // Parser l'erreur pour avoir des détails exploitables
+      const parsedError = parseApiError(error);
 
-      let errorMessage = t('cycleCreationError');
-      if (error.response?.data?.message) {
-        errorMessage = error.response.data.message;
-      } else if (error.response?.data?.detail) {
-        errorMessage = error.response.data.detail;
-      } else if (error.message) {
-        errorMessage = error.message;
+      // Log détaillé en dev pour debugging
+      logApiError(error, 'Création cycle de production');
+
+      // Afficher l'erreur formatée à l'utilisateur
+      Alert.alert(
+        t('error'),
+        formatErrorForDisplay(parsedError),
+        [{ text: 'OK', style: 'cancel' }]
+      );
+
+      // Si erreur de densité, afficher aide contextuelle
+      if (hasFieldError(parsedError, 'initial_count') && formData.initial_count && formData.pond_surface_m2) {
+        const density = Math.round(
+          parseInt(formData.initial_count) / parseFloat(formData.pond_surface_m2)
+        );
+
+        setTimeout(() => {
+          Alert.alert(
+            t('help'),
+            `${t('densityTooHigh')}\n\n` +
+              `${t('maxDensity')}: 500 ${t('fishPerM2')}\n` +
+              `${t('yourDensity')}: ${density} ${t('fishPerM2')}\n\n` +
+              t('densitySuggestion'),
+            [{ text: t('understood'), style: 'default' }]
+          );
+        }, 500);
       }
-
-      Alert.alert(t('error'), errorMessage);
     } finally {
       setSaving(false);
     }
