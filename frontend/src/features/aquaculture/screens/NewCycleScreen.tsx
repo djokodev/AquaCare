@@ -141,7 +141,7 @@ export default function NewCycleScreen({ navigation }: any) {
         cycle_name: formData.cycle_name,
         species: formData.species as 'clarias' | 'tilapia',
         pond_identifier: formData.pond_identifier,
-        pond_surface_m2: parseFloat(formData.pond_surface_m2),
+        pond_surface_m2: formData.pond_surface_m2 ? parseFloat(formData.pond_surface_m2) : undefined,
         pond_volume_m3: formData.pond_volume_m3 ? parseFloat(formData.pond_volume_m3) : undefined,
         start_date: formData.start_date,
         initial_count: parseInt(formData.initial_count),

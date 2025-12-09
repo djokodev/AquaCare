@@ -263,7 +263,7 @@ export interface CreateCycleForm {
   cycle_name: string;
   species: Species;
   pond_identifier: string;
-  pond_surface_m2: number;
+  pond_surface_m2?: number;
   pond_volume_m3?: number;
   start_date: string;
   initial_count: number;

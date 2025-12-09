@@ -65,19 +65,22 @@ class ProductionCycle(models.Model):
         help_text=_("Ex: 'Bassin A', 'Étang 1'")
     )
     pond_surface_m2 = models.DecimalField(
-        max_digits=10, 
+        max_digits=10,
         decimal_places=2,
+        null=True,
+        blank=True,
         validators=[MinValueValidator(Decimal('0.01'))],
-        verbose_name=_("Surface du bassin (m²)")
+        verbose_name=_("Surface du bassin (m²)"),
+        help_text=_("Optionnel - au moins surface OU volume requis")
     )
     pond_volume_m3 = models.DecimalField(
-        max_digits=10, 
+        max_digits=10,
         decimal_places=2,
-        null=True, 
+        null=True,
         blank=True,
         validators=[MinValueValidator(Decimal('0.01'))],
         verbose_name=_("Volume du bassin (m³)"),
-        help_text=_("Optionnel - pour calcul densité")
+        help_text=_("Optionnel - au moins surface OU volume requis")
     )
     
     # Initial data (cycle start)

@@ -159,7 +159,18 @@ class ProductionCycleSerializer(serializers.ModelSerializer):
                 'initial_count': _("Le nombre initial de poissons semble trop élevé")
             })
 
-        # Validate pond capacity
+        # Validate that at least one of pond_surface_m2 or pond_volume_m3 is provided
+        # (only for creation, not update)
+        if not self.instance:  # Creation only
+            has_surface = attrs.get('pond_surface_m2') is not None
+            has_volume = attrs.get('pond_volume_m3') is not None
+
+            if not has_surface and not has_volume:
+                raise serializers.ValidationError({
+                    'pond_surface_m2': _("Veuillez renseigner au moins la surface OU le volume du bassin")
+                })
+
+        # Validate pond capacity (density check)
         if attrs.get('pond_surface_m2') and attrs.get('initial_count'):
             density_per_m2 = attrs['initial_count'] / float(attrs['pond_surface_m2'])
             if density_per_m2 > 500:  # Max 500 fish per m2 initially
