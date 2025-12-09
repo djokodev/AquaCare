@@ -398,6 +398,10 @@ class OrderItem(models.Model):
         verbose_name = _("Article commande")
         verbose_name_plural = _("Articles commande")
         ordering = ['order', 'id']
+        indexes = [
+            # Index pour performance admin inline OrderItem
+            models.Index(fields=['order'], name='orderitem_order_idx'),
+        ]
 
     id = models.UUIDField(
         primary_key=True,

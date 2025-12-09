@@ -32,3 +32,7 @@ requests==2.32.3
 tzdata==2025.2
 PyYAML==6.0.2
 sqlparse==0.5.3
+
+# PDF Generation
+weasyprint==60.2
+pydyf==0.11.0

@@ -163,6 +163,9 @@ class Notification(models.Model):
             models.Index(fields=['content_type', 'object_id']),
             models.Index(fields=['user', 'notification_type']),
             models.Index(fields=['scheduled_for', 'is_sent']),
+            # Nouveaux index pour performance Chat (volumétrie élevée)
+            models.Index(fields=['user', '-created_at'], name='notif_user_created_idx'),
+            models.Index(fields=['user', 'notification_type', '-created_at'], name='notif_user_type_created_idx'),
         ]
 
     def __str__(self):

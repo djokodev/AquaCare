@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Commande {{ order.order_number }}</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 2cm;
+        }
+
+        body {
+            font-family: 'Helvetica', 'Arial', sans-serif;
+            color: #1e293b;
+            line-height: 1.6;
+        }
+
+        .header {
+            text-align: center;
+            color: {{ mavecam_color }};
+            border-bottom: 3px solid {{ mavecam_color }};
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 28px;
+            font-weight: bold;
+        }
+
+        .header h2 {
+            margin: 10px 0 0 0;
+            font-size: 20px;
+            font-weight: normal;
+        }
+
+        .header .order-info {
+            margin-top: 15px;
+            font-size: 14px;
+            color: #64748b;
+        }
+
+        .section {
+            margin-top: 25px;
+            padding: 15px;
+            background-color: #f8fafc;
+            border-radius: 8px;
+        }
+
+        .section h3 {
+            margin: 0 0 15px 0;
+            color: {{ mavecam_color }};
+            font-size: 16px;
+            border-bottom: 2px solid {{ mavecam_color }};
+            padding-bottom: 5px;
+        }
+
+        .section p {
+            margin: 8px 0;
+            font-size: 13px;
+        }
+
+        .section p strong {
+            color: #1e293b;
+            min-width: 150px;
+            display: inline-block;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+            font-size: 13px;
+        }
+
+        thead {
+            background-color: {{ mavecam_color }};
+            color: white;
+        }
+
+        th, td {
+            border: 1px solid #e2e8f0;
+            padding: 12px;
+            text-align: left;
+        }
+
+        th {
+            font-weight: bold;
+        }
+
+        tbody tr:nth-child(even) {
+            background-color: #f8fafc;
+        }
+
+        .totals {
+            margin-top: 30px;
+            text-align: right;
+            padding: 20px;
+            background-color: #f8fafc;
+            border-radius: 8px;
+        }
+
+        .totals p {
+            margin: 10px 0;
+            font-size: 14px;
+        }
+
+        .totals .total-final {
+            font-size: 22px;
+            font-weight: bold;
+            color: {{ mavecam_color }};
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 2px solid {{ mavecam_color }};
+        }
+
+        .footer {
+            margin-top: 50px;
+            text-align: center;
+            font-size: 11px;
+            color: #64748b;
+            padding-top: 20px;
+            border-top: 1px solid #e2e8f0;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .badge-delivery {
+            background-color: #10b981;
+            color: white;
+        }
+
+        .badge-pickup {
+            background-color: #3b82f6;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <!-- En-tete -->
+    <div class="header">
+        <h1>MAVECAM AquaCare</h1>
+        <h2>BON DE COMMANDE</h2>
+        <div class="order-info">
+            <strong>N° {{ order.order_number }}</strong> |
+            {{ order.created_at|date:"d/m/Y à H:i" }}
+        </div>
+    </div>
+
+    <!-- Informations Client -->
+    <div class="section">
+        <h3>Informations Client</h3>
+        <p><strong>Nom :</strong> {{ user.first_name }} {{ user.last_name }}</p>
+        <p><strong>Telephone :</strong> {{ user.phone_number }}</p>
+        <p><strong>Ferme :</strong> {{ farm.farm_name }}</p>
+        <p><strong>Region :</strong> {{ farm.get_region_display }}</p>
+    </div>
+
+    <!-- Informations Livraison -->
+    <div class="section">
+        <h3>Informations Livraison</h3>
+        <p>
+            <strong>Methode :</strong>
+            <span class="badge {% if order.delivery_method == 'home' %}badge-delivery{% else %}badge-pickup{% endif %}">
+                {{ delivery_method_display }}
+            </span>
+        </p>
+
+        {% if order.delivery_method == 'home' %}
+            <p><strong>Destinataire :</strong> {{ order.delivery_name }}</p>
+            <p><strong>Telephone :</strong> {{ order.delivery_phone }}</p>
+            <p><strong>Adresse :</strong> {{ order.delivery_full_address }}</p>
+        {% else %}
+            <p><strong>Lieu de retrait :</strong> {{ pickup_location_display }}</p>
+        {% endif %}
+    </div>
+
+    <!-- Tableau Articles -->
+    <div class="section">
+        <h3>Articles Commandes</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Produit</th>
+                    <th style="text-align: right;">Prix Unitaire</th>
+                    <th style="text-align: center;">Quantite</th>
+                    <th style="text-align: right;">Total Ligne</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in items %}
+                <tr>
+                    <td>
+                        {{ item.product_name }}
+                        {% if item.product %}
+                            <br><small style="color: #64748b;">
+                                {{ item.product.get_species_display }} -
+                                {{ item.product.package_weight_kg }} kg
+                            </small>
+                        {% endif %}
+                    </td>
+                    <td style="text-align: right;">{{ item.unit_price|floatformat:0 }} FCFA</td>
+                    <td style="text-align: center;">{{ item.quantity }}</td>
+                    <td style="text-align: right;"><strong>{{ item.line_total|floatformat:0 }} FCFA</strong></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Totaux -->
+    <div class="totals">
+        <p><strong>Sous-total :</strong> {{ order.subtotal|floatformat:0 }} FCFA</p>
+        <p><strong>Frais de livraison :</strong> {{ order.delivery_fee|floatformat:0 }} FCFA</p>
+        <p class="total-final">TOTAL : {{ order.total|floatformat:0 }} FCFA</p>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+        <p>Document genere le {{ generated_at|date:"d/m/Y à H:i" }}</p>
+        <p><strong>MAVECAM</strong> - Expertise Aquaculture Cameroun</p>
+        <p>Pour toute question, veuillez nous contacter</p>
+    </div>
+</body>
+</html>
