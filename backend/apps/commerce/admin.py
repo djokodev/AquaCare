@@ -287,7 +287,7 @@ class OrderAdmin(admin.ModelAdmin):
 
             zip_buffer.seek(0)
             response = FileResponse(zip_buffer, content_type='application/zip')
-            response['Content-Disposition'] = 'attachment; filename="commandes_mavecam.zip"'
+            response['Content-Disposition'] = 'attachment; filename="commandes_aquacare.zip"'
 
             self.message_user(
                 request,

@@ -34,5 +34,5 @@ PyYAML==6.0.2
 sqlparse==0.5.3
 
 # PDF Generation
-weasyprint==60.2
+weasyprint==61.2
 pydyf==0.11.0
