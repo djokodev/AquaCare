@@ -5,6 +5,7 @@ Coverage cible : >50%
 """
 import pytest
 from datetime import date
+from django.contrib.contenttypes.models import ContentType
 
 from apps.aquaculture.services.sanitary_service import SanitaryService
 from apps.aquaculture.models import SanitaryLog
@@ -35,20 +36,18 @@ class TestSanitaryServiceCreateLog:
 
     def test_create_sanitary_log_creates_notification(self):
         """Test création notification automatique."""
-        from apps.aquaculture.models import Notification
-
         cycle = ProductionCycleFactory()
 
-        SanitaryService.create_sanitary_log(
+        sanitary_log = SanitaryService.create_sanitary_log(
             cycle=cycle,
             event_date=date.today(),
             event_type='disease',
-            symptoms='Maladie détectée avec pertes d\'appétit'
+            symptoms="Maladie détectée avec pertes d'appétit"
         )
 
-        # Vérifie qu'une notification a été créée
         notifications = Notification.objects.filter(
-            cycle=cycle,
+            content_type=ContentType.objects.get_for_model(SanitaryLog),
+            object_id=sanitary_log.id,
             notification_type='alert'
         )
         assert notifications.exists()
@@ -56,7 +55,7 @@ class TestSanitaryServiceCreateLog:
 
 @pytest.mark.django_db
 class TestSanitaryServiceResolve:
-    """Tests de résolution d'événements sanitaires."""
+    """Tests de résolution d'évènements sanitaires."""
 
     def test_resolve_sanitary_log(self):
         """Test résolution log sanitaire."""
@@ -70,7 +69,6 @@ class TestSanitaryServiceResolve:
         )
         assert log.resolved is False
 
-        # Résoudre
         resolved_log = SanitaryService.resolve_sanitary_issue(
             sanitary_log_id=str(log.id),
             resolution_notes='Traitement effectué avec succès'
@@ -89,7 +87,6 @@ class TestSanitaryServiceAnalysis:
         """Test récupération problèmes non résolus."""
         cycle = ProductionCycleFactory()
 
-        # Créer plusieurs logs
         SanitaryService.create_sanitary_log(
             cycle=cycle,
             event_date=date.today(),
@@ -105,7 +102,6 @@ class TestSanitaryServiceAnalysis:
         )
         SanitaryService.resolve_sanitary_issue(str(log_resolved.id), resolution_notes='OK')
 
-        # Récupérer analyse historique
         analysis = SanitaryService.analyze_sanitary_history(cycle)
 
         assert analysis['total_events'] == 2

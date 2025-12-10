@@ -181,7 +181,8 @@ def send_push_notification_task(self, notification_id: str):
         if errors:
             logger.warning(f"Push notification errors for notification {notification_id}: {errors}")
 
-            # Désactiver les tokens invalides
+            # Désactiver les tokens invalides et isoler les erreurs critiques
+            non_device_errors = []
             for i, error_data in enumerate(errors):
                 error_details = error_data.get('details', {})
                 error_type = error_details.get('error')
@@ -192,10 +193,18 @@ def send_push_notification_task(self, notification_id: str):
                         token = list(push_tokens)[i]
                         token.deactivate()
                         logger.info(f"Deactivated invalid push token {token.id} for user {user.phone_number}")
+                else:
+                    non_device_errors.append(error_data)
 
-            # Si toutes les tentatives ont échoué
-            if len(errors) == len(expo_messages):
-                raise Exception(f"All push notifications failed: {errors}")
+            # Si tous les messages ont échoué mais uniquement pour tokens invalides, on arrête sans retry
+            if not non_device_errors and len(errors) == len(expo_messages):
+                notification.push_error = "No valid push tokens"
+                notification.save(update_fields=['push_error'])
+                return
+
+            # Si les échecs proviennent d'autres erreurs, laisser Celery remonter
+            if non_device_errors and len(non_device_errors) == len(expo_messages):
+                raise Exception(f"All push notifications failed: {non_device_errors}")
 
         # Mettre à jour la notification
         notification.push_sent_at = timezone.now()

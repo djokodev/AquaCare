@@ -31,8 +31,8 @@ class TestEmailNotificationTask:
         user.email = "farmer@example.com"
         user.save()
 
-        # Mock send_mail
-        with patch('django.core.mail.send_mail') as mock_send:
+        # Mock send_mail (patcher sur le module tache pour pointer la rĂŠfĂŠrence importĂŠe)
+        with patch('apps.notifications.tasks.send_mail') as mock_send:
             mock_send.return_value = 1  # Success
 
             # Execute
@@ -46,8 +46,8 @@ class TestEmailNotificationTask:
 
             # Verifier les arguments de send_mail
             call_args = mock_send.call_args
-            assert "[AquaCare]" in call_args[1]['subject']
-            assert user.email in call_args[1]['recipient_list']
+            assert "[AquaCare]" in call_args.kwargs['subject']
+            assert user.email in call_args.kwargs['recipient_list']
 
     def test_send_email_notification_task_no_email(self, notification, user):
         """User sans email -> Pas d'erreur, email_error defini."""
@@ -56,7 +56,7 @@ class TestEmailNotificationTask:
         user.save()
 
         # Mock send_mail
-        with patch('django.core.mail.send_mail') as mock_send:
+        with patch('apps.notifications.tasks.send_mail') as mock_send:
             # Execute
             send_email_notification_task(str(notification.id))
 
@@ -74,7 +74,7 @@ class TestEmailNotificationTask:
         user.save()
 
         # Mock send_mail avec exception
-        with patch('django.core.mail.send_mail') as mock_send:
+        with patch('apps.notifications.tasks.send_mail') as mock_send:
             mock_send.side_effect = Exception("Network error")
 
             # Execute & Assert: Exception raised pour trigger Celery retry
@@ -111,7 +111,7 @@ class TestPushNotificationTask:
 
             # Verifier URL Expo
             call_args = mock_post.call_args
-            assert 'expo.io/--/api/v2/push/send' in str(call_args)
+            assert 'exp.host/--/api/v2/push/send' in str(call_args)
 
     def test_send_push_notification_task_no_active_tokens(self, notification, user):
         """User sans tokens actifs -> Aucune erreur, push_sent_at reste None."""
@@ -178,7 +178,8 @@ class TestNotificationMaintenance:
             title='Old Notification',
             message='Should be deleted',
             is_read=True,
-            created_at=old_date
+            created_at=old_date,
+            scheduled_for=old_date
         )
 
         # Notification recente (30 jours)
@@ -188,7 +189,8 @@ class TestNotificationMaintenance:
             title='Recent Notification',
             message='Should be kept',
             is_read=False,
-            created_at=recent_date
+            created_at=recent_date,
+            scheduled_for=recent_date
         )
 
         # Execute
@@ -211,6 +213,7 @@ class TestNotificationMaintenance:
             title='Past Scheduled',
             message='Should be sent',
             scheduled_for=past_time,
+            channels=['email', 'push'],
             is_sent=False
         )
 
@@ -221,6 +224,7 @@ class TestNotificationMaintenance:
             title='Future Scheduled',
             message='Should not be sent yet',
             scheduled_for=future_time,
+            channels=['email', 'push'],
             is_sent=False
         )
 
