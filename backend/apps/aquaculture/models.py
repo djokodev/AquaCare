@@ -17,7 +17,7 @@ from django.utils.translation import gettext_lazy as _
 from django.utils import timezone
 from .constants import (
     SPECIES_CHOICES, CYCLE_STATUS_CHOICES, SANITARY_EVENT_TYPES,
-    NOTIFICATION_TYPES, GROWTH_STAGES
+    GROWTH_STAGES
 )
 
 
@@ -65,19 +65,22 @@ class ProductionCycle(models.Model):
         help_text=_("Ex: 'Bassin A', 'Étang 1'")
     )
     pond_surface_m2 = models.DecimalField(
-        max_digits=10, 
+        max_digits=10,
         decimal_places=2,
+        null=True,
+        blank=True,
         validators=[MinValueValidator(Decimal('0.01'))],
-        verbose_name=_("Surface du bassin (m²)")
+        verbose_name=_("Surface du bassin (m²)"),
+        help_text=_("Optionnel - au moins surface OU volume requis")
     )
     pond_volume_m3 = models.DecimalField(
-        max_digits=10, 
+        max_digits=10,
         decimal_places=2,
-        null=True, 
+        null=True,
         blank=True,
         validators=[MinValueValidator(Decimal('0.01'))],
         verbose_name=_("Volume du bassin (m³)"),
-        help_text=_("Optionnel - pour calcul densité")
+        help_text=_("Optionnel - au moins surface OU volume requis")
     )
     
     # Initial data (cycle start)
@@ -750,68 +753,10 @@ class CycleMetrics(models.Model):
     def __str__(self):
         return f"Métriques - {self.cycle.cycle_name}"
 
-
-class Notification(models.Model):
-    class Meta:
-        app_label = 'aquaculture'
-        ordering = ['-scheduled_for']
-        verbose_name = _("Notification")
-        verbose_name_plural = _("Notifications")
-        indexes = [
-            models.Index(fields=['user', 'is_read', 'scheduled_for']),
-            models.Index(fields=['notification_type', 'is_sent']),
-        ]
-
-    user = models.ForeignKey(
-        'accounts.User', 
-        on_delete=models.CASCADE,
-        related_name='aquaculture_notifications',
-        verbose_name=_("Utilisateur")
-    )
-    cycle = models.ForeignKey(
-        ProductionCycle, 
-        on_delete=models.CASCADE, 
-        null=True, 
-        blank=True,
-        verbose_name=_("Cycle concerné")
-    )
-    
-    notification_type = models.CharField(
-        max_length=50, 
-        choices=NOTIFICATION_TYPES,
-        verbose_name=_("Type de notification")
-    )
-    
-    title = models.CharField(
-        max_length=100,
-        verbose_name=_("Titre")
-    )
-
-    message = models.TextField(verbose_name=_("Message"))
-    
-    scheduled_for = models.DateTimeField(verbose_name=_("Programmé pour"))
-
-    sent_at = models.DateTimeField(
-        null=True, 
-        blank=True,
-        verbose_name=_("Envoyé le")
-    )
-    read_at = models.DateTimeField(
-        null=True, 
-        blank=True,
-        verbose_name=_("Lu le")
-    )
-    
-    is_sent = models.BooleanField(
-        default=False,
-        verbose_name=_("Envoyé")
-    )
-    is_read = models.BooleanField(
-        default=False,
-        verbose_name=_("Lu")
-    )
-    
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    def __str__(self):
-        return f"{self.title} - {self.user.display_name}"
+# ============================================================================
+# NOTIFICATION MODEL REMOVED
+# ============================================================================
+# Le modèle Notification a été déplacé vers le module apps/notifications/
+# pour centraliser toutes les notifications (aquaculture, commerce, chat, etc.)
+# Utilisez apps.notifications.models.Notification à la place
+# ============================================================================

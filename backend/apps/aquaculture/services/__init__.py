@@ -26,7 +26,8 @@ from .cycle_service import ProductionCycleService
 from .log_service import CycleLogService
 from .feeding_service import FeedingPlanService
 from .analytics_service import AnalyticsService
-from .notification_service import NotificationService
+# NotificationService moved to apps/notifications/services.py
+# from .notification_service import NotificationService
 from .sanitary_service import SanitaryService
 from .sync_service import SyncService
 
@@ -36,7 +37,7 @@ __all__ = [
     'CycleLogService',
     'FeedingPlanService',
     'AnalyticsService',
-    'NotificationService',
+    # 'NotificationService',  # Moved to apps/notifications
     'SanitaryService',
     'SyncService',
 ]

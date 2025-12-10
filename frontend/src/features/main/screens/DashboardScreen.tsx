@@ -1,4 +1,5 @@
 ﻿import React, { useEffect, useState, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
   Text,
@@ -45,6 +46,13 @@ export default function DashboardScreen({ navigation }: any) {
     initializeDashboard();
   }, [dispatch]);
 
+  // Rafraîchir les notifications à chaque retour sur le dashboard (ex: après création commande)
+  useFocusEffect(
+    useCallback(() => {
+      dispatch(fetchNotifications());
+    }, [dispatch])
+  );
+
   const tryGlobalOfflineSync = async () => {
     try {
       const hasPending = await offlineService.hasAnyPendingSync();
@@ -62,6 +70,7 @@ export default function DashboardScreen({ navigation }: any) {
 
   const onRefresh = useCallback(() => {
     dispatch(fetchDashboardData());
+    dispatch(fetchNotifications());
   }, [dispatch]);
 
   const summary = {
@@ -243,8 +252,6 @@ export default function DashboardScreen({ navigation }: any) {
     </ScrollView>
   );
 }
-
-
 
 
 

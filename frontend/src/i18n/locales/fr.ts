@@ -286,6 +286,8 @@ export const fr = {
   recordSaved: 'Saisie enregistrée avec succès',
   recordSaveError: 'Erreur lors de l\'enregistrement',
   recordSavedOffline: 'Saisie sauvegardée (sera synchronisée à la reconnexion)',
+  sampleCountTooLow: 'Nombre de poissons pesés insuffisant (min {min}).',
+  sampleCountRequiredWithWeight: 'Veuillez indiquer le nombre de poissons pesés avec le poids total.',
   syncInProgress: 'Synchronisation en cours...',
   syncSuccess: 'Synchronisation réussie',
   syncFailed: 'Erreur de synchronisation',
@@ -372,6 +374,12 @@ export const fr = {
   feedingNotes: 'Notes d\'Alimentation',
   understood: 'Compris',
   retry: 'Réessayer',
+  help: 'Aide',
+  densityTooHigh: 'La densité initiale est trop élevée.',
+  maxDensity: 'Densité maximale',
+  yourDensity: 'Votre densité',
+  fishPerM2: 'poissons/m²',
+  densitySuggestion: 'Réduisez le nombre initial ou augmentez la surface du bassin.',
   harvestDateRequired: 'La date de récolte est requise',
   finalCount: 'Nombre Final',
   finalCountRequired: 'Le nombre final de poissons est requis',
@@ -437,6 +445,9 @@ export const fr = {
   notificationType_treatment_reminder: 'Rappel Traitement',
   notificationType_cycle_milestone: 'Jalon de Cycle',
   notificationType_alert: 'Alerte',
+  notificationType_order_confirmed: 'Commande confirmée',
+  notificationType_order_shipped: 'Commande expédiée',
+  notificationType_order_delivered: 'Commande livrée',
 
   // Feeding Plans
   feedingPlan: 'Plan d\'Alimentation',
@@ -630,4 +641,16 @@ export const fr = {
   onboardingSlide2Description: 'Enregistrez vos poissons, suivez leur croissance et optimisez vos résultats en temps réel',
   onboardingSlide3Title: 'Optimisez votre alimentation',
   onboardingSlide3Description: 'Commandez vos aliments, planifiez vos rations et maximisez votre rentabilité',
+
+  // Notifications push
+  pushNotifications: 'Notifications push',
+  pushNotificationsDescription: 'Collez votre token Expo push pour recevoir les alertes sur cet appareil.',
+  pushTokenPlaceholder: 'ExponentPushToken[...]',
+  registerPushToken: 'Enregistrer le token push',
+  pushTokenSuccessTitle: 'Token enregistré',
+  pushTokenSuccessMessage: 'Cet appareil recevra désormais les notifications push.',
+  pushTokenError: 'Impossible d’enregistrer le token push. Réessayez.',
+  pushTokenMissingTitle: 'Token manquant',
+  pushTokenMissingMessage: 'Collez un token Expo push valide pour continuer.',
+  pushDeviceIdLabel: 'Identifiant appareil: {{deviceId}}',
 };

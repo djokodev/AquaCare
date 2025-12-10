@@ -99,6 +99,8 @@ MAVECAM AquaCare is a comprehensive aquaculture management platform consisting o
 - **Django REST API Backend** (`backend/`) - Aquaculture production tracking system
 - **React Native/Expo Frontend** (`frontend/`) - Mobile application for field data collection
 
+> Branding: AquaCare est une application distincte. MAVECameroon est un partenaire, mais l'app et ses PDF/exports ne doivent pas mentionner « MAVECAM » comme propriétaire. Utiliser un branding neutre AquaCare.
+
 This is a French-language application targeting aquaculture farmers in Cameroon, featuring offline-first architecture with multilingual support (French/English).
 
 

@@ -10,7 +10,7 @@ import {
   deleteNotification,
   deleteAllReadNotifications,
 } from '@/features/notifications/store/notificationSlice';
-import { Notification } from '@/types/aquaculture';
+import { Notification } from '@/types/notifications';
 import { MAVECAM_COLORS } from '@/constants/colors';
 
 const NOTIFICATION_COLORS = {
@@ -295,7 +295,7 @@ export default function NotificationsScreen({ navigation }: any) {
                       <View className="flex-row justify-between items-center">
                         <Text className="text-xs text-gray-light">{formatRelativeDate(notification.scheduled_for)}</Text>
                         <Text className="text-xs font-semibold" style={{ color }}>
-                          {t(`notificationType_${notification.notification_type}`) || notification.notification_type}
+                          {t(`notificationType_${notification.notification_type}`, notification.notification_type)}
                         </Text>
                       </View>
                     </View>
@@ -328,7 +328,5 @@ export default function NotificationsScreen({ navigation }: any) {
     </View>
   );
 }
-
-
 
 

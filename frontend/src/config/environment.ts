@@ -18,9 +18,17 @@ interface EnvironmentConfig {
   debug: boolean;
 }
 
-const DEFAULT_DEV_HOST = '172.20.10.2'; // fallback si host Expo non detecte
+const DEFAULT_DEV_HOST = '172.20.10.2'; // fallback si host Expo non detecté (à personnaliser)
 
 const getDevHost = () => {
+  // Surcharge optionnelle via extra ou variable Expo
+  const overrideHost =
+    (Constants.expoConfig as any)?.extra?.devHost ||
+    process.env.EXPO_PUBLIC_DEV_HOST;
+  if (overrideHost) {
+    return String(overrideHost);
+  }
+
   const hostUri =
     (Constants.expoConfig as any)?.hostUri ||
     (Constants as any)?.manifest2?.extra?.expoGo?.developer?.hostname ||
@@ -30,6 +38,13 @@ const getDevHost = () => {
     const cleaned = hostUri.replace(/^exp:\/\//, '').replace(/^https?:\/\//, '');
     return cleaned.split(':')[0];
   }
+
+  // Fallbacks connus
+  if (Platform.OS === 'android') {
+    // Android emulator sait accéder à l'hôte via 10.0.2.2
+    return '10.0.2.2';
+  }
+
   return DEFAULT_DEV_HOST;
 };
 
@@ -68,7 +83,6 @@ if (config.debug) {
 }
 
 export default config;
-
 
 
 

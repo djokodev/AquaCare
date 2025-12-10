@@ -6,8 +6,13 @@ Interface d'administration pour gestion catalogue produits et commandes.
 from django.contrib import admin
 from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
+from django.http import HttpResponse, FileResponse
+from django.contrib import messages
+import io
+import zipfile
 
 from .models import Product, Order, OrderItem
+from .services.pdf_service import generate_order_pdf
 
 
 class OrderItemInline(admin.TabularInline):
@@ -133,6 +138,7 @@ class OrderAdmin(admin.ModelAdmin):
     inlines = [OrderItemInline]
     date_hierarchy = 'created_at'
     ordering = ['-created_at']
+    actions = ['generate_pdf_action']
 
     fieldsets = (
         (_('Commande'), {
@@ -231,6 +237,71 @@ class OrderAdmin(admin.ModelAdmin):
         )
     total_display.short_description = _('Total')
     total_display.admin_order_field = 'total'
+
+    @admin.action(description="Generer PDF des commandes selectionnees")
+    def generate_pdf_action(self, request, queryset):
+        """Genere PDF pour commandes selectionnees (max 10)."""
+        count = queryset.count()
+
+        if count > 10:
+            self.message_user(
+                request,
+                "Selection limitee a 10 commandes maximum. Veuillez reduire votre selection.",
+                level=messages.WARNING
+            )
+            return
+
+        # Cas 1 : Une seule commande -> PDF direct
+        if count == 1:
+            order = queryset.first()
+            try:
+                pdf_bytes = generate_order_pdf(order)
+                response = HttpResponse(pdf_bytes, content_type='application/pdf')
+                response['Content-Disposition'] = f'attachment; filename="commande_{order.order_number}.pdf"'
+
+                self.message_user(
+                    request,
+                    f"PDF genere avec succes pour commande {order.order_number}",
+                    level=messages.SUCCESS
+                )
+                return response
+
+            except Exception as e:
+                self.message_user(
+                    request,
+                    f"Erreur generation PDF : {str(e)}",
+                    level=messages.ERROR
+                )
+                return
+
+        # Cas 2 : Plusieurs commandes -> ZIP de PDFs
+        try:
+            zip_buffer = io.BytesIO()
+            with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+                for order in queryset:
+                    pdf_bytes = generate_order_pdf(order)
+                    zip_file.writestr(
+                        f"commande_{order.order_number}.pdf",
+                        pdf_bytes
+                    )
+
+            zip_buffer.seek(0)
+            response = FileResponse(zip_buffer, content_type='application/zip')
+            response['Content-Disposition'] = 'attachment; filename="commandes_aquacare.zip"'
+
+            self.message_user(
+                request,
+                f"{count} PDFs generes avec succes et archives dans un ZIP",
+                level=messages.SUCCESS
+            )
+            return response
+
+        except Exception as e:
+            self.message_user(
+                request,
+                f"Erreur generation ZIP : {str(e)}",
+                level=messages.ERROR
+            )
 
     def has_add_permission(self, request):
         """Empêche création commande via admin (doit passer par API)."""

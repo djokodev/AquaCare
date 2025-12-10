@@ -401,6 +401,12 @@ export const en = {
   feedingNotes: 'Feeding Notes',
   understood: 'Understood',
   retry: 'Retry',
+  help: 'Help',
+  densityTooHigh: 'Initial density is too high.',
+  maxDensity: 'Maximum density',
+  yourDensity: 'Your density',
+  fishPerM2: 'fish/m²',
+  densitySuggestion: 'Reduce initial count or increase pond surface.',
   survival: 'Survival',
   finalBiomass: 'Final Biomass',
   finalWeight: 'Final Weight',
@@ -437,6 +443,9 @@ export const en = {
   notificationType_treatment_reminder: 'Treatment Reminder',
   notificationType_cycle_milestone: 'Cycle Milestone',
   notificationType_alert: 'Alert',
+  notificationType_order_confirmed: 'Order Confirmed',
+  notificationType_order_shipped: 'Order Shipped',
+  notificationType_order_delivered: 'Order Delivered',
 
   // Feeding Plans
   feedingPlan: 'Feeding Plan',
@@ -630,4 +639,16 @@ export const en = {
   onboardingSlide2Description: 'Record your fish, monitor their growth, and optimize your results in real-time',
   onboardingSlide3Title: 'Optimize Your Feeding',
   onboardingSlide3Description: 'Order your feed, plan your rations, and maximize your profitability',
+
+  // Push notifications
+  pushNotifications: 'Push notifications',
+  pushNotificationsDescription: 'Paste your Expo push token to receive alerts on this device.',
+  pushTokenPlaceholder: 'ExponentPushToken[...]',
+  registerPushToken: 'Register push token',
+  pushTokenSuccessTitle: 'Token saved',
+  pushTokenSuccessMessage: 'This device will now receive push notifications.',
+  pushTokenError: 'Unable to register the push token. Please try again.',
+  pushTokenMissingTitle: 'Missing token',
+  pushTokenMissingMessage: 'Paste a valid Expo push token to continue.',
+  pushDeviceIdLabel: 'Device id: {{deviceId}}',
 };

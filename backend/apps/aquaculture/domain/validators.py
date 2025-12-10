@@ -50,40 +50,44 @@ def validate_cycle_duration(start_date: date, end_date: date, species: str):
 
 
 def validate_stocking_density(
-    initial_count: int, 
-    pond_surface_m2: Decimal, 
+    initial_count: int,
+    pond_surface_m2: Decimal = None,
     pond_volume_m3: Decimal = None,
     species: str = 'clarias'
 ):
     """
     Valide que la densité de mise en charge initiale est dans les plages sécurisées.
-    
+
     Args:
         initial_count: Nombre de poissons
-        pond_surface_m2: Surface du bassin
+        pond_surface_m2: Surface du bassin (optionnel)
         pond_volume_m3: Volume du bassin (optionnel)
         species: Espèce de poisson
-        
+
     Raises:
         ValidationError: Si la densité est trop élevée
+
+    Note:
+        Au moins pond_surface_m2 OU pond_volume_m3 doit être fourni
     """
-    # Surface density check (fish per m²)
-    surface_density = initial_count / float(pond_surface_m2)
-    
-    # Recommended: 20-50 fish/m² for initial stocking
-    if surface_density > 50:
-        raise ValidationError(
-            _("Densité de mise en charge trop élevée: %(density).1f poissons/m² (maximum recommandé: 50)") % {
-                'density': surface_density
-            }
-        )
-    
-    if surface_density < 5:
-        raise ValidationError(
-            _("Densité de mise en charge trop faible: %(density).1f poissons/m² (minimum recommandé: 5)") % {
-                'density': surface_density
-            }
-        )
+    # Surface density check (fish per m²) - only if surface is provided
+    if pond_surface_m2:
+        surface_density = initial_count / float(pond_surface_m2)
+
+        # Recommended: 20-50 fish/m² for initial stocking
+        if surface_density > 50:
+            raise ValidationError(
+                _("Densité de mise en charge trop élevée: %(density).1f poissons/m² (maximum recommandé: 50)") % {
+                    'density': surface_density
+                }
+            )
+
+        if surface_density < 5:
+            raise ValidationError(
+                _("Densité de mise en charge trop faible: %(density).1f poissons/m² (minimum recommandé: 5)") % {
+                    'density': surface_density
+                }
+            )
 
 
 def validate_water_parameters(

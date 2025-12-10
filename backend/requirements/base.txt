@@ -20,7 +20,19 @@ pillow==11.3.0
 # JWT
 PyJWT==2.10.1
 
+# Task queue
+celery==5.4.0
+django-celery-beat==2.7.0
+redis==5.0.4
+
+# HTTP clients
+requests==2.32.3
+
 # Utilities
 tzdata==2025.2
 PyYAML==6.0.2
 sqlparse==0.5.3
+
+# PDF Generation
+weasyprint==61.2
+pydyf==0.11.0

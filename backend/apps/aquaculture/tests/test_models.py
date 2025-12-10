@@ -10,7 +10,7 @@ from django.utils import timezone
 
 from apps.aquaculture.models import (
     ProductionCycle, CycleLog, FeedingPlan, SanitaryLog,
-    NutritionalGuide, CycleMetrics, Notification
+    NutritionalGuide, CycleMetrics
 )
 
 
@@ -427,40 +427,3 @@ class TestCycleMetrics:
         
         expected = f"Métriques - {production_cycle.cycle_name}"
         assert str(metrics) == expected
-
-
-@pytest.mark.django_db
-class TestNotification:
-    """Tests pour le modèle Notification."""
-    
-    def test_create_notification(self, user_factory, production_cycle):
-        """Test création notification."""
-        user = user_factory()
-        notification = Notification.objects.create(
-            user=user,
-            cycle=production_cycle,
-            notification_type="feeding_reminder",
-            title="Rappel nourrissage",
-            message="Il est temps de nourrir les poissons",
-            scheduled_for=timezone.now()
-        )
-        
-        assert notification.id is not None
-        assert notification.notification_type == "feeding_reminder"
-        assert notification.is_sent is False
-        assert notification.is_read is False
-    
-    def test_notification_str(self, user_factory, production_cycle):
-        """Test représentation string de la notification."""
-        user = user_factory()
-        notification = Notification.objects.create(
-            user=user,
-            cycle=production_cycle,
-            notification_type="alert",
-            title="Alerte mortalité",
-            message="Mortalité anormale détectée",
-            scheduled_for=timezone.now()
-        )
-        
-        expected = f"Alerte mortalité - {user.display_name}"
-        assert str(notification) == expected

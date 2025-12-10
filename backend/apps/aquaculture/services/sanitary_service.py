@@ -17,8 +17,11 @@ from django.db import transaction
 from django.db.models import Q, Count, Avg
 from django.utils import timezone
 
-from ..models import SanitaryLog, ProductionCycle, Notification
+from ..models import SanitaryLog, ProductionCycle
+# Notification model moved to apps/notifications/models.py
+# Will be migrated to use NotificationService in Phase 1B
 from .base import BaseService
+from apps.notifications.services import NotificationService
 from ..domain.exceptions import (
     InvalidSanitaryDataException,
     SanitaryLogNotFoundException,
@@ -215,14 +218,18 @@ class SanitaryService(BaseService):
             sanitary_log.resolution_notes = resolution_notes
         sanitary_log.save()
 
-        # Créer notification de résolution
-        Notification.objects.create(
+        # Cr?er notification de r?solution
+        NotificationService.create_notification(
             user=sanitary_log.cycle.farm_profile.user,
-            cycle=sanitary_log.cycle,
-            notification_type='info',
-            title=f"✅ Problème résolu - {sanitary_log.cycle.cycle_name}",
-            message=f"Le problème {sanitary_log.get_event_type_display().lower()} du {sanitary_log.event_date} "
-                   f"a été marqué comme résolu.",
+            notification_type='ticket_resolved',
+            title=f"Probl?me r?solu - {sanitary_log.cycle.cycle_name}",
+            message=(
+                f"Le probl?me {sanitary_log.get_event_type_display().lower()} du {sanitary_log.event_date} "
+                f"a ?t? marqu? comme r?solu."
+            ),
+            content_object=sanitary_log,
+            metadata={'cycle_id': str(sanitary_log.cycle.id), 'sanitary_log_id': str(sanitary_log.id)},
+            channels=['in_app', 'push'],
             scheduled_for=timezone.now()
         )
 
@@ -394,12 +401,14 @@ class SanitaryService(BaseService):
             message = f"Événement {sanitary_log.get_event_type_display().lower()} enregistré."
             notification_type = 'info'
 
-        Notification.objects.create(
+        NotificationService.create_notification(
             user=cycle.farm_profile.user,
-            cycle=cycle,
             notification_type=notification_type,
             title=title,
             message=message,
+            content_object=sanitary_log,
+            metadata={'cycle_id': str(cycle.id), 'sanitary_log_id': str(sanitary_log.id)},
+            channels=['in_app', 'push'],
             scheduled_for=timezone.now()
         )
 
@@ -415,18 +424,23 @@ class SanitaryService(BaseService):
         cycle = sanitary_log.cycle
         percentage = affected_rate * 100
 
-        Notification.objects.create(
+        NotificationService.create_notification(
             user=cycle.farm_profile.user,
-            cycle=cycle,
-            notification_type='alert',
-            title=f"🚨 ALERTE CRITIQUE - {cycle.cycle_name}",
-            message=f"⚠️ {percentage:.1f}% de l'effectif affecté ({sanitary_log.affected_count} poissons).\n"
-                   f"Type: {sanitary_log.get_event_type_display()}\n"
-                   f"ACTION URGENTE REQUISE:\n"
-                   f"1. Isoler les poissons malades si possible\n"
-                   f"2. Vérifier qualité de l'eau immédiatement\n"
-                   f"3. Contacter le support technique MAVECAM\n"
-                   f"4. Suspendre l'alimentation si maladie grave",
+            notification_type='mortality_alert',
+            title=f"ALERTE CRITIQUE - {cycle.cycle_name}",
+            message=(
+                f"{percentage:.1f}% de l'effectif affecté ({sanitary_log.affected_count} poissons).\n"
+                f"Type: {sanitary_log.get_event_type_display()}\n"
+                "ACTION URGENTE :\n"
+                "1. Isoler les poissons malades si possible\n"
+                "2. Vérifier la qualité de l'eau\n"
+                "3. Contacter le support MAVECAM\n"
+                "4. Suspendre l'alimentation si besoin"
+            ),
+            content_object=sanitary_log,
+            metadata={'cycle_id': str(cycle.id), 'sanitary_log_id': str(sanitary_log.id)},
+            priority='urgent',
+            channels=['in_app', 'push', 'email'],
             scheduled_for=timezone.now()
         )
 

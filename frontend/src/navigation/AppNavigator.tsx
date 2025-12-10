@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
 
 import { useAuth } from '@/hooks/useAuth';
+import { useRegisterPushNotifications } from '@/hooks/useRegisterPushNotifications';
 import AuthNavigator from './AuthNavigator';
 import MainNavigator from './MainNavigator';
 import { LoadingScreen } from '@/features/main';
@@ -18,6 +19,7 @@ const Stack = createStackNavigator<AppStackParamList>();
 
 export default function AppNavigator() {
   const { isAuthenticated, isLoading, checkAuth } = useAuth();
+  const { registerPushToken } = useRegisterPushNotifications();
 
   // Etat onboarding
   const [isCheckingOnboarding, setIsCheckingOnboarding] = useState(true);
@@ -45,7 +47,14 @@ export default function AppNavigator() {
     checkOnboarding();
   }, []);
 
-  // Loading pendant auth + onboarding
+  // Enregistrer le token push quand authentifié
+  useEffect(() => {
+    if (isAuthenticated) {
+      registerPushToken();
+    }
+  }, [isAuthenticated, registerPushToken]);
+
+  // Déterminer la route initiale
   const initialRouteName = useMemo(() => {
     if (!isAuthenticated) return 'Auth';
     if (!hasCompletedOnboarding) return 'Onboarding';

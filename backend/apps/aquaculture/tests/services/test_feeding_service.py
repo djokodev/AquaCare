@@ -8,7 +8,8 @@ from decimal import Decimal
 from datetime import date, timedelta
 
 from apps.aquaculture.services.feeding_service import FeedingPlanService
-from apps.aquaculture.models import FeedingPlan, Notification
+from apps.aquaculture.models import FeedingPlan
+from apps.notifications.models import Notification
 from apps.aquaculture.domain.exceptions import FeedingPlanGenerationError
 from tests.fixtures.factories import ProductionCycleFactory
 
@@ -48,8 +49,12 @@ class TestFeedingPlanServiceGenerate:
         )
 
         # Vérifie que des notifications ont été créées
+        # Notifications génériques (content_type/object_id) via NotificationService
+        from django.contrib.contenttypes.models import ContentType
+        ct = ContentType.objects.get_for_model(cycle)
         notifications = Notification.objects.filter(
-            cycle=cycle,
+            content_type=ct,
+            object_id=str(cycle.id),
             notification_type='feeding_reminder'
         )
         assert notifications.exists()

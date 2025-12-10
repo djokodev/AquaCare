@@ -108,7 +108,7 @@ export const createProductionCycle = createAsyncThunk(
       const cycle = await aquacultureService.createProductionCycle(cycleData);
       return cycle;
     } catch (error: any) {
-      return rejectWithValue(error.response?.data?.detail || 'Erreur lors de la crÃ©ation du cycle');
+      return rejectWithValue(error.response?.data?.detail || 'Erreur lors de la création du cycle');
     }
   }
 );
@@ -153,7 +153,7 @@ export const harvestCycle = createAsyncThunk(
       const cycle = await aquacultureService.harvestCycle(id, harvestData);
       return cycle;
     } catch (error: any) {
-      return rejectWithValue(error.response?.data?.detail || 'Erreur lors de la rÃ©colte du cycle');
+      return rejectWithValue(error.response?.data?.detail || 'Erreur lors de la récolte du cycle');
     }
   }
 );
@@ -183,7 +183,7 @@ export const createCycleLog = createAsyncThunk(
       const log = await aquacultureService.createCycleLog(cycleId, logData);
       return log;
     } catch (error: any) {
-      return rejectWithValue(error.response?.data?.detail || 'Erreur lors de la crÃ©ation du log');
+      return rejectWithValue(error.response?.data?.detail || 'Erreur lors de la création du log');
     }
   }
 );
@@ -246,7 +246,7 @@ export const generateFeedingPlan = createAsyncThunk(
       const plans = await aquacultureService.generateFeedingPlan(cycleId);
       return plans;
     } catch (error: any) {
-      return rejectWithValue(error.response?.data?.detail || 'Erreur lors de la gÃ©nÃ©ration du plan d\'alimentation');
+      return rejectWithValue(error.response?.data?.detail || 'Erreur lors de la génération du plan d\'alimentation');
     }
   }
 );
@@ -276,7 +276,7 @@ export const createSanitaryLog = createAsyncThunk(
       const log = await aquacultureService.createSanitaryLog(cycleId, logData);
       return log;
     } catch (error: any) {
-      return rejectWithValue(error.response?.data?.detail || 'Erreur lors de la crÃ©ation du log sanitaire');
+      return rejectWithValue(error.response?.data?.detail || 'Erreur lors de la création du log sanitaire');
     }
   }
 );
@@ -291,7 +291,7 @@ export const resolveSanitaryIssue = createAsyncThunk(
       const log = await aquacultureService.resolveSanitaryIssue(id);
       return log;
     } catch (error: any) {
-      return rejectWithValue(error.response?.data?.detail || 'Erreur lors de la rÃ©solution du problÃ¨me');
+      return rejectWithValue(error.response?.data?.detail || 'Erreur lors de la résolution du problème');
     }
   }
 );
@@ -589,6 +589,3 @@ export const {
 } = aquacultureSlice.actions;
 
 export default aquacultureSlice.reducer;
-
-
-

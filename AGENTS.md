@@ -11,6 +11,7 @@ Guide rapide pour Codex sur le projet AquaCare. Lis ce fichier avant toute tache
 - Stack: backend Django 4.2+ / DRF (Clean Architecture + DDD), frontend React Native Expo SDK 51+ TypeScript strict, Redux Toolkit, React Navigation 6, i18next FR/EN, Axios avec interceptors JWT, SecureStore.
 - Modules: Auth/Profils, Aquaculture (cycles, logs, feeding plans, sanitary logs, analytics), Commerce (catalogue, panier, commandes, suggestions, simulation). Etat annonce: modules core completes.
 - CI/CD: GitHub Actions `pull-request-tests.yml` (pytest backend, npm test, tsc) et `deploy.yml` (tests backend, build/push images API+Nginx, deploy VPS).
+- Branding: AquaCare est distinct; MAVECameroon est un partenaire potentiel mais les livrables (PDF, UI, textes) ne doivent pas mentionner « MAVECAM » comme entité propriétaire.
 
 ## Arborescence
 - backend/: apps Django (accounts, aquaculture, commerce), mavecam_api settings, tests/, requirements/, nginx/, scripts/.

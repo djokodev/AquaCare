@@ -17,6 +17,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev \
     libjpeg-dev \
     zlib1g-dev \
+    libglib2.0-dev \
+    libpango1.0-dev \
+    libpangocairo-1.0-0 \
+    libgdk-pixbuf-2.0-dev \
+    libffi-dev \
+    libcairo2-dev \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -39,6 +45,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
     libjpeg62-turbo \
     netcat-openbsd \
+    libglib2.0-0 \
+    libpango-1.0-0 \
+    libpangocairo-1.0-0 \
+    libgdk-pixbuf-2.0-0 \
+    libcairo2 \
     && rm -rf /var/lib/apt/lists/*
 
 

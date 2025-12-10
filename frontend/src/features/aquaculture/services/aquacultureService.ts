@@ -166,7 +166,22 @@ class AquacultureService {
     }
   }
 
-  // =================== DAILY LOGS ===================
+  
+  /**
+   * R?cup?re les cycles r?colt?s pour les statistiques
+   * GET@/services/api/aquaculture/cycles/?status=harvested
+   */
+  async getHarvestedCycles(): Promise<ProductionCycle[]> {
+    try {
+      const response = await apiService.get<{ results?: ProductionCycle[] }>(`${this.baseUrl}/cycles/?status=harvested`);
+      return response.data.results || (response.data as unknown as ProductionCycle[]);
+    } catch (error) {
+      console.error('Erreur lors de la r?cup?ration des cycles r?colt?s:', error);
+      throw error;
+    }
+  }
+
+// =================== DAILY LOGS ===================
 
   /**
    * RÃ©cupÃ¨re les logs quotidiens (optionnellement filtrÃ©s par cycle)
@@ -383,75 +398,7 @@ class AquacultureService {
     }
   }
 
-  // =================== NOTIFICATIONS ===================
 
-  /**
-   * RÃ©cupÃ¨re les notifications de l'utilisateur
-   * GET@/services/api/aquaculture/notifications/
-   */
-  async getNotifications(): Promise<any[]> {
-    try {
-      const response = await apiService.get<{ results: any[] }>(`${this.baseUrl}/notifications/`);
-      return response.data.results || response.data;
-    } catch (error) {
-      console.error('Erreur lors de la rÃ©cupÃ©ration des notifications:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * RÃ©cupÃ¨re les cycles rÃ©coltÃ©s pour les statistiques
-   * GET@/services/api/aquaculture/cycles/?status=harvested
-   */
-  async getHarvestedCycles(): Promise<any[]> {
-    try {
-      const response = await apiService.get<any>(`${this.baseUrl}/cycles/?status=harvested`);
-      return response.data.results || response.data;
-    } catch (error) {
-      console.error('Erreur lors de la rÃ©cupÃ©ration des cycles rÃ©coltÃ©s:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Marque une notification comme lue
-   * PATCH@/services/api/aquaculture/notifications/{id}/
-   */
-  async markNotificationAsRead(id: string): Promise<any> {
-    try {
-      const response = await apiService.patch<any>(`${this.baseUrl}/notifications/${id}/`, { is_read: true });
-      return response.data;
-    } catch (error) {
-      console.error('Erreur lors du marquage de la notification comme lue:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Marque toutes les notifications comme lues
-   * POST@/services/api/aquaculture/notifications/mark_all_read/
-   */
-  async markAllNotificationsAsRead(): Promise<void> {
-    try {
-      await apiService.post(`${this.baseUrl}/notifications/mark_all_read/`);
-    } catch (error) {
-      console.error('Erreur lors du marquage des notifications comme lues:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Supprime une notification spÃ©cifique
-   * DELETE@/services/api/aquaculture/notifications/{id}/
-   */
-  async deleteNotification(id: string): Promise<void> {
-    try {
-      await apiService.delete(`${this.baseUrl}/notifications/${id}/`);
-    } catch (error) {
-      console.error(`Erreur lors de la suppression de la notification ${id}:`, error);
-      throw error;
-    }
-  }
 
   // =================== PLANS D'ALIMENTATION ===================
 
@@ -499,26 +446,6 @@ class AquacultureService {
     }
   }
 
-  /**
-   * Supprime toutes les notifications lues (simule via suppression individuelle)
-   */
-  async deleteAllReadNotifications(): Promise<void> {
-    try {
-      // RÃ©cupÃ©rer d'abord toutes les notifications
-      const allNotifications = await this.getNotifications();
-      const readNotifications = allNotifications.filter(n => n.is_read);
-
-      // Supprimer individuellement chaque notification lue
-      const deletePromises = readNotifications.map(notification =>
-        this.deleteNotification(notification.id)
-      );
-
-      await Promise.all(deletePromises);
-    } catch (error) {
-      console.error('Erreur lors de la suppression des notifications lues:', error);
-      throw error;
-    }
-  }
 
   // =================== GUIDES NUTRITIONNELS ===================
 

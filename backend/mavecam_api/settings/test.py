@@ -45,6 +45,16 @@ PASSWORD_HASHERS = [
 # Désactiver debug toolbar en tests
 DEBUG = False
 
+# Email en mémoire pour les tests (évite un SMTP réel)
+EMAIL_BACKEND = 'django.core.mail.backends.locmem.EmailBackend'
+DEFAULT_FROM_EMAIL = 'test@example.com'
+
+# Celery en mode eager pour les tests (évite Redis/broker)
+CELERY_TASK_ALWAYS_EAGER = True
+CELERY_TASK_EAGER_PROPAGATES = True
+CELERY_BROKER_URL = 'memory://'
+CELERY_RESULT_BACKEND = 'cache+memory://'
+
 # Logging minimal en tests
 LOGGING = {
     'version': 1,

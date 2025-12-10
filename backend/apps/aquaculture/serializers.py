@@ -22,9 +22,11 @@ from django.utils import timezone
 
 from .models import (
     ProductionCycle, CycleLog, FeedingPlan, SanitaryLog,
-    NutritionalGuide, CycleMetrics, Notification
+    NutritionalGuide, CycleMetrics
 )
+# Notification model moved to apps/notifications/models.py
 from .domain.calculators import AquacultureCalculator
+from apps.notifications.serializers import NotificationSerializer as GlobalNotificationSerializer
 
 
 class ProductionCycleSerializer(serializers.ModelSerializer):
@@ -157,7 +159,18 @@ class ProductionCycleSerializer(serializers.ModelSerializer):
                 'initial_count': _("Le nombre initial de poissons semble trop élevé")
             })
 
-        # Validate pond capacity
+        # Validate that at least one of pond_surface_m2 or pond_volume_m3 is provided
+        # (only for creation, not update)
+        if not self.instance:  # Creation only
+            has_surface = attrs.get('pond_surface_m2') is not None
+            has_volume = attrs.get('pond_volume_m3') is not None
+
+            if not has_surface and not has_volume:
+                raise serializers.ValidationError({
+                    'pond_surface_m2': _("Veuillez renseigner au moins la surface OU le volume du bassin")
+                })
+
+        # Validate pond capacity (density check)
         if attrs.get('pond_surface_m2') and attrs.get('initial_count'):
             density_per_m2 = attrs['initial_count'] / float(attrs['pond_surface_m2'])
             if density_per_m2 > 500:  # Max 500 fish per m2 initially
@@ -201,6 +214,9 @@ class CycleLogSerializer(serializers.ModelSerializer):
             'observations', 'created_offline', 'synced_at', 'created_at'
         ]
         read_only_fields = ['id', 'log_time', 'synced_at', 'created_at']
+        # On gère l'upsert (cycle/log_date) au niveau de la vue, donc on retire
+        # la validation unique automatique pour éviter un 400 avant la mise à jour.
+        validators = []
 
     def get_calculated_average_weight(self, obj):
         """Calcule le poids moyen à partir des données d'échantillonnage."""
@@ -516,29 +532,12 @@ class CycleComparisonSerializer(serializers.Serializer):
     )
 
 
-class NotificationSerializer(serializers.ModelSerializer):
-    """
-    Sérialiseur pour les notifications push.
-    """
-    cycle_name = serializers.CharField(source='cycle.cycle_name', read_only=True)
-    type_display = serializers.CharField(source='get_notification_type_display', read_only=True)
-    is_overdue = serializers.SerializerMethodField()
-
-    class Meta:
-        model = Notification
-        fields = [
-            'id', 'user', 'cycle', 'cycle_name', 'notification_type',
-            'type_display', 'title', 'message', 'scheduled_for',
-            'sent_at', 'read_at', 'is_sent', 'is_read', 'is_overdue',
-            'created_at'
-        ]
-        read_only_fields = ['id', 'sent_at', 'created_at']
-
-    def get_is_overdue(self, obj):
-        """Vérifie si la notification est en retard."""
-        from django.utils import timezone
-        return obj.scheduled_for < timezone.now() and not obj.is_sent
-
+# =============================================================================
+# NOTIFICATION SERIALIZER REMOVED
+# =============================================================================
+# NotificationSerializer a été déplacé vers apps/notifications/serializers.py
+# Utilisez apps.notifications.serializers.NotificationSerializer à la place
+# =============================================================================
 
 class DashboardSerializer(serializers.Serializer):
     """
@@ -553,7 +552,7 @@ class DashboardSerializer(serializers.Serializer):
     active_cycles = ProductionCycleSerializer(many=True)
     recent_logs = CycleLogSerializer(many=True)
     current_feeding_plans = FeedingPlanSerializer(many=True)
-    pending_notifications = NotificationSerializer(many=True)
+    pending_notifications = GlobalNotificationSerializer(many=True)
     active_sanitary_issues = SanitaryLogSerializer(many=True)
     
     growth_chart_data = serializers.ListField()
@@ -641,5 +640,3 @@ class CycleComparisonSerializer(serializers.Serializer):
     historical_averages = serializers.DictField()
     performance_ranking = serializers.CharField()
     improvement_suggestions = serializers.ListField()
-
-

@@ -72,6 +72,30 @@ export default function DailyLogScreen({ navigation }: any) {
     }
   }, [activeCycles, selectedCycle]);
 
+  const getErrorMessage = (error: any): string => {
+    if (error?.response?.data) {
+      const data = error.response.data;
+      if (typeof data === 'string') {
+        return data;
+      }
+      if (data.message) {
+        return data.message;
+      }
+      if (data.detail) {
+        return data.detail;
+      }
+      // DRF validation errors: take first field message
+      const firstKey = Object.keys(data)[0];
+      if (firstKey && Array.isArray(data[firstKey]) && data[firstKey].length > 0) {
+        return `${firstKey}: ${data[firstKey][0]}`;
+      }
+    }
+    if (error?.message) {
+      return error.message;
+    }
+    return t('recordSaveError');
+  };
+
   const handleSave = async () => {
     if (!selectedCycle) {
       Alert.alert(t('error'), t('noCycleSelected'));
@@ -82,6 +106,19 @@ export default function DailyLogScreen({ navigation }: any) {
     try {
       const sampleCount = parseFloat(formData.sample_count) || 0;
       const sampleWeight = parseFloat(formData.sample_total_weight) || 0;
+
+       // Validation locale pour éviter un 400 backend (min 5 poissons)
+      if (sampleCount > 0 && sampleCount < 5) {
+        Alert.alert(t('error'), t('sampleCountTooLow', { min: 5 }));
+        setSaving(false);
+        return;
+      }
+      // Si un poids est saisi, exiger un nombre
+      if (sampleWeight > 0 && sampleCount <= 0) {
+        Alert.alert(t('error'), t('sampleCountRequiredWithWeight'));
+        setSaving(false);
+        return;
+      }
 
       const logData: DailyLogForm = {
         log_date: new Date().toISOString().split('T')[0],
@@ -118,17 +155,10 @@ export default function DailyLogScreen({ navigation }: any) {
           throw apiError;
         }
       }
-    } catch (error: any) {
-      console.error('Error creating daily log:', error);
+      } catch (error: any) {
+        console.error('Error creating daily log:', error);
 
-      let errorMessage = t('recordSaveError');
-      if (error.response?.data?.message) {
-        errorMessage = error.response.data.message;
-      } else if (error.response?.data?.detail) {
-        errorMessage = error.response.data.detail;
-      } else if (error.message) {
-        errorMessage = error.message;
-      }
+      const errorMessage = getErrorMessage(error);
 
       Alert.alert(t('error'), errorMessage);
     } finally {
@@ -298,7 +328,6 @@ export default function DailyLogScreen({ navigation }: any) {
     </ScrollView>
   );
 }
-
 
 
 

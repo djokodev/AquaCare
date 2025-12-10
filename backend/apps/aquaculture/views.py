@@ -24,24 +24,31 @@ from django.db.models import Avg, Sum, Q
 from django.db import transaction
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiExample
 from drf_spectacular.types import OpenApiTypes
 
 from .models import (
     ProductionCycle, CycleLog, FeedingPlan, SanitaryLog,
-    NutritionalGuide, Notification
+    NutritionalGuide
 )
+# Notifications: utiliser le module central
+from apps.notifications.models import Notification
+from apps.notifications.services import NotificationService
+from apps.notifications.serializers import NotificationSerializer
+
 from .serializers import (
     ProductionCycleSerializer, CycleLogSerializer, CycleLogSyncSerializer,
     FeedingPlanSerializer, SanitaryLogSerializer, NutritionalGuideSerializer,
-    NotificationSerializer, DashboardSerializer,
+    DashboardSerializer,
     HarvestSerializer, CycleStatisticsSerializer, CycleComparisonSerializer,
     SyncRequestSerializer, SyncResponseSerializer
 )
+# NotificationSerializer moved to apps/notifications/serializers.py
+
 from .domain.calculators import AquacultureCalculator
 from .services import (
-    ProductionCycleService, AnalyticsService, NotificationService,
+    ProductionCycleService, AnalyticsService,
     SanitaryService, SyncService
 )
 from .domain.exceptions import (
@@ -468,14 +475,46 @@ class CycleLogViewSet(viewsets.ModelViewSet):
         
         return queryset
     
-    def perform_create(self, serializer):
+    def create(self, request, *args, **kwargs):
         """
-        Crée le log quotidien.
+        Crée ou met à jour le log quotidien (upsert par cycle/log_date).
 
-        Note: Les métriques de cycle sont mises à jour automatiquement
-        via le signal post_save dans signals.py (pas de duplication).
+        - Si un log existe déjà pour (cycle, log_date) du même utilisateur,
+          on le met à jour pour éviter une erreur 400 côté mobile.
+        - Sinon on crée un nouveau log.
         """
-        serializer.save()
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        cycle = serializer.validated_data.get('cycle')
+        log_date = serializer.validated_data.get('log_date')
+
+        # Sécurité : s'assurer que le cycle appartient bien à l'utilisateur
+        if cycle.farm_profile.user_id != request.user.id:
+            return Response(
+                {"detail": "Cycle non autorisé."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        existing_log = CycleLog.objects.filter(
+            cycle=cycle,
+            log_date=log_date
+        ).first()
+
+        if existing_log:
+            # Mettre à jour les champs fournis
+            for field, value in serializer.validated_data.items():
+                setattr(existing_log, field, value)
+            existing_log.save()
+            # Recalculer les métriques du cycle
+            self._recalculate_cycle_metrics(cycle)
+
+            output_serializer = self.get_serializer(existing_log)
+            return Response(output_serializer.data, status=status.HTTP_200_OK)
+
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
     
     @extend_schema(
         summary="Création en bulk de logs (sync offline)",
@@ -769,13 +808,60 @@ class FeedingPlanViewSet(viewsets.ModelViewSet):
     
     def _create_feeding_notifications(self, plan):
         """
-        Crée des notifications de rappel d'alimentation intelligentes.
+        Cr?e des notifications de rappel d'alimentation intelligentes (J ? J+6).
 
-        Délègue toute la logique de création de notifications au NotificationService
-        pour maintenir une séparation claire des responsabilités.
+        Logique adapt?e au service centralis? de notifications pour ?viter
+        la d?pendance ? l'ancien mod?le aquaculture.
         """
-        NotificationService.create_feeding_reminders(plan, regenerate=True)
+        feeding_schedules = {
+            1: [time(13, 0)],
+            2: [time(8, 0), time(17, 0)],
+            3: [time(8, 0), time(13, 0), time(18, 0)],
+            4: [time(7, 0), time(11, 0), time(15, 0), time(18, 0)],
+        }
+        meal_names = ['matin', 'midi', 'soir', 'nuit']
 
+        feeding_times = feeding_schedules.get(plan.meals_per_day, feeding_schedules[2])
+
+        for day_offset in range(7):
+            notification_date = plan.start_date + timedelta(days=day_offset)
+
+            if notification_date < date.today():
+                continue
+
+            daily_feeding_times = feeding_times
+            if notification_date == date.today():
+                now_time = timezone.now().time().replace(second=0, microsecond=0)
+                daily_feeding_times = [ft for ft in feeding_times if ft >= now_time]
+
+            if not daily_feeding_times:
+                continue
+
+            for meal_index, meal_time in enumerate(daily_feeding_times):
+                meal_label = meal_names[meal_index] if meal_index < len(meal_names) else f'repas {meal_index + 1}'
+
+                scheduled_dt = timezone.make_aware(datetime.combine(notification_date, meal_time))
+
+                for minutes_before, msg_suffix in [(30, "dans 30min"), (15, "dans 15min")]:
+                    scheduled_for = scheduled_dt - timedelta(minutes=minutes_before)
+                    if scheduled_for <= timezone.now():
+                        continue
+
+                    NotificationService.create_notification(
+                        user=plan.cycle.farm_profile.user,
+                        notification_type='feeding_reminder',
+                        title=f"Nourrissage {msg_suffix} - {plan.cycle.cycle_name}",
+                        message=f"Pr?parez {plan.feed_per_meal:.1f} kg d'aliment ({meal_label}).",
+                        content_object=plan.cycle,
+                        metadata={
+                            'cycle_id': str(plan.cycle.id),
+                            'plan_id': str(plan.id),
+                            'meal': meal_label,
+                            'minutes_before': minutes_before,
+                        },
+                        channels=['in_app', 'push'],
+                        scheduled_for=scheduled_for,
+                    )
 
 @extend_schema_view(
     list=extend_schema(
@@ -1155,81 +1241,14 @@ class NutritionalGuideViewSet(viewsets.ReadOnlyModelViewSet):
         ]
     )
 )
-class NotificationViewSet(viewsets.ModelViewSet):
-    """
-    Gestion des notifications et rappels.
-    
-    Gère les notifications automatiques (alimentation, santé) et personnalisées.
-    Supporte la programmation et le marquage comme lu/non lu.
-    """
-    serializer_class = NotificationSerializer
-    permission_classes = [permissions.IsAuthenticated]
-    
-    def get_queryset(self):
-        """Retourne les notifications pour l'utilisateur authentifié (seulement celles qui doivent être affichées)."""
-        return Notification.objects.filter(
-            user=self.request.user,
-            scheduled_for__lte=timezone.now()  # Seulement les notifications dont l'heure est arrivée
-        ).order_by('-scheduled_for')
-    
-    @extend_schema(
-        summary="Marquer notification comme lue",
-        description="""
-        Marque une notification spécifique comme lue et enregistre l'horodatage.
-        Utile pour le suivi de l'engagement utilisateur avec les notifications.
-        """,
-        responses={
-            200: NotificationSerializer,
-            404: OpenApiExample(
-                'Notification non trouvée',
-                value={'detail': 'Notification non trouvée'}
-            )
-        }
-    )
-    @action(detail=True, methods=['post'])
-    def mark_read(self, request, pk=None):
-        """
-        Marque une notification comme lue.
-        """
-        notification = self.get_object()
-        notification.is_read = True
-        notification.read_at = timezone.now()
-        notification.save()
-        
-        return Response(
-            NotificationSerializer(notification).data,
-            status=status.HTTP_200_OK
-        )
-    
-    @extend_schema(
-        summary="Marquer toutes notifications comme lues",
-        description="""
-        Marque toutes les notifications non lues de l'utilisateur comme lues en une seule opération.
-        Optimisé pour les actions en bulk depuis l'interface mobile.
-        """,
-        responses={
-            200: OpenApiExample(
-                'Notifications marquées',
-                value={
-                    'message': '5 notifications marquées comme lues'
-                }
-            )
-        }
-    )
-    @action(detail=False, methods=['post'])
-    def mark_all_read(self, request):
-        """
-        Marque toutes les notifications comme lues.
-        """
-        count = self.get_queryset().filter(is_read=False).update(
-            is_read=True,
-            read_at=timezone.now()
-        )
-        
-        return Response({
-            'message': f'{count} notifications marquées comme lues'
-        })
 
+# =============================================================================
+# NOTIFICATION VIEWSET REMOVED
+# =============================================================================
+# NotificationViewSet a été déplacé vers apps/notifications/views.py
+# Utilisez /api/notifications/ pour accéder aux notifications
+# Le nouveau ViewSet supporte tous les modules (aquaculture, commerce, chat, etc.)
+# =============================================================================
 
 @extend_schema(
     summary="Dashboard aquaculture complet",
@@ -1603,4 +1622,3 @@ class SyncView(APIView):
             http_status = status.HTTP_200_OK
 
         return Response(sync_result, status=http_status)
-

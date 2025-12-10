@@ -22,8 +22,9 @@ from django.http import HttpResponse
 
 from .models import (
     ProductionCycle, CycleLog, FeedingPlan, SanitaryLog,
-    NutritionalGuide, CycleMetrics, Notification
+    NutritionalGuide, CycleMetrics
 )
+# Notification model moved to apps/notifications/models.py
 
 
 @admin.register(ProductionCycle)
@@ -589,61 +590,13 @@ class NutritionalGuideAdmin(admin.ModelAdmin):
     id_short.short_description = _('ID')
 
 
-@admin.register(Notification)
-class NotificationAdmin(admin.ModelAdmin):
-    """Admin interface for notifications."""
-    list_display = [
-        'id_short', 'user_display', 'title', 'notification_type',
-        'scheduled_for', 'delivery_status'
-    ]
-    list_filter = [
-        'notification_type', 'is_sent', 'is_read', 'scheduled_for'
-    ]
-    search_fields = ['user__phone_number', 'title', 'message']
-    readonly_fields = ['id', 'sent_at', 'read_at', 'created_at']
-    date_hierarchy = 'scheduled_for'
-    
-    fieldsets = (
-        (_('Destinataire'), {
-            'fields': ('user', 'cycle')
-        }),
-        (_('Contenu'), {
-            'fields': ('notification_type', 'title', 'message')
-        }),
-        (_('Planification'), {
-            'fields': ('scheduled_for',)
-        }),
-        (_('Statut'), {
-            'fields': ('is_sent', 'sent_at', 'is_read', 'read_at')
-        }),
-        (_('Métadonnées'), {
-            'fields': ('created_at',),
-            'classes': ('collapse',)
-        })
-    )
-    
-    def user_display(self, obj):
-        """Display user info."""
-        return f"{obj.user.display_name} ({obj.user.phone_number})"
-    user_display.short_description = _('Utilisateur')
-    
-    def delivery_status(self, obj):
-        """Display delivery status."""
-        if obj.is_read:
-            return format_html('<span style="color: #28A745;">✓ Lu</span>')
-        elif obj.is_sent:
-            return format_html('<span style="color: #007BFF;"> Envoyé</span>')
-        elif obj.scheduled_for < timezone.now():
-            return format_html('<span style="color: #DC3545;">⏰ En retard</span>')
-        else:
-            return format_html('<span style="color: #FFC107;">⏳ Programmé</span>')
-    delivery_status.short_description = _('Statut')
-
-    def id_short(self, obj):
-        """Display short ID for easy reference."""
-        return str(obj.id)[:8] + "..."
-    id_short.short_description = _('ID')
-
+# =============================================================================
+# NOTIFICATION ADMIN REMOVED
+# =============================================================================
+# L'admin Notification a été déplacé vers apps/notifications/admin.py
+# Le nouveau module notifications centralise toutes les notifications
+# (aquaculture, commerce, chat, etc.)
+# =============================================================================
 
 @admin.register(CycleMetrics)
 class CycleMetricsAdmin(admin.ModelAdmin):
