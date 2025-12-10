@@ -92,7 +92,9 @@ export const estimateDaysElapsed = (startDate: string): number => {
     if (isNaN(start.getTime())) return 0;
     const now = new Date();
     const diffTime = Math.abs(now.getTime() - start.getTime());
-    return Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    const diffDays = diffTime / (1000 * 60 * 60 * 24);
+    // Round pour éviter les effets de fuseau/heure d'été qui trunceraient à 9.9 -> 9
+    return Math.round(diffDays);
   } catch (error) {
     return 0;
   }
@@ -182,7 +184,6 @@ export const estimateAverageWeight = (
   if (sampleCount <= 0) return 0;
   return sampleTotalWeightGrams / sampleCount;
 };
-
 
 
 

@@ -51,7 +51,7 @@ export const useRegisterPushNotifications = () => {
       }
 
       // Identifiants device
-      let deviceId: string | null = Application.androidId || null;
+      let deviceId: string | null = Application.getAndroidId?.() ?? null;
       if (!deviceId && (Application as any).getIosIdForVendorAsync) {
         deviceId = await (Application as any).getIosIdForVendorAsync();
       }
@@ -77,4 +77,3 @@ export const useRegisterPushNotifications = () => {
 
   return { registerPushToken };
 };
-

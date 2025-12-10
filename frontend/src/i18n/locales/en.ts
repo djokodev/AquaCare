@@ -629,6 +629,17 @@ export const en = {
   productAddedToCartWithQuantity: '{{quantity}} bag(s) of {{name}} added to cart',
   continueShopping: 'Continue shopping',
 
+  // Onboarding
+  onboardingSkip: 'Skip',
+  onboardingNext: 'Next',
+  onboardingStart: 'Get Started',
+  onboardingSlide1Title: 'Welcome to AquaCare',
+  onboardingSlide1Description: 'Manage your farm, track your cycles, manage your ponds, optimize your feed, and order your inputs online.',
+  onboardingSlide2Title: 'Track Your Production Cycles',
+  onboardingSlide2Description: 'Record your fish, monitor their growth, and optimize your results in real-time',
+  onboardingSlide3Title: 'Optimize Your Feeding',
+  onboardingSlide3Description: 'Order your feed, plan your rations, and maximize your profitability',
+
   // Push notifications
   pushNotifications: 'Push notifications',
   pushNotificationsDescription: 'Paste your Expo push token to receive alerts on this device.',
