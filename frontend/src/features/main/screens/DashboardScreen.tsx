@@ -8,6 +8,15 @@ import {
   ActivityIndicator,
   RefreshControl,
 } from 'react-native';
+import Animated, {
+  useSharedValue,
+  useAnimatedScrollHandler,
+  useAnimatedStyle,
+  withTiming,
+  withDelay,
+  withSpring,
+  Easing,
+} from 'react-native-reanimated';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { useDispatch, useSelector } from 'react-redux';
@@ -23,6 +32,130 @@ import { ProductionCycle } from '@/types/aquaculture';
 import { MAVECAM_COLORS } from '@/constants/colors';
 import { formatNumber, formatPercentage } from '@/utils';
 import { useAuth } from '@/hooks/useAuth';
+
+/**
+ * MetricCard - Carte métrique animée avec fade-in, slide-up et icône animée
+ */
+interface MetricCardProps {
+  icon: keyof typeof Ionicons.glyphMap;
+  color: string;
+  value: string | number;
+  label: string;
+  index: number;
+  animationType?: 'bounce' | 'wave' | 'rotate' | 'pulse';
+}
+
+const MetricCard: React.FC<MetricCardProps> = ({
+  icon,
+  color,
+  value,
+  label,
+  index,
+  animationType = 'pulse',
+}) => {
+  // Fade-in + slide-up animation
+  const opacity = useSharedValue(0);
+  const translateY = useSharedValue(20);
+
+  React.useEffect(() => {
+    opacity.value = withDelay(
+      index * 50,
+      withTiming(1, { duration: 300, easing: Easing.out(Easing.quad) })
+    );
+    translateY.value = withDelay(
+      index * 50,
+      withSpring(0, { damping: 15, stiffness: 120 })
+    );
+  }, [index]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [{ translateY: translateY.value }],
+  }));
+
+  // Animation continue pour l'icône (boucle infinie)
+  const iconAnimation = useSharedValue(0);
+
+  React.useEffect(() => {
+    const startAnimation = () => {
+      'worklet';
+      if (animationType === 'bounce') {
+        // Mouvement vertical (haut/bas) en boucle
+        iconAnimation.value = withTiming(1, { duration: 800, easing: Easing.inOut(Easing.ease) }, (finished) => {
+          if (finished) {
+            iconAnimation.value = withTiming(0, { duration: 800, easing: Easing.inOut(Easing.ease) }, startAnimation);
+          }
+        });
+      } else if (animationType === 'wave') {
+        // Mouvement ondulant en boucle
+        iconAnimation.value = withTiming(1, { duration: 2000, easing: Easing.inOut(Easing.sin) }, (finished) => {
+          if (finished) {
+            iconAnimation.value = withTiming(0, { duration: 2000, easing: Easing.inOut(Easing.sin) }, startAnimation);
+          }
+        });
+      } else if (animationType === 'rotate') {
+        // Rotation complète en boucle
+        iconAnimation.value = withTiming(1, { duration: 3000, easing: Easing.linear }, (finished) => {
+          if (finished) {
+            iconAnimation.value = 0;
+            startAnimation();
+          }
+        });
+      } else {
+        // Pulse (scale) en boucle
+        iconAnimation.value = withTiming(1, { duration: 1200, easing: Easing.inOut(Easing.ease) }, (finished) => {
+          if (finished) {
+            iconAnimation.value = withTiming(0, { duration: 1200, easing: Easing.inOut(Easing.ease) }, startAnimation);
+          }
+        });
+      }
+    };
+
+    // Démarrer avec un délai initial pour l'effet stagger
+    const timeout = setTimeout(() => {
+      startAnimation();
+    }, index * 100);
+
+    return () => clearTimeout(timeout);
+  }, [animationType, index]);
+
+  const iconAnimatedStyle = useAnimatedStyle(() => {
+    if (animationType === 'bounce') {
+      return {
+        transform: [{ translateY: iconAnimation.value * -8 }],
+      };
+    } else if (animationType === 'wave') {
+      return {
+        transform: [
+          { translateX: iconAnimation.value * 5 },
+          { translateY: Math.sin(iconAnimation.value * Math.PI * 2) * 3 },
+        ],
+      };
+    } else if (animationType === 'rotate') {
+      return {
+        transform: [{ rotate: `${iconAnimation.value * 360}deg` }],
+      };
+    } else {
+      // Pulse
+      return {
+        transform: [{ scale: 1 + iconAnimation.value * 0.1 }],
+      };
+    }
+  });
+
+  return (
+    <Animated.View
+      style={animatedStyle}
+      className="w-[48%] bg-white rounded-2xl p-4 shadow-sm items-center mb-3"
+    >
+      <Animated.View style={iconAnimatedStyle}>
+        <Ionicons name={icon} size={32} color={color} />
+      </Animated.View>
+      <Text className="text-2xl font-bold text-gray-dark mt-2">{value}</Text>
+      <Text className="text-sm text-gray-light text-center mt-1">{label}</Text>
+    </Animated.View>
+  );
+};
 
 export default function DashboardScreen({ navigation }: any) {
   const { t } = useTranslation();
@@ -64,7 +197,7 @@ export default function DashboardScreen({ navigation }: any) {
         }
       }
     } catch (err) {
-      console.error('Erreur synchronisation globale silencieuse:', err);
+      // Sync error handled silently
     }
   };
 
@@ -105,6 +238,24 @@ export default function DashboardScreen({ navigation }: any) {
     navigation.navigate('ProfileStack', { screen: 'Settings' });
   };
 
+  // Reanimated scroll handler for sticky header
+  const scrollY = useSharedValue(0);
+
+  const scrollHandler = useAnimatedScrollHandler({
+    onScroll: (event) => {
+      scrollY.value = event.contentOffset.y;
+    },
+  });
+
+  const headerAnimatedStyle = useAnimatedStyle(() => ({
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 100,
+    // Keep header fully opaque - no transparency
+  }));
+
   if (error && !dashboardData) {
     return (
       <ScrollView
@@ -135,18 +286,26 @@ export default function DashboardScreen({ navigation }: any) {
   }
 
   return (
-    <ScrollView
-      className="flex-1 bg-cream"
-      refreshControl={
-        <RefreshControl refreshing={loading.dashboard} onRefresh={onRefresh} />
-      }
-    >
-      <DashboardHeader
-        displayName={displayName}
-        unreadCount={unreadCount}
-        onNotificationsPress={handleNotificationsPress}
-        onSettingsPress={handleSettingsPress}
-      />
+    <View className="flex-1 bg-cream">
+      {/* Header Sticky - Outside ScrollView */}
+      <Animated.View style={headerAnimatedStyle}>
+        <DashboardHeader
+          displayName={displayName}
+          unreadCount={unreadCount}
+          onNotificationsPress={handleNotificationsPress}
+          onSettingsPress={handleSettingsPress}
+        />
+      </Animated.View>
+
+      {/* Animated ScrollView with sticky header */}
+      <Animated.ScrollView
+        onScroll={scrollHandler}
+        scrollEventThrottle={16}
+        refreshControl={
+          <RefreshControl refreshing={loading.dashboard} onRefresh={onRefresh} />
+        }
+        contentContainerStyle={{ paddingTop: 140 }}
+      >
 
       <View className="px-5 py-5">
         {loading.dashboard && !dashboardData ? (
@@ -158,41 +317,41 @@ export default function DashboardScreen({ navigation }: any) {
           </View>
         ) : (
           <View className="flex-row flex-wrap justify-between">
-            <View className="w-[48%] items-center mb-3 bg-white rounded-2xl p-4 shadow-sm">
-              <Ionicons name="fish" size={32} color={MAVECAM_COLORS.GREEN_PRIMARY} />
-              <Text className="text-2xl font-bold text-gray-dark mt-2">
-                {summary.active_cycles_count}
-              </Text>
-              <Text className="text-sm text-gray-light text-center mt-1">
-                {t('activeCycles')}
-              </Text>
-            </View>
+            <MetricCard
+              icon="fish"
+              color={MAVECAM_COLORS.GREEN_PRIMARY}
+              value={summary.active_cycles_count}
+              label={t('activeCycles')}
+              index={0}
+              animationType="wave"
+            />
 
-            <View className="w-[48%] items-center mb-3 bg-white rounded-2xl p-4 shadow-sm">
-              <Ionicons name="water" size={32} color={MAVECAM_COLORS.GREEN_LIGHT} />
-              <Text className="text-2xl font-bold text-gray-dark mt-2">
-                {activeCycles.length}
-              </Text>
-              <Text className="text-sm text-gray-light text-center mt-1">
-                {t('ponds')}
-              </Text>
-            </View>
+            <MetricCard
+              icon="water"
+              color={MAVECAM_COLORS.GREEN_LIGHT}
+              value={activeCycles.length}
+              label={t('ponds')}
+              index={1}
+              animationType="pulse"
+            />
 
-            <View className="w-[48%] items-center mb-3 bg-white rounded-2xl p-4 shadow-sm">
-              <Ionicons name="scale" size={32} color={MAVECAM_COLORS.GREEN_DARK} />
-              <Text className="text-2xl font-bold text-gray-dark mt-2">
-                {formatNumber(summary.total_biomass, 'kg')}
-              </Text>
-              <Text className="text-sm text-gray-light text-center mt-1">Biomasse</Text>
-            </View>
+            <MetricCard
+              icon="scale"
+              color={MAVECAM_COLORS.GREEN_DARK}
+              value={formatNumber(summary.total_biomass, 'kg')}
+              label="Biomasse"
+              index={2}
+              animationType="bounce"
+            />
 
-            <View className="w-[48%] items-center mb-3 bg-white rounded-2xl p-4 shadow-sm">
-              <Ionicons name="trending-up" size={32} color={MAVECAM_COLORS.SUCCESS} />
-              <Text className="text-2xl font-bold text-gray-dark mt-2">
-                {formatPercentage(summary.average_survival_rate)}
-              </Text>
-              <Text className="text-sm text-gray-light text-center mt-1">Survie</Text>
-            </View>
+            <MetricCard
+              icon="trending-up"
+              color={MAVECAM_COLORS.SUCCESS}
+              value={formatPercentage(summary.average_survival_rate)}
+              label="Survie"
+              index={3}
+              animationType="bounce"
+            />
           </View>
         )}
       </View>
@@ -206,7 +365,6 @@ export default function DashboardScreen({ navigation }: any) {
 
       {activeCycles.length > 0 && (
         <View className="px-5 py-5">
-          <Text className="text-xl font-bold text-gray-dark mb-4">{t('activeCycles')}</Text>
 
           {activeCycles.map((cycle) => (
             <View
@@ -249,7 +407,8 @@ export default function DashboardScreen({ navigation }: any) {
         unreadCount={unreadCount}
         navigation={navigation}
       />
-    </ScrollView>
+      </Animated.ScrollView>
+    </View>
   );
 }
 

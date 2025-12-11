@@ -114,11 +114,11 @@ export const fr = {
   startCycle: 'Démarrer votre premier cycle',
   viewAll: 'Voir Tout',
   quickActions: 'Actions Rapides',
-  newCycle: 'Nouvel élevage',
+  newCycle: 'Démarrer un nouvel élevage',
   healthCheck: 'Contrôle Sanitaire',
   reports: 'Rapports',
-  dailyLog: 'Saisie du jour',
-  sanitaryLog: 'Problème de santé',
+  dailyLog: 'Enregistrer mes données du jour',
+  sanitaryLog: 'Signaler un problème de santé',
   dayProgress: 'Jour {{day}}/{{duration}}',
   cycleStatus: 'Statut du cycle',
   pond: 'Bassin',
@@ -134,8 +134,8 @@ export const fr = {
   quickActionsSubtitle: 'Choisissez une action',
   viewAllActions: 'Voir toutes les actions',
   collapseActions: 'Réduire',
-  categoryAquaculture: 'Aquaculture',
-  categoryCommerce: 'Commerce',
+  categoryAquaculture: 'Gérer mon élevage',
+  categoryCommerce: 'Acheter mes aliments',
   suggestedActions: 'Actions suggérées pour vous',
   noActionsYet: 'Explorez nos fonctionnalités',
 
@@ -334,7 +334,7 @@ export const fr = {
   harvestDate: 'Date de Récolte',
 
   // Nutritional Guides
-  nutritionalGuides: 'Guides Nutritionnels',
+  nutritionalGuides: 'Consulter les guides nutritionnels',
   aboutGuides: ' propos des Guides',
   nutritionalGuidesDescription: 'Consultez les recommandations d\'alimentation optimales selon l\'espèce et le stade de croissance de vos poissons. Ces guides sont basés sur les meilleures pratiques MAVECAM.',
   allSpecies: 'Toutes espèces',
@@ -412,7 +412,7 @@ export const fr = {
   survival: 'Survie',
   finalBiomass: 'Biomasse Finale',
   finalWeight: 'Poids Final',
-  cycleHistoryButton: 'Historique',
+  cycleHistoryButton: 'Voir l\'historique de mes élevages',
 
   // Notifications
   notifications: 'Notifications',
@@ -451,7 +451,7 @@ export const fr = {
   notificationType_new_message: 'Nouveau message du support',
 
   // Feeding Plans
-  feedingPlan: 'Plan d\'Alimentation',
+  feedingPlan: 'Voir mon plan d\'alimentation',
   feedingPlans: 'Plans d\'Alimentation',
   selectCycle: 'Sélectionner un cycle',
   currentWeek: 'Semaine actuelle',
@@ -474,7 +474,7 @@ export const fr = {
   day: 'jour',
 
   // Statistics
-  statistics: 'Statistiques',
+  statistics: 'Voir mes statistiques',
   statisticsTitle: 'Statistiques de Performance',
   statisticsSubtitle: 'Analyse détaillée de vos cycles',
   cycleAnalysis: 'Cycle à analyser',
@@ -513,7 +513,7 @@ export const fr = {
   bags: 'sacs',
 
   // Commerce - Product Catalog
-  productCatalog: 'Catalogue Produits',
+  productCatalog: 'Acheter des aliments',
   productAddedToCart: 'Produit ajouté au panier',
   searchProducts: 'Rechercher des produits',
   brand: 'Marque',
@@ -526,7 +526,7 @@ export const fr = {
   mixed: 'Mixte',
 
   // Commerce - Cart
-  cart: 'Panier',
+  cart: 'Voir mon panier',
   emptyCart: 'Panier vide',
   emptyCartDescription: 'Votre panier est vide. Parcourez notre catalogue pour ajouter des produits.',
   browseCatalog: 'Parcourir le catalogue',
@@ -561,7 +561,7 @@ export const fr = {
   days: 'jours',
 
   // Commerce - Orders History
-  ordersHistory: 'Historique Commandes',
+  ordersHistory: 'Suivre mes commandes',
   orderStatistics: 'Statistiques Commandes',
   totalOrders: 'Total Commandes',
   totalSpent: 'Total Dépensé',
@@ -576,7 +576,7 @@ export const fr = {
   productNotFound: 'Produit introuvable',
 
   // Commerce - Feeding Suggestions
-  feedingSuggestions: 'Suggestions Alimentation',
+  feedingSuggestions: 'Obtenir des recommandations d\'aliments',
   intelligentRecommendations: 'Recommandations Intelligentes',
   analyzingCycles: 'Analyse de vos cycles...',
   dataQuality: 'Qualité des Données',
@@ -598,7 +598,7 @@ export const fr = {
   cycleProductsAddedToCart: '{{count}} produit(s) du cycle {{cycleName}} ajoutés au panier',
 
   // Commerce - Cycle Simulator
-  cycleSimulator: 'Simulateur Cycle',
+  cycleSimulator: 'Calculer le budget de mon cycle',
   predictROI: 'Prévoir le ROI',
   simulationParameters: 'Paramètres de Simulation',
   initialFishCount: 'Nombre Poissons Initial',

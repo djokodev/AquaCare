@@ -114,11 +114,11 @@
   startCycle: 'Start your first cycle',
   viewAll: 'View All',
   quickActions: 'Quick Actions',
-  newCycle: 'New farming cycle',
+  newCycle: 'Start a new farming cycle',
   healthCheck: 'Health Check',
   reports: 'Reports',
-  dailyLog: 'Daily entry',
-  sanitaryLog: 'Health problem',
+  dailyLog: 'Record my daily data',
+  sanitaryLog: 'Report a health problem',
   dayProgress: 'Day {{day}}/{{duration}}',
   cycleStatus: 'Cycle status',
   pond: 'Pond',
@@ -134,8 +134,8 @@
   quickActionsSubtitle: 'Choose an action',
   viewAllActions: 'View all actions',
   collapseActions: 'Collapse',
-  categoryAquaculture: 'Aquaculture',
-  categoryCommerce: 'Commerce',
+  categoryAquaculture: 'Manage my farm',
+  categoryCommerce: 'Buy my feed',
   suggestedActions: 'Suggested actions for you',
   noActionsYet: 'Explore our features',
 
@@ -362,7 +362,7 @@
   completeCycleToSeeHistory: 'Complete a cycle to see history',
 
   // Nutritional Guides
-  nutritionalGuides: 'Nutritional Guides',
+  nutritionalGuides: 'View nutritional guides',
   aboutGuides: 'About Guides',
   nutritionalGuidesDescription: 'Consult optimal feeding recommendations according to species and growth stage of your fish. These guides are based on MAVECAM best practices.',
   tilapia: 'Tilapia',
@@ -410,7 +410,7 @@
   survival: 'Survival',
   finalBiomass: 'Final Biomass',
   finalWeight: 'Final Weight',
-  cycleHistoryButton: 'History',
+  cycleHistoryButton: 'View my farming history',
 
   // Notifications
   notifications: 'Notifications',
@@ -449,7 +449,7 @@
   notificationType_new_message: 'New support message',
 
   // Feeding Plans
-  feedingPlan: 'Feeding Plan',
+  feedingPlan: 'View my feeding plan',
   feedingPlans: 'Feeding Plans',
   selectCycle: 'Select Cycle',
   currentWeek: 'Current Week',
@@ -472,7 +472,7 @@
   day: 'day',
 
   // Statistics
-  statistics: 'Statistics',
+  statistics: 'View my statistics',
   statisticsTitle: 'Performance Statistics',
   statisticsSubtitle: 'Detailed analysis of your cycles',
   cycleAnalysis: 'Cycle to analyze',
@@ -511,7 +511,7 @@
   bags: 'bags',
 
   // Commerce - Product Catalog
-  productCatalog: 'Product Catalog',
+  productCatalog: 'Buy feed',
   productAddedToCart: 'Product added to cart',
   searchProducts: 'Search products',
   brand: 'Brand',
@@ -524,7 +524,7 @@
   mixed: 'Mixed',
 
   // Commerce - Cart
-  cart: 'Cart',
+  cart: 'View my cart',
   emptyCart: 'Empty cart',
   emptyCartDescription: 'Your cart is empty. Browse our catalog to add products.',
   browseCatalog: 'Browse catalog',
@@ -559,7 +559,7 @@
   days: 'days',
 
   // Commerce - Orders History
-  ordersHistory: 'Orders History',
+  ordersHistory: 'Track my orders',
   orderStatistics: 'Order Statistics',
   totalOrders: 'Total Orders',
   totalSpent: 'Total Spent',
@@ -574,7 +574,7 @@
   productNotFound: 'Product not found',
 
   // Commerce - Feeding Suggestions
-  feedingSuggestions: 'Feeding Suggestions',
+  feedingSuggestions: 'Get feed recommendations',
   intelligentRecommendations: 'Intelligent Recommendations',
   analyzingCycles: 'Analyzing your cycles...',
   dataQuality: 'Data Quality',
@@ -596,7 +596,7 @@
   cycleProductsAddedToCart: '{{count}} product(s) from cycle {{cycleName}} added to cart',
 
   // Commerce - Cycle Simulator
-  cycleSimulator: 'Cycle Simulator',
+  cycleSimulator: 'Calculate my cycle budget',
   predictROI: 'Predict ROI',
   simulationParameters: 'Simulation Parameters',
   initialFishCount: 'Initial Fish Count',
