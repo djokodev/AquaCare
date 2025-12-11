@@ -448,6 +448,7 @@ export const fr = {
   notificationType_order_confirmed: 'Commande confirmée',
   notificationType_order_shipped: 'Commande expédiée',
   notificationType_order_delivered: 'Commande livrée',
+  notificationType_new_message: 'Nouveau message du support',
 
   // Feeding Plans
   feedingPlan: 'Plan d\'Alimentation',
@@ -649,8 +650,53 @@ export const fr = {
   registerPushToken: 'Enregistrer le token push',
   pushTokenSuccessTitle: 'Token enregistré',
   pushTokenSuccessMessage: 'Cet appareil recevra désormais les notifications push.',
-  pushTokenError: 'Impossible d’enregistrer le token push. Réessayez.',
+  pushTokenError: 'Impossible d\'enregistrer le token push. Réessayez.',
   pushTokenMissingTitle: 'Token manquant',
   pushTokenMissingMessage: 'Collez un token Expo push valide pour continuer.',
   pushDeviceIdLabel: 'Identifiant appareil: {{deviceId}}',
+
+  // Chat/Support
+  chatTitle: 'Support',
+  chatPlaceholder: 'Écrivez votre message...',
+  chatSendButton: 'Envoyer',
+  chatAdminLabel: 'Administration',
+  chatUserLabel: 'Vous',
+  chatSystemLabel: 'Système AquaCare',
+  chatVideoMessage: 'Vidéo',
+  chatVideoSelected: 'Vidéo sélectionnée',
+
+  // Chat - Permissions
+  chatPermissionDenied: 'Permission refusée',
+  chatPermissionMediaLibrary: 'L\'accès à votre galerie est nécessaire pour envoyer des photos et vidéos.',
+
+  // Chat - Media
+  chatMediaError: 'Erreur média',
+  chatMediaInvalidFile: 'Fichier invalide',
+  chatSelectMedia: 'Sélectionner un média',
+  chatSelectMediaDescription: 'Choisissez le type de fichier à envoyer',
+  chatImage: 'Image',
+  chatVideo: 'Vidéo',
+
+  // Chat - Validation errors
+  chatMessageError: 'Erreur message',
+  chatMessageInvalid: 'Message invalide',
+  chatMessageEmpty: 'Le message ne peut pas être vide',
+  chatMessageTooLong: 'Le message dépasse {{length}} caractères',
+  chatMediaImageTooLarge: 'L\'image dépasse {{size}}MB',
+  chatMediaImageInvalidFormat: 'Format d\'image invalide. Autorisés: JPEG, PNG, WebP',
+  chatMediaVideoTooLarge: 'La vidéo dépasse {{size}}MB',
+  chatMediaVideoInvalidFormat: 'Format vidéo invalide. Autorisés: MP4, QuickTime',
+
+  // Chat - Send errors
+  chatSendError: 'Erreur d\'envoi',
+  chatSendErrorGeneric: 'Impossible d\'envoyer le message. Réessayez.',
+
+  // Chat - Offline
+  chatOfflinePending: '{{count}} message(s) en attente',
+  chatSyncingOffline: 'Synchronisation de {{count}} message(s)...',
+
+  // Chat - Empty states
+  chatEmptyState: 'Aucun message',
+  chatEmptyStateDescription: 'Envoyez un message pour démarrer la conversation avec notre équipe.',
+  chatErrorRetry: 'Tirez pour actualiser',
 };

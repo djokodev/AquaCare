@@ -29,6 +29,7 @@ INSTALLED_APPS = [
     "aquaculture",
     "commerce",  # Module commerce MAVECAM
     "apps.notifications",  # Module notifications multi-canal
+    "apps.chat",  # Module chat/support utilisateur-administration
 ]
 
 MIDDLEWARE = [
@@ -198,3 +199,8 @@ DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'noreply@mavecam.com')
 
 # Frontend URL (pour les liens dans les emails)
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:8081')
+
+# Upload limits (chat média)
+# Limites alignées sur les validations (images 10MB, vidéos 50MB)
+DATA_UPLOAD_MAX_MEMORY_SIZE = 60 * 1024 * 1024  # 60MB max par requête
+FILE_UPLOAD_MAX_MEMORY_SIZE = 60 * 1024 * 1024

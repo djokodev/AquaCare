@@ -6,7 +6,7 @@ Ces URLs seront préfixées par '/api/accounts/' dans le projet principal.
 """
 
 from django.urls import path
-from rest_framework_simplejwt.views import TokenRefreshView
+from rest_framework_simplejwt.views import TokenRefreshView, TokenVerifyView
 from . import views
 
 app_name = 'accounts'
@@ -17,6 +17,7 @@ urlpatterns = [
     path('login/', views.LoginView.as_view(), name='login'),
     path('logout/', views.LogoutView.as_view(), name='logout'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('token/verify/', TokenVerifyView.as_view(), name='token_verify'),
     
     # Profile management
     path('profile/', views.ProfileView.as_view(), name='profile'),

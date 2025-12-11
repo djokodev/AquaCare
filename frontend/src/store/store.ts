@@ -3,6 +3,7 @@ import aquacultureReducer, { aquacultureSlice } from '@/features/aquaculture/sto
 import authReducer, { authSlice } from '@/features/auth/store/authSlice';
 import commerceReducer from '@/features/commerce/store/commerceSlice';
 import notificationReducer from '@/features/notifications/store/notificationSlice';
+import chatReducer from '@/features/chat/store/chatSlice';
 
 export const store = configureStore({
   reducer: {
@@ -10,6 +11,7 @@ export const store = configureStore({
     aquaculture: aquacultureReducer,
     notifications: notificationReducer,
     commerce: commerceReducer,
+    chat: chatReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({

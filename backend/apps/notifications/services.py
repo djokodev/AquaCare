@@ -3,6 +3,7 @@ Service centralisé pour la gestion des notifications.
 Utilisable par tous les modules (aquaculture, commerce, chat, support).
 """
 
+import logging
 from django.utils import timezone
 from django.db import transaction
 from django.contrib.auth import get_user_model
@@ -13,6 +14,7 @@ from .models import Notification, NotificationPreference
 from .constants import DEFAULT_CHANNELS_BY_TYPE, DEFAULT_PRIORITY_BY_TYPE
 
 User = get_user_model()
+logger = logging.getLogger(__name__)
 
 
 class NotificationService:
@@ -141,12 +143,20 @@ class NotificationService:
 
         # 9. Envoyer immédiatement si demandé (via Celery)
         if send_immediately:
-            from .tasks import send_email_notification_task, send_push_notification_task
+            try:
+                from .tasks import send_email_notification_task, send_push_notification_task
 
-            if 'email' in channels:
-                send_email_notification_task.delay(str(notification.id))
-            if 'push' in channels:
-                send_push_notification_task.delay(str(notification.id))
+                if 'email' in channels:
+                    send_email_notification_task.delay(str(notification.id))
+                if 'push' in channels:
+                    send_push_notification_task.delay(str(notification.id))
+            except Exception as exc:
+                # Ne pas bloquer la création de notification si l'envoi immédiat échoue
+                logger.warning(
+                    "Immediate notification dispatch failed for %s: %s",
+                    notification.id,
+                    exc,
+                )
 
         return notification
 

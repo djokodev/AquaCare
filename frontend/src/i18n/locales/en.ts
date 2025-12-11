@@ -446,6 +446,7 @@ export const en = {
   notificationType_order_confirmed: 'Order Confirmed',
   notificationType_order_shipped: 'Order Shipped',
   notificationType_order_delivered: 'Order Delivered',
+  notificationType_new_message: 'New support message',
 
   // Feeding Plans
   feedingPlan: 'Feeding Plan',
@@ -651,4 +652,49 @@ export const en = {
   pushTokenMissingTitle: 'Missing token',
   pushTokenMissingMessage: 'Paste a valid Expo push token to continue.',
   pushDeviceIdLabel: 'Device id: {{deviceId}}',
+
+  // Chat/Support
+  chatTitle: 'Support',
+  chatPlaceholder: 'Type your message...',
+  chatSendButton: 'Send',
+  chatAdminLabel: 'Administration',
+  chatUserLabel: 'You',
+  chatSystemLabel: 'AquaCare System',
+  chatVideoMessage: 'Video',
+  chatVideoSelected: 'Video selected',
+
+  // Chat - Permissions
+  chatPermissionDenied: 'Permission denied',
+  chatPermissionMediaLibrary: 'Access to your gallery is required to send photos and videos.',
+
+  // Chat - Media
+  chatMediaError: 'Media error',
+  chatMediaInvalidFile: 'Invalid file',
+  chatSelectMedia: 'Select media',
+  chatSelectMediaDescription: 'Choose the type of file to send',
+  chatImage: 'Image',
+  chatVideo: 'Video',
+
+  // Chat - Validation errors
+  chatMessageError: 'Message error',
+  chatMessageInvalid: 'Invalid message',
+  chatMessageEmpty: 'Message cannot be empty',
+  chatMessageTooLong: 'Message exceeds {{length}} characters',
+  chatMediaImageTooLarge: 'Image exceeds {{size}}MB',
+  chatMediaImageInvalidFormat: 'Invalid image format. Allowed: JPEG, PNG, WebP',
+  chatMediaVideoTooLarge: 'Video exceeds {{size}}MB',
+  chatMediaVideoInvalidFormat: 'Invalid video format. Allowed: MP4, QuickTime',
+
+  // Chat - Send errors
+  chatSendError: 'Send error',
+  chatSendErrorGeneric: 'Unable to send message. Please try again.',
+
+  // Chat - Offline
+  chatOfflinePending: '{{count}} pending message(s)',
+  chatSyncingOffline: 'Syncing {{count}} message(s)...',
+
+  // Chat - Empty states
+  chatEmptyState: 'No messages',
+  chatEmptyStateDescription: 'Send a message to start the conversation with our team.',
+  chatErrorRetry: 'Pull to refresh',
 };

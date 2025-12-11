@@ -31,6 +31,7 @@ def api_root(request):
             'aquaculture': '/api/aquaculture/',
             'commerce': '/api/commerce/',
             'notifications': '/api/notifications/',
+            'support': '/api/support/',
             'admin': '/admin/',
         },
     })
@@ -67,6 +68,7 @@ urlpatterns = [
     path('api/accounts/', include('accounts.urls')),
     path('api/aquaculture/', include('apps.aquaculture.urls')),
     path('api/commerce/', include('apps.commerce.urls')),  # Module commerce
+    path('api/support/', include('apps.chat.urls')),  # Module chat support
     path('api/', include('apps.notifications.urls')),  # Module notifications
 
 ]

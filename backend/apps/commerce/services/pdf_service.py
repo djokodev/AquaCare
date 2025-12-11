@@ -8,11 +8,9 @@ from importlib import metadata
 import inspect
 import logging
 
-import pydyf
 from django.conf import settings
 from django.template.loader import render_to_string
 from django.utils import timezone
-from weasyprint import HTML
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +24,9 @@ def _ensure_pdf_dependencies():
     argument but 3 were given » lorsque WeasyPrint appelle pydyf.PDF(version, identifier).
     On applique un shim de compatibilité si nécessaire.
     """
+    # Lazy import to avoid loading WeasyPrint at Django startup
+    import pydyf
+
     try:
         pydyf_version = metadata.version("pydyf")
     except metadata.PackageNotFoundError as exc:  # pragma: no cover - dépend du runtime
@@ -72,6 +73,9 @@ def generate_order_pdf(order):
     Raises:
         Exception: Si generation echoue
     """
+    # Lazy import to avoid loading WeasyPrint at Django startup
+    from weasyprint import HTML
+
     _ensure_pdf_dependencies()
 
     try:
