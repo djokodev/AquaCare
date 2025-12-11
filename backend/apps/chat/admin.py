@@ -62,6 +62,7 @@ class ConversationAdmin(admin.ModelAdmin):
 class MessageAdmin(admin.ModelAdmin):
     """Admin interface for Message model."""
 
+    ordering = ['-created_at']
     list_display = [
         'id',
         'conversation',
