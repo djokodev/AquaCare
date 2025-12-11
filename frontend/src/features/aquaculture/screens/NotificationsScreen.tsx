@@ -1,11 +1,13 @@
-﻿import React, { useEffect, useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl, Alert } from 'react-native';
+﻿import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { AppState, View, Text, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl, Alert } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { useDispatch, useSelector } from 'react-redux';
+import { useFocusEffect } from '@react-navigation/native';
 import { AppDispatch, RootState } from '@/store/store';
 import {
   fetchNotifications,
+  fetchNotificationsSilent,
   markNotificationAsRead,
   deleteNotification,
   deleteAllReadNotifications,
@@ -19,18 +21,58 @@ const NOTIFICATION_COLORS = {
   treatment_reminder: MAVECAM_COLORS.ERROR,
   cycle_milestone: MAVECAM_COLORS.SUCCESS,
   alert: MAVECAM_COLORS.ERROR,
+  new_message: MAVECAM_COLORS.SUCCESS,
 };
 
 export default function NotificationsScreen({ navigation }: any) {
   const { t } = useTranslation();
   const dispatch = useDispatch<AppDispatch>();
+  const pollingRef = useRef<NodeJS.Timeout | null>(null);
 
   const [selectedFilter, setSelectedFilter] = useState<'all' | 'unread' | 'read'>('all');
 
   const { notifications, loading, error, unreadCount } = useSelector((state: RootState) => state.notifications);
 
+  const stopPolling = useCallback(() => {
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current);
+      pollingRef.current = null;
+    }
+  }, []);
+
+  const startPolling = useCallback(() => {
+    if (pollingRef.current) {
+      return;
+    }
+
+    pollingRef.current = setInterval(() => {
+      dispatch(fetchNotificationsSilent());
+    }, 4000);
+  }, [dispatch]);
+
   useEffect(() => {
     dispatch(fetchNotifications());
+  }, [dispatch]);
+
+  useFocusEffect(
+    useCallback(() => {
+      dispatch(fetchNotificationsSilent());
+      startPolling();
+
+      return () => {
+        stopPolling();
+      };
+    }, [dispatch, startPolling, stopPolling])
+  );
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (status) => {
+      if (status === 'active') {
+        dispatch(fetchNotificationsSilent());
+      }
+    });
+
+    return () => subscription.remove();
   }, [dispatch]);
 
   const onRefresh = React.useCallback(() => {
@@ -65,6 +107,8 @@ export default function NotificationsScreen({ navigation }: any) {
 
   const getNotificationIcon = (type: string) => {
     switch (type) {
+      case 'new_message':
+        return 'chatbubbles-outline';
       case 'feeding_reminder':
         return 'restaurant-outline';
       case 'sampling_reminder':
@@ -328,5 +372,4 @@ export default function NotificationsScreen({ navigation }: any) {
     </View>
   );
 }
-
 

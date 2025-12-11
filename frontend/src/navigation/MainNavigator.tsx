@@ -24,6 +24,7 @@ const MAVECAM_COLORS = {
 // Screens
 import { DashboardScreen } from '@/features/main';
 import { ProfileScreen, FarmProfileScreen, SettingsScreen } from '@/features/profile';
+import { useNotificationsPolling } from '@/features/notifications/hooks/useNotificationsPolling';
 
 // Aquaculture Screens
 import {
@@ -48,8 +49,12 @@ import {
   CycleSimulatorScreen,
 } from '@/features/commerce';
 
+// Chat/Support Screens
+import { ChatScreen } from '@/features/chat';
+
 export type MainTabParamList = {
   Dashboard: undefined;
+  Support: undefined;
   ProfileStack: undefined;
 };
 
@@ -71,6 +76,8 @@ export type RootStackParamList = {
   OrdersHistory: undefined;
   FeedingSuggestions: undefined;
   CycleSimulator: undefined;
+  // Chat/Support Screens
+  Chat: undefined;
 };
 
 export type ProfileStackParamList = {
@@ -150,6 +157,8 @@ function MainTabNavigator() {
 
           if (route.name === 'Dashboard') {
             iconName = focused ? 'home' : 'home-outline';
+          } else if (route.name === 'Support') {
+            iconName = focused ? 'chatbubbles' : 'chatbubbles-outline';
           } else if (route.name === 'ProfileStack') {
             iconName = focused ? 'person' : 'person-outline';
           } else {
@@ -176,6 +185,18 @@ function MainTabNavigator() {
         }}
       />
       <Tab.Screen
+        name="Support"
+        component={ChatScreen}
+        options={{
+          tabBarLabel: t('chatTitle'),
+          headerShown: true,
+          headerStyle: { backgroundColor: MAVECAM_COLORS.GREEN_PRIMARY },
+          headerTintColor: MAVECAM_COLORS.WHITE,
+          headerTitleStyle: { fontWeight: 'bold' },
+          headerTitle: t('chatTitle'),
+        }}
+      />
+      <Tab.Screen
         name="ProfileStack"
         component={ProfileNavigator}
         options={{
@@ -188,6 +209,7 @@ function MainTabNavigator() {
 
 export default function MainNavigator() {
   const { t } = useTranslation();
+  useNotificationsPolling();
 
   return (
     <RootStack.Navigator screenOptions={{ headerShown: false }}>
@@ -263,10 +285,21 @@ export default function MainNavigator() {
         name="CycleSimulator"
         component={CycleSimulatorScreen}
       />
+      {/* Chat/Support Screens */}
+      <RootStack.Screen
+        name="Chat"
+        component={ChatScreen}
+        options={{
+          headerShown: true,
+          headerStyle: { backgroundColor: MAVECAM_COLORS.GREEN_PRIMARY },
+          headerTintColor: MAVECAM_COLORS.WHITE,
+          headerTitleStyle: { fontWeight: 'bold' },
+          title: t('chatTitle'),
+        }}
+      />
     </RootStack.Navigator>
   );
 }
-
 
 
 
