@@ -8,6 +8,7 @@ gunicorn==23.0.0
 pytest==8.4.1
 pytest-django==4.11.1
 pytest-cov==6.2.1
+pytest-xdist==3.6.1
 coverage==7.10.4
 
 # Test Data Generation
