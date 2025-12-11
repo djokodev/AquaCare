@@ -140,11 +140,11 @@ export const fr = {
   noActionsYet: 'Explorez nos fonctionnalités',
 
   // NewCycle Screen
-  newCycleTitle: 'Nouveau Cycle d\'Élevage',
+  newCycleTitle: 'Nouveau Cycle d\'levage',
   speciesSelection: 'Espèce à élever',
   pondInfo: 'Bassin d\'élevage',
   pondName: 'Nom/Identifiant du bassin',
-  pondNamePlaceholder: 'Ex: Bassin A, Étang 1, BP001...',
+  pondNamePlaceholder: 'Ex: Bassin A, tang 1, BP001...',
   surface: 'Surface (m²)',
   volume: 'Volume (m³)',
   pondDimensionsInfo: 'Renseignez au moins la surface OU le volume du bassin',
@@ -169,7 +169,7 @@ export const fr = {
   profileUpdatedSuccess: 'Profil mis à jour avec succès',
   profileUpdateError: 'Erreur lors de la mise à jour du profil',
   logoutConfirm: 'Déconnexion',
-  logoutMessage: 'Êtes-vous sûr de vouloir vous déconnecter ?',
+  logoutMessage: 'tes-vous sûr de vouloir vous déconnecter ?',
   
   // Profile Content
   personalInfo: 'Informations personnelles',
@@ -228,7 +228,7 @@ export const fr = {
   accountManagement: 'Gestion du compte',
   deleteAccount: 'Supprimer mon compte',
   deleteAccountDesc: 'Suppression définitive de toutes vos données',
-  about: 'À propos',
+  about: ' propos',
   appDescription: 'Application de gestion aquacole pour les pisciculteurs camerounais.',
   
   // Profile Screen Specific
@@ -275,7 +275,7 @@ export const fr = {
   dailyData: 'Données du jour',
   averageWeight: 'Poids moyen',
   averageWeightUnit: 'Poids moyen (g)',
-  sampleCount: 'Échantillon (nb)',
+  sampleCount: 'chantillon (nb)',
   sampleWeight: 'Poids total (g)',
   mortality: 'Mortalité',
   waterTemperature: 'Température de l\'eau',
@@ -335,7 +335,7 @@ export const fr = {
 
   // Nutritional Guides
   nutritionalGuides: 'Guides Nutritionnels',
-  aboutGuides: 'À propos des Guides',
+  aboutGuides: ' propos des Guides',
   nutritionalGuidesDescription: 'Consultez les recommandations d\'alimentation optimales selon l\'espèce et le stade de croissance de vos poissons. Ces guides sont basés sur les meilleures pratiques MAVECAM.',
   allSpecies: 'Toutes espèces',
   tilapia: 'Tilapia',
@@ -423,7 +423,7 @@ export const fr = {
   unread: 'Non Lues',
   read: 'Lues',
   notificationsList: 'Liste des Notifications',
-  justNow: 'À l\'instant',
+  justNow: ' l\'instant',
   yesterday: 'Hier',
   markAllAsRead: 'Marquer Toutes Comme Lues',
   markAllAsReadConfirm: 'Marquer {{count}} notifications comme lues ?',
@@ -441,13 +441,14 @@ export const fr = {
   noNotifications: 'Aucune notification',
   notificationsWillAppear: 'Les notifications apparaîtront ici',
   notificationType_feeding_reminder: 'Rappel Alimentation',
-  notificationType_sampling_reminder: 'Rappel Échantillonnage',
+  notificationType_sampling_reminder: 'Rappel chantillonnage',
   notificationType_treatment_reminder: 'Rappel Traitement',
   notificationType_cycle_milestone: 'Jalon de Cycle',
   notificationType_alert: 'Alerte',
   notificationType_order_confirmed: 'Commande confirmée',
   notificationType_order_shipped: 'Commande expédiée',
   notificationType_order_delivered: 'Commande livrée',
+  notificationType_new_message: 'Nouveau message du support',
 
   // Feeding Plans
   feedingPlan: 'Plan d\'Alimentation',
@@ -496,7 +497,7 @@ export const fr = {
   noStatistics: 'Aucune statistique disponible',
   harvestCycleToSeeStats: 'Récoltez un cycle pour voir les statistiques',
   interactiveCharts: 'Graphiques interactifs',
-  comingSoon: 'À implémenter prochainement',
+  comingSoon: ' implémenter prochainement',
 
   // Common
   loading: 'Chargement...',
@@ -533,7 +534,7 @@ export const fr = {
   confirmRemoval: 'Confirmer la suppression',
   confirmRemovalMessage: 'Supprimer {{productName}} du panier ?',
   confirmClearCart: 'Vider le panier',
-  confirmClearCartMessage: 'Êtes-vous sûr de vouloir vider tout le panier ?',
+  confirmClearCartMessage: 'tes-vous sûr de vouloir vider tout le panier ?',
   deliveryMethod: 'Méthode de livraison',
   homeDelivery: 'Livraison à domicile',
   pickupStore: 'Retrait en magasin',
@@ -649,8 +650,54 @@ export const fr = {
   registerPushToken: 'Enregistrer le token push',
   pushTokenSuccessTitle: 'Token enregistré',
   pushTokenSuccessMessage: 'Cet appareil recevra désormais les notifications push.',
-  pushTokenError: 'Impossible d’enregistrer le token push. Réessayez.',
+  pushTokenError: 'Impossible d\'enregistrer le token push. Réessayez.',
   pushTokenMissingTitle: 'Token manquant',
   pushTokenMissingMessage: 'Collez un token Expo push valide pour continuer.',
   pushDeviceIdLabel: 'Identifiant appareil: {{deviceId}}',
+
+  // Chat/Support
+  chatTitle: 'Support',
+  chatPlaceholder: 'Écrivez votre message...',
+  chatSendButton: 'Envoyer',
+  chatAdminLabel: 'Administration',
+  chatUserLabel: 'Vous',
+  chatSystemLabel: 'Système AquaCare',
+  chatVideoMessage: 'Vidéo',
+  chatVideoSelected: 'Vidéo sélectionnée',
+  chatScrollToBottom: 'Aller au dernier message',
+
+  // Chat - Permissions
+  chatPermissionDenied: 'Permission refusée',
+  chatPermissionMediaLibrary: 'L\'accès à votre galerie est nécessaire pour envoyer des photos et vidéos.',
+
+  // Chat - Media
+  chatMediaError: 'Erreur média',
+  chatMediaInvalidFile: 'Fichier invalide',
+  chatSelectMedia: 'Sélectionner un média',
+  chatSelectMediaDescription: 'Choisissez le type de fichier à envoyer',
+  chatImage: 'Image',
+  chatVideo: 'Vidéo',
+
+  // Chat - Validation errors
+  chatMessageError: 'Erreur message',
+  chatMessageInvalid: 'Message invalide',
+  chatMessageEmpty: 'Le message ne peut pas être vide',
+  chatMessageTooLong: 'Le message dépasse {{length}} caractères',
+  chatMediaImageTooLarge: 'L\'image dépasse {{size}}MB',
+  chatMediaImageInvalidFormat: 'Format d\'image invalide. Autorisés: JPEG, PNG, WebP',
+  chatMediaVideoTooLarge: 'La vidéo dépasse {{size}}MB',
+  chatMediaVideoInvalidFormat: 'Format vidéo invalide. Autorisés: MP4, QuickTime',
+
+  // Chat - Send errors
+  chatSendError: 'Erreur d\'envoi',
+  chatSendErrorGeneric: 'Impossible d\'envoyer le message. Réessayez.',
+
+  // Chat - Offline
+  chatOfflinePending: '{{count}} message(s) en attente',
+  chatSyncingOffline: 'Synchronisation de {{count}} message(s)...',
+
+  // Chat - Empty states
+  chatEmptyState: 'Aucun message',
+  chatEmptyStateDescription: 'Envoyez un message pour démarrer la conversation avec notre équipe.',
+  chatErrorRetry: 'Tirez pour actualiser',
 };

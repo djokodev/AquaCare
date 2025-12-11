@@ -131,6 +131,15 @@ export const notificationSlice = createSlice({
         state.error = action.payload as string;
       })
 
+      // ========== FETCH NOTIFICATIONS (SILENT) ==========
+      .addCase(fetchNotificationsSilent.fulfilled, (state, action) => {
+        state.notifications = action.payload as Notification[];
+        state.unreadCount = state.notifications.filter(n => !n.is_read).length;
+      })
+      .addCase(fetchNotificationsSilent.rejected, (state, action) => {
+        state.error = action.payload as string;
+      })
+
       // ========== MARK AS READ ==========
       .addCase(markNotificationAsRead.fulfilled, (state, action) => {
         const updatedNotification = action.payload;
@@ -197,4 +206,19 @@ export const {
 
 export default notificationSlice.reducer;
 
+/**
+ * Récupère les notifications sans activer le state "loading"
+ * (utile pour le polling silencieux afin d'éviter les spinners automatiques).
+ */
+export const fetchNotificationsSilent = createAsyncThunk(
+  'notifications/fetchNotificationsSilent',
+  async (_, { rejectWithValue }) => {
+    try {
+      const notifications = await notificationsService.getNotifications();
+      return notifications as Notification[];
+    } catch (error: any) {
+      return rejectWithValue(error.response?.data?.detail || 'Erreur lors du chargement des notifications');
+    }
+  }
+);
 
