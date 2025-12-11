@@ -7,6 +7,16 @@ import pytest
 from django.db.models.signals import post_save
 from unittest.mock import patch
 
+# Import shared fixtures from the global test configuration without
+# re-registering the plugin (avoids duplicate plugin errors with xdist).
+from tests.conftest import (  # noqa: F401
+    api_client,
+    user_factory,
+    authenticated_user,
+    auth_client,
+    mavecam_admin,
+)
+
 
 @pytest.fixture(autouse=True)
 def disable_chat_signals(request):
