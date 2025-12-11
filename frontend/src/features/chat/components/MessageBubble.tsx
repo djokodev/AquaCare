@@ -59,20 +59,6 @@ export function MessageBubble({ message, onImagePress }: MessageBubbleProps) {
   };
 
   /**
-   * Get sender label for admin/system messages
-   */
-  const getSenderLabel = (senderType: MessageSenderType) => {
-    switch (senderType) {
-      case 'admin':
-        return t('chatAdminLabel');
-      case 'system':
-        return t('chatAdminLabel');
-      default:
-        return null;
-    }
-  };
-
-  /**
    * Format message timestamp
    */
   const formatTimestamp = (timestamp: string) => {
@@ -147,7 +133,6 @@ export function MessageBubble({ message, onImagePress }: MessageBubbleProps) {
     return null;
   };
 
-  const senderLabel = getSenderLabel(message.sender_type);
   const textColor = getTextColor(message.sender_type);
   const timestampColor = message.sender_type === 'user' ? COLORS.WHITE : COLORS.GRAY_LIGHT;
 
@@ -158,11 +143,6 @@ export function MessageBubble({ message, onImagePress }: MessageBubbleProps) {
         message.sender_type === 'user' ? styles.containerUser : styles.containerOther,
       ]}
     >
-      {/* Sender label (admin/system) */}
-      {senderLabel && (
-        <Text style={styles.senderLabel}>{senderLabel}</Text>
-      )}
-
       {/* Message bubble */}
       <View style={[styles.bubble, getBubbleStyle(message.sender_type)]}>
         {/* Media attachment */}

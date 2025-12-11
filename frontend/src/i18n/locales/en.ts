@@ -1,4 +1,4 @@
-export const en = {
+﻿export const en = {
   // Navigation
   login: 'Login',
   register: 'Register',
@@ -59,7 +59,7 @@ export const en = {
   // Farm Profile
   farmName: 'Farm Name',
   totalPonds: 'Number of Ponds',
-  totalArea: 'Total Area (m²)',
+  totalArea: 'Total Area (mÂ²)',
   waterSource: 'Water Source',
   mainSpecies: 'Main Species',
   annualProduction: 'Annual Production (kg)',
@@ -101,7 +101,7 @@ export const en = {
   disconnect: 'Sign Out',
 
   // Dashboard
-  welcomeBoard: 'Nice to see you again ☺️',
+  welcomeBoard: 'Nice to see you again â˜ºï¸',
   quickOverview: 'Quick Overview',
   activeCycles: 'Active Farms',
   currentCycles: 'Current Cycles',
@@ -145,8 +145,8 @@ export const en = {
   pondInfo: 'Breeding pond',
   pondName: 'Pond name/Identifier',
   pondNamePlaceholder: 'Ex: Pond A, Tank 1, BP001...',
-  surface: 'Surface (m²)',
-  volume: 'Volume (m³)',
+  surface: 'Surface (mÂ²)',
+  volume: 'Volume (mÂ³)',
   pondDimensionsInfo: 'Enter at least the surface OR the volume of the pond',
   initialStocking: 'Initial stocking',
   initialCount: 'Number of fingerlings',
@@ -248,13 +248,13 @@ export const en = {
   myFarm: 'My Farm',
   farmOf: '{{farmName}} Farm',
   farmNamePlaceholder: 'Name of your farm',
-  areaPlaceholder: 'Area in m²',
+  areaPlaceholder: 'Area in mÂ²',
   waterSourcePlaceholder: 'Water supply source',
   speciesPlaceholder: 'Tilapia, Clarias, etc.',
   productionPlaceholder: 'Production in kg/year',
   averageAreaPerPond: 'Average area per pond',
   currentDensity: 'Current density',
-  yieldPerSquareMeter: 'Yield per m²',
+  yieldPerSquareMeter: 'Yield per mÂ²',
 
   // Intervention Zones
   urbaine: 'Urban area',
@@ -279,7 +279,7 @@ export const en = {
   sampleWeight: 'Total weight (g)',
   mortality: 'Mortality',
   waterTemperature: 'Water temperature',
-  waterTemperatureUnit: 'Temperature (°C)',
+  waterTemperatureUnit: 'Temperature (Â°C)',
   phLevel: 'Water pH',
   observations: 'Observations',
   observationsPlaceholder: 'Notes, special observations...',
@@ -325,7 +325,7 @@ export const en = {
   gallery: 'Gallery',
   camera: 'Camera',
 
-  // Harvest / Récolte
+  // Harvest / RÃ©colte
   harvest: 'Harvest',
   harvestCycle: 'Harvest Cycle',
   harvestData: 'Harvest Data',
@@ -405,7 +405,7 @@ export const en = {
   densityTooHigh: 'Initial density is too high.',
   maxDensity: 'Maximum density',
   yourDensity: 'Your density',
-  fishPerM2: 'fish/m²',
+  fishPerM2: 'fish/mÂ²',
   densitySuggestion: 'Reduce initial count or increase pond surface.',
   survival: 'Survival',
   finalBiomass: 'Final Biomass',
@@ -662,6 +662,7 @@ export const en = {
   chatSystemLabel: 'AquaCare System',
   chatVideoMessage: 'Video',
   chatVideoSelected: 'Video selected',
+  chatScrollToBottom: 'Jump to latest message',
 
   // Chat - Permissions
   chatPermissionDenied: 'Permission denied',

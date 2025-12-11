@@ -21,6 +21,7 @@ import {
   Platform,
   AppState,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 import { useDispatch, useSelector } from 'react-redux';
@@ -83,6 +84,7 @@ export function ChatScreen() {
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
   const isScreenFocusedRef = useRef(false);
   const pollingIntervalMs = 4000;
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
 
   /**
    * Load conversation and messages on mount
@@ -360,6 +362,12 @@ export function ChatScreen() {
             flatListRef.current?.scrollToEnd({ animated: false });
           }
         }}
+        onScroll={({ nativeEvent }) => {
+          const { contentOffset, contentSize, layoutMeasurement } = nativeEvent;
+          const distanceFromBottom = contentSize.height - (contentOffset.y + layoutMeasurement.height);
+          setShowScrollToBottom(distanceFromBottom > 160);
+        }}
+        scrollEventThrottle={200}
         maintainVisibleContentPosition={{
           minIndexForVisible: 0,
         }}
@@ -371,6 +379,16 @@ export function ChatScreen() {
         disabled={sendingMessage}
         offlinePendingCount={offlineQueueCount}
       />
+
+      {showScrollToBottom && (
+        <TouchableOpacity
+          onPress={() => flatListRef.current?.scrollToEnd({ animated: true })}
+          style={styles.scrollToBottomButton}
+          accessibilityLabel={t('chatScrollToBottom')}
+        >
+          <Ionicons name="arrow-down" size={20} color={COLORS.WHITE} />
+        </TouchableOpacity>
+      )}
 
       {/* Fullscreen image preview */}
       <Modal
@@ -455,5 +473,21 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: COLORS.GRAY_DARK,
     fontWeight: '500',
+  },
+  scrollToBottomButton: {
+    position: 'absolute',
+    right: 16,
+    bottom: 96,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: COLORS.GREEN_PRIMARY,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 4,
   },
 });
