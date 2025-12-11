@@ -8,6 +8,13 @@ import {
   ActivityIndicator,
   RefreshControl,
 } from 'react-native';
+import Animated, {
+  useSharedValue,
+  useAnimatedScrollHandler,
+  useAnimatedStyle,
+  interpolate,
+  Extrapolate,
+} from 'react-native-reanimated';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { useDispatch, useSelector } from 'react-redux';
@@ -64,7 +71,7 @@ export default function DashboardScreen({ navigation }: any) {
         }
       }
     } catch (err) {
-      console.error('Erreur synchronisation globale silencieuse:', err);
+      // Sync error handled silently
     }
   };
 
@@ -105,6 +112,29 @@ export default function DashboardScreen({ navigation }: any) {
     navigation.navigate('ProfileStack', { screen: 'Settings' });
   };
 
+  // Reanimated scroll handler for sticky header
+  const scrollY = useSharedValue(0);
+
+  const scrollHandler = useAnimatedScrollHandler({
+    onScroll: (event) => {
+      scrollY.value = event.contentOffset.y;
+    },
+  });
+
+  const headerAnimatedStyle = useAnimatedStyle(() => ({
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 100,
+    opacity: interpolate(
+      scrollY.value,
+      [0, 50, 150],
+      [1, 1, 0.95],
+      Extrapolate.CLAMP
+    ),
+  }));
+
   if (error && !dashboardData) {
     return (
       <ScrollView
@@ -135,18 +165,26 @@ export default function DashboardScreen({ navigation }: any) {
   }
 
   return (
-    <ScrollView
-      className="flex-1 bg-cream"
-      refreshControl={
-        <RefreshControl refreshing={loading.dashboard} onRefresh={onRefresh} />
-      }
-    >
-      <DashboardHeader
-        displayName={displayName}
-        unreadCount={unreadCount}
-        onNotificationsPress={handleNotificationsPress}
-        onSettingsPress={handleSettingsPress}
-      />
+    <View className="flex-1 bg-cream">
+      {/* Header Sticky - Outside ScrollView */}
+      <Animated.View style={headerAnimatedStyle}>
+        <DashboardHeader
+          displayName={displayName}
+          unreadCount={unreadCount}
+          onNotificationsPress={handleNotificationsPress}
+          onSettingsPress={handleSettingsPress}
+        />
+      </Animated.View>
+
+      {/* Animated ScrollView with sticky header */}
+      <Animated.ScrollView
+        onScroll={scrollHandler}
+        scrollEventThrottle={16}
+        refreshControl={
+          <RefreshControl refreshing={loading.dashboard} onRefresh={onRefresh} />
+        }
+        contentContainerStyle={{ paddingTop: 140 }}
+      >
 
       <View className="px-5 py-5">
         {loading.dashboard && !dashboardData ? (
@@ -249,7 +287,8 @@ export default function DashboardScreen({ navigation }: any) {
         unreadCount={unreadCount}
         navigation={navigation}
       />
-    </ScrollView>
+      </Animated.ScrollView>
+    </View>
   );
 }
 
