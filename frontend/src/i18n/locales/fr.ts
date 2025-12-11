@@ -101,9 +101,9 @@ export const fr = {
   disconnect: 'Déconnexion',
 
   // Dashboard
-  welcomeBoard: 'Heureux de vous revoir ️',
+  welcomeBoard: 'Heureux de vous revoir ☺️',
   quickOverview: 'Aperçu Rapide',
-  activeCycles: 'levages en cours',
+  activeCycles: 'Élevages en cours',
   currentCycles: 'Cycles en cours',
   ponds: 'Bassins',
   production: 'Production',
@@ -657,7 +657,7 @@ export const fr = {
 
   // Chat/Support
   chatTitle: 'Support',
-  chatPlaceholder: 'crivez votre message...',
+  chatPlaceholder: 'Écrivez votre message...',
   chatSendButton: 'Envoyer',
   chatAdminLabel: 'Administration',
   chatUserLabel: 'Vous',
