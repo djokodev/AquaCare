@@ -7,9 +7,6 @@ import pytest
 from django.db.models.signals import post_save
 from unittest.mock import patch
 
-# Import shared fixtures from global conftest
-pytest_plugins = ['tests.conftest']
-
 
 @pytest.fixture(autouse=True)
 def disable_chat_signals(request):
