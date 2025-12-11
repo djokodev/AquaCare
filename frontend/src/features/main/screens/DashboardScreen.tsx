@@ -12,8 +12,6 @@ import Animated, {
   useSharedValue,
   useAnimatedScrollHandler,
   useAnimatedStyle,
-  interpolate,
-  Extrapolate,
 } from 'react-native-reanimated';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
@@ -127,12 +125,7 @@ export default function DashboardScreen({ navigation }: any) {
     left: 0,
     right: 0,
     zIndex: 100,
-    opacity: interpolate(
-      scrollY.value,
-      [0, 50, 150],
-      [1, 1, 0.95],
-      Extrapolate.CLAMP
-    ),
+    // Keep header fully opaque - no transparency
   }));
 
   if (error && !dashboardData) {
