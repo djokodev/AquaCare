@@ -126,8 +126,6 @@ export default function QuickActionsPreview({
 
   return (
     <View className="px-5 py-5">
-      <Text className="text-xl font-bold text-gray-dark mb-4">{t('quickActions')}</Text>
-
       {/* Suggested Actions Preview */}
       <View className="bg-white rounded-xl shadow-sm overflow-hidden">
         {suggestedActions.map((action, index) => (

@@ -274,23 +274,17 @@ export default function QuickActionsSheet({
           >
             {/* Aquaculture Section */}
             <View className="mb-4">
-              <View className="flex-row items-center mb-3">
-                <Ionicons name="fish" size={20} color={MAVECAM_COLORS.GREEN_PRIMARY} />
-                <Text className="text-lg font-bold text-gray-dark ml-2">
-                  {t('categoryAquaculture')}
-                </Text>
-              </View>
+              <Text className="text-lg font-bold text-gray-dark mb-3">
+                {t('categoryAquaculture')}
+              </Text>
               {aquacultureActions.map(renderActionItem)}
             </View>
 
             {/* Commerce Section */}
             <View className="mb-2">
-              <View className="flex-row items-center mb-3">
-                <Ionicons name="storefront" size={20} color={MAVECAM_COLORS.GREEN_PRIMARY} />
-                <Text className="text-lg font-bold text-gray-dark ml-2">
-                  {t('categoryCommerce')}
-                </Text>
-              </View>
+              <Text className="text-lg font-bold text-gray-dark mb-3">
+                {t('categoryCommerce')}
+              </Text>
               {commerceActions.map(renderActionItem)}
             </View>
           </ScrollView>
