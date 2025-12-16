@@ -153,8 +153,8 @@ AUTHENTICATION_BACKENDS = [
 
 # drf-spectacular
 SPECTACULAR_SETTINGS = {
-    "TITLE": "MAVECAM AquaCare API",
-    "DESCRIPTION": "API de gestion aquacole pour les pisciculteurs.",
+    "TITLE": "AquaCare API",
+    "DESCRIPTION": "API de gestion aquacole",
     "VERSION": "1.0.0 MVP",
     "SERVE_INCLUDE_SCHEMA": False,
     "COMPONENT_SPLIT_REQUEST": True,

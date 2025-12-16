@@ -243,7 +243,7 @@ export default function DashboardScreen({ navigation }: any) {
 
   const scrollHandler = useAnimatedScrollHandler({
     onScroll: (event) => {
-      scrollY.value = event.contentOffset.y;
+      scrollY.value = event.contentOffset.y; 
     },
   });
 
@@ -411,6 +411,3 @@ export default function DashboardScreen({ navigation }: any) {
     </View>
   );
 }
-
-
-
