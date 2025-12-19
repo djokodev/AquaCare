@@ -101,8 +101,8 @@ def create_cycle_metrics(sender, instance, created, **kwargs):
             NotificationService.create_notification(
                 user=instance.farm_profile.user,
                 notification_type='sampling_reminder',
-                title=f"Echantillonnage - {instance.cycle_name}",
-                message="Planifiez la premiere pesee pour suivre la croissance.",
+                title=f"Échantillonnage - {instance.cycle_name}",
+                message="Planifiez la première pesée pour suivre la croissance.",
                 content_object=instance,
                 metadata={'cycle_id': str(instance.id)},
                 channels=['in_app', 'push'],
@@ -118,13 +118,13 @@ def check_cycle_completion(sender, instance, **kwargs):
     DÉLÉGATION : NotificationService pour notifications
     """
     if instance.status == 'harvested' and instance.end_date:
-        # Notification de cl?ture du cycle
+        # Notification de clôture du cycle
         NotificationService.create_notification(
             user=instance.farm_profile.user,
             notification_type='cycle_milestone',
-            title=f"Cycle termine - {instance.cycle_name}",
+            title=f"Cycle terminé - {instance.cycle_name}",
             message=(
-                f"Felicitations ! Cycle {instance.cycle_name} recolte. "
+                f"Félicitations ! Cycle {instance.cycle_name} récolté. "
                 f"Taux de survie: {float(instance.survival_rate or 0):.1f}%, FCR: {float(instance.fcr or 0):.2f}."
             ),
             content_object=instance,
@@ -135,14 +135,14 @@ def check_cycle_completion(sender, instance, **kwargs):
 
         # Recommandation pour le prochain cycle (J+1)
         next_cycle_message = (
-            "Vous pouvez maintenant demarrer un nouveau cycle. "
-            "Utilisez les donnees de ce cycle pour optimiser le prochain."
+            "Vous pouvez maintenant démarrer un nouveau cycle. "
+            "Utilisez les données de ce cycle pour optimiser le prochain."
         )
 
         NotificationService.create_notification(
             user=instance.farm_profile.user,
             notification_type='cycle_milestone',
-            title="Pret pour un nouveau cycle",
+            title="Prêt pour un nouveau cycle",
             message=next_cycle_message,
             content_object=instance,
             metadata={'cycle_id': str(instance.id)},

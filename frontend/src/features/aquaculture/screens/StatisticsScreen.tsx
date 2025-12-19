@@ -29,7 +29,6 @@ export default function StatisticsScreen({ navigation }: any) {
       const cycles = await aquacultureService.getHarvestedCycles();
       setHarvestedCycles(cycles);
     } catch (loadError: any) {
-      console.error('Erreur chargement donnees:', loadError);
       setError('Erreur lors du chargement des statistiques');
     } finally {
       setLoading(false);

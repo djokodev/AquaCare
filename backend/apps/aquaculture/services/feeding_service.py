@@ -345,7 +345,7 @@ class FeedingPlanService(BaseService):
                         title=_('Nourrissage dans 30min - %(cycle_name)s') % {
                             'cycle_name': plan.cycle.cycle_name
                         },
-                        message=_("Preparez %(amount).1f kg d'aliment pour le %(meal)s") % {
+                        message=_("Préparez %(amount).1f kg d'aliment (%(meal)s).") % {
                             'amount': plan.feed_per_meal,
                             'meal': meal_name
                         },

@@ -87,7 +87,14 @@ export default function DashboardHeader({
           >
             <Ionicons name="notifications-outline" size={24} color={MAVECAM_COLORS.WHITE} />
             {unreadCount > 0 && (
-              <View className="absolute -top-1 -right-1 bg-error rounded-full px-1.5 py-0.5 min-w-[20px] items-center justify-center">
+              <View
+                className="absolute -top-1 -right-1 bg-error rounded-full items-center justify-center"
+                style={{
+                  minWidth: unreadCount > 9 ? 24 : 20,
+                  height: unreadCount > 9 ? 24 : 20,
+                  paddingHorizontal: unreadCount > 9 ? 4 : 2,
+                }}
+              >
                 <Text className="text-white text-[10px] font-bold">
                   {unreadCount > 99 ? '99+' : unreadCount}
                 </Text>

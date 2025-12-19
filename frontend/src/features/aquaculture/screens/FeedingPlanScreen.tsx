@@ -39,8 +39,7 @@ export default function FeedingPlanScreen({ navigation }: any) {
         await loadFeedingPlans(cycles[0].id);
       }
     } catch (error: any) {
-      console.error('Erreur chargement donnees:', error);
-      setError('Erreur lors du chargement des donnees');
+      setError('Erreur lors du chargement des données');
     } finally {
       setLoading(false);
     }
