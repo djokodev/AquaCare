@@ -172,10 +172,10 @@ export const getFCRRecommendation = (
     excellent: 'FCR optimal ! Continuez cette gestion.',
     bon: 'FCR satisfaisant. Maintenir ce niveau.',
     acceptable: 'FCR acceptable. Optimisation possible.',
-    'necessite amelioration': 'FCR eleve. Consultez un technicien MAVECAM.',
+    'necessite amelioration': 'FCR élevé. Consultez un technicien MAVECAM.',
   };
 
-  return interpretation ? recommendations[interpretation] : 'Donnees insuffisantes';
+  return interpretation ? recommendations[interpretation] : 'Données insuffisantes';
 };
 
 /**
@@ -192,9 +192,9 @@ export const getSurvivalRateRecommendation = (
   const recommendations = {
     excellent: 'Taux de survie excellent ! Bonnes pratiques.',
     bon: 'Taux de survie satisfaisant.',
-    moyen: 'Taux de survie moyen. Surveillance recommandee.',
+    moyen: 'Taux de survie moyen. Surveillance recommandée.',
     faible: 'Taux de survie faible. Contactez MAVECAM.',
   };
 
-  return interpretation ? recommendations[interpretation] : 'Donnees insuffisantes';
+  return interpretation ? recommendations[interpretation] : 'Données insuffisantes';
 };

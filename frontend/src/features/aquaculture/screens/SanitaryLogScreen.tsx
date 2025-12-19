@@ -133,8 +133,7 @@ export default function SanitaryLogScreen({ navigation }: any) {
         setFormData((prev) => ({ ...prev, photo: processedUri }));
       }
     } catch (pickError) {
-      console.error('Erreur selection image:', pickError);
-      Alert.alert(t('error'), "Erreur lors de la selection de l'image");
+      Alert.alert(t('error'), "Erreur lors de la sélection de l'image");
     }
   };
 
@@ -142,7 +141,7 @@ export default function SanitaryLogScreen({ navigation }: any) {
     try {
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert(t('error'), "Permission d'acces a l'appareil photo requise");
+        Alert.alert(t('error'), "Permission d'accès à l'appareil photo requise");
         return;
       }
 
@@ -235,7 +234,7 @@ export default function SanitaryLogScreen({ navigation }: any) {
 
           Alert.alert(
             t('success'),
-            `${getSuccessMessage(formData.event_type)}\n\n${t('offlineSaveMessage') || 'Sauvegarde hors ligne - sera synchronisee des que possible.'}`,
+            `${getSuccessMessage(formData.event_type)}\n\n${t('offlineSaveMessage') || 'Sauvegarde hors ligne - sera synchronisée dès que possible.'}`,
             [{ text: 'OK', onPress: () => navigation.goBack() }]
           );
         } else {

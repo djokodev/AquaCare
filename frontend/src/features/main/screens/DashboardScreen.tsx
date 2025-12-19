@@ -318,12 +318,12 @@ export default function DashboardScreen({ navigation }: any) {
         ) : (
           <View className="flex-row flex-wrap justify-between">
             <MetricCard
-              icon="fish"
+              icon="nutrition"
               color={MAVECAM_COLORS.GREEN_PRIMARY}
-              value={summary.active_cycles_count}
-              label={t('activeCycles')}
+              value={summary.average_fcr > 0 ? summary.average_fcr.toFixed(1) : '-'}
+              label="FCR"
               index={0}
-              animationType="wave"
+              animationType="pulse"
             />
 
             <MetricCard
@@ -332,7 +332,7 @@ export default function DashboardScreen({ navigation }: any) {
               value={activeCycles.length}
               label={t('ponds')}
               index={1}
-              animationType="pulse"
+              animationType="wave"
             />
 
             <MetricCard

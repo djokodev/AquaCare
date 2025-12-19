@@ -210,13 +210,13 @@ describe('utils/interpreters', () => {
 
     it('retourne recommandation pour FCR eleve', () => {
       const result = getFCRRecommendation(2.5);
-      expect(result).toContain('eleve');
+      expect(result).toContain('élevé');
       expect(result).toContain('technicien MAVECAM');
     });
 
     it('retourne message par défaut pour valeurs nulles', () => {
-      expect(getFCRRecommendation(null)).toBe('Donnees insuffisantes');
-      expect(getFCRRecommendation(undefined)).toBe('Donnees insuffisantes');
+      expect(getFCRRecommendation(null)).toBe('Données insuffisantes');
+      expect(getFCRRecommendation(undefined)).toBe('Données insuffisantes');
     });
   });
 
@@ -245,8 +245,8 @@ describe('utils/interpreters', () => {
     });
 
     it('retourne message par défaut pour valeurs nulles', () => {
-      expect(getSurvivalRateRecommendation(null)).toBe('Donnees insuffisantes');
-      expect(getSurvivalRateRecommendation(undefined)).toBe('Donnees insuffisantes');
+      expect(getSurvivalRateRecommendation(null)).toBe('Données insuffisantes');
+      expect(getSurvivalRateRecommendation(undefined)).toBe('Données insuffisantes');
     });
   });
 });
