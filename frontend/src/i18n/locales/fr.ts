@@ -636,6 +636,41 @@ export const fr = {
   onboardingSkip: 'Ignorer',
   onboardingNext: 'Suivant',
   onboardingStart: 'Commencer',
+
+  // Slide 1: Problème
+  onboarding_problem_title: 'Vous perdez de l\'argent sans le savoir ?',
+  onboarding_problem_item1: 'Mortalité inexpliquée de vos poissons',
+  onboarding_problem_item2: 'Trop d\'aliments gaspillés chaque jour',
+  onboarding_problem_item3: 'Aucune visibilité sur votre rentabilité',
+
+  // Slide 2: Solution
+  onboarding_solution_title: 'AquaCare vous aide à gagner plus d\'argent',
+  onboarding_solution_item1: 'Jusqu\'à -50% de mortalité',
+  onboarding_solution_item2: 'Jusqu\'à -30% sur les aliments',
+  onboarding_solution_item3: 'Suivi de votre ROI en temps réel',
+
+  // Slide 3: Comment
+  onboarding_how_title: '3 minutes par jour suffisent',
+  onboarding_how_step1_title: 'Saisissez vos données',
+  onboarding_how_step1_desc: 'mortalité, poids, aliment',
+  onboarding_how_step2_title: 'Recevez des alertes',
+  onboarding_how_step2_desc: 'température, mortalité anormale',
+  onboarding_how_step3_title: 'Voyez vos économies',
+  onboarding_how_step3_desc: 'tableau de bord financier',
+
+  // Slide 4: Preuve sociale
+  onboarding_social_title: 'Rejoignez les pisciculteurs qui réussissent avec AquaCare',
+  onboarding_testimonial_name: 'Jean-Pierre, Douala',
+  onboarding_testimonial_text: 'J\'ai réduit ma mortalité de 40% à 15% en 3 mois',
+  onboarding_stat1: '200+ pisciculteurs',
+  onboarding_stat2: '100 cycles gérés',
+  onboarding_stat3: '5M FCFA économisés',
+
+  // Slide 5: Action
+  onboarding_action_title: 'Prêt à optimiser votre élevage ?',
+  onboarding_action_subtitle: 'Commencez à suivre vos données dès maintenant',
+
+  // Legacy keys (pour compatibilité)
   onboardingSlide1Title: 'Bienvenue dans AquaCare',
   onboardingSlide1Description: 'Gérez votre ferme, suivez vos cycles, gérez vos bassins, optimisez votre alimentation et commandez vos intrants en ligne.',
   onboardingSlide2Title: 'Suivez vos cycles de production',
