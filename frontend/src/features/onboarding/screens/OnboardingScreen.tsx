@@ -1,6 +1,6 @@
 /**
- * Écran principal d'onboarding avec 3 slides
- * Gère navigation, swipe, et persistance
+ * Écran principal d'onboarding avec 5 slides activation utilisateur
+ * Flow: Problème → Solution → Comment → Preuve sociale → Action
  * @module features/onboarding/screens
  */
 
@@ -31,26 +31,80 @@ import { MAVECAM_COLORS } from '@/constants/colors';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 /**
- * Données des 3 slides (clés i18n)
+ * Données des 5 slides (activation utilisateur)
+ * Slide 1: Problème (reconnaissance)
+ * Slide 2: Solution (promesse)
+ * Slide 3: Comment (demo rapide)
+ * Slide 4: Preuve sociale (confiance)
+ * Slide 5: Action (call to action)
  */
 const SLIDES: OnboardingSlideData[] = [
+  // Slide 1: Problème
   {
     id: '1',
-    iconName: 'fish-outline',
-    titleKey: 'onboardingSlide1Title',
-    descriptionKey: 'onboardingSlide1Description',
+    type: 'problem',
+    iconName: 'alert-circle-outline',
+    titleKey: 'onboarding_problem_title',
+    bulletItems: [
+      { iconName: 'skull-outline', textKey: 'onboarding_problem_item1' },
+      { iconName: 'fast-food-outline', textKey: 'onboarding_problem_item2' },
+      { iconName: 'eye-off-outline', textKey: 'onboarding_problem_item3' },
+    ],
   },
+  // Slide 2: Solution
   {
     id: '2',
-    iconName: 'analytics-outline',
-    titleKey: 'onboardingSlide2Title',
-    descriptionKey: 'onboardingSlide2Description',
+    type: 'solution',
+    iconName: 'trending-up-outline',
+    titleKey: 'onboarding_solution_title',
+    bulletItems: [
+      { iconName: 'checkmark-circle', textKey: 'onboarding_solution_item1' },
+      { iconName: 'checkmark-circle', textKey: 'onboarding_solution_item2' },
+      { iconName: 'checkmark-circle', textKey: 'onboarding_solution_item3' },
+    ],
   },
+  // Slide 3: Comment
   {
     id: '3',
-    iconName: 'cart-outline',
-    titleKey: 'onboardingSlide3Title',
-    descriptionKey: 'onboardingSlide3Description',
+    type: 'how',
+    titleKey: 'onboarding_how_title',
+    howSteps: [
+      {
+        iconName: 'create-outline',
+        titleKey: 'onboarding_how_step1_title',
+        descKey: 'onboarding_how_step1_desc',
+      },
+      {
+        iconName: 'notifications-outline',
+        titleKey: 'onboarding_how_step2_title',
+        descKey: 'onboarding_how_step2_desc',
+      },
+      {
+        iconName: 'cash-outline',
+        titleKey: 'onboarding_how_step3_title',
+        descKey: 'onboarding_how_step3_desc',
+      },
+    ],
+  },
+  // Slide 4: Preuve sociale
+  {
+    id: '4',
+    type: 'social_proof',
+    titleKey: 'onboarding_social_title',
+    testimonialNameKey: 'onboarding_testimonial_name',
+    testimonialTextKey: 'onboarding_testimonial_text',
+    stats: [
+      { iconName: 'people-outline', textKey: 'onboarding_stat1' },
+      { iconName: 'analytics-outline', textKey: 'onboarding_stat2' },
+      { iconName: 'wallet-outline', textKey: 'onboarding_stat3' },
+    ],
+  },
+  // Slide 5: Action
+  {
+    id: '5',
+    type: 'action',
+    titleKey: 'onboarding_action_title',
+    subtitleKey: 'onboarding_action_subtitle',
   },
 ];
 
@@ -78,7 +132,7 @@ export default function OnboardingScreen() {
   };
 
   /**
-   * Ignore l'onboarding (slides 1-2 uniquement)
+   * Ignore l'onboarding (slides 1-4 uniquement)
    */
   const handleSkip = async () => {
     if (isProcessing) return;
@@ -92,7 +146,6 @@ export default function OnboardingScreen() {
         routes: [{ name: 'Main' }],
       });
     } catch (error) {
-      console.error('[OnboardingScreen] Erreur handleSkip:', error);
       Alert.alert(
         t('error'),
         t('errorOccurred'),
@@ -103,7 +156,7 @@ export default function OnboardingScreen() {
   };
 
   /**
-   * Commence l'utilisation de l'app (slide 3 uniquement)
+   * Commence l'utilisation de l'app (slide 5 uniquement)
    */
   const handleStart = async () => {
     if (isProcessing) return;
@@ -117,7 +170,6 @@ export default function OnboardingScreen() {
         routes: [{ name: 'Main' }],
       });
     } catch (error) {
-      console.error('[OnboardingScreen] Erreur handleStart:', error);
       Alert.alert(
         t('error'),
         t('errorOccurred'),
@@ -140,13 +192,7 @@ export default function OnboardingScreen() {
    * Render d'un slide individuel
    */
   const renderSlide = ({ item }: { item: OnboardingSlideData }) => {
-    return (
-      <OnboardingSlide
-        iconName={item.iconName}
-        title={t(item.titleKey)}
-        description={t(item.descriptionKey)}
-      />
-    );
+    return <OnboardingSlide slide={item} />;
   };
 
   // Bouton affiché selon slide actuel
@@ -157,7 +203,7 @@ export default function OnboardingScreen() {
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       <View style={styles.container}>
-        {/* Header avec bouton "Ignorer" (slides 1-2 uniquement) */}
+        {/* Header avec bouton "Ignorer" (slides 1-4 uniquement) */}
         {!isLastSlide && (
           <View style={styles.header}>
             <TouchableOpacity
@@ -176,6 +222,9 @@ export default function OnboardingScreen() {
             </Text>
           </View>
         )}
+
+        {/* Espace réservé pour header sur dernier slide */}
+        {isLastSlide && <View style={styles.headerPlaceholder} />}
 
         {/* FlatList horizontal avec slides */}
         <FlatList
@@ -233,6 +282,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 12,
     paddingBottom: 12,
+  },
+
+  headerPlaceholder: {
+    height: 52,
   },
 
   skipButton: {

@@ -634,6 +634,41 @@
   onboardingSkip: 'Skip',
   onboardingNext: 'Next',
   onboardingStart: 'Get Started',
+
+  // Slide 1: Problem
+  onboarding_problem_title: 'Are you losing money without knowing it?',
+  onboarding_problem_item1: 'Unexplained fish mortality',
+  onboarding_problem_item2: 'Too much feed wasted every day',
+  onboarding_problem_item3: 'No visibility on your profitability',
+
+  // Slide 2: Solution
+  onboarding_solution_title: 'AquaCare helps you earn more money',
+  onboarding_solution_item1: 'Up to -50% mortality',
+  onboarding_solution_item2: 'Up to -30% on feed costs',
+  onboarding_solution_item3: 'Track your ROI in real-time',
+
+  // Slide 3: How
+  onboarding_how_title: '3 minutes a day is all it takes',
+  onboarding_how_step1_title: 'Enter your data',
+  onboarding_how_step1_desc: 'mortality, weight, feed',
+  onboarding_how_step2_title: 'Receive alerts',
+  onboarding_how_step2_desc: 'temperature, abnormal mortality',
+  onboarding_how_step3_title: 'See your savings',
+  onboarding_how_step3_desc: 'financial dashboard',
+
+  // Slide 4: Social proof
+  onboarding_social_title: 'Join the fish farmers succeeding with AquaCare',
+  onboarding_testimonial_name: 'Jean-Pierre, Douala',
+  onboarding_testimonial_text: 'I reduced my mortality from 40% to 15% in 3 months',
+  onboarding_stat1: '200+ fish farmers',
+  onboarding_stat2: '100 cycles managed',
+  onboarding_stat3: '5M FCFA saved',
+
+  // Slide 5: Action
+  onboarding_action_title: 'Ready to optimize your farm?',
+  onboarding_action_subtitle: 'Start tracking your data now',
+
+  // Legacy keys (for compatibility)
   onboardingSlide1Title: 'Welcome to AquaCare',
   onboardingSlide1Description: 'Manage your farm, track your cycles, manage your ponds, optimize your feed, and order your inputs online.',
   onboardingSlide2Title: 'Track Your Production Cycles',
