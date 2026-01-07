@@ -20,6 +20,32 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 export default function OnboardingSlide({ slide }: OnboardingSlideProps) {
   const { t } = useTranslation();
 
+  /**
+   * Rend un texte avec "AquaCare" coloré en vert
+   */
+  const renderTextWithAppName = (text: string, baseStyle: any) => {
+    const appName = 'AquaCare';
+    const parts = text.split(appName);
+
+    if (parts.length === 1) {
+      // Pas de "AquaCare" dans le texte
+      return <Text style={baseStyle}>{text}</Text>;
+    }
+
+    return (
+      <Text style={baseStyle}>
+        {parts.map((part, index) => (
+          <React.Fragment key={index}>
+            {part}
+            {index < parts.length - 1 && (
+              <Text style={styles.appNameHighlight}>{appName}</Text>
+            )}
+          </React.Fragment>
+        ))}
+      </Text>
+    );
+  };
+
   const renderContent = () => {
     switch (slide.type) {
       case 'problem':
@@ -39,7 +65,7 @@ export default function OnboardingSlide({ slide }: OnboardingSlideProps) {
 
   /**
    * Slide 1: Problème (reconnaissance)
-   * Icône + titre + liste à puces
+   * Icône + titre uniquement
    */
   const renderProblemSlide = () => (
     <View style={styles.contentContainer}>
@@ -54,60 +80,49 @@ export default function OnboardingSlide({ slide }: OnboardingSlideProps) {
       )}
 
       <Text style={styles.title}>{t(slide.titleKey)}</Text>
-
-      {slide.bulletItems && (
-        <View style={styles.bulletList}>
-          {slide.bulletItems.map((item, index) => (
-            <View key={index} style={styles.bulletItem}>
-              <Ionicons
-                name={item.iconName as any}
-                size={22}
-                color={MAVECAM_COLORS.ERROR}
-                style={styles.bulletIcon}
-              />
-              <Text style={styles.bulletText}>{t(item.textKey)}</Text>
-            </View>
-          ))}
-        </View>
-      )}
     </View>
   );
 
   /**
    * Slide 2: Solution (promesse)
-   * Icône + titre + liste avec checkmarks
+   * Icône + titre avec AquaCare en vert + liste avec checkmarks
    */
-  const renderSolutionSlide = () => (
-    <View style={styles.contentContainer}>
-      {slide.iconName && (
-        <View style={styles.iconContainer}>
-          <Ionicons
-            name={slide.iconName as any}
-            size={80}
-            color={MAVECAM_COLORS.GREEN_PRIMARY}
-          />
-        </View>
-      )}
+  const renderSolutionSlide = () => {
+    // Filtrer les bullet items non-vides
+    const nonEmptyItems = slide.bulletItems?.filter(item => t(item.textKey) !== '') || [];
 
-      <Text style={styles.title}>{t(slide.titleKey)}</Text>
+    return (
+      <View style={styles.contentContainer}>
+        {slide.iconName && (
+          <View style={styles.iconContainer}>
+            <Ionicons
+              name={slide.iconName as any}
+              size={80}
+              color={MAVECAM_COLORS.GREEN_PRIMARY}
+            />
+          </View>
+        )}
 
-      {slide.bulletItems && (
-        <View style={styles.bulletList}>
-          {slide.bulletItems.map((item, index) => (
-            <View key={index} style={styles.bulletItem}>
-              <Ionicons
-                name="checkmark-circle"
-                size={22}
-                color={MAVECAM_COLORS.GREEN_PRIMARY}
-                style={styles.bulletIcon}
-              />
-              <Text style={styles.bulletText}>{t(item.textKey)}</Text>
-            </View>
-          ))}
-        </View>
-      )}
-    </View>
-  );
+        {renderTextWithAppName(t(slide.titleKey), styles.title)}
+
+        {nonEmptyItems.length > 0 && (
+          <View style={styles.bulletList}>
+            {nonEmptyItems.map((item, index) => (
+              <View key={index} style={styles.bulletItem}>
+                <Ionicons
+                  name="checkmark-circle"
+                  size={22}
+                  color={MAVECAM_COLORS.GREEN_PRIMARY}
+                  style={styles.bulletIcon}
+                />
+                <Text style={styles.bulletText}>{t(item.textKey)}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+      </View>
+    );
+  };
 
   /**
    * Slide 3: Comment (demo rapide)
@@ -119,36 +134,49 @@ export default function OnboardingSlide({ slide }: OnboardingSlideProps) {
 
       {slide.howSteps && (
         <View style={styles.stepsContainer}>
-          {slide.howSteps.map((step, index) => (
-            <React.Fragment key={index}>
-              <View style={styles.stepItem}>
-                <View style={styles.stepNumber}>
-                  <Text style={styles.stepNumberText}>{index + 1}</Text>
+          {slide.howSteps.map((step, index) => {
+            const hasDescription = t(step.descKey) !== '';
+            return (
+              <React.Fragment key={index}>
+                <View style={styles.stepItem}>
+                  <View style={styles.stepNumber}>
+                    <Text style={styles.stepNumberText}>{index + 1}</Text>
+                  </View>
+                  <View style={styles.stepIconContainer}>
+                    <Ionicons
+                      name={step.iconName as any}
+                      size={32}
+                      color={MAVECAM_COLORS.GREEN_PRIMARY}
+                    />
+                  </View>
+                  <View style={[
+                    styles.stepTextContainer,
+                    !hasDescription && styles.stepTextContainerCentered
+                  ]}>
+                    <Text style={[
+                      styles.stepTitle,
+                      !hasDescription && styles.stepTitleCentered
+                    ]}>
+                      {t(step.titleKey)}
+                    </Text>
+                    {hasDescription && (
+                      <Text style={styles.stepDesc}>{t(step.descKey)}</Text>
+                    )}
+                  </View>
                 </View>
-                <View style={styles.stepIconContainer}>
-                  <Ionicons
-                    name={step.iconName as any}
-                    size={32}
-                    color={MAVECAM_COLORS.GREEN_PRIMARY}
-                  />
-                </View>
-                <View style={styles.stepTextContainer}>
-                  <Text style={styles.stepTitle}>{t(step.titleKey)}</Text>
-                  <Text style={styles.stepDesc}>{t(step.descKey)}</Text>
-                </View>
-              </View>
 
-              {index < (slide.howSteps?.length || 0) - 1 && (
-                <View style={styles.arrowContainer}>
-                  <Ionicons
-                    name="arrow-down"
-                    size={24}
-                    color={MAVECAM_COLORS.GRAY_LIGHT}
-                  />
-                </View>
-              )}
-            </React.Fragment>
-          ))}
+                {index < (slide.howSteps?.length || 0) - 1 && (
+                  <View style={styles.arrowContainer}>
+                    <Ionicons
+                      name="arrow-down"
+                      size={24}
+                      color={MAVECAM_COLORS.GRAY_LIGHT}
+                    />
+                  </View>
+                )}
+              </React.Fragment>
+            );
+          })}
         </View>
       )}
     </View>
@@ -156,44 +184,74 @@ export default function OnboardingSlide({ slide }: OnboardingSlideProps) {
 
   /**
    * Slide 4: Preuve sociale (confiance)
-   * Témoignage + statistiques
+   * Version minimaliste: Titre + stat principale en gros
    */
-  const renderSocialProofSlide = () => (
-    <View style={styles.socialProofContainer}>
-      <Text style={styles.socialProofTitle}>{t(slide.titleKey)}</Text>
+  const renderSocialProofSlide = () => {
+    // Filtrer les stats non-vides
+    const nonEmptyStats = slide.stats?.filter(stat => t(stat.textKey) !== '') || [];
+    const hasTestimonial = slide.testimonialNameKey &&
+                           slide.testimonialTextKey &&
+                           t(slide.testimonialNameKey) !== '' &&
+                           t(slide.testimonialTextKey) !== '';
+    const hasTitle = t(slide.titleKey) !== '';
 
-      {/* Témoignage */}
-      {slide.testimonialNameKey && slide.testimonialTextKey && (
-        <View style={styles.testimonialCard}>
-          <View style={styles.testimonialHeader}>
+    // Mode minimaliste: une seule stat sans témoignage
+    const isMinimalist = nonEmptyStats.length === 1 && !hasTestimonial;
+
+    return (
+      <View style={styles.socialProofContainer}>
+        {hasTitle && (
+          <Text style={styles.socialProofTitle}>{t(slide.titleKey)}</Text>
+        )}
+
+        {/* Mode minimaliste: afficher la stat principale en gros */}
+        {isMinimalist && (
+          <View style={styles.mainStatContainer}>
             <Ionicons
-              name="person-circle"
-              size={36}
+              name="people"
+              size={80}
               color={MAVECAM_COLORS.GREEN_PRIMARY}
             />
-            <Text style={styles.testimonialName}>{t(slide.testimonialNameKey)}</Text>
+            <Text style={styles.mainStatTextBlack}>
+              <Text style={styles.mainStatNumber}>+200</Text>
+              {' '}{t(nonEmptyStats[0].textKey).replace(/^\+200\s*/, '')}
+            </Text>
           </View>
-          <Text style={styles.testimonialText}>"{t(slide.testimonialTextKey)}"</Text>
-        </View>
-      )}
+        )}
 
-      {/* Statistiques */}
-      {slide.stats && (
-        <View style={styles.statsContainer}>
-          {slide.stats.map((stat, index) => (
-            <View key={index} style={styles.statItem}>
+        {/* Mode normal: Témoignage */}
+        {!isMinimalist && hasTestimonial && (
+          <View style={styles.testimonialCard}>
+            <View style={styles.testimonialHeader}>
               <Ionicons
-                name={stat.iconName as any}
-                size={22}
+                name="person-circle"
+                size={36}
                 color={MAVECAM_COLORS.GREEN_PRIMARY}
               />
-              <Text style={styles.statText}>{t(stat.textKey)}</Text>
+              <Text style={styles.testimonialName}>{t(slide.testimonialNameKey!)}</Text>
             </View>
-          ))}
-        </View>
-      )}
-    </View>
-  );
+            <Text style={styles.testimonialText}>"{t(slide.testimonialTextKey!)}"</Text>
+          </View>
+        )}
+
+        {/* Mode normal: Statistiques */}
+        {!isMinimalist && nonEmptyStats.length > 0 && (
+          <View style={styles.statsContainer}>
+            {nonEmptyStats.map((stat, index) => (
+              <View key={index} style={styles.statItem}>
+                <Ionicons
+                  name={stat.iconName as any}
+                  size={22}
+                  color={MAVECAM_COLORS.GREEN_PRIMARY}
+                />
+                <Text style={styles.statText}>{t(stat.textKey)}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+      </View>
+    );
+  };
 
   /**
    * Slide 5: Action (call to action)
@@ -411,5 +469,74 @@ const styles = StyleSheet.create({
     color: MAVECAM_COLORS.GRAY_DARK,
     marginLeft: 10,
     fontWeight: '500',
+  },
+
+  // Centered step text (when no description)
+  stepTextContainerCentered: {
+    justifyContent: 'center',
+  },
+
+  stepTitleCentered: {
+    marginBottom: 0,
+  },
+
+  // Main stat (minimalist social proof)
+  mainStatContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 40,
+    marginBottom: 20,
+  },
+
+  mainStatText: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: MAVECAM_COLORS.GREEN_PRIMARY,
+    textAlign: 'center',
+    marginTop: 20,
+  },
+
+  mainStatTextBlack: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: MAVECAM_COLORS.GRAY_DARK,
+    textAlign: 'center',
+    marginTop: 20,
+  },
+
+  mainStatNumber: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: MAVECAM_COLORS.GREEN_PRIMARY,
+  },
+
+  // AquaCare highlighted in green
+  appNameHighlight: {
+    color: MAVECAM_COLORS.GREEN_PRIMARY,
+    fontWeight: 'bold',
+  },
+
+  // Guarantee section (Slide 1)
+  guaranteeContainer: {
+    marginTop: 32,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    backgroundColor: MAVECAM_COLORS.CREAM,
+    borderRadius: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: MAVECAM_COLORS.GREEN_PRIMARY,
+    width: '100%',
+  },
+
+  guaranteeIcon: {
+    marginBottom: 8,
+    alignSelf: 'center',
+  },
+
+  guaranteeText: {
+    fontSize: 14,
+    lineHeight: 22,
+    color: MAVECAM_COLORS.GRAY_DARK,
+    textAlign: 'center',
   },
 });
