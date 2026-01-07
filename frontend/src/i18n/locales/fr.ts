@@ -637,38 +637,39 @@ export const fr = {
   onboardingNext: 'Suivant',
   onboardingStart: 'Commencer',
 
-  // Slide 1: Problème
-  onboarding_problem_title: 'Vous perdez de l\'argent sans le savoir ?',
-  onboarding_problem_item1: 'Mortalité inexpliquée de vos poissons',
-  onboarding_problem_item2: 'Trop d\'aliments gaspillés chaque jour',
-  onboarding_problem_item3: 'Aucune visibilité sur votre rentabilité',
+  // Slide 1: Problème (réaliste et impactant)
+  onboarding_problem_title: 'Sans un bon suivi, vos poissons meurent, vous gaspillez de l\'aliment et votre cycle n\'est pas rentable',
+  onboarding_problem_item1: '',
+  onboarding_problem_item2: '',
+  onboarding_problem_item3: '',
+  onboarding_problem_guarantee: 'Si vous utilisez {{appName}} pendant un cycle complet et que vous ne constatez pas d\'amélioration, nous vous REMBOURSONS votre abonnement ET nous vous offrons un sac d\'aliment gratuit.',
 
-  // Slide 2: Solution
-  onboarding_solution_title: 'AquaCare vous aide à gagner plus d\'argent',
-  onboarding_solution_item1: 'Jusqu\'à -50% de mortalité',
-  onboarding_solution_item2: 'Jusqu\'à -30% sur les aliments',
-  onboarding_solution_item3: 'Suivi de votre ROI en temps réel',
+  // Slide 2: Solution (promesse réaliste)
+  onboarding_solution_title: 'Avec AquaCare, gardez plus de poissons vivants',
+  onboarding_solution_item1: 'Réduisez votre mortalité',
+  onboarding_solution_item2: 'Optimisez vos rations',
+  onboarding_solution_item3: 'Prenez de bonnes décisions',
 
-  // Slide 3: Comment
+  // Slide 3: Comment (simple et clair)
   onboarding_how_title: '3 minutes par jour suffisent',
   onboarding_how_step1_title: 'Saisissez vos données',
-  onboarding_how_step1_desc: 'mortalité, poids, aliment',
+  onboarding_how_step1_desc: '',
   onboarding_how_step2_title: 'Recevez des alertes',
-  onboarding_how_step2_desc: 'température, mortalité anormale',
-  onboarding_how_step3_title: 'Voyez vos économies',
-  onboarding_how_step3_desc: 'tableau de bord financier',
+  onboarding_how_step2_desc: '',
+  onboarding_how_step3_title: 'Suivez vos résultats',
+  onboarding_how_step3_desc: '',
 
-  // Slide 4: Preuve sociale
-  onboarding_social_title: 'Rejoignez les pisciculteurs qui réussissent avec AquaCare',
-  onboarding_testimonial_name: 'Jean-Pierre, Douala',
-  onboarding_testimonial_text: 'J\'ai réduit ma mortalité de 40% à 15% en 3 mois',
-  onboarding_stat1: '200+ pisciculteurs',
-  onboarding_stat2: '100 cycles gérés',
-  onboarding_stat3: '5M FCFA économisés',
+  // Slide 4: Preuve sociale (minimaliste)
+  onboarding_social_title: '',
+  onboarding_testimonial_name: '',
+  onboarding_testimonial_text: '',
+  onboarding_stat1: '+200 pisciculteurs nous font confiance',
+  onboarding_stat2: '',
+  onboarding_stat3: '',
 
-  // Slide 5: Action
-  onboarding_action_title: 'Prêt à optimiser votre élevage ?',
-  onboarding_action_subtitle: 'Commencez à suivre vos données dès maintenant',
+  // Slide 5: Action (promesse claire)
+  onboarding_action_title: 'Augmentez vos profits et réduisez vos pertes',
+  onboarding_action_subtitle: 'Même si vous débutez en pisciculture',
 
   // Legacy keys (pour compatibilité)
   onboardingSlide1Title: 'Bienvenue dans AquaCare',
