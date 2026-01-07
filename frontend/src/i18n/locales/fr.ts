@@ -127,6 +127,10 @@ export const fr = {
   currentFish: 'Poissons actuels',
   currentBiomass: 'Biomasse actuelle',
 
+  // Dashboard Hormozi - Valeur financière
+  stockValue: 'Vos poissons valent',
+  feedSavings: 'Aliment économisé',
+
   // Dashboard Header & Quick Actions
   notificationsBell: 'Notifications',
   languageToggle: 'Langue',

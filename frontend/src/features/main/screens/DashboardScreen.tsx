@@ -30,7 +30,8 @@ import QuickActionsPreview from '../components/QuickActionsPreview';
 import QuickActionsSheet from '../components/QuickActionsSheet';
 import { ProductionCycle } from '@/types/aquaculture';
 import { MAVECAM_COLORS } from '@/constants/colors';
-import { formatNumber, formatPercentage } from '@/utils';
+import { calculateStockValue, calculateFeedSavings } from '@/constants/aquaculture';
+import { formatNumber, formatPercentage, formatCurrency } from '@/utils';
 import { useAuth } from '@/hooks/useAuth';
 
 /**
@@ -320,8 +321,8 @@ export default function DashboardScreen({ navigation }: any) {
             <MetricCard
               icon="nutrition"
               color={MAVECAM_COLORS.GREEN_PRIMARY}
-              value={summary.average_fcr > 0 ? summary.average_fcr.toFixed(1) : '-'}
-              label="FCR"
+              value={formatCurrency(calculateFeedSavings(summary.total_biomass, summary.average_fcr))}
+              label={t('feedSavings')}
               index={0}
               animationType="pulse"
             />
@@ -336,10 +337,10 @@ export default function DashboardScreen({ navigation }: any) {
             />
 
             <MetricCard
-              icon="scale"
+              icon="cash-outline"
               color={MAVECAM_COLORS.GREEN_DARK}
-              value={formatNumber(summary.total_biomass, 'kg')}
-              label="Biomasse"
+              value={formatCurrency(calculateStockValue(summary.total_biomass))}
+              label={t('stockValue')}
               index={2}
               animationType="bounce"
             />
@@ -378,7 +379,7 @@ export default function DashboardScreen({ navigation }: any) {
                     {cycle.species === 'clarias' ? 'Silure africain (Clarias)' : 'Tilapia'} - {cycle.pond_identifier}
                   </Text>
                   <Text className="text-xs text-gray-light">
-                    {Math.floor((new Date().getTime() - new Date(cycle.start_date).getTime()) / (1000 * 60 * 60 * 24))} jours - {formatNumber(cycle.current_biomass, 'kg')} - {formatPercentage(cycle.survival_rate || 0)} survie
+                    {Math.floor((new Date().getTime() - new Date(cycle.start_date).getTime()) / (1000 * 60 * 60 * 24))} jours - {formatCurrency(calculateStockValue(cycle.current_biomass))} - {formatPercentage(cycle.survival_rate || 0)} survie
                   </Text>
                 </View>
 
