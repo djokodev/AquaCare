@@ -635,38 +635,39 @@
   onboardingNext: 'Next',
   onboardingStart: 'Get Started',
 
-  // Slide 1: Problem
-  onboarding_problem_title: 'Are you losing money without knowing it?',
-  onboarding_problem_item1: 'Unexplained fish mortality',
-  onboarding_problem_item2: 'Too much feed wasted every day',
-  onboarding_problem_item3: 'No visibility on your profitability',
+  // Slide 1: Problem (realistic and impactful)
+  onboarding_problem_title: 'Without proper tracking, your fish die, you waste feed and your cycle is not profitable',
+  onboarding_problem_item1: '',
+  onboarding_problem_item2: '',
+  onboarding_problem_item3: '',
+  onboarding_problem_guarantee: 'If you use {{appName}} for a complete cycle and don\'t see improvement, we will REFUND your subscription AND give you a FREE bag of feed.',
 
-  // Slide 2: Solution
-  onboarding_solution_title: 'AquaCare helps you earn more money',
-  onboarding_solution_item1: 'Up to -50% mortality',
-  onboarding_solution_item2: 'Up to -30% on feed costs',
-  onboarding_solution_item3: 'Track your ROI in real-time',
+  // Slide 2: Solution (realistic promise)
+  onboarding_solution_title: 'With AquaCare, keep more fish alive',
+  onboarding_solution_item1: 'Reduce your mortality',
+  onboarding_solution_item2: 'Optimize your rations',
+  onboarding_solution_item3: 'Make better decisions',
 
-  // Slide 3: How
+  // Slide 3: How (simple and clear)
   onboarding_how_title: '3 minutes a day is all it takes',
   onboarding_how_step1_title: 'Enter your data',
-  onboarding_how_step1_desc: 'mortality, weight, feed',
+  onboarding_how_step1_desc: '',
   onboarding_how_step2_title: 'Receive alerts',
-  onboarding_how_step2_desc: 'temperature, abnormal mortality',
-  onboarding_how_step3_title: 'See your savings',
-  onboarding_how_step3_desc: 'financial dashboard',
+  onboarding_how_step2_desc: '',
+  onboarding_how_step3_title: 'Track your results',
+  onboarding_how_step3_desc: '',
 
-  // Slide 4: Social proof
-  onboarding_social_title: 'Join the fish farmers succeeding with AquaCare',
-  onboarding_testimonial_name: 'Jean-Pierre, Douala',
-  onboarding_testimonial_text: 'I reduced my mortality from 40% to 15% in 3 months',
-  onboarding_stat1: '200+ fish farmers',
-  onboarding_stat2: '100 cycles managed',
-  onboarding_stat3: '5M FCFA saved',
+  // Slide 4: Social proof (minimalist)
+  onboarding_social_title: '',
+  onboarding_testimonial_name: '',
+  onboarding_testimonial_text: '',
+  onboarding_stat1: '+200 fish farmers trust us',
+  onboarding_stat2: '',
+  onboarding_stat3: '',
 
-  // Slide 5: Action
-  onboarding_action_title: 'Ready to optimize your farm?',
-  onboarding_action_subtitle: 'Start tracking your data now',
+  // Slide 5: Action (clear promise)
+  onboarding_action_title: 'Increase your profits and reduce your losses',
+  onboarding_action_subtitle: 'Even if you\'re new to fish farming',
 
   // Legacy keys (for compatibility)
   onboardingSlide1Title: 'Welcome to AquaCare',
