@@ -127,6 +127,10 @@
   currentFish: 'Current fish',
   currentBiomass: 'Current biomass',
 
+  // Dashboard Hormozi - Financial value
+  stockValue: 'Your fish are worth',
+  feedSavings: 'Feed saved',
+
   // Dashboard Header & Quick Actions
   notificationsBell: 'Notifications',
   languageToggle: 'Language',
