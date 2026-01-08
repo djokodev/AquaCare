@@ -61,3 +61,17 @@ export const calculateFeedSavings = (biomassKg: number, currentFcr: number): num
 
   return Math.round(feedSaved * AQUACULTURE_CONSTANTS.FEED_PRICE_PER_KG);
 };
+
+/**
+ * Calcule la biomasse estimée à partir de l'échantillon
+ * @param fishCount Nombre de poissons dans le bassin
+ * @param averageWeightGrams Poids moyen par poisson en grammes
+ * @returns Biomasse estimée en kg
+ */
+export const calculateEstimatedBiomass = (
+  fishCount: number,
+  averageWeightGrams: number
+): number => {
+  if (fishCount <= 0 || averageWeightGrams <= 0) return 0;
+  return (fishCount * averageWeightGrams) / 1000; // Retourne en kg
+};

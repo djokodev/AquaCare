@@ -10,6 +10,8 @@ import { offlineService } from '@/services/offlineService';
 import { DailyLogForm } from '@/types/aquaculture';
 import { MAVECAM_COLORS } from '@/constants/colors';
 import { estimateAverageWeight } from '@/domain';
+import { calculateStockValue, calculateEstimatedBiomass } from '@/constants/aquaculture';
+import SuccessRewardModal from '@/components/modals/SuccessRewardModal';
 
 interface DailyLogData {
   cycle_id: string;
@@ -39,6 +41,15 @@ export default function DailyLogScreen({ navigation }: any) {
   });
   const [saving, setSaving] = useState(false);
 
+  // État pour le modal de récompense Hormozi
+  const [rewardModalVisible, setRewardModalVisible] = useState(false);
+  const [rewardData, setRewardData] = useState({
+    averageWeight: 0,
+    fishCount: 0,
+    estimatedBiomass: 0,
+    stockValue: 0,
+  });
+
   useEffect(() => {
     dispatch(fetchDashboardData());
     tryOfflineSync();
@@ -48,20 +59,14 @@ export default function DailyLogScreen({ navigation }: any) {
     try {
       const hasPending = await offlineService.hasPendingSync();
       if (hasPending) {
-        console.log('Sync offline data...');
         const result = await offlineService.syncOfflineLogs();
 
         if (result.success > 0) {
-          console.log(`${result.success} saisies synchronisees`);
           dispatch(fetchDashboardData());
         }
-
-        if (result.failed > 0) {
-          console.log(`${result.failed} saisies non synchronisees`);
-        }
       }
-    } catch (error) {
-      console.error('Erreur synchronisation silencieuse:', error);
+    } catch {
+      // Sync silencieuse - pas d'action requise en cas d'erreur
     }
   };
 
@@ -134,9 +139,28 @@ export default function DailyLogScreen({ navigation }: any) {
         await aquacultureService.createCycleLog(selectedCycle, logData);
         dispatch(fetchDashboardData());
 
-        Alert.alert(t('success'), t('recordSaved'), [
-          { text: 'OK', onPress: () => navigation.goBack() },
-        ]);
+        // Calculer les données de récompense à partir de la saisie
+        const currentCycle = activeCycles.find(c => c.id === selectedCycle);
+        if (sampleCount > 0 && sampleWeight > 0 && currentCycle) {
+          const avgWeight = sampleWeight / sampleCount;
+          const mortality = parseInt(formData.mortality_count) || 0;
+          const remainingFish = (currentCycle.current_count || 0) - mortality;
+          const biomass = calculateEstimatedBiomass(remainingFish, avgWeight);
+          const value = calculateStockValue(biomass);
+
+          setRewardData({
+            averageWeight: avgWeight,
+            fishCount: remainingFish,
+            estimatedBiomass: biomass,
+            stockValue: value,
+          });
+          setRewardModalVisible(true);
+        } else {
+          // Pas d'échantillon saisi, message simple
+          Alert.alert(t('success'), t('recordSaved'), [
+            { text: 'OK', onPress: () => navigation.goBack() },
+          ]);
+        }
       } catch (apiError: any) {
         const isNetworkError =
           apiError.code === 'NETWORK_ERROR' ||
@@ -145,25 +169,45 @@ export default function DailyLogScreen({ navigation }: any) {
           !apiError.response;
 
         if (isNetworkError) {
-          console.log('Pas de connexion, sauvegarde offline...');
           await offlineService.saveCycleLogOffline(selectedCycle, logData);
 
-          Alert.alert(t('success'), t('recordSavedOffline'), [
-            { text: 'OK', onPress: () => navigation.goBack() },
-          ]);
+          // Calculer les données de récompense même en offline
+          const currentCycle = activeCycles.find(c => c.id === selectedCycle);
+          if (sampleCount > 0 && sampleWeight > 0 && currentCycle) {
+            const avgWeight = sampleWeight / sampleCount;
+            const mortality = parseInt(formData.mortality_count) || 0;
+            const remainingFish = (currentCycle.current_count || 0) - mortality;
+            const biomass = calculateEstimatedBiomass(remainingFish, avgWeight);
+            const value = calculateStockValue(biomass);
+
+            setRewardData({
+              averageWeight: avgWeight,
+              fishCount: remainingFish,
+              estimatedBiomass: biomass,
+              stockValue: value,
+            });
+            setRewardModalVisible(true);
+          } else {
+            Alert.alert(t('success'), t('recordSavedOffline'), [
+              { text: 'OK', onPress: () => navigation.goBack() },
+            ]);
+          }
         } else {
           throw apiError;
         }
       }
       } catch (error: any) {
-        console.error('Error creating daily log:', error);
-
       const errorMessage = getErrorMessage(error);
 
       Alert.alert(t('error'), errorMessage);
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleCloseRewardModal = () => {
+    setRewardModalVisible(false);
+    navigation.goBack();
   };
 
   if (activeCycles.length === 0) {
@@ -325,6 +369,15 @@ export default function DailyLogScreen({ navigation }: any) {
           )}
         </TouchableOpacity>
       </View>
+
+      <SuccessRewardModal
+        visible={rewardModalVisible}
+        onClose={handleCloseRewardModal}
+        averageWeight={rewardData.averageWeight}
+        fishCount={rewardData.fishCount}
+        estimatedBiomass={rewardData.estimatedBiomass}
+        stockValue={rewardData.stockValue}
+      />
     </ScrollView>
   );
 }

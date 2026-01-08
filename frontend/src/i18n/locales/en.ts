@@ -289,6 +289,18 @@
   observationsPlaceholder: 'Notes, special observations...',
   recordSaved: 'Record saved successfully',
   recordSaveError: 'Error saving record',
+
+  // Daily Log Success Modal (Hormozi)
+  dailyLogSuccess: 'Entry recorded!',
+  estimationBasedOnEntry: 'Estimation based on your entry',
+  averageWeightPerFish: 'Average weight',
+  fishRemaining: 'Fish',
+  estimatedBiomass: 'Estimated biomass',
+  currentValue: 'Current cycle value',
+  keepTracking: 'Keep it up!',
+  greatJob: 'OK',
+  perFish: '/ fish',
+
   recordSavedOffline: 'Record saved offline (will sync when connected)',
   syncInProgress: 'Synchronizing...',
   syncSuccess: 'Synchronization successful',

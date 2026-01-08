@@ -289,6 +289,17 @@ export const fr = {
   observationsPlaceholder: 'Notes, observations particulières...',
   recordSaved: 'Saisie enregistrée avec succès',
   recordSaveError: 'Erreur lors de l\'enregistrement',
+
+  // Daily Log Success Modal (Hormozi)
+  dailyLogSuccess: 'Saisie enregistrée !',
+  estimationBasedOnEntry: 'Estimation basée sur votre saisie',
+  averageWeightPerFish: 'Poids moyen',
+  fishRemaining: 'Poissons',
+  estimatedBiomass: 'Biomasse estimée',
+  currentValue: 'Valeur actuelle du cycle',
+  keepTracking: 'Continuez comme ça !',
+  greatJob: 'OK',
+  perFish: '/ poisson',
   recordSavedOffline: 'Saisie sauvegardée (sera synchronisée à la reconnexion)',
   sampleCountTooLow: 'Nombre de poissons pesés insuffisant (min {min}).',
   sampleCountRequiredWithWeight: 'Veuillez indiquer le nombre de poissons pesés avec le poids total.',
