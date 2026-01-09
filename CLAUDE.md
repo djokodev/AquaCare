@@ -679,9 +679,3 @@ stockValue = calculateStockValue(biomass)
 - `fishRemaining`, `estimatedBiomass`, `currentValue`
 - `keepTracking`, `greatJob`, `perFish`
 
-### **🚀 Prochaines Étapes Projet Global**
-1. ✅ ~~**Navigation** - Setup CommerceStack dans MainNavigator~~ **TERMINÉ**
-2. ✅ ~~**Stratégie Hormozi** - Modules 1-3 implémentés~~ **TERMINÉ**
-3. **Tests utilisateur** avec aquaculteurs pilotes MAVECAM
-4. **Module Support (5.4)** - Chat technicien et système tickets
-5. **Optimisations** basées sur feedback terrain
