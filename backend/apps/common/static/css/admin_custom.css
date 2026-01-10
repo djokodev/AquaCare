@@ -1,0 +1,504 @@
+/**
+* AquaCare Admin - Custom CSS Fixes
+
+/* Card headers avec fond colore - texte blanc */
+.card-header,
+.card-header .card-title,
+.card-header h3,
+.card-header span,
+.card.card-success .card-header,
+.card.card-primary .card-header,
+.card.bg-success .card-header,
+.card.bg-primary .card-header,
+.bg-success .card-title,
+.bg-primary .card-title,
+.card-success > .card-header,
+.card-primary > .card-header {
+    color: #ffffff !important;  
+}
+
+/* Titres de sections dashboard Jazzmin */
+.card-outline-success .card-header,
+.card-outline-primary .card-header {
+    color: #ffffff !important;
+}
+
+/* Headers de modules dans le dashboard */
+.content-wrapper .card-header {
+    color: #ffffff !important;
+}
+
+/* =============================================================================
+   FIX 2: Sidebar "Recent Actions" - TEXTE FONCE sur fond clair
+   ============================================================================= */
+
+/* Recent actions panel */
+.direct-chat-messages,
+.direct-chat-text,
+.timeline-item,
+.timeline-body,
+.timeline-header,
+.timeline-header a,
+.card-body .timeline a,
+.card-body .direct-chat-name,
+.card-body .direct-chat-timestamp {
+    color: #343a40 !important;
+}
+
+/* Actions recentes - liste */
+#recent-actions-module,
+#recent-actions-module a,
+#recent-actions-module .actionlist,
+#recent-actions-module .actionlist a,
+.actionlist li,
+.actionlist a,
+.module.actions .actionlist a {
+    color: #343a40 !important;
+}
+
+/* Small box et info box sur fond blanc */
+.small-box .inner h3,
+.small-box .inner p,
+.info-box-content .info-box-text,
+.info-box-content .info-box-number {
+    color: #343a40 !important;
+}
+
+/* Recent actions dans la sidebar droite Jazzmin */
+.content-wrapper aside .card-body,
+.content-wrapper aside .card-body a,
+.content-wrapper aside .card-body span,
+.content-wrapper aside .card-body small,
+.content-wrapper aside .timeline-item a,
+.content-wrapper .direct-chat-msg .direct-chat-text {
+    color: #343a40 !important;
+}
+
+/* Forcer le texte sombre dans la zone d'actions recentes */
+.col-lg-3 .card-body,
+.col-lg-3 .card-body a,
+.col-lg-3 .card-body span,
+.col-md-3 .card-body,
+.col-md-3 .card-body a {
+    color: #343a40 !important;
+}
+
+/* =============================================================================
+   FIX 3: Liens dans les tableaux - VERT sur fond blanc
+   ============================================================================= */
+
+/* Liens dans les tables et contenu principal */
+.table td a,
+.table tbody a,
+#result_list a,
+#changelist a,
+.card-body table a,
+.module table a {
+    color: #ffffff !important;
+}
+
+.table td a:hover,
+.table tbody a:hover,
+#result_list a:hover,
+#changelist a:hover {
+    color: #ffffff !important;
+    text-decoration: underline !important;
+}
+
+/* Liens changelink/addlink - VERT seulement si pas dans un bouton */
+a.changelink:not(.btn):not([class*="btn-"]),
+a.addlink:not(.btn):not([class*="btn-"]) {
+    color: #059669 !important;
+}
+
+a.changelink:not(.btn):not([class*="btn-"]):hover,
+a.addlink:not(.btn):not([class*="btn-"]):hover {
+    color: #047857 !important;
+    text-decoration: underline !important;
+}
+
+/* Liens generaux dans le contenu */
+.content-wrapper .content a:not(.btn):not(.nav-link):not(.card-header a) {
+    color: #059669 !important;
+}
+
+/* =============================================================================
+   FIX 4: Breadcrumb - Texte visible
+   ============================================================================= */
+
+.breadcrumb,
+.breadcrumb a,
+.breadcrumb-item,
+.breadcrumb-item a,
+.breadcrumb-item.active,
+.content-header .breadcrumb-item a {
+    color: #495057 !important;
+}
+
+.breadcrumb-item + .breadcrumb-item::before {
+    color: #6c757d !important;
+}
+
+/* =============================================================================
+   FIX 5: Content header et titres de page
+   ============================================================================= */
+
+.content-header h1,
+.content-header .text-muted,
+.content-header small,
+.page-header h1,
+h1.page-title {
+    color: #343a40 !important;
+}
+
+/* =============================================================================
+   FIX 6: Corps des cartes - Texte sombre
+   ============================================================================= */
+
+.card-body,
+.card-body p,
+.card-body span:not(.badge),
+.card-body td,
+.card-body th {
+    color: #495057 !important;
+}
+
+/* =============================================================================
+   FIX 7: Tables - Headers sombres
+   ============================================================================= */
+
+.table th,
+.table thead th,
+.table-bordered th,
+#result_list th,
+#changelist th {
+    color: #343a40 !important;
+}
+
+/* =============================================================================
+   FIX 8: Formulaires - Labels visibles
+   ============================================================================= */
+
+label,
+.form-label,
+.control-label,
+.form-group label {
+    color: #343a40 !important;
+}
+
+.help-block,
+.helptext,
+.form-text,
+.text-muted {
+    color: #6c757d !important;
+}
+
+/* =============================================================================
+   FIX 9: Sidebar navigation - Meilleur contraste
+   ============================================================================= */
+
+.nav-sidebar .nav-item .nav-link,
+.sidebar-dark-success .nav-sidebar .nav-item .nav-link,
+.main-sidebar .nav-link {
+    color: rgba(255, 255, 255, 0.9) !important;
+}
+
+.nav-sidebar .nav-item .nav-link:hover,
+.main-sidebar .nav-link:hover {
+    color: #ffffff !important;
+    background-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+.nav-sidebar .nav-header,
+.main-sidebar .nav-header {
+    color: rgba(255, 255, 255, 0.6) !important;
+}
+
+/* Menu actif */
+.nav-sidebar .nav-item .nav-link.active {
+    background-color: #047857 !important;
+    color: #ffffff !important;
+}
+
+/* =============================================================================
+   FIX 10: Boutons - Theme AquaCare
+   ============================================================================= */
+
+.btn-success,
+.btn-primary,
+.btn.bg-success,
+.btn.bg-primary {
+    background-color: #059669 !important;
+    border-color: #059669 !important;
+    color: #ffffff !important;
+}
+
+.btn-success:hover,
+.btn-primary:hover {
+    background-color: #047857 !important;
+    border-color: #047857 !important;
+}
+
+/* Boutons outline */
+.btn-outline-success {
+    color: #059669 !important;
+    border-color: #059669 !important;
+}
+
+.btn-outline-success:hover {
+    background-color: #059669 !important;
+    color: #ffffff !important;
+}
+
+/* =============================================================================
+   FIX 11: Badges
+   ============================================================================= */
+
+.badge-success,
+.bg-success:not(.card):not(.btn):not(.nav-link) {
+    background-color: #059669 !important;
+    color: #ffffff !important;
+}
+
+.badge-warning {
+    color: #343a40 !important;
+}
+
+.badge-info {
+    color: #ffffff !important;
+}
+
+/* =============================================================================
+   FIX 12: Navbar header - Texte blanc
+   ============================================================================= */
+
+.main-header .navbar-nav .nav-link,
+.main-header .nav-item .nav-link,
+#header,
+#branding h1,
+#branding h1 a,
+.navbar-dark .navbar-nav .nav-link {
+    color: #ffffff !important;
+}
+
+/* Search box dans navbar */
+.navbar .form-control-navbar {
+    background-color: rgba(255, 255, 255, 0.2) !important;
+    border-color: rgba(255, 255, 255, 0.3) !important;
+    color: #ffffff !important;
+}
+
+.navbar .form-control-navbar::placeholder {
+    color: rgba(255, 255, 255, 0.7) !important;
+}
+
+/* =============================================================================
+   FIX 13: Progress bars
+   ============================================================================= */
+
+.progress-bar.bg-success,
+.progress-bar.bg-primary {
+    background-color: #059669 !important;
+}
+
+/* =============================================================================
+   FIX 14: Django admin specific - Module titles
+   ============================================================================= */
+
+.module h2,
+.module caption,
+#content-main h2,
+#content-main .module h2,
+.dashboard #content h1,
+.dashboard #content h2 {
+    color: #343a40 !important;
+}
+
+/* =============================================================================
+   FIX 15: Alerts et messages
+   ============================================================================= */
+
+.alert-success {
+    background-color: #d1fae5 !important;
+    border-color: #059669 !important;
+    color: #065f46 !important;
+}
+
+.alert-info {
+    color: #0c4a6e !important;
+}
+
+/* =============================================================================
+   FIX 16: Dark mode overrides
+   ============================================================================= */
+
+[data-bs-theme="dark"] .card-body,
+[data-bs-theme="dark"] .card-body a,
+[data-bs-theme="dark"] .table td {
+    color: #e2e8f0 !important;
+}
+
+[data-bs-theme="dark"] .breadcrumb,
+[data-bs-theme="dark"] .breadcrumb a {
+    color: #cbd5e1 !important;
+}
+
+[data-bs-theme="dark"] .content-header h1 {
+    color: #f1f5f9 !important;
+}
+
+/* =============================================================================
+   FIX 17: Jazzmin specific - Dashboard cards
+   ============================================================================= */
+
+/* Force white text on colored card headers */
+.card[class*="card-"] > .card-header,
+.card[class*="bg-"] > .card-header {
+    color: #ffffff !important;
+}
+
+/* Info boxes */
+.info-box .info-box-icon {
+    color: #ffffff !important;
+}
+
+/* Small boxes footer links */
+.small-box .small-box-footer {
+    color: #ffffff !important;
+}
+
+/* =============================================================================
+   FIX 18: Dropdown menus
+   ============================================================================= */
+
+.dropdown-menu .dropdown-item {
+    color: #343a40 !important;
+}
+
+.dropdown-menu .dropdown-item:hover {
+    background-color: #f1f5f9 !important;
+    color: #059669 !important;
+}
+
+/* =============================================================================
+   FIX 19: Pagination
+   ============================================================================= */
+
+.page-link {
+    color: #059669 !important;
+}
+
+.page-item.active .page-link {
+    background-color: #059669 !important;
+    border-color: #059669 !important;
+    color: #ffffff !important;
+}
+
+/* =============================================================================
+   FIX 20: Select2 et autocomplete
+   ============================================================================= */
+
+.select2-container--default .select2-selection--single .select2-selection__rendered {
+    color: #343a40 !important;
+}
+
+.select2-results__option {
+    color: #343a40 !important;
+}
+
+.select2-results__option--highlighted {
+    background-color: #059669 !important;
+    color: #ffffff !important;
+}
+
+/* =============================================================================
+   FIX 21: Boutons avec liens - TEXTE BLANC OBLIGATOIRE
+   ============================================================================= */
+
+/* Tous les liens dans les boutons doivent etre blancs */
+.btn a,
+.btn-success a,
+.btn-primary a,
+.btn-info a,
+.btn-warning a,
+.btn-danger a,
+.btn-outline-success a,
+.btn-outline-primary a,
+[class*="btn-"] a {
+    color: #ffffff !important;
+}
+
+/* Object-tools Jazzmin (boutons View/Change/History en haut a droite) */
+.object-tools a,
+.object-tools li a,
+.object-tools .viewlink,
+.object-tools .changelink,
+.object-tools .addlink,
+.object-tools .historylink,
+.object-tools .deletelink {
+    color: #ffffff !important;
+}
+
+/* Submit row (boutons Save/Delete en bas des formulaires) */
+.submit-row a,
+.submit-row input[type="submit"],
+.submit-row .deletelink,
+.submit-row .default {
+    color: #ffffff !important;
+}
+
+/* Liens actions dans les listes admin */
+.changelist-filter a,
+#changelist-filter a,
+.actions select + button,
+.actions .button {
+    color: inherit;
+}
+
+/* Boutons d'action dans les tableaux */
+td .btn a,
+td.action-checkbox-column + td a.btn,
+.results a.btn,
+.module a.btn {
+    color: #ffffff !important;
+}
+
+/* =============================================================================
+   FIX 22: Small-box et Info-box Jazzmin - Liens blancs
+   ============================================================================= */
+
+.small-box a,
+.small-box .small-box-footer,
+.small-box-footer a,
+.info-box a,
+.info-box .info-box-icon {
+    color: #ffffff !important;
+}
+
+/* =============================================================================
+   FIX 23: Card-tools et boutons collapse
+   ============================================================================= */
+
+.card-tools .btn,
+.card-tools a,
+.card-header .btn,
+.card-header a.btn,
+.card-header .card-tools a {
+    color: #ffffff !important;
+}
+
+/* =============================================================================
+   FIX 24: Sidebar active et liens menu
+   ============================================================================= */
+
+.nav-sidebar .nav-link.active,
+.nav-sidebar .nav-item.menu-open > .nav-link,
+.sidebar-dark-success .nav-sidebar > .nav-item.menu-open > .nav-link {
+    background-color: #047857 !important;
+    color: #ffffff !important;
+}
+
+.nav-sidebar .nav-treeview > .nav-item > .nav-link.active {
+    background-color: rgba(255, 255, 255, 0.1) !important;
+    color: #ffffff !important;
+}

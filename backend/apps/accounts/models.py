@@ -145,8 +145,8 @@ class User(AbstractUser):
     
     class Meta:
         app_label = 'accounts'
-        verbose_name = _('Utilisateur MAVECAM')
-        verbose_name_plural = _('Utilisateurs MAVECAM')
+        verbose_name = _('Utilisateur')
+        verbose_name_plural = _('Utilisateurs')
         db_table = 'accounts_user'
     
     def clean(self):
@@ -272,10 +272,10 @@ class User(AbstractUser):
 
 class FarmProfile(models.Model):
     """
-    Profil ferme associé à chaque utilisateur MAVECAM.
-    
+    Profil ferme associé à chaque utilisateur AquaCare.
+
     Modèle central pour les informations sur l'exploitation piscicole.
-    Créé automatiquement à l'inscription et géré par les admins MAVECAM.
+    Créé automatiquement à l'inscription et géré par les administrateurs.
     """
     
     CERTIFICATION_STATUS_CHOICES = [
@@ -311,7 +311,7 @@ class FarmProfile(models.Model):
         max_length=20,
         choices=CERTIFICATION_STATUS_CHOICES,
         default='pending',
-        help_text=_('Statut de certification géré uniquement par les admins MAVECAM')
+        help_text=_('Statut de certification géré par les administrateurs')
     )
         
     total_ponds = models.PositiveIntegerField(

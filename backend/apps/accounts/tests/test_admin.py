@@ -269,7 +269,7 @@ class TestFarmProfileAdmin:
         section_names = [fieldset[0] for fieldset in fieldsets]
         
         assert 'Informations de base' in section_names
-        assert 'Certification MAVECAM' in section_names
+        assert 'Certification' in section_names
         assert 'Informations techniques' in section_names
         assert 'Production' in section_names
     

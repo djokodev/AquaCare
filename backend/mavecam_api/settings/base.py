@@ -11,6 +11,7 @@ sys.path.insert(0, os.path.join(BASE_DIR, "apps"))
 
 # Application definition
 INSTALLED_APPS = [
+    "jazzmin",  # DOIT etre AVANT django.contrib.admin
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -27,9 +28,10 @@ INSTALLED_APPS = [
     # Local apps
     "accounts",
     "aquaculture",
-    "commerce",  # Module commerce MAVECAM
+    "commerce",  # Module commerce
     "apps.notifications",  # Module notifications multi-canal
     "apps.chat",  # Module chat/support utilisateur-administration
+    "apps.common",  # Module commun (admin mixins, static CSS)
 ]
 
 MIDDLEWARE = [
@@ -204,3 +206,8 @@ FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:8081')
 # Limites alignées sur les validations (images 10MB, vidéos 50MB)
 DATA_UPLOAD_MAX_MEMORY_SIZE = 60 * 1024 * 1024  # 60MB max par requête
 FILE_UPLOAD_MAX_MEMORY_SIZE = 60 * 1024 * 1024
+
+# =============================================================================
+# JAZZMIN ADMIN UI CONFIGURATION
+# =============================================================================
+from .jazzmin import JAZZMIN_SETTINGS, JAZZMIN_UI_TWEAKS

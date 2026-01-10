@@ -1,4 +1,5 @@
 from django.apps import AppConfig
+from django.utils.translation import gettext_lazy as _
 
 
 class AquacultureConfig(AppConfig):
@@ -6,7 +7,7 @@ class AquacultureConfig(AppConfig):
 
     default_auto_field = 'django.db.models.BigAutoField'
     name = 'apps.aquaculture'
-    verbose_name = "Production Aquacole"  # Plus métier que "Aquaculture Management"
+    verbose_name = _("Production Aquacole")
 
     def ready(self):
         """Initialise les signaux et autres composants au démarrage."""

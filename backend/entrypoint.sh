@@ -10,6 +10,9 @@ echo "PostgreSQL is ready!"
 echo "Running database migrations (with --fake-initial to tolerate existing tables)..."
 python manage.py migrate --noinput --fake-initial
 
+echo "Configuring RBAC groups and permissions..."
+python manage.py setup_rbac || echo "Warning: RBAC setup failed or already configured"
+
 echo "Collecting static files..."
 python manage.py collectstatic --noinput --clear
 

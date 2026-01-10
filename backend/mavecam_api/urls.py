@@ -55,6 +55,7 @@ def health_check(request):
         }, status=503)
 
 urlpatterns = [
+    path('i18n/', include('django.conf.urls.i18n')),  # Required for Jazzmin language switcher
     path('admin/', admin.site.urls),
     path('api/', api_root, name='api-root'),
     path('api/health/', health_check, name='health-check'),  # Health check pour Docker
