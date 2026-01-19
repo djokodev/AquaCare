@@ -1,287 +1,96 @@
 /**
-* AquaCare Admin - Custom CSS Fixes
+ * AquaCare Admin - Custom Styles
+ *
+ * Architecture:
+ * 1. Variables (couleurs, espacements)
+ * 2. Base (reset, typographie)
+ * 3. Layout (navbar, sidebar, content)
+ * 4. Components (boutons, badges, cards, formulaires)
+ * 5. Pages specifiques (dashboard, listes, formulaires)
+ * 6. Utilitaires
+ */
 
-/* Card headers avec fond colore - texte blanc */
-.card-header,
-.card-header .card-title,
-.card-header h3,
-.card-header span,
-.card.card-success .card-header,
-.card.card-primary .card-header,
-.card.bg-success .card-header,
-.card.bg-primary .card-header,
-.bg-success .card-title,
-.bg-primary .card-title,
-.card-success > .card-header,
-.card-primary > .card-header {
-    color: #ffffff !important;  
-}
+/* =============================================================================
+   1. VARIABLES CSS - Theme AquaCare
+   ============================================================================= */
 
-/* Titres de sections dashboard Jazzmin */
-.card-outline-success .card-header,
-.card-outline-primary .card-header {
-    color: #ffffff !important;
-}
+:root {
+    /* Couleurs principales AquaCare */
+    --aqua-primary: #059669;
+    --aqua-primary-hover: #047857;
+    --aqua-primary-light: #10b981;
+    --aqua-primary-lighter: #34d399;
 
-/* Headers de modules dans le dashboard */
-.content-wrapper .card-header {
-    color: #ffffff !important;
+    /* Couleurs de fond (dark mode admin) */
+    --bg-dark: #1e293b;
+    --bg-darker: #0f172a;
+    --bg-card: #1f2937;
+    --bg-input: #1e293b;
+    --bg-table-odd: #262626;
+    --bg-table-even: #303030;
+
+    /* Couleurs de texte */
+    --text-primary: #f1f5f9;
+    --text-secondary: #cbd5e1;
+    --text-muted: #94a3b8;
+    --text-dark: #1e293b;
+    --text-body: #374151;
+
+    /* Bordures */
+    --border-color: #334155;
+    --border-light: #d1d5db;
+
+    /* Etats */
+    --color-success: #059669;
+    --color-warning: #f59e0b;
+    --color-danger: #dc2626;
+    --color-info: #0ea5e9;
+
+    /* Ombres */
+    --shadow-focus: 0 0 0 3px rgba(5, 150, 105, 0.15);
 }
 
 /* =============================================================================
-   FIX 2: Sidebar "Recent Actions" - TEXTE FONCE sur fond clair
+   2. BASE - Reset et typographie
    ============================================================================= */
 
-/* Recent actions panel */
-.direct-chat-messages,
-.direct-chat-text,
-.timeline-item,
-.timeline-body,
-.timeline-header,
-.timeline-header a,
-.card-body .timeline a,
-.card-body .direct-chat-name,
-.card-body .direct-chat-timestamp {
-    color: #343a40 !important;
+/* Labels de formulaires */
+.content-wrapper label,
+.tab-content label,
+form label {
+    color: var(--text-secondary);
+    font-weight: 500;
 }
 
-/* Actions recentes - liste */
-#recent-actions-module,
-#recent-actions-module a,
-#recent-actions-module .actionlist,
-#recent-actions-module .actionlist a,
-.actionlist li,
-.actionlist a,
-.module.actions .actionlist a {
-    color: #343a40 !important;
-}
-
-/* Small box et info box sur fond blanc */
-.small-box .inner h3,
-.small-box .inner p,
-.info-box-content .info-box-text,
-.info-box-content .info-box-number {
-    color: #343a40 !important;
-}
-
-/* Recent actions dans la sidebar droite Jazzmin */
-.content-wrapper aside .card-body,
-.content-wrapper aside .card-body a,
-.content-wrapper aside .card-body span,
-.content-wrapper aside .card-body small,
-.content-wrapper aside .timeline-item a,
-.content-wrapper .direct-chat-msg .direct-chat-text {
-    color: #343a40 !important;
-}
-
-/* Forcer le texte sombre dans la zone d'actions recentes */
-.col-lg-3 .card-body,
-.col-lg-3 .card-body a,
-.col-lg-3 .card-body span,
-.col-md-3 .card-body,
-.col-md-3 .card-body a {
-    color: #343a40 !important;
-}
-
-/* =============================================================================
-   FIX 3: Liens dans les tableaux - VERT sur fond blanc
-   ============================================================================= */
-
-/* Liens dans les tables et contenu principal */
-.table td a,
-.table tbody a,
-#result_list a,
-#changelist a,
-.card-body table a,
-.module table a {
-    color: #ffffff !important;
-}
-
-.table td a:hover,
-.table tbody a:hover,
-#result_list a:hover,
-#changelist a:hover {
-    color: #ffffff !important;
-    text-decoration: underline !important;
-}
-
-/* Liens changelink/addlink - VERT seulement si pas dans un bouton */
-a.changelink:not(.btn):not([class*="btn-"]),
-a.addlink:not(.btn):not([class*="btn-"]) {
-    color: #059669 !important;
-}
-
-a.changelink:not(.btn):not([class*="btn-"]):hover,
-a.addlink:not(.btn):not([class*="btn-"]):hover {
-    color: #047857 !important;
-    text-decoration: underline !important;
-}
-
-/* Liens generaux dans le contenu */
-.content-wrapper .content a:not(.btn):not(.nav-link):not(.card-header a) {
-    color: #059669 !important;
-}
-
-/* =============================================================================
-   FIX 4: Breadcrumb - Texte visible
-   ============================================================================= */
-
-.breadcrumb,
-.breadcrumb a,
-.breadcrumb-item,
-.breadcrumb-item a,
-.breadcrumb-item.active,
-.content-header .breadcrumb-item a {
-    color: #495057 !important;
-}
-
-.breadcrumb-item + .breadcrumb-item::before {
-    color: #6c757d !important;
-}
-
-/* =============================================================================
-   FIX 5: Content header et titres de page
-   ============================================================================= */
-
-.content-header h1,
-.content-header .text-muted,
-.content-header small,
-.page-header h1,
-h1.page-title {
-    color: #343a40 !important;
-}
-
-/* =============================================================================
-   FIX 6: Corps des cartes - Texte sombre
-   ============================================================================= */
-
-.card-body,
-.card-body p,
-.card-body span:not(.badge),
-.card-body td,
-.card-body th {
-    color: #495057 !important;
-}
-
-/* =============================================================================
-   FIX 7: Tables - Headers sombres
-   ============================================================================= */
-
-.table th,
-.table thead th,
-.table-bordered th,
-#result_list th,
-#changelist th {
-    color: #343a40 !important;
-}
-
-/* =============================================================================
-   FIX 8: Formulaires - Labels visibles
-   ============================================================================= */
-
-label,
-.form-label,
-.control-label,
-.form-group label {
-    color: #343a40 !important;
-}
-
-.help-block,
+/* Texte d'aide sous les champs */
 .helptext,
+.help-block,
 .form-text,
-.text-muted {
-    color: #6c757d !important;
+p.help,
+span.helptext {
+    color: var(--text-muted) !important;
+    font-style: italic;
+    font-size: 0.875rem;
+}
+
+/* Titres de page dans le contenu */
+.content-wrapper h1:not(.navbar-brand):not(.brand-text),
+.content-wrapper .content h1,
+.content-wrapper .h4 {
+    color: var(--text-dark) !important;
+    font-weight: 600;
 }
 
 /* =============================================================================
-   FIX 9: Sidebar navigation - Meilleur contraste
+   3. LAYOUT - Navbar, Sidebar, Content
    ============================================================================= */
 
-.nav-sidebar .nav-item .nav-link,
-.sidebar-dark-success .nav-sidebar .nav-item .nav-link,
-.main-sidebar .nav-link {
-    color: rgba(255, 255, 255, 0.9) !important;
-}
-
-.nav-sidebar .nav-item .nav-link:hover,
-.main-sidebar .nav-link:hover {
-    color: #ffffff !important;
-    background-color: rgba(255, 255, 255, 0.1) !important;
-}
-
-.nav-sidebar .nav-header,
-.main-sidebar .nav-header {
-    color: rgba(255, 255, 255, 0.6) !important;
-}
-
-/* Menu actif */
-.nav-sidebar .nav-item .nav-link.active {
-    background-color: #047857 !important;
-    color: #ffffff !important;
-}
-
-/* =============================================================================
-   FIX 10: Boutons - Theme AquaCare
-   ============================================================================= */
-
-.btn-success,
-.btn-primary,
-.btn.bg-success,
-.btn.bg-primary {
-    background-color: #059669 !important;
-    border-color: #059669 !important;
-    color: #ffffff !important;
-}
-
-.btn-success:hover,
-.btn-primary:hover {
-    background-color: #047857 !important;
-    border-color: #047857 !important;
-}
-
-/* Boutons outline */
-.btn-outline-success {
-    color: #059669 !important;
-    border-color: #059669 !important;
-}
-
-.btn-outline-success:hover {
-    background-color: #059669 !important;
-    color: #ffffff !important;
-}
-
-/* =============================================================================
-   FIX 11: Badges
-   ============================================================================= */
-
-.badge-success,
-.bg-success:not(.card):not(.btn):not(.nav-link) {
-    background-color: #059669 !important;
-    color: #ffffff !important;
-}
-
-.badge-warning {
-    color: #343a40 !important;
-}
-
-.badge-info {
-    color: #ffffff !important;
-}
-
-/* =============================================================================
-   FIX 12: Navbar header - Texte blanc
-   ============================================================================= */
-
+/* --- Navbar --- */
 .main-header .navbar-nav .nav-link,
-.main-header .nav-item .nav-link,
-#header,
-#branding h1,
-#branding h1 a,
 .navbar-dark .navbar-nav .nav-link {
     color: #ffffff !important;
 }
 
-/* Search box dans navbar */
 .navbar .form-control-navbar {
     background-color: rgba(255, 255, 255, 0.2) !important;
     border-color: rgba(255, 255, 255, 0.3) !important;
@@ -292,35 +101,373 @@ label,
     color: rgba(255, 255, 255, 0.7) !important;
 }
 
-/* =============================================================================
-   FIX 13: Progress bars
-   ============================================================================= */
+/* --- Sidebar --- */
+.nav-sidebar .nav-link {
+    color: rgba(255, 255, 255, 0.85) !important;
+    padding: 0.5rem 1rem;
+}
 
-.progress-bar.bg-success,
-.progress-bar.bg-primary {
-    background-color: #059669 !important;
+.nav-sidebar .nav-link:hover {
+    color: #ffffff !important;
+    background-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+.nav-sidebar .nav-link.active {
+    background-color: var(--aqua-primary) !important;
+    color: #ffffff !important;
+    font-weight: 500;
+}
+
+.nav-sidebar .nav-header {
+    color: rgba(255, 255, 255, 0.5) !important;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+/* --- Breadcrumb --- */
+.content-wrapper .breadcrumb a,
+.content-wrapper .breadcrumb-item a {
+    color: var(--aqua-primary) !important;
+}
+
+.content-wrapper .breadcrumb-item.active {
+    color: var(--text-muted) !important;
+}
+
+.content-wrapper .breadcrumb-item + .breadcrumb-item::before {
+    color: var(--text-muted) !important;
 }
 
 /* =============================================================================
-   FIX 14: Django admin specific - Module titles
+   4. COMPONENTS - Boutons, Badges, Cards, Formulaires
    ============================================================================= */
 
-.module h2,
-.module caption,
-#content-main h2,
-#content-main .module h2,
-.dashboard #content h1,
-.dashboard #content h2 {
-    color: #343a40 !important;
+/* --- Boutons primaires (IMPORTANT: texte blanc par defaut ET au hover) --- */
+.btn-success,
+.btn-primary,
+.btn-info,
+.btn.bg-success,
+.btn.bg-primary,
+.btn.addlink,
+.btn.changelink,
+a.addlink.btn,
+a.changelink.btn {
+    color: #ffffff !important;
+}
+
+.btn-success,
+.btn-primary,
+.btn.addlink,
+a.addlink.btn {
+    background-color: var(--aqua-primary) !important;
+    border-color: var(--aqua-primary) !important;
+}
+
+.btn-success:hover,
+.btn-primary:hover,
+.btn.addlink:hover {
+    background-color: var(--aqua-primary-hover) !important;
+    border-color: var(--aqua-primary-hover) !important;
+    color: #ffffff !important;
+}
+
+.btn-info,
+.btn.changelink,
+a.changelink.btn {
+    background-color: var(--aqua-primary-light) !important;
+    border-color: var(--aqua-primary-light) !important;
+}
+
+.btn-info:hover,
+.btn.changelink:hover {
+    background-color: var(--aqua-primary) !important;
+    border-color: var(--aqua-primary) !important;
+    color: #ffffff !important;
+}
+
+/* Boutons outline */
+.btn-outline-success {
+    color: var(--aqua-primary) !important;
+    border-color: var(--aqua-primary) !important;
+}
+
+.btn-outline-success:hover {
+    background-color: var(--aqua-primary) !important;
+    color: #ffffff !important;
+}
+
+/* Boutons secondaires */
+.btn-secondary,
+.btn-outline-secondary {
+    background-color: transparent !important;
+    border: 1px solid #64748b !important;
+    color: #64748b !important;
+}
+
+.btn-secondary:hover,
+.btn-outline-secondary:hover {
+    background-color: #64748b !important;
+    color: #ffffff !important;
+}
+
+/* --- Liens dans les boutons (CRUCIAL pour le dashboard) --- */
+.btn a,
+.btn-success a,
+.btn-primary a,
+.btn-info a,
+a.btn,
+.model-links a.btn,
+.card-body .btn a,
+.card-body a.btn {
+    color: #ffffff !important;
+}
+
+/* --- Badges --- */
+.badge-success,
+.badge.bg-success,
+.badge-primary,
+.badge.bg-primary {
+    background-color: var(--aqua-primary) !important;
+    color: #ffffff !important;
+}
+
+.badge-info,
+.badge.bg-info {
+    background-color: var(--aqua-primary-light) !important;
+    color: #ffffff !important;
+}
+
+.badge-warning,
+.badge.bg-warning {
+    background-color: var(--color-warning) !important;
+    color: var(--text-dark) !important;
+}
+
+.badge-danger,
+.badge.bg-danger {
+    background-color: var(--color-danger) !important;
+    color: #ffffff !important;
+}
+
+/* --- Cards --- */
+.card-header,
+.card-header .card-title,
+.card[class*="card-"] > .card-header,
+.card[class*="bg-"] > .card-header {
+    color: #ffffff !important;
+}
+
+.card-body {
+    color: var(--text-body);
+}
+
+.card-tools .btn,
+.card-tools a,
+.card-header .btn {
+    color: #ffffff !important;
+}
+
+/* --- Formulaires: Inputs et Selects (UNIFORMES) --- */
+.content-wrapper input[type="text"],
+.content-wrapper input[type="email"],
+.content-wrapper input[type="password"],
+.content-wrapper input[type="number"],
+.content-wrapper input[type="url"],
+.content-wrapper input[type="tel"],
+.content-wrapper input[type="date"],
+.content-wrapper input[type="datetime-local"],
+.content-wrapper select,
+.content-wrapper textarea,
+.tab-content input,
+.tab-content select,
+.tab-content textarea,
+.tab-pane input,
+.tab-pane select,
+.tab-pane textarea,
+form.change-form input,
+form.change-form select,
+form.change-form textarea,
+.fieldBox input,
+.fieldBox select,
+.fieldBox textarea {
+    background-color: var(--bg-input) !important;
+    color: var(--text-primary) !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: 0.375rem;
+}
+
+/* Focus state uniforme */
+.content-wrapper input:focus,
+.content-wrapper select:focus,
+.content-wrapper textarea:focus,
+.tab-content input:focus,
+.tab-content select:focus,
+.tab-content textarea:focus {
+    border-color: var(--aqua-primary) !important;
+    box-shadow: var(--shadow-focus) !important;
+    outline: none !important;
+}
+
+/* Placeholder */
+.content-wrapper input::placeholder,
+.content-wrapper textarea::placeholder {
+    color: #64748b !important;
+}
+
+/* Exception: Champs de recherche/filtres dans les listes (fond blanc) */
+#changelist-search input,
+.changelist-filter input,
+#changelist .actions select,
+form[action=""] input[name="q"],
+.content-wrapper .content > .container-fluid > form[action=""] input,
+.content-wrapper .content > .container-fluid > form[action=""] select {
+    background-color: #ffffff !important;
+    color: var(--text-dark) !important;
+    border: 1px solid var(--border-light) !important;
+}
+
+/* --- Onglets de formulaire --- */
+.nav-tabs .nav-link {
+    color: var(--text-muted) !important;
+    border: none !important;
+    border-bottom: 2px solid transparent !important;
+    background: transparent !important;
+}
+
+.nav-tabs .nav-link.active {
+    color: var(--aqua-primary-light) !important;
+    border-bottom: 2px solid var(--aqua-primary-light) !important;
+    font-weight: 500;
+}
+
+.nav-tabs .nav-link:hover:not(.active) {
+    color: var(--text-primary) !important;
+    border-bottom: 2px solid #475569 !important;
 }
 
 /* =============================================================================
-   FIX 15: Alerts et messages
+   5. PAGES SPECIFIQUES
    ============================================================================= */
 
+/* --- Dashboard --- */
+.model-links .btn,
+.model-links a.btn,
+.card .model-links a,
+.card-body .model-links a.btn,
+.card-outline-success .btn,
+.card-outline-primary .btn {
+    color: #ffffff !important;
+}
+
+/* Actions recentes - texte sombre */
+#recent-actions-module a,
+.actionlist a,
+.col-lg-3 .card-body a,
+.content-wrapper aside .card-body a {
+    color: var(--text-dark) !important;
+}
+
+/* --- Tableaux / Listes --- */
+.table thead th,
+.table thead th a,
+.table thead th * {
+    color: #ffffff !important;
+    font-weight: 600;
+}
+
+.table-striped tbody tr:nth-of-type(odd) {
+    background-color: var(--bg-table-odd) !important;
+}
+
+.table-striped tbody tr:nth-of-type(even) {
+    background-color: var(--bg-table-even) !important;
+}
+
+.table tbody td {
+    color: var(--text-secondary) !important;
+}
+
+.table td a,
+#result_list td a {
+    color: var(--aqua-primary-light) !important;
+}
+
+.table td a:hover,
+#result_list td a:hover {
+    color: var(--aqua-primary-lighter) !important;
+    text-decoration: underline !important;
+}
+
+/* Compteur d'elements */
+.paginator,
+.dataTables_info,
+.content-wrapper .content p {
+    color: var(--text-dark) !important;
+}
+
+/* Actions de masse */
+.actions span,
+.actions label,
+.actions select {
+    color: var(--text-dark) !important;
+}
+
+.actions .btn,
+.actions button {
+    background-color: var(--aqua-primary) !important;
+    border-color: var(--aqua-primary) !important;
+    color: #ffffff !important;
+}
+
+/* --- Formulaires d'edition --- */
+.submit-row input[type="submit"],
+.submit-row button[type="submit"],
+input[name="_save"],
+input[name="_addanother"],
+input[name="_continue"] {
+    background-color: var(--aqua-primary) !important;
+    border-color: var(--aqua-primary) !important;
+    color: #ffffff !important;
+    font-weight: 500;
+}
+
+.submit-row input[type="submit"]:hover,
+.submit-row button[type="submit"]:hover {
+    background-color: var(--aqua-primary-hover) !important;
+}
+
+/* Object-tools (View/History en haut) */
+.object-tools a,
+.object-tools li a {
+    color: #ffffff !important;
+}
+
+.object-tools .historylink,
+.object-tools a[href*="history"] {
+    background-color: #475569 !important;
+    border-color: #475569 !important;
+}
+
+/* Liens dans le contenu */
+.content-wrapper a:not(.btn):not(.nav-link):not(.breadcrumb-item),
+.tab-content a:not(.btn) {
+    color: var(--aqua-primary-light) !important;
+}
+
+.content-wrapper a:not(.btn):not(.nav-link):hover {
+    color: var(--aqua-primary) !important;
+    text-decoration: underline !important;
+}
+
+/* =============================================================================
+   6. UTILITAIRES
+   ============================================================================= */
+
+/* Alerts */
 .alert-success {
     background-color: #d1fae5 !important;
-    border-color: #059669 !important;
+    border-color: var(--aqua-primary) !important;
     color: #065f46 !important;
 }
 
@@ -328,177 +475,103 @@ label,
     color: #0c4a6e !important;
 }
 
-/* =============================================================================
-   FIX 16: Dark mode overrides
-   ============================================================================= */
-
-[data-bs-theme="dark"] .card-body,
-[data-bs-theme="dark"] .card-body a,
-[data-bs-theme="dark"] .table td {
-    color: #e2e8f0 !important;
+/* Pagination */
+.page-link {
+    color: var(--aqua-primary) !important;
 }
 
-[data-bs-theme="dark"] .breadcrumb,
-[data-bs-theme="dark"] .breadcrumb a {
-    color: #cbd5e1 !important;
-}
-
-[data-bs-theme="dark"] .content-header h1 {
-    color: #f1f5f9 !important;
-}
-
-/* =============================================================================
-   FIX 17: Jazzmin specific - Dashboard cards
-   ============================================================================= */
-
-/* Force white text on colored card headers */
-.card[class*="card-"] > .card-header,
-.card[class*="bg-"] > .card-header {
+.page-item.active .page-link {
+    background-color: var(--aqua-primary) !important;
+    border-color: var(--aqua-primary) !important;
     color: #ffffff !important;
 }
 
-/* Info boxes */
-.info-box .info-box-icon {
+/* Select2 - Style uniforme avec les inputs (fond bleu sombre) */
+.content-wrapper .select2-container--default .select2-selection--single,
+.tab-content .select2-container--default .select2-selection--single,
+.tab-pane .select2-container--default .select2-selection--single {
+    background-color: var(--bg-input) !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: 0.375rem !important;
+    height: auto !important;
+    padding: 0.375rem 0.5rem !important;
+}
+
+.content-wrapper .select2-container--default .select2-selection--single .select2-selection__rendered,
+.tab-content .select2-container--default .select2-selection--single .select2-selection__rendered,
+.tab-pane .select2-container--default .select2-selection--single .select2-selection__rendered {
+    color: var(--text-primary) !important;
+    line-height: 1.5 !important;
+    padding-left: 0 !important;
+}
+
+.content-wrapper .select2-container--default .select2-selection--single .select2-selection__arrow,
+.tab-content .select2-container--default .select2-selection--single .select2-selection__arrow {
+    height: 100% !important;
+}
+
+.content-wrapper .select2-container--default .select2-selection--single .select2-selection__arrow b,
+.tab-content .select2-container--default .select2-selection--single .select2-selection__arrow b {
+    border-color: var(--text-muted) transparent transparent transparent !important;
+}
+
+/* Select2 focus state */
+.content-wrapper .select2-container--default.select2-container--focus .select2-selection--single,
+.content-wrapper .select2-container--default.select2-container--open .select2-selection--single {
+    border-color: var(--aqua-primary) !important;
+    box-shadow: var(--shadow-focus) !important;
+}
+
+/* Select2 dropdown */
+.select2-dropdown {
+    background-color: var(--bg-input) !important;
+    border-color: var(--border-color) !important;
+}
+
+.select2-search--dropdown .select2-search__field {
+    background-color: var(--bg-darker) !important;
+    color: var(--text-primary) !important;
+    border-color: var(--border-color) !important;
+}
+
+.select2-results__option {
+    color: var(--text-primary) !important;
+}
+
+.select2-results__option--highlighted {
+    background-color: var(--aqua-primary) !important;
     color: #ffffff !important;
 }
 
-/* Small boxes footer links */
-.small-box .small-box-footer {
+.select2-results__option--selected {
+    background-color: var(--aqua-primary-hover) !important;
     color: #ffffff !important;
 }
 
-/* =============================================================================
-   FIX 18: Dropdown menus
-   ============================================================================= */
-
+/* Dropdown */
 .dropdown-menu .dropdown-item {
-    color: #343a40 !important;
+    color: var(--text-dark) !important;
 }
 
 .dropdown-menu .dropdown-item:hover {
     background-color: #f1f5f9 !important;
-    color: #059669 !important;
+    color: var(--aqua-primary) !important;
 }
 
-/* =============================================================================
-   FIX 19: Pagination
-   ============================================================================= */
-
-.page-link {
-    color: #059669 !important;
+/* Progress bars */
+.progress-bar.bg-success,
+.progress-bar.bg-primary {
+    background-color: var(--aqua-primary) !important;
 }
 
-.page-item.active .page-link {
-    background-color: #059669 !important;
-    border-color: #059669 !important;
-    color: #ffffff !important;
-}
-
-/* =============================================================================
-   FIX 20: Select2 et autocomplete
-   ============================================================================= */
-
-.select2-container--default .select2-selection--single .select2-selection__rendered {
-    color: #343a40 !important;
-}
-
-.select2-results__option {
-    color: #343a40 !important;
-}
-
-.select2-results__option--highlighted {
-    background-color: #059669 !important;
-    color: #ffffff !important;
-}
-
-/* =============================================================================
-   FIX 21: Boutons avec liens - TEXTE BLANC OBLIGATOIRE
-   ============================================================================= */
-
-/* Tous les liens dans les boutons doivent etre blancs */
-.btn a,
-.btn-success a,
-.btn-primary a,
-.btn-info a,
-.btn-warning a,
-.btn-danger a,
-.btn-outline-success a,
-.btn-outline-primary a,
-[class*="btn-"] a {
-    color: #ffffff !important;
-}
-
-/* Object-tools Jazzmin (boutons View/Change/History en haut a droite) */
-.object-tools a,
-.object-tools li a,
-.object-tools .viewlink,
-.object-tools .changelink,
-.object-tools .addlink,
-.object-tools .historylink,
-.object-tools .deletelink {
-    color: #ffffff !important;
-}
-
-/* Submit row (boutons Save/Delete en bas des formulaires) */
-.submit-row a,
-.submit-row input[type="submit"],
-.submit-row .deletelink,
-.submit-row .default {
-    color: #ffffff !important;
-}
-
-/* Liens actions dans les listes admin */
-.changelist-filter a,
-#changelist-filter a,
-.actions select + button,
-.actions .button {
-    color: inherit;
-}
-
-/* Boutons d'action dans les tableaux */
-td .btn a,
-td.action-checkbox-column + td a.btn,
-.results a.btn,
-.module a.btn {
-    color: #ffffff !important;
-}
-
-/* =============================================================================
-   FIX 22: Small-box et Info-box Jazzmin - Liens blancs
-   ============================================================================= */
-
+/* Small-box (dashboard stats) */
 .small-box a,
 .small-box .small-box-footer,
-.small-box-footer a,
-.info-box a,
-.info-box .info-box-icon {
+.info-box a {
     color: #ffffff !important;
 }
 
-/* =============================================================================
-   FIX 23: Card-tools et boutons collapse
-   ============================================================================= */
-
-.card-tools .btn,
-.card-tools a,
-.card-header .btn,
-.card-header a.btn,
-.card-header .card-tools a {
-    color: #ffffff !important;
-}
-
-/* =============================================================================
-   FIX 24: Sidebar active et liens menu
-   ============================================================================= */
-
-.nav-sidebar .nav-link.active,
-.nav-sidebar .nav-item.menu-open > .nav-link,
-.sidebar-dark-success .nav-sidebar > .nav-item.menu-open > .nav-link {
-    background-color: #047857 !important;
-    color: #ffffff !important;
-}
-
-.nav-sidebar .nav-treeview > .nav-item > .nav-link.active {
-    background-color: rgba(255, 255, 255, 0.1) !important;
-    color: #ffffff !important;
+.small-box .inner h3,
+.small-box .inner p {
+    color: var(--text-dark) !important;
 }
