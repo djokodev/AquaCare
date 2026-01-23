@@ -7,7 +7,7 @@ from decimal import Decimal
 from django.core.exceptions import ValidationError
 
 from apps.commerce.models import Product, Order, OrderItem
-from accounts.models import User, FarmProfile
+from apps.accounts.models import User, FarmProfile
 
 
 @pytest.mark.django_db

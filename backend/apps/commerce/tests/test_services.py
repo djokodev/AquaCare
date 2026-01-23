@@ -9,7 +9,7 @@ from django.utils import timezone
 
 from apps.commerce.models import Product
 from apps.commerce.services import ProductService, OrderService, FeedingSuggestionService
-from accounts.models import User, FarmProfile
+from apps.accounts.models import User, FarmProfile
 from apps.aquaculture.models import ProductionCycle
 
 

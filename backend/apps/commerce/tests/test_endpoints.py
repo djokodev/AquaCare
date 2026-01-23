@@ -8,7 +8,7 @@ from rest_framework.test import APIClient
 from rest_framework import status
 from django.contrib.auth import get_user_model
 
-from accounts.models import FarmProfile
+from apps.accounts.models import FarmProfile
 from apps.commerce.models import Product, Order
 
 User = get_user_model()

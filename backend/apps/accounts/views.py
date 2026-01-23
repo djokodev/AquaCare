@@ -5,10 +5,10 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import TokenError
 from drf_spectacular.utils import extend_schema, OpenApiResponse, OpenApiExample
 
-from .models import User
+from apps.accounts.models import User
 
 from .serializers import (
-    UserRegistrationSerializer, 
+    UserRegistrationSerializer,
     UserProfileSimpleSerializer,
     UserProfileSerializer,
     FarmProfileSerializer,

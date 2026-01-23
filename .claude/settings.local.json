@@ -21,7 +21,9 @@
       "mcp__playwright__browser_take_screenshot",
       "mcp__playwright__browser_snapshot",
       "Bash(docker-compose exec:*)",
-      "Bash(docker-compose:*)"
+      "Bash(docker-compose:*)",
+      "WebSearch",
+      "Bash(winget:*)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits"

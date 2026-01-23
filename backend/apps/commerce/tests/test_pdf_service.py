@@ -6,7 +6,7 @@ import inspect
 
 import pytest
 
-from accounts.models import User, FarmProfile
+from apps.accounts.models import User, FarmProfile
 from apps.commerce.models import Product, Order, OrderItem
 from apps.commerce.services.pdf_service import (
     _ensure_pdf_dependencies,

@@ -8,7 +8,7 @@ from rest_framework.test import APIClient
 from rest_framework import status
 
 from apps.commerce.models import Product
-from accounts.models import User, FarmProfile
+from apps.accounts.models import User, FarmProfile
 
 
 @pytest.mark.django_db

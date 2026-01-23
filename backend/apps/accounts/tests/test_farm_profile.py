@@ -6,7 +6,7 @@ Teste toutes les fonctionnalités liées au profil ferme MAVECAM.
 import pytest
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
-from accounts.models import FarmProfile
+from apps.accounts.models import FarmProfile
 
 User = get_user_model()
 

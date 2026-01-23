@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth import authenticate
-from .models import User, FarmProfile
+from apps.accounts.models import User, FarmProfile
 from .validators import PhoneNumberValidator
 
 
