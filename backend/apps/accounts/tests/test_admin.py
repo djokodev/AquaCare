@@ -127,21 +127,19 @@ class TestUserAdmin:
         request.user = admin_user
         queryset = User.objects.filter(pk__in=[u.pk for u in users])
 
-        # Mock message_user method
-        self.admin.message_user = Mock()
-
         # Exécuter l'action
-        self.admin.verify_users(request, queryset)
+        with patch('apps.accounts.admin.messages') as mock_messages:
+            self.admin.verify_users(request, queryset)
 
-        # Vérifier que tous les utilisateurs sont vérifiés
-        for user in users:
-            user.refresh_from_db()
-            assert user.is_verified is True
+            # Vérifier que tous les utilisateurs sont vérifiés
+            for user in users:
+                user.refresh_from_db()
+                assert user.is_verified is True
 
-        # Vérifier le message
-        self.admin.message_user.assert_called_once()
-        args, kwargs = self.admin.message_user.call_args
-        assert '3 utilisateur(s) vérifié(s)' in args[1]
+            # Vérifier le message
+            mock_messages.success.assert_called_once()
+            args = mock_messages.success.call_args[0]
+            assert '3 utilisateur(s) vérifié(s)' in str(args[1]) or '3 utilisateur(s) verifie(s)' in str(args[1])
     
     def test_certify_farms_action(self):
         """Test action de certification des fermes."""
@@ -168,17 +166,17 @@ class TestUserAdmin:
         request = Mock()
         request.user = admin_user
         queryset = User.objects.filter(pk__in=[u.pk for u in users])
-        self.admin.message_user = Mock()
 
         # Exécuter l'action
-        self.admin.certify_farms(request, queryset)
+        with patch('apps.accounts.admin.messages') as mock_messages:
+            self.admin.certify_farms(request, queryset)
 
-        # Vérifier que toutes les fermes sont certifiées
-        for user in users:
-            user.refresh_from_db()
-            assert user.farm_profile.certification_status == 'certified'
+            # Vérifier que toutes les fermes sont certifiées
+            for user in users:
+                user.refresh_from_db()
+                assert user.farm_profile.certification_status == 'certified'
 
-        self.admin.message_user.assert_called_once()
+            mock_messages.success.assert_called_once()
     
     def test_suspend_certifications_action(self):
         """Test action de suspension des certifications."""
@@ -206,13 +204,15 @@ class TestUserAdmin:
         request = Mock()
         request.user = admin_user
         queryset = User.objects.filter(pk=user.pk)
-        self.admin.message_user = Mock()
 
         # Suspendre
-        self.admin.suspend_certifications(request, queryset)
+        with patch('apps.accounts.admin.messages') as mock_messages:
+            self.admin.suspend_certifications(request, queryset)
 
-        user.refresh_from_db()
-        assert user.farm_profile.certification_status == 'suspended'
+            user.refresh_from_db()
+            assert user.farm_profile.certification_status == 'suspended'
+
+            mock_messages.success.assert_called_once()
     
     # DEPRECATED: export_csv action removed with RBAC implementation
     # def test_export_csv_action(self):
@@ -241,12 +241,12 @@ class TestUserAdmin:
     #     lines = content.strip().split('\n')
     #
     #     # Header line
-        assert 'Téléphone' in lines[0]
-        assert 'Nom' in lines[0]
-        
-        # Data line
-        assert user.phone_number in lines[1]
-        assert user.display_name in lines[1]
+    #     assert 'Téléphone' in lines[0]
+    #     assert 'Nom' in lines[0]
+    #
+    #     # Data line
+    #     assert user.phone_number in lines[1]
+    #     assert user.display_name in lines[1]
 
 
 @pytest.mark.django_db

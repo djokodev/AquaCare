@@ -30,6 +30,8 @@ from apps.common.admin_mixins import (
 )
 from apps.accounts.admin import UserAdmin
 from apps.accounts.models import User
+from apps.commerce.admin import ProductAdmin
+from apps.commerce.models import Product
 from django.contrib.auth.models import AnonymousUser
 
 
@@ -748,8 +750,7 @@ class TestMultiRole:
 
         manager_group, _ = Group.objects.get_or_create(name=RBACConstants.GROUP_MANAGERS)
         commerce_group, _ = Group.objects.get_or_create(name=RBACConstants.GROUP_COMMERCE)
-        user.groups.add(manager_group, commerce_group)        from apps.commerce.admin import ProductAdmin
-        from apps.commerce.models import Product
+        user.groups.add(manager_group, commerce_group)
 
         request = mock_request(user)
 

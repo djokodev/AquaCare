@@ -27,11 +27,12 @@ def add_session_to_request(request):
     return request
 
 
+@pytest.mark.django_db
 class TestUserLanguageMiddleware:
     """
     Tests pour la détection automatique de langue.
     """
-    
+
     def setup_method(self):
         """Configuration pour chaque test."""
         self.factory = RequestFactory()
