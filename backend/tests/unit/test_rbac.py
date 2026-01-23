@@ -20,7 +20,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.test import RequestFactory
 from django.core.exceptions import PermissionDenied
 
-from apps.common.admin_mixins import (
+from common.admin_mixins import (
     RBACConstants,
     AuditLogMixin,
     SecuredModelAdmin,
@@ -29,9 +29,9 @@ from apps.common.admin_mixins import (
     ManagerMixin,
     PIIMaskingMixin,
 )
-from apps.accounts.admin import UserAdmin
-from apps.commerce.admin import ProductAdmin
-from apps.commerce.models import Product
+from accounts.admin import UserAdmin
+from commerce.admin import ProductAdmin
+from commerce.models import Product
 
 User = get_user_model()
 
@@ -566,8 +566,8 @@ class TestModulePermissionsByRole:
 
     def test_commerce_has_commerce_module_permission(self, mock_request, commerce_user):
         """Le commerce a acces au module commerce."""
-        from apps.commerce.admin import ProductAdmin
-        from apps.commerce.models import Product
+        from commerce.admin import ProductAdmin
+        from commerce.models import Product
 
         admin = ProductAdmin(Product, AdminSite())
         request = mock_request(commerce_user)
@@ -576,8 +576,8 @@ class TestModulePermissionsByRole:
 
     def test_commerce_has_aquaculture_view_permission(self, mock_request, commerce_user):
         """Le commerce a acces en lecture au module aquaculture."""
-        from apps.aquaculture.admin import ProductionCycleAdmin
-        from apps.aquaculture.models import ProductionCycle
+        from aquaculture.admin import ProductionCycleAdmin
+        from aquaculture.models import ProductionCycle
 
         admin = ProductionCycleAdmin(ProductionCycle, AdminSite())
         request = mock_request(commerce_user)
@@ -586,8 +586,8 @@ class TestModulePermissionsByRole:
 
     def test_support_has_chat_module_permission(self, mock_request, support_user):
         """Le support a acces au module chat."""
-        from apps.chat.admin import ConversationAdmin
-        from apps.chat.models import Conversation
+        from chat.admin import ConversationAdmin
+        from chat.models import Conversation
 
         admin = ConversationAdmin(Conversation, AdminSite())
         request = mock_request(support_user)
@@ -596,8 +596,8 @@ class TestModulePermissionsByRole:
 
     def test_support_has_notifications_module_permission(self, mock_request, support_user):
         """Le support a acces au module notifications."""
-        from apps.notifications.admin import NotificationAdmin
-        from apps.notifications.models import Notification
+        from notifications.admin import NotificationAdmin
+        from notifications.models import Notification
 
         admin = NotificationAdmin(Notification, AdminSite())
         request = mock_request(support_user)
@@ -606,8 +606,8 @@ class TestModulePermissionsByRole:
 
     def test_commerce_no_chat_module_permission(self, mock_request, commerce_user):
         """Le commerce n'a pas acces au module chat."""
-        from apps.chat.admin import ConversationAdmin
-        from apps.chat.models import Conversation
+        from chat.admin import ConversationAdmin
+        from chat.models import Conversation
 
         admin = ConversationAdmin(Conversation, AdminSite())
         request = mock_request(commerce_user)
@@ -616,8 +616,8 @@ class TestModulePermissionsByRole:
 
     def test_support_no_commerce_module_permission(self, mock_request, support_user):
         """Le support n'a pas acces au module commerce."""
-        from apps.commerce.admin import ProductAdmin
-        from apps.commerce.models import Product
+        from commerce.admin import ProductAdmin
+        from commerce.models import Product
 
         admin = ProductAdmin(Product, AdminSite())
         request = mock_request(support_user)
@@ -635,8 +635,8 @@ class TestCommerceAdmin:
 
     def test_commerce_can_add_product(self, mock_request, commerce_user):
         """Le commerce peut ajouter des produits."""
-        from apps.commerce.admin import ProductAdmin
-        from apps.commerce.models import Product
+        from commerce.admin import ProductAdmin
+        from commerce.models import Product
 
         admin = ProductAdmin(Product, AdminSite())
         request = mock_request(commerce_user)
@@ -645,8 +645,8 @@ class TestCommerceAdmin:
 
     def test_commerce_can_change_product(self, mock_request, commerce_user):
         """Le commerce peut modifier des produits."""
-        from apps.commerce.admin import ProductAdmin
-        from apps.commerce.models import Product
+        from commerce.admin import ProductAdmin
+        from commerce.models import Product
 
         admin = ProductAdmin(Product, AdminSite())
         request = mock_request(commerce_user)
@@ -655,8 +655,8 @@ class TestCommerceAdmin:
 
     def test_commerce_cannot_delete_product(self, mock_request, commerce_user):
         """Le commerce ne peut pas supprimer des produits."""
-        from apps.commerce.admin import ProductAdmin
-        from apps.commerce.models import Product
+        from commerce.admin import ProductAdmin
+        from commerce.models import Product
 
         admin = ProductAdmin(Product, AdminSite())
         request = mock_request(commerce_user)
@@ -665,8 +665,8 @@ class TestCommerceAdmin:
 
     def test_order_add_permission_disabled(self, mock_request, superuser):
         """Les commandes ne peuvent pas etre creees via admin."""
-        from apps.commerce.admin import OrderAdmin
-        from apps.commerce.models import Order
+        from commerce.admin import OrderAdmin
+        from commerce.models import Order
 
         admin = OrderAdmin(Order, AdminSite())
         request = mock_request(superuser)
@@ -675,8 +675,8 @@ class TestCommerceAdmin:
 
     def test_order_delete_permission_disabled(self, mock_request, superuser):
         """Les commandes ne peuvent pas etre supprimees."""
-        from apps.commerce.admin import OrderAdmin
-        from apps.commerce.models import Order
+        from commerce.admin import OrderAdmin
+        from commerce.models import Order
 
         admin = OrderAdmin(Order, AdminSite())
         request = mock_request(superuser)
@@ -694,7 +694,7 @@ class TestSupportInbox:
 
     def test_support_can_access_inbox(self, mock_request, support_user):
         """Le support peut acceder a la boite de support."""
-        from apps.chat.admin import support_inbox_view
+        from chat.admin import support_inbox_view
 
         request = mock_request(support_user)
         request.method = 'GET'
@@ -709,7 +709,7 @@ class TestSupportInbox:
 
     def test_commerce_cannot_access_inbox(self, mock_request, commerce_user):
         """Le commerce ne peut pas acceder a la boite de support."""
-        from apps.chat.admin import support_inbox_view
+        from chat.admin import support_inbox_view
 
         request = mock_request(commerce_user)
         request.method = 'GET'

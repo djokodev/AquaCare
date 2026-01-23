@@ -8,7 +8,7 @@ from datetime import timedelta
 from django.utils import timezone
 
 from commerce.models import Product
-from apps.commerce.services import ProductService, OrderService, FeedingSuggestionService
+from commerce.services import ProductService, OrderService, FeedingSuggestionService
 from accounts.models import User, FarmProfile
 from apps.aquaculture.models import ProductionCycle
 

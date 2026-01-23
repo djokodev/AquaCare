@@ -5,7 +5,7 @@ Coverage: Simulation prédictive de cycles aquacoles.
 import pytest
 from decimal import Decimal
 
-from apps.commerce.services import CycleSimulationService
+from commerce.services import CycleSimulationService
 from commerce.models import Product
 
 

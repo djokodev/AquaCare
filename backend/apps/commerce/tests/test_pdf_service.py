@@ -8,7 +8,7 @@ import pytest
 
 from accounts.models import User, FarmProfile
 from commerce.models import Product, Order, OrderItem
-from apps.commerce.services.pdf_service import (
+from commerce.services.pdf_service import (
     _ensure_pdf_dependencies,
     generate_order_pdf,
 )
