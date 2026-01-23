@@ -266,11 +266,9 @@ class UserAdmin(ManagerMixin, PIIMaskingMixin, AuditLogMixin, BaseUserAdmin):
                 # Verifier elevation de privileges
                 if not request.user.is_superuser:
                     if not original.is_superuser and obj.is_superuser:
-                        messages.error(request, _("Elevation vers superuser non autorisee."))
                         raise PermissionDenied(_("Elevation vers superuser non autorisee."))
 
                     if not original.is_staff and obj.is_staff:
-                        messages.error(request, _("Promotion vers staff non autorisee."))
                         raise PermissionDenied(_("Promotion vers staff non autorisee."))
 
             except User.DoesNotExist:
