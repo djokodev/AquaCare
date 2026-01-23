@@ -28,6 +28,9 @@ from apps.common.admin_mixins import (
     ManagerMixin,
     PIIMaskingMixin,
 )
+from apps.accounts.admin import UserAdmin
+from apps.accounts.models import User
+from django.contrib.auth.models import AnonymousUser
 
 
 # =============================================================================
@@ -144,7 +147,7 @@ class TestRBACConstants:
         assert 'accounts' in RBACConstants.ROLE_APPS[RBACConstants.GROUP_MANAGERS]
         assert 'aquaculture' in RBACConstants.ROLE_APPS[RBACConstants.GROUP_MANAGERS]
         assert 'commerce' in RBACConstants.ROLE_APPS[RBACConstants.GROUP_COMMERCE]
-        assert 'apps.chat' in RBACConstants.ROLE_APPS[RBACConstants.GROUP_SUPPORT]
+        assert 'chat' in RBACConstants.ROLE_APPS[RBACConstants.GROUP_SUPPORT]
 
     def test_sensitive_fields_defined(self):
         """Verifie que les champs sensibles sont definis."""
@@ -231,9 +234,6 @@ class TestSecuredModelAdmin:
 
     def test_superuser_has_module_permission(self, mock_request, superuser):
         """Le superuser a acces a tous les modules."""
-        from apps.accounts.admin import UserAdmin
-        from apps.accounts.models import User
-
         admin = UserAdmin(User, AdminSite())
         request = mock_request(superuser)
 
@@ -241,10 +241,6 @@ class TestSecuredModelAdmin:
 
     def test_unauthenticated_no_module_permission(self, mock_request, request_factory):
         """Un utilisateur non authentifie n'a pas acces."""
-        from apps.accounts.admin import UserAdmin
-        from apps.accounts.models import User
-        from django.contrib.auth.models import AnonymousUser
-
         admin = UserAdmin(User, AdminSite())
         request = request_factory.get('/admin/')
         request.user = AnonymousUser()
@@ -253,9 +249,6 @@ class TestSecuredModelAdmin:
 
     def test_manager_has_module_permission_accounts(self, mock_request, manager_user):
         """Le manager a acces au module accounts."""
-        from apps.accounts.admin import UserAdmin
-        from apps.accounts.models import User
-
         admin = UserAdmin(User, AdminSite())
         request = mock_request(manager_user)
 
@@ -263,9 +256,6 @@ class TestSecuredModelAdmin:
 
     def test_commerce_no_module_permission_accounts(self, mock_request, commerce_user):
         """Le commerce n'a pas acces au module accounts."""
-        from apps.accounts.admin import UserAdmin
-        from apps.accounts.models import User
-
         admin = UserAdmin(User, AdminSite())
         request = mock_request(commerce_user)
 
@@ -274,9 +264,6 @@ class TestSecuredModelAdmin:
 
     def test_support_no_module_permission_accounts(self, mock_request, support_user):
         """Le support n'a pas acces au module accounts."""
-        from apps.accounts.admin import UserAdmin
-        from apps.accounts.models import User
-
         admin = UserAdmin(User, AdminSite())
         request = mock_request(support_user)
 
@@ -293,9 +280,6 @@ class TestDeletePermissions:
 
     def test_superuser_can_delete_regular_user(self, mock_request, superuser, regular_user):
         """Le superuser peut supprimer un utilisateur normal."""
-        from apps.accounts.admin import UserAdmin
-        from apps.accounts.models import User
-
         admin = UserAdmin(User, AdminSite())
         request = mock_request(superuser)
 
@@ -303,9 +287,6 @@ class TestDeletePermissions:
 
     def test_superuser_cannot_delete_self(self, mock_request, superuser):
         """Le superuser ne peut pas se supprimer lui-meme."""
-        from apps.accounts.admin import UserAdmin
-        from apps.accounts.models import User
-
         admin = UserAdmin(User, AdminSite())
         request = mock_request(superuser)
 
@@ -313,9 +294,6 @@ class TestDeletePermissions:
 
     def test_superuser_cannot_delete_another_superuser(self, mock_request, superuser, user_factory):
         """Le superuser ne peut pas supprimer un autre superuser."""
-        from apps.accounts.admin import UserAdmin
-        from apps.accounts.models import User
-
         another_superuser = user_factory(
             phone_number='+237699999999',
             is_staff=True,
@@ -329,9 +307,6 @@ class TestDeletePermissions:
 
     def test_manager_cannot_delete_users(self, mock_request, manager_user, regular_user):
         """Le manager ne peut pas supprimer d'utilisateurs."""
-        from apps.accounts.admin import UserAdmin
-        from apps.accounts.models import User
-
         admin = UserAdmin(User, AdminSite())
         request = mock_request(manager_user)
 
@@ -348,9 +323,6 @@ class TestChangePermissions:
 
     def test_superuser_can_change_any_user(self, mock_request, superuser, staff_user):
         """Le superuser peut modifier n'importe quel utilisateur."""
-        from apps.accounts.admin import UserAdmin
-        from apps.accounts.models import User
-
         admin = UserAdmin(User, AdminSite())
         request = mock_request(superuser)
 
@@ -358,9 +330,6 @@ class TestChangePermissions:
 
     def test_manager_can_change_regular_user(self, mock_request, manager_user, regular_user):
         """Le manager peut modifier un utilisateur normal."""
-        from apps.accounts.admin import UserAdmin
-        from apps.accounts.models import User
-
         admin = UserAdmin(User, AdminSite())
         request = mock_request(manager_user)
 
@@ -368,9 +337,6 @@ class TestChangePermissions:
 
     def test_manager_cannot_change_staff_user(self, mock_request, manager_user, staff_user):
         """Le manager ne peut pas modifier un autre admin."""
-        from apps.accounts.admin import UserAdmin
-        from apps.accounts.models import User
-
         admin = UserAdmin(User, AdminSite())
         request = mock_request(manager_user)
 
@@ -387,9 +353,6 @@ class TestPrivilegeEscalation:
 
     def test_manager_cannot_promote_to_superuser(self, mock_request, manager_user, regular_user):
         """Le manager ne peut pas promouvoir un utilisateur en superuser."""
-        from apps.accounts.admin import UserAdmin
-        from apps.accounts.models import User
-
         admin = UserAdmin(User, AdminSite())
         request = mock_request(manager_user)
 
@@ -402,9 +365,6 @@ class TestPrivilegeEscalation:
 
     def test_manager_cannot_promote_to_staff(self, mock_request, manager_user, regular_user):
         """Le manager ne peut pas promouvoir un utilisateur en staff."""
-        from apps.accounts.admin import UserAdmin
-        from apps.accounts.models import User
-
         admin = UserAdmin(User, AdminSite())
         request = mock_request(manager_user)
 
@@ -417,9 +377,6 @@ class TestPrivilegeEscalation:
 
     def test_superuser_can_promote_to_staff(self, mock_request, superuser, regular_user):
         """Le superuser peut promouvoir un utilisateur en staff."""
-        from apps.accounts.admin import UserAdmin
-        from apps.accounts.models import User
-
         admin = UserAdmin(User, AdminSite())
         request = mock_request(superuser)
 
@@ -444,9 +401,6 @@ class TestReadonlyFields:
 
     def test_superuser_can_edit_permission_fields(self, mock_request, superuser):
         """Le superuser peut modifier les champs de permission."""
-        from apps.accounts.admin import UserAdmin
-        from apps.accounts.models import User
-
         admin = UserAdmin(User, AdminSite())
         request = mock_request(superuser)
 
@@ -458,9 +412,6 @@ class TestReadonlyFields:
 
     def test_manager_cannot_edit_permission_fields(self, mock_request, manager_user):
         """Le manager ne peut pas modifier les champs de permission."""
-        from apps.accounts.admin import UserAdmin
-        from apps.accounts.models import User
-
         admin = UserAdmin(User, AdminSite())
         request = mock_request(manager_user)
 
@@ -482,9 +433,6 @@ class TestQuerysetFiltering:
 
     def test_superuser_sees_all_users(self, mock_request, superuser, staff_user, regular_user):
         """Le superuser voit tous les utilisateurs."""
-        from apps.accounts.admin import UserAdmin
-        from apps.accounts.models import User
-
         admin = UserAdmin(User, AdminSite())
         request = mock_request(superuser)
 
@@ -496,9 +444,6 @@ class TestQuerysetFiltering:
 
     def test_manager_does_not_see_superusers(self, mock_request, manager_user, superuser, regular_user):
         """Le manager ne voit pas les superusers."""
-        from apps.accounts.admin import UserAdmin
-        from apps.accounts.models import User
-
         admin = UserAdmin(User, AdminSite())
         request = mock_request(manager_user)
 
@@ -518,9 +463,6 @@ class TestActionsFiltering:
 
     def test_superuser_has_delete_action(self, mock_request, superuser):
         """Le superuser a l'action delete_selected."""
-        from apps.accounts.admin import UserAdmin
-        from apps.accounts.models import User
-
         admin = UserAdmin(User, AdminSite())
         request = mock_request(superuser)
 
@@ -530,9 +472,6 @@ class TestActionsFiltering:
 
     def test_manager_has_verify_action(self, mock_request, manager_user):
         """Le manager a l'action verify_users."""
-        from apps.accounts.admin import UserAdmin
-        from apps.accounts.models import User
-
         admin = UserAdmin(User, AdminSite())
         request = mock_request(manager_user)
 
@@ -543,9 +482,6 @@ class TestActionsFiltering:
 
     def test_manager_no_delete_action(self, mock_request, manager_user):
         """Le manager n'a pas l'action delete_selected."""
-        from apps.accounts.admin import UserAdmin
-        from apps.accounts.models import User
-
         admin = UserAdmin(User, AdminSite())
         request = mock_request(manager_user)
 
@@ -579,9 +515,6 @@ class TestPIIMasking:
 
     def test_manager_sees_phone_number(self, mock_request, manager_user):
         """Le manager voit les numeros de telephone."""
-        from apps.accounts.admin import UserAdmin
-        from apps.accounts.models import User
-
         admin = UserAdmin(User, AdminSite())
         request = mock_request(manager_user)
 
@@ -815,11 +748,7 @@ class TestMultiRole:
 
         manager_group, _ = Group.objects.get_or_create(name=RBACConstants.GROUP_MANAGERS)
         commerce_group, _ = Group.objects.get_or_create(name=RBACConstants.GROUP_COMMERCE)
-        user.groups.add(manager_group, commerce_group)
-
-        from apps.accounts.admin import UserAdmin
-        from apps.accounts.models import User
-        from apps.commerce.admin import ProductAdmin
+        user.groups.add(manager_group, commerce_group)        from apps.commerce.admin import ProductAdmin
         from apps.commerce.models import Product
 
         request = mock_request(user)

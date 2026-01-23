@@ -132,7 +132,7 @@ class TestUserModel:
             age_group='26_35'
         )
         
-        expected = 'Marie Eleveur (+237692345678)'
+        expected = 'Marie Eleveur'  # Sans numéro de téléphone pour lisibilité admin
         assert str(user) == expected
     
     def test_phone_number_uniqueness(self):

@@ -9,13 +9,22 @@ from unittest.mock import Mock, patch
 from django.http import HttpRequest, JsonResponse
 from django.contrib.auth import get_user_model
 from django.test import RequestFactory
+from django.contrib.sessions.middleware import SessionMiddleware
 from accounts.middleware import (
-    UserLanguageMiddleware, 
+    UserLanguageMiddleware,
     APIResponseLanguageMiddleware,
     LoginRateLimitMiddleware
 )
 
 User = get_user_model()
+
+
+def add_session_to_request(request):
+    """Helper pour ajouter une session à une requête de test."""
+    middleware = SessionMiddleware(lambda x: x)
+    middleware.process_request(request)
+    request.session.save()
+    return request
 
 
 class TestUserLanguageMiddleware:
@@ -34,37 +43,41 @@ class TestUserLanguageMiddleware:
         # Créer un utilisateur avec préférence EN
         with patch('django.contrib.auth.get_user_model') as mock_get_user:
             request = self.factory.get('/')
+            request = add_session_to_request(request)
             request.user = Mock()
             request.user.is_authenticated = True
             request.user.language_preference = 'en'
-            
+
             language = self.middleware.get_user_language(request)
             assert language == 'en'
     
     def test_accept_language_header_used_when_not_authenticated(self):
         """Test utilisation header Accept-Language."""
         request = self.factory.get('/', HTTP_ACCEPT_LANGUAGE='en-US,en;q=0.9')
+        request = add_session_to_request(request)
         request.user = Mock()
         request.user.is_authenticated = False
-        
+
         language = self.middleware.get_user_language(request)
         assert language == 'en'
     
     def test_french_header_detected(self):
         """Test détection français dans header."""
         request = self.factory.get('/', HTTP_ACCEPT_LANGUAGE='fr-FR,fr;q=0.9')
+        request = add_session_to_request(request)
         request.user = Mock()
         request.user.is_authenticated = False
-        
+
         language = self.middleware.get_user_language(request)
         assert language == 'fr'
     
     def test_default_french_when_no_preference(self):
         """Test français par défaut."""
         request = self.factory.get('/')
+        request = add_session_to_request(request)
         request.user = Mock()
         request.user.is_authenticated = False
-        
+
         language = self.middleware.get_user_language(request)
         assert language == 'fr'
 

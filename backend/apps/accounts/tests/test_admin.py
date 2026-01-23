@@ -31,23 +31,25 @@ class TestUserAdmin:
         """Test champs affichés dans la liste."""
         expected_fields = (
             'phone_number', 'display_name', 'account_type', 'activity_type',
-            'region', 'is_verified', 'farm_certification_status', 'date_joined'
+            'region', 'is_verified', 'farm_certification_status', 'is_staff_display',
+            'date_joined'
         )
         assert self.admin.list_display == expected_fields
     
     def test_search_fields_configured(self):
-        """Test champs de recherche configurés."""
+        """Test champs de recherche configurés (sans phone pour PII)."""
         expected_fields = (
-            'phone_number', 'first_name', 'last_name', 'business_name',
+            'first_name', 'last_name', 'business_name',
             'email', 'farm_profile__farm_name'
         )
+        # phone_number ajouté dynamiquement via get_search_fields() pour managers
         assert self.admin.search_fields == expected_fields
     
     def test_list_filter_configured(self):
         """Test filtres de liste configurés."""
         expected_filters = (
-            'account_type', 'activity_type', 'region', 'is_verified', 
-            'is_active', 'date_joined', 'farm_profile__certification_status'
+            'account_type', 'activity_type', 'region', 'is_verified',
+            'is_active', 'is_staff', 'date_joined', 'farm_profile__certification_status'
         )
         assert self.admin.list_filter == expected_filters
     
@@ -111,22 +113,31 @@ class TestUserAdmin:
                 is_verified=False
             )
             users.append(user)
-        
-        # Mock request et queryset
+
+        # Créer un admin user pour la request
+        admin_user = User.objects.create_superuser(
+            phone_number='+237699999990',
+            first_name='Admin',
+            last_name='Test',
+            password='admin123'
+        )
+
+        # Mock request avec un vrai user
         request = Mock()
+        request.user = admin_user
         queryset = User.objects.filter(pk__in=[u.pk for u in users])
-        
+
         # Mock message_user method
         self.admin.message_user = Mock()
-        
+
         # Exécuter l'action
         self.admin.verify_users(request, queryset)
-        
+
         # Vérifier que tous les utilisateurs sont vérifiés
         for user in users:
             user.refresh_from_db()
             assert user.is_verified is True
-        
+
         # Vérifier le message
         self.admin.message_user.assert_called_once()
         args, kwargs = self.admin.message_user.call_args
@@ -145,19 +156,28 @@ class TestUserAdmin:
                 password='test123'
             )
             users.append(user)
-        
+
+        # Créer un admin user
+        admin_user = User.objects.create_superuser(
+            phone_number='+237699999991',
+            first_name='Admin',
+            last_name='Test',
+            password='admin123'
+        )
+
         request = Mock()
+        request.user = admin_user
         queryset = User.objects.filter(pk__in=[u.pk for u in users])
         self.admin.message_user = Mock()
-        
+
         # Exécuter l'action
         self.admin.certify_farms(request, queryset)
-        
+
         # Vérifier que toutes les fermes sont certifiées
         for user in users:
             user.refresh_from_db()
             assert user.farm_profile.certification_status == 'certified'
-        
+
         self.admin.message_user.assert_called_once()
     
     def test_suspend_certifications_action(self):
@@ -170,47 +190,57 @@ class TestUserAdmin:
             age_group='26_35',
             password='test123'
         )
-        
+
         # Certifier d'abord
         user.farm_profile.certification_status = 'certified'
         user.farm_profile.save()
-        
+
+        # Créer un admin user
+        admin_user = User.objects.create_superuser(
+            phone_number='+237699999992',
+            first_name='Admin',
+            last_name='Test',
+            password='admin123'
+        )
+
         request = Mock()
+        request.user = admin_user
         queryset = User.objects.filter(pk=user.pk)
         self.admin.message_user = Mock()
-        
+
         # Suspendre
         self.admin.suspend_certifications(request, queryset)
-        
+
         user.refresh_from_db()
         assert user.farm_profile.certification_status == 'suspended'
     
-    def test_export_csv_action(self):
-        """Test action d'export CSV."""
-        user = User.objects.create_user(
-            phone_number='+237693000000',
-            first_name='Export',
-            last_name='Test',
-            password='test123',
-            age_group='26_35',
-            region='centre',
-            activity_type='poisson_table'
-        )
-        
-        request = Mock()
-        queryset = User.objects.filter(pk=user.pk)
-        
-        response = self.admin.export_csv(request, queryset)
-        
-        # Vérifier les headers de réponse CSV
-        assert response['Content-Type'] == 'text/csv'
-        assert 'utilisateurs_mavecam.csv' in response['Content-Disposition']
-        
-        # Vérifier le contenu CSV
-        content = response.content.decode('utf-8')
-        lines = content.strip().split('\n')
-        
-        # Header line
+    # DEPRECATED: export_csv action removed with RBAC implementation
+    # def test_export_csv_action(self):
+    #     """Test action d'export CSV."""
+    #     user = User.objects.create_user(
+    #         phone_number='+237693000000',
+    #         first_name='Export',
+    #         last_name='Test',
+    #         password='test123',
+    #         age_group='26_35',
+    #         region='centre',
+    #         activity_type='poisson_table'
+    #     )
+    #
+    #     request = Mock()
+    #     queryset = User.objects.filter(pk=user.pk)
+    #
+    #     response = self.admin.export_csv(request, queryset)
+    #
+    #     # Vérifier les headers de réponse CSV
+    #     assert response['Content-Type'] == 'text/csv'
+    #     assert 'utilisateurs_mavecam.csv' in response['Content-Disposition']
+    #
+    #     # Vérifier le contenu CSV
+    #     content = response.content.decode('utf-8')
+    #     lines = content.strip().split('\n')
+    #
+    #     # Header line
         assert 'Téléphone' in lines[0]
         assert 'Nom' in lines[0]
         
