@@ -10,7 +10,7 @@ class NotificationsConfig(AppConfig):
     """Configuration de l'app notifications."""
 
     default_auto_field = 'django.db.models.BigAutoField'
-    name = 'apps.notifications'
+    name = 'notifications'
     verbose_name = _('Notifications')
 
     def ready(self):

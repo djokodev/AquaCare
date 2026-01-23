@@ -6,7 +6,7 @@ class AquacultureConfig(AppConfig):
     """Configuration de l'app aquaculture avec nom métier approprié."""
 
     default_auto_field = 'django.db.models.BigAutoField'
-    name = 'apps.aquaculture'
+    name = 'aquaculture'
     verbose_name = _("Production Aquacole")
 
     def ready(self):

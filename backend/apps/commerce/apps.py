@@ -4,5 +4,5 @@ from django.utils.translation import gettext_lazy as _
 
 class CommerceConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
-    name = 'apps.commerce'
+    name = 'commerce'
     verbose_name = _('Commerce')

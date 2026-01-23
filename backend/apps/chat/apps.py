@@ -7,7 +7,7 @@ class ChatConfig(AppConfig):
     """Configuration for chat application."""
 
     default_auto_field = 'django.db.models.BigAutoField'
-    name = 'apps.chat'
+    name = 'chat'
     verbose_name = _('Support Client')
 
     def ready(self):
