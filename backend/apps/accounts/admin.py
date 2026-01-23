@@ -16,8 +16,8 @@ from django.utils.translation import gettext_lazy as _
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
 
-from apps.accounts.models import User, FarmProfile
-from apps.common.admin_mixins import (
+from .models import User, FarmProfile
+from common.admin_mixins import (
     SecuredModelAdmin,
     ManagerMixin,
     PIIMaskingMixin,

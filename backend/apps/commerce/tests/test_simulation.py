@@ -6,7 +6,7 @@ import pytest
 from decimal import Decimal
 
 from apps.commerce.services import CycleSimulationService
-from apps.commerce.models import Product
+from commerce.models import Product
 
 
 @pytest.mark.django_db

@@ -20,7 +20,7 @@ from django.core.exceptions import PermissionDenied
 
 from .models import Conversation, Message
 from .services import MessageService
-from apps.common.admin_mixins import (
+from common.admin_mixins import (
     SecuredModelAdmin,
     SupportOperatorMixin,
     RBACConstants,

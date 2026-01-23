@@ -23,7 +23,7 @@ from .models import (
     ProductionCycle, CycleLog, FeedingPlan, SanitaryLog,
     NutritionalGuide, CycleMetrics
 )
-from apps.common.admin_mixins import (
+from common.admin_mixins import (
     SecuredModelAdmin,
     RBACConstants,
 )

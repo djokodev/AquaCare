@@ -7,8 +7,8 @@ from decimal import Decimal
 from rest_framework.test import APIClient
 from rest_framework import status
 
-from apps.commerce.models import Product
-from apps.accounts.models import User, FarmProfile
+from commerce.models import Product
+from accounts.models import User, FarmProfile
 
 
 @pytest.mark.django_db

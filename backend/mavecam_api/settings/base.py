@@ -29,9 +29,9 @@ INSTALLED_APPS = [
     "accounts",
     "aquaculture",
     "commerce",  # Module commerce
-    "apps.notifications",  # Module notifications multi-canal
-    "apps.chat",  # Module chat/support utilisateur-administration
-    "apps.common",  # Module commun (admin mixins, static CSS)
+    "notifications",  # Module notifications multi-canal
+    "chat",  # Module chat/support utilisateur-administration
+    "common",  # Module commun (admin mixins, static CSS)
 ]
 
 MIDDLEWARE = [

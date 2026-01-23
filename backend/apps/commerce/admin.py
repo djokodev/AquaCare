@@ -19,7 +19,7 @@ import zipfile
 
 from .models import Product, Order, OrderItem
 from .services.pdf_service import generate_order_pdf
-from apps.common.admin_mixins import (
+from common.admin_mixins import (
     SecuredModelAdmin,
     CommerceOperatorMixin,
     RBACConstants,

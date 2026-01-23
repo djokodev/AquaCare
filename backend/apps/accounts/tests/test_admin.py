@@ -10,7 +10,7 @@ from django.http import HttpRequest
 from django.test import RequestFactory
 from unittest.mock import Mock, patch
 from accounts.admin import UserAdmin, FarmProfileAdmin
-from apps.accounts.models import FarmProfile
+from accounts.models import FarmProfile
 
 User = get_user_model()
 

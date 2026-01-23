@@ -15,7 +15,7 @@ from django.db.models import Avg, Sum
 from django.utils import timezone
 
 from apps.aquaculture.models import ProductionCycle, CycleLog
-from apps.commerce.models import Product
+from commerce.models import Product
 from ..domain.growth_calculator import (
     GrowthCalculator,
     PhaseDetector

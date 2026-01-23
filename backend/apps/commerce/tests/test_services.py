@@ -7,9 +7,9 @@ from decimal import Decimal
 from datetime import timedelta
 from django.utils import timezone
 
-from apps.commerce.models import Product
+from commerce.models import Product
 from apps.commerce.services import ProductService, OrderService, FeedingSuggestionService
-from apps.accounts.models import User, FarmProfile
+from accounts.models import User, FarmProfile
 from apps.aquaculture.models import ProductionCycle
 
 

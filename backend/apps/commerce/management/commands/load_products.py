@@ -6,7 +6,7 @@ from django.core.management.base import BaseCommand
 import json
 from pathlib import Path
 
-from apps.commerce.models import Product
+from commerce.models import Product
 
 
 class Command(BaseCommand):

@@ -13,7 +13,7 @@ from django.contrib.auth.models import Group, Permission
 from django.contrib.contenttypes.models import ContentType
 from django.db import transaction
 
-from apps.common.admin_mixins import RBACConstants
+from common.admin_mixins import RBACConstants
 
 
 class Command(BaseCommand):
