@@ -3,6 +3,8 @@ Configuration Django Jazzmin pour AquaCare Admin.
 Interface moderne avec controle d'acces RBAC.
 """
 
+from django.utils.translation import gettext_lazy as _
+
 # =============================================================================
 # JAZZMIN SETTINGS - Configuration principale
 # =============================================================================
@@ -15,7 +17,7 @@ JAZZMIN_SETTINGS = {
     "site_logo": None,
     "login_logo": None,
     "site_icon": None,
-    "welcome_sign": "Bienvenue sur AquaCare Administration",
+    "welcome_sign": _("Bienvenue sur AquaCare Administration"),
     "copyright": "AquaCare",
 
     # User display
@@ -26,8 +28,8 @@ JAZZMIN_SETTINGS = {
 
     # Top menu links
     "topmenu_links": [
-        {"name": "Accueil", "url": "admin:index", "permissions": ["auth.view_user"]},
-        {"name": "Support Inbox", "url": "admin:chat_support_inbox", "permissions": ["chat.view_conversation"]},
+        {"name": _("Accueil"), "url": "admin:index", "permissions": ["auth.view_user"]},
+        {"name": _("Messagerie Support"), "url": "admin:chat_support_inbox", "permissions": ["chat.view_conversation"]},
         {"app": "accounts"},
     ],
 
@@ -65,14 +67,27 @@ JAZZMIN_SETTINGS = {
 
         # Notifications
         "notifications": "fas fa-bell",
-        "apps.notifications.Notification": "fas fa-envelope",
-        "apps.notifications.NotificationPreference": "fas fa-cog",
-        "apps.notifications.PushToken": "fas fa-mobile-alt",
+        "notifications.Notification": "fas fa-envelope",
+        "notifications.NotificationPreference": "fas fa-sliders-h",
+        "notifications.PushToken": "fas fa-mobile-alt",
 
-        # Chat
-        "chat": "fas fa-comments",
-        "apps.chat.Conversation": "fas fa-comment-dots",
-        "apps.chat.Message": "fas fa-comment",
+        # Chat / Support Client
+        "chat": "fas fa-headset",
+        "chat.Conversation": "fas fa-comment-dots",
+        "chat.Message": "fas fa-comment",
+
+        # Tâches périodiques (django-celery-beat)
+        "django_celery_beat": "fas fa-clock",
+        "django_celery_beat.PeriodicTask": "fas fa-tasks",
+        "django_celery_beat.IntervalSchedule": "fas fa-stopwatch",
+        "django_celery_beat.CrontabSchedule": "fas fa-calendar-alt",
+        "django_celery_beat.SolarSchedule": "fas fa-sun",
+        "django_celery_beat.ClockedSchedule": "fas fa-history",
+
+        # Token Blacklist (simplejwt)
+        "token_blacklist": "fas fa-ban",
+        "token_blacklist.BlacklistedToken": "fas fa-user-slash",
+        "token_blacklist.OutstandingToken": "fas fa-key",
     },
 
     # Ordre du menu lateral
@@ -82,14 +97,16 @@ JAZZMIN_SETTINGS = {
         "accounts.FarmProfile",
         "aquaculture",
         "commerce",
-        "apps.notifications",
-        "apps.chat",
+        "notifications",
+        "chat",
         "auth",
+        "django_celery_beat",
+        "token_blacklist",
     ],
 
     # Custom links par app
     "custom_links": {
-        "apps.chat": [{
+        "chat": [{
             "name": "Support Inbox",
             "url": "admin:chat_support_inbox",
             "icon": "fas fa-inbox",
@@ -112,7 +129,7 @@ JAZZMIN_SETTINGS = {
 
     # Custom CSS/JS
     "custom_css": "css/admin_custom.css",
-    "custom_js": "js/admin_translations.js",
+    "custom_js": "js/admin_translations.js?v=3",
 
     # UI builder (desactiver en production)
     "show_ui_builder": False,

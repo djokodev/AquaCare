@@ -5,56 +5,80 @@ from django.utils.translation import gettext as _
 class UserLanguageMiddleware:
     """
     Middleware qui détecte et applique automatiquement la langue préférée.
-    
-    Logique de détection :
-    1. Si utilisateur connecté : utilise sa langue préférée
-    2. Sinon : utilise l'header Accept-Language
-    3. Par défaut : français (public cible Afrique centrale)
+
+    Logique de détection (ordre de priorité) :
+    1. Cookie django_language (défini par le sélecteur de langue admin)
+    2. Session django_language
+    3. Préférence utilisateur connecté
+    4. Header Accept-Language
+    5. Par défaut : français (public cible Afrique centrale)
     """
-    
+
     def __init__(self, get_response):
         self.get_response = get_response
 
     def __call__(self, request):
         # Détecter la langue préférée
         language = self.get_user_language(request)
-        
+
         # Activer la langue
         translation.activate(language)
         request.LANGUAGE_CODE = language
-        
+
         response = self.get_response(request)
-        
+
         # Désactiver la langue après la réponse
         translation.deactivate()
-        
+
         return response
-    
+
     def get_user_language(self, request):
         """
         Détermine la langue à utiliser pour cette requête.
-        
+
+        Ordre de priorité :
+        1. Cookie django_language (pour le language switcher admin/Jazzmin)
+        2. Session django_language
+        3. Préférence utilisateur connecté (pour l'API mobile)
+        4. Header Accept-Language
+        5. Français par défaut
+
         Args:
             request: Requête HTTP Django
-            
+
         Returns:
             str: Code langue ('fr' ou 'en')
         """
-        # 1. Si utilisateur connecté, utiliser sa préférence
+        from django.conf import settings
+
+        # 1. Vérifier le cookie django_language (priorité pour l'admin)
+        cookie_name = getattr(settings, 'LANGUAGE_COOKIE_NAME', 'django_language')
+        cookie_lang = request.COOKIES.get(cookie_name)
+        if cookie_lang and cookie_lang in ['fr', 'en']:
+            return cookie_lang
+
+        # 2. Vérifier la session
+        session_lang = request.session.get('_language') or request.session.get('django_language')
+        if session_lang and session_lang in ['fr', 'en']:
+            return session_lang
+
+        # 3. Si utilisateur connecté, utiliser sa préférence (pour l'API mobile)
         if hasattr(request, 'user') and request.user.is_authenticated:
             if hasattr(request.user, 'language_preference'):
-                return request.user.language_preference
-        
-        # 2. Utiliser l'header Accept-Language
+                user_lang = request.user.language_preference
+                if user_lang in ['fr', 'en']:
+                    return user_lang
+
+        # 4. Utiliser l'header Accept-Language
         accept_language = request.META.get('HTTP_ACCEPT_LANGUAGE', '')
-        
-        # Analyser l'header Accept-Language
-        if 'en' in accept_language.lower():
-            return 'en'
-        elif 'fr' in accept_language.lower():
-            return 'fr'
-        
-        # 3. Par défaut : français (contexte MAVECAM)
+        if accept_language:
+            # Analyser l'header Accept-Language (simplifi�)
+            if accept_language.lower().startswith('en'):
+                return 'en'
+            elif accept_language.lower().startswith('fr'):
+                return 'fr'
+
+        # 5. Par défaut : français (contexte Cameroun)
         return 'fr'
 
 

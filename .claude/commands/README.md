@@ -1,241 +1,324 @@
-# Commandes Personnalisees MAVECAM AquaCare
+# AquaCare Custom Commands
 
-Ce repertoire contient les commandes personnalisees pour optimiser le workflow de developpement avec Claude Code.
-
-## Commandes Disponibles
-
-### 📦 `/check-package` - Verification Package avec Context7
-**Utilisation:** AVANT d'installer un nouveau package (frontend ou backend)
-
-**Cas d'usage:**
-- Installation package React Native (verification Expo Go compatible)
-- Installation package backend Python
-- Recherche alternatives matures
-
-**Actions executees:**
-1. **Verification Expo (CRITIQUE pour frontend):**
-   - Consultation https://reactnative.directory/
-   - Verification tag "Expo Go compatible"
-   - Verification presence dans https://docs.expo.dev/versions/latest/
-
-2. **Recherche Context7:**
-   - Consultation documentation officielle
-   - Verification maturite package (maintenance, stars, issues, doc)
-
-3. **Alternatives Expo-first:**
-   - Recherche alternatives officielles si package non-Expo
-
-4. **Decision:**
-   - Installer si Expo-compatible + mature
-   - Bloquer si non-Expo (sauf validation utilisateur)
-   - Proposer alternative si disponible
-
-**Verification:**
-- ✅ Package Expo-compatible (frontend)
-- ✅ Tag "Expo Go" sur https://reactnative.directory/
-- ✅ Maintenance active + maturite (stars, issues, doc)
-- ✅ Utilisation `expo install` au lieu de `npm install`
-
-**CRITIQUE:** Evite erreurs type package non-Expo cassant l'app mobile
-
-**Reference:** CLAUDE.md ligne 63-93, DONT_DO.md ligne 31-68
+Custom Claude Code commands optimized for the AquaCare development workflow.
 
 ---
 
-### 📋 `/update-changelog` - Mise a Jour PROJECT_CONTEXT.md
-**Utilisation:** Apres validation d'une feature complete
+## Quick Reference
 
-**Cas d'usage:**
-- Feature nouvelle implementee et testee
-- Bug fixe avec impact significatif
-- Refactoring majeur
-
-**Actions executees:**
-1. **Recuperer informations commit:**
-   - Derniers commits avec hash, message, date
-   - Changements dans git diff
-
-2. **Analyser changements:**
-   - Fichiers modifies
-   - Modules concernes (accounts, aquaculture, etc.)
-   - Type de changement (Feature, Fix, Refactor, Docs, Tests)
-
-3. **Ajouter nouvelle entree changelog:**
-   - Format chronologique obligatoire
-   - Structure: Date, Type, Module, Commit hash
-   - Sections: Added/Changed/Fixed, Tests
-
-4. **Mettre a jour statistiques:**
-   - Total lignes de code
-   - Nombre fonctionnalites
-   - Etat roadmap
-
-**Verification:**
-- ✅ Format chronologique respecte
-- ✅ Aucun accent dans texte
-- ✅ Type commit correct (Feature/Fix/Refactor)
-- ✅ Module identifie (accounts/aquaculture/both)
-
-**NB:** Ne pas utiliser pour commits mineurs (typo, formatting)
-
-**Reference:** PROJECT_CONTEXT.md structure existante
+| Command | Purpose | When to Use |
+|---------|---------|-------------|
+| `/check-package` | Verify package compatibility | Before installing any npm/pip package |
+| `/create-backend-feature` | Build new Django/DRF feature | New API endpoints, models, services |
+| `/create-frontend-feature` | Build new React Native feature | New screens, components, Redux |
+| `/fix-bug` | Systematic bug fixing | When debugging issues |
+| `/review-pr` | Code review workflow | Reviewing pull requests |
+| `/db-debug` | Database investigation | Query data for debugging |
+| `/update-changelog` | Document changes | After completing features |
+| `/pre-release` | Release validation | Before deploying to production |
 
 ---
 
-### 🔧 `/create-backend-feature` - Creation Feature Backend Complete
-**Utilisation:** Developper une nouvelle fonctionnalite backend Django/DRF
+## Commands in Detail
 
-**Cas d'usage:**
-- Nouveau module backend (API endpoints, models, serializers)
-- Extension module existant (nouvelles fonctionnalites aquaculture, accounts)
-- Refactoring backend avec nouvelle architecture
+### `/check-package <package-name>`
 
-**Actions executees:**
-1. **Analyse prerequis:**
-   - Lecture CLAUDE.md (regles projet)
-   - Lecture ARCHITECTURE.md (architecture actuelle)
-   - Lecture PROJECT_CONTEXT.md (progression projet)
-   - Lecture DESIGN_SYSTEM.md (si impact UI/UX)
-   - Lecture DONT_DO.md (erreurs a eviter)
+**Purpose:** Verify package compatibility and maturity before installation.
 
-2. **Planification (Deep Think):**
-   - Architecture proposee (models, serializers, views)
-   - Integration avec modules existants
-   - Gestion offline-first (UUIDs, sync metadata)
-   - Schema base de donnees (migrations)
-   - Endpoints API (routes, permissions)
-   - **Rapport detaille pour validation utilisateur**
+**Critical for:** Expo Go compatibility (frontend packages)
 
-3. **Implementation:**
-   - Creation models Django avec UUIDs
-   - Serializers DRF avec validation
-   - ViewSets/APIViews avec permissions
-   - Migrations base de donnees
-   - Integration signals si necessaire
-   - Documentation code (docstrings)
+**Actions:**
+1. Checks reactnative.directory for Expo Go tag
+2. Verifies package maturity (stars, maintenance, TypeScript)
+3. Suggests alternatives if package has native code
+4. Provides correct installation command
 
-4. **Tests unitaires (Coverage >90%):**
-   - Tests models (validation, contraintes)
-   - Tests serializers (serialization/deserialization)
-   - Tests API endpoints (permissions, responses)
-   - Fixtures factories (backend/tests/fixtures/factories.py)
+**Example:**
+```
+/check-package react-native-maps
+```
 
-5. **Validation:**
-   - Execution pytest avec coverage
-   - Verification migrations
-   - Test API avec curl/Postman
-   - **Feedback utilisateur pour iteration**
+**Output:**
+```
+PACKAGE: react-native-maps
+Expo Go Compatible: YES
+Installation: npx expo install react-native-maps
+```
 
-**Verification:**
-- ✅ Architecture respectee (Clean Architecture, DRY)
-- ✅ Offline-first (UUIDs, sync metadata)
-- ✅ Tests coverage >90%
-- ✅ Documentation complete (docstrings, README)
-- ✅ Migrations Django propres
-- ✅ Permissions API securisees
+**Rule:** NEVER use `npm install` for React Native packages. Always `npx expo install`.
+
+---
+
+### `/create-backend-feature`
+
+**Purpose:** Complete workflow for new Django/DRF backend features.
+
+**Use for:**
+- New API endpoints
+- New database models
+- New services/business logic
+- Backend refactoring
 
 **Workflow:**
-1. Description fonctionnalite (utilisateur)
-2. Deep think + rapport planification (Claude)
-3. Validation plan (utilisateur)
-4. Implementation + tests (Claude)
-5. Validation finale (utilisateur)
+1. **Context** - Reads CLAUDE.md, ARCHITECTURE.md, DONT_DO.md
+2. **Plan** - Generates detailed architecture proposal
+3. **Validate** - Waits for user approval
+4. **Implement** - Creates models, serializers, views, tests
+5. **Test** - Runs pytest with coverage (>50%)
+6. **Verify** - User confirms functionality
 
-**Reference:** [create-backend-feature.md](.claude/commands/create-backend-feature.md)
+**Key Patterns Enforced:**
+- UUID primary keys (offline-first)
+- client_uuid for deduplication
+- Decimal for FCFA amounts
+- Permission classes on all views
 
 ---
 
-### ⚛️ `/create-frontend-feature` - Creation Feature Frontend Complete
-**Utilisation:** Developper une nouvelle fonctionnalite frontend React Native/Expo
+### `/create-frontend-feature`
 
-**Cas d'usage:**
-- Nouvel ecran mobile (aquaculture, commerce, support)
-- Nouveau composant reutilisable (UI/UX)
-- Refactoring frontend avec nouvelle architecture
+**Purpose:** Complete workflow for new React Native/Expo frontend features.
 
-**Actions executees:**
-1. **Analyse prerequis:**
-   - Lecture CLAUDE.md (regles projet)
-   - Lecture ARCHITECTURE.md (architecture actuelle)
-   - Lecture PROJECT_CONTEXT.md (progression projet)
-   - Lecture DESIGN_SYSTEM.md (charte graphique MAVECAM)
-   - Lecture DONT_DO.md (erreurs a eviter)
-
-2. **Planification (Deep Think):**
-   - Architecture proposee (screens, components, navigation)
-   - Integration Redux Toolkit (slices, thunks)
-   - Services API (axios, offline sync)
-   - Gestion erreurs et states (loading, error, success)
-   - Traductions i18next (FR/EN)
-   - Charte graphique MAVECAM (#059669)
-   - **Rapport detaille pour validation utilisateur**
-
-3. **Implementation:**
-   - Screens React Native avec TypeScript
-   - Composants reutilisables
-   - Redux slices + thunks
-   - Services API avec gestion offline
-   - Traductions FR/EN (i18n/locales/)
-   - Navigation React Navigation 6
-   - Charte graphique respectee
-
-4. **Verification TypeScript:**
-   - `npx tsc --noEmit` apres chaque modification
-   - Gestion types optionnels (null/undefined)
-   - Props React correctes
-   - Imports complets
-
-5. **Tests:**
-   - Test compilation TypeScript
-   - Test navigation entre ecrans
-   - Test changement langue FR/EN
-   - Test offline/online sync
-   - **Validation utilisateur finale**
-
-**Verification:**
-- ✅ TypeScript strict (zero erreur tsc)
-- ✅ Traductions FR/EN completes
-- ✅ Charte MAVECAM respectee (#059669)
-- ✅ Offline-first (sync metadata)
-- ✅ Navigation fluide
-- ✅ Gestion erreurs defensive
-- ✅ Aucun console.log de debug restant
+**Use for:**
+- New screens
+- New components
+- Redux state management
+- API integration
 
 **Workflow:**
-1. Description fonctionnalite (utilisateur)
-2. Deep think + rapport planification (Claude)
-3. Validation plan (utilisateur)
-4. Implementation + verification TS (Claude)
-5. Validation finale (utilisateur)
+1. **Context** - Reads DESIGN_SYSTEM.md, ARCHITECTURE.md
+2. **Plan** - Generates screen/component architecture
+3. **Validate** - Waits for user approval
+4. **Implement** - Creates screens, components, Redux, translations
+5. **TypeCheck** - Runs `npx tsc --noEmit` (0 errors required)
+6. **Verify** - User tests on Expo Go
 
-**Reference:** [create-frontend-feature.md](.claude/commands/create-frontend-feature.md)
-
----
-
-## Workflow Recommande
-
-### 1. Avant d'installer un package:
-```
-/check-package nom-du-package
-```
-
-### 2. Developper nouvelle fonctionnalite backend:
-```
-/create-backend-feature
-```
-
-### 3. Developper nouvelle fonctionnalite frontend:
-```
-/create-frontend-feature
-```
-
-### 4. Apres validation feature complete:
-```
-/update-changelog
-```
+**Key Patterns Enforced:**
+- All text uses `t('key')` (translations)
+- Colors from `constants/colors.ts` only
+- Loading/Error/Empty states
+- TypeScript strict mode
 
 ---
 
+### `/fix-bug`
 
-**Derniere mise a jour :** 2025-10-27
-**Maintenu par :** Djoko Christian
+**Purpose:** Systematic approach to diagnosing and fixing bugs.
+
+**Use for:**
+- API errors (500, 401, 404)
+- UI crashes
+- Data inconsistencies
+- Sync issues
+
+**Workflow:**
+1. **Understand** - Document bug, gather reproduction steps
+2. **Diagnose** - Use logs, db-debug, code analysis
+3. **Plan** - Propose fix with risk assessment
+4. **Implement** - Write fix + regression test
+5. **Verify** - Confirm bug is resolved
+6. **Document** - Update changelog if significant
+
+**Quick Diagnosis:**
+| Symptom | Check First |
+|---------|-------------|
+| 500 error | `docker-compose logs api` |
+| Empty data | Queryset filter, permissions |
+| UI crash | Null/undefined handling |
+| Wrong data | Serializer, API response |
+
+---
+
+### `/review-pr [PR number]`
+
+**Purpose:** Comprehensive code review following AquaCare standards.
+
+**Use for:**
+- Reviewing pull requests
+- Pre-merge validation
+- Code quality assessment
+
+**Checks Applied:**
+- TypeScript correctness
+- Translation completeness
+- MAVECAM design compliance
+- Security best practices
+- Offline-first patterns
+- Test coverage
+
+**Output:** Structured review with:
+- Issues (Critical/Major/Minor)
+- Positive notes
+- Verdict (APPROVE/REQUEST_CHANGES/COMMENT)
+
+---
+
+### `/db-debug [description]`
+
+**Purpose:** Query and analyze database state using postgres-mcp.
+
+**Use for:**
+- Investigating data issues
+- Checking sync status
+- Verifying data integrity
+- Performance analysis
+
+**Common Queries:**
+```sql
+-- Active cycles for user
+SELECT * FROM aquaculture_productioncycle
+WHERE user_id = 'uuid' AND status = 'active';
+
+-- Check for duplicate client_uuid
+SELECT client_uuid, COUNT(*)
+FROM aquaculture_cyclelog
+WHERE client_uuid IS NOT NULL
+GROUP BY client_uuid HAVING COUNT(*) > 1;
+```
+
+**Tables:**
+- `accounts_user`, `accounts_farmprofile`
+- `aquaculture_productioncycle`, `aquaculture_cyclelog`
+- `commerce_product`, `commerce_order`
+- `notifications_notification`
+- `chat_conversation`, `chat_message`
+
+---
+
+### `/update-changelog`
+
+**Purpose:** Document completed features in PROJECT_CONTEXT.md.
+
+**Use after:**
+- Feature implementation complete
+- Significant bug fix
+- Major refactoring
+
+**Entry Format:**
+```markdown
+### [YYYY-MM-DD] - Feature Title
+
+- **Type:** Feature | Fix | Refactor
+- **Module:** aquaculture | commerce | accounts
+- **Commit:** abc1234
+
+**Summary:** Brief description
+
+**Added:** New files/endpoints
+**Changed:** Modified functionality
+**Tests:** Coverage info
+```
+
+**NOT for:** Typos, formatting, minor changes
+
+---
+
+### `/pre-release`
+
+**Purpose:** Comprehensive validation before deploying to production.
+
+**Runs These Checks:**
+1. TypeScript compilation (0 errors)
+2. Backend tests (>50% coverage)
+3. Translation completeness (i18n-validator)
+4. Security scan (security-reviewer)
+5. Package compatibility (expo-compatibility)
+6. Offline patterns (offline-sync-checker)
+7. Documentation status
+8. Git status and migrations
+
+**Output:** Release readiness report with GO/NO-GO decision
+
+**Blockers (NO-GO):**
+- TypeScript errors
+- Critical security issues
+- Failing tests
+- Missing translations
+- Expo-incompatible packages
+
+---
+
+## Recommended Workflow
+
+### New Feature Development
+
+```
+1. /create-backend-feature   (if backend needed)
+   ↓ [Plan → Approve → Implement]
+
+2. /create-frontend-feature  (if frontend needed)
+   ↓ [Plan → Approve → Implement]
+
+3. /update-changelog
+   ↓ [Document what was built]
+
+4. git commit
+   ↓ [Skill auto-applies commit conventions]
+```
+
+### Bug Fixing
+
+```
+1. /fix-bug
+   ↓ [Diagnose → Plan → Fix → Test]
+
+2. /update-changelog  (if significant)
+
+3. git commit
+```
+
+### Before Release
+
+```
+1. /pre-release
+   ↓ [All validations run]
+
+2. Fix any blockers
+
+3. Deploy with confidence
+```
+
+### Code Review
+
+```
+1. /review-pr 123
+   ↓ [Full review generated]
+
+2. Post review on GitHub (optional)
+```
+
+---
+
+## Integration with Agents
+
+Commands work alongside these agents:
+
+| Agent | Invoked By |
+|-------|------------|
+| `expo-compatibility` | `/pre-release`, `/check-package` |
+| `i18n-validator` | `/pre-release`, `/create-frontend-feature` |
+| `security-reviewer` | `/pre-release`, `/review-pr` |
+| `offline-sync-checker` | `/pre-release`, `/create-backend-feature` |
+| `test-runner` | `/pre-release`, `/fix-bug` |
+
+---
+
+## File Locations
+
+```
+.claude/commands/
+├── README.md                  # This file
+├── check-package.md           # Package verification
+├── create-backend-feature.md  # Backend workflow
+├── create-frontend-feature.md # Frontend workflow
+├── fix-bug.md                 # Bug fixing workflow
+├── review-pr.md               # PR review workflow
+├── db-debug.md                # Database debugging
+├── update-changelog.md        # Changelog management
+└── pre-release.md             # Release validation
+```
+
+---
+
+**Last Updated:** 2025-01-20
+**Maintainer:** AquaCare Team

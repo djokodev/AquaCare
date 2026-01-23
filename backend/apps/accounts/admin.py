@@ -125,7 +125,12 @@ class UserAdmin(ManagerMixin, PIIMaskingMixin, AuditLogMixin, BaseUserAdmin):
         }),
         (_('Informations complementaires'), {
             'classes': ('wide',),
-            'fields': ('account_type', 'business_name', 'activity_type', 'region')
+            'fields': ('account_type', 'age_group', 'business_name', 'activity_type', 'region')
+        }),
+        (_('Permissions (admin seulement)'), {
+            'classes': ('wide', 'collapse'),
+            'fields': ('is_staff', 'is_active', 'groups'),
+            'description': _('Cocher "is_staff" pour donner acces a l\'admin.')
         }),
     )
 

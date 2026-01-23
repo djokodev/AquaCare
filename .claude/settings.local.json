@@ -1,9 +1,29 @@
 {
   "permissions": {
     "allow": [
+      "Bash(npm:*)",
+      "Bash(yarn:*)",
+      "Bash(pnpm:*)",
+      "Bash(git:*)",
+      "Bash(git diff:*)",
+      "Bash(git status:*)",
+      "Bash(git log:*)",
+      "Bash(docker:*)",
+      "Bash(docker compose:*)",
+      "Bash(cat:*)",
+      "Bash(ls:*)",
+      "Bash(grep:*)",
       "Bash(find:*)",
-      "Bash(ls:*)"
+      "Skill(*)",
+      "Edit",
+      "Read",
+      "mcp__playwright__browser_click",
+      "mcp__playwright__browser_take_screenshot",
+      "mcp__playwright__browser_snapshot",
+      "Bash(docker-compose exec:*)",
+      "Bash(docker-compose:*)"
     ],
-    "deny": []
+    "deny": [],
+    "defaultMode": "acceptEdits"
   }
 }

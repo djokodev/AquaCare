@@ -126,15 +126,20 @@ span.helptext {
 }
 
 /* --- Breadcrumb --- */
+/* Liens dans le breadcrumb (ex: "Accueil") */
 .content-wrapper .breadcrumb a,
 .content-wrapper .breadcrumb-item a {
     color: var(--aqua-primary) !important;
 }
 
-.content-wrapper .breadcrumb-item.active {
-    color: var(--text-muted) !important;
+/* Texte non-lien dans le breadcrumb (élément actif/courant) */
+.content-wrapper .breadcrumb-item,
+.content-wrapper .breadcrumb-item.active,
+.content-wrapper .breadcrumb > li:last-child {
+    color: var(--text-body) !important;
 }
 
+/* Séparateur entre les éléments */
 .content-wrapper .breadcrumb-item + .breadcrumb-item::before {
     color: var(--text-muted) !important;
 }
@@ -360,12 +365,73 @@ form[action=""] input[name="q"],
     color: #ffffff !important;
 }
 
-/* Actions recentes - texte sombre */
+/* =============================================================================
+   SECTION "ACTIONS RECENTES" - Contraste et lisibilité
+   ============================================================================= */
+
+/* Titre principal de la section */
+#recent-actions-module h4,
+#recent-actions-module h3,
+#recent-actions-module h5,
+#recent-actions-module .card-title,
+.col-lg-3 .module h4,
+.col-lg-3 .module h3 {
+    color: var(--text-dark) !important;
+    font-weight: 600 !important;
+}
+
+/* Liens dans les actions récentes */
 #recent-actions-module a,
 .actionlist a,
 .col-lg-3 .card-body a,
 .content-wrapper aside .card-body a {
+    color: var(--aqua-primary) !important;
+    font-weight: 500;
+}
+
+#recent-actions-module a:hover,
+.actionlist a:hover {
+    color: var(--aqua-primary-hover) !important;
+    text-decoration: underline !important;
+}
+
+/* Titres des items d'action (ex: "Test Support") */
+#recent-actions-module h5,
+#recent-actions-module .timeline h5,
+#recent-actions-module .action-row h5 {
     color: var(--text-dark) !important;
+    font-weight: 500 !important;
+}
+
+/* Timestamps et descriptions */
+#recent-actions-module time,
+#recent-actions-module .text-muted,
+#recent-actions-module small,
+#recent-actions-module .timeline-footer,
+.col-lg-3 .module time,
+.col-lg-3 .module small {
+    color: var(--text-muted) !important;
+    font-size: 0.8rem;
+}
+
+/* Texte descriptif des actions (ex: "Added 'Test Support'.") */
+#recent-actions-module p,
+#recent-actions-module span:not(.badge),
+#recent-actions-module .action-description,
+.col-lg-3 .module p {
+    color: var(--text-body) !important;
+}
+
+/* Timeline items (points et lignes) */
+#recent-actions-module .timeline-item,
+#recent-actions-module .action-row {
+    border-left-color: var(--aqua-primary) !important;
+}
+
+#recent-actions-module .timeline-badge,
+#recent-actions-module .action-icon {
+    background-color: var(--aqua-primary) !important;
+    border-color: var(--aqua-primary) !important;
 }
 
 /* --- Tableaux / Listes --- */
@@ -548,7 +614,88 @@ input[name="_continue"] {
     color: #ffffff !important;
 }
 
-/* Dropdown */
+/* =============================================================================
+   NAVBAR DROPDOWNS - Language & User Menu (FIX: Contraste illisible)
+   ============================================================================= */
+
+/* Dropdown menu container (fond clair pour lisibilité) */
+.navbar .dropdown-menu,
+.main-header .dropdown-menu,
+.navbar-nav .dropdown-menu {
+    background-color: #ffffff !important;
+    border: 1px solid var(--border-light) !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15) !important;
+}
+
+/* Dropdown items - texte foncé sur fond clair */
+.navbar .dropdown-menu .dropdown-item,
+.main-header .dropdown-menu .dropdown-item,
+.navbar-nav .dropdown-menu .dropdown-item {
+    color: var(--text-dark) !important;
+    padding: 0.5rem 1rem;
+    transition: all 0.2s ease;
+}
+
+/* Dropdown items - hover state */
+.navbar .dropdown-menu .dropdown-item:hover,
+.main-header .dropdown-menu .dropdown-item:hover,
+.navbar-nav .dropdown-menu .dropdown-item:hover {
+    background-color: #f1f5f9 !important;
+    color: var(--aqua-primary) !important;
+}
+
+/* Dropdown header (ex: "Account") */
+.navbar .dropdown-menu .dropdown-header,
+.main-header .dropdown-menu .dropdown-header,
+.navbar-nav .dropdown-menu .dropdown-header {
+    color: var(--text-muted) !important;
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.05em;
+    padding: 0.5rem 1rem;
+}
+
+/* Dropdown divider */
+.navbar .dropdown-menu .dropdown-divider,
+.main-header .dropdown-menu .dropdown-divider,
+.navbar-nav .dropdown-menu .dropdown-divider {
+    border-top-color: var(--border-light) !important;
+}
+
+/* Boutons dans les dropdowns (langue) */
+.navbar .dropdown-menu button,
+.main-header .dropdown-menu button,
+.navbar-nav .dropdown-menu button {
+    color: var(--text-dark) !important;
+    background: transparent !important;
+    border: none !important;
+    text-align: left;
+    width: 100%;
+    padding: 0.5rem 1rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.navbar .dropdown-menu button:hover,
+.main-header .dropdown-menu button:hover,
+.navbar-nav .dropdown-menu button:hover {
+    background-color: #f1f5f9 !important;
+    color: var(--aqua-primary) !important;
+}
+
+/* Liens dans les dropdowns */
+.navbar .dropdown-menu a:not(.dropdown-item),
+.main-header .dropdown-menu a:not(.dropdown-item),
+.navbar-nav .dropdown-menu a:not(.dropdown-item) {
+    color: var(--text-dark) !important;
+}
+
+/* =============================================================================
+   AUTRES DROPDOWNS (dans le contenu)
+   ============================================================================= */
+
+/* Dropdown (dans le contenu principal) */
 .dropdown-menu .dropdown-item {
     color: var(--text-dark) !important;
 }

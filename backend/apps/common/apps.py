@@ -3,6 +3,7 @@ Configuration de l'app common.
 """
 
 from django.apps import AppConfig
+from django.utils.translation import gettext_lazy as _
 
 
 class CommonConfig(AppConfig):
@@ -10,4 +11,4 @@ class CommonConfig(AppConfig):
 
     default_auto_field = 'django.db.models.BigAutoField'
     name = 'apps.common'
-    verbose_name = 'Utilitaires communs'
+    verbose_name = _('Utilitaires communs')

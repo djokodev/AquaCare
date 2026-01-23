@@ -222,8 +222,9 @@ class User(AbstractUser):
     
 
     def __str__(self):
+        """Affichage du nom (sans telephone pour une meilleure lisibilite admin)."""
         if self.first_name and self.last_name:
-            return f"{self.first_name} {self.last_name} ({self.phone_number})"
+            return f"{self.first_name} {self.last_name}"
         return self.phone_number
     
 
