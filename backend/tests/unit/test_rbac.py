@@ -12,7 +12,8 @@ Couvre:
 import pytest
 from io import StringIO
 from unittest.mock import Mock, patch, MagicMock
-from django.contrib.auth.models import Group, Permission
+from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group, Permission, AnonymousUser
 from django.contrib.admin.sites import AdminSite
 from django.contrib.admin.models import LogEntry
 from django.contrib.contenttypes.models import ContentType
@@ -29,10 +30,10 @@ from apps.common.admin_mixins import (
     PIIMaskingMixin,
 )
 from apps.accounts.admin import UserAdmin
-from apps.accounts.models import User
 from apps.commerce.admin import ProductAdmin
 from apps.commerce.models import Product
-from django.contrib.auth.models import AnonymousUser
+
+User = get_user_model()
 
 
 # =============================================================================
