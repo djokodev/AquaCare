@@ -12,4 +12,4 @@ class ChatConfig(AppConfig):
 
     def ready(self):
         """Import signals when app is ready."""
-        import apps.chat.signals  # noqa
+        from . import signals  # noqa
