@@ -217,7 +217,7 @@ class OrderService(BaseCommerceService):
         Examples:
             >>> OrderService._create_order_notification(order)
         """
-        from apps.notifications.services import NotificationService
+        from notifications.services import NotificationService
 
         message = (
             f"Votre commande {order.order_number} a été confirmée. "

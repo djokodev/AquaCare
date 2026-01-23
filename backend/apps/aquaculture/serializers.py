@@ -26,7 +26,7 @@ from .models import (
 )
 # Notification model moved to apps/notifications/models.py
 from .domain.calculators import AquacultureCalculator
-from apps.notifications.serializers import NotificationSerializer as GlobalNotificationSerializer
+from notifications.serializers import NotificationSerializer as GlobalNotificationSerializer
 
 
 class ProductionCycleSerializer(serializers.ModelSerializer):

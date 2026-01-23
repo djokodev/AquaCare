@@ -14,7 +14,7 @@ from typing import Dict, List, Optional
 from django.db.models import Avg, Sum
 from django.utils import timezone
 
-from apps.aquaculture.models import ProductionCycle, CycleLog
+from aquaculture.models import ProductionCycle, CycleLog
 from commerce.models import Product
 from ..domain.growth_calculator import (
     GrowthCalculator,

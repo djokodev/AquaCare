@@ -13,8 +13,8 @@ from datetime import timedelta
 from decimal import Decimal
 
 from accounts.models import User, FarmProfile
-from apps.aquaculture.models import ProductionCycle
-from apps.notifications.models import Notification, NotificationPreference, PushToken
+from aquaculture.models import ProductionCycle
+from notifications.models import Notification, NotificationPreference, PushToken
 
 
 @pytest.fixture

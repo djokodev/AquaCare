@@ -8,7 +8,7 @@ from decimal import Decimal
 from datetime import date, timedelta
 from django.core.exceptions import ValidationError
 
-from apps.aquaculture.domain.validators import (
+from aquaculture.domain.validators import (
     validate_cycle_duration,
     validate_stocking_density,
     validate_water_parameters,

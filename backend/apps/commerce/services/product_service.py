@@ -239,7 +239,7 @@ class ProductService(BaseCommerceService):
             QuerySet: Produits recommandés
 
         Examples:
-            >>> from apps.aquaculture.models import ProductionCycle
+            >>> from aquaculture.models import ProductionCycle
             >>> cycle = ProductionCycle.objects.first()
             >>> products = ProductService.get_products_for_cycle(cycle)
             >>> products.count()

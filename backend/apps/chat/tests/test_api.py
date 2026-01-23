@@ -10,8 +10,8 @@ from django.urls import reverse
 from rest_framework import status
 from django.core.files.uploadedfile import SimpleUploadedFile
 
-from apps.chat.models import Conversation, Message
-from apps.chat.services import ConversationService, MessageService
+from chat.models import Conversation, Message
+from chat.services import ConversationService, MessageService
 
 
 @pytest.mark.django_db
@@ -346,7 +346,7 @@ class TestSignalIntegration:
 
     def test_admin_message_creates_notification(self, authenticated_user, mavecam_admin):
         """Test that admin message triggers notification creation."""
-        from apps.notifications.models import Notification
+        from notifications.models import Notification
 
         conversation = ConversationService.get_or_create_conversation(authenticated_user)
 

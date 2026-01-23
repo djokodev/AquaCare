@@ -10,13 +10,13 @@ from unittest.mock import patch, MagicMock, call
 from django.utils import timezone
 from datetime import timedelta
 
-from apps.notifications.tasks import (
+from notifications.tasks import (
     send_email_notification_task,
     send_push_notification_task,
     cleanup_old_notifications,
     send_scheduled_notifications
 )
-from apps.notifications.models import Notification, PushToken
+from notifications.models import Notification, PushToken
 
 
 # =================== TESTS EMAIL NOTIFICATIONS ===================

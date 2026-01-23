@@ -12,7 +12,7 @@ from rest_framework import status
 from django.urls import reverse
 from django.utils import timezone
 
-from apps.notifications.models import Notification, NotificationPreference, PushToken
+from notifications.models import Notification, NotificationPreference, PushToken
 
 
 @pytest.fixture

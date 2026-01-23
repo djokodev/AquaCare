@@ -496,7 +496,7 @@ class TestOrderEndpoints:
 
     def test_create_order_validation_missing_items(self):
         """Test validation : commande sans produits lève InvalidOrderError."""
-        from apps.commerce.domain.exceptions import InvalidOrderError
+        from commerce.domain.exceptions import InvalidOrderError
 
         payload = {
             'delivery_method': 'pickup',

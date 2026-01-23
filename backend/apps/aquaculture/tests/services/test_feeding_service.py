@@ -7,10 +7,10 @@ import pytest
 from decimal import Decimal
 from datetime import date, timedelta
 
-from apps.aquaculture.services.feeding_service import FeedingPlanService
-from apps.aquaculture.models import FeedingPlan
-from apps.notifications.models import Notification
-from apps.aquaculture.domain.exceptions import FeedingPlanGenerationError
+from aquaculture.services.feeding_service import FeedingPlanService
+from aquaculture.models import FeedingPlan
+from notifications.models import Notification
+from aquaculture.domain.exceptions import FeedingPlanGenerationError
 from tests.fixtures.factories import ProductionCycleFactory
 
 

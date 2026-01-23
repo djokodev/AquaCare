@@ -5,7 +5,7 @@ Basée sur les spécifications techniques de la documentation Skretting et Aller
 from django.core.management.base import BaseCommand
 from decimal import Decimal
 
-from apps.aquaculture.models import NutritionalGuide
+from aquaculture.models import NutritionalGuide
 
 
 class Command(BaseCommand):

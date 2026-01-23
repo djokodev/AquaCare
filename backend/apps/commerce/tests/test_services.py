@@ -10,7 +10,7 @@ from django.utils import timezone
 from commerce.models import Product
 from commerce.services import ProductService, OrderService, FeedingSuggestionService
 from accounts.models import User, FarmProfile
-from apps.aquaculture.models import ProductionCycle
+from aquaculture.models import ProductionCycle
 
 
 @pytest.mark.django_db

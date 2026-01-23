@@ -121,7 +121,7 @@ def production_cycle(farm_profile):
     """
     from decimal import Decimal
     from datetime import date, timedelta
-    from apps.aquaculture.models import ProductionCycle
+    from aquaculture.models import ProductionCycle
     
     # Créer cycle avec tous les champs requis définis explicitement
     cycle = ProductionCycle(

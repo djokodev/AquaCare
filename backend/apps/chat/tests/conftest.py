@@ -35,8 +35,8 @@ def disable_chat_signals(request):
         return
 
     # Disconnect the signal for other tests
-    from apps.chat.models import Message
-    from apps.chat.signals import handle_new_message
+    from chat.models import Message
+    from chat.signals import handle_new_message
 
     post_save.disconnect(handle_new_message, sender=Message)
 

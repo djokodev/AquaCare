@@ -13,11 +13,11 @@ from rest_framework import status
 from rest_framework.test import APIClient
 from unittest.mock import patch, MagicMock
 
-from apps.aquaculture.models import (
+from aquaculture.models import (
     ProductionCycle, CycleLog, FeedingPlan, SanitaryLog, 
     NutritionalGuide
 )
-from apps.notifications.models import Notification
+from notifications.models import Notification
 
 
 @pytest.mark.django_db
@@ -412,7 +412,7 @@ class TestSanitaryLogViewSet:
     def test_resolve_sanitary_issue(self, auth_client, production_cycle):
         """Test résolution problème sanitaire."""
         # Créer log sanitaire
-        from apps.aquaculture.models import SanitaryLog
+        from aquaculture.models import SanitaryLog
         sanitary_log = SanitaryLog.objects.create(
             cycle=production_cycle,
             event_date=date.today() - timedelta(days=3),
@@ -433,7 +433,7 @@ class TestSanitaryLogViewSet:
     def test_active_issues_endpoint(self, auth_client, production_cycle):
         """Test endpoint problèmes sanitaires actifs."""
         # Créer problèmes sanitaires
-        from apps.aquaculture.models import SanitaryLog
+        from aquaculture.models import SanitaryLog
         
         SanitaryLog.objects.create(
             cycle=production_cycle,

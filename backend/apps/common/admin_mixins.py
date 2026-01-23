@@ -3,7 +3,7 @@ Mixins de securite pour l'admin Django AquaCare.
 Implementent le RBAC multi-niveau avec audit logging.
 
 Usage:
-    from apps.common.admin_mixins import SecuredModelAdmin, RBACConstants
+    from common.admin_mixins import SecuredModelAdmin, RBACConstants
 
     @admin.register(MyModel)
     class MyModelAdmin(SecuredModelAdmin):

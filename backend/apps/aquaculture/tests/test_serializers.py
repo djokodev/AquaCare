@@ -11,12 +11,12 @@ from django.utils import timezone
 from rest_framework.test import APIRequestFactory
 from rest_framework.request import Request
 
-from apps.aquaculture.serializers import (
+from aquaculture.serializers import (
     ProductionCycleSerializer, CycleLogSerializer, CycleLogSyncSerializer,
     FeedingPlanSerializer, SanitaryLogSerializer, NutritionalGuideSerializer,
     DashboardSerializer, HarvestSerializer
 )
-from apps.aquaculture.models import ProductionCycle, CycleLog, NutritionalGuide
+from aquaculture.models import ProductionCycle, CycleLog, NutritionalGuide
 
 
 @pytest.mark.django_db
@@ -344,7 +344,7 @@ class TestFeedingPlanSerializer:
 
     def test_computed_fields(self, production_cycle):
         """Test champs calculés du sérialiseur."""
-        from apps.aquaculture.models import FeedingPlan
+        from aquaculture.models import FeedingPlan
         
         plan = FeedingPlan.objects.create(
             cycle=production_cycle,
@@ -428,7 +428,7 @@ class TestSanitaryLogSerializer:
 
     def test_computed_fields(self, production_cycle):
         """Test champs calculés du sérialiseur."""
-        from apps.aquaculture.models import SanitaryLog
+        from aquaculture.models import SanitaryLog
         
         log = SanitaryLog.objects.create(
             cycle=production_cycle,

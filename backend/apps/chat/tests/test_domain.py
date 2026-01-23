@@ -6,7 +6,7 @@ Pure Python tests with no Django dependencies.
 Tests business rules and validation logic.
 """
 import pytest
-from apps.chat.domain import (
+from chat.domain import (
     MessageContent,
     MediaAttachment,
     InvalidMessageContent,
