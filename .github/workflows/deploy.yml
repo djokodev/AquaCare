@@ -70,7 +70,7 @@ jobs:
       - name: Build API Image
         working-directory: ./backend
         run: |
-          docker build \
+          docker build --no-cache \
             -t ${{ env.DOCKER_IMAGE_API }}:latest \
             -t ${{ env.DOCKER_IMAGE_API }}:${{ github.sha }} \
             -f Dockerfile \
@@ -79,7 +79,7 @@ jobs:
       - name: Build Nginx Image
         working-directory: ./backend/nginx
         run: |
-          docker build \
+          docker build --no-cache \
             -t ${{ env.DOCKER_IMAGE_NGINX }}:latest \
             -t ${{ env.DOCKER_IMAGE_NGINX }}:${{ github.sha }} \
             -f Dockerfile \
@@ -133,6 +133,10 @@ jobs:
           POSTGRES_PORT=5432
           JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}
           COMPOSE_PROJECT_NAME=aquacare
+          DJANGO_SUPERUSER_PHONE=${{ secrets.DJANGO_SUPERUSER_PHONE }}
+          DJANGO_SUPERUSER_PASSWORD=${{ secrets.DJANGO_SUPERUSER_PASSWORD }}
+          DJANGO_SUPERUSER_FIRST_NAME=${{ secrets.DJANGO_SUPERUSER_FIRST_NAME }}
+          DJANGO_SUPERUSER_LAST_NAME=${{ secrets.DJANGO_SUPERUSER_LAST_NAME }}
           ENVEOF
 
             chmod 600 .env
