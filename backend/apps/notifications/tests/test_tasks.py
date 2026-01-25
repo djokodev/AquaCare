@@ -32,7 +32,7 @@ class TestEmailNotificationTask:
         user.save()
 
         # Mock send_mail (patcher sur le module tache pour pointer la rĂŠfĂŠrence importĂŠe)
-        with patch('apps.notifications.tasks.send_mail') as mock_send:
+        with patch('notifications.tasks.send_mail') as mock_send:
             mock_send.return_value = 1  # Success
 
             # Execute
@@ -56,7 +56,7 @@ class TestEmailNotificationTask:
         user.save()
 
         # Mock send_mail
-        with patch('apps.notifications.tasks.send_mail') as mock_send:
+        with patch('notifications.tasks.send_mail') as mock_send:
             # Execute
             send_email_notification_task(str(notification.id))
 
@@ -74,7 +74,7 @@ class TestEmailNotificationTask:
         user.save()
 
         # Mock send_mail avec exception
-        with patch('apps.notifications.tasks.send_mail') as mock_send:
+        with patch('notifications.tasks.send_mail') as mock_send:
             mock_send.side_effect = Exception("Network error")
 
             # Execute & Assert: Exception raised pour trigger Celery retry
@@ -229,8 +229,8 @@ class TestNotificationMaintenance:
         )
 
         # Mock les taches d'envoi pour eviter vraie execution
-        with patch('apps.notifications.tasks.send_email_notification_task.delay') as mock_email:
-            with patch('apps.notifications.tasks.send_push_notification_task.delay') as mock_push:
+        with patch('notifications.tasks.send_email_notification_task.delay') as mock_email:
+            with patch('notifications.tasks.send_push_notification_task.delay') as mock_push:
                 # Execute
                 send_scheduled_notifications()
 

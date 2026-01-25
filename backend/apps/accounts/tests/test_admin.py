@@ -128,7 +128,7 @@ class TestUserAdmin:
         queryset = User.objects.filter(pk__in=[u.pk for u in users])
 
         # Exécuter l'action
-        with patch('apps.accounts.admin.messages') as mock_messages:
+        with patch('accounts.admin.messages') as mock_messages:
             self.admin.verify_users(request, queryset)
 
             # Vérifier que tous les utilisateurs sont vérifiés
@@ -168,7 +168,7 @@ class TestUserAdmin:
         queryset = User.objects.filter(pk__in=[u.pk for u in users])
 
         # Exécuter l'action
-        with patch('apps.accounts.admin.messages') as mock_messages:
+        with patch('accounts.admin.messages') as mock_messages:
             self.admin.certify_farms(request, queryset)
 
             # Vérifier que toutes les fermes sont certifiées
@@ -206,7 +206,7 @@ class TestUserAdmin:
         queryset = User.objects.filter(pk=user.pk)
 
         # Suspendre
-        with patch('apps.accounts.admin.messages') as mock_messages:
+        with patch('accounts.admin.messages') as mock_messages:
             self.admin.suspend_certifications(request, queryset)
 
             user.refresh_from_db()
