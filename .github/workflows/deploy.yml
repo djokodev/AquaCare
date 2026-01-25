@@ -173,6 +173,13 @@ jobs:
             fi
           EOF
 
+      - name: Login to GHCR on VPS
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << EOF
+            echo "Authenticating to GitHub Container Registry on VPS..."
+            echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u ${{ github.repository_owner }} --password-stdin
+          EOF
+
       - name: Pull Latest Images & Deploy
         run: |
           ssh -i ~/.ssh/deploy_key ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << 'EOF'
