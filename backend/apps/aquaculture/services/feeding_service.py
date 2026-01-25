@@ -18,8 +18,8 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from ..models import FeedingPlan, ProductionCycle, NutritionalGuide
-from apps.notifications.models import Notification
-from apps.notifications.services import NotificationService
+from notifications.models import Notification
+from notifications.services import NotificationService
 from django.contrib.contenttypes.models import ContentType
 from ..domain.calculators import AquacultureCalculator
 from ..domain.exceptions import (

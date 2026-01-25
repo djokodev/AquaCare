@@ -1,136 +1,403 @@
-{% load static %}
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <title>Inbox Support</title>
-  <style>
-    :root {
-      --green-primary: #059669;
-      --green-dark: #047857;
-      --cream: #f8fafc;
-      --gray-dark: #0f172a;
-      --gray: #1e293b;
-      --gray-light: #cbd5e1;
-      --white: #ffffff;
-    }
-    * { box-sizing: border-box; }
-    body { margin: 0; background: var(--cream); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: var(--gray-dark); }
-    .layout { display: grid; grid-template-columns: 320px 1fr; min-height: 100vh; }
-    .sidebar { background: var(--white); border-right: 1px solid #e2e8f0; padding: 16px; }
-    .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
-    .title { font-size: 18px; font-weight: 800; color: var(--green-dark); }
-    .chip { background: #e2f6ef; color: var(--green-dark); padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; }
-    .list { display: flex; flex-direction: column; gap: 10px; }
-    .conv { border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px; background: var(--white); cursor: pointer; text-decoration: none; color: inherit; transition: all 0.15s ease; }
-    .conv:hover { border-color: var(--green-primary); box-shadow: 0 8px 24px rgba(5, 150, 105, 0.12); transform: translateY(-1px); }
-    .conv.active { border-color: var(--green-primary); box-shadow: 0 10px 30px rgba(5, 150, 105, 0.16); }
-    .conv .title { font-weight: 700; color: var(--gray-dark); margin-bottom: 6px; }
-    .conv .meta { font-size: 12px; color: #64748b; display: flex; gap: 8px; align-items: center; }
-    .conv .preview { font-size: 13px; color: #0f172a; margin-top: 6px; line-height: 18px; }
-    .main { padding: 20px; overflow-y: auto; }
-    .empty { color: #64748b; }
-    .messages { display: flex; flex-direction: column; gap: 14px; }
-    .bubble { max-width: 820px; border-radius: 14px; padding: 14px 16px; background: var(--white); border: 1px solid #e2e8f0; box-shadow: 0 10px 30px rgba(0,0,0,0.04); }
-    .bubble.admin { border-color: rgba(5, 150, 105, 0.15); background: #f0fdf4; }
-    .bubble.user { border-color: #e2e8f0; background: var(--white); }
-    .bubble .sender { font-size: 12px; color: var(--green-dark); margin-bottom: 4px; font-weight: 800; letter-spacing: 0.2px; }
-    .bubble .sender.user { color: #0f172a; }
-    .bubble .content { font-size: 14px; line-height: 21px; color: #0f172a; white-space: pre-wrap; }
-    .bubble .media { margin-top: 10px; }
-    .bubble .media img { max-width: 100%; border-radius: 10px; border: 1px solid #e2e8f0; box-shadow: 0 8px 20px rgba(0,0,0,0.08); }
-    .bubble .meta { margin-top: 8px; font-size: 12px; color: #64748b; display: flex; gap: 12px; align-items: center; }
-    .reply-box { margin-top: 22px; border: 1px solid #e2e8f0; background: var(--white); border-radius: 14px; padding: 14px; box-shadow: 0 12px 30px rgba(0,0,0,0.05); }
-    .reply-box label { font-weight: 800; color: var(--gray-dark); margin-bottom: 8px; display: block; }
-    textarea { width: 100%; min-height: 100px; background: #f8fafc; color: #0f172a; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px; font-size: 14px; }
-    textarea:focus { outline: 1px solid var(--green-primary); }
-    .actions { margin-top: 10px; display: flex; gap: 10px; align-items: center; }
-    .btn { background: var(--green-primary); color: #fff; border: none; border-radius: 10px; padding: 10px 16px; cursor: pointer; font-weight: 800; letter-spacing: 0.2px; box-shadow: 0 10px 24px rgba(5, 150, 105, 0.25); }
-    .btn:hover { background: var(--green-dark); }
-    .pill { background: #e2f6ef; color: var(--green-dark); padding: 4px 8px; border-radius: 999px; font-size: 12px; }
-  </style>
-</head>
-<body>
-  <div class="layout">
-    <div class="sidebar">
-      <div class="header">
-        <div class="title">Inbox Support</div>
-        {% with total=conversations|length %}
-          <span class="chip">Conversations: {{ total }}</span>
-        {% endwith %}
-      </div>
-      <div class="list">
-        {% for conv in conversations %}
-          <a class="conv {% if selected_conversation and conv.id == selected_conversation.id %}active{% endif %}"
-             href="?conversation={{ conv.id }}">
-            <div class="title">{{ conv.user.get_full_name|default:conv.user.phone_number }}</div>
-            <div class="meta">
-              <span>{{ conv.last_message_at|date:"d/m H:i" }}</span>
-              {% if conv.unread_count_admin > 0 %}
-                <span class="chip">{{ conv.unread_count_admin }} à traiter</span>
-              {% else %}
-                <span class="pill">0</span>
-              {% endif %}
-            </div>
-            {% if conv.last_message %}
-              <div class="preview">
-                {% if conv.last_message.sender_type == "user" %}👤{% elif conv.last_message.sender_type == "admin" %}🛠️{% else %}ℹ️{% endif %}
-                {{ conv.last_message.content|truncatechars:80 }}
-              </div>
-            {% endif %}
-          </a>
-        {% empty %}
-          <div class="empty">Aucune conversation.</div>
-        {% endfor %}
-      </div>
+{% extends "admin/base_site.html" %}
+{% load static i18n %}
+
+{% block title %}Inbox Support - {{ site_header }}{% endblock %}
+
+{% block extrahead %}
+{{ block.super }}
+<style>
+  :root {
+    --green-primary: #059669;
+    --green-dark: #047857;
+    --cream: #f8fafc;
+    --gray-dark: #0f172a;
+    --gray-light: #cbd5e1;
+  }
+
+  .inbox-layout {
+    display: grid;
+    grid-template-columns: 340px 1fr;
+    gap: 20px;
+    min-height: calc(100vh - 200px);
+  }
+
+  .inbox-sidebar {
+    background: #1e293b;
+    border-radius: 12px;
+    padding: 16px;
+    overflow-y: auto;
+    max-height: calc(100vh - 220px);
+  }
+
+  .inbox-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #334155;
+  }
+
+  .inbox-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: #f8fafc;
+  }
+
+  .inbox-chip {
+    background: var(--green-primary);
+    color: #fff;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  .conv-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .conv-item {
+    border: 1px solid #334155;
+    border-radius: 10px;
+    padding: 12px;
+    background: #0f172a;
+    cursor: pointer;
+    text-decoration: none;
+    color: inherit;
+    transition: all 0.15s ease;
+  }
+
+  .conv-item:hover {
+    border-color: var(--green-primary);
+    background: #1e293b;
+  }
+
+  .conv-item.active {
+    border-color: var(--green-primary);
+    background: #1e293b;
+    box-shadow: 0 0 0 2px rgba(5, 150, 105, 0.3);
+  }
+
+  .conv-item .conv-title {
+    font-weight: 600;
+    color: #f8fafc;
+    margin-bottom: 4px;
+    font-size: 14px;
+  }
+
+  .conv-item .conv-meta {
+    font-size: 11px;
+    color: #94a3b8;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .conv-item .conv-preview {
+    font-size: 12px;
+    color: #cbd5e1;
+    margin-top: 6px;
+    line-height: 1.4;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .badge-unread {
+    background: #dc2626;
+    color: #fff;
+    padding: 2px 6px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 700;
+  }
+
+  .inbox-main {
+    background: #1e293b;
+    border-radius: 12px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .inbox-main-header {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    padding-bottom: 16px;
+    border-bottom: 1px solid #334155;
+    margin-bottom: 16px;
+  }
+
+  .inbox-main-header h2 {
+    margin: 0;
+    color: #f8fafc;
+    font-size: 18px;
+    font-weight: 700;
+  }
+
+  .messages-container {
+    flex: 1;
+    overflow-y: auto;
+    max-height: calc(100vh - 400px);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding-right: 8px;
+  }
+
+  .msg-bubble {
+    max-width: 80%;
+    border-radius: 12px;
+    padding: 12px 14px;
+  }
+
+  .msg-bubble.admin {
+    background: linear-gradient(135deg, var(--green-primary), var(--green-dark));
+    color: #fff;
+    align-self: flex-end;
+    margin-left: auto;
+  }
+
+  .msg-bubble.user {
+    background: #0f172a;
+    border: 1px solid #334155;
+    color: #f8fafc;
+    align-self: flex-start;
+  }
+
+  .msg-sender {
+    font-size: 11px;
+    font-weight: 700;
+    margin-bottom: 4px;
+    opacity: 0.8;
+  }
+
+  .msg-content {
+    font-size: 14px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+  }
+
+  .msg-meta {
+    margin-top: 6px;
+    font-size: 10px;
+    opacity: 0.7;
+    display: flex;
+    gap: 8px;
+  }
+
+  .msg-media img {
+    max-width: 100%;
+    max-height: 300px;
+    border-radius: 8px;
+    margin-top: 8px;
+  }
+
+  .reply-form {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid #334155;
+  }
+
+  .reply-form label {
+    font-weight: 600;
+    color: #f8fafc;
+    margin-bottom: 8px;
+    display: block;
+    font-size: 13px;
+  }
+
+  .reply-form textarea {
+    width: 100%;
+    min-height: 80px;
+    background: #0f172a;
+    color: #f8fafc;
+    border: 1px solid #334155;
+    border-radius: 8px;
+    padding: 10px;
+    font-size: 14px;
+    resize: vertical;
+  }
+
+  .reply-form textarea:focus {
+    outline: none;
+    border-color: var(--green-primary);
+  }
+
+  .reply-actions {
+    margin-top: 10px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+
+  .btn-send {
+    background: var(--green-primary);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 20px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 13px;
+    transition: background 0.15s;
+  }
+
+  .btn-send:hover {
+    background: var(--green-dark);
+  }
+
+  .empty-state {
+    color: #64748b;
+    text-align: center;
+    padding: 40px;
+    font-size: 14px;
+  }
+
+  .empty-state i {
+    font-size: 48px;
+    margin-bottom: 16px;
+    display: block;
+    opacity: 0.5;
+  }
+</style>
+{% endblock %}
+
+{% block breadcrumbs %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="{% url 'admin:index' %}">Accueil</a></li>
+    <li class="breadcrumb-item"><a href="{% url 'admin:app_list' app_label='chat' %}">Support Client</a></li>
+    <li class="breadcrumb-item active">Inbox Support</li>
+  </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="inbox-layout">
+  <!-- Sidebar: Liste des conversations -->
+  <div class="inbox-sidebar">
+    <div class="inbox-header">
+      <span class="inbox-title"><i class="fas fa-inbox"></i> Inbox</span>
+      <span class="inbox-chip">{{ conversations|length }} conversations</span>
     </div>
 
-    <div class="main">
-      {% if selected_conversation %}
-        <div style="display:flex; gap:12px; align-items:center; margin-bottom:6px;">
-          <h2 style="margin:0;color:var(--green-dark); font-size:20px; font-weight:800;">
-            {{ selected_conversation.user.get_full_name|default:selected_conversation.user.phone_number }}
-          </h2>
-          <span class="pill">Dernier: {{ selected_conversation.last_message_at|date:"d/m H:i" }}</span>
-        </div>
-
-        <div class="messages">
-          {% for msg in messages %}
-            <div class="bubble {% if msg.sender_type in 'admin system' %}admin{% else %}user{% endif %}">
-              <div class="sender {% if msg.sender_type in 'admin system' %}admin{% else %}user{% endif %}">
-                {% if msg.sender_type == 'user' %}Utilisateur{% else %}Administration{% endif %}
-              </div>
-              <div class="content">{{ msg.content|linebreaksbr }}</div>
-              {% if msg.media_type == 'image' and msg.media_file %}
-                <div class="media"><a href="{{ msg.media_file.url }}" target="_blank"><img src="{{ msg.media_file.url }}" alt="media"></a></div>
-              {% elif msg.media_type == 'video' and msg.media_file %}
-                <div class="media"><a href="{{ msg.media_file.url }}" target="_blank">▶️ Ouvrir la vidéo</a></div>
-              {% endif %}
-              <div class="meta">
-                <span>{{ msg.created_at|date:"d/m H:i" }}</span>
-                <span class="pill">{{ msg.get_sender_type_display }}</span>
-                {% if msg.media_type != 'none' %}<span class="pill">{{ msg.get_media_type_display }}</span>{% endif %}
-              </div>
-            </div>
-          {% empty %}
-            <div class="empty">Aucun message pour cette conversation.</div>
-          {% endfor %}
-        </div>
-
-        <form method="post" class="reply-box">
-          {% csrf_token %}
-          <input type="hidden" name="conversation_id" value="{{ selected_conversation.id }}">
-          <label for="reply_content">Répondre (Administration)</label>
-          <textarea id="reply_content" name="reply_content" placeholder="Votre réponse..."></textarea>
-          <div class="actions">
-            <button class="btn" type="submit">Envoyer</button>
-            <span style="font-size:12px;color:#64748b;">Envoyé en tant qu'Administration</span>
+    <div class="conv-list">
+      {% for conv in conversations %}
+        <a class="conv-item {% if selected_conversation and conv.id == selected_conversation.id %}active{% endif %}"
+           href="?conversation={{ conv.id }}">
+          <div class="conv-title">
+            <i class="fas fa-user"></i>
+            {{ conv.user.get_full_name|default:conv.user.phone_number }}
           </div>
-        </form>
-      {% else %}
-        <div class="empty">Sélectionnez une conversation pour voir les messages.</div>
-      {% endif %}
+          <div class="conv-meta">
+            <span><i class="fas fa-clock"></i> {{ conv.last_message_at|date:"d/m H:i" }}</span>
+            {% if conv.unread_count_admin > 0 %}
+              <span class="badge-unread">{{ conv.unread_count_admin }} non lu{{ conv.unread_count_admin|pluralize }}</span>
+            {% endif %}
+          </div>
+          {% if conv.last_message %}
+            <div class="conv-preview">
+              {% if conv.last_message.sender_type == "user" %}
+                <i class="fas fa-user"></i>
+              {% elif conv.last_message.sender_type == "admin" %}
+                <i class="fas fa-headset"></i>
+              {% else %}
+                <i class="fas fa-info-circle"></i>
+              {% endif %}
+              {{ conv.last_message.content|truncatechars:60 }}
+            </div>
+          {% endif %}
+        </a>
+      {% empty %}
+        <div class="empty-state">
+          <i class="fas fa-comments"></i>
+          Aucune conversation.
+        </div>
+      {% endfor %}
     </div>
   </div>
-</body>
-</html>
+
+  <!-- Main: Messages de la conversation selectionnee -->
+  <div class="inbox-main">
+    {% if selected_conversation %}
+      <div class="inbox-main-header">
+        <h2>
+          <i class="fas fa-user-circle"></i>
+          {{ selected_conversation.user.get_full_name|default:selected_conversation.user.phone_number }}
+        </h2>
+        <span class="inbox-chip">
+          <i class="fas fa-clock"></i> {{ selected_conversation.last_message_at|date:"d/m/Y H:i" }}
+        </span>
+      </div>
+
+      <div class="messages-container">
+        {% for msg in messages %}
+          <div class="msg-bubble {% if msg.sender_type in 'admin system' %}admin{% else %}user{% endif %}">
+            <div class="msg-sender">
+              {% if msg.sender_type == 'user' %}
+                <i class="fas fa-user"></i> Utilisateur
+              {% elif msg.sender_type == 'admin' %}
+                <i class="fas fa-headset"></i> Support
+              {% else %}
+                <i class="fas fa-robot"></i> Systeme
+              {% endif %}
+            </div>
+            <div class="msg-content">{{ msg.content|linebreaksbr }}</div>
+            {% if msg.media_type == 'image' and msg.media_file %}
+              <div class="msg-media">
+                <a href="{{ msg.media_file.url }}" target="_blank">
+                  <img src="{{ msg.media_file.url }}" alt="media">
+                </a>
+              </div>
+            {% elif msg.media_type == 'video' and msg.media_file %}
+              <div class="msg-media">
+                <a href="{{ msg.media_file.url }}" target="_blank" class="btn-send">
+                  <i class="fas fa-play"></i> Voir la video
+                </a>
+              </div>
+            {% endif %}
+            <div class="msg-meta">
+              <span>{{ msg.created_at|date:"d/m H:i" }}</span>
+              {% if msg.media_type != 'none' %}
+                <span><i class="fas fa-paperclip"></i> {{ msg.get_media_type_display }}</span>
+              {% endif %}
+            </div>
+          </div>
+        {% empty %}
+          <div class="empty-state">
+            <i class="fas fa-comment-slash"></i>
+            Aucun message dans cette conversation.
+          </div>
+        {% endfor %}
+      </div>
+
+      <form method="post" class="reply-form">
+        {% csrf_token %}
+        <input type="hidden" name="conversation_id" value="{{ selected_conversation.id }}">
+        <label for="reply_content">
+          <i class="fas fa-reply"></i> Repondre en tant que Support
+        </label>
+        <textarea id="reply_content" name="reply_content" placeholder="Ecrivez votre reponse..."></textarea>
+        <div class="reply-actions">
+          <button class="btn-send" type="submit">
+            <i class="fas fa-paper-plane"></i> Envoyer
+          </button>
+          <span style="font-size:11px;color:#64748b;">
+            <i class="fas fa-info-circle"></i> Envoye en tant qu'Administration
+          </span>
+        </div>
+      </form>
+    {% else %}
+      <div class="empty-state">
+        <i class="fas fa-hand-pointer"></i>
+        Selectionnez une conversation pour voir les messages.
+      </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

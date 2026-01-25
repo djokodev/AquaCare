@@ -64,7 +64,7 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
         Args:
             cycle_id: UUID du cycle
         """
-        from apps.aquaculture.models import ProductionCycle
+        from aquaculture.models import ProductionCycle
 
         try:
             cycle = ProductionCycle.objects.get(id=cycle_id, user=request.user)

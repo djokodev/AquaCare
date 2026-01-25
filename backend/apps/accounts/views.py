@@ -8,7 +8,7 @@ from drf_spectacular.utils import extend_schema, OpenApiResponse, OpenApiExample
 from .models import User
 
 from .serializers import (
-    UserRegistrationSerializer, 
+    UserRegistrationSerializer,
     UserProfileSimpleSerializer,
     UserProfileSerializer,
     FarmProfileSerializer,

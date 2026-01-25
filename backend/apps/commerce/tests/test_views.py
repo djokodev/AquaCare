@@ -7,7 +7,7 @@ from decimal import Decimal
 from rest_framework.test import APIClient
 from rest_framework import status
 
-from apps.commerce.models import Product
+from commerce.models import Product
 from accounts.models import User, FarmProfile
 
 

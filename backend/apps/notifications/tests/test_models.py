@@ -11,7 +11,7 @@ from django.utils import timezone
 from django.contrib.contenttypes.models import ContentType
 from datetime import timedelta
 
-from apps.notifications.models import Notification, NotificationPreference, PushToken
+from notifications.models import Notification, NotificationPreference, PushToken
 
 
 @pytest.mark.django_db

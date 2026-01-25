@@ -13,8 +13,8 @@ from django.utils import timezone
 from datetime import timedelta
 from unittest.mock import patch
 
-from apps.notifications.services import NotificationService
-from apps.notifications.models import Notification
+from notifications.services import NotificationService
+from notifications.models import Notification
 
 
 @pytest.mark.django_db

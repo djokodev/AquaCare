@@ -10,6 +10,12 @@ echo "PostgreSQL is ready!"
 echo "Running database migrations (with --fake-initial to tolerate existing tables)..."
 python manage.py migrate --noinput --fake-initial
 
+echo "Creating superuser from environment variables..."
+python manage.py create_superuser_from_env || echo "Warning: Superuser creation skipped or already exists"
+
+echo "Configuring RBAC groups and permissions..."
+python manage.py setup_rbac || echo "Warning: RBAC setup failed or already configured"
+
 echo "Collecting static files..."
 python manage.py collectstatic --noinput --clear
 

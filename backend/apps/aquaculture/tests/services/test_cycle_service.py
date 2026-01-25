@@ -13,15 +13,15 @@ from decimal import Decimal
 from datetime import date, timedelta
 from django.utils import timezone
 
-from apps.aquaculture.services import ProductionCycleService
-from apps.aquaculture.domain.exceptions import (
+from aquaculture.services import ProductionCycleService
+from aquaculture.domain.exceptions import (
     InvalidDensityError,
     CycleAlreadyHarvestedError,
     CycleNotActiveError,
     InvalidHarvestDataError,
     BusinessRuleViolation,
 )
-from apps.aquaculture.models import ProductionCycle, CycleLog
+from aquaculture.models import ProductionCycle, CycleLog
 from tests.fixtures.factories import FarmProfileFactory, ProductionCycleFactory
 
 

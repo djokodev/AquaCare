@@ -1,3 +1,35 @@
 # Claude Code - Plans et documents stratégiques
 .claude/plans/
 .claude/STRATEGIE_HORMOZI.md
+
+# Claude Code - Fichiers temporaires (subagents)
+tmpclaude-*-cwd
+nul
+
+# Coverage files
+.coverage*
+htmlcov/
+
+# Compiled translations (regenerated from .po files)
+*.mo
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Environment
+.env
+.env.local
+*.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

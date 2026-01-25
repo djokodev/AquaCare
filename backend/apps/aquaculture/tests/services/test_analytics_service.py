@@ -7,10 +7,10 @@ import pytest
 from decimal import Decimal
 from datetime import date, timedelta
 
-from apps.aquaculture.services.analytics_service import AnalyticsService
-from apps.aquaculture.models import CycleMetrics
+from aquaculture.services.analytics_service import AnalyticsService
+from aquaculture.models import CycleMetrics
 from tests.fixtures.factories import ProductionCycleFactory
-from apps.aquaculture.services.log_service import CycleLogService
+from aquaculture.services.log_service import CycleLogService
 
 
 @pytest.mark.django_db

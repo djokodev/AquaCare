@@ -1,14 +1,14 @@
-# English translations for MAVECAM AquaCare API
-# Copyright (C) 2025 MAVECAM
-# This file is distributed under the same license as the PACKAGE package.
+# AquaCare English Translations
+# Copyright (C) 2025 AquaCare
+# This file is distributed under the same license as the AquaCare package.
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: MAVECAM AquaCare 1.0\n"
+"Project-Id-Version: AquaCare 1.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-08-13 12:00+0000\n"
-"PO-Revision-Date: 2025-08-13 12:00+0000\n"
-"Last-Translator: MAVECAM Team\n"
+"POT-Creation-Date: 2025-01-22 12:00+0000\n"
+"PO-Revision-Date: 2025-01-22 12:00+0000\n"
+"Last-Translator: AquaCare Team\n"
 "Language: en\n"
 "Language-Team: English\n"
 "MIME-Version: 1.0\n"
@@ -16,239 +16,38 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-# User model field labels
-msgid "Numéro de téléphone"
-msgstr "Phone Number"
+# =============================================================================
+# APP NAMES (apps.py verbose_name)
+# =============================================================================
 
-msgid "Format : +237XXXXXXXXX ou format international"
-msgstr "Format: +237XXXXXXXXX or international format"
+msgid "Comptes Utilisateurs"
+msgstr "User Accounts"
 
-msgid "Type de compte"
-msgstr "Account Type"
+msgid "Production Aquacole"
+msgstr "Aquaculture Production"
 
-msgid "Type d'utilisateur : personne physique ou entreprise"
-msgstr "User type: individual or company"
+msgid "Commerce"
+msgstr "Commerce"
 
-msgid "Nom de l'entreprise"
-msgstr "Company Name"
+msgid "Support Client"
+msgstr "Customer Support"
 
-msgid "Nom de l'entreprise pour les comptes de type \"company\""
-msgstr "Company name for \"company\" type accounts"
+msgid "Notifications"
+msgstr "Notifications"
 
-msgid "Téléphone vérifié"
-msgstr "Phone Verified"
+msgid "Utilitaires communs"
+msgstr "Common Utilities"
 
-msgid "Indique si le numéro de téléphone a été vérifié par SMS"
-msgstr "Indicates if the phone number has been verified by SMS"
+# =============================================================================
+# MODEL NAMES (verbose_name / verbose_name_plural)
+# =============================================================================
 
-msgid "Langue préférée"
-msgstr "Preferred Language"
-
-msgid "Langue d'interface préférée de l'utilisateur"
-msgstr "User's preferred interface language"
-
-msgid "Type d'activité"
-msgstr "Activity Type"
-
-msgid "Maillon d'activité : producteur d'alevins, poisson de table, etc."
-msgstr "Activity link: fry producer, table fish, etc."
-
-msgid "Région"
-msgstr "Region"
-
-msgid "Région du Cameroun"
-msgstr "Region of Cameroon"
-
-msgid "Département"
-msgstr "Department"
-
-msgid "Département dans la région choisie"
-msgstr "Department in the selected region"
-
-msgid "Arrondissement"
-msgstr "District"
-
-msgid "Arrondissement dans le département"
-msgstr "District in the department"
-
-msgid "Quartier"
-msgstr "Neighborhood"
-
-msgid "Quartier ou localité spécifique"
-msgstr "Neighborhood or specific locality"
-
-msgid "Statut juridique"
-msgstr "Legal Status"
-
-msgid "Statut juridique de l'entreprise (SARL, SCOOP, etc.)"
-msgstr "Legal status of the company (SARL, COOP, etc.)"
-
-msgid "Nom du promoteur"
-msgstr "Promoter Name"
-
-msgid "Nom du promoteur ou dirigeant de l'entreprise"
-msgstr "Name of the promoter or company manager"
-
-msgid "Classe d'âge"
-msgstr "Age Group"
-
-msgid "Tranche d'âge de la personne"
-msgstr "Person's age range"
-
-msgid "Zone d'intervention"
-msgstr "Intervention Zone"
-
-msgid "Zone géographique d'intervention de l'activité"
-msgstr "Geographic area of activity intervention"
-
-msgid "Utilisateur MAVECAM"
-msgstr "MAVECAM User"
-
-msgid "Utilisateurs MAVECAM"
-msgstr "MAVECAM Users"
-
-# User validation messages
-msgid "Le nom de l'entreprise est requis pour les comptes entreprise."
-msgstr "Company name is required for business accounts."
-
-msgid "Le statut juridique est requis pour les entreprises."
-msgstr "Legal status is required for companies."
-
-msgid "Le nom du promoteur est requis pour les entreprises."
-msgstr "Promoter name is required for companies."
-
-msgid "La classe d'âge ne s'applique qu'aux personnes physiques."
-msgstr "Age group only applies to individuals."
-
-msgid "Le prénom est requis pour les comptes individuels."
-msgstr "First name is required for individual accounts."
-
-msgid "Le nom est requis pour les comptes individuels."
-msgstr "Last name is required for individual accounts."
-
-msgid "La classe d'âge est requise pour les personnes physiques."
-msgstr "Age group is required for individuals."
-
-msgid "Le nom d'entreprise ne s'applique qu'aux comptes entreprise."
-msgstr "Company name only applies to business accounts."
-
-msgid "Le statut juridique ne s'applique qu'aux entreprises."
-msgstr "Legal status only applies to companies."
-
-msgid "Le nom du promoteur ne s'applique qu'aux entreprises."
-msgstr "Promoter name only applies to companies."
-
-msgid "La région est requise si le département est spécifié."
-msgstr "Region is required if department is specified."
-
-msgid "Le département est requis si l'arrondissement est spécifié."
-msgstr "Department is required if district is specified."
-
-msgid "La région est requise si l'arrondissement est spécifié."
-msgstr "Region is required if district is specified."
-
-# Manager messages
-msgid "Le numéro de téléphone doit être fourni"
-msgstr "Phone number must be provided"
-
-msgid "Les superutilisateurs doivent avoir is_staff=True."
-msgstr "Superusers must have is_staff=True."
-
-msgid "Les superutilisateurs doivent avoir is_superuser=True."
-msgstr "Superusers must have is_superuser=True."
-
-# Middleware messages
-msgid "Trop de tentatives de connexion. Veuillez patienter."
-msgstr "Too many login attempts. Please wait."
-
-# Validator messages
-msgid "Le numéro de téléphone est requis."
-msgstr "Phone number is required."
-
-msgid "Format de numéro invalide. Formats acceptés : +237XXXXXXXXX (Cameroun) ou +XXX format international."
-msgstr "Invalid phone format. Accepted formats: +237XXXXXXXXX (Cameroon) or +XXX international format."
-
-# Farm Profile model
-msgid "En attente"
-msgstr "Pending"
-
-msgid "Certifiée"
-msgstr "Certified"
-
-msgid "Suspendue"
-msgstr "Suspended"
-
-msgid "Rejetée"
-msgstr "Rejected"
-
-msgid "Identifiant unique UUID pour la synchronisation mobile"
-msgstr "Unique UUID identifier for mobile synchronization"
-
+# Accounts
 msgid "Utilisateur"
 msgstr "User"
 
-msgid "Utilisateur propriétaire de cette ferme"
-msgstr "User who owns this farm"
-
-msgid "Nom de la ferme"
-msgstr "Farm Name"
-
-msgid "Nom commercial ou descriptif de l'exploitation"
-msgstr "Commercial or descriptive name of the farm"
-
-msgid "Statut de certification"
-msgstr "Certification Status"
-
-msgid "Statut de certification géré uniquement par les admins MAVECAM"
-msgstr "Certification status managed only by MAVECAM admins"
-
-msgid "Nombre total de bassins"
-msgstr "Total Number of Ponds"
-
-msgid "Nombre total de bassins d'élevage disponibles"
-msgstr "Total number of available breeding ponds"
-
-msgid "Superficie totale (m²)"
-msgstr "Total Area (m²)"
-
-msgid "Superficie totale de l'exploitation en mètres carrés"
-msgstr "Total farm area in square meters"
-
-msgid "Source d'eau"
-msgstr "Water Source"
-
-msgid "Principale source d'approvisionnement en eau"
-msgstr "Main water supply source"
-
-msgid "Espèce principale"
-msgstr "Main Species"
-
-msgid "Principale espèce de poisson élevée"
-msgstr "Main fish species raised"
-
-msgid "Production annuelle (kg)"
-msgstr "Annual Production (kg)"
-
-msgid "Production annuelle estimée en kilogrammes"
-msgstr "Estimated annual production in kilograms"
-
-msgid "Date de création"
-msgstr "Creation Date"
-
-msgid "Date de création automatique du profil"
-msgstr "Automatic profile creation date"
-
-msgid "Dernière modification"
-msgstr "Last Modified"
-
-msgid "Date de dernière modification du profil"
-msgstr "Profile last modification date"
-
-msgid "Supprimé"
-msgstr "Deleted"
-
-msgid "Marqueur de suppression pour la synchronisation mobile"
-msgstr "Deletion marker for mobile synchronization"
+msgid "Utilisateurs"
+msgstr "Users"
 
 msgid "Profil de ferme"
 msgstr "Farm Profile"
@@ -256,8 +55,535 @@ msgstr "Farm Profile"
 msgid "Profils de fermes"
 msgstr "Farm Profiles"
 
-msgid "Le nom de la ferme ne peut pas être vide."
-msgstr "Farm name cannot be empty."
+# Aquaculture
+msgid "Cycle de production"
+msgstr "Production Cycle"
 
-msgid "Le nombre de bassins doit être supérieur à 0 si il y a une production."
-msgstr "Number of ponds must be greater than 0 if there is production."
+msgid "Cycles de production"
+msgstr "Production Cycles"
+
+msgid "Journal quotidien"
+msgstr "Daily Log"
+
+msgid "Journaux quotidiens"
+msgstr "Daily Logs"
+
+msgid "Journal sanitaire"
+msgstr "Sanitary Log"
+
+msgid "Journaux sanitaires"
+msgstr "Sanitary Logs"
+
+msgid "Plan d'alimentation"
+msgstr "Feeding Plan"
+
+msgid "Plans d'alimentation"
+msgstr "Feeding Plans"
+
+msgid "Guide nutritionnel"
+msgstr "Nutritional Guide"
+
+msgid "Guides nutritionnels"
+msgstr "Nutritional Guides"
+
+msgid "Métrique de cycle"
+msgstr "Cycle Metric"
+
+msgid "Métriques de cycle"
+msgstr "Cycle Metrics"
+
+msgid "Métriques de cycles"
+msgstr "Cycle Metrics"
+
+# Commerce
+msgid "Produit"
+msgstr "Product"
+
+msgid "Produits"
+msgstr "Products"
+
+msgid "Commande"
+msgstr "Order"
+
+msgid "Commandes"
+msgstr "Orders"
+
+msgid "Article commande"
+msgstr "Order Item"
+
+msgid "Articles commande"
+msgstr "Order Items"
+
+# Notifications
+msgid "Notification"
+msgstr "Notification"
+
+msgid "Préférence de notification"
+msgstr "Notification Preference"
+
+msgid "Préférences de notifications"
+msgstr "Notification Preferences"
+
+msgid "Token Push"
+msgstr "Push Token"
+
+msgid "Tokens Push"
+msgstr "Push Tokens"
+
+# Chat
+msgid "Conversation"
+msgstr "Conversation"
+
+msgid "Conversations"
+msgstr "Conversations"
+
+msgid "Message"
+msgstr "Message"
+
+msgid "Messages"
+msgstr "Messages"
+
+msgid "Messagerie Support"
+msgstr "Support Inbox"
+
+# =============================================================================
+# JAZZMIN UI ELEMENTS
+# =============================================================================
+
+msgid "Tableau de bord"
+msgstr "Dashboard"
+
+msgid "Accueil"
+msgstr "Home"
+
+msgid "Actions récentes"
+msgstr "Recent Actions"
+
+msgid "Bienvenue sur AquaCare Administration"
+msgstr "Welcome to AquaCare Administration"
+
+msgid "Choisir la langue"
+msgstr "Choose language"
+
+# =============================================================================
+# ADMIN BUTTONS AND ACTIONS
+# =============================================================================
+
+msgid "Ajouter"
+msgstr "Add"
+
+msgid "Modifier"
+msgstr "Change"
+
+msgid "Modification"
+msgstr "Change"
+
+msgid "Supprimer"
+msgstr "Delete"
+
+msgid "Voir"
+msgstr "View"
+
+msgid "Afficher"
+msgstr "View"
+
+msgid "Enregistrer"
+msgstr "Save"
+
+msgid "Historique"
+msgstr "History"
+
+msgid "Enregistrer et continuer"
+msgstr "Save and continue editing"
+
+msgid "Enregistrer et ajouter"
+msgstr "Save and add another"
+
+# =============================================================================
+# ADMIN FIELDSETS (UserAdmin, etc.)
+# =============================================================================
+
+msgid "Informations de base"
+msgstr "Basic Information"
+
+msgid "Informations personnelles"
+msgstr "Personal Information"
+
+msgid "Activite aquacole"
+msgstr "Aquaculture Activity"
+
+msgid "Localisation"
+msgstr "Location"
+
+msgid "Entreprise"
+msgstr "Company"
+
+msgid "Personne physique"
+msgstr "Individual"
+
+msgid "Permissions"
+msgstr "Permissions"
+
+msgid "Dates importantes"
+msgstr "Important Dates"
+
+msgid "Informations obligatoires"
+msgstr "Required Information"
+
+msgid "Informations complementaires"
+msgstr "Additional Information"
+
+msgid "Permissions (admin seulement)"
+msgstr "Permissions (admin only)"
+
+msgid "Seul le superuser peut modifier ces champs."
+msgstr "Only superuser can modify these fields."
+
+msgid "Cocher \"is_staff\" pour donner acces a l'admin."
+msgstr "Check \"is_staff\" to grant admin access."
+
+# Aquaculture Fieldsets
+msgid "Bassin et infrastructure"
+msgstr "Pond and Infrastructure"
+
+msgid "Donnees initiales"
+msgstr "Initial Data"
+
+msgid "Donnees actuelles"
+msgstr "Current Data"
+
+msgid "Recolte"
+msgstr "Harvest"
+
+msgid "Metadonnees"
+msgstr "Metadata"
+
+msgid "Donnees de mortalite"
+msgstr "Mortality Data"
+
+msgid "Donnees de croissance"
+msgstr "Growth Data"
+
+msgid "Alimentation"
+msgstr "Feeding"
+
+msgid "Parametres environnementaux"
+msgstr "Environmental Parameters"
+
+msgid "Observations"
+msgstr "Observations"
+
+msgid "Synchronisation"
+msgstr "Synchronization"
+
+msgid "Details de l evenement"
+msgstr "Event Details"
+
+msgid "Traitement"
+msgstr "Treatment"
+
+msgid "Documentation"
+msgstr "Documentation"
+
+msgid "Suivi"
+msgstr "Follow-up"
+
+msgid "Parametres du cycle"
+msgstr "Cycle Parameters"
+
+msgid "Plan d alimentation"
+msgstr "Feeding Plan"
+
+msgid "Specifications de l aliment"
+msgstr "Feed Specifications"
+
+msgid "Classification"
+msgstr "Classification"
+
+msgid "Plage de poids"
+msgstr "Weight Range"
+
+msgid "Recommandations nutritionnelles"
+msgstr "Nutritional Recommendations"
+
+msgid "Produits recommandés"
+msgstr "Recommended Products"
+
+msgid "Notes"
+msgstr "Notes"
+
+msgid "Certification"
+msgstr "Certification"
+
+msgid "Informations techniques"
+msgstr "Technical Information"
+
+msgid "Production"
+msgstr "Production"
+
+# =============================================================================
+# ADMIN LIST DISPLAY COLUMNS
+# =============================================================================
+
+msgid "Role"
+msgstr "Role"
+
+msgid "Proprietaire"
+msgstr "Owner"
+
+msgid "Ferme"
+msgstr "Farm"
+
+msgid "Espece"
+msgstr "Species"
+
+msgid "Statut"
+msgstr "Status"
+
+msgid "Jours actifs"
+msgstr "Active Days"
+
+msgid "Biomasse"
+msgstr "Biomass"
+
+msgid "Taux survie"
+msgstr "Survival Rate"
+
+msgid "FCR"
+msgstr "FCR"
+
+msgid "Performance"
+msgstr "Performance"
+
+msgid "ID"
+msgstr "ID"
+
+msgid "Cycle"
+msgstr "Cycle"
+
+msgid "Temperature"
+msgstr "Temperature"
+
+msgid "Type"
+msgstr "Type"
+
+msgid "Statut resolution"
+msgstr "Resolution Status"
+
+msgid "Photo"
+msgstr "Photo"
+
+msgid "Eleveur"
+msgstr "Farmer"
+
+msgid "Periode"
+msgstr "Period"
+
+msgid "Stade"
+msgstr "Stage"
+
+# =============================================================================
+# ADMIN ACTIONS
+# =============================================================================
+
+msgid "Verifier les telephones selectionnes"
+msgstr "Verify selected phone numbers"
+
+msgid "Certifier les fermes selectionnees"
+msgstr "Certify selected farms"
+
+msgid "Suspendre les certifications"
+msgstr "Suspend certifications"
+
+msgid "Exporter selection en CSV"
+msgstr "Export selection to CSV"
+
+msgid "Generer rapport performance"
+msgstr "Generate performance report"
+
+msgid "Marquer comme termine"
+msgstr "Mark as completed"
+
+# =============================================================================
+# ADMIN MESSAGES
+# =============================================================================
+
+msgid "Elevation vers superuser non autorisee."
+msgstr "Elevation to superuser not authorized."
+
+msgid "Promotion vers staff non autorisee."
+msgstr "Promotion to staff not authorized."
+
+msgid "Vous n'avez pas la permission de verifier les utilisateurs."
+msgstr "You don't have permission to verify users."
+
+msgid "Vous n'avez pas la permission de certifier les fermes."
+msgstr "You don't have permission to certify farms."
+
+msgid "Vous n'avez pas la permission de suspendre les certifications."
+msgstr "You don't have permission to suspend certifications."
+
+msgid "Vous n'avez pas la permission d'exporter."
+msgstr "You don't have permission to export."
+
+msgid "Vous n'avez pas la permission de generer des rapports."
+msgstr "You don't have permission to generate reports."
+
+msgid "Vous n'avez pas la permission de terminer des cycles."
+msgstr "You don't have permission to complete cycles."
+
+msgid "{} utilisateur(s) verifie(s)."
+msgstr "{} user(s) verified."
+
+msgid "{} ferme(s) certifiee(s)."
+msgstr "{} farm(s) certified."
+
+msgid "{} certification(s) suspendue(s)."
+msgstr "{} certification(s) suspended."
+
+msgid "{} cycle(s) marque(s) comme termine(s)."
+msgstr "{} cycle(s) marked as completed."
+
+# =============================================================================
+# DJANGO-CELERY-BEAT (Periodic Tasks)
+# =============================================================================
+
+msgid "Tâches périodiques"
+msgstr "Periodic Tasks"
+
+msgid "Tâches Périodique"
+msgstr "Periodic Tasks"
+
+msgid "Tâche périodique"
+msgstr "Periodic Task"
+
+msgid "Planifié"
+msgstr "Clocked"
+
+msgid "Horaire"
+msgstr "Clocked"
+
+msgid "Crontabs"
+msgstr "Crontabs"
+
+msgid "Intervalles"
+msgstr "Intervals"
+
+msgid "Intervales"
+msgstr "Intervals"
+
+msgid "Événements solaires"
+msgstr "Solar Events"
+
+msgid "Évènements solaire"
+msgstr "Solar Events"
+
+# =============================================================================
+# AUTHENTICATION AND AUTHORIZATION
+# =============================================================================
+
+msgid "Authentification et Autorisations"
+msgstr "Authentication and Authorization"
+
+msgid "Authentification et autorisation"
+msgstr "Authentication and Authorization"
+
+msgid "Groupes"
+msgstr "Groups"
+
+msgid "Groupe"
+msgstr "Group"
+
+# =============================================================================
+# JWT TOKEN MANAGEMENT
+# =============================================================================
+
+msgid "Gestion des tokens"
+msgstr "Token Management"
+
+msgid "Tokens révoqués"
+msgstr "Blacklisted Tokens"
+
+msgid "Tokens actifs"
+msgstr "Outstanding Tokens"
+
+# =============================================================================
+# MISC USER MESSAGES
+# =============================================================================
+
+msgid "Trop de tentatives de connexion. Veuillez patienter."
+msgstr "Too many login attempts. Please wait."
+
+# =============================================================================
+# MODEL FIELD LABELS
+# =============================================================================
+
+msgid "Numéro de téléphone"
+msgstr "Phone Number"
+
+msgid "Type de compte"
+msgstr "Account Type"
+
+msgid "Nom de l'entreprise"
+msgstr "Business Name"
+
+msgid "Téléphone vérifié"
+msgstr "Phone Verified"
+
+msgid "Langue préférée"
+msgstr "Preferred Language"
+
+msgid "Type d'activité"
+msgstr "Activity Type"
+
+msgid "Région"
+msgstr "Region"
+
+msgid "Département"
+msgstr "Department"
+
+msgid "Arrondissement"
+msgstr "District"
+
+msgid "Ville"
+msgstr "City"
+
+msgid "Quartier"
+msgstr "Neighborhood"
+
+# =============================================================================
+# HELP TEXTS
+# =============================================================================
+
+msgid "Format : +237XXXXXXXXX ou format international"
+msgstr "Format: +237XXXXXXXXX or international format"
+
+msgid "Type d'utilisateur : personne physique ou entreprise"
+msgstr "User type: individual or company"
+
+msgid "Nom de l'entreprise pour les comptes de type \"company\""
+msgstr "Business name for company-type accounts"
+
+msgid "Indique si le numéro de téléphone a été vérifié par SMS"
+msgstr "Indicates if the phone number has been verified by SMS"
+
+msgid "Langue d'interface préférée de l'utilisateur"
+msgstr "User's preferred interface language"
+
+msgid "Maillon d'activité : producteur d'alevins, poisson de table, etc."
+msgstr "Activity type: fingerling producer, table fish, etc."
+
+msgid "Région du Cameroun"
+msgstr "Cameroon Region"
+
+msgid "Département dans la région choisie"
+msgstr "Department in the selected region"
+
+msgid "Arrondissement dans le département"
+msgstr "District in the department"
+
+msgid "Ville dans l'arrondissement"
+msgstr "City in the district"
+
+msgid "Quartier ou localité spécifique"
+msgstr "Specific neighborhood or locality"

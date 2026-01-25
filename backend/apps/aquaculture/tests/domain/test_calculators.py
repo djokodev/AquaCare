@@ -7,7 +7,7 @@ import pytest
 from decimal import Decimal
 from datetime import date, timedelta
 
-from apps.aquaculture.domain.calculators import AquacultureCalculator
+from aquaculture.domain.calculators import AquacultureCalculator
 
 
 class TestBiomassCalculations:

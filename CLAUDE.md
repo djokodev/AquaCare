@@ -2,686 +2,415 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-### **RÈGLE FONDAMENTALE**
-**TOUJOURS consulter et utiliser la documentation officielle de chaque librairie/framework avant d'écrire du code.**
+## 🚀 IMPORTANT : Workflow de Développement
 
-### **Documentations Officielles à Consulter Systématiquement**
+**AVANT toute tâche de développement, LIRE `WORKFLOW.md`** à la racine du projet.
 
-#### **Backend Django/Python**
-- **Django REST Framework** : https://www.django-rest-framework.org/
-- **Django** : https://docs.djangoproject.com/
-- **django-simple-jwt** : https://django-rest-framework-simplejwt.readthedocs.io/
-- **PostgreSQL + Django** : https://docs.djangoproject.com/en/stable/ref/databases/#postgresql
-- **pytest** : https://docs.pytest.org/
-- **Pillow (images)** : https://pillow.readthedocs.io/
+Ce fichier contient :
+- **Routine 10 étapes** : De la feature jusqu'au merge (feature → branch → implement → test → commit → PR → review → merge)
+- **Cheatsheet** : 8 custom commands, 5 agents, 6 skills, 5 MCP servers
+- **Checklists qualité** : Pre-commit, pre-PR, pre-release
+- **Troubleshooting guidé** : Debug API errors, frontend crashes, offline sync, i18n
+- **Commandes Docker/npm** : Référence complète copiable
 
-#### **Frontend React Native/Mobile**
-- **React Native** : https://reactnative.dev/docs/
-- **Expo** : https://docs.expo.dev/
-- **React Navigation** : https://reactnavigation.org/docs/
-- **Redux Toolkit** : https://redux-toolkit.js.org/
-- **React Redux** : https://react-redux.js.org/
-- **Axios** : https://axios-http.com/docs/
-- **Expo SecureStore** : https://docs.expo.dev/versions/latest/sdk/securestore/
-- **i18next** : https://www.i18next.com/
+**Instruction Claude Code :** Commence chaque session de développement en lisant `WORKFLOW.md` pour connaître la routine appropriée selon la tâche (feature backend/frontend, bug fix, package installation, review PR, pre-release).
 
-
-### **Processus de Développement Obligatoire**
-
-1. **AVANT d'écrire du code** :
-   - Utiliser WebFetch ou WebSearch pour consulter la documentation officielle
-   - Vérifier les bonnes pratiques actuelles et patterns recommandés
-   - Identifier la méthode/approche officiellement recommandée
-
-2. **PENDANT le développement** :
-   - Suivre strictement les conventions de la librairie
-   - Utiliser les méthodes/composants recommandés dans la doc
-   - Respecter la structure de fichiers et patterns suggérés
-
-3. **Format de Requête Documentation** :
-```
-WebFetch(
-  url: "https://docs.officielle.com/section-pertinente",
-  prompt: "Comment implémenter [fonctionnalité] selon les bonnes pratiques officielles ?"
-)
-```
-
-4. **APRÈS chaque modification de fichier** :
-   - OBLIGATOIRE: Exécuter `npx tsc --noEmit` pour vérifier les erreurs TypeScript
-   - OBLIGATOIRE: Tester la compilation avec `npm run web` pour les modifications critiques
-   - OBLIGATOIRE: Ne jamais marquer une tâche comme terminée sans vérification
-   - OBLIGATOIRE: Signaler immédiatement toute erreur détectée
-   - OBLIGATOIRE: Supprimer TOUS les console.log de débogage après validation du code
-
-5. **Toujours analyser la code base actuelle lors d'une nouvelle requette dans un nouveau chat et pour chaque fonctionnalites developper, tu dois mettre cela a jour dans ce fichier afin que la comprehension par n nouveau chat soit parfaite, donc toujours mettre ce fichier a jour en fonction de l'avancement actuel (apres ma confirmation biensur)**
-
-### **Interdictions Strictes**
-- ❌ Écrire du code sans consulter la documentation officielle
-- ❌ Utiliser des patterns obsolètes ou non-officiels
-- ❌ Solutions "qui marchent" mais non-conformes aux standards
-- ❌ Code basé uniquement sur la mémoire ou des exemples non-officiels
-- ❌ **CRITIQUE : Utiliser des packages NON compatibles avec Expo et Expo Go**
-
-### **RÈGLE FONDAMENTALE - COMPATIBILITÉ EXPO**
-
-**🚨 CONTRAINTE TECHNIQUE OBLIGATOIRE :**
-
-**TOUS les packages utilisés dans ce projet DOIVENT être compatibles avec Expo et Expo Go.**
-
-#### ✅ Packages autorisés
-- Packages officiels Expo (`expo-*`)
-- Packages listés dans [Expo SDK Documentation](https://docs.expo.dev/versions/latest/)
-- Packages supportés par Expo Go ([vérifier ici](https://docs.expo.dev/workflow/using-libraries/))
-
-#### ❌ Packages interdits
-- Packages nécessitant des modifications natives
-- Modules React Native non supportés par Expo Go
-- Packages avec code natif personnalisé
-
-#### 🔍 Processus de vérification avant ajout de package
-```bash
-# 1. Consulter https://reactnative.directory/
-# 2. Chercher le tag "✅ Expo Go"
-# 3. Utiliser : expo install nom-du-package
-# 4. Tester sur Expo Go avant validation
-# 5. Si non supporté → chercher alternative Expo-compatible
-```
-
-#### **Si absolument nécessaire d'utiliser package non-Expo :**
-1. **Chercher d'abord une alternative Expo-compatible**
-2. **Si impossible, basculer vers EAS Development Builds**
-3. **Documenter le changement et obtenir validation utilisateur**
-
+---
 
 ## Project Overview
 
-MAVECAM AquaCare is a comprehensive aquaculture management platform consisting of:
-- **Django REST API Backend** (`backend/`) - Aquaculture production tracking system
-- **React Native/Expo Frontend** (`frontend/`) - Mobile application for field data collection
+AquaCare is a bilingual (French/English) aquaculture management application for Cameroon, targeting fish farmers with offline-first mobile capabilities. Stack: Django REST Framework (backend) + React Native/Expo (frontend).
 
-> Branding: AquaCare est une application distincte. MAVECameroon est un partenaire, mais l'app et ses PDF/exports ne doivent pas mentionner « MAVECAM » comme propriétaire. Utiliser un branding neutre AquaCare.
+## Essential Commands
 
-This is a French-language application targeting aquaculture farmers in Cameroon, featuring offline-first architecture with multilingual support (French/English).
-
-
-## Common Development Commands
-
-### Backend (Django)
+### Backend (Docker)
 ```bash
+# Start full stack (PostgreSQL + Redis + Django + Celery + Nginx)
 cd backend
-
-# Activate virtual environment
-# Windows:
-venv\Scripts\activate
-# macOS/Linux:
-source venv/bin/activate
-
-# Install dependencies
-pip install -r requirements.txt
+docker-compose up -d
 
 # Database operations
-python manage.py makemigrations
-python manage.py migrate
+docker-compose exec api python manage.py migrate
+docker-compose exec api python manage.py makemigrations
 
-# ⚠️ OBLIGATOIRE : Charger les guides nutritionnels
-python manage.py load_nutritional_data
+# Load initial data (CRITICAL after migrations)
+docker-compose exec api python manage.py load_nutritional_data  # 8 MAVECAM guides
+docker-compose exec api python manage.py load_products           # 22 products catalog
+docker-compose exec api python manage.py setup_rbac              # Admin roles/permissions
 
-# Run development server
-python manage.py runserver
+# Create superuser from environment variables
+docker-compose exec api python manage.py create_superuser_from_env
 
-# Testing (pytest with coverage)
-pytest
-pytest --cov=apps --cov-report=html
+# Testing
+docker-compose exec api pytest                                   # Run all tests
+docker-compose exec api pytest apps/aquaculture/tests/          # Specific module
+docker-compose exec api pytest -k test_function_name            # Single test
+docker-compose exec api pytest --cov=apps --cov-report=html     # Coverage report
+
+# Logs and debugging
+docker-compose logs -f api          # Watch Django logs
+docker-compose logs -f celery_worker
+docker-compose exec api python manage.py shell
+docker-compose exec db psql -U aquacare_user -d aquacare_db
 ```
 
-### ⚠️ Données Nutritionnelles - Étape Critique
-
-**OBLIGATOIRE pour NutritionalGuidesScreen :**
-```bash
-python manage.py load_nutritional_data
-```
-
-Cette commande charge 8 guides MAVECAM depuis :
-`backend/apps/aquaculture/fixtures/nutritional_guides.json`
-
-**Sans cette étape, l'écran mobile affichera "0 sur 0 guides" !**
-
-### Frontend (React Native/Expo)
+### Frontend (Expo)
 ```bash
 cd frontend
+npm start                    # Start Expo Go (auto-detects backend IP)
+npm start -- --clear         # Clear cache (required after .env or config changes)
 
-# Install dependencies
-npm install
+# TypeScript validation (MANDATORY after any code changes)
+npx tsc --noEmit             # MUST show 0 errors before committing
 
-# Start development server
-npm start
-
-# ⚠️ Si modifications .env ou config environnement : Clear cache
-npm start -- --clear
+# Testing
+npm test                     # Run Jest tests
+npm run test:watch          # Watch mode
+npm run test:coverage       # Coverage report
 ```
 
-### **🔄 Configuration Environnement Automatique**
+## Critical Architecture Patterns
 
-**Le frontend détecte automatiquement l'environnement (comme Django) !**
+### Offline-First with UUID Primary Keys
+
+**ALL database models use UUID** (not auto-increment integers) to enable offline-first operation:
+
+```python
+# Django models
+id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+client_uuid = models.UUIDField(unique=True, null=True, blank=True)  # For deduplication
+```
+
+**Why:** Fish farmers in rural Cameroon often have intermittent 2G connectivity. UUID allows:
+- Mobile app generates UUIDs locally
+- Backend deduplicates via `client_uuid` (unique constraint)
+- If UUID exists → return existing record instead of error
+
+### Backend Architecture: Views → Services → Domain
+
+```
+HTTP Request
+    ↓
+views.py          # Thin layer: auth, serializer validation only
+    ↓
+services/         # Business logic, transactions, orchestration
+    ↓
+domain/           # Pure Python calculators/validators (no Django dependencies)
+    ↓
+models.py         # ORM persistence
+```
+
+**Pattern for new features:**
+1. Create service in `apps/{module}/services/`
+2. Add calculations to `domain/calculators.py` or `domain/validators.py`
+3. Views delegate to services (no business logic in views)
+4. Write domain tests (fast, no DB) + integration tests (with DB)
+
+### Frontend Architecture: Backend is Source of Truth
+
+Frontend NEVER performs definitive business calculations. Pattern:
+
+```typescript
+// 1. Optimistic UI (temporary estimation for UX)
+const estimatedValue = biomassKg * 1800;  // Show immediately
+
+// 2. Submit to backend
+const response = await api.post('/cycles/harvest/', data);
+
+// 3. Replace with backend calculations
+dispatch(updateCycleValue(response.data.final_value));  // Backend is truth
+```
+
+**Rule:** All FCR, biomass, ROI, feed calculations happen backend-only. Frontend displays results.
+
+## Bilingual Translations (MANDATORY)
+
+Application MUST be 100% bilingual French/English. **NEVER hardcode text in components.**
+
+```typescript
+// ❌ WRONG - Will fail review
+<Text>Statut juridique</Text>
+
+// ✅ CORRECT - Always use i18next
+<Text>{t('legalStatus')}</Text>
+```
+
+**Process for new strings:**
+1. Add key to `frontend/src/i18n/locales/fr.ts`
+2. Add same key to `frontend/src/i18n/locales/en.ts`
+3. Use `t('key')` in components
+
+**Verification:** Run `/i18n-validator` agent to check completeness.
+
+## Cameroon-Specific Constraints
+
+### Phone Numbers (Primary Identifier)
+- Format: `+237` + 9 digits (e.g., `+237652000000`)
+- Phone replaces email as login identifier (90% mobile penetration vs 30% email)
+- Validation: `accounts/validators.py` - `validate_cameroon_phone_number()`
+
+### Geography Constants
+- 10 regions, departments, arrondissements in `constants/cameroon.ts`
+- Timezone: `Africa/Douala` (UTC+1)
+
+### Business Constants
+```typescript
+// frontend/src/constants/aquaculture.ts
+FISH_PRICE_PER_KG = 1800;      // FCFA
+FEED_PRICE_PER_KG = 1250;      // FCFA
+FCR_BASELINE = 1.3;             // Without AquaCare
+FCR_TARGET = 0.7;               // With AquaCare optimization
+```
+
+## MAVECAM Design System
+
+**Colors (ONLY these - never invent new greens):**
+```typescript
+// frontend/src/constants/colors.ts
+GREEN_PRIMARY = '#059669';     // Buttons, headers, main actions
+GREEN_LIGHT = '#10b981';       // Hover states, accents
+GREEN_DARK = '#047857';        // Emphasis, active borders
+CREAM = '#f8fafc';             // App background
+ERROR = '#dc2626';             // Errors, high mortality alerts
+WARNING = '#f59e0b';           // Warnings, FCR > 2.0
+```
+
+**Typography & Spacing:**
+- Base spacing: multiples of 4px (4, 8, 12, 16, 20, 24, 32)
+- Border radius: 12px (cards/buttons), 8px (inputs)
+- Touch targets: minimum 44x44px (Apple HIG)
+
+## Expo Go Compatibility (CRITICAL)
+
+**App uses Expo Go** (not custom dev build). This means:
+- ❌ **NO packages with native code** (react-native-camera, react-native-maps, etc.)
+- ✅ **ONLY `expo-*` packages or pure JavaScript packages**
+
+**Before installing ANY package:**
+1. Check https://reactnative.directory/ for "Expo Go" tag
+2. Use `npx expo install {package}` (never `npm install` for RN packages)
+3. Or run `/check-package {package-name}` command
+
+## TypeScript Requirements
+
+**Zero tolerance for TypeScript errors.** After ANY code change:
+
+```bash
+cd frontend
+npx tsc --noEmit   # MUST show 0 errors
+```
+
+**Defensive coding for optionals:**
+```typescript
+// ❌ WRONG - crashes if undefined
+if (farmProfile.total_area_m2 > 0)
+
+// ✅ CORRECT - safe
+if ((farmProfile.total_area_m2 || 0) > 0)
+```
+
+## Testing Requirements
+
+### Backend (pytest)
+```bash
+# All tests require @pytest.mark.django_db decorator
+@pytest.mark.django_db
+def test_create_cycle():
+    user = User.objects.create_user(phone_number="+237652000000", password="test123")
+    # ...
+```
+
+**Coverage:** Minimum 50% required. Current config in `pytest.ini`:
+- Parallel execution: `-n auto`
+- Coverage reports: `--cov=apps --cov-report=term-missing`
+
+**Common gotchas:**
+- Read `models.py` BEFORE writing tests (field names must match exactly)
+- Include ALL required fields (check `null=False` in model)
+- Use exact enum values (e.g., `species="tilapia"` not `"fish"`)
+
+### Frontend (Jest)
+```bash
+npm test                    # All tests
+npm run test:coverage       # With coverage
+```
+
+## Key Django Models
+
+**Core entities:**
+- `User` (accounts): Phone-based auth, JWT tokens
+- `FarmProfile` (accounts): Farm details, location, legal status
+- `ProductionCycle` (aquaculture): 60-180 day cycles, central entity
+- `CycleLog` (aquaculture): Daily logs with `client_uuid` for offline
+- `FeedingPlan` (aquaculture): Auto-generated weekly feeding schedules
+- `NutritionalGuide` (aquaculture): 8 MAVECAM guides (fixtures)
+- `Product` (commerce): Feed catalog (22 products from fixtures)
+- `Order` (commerce): Cart + order management
+
+**Sync metadata fields:**
+```python
+created_offline = models.BooleanField(default=False)
+synced_at = models.DateTimeField(null=True, blank=True)
+client_uuid = models.UUIDField(unique=True, null=True, blank=True)
+```
+
+## Redux State Management
+
+**5 main slices:**
+```
+frontend/src/features/{domain}/store/{domain}Slice.ts
+
+1. auth         - Login, registration, JWT management
+2. aquaculture  - Cycles, logs, feeding plans, stats
+3. commerce     - Products, cart, orders
+4. notifications - Alerts, filtering
+5. chat         - Support messaging
+```
+
+**Async operations use createAsyncThunk:**
+```typescript
+export const fetchCycles = createAsyncThunk(
+  'aquaculture/fetchCycles',
+  async (_, { rejectWithValue }) => {
+    const response = await api.get('/cycles/');
+    return response.data;
+  }
+);
+```
+
+## Environment Auto-Detection
 
 ```typescript
 // frontend/src/config/environment.ts
 if (__DEV__) {
-  // Développement → Backend Docker local
-  API_URL = 'http://172.20.10.2:8000/api'
+  // Expo Go → http://{local-ip}:8000/api (auto-detected)
 } else {
-  // Production → API en ligne
-  API_URL = 'http://77.237.241.223/api'
+  // Production → http://77.237.241.223/api
 }
 ```
 
-**Workflow complet** :
-- **DEV** : `npm start` → Se connecte automatiquement au Docker local
-- **PROD** : `eas build` → Se connecte automatiquement à l'API en ligne
-- **Aucune modification manuelle nécessaire !**
+**No manual configuration needed.** Backend IP auto-detected in development.
 
-**Documentation complète** : Voir [WORKFLOW_DEV_PROD.md](../WORKFLOW_DEV_PROD.md)
+## Navigation Types
 
-## Core Architecture
+```typescript
+// frontend/src/navigation/MainNavigator.tsx
+export type RootStackParamList = {
+  MainTabs: undefined;
+  DailyLog: undefined;
+  ProductDetail: { productId: string };  // With params
+  // ...
+};
 
-### Backend Structure
-- **Custom User Model**: Phone-based authentication (`accounts.User`) with Cameroon-specific validation
-- **Farm Profile System**: One-to-one relationship with users for aquaculture facility management
-- **Production Cycles**: Central entity tracking complete fish farming cycles (60-180 days)
-- **Offline-First Design**: UUID-based models with sync metadata for mobile offline support
-- **Multilingual**: Django i18n with French/English support, Cameroon timezone (Africa/Douala)
-
-### Key Backend Models
-- `accounts.User` - Custom user model with phone authentication
-- `accounts.FarmProfile` - Farm facility information
-- `aquaculture.ProductionCycle` - Core aquaculture cycle tracking
-- `aquaculture.CycleLog` - Daily production logs with offline sync support
-- `aquaculture.FeedingPlan` - Automated feeding recommendations
-- `aquaculture.SanitaryLog` - Health monitoring with photo support
-
-### Frontend Architecture
-- **Redux Toolkit**: State management with auth slice
-- **React Navigation 6**: Stack and tab navigation
-- **Expo SecureStore**: Token storage for offline authentication
-- **i18next**: Internationalization with French/English locales
-- **Axios**: API client with automatic token refresh
-- **TypeScript**: Full type coverage
-
-### API Authentication
-- JWT-based with 15-minute access tokens and 7-day refresh tokens
-- Automatic token rotation and blacklisting for security
-- Phone number as primary identifier (+237 Cameroon format)
-
-### Offline-First Features
-- Client-generated UUIDs for offline data creation
-- Sync metadata tracking (`created_offline`, `synced_at`, `client_uuid`)
-- Automatic deduplication on sync
-- SecureStore for persistent authentication
-
-
-## 🎨 CHARTE GRAPHIQUE MAVECAM
-
-### **Couleurs Officielles**
-```scss
-// Couleurs Principales MAVECAM
-$mavecam-green-primary: #059669;     // Vert MAVECAM principal
-$mavecam-green-light: #10b981;       // Vert clair pour accents
-$mavecam-green-dark: #047857;        // Vert foncé pour headers
-$mavecam-white: #ffffff;             // Blanc pur
-$mavecam-cream: #f8fafc;             // Blanc cassé pour backgrounds
-$mavecam-error: #dc2626;             // Rouge pour erreurs
-$mavecam-gray-light: #64748b;        // Texte secondaire
-$mavecam-gray-dark: #1e293b;         // Texte principal
+// Usage in screens
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
+type Props = NativeStackScreenProps<RootStackParamList, 'ProductDetail'>;
 ```
 
-### **Application des Couleurs**
-- **Headers/Navigation** : Vert MAVECAM primary
-- **Boutons principaux** : Vert MAVECAM primary
-- **Backgrounds** : Crème MAVECAM
-- **Cartes/Sections** : Blanc avec ombres subtiles
-- **Interface optimisée** pour utilisateurs peu alphabétisés (icônes + texte)
+## Docker Stack (Development)
 
-## Development Guidelines
+Services in `docker-compose.yml`:
+- `db` - PostgreSQL 15 (port 5432)
+- `api` - Django + Gunicorn (port 8000)
+- `redis` - Cache + Celery broker (port 6379)
+- `celery_worker` - Async task processing
+- `celery_beat` - Scheduled tasks (cron-like)
+- `nginx` - Static/media files + reverse proxy (port 80)
 
-### Database Access
-- Primary database: SQLite for development (backend/db.sqlite3)
-- Use Django ORM with proper migrations for schema changes
-- Custom managers for business logic (UserManager in accounts)
+## Common Gotchas (DO NOT REPEAT)
 
-### Testing Approach
-- Backend: pytest with Django integration (pytest-django)
-- Test configuration in `backend/pytest.ini`
-- Coverage requirements: 80% minimum
-- Test structure: `backend/tests/unit/` and `backend/tests/fixtures/`
+1. **Missing fixtures after migration** → Run `load_nutritional_data` + `load_products`
+2. **`git status -uall`** → NEVER use `-uall` flag (crashes on large repos)
+3. **Hardcoded text** → Always use `t('key')` translations
+4. **Console.log in production** → Remove all debug logs before commit
+5. **Native packages in Expo Go** → Will crash, check compatibility first
+6. **TypeScript errors ignored** → Must run `npx tsc --noEmit` and fix ALL errors
+7. **Decimal for money** → Use `models.DecimalField` for FCFA amounts (not Float)
 
+## Security Considerations
 
-### Localization
-- Backend: Django i18n with locale files in `backend/locale/`
-- Frontend: i18next configuration in `frontend/src/i18n/`
-- Primary language: French (Cameroon target market)
+- JWT tokens: Access (15min) + Refresh (7 days)
+- Stored in `expo-secure-store` (encrypted storage)
+- Axios interceptor auto-refreshes on 401
+- NEVER commit `.env` files
+- Phone validation prevents injection attacks
+- All API endpoints require authentication (except login/register)
 
+## CI/CD Pipeline
 
-## **PROCESSUS DE VÉRIFICATION AUTOMATIQUE**
+**GitHub Actions workflows:**
+```
+.github/workflows/
+├── pull-request-tests.yml  # Run pytest on PR to main
+└── deploy.yml              # Build + Push to ghcr.io + Deploy on push to main
+```
 
-### **RÈGLE CRITIQUE - VÉRIFICATION POST-MODIFICATION**
-**OBLIGATOIRE : Après chaque modification de code, effectuer une vérification complète pour éviter les erreurs TypeScript et les bugs de runtime.**
+**Production:**
+- API: http://77.237.241.223/api
+- Registry: ghcr.io/{owner}/aquacare-api
+- Nginx serves `/static/` and `/media/`, proxies to Django
 
-### **✅ Processus de Vérification Systématique**
+## Custom Commands & Skills
 
-#### **1. APRÈS CHAQUE EDIT/MULTIEDIT**
+**Available commands** (see `.claude/commands/README.md` for details):
+- `/check-package <name>` - Verify Expo Go compatibility before installing
+- `/create-backend-feature` - Scaffold new Django feature with tests
+- `/create-frontend-feature` - Scaffold new React Native screen with Redux
+- `/fix-bug` - Systematic bug diagnosis and fixing workflow
+- `/review-pr` - Code review following AquaCare standards
+- `/db-debug` - Query PostgreSQL database for debugging
+- `/update-changelog` - Document changes in PROJECT_CONTEXT.md
+- `/pre-release` - Comprehensive validation before production deploy
+
+**Auto-applied skills:**
+- `bilingual-strings` - Enforces i18n translations for all UI text
+- `commit-conventions` - AquaCare commit message format
+- `code-review-aquacare` - Code review standards
+- `expo-go-check` - Package compatibility verification
+- `offline-first-models` - UUID + sync metadata patterns
+
+## File Structure
+
+```
+AquaCare/
+├── backend/
+│   ├── apps/
+│   │   ├── accounts/          # Auth, users, farm profiles
+│   │   ├── aquaculture/       # Cycles, logs, feeding (core business logic)
+│   │   ├── commerce/          # Products, orders, cart
+│   │   ├── notifications/     # Alerts system
+│   │   └── chat/              # Support messaging
+│   ├── mavecam_api/
+│   │   ├── settings/          # base.py, development.py, production.py, test.py
+│   │   └── urls.py
+│   ├── docker-compose.yml     # Development stack
+│   ├── pytest.ini             # Test configuration
+│   └── requirements.txt
+│
+└── frontend/
+    ├── src/
+    │   ├── features/          # Feature-sliced design
+    │   ├── navigation/        # React Navigation
+    │   ├── store/             # Redux Toolkit
+    │   ├── services/          # API clients (axios)
+    │   ├── i18n/locales/      # fr.ts, en.ts
+    │   ├── constants/         # colors.ts, aquaculture.ts, cameroon.ts
+    │   └── types/             # TypeScript interfaces
+    ├── package.json
+    ├── tsconfig.json
+    └── app.json               # Expo configuration
+```
+
+## Post-Migration Checklist
+
+After running migrations, ALWAYS execute:
 ```bash
-1. ✅ Read automatique du fichier modifié
-2. ✅ Vérification des types TypeScript dans le code
-3. ✅ Identification proactive des erreurs potentielles
-4. ✅ Correction immédiate si problème détecté
-5. ✅ Confirmation par nouvelle lecture
-6. ✅ VÉRIFICATION OBLIGATOIRE DE LA TRADUCTION (voir section dédiée)
-7. ✅ SUPPRESSION de tous les console.log de débogage ajoutés
+docker-compose exec api python manage.py migrate
+docker-compose exec api python manage.py load_nutritional_data
+docker-compose exec api python manage.py load_products
+docker-compose exec api python manage.py setup_rbac
 ```
 
-#### **🧹 RÈGLE CRITIQUE - NETTOYAGE DES LOGS DE DÉBOGAGE**
-**OBLIGATION ABSOLUE : Supprimer tous les console.log ajoutés pour le débogage**
+## Branding Note
 
-**❌ PROBLÈMES DES LOGS DE DÉBOGAGE :**
-- Pollution de la console en production
-- Performance dégradée sur mobile
-- Informations sensibles exposées
-- Code non-professionnel
-
-**✅ APRÈS VALIDATION DU CODE :**
-1. **Identifier tous les console.log ajoutés** pour débogage
-2. **Les supprimer systématiquement** avant finalisation
-3. **Garder uniquement** les logs métier essentiels
-4. **Vérifier** qu'aucun log temporaire ne reste
-
-**EXCEPTION :** Logs métier permanents (erreurs, analytics) sont autorisés.
-
-#### **🌍 VÉRIFICATION TRADUCTION OBLIGATOIRE**
-**RÈGLE ABSOLUE : Notre application doit être PARFAITEMENT bilingue (Français/Anglais)**
-
-**✅ APRÈS CHAQUE NOUVELLE IMPLÉMENTATION :**
-1. **Identifier tous les textes affichés** à l'utilisateur
-2. **Vérifier que TOUS utilisent t('key')** et non du texte hardcodé
-3. **Ajouter les traductions manquantes** dans `frontend/src/i18n/locales/fr.ts` ET `en.ts`
-4. **Tester le changement de langue** pour s'assurer que TOUT se traduit
-5. **Aucun texte français/anglais hardcodé** ne doit rester dans les composants
-
-**❌ ERREURS À ÉVITER :**
-```typescript
-// ❌ INTERDIT - Texte hardcodé
-<Text>Statut juridique *</Text>
-
-// ✅ OBLIGATOIRE - Traduction
-<Text>{t('legalStatus')} *</Text>
-```
-
-**FICHIERS DE TRADUCTION :**
-- `frontend/src/i18n/locales/fr.ts` : Traductions françaises
-- `frontend/src/i18n/locales/en.ts` : Traductions anglaises
-
-**OBJECTIF :** Utilisateur camerounais ET anglophone doivent avoir exactement la même expérience.
-
-#### **2. TYPES D'ERREURS À SURVEILLER**
-- **Propriétés optionnelles** : `object.prop` → `(object.prop || defaultValue)`
-- **Types undefined** : Vérifier tous les `?` dans les interfaces
-- **Imports manquants** : S'assurer que tous les imports sont présents
-- **Erreurs de syntax** : Parenthèses, accolades, virgules
-- **Props React** : Types corrects et propriétés requises
-
-#### **3. COMMANDES DE VÉRIFICATION DISPONIBLES**
-```bash
-# Frontend - Vérification TypeScript
-cd frontend
-npx tsc --noEmit --pretty
-
-# Backend - Vérification Python
-cd backend
-python -m py_compile apps/module/file.py
-
-# Tests globaux
-npm test
-pytest
-```
-
-#### **4. CORRECTIONS TYPES COURANTES**
-```typescript
-// ❌ PROBLÉMATIQUE
-farmProfile.total_area_m2 > 0
-
-// ✅ SÉCURISÉE  
-(farmProfile.total_area_m2 || 0) > 0
-
-// ❌ PROBLÉMATIQUE
-user.first_name + " " + user.last_name
-
-// ✅ SÉCURISÉE
-`${user.first_name || ''} ${user.last_name || ''}`.trim()
-```
-
-### **🎯 ENGAGEMENT QUALITÉ**
-- **Zéro erreur TypeScript** tolérée après modification
-- **Lecture systématique** de chaque fichier édité
-- **Correction proactive** avant passage à la tâche suivante
-- **Vérification des types** optionnels et undefined
-
-## **📁 CONFIGURATION PRODUCTION - FICHIERS STATIQUES**
-
-### **🌐 Architecture Production Prévue**
-
-**DÉCISION TECHNIQUE :** Utilisation de **Nginx** pour servir les fichiers statiques et media en production.
-
-#### **📸 Gestion des Photos (Media Files)**
-- **Développement** : Django dev server (`settings.DEBUG = True`)
-- **Production** : Nginx sert directement `/media/` sans passer par Django
-- **Structure** :
-  ```
-  /var/www/mavecam/
-  ├── api/              # Code Django
-  ├── media/            # Fichiers uploadés (photos journal sanitaire, etc.)
-  │   └── sanitary_logs/
-  │       └── 2024/12/  # Photos par année/mois
-  └── static/           # CSS, JS, assets Django
-  ```
-
-#### **🔧 Configuration Nginx Prévue**
-```nginx
-server {
-    listen 80;
-    server_name api.mavecam.com;
-
-    # Servir les fichiers media directement (photos, uploads)
-    location /media/ {
-        alias /var/www/mavecam/media/;
-        expires 1y;
-        add_header Cache-Control "public, immutable";
-        access_log off;
-    }
-
-    # Servir les fichiers static directement (CSS, JS)
-    location /static/ {
-        alias /var/www/mavecam/static/;
-        expires 1y;
-        add_header Cache-Control "public, immutable";
-        access_log off;
-    }
-
-    # Proxy vers Django pour API uniquement
-    location / {
-        proxy_pass http://django:8000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-    }
-}
-```
-
-#### **⚙️ Settings Django Production**
-```python
-# settings/production.py
-STATIC_URL = '/static/'
-STATIC_ROOT = '/var/www/mavecam/static/'
-
-MEDIA_URL = '/media/'
-MEDIA_ROOT = '/var/www/mavecam/media/'
-
-# Ne pas servir les fichiers via Django en production
-# (Les URLs static() sont uniquement pour DEBUG=True)
-```
-
-#### **📊 Avantages Nginx vs Django**
-- **Performance** : Nginx sert fichiers 10x+ rapide que Django
-- **Ressources** : Django libéré pour traiter API uniquement
-- **Cache** : Headers de cache optimisés pour photos
-- **Sécurité** : Pas d'exécution Python pour fichiers statiques
-
-#### **🚀 Migration Prévue**
-1. **Phase Actuelle** : Django dev server (OK pour développement)
-2. **Phase Production** : Docker + Nginx + Volume persistant
-3. **Phase Scale** : Optionnel CDN (AWS CloudFront) si besoin global
-
-**Note** : Cette configuration est optimale pour l'infrastructure MAVECAM et compatible avec le contexte camerounais.
-
-## **📈 ÉTAT D'AVANCEMENT ACTUEL (Janvier 2026)**
-
-### **🎯 Fonctionnalités Complètement Implémentées**
-
-#### **🔐 Module Authentification & Profils (100%)**
-- ✅ Système d'authentification JWT complet
-- ✅ Gestion des profils utilisateur/ferme
-- ✅ Support multilingue (FR/EN) avec i18next
-- ✅ Configuration géographique Cameroun (régions/départements)
-- ✅ Stockage sécurisé offline (Expo SecureStore)
-
-#### **🐟 Module Aquaculture Core (100%)**
-- ✅ **Dashboard intelligent** avec métriques temps réel
-- ✅ **Gestion complète des cycles** de production (60-180 jours)
-- ✅ **Saisie quotidienne** optimisée (mortalité, croissance, paramètres eau)
-- ✅ **Journal sanitaire** avec photos et géolocalisation
-- ✅ **Actions de récolte** avec calculs FCR/survie/ROI
-- ✅ **Historique cycles** avec comparaisons et tendances
-- ✅ **Notifications système** complètes (filtrage, marquage, suppression)
-- ✅ **Synchronisation offline** robuste avec déduplication UUID
-- ✅ **Calculs automatiques** sophistiqués (biomasse, densité, projections)
-
-#### **🎨 Qualité Technique (100%)**
-- ✅ **TypeScript** intégral avec types stricts
-- ✅ **Redux Toolkit** pour état global optimisé
-- ✅ **React Navigation 6** fluide
-- ✅ **Charte graphique MAVECAM** respectée (#059669)
-- ✅ **Gestion d'erreurs** défensive (null/undefined)
-- ✅ **Tests unitaires** backend (pytest + couverture)
-- ✅ **Architecture scalable** frontend/backend
-
-### **✅ Fonctionnalités Complètement Finalisées (Septembre 2025)**
-
-#### **🍽️ FeedingPlanScreen - ✅ TERMINÉ**
-**Objectif :** Génération automatique de plans d'alimentation optimisés
-- ✅ Calcul automatique des rations selon poids/espèce/température
-- ✅ Calendriers d'alimentation personnalisés par cycle
-- ✅ Optimisation FCR (objectif : passer de 3.5 à 1.8)
-- ✅ Estimation coûts alimentaires et ROI
-- ✅ Interface intuitive avec cycle selection
-
-#### **📊 StatisticsScreen - ✅ TERMINÉ**
-**Objectif :** Analytics avancées et aide à la décision
-- ✅ Interface complète pour cycles récoltés
-- ✅ KPIs aquaculture (FCR, survie, croissance, rentabilité)
-- ✅ Filtrage par espèce et période
-- ✅ Métriques détaillées par cycle avec comparaisons
-- ✅ Message informatif pour encourager utilisation
-
-#### **📖 NutritionalGuidesScreen - ✅ TERMINÉ**
-**Objectif :** Accès aux guides nutritionnels MAVECAM
-- ✅ Base de données nutritionnelle locale (8 guides : 4 Tilapia + 4 Clarias)
-- ✅ Fiches techniques MAVECAM intégrées avec données précises
-- ✅ Recherche par espèce et texte libre
-- ✅ Consultation offline pour zones rurales
-- ✅ Interface expansion/contraction des détails
-- ✅ Données chargées depuis fixtures backend
-
-### **📈 Impact Métier Attendu**
-- **Réduction mortalité** : 40% → 15% (économie 25% pertes)
-- **Optimisation FCR** : 3.5 → 1.8 (économie 50% aliments)
-- **Augmentation survie** : 60% → 85% (+40% revenus)
-- **Support technique** : Proactif vs réactif
-- **Certification MAVECAM** : Accélérée par données qualité
-
-### **🎯 Module Aquaculture - 100% COMPLET**
-
-**✅ TOUTES les fonctionnalités du cahier des charges sections 5.1-5.2 sont implémentées :**
-
-1. ✅ **Tableau de bord** - Saisie manuelle, affichage automatique, historique
-2. ✅ **Planificateur d'alimentation** - Suggestions, notifications, guides nutritionnels
-3. ✅ **Journal sanitaire** - Événements, photos, alertes
-4. ✅ **Gestion cycles** - Création, suivi, récolte, historique
-5. ✅ **Notifications** - Système complet avec filtrage et actions
-6. ✅ **Synchronisation offline** - Architecture robuste avec déduplication
-
-### **🛒 Module Commerce - 100% COMPLET**
-
-**✅ TOUTES les fonctionnalités du module Commerce sont implémentées :**
-
-#### **Screens Frontend (6 écrans - 4,295 lignes)**
-
-1. ✅ **ProductCatalogScreen** (592L) - Catalogue 22 produits MAVECAM
-   - Filtres espèce/marque/recherche
-   - Ajout rapide panier
-   - Pull-to-refresh
-
-2. ✅ **ProductDetailScreen** (607L) - Détails produit complets
-   - Specs nutritionnelles (protéines, lipides)
-   - Sélection quantité
-   - Produits similaires
-   - Navigation fluide
-
-3. ✅ **CartScreen** (759L) - Panier intelligent
-   - Gestion quantités (ajout/suppression)
-   - Preview frais livraison temps réel (API)
-   - Livraison gratuite Douala >= 20 sacs
-   - Choix retrait magasin (Ndokoti/Ndogpasi)
-   - Validation commande offline-first (UUID)
-
-4. ✅ **OrdersHistoryScreen** (694L) - Historique commandes
-   - Statistiques globales (total dépensé, nb commandes)
-   - Détails expandables (items, adresse, montants)
-   - Pull-to-refresh
-
-5. ✅ **FeedingSuggestionsScreen** (820L) - ⭐ FEATURE PHARE MAVECAM
-   - Analyse automatique cycles actifs (30 jours)
-   - Recommandations multi-granulométrie
-   - Projection changements taille aliments
-   - Score confiance qualité données
-   - Buffer sécurité +7 jours
-   - Ajout panier par produit ou cycle complet
-
-6. ✅ **CycleSimulatorScreen** (655L) - Outil prédictif ROI
-   - Simulation cycle complet (60-180 jours)
-   - Calcul croissance jour par jour (backend)
-   - Estimation FCR vs cible MAVECAM
-   - Projection ROI (coûts vs revenus)
-   - Phases alimentation automatiques
-
-#### **Architecture Backend Existante**
-
-- ✅ **Models Django** : Product, Order, OrderItem
-- ✅ **API Endpoints** (10) : CRUD produits, commandes, suggestions, simulation
-- ✅ **Algorithmes** : Recommandations granulométrie, calculs FCR, projections ROI
-- ✅ **Règles métier** : Frais livraison MAVECAM, seuils gratuits
-
-#### **Architecture Frontend**
-
-- ✅ **Types TypeScript** : commerce.ts (400L) - Types stricts complets
-- ✅ **Redux Slice** : commerceSlice.ts (500L) - 10 thunks async + 9 actions sync
-- ✅ **Services API** : commerceApi.ts (300L) - 10 endpoints documentés
-- ✅ **Domain Layer** : constants + estimators (Clean Architecture)
-- ✅ **Traductions** : FR/EN complètes (+135 clés chacune)
-
-#### **Fonctionnalités Clés**
-
-**Commerce :**
-- ✅ Catalogue 22 produits (Aller Aqua + DIBAQ)
-- ✅ Filtres avancés (espèce, marque, phase, recherche)
-- ✅ Panier temps réel avec preview frais
-- ✅ Commandes offline-first (UUID déduplication)
-- ✅ Historique avec statistiques
-
-**Intelligence MAVECAM :**
-- ✅ Suggestions alimentation adaptatives
-- ✅ Simulation ROI cycle complet
-- ✅ Recommandations multi-granulométrie
-- ✅ Projections croissance/FCR
-- ✅ Score confiance données
-
-**UX Optimisée :**
-- ✅ Charte MAVECAM (#059669) respectée
-- ✅ Bilingue FR/EN parfait
-- ✅ États vide/loading/erreur gérés
-- ✅ Pull-to-refresh partout
-- ✅ Navigation fluide
-
-#### **Qualité Code**
-- ✅ 0 erreur TypeScript
-- ✅ Clean Architecture stricte
-- ✅ Gestion défensive null/undefined
-- ✅ Documentation JSDoc exhaustive
-- ✅ Aucun console.log temporaire
-
-#### **Navigation Intégrée (100%)**
-- ✅ **RootStackParamList** : 6 routes Commerce ajoutées avec types stricts
-  - ProductCatalog (catalogue filtrable)
-  - ProductDetail (détails + params `productId`)
-  - Cart (panier intelligent)
-  - OrdersHistory (historique + stats)
-  - FeedingSuggestions (recommandations IA)
-  - CycleSimulator (prédiction ROI)
-- ✅ **MainNavigator.tsx** : Tous les screens Commerce enregistrés
-- ✅ **TypeScript Navigation** : Typage strict avec `StackNavigationProp`
-- ✅ **Compilation** : 0 erreur TypeScript vérifiée
-- ✅ **Exports centralisés** : `@/screens/commerce/index.ts`
-
-**Navigation fluide entre :**
-- Dashboard → ProductCatalog → ProductDetail → Cart → OrdersHistory
-- Dashboard → FeedingSuggestions (analyse cycles actifs)
-- Dashboard → CycleSimulator (prédiction nouveau cycle)
-
-### **🎯 Stratégie Hormozi - Engagement Utilisateur (100% COMPLET)**
-
-**Principe Alex Hormozi :** Chaque effort de l'utilisateur = récompense visible en FCFA
-
-#### **Module 1 : Onboarding Hormozi - ✅ TERMINÉ**
-**Fichiers :** `frontend/src/features/onboarding/screens/`
-
-5 écrans d'activation avec calculs de valeur :
-1. ✅ **WelcomeScreen** - Introduction avec promesse de valeur
-2. ✅ **ProblemScreen** - Problèmes résolus par AquaCare
-3. ✅ **SolutionScreen** - Solutions avec économies chiffrées
-4. ✅ **ValueScreen** - Récapitulatif valeur totale en FCFA
-5. ✅ **ActionScreen** - CTA vers création compte
-
-**Impact :** Conversion onboarding +40% attendue
-
-#### **Module 2 : Dashboard Hormozi - ✅ TERMINÉ**
-**Fichier :** `frontend/src/features/main/screens/DashboardScreen.tsx`
-
-Métriques financières temps réel :
-- ✅ **Économies aliments** - Calcul FCR vs baseline (1800 FCFA/kg)
-- ✅ **Valeur stock** - Biomasse × prix marché (1800 FCFA/kg)
-- ✅ **Taux survie** - Pourcentage animé
-- ✅ **Nombre bassins** - Compteur actif
-
-**Fichier calculs :** `frontend/src/constants/aquaculture.ts`
-```typescript
-calculateStockValue(biomassKg) // → FCFA
-calculateFeedSavings(biomassKg, fcr) // → FCFA économisés
-calculateEstimatedBiomass(fishCount, avgWeightGrams) // → kg
-```
-
-#### **Module 3 : Saisie Quotidienne Hormozi - ✅ TERMINÉ**
-**Fichiers :**
-- `frontend/src/features/aquaculture/screens/DailyLogScreen.tsx`
-- `frontend/src/components/modals/SuccessRewardModal.tsx`
-
-Modal de récompense après saisie :
-- ✅ **Poids moyen** calculé depuis échantillon
-- ✅ **Poissons restants** (stock - mortalité)
-- ✅ **Biomasse estimée** en kg
-- ✅ **Valeur actuelle du cycle** en FCFA
-
-**Formules :**
-```typescript
-averageWeight = sampleTotalWeight / sampleCount
-remainingFish = cycle.current_count - mortality
-biomass = calculateEstimatedBiomass(remainingFish, averageWeight)
-stockValue = calculateStockValue(biomass)
-```
-
-**Traductions ajoutées :** `fr.ts` et `en.ts`
-- `dailyLogSuccess`, `estimationBasedOnEntry`, `averageWeightPerFish`
-- `fishRemaining`, `estimatedBiomass`, `currentValue`
-- `keepTracking`, `greatJob`, `perFish`
-
-### **🚀 Prochaines Étapes Projet Global**
-1. ✅ ~~**Navigation** - Setup CommerceStack dans MainNavigator~~ **TERMINÉ**
-2. ✅ ~~**Stratégie Hormozi** - Modules 1-3 implémentés~~ **TERMINÉ**
-3. **Tests utilisateur** avec aquaculteurs pilotes MAVECAM
-4. **Module Support (5.4)** - Chat technicien et système tickets
-5. **Optimisations** basées sur feedback terrain
+AquaCare is independent of MAVECAM. Do not use "MAVECAM" as owner/author in exports, PDFs, or UI. Use neutral "AquaCare" branding.

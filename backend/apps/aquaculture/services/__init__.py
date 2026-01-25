@@ -11,7 +11,7 @@ Architecture :
 - Gestion transactionnelle explicite
 
 Utilisation dans views.py :
-    from apps.aquaculture.services import ProductionCycleService
+    from aquaculture.services import ProductionCycleService
 
     @action(detail=True, methods=['post'])
     def harvest(self, request, pk=None):

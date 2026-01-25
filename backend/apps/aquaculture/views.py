@@ -33,9 +33,9 @@ from .models import (
     NutritionalGuide
 )
 # Notifications: utiliser le module central
-from apps.notifications.models import Notification
-from apps.notifications.services import NotificationService
-from apps.notifications.serializers import NotificationSerializer
+from notifications.models import Notification
+from notifications.services import NotificationService
+from notifications.serializers import NotificationSerializer
 
 from .serializers import (
     ProductionCycleSerializer, CycleLogSerializer, CycleLogSyncSerializer,

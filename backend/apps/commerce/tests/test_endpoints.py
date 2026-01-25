@@ -9,7 +9,7 @@ from rest_framework import status
 from django.contrib.auth import get_user_model
 
 from accounts.models import FarmProfile
-from apps.commerce.models import Product, Order
+from commerce.models import Product, Order
 
 User = get_user_model()
 
@@ -496,7 +496,7 @@ class TestOrderEndpoints:
 
     def test_create_order_validation_missing_items(self):
         """Test validation : commande sans produits lève InvalidOrderError."""
-        from apps.commerce.domain.exceptions import InvalidOrderError
+        from commerce.domain.exceptions import InvalidOrderError
 
         payload = {
             'delivery_method': 'pickup',

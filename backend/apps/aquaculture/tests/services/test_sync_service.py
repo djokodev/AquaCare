@@ -7,8 +7,8 @@ import pytest
 from datetime import date, timedelta
 from django.utils import timezone
 
-from apps.aquaculture.services.sync_service import SyncService
-from apps.aquaculture.models import ProductionCycle, CycleLog
+from aquaculture.services.sync_service import SyncService
+from aquaculture.models import ProductionCycle, CycleLog
 from tests.fixtures.factories import ProductionCycleFactory, UserFactory
 
 
@@ -47,7 +47,7 @@ class TestSyncServicePullData:
         )
 
         # Créer logs (pas offline pour être dans server_updates)
-        from apps.aquaculture.models import CycleLog
+        from aquaculture.models import CycleLog
         CycleLog.objects.create(
             cycle=cycle,
             log_date=date.today() - timedelta(days=5),
@@ -150,7 +150,7 @@ class TestSyncServiceConflictResolution:
 
         # Créer log serveur
         import uuid
-        from apps.aquaculture.services.log_service import CycleLogService
+        from aquaculture.services.log_service import CycleLogService
 
         conflict_uuid = str(uuid.uuid4())
         server_log = CycleLogService.create_log(cycle, {
@@ -189,7 +189,7 @@ class TestSyncServiceHealthCheck:
         cycle = ProductionCycleFactory(farm_profile=farm)
 
         # Créer logs offline
-        from apps.aquaculture.models import CycleLog
+        from aquaculture.models import CycleLog
         CycleLog.objects.create(
             cycle=cycle,
             log_date=date.today(),

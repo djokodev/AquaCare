@@ -11,9 +11,9 @@ from decimal import Decimal
 from django.utils import timezone
 from django.core.files.uploadedfile import SimpleUploadedFile
 
-from apps.chat.models import Conversation, Message
-from apps.chat.services import ConversationService, MessageService, AutoResponseService
-from apps.chat.domain import (
+from chat.models import Conversation, Message
+from chat.services import ConversationService, MessageService, AutoResponseService
+from chat.domain import (
     InvalidMessageContent,
     MediaTooLarge,
     InvalidMediaFormat,

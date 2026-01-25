@@ -21,7 +21,7 @@ from ..models import SanitaryLog, ProductionCycle
 # Notification model moved to apps/notifications/models.py
 # Will be migrated to use NotificationService in Phase 1B
 from .base import BaseService
-from apps.notifications.services import NotificationService
+from notifications.services import NotificationService
 from ..domain.exceptions import (
     InvalidSanitaryDataException,
     SanitaryLogNotFoundException,

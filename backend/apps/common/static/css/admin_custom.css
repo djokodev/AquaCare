@@ -1,0 +1,724 @@
+/**
+ * AquaCare Admin - Custom Styles
+ *
+ * Architecture:
+ * 1. Variables (couleurs, espacements)
+ * 2. Base (reset, typographie)
+ * 3. Layout (navbar, sidebar, content)
+ * 4. Components (boutons, badges, cards, formulaires)
+ * 5. Pages specifiques (dashboard, listes, formulaires)
+ * 6. Utilitaires
+ */
+
+/* =============================================================================
+   1. VARIABLES CSS - Theme AquaCare
+   ============================================================================= */
+
+:root {
+    /* Couleurs principales AquaCare */
+    --aqua-primary: #059669;
+    --aqua-primary-hover: #047857;
+    --aqua-primary-light: #10b981;
+    --aqua-primary-lighter: #34d399;
+
+    /* Couleurs de fond (dark mode admin) */
+    --bg-dark: #1e293b;
+    --bg-darker: #0f172a;
+    --bg-card: #1f2937;
+    --bg-input: #1e293b;
+    --bg-table-odd: #262626;
+    --bg-table-even: #303030;
+
+    /* Couleurs de texte */
+    --text-primary: #f1f5f9;
+    --text-secondary: #cbd5e1;
+    --text-muted: #94a3b8;
+    --text-dark: #1e293b;
+    --text-body: #374151;
+
+    /* Bordures */
+    --border-color: #334155;
+    --border-light: #d1d5db;
+
+    /* Etats */
+    --color-success: #059669;
+    --color-warning: #f59e0b;
+    --color-danger: #dc2626;
+    --color-info: #0ea5e9;
+
+    /* Ombres */
+    --shadow-focus: 0 0 0 3px rgba(5, 150, 105, 0.15);
+}
+
+/* =============================================================================
+   2. BASE - Reset et typographie
+   ============================================================================= */
+
+/* Labels de formulaires */
+.content-wrapper label,
+.tab-content label,
+form label {
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+/* Texte d'aide sous les champs */
+.helptext,
+.help-block,
+.form-text,
+p.help,
+span.helptext {
+    color: var(--text-muted) !important;
+    font-style: italic;
+    font-size: 0.875rem;
+}
+
+/* Titres de page dans le contenu */
+.content-wrapper h1:not(.navbar-brand):not(.brand-text),
+.content-wrapper .content h1,
+.content-wrapper .h4 {
+    color: var(--text-dark) !important;
+    font-weight: 600;
+}
+
+/* =============================================================================
+   3. LAYOUT - Navbar, Sidebar, Content
+   ============================================================================= */
+
+/* --- Navbar --- */
+.main-header .navbar-nav .nav-link,
+.navbar-dark .navbar-nav .nav-link {
+    color: #ffffff !important;
+}
+
+.navbar .form-control-navbar {
+    background-color: rgba(255, 255, 255, 0.2) !important;
+    border-color: rgba(255, 255, 255, 0.3) !important;
+    color: #ffffff !important;
+}
+
+.navbar .form-control-navbar::placeholder {
+    color: rgba(255, 255, 255, 0.7) !important;
+}
+
+/* --- Sidebar --- */
+.nav-sidebar .nav-link {
+    color: rgba(255, 255, 255, 0.85) !important;
+    padding: 0.5rem 1rem;
+}
+
+.nav-sidebar .nav-link:hover {
+    color: #ffffff !important;
+    background-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+.nav-sidebar .nav-link.active {
+    background-color: var(--aqua-primary) !important;
+    color: #ffffff !important;
+    font-weight: 500;
+}
+
+.nav-sidebar .nav-header {
+    color: rgba(255, 255, 255, 0.5) !important;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+/* --- Breadcrumb --- */
+/* Liens dans le breadcrumb (ex: "Accueil") */
+.content-wrapper .breadcrumb a,
+.content-wrapper .breadcrumb-item a {
+    color: var(--aqua-primary) !important;
+}
+
+/* Texte non-lien dans le breadcrumb (élément actif/courant) */
+.content-wrapper .breadcrumb-item,
+.content-wrapper .breadcrumb-item.active,
+.content-wrapper .breadcrumb > li:last-child {
+    color: var(--text-body) !important;
+}
+
+/* Séparateur entre les éléments */
+.content-wrapper .breadcrumb-item + .breadcrumb-item::before {
+    color: var(--text-muted) !important;
+}
+
+/* =============================================================================
+   4. COMPONENTS - Boutons, Badges, Cards, Formulaires
+   ============================================================================= */
+
+/* --- Boutons primaires (IMPORTANT: texte blanc par defaut ET au hover) --- */
+.btn-success,
+.btn-primary,
+.btn-info,
+.btn.bg-success,
+.btn.bg-primary,
+.btn.addlink,
+.btn.changelink,
+a.addlink.btn,
+a.changelink.btn {
+    color: #ffffff !important;
+}
+
+.btn-success,
+.btn-primary,
+.btn.addlink,
+a.addlink.btn {
+    background-color: var(--aqua-primary) !important;
+    border-color: var(--aqua-primary) !important;
+}
+
+.btn-success:hover,
+.btn-primary:hover,
+.btn.addlink:hover {
+    background-color: var(--aqua-primary-hover) !important;
+    border-color: var(--aqua-primary-hover) !important;
+    color: #ffffff !important;
+}
+
+.btn-info,
+.btn.changelink,
+a.changelink.btn {
+    background-color: var(--aqua-primary-light) !important;
+    border-color: var(--aqua-primary-light) !important;
+}
+
+.btn-info:hover,
+.btn.changelink:hover {
+    background-color: var(--aqua-primary) !important;
+    border-color: var(--aqua-primary) !important;
+    color: #ffffff !important;
+}
+
+/* Boutons outline */
+.btn-outline-success {
+    color: var(--aqua-primary) !important;
+    border-color: var(--aqua-primary) !important;
+}
+
+.btn-outline-success:hover {
+    background-color: var(--aqua-primary) !important;
+    color: #ffffff !important;
+}
+
+/* Boutons secondaires */
+.btn-secondary,
+.btn-outline-secondary {
+    background-color: transparent !important;
+    border: 1px solid #64748b !important;
+    color: #64748b !important;
+}
+
+.btn-secondary:hover,
+.btn-outline-secondary:hover {
+    background-color: #64748b !important;
+    color: #ffffff !important;
+}
+
+/* --- Liens dans les boutons (CRUCIAL pour le dashboard) --- */
+.btn a,
+.btn-success a,
+.btn-primary a,
+.btn-info a,
+a.btn,
+.model-links a.btn,
+.card-body .btn a,
+.card-body a.btn {
+    color: #ffffff !important;
+}
+
+/* --- Badges --- */
+.badge-success,
+.badge.bg-success,
+.badge-primary,
+.badge.bg-primary {
+    background-color: var(--aqua-primary) !important;
+    color: #ffffff !important;
+}
+
+.badge-info,
+.badge.bg-info {
+    background-color: var(--aqua-primary-light) !important;
+    color: #ffffff !important;
+}
+
+.badge-warning,
+.badge.bg-warning {
+    background-color: var(--color-warning) !important;
+    color: var(--text-dark) !important;
+}
+
+.badge-danger,
+.badge.bg-danger {
+    background-color: var(--color-danger) !important;
+    color: #ffffff !important;
+}
+
+/* --- Cards --- */
+.card-header,
+.card-header .card-title,
+.card[class*="card-"] > .card-header,
+.card[class*="bg-"] > .card-header {
+    color: #ffffff !important;
+}
+
+.card-body {
+    color: var(--text-body);
+}
+
+.card-tools .btn,
+.card-tools a,
+.card-header .btn {
+    color: #ffffff !important;
+}
+
+/* --- Formulaires: Inputs et Selects (UNIFORMES) --- */
+.content-wrapper input[type="text"],
+.content-wrapper input[type="email"],
+.content-wrapper input[type="password"],
+.content-wrapper input[type="number"],
+.content-wrapper input[type="url"],
+.content-wrapper input[type="tel"],
+.content-wrapper input[type="date"],
+.content-wrapper input[type="datetime-local"],
+.content-wrapper select,
+.content-wrapper textarea,
+.tab-content input,
+.tab-content select,
+.tab-content textarea,
+.tab-pane input,
+.tab-pane select,
+.tab-pane textarea,
+form.change-form input,
+form.change-form select,
+form.change-form textarea,
+.fieldBox input,
+.fieldBox select,
+.fieldBox textarea {
+    background-color: var(--bg-input) !important;
+    color: var(--text-primary) !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: 0.375rem;
+}
+
+/* Focus state uniforme */
+.content-wrapper input:focus,
+.content-wrapper select:focus,
+.content-wrapper textarea:focus,
+.tab-content input:focus,
+.tab-content select:focus,
+.tab-content textarea:focus {
+    border-color: var(--aqua-primary) !important;
+    box-shadow: var(--shadow-focus) !important;
+    outline: none !important;
+}
+
+/* Placeholder */
+.content-wrapper input::placeholder,
+.content-wrapper textarea::placeholder {
+    color: #64748b !important;
+}
+
+/* Exception: Champs de recherche/filtres dans les listes (fond blanc) */
+#changelist-search input,
+.changelist-filter input,
+#changelist .actions select,
+form[action=""] input[name="q"],
+.content-wrapper .content > .container-fluid > form[action=""] input,
+.content-wrapper .content > .container-fluid > form[action=""] select {
+    background-color: #ffffff !important;
+    color: var(--text-dark) !important;
+    border: 1px solid var(--border-light) !important;
+}
+
+/* --- Onglets de formulaire --- */
+.nav-tabs .nav-link {
+    color: var(--text-muted) !important;
+    border: none !important;
+    border-bottom: 2px solid transparent !important;
+    background: transparent !important;
+}
+
+.nav-tabs .nav-link.active {
+    color: var(--aqua-primary-light) !important;
+    border-bottom: 2px solid var(--aqua-primary-light) !important;
+    font-weight: 500;
+}
+
+.nav-tabs .nav-link:hover:not(.active) {
+    color: var(--text-primary) !important;
+    border-bottom: 2px solid #475569 !important;
+}
+
+/* =============================================================================
+   5. PAGES SPECIFIQUES
+   ============================================================================= */
+
+/* --- Dashboard --- */
+.model-links .btn,
+.model-links a.btn,
+.card .model-links a,
+.card-body .model-links a.btn,
+.card-outline-success .btn,
+.card-outline-primary .btn {
+    color: #ffffff !important;
+}
+
+/* =============================================================================
+   SECTION "ACTIONS RECENTES" - Contraste et lisibilité
+   ============================================================================= */
+
+/* Titre principal de la section */
+#recent-actions-module h4,
+#recent-actions-module h3,
+#recent-actions-module h5,
+#recent-actions-module .card-title,
+.col-lg-3 .module h4,
+.col-lg-3 .module h3 {
+    color: var(--text-dark) !important;
+    font-weight: 600 !important;
+}
+
+/* Liens dans les actions récentes */
+#recent-actions-module a,
+.actionlist a,
+.col-lg-3 .card-body a,
+.content-wrapper aside .card-body a {
+    color: var(--aqua-primary) !important;
+    font-weight: 500;
+}
+
+#recent-actions-module a:hover,
+.actionlist a:hover {
+    color: var(--aqua-primary-hover) !important;
+    text-decoration: underline !important;
+}
+
+/* Titres des items d'action (ex: "Test Support") */
+#recent-actions-module h5,
+#recent-actions-module .timeline h5,
+#recent-actions-module .action-row h5 {
+    color: var(--text-dark) !important;
+    font-weight: 500 !important;
+}
+
+/* Timestamps et descriptions */
+#recent-actions-module time,
+#recent-actions-module .text-muted,
+#recent-actions-module small,
+#recent-actions-module .timeline-footer,
+.col-lg-3 .module time,
+.col-lg-3 .module small {
+    color: var(--text-muted) !important;
+    font-size: 0.8rem;
+}
+
+/* Texte descriptif des actions (ex: "Added 'Test Support'.") */
+#recent-actions-module p,
+#recent-actions-module span:not(.badge),
+#recent-actions-module .action-description,
+.col-lg-3 .module p {
+    color: var(--text-body) !important;
+}
+
+/* Timeline items (points et lignes) */
+#recent-actions-module .timeline-item,
+#recent-actions-module .action-row {
+    border-left-color: var(--aqua-primary) !important;
+}
+
+#recent-actions-module .timeline-badge,
+#recent-actions-module .action-icon {
+    background-color: var(--aqua-primary) !important;
+    border-color: var(--aqua-primary) !important;
+}
+
+/* --- Tableaux / Listes --- */
+.table thead th,
+.table thead th a,
+.table thead th * {
+    color: #ffffff !important;
+    font-weight: 600;
+}
+
+.table-striped tbody tr:nth-of-type(odd) {
+    background-color: var(--bg-table-odd) !important;
+}
+
+.table-striped tbody tr:nth-of-type(even) {
+    background-color: var(--bg-table-even) !important;
+}
+
+.table tbody td {
+    color: var(--text-secondary) !important;
+}
+
+.table td a,
+#result_list td a {
+    color: var(--aqua-primary-light) !important;
+}
+
+.table td a:hover,
+#result_list td a:hover {
+    color: var(--aqua-primary-lighter) !important;
+    text-decoration: underline !important;
+}
+
+/* Compteur d'elements */
+.paginator,
+.dataTables_info,
+.content-wrapper .content p {
+    color: var(--text-dark) !important;
+}
+
+/* Actions de masse */
+.actions span,
+.actions label,
+.actions select {
+    color: var(--text-dark) !important;
+}
+
+.actions .btn,
+.actions button {
+    background-color: var(--aqua-primary) !important;
+    border-color: var(--aqua-primary) !important;
+    color: #ffffff !important;
+}
+
+/* --- Formulaires d'edition --- */
+.submit-row input[type="submit"],
+.submit-row button[type="submit"],
+input[name="_save"],
+input[name="_addanother"],
+input[name="_continue"] {
+    background-color: var(--aqua-primary) !important;
+    border-color: var(--aqua-primary) !important;
+    color: #ffffff !important;
+    font-weight: 500;
+}
+
+.submit-row input[type="submit"]:hover,
+.submit-row button[type="submit"]:hover {
+    background-color: var(--aqua-primary-hover) !important;
+}
+
+/* Object-tools (View/History en haut) */
+.object-tools a,
+.object-tools li a {
+    color: #ffffff !important;
+}
+
+.object-tools .historylink,
+.object-tools a[href*="history"] {
+    background-color: #475569 !important;
+    border-color: #475569 !important;
+}
+
+/* Liens dans le contenu */
+.content-wrapper a:not(.btn):not(.nav-link):not(.breadcrumb-item),
+.tab-content a:not(.btn) {
+    color: var(--aqua-primary-light) !important;
+}
+
+.content-wrapper a:not(.btn):not(.nav-link):hover {
+    color: var(--aqua-primary) !important;
+    text-decoration: underline !important;
+}
+
+/* =============================================================================
+   6. UTILITAIRES
+   ============================================================================= */
+
+/* Alerts */
+.alert-success {
+    background-color: #d1fae5 !important;
+    border-color: var(--aqua-primary) !important;
+    color: #065f46 !important;
+}
+
+.alert-info {
+    color: #0c4a6e !important;
+}
+
+/* Pagination */
+.page-link {
+    color: var(--aqua-primary) !important;
+}
+
+.page-item.active .page-link {
+    background-color: var(--aqua-primary) !important;
+    border-color: var(--aqua-primary) !important;
+    color: #ffffff !important;
+}
+
+/* Select2 - Style uniforme avec les inputs (fond bleu sombre) */
+.content-wrapper .select2-container--default .select2-selection--single,
+.tab-content .select2-container--default .select2-selection--single,
+.tab-pane .select2-container--default .select2-selection--single {
+    background-color: var(--bg-input) !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: 0.375rem !important;
+    height: auto !important;
+    padding: 0.375rem 0.5rem !important;
+}
+
+.content-wrapper .select2-container--default .select2-selection--single .select2-selection__rendered,
+.tab-content .select2-container--default .select2-selection--single .select2-selection__rendered,
+.tab-pane .select2-container--default .select2-selection--single .select2-selection__rendered {
+    color: var(--text-primary) !important;
+    line-height: 1.5 !important;
+    padding-left: 0 !important;
+}
+
+.content-wrapper .select2-container--default .select2-selection--single .select2-selection__arrow,
+.tab-content .select2-container--default .select2-selection--single .select2-selection__arrow {
+    height: 100% !important;
+}
+
+.content-wrapper .select2-container--default .select2-selection--single .select2-selection__arrow b,
+.tab-content .select2-container--default .select2-selection--single .select2-selection__arrow b {
+    border-color: var(--text-muted) transparent transparent transparent !important;
+}
+
+/* Select2 focus state */
+.content-wrapper .select2-container--default.select2-container--focus .select2-selection--single,
+.content-wrapper .select2-container--default.select2-container--open .select2-selection--single {
+    border-color: var(--aqua-primary) !important;
+    box-shadow: var(--shadow-focus) !important;
+}
+
+/* Select2 dropdown */
+.select2-dropdown {
+    background-color: var(--bg-input) !important;
+    border-color: var(--border-color) !important;
+}
+
+.select2-search--dropdown .select2-search__field {
+    background-color: var(--bg-darker) !important;
+    color: var(--text-primary) !important;
+    border-color: var(--border-color) !important;
+}
+
+.select2-results__option {
+    color: var(--text-primary) !important;
+}
+
+.select2-results__option--highlighted {
+    background-color: var(--aqua-primary) !important;
+    color: #ffffff !important;
+}
+
+.select2-results__option--selected {
+    background-color: var(--aqua-primary-hover) !important;
+    color: #ffffff !important;
+}
+
+/* =============================================================================
+   NAVBAR DROPDOWNS - Language & User Menu (FIX: Contraste illisible)
+   ============================================================================= */
+
+/* Dropdown menu container (fond clair pour lisibilité) */
+.navbar .dropdown-menu,
+.main-header .dropdown-menu,
+.navbar-nav .dropdown-menu {
+    background-color: #ffffff !important;
+    border: 1px solid var(--border-light) !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15) !important;
+}
+
+/* Dropdown items - texte foncé sur fond clair */
+.navbar .dropdown-menu .dropdown-item,
+.main-header .dropdown-menu .dropdown-item,
+.navbar-nav .dropdown-menu .dropdown-item {
+    color: var(--text-dark) !important;
+    padding: 0.5rem 1rem;
+    transition: all 0.2s ease;
+}
+
+/* Dropdown items - hover state */
+.navbar .dropdown-menu .dropdown-item:hover,
+.main-header .dropdown-menu .dropdown-item:hover,
+.navbar-nav .dropdown-menu .dropdown-item:hover {
+    background-color: #f1f5f9 !important;
+    color: var(--aqua-primary) !important;
+}
+
+/* Dropdown header (ex: "Account") */
+.navbar .dropdown-menu .dropdown-header,
+.main-header .dropdown-menu .dropdown-header,
+.navbar-nav .dropdown-menu .dropdown-header {
+    color: var(--text-muted) !important;
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.05em;
+    padding: 0.5rem 1rem;
+}
+
+/* Dropdown divider */
+.navbar .dropdown-menu .dropdown-divider,
+.main-header .dropdown-menu .dropdown-divider,
+.navbar-nav .dropdown-menu .dropdown-divider {
+    border-top-color: var(--border-light) !important;
+}
+
+/* Boutons dans les dropdowns (langue) */
+.navbar .dropdown-menu button,
+.main-header .dropdown-menu button,
+.navbar-nav .dropdown-menu button {
+    color: var(--text-dark) !important;
+    background: transparent !important;
+    border: none !important;
+    text-align: left;
+    width: 100%;
+    padding: 0.5rem 1rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.navbar .dropdown-menu button:hover,
+.main-header .dropdown-menu button:hover,
+.navbar-nav .dropdown-menu button:hover {
+    background-color: #f1f5f9 !important;
+    color: var(--aqua-primary) !important;
+}
+
+/* Liens dans les dropdowns */
+.navbar .dropdown-menu a:not(.dropdown-item),
+.main-header .dropdown-menu a:not(.dropdown-item),
+.navbar-nav .dropdown-menu a:not(.dropdown-item) {
+    color: var(--text-dark) !important;
+}
+
+/* =============================================================================
+   AUTRES DROPDOWNS (dans le contenu)
+   ============================================================================= */
+
+/* Dropdown (dans le contenu principal) */
+.dropdown-menu .dropdown-item {
+    color: var(--text-dark) !important;
+}
+
+.dropdown-menu .dropdown-item:hover {
+    background-color: #f1f5f9 !important;
+    color: var(--aqua-primary) !important;
+}
+
+/* Progress bars */
+.progress-bar.bg-success,
+.progress-bar.bg-primary {
+    background-color: var(--aqua-primary) !important;
+}
+
+/* Small-box (dashboard stats) */
+.small-box a,
+.small-box .small-box-footer,
+.info-box a {
+    color: #ffffff !important;
+}
+
+.small-box .inner h3,
+.small-box .inner p {
+    color: var(--text-dark) !important;
+}

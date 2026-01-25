@@ -1,9 +1,15 @@
 """
-Configuration Django Admin pour le module commerce MAVECAM AquaCare.
+Administration securisee du module commerce MAVECAM AquaCare.
+Implemente le RBAC multi-niveau avec audit logging.
 
-Interface d'administration pour gestion catalogue produits et commandes.
+Roles:
+- OWNER (is_superuser): Controle total
+- COMMERCE (mavecam_commerce): CRUD produits, view commandes, generer PDF
+- MANAGERS: Lecture seule pour contexte
+- SUPPORT: Pas d'acces
 """
 from django.contrib import admin
+from django.contrib.admin.models import CHANGE
 from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
 from django.http import HttpResponse, FileResponse
@@ -13,6 +19,35 @@ import zipfile
 
 from .models import Product, Order, OrderItem
 from .services.pdf_service import generate_order_pdf
+from common.admin_mixins import (
+    SecuredModelAdmin,
+    CommerceOperatorMixin,
+    RBACConstants,
+)
+
+
+class CommerceSecuredAdmin(CommerceOperatorMixin, SecuredModelAdmin):
+    """
+    Base class pour tous les admins du module commerce.
+    Commerce operators ont acces complet, managers en lecture seule.
+    """
+
+    def has_module_permission(self, request):
+        """Commerce et managers peuvent voir le module commerce."""
+        if request.user.is_superuser:
+            return True
+
+        user_groups = set(request.user.groups.values_list('name', flat=True))
+
+        # Commerce operators: acces complet
+        if RBACConstants.GROUP_COMMERCE in user_groups:
+            return True
+
+        # Managers: lecture seule
+        if RBACConstants.GROUP_MANAGERS in user_groups:
+            return True
+
+        return False
 
 
 class OrderItemInline(admin.TabularInline):
@@ -25,14 +60,14 @@ class OrderItemInline(admin.TabularInline):
     can_delete = False
 
     def has_add_permission(self, request, obj=None):
-        """Empêche ajout items après création commande."""
+        """Empeche ajout items apres creation commande."""
         return False
 
 
 @admin.register(Product)
-class ProductAdmin(admin.ModelAdmin):
+class ProductAdmin(CommerceSecuredAdmin):
     """
-    Administration catalogue produits MAVECAM.
+    Administration securisee du catalogue produits MAVECAM.
     """
     list_display = [
         'name', 'brand_badge', 'species_badge', 'phase',
@@ -51,20 +86,50 @@ class ProductAdmin(admin.ModelAdmin):
         (_('Classification'), {
             'fields': ('species', 'phase')
         }),
-        (_('Caractéristiques techniques'), {
+        (_('Caracteristiques techniques'), {
             'fields': ('pellet_size_mm', 'protein_percentage', 'lipid_percentage')
         }),
         (_('Conditionnement & Prix'), {
             'fields': ('package_weight_kg', 'price_per_package', 'price_per_kg')
         }),
-        (_('Disponibilité'), {
+        (_('Disponibilite'), {
             'fields': ('is_available',)
         }),
-        (_('Métadonnées'), {
+        (_('Metadonnees'), {
             'fields': ('created_at', 'updated_at'),
             'classes': ('collapse',)
         }),
     )
+
+    def has_add_permission(self, request):
+        """Commerce et superusers peuvent ajouter des produits."""
+        if request.user.is_superuser:
+            return True
+        return request.user.groups.filter(
+            name=RBACConstants.GROUP_COMMERCE
+        ).exists()
+
+    def has_change_permission(self, request, obj=None):
+        """Commerce et superusers peuvent modifier des produits."""
+        if request.user.is_superuser:
+            return True
+        return request.user.groups.filter(
+            name=RBACConstants.GROUP_COMMERCE
+        ).exists()
+
+    def has_delete_permission(self, request, obj=None):
+        """Seul superuser peut supprimer des produits."""
+        return request.user.is_superuser
+
+    def save_model(self, request, obj, form, change):
+        """Override save pour audit."""
+        super().save_model(request, obj, form, change)
+
+        from django.contrib.admin.models import ADDITION
+        action = CHANGE if change else ADDITION
+        self.log_action(request, obj, action)
+
+    # --- Display methods ---
 
     def brand_badge(self, obj):
         """Badge couleur pour marque."""
@@ -81,7 +146,7 @@ class ProductAdmin(admin.ModelAdmin):
     brand_badge.short_description = _('Marque')
 
     def species_badge(self, obj):
-        """Badge couleur pour espèce."""
+        """Badge couleur pour espece."""
         colors = {
             'tilapia': '#10b981',
             'catfish': '#f59e0b'
@@ -92,32 +157,32 @@ class ProductAdmin(admin.ModelAdmin):
             color,
             obj.get_species_display()
         )
-    species_badge.short_description = _('Espèce')
+    species_badge.short_description = _('Espece')
 
     def price_display(self, obj):
-        """Affichage formaté du prix."""
+        """Affichage formate du prix."""
         formatted_price = f"{obj.price_per_package:,.0f}"
         return format_html('{} FCFA', formatted_price)
     price_display.short_description = _('Prix')
     price_display.admin_order_field = 'price_per_package'
 
     def availability_badge(self, obj):
-        """Badge disponibilité."""
+        """Badge disponibilite."""
         if obj.is_available:
             return format_html(
-                '<span style="display:inline-block; min-width:110px; text-align:center; white-space:nowrap; background-color: #10b981; color: white; padding: 4px 10px; border-radius: 6px;">✓ Disponible</span>'
+                '<span style="display:inline-block; min-width:110px; text-align:center; white-space:nowrap; background-color: #10b981; color: white; padding: 4px 10px; border-radius: 6px;">Disponible</span>'
             )
         else:
             return format_html(
-                '<span style="display:inline-block; min-width:120px; text-align:center; white-space:nowrap; background-color: #ef4444; color: white; padding: 4px 10px; border-radius: 6px;">✗ Indisponible</span>'
+                '<span style="display:inline-block; min-width:120px; text-align:center; white-space:nowrap; background-color: #ef4444; color: white; padding: 4px 10px; border-radius: 6px;">Indisponible</span>'
             )
-    availability_badge.short_description = _('Disponibilité')
+    availability_badge.short_description = _('Disponibilite')
 
 
 @admin.register(Order)
-class OrderAdmin(admin.ModelAdmin):
+class OrderAdmin(CommerceSecuredAdmin):
     """
-    Administration commandes MAVECAM.
+    Administration securisee des commandes MAVECAM.
     """
     list_display = [
         'order_number', 'user_link', 'farm_link', 'status_badge',
@@ -127,7 +192,7 @@ class OrderAdmin(admin.ModelAdmin):
     list_filter = ['status', 'delivery_method', 'created_at', 'created_offline']
     search_fields = [
         'order_number', 'user__first_name', 'user__last_name',
-        'user__phone_number', 'delivery_phone'
+        'delivery_phone'
     ]
     readonly_fields = [
         'id', 'order_number', 'user', 'farm_profile',
@@ -164,19 +229,63 @@ class OrderAdmin(admin.ModelAdmin):
             'fields': ('client_uuid', 'created_offline', 'synced_at'),
             'classes': ('collapse',)
         }),
-        (_('Métadonnées'), {
+        (_('Metadonnees'), {
             'fields': ('created_at', 'updated_at'),
             'classes': ('collapse',)
         }),
     )
 
+    def get_search_fields(self, request):
+        """Retire phone_number de la recherche pour non-commerce."""
+        search_fields = list(self.search_fields)
+
+        if request.user.is_superuser:
+            search_fields.append('user__phone_number')
+        elif request.user.groups.filter(name=RBACConstants.GROUP_COMMERCE).exists():
+            search_fields.append('user__phone_number')
+
+        return search_fields
+
+    def get_actions(self, request):
+        """Retire les actions selon le role."""
+        actions = super().get_actions(request)
+
+        if not request.user.is_superuser:
+            # Seuls commerce operators peuvent generer PDF
+            is_commerce = request.user.groups.filter(
+                name=RBACConstants.GROUP_COMMERCE
+            ).exists()
+
+            if not is_commerce:
+                if 'generate_pdf_action' in actions:
+                    del actions['generate_pdf_action']
+
+        return actions
+
+    def has_add_permission(self, request):
+        """Empeche creation commande via admin (doit passer par API)."""
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        """Commerce operators peuvent modifier le statut des commandes."""
+        if request.user.is_superuser:
+            return True
+        return request.user.groups.filter(
+            name=RBACConstants.GROUP_COMMERCE
+        ).exists()
+
+    def has_delete_permission(self, request, obj=None):
+        """Empeche suppression commande."""
+        return False
+
+    # --- Display methods ---
+
     def user_link(self, obj):
         """Lien vers utilisateur."""
         return format_html(
-            '<a href="/admin/accounts/user/{}/change/">{}</a><br><small>{}</small>',
+            '<a href="/admin/accounts/user/{}/change/">{}</a><br><small>Tel: ***</small>',
             obj.user.id,
-            obj.user.full_name,
-            obj.user.phone_number
+            obj.user.full_name
         )
     user_link.short_description = _('Client')
 
@@ -190,7 +299,7 @@ class OrderAdmin(admin.ModelAdmin):
     farm_link.short_description = _('Ferme')
 
     def status_badge(self, obj):
-        """Badge statut coloré."""
+        """Badge statut colore."""
         colors = {
             'confirmed': '#10b981'
         }
@@ -209,14 +318,13 @@ class OrderAdmin(admin.ModelAdmin):
             'pickup': '#f59e0b'
         }
         color = colors.get(obj.delivery_method, '#6b7280')
-        icon = '🚚' if obj.delivery_method == 'home' else '📦'
         text = obj.get_delivery_method_display()
         if obj.pickup_location:
             text += f' ({obj.get_pickup_location_display()})'
 
         return format_html(
-            '<span style="background-color: {}; color: white; padding: 3px 10px; border-radius: 3px;">{} {}</span>',
-            color, icon, text
+            '<span style="background-color: {}; color: white; padding: 3px 10px; border-radius: 3px;">{}</span>',
+            color, text
         )
     delivery_method_badge.short_description = _('Livraison')
 
@@ -226,10 +334,10 @@ class OrderAdmin(admin.ModelAdmin):
             '<strong>{}</strong> sacs',
             obj.total_bags
         )
-    total_bags_display.short_description = _('Quantité')
+    total_bags_display.short_description = _('Quantite')
 
     def total_display(self, obj):
-        """Affichage formaté du total."""
+        """Affichage formate du total."""
         formatted_total = f"{obj.total:,.0f}"
         return format_html(
             '<strong style="color: #059669;">{} FCFA</strong>',
@@ -238,16 +346,23 @@ class OrderAdmin(admin.ModelAdmin):
     total_display.short_description = _('Total')
     total_display.admin_order_field = 'total'
 
-    @admin.action(description="Generer PDF des commandes selectionnees")
+    # --- Actions securisees ---
+
+    @admin.action(description=_("Generer PDF des commandes selectionnees"))
     def generate_pdf_action(self, request, queryset):
-        """Genere PDF pour commandes selectionnees (max 10)."""
+        """Genere PDF pour commandes selectionnees (max 10). Commerce only."""
+        # Verifier permission
+        if not request.user.is_superuser:
+            if not request.user.groups.filter(name=RBACConstants.GROUP_COMMERCE).exists():
+                messages.error(request, _("Vous n'avez pas la permission de generer des PDF."))
+                return
+
         count = queryset.count()
 
         if count > 10:
-            self.message_user(
+            messages.warning(
                 request,
-                "Selection limitee a 10 commandes maximum. Veuillez reduire votre selection.",
-                level=messages.WARNING
+                _("Selection limitee a 10 commandes maximum. Veuillez reduire votre selection.")
             )
             return
 
@@ -259,18 +374,19 @@ class OrderAdmin(admin.ModelAdmin):
                 response = HttpResponse(pdf_bytes, content_type='application/pdf')
                 response['Content-Disposition'] = f'attachment; filename="commande_{order.order_number}.pdf"'
 
-                self.message_user(
+                # Audit
+                self.log_action(request, order, CHANGE, message="PDF bon de commande genere")
+
+                messages.success(
                     request,
-                    f"PDF genere avec succes pour commande {order.order_number}",
-                    level=messages.SUCCESS
+                    _("PDF genere avec succes pour commande {}").format(order.order_number)
                 )
                 return response
 
             except Exception as e:
-                self.message_user(
+                messages.error(
                     request,
-                    f"Erreur generation PDF : {str(e)}",
-                    level=messages.ERROR
+                    _("Erreur generation PDF : {}").format(str(e))
                 )
                 return
 
@@ -284,38 +400,30 @@ class OrderAdmin(admin.ModelAdmin):
                         f"commande_{order.order_number}.pdf",
                         pdf_bytes
                     )
+                    # Audit
+                    self.log_action(request, order, CHANGE, message="PDF bon de commande genere (batch)")
 
             zip_buffer.seek(0)
             response = FileResponse(zip_buffer, content_type='application/zip')
             response['Content-Disposition'] = 'attachment; filename="commandes_aquacare.zip"'
 
-            self.message_user(
+            messages.success(
                 request,
-                f"{count} PDFs generes avec succes et archives dans un ZIP",
-                level=messages.SUCCESS
+                _("{} PDFs generes avec succes et archives dans un ZIP").format(count)
             )
             return response
 
         except Exception as e:
-            self.message_user(
+            messages.error(
                 request,
-                f"Erreur generation ZIP : {str(e)}",
-                level=messages.ERROR
+                _("Erreur generation ZIP : {}").format(str(e))
             )
-
-    def has_add_permission(self, request):
-        """Empêche création commande via admin (doit passer par API)."""
-        return False
-
-    def has_delete_permission(self, request, obj=None):
-        """Empêche suppression commande."""
-        return False
 
 
 @admin.register(OrderItem)
-class OrderItemAdmin(admin.ModelAdmin):
+class OrderItemAdmin(CommerceSecuredAdmin):
     """
-    Administration lignes de commande (consultation uniquement).
+    Administration securisee des lignes de commande (consultation uniquement).
     """
     list_display = [
         'order_number', 'product_name', 'quantity', 'unit_price_display', 'line_total_display'
@@ -334,13 +442,13 @@ class OrderItemAdmin(admin.ModelAdmin):
     order_number.short_description = _('Commande')
 
     def unit_price_display(self, obj):
-        """Affichage formaté prix unitaire."""
+        """Affichage formate prix unitaire."""
         formatted_unit_price = f"{obj.unit_price:,.0f}"
         return format_html('{} FCFA', formatted_unit_price)
     unit_price_display.short_description = _('Prix unitaire')
 
     def line_total_display(self, obj):
-        """Affichage formaté total ligne."""
+        """Affichage formate total ligne."""
         formatted_line_total = f"{obj.line_total:,.0f}"
         return format_html(
             '<strong>{} FCFA</strong>',
@@ -349,9 +457,13 @@ class OrderItemAdmin(admin.ModelAdmin):
     line_total_display.short_description = _('Total')
 
     def has_add_permission(self, request):
-        """Empêche création item via admin."""
+        """Empeche creation item via admin."""
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        """Lecture seule pour tous."""
         return False
 
     def has_delete_permission(self, request, obj=None):
-        """Empêche suppression item."""
+        """Empeche suppression item."""
         return False

@@ -55,6 +55,7 @@ def health_check(request):
         }, status=503)
 
 urlpatterns = [
+    path('i18n/', include('django.conf.urls.i18n')),  # Required for Jazzmin language switcher
     path('admin/', admin.site.urls),
     path('api/', api_root, name='api-root'),
     path('api/health/', health_check, name='health-check'),  # Health check pour Docker
@@ -66,10 +67,10 @@ urlpatterns = [
 
     # API Endpoints
     path('api/accounts/', include('accounts.urls')),
-    path('api/aquaculture/', include('apps.aquaculture.urls')),
-    path('api/commerce/', include('apps.commerce.urls')),  # Module commerce
-    path('api/support/', include('apps.chat.urls')),  # Module chat support
-    path('api/', include('apps.notifications.urls')),  # Module notifications
+    path('api/aquaculture/', include('aquaculture.urls')),
+    path('api/commerce/', include('commerce.urls')),  # Module commerce
+    path('api/support/', include('chat.urls')),  # Module chat support
+    path('api/', include('notifications.urls')),  # Module notifications
 
 ]
 

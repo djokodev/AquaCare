@@ -6,7 +6,7 @@ Coverage cible : >95% (objets critiques)
 import pytest
 from decimal import Decimal
 
-from apps.aquaculture.domain.value_objects import (
+from aquaculture.domain.value_objects import (
     Biomass, FCR, SurvivalRate, WaterQuality, GrowthRate
 )
 

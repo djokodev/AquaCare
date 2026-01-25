@@ -43,7 +43,7 @@ def handle_new_message(sender, instance, created, **kwargs):
             from django.core.mail import mail_admins
             from django.conf import settings
             from django.contrib.auth import get_user_model
-            from apps.notifications.services import NotificationService
+            from notifications.services import NotificationService
 
             user_display = conversation.user.get_full_name() or conversation.user.phone_number
             site_url = getattr(settings, 'SITE_URL', '').rstrip('/')
@@ -91,7 +91,7 @@ Voir la conversation: {site_url}/admin/chat/conversation/{conversation.id}/chang
     # =========================================================================
     elif instance.sender_type == 'admin':
         try:
-            from apps.notifications.services import NotificationService
+            from notifications.services import NotificationService
 
             NotificationService.create_notification(
                 user=conversation.user,

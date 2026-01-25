@@ -7,9 +7,9 @@ import pytest
 from datetime import date
 from django.contrib.contenttypes.models import ContentType
 
-from apps.aquaculture.services.sanitary_service import SanitaryService
-from apps.aquaculture.models import SanitaryLog
-from apps.notifications.models import Notification
+from aquaculture.services.sanitary_service import SanitaryService
+from aquaculture.models import SanitaryLog
+from notifications.models import Notification
 from tests.fixtures.factories import ProductionCycleFactory
 
 

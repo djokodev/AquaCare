@@ -21,7 +21,7 @@ from django.utils import timezone
 from ..models import ProductionCycle, CycleLog
 from ..domain.calculators import AquacultureCalculator
 from .base import BaseService
-from apps.notifications.services import NotificationService
+from notifications.services import NotificationService
 
 
 class AnalyticsService(BaseService):

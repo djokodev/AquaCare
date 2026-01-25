@@ -8,9 +8,9 @@ from decimal import Decimal
 from datetime import date, timedelta
 from django.utils import timezone
 
-from apps.aquaculture.services.log_service import CycleLogService
-from apps.aquaculture.models import CycleLog
-from apps.aquaculture.domain.exceptions import (
+from aquaculture.services.log_service import CycleLogService
+from aquaculture.models import CycleLog
+from aquaculture.domain.exceptions import (
     BusinessRuleViolation,
     InsufficientFishCountError,
     InvalidDateRangeError
