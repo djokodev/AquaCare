@@ -1,5 +1,7 @@
 FROM python:3.12-slim AS builder
 
+# Cache buster - invalidates all layers when changed
+ARG CACHEBUST=1
 
 LABEL maintainer="Djoko Christian <djoko.dev.pro@gmail.com>"
 LABEL description="AquaCare API"
