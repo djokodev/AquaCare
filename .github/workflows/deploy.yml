@@ -176,8 +176,8 @@ jobs:
             echo "Pulling latest images from GitHub Container Registry..."
             docker compose -f docker-compose.prod.yml pull
 
-            echo "Starting services..."
-            docker compose -f docker-compose.prod.yml up -d
+            echo "Starting services with force-recreate..."
+            docker compose -f docker-compose.prod.yml up -d --force-recreate --remove-orphans
 
             echo "Waiting for services to be ready (30s)..."
             sleep 30
