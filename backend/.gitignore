@@ -49,3 +49,7 @@ backups/
 # Logs
 logs/
 *.log
+
+# .md file
+SETUP_DB_PRODUCTION.md
+SETUP_NGINX_PRODUCTION.md
