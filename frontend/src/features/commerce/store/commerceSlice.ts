@@ -1,42 +1,53 @@
-﻿/**
- * Redux Slice - Module Commerce MAVECAM AquaCare
- *
- * Gestion Ã©tat global pour :
- * - Catalogue produits (22 produits MAVECAM)
- * - Panier utilisateur (offline-first)
- * - Commandes et historique
- * - Suggestions alimentation intelligentes
- * - Simulations cycles production
- *
- * Architecture :
- * - Actions sync : addToCart, removeFromCart, setFilters, etc.
- * - Actions async (thunks) : fetchProducts, createOrder, etc.
- * - State = miroir backend (pas de calculs mÃ©tier)
- *
- * @module store/slices/commerceSlice
- */
-
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import {
   CommerceState,
   Product,
   ProductFilters,
-  CartItem,
   DeliveryMethod,
   PickupLocation,
-  Order,
-  CreateOrderPayload,
-  OrderStatistics,
-  DeliveryFeePreview,
-  FeedingSuggestion,
   CycleSimulationParams,
-  SimulationResult,
+  CreateOrderPayload,
 } from '@/types/commerce';
 import commerceApi from '@/features/commerce/services/commerceApi';
 
-// ============================================================================
-// Ã‰TAT INITIAL
-// ============================================================================
+const extractApiErrorMessage = (error: unknown, fallback: string): string => {
+  const err = error as any;
+  const data = err?.response?.data;
+
+  if (typeof data === 'string' && data.trim()) {
+    return data;
+  }
+
+  if (data && typeof data === 'object') {
+    if (typeof data.message === 'string' && data.message.trim()) {
+      return data.message;
+    }
+    if (typeof data.error === 'string' && data.error.trim()) {
+      return data.error;
+    }
+    if (typeof data.detail === 'string' && data.detail.trim()) {
+      return data.detail;
+    }
+    if (Array.isArray(data.non_field_errors) && data.non_field_errors.length > 0) {
+      return String(data.non_field_errors[0]);
+    }
+
+    for (const value of Object.values(data)) {
+      if (Array.isArray(value) && value.length > 0) {
+        const first = value[0];
+        if (typeof first === 'string' && first.trim()) {
+          return first;
+        }
+      }
+    }
+  }
+
+  if (typeof err?.message === 'string' && err.message.trim()) {
+    return err.message;
+  }
+
+  return fallback;
+};
 
 const initialState: CommerceState = {
   products: {
@@ -70,43 +81,28 @@ const initialState: CommerceState = {
   },
 };
 
-// ============================================================================
-// THUNKS ASYNC - PRODUITS
-// ============================================================================
-
-/**
- * RÃ©cupÃ¨re liste produits avec filtres optionnels
- */
 export const fetchProducts = createAsyncThunk(
   'commerce/fetchProducts',
   async (filters: ProductFilters | undefined, { rejectWithValue }) => {
     try {
-      const products = await commerceApi.getProducts(filters);
-      return products;
-    } catch (error: any) {
-      return rejectWithValue(error.response?.data?.message || 'Erreur rÃ©cupÃ©ration produits');
+      return await commerceApi.getProducts(filters);
+    } catch (error) {
+      return rejectWithValue(extractApiErrorMessage(error, 'Erreur récupération produits'));
     }
   }
 );
 
-/**
- * RÃ©cupÃ¨re dÃ©tails produit spÃ©cifique
- */
 export const fetchProductDetail = createAsyncThunk(
   'commerce/fetchProductDetail',
   async (productId: string, { rejectWithValue }) => {
     try {
-      const product = await commerceApi.getProductDetail(productId);
-      return product;
-    } catch (error: any) {
-      return rejectWithValue(error.response?.data?.message || 'Erreur rÃ©cupÃ©ration produit');
+      return await commerceApi.getProductDetail(productId);
+    } catch (error) {
+      return rejectWithValue(extractApiErrorMessage(error, 'Erreur récupération produit'));
     }
   }
 );
 
-/**
- * RÃ©cupÃ¨re produit recommandÃ© selon espÃ¨ce et poids
- */
 export const fetchRecommendedProduct = createAsyncThunk(
   'commerce/fetchRecommendedProduct',
   async (
@@ -114,111 +110,79 @@ export const fetchRecommendedProduct = createAsyncThunk(
     { rejectWithValue }
   ) => {
     try {
-      const product = await commerceApi.getRecommendedProduct(species, weightG);
-      return product;
-    } catch (error: any) {
-      return rejectWithValue(error.response?.data?.message || 'Erreur recommandation produit');
+      return await commerceApi.getRecommendedProduct(species, weightG);
+    } catch (error) {
+      return rejectWithValue(extractApiErrorMessage(error, 'Erreur recommandation produit'));
     }
   }
 );
 
-/**
- * RÃ©cupÃ¨re suggestions alimentation intelligentes
- */
 export const fetchFeedingSuggestions = createAsyncThunk(
   'commerce/fetchFeedingSuggestions',
   async (farmProfileId: string | undefined, { rejectWithValue }) => {
     try {
-      const suggestions = await commerceApi.getFeedingSuggestions(farmProfileId);
-      return suggestions;
-    } catch (error: any) {
-      return rejectWithValue(error.response?.data?.message || 'Erreur rÃ©cupÃ©ration suggestions');
+      return await commerceApi.getFeedingSuggestions(farmProfileId);
+    } catch (error) {
+      return rejectWithValue(extractApiErrorMessage(error, 'Erreur récupération suggestions'));
     }
   }
 );
 
-/**
- * Lance simulation cycle production
- */
 export const fetchCycleSimulation = createAsyncThunk(
   'commerce/fetchCycleSimulation',
   async (params: CycleSimulationParams, { rejectWithValue }) => {
     try {
-      const result = await commerceApi.simulateCycle(params);
-      return result;
-    } catch (error: any) {
-      return rejectWithValue(error.response?.data?.message || 'Erreur simulation cycle');
+      return await commerceApi.simulateCycle(params);
+    } catch (error) {
+      return rejectWithValue(extractApiErrorMessage(error, 'Erreur simulation cycle'));
     }
   }
 );
 
-// ============================================================================
-// THUNKS ASYNC - COMMANDES
-// ============================================================================
-
-/**
- * RÃ©cupÃ¨re historique commandes utilisateur
- */
 export const fetchOrders = createAsyncThunk(
   'commerce/fetchOrders',
   async (_, { rejectWithValue }) => {
     try {
-      const orders = await commerceApi.getOrders();
-      return orders;
-    } catch (error: any) {
-      return rejectWithValue(error.response?.data?.message || 'Erreur rÃ©cupÃ©ration commandes');
+      return await commerceApi.getOrders();
+    } catch (error) {
+      return rejectWithValue(extractApiErrorMessage(error, 'Erreur récupération commandes'));
     }
   }
 );
 
-/**
- * RÃ©cupÃ¨re dÃ©tails commande spÃ©cifique
- */
 export const fetchOrderDetail = createAsyncThunk(
   'commerce/fetchOrderDetail',
   async (orderId: string, { rejectWithValue }) => {
     try {
-      const order = await commerceApi.getOrderDetail(orderId);
-      return order;
-    } catch (error: any) {
-      return rejectWithValue(error.response?.data?.message || 'Erreur rÃ©cupÃ©ration commande');
+      return await commerceApi.getOrderDetail(orderId);
+    } catch (error) {
+      return rejectWithValue(extractApiErrorMessage(error, 'Erreur récupération commande'));
     }
   }
 );
 
-/**
- * CrÃ©e nouvelle commande (offline-first)
- */
 export const createOrder = createAsyncThunk(
   'commerce/createOrder',
   async (orderData: CreateOrderPayload, { rejectWithValue }) => {
     try {
-      const order = await commerceApi.createOrder(orderData);
-      return order;
-    } catch (error: any) {
-      return rejectWithValue(error.response?.data?.message || 'Erreur crÃ©ation commande');
+      return await commerceApi.createOrder(orderData);
+    } catch (error) {
+      return rejectWithValue(extractApiErrorMessage(error, 'Erreur création commande'));
     }
   }
 );
 
-/**
- * RÃ©cupÃ¨re statistiques commandes utilisateur
- */
 export const fetchOrderStatistics = createAsyncThunk(
   'commerce/fetchOrderStatistics',
   async (_, { rejectWithValue }) => {
     try {
-      const stats = await commerceApi.getOrderStatistics();
-      return stats;
-    } catch (error: any) {
-      return rejectWithValue(error.response?.data?.message || 'Erreur rÃ©cupÃ©ration statistiques');
+      return await commerceApi.getOrderStatistics();
+    } catch (error) {
+      return rejectWithValue(extractApiErrorMessage(error, 'Erreur récupération statistiques'));
     }
   }
 );
 
-/**
- * Preview frais livraison
- */
 export const fetchDeliveryFeePreview = createAsyncThunk(
   'commerce/fetchDeliveryFeePreview',
   async (
@@ -226,85 +190,49 @@ export const fetchDeliveryFeePreview = createAsyncThunk(
     { rejectWithValue }
   ) => {
     try {
-      const preview = await commerceApi.previewDeliveryFee(data);
-      return preview;
-    } catch (error: any) {
-      return rejectWithValue(error.response?.data?.message || 'Erreur preview frais livraison');
+      return await commerceApi.previewDeliveryFee(data);
+    } catch (error) {
+      return rejectWithValue(extractApiErrorMessage(error, 'Erreur preview frais livraison'));
     }
   }
 );
-
-// ============================================================================
-// SLICE
-// ============================================================================
 
 const commerceSlice = createSlice({
   name: 'commerce',
   initialState,
   reducers: {
-    // ========================================================================
-    // ACTIONS SYNC - FILTRES PRODUITS
-    // ========================================================================
-
-    /**
-     * Applique filtres recherche produits
-     */
     applyFilters: (state, action: PayloadAction<ProductFilters>) => {
       state.products.filters = action.payload;
     },
-
-    /**
-     * RÃ©initialise filtres produits
-     */
     resetFilters: (state) => {
       state.products.filters = {};
     },
-
-    // ========================================================================
-    // ACTIONS SYNC - PANIER
-    // ========================================================================
-
-    /**
-     * Ajoute produit au panier (ou augmente quantitÃ© si existe)
-     */
     addToCart: (state, action: PayloadAction<{ product: Product; quantity: number }>) => {
       const { product, quantity } = action.payload;
       const existingItem = state.cart.items.find((item) => item.product.id === product.id);
 
       if (existingItem) {
-        // Produit dÃ©jÃ  dans panier â†’ augmente quantitÃ©
         existingItem.quantity += quantity;
       } else {
-        // Nouveau produit
         state.cart.items.push({ product, quantity });
       }
 
-      // Reset preview (sera recalculÃ©)
       state.cart.deliveryPreview = null;
     },
-
-    /**
-     * Supprime produit du panier
-     */
     removeFromCart: (state, action: PayloadAction<string>) => {
       state.cart.items = state.cart.items.filter((item) => item.product.id !== action.payload);
       state.cart.deliveryPreview = null;
     },
-
-    /**
-     * Met Ã  jour quantitÃ© produit dans panier
-     */
     updateCartQuantity: (
       state,
       action: PayloadAction<{ productId: string; quantity: number }>
     ) => {
       const { productId, quantity } = action.payload;
-      const item = state.cart.items.find((item) => item.product.id === productId);
+      const item = state.cart.items.find((entry) => entry.product.id === productId);
 
       if (item) {
         if (quantity <= 0) {
-          // QuantitÃ© 0 â†’ supprime
-          state.cart.items = state.cart.items.filter((item) => item.product.id !== productId);
+          state.cart.items = state.cart.items.filter((entry) => entry.product.id !== productId);
         } else {
           item.quantity = quantity;
         }
@@ -312,62 +240,30 @@ const commerceSlice = createSlice({
 
       state.cart.deliveryPreview = null;
     },
-
-    /**
-     * Vide panier complÃ¨tement
-     */
     clearCart: (state) => {
       state.cart.items = [];
       state.cart.deliveryPreview = null;
     },
-
-    /**
-     * DÃ©finit mÃ©thode livraison
-     */
     setDeliveryMethod: (state, action: PayloadAction<DeliveryMethod>) => {
       state.cart.delivery_method = action.payload;
-
-      // Reset pickup_location si passage Ã  home
       if (action.payload === 'home') {
         state.cart.pickup_location = undefined;
       }
-
       state.cart.deliveryPreview = null;
     },
-
-    /**
-     * DÃ©finit localisation retrait (si pickup)
-     */
     setPickupLocation: (state, action: PayloadAction<PickupLocation | undefined>) => {
       state.cart.pickup_location = action.payload;
     },
-
-    // ========================================================================
-    // ACTIONS SYNC - RESET Ã‰TATS
-    // ========================================================================
-
-    /**
-     * Reset Ã©tat suggestions
-     */
     resetSuggestions: (state) => {
       state.suggestions.data = null;
       state.suggestions.error = null;
     },
-
-    /**
-     * Reset Ã©tat simulation
-     */
     resetSimulation: (state) => {
       state.simulation.result = null;
       state.simulation.error = null;
     },
   },
-
   extraReducers: (builder) => {
-    // ========================================================================
-    // REDUCERS ASYNC - PRODUITS
-    // ========================================================================
-
     builder
       .addCase(fetchProducts.pending, (state) => {
         state.products.loading = true;
@@ -410,10 +306,6 @@ const commerceSlice = createSlice({
         state.simulation.error = action.payload as string;
       });
 
-    // ========================================================================
-    // REDUCERS ASYNC - COMMANDES
-    // ========================================================================
-
     builder
       .addCase(fetchOrders.pending, (state) => {
         state.orders.loading = true;
@@ -435,8 +327,7 @@ const commerceSlice = createSlice({
       })
       .addCase(fetchOrderDetail.fulfilled, (state, action) => {
         state.orders.loading = false;
-        // Ajoute ou met Ã  jour commande dans liste
-        const existingIndex = state.orders.items.findIndex((o) => o.id === action.payload.id);
+        const existingIndex = state.orders.items.findIndex((order) => order.id === action.payload.id);
         if (existingIndex >= 0) {
           state.orders.items[existingIndex] = action.payload;
         } else {
@@ -455,7 +346,6 @@ const commerceSlice = createSlice({
       })
       .addCase(createOrder.fulfilled, (state, action) => {
         state.orders.loading = false;
-        // Ajoute commande crÃ©Ã©e en tÃªte de liste
         state.orders.items.unshift(action.payload);
       })
       .addCase(createOrder.rejected, (state, action) => {
@@ -492,10 +382,6 @@ const commerceSlice = createSlice({
   },
 });
 
-// ============================================================================
-// EXPORTS
-// ============================================================================
-
 export const {
   applyFilters,
   resetFilters,
@@ -510,9 +396,3 @@ export const {
 } = commerceSlice.actions;
 
 export default commerceSlice.reducer;
-
-
-
-
-
-

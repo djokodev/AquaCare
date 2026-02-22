@@ -3,6 +3,7 @@ import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert } fr
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
+import { StackNavigationProp } from '@react-navigation/stack';
 import { useDispatch, useSelector } from 'react-redux';
 
 import { AppDispatch, RootState } from '@/store/store';
@@ -19,13 +20,26 @@ import { CartItem, DeliveryMethod, PickupLocation } from '@/types/commerce';
 import { MAVECAM_COLORS } from '@/constants/colors';
 import { DELIVERY_METHODS, PICKUP_LOCATIONS, FREE_DELIVERY_THRESHOLD } from '@/domain/commerce';
 import SelectField from '@/components/SelectField';
+import logger from '@/utils/logger';
+import { RootStackParamList } from '@/navigation/MainNavigator';
+
+type NavigationProp = StackNavigationProp<RootStackParamList, 'Cart'>;
+
+const extractErrorMessage = (error: unknown, fallback: string): string => {
+  const err = error as any;
+  const data = err?.response?.data;
+  if (typeof data?.message === 'string') return data.message;
+  if (typeof data?.error === 'string') return data.error;
+  if (typeof data?.detail === 'string') return data.detail;
+  if (typeof err === 'string') return err;
+  if (typeof err?.message === 'string') return err.message;
+  return fallback;
+};
 
 export default function CartScreen() {
   const { t } = useTranslation();
-  const navigation = useNavigation();
+  const navigation = useNavigation<NavigationProp>();
   const dispatch = useDispatch<AppDispatch>();
-
-  const debugLog = (...args: unknown[]) => console.log('[CartScreen]', ...args);
   const generateClientUuid = () => {
     const cryptoObj = typeof globalThis !== 'undefined' ? (globalThis as any).crypto : undefined;
     if (cryptoObj?.randomUUID) return cryptoObj.randomUUID();
@@ -105,13 +119,6 @@ export default function CartScreen() {
   };
 
   const handleConfirmOrder = async () => {
-    debugLog('CTA confirm tapped', {
-      cartItems: cartItems.length,
-      delivery_method,
-      pickup_location,
-      hasPreview: Boolean(deliveryPreview),
-    });
-
     if (cartItems.length === 0) {
       Alert.alert(t('error'), t('emptyCartError'));
       return;
@@ -148,34 +155,28 @@ export default function CartScreen() {
                 created_offline: false,
               };
 
-              debugLog('Submitting order', orderData);
-
               await dispatch(createOrder(orderData)).unwrap();
-
-              debugLog('Order success, showing success alert');
 
               // Vider le panier dans les callbacks pour eviter les re-renders pendant l'alerte
               Alert.alert(t('success'), t('orderCreatedSuccess'), [
                 {
                   text: t('viewOrder'),
                   onPress: () => {
-                    debugLog('Clear cart -> OrdersHistory');
                     dispatch(clearCart());
-                    navigation.navigate('OrdersHistory' as never);
+                    navigation.navigate('OrdersHistory');
                   },
                 },
                 {
                   text: t('ok'),
                   onPress: () => {
-                    debugLog('Clear cart -> ProductCatalog');
                     dispatch(clearCart());
-                    navigation.navigate('ProductCatalog' as never);
+                    navigation.navigate('ProductCatalog');
                   },
                 },
               ]);
-            } catch (error: any) {
-              console.error('[CartScreen] Order error', error);
-              Alert.alert(t('error'), error || t('orderCreationError'));
+            } catch (error) {
+              logger.error('[CartScreen] Order error');
+              Alert.alert(t('error'), extractErrorMessage(error, t('orderCreationError')));
             } finally {
               setIsSubmitting(false);
             }
@@ -186,7 +187,7 @@ export default function CartScreen() {
   };
 
   const handleBackToCatalog = () => {
-    navigation.navigate('ProductCatalog' as never);
+    navigation.navigate('ProductCatalog');
   };
 
   const renderCartItem = (item: CartItem) => {
@@ -369,7 +370,7 @@ export default function CartScreen() {
               </View>
             )}
 
-            {user?.region === 'littoral' &&
+            {user?.region?.trim().toLowerCase() === 'littoral' &&
               delivery_method === 'home' &&
               !deliveryPreview.free_delivery_threshold_reached &&
               deliveryPreview.total_bags < FREE_DELIVERY_THRESHOLD && (
@@ -421,4 +422,3 @@ export default function CartScreen() {
     </View>
   );
 }
-

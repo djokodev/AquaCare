@@ -59,7 +59,7 @@
   // Farm Profile
   farmName: 'Farm Name',
   totalPonds: 'Number of Ponds',
-  totalArea: 'Total Area (mÂ²)',
+  totalArea: 'Total Area (m²)',
   waterSource: 'Water Source',
   mainSpecies: 'Main Species',
   annualProduction: 'Annual Production (kg)',
@@ -149,8 +149,8 @@
   pondInfo: 'Breeding pond',
   pondName: 'Pond name/Identifier',
   pondNamePlaceholder: 'Ex: Pond A, Tank 1, BP001...',
-  surface: 'Surface (mÂ²)',
-  volume: 'Volume (mÂ³)',
+  surface: 'Surface (m²)',
+  volume: 'Volume (m³)',
   pondDimensionsInfo: 'Enter at least the surface OR the volume of the pond',
   initialStocking: 'Initial stocking',
   initialCount: 'Number of fingerlings',
@@ -167,6 +167,8 @@
   cycleCreatedSuccess: 'New cycle created successfully!',
   cycleCreatedOffline: 'Cycle saved offline (will sync when connected)',
   cycleCreationError: 'Error creating cycle',
+  farmNotDefined: 'Farm not defined',
+  dayCountShort: 'D{{count}}',
   requiredField: '*',
 
   // Profile
@@ -252,13 +254,13 @@
   myFarm: 'My Farm',
   farmOf: '{{farmName}} Farm',
   farmNamePlaceholder: 'Name of your farm',
-  areaPlaceholder: 'Area in mÂ²',
+  areaPlaceholder: 'Area in m²',
   waterSourcePlaceholder: 'Water supply source',
   speciesPlaceholder: 'Tilapia, Clarias, etc.',
   productionPlaceholder: 'Production in kg/year',
   averageAreaPerPond: 'Average area per pond',
   currentDensity: 'Current density',
-  yieldPerSquareMeter: 'Yield per mÂ²',
+  yieldPerSquareMeter: 'Yield per m²',
 
   // Intervention Zones
   urbaine: 'Urban area',
@@ -283,7 +285,7 @@
   sampleWeight: 'Total weight (g)',
   mortality: 'Mortality',
   waterTemperature: 'Water temperature',
-  waterTemperatureUnit: 'Temperature (Â°C)',
+  waterTemperatureUnit: 'Temperature (°C)',
   phLevel: 'Water pH',
   observations: 'Observations',
   observationsPlaceholder: 'Notes, special observations...',
@@ -321,6 +323,7 @@
   sanitaryRecordSaved: 'Sanitary record saved successfully',
   sanitaryRecordSavedOffline: 'Sanitary record saved offline (will sync when connected)',
   sanitaryRecordSaveError: 'Error saving sanitary record',
+  offlineSaveMessage: 'Saved offline - it will be synchronized as soon as possible.',
   eventType: 'Event Type',
   details: 'Details',
   symptoms: 'Observed Symptoms',
@@ -340,8 +343,31 @@
   choosePhotoSource: 'Choose photo source',
   gallery: 'Gallery',
   camera: 'Camera',
+  photoPermissionRequired: 'Photo library permission is required.',
+  imageSelectionError: 'Error selecting image.',
+  cameraPermissionRequired: 'Camera permission is required.',
+  cameraCaptureError: 'Error while taking photo.',
+  pondPrefix: 'Pond',
+  fishLabel: 'fish',
+  validationErrorsTitle: 'Validation errors:',
+  exampleAffectedCount: 'Ex: 10',
+  exampleMedication: 'Ex: Antibiotic XYZ',
+  exampleDosage: 'Ex: 5mg/L',
+  exampleTreatmentDuration: 'Ex: 7',
+  sanitaryEventDisease: 'Disease',
+  sanitaryEventTreatment: 'Treatment',
+  sanitaryEventVaccination: 'Vaccination',
+  sanitaryEventAbnormalMortality: 'Abnormal mortality',
+  sanitaryEventWaterQuality: 'Water quality',
+  sanitaryEventOther: 'Other',
+  sanitarySuccessDisease: 'Disease reported successfully. The team will review your report.',
+  sanitarySuccessTreatment: 'Treatment recorded successfully.',
+  sanitarySuccessVaccination: 'Vaccination recorded successfully.',
+  sanitarySuccessAbnormalMortality: 'Abnormal mortality reported successfully.',
+  sanitarySuccessWaterQuality: 'Water quality issue reported successfully.',
+  sanitarySuccessOther: 'Event recorded successfully.',
 
-  // Harvest / RÃ©colte
+  // Harvest / Recolte
   harvest: 'Harvest',
   harvestCycle: 'Harvest Cycle',
   harvestData: 'Harvest Data',
@@ -376,6 +402,10 @@
   harvestedCycles: 'Harvested Cycles',
   noHarvestedCycles: 'No harvested cycles',
   completeCycleToSeeHistory: 'Complete a cycle to see history',
+  clariasSpeciesFull: 'African catfish (Clarias)',
+  performanceExcellent: 'Excellent',
+  performanceGood: 'Good',
+  performanceImprove: 'Needs improvement',
 
   // Nutritional Guides
   nutritionalGuides: 'View nutritional guides',
@@ -398,6 +428,9 @@
   finition: 'Finishing',
 
   // Commerce farming phases (backend values)
+  alevinage: 'Starter',
+  pre_grossissement: 'Pre-Growing',
+  grossissement: 'Growing',
   larvae: 'Larvae Stage',
   juvenilePhase: 'Pre-Growing',
   growing: 'Growing',
@@ -421,7 +454,7 @@
   densityTooHigh: 'Initial density is too high.',
   maxDensity: 'Maximum density',
   yourDensity: 'Your density',
-  fishPerM2: 'fish/mÂ²',
+  fishPerM2: 'fish/m²',
   densitySuggestion: 'Reduce initial count or increase pond surface.',
   survival: 'Survival',
   finalBiomass: 'Final Biomass',
@@ -430,6 +463,7 @@
 
   // Notifications
   notifications: 'Notifications',
+  info: 'Information',
   totalNotifications: 'Total',
   unreadNotifications: 'Unread',
   filterNotifications: 'Filter Notifications',
@@ -445,7 +479,9 @@
   deleteAllRead: 'Delete All Read',
   deleteNotificationConfirm: 'Delete this notification?',
   deleteAllReadConfirm: 'Delete all read notifications?',
+  notificationNotReadWarning: 'This notification is not read yet.',
   confirm: 'Confirm',
+  markAsRead: 'Mark as read',
   markReadError: 'Error marking notification as read',
   markAllReadError: 'Error marking all notifications as read',
   deleteError: 'Error deleting notification',
@@ -486,6 +522,8 @@
   costPerDay: 'Daily Cost',
   notes: 'Notes',
   day: 'day',
+  feedingPlansLoadError: 'Error loading feeding plan data',
+  feedingPlansLoadByCycleError: 'Error loading feeding plans for this cycle',
 
   // Statistics
   statistics: 'View my statistics',
@@ -512,6 +550,9 @@
   harvestCycleToSeeStats: 'Harvest a cycle to see statistics',
   interactiveCharts: 'Interactive Charts',
   comingSoon: 'Coming soon',
+  statisticsLoadError: 'Error loading statistics',
+  selectCycleToAnalyze: 'Select a cycle to analyze',
+  selectCycleHint: 'Tap on a cycle above to view detailed statistics',
 
   // Common
   loading: 'Loading...',
@@ -586,6 +627,7 @@
   orderItems: 'Order Items',
   deliveryAddress: 'Delivery Address',
   pickupPoint: 'Pickup Point',
+  pickupLocationPrefix: 'Point',
   confirmed: 'Confirmed',
   productNotFound: 'Product not found',
 
@@ -750,4 +792,33 @@
   chatEmptyState: 'No messages',
   chatEmptyStateDescription: 'Send a message to start the conversation with our team.',
   chatErrorRetry: 'Pull to refresh',
+
+  // Error Boundary
+  errorBoundaryTitle: 'Oops, something went wrong',
+  errorBoundaryMessage: 'The application encountered an unexpected error. Please try again.',
+  errorBoundaryRetry: 'Try again',
+
+  // Auth Placeholders
+  placeholderLoginName: 'Jean Farmer or AquaFerme SARL',
+  placeholderPhoneExample: '652260368',
+  placeholderEmail: 'example@email.com',
+  placeholderFirstName: 'Jean',
+  placeholderLastName: 'Dupont',
+  placeholderBusinessName: 'AquaFerme SARL',
+  placeholderPromoterName: 'Jean Dupont',
+
+  // Auth error codes (client-side)
+  AUTH_INVALID_CREDENTIALS: 'Incorrect credentials or session expired.',
+  AUTH_FORBIDDEN: 'Access denied.',
+  AUTH_NOT_FOUND: 'User not found.',
+  AUTH_RATE_LIMITED: 'Too many attempts. Please wait before trying again.',
+  AUTH_SERVER_ERROR: 'Server error. Please try again later.',
+  AUTH_NETWORK_ERROR: 'Cannot reach the server. Check your internet connection.',
+  AUTH_UNKNOWN_ERROR: 'An unexpected error occurred.',
+
+  // Settings - Language change
+  languageUpdatedTitle: 'Language Updated',
+  languageUpdatedToFrench: 'Language changed to French',
+  languageUpdatedToEnglish: 'Language changed to English',
+  languageChangeError: 'Unable to change language. Please try again.',
 };

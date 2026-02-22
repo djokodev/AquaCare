@@ -144,11 +144,11 @@ export const fr = {
   noActionsYet: 'Explorez nos fonctionnalités',
 
   // NewCycle Screen
-  newCycleTitle: 'Nouveau Cycle d\'levage',
+  newCycleTitle: 'Nouveau cycle d\'elevage',
   speciesSelection: 'Espèce à élever',
   pondInfo: 'Bassin d\'élevage',
   pondName: 'Nom/Identifiant du bassin',
-  pondNamePlaceholder: 'Ex: Bassin A, tang 1, BP001...',
+  pondNamePlaceholder: 'Ex: Bassin A, bac 1, BP001...',
   surface: 'Surface (m²)',
   volume: 'Volume (m³)',
   pondDimensionsInfo: 'Renseignez au moins la surface OU le volume du bassin',
@@ -167,13 +167,15 @@ export const fr = {
   cycleCreatedSuccess: 'Nouveau cycle créé avec succès !',
   cycleCreatedOffline: 'Cycle sauvegardé (sera synchronisé à la reconnexion)',
   cycleCreationError: 'Erreur lors de la création du cycle',
+  farmNotDefined: 'Ferme non definie',
+  dayCountShort: 'J{{count}}',
   requiredField: '*',
 
   // Profile
   profileUpdatedSuccess: 'Profil mis à jour avec succès',
   profileUpdateError: 'Erreur lors de la mise à jour du profil',
   logoutConfirm: 'Déconnexion',
-  logoutMessage: 'tes-vous sûr de vouloir vous déconnecter ?',
+  logoutMessage: 'Etes-vous sur de vouloir vous deconnecter ?',
   
   // Profile Content
   personalInfo: 'Informations personnelles',
@@ -232,7 +234,7 @@ export const fr = {
   accountManagement: 'Gestion du compte',
   deleteAccount: 'Supprimer mon compte',
   deleteAccountDesc: 'Suppression définitive de toutes vos données',
-  about: ' propos',
+  about: 'A propos',
   appDescription: 'Application de gestion aquacole pour les pisciculteurs camerounais.',
   
   // Profile Screen Specific
@@ -279,7 +281,7 @@ export const fr = {
   dailyData: 'Données du jour',
   averageWeight: 'Poids moyen',
   averageWeightUnit: 'Poids moyen (g)',
-  sampleCount: 'chantillon (nb)',
+  sampleCount: 'Echantillon (nb)',
   sampleWeight: 'Poids total (g)',
   mortality: 'Mortalité',
   waterTemperature: 'Température de l\'eau',
@@ -322,6 +324,7 @@ export const fr = {
   sanitaryRecordSaved: 'Journal sanitaire enregistré avec succès',
   sanitaryRecordSavedOffline: 'Journal sanitaire sauvegardé (sera synchronisé à la reconnexion)',
   sanitaryRecordSaveError: 'Erreur lors de l\'enregistrement du journal sanitaire',
+  offlineSaveMessage: 'Sauvegarde hors ligne - sera synchronisee des que possible.',
   eventType: 'Type d\'événement',
   details: 'Détails',
   symptoms: 'Symptômes observés',
@@ -341,6 +344,29 @@ export const fr = {
   choosePhotoSource: 'Choisir la source de la photo',
   gallery: 'Galerie',
   camera: 'Appareil photo',
+  photoPermissionRequired: 'La permission d\'acces aux photos est requise.',
+  imageSelectionError: 'Erreur lors de la selection de l\'image.',
+  cameraPermissionRequired: 'La permission d\'acces a la camera est requise.',
+  cameraCaptureError: 'Erreur lors de la prise de photo.',
+  pondPrefix: 'Bassin',
+  fishLabel: 'poissons',
+  validationErrorsTitle: 'Erreurs de validation :',
+  exampleAffectedCount: 'Ex: 10',
+  exampleMedication: 'Ex: Antibiotique XYZ',
+  exampleDosage: 'Ex: 5mg/L',
+  exampleTreatmentDuration: 'Ex: 7',
+  sanitaryEventDisease: 'Maladie',
+  sanitaryEventTreatment: 'Traitement',
+  sanitaryEventVaccination: 'Vaccination',
+  sanitaryEventAbnormalMortality: 'Mortalite anormale',
+  sanitaryEventWaterQuality: 'Qualite de l\'eau',
+  sanitaryEventOther: 'Autre',
+  sanitarySuccessDisease: 'Maladie signalee avec succes. L\'equipe va analyser votre rapport.',
+  sanitarySuccessTreatment: 'Traitement enregistre avec succes.',
+  sanitarySuccessVaccination: 'Vaccination enregistree avec succes.',
+  sanitarySuccessAbnormalMortality: 'Mortalite anormale signalee avec succes.',
+  sanitarySuccessWaterQuality: 'Probleme de qualite de l\'eau signale avec succes.',
+  sanitarySuccessOther: 'Evenement enregistre avec succes.',
 
   // Harvest / Récolte
   harvest: 'Récolter',
@@ -350,7 +376,7 @@ export const fr = {
 
   // Nutritional Guides
   nutritionalGuides: 'Consulter les guides nutritionnels',
-  aboutGuides: ' propos des Guides',
+  aboutGuides: 'A propos des guides',
   nutritionalGuidesDescription: 'Consultez les recommandations d\'alimentation optimales selon l\'espèce et le stade de croissance de vos poissons. Ces guides sont basés sur les meilleures pratiques MAVECAM.',
   allSpecies: 'Toutes espèces',
   tilapia: 'Tilapia',
@@ -370,6 +396,9 @@ export const fr = {
   finition: 'Finition',
 
   // Phases d'élevage Commerce (valeurs backend)
+  alevinage: 'Alevinage',
+  pre_grossissement: 'Pré-grossissement',
+  grossissement: 'Grossissement',
   larvae: 'Alevinage',
   juvenilePhase: 'Pré-grossissement',
   growing: 'Grossissement',
@@ -424,6 +453,10 @@ export const fr = {
   harvestedCycles: 'Cycles Récoltés',
   noHarvestedCycles: 'Aucun cycle récolté',
   completeCycleToSeeHistory: 'Terminez un cycle pour voir l\'historique',
+  clariasSpeciesFull: 'Silure africain (Clarias)',
+  performanceExcellent: 'Excellent',
+  performanceGood: 'Bon',
+  performanceImprove: 'A ameliorer',
   survival: 'Survie',
   finalBiomass: 'Biomasse Finale',
   finalWeight: 'Poids Final',
@@ -431,6 +464,7 @@ export const fr = {
 
   // Notifications
   notifications: 'Notifications',
+  info: 'Information',
   totalNotifications: 'Total',
   unreadNotifications: 'Non Lues',
   filterNotifications: 'Filtrer les Notifications',
@@ -438,7 +472,7 @@ export const fr = {
   unread: 'Non Lues',
   read: 'Lues',
   notificationsList: 'Liste des Notifications',
-  justNow: ' l\'instant',
+  justNow: 'A l\'instant',
   yesterday: 'Hier',
   markAllAsRead: 'Marquer Toutes Comme Lues',
   markAllAsReadConfirm: 'Marquer {{count}} notifications comme lues ?',
@@ -446,7 +480,9 @@ export const fr = {
   deleteAllRead: 'Supprimer Toutes les Lues',
   deleteNotificationConfirm: 'Supprimer cette notification ?',
   deleteAllReadConfirm: 'Supprimer toutes les notifications lues ?',
+  notificationNotReadWarning: 'Cette notification n\'est pas encore lue.',
   confirm: 'Confirmer',
+  markAsRead: 'Marquer comme lue',
   markReadError: 'Erreur lors du marquage de la notification',
   markAllReadError: 'Erreur lors du marquage de toutes les notifications',
   deleteError: 'Erreur lors de la suppression de la notification',
@@ -456,7 +492,7 @@ export const fr = {
   noNotifications: 'Aucune notification',
   notificationsWillAppear: 'Les notifications apparaîtront ici',
   notificationType_feeding_reminder: 'Rappel Alimentation',
-  notificationType_sampling_reminder: 'Rappel chantillonnage',
+  notificationType_sampling_reminder: 'Rappel echantillonnage',
   notificationType_treatment_reminder: 'Rappel Traitement',
   notificationType_cycle_milestone: 'Jalon de Cycle',
   notificationType_alert: 'Alerte',
@@ -487,6 +523,8 @@ export const fr = {
   costPerDay: 'Coût journalier',
   notes: 'Notes',
   day: 'jour',
+  feedingPlansLoadError: 'Erreur lors du chargement des donnees du plan d\'alimentation',
+  feedingPlansLoadByCycleError: 'Erreur lors du chargement des plans pour ce cycle',
 
   // Statistics
   statistics: 'Voir mes statistiques',
@@ -512,7 +550,10 @@ export const fr = {
   noStatistics: 'Aucune statistique disponible',
   harvestCycleToSeeStats: 'Récoltez un cycle pour voir les statistiques',
   interactiveCharts: 'Graphiques interactifs',
-  comingSoon: ' implémenter prochainement',
+  comingSoon: 'A implementer prochainement',
+  statisticsLoadError: 'Erreur lors du chargement des statistiques',
+  selectCycleToAnalyze: 'Selectionnez un cycle a analyser',
+  selectCycleHint: 'Touchez un cycle ci-dessus pour afficher les statistiques detaillees',
 
   // Common
   loading: 'Chargement...',
@@ -549,7 +590,7 @@ export const fr = {
   confirmRemoval: 'Confirmer la suppression',
   confirmRemovalMessage: 'Supprimer {{productName}} du panier ?',
   confirmClearCart: 'Vider le panier',
-  confirmClearCartMessage: 'tes-vous sûr de vouloir vider tout le panier ?',
+  confirmClearCartMessage: 'Êtes-vous sûr de vouloir vider tout le panier ?',
   deliveryMethod: 'Méthode de livraison',
   homeDelivery: 'Livraison à domicile',
   pickupStore: 'Retrait en magasin',
@@ -587,6 +628,7 @@ export const fr = {
   orderItems: 'Articles Commande',
   deliveryAddress: 'Adresse de Livraison',
   pickupPoint: 'Point de Retrait',
+  pickupLocationPrefix: 'Point',
   confirmed: 'Confirmée',
   productNotFound: 'Produit introuvable',
 
@@ -751,4 +793,33 @@ export const fr = {
   chatEmptyState: 'Aucun message',
   chatEmptyStateDescription: 'Envoyez un message pour démarrer la conversation avec notre équipe.',
   chatErrorRetry: 'Tirez pour actualiser',
+
+  // Error Boundary
+  errorBoundaryTitle: 'Oups, quelque chose s\'est mal passé',
+  errorBoundaryMessage: 'L\'application a rencontré une erreur inattendue. Veuillez réessayer.',
+  errorBoundaryRetry: 'Réessayer',
+
+  // Auth Placeholders
+  placeholderLoginName: 'Jean Farmer ou AquaFerme SARL',
+  placeholderPhoneExample: '652260368',
+  placeholderEmail: 'exemple@email.com',
+  placeholderFirstName: 'Jean',
+  placeholderLastName: 'Dupont',
+  placeholderBusinessName: 'AquaFerme SARL',
+  placeholderPromoterName: 'Jean Dupont',
+
+  // Auth error codes (client-side)
+  AUTH_INVALID_CREDENTIALS: 'Identifiants incorrects ou session expirée.',
+  AUTH_FORBIDDEN: 'Accès interdit.',
+  AUTH_NOT_FOUND: 'Utilisateur introuvable.',
+  AUTH_RATE_LIMITED: 'Trop de tentatives. Veuillez patienter puis réessayer.',
+  AUTH_SERVER_ERROR: 'Erreur serveur. Veuillez réessayer plus tard.',
+  AUTH_NETWORK_ERROR: 'Impossible de contacter le serveur. Vérifiez votre connexion.',
+  AUTH_UNKNOWN_ERROR: 'Une erreur inattendue est survenue.',
+
+  // Settings - Language change
+  languageUpdatedTitle: 'Langue mise à jour',
+  languageUpdatedToFrench: 'La langue a été changée vers Français',
+  languageUpdatedToEnglish: 'La langue a été changée vers English',
+  languageChangeError: 'Impossible de changer la langue. Veuillez réessayer.',
 };

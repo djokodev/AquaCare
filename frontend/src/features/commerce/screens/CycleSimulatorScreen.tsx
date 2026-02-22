@@ -163,7 +163,7 @@ export default function CycleSimulatorScreen() {
             {totalBags} {t(totalBags > 1 ? 'bags' : 'bag')}
           </Text>
           <Text className="text-base font-bold text-mavecam-primary">
-            {parseFloat(phase.total_price).toLocaleString()} FCFA
+            {phase.total_price.toLocaleString()} FCFA
           </Text>
         </View>
 
@@ -434,7 +434,6 @@ export default function CycleSimulatorScreen() {
     </View>
   );
 }
-
 
 
 

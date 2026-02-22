@@ -11,16 +11,20 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
+import { StackNavigationProp } from '@react-navigation/stack';
 import { useDispatch, useSelector } from 'react-redux';
 
 import { AppDispatch, RootState } from '@/store/store';
 import { fetchOrders, fetchOrderStatistics } from '@/features/commerce/store/commerceSlice';
 import { Order } from '@/types/commerce';
 import { MAVECAM_COLORS } from '@/constants/colors';
+import { RootStackParamList } from '@/navigation/MainNavigator';
+
+type NavigationProp = StackNavigationProp<RootStackParamList, 'OrdersHistory'>;
 
 export default function OrdersHistoryScreen() {
-  const { t } = useTranslation();
-  const navigation = useNavigation();
+  const { t, i18n } = useTranslation();
+  const navigation = useNavigation<NavigationProp>();
   const dispatch = useDispatch<AppDispatch>();
 
   const { orders } = useSelector((state: RootState) => state.commerce);
@@ -46,12 +50,14 @@ export default function OrdersHistoryScreen() {
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
-    return date.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
+    const locale = i18n.language?.startsWith('fr') ? 'fr-FR' : 'en-US';
+    return date.toLocaleDateString(locale, { day: '2-digit', month: 'short', year: 'numeric' });
   };
 
   const formatTime = (dateString: string) => {
     const date = new Date(dateString);
-    return date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    const locale = i18n.language?.startsWith('fr') ? 'fr-FR' : 'en-US';
+    return date.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
   };
 
   const renderOrderCard = ({ item: order }: { item: Order }) => {
@@ -186,7 +192,7 @@ export default function OrdersHistoryScreen() {
                 <View className="flex-row items-center bg-cream p-3 rounded-lg gap-2">
                   <Ionicons name="location" size={20} color={MAVECAM_COLORS.GREEN_PRIMARY} />
                   <Text className="text-sm font-semibold text-mavecam-primary">
-                    MAVECAM {order.pickup_location === 'ndokoti' ? 'Ndokoti' : 'Ndogpasi'}
+                    {t('pickupLocationPrefix')} {order.pickup_location === 'ndokoti' ? 'Ndokoti' : 'Ndogpasi'}
                   </Text>
                 </View>
               </View>
@@ -239,7 +245,7 @@ export default function OrdersHistoryScreen() {
       <Text className="mt-3 text-base text-gray-light text-center px-10">{t('noOrdersDescription')}</Text>
       <TouchableOpacity
         className="mt-6 bg-mavecam-primary flex-row items-center px-6 py-3 rounded-lg gap-2"
-        onPress={() => navigation.navigate('ProductCatalog' as never)}
+        onPress={() => navigation.navigate('ProductCatalog')}
       >
         <Ionicons name="albums-outline" size={20} color={MAVECAM_COLORS.WHITE} />
         <Text className="text-white text-base font-semibold">{t('browseCatalog')}</Text>
@@ -303,7 +309,6 @@ export default function OrdersHistoryScreen() {
     </View>
   );
 }
-
 
 
 
