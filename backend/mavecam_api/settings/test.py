@@ -26,6 +26,15 @@ DATABASES = {
     }
 }
 
+# Cache local en mémoire pour tests.
+# Evite toute dépendance Redis (throttling DRF inclus).
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "aquacare-test-cache",
+    }
+}
+
 # Désactiver les migrations pour accélérer les tests
 # (créer les tables directement depuis les modèles)
 class DisableMigrations:

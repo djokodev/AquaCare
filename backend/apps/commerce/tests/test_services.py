@@ -9,6 +9,7 @@ from django.utils import timezone
 
 from commerce.models import Product
 from commerce.services import ProductService, OrderService, FeedingSuggestionService
+from commerce.domain.exceptions import InvalidOrderError
 from accounts.models import User, FarmProfile
 from aquaculture.models import ProductionCycle
 
@@ -117,6 +118,52 @@ class TestOrderService:
         assert preview['delivery_fee'] == Decimal("0.00")  # Gratuit (20+ sacs à Douala)
         assert preview['subtotal'] == Decimal("600000.00")  # 20×30000
 
+    def test_create_order_idempotent_same_client_uuid(self, test_user, test_farm, test_product):
+        items_data = [{"product_id": str(test_product.id), "quantity": 1}]
+        order_1 = OrderService.create_order(
+            user=test_user,
+            items_data=items_data,
+            delivery_method="home",
+            client_uuid="11111111-1111-4111-8111-111111111111",
+            created_offline=True,
+        )
+        order_2 = OrderService.create_order(
+            user=test_user,
+            items_data=items_data,
+            delivery_method="home",
+            client_uuid="11111111-1111-4111-8111-111111111111",
+            created_offline=True,
+        )
+        assert order_1.id == order_2.id
+
+    def test_create_order_rejects_foreign_client_uuid(self, test_user, test_farm, test_product):
+        other_user = User.objects.create_user(
+            phone_number="+237222333444",
+            password="testpass123",
+            first_name="Other",
+            last_name="User",
+            age_group="26_35",
+        )
+        FarmProfile.objects.get_or_create(user=other_user, defaults={"farm_name": "Other Farm"})
+
+        items_data = [{"product_id": str(test_product.id), "quantity": 1}]
+        OrderService.create_order(
+            user=test_user,
+            items_data=items_data,
+            delivery_method="home",
+            client_uuid="22222222-2222-4222-8222-222222222222",
+            created_offline=True,
+        )
+
+        with pytest.raises(InvalidOrderError):
+            OrderService.create_order(
+                user=other_user,
+                items_data=items_data,
+                delivery_method="home",
+                client_uuid="22222222-2222-4222-8222-222222222222",
+                created_offline=True,
+            )
+
 
 @pytest.mark.django_db
 class TestFeedingSuggestionService:
@@ -140,13 +187,19 @@ class TestFeedingSuggestionService:
     @pytest.fixture
     def test_cycle(self, test_user, test_farm):
         return ProductionCycle.objects.create(
-            user=test_user,
             farm_profile=test_farm,
+            cycle_name="Cycle Test",
             species="tilapia",
-            initial_fish_count=1000,
+            pond_identifier="Pond A",
+            pond_surface_m2=Decimal("100.0"),
             start_date=timezone.now().date() - timedelta(days=30),
-            planned_harvest_date=timezone.now().date() + timedelta(days=60),
-            status="active"
+            initial_count=1000,
+            initial_average_weight=Decimal("5.0"),
+            initial_biomass=Decimal("5.0"),
+            current_count=1000,
+            current_average_weight=Decimal("5.0"),
+            current_biomass=Decimal("5.0"),
+            status="active",
         )
 
     def test_get_feeding_suggestions_no_cycles(self, test_user):
@@ -156,3 +209,33 @@ class TestFeedingSuggestionService:
     def test_calculate_confidence_high(self):
         confidence = FeedingSuggestionService._calculate_confidence(3, 3)
         assert confidence >= 90
+
+    def test_feeding_suggestions_include_cycle_name(self, test_user, test_cycle, monkeypatch):
+        def _fake_analysis(cycle):
+            return {
+                "has_data": True,
+                "cycle_id": str(cycle.id),
+                "cycle_name": cycle.cycle_name,
+                "species": cycle.species,
+                "current_phase": "pre_grossissement",
+                "current_avg_weight_g": 45.0,
+                "days_remaining": 30,
+                "avg_daily_consumption_kg": 3.5,
+                "phases": [],
+                "summary": {
+                    "total_needed_kg": 100.0,
+                    "total_bags": 5,
+                    "total_price": 100000.0,
+                    "coverage_days": 37,
+                },
+            }
+
+        monkeypatch.setattr(
+            FeedingSuggestionService,
+            "_analyze_cycle_with_phases",
+            staticmethod(_fake_analysis),
+        )
+
+        result = FeedingSuggestionService.get_feeding_suggestions(test_user.id)
+        assert result["has_suggestions"] is True
+        assert result["suggestions"][0]["cycle_name"] == test_cycle.cycle_name

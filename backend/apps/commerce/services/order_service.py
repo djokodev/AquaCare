@@ -7,13 +7,14 @@ Gère création, validation, calculs automatiques et notifications.
 from datetime import datetime
 from decimal import Decimal
 from typing import List, Dict, Any, Optional
-from django.db import transaction
+from django.db import transaction, IntegrityError
 from django.utils import timezone
 from django.db.models import QuerySet, Sum, Count
 
 from ..models import Order, OrderItem
 from ..domain.calculators import DeliveryFeeCalculator, OrderTotalCalculator
 from ..domain.validators import OrderValidator
+from ..domain.exceptions import InvalidOrderError
 from .base import BaseCommerceService
 from .product_service import ProductService
 
@@ -86,6 +87,19 @@ class OrderService(BaseCommerceService):
             'delivery_method': delivery_method
         })
 
+        # Idempotence offline : même client_uuid pour le même utilisateur
+        # doit retourner la commande déjà créée.
+        if client_uuid:
+            existing_order = Order.objects.filter(client_uuid=client_uuid).select_related(
+                'user', 'farm_profile'
+            ).prefetch_related('items__product').first()
+            if existing_order:
+                if existing_order.user_id != user.id:
+                    raise InvalidOrderError(
+                        "client_uuid déjà utilisé par un autre utilisateur"
+                    )
+                return existing_order
+
         # 1. Validation données
         OrderValidator.validate_items(items_data)
         OrderValidator.validate_delivery_method(delivery_method, pickup_location)
@@ -118,7 +132,7 @@ class OrderService(BaseCommerceService):
         # 3. Calcul frais de livraison (règles MAVECAM)
         delivery_fee = DeliveryFeeCalculator.calculate(
             delivery_method=delivery_method,
-            region=user.region,
+            region=OrderService._normalize_region(user.region),
             total_bags=total_bags
         )
 
@@ -132,22 +146,16 @@ class OrderService(BaseCommerceService):
         delivery_address_data = OrderService._build_delivery_address_snapshot(user)
 
         # 5. Création Order
-        order = Order.objects.create(
+        order = OrderService._create_order_with_retry(
             user=user,
-            farm_profile=user.farm_profile,
-            order_number=OrderService.generate_order_number(),
-            status='confirmed',  # MVP : statut unique
             delivery_method=delivery_method,
             pickup_location=pickup_location or '',
             client_uuid=client_uuid,
             created_offline=created_offline,
-            synced_at=None if created_offline else timezone.now(),
-            # Snapshot adresse
-            **delivery_address_data,
-            # Montants
+            delivery_address_data=delivery_address_data,
             subtotal=subtotal,
             delivery_fee=delivery_fee,
-            total=total
+            total=total,
         )
 
         # 6. Création OrderItems
@@ -205,6 +213,62 @@ class OrderService(BaseCommerceService):
             'delivery_city': user.city or '',
             'delivery_full_address': full_address
         }
+
+    @staticmethod
+    def _normalize_region(region: Optional[str]) -> str:
+        """Normalise le nom de région pour les règles métier."""
+        return (region or '').strip().lower()
+
+    @staticmethod
+    def _create_order_with_retry(
+        user,
+        delivery_method: str,
+        pickup_location: str,
+        client_uuid,
+        created_offline: bool,
+        delivery_address_data: Dict[str, str],
+        subtotal: Decimal,
+        delivery_fee: Decimal,
+        total: Decimal,
+        max_retries: int = 3,
+    ) -> Order:
+        """
+        Crée une commande en gérant les collisions concurrentes
+        sur `order_number` ou `client_uuid`.
+        """
+        for _ in range(max_retries):
+            try:
+                return Order.objects.create(
+                    user=user,
+                    farm_profile=user.farm_profile,
+                    order_number=OrderService.generate_order_number(),
+                    status='confirmed',  # MVP : statut unique
+                    delivery_method=delivery_method,
+                    pickup_location=pickup_location,
+                    client_uuid=client_uuid,
+                    created_offline=created_offline,
+                    synced_at=None if created_offline else timezone.now(),
+                    # Snapshot adresse
+                    **delivery_address_data,
+                    # Montants
+                    subtotal=subtotal,
+                    delivery_fee=delivery_fee,
+                    total=total
+                )
+            except IntegrityError:
+                # Si collision sur client_uuid, on retourne la commande existante
+                # si elle appartient au même utilisateur.
+                if client_uuid:
+                    existing_order = Order.objects.filter(client_uuid=client_uuid).first()
+                    if existing_order:
+                        if existing_order.user_id != user.id:
+                            raise InvalidOrderError(
+                                "client_uuid déjà utilisé par un autre utilisateur"
+                            )
+                        return existing_order
+                # Sinon collision order_number -> retry.
+                continue
+        raise InvalidOrderError("Impossible de créer la commande, veuillez réessayer.")
 
     @staticmethod
     def _create_order_notification(order: Order) -> None:
@@ -420,7 +484,7 @@ class OrderService(BaseCommerceService):
         # Calcul frais livraison
         delivery_fee = DeliveryFeeCalculator.calculate(
             delivery_method=delivery_method,
-            region=user.region,
+            region=OrderService._normalize_region(user.region),
             total_bags=total_bags
         )
 

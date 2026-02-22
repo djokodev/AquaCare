@@ -8,6 +8,11 @@ from rest_framework import serializers
 
 from .models import Product, Order, OrderItem
 from .services import OrderService
+from .domain.exceptions import (
+    InvalidOrderError,
+    ProductNotFoundError,
+    ProductNotAvailableError,
+)
 
 
 class ProductSerializer(serializers.ModelSerializer):
@@ -184,14 +189,22 @@ class OrderCreateSerializer(serializers.Serializer):
         ]
 
         # Déléguer création au service
-        order = OrderService.create_order(
-            user=user,
-            items_data=items_data,
-            delivery_method=validated_data['delivery_method'],
-            pickup_location=validated_data.get('pickup_location', None),
-            client_uuid=validated_data.get('client_uuid', None),
-            created_offline=validated_data.get('created_offline', False)
-        )
+        try:
+            order = OrderService.create_order(
+                user=user,
+                items_data=items_data,
+                delivery_method=validated_data['delivery_method'],
+                pickup_location=validated_data.get('pickup_location', None),
+                client_uuid=validated_data.get('client_uuid', None),
+                created_offline=validated_data.get('created_offline', False)
+            )
+        except (
+            InvalidOrderError,
+            ProductNotFoundError,
+            ProductNotAvailableError,
+            ValueError,
+        ) as exc:
+            raise serializers.ValidationError({'message': str(exc)}) from exc
 
         return order
 
@@ -228,8 +241,13 @@ class DeliveryFeePreviewSerializer(serializers.Serializer):
                 delivery_method=attrs['delivery_method']
             )
             attrs['preview'] = preview
-        except Exception as e:
-            raise serializers.ValidationError(str(e))
+        except (
+            InvalidOrderError,
+            ProductNotFoundError,
+            ProductNotAvailableError,
+            ValueError,
+        ) as exc:
+            raise serializers.ValidationError({'message': str(exc)}) from exc
 
         return attrs
 

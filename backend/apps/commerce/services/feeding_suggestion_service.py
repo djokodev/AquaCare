@@ -242,6 +242,7 @@ class FeedingSuggestionService:
         return {
             'has_data': True,
             'cycle_id': str(cycle.id),
+            'cycle_name': cycle.cycle_name,
             'species': cycle.species,
             'current_phase': current_phase['phase'],
             'current_avg_weight_g': round(current_avg_weight, 1),
@@ -271,20 +272,20 @@ class FeedingSuggestionService:
             float: Poids moyen en grammes OU None si impossible
         """
         # Méthode 1 : Dernier log avec avg_weight renseigné
-        last_log_with_weight = logs.filter(avg_weight__isnull=False).order_by('-log_date').first()
-        if last_log_with_weight and last_log_with_weight.avg_weight:
-            return float(last_log_with_weight.avg_weight)
+        last_log_with_weight = logs.filter(average_weight__isnull=False).order_by('-log_date').first()
+        if last_log_with_weight and last_log_with_weight.average_weight:
+            return float(last_log_with_weight.average_weight)
 
         # Méthode 2 : Calculer depuis échantillonnages
         recent_samples = logs.filter(
-            sample_weight__isnull=False,
+            sample_total_weight__isnull=False,
             sample_count__isnull=False,
             sample_count__gt=0
         ).order_by('-log_date')[:5]  # 5 derniers échantillonnages
 
         if recent_samples.exists():
             avg_from_samples = recent_samples.aggregate(
-                avg=Avg('sample_weight')
+                avg=Avg('average_weight')
             )['avg']
             if avg_from_samples:
                 return float(avg_from_samples)

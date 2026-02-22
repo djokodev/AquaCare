@@ -4,11 +4,14 @@ ViewSets Django REST Framework pour API commerce MAVECAM AquaCare.
 Architecture minimaliste : ViewSets délèguent toute logique métier aux Services.
 Responsabilités : authentification, permissions, sérialisation, routing HTTP.
 """
-from rest_framework import viewsets, status, permissions
+import logging
+
+from rest_framework import viewsets, status, permissions, mixins
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
+from rest_framework.exceptions import ValidationError
 
 from .serializers import (
     ProductSerializer, OrderSerializer, OrderCreateSerializer,
@@ -16,6 +19,13 @@ from .serializers import (
     CycleSimulationInputSerializer, CycleSimulationOutputSerializer
 )
 from .services import ProductService, OrderService, FeedingSuggestionService, CycleSimulationService
+from .domain.exceptions import (
+    InvalidOrderError,
+    ProductNotFoundError,
+    ProductNotAvailableError,
+)
+
+logger = logging.getLogger(__name__)
 
 
 class ProductViewSet(viewsets.ReadOnlyModelViewSet):
@@ -254,12 +264,12 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
             }
         }
         """
-        # Validation input
-        input_serializer = CycleSimulationInputSerializer(data=request.data)
-        input_serializer.is_valid(raise_exception=True)
-
-        # Exécuter simulation
         try:
+            # Validation input
+            input_serializer = CycleSimulationInputSerializer(data=request.data)
+            input_serializer.is_valid(raise_exception=True)
+
+            # Exécuter simulation
             simulation_result = CycleSimulationService.simulate_cycle(
                 species=input_serializer.validated_data['species'],
                 initial_fish_count=input_serializer.validated_data['initial_fish_count'],
@@ -273,14 +283,30 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
             output_serializer = CycleSimulationOutputSerializer(simulation_result)
             return Response(output_serializer.data, status=status.HTTP_200_OK)
 
-        except Exception as e:
+        except ValidationError:
+            raise
+        except (InvalidOrderError, ProductNotFoundError, ProductNotAvailableError, ValueError) as exc:
             return Response(
-                {'error': f'Erreur lors de la simulation : {str(e)}'},
+                {'message': str(exc), 'error': 'simulation_validation_error'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception:
+            logger.exception("Echec simulation cycle commerce")
+            return Response(
+                {
+                    'message': "Une erreur interne est survenue pendant la simulation.",
+                    'error': 'simulation_internal_error',
+                },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
 
-class OrderViewSet(viewsets.ModelViewSet):
+class OrderViewSet(
+    mixins.CreateModelMixin,
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    viewsets.GenericViewSet,
+):
     """
     API gestion commandes utilisateur.
 
@@ -292,6 +318,7 @@ class OrderViewSet(viewsets.ModelViewSet):
     - POST /api/commerce/orders/preview_delivery_fee/ : Preview frais livraison
     """
     permission_classes = [permissions.IsAuthenticated]
+    http_method_names = ['get', 'post', 'head', 'options']
     filter_backends = [DjangoFilterBackend, OrderingFilter]
     filterset_fields = ['status', 'delivery_method']
     ordering_fields = ['created_at', 'total']
@@ -342,9 +369,11 @@ class OrderViewSet(viewsets.ModelViewSet):
         """
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-
-        # Créer via serializer (qui appelle OrderService)
-        order = serializer.save()
+        try:
+            # Créer via serializer (qui appelle OrderService)
+            order = serializer.save()
+        except (InvalidOrderError, ProductNotFoundError, ProductNotAvailableError, ValueError) as exc:
+            raise ValidationError({'message': str(exc)}) from exc
 
         # Retourner avec OrderSerializer
         output_serializer = OrderSerializer(order)

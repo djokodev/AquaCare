@@ -7,6 +7,8 @@ from django.utils.translation import gettext_lazy as _
 SPECIES_CHOICES = [
     ('tilapia', _('Tilapia')),
     ('catfish', _('Silure (Catfish)')),
+    # Certains produits d'amorçage sont multi-espèces.
+    ('mixed', _('Mixte (Tilapia + Catfish)')),
 ]
 
 # Phases d'élevage
@@ -14,6 +16,12 @@ PHASE_CHOICES = [
     ('alevinage', _('Alevinage')),
     ('pre_grossissement', _('Pré-grossissement')),
     ('grossissement', _('Grossissement')),
+    # Alias maintenus pour compatibilité fixtures/catalogue historique.
+    ('larvae', _('Larves')),
+    ('juvenile', _('Juvénile')),
+    ('growing', _('Croissance')),
+    ('fattening', _('Engraissement')),
+    ('finishing', _('Finition')),
 ]
 
 # Marques d'aliments

@@ -3,6 +3,7 @@ Tests de generation PDF pour les commandes.
 """
 from decimal import Decimal
 import inspect
+import ctypes.util
 
 import pytest
 
@@ -15,9 +16,20 @@ from commerce.services.pdf_service import (
 import pydyf
 
 
+def _weasyprint_runtime_available() -> bool:
+    """Retourne True si les dépendances natives WeasyPrint sont présentes."""
+    # Sur macOS/Linux de dev, la lib peut être absente; on skip explicitement.
+    return bool(ctypes.util.find_library("gobject-2.0"))
+
+
 @pytest.mark.django_db
 def test_generate_order_pdf_returns_bytes():
     """Verifie que la generation produit un PDF non vide."""
+    if not _weasyprint_runtime_available():
+        pytest.skip(
+            "WeasyPrint runtime natif non disponible (gobject-2.0). "
+            "Installez les dépendances système pour exécuter ce test."
+        )
     _ensure_pdf_dependencies()
 
     user = User.objects.create_user(
@@ -27,7 +39,7 @@ def test_generate_order_pdf_returns_bytes():
         last_name="User",
         age_group="26_35",
     )
-    # Un profil ferme est crЄЄЉ par signal ; on le complЈЏte pour le test.
+    # Un profil ferme est créé par signal ; on le complète pour le test.
     farm = user.farm_profile
     farm.farm_name = "Ferme Test"
     farm.total_ponds = 2

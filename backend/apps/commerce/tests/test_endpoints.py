@@ -10,6 +10,7 @@ from django.contrib.auth import get_user_model
 
 from accounts.models import FarmProfile
 from commerce.models import Product, Order
+from commerce.services import CycleSimulationService
 
 User = get_user_model()
 
@@ -101,7 +102,7 @@ class TestProductEndpoints:
         # Créer un produit catfish
         Product.objects.create(
             name="CATFISH FOOD 2MM",
-            brand="raanan",
+            brand="dibaq",
             species="catfish",
             phase="alevinage",
             pellet_size_mm=Decimal("2.0"),
@@ -495,23 +496,20 @@ class TestOrderEndpoints:
         assert data['total_orders'] >= 2
 
     def test_create_order_validation_missing_items(self):
-        """Test validation : commande sans produits lève InvalidOrderError."""
-        from commerce.domain.exceptions import InvalidOrderError
-
+        """Test validation : commande sans produits renvoie une 400."""
         payload = {
             'delivery_method': 'pickup',
             'pickup_location': 'ndokoti',
             'items': []
         }
 
-        # L'erreur InvalidOrderError est levée par le service et non capturée par DRF
-        # TODO: Implémenter exception handler global dans DRF pour retourner 400
-        with pytest.raises(InvalidOrderError):
-            self.client.post(
-                '/api/commerce/orders/',
-                data=payload,
-                format='json'
-            )
+        response = self.client.post(
+            '/api/commerce/orders/',
+            data=payload,
+            format='json'
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert 'message' in response.data
 
     def test_create_order_validation_missing_pickup_location(self):
         """Test validation : retrait sans lieu de retrait."""
@@ -553,3 +551,94 @@ class TestOrderEndpoints:
 
         # Livraison domicile créée avec succès (pas de contrainte delivery_address)
         assert response.status_code == status.HTTP_201_CREATED
+
+    def test_order_idempotency_with_client_uuid(self):
+        """Même client_uuid pour le même user => pas de doublon."""
+        client_uuid = "11111111-1111-4111-8111-111111111111"
+        payload = {
+            'delivery_method': 'home',
+            'client_uuid': client_uuid,
+            'items': [
+                {
+                    'product_id': str(self.product.id),
+                    'quantity': 1
+                }
+            ]
+        }
+
+        first = self.client.post('/api/commerce/orders/', data=payload, format='json')
+        second = self.client.post('/api/commerce/orders/', data=payload, format='json')
+
+        assert first.status_code == status.HTTP_201_CREATED
+        assert second.status_code == status.HTTP_201_CREATED
+        assert first.data['id'] == second.data['id']
+        assert Order.objects.filter(client_uuid=client_uuid).count() == 1
+
+    def test_order_mutation_methods_not_allowed(self):
+        """PUT/PATCH/DELETE doivent être explicitement refusés."""
+        order = Order.objects.create(
+            user=self.user,
+            farm_profile=self.farm_profile,
+            order_number='ORD-TEST-0050',
+            delivery_method='home',
+            subtotal=Decimal("30000.00"),
+            delivery_fee=Decimal("3000.00"),
+            total=Decimal("33000.00"),
+            status='confirmed'
+        )
+
+        put_response = self.client.put(
+            f'/api/commerce/orders/{order.id}/',
+            data={'delivery_method': 'pickup'},
+            format='json'
+        )
+        patch_response = self.client.patch(
+            f'/api/commerce/orders/{order.id}/',
+            data={'delivery_method': 'pickup'},
+            format='json'
+        )
+        delete_response = self.client.delete(f'/api/commerce/orders/{order.id}/')
+
+        assert put_response.status_code == status.HTTP_405_METHOD_NOT_ALLOWED
+        assert patch_response.status_code == status.HTTP_405_METHOD_NOT_ALLOWED
+        assert delete_response.status_code == status.HTTP_405_METHOD_NOT_ALLOWED
+
+    def test_delivery_fee_region_case_insensitive(self):
+        """Littoral en casse mixte doit déclencher la gratuité >= 20 sacs."""
+        User.objects.filter(id=self.user.id).update(region='Littoral ')
+        self.user.refresh_from_db()
+
+        payload = {
+            'delivery_method': 'home',
+            'items': [
+                {
+                    'product_id': str(self.product.id),
+                    'quantity': 20
+                }
+            ]
+        }
+        response = self.client.post('/api/commerce/orders/preview_delivery_fee/', data=payload, format='json')
+        assert response.status_code == status.HTTP_200_OK
+        assert Decimal(response.data['delivery_fee']) == Decimal("0")
+
+    def test_cycle_simulation_internal_error_is_generic(self, monkeypatch):
+        """Les erreurs internes ne doivent pas exposer les détails techniques."""
+
+        def _raise_error(*args, **kwargs):
+            raise RuntimeError("internal stacktrace secret")
+
+        monkeypatch.setattr(CycleSimulationService, "simulate_cycle", _raise_error)
+
+        payload = {
+            'species': 'tilapia',
+            'initial_fish_count': 1000
+        }
+        response = self.client.post(
+            '/api/commerce/products/cycle_simulation/',
+            data=payload,
+            format='json'
+        )
+
+        assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+        assert response.data['error'] == 'simulation_internal_error'
+        assert 'secret' not in response.data['message']

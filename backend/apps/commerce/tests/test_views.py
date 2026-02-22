@@ -147,7 +147,8 @@ class TestOrderViewSet:
         }, format="json")
         response = authenticated_client.get("/api/commerce/orders/")
         assert response.status_code == status.HTTP_200_OK
-        assert len(response.data) >= 1
+        assert response.data["count"] >= 1
+        assert len(response.data["results"]) >= 1
 
     def test_order_statistics_endpoint(self, authenticated_client, test_farm, test_product):
         authenticated_client.post("/api/commerce/orders/", {
@@ -157,3 +158,26 @@ class TestOrderViewSet:
         response = authenticated_client.get("/api/commerce/orders/statistics/")
         assert response.status_code == status.HTTP_200_OK
         assert "total_orders" in response.data
+
+    def test_order_mutation_methods_are_blocked(self, authenticated_client, test_farm, test_product):
+        create_response = authenticated_client.post("/api/commerce/orders/", {
+            "items": [{"product_id": str(test_product.id), "quantity": 1}],
+            "delivery_method": "home"
+        }, format="json")
+        order_id = create_response.data["id"]
+
+        put_response = authenticated_client.put(
+            f"/api/commerce/orders/{order_id}/",
+            {"delivery_method": "pickup"},
+            format="json",
+        )
+        patch_response = authenticated_client.patch(
+            f"/api/commerce/orders/{order_id}/",
+            {"delivery_method": "pickup"},
+            format="json",
+        )
+        delete_response = authenticated_client.delete(f"/api/commerce/orders/{order_id}/")
+
+        assert put_response.status_code == status.HTTP_405_METHOD_NOT_ALLOWED
+        assert patch_response.status_code == status.HTTP_405_METHOD_NOT_ALLOWED
+        assert delete_response.status_code == status.HTTP_405_METHOD_NOT_ALLOWED
