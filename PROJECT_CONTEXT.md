@@ -66,3 +66,38 @@ docker-compose exec api python manage.py load_nutritional_data  # 8 guides
 docker-compose exec api python manage.py load_products           # 22 produits
 docker-compose exec api python manage.py setup_rbac              # Roles admin
 ```
+
+## Mise a jour audit Commerce (Fevrier 2026)
+
+### Backend Commerce
+- Hardening API commandes: `OrderViewSet` restreint a `GET/POST` et `GET detail` (mutations `PUT/PATCH/DELETE` bloquees en 405).
+- Gestion d'erreurs metier durcie: mapping exceptions metier vers 400 propres; suppression d'exposition brute des erreurs internes dans `cycle_simulation` (message generique client + logs serveur).
+- Idempotence offline renforcee via `client_uuid` dans `OrderService`:
+  - meme `client_uuid` + meme utilisateur => reutilisation de la commande existante;
+  - `client_uuid` reutilise par un autre utilisateur => erreur metier controlee.
+- Creation de commande robuste en concurrence: retry sur `IntegrityError` pour collisions `order_number/client_uuid`.
+- Normalisation region (`trim/lower`) appliquee au calcul de livraison pour eviter les ecarts de casse (`Littoral`, `littoral`, etc.).
+- Contrat suggestions aligne frontend: ajout `cycle_name` dans `feeding_suggestions`.
+- Taxonomie commerce etendue pour compatibilite legacy/catalogue (`species/phase`) sans rupture d'API.
+- Settings de test stabilises: cache force en `LocMemCache` (`mavecam_api.settings.test`) pour supprimer la dependance Redis en tests.
+- Test PDF rendu deterministe: skip explicite si dependances systeme WeasyPrint absentes.
+
+### Frontend Commerce
+- Nettoyage encodage/texte Commerce (suppression mojibake) sur types/domain/services.
+- Contrats TS alignes sur payload API reel:
+  - simulation en numerique (`unit_price`, `total_price`);
+  - `CycleSuggestion` enrichi (`cycle_name`, `avg_daily_consumption_kg`);
+  - phases/species alignees avec backend.
+- Gestion d'erreurs centralisee dans `commerceSlice` (`message | error | detail | non_field_errors | fallback`).
+- `OrdersHistoryScreen`: locale date/heure basee sur `i18n.language` (plus de `fr-FR` force), branding pickup neutralise via i18n (`pickupLocationPrefix`).
+- `CartScreen`: suppression logs sensibles en flux commande, fallbacks d'erreur robustes, normalisation region cote UI.
+- Logger production durci: logs desactives par defaut en release (`ENABLE_PROD_LOGS=false`).
+- Ajouts i18n FR/EN Commerce:
+  - correction `confirmClearCartMessage`;
+  - nouvelles cles phases backend (`alevinage`, `pre_grossissement`, `grossissement`);
+  - `pickupLocationPrefix`.
+- Config Jest dediee Commerce (`jest.commerce.config.js`) + scripts `test:commerce` et `test:commerce:coverage`.
+
+### Tests et couverture Commerce valides
+- Backend Commerce: tests passes en mode deterministe (`pytest apps/commerce/tests -n 0`), avec couverture core Commerce a 76% (objectif >=75 atteint).
+- Frontend Commerce: tests ecrans/services/store/domain completes, couverture module Commerce a 77.6% statements et 79.9% lines (objectif >=70 atteint).
