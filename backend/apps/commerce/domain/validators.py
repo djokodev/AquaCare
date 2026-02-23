@@ -7,6 +7,7 @@ sans dépendances Django (utilisables hors contexte web).
 from typing import List, Dict, Any
 from decimal import Decimal
 from .exceptions import InvalidOrderError
+from ..constants import PICKUP_LOCATION_CHOICES
 
 
 class OrderValidator:
@@ -76,7 +77,7 @@ class OrderValidator:
 
         # Si retrait en magasin, vérifier point de retrait
         if delivery_method == 'pickup':
-            valid_locations = ['ndokoti', 'ndogpasi']
+            valid_locations = [loc[0] for loc in PICKUP_LOCATION_CHOICES]
             if not pickup_location:
                 raise InvalidOrderError(
                     "Le point de retrait est requis pour la méthode 'pickup'"

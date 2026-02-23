@@ -14,6 +14,9 @@ from django.utils import timezone
 
 logger = logging.getLogger(__name__)
 
+# Guard pour éviter d'appliquer le patch plusieurs fois
+_pdf_patched = False
+
 
 def _ensure_pdf_dependencies():
     """
@@ -23,7 +26,14 @@ def _ensure_pdf_dependencies():
     arguments, ce qui déclenche l'erreur « PDF.__init__() takes 1 positional
     argument but 3 were given » lorsque WeasyPrint appelle pydyf.PDF(version, identifier).
     On applique un shim de compatibilité si nécessaire.
+
+    Le guard _pdf_patched garantit que le patch n'est appliqué qu'une seule fois,
+    évitant les conflits en cas d'appels concurrents.
     """
+    global _pdf_patched
+    if _pdf_patched:
+        return
+
     # Lazy import to avoid loading WeasyPrint at Django startup
     import pydyf
 
@@ -58,6 +68,8 @@ def _ensure_pdf_dependencies():
             "Shim de compatibilité appliqué pour pydyf %s (signature héritée sans arguments).",
             pydyf_version,
         )
+
+    _pdf_patched = True
 
 
 def generate_order_pdf(order):

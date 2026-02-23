@@ -4,6 +4,7 @@ Service de simulation de cycles aquacoles MAVECAM.
 Permet aux aquaculteurs de planifier leur budget AVANT de démarrer un cycle.
 Calcule automatiquement : aliments nécessaires, coûts, phases, ROI estimé.
 """
+import math
 from decimal import Decimal
 from typing import Dict, List, Optional
 from django.db.models import QuerySet
@@ -257,7 +258,7 @@ class CycleSimulationService(BaseCommerceService):
         # Compléter avec sacs de 1kg si reste
         product_1kg = available_products.filter(package_weight_kg=1).first()
         if product_1kg and remaining_kg > 0:
-            bags_1kg = int(remaining_kg) + 1  # Arrondir au supérieur
+            bags_1kg = math.ceil(float(remaining_kg))  # Arrondi au supérieur correct
             suggested_products.append({
                 'product_id': str(product_1kg.id),
                 'product_name': product_1kg.name,

@@ -112,6 +112,14 @@ REST_FRAMEWORK = {
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 50,
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    "DEFAULT_THROTTLE_CLASSES": [
+        "rest_framework.throttling.AnonRateThrottle",
+        "rest_framework.throttling.UserRateThrottle",
+    ],
+    "DEFAULT_THROTTLE_RATES": {
+        "anon": "20/minute",
+        "user": "100/minute",
+    },
 }
 
 # JWT Configuration
@@ -189,6 +197,17 @@ CELERY_WORKER_MAX_TASKS_PER_CHILD = 1000  # Restart worker after 1000 tasks
 
 # Celery Beat (Periodic Tasks)
 CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
+
+# =============================================================================
+# CACHE CONFIGURATION
+# =============================================================================
+# Redis cache — shared across all Gunicorn workers (required for rate limiting)
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.redis.RedisCache",
+        "LOCATION": os.getenv('CELERY_BROKER_URL', 'redis://redis:6379/0'),
+    }
+}
 
 # Email Configuration (pour notifications email)
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'

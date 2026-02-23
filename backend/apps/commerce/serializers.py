@@ -98,6 +98,8 @@ class OrderItemInputSerializer(serializers.Serializer):
     Serializer pour validation input items lors création commande.
 
     Utilisé dans OrderCreateSerializer.
+    Note : la validation de disponibilité produit se fait en batch dans
+    OrderCreateSerializer.validate() pour éviter les requêtes N+1.
     """
     product_id = serializers.UUIDField(
         required=True,
@@ -108,18 +110,6 @@ class OrderItemInputSerializer(serializers.Serializer):
         min_value=1,
         help_text="Quantité (nombre de sacs)"
     )
-
-    def validate_product_id(self, value):
-        """Valide que le produit existe et est disponible."""
-        from .services import ProductService
-        from .domain.exceptions import ProductNotFoundError, ProductNotAvailableError
-
-        try:
-            ProductService.get_product_by_id(str(value), check_availability=True)
-        except (ProductNotFoundError, ProductNotAvailableError) as e:
-            raise serializers.ValidationError(str(e))
-
-        return value
 
 
 class OrderCreateSerializer(serializers.Serializer):
@@ -168,6 +158,22 @@ class OrderCreateSerializer(serializers.Serializer):
         # Si home, pickup_location doit être vide
         if delivery_method == 'home' and pickup_location:
             attrs['pickup_location'] = ''  # Force vide
+
+        # Validation batch des produits : 1 seule requête DB pour tous les items
+        # (évite les N+1 de validate_product_id sur chaque OrderItemInputSerializer)
+        items = attrs.get('items', [])
+        if items:
+            product_ids = [str(item['product_id']) for item in items]
+            available_products = Product.objects.filter(
+                id__in=product_ids,
+                is_available=True
+            ).values_list('id', flat=True)
+            found_ids = {str(pid) for pid in available_products}
+            missing = [pid for pid in product_ids if pid not in found_ids]
+            if missing:
+                raise serializers.ValidationError({
+                    'items': f"Produit(s) introuvable(s) ou indisponible(s) : {', '.join(missing)}"
+                })
 
         return attrs
 

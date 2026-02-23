@@ -205,6 +205,28 @@ jobs:
               exit 1
             fi
 
+            if ! docker ps --format '{{.Names}}' | grep -q '^aquacare_celery_worker$'; then
+              echo "❌ Celery worker container not running!"
+              docker compose -f /root/aquacare/docker-compose.prod.yml logs celery_worker
+              exit 1
+            fi
+
+            for i in {1..5}; do
+              if docker exec aquacare_celery_worker celery -A mavecam_api inspect ping --timeout=5 2>/dev/null | grep -q "pong"; then
+                echo "✅ Celery worker check passed!"
+                break
+              fi
+
+              if [ "$i" -eq 5 ]; then
+                echo "❌ Celery worker check failed after 5 attempts"
+                docker compose -f /root/aquacare/docker-compose.prod.yml logs celery_worker
+                exit 1
+              fi
+
+              echo "Celery worker check attempt $i/5 failed, retrying..."
+              sleep 5
+            done
+
             # Test health check endpoint (retry 5 fois)
             for i in {1..5}; do
               if curl -f http://localhost/api/health/ > /dev/null 2>&1; then

@@ -463,7 +463,9 @@ class OrderItem(models.Model):
 
     def save(self, *args, **kwargs):
         """Calcul automatique du line_total si non fourni."""
-        if not self.line_total:
-            self.line_total = self.unit_price * self.quantity
-        self.full_clean()
+        if not self.pk:
+            # À la création : calculer line_total si absent, puis valider
+            if not self.line_total:
+                self.line_total = self.unit_price * self.quantity
+            self.full_clean()
         super().save(*args, **kwargs)

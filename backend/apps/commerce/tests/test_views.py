@@ -3,11 +3,12 @@ Tests unitaires pour les API ViewSets.
 Coverage: ProductViewSet, OrderViewSet endpoints.
 """
 import pytest
+from datetime import date
 from decimal import Decimal
 from rest_framework.test import APIClient
 from rest_framework import status
 
-from commerce.models import Product
+from commerce.models import Product, Order
 from accounts.models import User, FarmProfile
 
 
@@ -181,3 +182,103 @@ class TestOrderViewSet:
         assert put_response.status_code == status.HTTP_405_METHOD_NOT_ALLOWED
         assert patch_response.status_code == status.HTTP_405_METHOD_NOT_ALLOWED
         assert delete_response.status_code == status.HTTP_405_METHOD_NOT_ALLOWED
+
+    def test_retrieve_order_cross_user_denied(self, api_client, test_farm, test_product):
+        """Un utilisateur B ne peut pas accéder à la commande d'un utilisateur A."""
+        user_b = User.objects.create_user(
+            phone_number="+237999888777",
+            password="testpass123",
+            first_name="User",
+            last_name="B",
+            age_group="26_35"
+        )
+        FarmProfile.objects.get_or_create(user=user_b, defaults={"farm_name": "Farm B"})
+
+        # Créer commande pour user_a (test_user via authenticated_client)
+        client_a = APIClient()
+        client_a.force_authenticate(user=test_farm.user)
+        create_resp = client_a.post("/api/commerce/orders/", {
+            "items": [{"product_id": str(test_product.id), "quantity": 1}],
+            "delivery_method": "home"
+        }, format="json")
+        assert create_resp.status_code == status.HTTP_201_CREATED
+        order_id = create_resp.data["id"]
+
+        # User B tente d'accéder à la commande de User A → 404 (filtré par queryset)
+        client_b = APIClient()
+        client_b.force_authenticate(user=user_b)
+        response = client_b.get(f"/api/commerce/orders/{order_id}/")
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_for_cycle_cross_user_denied(self, api_client, test_farm, test_product):
+        """Un utilisateur B ne peut pas accéder aux suggestions produits du cycle d'un utilisateur A."""
+        from aquaculture.models import ProductionCycle
+
+        user_a = test_farm.user
+        user_b = User.objects.create_user(
+            phone_number="+237666555444",
+            password="testpass123",
+            first_name="User",
+            last_name="B",
+            age_group="26_35"
+        )
+
+        # Créer un cycle avec les vrais champs du modèle ProductionCycle pour user_a
+        cycle_a = ProductionCycle.objects.create(
+            farm_profile=test_farm,
+            cycle_name="Cycle Test A",
+            species="tilapia",
+            pond_identifier="Bassin A",
+            start_date=date(2025, 1, 1),
+            initial_count=1000,
+            initial_average_weight=Decimal("5.0"),
+            initial_biomass=Decimal("5.0"),
+            current_count=1000,
+            current_average_weight=Decimal("5.0"),
+            current_biomass=Decimal("5.0"),
+        )
+
+        # User B tente d'accéder aux suggestions produits du cycle de User A → 404
+        # (filtré par farm_profile__user=request.user dans la vue)
+        client_b = APIClient()
+        client_b.force_authenticate(user=user_b)
+        response = client_b.get(f"/api/commerce/products/for_cycle/{cycle_a.id}/")
+        assert response.status_code in [status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND]
+
+    def test_create_order_empty_items(self, authenticated_client, test_farm):
+        """Commande avec items vides → 400."""
+        response = authenticated_client.post("/api/commerce/orders/", {
+            "items": [],
+            "delivery_method": "home"
+        }, format="json")
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_create_order_invalid_pickup_location(self, authenticated_client, test_farm, test_product):
+        """Commande avec point de retrait invalide → 400."""
+        response = authenticated_client.post("/api/commerce/orders/", {
+            "items": [{"product_id": str(test_product.id), "quantity": 1}],
+            "delivery_method": "pickup",
+            "pickup_location": "marche_inconnu"
+        }, format="json")
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_notification_failure_does_not_break_order(
+        self, authenticated_client, test_farm, test_product, monkeypatch
+    ):
+        """Échec du service de notification ne doit pas annuler la création de commande."""
+        from commerce.services import order_service as os_module
+
+        def failing_notification(order):
+            raise RuntimeError("Service de notification indisponible")
+
+        monkeypatch.setattr(
+            os_module.OrderService, "_create_order_notification", staticmethod(failing_notification)
+        )
+
+        response = authenticated_client.post("/api/commerce/orders/", {
+            "items": [{"product_id": str(test_product.id), "quantity": 1}],
+            "delivery_method": "home"
+        }, format="json")
+        # La commande doit être créée malgré l'échec de la notification
+        assert response.status_code == status.HTTP_201_CREATED
+        assert "order_number" in response.data

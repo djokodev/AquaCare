@@ -77,7 +77,7 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
         from aquaculture.models import ProductionCycle
 
         try:
-            cycle = ProductionCycle.objects.get(id=cycle_id, user=request.user)
+            cycle = ProductionCycle.objects.get(id=cycle_id, farm_profile__user=request.user)
             products = ProductService.get_products_for_cycle(cycle)
             serializer = self.get_serializer(products, many=True)
             return Response(serializer.data)

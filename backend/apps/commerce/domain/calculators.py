@@ -50,8 +50,12 @@ class DeliveryFeeCalculator:
         if delivery_method == 'pickup':
             return Decimal('0')
 
+        # Normaliser la région une fois ici pour éviter les erreurs de casse
+        # ('Littoral', 'LITTORAL', 'littoral' → 'littoral')
+        normalized_region = (region or '').strip().lower()
+
         # Règle 2 : Douala + 20 sacs ou plus = gratuit
-        if region == REGION_DOUALA and total_bags >= DELIVERY_FEE_FREE_THRESHOLD_BAGS:
+        if normalized_region == REGION_DOUALA and total_bags >= DELIVERY_FEE_FREE_THRESHOLD_BAGS:
             return Decimal('0')
 
         # Règle 3 : Tous les autres cas = frais standard

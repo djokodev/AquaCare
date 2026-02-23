@@ -4,12 +4,15 @@ Service de gestion des commandes MAVECAM AquaCare.
 Architecture Clean : Service stateless coordonnant les opérations commande.
 Gère création, validation, calculs automatiques et notifications.
 """
+import logging
 from datetime import datetime
 from decimal import Decimal
 from typing import List, Dict, Any, Optional
 from django.db import transaction, IntegrityError
 from django.utils import timezone
 from django.db.models import QuerySet, Sum, Count
+
+logger = logging.getLogger(__name__)
 
 from ..models import Order, OrderItem
 from ..domain.calculators import DeliveryFeeCalculator, OrderTotalCalculator
@@ -169,8 +172,15 @@ class OrderService(BaseCommerceService):
                 line_total=item_data['line_total']
             )
 
-        # 7. Notification utilisateur
-        OrderService._create_order_notification(order)
+        # 7. Notification utilisateur (non-bloquante : échec ne doit pas annuler la commande)
+        try:
+            OrderService._create_order_notification(order)
+        except Exception:
+            logger.error(
+                "Échec envoi notification pour commande %s",
+                order.id,
+                exc_info=True
+            )
 
         OrderService.log_operation('order_created', {
             'order_id': str(order.id),
@@ -314,6 +324,10 @@ class OrderService(BaseCommerceService):
         - YYYYMMDD : Date du jour
         - XXXX : Compteur incrémental sur 4 chiffres
 
+        Utilise select_for_update() pour éviter les race conditions : le verrou
+        est maintenu jusqu'à la fin de la transaction enclosante (transaction.atomic
+        de create_order), garantissant l'unicité même en cas de requêtes concurrentes.
+
         Returns:
             str: Numéro de commande unique
 
@@ -322,18 +336,17 @@ class OrderService(BaseCommerceService):
             >>> num
             'ORD-20250110-0001'
         """
-        from django.db.models import Max
-
         today = datetime.now().strftime('%Y%m%d')
         prefix = f"ORD-{today}-"
 
-        # Trouver dernier numéro du jour
-        last_order = Order.objects.filter(
+        # select_for_update() pose un verrou de ligne (ou d'absence de ligne)
+        # maintenu jusqu'à la fin de la transaction enclosante.
+        last_order = Order.objects.select_for_update().filter(
             order_number__startswith=prefix
-        ).aggregate(Max('order_number'))
+        ).order_by('-order_number').first()
 
-        if last_order['order_number__max']:
-            last_num = int(last_order['order_number__max'].split('-')[-1])
+        if last_order:
+            last_num = int(last_order.order_number.split('-')[-1])
             next_num = last_num + 1
         else:
             next_num = 1

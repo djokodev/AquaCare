@@ -212,8 +212,8 @@ class ProductService(BaseCommerceService):
             pellet_size_mm=Decimal(str(recommended_size)),
             is_available=True
         ).order_by(
-            # Priorité Aller Aqua
-            '-brand'  # 'aller_aqua' avant 'dibaq' alphabétiquement inversé
+            # Priorité Aller Aqua : 'aller_aqua' < 'dibaq' en ordre croissant
+            'brand'
         ).first()
 
         if not product:
@@ -223,7 +223,7 @@ class ProductService(BaseCommerceService):
                 pellet_size_mm__gte=Decimal(str(recommended_size - 0.5)),
                 pellet_size_mm__lte=Decimal(str(recommended_size + 0.5)),
                 is_available=True
-            ).order_by('-brand', 'pellet_size_mm').first()
+            ).order_by('brand', 'pellet_size_mm').first()
 
         return product
 
