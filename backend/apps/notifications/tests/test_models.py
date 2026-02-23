@@ -10,6 +10,7 @@ import pytest
 from django.utils import timezone
 from django.contrib.contenttypes.models import ContentType
 from datetime import timedelta
+from unittest.mock import patch
 
 from notifications.models import Notification, NotificationPreference, PushToken
 
@@ -112,3 +113,90 @@ class TestPushTokenModel:
 
         user_tokens = PushToken.objects.filter(user=user)
         assert user_tokens.count() == 2
+
+    def test_deactivate_sets_is_active_false(self, user):
+        """[P2] PushToken.deactivate() passe is_active à False et sauvegarde."""
+        token = PushToken.objects.create(
+            user=user,
+            expo_push_token='ExponentPushToken[deactivate_test]',
+            device_id='device-deactivate',
+            platform='ios',
+            is_active=True,
+        )
+        token.deactivate()
+        token.refresh_from_db()
+        assert token.is_active is False
+
+
+@pytest.mark.django_db
+class TestNotificationPreferenceQuietHours:
+    """Tests de is_in_quiet_hours() et is_type_enabled()."""
+
+    def test_quiet_hours_simple_range_inside(self, user):
+        """Plage simple (08:00→22:00) : heure dans la plage → True."""
+        from datetime import time
+        pref = NotificationPreference.objects.create(
+            user=user,
+            quiet_hours_start=time(8, 0),
+            quiet_hours_end=time(22, 0),
+        )
+        with patch('django.utils.timezone.localtime') as mock_local:
+            from datetime import datetime
+            mock_local.return_value = timezone.now().replace(hour=12, minute=0)
+            assert pref.is_in_quiet_hours() is True
+
+    def test_quiet_hours_simple_range_outside(self, user):
+        """Plage simple (08:00→22:00) : heure hors de la plage → False."""
+        from datetime import time
+        pref = NotificationPreference.objects.create(
+            user=user,
+            quiet_hours_start=time(8, 0),
+            quiet_hours_end=time(22, 0),
+        )
+        with patch('django.utils.timezone.localtime') as mock_local:
+            mock_local.return_value = timezone.now().replace(hour=23, minute=0)
+            assert pref.is_in_quiet_hours() is False
+
+    def test_quiet_hours_midnight_crossing_inside(self, user):
+        """Plage traversant minuit (22:00→07:00) : heure dans la plage → True."""
+        from datetime import time
+        pref = NotificationPreference.objects.create(
+            user=user,
+            quiet_hours_start=time(22, 0),
+            quiet_hours_end=time(7, 0),
+        )
+        with patch('django.utils.timezone.localtime') as mock_local:
+            mock_local.return_value = timezone.now().replace(hour=23, minute=30)
+            assert pref.is_in_quiet_hours() is True
+
+    def test_quiet_hours_midnight_crossing_outside(self, user):
+        """Plage traversant minuit (22:00→07:00) : heure hors de la plage → False."""
+        from datetime import time
+        pref = NotificationPreference.objects.create(
+            user=user,
+            quiet_hours_start=time(22, 0),
+            quiet_hours_end=time(7, 0),
+        )
+        with patch('django.utils.timezone.localtime') as mock_local:
+            mock_local.return_value = timezone.now().replace(hour=12, minute=0)
+            assert pref.is_in_quiet_hours() is False
+
+    def test_quiet_hours_not_configured(self, user):
+        """Pas d'heures silencieuses configurées → False."""
+        pref = NotificationPreference.objects.create(user=user)
+        assert pref.is_in_quiet_hours() is False
+
+    def test_is_type_enabled_known_type(self, user):
+        """Type connu et activé → True."""
+        pref = NotificationPreference.objects.create(user=user, feeding_reminders=True)
+        assert pref.is_type_enabled('feeding_reminder') is True
+
+    def test_is_type_enabled_disabled_type(self, user):
+        """Type connu mais désactivé → False."""
+        pref = NotificationPreference.objects.create(user=user, feeding_reminders=False)
+        assert pref.is_type_enabled('feeding_reminder') is False
+
+    def test_is_type_enabled_unknown_type(self, user):
+        """Type inconnu → True par défaut."""
+        pref = NotificationPreference.objects.create(user=user)
+        assert pref.is_type_enabled('unknown_type_xyz') is True

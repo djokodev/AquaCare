@@ -125,6 +125,17 @@ class TestNotificationServiceDelete:
             notification_type='alert',
             title='Old',
             message='Old notification',
+            is_read=True,
+            scheduled_for=timezone.now() - timedelta(days=95)
+        )
+
+        # Notification ancienne non lue (doit être conservée)
+        old_unread = Notification.objects.create(
+            user=user,
+            notification_type='alert',
+            title='Old unread',
+            message='Old unread notification',
+            is_read=False,
             scheduled_for=timezone.now() - timedelta(days=95)
         )
 
@@ -132,6 +143,7 @@ class TestNotificationServiceDelete:
 
         assert count == 1
         assert not Notification.objects.filter(id=old_notif.id).exists()
+        assert Notification.objects.filter(id=old_unread.id).exists()
 
 
 @pytest.mark.django_db
@@ -166,3 +178,63 @@ class TestNotificationServiceQuery:
 
         notifications = NotificationService.get_user_notifications(user)
         assert len(notifications) == 3
+
+
+@pytest.mark.django_db
+class TestCreateBulkNotificationsN1:
+    """Tests de l'optimisation N+1 dans create_bulk_notifications."""
+
+    def test_no_n1_queries_for_preferences(self, django_assert_num_queries):
+        """create_bulk_notifications() ne doit pas faire N requêtes pour N users."""
+        from accounts.models import User
+
+        users = []
+        for i in range(5):
+            u = User.objects.create_user(
+                phone_number=f"+23765000000{i}",
+                password="testpass123",
+                first_name="Bulk",
+                last_name=f"User{i}",
+                age_group="26_35",
+            )
+            users.append(u)
+
+        # Nombre de requêtes attendu : 1 SELECT prefs + 1 bulk_create prefs + 1 bulk_create notifs
+        # (pas N requêtes pour N users)
+        with django_assert_num_queries(3):
+            count = NotificationService.create_bulk_notifications(
+                users=users,
+                notification_type='system_update',
+                title='Bulk Test',
+                message='Test message',
+            )
+
+        assert count == 5
+
+    def test_bulk_with_existing_preferences(self, django_assert_num_queries):
+        """Si toutes les préférences existent déjà, pas de bulk_create de prefs."""
+        from accounts.models import User
+        from notifications.models import NotificationPreference
+
+        users = []
+        for i in range(3):
+            u = User.objects.create_user(
+                phone_number=f"+23766000000{i}",
+                password="testpass123",
+                first_name="Existing",
+                last_name=f"Pref{i}",
+                age_group="26_35",
+            )
+            NotificationPreference.objects.create(user=u)
+            users.append(u)
+
+        # 1 SELECT prefs + 1 bulk_create notifs (pas de bulk_create prefs)
+        with django_assert_num_queries(2):
+            count = NotificationService.create_bulk_notifications(
+                users=users,
+                notification_type='system_update',
+                title='Existing Pref Test',
+                message='Test',
+            )
+
+        assert count == 3

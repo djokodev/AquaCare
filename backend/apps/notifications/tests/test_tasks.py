@@ -14,7 +14,11 @@ from notifications.tasks import (
     send_email_notification_task,
     send_push_notification_task,
     cleanup_old_notifications,
-    send_scheduled_notifications
+    send_scheduled_notifications,
+    EMAIL_ERROR_RECIPIENT_MISSING,
+    EMAIL_ERROR_SEND_FAILED,
+    PUSH_ERROR_NO_VALID_TOKENS,
+    PUSH_ERROR_SEND_FAILED,
 )
 from notifications.models import Notification, PushToken
 
@@ -63,8 +67,7 @@ class TestEmailNotificationTask:
             # Assertions
             notification.refresh_from_db()
             assert notification.email_sent_at is None
-            assert notification.email_error is not None
-            assert "sans email" in notification.email_error.lower()
+            assert notification.email_error == EMAIL_ERROR_RECIPIENT_MISSING
             mock_send.assert_not_called()
 
     def test_send_email_notification_task_retry_on_failure(self, notification, user):
@@ -82,6 +85,8 @@ class TestEmailNotificationTask:
                 send_email_notification_task(str(notification.id))
 
             assert "Network error" in str(exc_info.value)
+            notification.refresh_from_db()
+            assert notification.email_error == EMAIL_ERROR_SEND_FAILED
 
 
 # =================== TESTS PUSH NOTIFICATIONS ===================
@@ -143,8 +148,38 @@ class TestPushNotificationTask:
             send_push_notification_task(str(notification.id))
 
             # Assertions: Token desactive
+            notification.refresh_from_db()
             push_token.refresh_from_db()
             assert push_token.is_active is False
+            assert notification.push_error == PUSH_ERROR_NO_VALID_TOKENS
+
+    def test_send_push_notification_task_deactivates_correct_token_by_index(self, notification, push_token):
+        """Un seul token invalide dans une réponse mixte -> seul ce token est désactivé."""
+        second_token = PushToken.objects.create(
+            user=notification.user,
+            expo_push_token='ExponentPushToken[yyyyyyyyyyyyyyyyyyyyyy]',
+            device_id='device-456',
+            platform='android',
+            is_active=True,
+        )
+
+        with patch('requests.post') as mock_post:
+            mock_response = MagicMock()
+            mock_response.status_code = 200
+            mock_response.json.return_value = {
+                'data': [
+                    {'status': 'ok'},
+                    {'status': 'error', 'details': {'error': 'DeviceNotRegistered'}},
+                ]
+            }
+            mock_post.return_value = mock_response
+
+            send_push_notification_task(str(notification.id))
+
+        push_token.refresh_from_db()
+        second_token.refresh_from_db()
+        assert push_token.is_active is True
+        assert second_token.is_active is False
 
     def test_send_push_notification_task_expo_api_failure(self, notification, push_token):
         """Expo API down -> Exception raised (retry Celery)."""
@@ -157,6 +192,8 @@ class TestPushNotificationTask:
                 send_push_notification_task(str(notification.id))
 
             assert "API unreachable" in str(exc_info.value)
+            notification.refresh_from_db()
+            assert notification.push_error == PUSH_ERROR_SEND_FAILED
 
 
 # =================== TESTS CLEANUP & SCHEDULED ===================
@@ -247,3 +284,92 @@ class TestNotificationMaintenance:
                 # Verifier que les taches d'envoi ont ete appelees pour past
                 # (au moins une des deux selon channels configures)
                 assert mock_email.called or mock_push.called
+
+    def test_send_scheduled_notifications_uses_batch_update(self, user):
+        """[P5] send_scheduled_notifications() doit utiliser un UPDATE batch, pas mark_as_sent individuel."""
+        past_time = timezone.now() - timedelta(hours=1)
+
+        for i in range(3):
+            Notification.objects.create(
+                user=user,
+                notification_type='feeding_reminder',
+                title=f'Scheduled {i}',
+                message='Batch update test',
+                scheduled_for=past_time,
+                channels=['in_app'],
+                is_sent=False,
+            )
+
+        with patch('notifications.tasks.send_email_notification_task.delay'):
+            with patch('notifications.tasks.send_push_notification_task.delay'):
+                with patch.object(Notification, 'mark_as_sent') as mock_mark_sent:
+                    send_scheduled_notifications()
+
+                    # mark_as_sent individuel NE doit PAS être appelé (batch update utilisé à la place)
+                    mock_mark_sent.assert_not_called()
+
+        # Toutes les notifications passées doivent être marquées is_sent=True
+        assert Notification.objects.filter(is_sent=False, scheduled_for__lte=timezone.now()).count() == 0
+
+    def test_send_scheduled_notifications_batch_limit(self, user):
+        """[A4] send_scheduled_notifications() ne traite que 500 notifications max par run."""
+        past_time = timezone.now() - timedelta(hours=1)
+
+        # Creer 10 notifications (simuler un petit batch)
+        for i in range(10):
+            Notification.objects.create(
+                user=user,
+                notification_type='alert',
+                title=f'Notif {i}',
+                message='Batch limit test',
+                scheduled_for=past_time,
+                channels=['in_app'],
+                is_sent=False,
+            )
+
+        with patch('notifications.tasks.send_email_notification_task.delay'):
+            with patch('notifications.tasks.send_push_notification_task.delay'):
+                result = send_scheduled_notifications()
+
+        # 10 notifications bien traitées (en dessous de la limite 500)
+        assert "10" in result
+        assert Notification.objects.filter(is_sent=False, scheduled_for__lte=timezone.now()).count() == 0
+
+    def test_send_push_notification_deactivates_correct_token_by_value(self, notification):
+        """[P2] Désactivation du bon token par valeur Expo, pas par index."""
+        user = notification.user
+
+        # Créer deux tokens dans un ordre déterminé
+        token_a = PushToken.objects.create(
+            user=user,
+            expo_push_token='ExponentPushToken[aaaaaaaaaaaaaaaaaaaaaa]',
+            device_id='device-aaa',
+            platform='ios',
+            is_active=True,
+        )
+        token_b = PushToken.objects.create(
+            user=user,
+            expo_push_token='ExponentPushToken[bbbbbbbbbbbbbbbbbbbbbb]',
+            device_id='device-bbb',
+            platform='android',
+            is_active=True,
+        )
+
+        # Expo renvoie : token_a ok, token_b DeviceNotRegistered
+        with patch('requests.post') as mock_post:
+            mock_response = MagicMock()
+            mock_response.status_code = 200
+            mock_response.json.return_value = {
+                'data': [
+                    {'status': 'ok'},
+                    {'status': 'error', 'details': {'error': 'DeviceNotRegistered'}},
+                ]
+            }
+            mock_post.return_value = mock_response
+
+            send_push_notification_task(str(notification.id))
+
+        token_a.refresh_from_db()
+        token_b.refresh_from_db()
+        assert token_a.is_active is True, "token_a ne doit pas être désactivé"
+        assert token_b.is_active is False, "token_b doit être désactivé"
