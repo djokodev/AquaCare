@@ -49,6 +49,7 @@
   selectDistrictFirst: 'Select a district first',
   selectCityFirst: 'Select a city first',
   noNeighborhoodsAvailable: 'No neighborhoods available',
+  noOptionsAvailable: 'No options available',
   city: 'City',
 
   // Activity Types

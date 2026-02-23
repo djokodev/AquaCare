@@ -506,11 +506,11 @@ function PickerModal({
           
           {isLoading ? (
             <View style={styles.emptyState}>
-              <Text style={styles.emptyText}>Chargement...</Text>
+              <Text style={styles.emptyText}>{t('loading')}</Text>
             </View>
           ) : options.length === 0 ? (
             <View style={styles.emptyState}>
-              <Text style={styles.emptyText}>Aucune option disponible</Text>
+              <Text style={styles.emptyText}>{t('noOptionsAvailable')}</Text>
             </View>
           ) : (
             <View style={styles.optionsContainer}>
@@ -718,5 +718,4 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 });
-
 

@@ -1,6 +1,6 @@
-﻿/**
- * DonnÃ©es gÃ©ographiques officielles du Cameroun
- * HiÃ©rarchie : RÃ©gion â†’ DÃ©partement â†’ Arrondissement â†’ Ville â†’ Quartier
+/**
+ * Données géographiques officielles du Cameroun
+ * Hiérarchie : Région → Département → Arrondissement → Ville → Quartier
  */
 
 export interface City {
@@ -21,29 +21,29 @@ export interface Department {
   name: string;
   code: string;
   arrondissements: Arrondissement[];
-  chefLieu: string; // Chef-lieu du dÃ©partement
+  chefLieu: string; // Chef-lieu du département
 }
 
 export interface Region {
   name: string;
   code: string;
   departments: Department[];
-  chefLieu: string; // Chef-lieu de la rÃ©gion
+  chefLieu: string; // Chef-lieu de la région
 }
 
 /**
- * RÃ©publique du Cameroun - Structure administrative complÃ¨te
- * 10 RÃ©gions, 58 DÃ©partements
+ * République du Cameroun - Structure administrative complète
+ * 10 Régions, 58 Départements
  */
 export const CAMEROON_REGIONS: Region[] = [
-  // ===== RÃ‰GION ADAMAOUA =====
+  // ===== RÉGION ADAMAOUA =====
   {
     name: "Adamaoua",
     code: "adamaoua",
-    chefLieu: "NgaoundÃ©rÃ©",
+    chefLieu: "Ngaoundéré",
     departments: [
       {
-        name: "DjÃ©rem",
+        name: "Djérem",
         code: "djerem",
         chefLieu: "Tibati",
         arrondissements: [
@@ -58,16 +58,16 @@ export const CAMEROON_REGIONS: Region[] = [
         ]
       },
       {
-        name: "Faro-et-DÃ©o",
+        name: "Faro-et-Déo",
         code: "faro_deo",
-        chefLieu: "TignÃ¨re",
+        chefLieu: "Tignère",
         arrondissements: [
           {
-            name: "TignÃ¨re",
+            name: "Tignère",
             code: "tignere",
-            chefLieu: "TignÃ¨re",
+            chefLieu: "Tignère",
             cities: [
-              { name: "TignÃ¨re", code: "tignere", isChefLieu: true, neighborhoods: ["Centre", "Galim"] }
+              { name: "Tignère", code: "tignere", isChefLieu: true, neighborhoods: ["Centre", "Galim"] }
             ]
           }
         ]
@@ -88,7 +88,7 @@ export const CAMEROON_REGIONS: Region[] = [
         ]
       },
       {
-        name: "MbÃ©rÃ©",
+        name: "Mbéré",
         code: "mbere",
         chefLieu: "Meiganga",
         arrondissements: [
@@ -105,14 +105,14 @@ export const CAMEROON_REGIONS: Region[] = [
       {
         name: "Vina",
         code: "vina",
-        chefLieu: "NgaoundÃ©rÃ©",
+        chefLieu: "Ngaoundéré",
         arrondissements: [
           {
-            name: "NgaoundÃ©rÃ© 1er",
+            name: "Ngaoundéré 1er",
             code: "ngaoundere_1",
-            chefLieu: "NgaoundÃ©rÃ©",
+            chefLieu: "Ngaoundéré",
             cities: [
-              { name: "NgaoundÃ©rÃ©", code: "ngaoundere", isChefLieu: true, neighborhoods: ["Centre-ville", "Petit marchÃ©", "Sabongari"] }
+              { name: "Ngaoundéré", code: "ngaoundere", isChefLieu: true, neighborhoods: ["Centre-ville", "Petit marché", "Sabongari"] }
             ]
           }
         ]
@@ -120,38 +120,38 @@ export const CAMEROON_REGIONS: Region[] = [
     ]
   },
 
-  // ===== RÃ‰GION CENTRE =====
+  // ===== RÉGION CENTRE =====
   {
     name: "Centre",
     code: "centre",
-    chefLieu: "YaoundÃ©",
+    chefLieu: "Yaoundé",
     departments: [
       {
         name: "Haute-Sanaga",
         code: "haute_sanaga",
-        chefLieu: "Nanga-Ã‰boko",
+        chefLieu: "Nanga-Éboko",
         arrondissements: [
           {
-            name: "Nanga-Ã‰boko",
+            name: "Nanga-Éboko",
             code: "nanga_eboko",
-            chefLieu: "Nanga-Ã‰boko",
+            chefLieu: "Nanga-Éboko",
             cities: [
-              { name: "Nanga-Ã‰boko", code: "nanga_eboko", isChefLieu: true, neighborhoods: ["Centre", "Carrefour"] }
+              { name: "Nanga-Éboko", code: "nanga_eboko", isChefLieu: true, neighborhoods: ["Centre", "Carrefour"] }
             ]
           }
         ]
       },
       {
-        name: "LekiÃ©",
+        name: "Lekié",
         code: "lekie",
-        chefLieu: "MonatÃ©lÃ©",
+        chefLieu: "Monatélé",
         arrondissements: [
           {
-            name: "MonatÃ©lÃ©",
+            name: "Monatélé",
             code: "monatele",
-            chefLieu: "MonatÃ©lÃ©",
+            chefLieu: "Monatélé",
             cities: [
-              { name: "MonatÃ©lÃ©", code: "monatele", isChefLieu: true, neighborhoods: ["Centre-ville"] }
+              { name: "Monatélé", code: "monatele", isChefLieu: true, neighborhoods: ["Centre-ville"] }
             ]
           }
         ]
@@ -187,7 +187,7 @@ export const CAMEROON_REGIONS: Region[] = [
         ]
       },
       {
-        name: "MÃ©fou-et-Afamba",
+        name: "Méfou-et-Afamba",
         code: "mefou_afamba",
         chefLieu: "Mfou",
         arrondissements: [
@@ -202,7 +202,7 @@ export const CAMEROON_REGIONS: Region[] = [
         ]
       },
       {
-        name: "MÃ©fou-et-Akono",
+        name: "Méfou-et-Akono",
         code: "mefou_akono",
         chefLieu: "Ngoumou",
         arrondissements: [
@@ -219,15 +219,15 @@ export const CAMEROON_REGIONS: Region[] = [
       {
         name: "Mfoundi",
         code: "mfoundi",
-        chefLieu: "YaoundÃ©",
+        chefLieu: "Yaoundé",
         arrondissements: [
           {
-            name: "YaoundÃ© 1er",
+            name: "Yaoundé 1er",
             code: "yaounde_1",
-            chefLieu: "YaoundÃ©",
+            chefLieu: "Yaoundé",
             cities: [
               { 
-                name: "YaoundÃ©", 
+                name: "Yaoundé", 
                 code: "yaounde", 
                 isChefLieu: true, 
                 neighborhoods: [
@@ -238,26 +238,26 @@ export const CAMEROON_REGIONS: Region[] = [
             ]
           },
           {
-            name: "YaoundÃ© 2Ã¨me",
+            name: "Yaoundé 2ème",
             code: "yaounde_2",
-            chefLieu: "YaoundÃ©",
+            chefLieu: "Yaoundé",
             cities: [
-              { name: "YaoundÃ©", code: "yaounde", neighborhoods: ["Biyem-Assi", "Nkolmesseng"] }
+              { name: "Yaoundé", code: "yaounde", neighborhoods: ["Biyem-Assi", "Nkolmesseng"] }
             ]
           }
         ]
       },
       {
-        name: "Nyong-et-KÃ©llÃ©",
+        name: "Nyong-et-Kéllé",
         code: "nyong_kelle",
-        chefLieu: "EsÃ©ka",
+        chefLieu: "Eséka",
         arrondissements: [
           {
-            name: "EsÃ©ka",
+            name: "Eséka",
             code: "eseka",
-            chefLieu: "EsÃ©ka",
+            chefLieu: "Eséka",
             cities: [
-              { name: "EsÃ©ka", code: "eseka", isChefLieu: true, neighborhoods: ["Centre", "Gare"] }
+              { name: "Eséka", code: "eseka", isChefLieu: true, neighborhoods: ["Centre", "Gare"] }
             ]
           }
         ]
@@ -295,7 +295,7 @@ export const CAMEROON_REGIONS: Region[] = [
     ]
   },
 
-  // ===== RÃ‰GION EST =====
+  // ===== RÉGION EST =====
   {
     name: "Est",
     code: "est",
@@ -347,7 +347,7 @@ export const CAMEROON_REGIONS: Region[] = [
         ]
       },
       {
-        name: "Lom-et-DjÃ©rem",
+        name: "Lom-et-Djérem",
         code: "lom_djerem",
         chefLieu: "Bertoua",
         arrondissements: [
@@ -364,14 +364,14 @@ export const CAMEROON_REGIONS: Region[] = [
     ]
   },
 
-  // ===== RÃ‰GION EXTRÃŠME-NORD =====
+  // ===== RÉGION EXTRÊME-NORD =====
   {
-    name: "ExtrÃªme-Nord",
+    name: "Extrême-Nord",
     code: "extreme_nord",
     chefLieu: "Maroua",
     departments: [
       {
-        name: "DiamarÃ©",
+        name: "Diamaré",
         code: "diamare",
         chefLieu: "Maroua",
         arrondissements: [
@@ -388,14 +388,14 @@ export const CAMEROON_REGIONS: Region[] = [
       {
         name: "Logone-et-Chari",
         code: "logone_chari",
-        chefLieu: "KoussÃ©ri",
+        chefLieu: "Kousséri",
         arrondissements: [
           {
-            name: "KoussÃ©ri",
+            name: "Kousséri",
             code: "kousseri",
-            chefLieu: "KoussÃ©ri",
+            chefLieu: "Kousséri",
             cities: [
-              { name: "KoussÃ©ri", code: "kousseri", isChefLieu: true, neighborhoods: ["Centre", "FrontiÃ¨re"] }
+              { name: "Kousséri", code: "kousseri", isChefLieu: true, neighborhoods: ["Centre", "Frontière"] }
             ]
           }
         ]
@@ -418,14 +418,14 @@ export const CAMEROON_REGIONS: Region[] = [
       {
         name: "Mayo-Kani",
         code: "mayo_kani",
-        chefLieu: "KaÃ©lÃ©",
+        chefLieu: "Kaélé",
         arrondissements: [
           {
-            name: "KaÃ©lÃ©",
+            name: "Kaélé",
             code: "kaele",
-            chefLieu: "KaÃ©lÃ©",
+            chefLieu: "Kaélé",
             cities: [
-              { name: "KaÃ©lÃ©", code: "kaele", isChefLieu: true, neighborhoods: ["Centre-ville"] }
+              { name: "Kaélé", code: "kaele", isChefLieu: true, neighborhoods: ["Centre-ville"] }
             ]
           }
         ]
@@ -463,7 +463,7 @@ export const CAMEROON_REGIONS: Region[] = [
     ]
   },
 
-  // ===== RÃ‰GION LITTORAL =====
+  // ===== RÉGION LITTORAL =====
   {
     name: "Littoral",
     code: "littoral",
@@ -523,22 +523,22 @@ export const CAMEROON_REGIONS: Region[] = [
       {
         name: "Sanaga-Maritime",
         code: "sanaga_maritime",
-        chefLieu: "Ã‰dÃ©a",
+        chefLieu: "Édéa",
         arrondissements: [
           {
-            name: "Ã‰dÃ©a 1er",
+            name: "Édéa 1er",
             code: "edea_1",
-            chefLieu: "Ã‰dÃ©a",
+            chefLieu: "Édéa",
             cities: [
-              { name: "Ã‰dÃ©a", code: "edea", isChefLieu: true, neighborhoods: ["Centre-ville", "Camp SIC", "Carrefour Ã‰dÃ©a"] }
+              { name: "Édéa", code: "edea", isChefLieu: true, neighborhoods: ["Centre-ville", "Camp SIC", "Carrefour Édéa"] }
             ]
           },
           {
-            name: "DizanguÃ©",
+            name: "Dizangué",
             code: "dizangue",
-            chefLieu: "DizanguÃ©",
+            chefLieu: "Dizangué",
             cities: [
-              { name: "DizanguÃ©", code: "dizangue", isChefLieu: true, neighborhoods: ["Centre", "Port"] }
+              { name: "Dizangué", code: "dizangue", isChefLieu: true, neighborhoods: ["Centre", "Port"] }
             ]
           }
         ]
@@ -558,14 +558,14 @@ export const CAMEROON_REGIONS: Region[] = [
                 code: "douala", 
                 isChefLieu: true, 
                 neighborhoods: [
-                  "Akwa", "Bonanjo", "BonabÃ©ri", "Bassa", "Deido", "Makepe",
-                  "New-Bell", "Nylon", "PK8", "Logpom", "Bonapriso", "BÃ©panda"
+                  "Akwa", "Bonanjo", "Bonabéri", "Bassa", "Deido", "Makepe",
+                  "New-Bell", "Nylon", "PK8", "Logpom", "Bonapriso", "Bépanda"
                 ] 
               }
             ]
           },
           {
-            name: "Douala 2Ã¨me",
+            name: "Douala 2ème",
             code: "douala_2",
             chefLieu: "Douala",
             cities: [
@@ -573,7 +573,7 @@ export const CAMEROON_REGIONS: Region[] = [
             ]
           },
           {
-            name: "Douala 3Ã¨me",
+            name: "Douala 3ème",
             code: "douala_3",
             chefLieu: "Douala", 
             cities: [
@@ -581,15 +581,15 @@ export const CAMEROON_REGIONS: Region[] = [
             ]
           },
           {
-            name: "Douala 4Ã¨me",
+            name: "Douala 4ème",
             code: "douala_4",
             chefLieu: "Douala",
             cities: [
-              { name: "Douala", code: "douala", neighborhoods: ["BonabÃ©ri", "Makepe"] }
+              { name: "Douala", code: "douala", neighborhoods: ["Bonabéri", "Makepe"] }
             ]
           },
           {
-            name: "Douala 5Ã¨me",
+            name: "Douala 5ème",
             code: "douala_5",
             chefLieu: "Douala",
             cities: [
@@ -601,14 +601,14 @@ export const CAMEROON_REGIONS: Region[] = [
     ]
   },
 
-  // ===== RÃ‰GION NORD =====
+  // ===== RÉGION NORD =====
   {
     name: "Nord",
     code: "nord",
     chefLieu: "Garoua",
     departments: [
       {
-        name: "BÃ©nouÃ©",
+        name: "Bénoué",
         code: "benoue",
         chefLieu: "Garoua",
         arrondissements: [
@@ -655,14 +655,14 @@ export const CAMEROON_REGIONS: Region[] = [
       {
         name: "Mayo-Rey",
         code: "mayo_rey",
-        chefLieu: "TchollirÃ©",
+        chefLieu: "Tcholliré",
         arrondissements: [
           {
-            name: "TchollirÃ©",
+            name: "Tcholliré",
             code: "tchollire",
-            chefLieu: "TchollirÃ©",
+            chefLieu: "Tcholliré",
             cities: [
-              { name: "TchollirÃ©", code: "tchollire", isChefLieu: true, neighborhoods: ["Centre-ville"] }
+              { name: "Tcholliré", code: "tchollire", isChefLieu: true, neighborhoods: ["Centre-ville"] }
             ]
           }
         ]
@@ -670,7 +670,7 @@ export const CAMEROON_REGIONS: Region[] = [
     ]
   },
 
-  // ===== RÃ‰GION NORD-OUEST =====
+  // ===== RÉGION NORD-OUEST =====
   {
     name: "Nord-Ouest",
     code: "nord_ouest",
@@ -755,7 +755,7 @@ export const CAMEROON_REGIONS: Region[] = [
             ]
           },
           {
-            name: "Bamenda 2Ã¨me",
+            name: "Bamenda 2ème",
             code: "bamenda_2",
             chefLieu: "Bamenda",
             cities: [
@@ -797,7 +797,7 @@ export const CAMEROON_REGIONS: Region[] = [
     ]
   },
 
-  // ===== RÃ‰GION OUEST =====
+  // ===== RÉGION OUEST =====
   {
     name: "Ouest",
     code: "ouest",
@@ -813,7 +813,7 @@ export const CAMEROON_REGIONS: Region[] = [
             code: "mbouda",
             chefLieu: "Mbouda",
             cities: [
-              { name: "Mbouda", code: "mbouda", isChefLieu: true, neighborhoods: ["Centre-ville", "MarchÃ©"] },
+              { name: "Mbouda", code: "mbouda", isChefLieu: true, neighborhoods: ["Centre-ville", "Marché"] },
               { name: "Galim", code: "galim", neighborhoods: ["Centre", "Station"] }
             ]
           },
@@ -838,15 +838,15 @@ export const CAMEROON_REGIONS: Region[] = [
             chefLieu: "Bafang",
             cities: [
               { name: "Bafang", code: "bafang", isChefLieu: true, neighborhoods: ["Centre-ville", "Quartier Administratif"] },
-              { name: "KÃ©kem", code: "kekem", neighborhoods: ["Centre", "Gare"] }
+              { name: "Kékem", code: "kekem", neighborhoods: ["Centre", "Gare"] }
             ]
           },
           {
-            name: "KÃ©kem",
+            name: "Kékem",
             code: "kekem_arr",
-            chefLieu: "KÃ©kem",
+            chefLieu: "Kékem",
             cities: [
-              { name: "KÃ©kem", code: "kekem", isChefLieu: true, neighborhoods: ["Centre-ville"] }
+              { name: "Kékem", code: "kekem", isChefLieu: true, neighborhoods: ["Centre-ville"] }
             ]
           }
         ]
@@ -895,17 +895,17 @@ export const CAMEROON_REGIONS: Region[] = [
                 name: "Dschang", 
                 code: "dschang", 
                 isChefLieu: true, 
-                neighborhoods: ["Centre-ville", "Foto", "Foreke-Dschang", "UniversitÃ©"] 
+                neighborhoods: ["Centre-ville", "Foto", "Foreke-Dschang", "Université"] 
               },
-              { name: "FokouÃ©", code: "fokoue", neighborhoods: ["Centre", "MarchÃ©"] }
+              { name: "Fokoué", code: "fokoue", neighborhoods: ["Centre", "Marché"] }
             ]
           },
           {
-            name: "FokouÃ©",
+            name: "Fokoué",
             code: "fokoue_arr",
-            chefLieu: "FokouÃ©",
+            chefLieu: "Fokoué",
             cities: [
-              { name: "FokouÃ©", code: "fokoue", isChefLieu: true, neighborhoods: ["Centre-ville"] }
+              { name: "Fokoué", code: "fokoue", isChefLieu: true, neighborhoods: ["Centre-ville"] }
             ]
           }
         ]
@@ -926,13 +926,13 @@ export const CAMEROON_REGIONS: Region[] = [
                 isChefLieu: true, 
                 neighborhoods: [
                   "Centre-ville", "Tamdja", "Djeleng", "Famla", "Kamkop", 
-                  "Quartier Administratif", "MarchÃ© A"
+                  "Quartier Administratif", "Marché A"
                 ] 
               }
             ]
           },
           {
-            name: "Bafoussam 2Ã¨me",
+            name: "Bafoussam 2ème",
             code: "bafoussam_2",
             chefLieu: "Bafoussam",
             cities: [
@@ -942,16 +942,16 @@ export const CAMEROON_REGIONS: Region[] = [
         ]
       },
       {
-        name: "NdÃ©",
+        name: "Ndé",
         code: "nde",
-        chefLieu: "BangangtÃ©",
+        chefLieu: "Bangangté",
         arrondissements: [
           {
-            name: "BangangtÃ©",
+            name: "Bangangté",
             code: "bangante",
-            chefLieu: "BangangtÃ©",
+            chefLieu: "Bangangté",
             cities: [
-              { name: "BangangtÃ©", code: "bangante", isChefLieu: true, neighborhoods: ["Centre-ville", "MarchÃ©"] },
+              { name: "Bangangté", code: "bangante", isChefLieu: true, neighborhoods: ["Centre-ville", "Marché"] },
               { name: "Bassamba", code: "bassamba", neighborhoods: ["Centre"] }
             ]
           },
@@ -1005,7 +1005,7 @@ export const CAMEROON_REGIONS: Region[] = [
     ]
   },
 
-  // ===== RÃ‰GION SUD =====
+  // ===== RÉGION SUD =====
   {
     name: "Sud",
     code: "sud",
@@ -1014,14 +1014,14 @@ export const CAMEROON_REGIONS: Region[] = [
       {
         name: "Dja-et-Lobo",
         code: "dja_lobo",
-        chefLieu: "SangmÃ©lima",
+        chefLieu: "Sangmélima",
         arrondissements: [
           {
-            name: "SangmÃ©lima",
+            name: "Sangmélima",
             code: "sangmelima",
-            chefLieu: "SangmÃ©lima",
+            chefLieu: "Sangmélima",
             cities: [
-              { name: "SangmÃ©lima", code: "sangmelima", isChefLieu: true, neighborhoods: ["Centre-ville"] }
+              { name: "Sangmélima", code: "sangmelima", isChefLieu: true, neighborhoods: ["Centre-ville"] }
             ]
           }
         ]
@@ -1042,7 +1042,7 @@ export const CAMEROON_REGIONS: Region[] = [
         ]
       },
       {
-        name: "OcÃ©an",
+        name: "Océan",
         code: "ocean",
         chefLieu: "Kribi",
         arrondissements: [
@@ -1064,13 +1064,13 @@ export const CAMEROON_REGIONS: Region[] = [
             code: "campo",
             chefLieu: "Campo",
             cities: [
-              { name: "Campo", code: "campo", isChefLieu: true, neighborhoods: ["Centre", "FrontiÃ¨re"] }
+              { name: "Campo", code: "campo", isChefLieu: true, neighborhoods: ["Centre", "Frontière"] }
             ]
           }
         ]
       },
       {
-        name: "VallÃ©e-du-Ntem",
+        name: "Vallée-du-Ntem",
         code: "vallee_ntem",
         chefLieu: "Ambam",
         arrondissements: [
@@ -1079,7 +1079,7 @@ export const CAMEROON_REGIONS: Region[] = [
             code: "ambam",
             chefLieu: "Ambam",
             cities: [
-              { name: "Ambam", code: "ambam", isChefLieu: true, neighborhoods: ["Centre-ville", "FrontiÃ¨re"] }
+              { name: "Ambam", code: "ambam", isChefLieu: true, neighborhoods: ["Centre-ville", "Frontière"] }
             ]
           }
         ]
@@ -1087,24 +1087,24 @@ export const CAMEROON_REGIONS: Region[] = [
     ]
   },
 
-  // ===== RÃ‰GION SUD-OUEST =====
+  // ===== RÉGION SUD-OUEST =====
   {
     name: "Sud-Ouest",
     code: "sud_ouest",
-    chefLieu: "BuÃ©a",
+    chefLieu: "Buéa",
     departments: [
       {
         name: "Fako",
         code: "fako",
-        chefLieu: "LimbÃ©",
+        chefLieu: "Limbé",
         arrondissements: [
           {
-            name: "LimbÃ© 1er",
+            name: "Limbé 1er",
             code: "limbe_1",
-            chefLieu: "LimbÃ©",
+            chefLieu: "Limbé",
             cities: [
               { 
-                name: "LimbÃ©", 
+                name: "Limbé", 
                 code: "limbe", 
                 isChefLieu: true, 
                 neighborhoods: ["Down Beach", "Church Street", "Half Mile", "Botanical Garden"] 
@@ -1112,12 +1112,12 @@ export const CAMEROON_REGIONS: Region[] = [
             ]
           },
           {
-            name: "BuÃ©a",
+            name: "Buéa",
             code: "buea_arr",
-            chefLieu: "BuÃ©a",
+            chefLieu: "Buéa",
             cities: [
               { 
-                name: "BuÃ©a", 
+                name: "Buéa", 
                 code: "buea", 
                 isChefLieu: true, 
                 neighborhoods: ["Government Station", "Town", "University of Buea", "Molyko"] 
@@ -1127,7 +1127,7 @@ export const CAMEROON_REGIONS: Region[] = [
         ]
       },
       {
-        name: "KoupÃ©-Manengouba",
+        name: "Koupé-Manengouba",
         code: "koupe_manengouba",
         chefLieu: "Bangem",
         arrondissements: [
@@ -1208,7 +1208,7 @@ export const CAMEROON_REGIONS: Region[] = [
 // ===== FONCTIONS UTILITAIRES =====
 
 /**
- * RÃ©cupÃ¨re tous les dÃ©partements d'une rÃ©gion
+ * Récupère tous les départements d'une région
  */
 export function getDepartmentsByRegion(regionCode: string): Department[] {
   const region = CAMEROON_REGIONS.find(r => r.code === regionCode);
@@ -1216,7 +1216,7 @@ export function getDepartmentsByRegion(regionCode: string): Department[] {
 }
 
 /**
- * RÃ©cupÃ¨re tous les arrondissements d'un dÃ©partement
+ * Récupère tous les arrondissements d'un département
  */
 export function getArrondissementsByDepartment(regionCode: string, departmentName: string): Arrondissement[] {
   const region = CAMEROON_REGIONS.find(r => r.code === regionCode);
@@ -1225,7 +1225,7 @@ export function getArrondissementsByDepartment(regionCode: string, departmentNam
 }
 
 /**
- * RÃ©cupÃ¨re toutes les villes d'un arrondissement
+ * Récupère toutes les villes d'un arrondissement
  */
 export function getCitiesByArrondissement(regionCode: string, departmentName: string, arrondissementName: string): City[] {
   const region = CAMEROON_REGIONS.find(r => r.code === regionCode);
@@ -1235,7 +1235,7 @@ export function getCitiesByArrondissement(regionCode: string, departmentName: st
 }
 
 /**
- * RÃ©cupÃ¨re tous les quartiers d'une ville
+ * Récupère tous les quartiers d'une ville
  */
 export function getNeighborhoodsByCity(regionCode: string, departmentName: string, arrondissementName: string, cityName: string): string[] {
   const region = CAMEROON_REGIONS.find(r => r.code === regionCode);
@@ -1246,7 +1246,7 @@ export function getNeighborhoodsByCity(regionCode: string, departmentName: strin
 }
 
 /**
- * Interface pour les donnÃ©es de localisation sÃ©lectionnÃ©es
+ * Interface pour les données de localisation sélectionnées
  */
 export interface LocationData {
   region?: string;
@@ -1270,14 +1270,14 @@ export function getLocationDisplayName(location: LocationData): string {
 }
 
 /**
- * RÃ©cupÃ¨re tous les dÃ©partements de toutes les rÃ©gions
+ * Récupère tous les départements de toutes les régions
  */
 export function getAllDepartments(): Department[] {
   return CAMEROON_REGIONS.flatMap(region => region.departments);
 }
 
 /**
- * RÃ©cupÃ¨re tous les arrondissements de tous les dÃ©partements
+ * Récupère tous les arrondissements de tous les départements
  */
 export function getAllArrondissements(): Arrondissement[] {
   return CAMEROON_REGIONS.flatMap(region => 
@@ -1286,7 +1286,7 @@ export function getAllArrondissements(): Arrondissement[] {
 }
 
 /**
- * RÃ©cupÃ¨re toutes les villes de tous les arrondissements
+ * Récupère toutes les villes de tous les arrondissements
  */
 export function getAllCities(): City[] {
   return CAMEROON_REGIONS.flatMap(region => 
@@ -1297,7 +1297,7 @@ export function getAllCities(): City[] {
 }
 
 /**
- * RÃ©cupÃ¨re tous les quartiers d'un arrondissement (toutes villes confondues)
+ * Récupère tous les quartiers d'un arrondissement (toutes villes confondues)
  */
 export function getNeighborhoodsByArrondissement(regionCode: string, departmentName: string, arrondissementName: string): string[] {
   const region = CAMEROON_REGIONS.find(r => r.code === regionCode);
@@ -1316,14 +1316,14 @@ export function getNeighborhoodsByArrondissement(regionCode: string, departmentN
 }
 
 /**
- * VÃ©rifie si un arrondissement a des quartiers
+ * Vérifie si un arrondissement a des quartiers
  */
 export function hasNeighborhoods(regionCode: string, departmentCode: string, arrondissementCode: string): boolean {
   return getNeighborhoodsByArrondissement(regionCode, departmentCode, arrondissementCode).length > 0;
 }
 
 /**
- * RÃ©cupÃ¨re une rÃ©gion par son code
+ * Récupère une région par son code
  */
 export function getRegionByCode(regionCode: string): Region | undefined {
   return CAMEROON_REGIONS.find(r => r.code === regionCode);
@@ -1334,11 +1334,11 @@ export function getRegionByCode(regionCode: string): Region | undefined {
  */
 export const INTERVENTION_ZONES = [
   { value: 'urbaine', labelKey: 'urbaine', code: 'urbaine', name: 'Zone urbaine' },
-  { value: 'periurbaine', labelKey: 'periurbaine', code: 'periurbaine', name: 'Zone pÃ©ri-urbaine' },
+  { value: 'periurbaine', labelKey: 'periurbaine', code: 'periurbaine', name: 'Zone péri-urbaine' },
   { value: 'rurale', labelKey: 'rurale', code: 'rurale', name: 'Zone rurale' },
   { value: 'fluviale', labelKey: 'fluviale', code: 'fluviale', name: 'Zone fluviale' },
   { value: 'lacustre', labelKey: 'lacustre', code: 'lacustre', name: 'Zone lacustre' },
-  { value: 'cotiere', labelKey: 'cotiere', code: 'cotiere', name: 'Zone cÃ´tiÃ¨re' },
+  { value: 'cotiere', labelKey: 'cotiere', code: 'cotiere', name: 'Zone côtière' },
   { value: 'montagnarde', labelKey: 'montagnarde', code: 'montagnarde', name: 'Zone montagnarde' }
 ];
 

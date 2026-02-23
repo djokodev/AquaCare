@@ -49,6 +49,7 @@ export const fr = {
   selectDistrictFirst: "Sélectionnez d'abord un arrondissement",
   selectCityFirst: "Sélectionnez d'abord une ville",
   noNeighborhoodsAvailable: 'Aucun quartier disponible',
+  noOptionsAvailable: 'Aucune option disponible',
   city: 'Ville',
 
   // Activity Types

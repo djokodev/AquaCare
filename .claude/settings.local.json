@@ -23,7 +23,9 @@
       "Bash(docker-compose exec:*)",
       "Bash(docker-compose:*)",
       "WebSearch",
-      "Bash(winget:*)"
+      "Bash(winget:*)",
+      "Bash(python3:*)",
+      "Bash(npx tsc:*)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits"
