@@ -10,6 +10,7 @@ import type {
   Conversation,
   Message,
   MessagesPaginatedResponse,
+  ReactNativeFile,
   SendMessageRequest,
 } from '../../types/chat';
 
@@ -93,7 +94,9 @@ export async function sendMessage(
   }
 
   if (request.media_file) {
-    formData.append('media_file', request.media_file as any);
+    // React Native requires the file to be appended as a plain object (not a Blob).
+    // FormData.append typing expects string | Blob, but RN's FormData accepts ReactNativeFile.
+    formData.append('media_file', request.media_file as unknown as Blob);
   }
 
   if (request.client_uuid) {
@@ -130,7 +133,7 @@ export async function sendMessage(
 export async function sendMessageWithMedia(
   conversationId: string,
   content: string,
-  mediaFile: File | { uri: string; type: string; name: string },
+  mediaFile: File | ReactNativeFile,
   mediaType: 'image' | 'video',
   clientUuid?: string
 ): Promise<Message> {

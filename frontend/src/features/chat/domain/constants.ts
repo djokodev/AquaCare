@@ -12,15 +12,15 @@ export const MAX_MESSAGE_LENGTH = 5000;
 
 /**
  * Maximum image file size in MB
- * Backend validation: 5MB max for images
+ * Backend validation: 10MB max for images
  */
-export const MAX_IMAGE_SIZE_MB = 5;
+export const MAX_IMAGE_SIZE_MB = 10;
 
 /**
  * Maximum video file size in MB
- * Backend validation: 10MB max for videos
+ * Backend validation: 50MB max for videos
  */
-export const MAX_VIDEO_SIZE_MB = 10;
+export const MAX_VIDEO_SIZE_MB = 50;
 
 /**
  * Allowed image MIME types
@@ -81,10 +81,14 @@ export const MESSAGE_COLORS = {
 } as const;
 
 /**
- * Message bubble dimensions
+ * Message bubble maximum width as a percentage string (React Native DimensionValue)
+ */
+export const BUBBLE_MAX_WIDTH = '80%' as const;
+
+/**
+ * Message bubble numeric dimensions (pixels / dp)
  */
 export const MESSAGE_DIMENSIONS = {
-  bubbleMaxWidth: '80%',
   bubbleBorderRadius: 16,
   bubblePadding: 12,
   bubbleMarginVertical: 6,

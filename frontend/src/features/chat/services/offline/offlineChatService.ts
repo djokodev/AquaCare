@@ -7,12 +7,13 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { v4 as uuidv4 } from 'uuid';
-import type { OfflineMessageQueueItem, SendMessageRequest } from '../../types/chat';
+import type { OfflineMessageQueueItem, ReactNativeFile, SendMessageRequest } from '../../types/chat';
 import {
   OFFLINE_QUEUE_STORAGE_KEY,
   MAX_SYNC_RETRIES,
 } from '../../domain/constants';
 import * as chatApi from '../api/chatApi';
+import logger from '@/utils/logger';
 
 /**
  * Add message to offline queue
@@ -68,7 +69,7 @@ export async function getOfflineQueue(): Promise<OfflineMessageQueueItem[]> {
 
     return JSON.parse(queueJson);
   } catch (error) {
-    console.error('Error reading offline queue:', error);
+    logger.error('Error reading offline queue:', error);
     return [];
   }
 }
@@ -94,6 +95,26 @@ export async function removeFromOfflineQueue(clientUuid: string): Promise<void> 
  */
 export async function clearOfflineQueue(): Promise<void> {
   await AsyncStorage.removeItem(OFFLINE_QUEUE_STORAGE_KEY);
+}
+
+/**
+ * Mark a queue item as permanently failed (sync_failed=true).
+ * Such items will not be retried by syncOfflineQueue.
+ *
+ * @param clientUuid - Client UUID of message
+ * @param error - Error message to record
+ */
+async function markAsSyncFailed(clientUuid: string, error: string): Promise<void> {
+  const queue = await getOfflineQueue();
+
+  const updatedQueue = queue.map((item) => {
+    if (item.client_uuid === clientUuid) {
+      return { ...item, sync_failed: true, last_error: error };
+    }
+    return item;
+  });
+
+  await AsyncStorage.setItem(OFFLINE_QUEUE_STORAGE_KEY, JSON.stringify(updatedQueue));
 }
 
 /**
@@ -147,6 +168,13 @@ export async function syncOfflineQueue(): Promise<{
   // Process each queued message
   for (const item of queue) {
     try {
+      // Skip permanently failed items (media could not be read)
+      if (item.sync_failed) {
+        errors[item.client_uuid] = item.last_error || 'Sync permanently failed';
+        failureCount++;
+        continue;
+      }
+
       // Skip if max retries exceeded
       if (item.retry_count >= MAX_SYNC_RETRIES) {
         errors[item.client_uuid] = `Max retries (${MAX_SYNC_RETRIES}) exceeded`;
@@ -164,26 +192,29 @@ export async function syncOfflineQueue(): Promise<{
 
       // Handle media file if present
       if (item.media_uri && item.media_type !== 'none') {
-        // Convert local URI to File object
-        // Note: In React Native, we need to use fetch API or library
-        // to read the file from URI
         try {
           const fileResponse = await fetch(item.media_uri);
           const blob = await fileResponse.blob();
           const fileName = item.media_uri.split('/').pop() || 'media';
 
-          // Create File-like object
-          request.media_file = {
+          const mediaFile: ReactNativeFile = {
             uri: item.media_uri,
             type: blob.type,
             name: fileName,
-          } as any;
-        } catch (fileError) {
-          console.warn(
-            `Could not read media file for ${item.client_uuid}:`,
+          };
+          request.media_file = mediaFile;
+        } catch (fileError: unknown) {
+          const errorMessage =
+            fileError instanceof Error ? fileError.message : 'Could not read media file';
+          logger.error(
+            `Media file unreadable for queue item ${item.client_uuid}:`,
             fileError
           );
-          // Continue without media - send text only
+          // Mark as permanently failed so the item is not retried with corrupted state
+          await markAsSyncFailed(item.client_uuid, errorMessage);
+          errors[item.client_uuid] = errorMessage;
+          failureCount++;
+          continue;
         }
       }
 

@@ -14,6 +14,14 @@ export type MessageSenderType = 'user' | 'admin' | 'system';
  */
 export type MediaType = 'none' | 'image' | 'video';
 
+export interface ConversationLastMessage {
+  id: string;
+  content: string;
+  sender_type: MessageSenderType;
+  created_at: string; // ISO datetime
+  has_media: boolean;
+}
+
 /**
  * Message model
  * Represents a single message in a conversation
@@ -46,11 +54,21 @@ export interface Conversation {
   created_at: string; // ISO datetime
   updated_at: string; // ISO datetime
   last_message_at: string; // ISO datetime
-  last_message?: string | null; // Computed: preview of last message
+  last_message?: ConversationLastMessage | null;
   message_count: number; // Computed: total messages
   unread_count_user: number; // Unread messages for user
   unread_count_admin: number; // Unread messages for admin
   is_active: boolean;
+}
+
+/**
+ * React Native file object for media attachments
+ * Used instead of `as any` when appending to FormData
+ */
+export interface ReactNativeFile {
+  uri: string;
+  type: string;
+  name: string;
 }
 
 /**
@@ -59,7 +77,7 @@ export interface Conversation {
 export interface SendMessageRequest {
   content: string;
   media_type?: MediaType;
-  media_file?: File | { uri: string; type: string; name: string }; // React Native file object
+  media_file?: File | ReactNativeFile; // React Native file object
   client_uuid?: string; // For offline deduplication
   created_offline?: boolean;
 }
@@ -87,6 +105,7 @@ export interface OfflineMessageQueueItem {
   created_at: string; // ISO datetime
   retry_count: number;
   last_error?: string;
+  sync_failed?: boolean; // True if media could not be read — will not be retried
 }
 
 /**

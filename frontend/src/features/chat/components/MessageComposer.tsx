@@ -27,8 +27,6 @@ import {
 } from '../domain/estimators';
 import {
   MAX_MESSAGE_LENGTH,
-  MAX_IMAGE_SIZE_MB,
-  MAX_VIDEO_SIZE_MB,
 } from '../domain/constants';
 import type { MediaType } from '../types/chat';
 
@@ -106,7 +104,10 @@ export function MessageComposer({
       // Validate image
       const validation = validateImageFile(fileSizeMB, asset.mimeType || 'image/jpeg');
       if (!validation.isValid) {
-        Alert.alert(t('chatMediaError'), validation.error || t('chatMediaInvalidFile'));
+        const message = validation.errorKey
+          ? t(validation.errorKey, validation.errorParams)
+          : t('chatMediaInvalidFile');
+        Alert.alert(t('chatMediaError'), message);
         return;
       }
 
@@ -140,7 +141,10 @@ export function MessageComposer({
       // Validate video
       const validation = validateVideoFile(fileSizeMB, asset.mimeType || 'video/mp4');
       if (!validation.isValid) {
-        Alert.alert(t('chatMediaError'), validation.error || t('chatMediaInvalidFile'));
+        const message = validation.errorKey
+          ? t(validation.errorKey, validation.errorParams)
+          : t('chatMediaInvalidFile');
+        Alert.alert(t('chatMediaError'), message);
         return;
       }
 
@@ -193,7 +197,10 @@ export function MessageComposer({
     // Validate content
     const validation = validateMessageContent(content);
     if (!validation.isValid) {
-      Alert.alert(t('chatMessageError'), validation.error || t('chatMessageInvalid'));
+      const message = validation.errorKey
+        ? t(validation.errorKey, validation.errorParams)
+        : t('chatMessageInvalid');
+      Alert.alert(t('chatMessageError'), message);
       return;
     }
 
@@ -206,8 +213,9 @@ export function MessageComposer({
       setContent('');
       setMediaFile(null);
       setMediaType('none');
-    } catch (error: any) {
-      Alert.alert(t('chatSendError'), error.message || t('chatSendErrorGeneric'));
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : t('chatSendErrorGeneric');
+      Alert.alert(t('chatSendError'), message);
     } finally {
       setSending(false);
     }

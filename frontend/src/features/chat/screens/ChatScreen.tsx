@@ -25,7 +25,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 import { useDispatch, useSelector } from 'react-redux';
-import type { AppDispatch, RootState } from '@/store/store';
+import type { AppDispatch } from '@/store/store';
 import {
   fetchConversation,
   fetchMessages,
@@ -45,9 +45,11 @@ import {
   selectSyncingOffline,
 } from '../store/chatSlice';
 import { fetchNotificationsSilent } from '@/features/notifications/store/notificationSlice';
+import { offlineService } from '@/services/offlineService';
 import { MessageBubble } from '../components/MessageBubble';
 import { MessageComposer } from '../components/MessageComposer';
 import type { Conversation, Message, MediaType } from '../types/chat';
+import { AUTO_REFRESH_INTERVAL_MS } from '../domain/constants';
 
 /**
  * MAVECAM Design System Colors
@@ -79,12 +81,29 @@ export function ChatScreen() {
   // Local state
   const [refreshing, setRefreshing] = useState(false);
   const flatListRef = useRef<FlatList>(null);
-  const [hasScrolledToBottom, setHasScrolledToBottom] = useState(false);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
   const isScreenFocusedRef = useRef(false);
-  const pollingIntervalMs = 4000;
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
+
+  const syncOfflineMessagesIfOnline = useCallback(async (conversationId?: string) => {
+    if (offlineQueueCount === 0 || syncingOffline) {
+      return;
+    }
+
+    const isOnline = await offlineService.isOnline();
+    if (!isOnline) {
+      return;
+    }
+
+    const syncResult = await dispatch(syncOfflineQueue());
+    if (syncOfflineQueue.fulfilled.match(syncResult)) {
+      await dispatch(loadOfflineQueue());
+      if (conversationId && syncResult.payload.successCount > 0) {
+        await dispatch(fetchMessages({ conversationId, page: 1 }));
+      }
+    }
+  }, [offlineQueueCount, syncingOffline, dispatch]);
 
   /**
    * Load conversation and messages on mount
@@ -99,25 +118,30 @@ export function ChatScreen() {
 
       // If conversation exists, fetch messages
       if (convResult.meta.requestStatus === 'fulfilled' && convResult.payload) {
-        const conversationId = (convResult.payload as any).id;
+        const conversationId = (convResult.payload as Conversation).id;
         await dispatch(fetchMessages({ conversationId, page: 1 }));
       }
+
+      await syncOfflineMessagesIfOnline(
+        convResult.meta.requestStatus === 'fulfilled' && convResult.payload
+          ? (convResult.payload as Conversation).id
+          : undefined
+      );
     };
 
     loadData();
-  }, [dispatch]);
+  }, [dispatch, syncOfflineMessagesIfOnline]);
 
   /**
    * Auto-scroll to bottom when new messages arrive
    */
   useEffect(() => {
-    if (messages.length > 0 && !hasScrolledToBottom) {
+    if (messages.length > 0) {
       setTimeout(() => {
         flatListRef.current?.scrollToEnd({ animated: true });
-        setHasScrolledToBottom(true);
       }, 300);
     }
-  }, [messages.length, hasScrolledToBottom]);
+  }, [messages.length]);
 
   /**
    * Helpers to start/stop polling
@@ -145,7 +169,7 @@ export function ChatScreen() {
 
     pollingRef.current = setInterval(() => {
       fetchLatestChatData();
-    }, pollingIntervalMs);
+    }, AUTO_REFRESH_INTERVAL_MS);
   }, [conversation, fetchLatestChatData]);
 
   /**
@@ -160,13 +184,21 @@ export function ChatScreen() {
       }
 
       fetchLatestChatData();
+      void syncOfflineMessagesIfOnline(conversation?.id);
       startPolling();
 
       return () => {
         isScreenFocusedRef.current = false;
         stopPolling();
       };
-    }, [dispatch, conversation, fetchLatestChatData, startPolling, stopPolling])
+    }, [
+      dispatch,
+      conversation,
+      fetchLatestChatData,
+      startPolling,
+      stopPolling,
+      syncOfflineMessagesIfOnline,
+    ])
   );
 
   /**
@@ -187,11 +219,12 @@ export function ChatScreen() {
     const subscription = AppState.addEventListener('change', (status) => {
       if (status === 'active' && isScreenFocusedRef.current) {
         fetchLatestChatData();
+        void syncOfflineMessagesIfOnline(conversation?.id);
       }
     });
 
     return () => subscription.remove();
-  }, [fetchLatestChatData]);
+  }, [fetchLatestChatData, syncOfflineMessagesIfOnline, conversation?.id]);
 
   /**
    * Pull to refresh
@@ -205,10 +238,11 @@ export function ChatScreen() {
         dispatch(fetchMessages({ conversationId: conversation.id, page: 1 })),
         dispatch(fetchNotificationsSilent()),
       ]);
+      await syncOfflineMessagesIfOnline(conversation.id);
     } finally {
       setRefreshing(false);
     }
-  }, [dispatch, conversation]);
+  }, [dispatch, conversation, syncOfflineMessagesIfOnline]);
 
   /**
    * Send text message
@@ -221,7 +255,7 @@ export function ChatScreen() {
     ) => {
       let conversationId = conversation?.id;
 
-      // Si la conversation est absente (erreur réseau initiale), tenter de la récupérer avant d'envoyer
+      // If conversation is missing (initial network error), try to fetch it before sending
       if (!conversationId) {
         const convResult = await dispatch(fetchConversation());
         if (convResult.meta.requestStatus === 'fulfilled' && convResult.payload) {
@@ -232,8 +266,7 @@ export function ChatScreen() {
         }
       }
 
-      // Try to send online, will fallback to offline queue automatically if network error
-      const isOnline = true; // Always attempt online first
+      const isOnline = await offlineService.isOnline();
 
       if (mediaFile && mediaType && mediaType !== 'none') {
         // Send media message
@@ -245,7 +278,7 @@ export function ChatScreen() {
             mediaType,
             isOnline,
           })
-        );
+        ).unwrap();
       } else {
         // Send text message
         await dispatch(
@@ -254,10 +287,13 @@ export function ChatScreen() {
             content,
             isOnline,
           })
-        );
+        ).unwrap();
       }
 
-      // Recharger les messages pour récupérer immédiatement la réponse système
+      await dispatch(loadOfflineQueue());
+      await syncOfflineMessagesIfOnline(conversationId);
+
+      // Reload messages to immediately get the system auto-response
       await dispatch(fetchMessages({ conversationId, page: 1 }));
 
       // Scroll to bottom after sending
@@ -265,7 +301,17 @@ export function ChatScreen() {
         flatListRef.current?.scrollToEnd({ animated: true });
       }, 100);
     },
-    [dispatch, conversation, t]
+    [dispatch, conversation, t, syncOfflineMessagesIfOnline]
+  );
+
+  const formatError = useCallback(
+    (error: string | null) => {
+      if (!error) {
+        return null;
+      }
+      return t(error, { defaultValue: error });
+    },
+    [t]
   );
 
   /**
@@ -302,7 +348,7 @@ export function ChatScreen() {
       return (
         <View style={styles.emptyContainer}>
           <Text style={styles.errorText}>
-            {conversationError || messagesError}
+            {formatError(conversationError || messagesError)}
           </Text>
           <Text style={styles.emptySubtext}>{t('chatErrorRetry')}</Text>
         </View>

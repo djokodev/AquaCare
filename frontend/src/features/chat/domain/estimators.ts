@@ -18,8 +18,8 @@ import {
  */
 export interface MediaValidationResult {
   isValid: boolean;
-  error?: string;
   errorKey?: string; // i18n key for error message
+  errorParams?: Record<string, string | number>;
 }
 
 /**
@@ -41,7 +41,6 @@ export function validateMessageContent(content: string): MediaValidationResult {
   if (!content || content.trim().length === 0) {
     return {
       isValid: false,
-      error: 'Message content cannot be empty',
       errorKey: 'chatMessageEmpty',
     };
   }
@@ -49,8 +48,8 @@ export function validateMessageContent(content: string): MediaValidationResult {
   if (content.length > MAX_MESSAGE_LENGTH) {
     return {
       isValid: false,
-      error: `Message exceeds maximum length of ${MAX_MESSAGE_LENGTH} characters`,
       errorKey: 'chatMessageTooLong',
+      errorParams: { length: MAX_MESSAGE_LENGTH },
     };
   }
 
@@ -72,8 +71,8 @@ export function validateImageFile(
   if (fileSizeMB > MAX_IMAGE_SIZE_MB) {
     return {
       isValid: false,
-      error: `Image exceeds maximum size of ${MAX_IMAGE_SIZE_MB}MB`,
       errorKey: 'chatMediaImageTooLarge',
+      errorParams: { size: MAX_IMAGE_SIZE_MB },
     };
   }
 
@@ -81,7 +80,6 @@ export function validateImageFile(
   if (!ALLOWED_IMAGE_TYPES.includes(mimeType as any)) {
     return {
       isValid: false,
-      error: 'Invalid image format. Allowed: JPEG, PNG, WebP',
       errorKey: 'chatMediaImageInvalidFormat',
     };
   }
@@ -104,8 +102,8 @@ export function validateVideoFile(
   if (fileSizeMB > MAX_VIDEO_SIZE_MB) {
     return {
       isValid: false,
-      error: `Video exceeds maximum size of ${MAX_VIDEO_SIZE_MB}MB`,
       errorKey: 'chatMediaVideoTooLarge',
+      errorParams: { size: MAX_VIDEO_SIZE_MB },
     };
   }
 
@@ -113,7 +111,6 @@ export function validateVideoFile(
   if (!ALLOWED_VIDEO_TYPES.includes(mimeType as any)) {
     return {
       isValid: false,
-      error: 'Invalid video format. Allowed: MP4, QuickTime',
       errorKey: 'chatMediaVideoInvalidFormat',
     };
   }

@@ -40,6 +40,53 @@ const initialState: ChatState = {
   syncErrors: {},
 };
 
+const ERROR_KEYS = {
+  fetchConversation: 'chatFetchConversationError',
+  fetchMessages: 'chatFetchMessagesError',
+  sendMessage: 'chatSendErrorGeneric',
+  sendMediaMessage: 'chatSendErrorGeneric',
+  markRead: 'chatMarkReadError',
+  syncOffline: 'chatSyncOfflineError',
+  loadOfflineQueue: 'chatLoadOfflineQueueError',
+  refreshConversation: 'chatRefreshConversationError',
+} as const;
+
+function getApiErrorMessage(error: any, fallbackKey: string): string {
+  const apiError = error?.response?.data?.error;
+  if (typeof apiError === 'string' && apiError.trim().length > 0) {
+    return apiError;
+  }
+  return fallbackKey;
+}
+
+function isNetworkLikeError(error: any): boolean {
+  return !error?.response;
+}
+
+function buildOptimisticMessage(params: {
+  clientUuid: string;
+  conversationId: string;
+  content: string;
+  mediaType: 'none' | 'image' | 'video';
+  mediaUrl?: string | null;
+}): Message {
+  return {
+    id: params.clientUuid,
+    client_uuid: params.clientUuid,
+    conversation: params.conversationId,
+    sender_type: 'user',
+    content: params.content,
+    media_type: params.mediaType,
+    media_url: params.mediaUrl ?? null,
+    is_read: false,
+    read_at: null,
+    created_offline: true,
+    synced_at: null,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+}
+
 /**
  * Fetch or create user's conversation with administration
  */
@@ -74,6 +121,21 @@ export const sendTextMessage = createAsyncThunk<
   { conversationId: string; content: string; isOnline: boolean },
   { rejectValue: string }
 >('chat/sendTextMessage', async ({ conversationId, content, isOnline }, { rejectWithValue }) => {
+  const enqueueOfflineText = async (): Promise<Message> => {
+    const clientUuid = await offlineChatService.addToOfflineQueue(
+      conversationId,
+      content,
+      'none'
+    );
+
+    return buildOptimisticMessage({
+      clientUuid,
+      conversationId,
+      content,
+      mediaType: 'none',
+    });
+  };
+
   try {
     if (isOnline) {
       // Online - send immediately
@@ -85,34 +147,17 @@ export const sendTextMessage = createAsyncThunk<
 
       return await chatApi.sendMessage(conversationId, request);
     } else {
-      // Offline - add to queue
-      const clientUuid = await offlineChatService.addToOfflineQueue(
-        conversationId,
-        content,
-        'none'
-      );
-
-      // Create optimistic message for UI
-      const optimisticMessage: Message = {
-        id: clientUuid, // Temporary ID
-        client_uuid: clientUuid,
-        conversation: conversationId,
-        sender_type: 'user',
-        content,
-        media_type: 'none',
-        media_url: null,
-        is_read: false,
-        read_at: null,
-        created_offline: true,
-        synced_at: null,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-
-      return optimisticMessage;
+      return await enqueueOfflineText();
     }
   } catch (error: any) {
-    return rejectWithValue(error?.response?.data?.error || error.message || 'Failed to send message');
+    if (isOnline && isNetworkLikeError(error)) {
+      try {
+        return await enqueueOfflineText();
+      } catch (offlineError: any) {
+        return rejectWithValue(getApiErrorMessage(offlineError, ERROR_KEYS.sendMessage));
+      }
+    }
+    return rejectWithValue(getApiErrorMessage(error, ERROR_KEYS.sendMessage));
   }
 });
 
@@ -138,6 +183,24 @@ export const sendMediaMessage = createAsyncThunk<
 >(
   'chat/sendMediaMessage',
   async ({ conversationId, content, mediaFile, mediaType, isOnline }, { rejectWithValue }) => {
+    const enqueueOfflineMedia = async (): Promise<Message> => {
+      const mediaUri = 'uri' in mediaFile ? mediaFile.uri : '';
+      const clientUuid = await offlineChatService.addToOfflineQueue(
+        conversationId,
+        content,
+        mediaType,
+        mediaUri
+      );
+
+      return buildOptimisticMessage({
+        clientUuid,
+        conversationId,
+        content,
+        mediaType,
+        mediaUrl: mediaUri || null,
+      });
+    };
+
     try {
       if (isOnline) {
         // Online - send immediately
@@ -148,36 +211,19 @@ export const sendMediaMessage = createAsyncThunk<
           mediaType
         );
       } else {
-        // Offline - add to queue with media URI
-        const mediaUri = 'uri' in mediaFile ? mediaFile.uri : '';
-        const clientUuid = await offlineChatService.addToOfflineQueue(
-          conversationId,
-          content,
-          mediaType,
-          mediaUri
-        );
-
-        // Create optimistic message for UI
-        const optimisticMessage: Message = {
-          id: clientUuid,
-          client_uuid: clientUuid,
-          conversation: conversationId,
-          sender_type: 'user',
-          content,
-          media_type: mediaType,
-          media_url: mediaUri,
-          is_read: false,
-          read_at: null,
-          created_offline: true,
-          synced_at: null,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        };
-
-        return optimisticMessage;
+        return await enqueueOfflineMedia();
       }
     } catch (error: any) {
-      return rejectWithValue(error?.response?.data?.error || error.message || 'Failed to send media message');
+      if (isOnline && isNetworkLikeError(error)) {
+        try {
+          return await enqueueOfflineMedia();
+        } catch (offlineError: any) {
+          return rejectWithValue(
+            getApiErrorMessage(offlineError, ERROR_KEYS.sendMediaMessage)
+          );
+        }
+      }
+      return rejectWithValue(getApiErrorMessage(error, ERROR_KEYS.sendMediaMessage));
     }
   }
 );
@@ -325,9 +371,9 @@ const chatSlice = createSlice({
         state.conversationLoading = false;
         state.conversation = action.payload;
       })
-      .addCase(fetchConversation.rejected, (state, action) => {
+      .addCase(fetchConversation.rejected, (state) => {
         state.conversationLoading = false;
-        state.conversationError = action.error.message || 'Failed to fetch conversation';
+        state.conversationError = ERROR_KEYS.fetchConversation;
       });
 
     // Fetch messages
@@ -345,9 +391,9 @@ const chatSlice = createSlice({
           hasPrevious: action.payload.previous !== null,
         };
       })
-      .addCase(fetchMessages.rejected, (state, action) => {
+      .addCase(fetchMessages.rejected, (state) => {
         state.messagesLoading = false;
-        state.messagesError = action.error.message || 'Failed to fetch messages';
+        state.messagesError = ERROR_KEYS.fetchMessages;
       });
 
     // Send text message
@@ -366,7 +412,7 @@ const chatSlice = createSlice({
       })
       .addCase(sendTextMessage.rejected, (state, action) => {
         state.sendingMessage = false;
-        state.sendMessageError = action.payload || 'Failed to send message';
+        state.sendMessageError = action.payload || ERROR_KEYS.sendMessage;
       });
 
     // Send media message
@@ -384,7 +430,7 @@ const chatSlice = createSlice({
       })
       .addCase(sendMediaMessage.rejected, (state, action) => {
         state.sendingMessage = false;
-        state.sendMessageError = action.payload || 'Failed to send media message';
+        state.sendMessageError = action.payload || ERROR_KEYS.sendMediaMessage;
       });
 
     // Mark messages as read
@@ -400,8 +446,8 @@ const chatSlice = createSlice({
           read_at: msg.read_at || new Date().toISOString(),
         }));
       })
-      .addCase(markMessagesAsRead.rejected, (state, action) => {
-        state.messagesError = action.error.message || 'Failed to mark messages as read';
+      .addCase(markMessagesAsRead.rejected, (state) => {
+        state.messagesError = ERROR_KEYS.markRead;
       });
 
     // Sync offline queue
@@ -418,9 +464,9 @@ const chatSlice = createSlice({
         // (Backend handles actual removal via offlineChatService)
         // Load fresh queue after sync
       })
-      .addCase(syncOfflineQueue.rejected, (state, action) => {
+      .addCase(syncOfflineQueue.rejected, (state) => {
         state.syncingOffline = false;
-        state.messagesError = action.error.message || 'Failed to sync offline messages';
+        state.messagesError = ERROR_KEYS.syncOffline;
       });
 
     // Load offline queue
@@ -428,8 +474,8 @@ const chatSlice = createSlice({
       .addCase(loadOfflineQueue.fulfilled, (state, action) => {
         state.offlineQueue = action.payload;
       })
-      .addCase(loadOfflineQueue.rejected, (state, action) => {
-        state.messagesError = action.error.message || 'Failed to load offline queue';
+      .addCase(loadOfflineQueue.rejected, (state) => {
+        state.messagesError = ERROR_KEYS.loadOfflineQueue;
       });
 
     // Refresh conversation
@@ -437,8 +483,8 @@ const chatSlice = createSlice({
       .addCase(refreshConversation.fulfilled, (state, action) => {
         state.conversation = action.payload;
       })
-      .addCase(refreshConversation.rejected, (state, action) => {
-        state.conversationError = action.error.message || 'Failed to refresh conversation';
+      .addCase(refreshConversation.rejected, (state) => {
+        state.conversationError = ERROR_KEYS.refreshConversation;
       });
   },
 });
