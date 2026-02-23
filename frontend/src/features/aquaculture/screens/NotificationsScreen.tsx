@@ -1,7 +1,8 @@
-﻿import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, View, Text, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl, Alert } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
+import { StackNavigationProp } from '@react-navigation/stack';
 import { useDispatch, useSelector } from 'react-redux';
 import { useFocusEffect } from '@react-navigation/native';
 import { AppDispatch, RootState } from '@/store/store';
@@ -9,10 +10,12 @@ import {
   fetchNotifications,
   fetchNotificationsSilent,
   markNotificationAsRead,
+  markAllNotificationsAsRead,
   deleteNotification,
   deleteAllReadNotifications,
 } from '@/features/notifications/store/notificationSlice';
 import { Notification } from '@/types/notifications';
+import { RootStackParamList } from '@/navigation/MainNavigator';
 import { MAVECAM_COLORS } from '@/constants/colors';
 
 const NOTIFICATION_COLORS = {
@@ -24,8 +27,18 @@ const NOTIFICATION_COLORS = {
   new_message: MAVECAM_COLORS.SUCCESS,
 };
 
-export default function NotificationsScreen({ navigation }: any) {
-  const { t } = useTranslation();
+type NotificationsScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Notifications'>;
+
+interface NotificationsScreenProps {
+  navigation: NotificationsScreenNavigationProp;
+}
+
+interface ErrorWithMessage {
+  message?: string;
+}
+
+export default function NotificationsScreen({ navigation }: NotificationsScreenProps) {
+  const { t, i18n } = useTranslation();
   const dispatch = useDispatch<AppDispatch>();
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -98,14 +111,14 @@ export default function NotificationsScreen({ navigation }: any) {
     if (diffHours < 24) return `${Math.floor(diffHours)}h`;
     if (diffHours < 48) return t('yesterday');
 
-    return date.toLocaleDateString('fr-FR', {
+    return date.toLocaleDateString(i18n.language === 'fr' ? 'fr-FR' : 'en-US', {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
     });
   };
 
-  const getNotificationIcon = (type: string) => {
+  const getNotificationIcon = (type: string): keyof typeof Ionicons.glyphMap => {
     switch (type) {
       case 'new_message':
         return 'chatbubbles-outline';
@@ -133,13 +146,14 @@ export default function NotificationsScreen({ navigation }: any) {
 
     try {
       await dispatch(markNotificationAsRead(notification.id)).unwrap();
-    } catch (markError: any) {
-      Alert.alert(t('error'), markError || t('markReadError'));
+    } catch (markError: unknown) {
+      const errorWithMessage = markError as ErrorWithMessage;
+      Alert.alert(t('error'), errorWithMessage.message || t('markReadError'));
     }
   };
 
   const handleMarkAllAsRead = () => {
-    const unreadNotifications = notifications.filter((n) => !n.is_read);
+    const unreadNotifications = notifications.filter((notification) => !notification.is_read);
 
     if (unreadNotifications.length === 0) {
       Alert.alert(t('info'), t('noUnreadNotifications'));
@@ -152,8 +166,8 @@ export default function NotificationsScreen({ navigation }: any) {
         text: t('confirm'),
         onPress: async () => {
           try {
-            await Promise.all(unreadNotifications.map((notification) => dispatch(markNotificationAsRead(notification.id))));
-          } catch (markAllError: any) {
+            await dispatch(markAllNotificationsAsRead()).unwrap();
+          } catch {
             Alert.alert(t('error'), t('markAllReadError'));
           }
         },
@@ -163,7 +177,7 @@ export default function NotificationsScreen({ navigation }: any) {
 
   const handleDeleteNotification = (notification: Notification) => {
     const warningMessage = !notification.is_read
-      ? `${t('deleteNotificationConfirm')} Cette notification n'est pas encore lue.`
+      ? `${t('deleteNotificationConfirm')} ${t('notificationNotReadWarning')}`
       : t('deleteNotificationConfirm');
 
     Alert.alert(t('deleteNotification'), warningMessage, [
@@ -174,8 +188,9 @@ export default function NotificationsScreen({ navigation }: any) {
         onPress: async () => {
           try {
             await dispatch(deleteNotification(notification.id)).unwrap();
-          } catch (deleteError: any) {
-            Alert.alert(t('error'), deleteError || t('deleteError'));
+          } catch (deleteError: unknown) {
+            const errorWithMessage = deleteError as ErrorWithMessage;
+            Alert.alert(t('error'), errorWithMessage.message || t('deleteError'));
           }
         },
       },
@@ -183,7 +198,7 @@ export default function NotificationsScreen({ navigation }: any) {
   };
 
   const handleDeleteAllRead = () => {
-    const readNotifications = notifications.filter((n) => n.is_read);
+    const readNotifications = notifications.filter((notification) => notification.is_read);
 
     if (readNotifications.length === 0) {
       Alert.alert(t('info'), t('noReadNotifications'));
@@ -198,8 +213,9 @@ export default function NotificationsScreen({ navigation }: any) {
         onPress: async () => {
           try {
             await dispatch(deleteAllReadNotifications()).unwrap();
-          } catch (deleteAllError: any) {
-            Alert.alert(t('error'), deleteAllError || t('deleteAllReadError'));
+          } catch (deleteAllError: unknown) {
+            const errorWithMessage = deleteAllError as ErrorWithMessage;
+            Alert.alert(t('error'), errorWithMessage.message || t('deleteAllReadError'));
           }
         },
       },
@@ -227,7 +243,7 @@ export default function NotificationsScreen({ navigation }: any) {
             <Ionicons name="checkmark-done" size={20} color={MAVECAM_COLORS.WHITE} />
           </TouchableOpacity>
         )}
-        {notifications.filter((n) => n.is_read).length > 0 && (
+        {notifications.filter((notification) => notification.is_read).length > 0 && (
           <TouchableOpacity className="p-2 bg-white/20 rounded-md" onPress={handleDeleteAllRead}>
             <Ionicons name="trash" size={20} color={MAVECAM_COLORS.WHITE} />
           </TouchableOpacity>
@@ -242,7 +258,7 @@ export default function NotificationsScreen({ navigation }: any) {
         {renderHeader()}
         <View className="flex-1 items-center justify-center p-6">
           <Ionicons name="alert-circle" size={48} color={MAVECAM_COLORS.ERROR} />
-          <Text className="text-lg text-error text-center mt-3">{error}</Text>
+          <Text className="text-lg text-error text-center mt-3">{error ? t(error) : ''}</Text>
           <TouchableOpacity className="mt-4 bg-mavecam-primary px-5 py-3 rounded-lg" onPress={() => dispatch(fetchNotifications())}>
             <Text className="text-white text-base font-semibold">{t('retry')}</Text>
           </TouchableOpacity>
@@ -256,7 +272,7 @@ export default function NotificationsScreen({ navigation }: any) {
       {renderHeader()}
 
       <ScrollView refreshControl={<RefreshControl refreshing={loading} onRefresh={onRefresh} />}>
-        <View className="bg-white mx-4 mt-4 mb-4 p-4 rounded-xl shadow flex-row justify-around">
+        <View className="bg-white mx-4 mt-4 mb-4 p-4 rounded-xl flex-row justify-around">
           <View className="items-center">
             <Text className="text-2xl font-bold text-mavecam-primary">{totalNotifications}</Text>
             <Text className="text-xs text-gray-light text-center">{t('totalNotifications')}</Text>
@@ -267,7 +283,7 @@ export default function NotificationsScreen({ navigation }: any) {
           </View>
         </View>
 
-        <View className="bg-white mx-4 mb-4 p-4 rounded-xl shadow">
+        <View className="bg-white mx-4 mb-4 p-4 rounded-xl">
           <Text className="text-base font-bold text-gray-dark mb-3">{t('filterNotifications')}</Text>
           <View className="flex-row justify-around">
             {(['all', 'unread', 'read'] as const).map((filter) => (
@@ -278,11 +294,7 @@ export default function NotificationsScreen({ navigation }: any) {
                 }`}
                 onPress={() => setSelectedFilter(filter)}
               >
-                <Text
-                  className={`text-sm font-medium ${
-                    selectedFilter === filter ? 'text-white' : 'text-gray-dark'
-                  }`}
-                >
+                <Text className={`text-sm font-medium ${selectedFilter === filter ? 'text-white' : 'text-gray-dark'}`}>
                   {filter === 'all' ? t('allNotifications') : filter === 'unread' ? t('unread') : t('read')}
                 </Text>
               </TouchableOpacity>
@@ -298,7 +310,7 @@ export default function NotificationsScreen({ navigation }: any) {
           {loading && sortedNotifications.length === 0 ? (
             <View className="items-center py-10">
               <ActivityIndicator size="large" color={MAVECAM_COLORS.GREEN_PRIMARY} />
-              <Text className="text-sm text-gray-light mt-3">{t('loading')}...</Text>
+              <Text className="text-sm text-gray-light mt-3">{t('loading')}</Text>
             </View>
           ) : sortedNotifications.length === 0 ? (
             <View className="items-center py-10">
@@ -307,8 +319,8 @@ export default function NotificationsScreen({ navigation }: any) {
                 {selectedFilter === 'unread'
                   ? t('noUnreadNotifications')
                   : selectedFilter === 'read'
-                  ? t('noReadNotifications')
-                  : t('noNotifications')}
+                    ? t('noReadNotifications')
+                    : t('noNotifications')}
               </Text>
               <Text className="text-sm text-gray-light text-center mt-1">{t('notificationsWillAppear')}</Text>
             </View>
@@ -320,11 +332,11 @@ export default function NotificationsScreen({ navigation }: any) {
               return (
                 <View
                   key={notification.id}
-                  className={`bg-white rounded-xl p-4 mb-3 shadow ${!notification.is_read ? 'border-l-4 border-l-mavecam-primary bg-[#f0fdf4]' : ''}`}
+                  className={`bg-white rounded-xl p-4 mb-3 ${!notification.is_read ? 'border-l-4 border-l-mavecam-primary bg-[#f0fdf4]' : ''}`}
                 >
                   <View className="flex-row">
                     <View className="w-12 h-12 rounded-full items-center justify-center mr-3" style={{ backgroundColor: `${color}20` }}>
-                      <Ionicons name={iconName as any} size={24} color={color} />
+                      <Ionicons name={iconName} size={24} color={color} />
                     </View>
 
                     <View className="flex-1">
@@ -351,7 +363,7 @@ export default function NotificationsScreen({ navigation }: any) {
                       onPress={() => handleMarkAsRead(notification)}
                     >
                       <Text className="text-xs font-semibold text-success">
-                        {notification.is_read ? t('read') : t('markAllAsRead').replace(' Toutes', '')}
+                        {notification.is_read ? t('read') : t('markAsRead')}
                       </Text>
                     </TouchableOpacity>
 
@@ -372,4 +384,3 @@ export default function NotificationsScreen({ navigation }: any) {
     </View>
   );
 }
-
