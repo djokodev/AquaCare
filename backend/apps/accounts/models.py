@@ -1,5 +1,6 @@
 import uuid
 from django.contrib.auth.models import AbstractUser
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 from .managers import UserManager
@@ -148,10 +149,13 @@ class User(AbstractUser):
         verbose_name = _('Utilisateur')
         verbose_name_plural = _('Utilisateurs')
         db_table = 'accounts_user'
+        indexes = [
+            models.Index(fields=['account_type'], name='idx_user_account_type'),
+            models.Index(fields=['region'], name='idx_user_region'),
+        ]
     
     def clean(self):
         """Validation métier du modèle User selon spécifications MAVECAM."""
-        from django.core.exceptions import ValidationError
         errors = {}
                 
         if self.account_type == 'company':
@@ -197,10 +201,6 @@ class User(AbstractUser):
                 errors['region'] = _('La région est requise si l\'arrondissement est spécifié.')
         
         
-        if not self.activity_type:
-            # Note : On peut faire ceci optionnel selon les besoins du client
-            pass  # Laissé vide pour le moment, peut être ajouté plus tard
-        
         # Si des erreurs ont été trouvées, les lever
         if errors:
             raise ValidationError(errors)
@@ -228,35 +228,38 @@ class User(AbstractUser):
         return self.phone_number
     
 
+    def _resolve_display_name(self):
+        """
+        Retourne business_name (entreprise) ou 'prénom nom' (individu), sinon None.
+
+        Factorise la logique partagée entre login_name et display_name.
+        """
+        if self.account_type == 'company' and self.business_name:
+            return self.business_name
+        if self.first_name and self.last_name:
+            return f"{self.first_name} {self.last_name}"
+        return None
+
     @property
     def full_name(self):
         if self.first_name and self.last_name:
             return f"{self.first_name} {self.last_name}"
         return self.phone_number
-    
-    
+
     @property
     def login_name(self):
         """
         Nom utilisé pour la connexion selon les spécifications MAVECAM.
-        
+
         - Pour les entreprises : business_name
         - Pour les personnes physiques : first_name last_name
         """
-        if self.account_type == 'company' and self.business_name:
-            return self.business_name
-        elif self.first_name and self.last_name:
-            return f"{self.first_name} {self.last_name}"
-        return None
-    
+        return self._resolve_display_name()
+
     @property
     def display_name(self):
         """Nom d'affichage pour l'interface utilisateur."""
-        if self.account_type == 'company' and self.business_name:
-            return self.business_name
-        elif self.first_name and self.last_name:
-            return f"{self.first_name} {self.last_name}"
-        return self.phone_number
+        return self._resolve_display_name() or self.phone_number
     
     @property
     def is_individual(self):
@@ -266,8 +269,6 @@ class User(AbstractUser):
     def is_company(self):
         return self.account_type == 'company'
     
-    def get_display_language(self):
-        return self.language_preference
 
 
 
@@ -355,7 +356,7 @@ class FarmProfile(models.Model):
         _('Prix aliment par défaut (FCFA/kg)'),
         max_digits=8,
         decimal_places=2,
-        default=500,
+        default=1250,
         help_text=_('Prix unitaire de l\'aliment en FCFA par kg (utilisé pour calcul coûts)')
     )
 
@@ -383,6 +384,9 @@ class FarmProfile(models.Model):
         verbose_name_plural = _('Profils de fermes')
         db_table = 'accounts_farm_profile'
         ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['certification_status'], name='idx_farm_certification'),
+        ]
     
     def __str__(self):
         return f"{self.farm_name} - {self.user.display_name}"
@@ -392,9 +396,8 @@ class FarmProfile(models.Model):
         return self.certification_status == 'certified'
     
     def clean(self):
-        from django.core.exceptions import ValidationError
         errors = {}
-        
+
         # Vérifier que le nom de ferme n'est pas vide
         if not self.farm_name or not self.farm_name.strip():
             errors['farm_name'] = _('Le nom de la ferme ne peut pas être vide.')

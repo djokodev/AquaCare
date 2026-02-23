@@ -5,11 +5,13 @@ Teste le rate limiting, la détection de langue, etc.
 """
 import pytest
 import json
+import time
 from unittest.mock import Mock, patch
 from django.http import HttpRequest, JsonResponse
 from django.contrib.auth import get_user_model
 from django.test import RequestFactory
 from django.contrib.sessions.middleware import SessionMiddleware
+from django.core.cache import cache
 from accounts.middleware import (
     UserLanguageMiddleware,
     APIResponseLanguageMiddleware,
@@ -131,6 +133,7 @@ class TestLoginRateLimitMiddleware:
         self.factory = RequestFactory()
         self.get_response = Mock()
         self.middleware = LoginRateLimitMiddleware(self.get_response)
+        cache.clear()
     
     def test_non_login_request_not_rate_limited(self):
         """Test que les requêtes non-login ne sont pas limitées."""
@@ -148,7 +151,12 @@ class TestLoginRateLimitMiddleware:
     
     def test_ip_limit_not_reached_initially(self):
         """Test limite IP pas atteinte initialement."""
-        should_limit = self.middleware.check_ip_limit('192.168.1.1')
+        ip = '192.168.1.1'
+        should_limit = self.middleware._check_limit(
+            self.middleware._cache_key_ip(ip),
+            self.middleware.ip_limit,
+            self.middleware.window_seconds,
+        )
         assert should_limit is False
     
     def test_ip_limit_reached_after_attempts(self):
@@ -156,31 +164,33 @@ class TestLoginRateLimitMiddleware:
         ip = '192.168.1.100'
         
         # Simuler 5 tentatives dans la dernière minute
-        import time
         current_time = time.time()
-        self.middleware.ip_attempts[ip] = [
+        cache.set(self.middleware._cache_key_ip(ip), [
             current_time - 30,  # 30 secondes ago
             current_time - 25,
             current_time - 20,
             current_time - 15,
             current_time - 10
-        ]
+        ], timeout=60)
         
-        should_limit = self.middleware.check_ip_limit(ip)
+        should_limit = self.middleware._check_limit(
+            self.middleware._cache_key_ip(ip),
+            self.middleware.ip_limit,
+            self.middleware.window_seconds,
+        )
         assert should_limit is True
-    
+
     def test_user_limit_reached_after_attempts(self):
         """Test limite utilisateur atteinte."""
         login_name = 'Jean Farmer'
         
         # Simuler 3 tentatives dans la dernière minute
-        import time
         current_time = time.time()
-        self.middleware.user_attempts[login_name] = [
+        cache.set(self.middleware._cache_key_user(login_name), [
             current_time - 30,
             current_time - 20,
             current_time - 10
-        ]
+        ], timeout=60)
         
         should_limit = self.middleware.check_user_limit(login_name)
         assert should_limit is True
@@ -190,18 +200,23 @@ class TestLoginRateLimitMiddleware:
         ip = '192.168.1.200'
         
         # Ajouter des tentatives anciennes (> 1 minute)
-        import time
         current_time = time.time()
-        self.middleware.ip_attempts[ip] = [
+        key = self.middleware._cache_key_ip(ip)
+        cache.set(key, [
             current_time - 120,  # 2 minutes ago (doit être supprimé)
             current_time - 90,   # 1.5 minutes ago (doit être supprimé)
             current_time - 30    # 30 seconds ago (doit rester)
-        ]
+        ], timeout=60)
         
-        should_limit = self.middleware.check_ip_limit(ip)
+        should_limit = self.middleware._check_limit(
+            self.middleware._cache_key_ip(ip),
+            self.middleware.ip_limit,
+            self.middleware.window_seconds,
+        )
+        remaining_attempts = cache.get(key, [])
         
         # Vérifier qu'une seule tentative reste
-        assert len(self.middleware.ip_attempts[ip]) == 1
+        assert len(remaining_attempts) == 1
         assert should_limit is False  # Pas encore la limite
     
     def test_get_client_ip_with_forwarded_header(self):

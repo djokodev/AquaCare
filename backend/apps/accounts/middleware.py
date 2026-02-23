@@ -1,5 +1,9 @@
+import json
+import time
+
 from django.utils import translation
 from django.utils.translation import gettext as _
+from django.core.cache import cache
 
 
 class UserLanguageMiddleware:
@@ -25,10 +29,10 @@ class UserLanguageMiddleware:
         translation.activate(language)
         request.LANGUAGE_CODE = language
 
-        response = self.get_response(request)
-
-        # Désactiver la langue après la réponse
-        translation.deactivate()
+        try:
+            response = self.get_response(request)
+        finally:
+            translation.deactivate()
 
         return response
 
@@ -72,7 +76,7 @@ class UserLanguageMiddleware:
         # 4. Utiliser l'header Accept-Language
         accept_language = request.META.get('HTTP_ACCEPT_LANGUAGE', '')
         if accept_language:
-            # Analyser l'header Accept-Language (simplifi�)
+            # Analyser l'header Accept-Language (simplifié�)
             if accept_language.lower().startswith('en'):
                 return 'en'
             elif accept_language.lower().startswith('fr'):
@@ -117,11 +121,17 @@ class LoginRateLimitMiddleware:
     - Blocage progressif en cas d'abus répété
     """
     
+    # Endpoints proteges et leurs limites specifiques
+    PROTECTED_ENDPOINTS = {
+        '/api/accounts/login/': {'ip_limit': 5, 'window_seconds': 60},
+        '/api/accounts/register/': {'ip_limit': 10, 'window_seconds': 60},
+    }
+
     def __init__(self, get_response):
         self.get_response = get_response
-        # Cache simple en mémoire (en production, utiliser Redis)
-        self.ip_attempts = {}
-        self.user_attempts = {}
+        self.ip_limit = 5
+        self.user_limit = 3
+        self.window_seconds = 60
     
     def __call__(self, request):
         # Vérifier le rate limiting avant traitement
@@ -141,91 +151,64 @@ class LoginRateLimitMiddleware:
         return response
     
     def is_login_attempt(self, request, response):
-        """Vérifie si c'est une tentative de connexion."""
+        """Vérifie si c'est une tentative sur un endpoint protégé."""
         return (
-            request.path == '/api/accounts/login/' and 
+            request.path in self.PROTECTED_ENDPOINTS and
             request.method == 'POST'
         )
-    
+
     def should_rate_limit(self, request):
         """Vérifie si la requête doit être rate limitée."""
         if not self.is_login_request(request):
             return False
-        
+
+        endpoint_config = self.PROTECTED_ENDPOINTS[request.path]
+        ip_limit = endpoint_config['ip_limit']
+        window = endpoint_config['window_seconds']
+
         ip = self.get_client_ip(request)
-        
-        # Vérifier les tentatives par IP
-        if self.check_ip_limit(ip):
+
+        # Vérifier les tentatives par IP (avec limite spécifique à l'endpoint)
+        if self._check_limit(self._cache_key_ip(ip), ip_limit, window):
             return True
-        
-        # Vérifier les tentatives par utilisateur (si login_name fourni)
-        login_name = self.get_login_name(request)
-        if login_name and self.check_user_limit(login_name):
-            return True
-        
+
+        # Vérifier les tentatives par utilisateur (login uniquement)
+        if request.path == '/api/accounts/login/':
+            login_name = self.get_login_name(request)
+            if login_name and self.check_user_limit(login_name):
+                return True
+
         return False
-    
+
     def is_login_request(self, request):
-        """Vérifie si c'est une requête de login."""
+        """Vérifie si c'est une requête sur un endpoint protégé."""
         return (
-            request.path == '/api/accounts/login/' and 
+            request.path in self.PROTECTED_ENDPOINTS and
             request.method == 'POST'
         )
     
-    def check_ip_limit(self, ip):
-        """Vérifie la limite par IP."""
-        import time
-        current_time = time.time()
-        
-        if ip not in self.ip_attempts:
-            return False
-        
-        # Nettoyer les tentatives anciennes (> 1 minute)
-        self.ip_attempts[ip] = [
-            attempt for attempt in self.ip_attempts[ip]
-            if current_time - attempt < 60
-        ]
-        
-        # Vérifier la limite (5 tentatives par minute)
-        return len(self.ip_attempts[ip]) >= 5
-    
+    def _check_limit(self, key, limit, window_seconds):
+        """Vérifie si une clé de cache dépasse sa limite dans la fenêtre."""
+        attempts = self._get_recent_attempts(key, window_seconds)
+        return len(attempts) >= limit
+
     def check_user_limit(self, login_name):
         """Vérifie la limite par utilisateur."""
-        import time
-        current_time = time.time()
-        
-        if login_name not in self.user_attempts:
-            return False
-        
-        # Nettoyer les tentatives anciennes
-        self.user_attempts[login_name] = [
-            attempt for attempt in self.user_attempts[login_name]
-            if current_time - attempt < 60
-        ]
-        
-        # Vérifier la limite (3 tentatives par minute)
-        return len(self.user_attempts[login_name]) >= 3
+        key = self._cache_key_user(login_name)
+        attempts = self._get_recent_attempts(key)
+        return len(attempts) >= self.user_limit
     
     def record_attempt(self, request, response):
         """Enregistre une tentative de connexion."""
-        import time
-        current_time = time.time()
-        
         # Enregistrer seulement les tentatives échouées
         if response.status_code != 200:
             ip = self.get_client_ip(request)
             login_name = self.get_login_name(request)
-            
-            # Enregistrer par IP
-            if ip not in self.ip_attempts:
-                self.ip_attempts[ip] = []
-            self.ip_attempts[ip].append(current_time)
-            
-            # Enregistrer par utilisateur
+
+            self._record_attempt(self._cache_key_ip(ip))
+
             if login_name:
-                if login_name not in self.user_attempts:
-                    self.user_attempts[login_name] = []
-                self.user_attempts[login_name].append(current_time)
+                self._record_attempt(self._cache_key_user(login_name))
     
     def get_client_ip(self, request):
         """Récupère l'IP du client."""
@@ -239,8 +222,32 @@ class LoginRateLimitMiddleware:
     def get_login_name(self, request):
         """Récupère le login_name de la requête."""
         try:
-            import json
             body = json.loads(request.body.decode('utf-8'))
             return body.get('login_name', '')
-        except:
+        except Exception:
             return ''
+
+    def _cache_key_ip(self, ip):
+        return f"login-rate-limit:ip:{ip}"
+
+    def _cache_key_user(self, login_name):
+        return f"login-rate-limit:user:{login_name}"
+
+    def _get_recent_attempts(self, key, window_seconds=None):
+        window = window_seconds if window_seconds is not None else self.window_seconds
+        current_time = time.time()
+        attempts = cache.get(key, [])
+        recent_attempts = [
+            attempt for attempt in attempts
+            if current_time - attempt < window
+        ]
+
+        if recent_attempts != attempts:
+            cache.set(key, recent_attempts, timeout=window)
+
+        return recent_attempts
+
+    def _record_attempt(self, key):
+        attempts = self._get_recent_attempts(key)
+        attempts.append(time.time())
+        cache.set(key, attempts, timeout=self.window_seconds)

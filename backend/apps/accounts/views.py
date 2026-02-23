@@ -1,3 +1,7 @@
+import logging
+
+from django.utils.translation import gettext as _
+
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -5,16 +9,18 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import TokenError
 from drf_spectacular.utils import extend_schema, OpenApiResponse, OpenApiExample
 
-from .models import User
+from django.http import Http404
+from .models import User, FarmProfile
 
 from .serializers import (
     UserRegistrationSerializer,
-    UserProfileSimpleSerializer,
     UserProfileSerializer,
     FarmProfileSerializer,
     LoginSerializer
 )
 from .permissions import IsOwnerOrReadOnly
+
+logger = logging.getLogger(__name__)
 
 
 class RegisterView(generics.CreateAPIView):
@@ -82,15 +88,7 @@ class RegisterView(generics.CreateAPIView):
         }
     )
     def create(self, request, *args, **kwargs):
-        # Debug: Log des données reçues
-        print(f"DEBUG - Donnees recues pour inscription: {request.data}")
-        print(f"DEBUG - Content-Type: {request.content_type}")
-        
         serializer = self.get_serializer(data=request.data)
-        
-        if not serializer.is_valid():
-            print(f"ERROR - Erreurs de validation: {serializer.errors}")
-            
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
         
@@ -102,7 +100,7 @@ class RegisterView(generics.CreateAPIView):
                 'refresh': str(refresh),
                 'access': str(refresh.access_token),
             },
-            'message': 'Compte créé avec succès'
+            'message': _('Compte créé avec succès')
         }, status=status.HTTP_201_CREATED)
 
 
@@ -176,7 +174,7 @@ class LoginView(APIView):
                 'refresh': str(refresh),
                 'access': str(refresh.access_token),
             },
-            'message': 'Connexion réussie'
+            'message': _('Connexion réussie')
         })
 
 
@@ -260,7 +258,7 @@ class LogoutView(APIView):
             
             if not refresh_token:
                 return Response(
-                    {'error': 'Token de rafraîchissement requis'},
+                    {'error': _('Token de rafraîchissement requis')},
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
@@ -269,18 +267,19 @@ class LogoutView(APIView):
             token.blacklist()
             
             return Response(
-                {'message': 'Déconnexion réussie'},
+                {'message': _('Déconnexion réussie')},
                 status=status.HTTP_200_OK
             )
             
         except TokenError:
             return Response(
-                {'error': 'Token invalide'},
+                {'error': _('Token invalide')},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        except Exception as e:
+        except Exception:
+            logger.exception("Erreur inattendue pendant la deconnexion utilisateur")
             return Response(
-                {'error': 'Erreur lors de la déconnexion'},
+                {'error': _('Erreur lors de la déconnexion')},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
@@ -309,4 +308,7 @@ class FarmProfileView(generics.RetrieveUpdateAPIView):
     permission_classes = [permissions.IsAuthenticated]
     
     def get_object(self):
-        return self.request.user.farm_profile
+        try:
+            return self.request.user.farm_profile
+        except FarmProfile.DoesNotExist:
+            raise Http404

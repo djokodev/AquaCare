@@ -99,7 +99,7 @@ class UserManager(BaseUserManager):
         extra_fields.setdefault('is_superuser', True)
         extra_fields.setdefault('is_active', True)
         extra_fields.setdefault('is_verified', True)
-        extra_fields.setdefault('account_type', 'individual') # Admins = employés MAVECAM
+        extra_fields.setdefault('account_type', 'individual')  # Admins = employés MAVECAM
         extra_fields.setdefault('age_group', '26_35')
         
         if extra_fields.get('is_staff') is not True:
@@ -138,8 +138,6 @@ class UserManager(BaseUserManager):
         Returns:
             User: Utilisateur trouvé ou None
         """
-        from django.db.models import Q
-        
         # Recherche d'abord dans les entreprises par business_name
         try:
             return self.get(

@@ -6,24 +6,23 @@ from django.utils.translation import gettext_lazy as _
 class PhoneNumberValidator:
     """
     Validateur pour les numéros de téléphone camerounais et internationaux.
-    
+
     Métier : Les pisciculteurs MAVECAM utilisent principalement des numéros
     camerounais (+237) mais peuvent aussi avoir des numéros internationaux.
-    
+
     Formats acceptés :
     - Cameroun : +237XXXXXXXXX, 237XXXXXXXXX, 6XXXXXXXX, 7XXXXXXXX
     - International : +XXX format standard
     """
-    
-    def __init__(self):
-        # Motifs regex pour différents formats
-        self.patterns = {
-            'cameroon_full': r'^\+237[67]\d{8}$',        # +2376XXXXXXXX ou +2377XXXXXXXX
-            'cameroon_code': r'^237[67]\d{8}$',          # 2376XXXXXXXX ou 2377XXXXXXXX
-            'cameroon_local': r'^[67]\d{8}$',            # 6XXXXXXXX ou 7XXXXXXXX
-            'international': r'^\+[1-9]\d{1,14}$'       # Format international standard
-        }
-    
+
+    # Patterns compilés une fois au niveau classe (immuables)
+    _PATTERNS = (
+        r'^\+237[67]\d{8}$',   # +2376XXXXXXXX ou +2377XXXXXXXX
+        r'^237[67]\d{8}$',     # 2376XXXXXXXX ou 2377XXXXXXXX
+        r'^[67]\d{8}$',        # 6XXXXXXXX ou 7XXXXXXXX
+        r'^\+[1-9]\d{1,14}$',  # Format international standard
+    )
+
     def __call__(self, value):
         """
         Valide le numéro de téléphone selon les formats acceptés.
@@ -39,9 +38,9 @@ class PhoneNumberValidator:
         
         # Nettoyer la valeur (espaces, tirets)
         cleaned_value = re.sub(r'[\s\-\(\)]', '', str(value))
-        
+
         # Tester les différents formats
-        for pattern_name, pattern in self.patterns.items():
+        for pattern in self._PATTERNS:
             if re.match(pattern, cleaned_value):
                 return  # Format valide trouvé
         

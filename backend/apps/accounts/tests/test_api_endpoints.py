@@ -7,6 +7,7 @@ import pytest
 import json
 from django.urls import reverse
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from rest_framework.test import APIClient
 from rest_framework import status
 from accounts.models import FarmProfile
@@ -207,9 +208,10 @@ class TestLoginEndpoint:
     
     def setup_method(self):
         """Configuration pour chaque test."""
+        cache.clear()
         self.client = APIClient()
         self.url = reverse('accounts:login')
-        
+
         # Créer des utilisateurs de test
         self.individual_user = User.objects.create_user(
             phone_number="+237690444444",
@@ -317,6 +319,7 @@ class TestTokenRefreshEndpoint:
         self.url = reverse('accounts:token_refresh')
         
         # Créer utilisateur et obtenir tokens
+        cache.clear()
         self.user = User.objects.create_user(
             phone_number="+237690666666",
             first_name="Token",
@@ -324,7 +327,7 @@ class TestTokenRefreshEndpoint:
             password="test123",
             age_group="26_35"
         )
-        
+
         # Obtenir le refresh token via login
         login_response = self.client.post(
             reverse('accounts:login'),
@@ -593,21 +596,21 @@ class TestRateLimiting:
     
     def setup_method(self):
         """Configuration pour chaque test."""
+        cache.clear()
         self.client = APIClient()
         self.url = reverse('accounts:login')
-    
+
     def test_multiple_failed_login_attempts(self):
         """Test simulation rate limiting."""
-        # Faire plusieurs tentatives échouées rapidement
+        # IP dédiée pour éviter les interférences avec d'autres workers pytest en parallèle
+        unique_ip = '10.200.200.200'
         for i in range(3):
             response = self.client.post(
                 self.url,
                 {"login_name": "inexistant", "password": "faux"},
-                format='json'
+                format='json',
+                REMOTE_ADDR=unique_ip,
             )
             # Les premières tentatives échouent avec 400
             if i < 2:
                 assert response.status_code == status.HTTP_400_BAD_REQUEST
-        
-        # Note : Le rate limiting réel nécessiterait une vraie configuration
-        # avec des IPs différentes et un timing précis
