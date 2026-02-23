@@ -1,10 +1,13 @@
-﻿import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl, Alert, TextInput, FlatList } from 'react-native';
+import React, { useState, useEffect, useMemo } from 'react';
+import { View, Text, TouchableOpacity, ActivityIndicator, RefreshControl, Alert, TextInput, FlatList } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
+import { StackNavigationProp } from '@react-navigation/stack';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
 import { NutritionalGuide, Species } from '@/types/aquaculture';
+import { RootStackParamList } from '@/navigation/MainNavigator';
 import { MAVECAM_COLORS } from '@/constants/colors';
+import logger from '@/utils/logger';
 
 interface FilterState {
   species: 'all' | Species;
@@ -12,13 +15,22 @@ interface FilterState {
   selectedStage: string | null;
 }
 
-export default function NutritionalGuidesScreen({ navigation }: any) {
+type NutritionalGuidesScreenNavigationProp = StackNavigationProp<RootStackParamList, 'NutritionalGuides'>;
+
+interface NutritionalGuidesScreenProps {
+  navigation: NutritionalGuidesScreenNavigationProp;
+}
+
+interface ErrorWithMessage {
+  message?: string;
+}
+
+export default function NutritionalGuidesScreen({ navigation }: NutritionalGuidesScreenProps) {
   const { t } = useTranslation();
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [guides, setGuides] = useState<NutritionalGuide[]>([]);
-  const [filteredGuides, setFilteredGuides] = useState<NutritionalGuide[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [selectedGuide, setSelectedGuide] = useState<NutritionalGuide | null>(null);
 
@@ -28,7 +40,7 @@ export default function NutritionalGuidesScreen({ navigation }: any) {
     selectedStage: null,
   });
 
-  const speciesOptions = [
+  const speciesOptions: Array<{ key: FilterState['species']; label: string }> = [
     { key: 'all', label: t('allSpecies') },
     { key: 'tilapia', label: t('tilapia') },
     { key: 'clarias', label: t('clarias') },
@@ -38,18 +50,15 @@ export default function NutritionalGuidesScreen({ navigation }: any) {
     loadNutritionalGuides();
   }, []);
 
-  useEffect(() => {
-    applyFilters();
-  }, [guides, filters]);
-
   const loadNutritionalGuides = async () => {
     try {
       setError(null);
       const data = await aquacultureService.getAllNutritionalGuides();
       setGuides(data);
-    } catch (err: any) {
-      console.error('Erreur chargement guides nutritionnels:', err);
-      setError(err.message || t('errorLoadingGuides'));
+    } catch (err: unknown) {
+      logger.error('Erreur chargement guides nutritionnels:', err);
+      const errWithMessage = err as ErrorWithMessage;
+      setError(errWithMessage.message || t('errorLoadingGuides'));
     } finally {
       setLoading(false);
     }
@@ -61,7 +70,7 @@ export default function NutritionalGuidesScreen({ navigation }: any) {
     setRefreshing(false);
   }, []);
 
-  const applyFilters = () => {
+  const filteredGuides = useMemo(() => {
     let filtered = [...guides];
 
     if (filters.species !== 'all') {
@@ -82,17 +91,13 @@ export default function NutritionalGuidesScreen({ navigation }: any) {
       filtered = filtered.filter((guide) => guide.growth_stage === filters.selectedStage);
     }
 
-    filtered.sort((a, b) => {
-      if (a.species !== b.species) {
-        return a.species.localeCompare(b.species);
-      }
+    return filtered.sort((a, b) => {
+      if (a.species !== b.species) return a.species.localeCompare(b.species);
       return a.min_weight - b.min_weight;
     });
+  }, [guides, filters]);
 
-    setFilteredGuides(filtered);
-  };
-
-  const updateFilter = (key: keyof FilterState, value: any) => {
+  const updateFilter = <K extends keyof FilterState>(key: K, value: FilterState[K]) => {
     setFilters((prev) => ({
       ...prev,
       [key]: value,
@@ -170,7 +175,7 @@ export default function NutritionalGuidesScreen({ navigation }: any) {
 
   const renderGuideCard = ({ item: guide }: { item: NutritionalGuide }) => (
     <TouchableOpacity
-      className={`bg-white rounded-xl p-4 mb-3 shadow ${selectedGuide?.id === guide.id ? 'border-2 border-mavecam-primary' : ''}`}
+      className={`bg-white rounded-xl p-4 mb-3 ${selectedGuide?.id === guide.id ? 'border-2 border-mavecam-primary' : ''}`}
       onPress={() => setSelectedGuide(selectedGuide?.id === guide.id ? null : guide)}
     >
       <View className="flex-row justify-between items-center mb-3">
@@ -319,7 +324,3 @@ export default function NutritionalGuidesScreen({ navigation }: any) {
     </View>
   );
 }
-
-
-
-

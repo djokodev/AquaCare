@@ -1,48 +1,80 @@
-﻿import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
+import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import {
   AquacultureState,
   ProductionCycle,
   CycleLog,
   FeedingPlan,
   SanitaryLog,
-  DashboardData,
   CreateCycleForm,
   DailyLogForm,
   SanitaryLogForm,
   HarvestData,
   SyncPayload,
-  SyncResponse
 } from '@/types/aquaculture';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
 
-// =================== Ã‰TAT INITIAL ===================
+interface ApiErrorPayload {
+  detail?: string;
+  message?: string;
+}
+
+interface ApiErrorShape {
+  response?: {
+    data?: ApiErrorPayload | string;
+  };
+  message?: string;
+}
+
+type PendingSyncAction =
+  | { type: 'cycleLogs'; data: Partial<CycleLog> }
+  | { type: 'sanitaryLogs'; data: Partial<SanitaryLog> }
+  | { type: 'newCycles'; data: Partial<ProductionCycle> };
+
+const extractErrorMessage = (error: unknown, fallback: string): string => {
+  if (!error || typeof error !== 'object') {
+    return fallback;
+  }
+
+  const candidate = error as ApiErrorShape;
+  const responseData = candidate.response?.data;
+
+  if (typeof responseData === 'string' && responseData.trim()) {
+    return responseData;
+  }
+
+  if (responseData && typeof responseData === 'object') {
+    if (responseData.detail) {
+      return responseData.detail;
+    }
+    if (responseData.message) {
+      return responseData.message;
+    }
+  }
+
+  if (candidate.message) {
+    return candidate.message;
+  }
+
+  return fallback;
+};
+
+// =================== ETAT INITIAL ===================
 
 const initialState: AquacultureState = {
-  // DonnÃ©es principales
   cycles: [],
   activeCycles: [],
   currentCycle: undefined,
-
-  // Logs et plans
   cycleLogs: [],
   feedingPlans: [],
   sanitaryLogs: [],
-
-  // Dashboard
   dashboardData: undefined,
-
-  // Ã‰tat de chargement
   loading: {
     dashboard: false,
     cycles: false,
     logs: false,
     sync: false,
   },
-
-  // Erreurs
   error: null,
-
-  // Synchronisation offline
   pendingSync: {
     cycleLogs: [],
     sanitaryLogs: [],
@@ -53,174 +85,138 @@ const initialState: AquacultureState = {
 
 // =================== ACTIONS ASYNC ===================
 
-/**
- * RÃ©cupÃ¨re les donnÃ©es du dashboard
- */
 export const fetchDashboardData = createAsyncThunk(
   'aquaculture/fetchDashboardData',
   async (_, { rejectWithValue }) => {
     try {
       const data = await aquacultureService.getDashboardData();
       return data;
-    } catch (error: any) {
-      return rejectWithValue(error.response?.data?.detail || 'Erreur lors du chargement du dashboard');
+    } catch (error: unknown) {
+      return rejectWithValue(extractErrorMessage(error, 'Erreur lors du chargement du dashboard'));
     }
   }
 );
 
-/**
- * RÃ©cupÃ¨re tous les cycles de production
- */
 export const fetchProductionCycles = createAsyncThunk(
   'aquaculture/fetchProductionCycles',
   async (_, { rejectWithValue }) => {
     try {
       const cycles = await aquacultureService.getProductionCycles();
       return cycles;
-    } catch (error: any) {
-      return rejectWithValue(error.response?.data?.detail || 'Erreur lors du chargement des cycles');
+    } catch (error: unknown) {
+      return rejectWithValue(extractErrorMessage(error, 'Erreur lors du chargement des cycles'));
     }
   }
 );
 
-/**
- * RÃ©cupÃ¨re un cycle spÃ©cifique
- */
 export const fetchProductionCycle = createAsyncThunk(
   'aquaculture/fetchProductionCycle',
   async (id: string, { rejectWithValue }) => {
     try {
       const cycle = await aquacultureService.getProductionCycle(id);
       return cycle;
-    } catch (error: any) {
-      return rejectWithValue(error.response?.data?.detail || 'Erreur lors du chargement du cycle');
+    } catch (error: unknown) {
+      return rejectWithValue(extractErrorMessage(error, 'Erreur lors du chargement du cycle'));
     }
   }
 );
 
-/**
- * CrÃ©e un nouveau cycle de production
- */
 export const createProductionCycle = createAsyncThunk(
   'aquaculture/createProductionCycle',
   async (cycleData: CreateCycleForm, { rejectWithValue }) => {
     try {
       const cycle = await aquacultureService.createProductionCycle(cycleData);
       return cycle;
-    } catch (error: any) {
-      return rejectWithValue(error.response?.data?.detail || 'Erreur lors de la création du cycle');
+    } catch (error: unknown) {
+      return rejectWithValue(extractErrorMessage(error, 'Erreur lors de la creation du cycle'));
     }
   }
 );
 
-/**
- * Met Ã  jour un cycle
- */
 export const updateProductionCycle = createAsyncThunk(
   'aquaculture/updateProductionCycle',
   async ({ id, data }: { id: string; data: Partial<ProductionCycle> }, { rejectWithValue }) => {
     try {
       const cycle = await aquacultureService.updateProductionCycle(id, data);
       return cycle;
-    } catch (error: any) {
-      return rejectWithValue(error.response?.data?.detail || 'Erreur lors de la mise Ã  jour du cycle');
+    } catch (error: unknown) {
+      return rejectWithValue(extractErrorMessage(error, 'Erreur lors de la mise a jour du cycle'));
     }
   }
 );
 
-/**
- * Supprime un cycle
- */
 export const deleteProductionCycle = createAsyncThunk(
   'aquaculture/deleteProductionCycle',
   async (id: string, { rejectWithValue }) => {
     try {
       await aquacultureService.deleteProductionCycle(id);
       return id;
-    } catch (error: any) {
-      return rejectWithValue(error.response?.data?.detail || 'Erreur lors de la suppression du cycle');
+    } catch (error: unknown) {
+      return rejectWithValue(extractErrorMessage(error, 'Erreur lors de la suppression du cycle'));
     }
   }
 );
 
-/**
- * Finalise un cycle (rÃ©colte)
- */
 export const harvestCycle = createAsyncThunk(
   'aquaculture/harvestCycle',
   async ({ id, harvestData }: { id: string; harvestData: HarvestData }, { rejectWithValue }) => {
     try {
       const cycle = await aquacultureService.harvestCycle(id, harvestData);
       return cycle;
-    } catch (error: any) {
-      return rejectWithValue(error.response?.data?.detail || 'Erreur lors de la récolte du cycle');
+    } catch (error: unknown) {
+      return rejectWithValue(extractErrorMessage(error, 'Erreur lors de la recolte du cycle'));
     }
   }
 );
 
-/**
- * RÃ©cupÃ¨re les logs d'un cycle
- */
 export const fetchCycleLogs = createAsyncThunk(
   'aquaculture/fetchCycleLogs',
   async (cycleId: string | undefined, { rejectWithValue }) => {
     try {
       const logs = await aquacultureService.getCycleLogs(cycleId);
       return logs;
-    } catch (error: any) {
-      return rejectWithValue(error.response?.data?.detail || 'Erreur lors du chargement des logs');
+    } catch (error: unknown) {
+      return rejectWithValue(extractErrorMessage(error, 'Erreur lors du chargement des logs'));
     }
   }
 );
 
-/**
- * CrÃ©e un nouveau log quotidien
- */
 export const createCycleLog = createAsyncThunk(
   'aquaculture/createCycleLog',
   async ({ cycleId, logData }: { cycleId: string; logData: DailyLogForm }, { rejectWithValue }) => {
     try {
       const log = await aquacultureService.createCycleLog(cycleId, logData);
       return log;
-    } catch (error: any) {
-      return rejectWithValue(error.response?.data?.detail || 'Erreur lors de la création du log');
+    } catch (error: unknown) {
+      return rejectWithValue(extractErrorMessage(error, 'Erreur lors de la creation du log'));
     }
   }
 );
 
-/**
- * Met Ã  jour un log
- */
 export const updateCycleLog = createAsyncThunk(
   'aquaculture/updateCycleLog',
   async ({ id, data }: { id: string; data: Partial<DailyLogForm> }, { rejectWithValue }) => {
     try {
       const log = await aquacultureService.updateCycleLog(id, data);
       return log;
-    } catch (error: any) {
-      return rejectWithValue(error.response?.data?.detail || 'Erreur lors de la mise Ã  jour du log');
+    } catch (error: unknown) {
+      return rejectWithValue(extractErrorMessage(error, 'Erreur lors de la mise a jour du log'));
     }
   }
 );
 
-/**
- * Supprime un log
- */
 export const deleteCycleLog = createAsyncThunk(
   'aquaculture/deleteCycleLog',
   async (id: string, { rejectWithValue }) => {
     try {
       await aquacultureService.deleteCycleLog(id);
       return id;
-    } catch (error: any) {
-      return rejectWithValue(error.response?.data?.detail || 'Erreur lors de la suppression du log');
+    } catch (error: unknown) {
+      return rejectWithValue(extractErrorMessage(error, 'Erreur lors de la suppression du log'));
     }
   }
 );
 
-/**
- * RÃ©cupÃ¨re les plans d'alimentation
- */
 export const fetchFeedingPlans = createAsyncThunk(
   'aquaculture/fetchFeedingPlans',
   async (cycleId: string | undefined, { rejectWithValue }) => {
@@ -230,75 +226,60 @@ export const fetchFeedingPlans = createAsyncThunk(
       }
       const plans = await aquacultureService.getFeedingPlans(cycleId);
       return plans;
-    } catch (error: any) {
-      return rejectWithValue(error.response?.data?.detail || 'Erreur lors du chargement des plans d\'alimentation');
+    } catch (error: unknown) {
+      return rejectWithValue(extractErrorMessage(error, "Erreur lors du chargement des plans d'alimentation"));
     }
   }
 );
 
-/**
- * GÃ©nÃ¨re un plan d'alimentation automatiquement
- */
 export const generateFeedingPlan = createAsyncThunk(
   'aquaculture/generateFeedingPlan',
   async ({ cycleId }: { cycleId: string }, { rejectWithValue }) => {
     try {
       const plans = await aquacultureService.generateFeedingPlan(cycleId);
       return plans;
-    } catch (error: any) {
-      return rejectWithValue(error.response?.data?.detail || 'Erreur lors de la génération du plan d\'alimentation');
+    } catch (error: unknown) {
+      return rejectWithValue(extractErrorMessage(error, "Erreur lors de la generation du plan d'alimentation"));
     }
   }
 );
 
-/**
- * RÃ©cupÃ¨re les logs sanitaires
- */
 export const fetchSanitaryLogs = createAsyncThunk(
   'aquaculture/fetchSanitaryLogs',
   async (cycleId: string | undefined, { rejectWithValue }) => {
     try {
       const logs = await aquacultureService.getSanitaryLogs(cycleId);
       return logs;
-    } catch (error: any) {
-      return rejectWithValue(error.response?.data?.detail || 'Erreur lors du chargement des logs sanitaires');
+    } catch (error: unknown) {
+      return rejectWithValue(extractErrorMessage(error, 'Erreur lors du chargement des logs sanitaires'));
     }
   }
 );
 
-/**
- * CrÃ©e un nouveau log sanitaire
- */
 export const createSanitaryLog = createAsyncThunk(
   'aquaculture/createSanitaryLog',
   async ({ cycleId, logData }: { cycleId: string; logData: SanitaryLogForm }, { rejectWithValue }) => {
     try {
       const log = await aquacultureService.createSanitaryLog(cycleId, logData);
       return log;
-    } catch (error: any) {
-      return rejectWithValue(error.response?.data?.detail || 'Erreur lors de la création du log sanitaire');
+    } catch (error: unknown) {
+      return rejectWithValue(extractErrorMessage(error, 'Erreur lors de la creation du log sanitaire'));
     }
   }
 );
 
-/**
- * Marque un problÃ¨me sanitaire comme rÃ©solu
- */
 export const resolveSanitaryIssue = createAsyncThunk(
   'aquaculture/resolveSanitaryIssue',
   async (id: string, { rejectWithValue }) => {
     try {
       const log = await aquacultureService.resolveSanitaryIssue(id);
       return log;
-    } catch (error: any) {
-      return rejectWithValue(error.response?.data?.detail || 'Erreur lors de la résolution du problème');
+    } catch (error: unknown) {
+      return rejectWithValue(extractErrorMessage(error, 'Erreur lors de la resolution du probleme'));
     }
   }
 );
 
-/**
- * Synchronisation offline
- */
 export const synchronizeData = createAsyncThunk(
   'aquaculture/synchronizeData',
   async (_, { getState, rejectWithValue }) => {
@@ -311,13 +292,13 @@ export const synchronizeData = createAsyncThunk(
         sanitary_logs: pendingSync.sanitaryLogs,
         new_cycles: pendingSync.newCycles,
         last_sync: lastSyncTime,
-        client_id: 'mobile-app', // Ã€ remplacer par un ID unique d'appareil
+        device_id: 'mobile-app',
       };
 
       const response = await aquacultureService.synchronize(payload);
       return response;
-    } catch (error: any) {
-      return rejectWithValue(error.response?.data?.detail || 'Erreur lors de la synchronisation');
+    } catch (error: unknown) {
+      return rejectWithValue(extractErrorMessage(error, 'Erreur lors de la synchronisation'));
     }
   }
 );
@@ -328,23 +309,27 @@ export const aquacultureSlice = createSlice({
   name: 'aquaculture',
   initialState,
   reducers: {
-    // Gestion des erreurs
     clearError: (state) => {
       state.error = null;
     },
 
-    // SÃ©lection du cycle actuel
     setCurrentCycle: (state, action: PayloadAction<ProductionCycle | undefined>) => {
       state.currentCycle = action.payload;
     },
 
-    // Gestion des donnÃ©es offline
-    addToPendingSync: (state, action: PayloadAction<{
-      type: 'cycleLogs' | 'sanitaryLogs' | 'newCycles';
-      data: any;
-    }>) => {
-      const { type, data } = action.payload;
-      state.pendingSync[type].push(data);
+    addToPendingSync: (state, action: PayloadAction<PendingSyncAction>) => {
+      const payload = action.payload;
+      switch (payload.type) {
+        case 'cycleLogs':
+          state.pendingSync.cycleLogs.push(payload.data);
+          break;
+        case 'sanitaryLogs':
+          state.pendingSync.sanitaryLogs.push(payload.data);
+          break;
+        case 'newCycles':
+          state.pendingSync.newCycles.push(payload.data);
+          break;
+      }
     },
 
     clearPendingSync: (state) => {
@@ -359,12 +344,10 @@ export const aquacultureSlice = createSlice({
       state.lastSyncTime = action.payload;
     },
 
-    // Reset complet de l'Ã©tat (utile lors de la dÃ©connexion)
     resetAquacultureState: () => initialState,
   },
 
   extraReducers: (builder) => {
-    // ========== DASHBOARD ==========
     builder
       .addCase(fetchDashboardData.pending, (state) => {
         state.loading.dashboard = true;
@@ -380,7 +363,6 @@ export const aquacultureSlice = createSlice({
         state.error = action.payload as string;
       })
 
-      // ========== CYCLES ==========
       .addCase(fetchProductionCycles.pending, (state) => {
         state.loading.cycles = true;
         state.error = null;
@@ -388,7 +370,7 @@ export const aquacultureSlice = createSlice({
       .addCase(fetchProductionCycles.fulfilled, (state, action) => {
         state.loading.cycles = false;
         state.cycles = action.payload;
-        state.activeCycles = action.payload.filter(cycle => cycle.status === 'active');
+        state.activeCycles = action.payload.filter((cycle) => cycle.status === 'active');
       })
       .addCase(fetchProductionCycles.rejected, (state, action) => {
         state.loading.cycles = false;
@@ -397,8 +379,7 @@ export const aquacultureSlice = createSlice({
 
       .addCase(fetchProductionCycle.fulfilled, (state, action) => {
         state.currentCycle = action.payload;
-        // Mettre Ã  jour dans la liste aussi
-        const index = state.cycles.findIndex(cycle => cycle.id === action.payload.id);
+        const index = state.cycles.findIndex((cycle) => cycle.id === action.payload.id);
         if (index !== -1) {
           state.cycles[index] = action.payload;
         }
@@ -412,12 +393,12 @@ export const aquacultureSlice = createSlice({
       })
 
       .addCase(updateProductionCycle.fulfilled, (state, action) => {
-        const index = state.cycles.findIndex(cycle => cycle.id === action.payload.id);
+        const index = state.cycles.findIndex((cycle) => cycle.id === action.payload.id);
         if (index !== -1) {
           state.cycles[index] = action.payload;
         }
 
-        const activeIndex = state.activeCycles.findIndex(cycle => cycle.id === action.payload.id);
+        const activeIndex = state.activeCycles.findIndex((cycle) => cycle.id === action.payload.id);
         if (activeIndex !== -1) {
           if (action.payload.status === 'active') {
             state.activeCycles[activeIndex] = action.payload;
@@ -432,8 +413,8 @@ export const aquacultureSlice = createSlice({
       })
 
       .addCase(deleteProductionCycle.fulfilled, (state, action) => {
-        state.cycles = state.cycles.filter(cycle => cycle.id !== action.payload);
-        state.activeCycles = state.activeCycles.filter(cycle => cycle.id !== action.payload);
+        state.cycles = state.cycles.filter((cycle) => cycle.id !== action.payload);
+        state.activeCycles = state.activeCycles.filter((cycle) => cycle.id !== action.payload);
         if (state.currentCycle?.id === action.payload) {
           state.currentCycle = undefined;
         }
@@ -442,22 +423,18 @@ export const aquacultureSlice = createSlice({
       .addCase(harvestCycle.fulfilled, (state, action) => {
         const harvestedCycle = action.payload;
 
-        // Mettre Ã  jour dans la liste des cycles
-        const cycleIndex = state.cycles.findIndex(cycle => cycle.id === harvestedCycle.id);
+        const cycleIndex = state.cycles.findIndex((cycle) => cycle.id === harvestedCycle.id);
         if (cycleIndex !== -1) {
           state.cycles[cycleIndex] = harvestedCycle;
         }
 
-        // Retirer des cycles actifs car il est maintenant rÃ©coltÃ©
-        state.activeCycles = state.activeCycles.filter(cycle => cycle.id !== harvestedCycle.id);
+        state.activeCycles = state.activeCycles.filter((cycle) => cycle.id !== harvestedCycle.id);
 
-        // Mettre Ã  jour le cycle actuel s'il correspond
         if (state.currentCycle?.id === harvestedCycle.id) {
           state.currentCycle = harvestedCycle;
         }
       })
 
-      // ========== LOGS ==========
       .addCase(fetchCycleLogs.pending, (state) => {
         state.loading.logs = true;
       })
@@ -475,25 +452,23 @@ export const aquacultureSlice = createSlice({
       })
 
       .addCase(updateCycleLog.fulfilled, (state, action) => {
-        const index = state.cycleLogs.findIndex(log => log.id === action.payload.id);
+        const index = state.cycleLogs.findIndex((log) => log.id === action.payload.id);
         if (index !== -1) {
           state.cycleLogs[index] = action.payload;
         }
       })
 
       .addCase(deleteCycleLog.fulfilled, (state, action) => {
-        state.cycleLogs = state.cycleLogs.filter(log => log.id !== action.payload);
+        state.cycleLogs = state.cycleLogs.filter((log) => log.id !== action.payload);
       })
 
-      // ========== FEEDING PLANS ==========
       .addCase(fetchFeedingPlans.fulfilled, (state, action) => {
         state.feedingPlans = action.payload;
       })
 
       .addCase(generateFeedingPlan.fulfilled, (state, action) => {
-        // Ajouter les nouveaux plans gÃ©nÃ©rÃ©s
-        action.payload.forEach(plan => {
-          const existingIndex = state.feedingPlans.findIndex(p => p.id === plan.id);
+        action.payload.forEach((plan) => {
+          const existingIndex = state.feedingPlans.findIndex((currentPlan) => currentPlan.id === plan.id);
           if (existingIndex !== -1) {
             state.feedingPlans[existingIndex] = plan;
           } else {
@@ -502,7 +477,6 @@ export const aquacultureSlice = createSlice({
         });
       })
 
-      // ========== SANITARY LOGS ==========
       .addCase(fetchSanitaryLogs.fulfilled, (state, action) => {
         state.sanitaryLogs = action.payload;
       })
@@ -512,20 +486,18 @@ export const aquacultureSlice = createSlice({
       })
 
       .addCase(resolveSanitaryIssue.fulfilled, (state, action) => {
-        const index = state.sanitaryLogs.findIndex(log => log.id === action.payload.id);
+        const index = state.sanitaryLogs.findIndex((log) => log.id === action.payload.id);
         if (index !== -1) {
           state.sanitaryLogs[index] = action.payload;
         }
       })
 
-      // ========== SYNCHRONISATION ==========
       .addCase(synchronizeData.pending, (state) => {
         state.loading.sync = true;
       })
       .addCase(synchronizeData.fulfilled, (state, action) => {
         state.loading.sync = false;
 
-        // Vider la queue pending aprÃ¨s synchronisation rÃ©ussie
         if (action.payload.status === 'success') {
           state.pendingSync = {
             cycleLogs: [],
@@ -535,11 +507,10 @@ export const aquacultureSlice = createSlice({
           state.lastSyncTime = action.payload.timestamp;
         }
 
-        // IntÃ©grer les mises Ã  jour du serveur
         const { server_updates } = action.payload;
         if (server_updates.cycles.length > 0) {
-          server_updates.cycles.forEach(cycle => {
-            const index = state.cycles.findIndex(c => c.id === cycle.id);
+          server_updates.cycles.forEach((cycle) => {
+            const index = state.cycles.findIndex((currentCycle) => currentCycle.id === cycle.id);
             if (index !== -1) {
               state.cycles[index] = cycle;
             } else {
@@ -548,9 +519,10 @@ export const aquacultureSlice = createSlice({
           });
         }
 
-        if (server_updates.logs.length > 0) {
-          server_updates.logs.forEach(log => {
-            const index = state.cycleLogs.findIndex(l => l.id === log.id);
+        const incomingCycleLogs = server_updates.cycle_logs || [];
+        if (incomingCycleLogs.length > 0) {
+          incomingCycleLogs.forEach((log) => {
+            const index = state.cycleLogs.findIndex((currentLog) => currentLog.id === log.id);
             if (index !== -1) {
               state.cycleLogs[index] = log;
             } else {
@@ -560,12 +532,24 @@ export const aquacultureSlice = createSlice({
         }
 
         if (server_updates.feeding_plans.length > 0) {
-          server_updates.feeding_plans.forEach(plan => {
-            const index = state.feedingPlans.findIndex(p => p.id === plan.id);
+          server_updates.feeding_plans.forEach((plan) => {
+            const index = state.feedingPlans.findIndex((currentPlan) => currentPlan.id === plan.id);
             if (index !== -1) {
               state.feedingPlans[index] = plan;
             } else {
               state.feedingPlans.push(plan);
+            }
+          });
+        }
+
+        const incomingSanitaryLogs = server_updates.sanitary_logs || [];
+        if (incomingSanitaryLogs.length > 0) {
+          incomingSanitaryLogs.forEach((log) => {
+            const index = state.sanitaryLogs.findIndex((currentLog) => currentLog.id === log.id);
+            if (index !== -1) {
+              state.sanitaryLogs[index] = log;
+            } else {
+              state.sanitaryLogs.push(log);
             }
           });
         }

@@ -1,15 +1,23 @@
-﻿import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
+import { StackNavigationProp } from '@react-navigation/stack';
 import { useDispatch, useSelector } from 'react-redux';
 import { AppDispatch, RootState } from '@/store/store';
 import { fetchProductionCycles } from '@/features/aquaculture/store/aquacultureSlice';
 import { ProductionCycle } from '@/types/aquaculture';
+import { RootStackParamList } from '@/navigation/MainNavigator';
 import { MAVECAM_COLORS } from '@/constants/colors';
 import { formatNumber, formatPercentage, formatDate, formatDaysSince } from '@/utils';
 
-export default function CycleHistoryScreen({ navigation }: any) {
+type CycleHistoryScreenNavigationProp = StackNavigationProp<RootStackParamList, 'CycleHistory'>;
+
+interface CycleHistoryScreenProps {
+  navigation: CycleHistoryScreenNavigationProp;
+}
+
+export default function CycleHistoryScreen({ navigation }: CycleHistoryScreenProps) {
   const { t } = useTranslation();
   const dispatch = useDispatch<AppDispatch>();
 
@@ -56,28 +64,33 @@ export default function CycleHistoryScreen({ navigation }: any) {
     const survival = survivalRate || 0;
     const fcrValue = fcr || 999;
 
-    if (survival >= 85 && fcrValue <= 1.8) return 'Excellent';
-    if (survival >= 75 && fcrValue <= 2.2) return 'Bon';
-    return 'A ameliorer';
+    if (survival >= 85 && fcrValue <= 1.8) return t('performanceExcellent');
+    if (survival >= 75 && fcrValue <= 2.2) return t('performanceGood');
+    return t('performanceImprove');
   };
 
-  const totalCycles = sortedCycles.length;
-  const avgSurvival = totalCycles > 0
-    ? sortedCycles.reduce((sum, c) => sum + (c.survival_rate || 0), 0) / totalCycles
-    : 0;
-  const avgFCR = totalCycles > 0
-    ? sortedCycles.reduce((sum, c) => sum + (c.fcr || 0), 0) / totalCycles
-    : 0;
-  const totalBiomass = sortedCycles.reduce((sum, c) => sum + (c.final_biomass || 0), 0);
+  const { totalCycles, avgSurvival, avgFCR, totalBiomass } = useMemo(() => {
+    const count = sortedCycles.length;
+    return {
+      totalCycles: count,
+      avgSurvival: count > 0
+        ? sortedCycles.reduce((sum, c) => sum + (c.survival_rate || 0), 0) / count
+        : 0,
+      avgFCR: count > 0
+        ? sortedCycles.reduce((sum, c) => sum + (c.fcr || 0), 0) / count
+        : 0,
+      totalBiomass: sortedCycles.reduce((sum, c) => sum + (c.final_biomass || 0), 0),
+    };
+  }, [sortedCycles]);
 
   const renderCycleCard = (cycle: ProductionCycle) => {
     const duration = cycle.end_date ? getDurationInDays(cycle.start_date, cycle.end_date) : 0;
     const performanceColor = getPerformanceColor(cycle.survival_rate, cycle.fcr);
     const performanceText = getPerformanceText(cycle.survival_rate, cycle.fcr);
-    const speciesLabel = cycle.species === 'clarias' ? 'Silure africain (Clarias)' : 'Tilapia';
+    const speciesLabel = cycle.species === 'clarias' ? t('clariasSpeciesFull') : t('tilapia');
 
     return (
-      <View key={cycle.id} className="bg-white rounded-xl p-4 mb-3 shadow">
+      <View key={cycle.id} className="bg-white rounded-xl p-4 mb-3">
         <View className="flex-row justify-between items-start mb-3">
           <View className="flex-1 mr-3">
             <Text className="text-base font-bold text-gray-dark" numberOfLines={1}>{cycle.cycle_name}</Text>
@@ -85,7 +98,7 @@ export default function CycleHistoryScreen({ navigation }: any) {
               {speciesLabel} | {cycle.pond_identifier}
             </Text>
             <Text className="text-xs text-gray-light" numberOfLines={1}>
-              {formatDate(cycle.start_date)} - {cycle.end_date ? formatDate(cycle.end_date) : formatDaysSince(cycle.start_date)} | {duration} jours
+              {formatDate(cycle.start_date)} - {cycle.end_date ? formatDate(cycle.end_date) : formatDaysSince(cycle.start_date)} | {duration} {t('days')}
             </Text>
           </View>
           <View className="items-end">
@@ -133,7 +146,7 @@ export default function CycleHistoryScreen({ navigation }: any) {
         refreshControl={<RefreshControl refreshing={loading.cycles} onRefresh={onRefresh} />}
         showsVerticalScrollIndicator={false}
       >
-        <View className="bg-white mx-4 my-4 p-4 rounded-xl shadow">
+        <View className="bg-white mx-4 my-4 p-4 rounded-xl">
           <Text className="text-lg font-bold text-gray-dark mb-4">{t('historySummary')}</Text>
 
           <View className="flex-row flex-wrap justify-between">
@@ -159,7 +172,7 @@ export default function CycleHistoryScreen({ navigation }: any) {
           </View>
         </View>
 
-        <View className="bg-white mx-4 mb-4 p-4 rounded-xl shadow-sm">
+        <View className="bg-white mx-4 mb-4 p-4 rounded-xl">
           <Text className="text-base font-bold text-gray-dark mb-3">{t('filterBySpecies')}</Text>
 
           <View className="flex-row justify-around">
@@ -173,12 +186,8 @@ export default function CycleHistoryScreen({ navigation }: any) {
                 }`}
                 onPress={() => setSelectedFilter(filter)}
               >
-                <Text
-                  className={`text-sm font-medium ${
-                    selectedFilter === filter ? 'text-white' : 'text-gray-dark'
-                  }`}
-                >
-                  {filter === 'all' ? t('allSpecies') : filter === 'clarias' ? 'Clarias' : 'Tilapia'}
+                <Text className={`text-sm font-medium ${selectedFilter === filter ? 'text-white' : 'text-gray-dark'}`}>
+                  {filter === 'all' ? t('allSpecies') : filter === 'clarias' ? t('clarias') : t('tilapia')}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -193,7 +202,7 @@ export default function CycleHistoryScreen({ navigation }: any) {
           {loading.cycles && sortedCycles.length === 0 ? (
             <View className="items-center py-10">
               <ActivityIndicator size="large" color={MAVECAM_COLORS.GREEN_PRIMARY} />
-              <Text className="text-base text-gray-light mt-3">{t('loading')}...</Text>
+              <Text className="text-base text-gray-light mt-3">{t('loading')}</Text>
             </View>
           ) : sortedCycles.length === 0 ? (
             <View className="items-center py-10">
@@ -209,7 +218,3 @@ export default function CycleHistoryScreen({ navigation }: any) {
     </View>
   );
 }
-
-
-
-

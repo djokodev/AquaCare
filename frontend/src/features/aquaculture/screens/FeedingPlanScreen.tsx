@@ -1,17 +1,33 @@
-﻿import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl, Alert } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
-import { useDispatch, useSelector } from 'react-redux';
-import { AppDispatch, RootState } from '@/store/store';
+import { StackNavigationProp } from '@react-navigation/stack';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
-import { ProductionCycle, FeedingPlan } from '@/types/aquaculture';
+import { ProductionCycle, FeedingPlan, Species } from '@/types/aquaculture';
+import { RootStackParamList } from '@/navigation/MainNavigator';
 import { MAVECAM_COLORS } from '@/constants/colors';
 import { formatNumber, formatPercentage } from '@/utils';
+import logger from '@/utils/logger';
 
-export default function FeedingPlanScreen({ navigation }: any) {
-  const { t } = useTranslation();
-  const dispatch = useDispatch<AppDispatch>();
+type FeedingPlanScreenNavigationProp = StackNavigationProp<RootStackParamList, 'FeedingPlan'>;
+
+interface FeedingPlanScreenProps {
+  navigation: FeedingPlanScreenNavigationProp;
+}
+
+const getSpeciesLabel = (species: Species, t: (key: string) => string): string => {
+  if (species === 'clarias') {
+    return t('catfish');
+  }
+  if (species === 'tilapia') {
+    return t('tilapia');
+  }
+  return species;
+};
+
+export default function FeedingPlanScreen({ navigation }: FeedingPlanScreenProps) {
+  const { t, i18n } = useTranslation();
 
   const [loading, setLoading] = useState(true);
   const [loadingPlans, setLoadingPlans] = useState(false);
@@ -38,8 +54,8 @@ export default function FeedingPlanScreen({ navigation }: any) {
         setSelectedCycle(cycles[0]);
         await loadFeedingPlans(cycles[0].id);
       }
-    } catch (error: any) {
-      setError('Erreur lors du chargement des données');
+    } catch {
+      setError(t('feedingPlansLoadError'));
     } finally {
       setLoading(false);
     }
@@ -50,10 +66,10 @@ export default function FeedingPlanScreen({ navigation }: any) {
       setFeedingPlans([]);
       const plans = await aquacultureService.getFeedingPlans(cycleId);
       setFeedingPlans(plans);
-    } catch (error: any) {
-      console.error('Erreur chargement plans:', error);
+    } catch (error: unknown) {
+      logger.error('Erreur chargement plans:', error);
       setFeedingPlans([]);
-      setError("Erreur lors du chargement des plans d'alimentation");
+      setError(t('feedingPlansLoadByCycleError'));
     }
   };
 
@@ -83,8 +99,8 @@ export default function FeedingPlanScreen({ navigation }: any) {
             await aquacultureService.generateFeedingPlan(selectedCycle.id);
             await loadFeedingPlans(selectedCycle.id);
             Alert.alert(t('success'), t('feedingPlanGenerated'));
-          } catch (error: any) {
-            console.error('Erreur generation plan:', error);
+          } catch (error: unknown) {
+            logger.error('Erreur generation plan:', error);
             Alert.alert(t('error'), t('feedingPlanGenerationError'));
           } finally {
             setGeneratingPlan(false);
@@ -121,7 +137,7 @@ export default function FeedingPlanScreen({ navigation }: any) {
         {renderHeader()}
         <View className="flex-1 items-center justify-center p-10">
           <ActivityIndicator size="large" color={MAVECAM_COLORS.GREEN_PRIMARY} />
-          <Text className="text-base text-gray-light mt-3">{t('loading')}...</Text>
+          <Text className="text-base text-gray-light mt-3">{t('loading')}</Text>
         </View>
       </View>
     );
@@ -153,7 +169,7 @@ export default function FeedingPlanScreen({ navigation }: any) {
       {renderHeader()}
 
       <ScrollView refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
-        <View className="bg-white mx-4 mt-4 mb-4 p-4 rounded-xl shadow">
+        <View className="bg-white mx-4 mt-4 mb-4 p-4 rounded-xl">
           <Text className="text-lg font-bold text-gray-dark mb-4">{t('selectCycle')}</Text>
 
           <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-row">
@@ -171,10 +187,10 @@ export default function FeedingPlanScreen({ navigation }: any) {
                     {cycle.cycle_name}
                   </Text>
                   <Text className={`text-sm mt-1 ${isSelected ? 'text-mavecam-primary' : 'text-gray-light'}`}>
-                    {cycle.species === 'clarias' ? 'Silure' : 'Tilapia'} - {cycle.pond_identifier}
+                    {getSpeciesLabel(cycle.species, t)} - {cycle.pond_identifier}
                   </Text>
                   <Text className={`text-xs mt-1 ${isSelected ? 'text-mavecam-primary' : 'text-gray-light'}`}>
-                    J{getDaysBetween(cycle.start_date)} - {formatNumber(cycle.current_biomass, 'kg')}
+                    {t('dayCountShort', { count: getDaysBetween(cycle.start_date) })} - {formatNumber(cycle.current_biomass, 'kg')}
                   </Text>
                 </TouchableOpacity>
               );
@@ -184,14 +200,16 @@ export default function FeedingPlanScreen({ navigation }: any) {
 
         {selectedCycle && (
           <>
-            <View className="bg-white mx-4 mb-4 p-4 rounded-xl shadow">
+            <View className="bg-white mx-4 mb-4 p-4 rounded-xl">
               <Text className="text-lg font-bold text-gray-dark mb-4">{t('cycleInformation')}</Text>
 
               <View className="bg-cream rounded-lg p-4">
                 <View className="flex-row justify-between mb-4">
                   <View className="flex-1 items-center">
                     <Text className="text-xs text-gray-light mb-1">{t('currentWeek')}</Text>
-                    <Text className="text-lg font-bold text-gray-dark">{t('week')} {getCurrentWeek(selectedCycle.start_date)}</Text>
+                    <Text className="text-lg font-bold text-gray-dark">
+                      {t('week')} {getCurrentWeek(selectedCycle.start_date)}
+                    </Text>
                   </View>
                   <View className="flex-1 items-center">
                     <Text className="text-xs text-gray-light mb-1">{t('currentBiomass')}</Text>
@@ -212,7 +230,7 @@ export default function FeedingPlanScreen({ navigation }: any) {
               </View>
             </View>
 
-            <View className="bg-white mx-4 mb-6 p-4 rounded-xl shadow">
+            <View className="bg-white mx-4 mb-6 p-4 rounded-xl">
               <View className="flex-row items-center justify-between mb-4">
                 <Text className="text-lg font-bold text-gray-dark">{t('feedingPlans')}</Text>
                 <TouchableOpacity
@@ -234,7 +252,7 @@ export default function FeedingPlanScreen({ navigation }: any) {
               {loadingPlans ? (
                 <View className="items-center py-10">
                   <ActivityIndicator size="large" color={MAVECAM_COLORS.GREEN_PRIMARY} />
-                  <Text className="text-sm text-gray-light mt-3">{t('loading')}...</Text>
+                  <Text className="text-sm text-gray-light mt-3">{t('loading')}</Text>
                 </View>
               ) : feedingPlans.length === 0 ? (
                 <View className="items-center py-10">
@@ -246,8 +264,12 @@ export default function FeedingPlanScreen({ navigation }: any) {
                 feedingPlans.map((plan) => (
                   <View key={plan.id} className="bg-cream rounded-lg p-4 mb-3 border-l-4 border-l-mavecam-primary">
                     <View className="flex-row justify-between items-center mb-3">
-                      <Text className="text-base font-bold text-gray-dark">{t('week')} {plan.week_number}</Text>
-                      <Text className="text-sm text-gray-light">{new Date(plan.start_date).toLocaleDateString('fr-FR')}</Text>
+                      <Text className="text-base font-bold text-gray-dark">
+                        {t('week')} {plan.week_number}
+                      </Text>
+                      <Text className="text-sm text-gray-light">
+                        {new Date(plan.start_date).toLocaleDateString(i18n.language === 'fr' ? 'fr-FR' : 'en-US')}
+                      </Text>
                     </View>
 
                     <View className="gap-3">
@@ -265,7 +287,9 @@ export default function FeedingPlanScreen({ navigation }: any) {
                       <View className="flex-row justify-between">
                         <View className="flex-1 items-center">
                           <Text className="text-xs text-gray-light mb-1">{t('feedingFrequency')}</Text>
-                          <Text className="text-sm font-semibold text-gray-dark">{plan.meals_per_day}x/{t('day')}</Text>
+                          <Text className="text-sm font-semibold text-gray-dark">
+                            {plan.meals_per_day}x/{t('day')}
+                          </Text>
                         </View>
                         <View className="flex-1 items-center">
                           <Text className="text-xs text-gray-light mb-1">{t('feedPerMeal')}</Text>
@@ -287,10 +311,12 @@ export default function FeedingPlanScreen({ navigation }: any) {
           </>
         )}
       </ScrollView>
+
+      {error && (
+        <View className="px-4 pb-4">
+          <Text className="text-sm text-error text-center">{error}</Text>
+        </View>
+      )}
     </View>
   );
 }
-
-
-
-

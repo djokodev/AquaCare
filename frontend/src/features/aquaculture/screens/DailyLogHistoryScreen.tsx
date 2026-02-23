@@ -1,16 +1,25 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
+import { StackNavigationProp } from '@react-navigation/stack';
 import { useSelector } from 'react-redux';
 import { RootState } from '@/store/store';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
 import { CycleLog } from '@/types/aquaculture';
+import { RootStackParamList } from '@/navigation/MainNavigator';
 import { MAVECAM_COLORS } from '@/constants/colors';
 import { formatDate } from '@/utils';
 import { estimateAverageWeight } from '@/domain';
+import logger from '@/utils/logger';
 
-export default function DailyLogHistoryScreen({ navigation }: any) {
+type DailyLogHistoryScreenNavigationProp = StackNavigationProp<RootStackParamList, 'DailyLogHistory'>;
+
+interface DailyLogHistoryScreenProps {
+  navigation: DailyLogHistoryScreenNavigationProp;
+}
+
+export default function DailyLogHistoryScreen({ navigation }: DailyLogHistoryScreenProps) {
   const { t } = useTranslation();
   const { dashboardData } = useSelector((state: RootState) => state.aquaculture);
   const activeCycles = dashboardData?.active_cycles || [];
@@ -31,7 +40,7 @@ export default function DailyLogHistoryScreen({ navigation }: any) {
       const logsData = await aquacultureService.getCycleLogs(cycleId);
       setLogs(logsData);
     } catch (error) {
-      console.error('Erreur lors du chargement des logs:', error);
+      logger.error('Erreur lors du chargement des logs:', error);
     } finally {
       setLoading(false);
     }
@@ -44,12 +53,12 @@ export default function DailyLogHistoryScreen({ navigation }: any) {
   };
 
   const getCycleName = (cycleId: string) => {
-    const cycle = activeCycles.find((c) => c.id === cycleId);
+    const cycle = activeCycles.find((currentCycle) => currentCycle.id === cycleId);
     return cycle ? cycle.pond_identifier : `Cycle ${cycleId.slice(-4)}`;
   };
 
   const renderLogCard = (log: CycleLog) => (
-    <View key={log.id} className="bg-white rounded-xl p-4 mb-3 shadow">
+    <View key={log.id} className="bg-white rounded-xl p-4 mb-3">
       <View className="flex-row justify-between items-center mb-3 pb-2 border-b border-slate-100">
         <Text className="text-base font-semibold text-gray-dark">{formatDate(log.log_date)}</Text>
         <Text className="text-sm font-medium text-mavecam-primary">{getCycleName(log.cycle)}</Text>
@@ -75,13 +84,13 @@ export default function DailyLogHistoryScreen({ navigation }: any) {
         {log.water_temperature && (
           <View className="flex-row items-center mb-2">
             <Text className="text-sm text-gray-light flex-1">{t('waterTemperature')} :</Text>
-            <Text className="text-sm font-semibold text-gray-dark">{log.water_temperature}\u00B0C</Text>
+            <Text className="text-sm font-semibold text-gray-dark">{log.water_temperature}°C</Text>
           </View>
         )}
 
         {log.ph_level && (
           <View className="flex-row items-center mb-2">
-            <Text className="text-sm text-gray-light flex-1">pH :</Text>
+            <Text className="text-sm text-gray-light flex-1">{t('phLevel')} :</Text>
             <Text className="text-sm font-semibold text-gray-dark">{log.ph_level}</Text>
           </View>
         )}
@@ -100,7 +109,7 @@ export default function DailyLogHistoryScreen({ navigation }: any) {
     return (
       <View className="flex-1 items-center justify-center bg-cream">
         <ActivityIndicator size="large" color={MAVECAM_COLORS.GREEN_PRIMARY} />
-        <Text className="mt-3 text-gray-dark text-base">{t('loading')}...</Text>
+        <Text className="mt-3 text-gray-dark text-base">{t('loading')}</Text>
       </View>
     );
   }
@@ -116,43 +125,25 @@ export default function DailyLogHistoryScreen({ navigation }: any) {
 
       <View className="bg-white p-4 border-b border-slate-200">
         <Text className="text-sm font-medium text-gray-dark mb-2">{t('filterByCycle')} :</Text>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ flexDirection: 'row' }}
-        >
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: 'row' }}>
           <TouchableOpacity
             className={`px-4 py-2 mr-2 rounded-full border ${
-              selectedCycle === 'all'
-                ? 'bg-mavecam-primary border-mavecam-primary'
-                : 'bg-cream border-gray-light'
+              selectedCycle === 'all' ? 'bg-mavecam-primary border-mavecam-primary' : 'bg-cream border-gray-light'
             }`}
             onPress={() => setSelectedCycle('all')}
           >
-            <Text
-              className={`text-sm ${
-                selectedCycle === 'all' ? 'text-white' : 'text-gray-dark'
-              }`}
-            >
-              {t('allCycles')}
-            </Text>
+            <Text className={`text-sm ${selectedCycle === 'all' ? 'text-white' : 'text-gray-dark'}`}>{t('allCycles')}</Text>
           </TouchableOpacity>
 
           {activeCycles.map((cycle) => (
             <TouchableOpacity
               key={cycle.id}
               className={`px-4 py-2 mr-2 rounded-full border ${
-                selectedCycle === cycle.id
-                  ? 'bg-mavecam-primary border-mavecam-primary'
-                  : 'bg-cream border-gray-light'
+                selectedCycle === cycle.id ? 'bg-mavecam-primary border-mavecam-primary' : 'bg-cream border-gray-light'
               }`}
               onPress={() => setSelectedCycle(cycle.id)}
             >
-              <Text
-                className={`text-sm ${
-                  selectedCycle === cycle.id ? 'text-white' : 'text-gray-dark'
-                }`}
-              >
+              <Text className={`text-sm ${selectedCycle === cycle.id ? 'text-white' : 'text-gray-dark'}`}>
                 {t('pond')} {cycle.pond_identifier}
               </Text>
             </TouchableOpacity>
@@ -160,10 +151,7 @@ export default function DailyLogHistoryScreen({ navigation }: any) {
         </ScrollView>
       </View>
 
-      <ScrollView
-        className="flex-1 px-4"
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-      >
+      <ScrollView className="flex-1 px-4" refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
         {logs.length === 0 ? (
           <View className="flex-1 items-center justify-center py-24 px-6">
             <Ionicons name="document-outline" size={64} color={MAVECAM_COLORS.GRAY_LIGHT} />
@@ -177,7 +165,3 @@ export default function DailyLogHistoryScreen({ navigation }: any) {
     </View>
   );
 }
-
-
-
-

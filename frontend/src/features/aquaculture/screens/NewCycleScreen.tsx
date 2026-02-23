@@ -1,7 +1,8 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, TextInput, Alert, ActivityIndicator } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
+import { StackNavigationProp } from '@react-navigation/stack';
 import { useDispatch } from 'react-redux';
 import { useAuth } from '@/hooks/useAuth';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
@@ -11,12 +12,20 @@ import { AppDispatch } from '@/store/store';
 import { fetchDashboardData } from '@/features/aquaculture/store/aquacultureSlice';
 import { MAVECAM_COLORS } from '@/constants/colors';
 import { estimateBiomass, estimateDensityWithUnit } from '@/domain';
-import { parseApiError, formatErrorForDisplay, logApiError, hasFieldError } from '@/utils/errorParser';
+import { parseApiError, formatErrorForDisplay, logApiError, hasFieldError, isNetworkError } from '@/utils/errorParser';
+import { RootStackParamList } from '@/navigation/MainNavigator';
+import logger from '@/utils/logger';
 
 const SPECIES_OPTIONS = [
-  { value: 'clarias', label: 'Clarias', duration: '120 jours' },
-  { value: 'tilapia', label: 'Tilapia', duration: '180 jours' },
-];
+  { value: 'clarias', labelKey: 'clarias', durationDays: 120 },
+  { value: 'tilapia', labelKey: 'tilapia', durationDays: 180 },
+] as const;
+
+type NewCycleScreenNavigationProp = StackNavigationProp<RootStackParamList, 'NewCycle'>;
+
+interface NewCycleScreenProps {
+  navigation: NewCycleScreenNavigationProp;
+}
 
 interface NewCycleData {
   cycle_name: string;
@@ -29,7 +38,7 @@ interface NewCycleData {
   start_date: string;
 }
 
-export default function NewCycleScreen({ navigation }: any) {
+export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
   const { t } = useTranslation();
   const { farmProfile } = useAuth();
   const dispatch = useDispatch<AppDispatch>();
@@ -70,7 +79,7 @@ export default function NewCycleScreen({ navigation }: any) {
     const year = date.getFullYear();
 
     if (species && formData.pond_identifier) {
-      const name = `${species.label.split(' ')[0]} ${formData.pond_identifier} Q${quarter} ${year}`;
+      const name = `${t(species.labelKey)} ${formData.pond_identifier} Q${quarter} ${year}`;
       setFormData((prev) => ({ ...prev, cycle_name: name }));
     }
   };
@@ -107,20 +116,14 @@ export default function NewCycleScreen({ navigation }: any) {
     try {
       const hasPending = await offlineService.hasPendingSync();
       if (hasPending) {
-        console.log('Sync offline data...');
         const result = await offlineService.syncOfflineLogs();
 
         if (result.success > 0) {
-          console.log(`${result.success} saisies synchronisees`);
           dispatch(fetchDashboardData());
-        }
-
-        if (result.failed > 0) {
-          console.log(`${result.failed} saisies non synchronisees`);
         }
       }
     } catch (error) {
-      console.error('Erreur synchronisation silencieuse:', error);
+      logger.error('Erreur synchronisation silencieuse:', error);
     }
   };
 
@@ -144,7 +147,7 @@ export default function NewCycleScreen({ navigation }: any) {
         pond_surface_m2: formData.pond_surface_m2 ? parseFloat(formData.pond_surface_m2) : undefined,
         pond_volume_m3: formData.pond_volume_m3 ? parseFloat(formData.pond_volume_m3) : undefined,
         start_date: formData.start_date,
-        initial_count: parseInt(formData.initial_count),
+        initial_count: parseInt(formData.initial_count, 10),
         initial_average_weight: parseFloat(formData.initial_average_weight),
       };
 
@@ -153,53 +156,32 @@ export default function NewCycleScreen({ navigation }: any) {
         dispatch(fetchDashboardData());
 
         Alert.alert(t('success'), t('cycleCreatedSuccess'), [
-          { text: 'OK', onPress: () => navigation.goBack() },
+          { text: t('ok'), onPress: () => navigation.goBack() },
         ]);
-      } catch (apiError: any) {
-        const isNetworkError =
-          apiError.code === 'NETWORK_ERROR' ||
-          apiError.message?.toLowerCase().includes('network') ||
-          apiError.message?.toLowerCase().includes('connection') ||
-          !apiError.response;
-
-        if (isNetworkError) {
-          console.log('Pas de connexion, sauvegarde cycle offline...');
+      } catch (apiError: unknown) {
+        if (isNetworkError(apiError)) {
           await offlineService.saveNewCycleOffline(cycleData);
 
           Alert.alert(t('success'), t('cycleCreatedOffline'), [
-            { text: 'OK', onPress: () => navigation.goBack() },
+            { text: t('ok'), onPress: () => navigation.goBack() },
           ]);
         } else {
           throw apiError;
         }
       }
-    } catch (error: any) {
-      // Parser l'erreur pour avoir des détails exploitables
+    } catch (error: unknown) {
       const parsedError = parseApiError(error);
+      logApiError(error, 'Creation cycle de production');
 
-      // Log détaillé en dev pour debugging
-      logApiError(error, 'Création cycle de production');
+      Alert.alert(t('error'), formatErrorForDisplay(parsedError), [{ text: t('ok'), style: 'cancel' }]);
 
-      // Afficher l'erreur formatée à l'utilisateur
-      Alert.alert(
-        t('error'),
-        formatErrorForDisplay(parsedError),
-        [{ text: 'OK', style: 'cancel' }]
-      );
-
-      // Si erreur de densité, afficher aide contextuelle
       if (hasFieldError(parsedError, 'initial_count') && formData.initial_count && formData.pond_surface_m2) {
-        const density = Math.round(
-          parseInt(formData.initial_count) / parseFloat(formData.pond_surface_m2)
-        );
+        const density = Math.round(parseInt(formData.initial_count, 10) / parseFloat(formData.pond_surface_m2));
 
         setTimeout(() => {
           Alert.alert(
             t('help'),
-            `${t('densityTooHigh')}\n\n` +
-              `${t('maxDensity')}: 500 ${t('fishPerM2')}\n` +
-              `${t('yourDensity')}: ${density} ${t('fishPerM2')}\n\n` +
-              t('densitySuggestion'),
+            `${t('densityTooHigh')}\n\n${t('maxDensity')}: 500 ${t('fishPerM2')}\n${t('yourDensity')}: ${density} ${t('fishPerM2')}\n\n${t('densitySuggestion')}`,
             [{ text: t('understood'), style: 'default' }]
           );
         }, 500);
@@ -221,13 +203,13 @@ export default function NewCycleScreen({ navigation }: any) {
       <View className="p-4">
         <View className="bg-white p-4 rounded-lg flex-row items-center mb-6 gap-3 border border-gray-200">
           <Ionicons name="business" size={20} color={MAVECAM_COLORS.GREEN_PRIMARY} />
-          <Text className="text-base font-semibold text-gray-dark">
-            {farmProfile?.farm_name || 'Ferme non definie'}
-          </Text>
+          <Text className="text-base font-semibold text-gray-dark">{farmProfile?.farm_name || t('farmNotDefined')}</Text>
         </View>
 
         <View className="mb-6">
-          <Text className="text-base font-bold text-gray-dark mb-3">{t('speciesSelection')} {t('requiredField')}</Text>
+          <Text className="text-base font-bold text-gray-dark mb-3">
+            {t('speciesSelection')} {t('requiredField')}
+          </Text>
           <View className="gap-2">
             {SPECIES_OPTIONS.map((species) => (
               <TouchableOpacity
@@ -245,14 +227,14 @@ export default function NewCycleScreen({ navigation }: any) {
                       formData.species === species.value ? 'text-white' : 'text-gray-dark'
                     }`}
                   >
-                    {species.label}
+                    {t(species.labelKey)}
                   </Text>
                   <Text
                     className={`text-sm ${
                       formData.species === species.value ? 'text-white' : 'text-gray-light'
                     }`}
                   >
-                    {species.duration}
+                    {species.durationDays} {t('days')}
                   </Text>
                 </View>
                 {formData.species === species.value && (
@@ -267,7 +249,9 @@ export default function NewCycleScreen({ navigation }: any) {
           <Text className="text-base font-bold text-gray-dark mb-3">{t('pondInfo')}</Text>
 
           <View className="mb-4">
-            <Text className="text-sm font-medium text-gray-dark mb-2">{t('pondName')} {t('requiredField')}</Text>
+            <Text className="text-sm font-medium text-gray-dark mb-2">
+              {t('pondName')} {t('requiredField')}
+            </Text>
             <TextInput
               className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
               value={formData.pond_identifier}
@@ -278,9 +262,7 @@ export default function NewCycleScreen({ navigation }: any) {
 
           <View className="flex-row items-center bg-[#e0f2fe] p-3 rounded-lg mb-4 gap-2">
             <Ionicons name="information-circle" size={18} color={MAVECAM_COLORS.INFO} />
-            <Text className="flex-1 text-sm text-mavecam-primary">
-              {t('pondDimensionsInfo') || 'Renseignez au moins la surface OU le volume du bassin'}
-            </Text>
+            <Text className="flex-1 text-sm text-mavecam-primary">{t('pondDimensionsInfo')}</Text>
           </View>
 
           <View className="flex-row gap-3">
@@ -313,7 +295,9 @@ export default function NewCycleScreen({ navigation }: any) {
 
           <View className="flex-row gap-3">
             <View className="flex-1 mb-4">
-              <Text className="text-sm font-medium text-gray-dark mb-2">{t('initialCount')} {t('requiredField')}</Text>
+              <Text className="text-sm font-medium text-gray-dark mb-2">
+                {t('initialCount')} {t('requiredField')}
+              </Text>
               <TextInput
                 className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
                 value={formData.initial_count}
@@ -324,7 +308,9 @@ export default function NewCycleScreen({ navigation }: any) {
             </View>
 
             <View className="flex-1 mb-4">
-              <Text className="text-sm font-medium text-gray-dark mb-2">{t('initialWeight')} {t('requiredField')}</Text>
+              <Text className="text-sm font-medium text-gray-dark mb-2">
+                {t('initialWeight')} {t('requiredField')}
+              </Text>
               <TextInput
                 className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
                 value={formData.initial_average_weight}
@@ -336,7 +322,9 @@ export default function NewCycleScreen({ navigation }: any) {
           </View>
 
           <View className="mb-4">
-            <Text className="text-sm font-medium text-gray-dark mb-2">{t('startDate')} {t('requiredField')}</Text>
+            <Text className="text-sm font-medium text-gray-dark mb-2">
+              {t('startDate')} {t('requiredField')}
+            </Text>
             <TextInput
               className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
               value={formData.start_date}
@@ -381,7 +369,9 @@ export default function NewCycleScreen({ navigation }: any) {
                 {selectedSpecies && (
                   <View className="flex-row justify-between">
                     <Text className="text-sm text-gray-light">{t('expectedDuration')} :</Text>
-                    <Text className="text-sm font-semibold text-mavecam-primary">{selectedSpecies.duration}</Text>
+                    <Text className="text-sm font-semibold text-mavecam-primary">
+                      {selectedSpecies.durationDays} {t('days')}
+                    </Text>
                   </View>
                 )}
               </View>
@@ -409,7 +399,3 @@ export default function NewCycleScreen({ navigation }: any) {
     </ScrollView>
   );
 }
-
-
-
-

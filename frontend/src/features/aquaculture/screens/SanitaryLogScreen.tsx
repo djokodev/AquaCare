@@ -1,24 +1,39 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, TextInput, Alert, ActivityIndicator, Image } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
+import { StackNavigationProp } from '@react-navigation/stack';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState, AppDispatch } from '@/store/store';
 import { fetchDashboardData } from '@/features/aquaculture/store/aquacultureSlice';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
 import { offlineService } from '@/services/offlineService';
-import { SanitaryLogForm, SanitaryEventType } from '@/types/aquaculture';
+import { ReactNativeUploadFile, SanitaryLogForm, SanitaryEventType } from '@/types/aquaculture';
+import { RootStackParamList } from '@/navigation/MainNavigator';
 import * as ImagePicker from 'expo-image-picker';
 import { MAVECAM_COLORS } from '@/constants/colors';
+import logger from '@/utils/logger';
+import { isNetworkError, getApiErrorMessage } from '@/utils/errorParser';
+import CycleSelector from '@/components/common/CycleSelector';
 
-const SANITARY_EVENT_TYPES = [
-  { value: 'disease', label: 'Maladie', icon: 'medical' },
-  { value: 'treatment', label: 'Traitement', icon: 'medical-outline' },
-  { value: 'vaccination', label: 'Vaccination', icon: 'shield-checkmark' },
-  { value: 'abnormal_mortality', label: 'Mortalite anormale', icon: 'skull' },
-  { value: 'water_quality', label: 'Qualite eau', icon: 'water' },
-  { value: 'other', label: 'Autre', icon: 'help-circle' },
+const SANITARY_EVENT_TYPES: Array<{
+  value: SanitaryEventType;
+  labelKey: string;
+  icon: keyof typeof Ionicons.glyphMap;
+}> = [
+  { value: 'disease', labelKey: 'sanitaryEventDisease', icon: 'medical' },
+  { value: 'treatment', labelKey: 'sanitaryEventTreatment', icon: 'medical-outline' },
+  { value: 'vaccination', labelKey: 'sanitaryEventVaccination', icon: 'shield-checkmark' },
+  { value: 'abnormal_mortality', labelKey: 'sanitaryEventAbnormalMortality', icon: 'skull' },
+  { value: 'water_quality', labelKey: 'sanitaryEventWaterQuality', icon: 'water' },
+  { value: 'other', labelKey: 'sanitaryEventOther', icon: 'help-circle' },
 ];
+
+type SanitaryLogScreenNavigationProp = StackNavigationProp<RootStackParamList, 'SanitaryLog'>;
+
+interface SanitaryLogScreenProps {
+  navigation: SanitaryLogScreenNavigationProp;
+}
 
 interface SanitaryLogData {
   cycle_id: string;
@@ -33,7 +48,8 @@ interface SanitaryLogData {
   photo: string | null;
 }
 
-export default function SanitaryLogScreen({ navigation }: any) {
+
+export default function SanitaryLogScreen({ navigation }: SanitaryLogScreenProps) {
   const { t } = useTranslation();
   const dispatch = useDispatch<AppDispatch>();
   const { dashboardData } = useSelector((state: RootState) => state.aquaculture);
@@ -59,17 +75,17 @@ export default function SanitaryLogScreen({ navigation }: any) {
   const getSuccessMessage = (eventType: string) => {
     switch (eventType) {
       case 'disease':
-        return "Maladie signalee avec succes. L'equipe MAVECAM va analyser votre rapport et vous contacter si necessaire.";
+        return t('sanitarySuccessDisease');
       case 'treatment':
-        return "Traitement enregistre avec succes. Continuez a surveiller l'evolution et informez-nous des resultats.";
+        return t('sanitarySuccessTreatment');
       case 'vaccination':
-        return 'Vaccination enregistree avec succes. Votre programme de prevention est a jour.';
+        return t('sanitarySuccessVaccination');
       case 'abnormal_mortality':
-        return "Mortalite anormale signalee avec succes. L'equipe MAVECAM va vous contacter rapidement pour assistance.";
+        return t('sanitarySuccessAbnormalMortality');
       case 'water_quality':
-        return "Probleme de qualite d'eau signale avec succes. Verifiez les parametres et appliquez les corrections necessaires.";
+        return t('sanitarySuccessWaterQuality');
       case 'other':
-        return "Evenement enregistre avec succes. L'equipe MAVECAM examinera votre rapport.";
+        return t('sanitarySuccessOther');
       default:
         return t('sanitaryRecordSaved');
     }
@@ -101,7 +117,7 @@ export default function SanitaryLogScreen({ navigation }: any) {
   const requestPermissions = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert(t('error'), "Permission d'acces aux photos requise");
+      Alert.alert(t('error'), t('photoPermissionRequired'));
       return false;
     }
     return true;
@@ -109,7 +125,7 @@ export default function SanitaryLogScreen({ navigation }: any) {
 
   const processImage = async (uri: string): Promise<string> => uri;
 
-  const createFormDataFile = (uri: string, name: string) => ({
+  const createFormDataFile = (uri: string, name: string): ReactNativeUploadFile => ({
     uri,
     type: 'image/jpeg',
     name,
@@ -132,8 +148,8 @@ export default function SanitaryLogScreen({ navigation }: any) {
         const processedUri = await processImage(result.assets[0].uri);
         setFormData((prev) => ({ ...prev, photo: processedUri }));
       }
-    } catch (pickError) {
-      Alert.alert(t('error'), "Erreur lors de la sélection de l'image");
+    } catch {
+      Alert.alert(t('error'), t('imageSelectionError'));
     }
   };
 
@@ -141,7 +157,7 @@ export default function SanitaryLogScreen({ navigation }: any) {
     try {
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert(t('error'), "Permission d'accès à l'appareil photo requise");
+        Alert.alert(t('error'), t('cameraPermissionRequired'));
         return;
       }
 
@@ -157,8 +173,8 @@ export default function SanitaryLogScreen({ navigation }: any) {
         setFormData((prev) => ({ ...prev, photo: processedUri }));
       }
     } catch (cameraError) {
-      console.error('Erreur prise photo:', cameraError);
-      Alert.alert(t('error'), 'Erreur lors de la prise de photo');
+      logger.error('Erreur prise photo:', cameraError);
+      Alert.alert(t('error'), t('cameraCaptureError'));
     }
   };
 
@@ -196,20 +212,21 @@ export default function SanitaryLogScreen({ navigation }: any) {
         event_date: new Date().toISOString().split('T')[0],
         event_type: formData.event_type as SanitaryEventType,
         symptoms: formData.symptoms,
-        affected_count: formData.affected_count ? parseInt(formData.affected_count) : undefined,
+        affected_count: formData.affected_count ? parseInt(formData.affected_count, 10) : undefined,
         treatment_applied: formData.treatment_applied || undefined,
         medication_used: formData.medication_used || undefined,
         dosage: formData.dosage || undefined,
-        treatment_duration_days: formData.treatment_duration_days ? parseInt(formData.treatment_duration_days) : undefined,
+        treatment_duration_days: formData.treatment_duration_days
+          ? parseInt(formData.treatment_duration_days, 10)
+          : undefined,
         notes: formData.comments || undefined,
       };
 
       if (formData.photo) {
         try {
-          const photoFile = createFormDataFile(formData.photo, `sanitary_log_${Date.now()}.jpg`);
-          sanitaryData.photo = photoFile as any;
+          sanitaryData.photo = createFormDataFile(formData.photo, `sanitary_log_${Date.now()}.jpg`);
         } catch (photoError) {
-          console.error('Erreur preparation photo:', photoError);
+          logger.error('Erreur preparation photo:', photoError);
           sanitaryData.photo = undefined;
         }
       }
@@ -219,48 +236,22 @@ export default function SanitaryLogScreen({ navigation }: any) {
         dispatch(fetchDashboardData());
 
         Alert.alert(t('success'), getSuccessMessage(formData.event_type), [
-          { text: 'OK', onPress: () => navigation.goBack() },
+          { text: t('ok'), onPress: () => navigation.goBack() },
         ]);
-      } catch (apiError: any) {
-        const isNetworkError =
-          apiError.code === 'NETWORK_ERROR' ||
-          apiError.message?.toLowerCase().includes('network') ||
-          apiError.message?.toLowerCase().includes('connection') ||
-          !apiError.response;
-
-        if (isNetworkError) {
-          console.log('Pas de connexion, sauvegarde log sanitaire offline...');
+      } catch (apiError: unknown) {
+        if (isNetworkError(apiError)) {
           await offlineService.saveSanitaryLogOffline(selectedCycle, sanitaryData);
 
-          Alert.alert(
-            t('success'),
-            `${getSuccessMessage(formData.event_type)}\n\n${t('offlineSaveMessage') || 'Sauvegarde hors ligne - sera synchronisée dès que possible.'}`,
-            [{ text: 'OK', onPress: () => navigation.goBack() }]
-          );
+          Alert.alert(t('success'), `${getSuccessMessage(formData.event_type)}\n\n${t('offlineSaveMessage')}`, [
+            { text: t('ok'), onPress: () => navigation.goBack() },
+          ]);
         } else {
           throw apiError;
         }
       }
-    } catch (error: any) {
-      console.error('Error creating sanitary log:', error);
-
-      let errorMessage = t('sanitaryRecordSaveError');
-      if (error.response?.data) {
-        if (typeof error.response.data === 'object') {
-          const errors = Object.entries(error.response.data)
-            .map(([field, messages]) => `${field}: ${Array.isArray(messages) ? messages.join(', ') : messages}`)
-            .join('\n');
-          errorMessage = `Erreurs de validation:\n${errors}`;
-        } else if (error.response.data.message) {
-          errorMessage = error.response.data.message;
-        } else if (error.response.data.detail) {
-          errorMessage = error.response.data.detail;
-        }
-      } else if (error.message) {
-        errorMessage = error.message;
-      }
-
-      Alert.alert(t('error'), errorMessage);
+    } catch (error: unknown) {
+      logger.error('Error creating sanitary log:', error);
+      Alert.alert(t('error'), getApiErrorMessage(error, t('sanitaryRecordSaveError')));
     } finally {
       setSaving(false);
     }
@@ -285,35 +276,18 @@ export default function SanitaryLogScreen({ navigation }: any) {
         <TouchableOpacity className="mr-4" onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={24} color={MAVECAM_COLORS.WHITE} />
         </TouchableOpacity>
-        <Text className="text-xl font-bold text-white">Journal Sanitaire</Text>
+        <Text className="text-xl font-bold text-white">{t('sanitaryLogTitle')}</Text>
       </View>
 
       <View className="p-4">
-        <View className="mb-6">
-          <Text className="text-base font-bold text-gray-dark mb-3">{t('cycleSelection')}</Text>
-          {activeCycles.map((cycle) => (
-            <TouchableOpacity
-              key={cycle.id}
-              className={`bg-white p-4 rounded-lg mb-2 border flex-row justify-between items-center ${
-                selectedCycle === cycle.id ? 'border-mavecam-primary bg-[#f0fdf4]' : 'border-gray-200'
-              }`}
-              onPress={() => {
-                setSelectedCycle(cycle.id);
-                setFormData((prev) => ({ ...prev, cycle_id: cycle.id }));
-              }}
-            >
-              <View className="flex-1">
-                <Text className="text-base font-semibold text-gray-dark">
-                  Bassin {cycle.pond_identifier || cycle.id.slice(-4)}
-                </Text>
-                <Text className="text-sm text-gray-light mt-1">
-                  {cycle.current_count} poissons - {cycle.species}
-                </Text>
-              </View>
-              {selectedCycle === cycle.id && <Ionicons name="checkmark-circle" size={24} color={MAVECAM_COLORS.GREEN_PRIMARY} />}
-            </TouchableOpacity>
-          ))}
-        </View>
+        <CycleSelector
+          cycles={activeCycles}
+          selectedCycleId={selectedCycle}
+          onSelectCycle={(cycleId) => {
+            setSelectedCycle(cycleId);
+            setFormData((prev) => ({ ...prev, cycle_id: cycleId }));
+          }}
+        />
 
         <View className="mb-6">
           <Text className="text-base font-bold text-gray-dark mb-3">{t('eventType')}</Text>
@@ -329,12 +303,12 @@ export default function SanitaryLogScreen({ navigation }: any) {
                     onPress={() => setFormData((prev) => ({ ...prev, event_type: type.value }))}
                   >
                     <Ionicons
-                      name={type.icon as any}
+                      name={type.icon}
                       size={32}
                       color={isSelected ? MAVECAM_COLORS.WHITE : MAVECAM_COLORS.GRAY_LIGHT}
                     />
                     <Text className={`text-xs text-center mt-2 ${isSelected ? 'text-white' : 'text-gray-dark'}`}>
-                      {type.label}
+                      {t(type.labelKey)}
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -358,9 +332,7 @@ export default function SanitaryLogScreen({ navigation }: any) {
                   shouldShowTreatmentFields ? 'text-green-700' : 'text-blue-700'
                 }`}
               >
-                {shouldShowTreatmentFields
-                  ? t('treatmentFieldsInfo') || 'Les champs de traitement sont disponibles ci-dessous'
-                  : t('noTreatmentRequired') || "Aucun traitement requis pour ce type d'evenement"}
+                {shouldShowTreatmentFields ? t('treatmentFieldsInfo') : t('noTreatmentRequired')}
               </Text>
             </View>
           )}
@@ -375,7 +347,7 @@ export default function SanitaryLogScreen({ navigation }: any) {
               className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark h-20"
               value={formData.symptoms}
               onChangeText={(value) => setFormData((prev) => ({ ...prev, symptoms: value }))}
-              placeholder={t('symptomsPlaceholder') || 'Listez les symptomes visibles...'}
+              placeholder={t('symptomsPlaceholder')}
               multiline
               numberOfLines={3}
             />
@@ -387,7 +359,7 @@ export default function SanitaryLogScreen({ navigation }: any) {
               className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
               value={formData.affected_count}
               onChangeText={(value) => setFormData((prev) => ({ ...prev, affected_count: value }))}
-              placeholder="Ex: 10"
+              placeholder={t('exampleAffectedCount')}
               keyboardType="numeric"
             />
           </View>
@@ -400,7 +372,7 @@ export default function SanitaryLogScreen({ navigation }: any) {
                   className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark h-20"
                   value={formData.treatment_applied}
                   onChangeText={(value) => setFormData((prev) => ({ ...prev, treatment_applied: value }))}
-                  placeholder={t('treatmentAppliedPlaceholder') || 'Decrivez le traitement applique...'}
+                  placeholder={t('treatmentAppliedPlaceholder')}
                   multiline
                   numberOfLines={3}
                 />
@@ -413,7 +385,7 @@ export default function SanitaryLogScreen({ navigation }: any) {
                     className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
                     value={formData.medication_used}
                     onChangeText={(value) => setFormData((prev) => ({ ...prev, medication_used: value }))}
-                    placeholder="Ex: Antibiotique XYZ"
+                    placeholder={t('exampleMedication')}
                   />
                 </View>
 
@@ -423,7 +395,7 @@ export default function SanitaryLogScreen({ navigation }: any) {
                     className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
                     value={formData.dosage}
                     onChangeText={(value) => setFormData((prev) => ({ ...prev, dosage: value }))}
-                    placeholder="Ex: 5mg/L"
+                    placeholder={t('exampleDosage')}
                   />
                 </View>
               </View>
@@ -434,7 +406,7 @@ export default function SanitaryLogScreen({ navigation }: any) {
                   className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
                   value={formData.treatment_duration_days}
                   onChangeText={(value) => setFormData((prev) => ({ ...prev, treatment_duration_days: value }))}
-                  placeholder="Ex: 7"
+                  placeholder={t('exampleTreatmentDuration')}
                   keyboardType="numeric"
                 />
               </View>
@@ -447,7 +419,7 @@ export default function SanitaryLogScreen({ navigation }: any) {
               className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark h-20"
               value={formData.comments}
               onChangeText={(value) => setFormData((prev) => ({ ...prev, comments: value }))}
-              placeholder={t('commentsPlaceholder') || 'Notes, observations supplementaires...'}
+              placeholder={t('commentsPlaceholder')}
               multiline
               numberOfLines={3}
             />
@@ -493,7 +465,3 @@ export default function SanitaryLogScreen({ navigation }: any) {
     </ScrollView>
   );
 }
-
-
-
-

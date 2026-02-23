@@ -1,17 +1,21 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, TextInput, Alert, ActivityIndicator } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
+import { StackNavigationProp } from '@react-navigation/stack';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState, AppDispatch } from '@/store/store';
 import { fetchDashboardData } from '@/features/aquaculture/store/aquacultureSlice';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
 import { offlineService } from '@/services/offlineService';
 import { DailyLogForm } from '@/types/aquaculture';
+import { RootStackParamList } from '@/navigation/MainNavigator';
 import { MAVECAM_COLORS } from '@/constants/colors';
 import { estimateAverageWeight } from '@/domain';
 import { calculateStockValue, calculateEstimatedBiomass } from '@/constants/aquaculture';
 import SuccessRewardModal from '@/components/modals/SuccessRewardModal';
+import CycleSelector from '@/components/common/CycleSelector';
+import { getApiErrorMessage, isNetworkError } from '@/utils/errorParser';
 
 interface DailyLogData {
   cycle_id: string;
@@ -23,7 +27,14 @@ interface DailyLogData {
   observations: string;
 }
 
-export default function DailyLogScreen({ navigation }: any) {
+type DailyLogScreenNavigationProp = StackNavigationProp<RootStackParamList, 'DailyLog'>;
+
+interface DailyLogScreenProps {
+  navigation: DailyLogScreenNavigationProp;
+}
+
+
+export default function DailyLogScreen({ navigation }: DailyLogScreenProps) {
   const { t } = useTranslation();
   const dispatch = useDispatch<AppDispatch>();
   const { dashboardData } = useSelector((state: RootState) => state.aquaculture);
@@ -41,7 +52,6 @@ export default function DailyLogScreen({ navigation }: any) {
   });
   const [saving, setSaving] = useState(false);
 
-  // État pour le modal de récompense Hormozi
   const [rewardModalVisible, setRewardModalVisible] = useState(false);
   const [rewardData, setRewardData] = useState({
     averageWeight: 0,
@@ -66,7 +76,7 @@ export default function DailyLogScreen({ navigation }: any) {
         }
       }
     } catch {
-      // Sync silencieuse - pas d'action requise en cas d'erreur
+      // Synchronisation silencieuse
     }
   };
 
@@ -77,29 +87,8 @@ export default function DailyLogScreen({ navigation }: any) {
     }
   }, [activeCycles, selectedCycle]);
 
-  const getErrorMessage = (error: any): string => {
-    if (error?.response?.data) {
-      const data = error.response.data;
-      if (typeof data === 'string') {
-        return data;
-      }
-      if (data.message) {
-        return data.message;
-      }
-      if (data.detail) {
-        return data.detail;
-      }
-      // DRF validation errors: take first field message
-      const firstKey = Object.keys(data)[0];
-      if (firstKey && Array.isArray(data[firstKey]) && data[firstKey].length > 0) {
-        return `${firstKey}: ${data[firstKey][0]}`;
-      }
-    }
-    if (error?.message) {
-      return error.message;
-    }
-    return t('recordSaveError');
-  };
+  const getErrorMessage = (error: unknown): string =>
+    getApiErrorMessage(error, t('recordSaveError'));
 
   const handleSave = async () => {
     if (!selectedCycle) {
@@ -112,13 +101,12 @@ export default function DailyLogScreen({ navigation }: any) {
       const sampleCount = parseFloat(formData.sample_count) || 0;
       const sampleWeight = parseFloat(formData.sample_total_weight) || 0;
 
-       // Validation locale pour éviter un 400 backend (min 5 poissons)
       if (sampleCount > 0 && sampleCount < 5) {
         Alert.alert(t('error'), t('sampleCountTooLow', { min: 5 }));
         setSaving(false);
         return;
       }
-      // Si un poids est saisi, exiger un nombre
+
       if (sampleWeight > 0 && sampleCount <= 0) {
         Alert.alert(t('error'), t('sampleCountRequiredWithWeight'));
         setSaving(false);
@@ -127,7 +115,7 @@ export default function DailyLogScreen({ navigation }: any) {
 
       const logData: DailyLogForm = {
         log_date: new Date().toISOString().split('T')[0],
-        mortality_count: formData.mortality_count ? parseInt(formData.mortality_count) : undefined,
+        mortality_count: formData.mortality_count ? parseInt(formData.mortality_count, 10) : undefined,
         sample_count: sampleCount > 0 ? sampleCount : undefined,
         sample_total_weight: sampleWeight > 0 ? sampleWeight : undefined,
         water_temperature: formData.water_temperature ? parseFloat(formData.water_temperature) : undefined,
@@ -139,11 +127,10 @@ export default function DailyLogScreen({ navigation }: any) {
         await aquacultureService.createCycleLog(selectedCycle, logData);
         dispatch(fetchDashboardData());
 
-        // Calculer les données de récompense à partir de la saisie
-        const currentCycle = activeCycles.find(c => c.id === selectedCycle);
+        const currentCycle = activeCycles.find((cycle) => cycle.id === selectedCycle);
         if (sampleCount > 0 && sampleWeight > 0 && currentCycle) {
           const avgWeight = sampleWeight / sampleCount;
-          const mortality = parseInt(formData.mortality_count) || 0;
+          const mortality = parseInt(formData.mortality_count, 10) || 0;
           const remainingFish = (currentCycle.current_count || 0) - mortality;
           const biomass = calculateEstimatedBiomass(remainingFish, avgWeight);
           const value = calculateStockValue(biomass);
@@ -156,26 +143,16 @@ export default function DailyLogScreen({ navigation }: any) {
           });
           setRewardModalVisible(true);
         } else {
-          // Pas d'échantillon saisi, message simple
-          Alert.alert(t('success'), t('recordSaved'), [
-            { text: 'OK', onPress: () => navigation.goBack() },
-          ]);
+          Alert.alert(t('success'), t('recordSaved'), [{ text: t('ok'), onPress: () => navigation.goBack() }]);
         }
-      } catch (apiError: any) {
-        const isNetworkError =
-          apiError.code === 'NETWORK_ERROR' ||
-          apiError.message?.toLowerCase().includes('network') ||
-          apiError.message?.toLowerCase().includes('connection') ||
-          !apiError.response;
-
-        if (isNetworkError) {
+      } catch (apiError: unknown) {
+        if (isNetworkError(apiError)) {
           await offlineService.saveCycleLogOffline(selectedCycle, logData);
 
-          // Calculer les données de récompense même en offline
-          const currentCycle = activeCycles.find(c => c.id === selectedCycle);
+          const currentCycle = activeCycles.find((cycle) => cycle.id === selectedCycle);
           if (sampleCount > 0 && sampleWeight > 0 && currentCycle) {
             const avgWeight = sampleWeight / sampleCount;
-            const mortality = parseInt(formData.mortality_count) || 0;
+            const mortality = parseInt(formData.mortality_count, 10) || 0;
             const remainingFish = (currentCycle.current_count || 0) - mortality;
             const biomass = calculateEstimatedBiomass(remainingFish, avgWeight);
             const value = calculateStockValue(biomass);
@@ -188,17 +165,14 @@ export default function DailyLogScreen({ navigation }: any) {
             });
             setRewardModalVisible(true);
           } else {
-            Alert.alert(t('success'), t('recordSavedOffline'), [
-              { text: 'OK', onPress: () => navigation.goBack() },
-            ]);
+            Alert.alert(t('success'), t('recordSavedOffline'), [{ text: t('ok'), onPress: () => navigation.goBack() }]);
           }
         } else {
           throw apiError;
         }
       }
-      } catch (error: any) {
+    } catch (error: unknown) {
       const errorMessage = getErrorMessage(error);
-
       Alert.alert(t('error'), errorMessage);
     } finally {
       setSaving(false);
@@ -233,33 +207,14 @@ export default function DailyLogScreen({ navigation }: any) {
       </View>
 
       <View className="p-4">
-        <View className="mb-6">
-          <Text className="text-base font-bold text-gray-dark mb-3">{t('cycleSelection')}</Text>
-          {activeCycles.map((cycle) => (
-            <TouchableOpacity
-              key={cycle.id}
-              className={`bg-white p-4 rounded-lg mb-2 border flex-row justify-between items-center ${
-                selectedCycle === cycle.id ? 'border-mavecam-primary bg-[#f0fdf4]' : 'border-gray-200'
-              }`}
-              onPress={() => {
-                setSelectedCycle(cycle.id);
-                setFormData((prev) => ({ ...prev, cycle_id: cycle.id }));
-              }}
-            >
-              <View className="flex-1">
-                <Text className="text-base font-semibold text-gray-dark">
-                  Bassin {cycle.pond_identifier || cycle.id.slice(-4)}
-                </Text>
-                <Text className="text-sm text-gray-light mt-1">
-                  {cycle.current_count} poissons - {cycle.species}
-                </Text>
-              </View>
-              {selectedCycle === cycle.id && (
-                <Ionicons name="checkmark-circle" size={24} color={MAVECAM_COLORS.GREEN_PRIMARY} />
-              )}
-            </TouchableOpacity>
-          ))}
-        </View>
+        <CycleSelector
+          cycles={activeCycles}
+          selectedCycleId={selectedCycle}
+          onSelectCycle={(cycleId) => {
+            setSelectedCycle(cycleId);
+            setFormData((prev) => ({ ...prev, cycle_id: cycleId }));
+          }}
+        />
 
         <View className="mb-6">
           <Text className="text-base font-bold text-gray-dark mb-3">{t('dailyData')}</Text>
@@ -271,7 +226,7 @@ export default function DailyLogScreen({ navigation }: any) {
                 className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
                 value={formData.sample_count}
                 onChangeText={(value) => setFormData((prev) => ({ ...prev, sample_count: value }))}
-                placeholder="Ex: 10"
+                placeholder={t('exampleAffectedCount')}
                 keyboardType="numeric"
               />
             </View>
@@ -381,6 +336,3 @@ export default function DailyLogScreen({ navigation }: any) {
     </ScrollView>
   );
 }
-
-
-
