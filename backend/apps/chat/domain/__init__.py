@@ -11,6 +11,7 @@ from .exceptions import (
     MediaTooLarge,
     ConversationNotFound,
     UnauthorizedAccess,
+    ClientUUIDConflict,
 )
 
 __all__ = [
@@ -22,4 +23,5 @@ __all__ = [
     'MediaTooLarge',
     'ConversationNotFound',
     'UnauthorizedAccess',
+    'ClientUUIDConflict',
 ]

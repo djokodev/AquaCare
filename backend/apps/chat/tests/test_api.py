@@ -6,6 +6,7 @@ Tests HTTP layer: viewsets, serializers, permissions, and API responses.
 """
 import pytest
 import uuid
+from unittest.mock import patch
 from django.urls import reverse
 from rest_framework import status
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -141,7 +142,7 @@ class TestMessagesAPI:
         url = reverse('conversation-messages', kwargs={'pk': other_conversation.id})
         response = auth_client.get(url)
 
-        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.status_code == status.HTTP_404_NOT_FOUND
 
 
 @pytest.mark.django_db
@@ -265,7 +266,52 @@ class TestSendMessageAPI:
         }
         response = auth_client.post(url, data, format='json')
 
-        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_send_message_client_uuid_conflict_other_user(self, auth_client, authenticated_user, user_factory):
+        """Test that reusing a client UUID from another user returns 409."""
+        own_conversation = ConversationService.get_or_create_conversation(authenticated_user)
+        other_user = user_factory()
+        other_conversation = ConversationService.get_or_create_conversation(other_user)
+        client_uuid = str(uuid.uuid4())
+
+        other_client = self._build_auth_client_for_user(other_user)
+
+        url_other = reverse('conversation-send-message', kwargs={'pk': other_conversation.id})
+        first_response = other_client.post(
+            url_other,
+            {
+                'content': 'Other user message',
+                'client_uuid': client_uuid,
+                'created_offline': True,
+            },
+            format='json'
+        )
+        assert first_response.status_code == status.HTTP_201_CREATED
+
+        url_own = reverse('conversation-send-message', kwargs={'pk': own_conversation.id})
+        conflict_response = auth_client.post(
+            url_own,
+            {
+                'content': 'Current user message',
+                'client_uuid': client_uuid,
+                'created_offline': True,
+            },
+            format='json'
+        )
+
+        assert conflict_response.status_code == status.HTTP_409_CONFLICT
+        assert conflict_response.data['field'] == 'client_uuid'
+
+    @staticmethod
+    def _build_auth_client_for_user(user):
+        from rest_framework.test import APIClient
+        from rest_framework_simplejwt.tokens import RefreshToken
+
+        client = APIClient()
+        refresh = RefreshToken.for_user(user)
+        client.credentials(HTTP_AUTHORIZATION=f'Bearer {refresh.access_token}')
+        return client
 
 
 @pytest.mark.django_db
@@ -297,7 +343,7 @@ class TestMarkReadAPI:
         url = reverse('conversation-mark-read', kwargs={'pk': other_conversation.id})
         response = auth_client.post(url)
 
-        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.status_code == status.HTTP_404_NOT_FOUND
 
 
 @pytest.mark.django_db
@@ -328,8 +374,8 @@ class TestSignalIntegration:
         acknowledgment = system_messages.first()
         assert "reçu" in acknowledgment.content.lower() or "received" in acknowledgment.content.lower()
 
-    def test_each_user_message_triggers_acknowledgment(self, authenticated_user):
-        """Test that every user message triggers acknowledgment."""
+    def test_only_first_user_message_triggers_acknowledgment(self, authenticated_user):
+        """Test that only the first user message triggers acknowledgment."""
         conversation = ConversationService.get_or_create_conversation(authenticated_user)
 
         # Send multiple messages
@@ -341,8 +387,8 @@ class TestSignalIntegration:
             sender_type='system'
         ).count()
 
-        # One acknowledgment per user message
-        assert system_count == 2
+        # Only one acknowledgment for the first user message
+        assert system_count == 1
 
     def test_admin_message_creates_notification(self, authenticated_user, mavecam_admin):
         """Test that admin message triggers notification creation."""
@@ -366,3 +412,228 @@ class TestSignalIntegration:
         assert notifications.exists()
         notification = notifications.first()
         assert "support" in notification.title.lower() or "message" in notification.title.lower()
+        assert "réponse de l'équipe support" not in notification.message.lower()
+
+
+@pytest.mark.django_db
+class TestRateLimiting:
+    """Tests for rate limiting on chat endpoints."""
+
+    def test_send_message_rate_limit_enforced(self, auth_client, authenticated_user, settings):
+        """Test that sending more than 10 messages per minute returns 429.
+
+        Uses an isolated locmem cache to avoid interference from parallel test workers
+        that share the same Redis instance and call cache.clear() between tests.
+        """
+        # Use isolated in-process cache so xdist workers don't clear each other's state
+        settings.CACHES = {
+            'default': {
+                'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+                'LOCATION': f'throttle-test-{id(self)}',
+            }
+        }
+        from django.core.cache import cache as throttle_cache
+        throttle_cache.clear()
+
+        conversation = ConversationService.get_or_create_conversation(authenticated_user)
+        url = reverse('conversation-send-message', kwargs={'pk': conversation.id})
+
+        # Send 10 messages (within limit)
+        for i in range(10):
+            response = auth_client.post(url, {'content': f'Message {i}'}, format='json')
+            assert response.status_code == status.HTTP_201_CREATED, (
+                f"Message {i} should succeed, got {response.status_code}"
+            )
+
+        # 11th message should be throttled
+        response = auth_client.post(url, {'content': 'Message 11'}, format='json')
+        assert response.status_code == status.HTTP_429_TOO_MANY_REQUESTS
+
+
+@pytest.mark.django_db
+class TestMediaValidation:
+    """
+    Tests for media file size and format validation at the serializer level.
+
+    Note: Tests use the serializer directly rather than the HTTP layer because
+    multipart encoding in APIClient recreates the file object from actual bytes,
+    discarding any manually set .size attributes on the Python object.
+    """
+
+    def _make_mock_file(self, size_bytes: int, content_type: str, name: str):
+        """Create a mock file with a controlled .size attribute."""
+        from unittest.mock import MagicMock
+        mock = MagicMock()
+        mock.size = size_bytes
+        mock.content_type = content_type
+        mock.name = name
+        return mock
+
+    def test_image_too_large_rejected(self):
+        """Test that an image > 10MB is rejected by the serializer."""
+        from chat.serializers import SendMessageSerializer
+        from rest_framework import serializers as drf_serializers
+
+        mock_file = self._make_mock_file(11 * 1024 * 1024, 'image/jpeg', 'big.jpg')
+        serializer = SendMessageSerializer()
+
+        # Field-level validation passes (only checks > 50MB threshold)
+        serializer.validate_media_file(mock_file)
+
+        # Cross-field validation should reject image > 10MB
+        with pytest.raises(drf_serializers.ValidationError):
+            serializer.validate({'content': 'Test', 'media_file': mock_file, 'media_type': 'image'})
+
+    def test_video_too_large_rejected(self):
+        """Test that a video > 50MB is rejected at field-level validation."""
+        from chat.serializers import SendMessageSerializer
+        from rest_framework import serializers as drf_serializers
+
+        mock_file = self._make_mock_file(51 * 1024 * 1024, 'video/mp4', 'big.mp4')
+        serializer = SendMessageSerializer()
+
+        with pytest.raises(drf_serializers.ValidationError):
+            serializer.validate_media_file(mock_file)
+
+    def test_invalid_media_format_rejected(self, auth_client, authenticated_user):
+        """Test that uploading an invalid file format via API returns 400."""
+        conversation = ConversationService.get_or_create_conversation(authenticated_user)
+
+        invalid_file = SimpleUploadedFile(
+            name='malware.exe',
+            content=b'MZ\x90\x00',
+            content_type='application/octet-stream'
+        )
+
+        url = reverse('conversation-send-message', kwargs={'pk': conversation.id})
+        data = {
+            'content': 'Test',
+            'media_type': 'image',
+            'media_file': invalid_file,
+        }
+        response = auth_client.post(url, data, format='multipart')
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        response_text = str(response.data)
+        assert 'format' in response_text.lower() or 'supporté' in response_text.lower()
+
+    def test_image_within_10mb_passes_serializer(self):
+        """Test that an image within 10MB passes both serializer validations."""
+        from chat.serializers import SendMessageSerializer
+
+        mock_file = self._make_mock_file(5 * 1024 * 1024, 'image/jpeg', 'ok.jpg')
+        serializer = SendMessageSerializer()
+
+        serializer.validate_media_file(mock_file)
+        result = serializer.validate({'content': 'Test', 'media_file': mock_file, 'media_type': 'image'})
+        assert result['content'] == 'Test'
+
+
+@pytest.mark.django_db
+class TestUnreadCountConcurrency:
+    """Tests for unread count consistency using F() expressions."""
+
+    def test_unread_count_increments_correctly(self, authenticated_user, mavecam_admin):
+        """Test that multiple unread count increments are applied correctly."""
+        from chat.services import ConversationService
+
+        conversation = ConversationService.get_or_create_conversation(authenticated_user)
+        assert conversation.unread_count_user == 0
+
+        # Increment 3 times
+        for _ in range(3):
+            ConversationService.increment_unread_count(conversation, for_user=True)
+            conversation.refresh_from_db()
+
+        conversation.refresh_from_db()
+        assert conversation.unread_count_user == 3
+
+    def test_unread_count_reset_is_atomic(self, authenticated_user, mavecam_admin):
+        """Test that resetting unread count is atomic and sets value to 0."""
+        from chat.services import ConversationService
+
+        conversation = ConversationService.get_or_create_conversation(authenticated_user)
+
+        # Set initial count
+        ConversationService.increment_unread_count(conversation, for_user=True)
+        ConversationService.increment_unread_count(conversation, for_user=True)
+        conversation.refresh_from_db()
+        assert conversation.unread_count_user == 2
+
+        # Reset
+        ConversationService.reset_unread_count(conversation, for_user=True)
+        conversation.refresh_from_db()
+        assert conversation.unread_count_user == 0
+
+
+@pytest.mark.django_db
+class TestIsolationSecurity:
+    """Tests verifying user isolation for mark_read and message listing."""
+
+    def test_mark_read_isolation(self, auth_client, user_factory, mavecam_admin):
+        """Test that userA cannot mark messages as read in userB's conversation."""
+        other_user = user_factory()
+        other_conversation = ConversationService.get_or_create_conversation(other_user)
+
+        # Admin sends a message to other_user's conversation
+        MessageService.send_admin_message(
+            other_conversation,
+            mavecam_admin,
+            "Message for other user"
+        )
+
+        # auth_client (authenticated as userA) tries to mark_read userB's conversation
+        url = reverse('conversation-mark-read', kwargs={'pk': other_conversation.id})
+        response = auth_client.post(url)
+
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_messages_list_isolation(self, auth_client, user_factory):
+        """Test that userA cannot list messages from userB's conversation."""
+        other_user = user_factory()
+        other_conversation = ConversationService.get_or_create_conversation(other_user)
+
+        url = reverse('conversation-messages', kwargs={'pk': other_conversation.id})
+        response = auth_client.get(url)
+
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+@pytest.mark.django_db
+class TestBulkNotificationTask:
+    """Tests for the Celery bulk notification task."""
+
+    def test_notify_admin_task_uses_bulk_create(self, authenticated_user, mavecam_admin):
+        """Test that notify_admins_new_user_message_task creates N notifications in 1 bulk_create."""
+        from chat.tasks import notify_admins_new_user_message_task
+        from notifications.models import Notification
+
+        conversation = ConversationService.get_or_create_conversation(authenticated_user)
+        message = MessageService.send_user_message(
+            user=authenticated_user,
+            content="Test message",
+            media_file=None,
+            media_type='none',
+            client_uuid=None,
+            created_offline=False
+        )
+
+        initial_count = Notification.objects.count()
+
+        # Patch bulk_create to verify it's called once
+        from notifications.models import Notification as NotifModel
+        original_bulk_create = NotifModel.objects.bulk_create
+
+        bulk_create_calls = []
+
+        def tracking_bulk_create(objs, **kwargs):
+            bulk_create_calls.append(len(objs))
+            return original_bulk_create(objs, **kwargs)
+
+        with patch.object(NotifModel.objects, 'bulk_create', side_effect=tracking_bulk_create):
+            notify_admins_new_user_message_task(str(message.id))
+
+        # bulk_create was called exactly once
+        assert len(bulk_create_calls) == 1
+        # And created notifications for all admins in one shot
+        assert Notification.objects.count() > initial_count

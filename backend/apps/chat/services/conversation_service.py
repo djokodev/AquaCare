@@ -7,6 +7,7 @@ Handles conversation lifecycle and retrieval with permission checks.
 from typing import Optional
 from django.contrib.auth import get_user_model
 from django.db import transaction
+from django.db.models import F
 from django.utils import timezone
 
 # Import when models are available - circular import prevention
@@ -139,11 +140,13 @@ class ConversationService:
                      If False, increment admin's unread count (user sent message)
         """
         if for_user:
-            conversation.unread_count_user += 1
+            conversation.unread_count_user = F('unread_count_user') + 1
             conversation.save(update_fields=['unread_count_user', 'updated_at'])
+            conversation.refresh_from_db()
         else:
-            conversation.unread_count_admin += 1
+            conversation.unread_count_admin = F('unread_count_admin') + 1
             conversation.save(update_fields=['unread_count_admin', 'updated_at'])
+            conversation.refresh_from_db()
 
     @staticmethod
     @transaction.atomic
@@ -161,6 +164,8 @@ class ConversationService:
         if for_user:
             conversation.unread_count_user = 0
             conversation.save(update_fields=['unread_count_user', 'updated_at'])
+            conversation.refresh_from_db()
         else:
             conversation.unread_count_admin = 0
             conversation.save(update_fields=['unread_count_admin', 'updated_at'])
+            conversation.refresh_from_db()

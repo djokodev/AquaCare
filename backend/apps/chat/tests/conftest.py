@@ -5,7 +5,7 @@ Imports shared fixtures from global conftest and adds chat-specific fixtures.
 """
 import pytest
 from django.db.models.signals import post_save
-from unittest.mock import patch
+from django.core.cache import cache
 
 # Import shared fixtures from the global test configuration without
 # re-registering the plugin (avoids duplicate plugin errors with xdist).
@@ -16,6 +16,30 @@ from tests.conftest import (  # noqa: F401
     auth_client,
     mavecam_admin,
 )
+
+
+@pytest.fixture(autouse=True)
+def clear_rate_limit_cache():
+    """
+    Ensure DRF throttling cache state does not leak across tests.
+    """
+    cache.clear()
+    yield
+    cache.clear()
+
+
+@pytest.fixture(autouse=True)
+def celery_always_eager(settings):
+    """
+    Force Celery tasks to execute synchronously during tests.
+
+    The Docker environment sets DJANGO_SETTINGS_MODULE=development, which does
+    not include CELERY_TASK_ALWAYS_EAGER=True. This fixture ensures tasks that
+    are called via .delay() run in-process so signal-triggered notifications
+    (e.g. test_admin_message_creates_notification) are created immediately.
+    """
+    settings.CELERY_TASK_ALWAYS_EAGER = True
+    settings.CELERY_TASK_EAGER_PROPAGATES = True
 
 
 @pytest.fixture(autouse=True)

@@ -19,6 +19,7 @@ from chat.domain import (
     InvalidMediaFormat,
     ConversationNotFound,
     UnauthorizedAccess,
+    ClientUUIDConflict,
 )
 
 
@@ -229,6 +230,31 @@ class TestMessageService:
         assert message1.content == "First attempt"
         assert Message.objects.filter(client_uuid=client_uuid).count() == 1
 
+    def test_send_user_message_duplicate_uuid_other_user_rejected(self, user_factory):
+        """Test that a client_uuid cannot be reused by another user."""
+        user1 = user_factory()
+        user2 = user_factory()
+        client_uuid = uuid.uuid4()
+
+        MessageService.send_user_message(
+            user=user1,
+            content="Message from user 1",
+            media_file=None,
+            media_type='none',
+            client_uuid=client_uuid,
+            created_offline=True
+        )
+
+        with pytest.raises(ClientUUIDConflict):
+            MessageService.send_user_message(
+                user=user2,
+                content="Message from user 2",
+                media_file=None,
+                media_type='none',
+                client_uuid=client_uuid,
+                created_offline=True
+            )
+
     def test_send_user_message_empty_content_rejected(self, authenticated_user):
         """Test that empty message content is rejected."""
         conversation = ConversationService.get_or_create_conversation(authenticated_user)
@@ -413,3 +439,46 @@ class TestAutoResponseService:
 
         assert message is not None
         assert "reçu" in message.content.lower()  # French text
+
+
+@pytest.mark.django_db
+class TestUnreadCountFExpressions:
+    """Tests ensuring F() expression atomic updates work correctly."""
+
+    def test_increment_uses_f_expression(self, authenticated_user):
+        """Test that increment_unread_count uses F() so no read-modify-write race."""
+        from django.db.models import F
+        conversation = ConversationService.get_or_create_conversation(authenticated_user)
+
+        # Call twice to ensure both increments are applied
+        ConversationService.increment_unread_count(conversation, for_user=True)
+        conversation.refresh_from_db()
+        ConversationService.increment_unread_count(conversation, for_user=True)
+        conversation.refresh_from_db()
+
+        assert conversation.unread_count_user == 2
+
+    def test_increment_admin_uses_f_expression(self, authenticated_user):
+        """Test that admin unread count increments correctly with F()."""
+        conversation = ConversationService.get_or_create_conversation(authenticated_user)
+
+        ConversationService.increment_unread_count(conversation, for_user=False)
+        conversation.refresh_from_db()
+        ConversationService.increment_unread_count(conversation, for_user=False)
+        conversation.refresh_from_db()
+
+        assert conversation.unread_count_admin == 2
+
+    def test_reset_after_increment(self, authenticated_user):
+        """Test reset_unread_count properly zeroes after multiple increments."""
+        conversation = ConversationService.get_or_create_conversation(authenticated_user)
+
+        for _ in range(5):
+            ConversationService.increment_unread_count(conversation, for_user=True)
+
+        conversation.refresh_from_db()
+        assert conversation.unread_count_user == 5
+
+        ConversationService.reset_unread_count(conversation, for_user=True)
+        conversation.refresh_from_db()
+        assert conversation.unread_count_user == 0

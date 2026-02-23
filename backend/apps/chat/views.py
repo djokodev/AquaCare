@@ -8,6 +8,7 @@ from rest_framework import viewsets, status, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.throttling import UserRateThrottle
+from django.utils.translation import gettext as _
 
 from .models import Conversation, Message
 from .serializers import (
@@ -22,7 +23,8 @@ from .domain.exceptions import (
     InvalidMediaFormat,
     MediaTooLarge,
     ConversationNotFound,
-    UnauthorizedAccess
+    UnauthorizedAccess,
+    ClientUUIDConflict,
 )
 
 
@@ -33,6 +35,7 @@ class ChatMessageThrottle(UserRateThrottle):
     Rate limit: 10 messages par minute par utilisateur
     Prevents spam and DoS attacks.
     """
+    scope = 'chat_message'
     rate = '10/min'
 
 
@@ -56,6 +59,19 @@ class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = ConversationSerializer
     permission_classes = [permissions.IsAuthenticated, IsConversationOwnerOrAdmin]
 
+    def get_throttles(self):
+        """Apply ChatMessageThrottle on write/read-heavy actions."""
+        if getattr(self, 'action', None) in ('send_message', 'mark_read', 'messages'):
+            return [ChatMessageThrottle()]
+        return super().get_throttles()
+
+    @staticmethod
+    def _conversation_not_found_response():
+        return Response(
+            {'error': _('Conversation introuvable.')},
+            status=status.HTTP_404_NOT_FOUND
+        )
+
     def get_queryset(self):
         """
         Get conversations for current user.
@@ -67,10 +83,17 @@ class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
 
         if user.is_staff:
             # Admin sees all conversations
-            return Conversation.objects.all().select_related('user')
+            return (
+                Conversation.objects.all()
+                .select_related('user')
+                .prefetch_related('messages')
+            )
         else:
             # User sees only their own conversation
-            return Conversation.objects.filter(user=user)
+            return (
+                Conversation.objects.filter(user=user)
+                .prefetch_related('messages')
+            )
 
     @action(detail=False, methods=['get'], url_path='me')
     def get_my_conversation(self, request):
@@ -106,11 +129,11 @@ class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
                 conversation_id=pk,
                 requesting_user=request.user
             )
-        except (ConversationNotFound, UnauthorizedAccess) as e:
-            return Response(
-                {'error': str(e)},
-                status=status.HTTP_403_FORBIDDEN
-            )
+        except ConversationNotFound:
+            return self._conversation_not_found_response()
+        except UnauthorizedAccess:
+            # Do not reveal conversation existence to unauthorized users.
+            return self._conversation_not_found_response()
 
         # Get messages ordered by creation date
         messages = conversation.messages.all().order_by('created_at')
@@ -158,11 +181,11 @@ class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
                 conversation_id=pk,
                 requesting_user=request.user
             )
-        except (ConversationNotFound, UnauthorizedAccess) as e:
-            return Response(
-                {'error': str(e)},
-                status=status.HTTP_403_FORBIDDEN
-            )
+        except ConversationNotFound:
+            return self._conversation_not_found_response()
+        except UnauthorizedAccess:
+            # Do not reveal conversation existence to unauthorized users.
+            return self._conversation_not_found_response()
 
         # Validate input
         serializer = SendMessageSerializer(data=request.data)
@@ -195,14 +218,36 @@ class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
             )
             return Response(response_serializer.data, status=status.HTTP_201_CREATED)
 
-        except InvalidMessageContent as e:
+        except InvalidMessageContent:
             return Response(
-                {'error': str(e), 'field': 'content'},
+                {'error': _('Contenu du message invalide.'), 'field': 'content'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        except (InvalidMediaFormat, MediaTooLarge) as e:
+        except ClientUUIDConflict:
             return Response(
-                {'error': str(e), 'field': 'media_file'},
+                {
+                    'error': _(
+                        "Conflit de synchronisation détecté. "
+                        "Veuillez actualiser la conversation."
+                    ),
+                    'field': 'client_uuid',
+                },
+                status=status.HTTP_409_CONFLICT
+            )
+        except InvalidMediaFormat:
+            return Response(
+                {
+                    'error': _('Format de média non pris en charge.'),
+                    'field': 'media_file',
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except MediaTooLarge:
+            return Response(
+                {
+                    'error': _('Fichier média trop volumineux.'),
+                    'field': 'media_file',
+                },
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -222,11 +267,11 @@ class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
                 conversation_id=pk,
                 requesting_user=request.user
             )
-        except (ConversationNotFound, UnauthorizedAccess) as e:
-            return Response(
-                {'error': str(e)},
-                status=status.HTTP_403_FORBIDDEN
-            )
+        except ConversationNotFound:
+            return self._conversation_not_found_response()
+        except UnauthorizedAccess:
+            # Do not reveal conversation existence to unauthorized users.
+            return self._conversation_not_found_response()
 
         # Mark as read
         MessageService.mark_messages_as_read(

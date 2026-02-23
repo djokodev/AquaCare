@@ -15,6 +15,7 @@ from ..domain.exceptions import (
     InvalidMessageContent,
     InvalidMediaFormat,
     MediaTooLarge,
+    ClientUUIDConflict,
 )
 from .conversation_service import ConversationService
 
@@ -99,9 +100,15 @@ class MessageService:
 
         # Deduplication: Check for existing message with same client_uuid
         if client_uuid:
-            existing = Message.objects.filter(client_uuid=client_uuid).first()
+            existing = Message.objects.filter(client_uuid=client_uuid).select_related(
+                'conversation__user'
+            ).first()
             if existing:
-                # Return existing message (idempotent operation)
+                # Idempotent for same user only.
+                if existing.conversation.user_id != user.id:
+                    raise ClientUUIDConflict(
+                        "Client UUID already used by another user."
+                    )
                 return existing
 
         # Create new message

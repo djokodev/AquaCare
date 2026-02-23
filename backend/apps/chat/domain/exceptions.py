@@ -39,3 +39,9 @@ class UnauthorizedAccess(ChatDomainException):
     """Raised when user attempts to access conversation they don't own."""
 
     pass
+
+
+class ClientUUIDConflict(ChatDomainException):
+    """Raised when a client UUID is reused across different users."""
+
+    pass

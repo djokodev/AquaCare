@@ -12,6 +12,7 @@ Roles:
 
 from django.contrib import admin, messages as dj_messages
 from django.contrib.admin.models import ADDITION, CHANGE
+from django.db.models import Count
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import path, reverse
 from django.utils.html import format_html
@@ -121,15 +122,21 @@ class ConversationAdmin(ChatSecuredAdmin):
         """Seul superuser peut supprimer des conversations."""
         return request.user.is_superuser
 
+    def get_queryset(self, request):
+        """Annotate queryset with message count to avoid N+1."""
+        qs = super().get_queryset(request)
+        return qs.annotate(_message_count=Count('messages'))
+
     def user_display(self, obj):
         """Display user name or phone (masked for non-support)."""
         return obj.user.get_full_name() or f"User #{obj.user.id}"
     user_display.short_description = _("Utilisateur")
 
     def message_count(self, obj):
-        """Display total message count."""
-        return obj.messages.count()
+        """Display total message count using annotated value."""
+        return getattr(obj, '_message_count', obj.messages.count())
     message_count.short_description = _("Messages")
+    message_count.admin_order_field = '_message_count'
 
 
 @admin.register(Message)

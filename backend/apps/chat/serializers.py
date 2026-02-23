@@ -142,10 +142,19 @@ class ConversationSerializer(serializers.ModelSerializer):
         """
         Get preview of last message in conversation.
 
+        Uses prefetched messages cache when available (avoids N+1).
+
         Returns:
             Dict with message info or None
         """
-        last_msg = obj.messages.order_by('-created_at').first()
+        # Use prefetch cache if available (set by prefetch_related in views)
+        prefetched = getattr(obj, '_prefetched_objects_cache', {})
+        if 'messages' in prefetched:
+            messages_list = list(obj.messages.all())
+            last_msg = max(messages_list, key=lambda m: m.created_at, default=None)
+        else:
+            last_msg = obj.messages.order_by('-created_at').first()
+
         if last_msg:
             return {
                 'id': str(last_msg.id),
@@ -157,7 +166,14 @@ class ConversationSerializer(serializers.ModelSerializer):
         return None
 
     def get_message_count(self, obj):
-        """Get total message count in conversation."""
+        """
+        Get total message count in conversation.
+
+        Uses prefetch cache when available (avoids N+1).
+        """
+        prefetched = getattr(obj, '_prefetched_objects_cache', {})
+        if 'messages' in prefetched:
+            return len(obj.messages.all())
         return obj.messages.count()
 
 
@@ -209,22 +225,26 @@ class SendMessageSerializer(serializers.Serializer):
         """
         Validate media file size and format.
 
+        Size limits align with domain rules (MediaAttachment value object):
+        - Images: max 10MB
+        - Videos: max 50MB
+        Cross-field size check by media_type happens in validate().
+
         Raises:
             ValidationError: If file is too large or invalid format
         """
         if value is None:
             return value
 
-        # Maximum file size: 50MB (conservative for both images and videos)
-        # Note: Cannot access data.get('media_type') in field-level validation
-        # Cross-field validation happens in validate() method
-        MAX_FILE_SIZE_MB = 50
-        MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
+        # Conservative upper bound check (video max, 50MB).
+        # Per-type check (images capped at 10MB) is in validate().
+        MAX_VIDEO_SIZE_MB = 50
+        MAX_FILE_SIZE_BYTES = MAX_VIDEO_SIZE_MB * 1024 * 1024
 
         if value.size > MAX_FILE_SIZE_BYTES:
             size_mb = round(value.size / (1024 * 1024), 2)
             raise serializers.ValidationError(
-                f"Fichier trop volumineux ({size_mb}MB). Taille maximale: {MAX_FILE_SIZE_MB}MB"
+                f"Fichier trop volumineux ({size_mb}MB). Taille maximale: {MAX_VIDEO_SIZE_MB}MB"
             )
 
         # Allowed MIME types (images and videos only)
@@ -245,9 +265,13 @@ class SendMessageSerializer(serializers.Serializer):
     def validate(self, data):
         """
         Cross-field validation: media_type and media_file must be consistent.
+        Also enforces per-type size limits aligned with domain rules:
+        - Images: max 10MB
+        - Videos: max 50MB
 
         Raises:
-            ValidationError: If media_type provided without media_file or vice versa
+            ValidationError: If media_type provided without media_file or vice versa,
+                             or if file exceeds its per-type size limit.
         """
         has_media_file = data.get('media_file') is not None
         has_media_type = data.get('media_type') is not None
@@ -261,5 +285,17 @@ class SendMessageSerializer(serializers.Serializer):
             raise serializers.ValidationError(
                 "media_file is required when media_type is provided"
             )
+
+        # Per-type size validation (aligned with domain/value_objects.py)
+        media_file = data.get('media_file')
+        media_type = data.get('media_type')
+        if media_file and media_type:
+            if media_type == 'image':
+                MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024  # 10 MB
+                if media_file.size > MAX_IMAGE_SIZE_BYTES:
+                    size_mb = round(media_file.size / (1024 * 1024), 2)
+                    raise serializers.ValidationError(
+                        {"media_file": f"Image trop volumineuse ({size_mb}MB). Taille maximale: 10MB"}
+                    )
 
         return data
