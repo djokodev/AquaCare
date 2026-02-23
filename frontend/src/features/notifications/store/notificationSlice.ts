@@ -1,8 +1,8 @@
-﻿import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
+import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import { Notification } from '@/types/notifications';
 import { notificationsService } from '@/services/notificationsService';
 
-// =================== Ã‰TAT INITIAL ===================
+// =================== ETAT INITIAL ===================
 
 interface NotificationState {
   notifications: Notification[];
@@ -21,7 +21,7 @@ const initialState: NotificationState = {
 // =================== ACTIONS ASYNC ===================
 
 /**
- * RÃ©cupÃ¨re toutes les notifications de l'utilisateur
+ * Recupere toutes les notifications de l'utilisateur
  */
 export const fetchNotifications = createAsyncThunk(
   'notifications/fetchNotifications',
@@ -30,7 +30,7 @@ export const fetchNotifications = createAsyncThunk(
       const notifications = await notificationsService.getNotifications();
       return notifications as Notification[];
     } catch (error: any) {
-      return rejectWithValue(error.response?.data?.detail || 'Erreur lors du chargement des notifications');
+      return rejectWithValue(error.response?.data?.detail || 'loadError');
     }
   }
 );
@@ -45,7 +45,7 @@ export const markNotificationAsRead = createAsyncThunk(
       const notification = await notificationsService.markNotificationAsRead(notificationId);
       return notification;
     } catch (error: any) {
-      return rejectWithValue(error.response?.data?.detail || 'Erreur lors du marquage de la notification');
+      return rejectWithValue(error.response?.data?.detail || 'markReadError');
     }
   }
 );
@@ -60,13 +60,13 @@ export const markAllNotificationsAsRead = createAsyncThunk(
       const result = await notificationsService.markAllNotificationsAsRead();
       return result?.count ?? 0;
     } catch (error: any) {
-      return rejectWithValue(error.response?.data?.detail || 'Erreur lors du marquage de toutes les notifications');
+      return rejectWithValue(error.response?.data?.detail || 'markAllReadError');
     }
   }
 );
 
 /**
- * Supprime une notification spÃ©cifique
+ * Supprime une notification specifique
  */
 export const deleteNotification = createAsyncThunk(
   'notifications/deleteNotification',
@@ -75,7 +75,7 @@ export const deleteNotification = createAsyncThunk(
       await notificationsService.deleteNotification(notificationId);
       return notificationId;
     } catch (error: any) {
-      return rejectWithValue(error.response?.data?.detail || 'Erreur lors de la suppression de la notification');
+      return rejectWithValue(error.response?.data?.detail || 'deleteError');
     }
   }
 );
@@ -90,7 +90,7 @@ export const deleteAllReadNotifications = createAsyncThunk(
       await notificationsService.deleteAllReadNotifications();
       return;
     } catch (error: any) {
-      return rejectWithValue(error.response?.data?.detail || 'Erreur lors de la suppression des notifications');
+      return rejectWithValue(error.response?.data?.detail || 'deleteAllReadError');
     }
   }
 );
@@ -105,12 +105,12 @@ export const notificationSlice = createSlice({
       state.error = null;
     },
 
-    // Mise Ã  jour locale du compteur de non-lues
+    // Mise a jour locale du compteur de non-lues
     updateUnreadCount: (state) => {
       state.unreadCount = state.notifications.filter(n => !n.is_read).length;
     },
 
-    // Reset complet de l'Ã©tat (utile lors de la dÃ©connexion)
+    // Reset complet de l'etat (utile lors de la deconnexion)
     resetNotificationState: () => initialState,
   },
 
@@ -155,12 +155,11 @@ export const notificationSlice = createSlice({
       })
 
       // ========== MARK ALL AS READ ==========
-      .addCase(markAllNotificationsAsRead.fulfilled, (state, action) => {
-        const now = new Date().toISOString();
+      .addCase(markAllNotificationsAsRead.fulfilled, (state) => {
         state.notifications = state.notifications.map(n => ({
           ...n,
           is_read: true,
-          read_at: n.read_at || now,
+          read_at: n.read_at ?? null,  // Pas de timestamp client inventé
         }));
         state.unreadCount = 0;
       })
@@ -171,7 +170,6 @@ export const notificationSlice = createSlice({
       // ========== DELETE NOTIFICATION ==========
       .addCase(deleteNotification.fulfilled, (state, action) => {
         const deletedId = action.payload;
-        const deletedNotification = state.notifications.find(n => n.id === deletedId);
 
         // Supprimer de la liste
         state.notifications = state.notifications.filter(n => n.id !== deletedId);
@@ -217,8 +215,7 @@ export const fetchNotificationsSilent = createAsyncThunk(
       const notifications = await notificationsService.getNotifications();
       return notifications as Notification[];
     } catch (error: any) {
-      return rejectWithValue(error.response?.data?.detail || 'Erreur lors du chargement des notifications');
+      return rejectWithValue(error.response?.data?.detail || 'loadError');
     }
   }
 );
-

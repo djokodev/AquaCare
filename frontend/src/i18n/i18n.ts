@@ -4,6 +4,7 @@ import * as Localization from 'expo-localization';
 import * as SecureStore from 'expo-secure-store';
 
 import { STORAGE_KEYS } from '@/constants/api';
+import logger from '@/utils/logger';
 import { fr } from './locales/fr';
 import { en } from './locales/en';
 
@@ -46,7 +47,7 @@ const loadSavedLanguage = async () => {
       await SecureStore.setItemAsync(STORAGE_KEYS.LANGUAGE, deviceLanguage);
     }
   } catch (error) {
-    console.warn('âš ï¸ Erreur lors du chargement de la langue, utilisation du franÃ§ais par dÃ©faut:', error);
+    logger.warn('âš ï¸ Erreur lors du chargement de la langue, utilisation du franÃ§ais par dÃ©faut:', error);
   }
 };
 
