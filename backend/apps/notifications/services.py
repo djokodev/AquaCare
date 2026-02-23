@@ -150,12 +150,11 @@ class NotificationService:
                     send_email_notification_task.delay(str(notification.id))
                 if 'push' in channels:
                     send_push_notification_task.delay(str(notification.id))
-            except Exception as exc:
+            except Exception:
                 # Ne pas bloquer la création de notification si l'envoi immédiat échoue
-                logger.warning(
-                    "Immediate notification dispatch failed for %s: %s",
+                logger.exception(
+                    "Immediate notification dispatch failed for %s",
                     notification.id,
-                    exc,
                 )
 
         return notification
@@ -201,13 +200,29 @@ class NotificationService:
         if scheduled_for is None:
             scheduled_for = timezone.now()
 
-        # Créer notifications en masse
+        # Charger toutes les préférences existantes en une seule requête
+        user_ids = [u.pk for u in users]
+        existing_prefs = {
+            p.user_id: p
+            for p in NotificationPreference.objects.filter(user__in=user_ids)
+        }
+
+        # Créer les préférences manquantes en batch
+        missing_user_ids = [uid for uid in user_ids if uid not in existing_prefs]
+        if missing_user_ids:
+            new_prefs = NotificationPreference.objects.bulk_create(
+                [NotificationPreference(user_id=uid) for uid in missing_user_ids],
+                ignore_conflicts=True,
+            )
+            for p in new_prefs:
+                existing_prefs[p.user_id] = p
+
+        # Construire les notifications en filtrant par préférences (lookup O(1))
         notifications = []
         for user in users:
-            # Vérifier préférences basiques
-            prefs, _ = NotificationPreference.objects.get_or_create(user=user)
-            if prefs.is_type_enabled(notification_type):
-                notif = Notification(
+            prefs = existing_prefs.get(user.pk)
+            if prefs and prefs.is_type_enabled(notification_type):
+                notifications.append(Notification(
                     user=user,
                     notification_type=notification_type,
                     title=title,
@@ -215,9 +230,8 @@ class NotificationService:
                     metadata=metadata or {},
                     channels=list(channels),
                     priority=priority,
-                    scheduled_for=scheduled_for
-                )
-                notifications.append(notif)
+                    scheduled_for=scheduled_for,
+                ))
 
         # Créer en batch
         Notification.objects.bulk_create(notifications, batch_size=500)
@@ -301,6 +315,7 @@ class NotificationService:
         """
         cutoff_date = timezone.now() - timezone.timedelta(days=days)
         count, _ = Notification.objects.filter(
+            is_read=True,
             scheduled_for__lt=cutoff_date
         ).delete()
         return count

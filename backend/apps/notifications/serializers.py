@@ -6,7 +6,18 @@ from rest_framework import serializers
 from .models import Notification, NotificationPreference, PushToken
 
 
-class NotificationSerializer(serializers.ModelSerializer):
+class NotificationErrorVisibilityMixin:
+    """
+    Ne jamais exposer les détails techniques d'erreur aux utilisateurs standards.
+    """
+
+    def _can_expose_delivery_errors(self) -> bool:
+        request = self.context.get('request')
+        user = getattr(request, 'user', None)
+        return bool(user and user.is_authenticated and (user.is_staff or user.is_superuser))
+
+
+class NotificationSerializer(NotificationErrorVisibilityMixin, serializers.ModelSerializer):
     """
     Serializer pour le modèle Notification.
     Utilisé pour les endpoints de liste et détail.
@@ -20,6 +31,18 @@ class NotificationSerializer(serializers.ModelSerializer):
         source='get_priority_display',
         read_only=True
     )
+    email_error = serializers.SerializerMethodField()
+    push_error = serializers.SerializerMethodField()
+
+    def get_email_error(self, obj):
+        if self._can_expose_delivery_errors():
+            return obj.email_error
+        return None
+
+    def get_push_error(self, obj):
+        if self._can_expose_delivery_errors():
+            return obj.push_error
+        return None
 
     class Meta:
         model = Notification
@@ -60,7 +83,7 @@ class NotificationSerializer(serializers.ModelSerializer):
         ]
 
 
-class NotificationListSerializer(serializers.ModelSerializer):
+class NotificationListSerializer(NotificationErrorVisibilityMixin, serializers.ModelSerializer):
     """
     Serializer léger pour la liste de notifications.
     Exclut les champs volumineux comme metadata.
@@ -70,6 +93,18 @@ class NotificationListSerializer(serializers.ModelSerializer):
         source='get_notification_type_display',
         read_only=True
     )
+    email_error = serializers.SerializerMethodField()
+    push_error = serializers.SerializerMethodField()
+
+    def get_email_error(self, obj):
+        if self._can_expose_delivery_errors():
+            return obj.email_error
+        return None
+
+    def get_push_error(self, obj):
+        if self._can_expose_delivery_errors():
+            return obj.push_error
+        return None
 
     class Meta:
         model = Notification
@@ -84,6 +119,8 @@ class NotificationListSerializer(serializers.ModelSerializer):
             'scheduled_for',
             'is_read',
             'read_at',
+            'email_error',
+            'push_error',
             'created_at',
         ]
         read_only_fields = fields

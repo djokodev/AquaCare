@@ -15,6 +15,11 @@ from .models import Notification, PushToken
 
 logger = logging.getLogger(__name__)
 
+EMAIL_ERROR_RECIPIENT_MISSING = "EMAIL_RECIPIENT_MISSING"
+EMAIL_ERROR_SEND_FAILED = "EMAIL_SEND_FAILED"
+PUSH_ERROR_NO_VALID_TOKENS = "PUSH_NO_VALID_TOKENS"
+PUSH_ERROR_SEND_FAILED = "PUSH_SEND_FAILED"
+
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
 def send_email_notification_task(self, notification_id: str):
@@ -36,8 +41,11 @@ def send_email_notification_task(self, notification_id: str):
 
         # Vérifier que l'utilisateur a un email
         if not user.email:
-            logger.warning(f"User {user.phone_number} has no email, skipping notification {notification_id}")
-            notification.email_error = "Utilisateur sans email"
+            logger.warning(
+                "Skipping email notification %s: recipient email missing",
+                notification_id,
+            )
+            notification.email_error = EMAIL_ERROR_RECIPIENT_MISSING
             notification.save(update_fields=['email_error'])
             return
 
@@ -65,7 +73,7 @@ def send_email_notification_task(self, notification_id: str):
                 <p>{notification.message}</p>
                 <hr>
                 <p style="color: gray; font-size: 12px;">
-                    MAVECAM AquaCare - Système de notifications
+                    AquaCare - Notifications
                 </p>
             </body>
             </html>
@@ -88,20 +96,19 @@ def send_email_notification_task(self, notification_id: str):
         notification.email_error = None  # Réinitialiser erreur si succès
         notification.save(update_fields=['email_sent_at', 'email_error'])
 
-        logger.info(f"Email sent successfully for notification {notification_id} to {user.email}")
+        logger.info("Email sent successfully for notification %s", notification_id)
 
     except Notification.DoesNotExist:
-        logger.error(f"Notification {notification_id} does not exist")
+        logger.warning("Email notification %s skipped: notification does not exist", notification_id)
         return
 
     except Exception as exc:
-        # Logger l'erreur
-        logger.error(f"Failed to send email for notification {notification_id}: {str(exc)}")
+        logger.exception("Email delivery failed for notification %s", notification_id)
 
-        # Enregistrer l'erreur dans la notification
+        # Enregistrer une erreur neutre (pas de détails techniques en base)
         try:
             notification = Notification.objects.get(id=notification_id)
-            notification.email_error = str(exc)[:500]  # Limiter taille erreur
+            notification.email_error = EMAIL_ERROR_SEND_FAILED
             notification.save(update_fields=['email_error'])
         except Exception:
             pass
@@ -129,15 +136,24 @@ def send_push_notification_task(self, notification_id: str):
         user = notification.user
 
         # Récupérer les push tokens actifs de l'utilisateur
-        push_tokens = PushToken.objects.filter(user=user, is_active=True)
+        push_tokens = PushToken.objects.filter(
+            user=user,
+            is_active=True
+        ).order_by('created_at', 'id')
+        tokens = list(push_tokens)
 
-        if not push_tokens.exists():
-            logger.info(f"No active push tokens for user {user.phone_number}, skipping notification {notification_id}")
+        if not tokens:
+            logger.info("No active push token for notification %s", notification_id)
             return
+
+        # Construire une map token_value → PushToken pour lookup O(1)
+        token_map = {t.expo_push_token: t for t in tokens}
+        token_order = []  # Liste ordonnée pour correspondre aux résultats Expo
 
         # Préparer les messages Expo Push
         expo_messages = []
-        for token in push_tokens:
+        unread_badge = user.notifications.filter(is_read=False).count()
+        for token in tokens:
             message = {
                 'to': token.expo_push_token,
                 'sound': 'default',
@@ -150,7 +166,7 @@ def send_push_notification_task(self, notification_id: str):
                     'priority': notification.priority,
                 },
                 'priority': 'high' if notification.priority in ['high', 'urgent'] else 'default',
-                'badge': user.notifications.filter(is_read=False).count(),  # Update app badge
+                'badge': unread_badge,  # Update app badge
             }
 
             # Ajouter channelId pour Android
@@ -158,6 +174,7 @@ def send_push_notification_task(self, notification_id: str):
                 message['channelId'] = 'default'
 
             expo_messages.append(message)
+            token_order.append(token.expo_push_token)
 
         # Envoyer à l'API Expo Push Notifications
         response = requests.post(
@@ -175,56 +192,67 @@ def send_push_notification_task(self, notification_id: str):
         results = response.json()
         data = results.get('data', [])
 
-        # Traiter les erreurs
-        errors = [r for r in data if r.get('status') == 'error']
+        # Traiter les erreurs en matchant par valeur de token (pas par index brut)
+        non_device_error_count = 0
+        device_not_registered_count = 0
+        for index, result in enumerate(data):
+            if result.get('status') != 'error':
+                continue
 
-        if errors:
-            logger.warning(f"Push notification errors for notification {notification_id}: {errors}")
+            error_details = result.get('details', {}) or {}
+            error_type = error_details.get('error')
 
-            # Désactiver les tokens invalides et isoler les erreurs critiques
-            non_device_errors = []
-            for i, error_data in enumerate(errors):
-                error_details = error_data.get('details', {})
-                error_type = error_details.get('error')
+            if error_type == 'DeviceNotRegistered' and index < len(token_order):
+                token = token_map.get(token_order[index])
+                if token:
+                    token.deactivate()
+                device_not_registered_count += 1
+            else:
+                non_device_error_count += 1
 
-                if error_type == 'DeviceNotRegistered':
-                    # Token invalide, désactiver
-                    if i < len(push_tokens):
-                        token = list(push_tokens)[i]
-                        token.deactivate()
-                        logger.info(f"Deactivated invalid push token {token.id} for user {user.phone_number}")
-                else:
-                    non_device_errors.append(error_data)
+        if device_not_registered_count or non_device_error_count:
+            logger.warning(
+                "Push delivery had %s device token errors and %s non-device errors for notification %s",
+                device_not_registered_count,
+                non_device_error_count,
+                notification_id,
+            )
 
-            # Si tous les messages ont échoué mais uniquement pour tokens invalides, on arrête sans retry
-            if not non_device_errors and len(errors) == len(expo_messages):
-                notification.push_error = "No valid push tokens"
+            # Tous les messages ont échoué uniquement car tokens invalides
+            if (
+                non_device_error_count == 0
+                and device_not_registered_count == len(expo_messages)
+            ):
+                notification.push_error = PUSH_ERROR_NO_VALID_TOKENS
                 notification.save(update_fields=['push_error'])
                 return
 
-            # Si les échecs proviennent d'autres erreurs, laisser Celery remonter
-            if non_device_errors and len(non_device_errors) == len(expo_messages):
-                raise Exception(f"All push notifications failed: {non_device_errors}")
+            # Tous les messages ont échoué pour une autre raison
+            if non_device_error_count == len(expo_messages):
+                raise Exception("All push notifications failed")
 
         # Mettre à jour la notification
         notification.push_sent_at = timezone.now()
         notification.push_error = None  # Réinitialiser erreur si succès
         notification.save(update_fields=['push_sent_at', 'push_error'])
 
-        logger.info(f"Push notification sent successfully for notification {notification_id} to {len(push_tokens)} devices")
+        logger.info(
+            "Push notification sent for notification %s to %s devices",
+            notification_id,
+            len(tokens),
+        )
 
     except Notification.DoesNotExist:
-        logger.error(f"Notification {notification_id} does not exist")
+        logger.warning("Push notification %s skipped: notification does not exist", notification_id)
         return
 
     except Exception as exc:
-        # Logger l'erreur
-        logger.error(f"Failed to send push notification for notification {notification_id}: {str(exc)}")
+        logger.exception("Push delivery failed for notification %s", notification_id)
 
-        # Enregistrer l'erreur dans la notification
+        # Enregistrer une erreur neutre (pas de détails techniques en base)
         try:
             notification = Notification.objects.get(id=notification_id)
-            notification.push_error = str(exc)[:500]  # Limiter taille erreur
+            notification.push_error = PUSH_ERROR_SEND_FAILED
             notification.save(update_fields=['push_error'])
         except Exception:
             pass
@@ -248,11 +276,11 @@ def cleanup_old_notifications():
 
     try:
         count = NotificationService.delete_old_notifications(days=90)
-        logger.info(f"Cleanup task: Deleted {count} old notifications")
+        logger.info("Cleanup task deleted %s old notifications", count)
         return f"Deleted {count} old notifications"
-    except Exception as exc:
-        logger.error(f"Cleanup task failed: {str(exc)}")
-        return f"Cleanup failed: {str(exc)}"
+    except Exception:
+        logger.error("Cleanup task failed")
+        return "Cleanup failed"
 
 
 @shared_task
@@ -273,21 +301,25 @@ def send_scheduled_notifications():
             is_sent=False
         )
 
-        count = 0
-        for notification in pending_notifications:
-            # Envoyer via les canaux appropriés
+        dispatched_ids = []
+        for notification in pending_notifications[:500]:
             if 'email' in notification.channels:
                 send_email_notification_task.delay(str(notification.id))
             if 'push' in notification.channels:
                 send_push_notification_task.delay(str(notification.id))
+            dispatched_ids.append(notification.id)
 
-            # Marquer comme envoyée
-            notification.mark_as_sent()
-            count += 1
+        # Batch UPDATE au lieu d'un UPDATE individuel par notification
+        if dispatched_ids:
+            Notification.objects.filter(id__in=dispatched_ids).update(
+                is_sent=True,
+                sent_at=timezone.now(),
+            )
+        count = len(dispatched_ids)
 
-        logger.info(f"Sent {count} scheduled notifications")
+        logger.info("Scheduled notifications task enqueued %s notifications", count)
         return f"Sent {count} scheduled notifications"
 
-    except Exception as exc:
-        logger.error(f"Send scheduled notifications task failed: {str(exc)}")
-        return f"Send scheduled failed: {str(exc)}"
+    except Exception:
+        logger.error("Send scheduled notifications task failed")
+        return "Send scheduled failed"

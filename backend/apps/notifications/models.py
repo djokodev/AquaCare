@@ -345,7 +345,7 @@ class NotificationPreference(models.Model):
         now = timezone.localtime(timezone.now()).time()
 
         if self.quiet_hours_start < self.quiet_hours_end:
-            # Plage normale (ex: 22:00 → 07:00 le lendemain)
+            # Plage simple ne traversant pas minuit (ex: 08:00 → 20:00)
             return self.quiet_hours_start <= now <= self.quiet_hours_end
         else:
             # Plage qui traverse minuit

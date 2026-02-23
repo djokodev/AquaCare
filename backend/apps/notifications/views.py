@@ -46,7 +46,7 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
         queryset = Notification.objects.filter(
             user=user,
             scheduled_for__lte=timezone.now()
-        ).select_related('user')
+        ).select_related('user').prefetch_related('content_type')
 
         # Filtres optionnels via query params
         is_read = self.request.query_params.get('is_read', None)
@@ -191,19 +191,23 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
         ```
         """
         user = request.user
+        now = timezone.now()
 
-        total_count = Notification.objects.filter(
+        # Combiner total et unread en un seul aggregate (2 requêtes au lieu de 3)
+        agg = Notification.objects.filter(
             user=user,
-            scheduled_for__lte=timezone.now()
-        ).count()
-
-        unread_count = NotificationService.get_unread_count(user)
+            scheduled_for__lte=now,
+        ).aggregate(
+            total_count=Count('id'),
+            unread_count=Count('id', filter=Q(is_read=False)),
+        )
+        total_count = agg['total_count']
+        unread_count = agg['unread_count']
         read_count = total_count - unread_count
 
-        # Comptage par type
         by_type = Notification.objects.filter(
             user=user,
-            scheduled_for__lte=timezone.now()
+            scheduled_for__lte=now,
         ).values('notification_type').annotate(
             count=Count('id')
         ).order_by('-count')
