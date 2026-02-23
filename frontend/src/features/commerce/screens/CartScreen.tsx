@@ -25,13 +25,18 @@ import { RootStackParamList } from '@/navigation/MainNavigator';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'Cart'>;
 
+interface AxiosApiError {
+  response?: { data?: { message?: string; error?: string; detail?: string } };
+  message?: string;
+}
+
 const extractErrorMessage = (error: unknown, fallback: string): string => {
-  const err = error as any;
+  if (typeof error === 'string') return error;
+  const err = error as AxiosApiError;
   const data = err?.response?.data;
   if (typeof data?.message === 'string') return data.message;
   if (typeof data?.error === 'string') return data.error;
   if (typeof data?.detail === 'string') return data.detail;
-  if (typeof err === 'string') return err;
   if (typeof err?.message === 'string') return err.message;
   return fallback;
 };
@@ -40,31 +45,8 @@ export default function CartScreen() {
   const { t } = useTranslation();
   const navigation = useNavigation<NavigationProp>();
   const dispatch = useDispatch<AppDispatch>();
-  const generateClientUuid = () => {
-    const cryptoObj = typeof globalThis !== 'undefined' ? (globalThis as any).crypto : undefined;
-    if (cryptoObj?.randomUUID) return cryptoObj.randomUUID();
-
-    const getRandomValues = cryptoObj?.getRandomValues?.bind(cryptoObj);
-    if (getRandomValues) {
-      const bytes = new Uint8Array(16);
-      getRandomValues(bytes);
-      bytes[6] = (bytes[6] & 0x0f) | 0x40;
-      bytes[8] = (bytes[8] & 0x3f) | 0x80;
-      const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0'));
-      return [
-        hex.slice(0, 4).join(''),
-        hex.slice(4, 6).join(''),
-        hex.slice(6, 8).join(''),
-        hex.slice(8, 10).join(''),
-        hex.slice(10, 16).join(''),
-      ].join('-');
-    }
-
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-      const r = Math.floor(Math.random() * 16);
-      const v = c === 'x' ? r : (r & 0x3) | 0x8;
-      return v.toString(16);
-    });
+  const generateClientUuid = (): string => {
+    return (globalThis.crypto as Crypto).randomUUID();
   };
 
   const { cart } = useSelector((state: RootState) => state.commerce);
@@ -195,7 +177,7 @@ export default function CartScreen() {
     const lineTotal = parseFloat(product.price_per_package) * quantity;
 
     return (
-      <View key={product.id} className="bg-white rounded-xl p-4 mb-3 shadow">
+      <View key={product.id} className="bg-white rounded-xl p-4 mb-3">
         <View className="w-14 h-14 bg-cream rounded-lg items-center justify-center mb-3">
           <Ionicons name="cube-outline" size={32} color={MAVECAM_COLORS.GREEN_PRIMARY} />
         </View>

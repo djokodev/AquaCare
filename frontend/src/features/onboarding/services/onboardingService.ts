@@ -5,6 +5,7 @@
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import logger from '@/utils/logger';
 
 /**
  * Service singleton pour gérer l'état d'onboarding
@@ -23,7 +24,7 @@ class OnboardingService {
       const value = await AsyncStorage.getItem(this.STORAGE_KEY);
       return value === 'true';
     } catch (error) {
-      console.error('[OnboardingService] Erreur lecture hasCompleted:', error);
+      logger.error('[OnboardingService] Erreur lecture hasCompleted:', error);
       // En cas d'erreur, on considère l'onboarding non complété
       return false;
     }
@@ -38,7 +39,7 @@ class OnboardingService {
     try {
       await AsyncStorage.setItem(this.STORAGE_KEY, 'true');
     } catch (error) {
-      console.error('[OnboardingService] Erreur écriture setCompleted:', error);
+      logger.error('[OnboardingService] Erreur écriture setCompleted:', error);
       throw error; // Remonter l'erreur pour gestion UI
     }
   }
@@ -52,7 +53,7 @@ class OnboardingService {
     try {
       await AsyncStorage.removeItem(this.STORAGE_KEY);
     } catch (error) {
-      console.error('[OnboardingService] Erreur reset:', error);
+      logger.error('[OnboardingService] Erreur reset:', error);
       throw error;
     }
   }

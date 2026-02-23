@@ -68,7 +68,7 @@ export default function OrdersHistoryScreen() {
 
     return (
       <TouchableOpacity
-        className="bg-white rounded-xl p-4 mb-3 shadow"
+        className="bg-white rounded-xl p-4 mb-3"
         onPress={() => toggleOrderExpansion(order.id)}
         activeOpacity={0.8}
       >
@@ -210,7 +210,7 @@ export default function OrdersHistoryScreen() {
     const avgOrderValue = parseFloat(statistics.average_order_value);
 
     return (
-      <View className="bg-white rounded-xl p-4 mb-4 shadow">
+      <View className="bg-white rounded-xl p-4 mb-4">
         <Text className="text-lg font-bold text-gray-dark mb-3">{t('orderStatistics')}</Text>
         <View className="flex-row flex-wrap gap-3">
           <View className="flex-1 min-w-[45%] bg-cream rounded-lg p-4 items-center">
@@ -309,6 +309,5 @@ export default function OrdersHistoryScreen() {
     </View>
   );
 }
-
 
 

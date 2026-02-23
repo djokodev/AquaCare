@@ -11,6 +11,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
+import { StackNavigationProp } from '@react-navigation/stack';
 import { useDispatch, useSelector } from 'react-redux';
 
 import { AppDispatch, RootState } from '@/store/store';
@@ -19,10 +20,13 @@ import { CycleSimulationParams, SimulatedFeedingPhase } from '@/types/commerce';
 import { MAVECAM_COLORS } from '@/constants/colors';
 import { CYCLE_SIMULATION_DEFAULTS } from '@/domain/commerce';
 import CustomPicker from '@/components/common/CustomPicker';
+import { RootStackParamList } from '@/navigation/MainNavigator';
+
+type NavigationProp = StackNavigationProp<RootStackParamList>;
 
 export default function CycleSimulatorScreen() {
   const { t } = useTranslation();
-  const navigation = useNavigation();
+  const navigation = useNavigation<NavigationProp>();
   const dispatch = useDispatch<AppDispatch>();
 
   const { simulation, cart, products } = useSelector((state: RootState) => state.commerce);
@@ -110,7 +114,7 @@ export default function CycleSimulatorScreen() {
     });
 
     Alert.alert(t('success'), t('simulationProductsAdded', { count: totalProducts }), [
-      { text: t('viewCart'), onPress: () => navigation.navigate('Cart' as never) },
+      { text: t('viewCart'), onPress: () => navigation.navigate('Cart') },
       { text: t('ok') },
     ]);
   };
@@ -130,7 +134,7 @@ export default function CycleSimulatorScreen() {
     const totalBags = phase.products.reduce((sum, p) => sum + p.quantity_bags, 0);
 
     return (
-      <View key={index} className="bg-white rounded-xl p-4 mb-3 shadow">
+      <View key={index} className="bg-white rounded-xl p-4 mb-3">
         <View className="flex-row items-center mb-3 gap-3">
           <View className="w-10 h-10 bg-cream rounded-full items-center justify-center">
             <Ionicons name="fast-food" size={20} color={MAVECAM_COLORS.GREEN_PRIMARY} />
@@ -193,10 +197,10 @@ export default function CycleSimulatorScreen() {
           <Text className="text-xl font-bold text-gray-dark">{t('cycleSimulator')}</Text>
           <Text className="text-xs text-gray-light mt-1">{t('predictROI')}</Text>
         </View>
-        <TouchableOpacity onPress={() => navigation.navigate('Cart' as never)} className="relative">
+        <TouchableOpacity onPress={() => navigation.navigate('Cart')} className="relative">
           <Ionicons name="cart-outline" size={24} color={MAVECAM_COLORS.GREEN_PRIMARY} />
           {cart.items.length > 0 && (
-            <View className="absolute -top-2 -right-2 bg-[#dc2626] rounded-full min-w-[20px] h-5 items-center justify-center px-1">
+            <View className="absolute -top-2 -right-2 rounded-full min-w-[20px] h-5 items-center justify-center px-1" style={{ backgroundColor: MAVECAM_COLORS.ERROR }}>
               <Text className="text-white text-[10px] font-bold">
                 {cart.items.reduce((sum, item) => sum + item.quantity, 0)}
               </Text>
@@ -337,7 +341,7 @@ export default function CycleSimulatorScreen() {
         {error && (
           <View className="bg-white px-4 py-4 mb-2 items-center gap-3">
             <Ionicons name="alert-circle-outline" size={32} color={MAVECAM_COLORS.ERROR} />
-            <Text className="text-sm text-[#dc2626] text-center">{error}</Text>
+            <Text className="text-sm text-center" style={{ color: MAVECAM_COLORS.ERROR }}>{error}</Text>
           </View>
         )}
 
@@ -346,28 +350,28 @@ export default function CycleSimulatorScreen() {
             <Text className="text-lg font-bold text-gray-dark mb-3">{t('simulationResults')}</Text>
 
             <View className="flex-row flex-wrap gap-3 mb-4">
-              <View className="flex-1 min-w-[45%] bg-white rounded-xl p-4 items-center shadow">
+              <View className="flex-1 min-w-[45%] bg-white rounded-xl p-4 items-center">
                 <Ionicons name="scale-outline" size={24} color={MAVECAM_COLORS.GREEN_PRIMARY} />
                 <Text className="text-lg font-bold text-mavecam-primary mt-2">
                   {simulationResult.summary.total_feed_kg.toLocaleString()}kg
                 </Text>
                 <Text className="text-xs text-gray-light mt-1 text-center">{t('totalFeed')}</Text>
               </View>
-              <View className="flex-1 min-w-[45%] bg-white rounded-xl p-4 items-center shadow">
+              <View className="flex-1 min-w-[45%] bg-white rounded-xl p-4 items-center">
                 <Ionicons name="wallet-outline" size={24} color={MAVECAM_COLORS.GREEN_PRIMARY} />
                 <Text className="text-lg font-bold text-mavecam-primary mt-2">
                   {simulationResult.summary.total_cost_fcfa.toLocaleString()}
                 </Text>
                 <Text className="text-xs text-gray-light mt-1 text-center">{t('feedCost')}</Text>
               </View>
-              <View className="flex-1 min-w-[45%] bg-white rounded-xl p-4 items-center shadow">
+              <View className="flex-1 min-w-[45%] bg-white rounded-xl p-4 items-center">
                 <Ionicons name="trending-up-outline" size={24} color={MAVECAM_COLORS.GREEN_PRIMARY} />
                 <Text className="text-lg font-bold text-mavecam-primary mt-2">
                   {simulationResult.summary.estimated_fcr.toFixed(1)}
                 </Text>
                 <Text className="text-xs text-gray-light mt-1 text-center">{t('estimatedFCR')}</Text>
               </View>
-              <View className="flex-1 min-w-[45%] bg-white rounded-xl p-4 items-center shadow">
+              <View className="flex-1 min-w-[45%] bg-white rounded-xl p-4 items-center">
                 <Ionicons name="heart-outline" size={24} color={MAVECAM_COLORS.GREEN_PRIMARY} />
                 <Text className="text-lg font-bold text-mavecam-primary mt-2">
                   {(simulationResult.summary.survival_rate * 100).toFixed(0)}%
@@ -376,7 +380,7 @@ export default function CycleSimulatorScreen() {
               </View>
             </View>
 
-            <View className="bg-white rounded-xl p-4 mb-4 shadow">
+            <View className="bg-white rounded-xl p-4 mb-4">
               <Text className="text-base font-bold text-gray-dark mb-3">{t('roi')}</Text>
               <View className="gap-3">
                 <View className="flex-row justify-between items-center">
@@ -425,7 +429,7 @@ export default function CycleSimulatorScreen() {
 
       {loading && (
         <View className="absolute inset-0 bg-black/10 items-center justify-center">
-          <View className="bg-white px-4 py-3 rounded-lg shadow flex-row items-center gap-3">
+          <View className="bg-white px-4 py-3 rounded-lg flex-row items-center gap-3">
             <ActivityIndicator size="small" color={MAVECAM_COLORS.GREEN_PRIMARY} />
             <Text className="text-base text-gray-dark">{t('loading')}</Text>
           </View>
@@ -434,6 +438,5 @@ export default function CycleSimulatorScreen() {
     </View>
   );
 }
-
 
 

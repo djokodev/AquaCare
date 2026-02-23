@@ -94,7 +94,7 @@ export default function ProductCatalogScreen() {
 
   const renderProductCard = ({ item }: { item: Product }) => (
     <TouchableOpacity
-      className="bg-white rounded-xl p-4 flex-row shadow-sm"
+      className="bg-white rounded-xl p-4 flex-row"
       onPress={() => handleProductPress(item)}
       activeOpacity={0.7}
     >
@@ -297,7 +297,6 @@ export default function ProductCatalogScreen() {
     </View>
   );
 }
-
 
 
 

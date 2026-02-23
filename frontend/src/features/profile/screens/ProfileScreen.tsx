@@ -212,7 +212,7 @@ export default function ProfileScreen({ navigation }: Props) {
             <Ionicons name={isEditing ? "close" : "pencil"} size={20} color={MAVECAM_COLORS.GREEN_PRIMARY} />
           </TouchableOpacity>
         </View>
-        <View className="bg-white rounded-xl p-4 shadow">
+        <View className="bg-white rounded-xl p-4">
           <InfoRow label={t("phoneNumber") || ""} value={user.phone_number} editable={false} />
           <InfoRow
             label={t("email") || ""}
@@ -252,7 +252,7 @@ export default function ProfileScreen({ navigation }: Props) {
 
       <View className="px-5 py-3">
         <Text className="text-lg font-bold text-gray-dark mb-3">{t("location")}</Text>
-        <View className="bg-white rounded-xl p-4 shadow">
+        <View className="bg-white rounded-xl p-4">
           {user.region && <InfoRow label={t("region") || ""} value={user.region} editable={false} />}
           <LocationSelector value={locationData} onChange={handleLocationChange} userRegion={user?.region} editable={isEditing} />
 
@@ -290,7 +290,7 @@ export default function ProfileScreen({ navigation }: Props) {
       {farmProfile && (
         <View className="px-5 py-3">
           <Text className="text-lg font-bold text-gray-dark mb-3">{t("farmInfo")}</Text>
-          <View className="bg-white rounded-xl p-4 shadow">
+          <View className="bg-white rounded-xl p-4">
             <InfoRow label={t("farmName") || ""} value={formatFarmName(farmProfile.farm_name)} editable={false} icon="business" />
             <InfoRow label={t("totalPonds") || ""} value={activeCycles.length.toString()} editable={false} icon="water" />
             {farmProfile.total_area_m2 && (
@@ -321,7 +321,7 @@ export default function ProfileScreen({ navigation }: Props) {
 
       <View className="px-5 py-3">
         <Text className="text-lg font-bold text-gray-dark mb-3">{t("preferences")}</Text>
-        <View className="bg-white rounded-xl p-4 shadow">
+        <View className="bg-white rounded-xl p-4">
           <InfoRow
             icon="language"
             label={t("preferredLanguage") || ""}
@@ -350,13 +350,13 @@ export default function ProfileScreen({ navigation }: Props) {
       )}
 
       <View className="px-5 pb-8">
-        <TouchableOpacity className="bg-white flex-row items-center p-4 rounded-xl shadow mb-3" onPress={() => navigation.navigate("FarmProfile")}>
+        <TouchableOpacity className="bg-white flex-row items-center p-4 rounded-xl mb-3" onPress={() => navigation.navigate("FarmProfile")}>
           <Ionicons name="analytics" size={20} color={MAVECAM_COLORS.GREEN_PRIMARY} />
           <Text className="text-base font-semibold text-gray-dark flex-1 ml-3">{t("farmManagement")}</Text>
           <Ionicons name="chevron-forward" size={20} color={MAVECAM_COLORS.GRAY_LIGHT} />
         </TouchableOpacity>
 
-        <TouchableOpacity className="bg-white flex-row items-center p-4 rounded-xl shadow mb-3" onPress={() => navigation.navigate("Settings")}>
+        <TouchableOpacity className="bg-white flex-row items-center p-4 rounded-xl mb-3" onPress={() => navigation.navigate("Settings")}>
           <Ionicons name="settings" size={20} color={MAVECAM_COLORS.GREEN_PRIMARY} />
           <Text className="text-base font-semibold text-gray-dark flex-1 ml-3">{t("settings")}</Text>
           <Ionicons name="chevron-forward" size={20} color={MAVECAM_COLORS.GRAY_LIGHT} />

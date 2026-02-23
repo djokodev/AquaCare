@@ -11,16 +11,20 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
+import { StackNavigationProp } from '@react-navigation/stack';
 import { useDispatch, useSelector } from 'react-redux';
 
 import { AppDispatch, RootState } from '@/store/store';
 import { fetchFeedingSuggestions, addToCart } from '@/features/commerce/store/commerceSlice';
 import { CycleSuggestion, FeedingPhase, SuggestedProduct } from '@/types/commerce';
 import { MAVECAM_COLORS } from '@/constants/colors';
+import { RootStackParamList } from '@/navigation/MainNavigator';
+
+type NavigationProp = StackNavigationProp<RootStackParamList>;
 
 export default function FeedingSuggestionsScreen() {
   const { t } = useTranslation();
-  const navigation = useNavigation();
+  const navigation = useNavigation<NavigationProp>();
   const dispatch = useDispatch<AppDispatch>();
 
   const { suggestions, cart, products } = useSelector((state: RootState) => state.commerce);
@@ -82,7 +86,7 @@ export default function FeedingSuggestionsScreen() {
       t('success'),
       t('cycleProductsAddedToCart', { count: totalProducts, cycleName: cycle.cycle_name }),
       [
-        { text: t('viewCart'), onPress: () => navigation.navigate('Cart' as never) },
+        { text: t('viewCart'), onPress: () => navigation.navigate('Cart') },
         { text: t('ok') },
       ]
     );
@@ -100,7 +104,7 @@ export default function FeedingSuggestionsScreen() {
         : MAVECAM_COLORS.ERROR;
 
     return (
-      <View className="bg-white rounded-xl p-4 mb-4 shadow">
+      <View className="bg-white rounded-xl p-4 mb-4">
         <View className="flex-row items-center mb-3 gap-2">
           <Ionicons name="analytics-outline" size={24} color={scoreColor} />
           <Text className="text-base font-bold text-gray-dark">{t('dataQuality')}</Text>
@@ -220,7 +224,7 @@ export default function FeedingSuggestionsScreen() {
     const isExpanded = expandedCycleId === cycle.cycle_id;
 
     return (
-      <View className="bg-white rounded-xl p-4 mb-4 shadow">
+      <View className="bg-white rounded-xl p-4 mb-4">
         <TouchableOpacity
           className="flex-row items-center justify-between"
           onPress={() => toggleCycleExpansion(cycle.cycle_id)}
@@ -289,7 +293,7 @@ export default function FeedingSuggestionsScreen() {
       <Text className="mt-3 text-base text-gray-light text-center px-8">{t('noSuggestionsDescription')}</Text>
       <TouchableOpacity
         className="mt-6 bg-mavecam-primary flex-row items-center px-6 py-3 rounded-lg gap-2"
-        onPress={() => navigation.navigate('NewCycle' as never)}
+        onPress={() => navigation.navigate('NewCycle')}
       >
         <Ionicons name="add-circle-outline" size={20} color={MAVECAM_COLORS.WHITE} />
         <Text className="text-white text-base font-semibold">{t('startNewCycle')}</Text>
@@ -307,7 +311,7 @@ export default function FeedingSuggestionsScreen() {
           <Text className="text-xl font-bold text-gray-dark">{t('feedingSuggestions')}</Text>
           <Text className="text-xs text-gray-light mt-1">{t('intelligentRecommendations')}</Text>
         </View>
-        <TouchableOpacity onPress={() => navigation.navigate('Cart' as never)} className="relative">
+        <TouchableOpacity onPress={() => navigation.navigate('Cart')} className="relative">
           <Ionicons name="cart-outline" size={24} color={MAVECAM_COLORS.GREEN_PRIMARY} />
           {cart.items.length > 0 && (
             <View className="absolute -top-2 -right-2 bg-[#dc2626] rounded-full min-w-[20px] h-5 items-center justify-center px-1">
@@ -371,7 +375,6 @@ export default function FeedingSuggestionsScreen() {
     </View>
   );
 }
-
 
 
 

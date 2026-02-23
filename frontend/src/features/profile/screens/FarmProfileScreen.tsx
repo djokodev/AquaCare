@@ -164,7 +164,7 @@ export default function FarmProfileScreen() {
             <Ionicons name={isEditing ? "close" : "pencil"} size={20} color={MAVECAM_COLORS.GREEN_PRIMARY} />
           </TouchableOpacity>
         </View>
-        <View className="bg-white rounded-xl p-4 shadow">
+        <View className="bg-white rounded-xl p-4">
           <FarmInfoRow
             label={t("farmName") || ""}
             value={isEditing ? undefined : formatFarmName(farmProfile.farm_name) || t("notProvided")}
@@ -175,7 +175,7 @@ export default function FarmProfileScreen() {
           />
           <FarmInfoRow
             label={t("totalPonds") || ""}
-            value={isEditing ? undefined : activeCycles.length.toString()}
+            value={isEditing ? undefined : (farmProfile.total_ponds ?? 0).toString()}
             editable={isEditing}
             onChangeText={(value) => setEditData((prev) => ({ ...prev, total_ponds: parseInt(value, 10) || 0 }))}
             inputValue={editData.total_ponds?.toString()}
@@ -235,7 +235,7 @@ export default function FarmProfileScreen() {
               const cycleDuration = cycle.species === "clarias" ? 120 : 180;
 
               return (
-                <View key={cycle.id} className="bg-white rounded-xl p-4 shadow border-l-4 border-l-mavecam-primary">
+                <View key={cycle.id} className="bg-white rounded-xl p-4 border-l-4 border-l-mavecam-primary">
                   <View className="flex-row items-center justify-between mb-3">
                     <Text className="text-base font-bold text-gray-dark flex-1" numberOfLines={1}>
                       {cycle.cycle_name}

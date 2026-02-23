@@ -22,6 +22,7 @@ import commerceReducer, {
   fetchDeliveryFeePreview,
 } from '../commerceSlice';
 import commerceApi from '@/features/commerce/services/commerceApi';
+import { Product, Order } from '@/types/commerce';
 
 jest.mock('@/features/commerce/services/commerceApi', () => ({
   __esModule: true,
@@ -42,35 +43,55 @@ jest.mock('@/features/commerce/services/commerceApi', () => ({
 describe('features/commerce/store/commerceSlice', () => {
   const mockApi = commerceApi as jest.Mocked<typeof commerceApi>;
 
-  const productA = {
+  const productA: Product = {
     id: 'prod-1',
+    brand: 'aller_aqua',
     name: 'Aliment Tilapia 2mm',
-    brand: 'MAVECAM',
-    species: ['tilapia'],
-    growth_stage: 'juvenile',
-    package_size_kg: 15,
-    price_per_bag: 25000,
-    in_stock: true,
-  } as any;
+    species: 'tilapia',
+    phase: 'juvenile',
+    pellet_size_mm: '2.0',
+    protein_percentage: 45,
+    lipid_percentage: 12,
+    package_weight_kg: 15,
+    price_per_package: '25000',
+    price_per_kg: '1667',
+    is_available: true,
+    created_at: '2026-02-20T00:00:00Z',
+    updated_at: '2026-02-20T00:00:00Z',
+  };
 
-  const productB = {
+  const productB: Product = {
     ...productA,
     id: 'prod-2',
     name: 'Aliment Catfish 3mm',
-    species: ['catfish'],
-  } as any;
+    species: 'catfish',
+    pellet_size_mm: '3.0',
+  };
 
-  const orderA = {
+  const orderA: Order = {
     id: 'order-1',
-    order_number: 'ORD-001',
-    status: 'pending',
+    order_number: 'ORD-20260220-0001',
+    status: 'confirmed',
+    user: 'user-uuid-1',
+    user_name: 'Test User',
+    farm_profile: 'farm-uuid-1',
+    farm_name: 'Test Farm',
     delivery_method: 'home',
+    delivery_name: 'Test User',
+    delivery_phone: '+237652000000',
+    delivery_region: 'littoral',
+    delivery_city: 'Douala',
+    delivery_full_address: 'Littoral, Wouri, Douala, Akwa',
+    subtotal: '50000',
+    delivery_fee: '3000',
+    total: '53000',
+    total_bags: 2,
+    is_free_delivery: false,
     items: [],
-    subtotal: 50000,
-    delivery_fee: 3000,
-    total_amount: 53000,
+    created_offline: false,
     created_at: '2026-02-20T10:00:00Z',
-  } as any;
+    updated_at: '2026-02-20T10:00:00Z',
+  };
 
   const createStore = () =>
     configureStore({
