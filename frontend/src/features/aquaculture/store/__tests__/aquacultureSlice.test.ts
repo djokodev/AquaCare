@@ -1,0 +1,398 @@
+import { configureStore } from '@reduxjs/toolkit';
+import aquacultureReducer, {
+  clearError,
+  setCurrentCycle,
+  addToPendingSync,
+  clearPendingSync,
+  updateLastSyncTime,
+  resetAquacultureState,
+  updateProductionCycle,
+  deleteProductionCycle,
+  generateFeedingPlan,
+  fetchDashboardData,
+  fetchFeedingPlans,
+  harvestCycle,
+  synchronizeData,
+} from '../aquacultureSlice';
+import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
+import { AquacultureState, ProductionCycle, SyncResponse } from '@/types/aquaculture';
+
+jest.mock('@/features/aquaculture/services/aquacultureService', () => ({
+  aquacultureService: {
+    getDashboardData: jest.fn(),
+    getProductionCycles: jest.fn(),
+    getProductionCycle: jest.fn(),
+    createProductionCycle: jest.fn(),
+    updateProductionCycle: jest.fn(),
+    deleteProductionCycle: jest.fn(),
+    harvestCycle: jest.fn(),
+    getCycleLogs: jest.fn(),
+    createCycleLog: jest.fn(),
+    updateCycleLog: jest.fn(),
+    deleteCycleLog: jest.fn(),
+    getFeedingPlans: jest.fn(),
+    generateFeedingPlan: jest.fn(),
+    getSanitaryLogs: jest.fn(),
+    createSanitaryLog: jest.fn(),
+    resolveSanitaryIssue: jest.fn(),
+    synchronize: jest.fn(),
+  },
+}));
+
+describe('features/aquaculture/store/aquacultureSlice', () => {
+  const mockService = aquacultureService as jest.Mocked<typeof aquacultureService>;
+
+  const activeCycle: ProductionCycle = {
+    id: 'cycle-1',
+    farm_profile: 'farm-1',
+    cycle_name: 'Cycle A',
+    species: 'tilapia',
+    pond_identifier: 'P1',
+    pond_surface_m2: 100,
+    start_date: '2026-01-01',
+    initial_count: 1000,
+    initial_average_weight: 10,
+    initial_biomass: 10,
+    current_count: 900,
+    current_average_weight: 100,
+    current_biomass: 90,
+    total_feed_consumed: 120,
+    status: 'active',
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-02T00:00:00Z',
+  };
+
+  const createStore = (preloadedState?: Partial<AquacultureState>) => {
+    const initial = aquacultureReducer(undefined, { type: '@@INIT' }) as AquacultureState;
+    return configureStore({
+      reducer: { aquaculture: aquacultureReducer },
+      preloadedState: {
+        aquaculture: {
+          ...initial,
+          ...preloadedState,
+        },
+      },
+    });
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('clearError efface l\'erreur', () => {
+    const state = {
+      ...(aquacultureReducer(undefined, { type: '@@INIT' }) as AquacultureState),
+      error: 'Erreur test',
+    };
+
+    const nextState = aquacultureReducer(state, clearError());
+
+    expect(nextState.error).toBeNull();
+  });
+
+  it('setCurrentCycle met a jour le cycle courant', () => {
+    const state = aquacultureReducer(undefined, setCurrentCycle(activeCycle));
+    expect(state.currentCycle?.id).toBe('cycle-1');
+  });
+
+  it('updateLastSyncTime et resetAquacultureState restaurent un etat propre', () => {
+    let state = aquacultureReducer(undefined, updateLastSyncTime('2026-02-19T10:00:00Z'));
+    expect(state.lastSyncTime).toBe('2026-02-19T10:00:00Z');
+
+    state = aquacultureReducer(state, resetAquacultureState());
+    expect(state.lastSyncTime).toBeUndefined();
+    expect(state.cycles).toHaveLength(0);
+    expect(state.error).toBeNull();
+  });
+
+  it('addToPendingSync ajoute les donnees selon le type', () => {
+    let state = aquacultureReducer(undefined, addToPendingSync({ type: 'cycleLogs', data: { id: 'log-1' } }));
+    state = aquacultureReducer(state, addToPendingSync({ type: 'sanitaryLogs', data: { id: 'san-1' } }));
+    state = aquacultureReducer(state, addToPendingSync({ type: 'newCycles', data: { id: 'new-cycle-1' } }));
+
+    expect(state.pendingSync.cycleLogs).toHaveLength(1);
+    expect(state.pendingSync.sanitaryLogs).toHaveLength(1);
+    expect(state.pendingSync.newCycles).toHaveLength(1);
+
+    const cleared = aquacultureReducer(state, clearPendingSync());
+    expect(cleared.pendingSync.cycleLogs).toHaveLength(0);
+    expect(cleared.pendingSync.sanitaryLogs).toHaveLength(0);
+    expect(cleared.pendingSync.newCycles).toHaveLength(0);
+  });
+
+  it('harvestCycle.fulfilled retire le cycle des actifs et met a jour le cycle courant', () => {
+    const initialState: AquacultureState = {
+      ...(aquacultureReducer(undefined, { type: '@@INIT' }) as AquacultureState),
+      cycles: [activeCycle],
+      activeCycles: [activeCycle],
+      currentCycle: activeCycle,
+    };
+
+    const harvestedCycle: ProductionCycle = { ...activeCycle, status: 'harvested', end_date: '2026-05-01' };
+
+    const action = harvestCycle.fulfilled(
+      harvestedCycle,
+      'request-id',
+      {
+        id: 'cycle-1',
+        harvestData: {
+          harvest_date: '2026-05-01',
+          final_count: 850,
+          final_average_weight: 250,
+          total_harvested_weight: 212.5,
+        },
+      }
+    );
+
+    const nextState = aquacultureReducer(initialState, action);
+
+    expect(nextState.cycles[0].status).toBe('harvested');
+    expect(nextState.activeCycles).toHaveLength(0);
+    expect(nextState.currentCycle?.status).toBe('harvested');
+  });
+
+  it('updateProductionCycle.fulfilled retire un cycle des actifs si son statut change', () => {
+    const initialState: AquacultureState = {
+      ...(aquacultureReducer(undefined, { type: '@@INIT' }) as AquacultureState),
+      cycles: [activeCycle],
+      activeCycles: [activeCycle],
+      currentCycle: activeCycle,
+    };
+
+    const updatedCycle: ProductionCycle = { ...activeCycle, status: 'harvested' };
+
+    const action = updateProductionCycle.fulfilled(
+      updatedCycle,
+      'request-id',
+      { id: activeCycle.id, data: { status: 'harvested' } }
+    );
+    const nextState = aquacultureReducer(initialState, action);
+
+    expect(nextState.activeCycles).toHaveLength(0);
+    expect(nextState.currentCycle?.status).toBe('harvested');
+  });
+
+  it('deleteProductionCycle.fulfilled supprime le cycle et nettoie currentCycle', () => {
+    const initialState: AquacultureState = {
+      ...(aquacultureReducer(undefined, { type: '@@INIT' }) as AquacultureState),
+      cycles: [activeCycle],
+      activeCycles: [activeCycle],
+      currentCycle: activeCycle,
+    };
+
+    const action = deleteProductionCycle.fulfilled(activeCycle.id, 'request-id', activeCycle.id);
+    const nextState = aquacultureReducer(initialState, action);
+
+    expect(nextState.cycles).toHaveLength(0);
+    expect(nextState.activeCycles).toHaveLength(0);
+    expect(nextState.currentCycle).toBeUndefined();
+  });
+
+  it('generateFeedingPlan.fulfilled met a jour un plan existant et ajoute un nouveau', () => {
+    const existingPlan = {
+      id: 'plan-1',
+      cycle: 'cycle-1',
+      week_number: 1,
+      estimated_fish_count: 100,
+      average_weight: 40,
+      biomass: 4,
+      daily_feed_amount: 0.2,
+      feeding_rate: 5,
+      meals_per_day: 2,
+      feed_per_meal: 0.1,
+      recommended_feed: 'initial',
+      protein_percentage: 30,
+      start_date: '2026-01-01',
+      end_date: '2026-01-07',
+      is_active: true,
+      created_at: '2026-01-01T00:00:00Z',
+    };
+
+    const initialState: AquacultureState = {
+      ...(aquacultureReducer(undefined, { type: '@@INIT' }) as AquacultureState),
+      feedingPlans: [existingPlan],
+    };
+
+    const action = generateFeedingPlan.fulfilled(
+      [
+        { ...existingPlan, recommended_feed: 'updated' },
+        { ...existingPlan, id: 'plan-2', week_number: 2, recommended_feed: 'new' },
+      ],
+      'request-id',
+      { cycleId: 'cycle-1' }
+    );
+
+    const nextState = aquacultureReducer(initialState, action);
+    expect(nextState.feedingPlans).toHaveLength(2);
+    expect(nextState.feedingPlans.find((plan) => plan.id === 'plan-1')?.recommended_feed).toBe('updated');
+    expect(nextState.feedingPlans.some((plan) => plan.id === 'plan-2')).toBe(true);
+  });
+
+  it('synchronizeData.fulfilled merge les updates serveur et nettoie pendingSync en succes', () => {
+    const initialState: AquacultureState = {
+      ...(aquacultureReducer(undefined, { type: '@@INIT' }) as AquacultureState),
+      pendingSync: {
+        cycleLogs: [{ id: 'local-log' }],
+        sanitaryLogs: [{ id: 'local-san' }],
+        newCycles: [{ id: 'local-cycle' }],
+      },
+      cycles: [{ ...activeCycle, id: 'existing-cycle' }],
+      cycleLogs: [{ id: 'existing-log', cycle: 'existing-cycle', log_date: '2026-01-01', created_offline: false, created_at: '2026-01-01T00:00:00Z' }],
+      feedingPlans: [{
+        id: 'existing-plan',
+        cycle: 'existing-cycle',
+        week_number: 1,
+        estimated_fish_count: 100,
+        average_weight: 40,
+        biomass: 4,
+        daily_feed_amount: 0.2,
+        feeding_rate: 5,
+        meals_per_day: 2,
+        feed_per_meal: 0.1,
+        recommended_feed: 'test',
+        protein_percentage: 30,
+        start_date: '2026-01-01',
+        end_date: '2026-01-07',
+        is_active: true,
+        created_at: '2026-01-01T00:00:00Z',
+      }],
+      sanitaryLogs: [{ id: 'existing-san', cycle: 'existing-cycle', event_date: '2026-01-01', event_type: 'other', symptoms: 'ok', resolved: false, created_at: '2026-01-01T00:00:00Z', created_offline: false }],
+    };
+
+    const response: SyncResponse = {
+      status: 'success',
+      timestamp: '2026-02-19T12:00:00Z',
+      processed: {
+        cycles: 1,
+        cycle_logs: 1,
+        sanitary_logs: 1,
+      },
+      errors: [],
+      server_updates: {
+        cycles: [{ ...activeCycle, id: 'server-cycle' }],
+        cycle_logs: [{ id: 'server-log', cycle: 'server-cycle', log_date: '2026-02-01', created_offline: false, created_at: '2026-02-01T00:00:00Z' }],
+        feeding_plans: [{
+          id: 'server-plan',
+          cycle: 'server-cycle',
+          week_number: 1,
+          estimated_fish_count: 100,
+          average_weight: 40,
+          biomass: 4,
+          daily_feed_amount: 0.2,
+          feeding_rate: 5,
+          meals_per_day: 2,
+          feed_per_meal: 0.1,
+          recommended_feed: 'test',
+          protein_percentage: 30,
+          start_date: '2026-02-01',
+          end_date: '2026-02-07',
+          is_active: true,
+          created_at: '2026-02-01T00:00:00Z',
+        }],
+        sanitary_logs: [{ id: 'server-san', cycle: 'server-cycle', event_date: '2026-02-01', event_type: 'other', symptoms: 'ok', resolved: false, created_at: '2026-02-01T00:00:00Z', created_offline: false }],
+      },
+    };
+
+    const action = synchronizeData.fulfilled(response, 'request-id', undefined);
+    const nextState = aquacultureReducer(initialState, action);
+
+    expect(nextState.pendingSync.cycleLogs).toHaveLength(0);
+    expect(nextState.pendingSync.sanitaryLogs).toHaveLength(0);
+    expect(nextState.pendingSync.newCycles).toHaveLength(0);
+    expect(nextState.lastSyncTime).toBe('2026-02-19T12:00:00Z');
+
+    expect(nextState.cycles.some((cycle) => cycle.id === 'server-cycle')).toBe(true);
+    expect(nextState.cycleLogs.some((log) => log.id === 'server-log')).toBe(true);
+    expect(nextState.feedingPlans.some((plan) => plan.id === 'server-plan')).toBe(true);
+    expect(nextState.sanitaryLogs.some((log) => log.id === 'server-san')).toBe(true);
+  });
+
+  it('fetchFeedingPlans rejette si cycleId absent', async () => {
+    const store = createStore();
+
+    const action = await store.dispatch(fetchFeedingPlans(undefined));
+
+    expect(action.type).toBe('aquaculture/fetchFeedingPlans/rejected');
+    expect(action.payload).toBe('ID de cycle requis');
+    expect(mockService.getFeedingPlans).not.toHaveBeenCalled();
+  });
+
+  it('fetchDashboardData propage detail depuis erreur API', async () => {
+    const store = createStore();
+    mockService.getDashboardData.mockRejectedValueOnce({ response: { data: { detail: 'Dashboard indisponible' } } });
+
+    const action = await store.dispatch(fetchDashboardData());
+
+    expect(action.type).toBe('aquaculture/fetchDashboardData/rejected');
+    expect(action.payload).toBe('Dashboard indisponible');
+  });
+
+  it('fetchDashboardData utilise la chaine brute de l\'API si disponible', async () => {
+    const store = createStore();
+    mockService.getDashboardData.mockRejectedValueOnce({ response: { data: 'Service indisponible' } });
+
+    const action = await store.dispatch(fetchDashboardData());
+
+    expect(action.type).toBe('aquaculture/fetchDashboardData/rejected');
+    expect(action.payload).toBe('Service indisponible');
+  });
+
+  it('fetchDashboardData fallback sur error.message puis message par defaut', async () => {
+    const store = createStore();
+    mockService.getDashboardData.mockRejectedValueOnce({ message: 'Erreur réseau temporaire' });
+    const withMessage = await store.dispatch(fetchDashboardData());
+
+    expect(withMessage.payload).toBe('Erreur réseau temporaire');
+
+    mockService.getDashboardData.mockRejectedValueOnce(null);
+    const fallback = await store.dispatch(fetchDashboardData());
+    expect(fallback.payload).toBe('Erreur lors du chargement du dashboard');
+  });
+
+  it('synchronizeData envoie le payload attendu et met a jour le store', async () => {
+    const store = createStore({
+      pendingSync: {
+        cycleLogs: [{ id: 'pending-log' }],
+        sanitaryLogs: [{ id: 'pending-san' }],
+        newCycles: [{ id: 'pending-cycle' }],
+      },
+      lastSyncTime: '2026-02-18T00:00:00Z',
+    });
+
+    const syncResponse: SyncResponse = {
+      status: 'success',
+      timestamp: '2026-02-19T18:00:00Z',
+      processed: { cycles: 1, cycle_logs: 1, sanitary_logs: 1 },
+      errors: [],
+      server_updates: { cycles: [], cycle_logs: [], feeding_plans: [] },
+    };
+
+    mockService.synchronize.mockResolvedValueOnce(syncResponse);
+
+    const action = await store.dispatch(synchronizeData());
+
+    expect(action.type).toBe('aquaculture/synchronizeData/fulfilled');
+    expect(mockService.synchronize).toHaveBeenCalledWith({
+      cycle_logs: [{ id: 'pending-log' }],
+      sanitary_logs: [{ id: 'pending-san' }],
+      new_cycles: [{ id: 'pending-cycle' }],
+      last_sync: '2026-02-18T00:00:00Z',
+      device_id: 'mobile-app',
+    });
+
+    const state = store.getState().aquaculture;
+    expect(state.lastSyncTime).toBe('2026-02-19T18:00:00Z');
+    expect(state.pendingSync.cycleLogs).toHaveLength(0);
+  });
+
+  it('synchronizeData.rejected remonte l\'erreur et coupe loading.sync', async () => {
+    const store = createStore();
+    mockService.synchronize.mockRejectedValueOnce({ response: { data: { message: 'Sync impossible' } } });
+
+    await store.dispatch(synchronizeData());
+
+    const state = store.getState().aquaculture;
+    expect(state.loading.sync).toBe(false);
+    expect(state.error).toBe('Sync impossible');
+  });
+});
