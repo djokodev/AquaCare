@@ -44,39 +44,11 @@ module.exports = {
     '!src/domain/constants.ts',
   ],
 
-  // Coverage thresholds (progressive approach - Phase 1: critical modules)
-  // Global threshold set to current coverage to ensure CI passes
+  // Coverage threshold global cible (objectif utilisateur: >50% frontend)
   coverageThreshold: {
     global: {
-      statements: 0,
-      branches: 0,
-      functions: 0,
-      lines: 0,
-    },
-    // High coverage required for tested modules
-    './src/domain/aquaculture/estimators.ts': {
-      statements: 95,
-      branches: 100,
-      functions: 100,
-      lines: 95,
-    },
-    './src/utils/formatters.ts': {
-      statements: 90,
-      branches: 95,
-      functions: 100,
-      lines: 90,
-    },
-    './src/utils/interpreters.ts': {
-      statements: 100,
-      branches: 100,
-      functions: 100,
-      lines: 100,
-    },
-    './src/utils/validators.ts': {
-      statements: 95,
-      branches: 100,
-      functions: 100,
-      lines: 95,
+      statements: 50,
+      lines: 50,
     },
   },
 

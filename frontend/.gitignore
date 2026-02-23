@@ -1,4 +1,5 @@
 /node_modules
+.expo/
 README.md
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -216,4 +217,3 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
-

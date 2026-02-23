@@ -17,7 +17,8 @@
     },
     "plugins": [
       "expo-secure-store",
-      "expo-localization"
+      "expo-localization",
+      "expo-font"
     ],
     "extra": {
       "apiUrl": "http://172.20.10.2:8000/api"
