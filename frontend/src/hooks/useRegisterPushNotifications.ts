@@ -6,6 +6,7 @@ import * as Application from 'expo-application';
 import Constants from 'expo-constants';
 
 import { notificationsService } from '@/services/notificationsService';
+import logger from '@/utils/logger';
 
 /**
  * Enregistre automatiquement le token push Expo pour l'utilisateur connecté.
@@ -69,7 +70,7 @@ export const useRegisterPushNotifications = () => {
         platform,
       });
     } catch (error) {
-      console.warn('Push token registration failed', error);
+      logger.warn('Push token registration failed', error);
     } finally {
       isRegistering.current = false;
     }

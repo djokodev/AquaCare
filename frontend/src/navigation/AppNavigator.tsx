@@ -8,6 +8,7 @@ import MainNavigator from './MainNavigator';
 import { LoadingScreen } from '@/features/main';
 import OnboardingService from '@/features/onboarding/services/onboardingService';
 import OnboardingScreen from '@/features/onboarding/screens/OnboardingScreen';
+import logger from '@/utils/logger';
 
 type AppStackParamList = {
   Auth: undefined;
@@ -37,7 +38,7 @@ export default function AppNavigator() {
         const completed = await OnboardingService.hasCompleted();
         setHasCompletedOnboarding(completed);
       } catch (error) {
-        console.error('[AppNavigator] Erreur checkOnboarding:', error);
+        logger.error('[AppNavigator] Erreur checkOnboarding:', error);
         setHasCompletedOnboarding(true); // Failsafe : ne pas bloquer
       } finally {
         setIsCheckingOnboarding(false);

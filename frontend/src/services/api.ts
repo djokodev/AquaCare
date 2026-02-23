@@ -2,6 +2,7 @@
 import * as SecureStore from 'expo-secure-store';
 
 import { API_CONFIG, STORAGE_KEYS } from '@/constants/api';
+import logger from '@/utils/logger';
 
 // Event listener pour la dÃ©connexion automatique
 type LogoutCallback = () => void;
@@ -33,7 +34,7 @@ class ApiService {
             config.headers.Authorization = `Bearer ${token}`;
           }
         } catch (error) {
-          console.warn('Erreur lors de la rÃ©cupÃ©ration du token:', error);
+          logger.warn('Erreur lors de la rÃ©cupÃ©ration du token:', error);
         }
         return config;
       },
@@ -99,7 +100,7 @@ class ApiService {
       await SecureStore.deleteItemAsync(STORAGE_KEYS.REFRESH_TOKEN);
       await SecureStore.deleteItemAsync(STORAGE_KEYS.USER_DATA);
     } catch (error) {
-      console.warn('Erreur lors de la suppression des tokens:', error);
+      logger.warn('Erreur lors de la suppression des tokens:', error);
     }
   }
 

@@ -1,6 +1,7 @@
 ﻿import AsyncStorage from '@react-native-async-storage/async-storage';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
 import { DailyLogForm, CreateCycleForm, SanitaryLogForm } from '@/types/aquaculture';
+import logger from '@/utils/logger';
 
 /**
  * Service de gestion des donnÃ©es offline pour MAVECAM AquaCare
@@ -74,11 +75,11 @@ class OfflineService {
         JSON.stringify(updatedLogs)
       );
 
-      console.log('ðŸ“± Log sauvegardÃ© offline:', logId);
+      logger.log('ðŸ“± Log sauvegardÃ© offline:', logId);
       return logId;
 
     } catch (error) {
-      console.error('âŒ Erreur sauvegarde offline:', error);
+      logger.error('âŒ Erreur sauvegarde offline:', error);
       throw new Error('Impossible de sauvegarder en local');
     }
   }
@@ -91,7 +92,7 @@ class OfflineService {
       const stored = await AsyncStorage.getItem(STORAGE_KEYS.OFFLINE_CYCLE_LOGS);
       return stored ? JSON.parse(stored) : [];
     } catch (error) {
-      console.error('âŒ Erreur lecture logs offline:', error);
+      logger.error('âŒ Erreur lecture logs offline:', error);
       return [];
     }
   }
@@ -111,11 +112,11 @@ class OfflineService {
     const pendingLogs = await this.getPendingSyncLogs();
 
     if (pendingLogs.length === 0) {
-      console.log('âœ… Aucun log Ã  synchroniser');
+      logger.log('âœ… Aucun log Ã  synchroniser');
       return { success: 0, failed: 0 };
     }
 
-    console.log(`ðŸ”„ Synchronisation de ${pendingLogs.length} logs...`);
+    logger.log(`ðŸ”„ Synchronisation de ${pendingLogs.length} logs...`);
 
     let successCount = 0;
     let failedCount = 0;
@@ -129,10 +130,10 @@ class OfflineService {
         await this.markLogAsSynced(log.id);
         successCount++;
 
-        console.log(`âœ… Log ${log.id} synchronisÃ©`);
+        logger.log(`âœ… Log ${log.id} synchronisÃ©`);
 
       } catch (error) {
-        console.error(`âŒ Erreur sync log ${log.id}:`, error);
+        logger.error(`âŒ Erreur sync log ${log.id}:`, error);
         failedCount++;
       }
     }
@@ -140,7 +141,7 @@ class OfflineService {
     // Sauvegarder timestamp derniÃ¨re sync
     await AsyncStorage.setItem(STORAGE_KEYS.LAST_SYNC, Date.now().toString());
 
-    console.log(`ðŸ“Š Sync terminÃ©e: ${successCount} succÃ¨s, ${failedCount} Ã©checs`);
+    logger.log(`ðŸ“Š Sync terminÃ©e: ${successCount} succÃ¨s, ${failedCount} Ã©checs`);
 
     return { success: successCount, failed: failedCount };
   }
@@ -160,7 +161,7 @@ class OfflineService {
         JSON.stringify(updatedLogs)
       );
     } catch (error) {
-      console.error('âŒ Erreur marquage sync:', error);
+      logger.error('âŒ Erreur marquage sync:', error);
     }
   }
 
@@ -183,12 +184,12 @@ class OfflineService {
           STORAGE_KEYS.OFFLINE_CYCLE_LOGS,
           JSON.stringify(activeLogs)
         );
-        console.log(`ðŸ§¹ Nettoyage: ${removedCount} logs supprimÃ©s`);
+        logger.log(`ðŸ§¹ Nettoyage: ${removedCount} logs supprimÃ©s`);
       }
 
       return removedCount;
     } catch (error) {
-      console.error('âŒ Erreur nettoyage:', error);
+      logger.error('âŒ Erreur nettoyage:', error);
       return 0;
     }
   }
@@ -271,11 +272,11 @@ class OfflineService {
         JSON.stringify(updatedCycles)
       );
 
-      console.log('ðŸ“± Nouveau cycle sauvegardÃ© offline:', cycleId);
+      logger.log('ðŸ“± Nouveau cycle sauvegardÃ© offline:', cycleId);
       return cycleId;
 
     } catch (error) {
-      console.error('âŒ Erreur sauvegarde cycle offline:', error);
+      logger.error('âŒ Erreur sauvegarde cycle offline:', error);
       throw new Error('Impossible de sauvegarder le cycle en local');
     }
   }
@@ -288,7 +289,7 @@ class OfflineService {
       const stored = await AsyncStorage.getItem(STORAGE_KEYS.OFFLINE_NEW_CYCLES);
       return stored ? JSON.parse(stored) : [];
     } catch (error) {
-      console.error('âŒ Erreur lecture cycles offline:', error);
+      logger.error('âŒ Erreur lecture cycles offline:', error);
       return [];
     }
   }
@@ -321,11 +322,11 @@ class OfflineService {
         JSON.stringify(updatedLogs)
       );
 
-      console.log('ðŸ“± Log sanitaire sauvegardÃ© offline:', logId);
+      logger.log('ðŸ“± Log sanitaire sauvegardÃ© offline:', logId);
       return logId;
 
     } catch (error) {
-      console.error('âŒ Erreur sauvegarde log sanitaire offline:', error);
+      logger.error('âŒ Erreur sauvegarde log sanitaire offline:', error);
       throw new Error('Impossible de sauvegarder le log sanitaire en local');
     }
   }
@@ -338,7 +339,7 @@ class OfflineService {
       const stored = await AsyncStorage.getItem(STORAGE_KEYS.OFFLINE_SANITARY_LOGS);
       return stored ? JSON.parse(stored) : [];
     } catch (error) {
-      console.error('âŒ Erreur lecture logs sanitaires offline:', error);
+      logger.error('âŒ Erreur lecture logs sanitaires offline:', error);
       return [];
     }
   }
@@ -349,7 +350,7 @@ class OfflineService {
    * Synchronise TOUS les types de donnÃ©es offline
    */
   async syncAllOfflineData(): Promise<{ success: number; failed: number; details: any }> {
-    console.log('ðŸ”„ DÃ©but synchronisation globale...');
+    logger.log('ðŸ”„ DÃ©but synchronisation globale...');
 
     const results = {
       success: 0,
@@ -368,7 +369,7 @@ class OfflineService {
       results.failed += cycleLogsResult.failed;
       results.details.cycleLogs = cycleLogsResult;
     } catch (error) {
-      console.error('âŒ Erreur sync cycle logs:', error);
+      logger.error('âŒ Erreur sync cycle logs:', error);
     }
 
     // 2. Synchroniser les nouveaux cycles
@@ -378,7 +379,7 @@ class OfflineService {
       results.failed += newCyclesResult.failed;
       results.details.newCycles = newCyclesResult;
     } catch (error) {
-      console.error('âŒ Erreur sync nouveaux cycles:', error);
+      logger.error('âŒ Erreur sync nouveaux cycles:', error);
     }
 
     // 3. Synchroniser les logs sanitaires
@@ -388,12 +389,12 @@ class OfflineService {
       results.failed += sanitaryLogsResult.failed;
       results.details.sanitaryLogs = sanitaryLogsResult;
     } catch (error) {
-      console.error('âŒ Erreur sync logs sanitaires:', error);
+      logger.error('âŒ Erreur sync logs sanitaires:', error);
     }
 
     await AsyncStorage.setItem(STORAGE_KEYS.LAST_SYNC, Date.now().toString());
 
-    console.log(`ðŸ“Š Sync globale terminÃ©e: ${results.success} succÃ¨s, ${results.failed} Ã©checs`);
+    logger.log(`ðŸ“Š Sync globale terminÃ©e: ${results.success} succÃ¨s, ${results.failed} Ã©checs`);
     return results;
   }
 
@@ -408,7 +409,7 @@ class OfflineService {
       return { success: 0, failed: 0 };
     }
 
-    console.log(`ðŸ”„ Synchronisation de ${unsyncedCycles.length} nouveaux cycles...`);
+    logger.log(`ðŸ”„ Synchronisation de ${unsyncedCycles.length} nouveaux cycles...`);
 
     let successCount = 0;
     let failedCount = 0;
@@ -420,10 +421,10 @@ class OfflineService {
 
         await this.markNewCycleAsSynced(cycle.id);
         successCount++;
-        console.log(`âœ… Cycle ${cycle.id} synchronisÃ©`);
+        logger.log(`âœ… Cycle ${cycle.id} synchronisÃ©`);
 
       } catch (error) {
-        console.error(`âŒ Erreur sync cycle ${cycle.id}:`, error);
+        logger.error(`âŒ Erreur sync cycle ${cycle.id}:`, error);
         failedCount++;
       }
     }
@@ -442,7 +443,7 @@ class OfflineService {
       return { success: 0, failed: 0 };
     }
 
-    console.log(`ðŸ”„ Synchronisation de ${unsyncedLogs.length} logs sanitaires...`);
+    logger.log(`ðŸ”„ Synchronisation de ${unsyncedLogs.length} logs sanitaires...`);
 
     let successCount = 0;
     let failedCount = 0;
@@ -454,10 +455,10 @@ class OfflineService {
 
         await this.markSanitaryLogAsSynced(log.id);
         successCount++;
-        console.log(`âœ… Log sanitaire ${log.id} synchronisÃ©`);
+        logger.log(`âœ… Log sanitaire ${log.id} synchronisÃ©`);
 
       } catch (error) {
-        console.error(`âŒ Erreur sync log sanitaire ${log.id}:`, error);
+        logger.error(`âŒ Erreur sync log sanitaire ${log.id}:`, error);
         failedCount++;
       }
     }
@@ -480,7 +481,7 @@ class OfflineService {
         JSON.stringify(updatedCycles)
       );
     } catch (error) {
-      console.error('âŒ Erreur marquage cycle sync:', error);
+      logger.error('âŒ Erreur marquage cycle sync:', error);
     }
   }
 
@@ -499,7 +500,7 @@ class OfflineService {
         JSON.stringify(updatedLogs)
       );
     } catch (error) {
-      console.error('âŒ Erreur marquage log sanitaire sync:', error);
+      logger.error('âŒ Erreur marquage log sanitaire sync:', error);
     }
   }
 
@@ -533,7 +534,7 @@ class OfflineService {
     await AsyncStorage.removeItem(STORAGE_KEYS.OFFLINE_NEW_CYCLES);
     await AsyncStorage.removeItem(STORAGE_KEYS.OFFLINE_SANITARY_LOGS);
     await AsyncStorage.removeItem(STORAGE_KEYS.LAST_SYNC);
-    console.log('ðŸ”„ DonnÃ©es offline rÃ©initialisÃ©es');
+    logger.log('ðŸ”„ DonnÃ©es offline rÃ©initialisÃ©es');
   }
 }
 

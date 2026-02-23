@@ -9,6 +9,7 @@
 
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
+import logger from '@/utils/logger';
 
 export type Environment = 'development' | 'production';
 
@@ -74,7 +75,7 @@ export function getEnvironmentConfig(): EnvironmentConfig {
 const config = getEnvironmentConfig();
 
 if (config.debug) {
-  console.log('[Environment] Configuration:', {
+  logger.log('[Environment] Configuration:', {
     environment: config.environment,
     apiUrl: config.apiUrl,
     platform: Platform.OS,

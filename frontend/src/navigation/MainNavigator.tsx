@@ -3,7 +3,6 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
-import { useFocusEffect } from '@react-navigation/native';
 
 // Couleurs MAVECAM selon spÃ©cifications
 const MAVECAM_COLORS = {
@@ -202,6 +201,13 @@ function MainTabNavigator() {
         options={{
           tabBarLabel: t('profile'),
         }}
+        listeners={({ navigation }) => ({
+          tabPress: (event) => {
+            // Always open profile root when tapping the profile tab icon.
+            event.preventDefault();
+            navigation.navigate('ProfileStack', { screen: 'ProfileMain' });
+          },
+        })}
       />
     </Tab.Navigator>
   );
@@ -300,6 +306,4 @@ export default function MainNavigator() {
     </RootStack.Navigator>
   );
 }
-
-
 

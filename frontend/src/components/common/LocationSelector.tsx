@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
+import logger from '@/utils/logger';
 
 import {
   CAMEROON_REGIONS,
@@ -110,7 +111,7 @@ export default function LocationSelector({
         setDepartmentOptions([]);
       }
     } catch (error) {
-      console.error('LocationSelector: Error loading departments:', error);
+      logger.error('LocationSelector: Error loading departments:', error);
       setDepartmentOptions([]);
     } finally {
       setIsLoading(false);

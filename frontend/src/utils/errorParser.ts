@@ -7,6 +7,8 @@
  * @module errorParser
  */
 
+import logger from '@/utils/logger';
+
 /**
  * Détails d'erreur pour un champ spécifique.
  */
@@ -270,18 +272,74 @@ const getFieldLabel = (field: string): string => {
 export const logApiError = (error: any, context: string): void => {
   if (__DEV__) {
     const parsedError = parseApiError(error);
-    console.group(`🔴 API Error - ${context}`);
-    console.log('Status:', parsedError.status);
-    console.log('Message:', parsedError.message);
+    logger.log(`🔴 API Error - ${context}`);
+    logger.log('Status:', parsedError.status);
+    logger.log('Message:', parsedError.message);
     if (parsedError.details.length > 0) {
-      console.log('Validation Errors:');
+      logger.log('Validation Errors:');
       parsedError.details.forEach((detail) => {
-        console.log(`  - ${detail.field}:`, detail.messages);
+        logger.log(`  - ${detail.field}:`, detail.messages);
       });
     }
-    console.log('Raw Error:', parsedError.rawError);
-    console.groupEnd();
+    logger.log('Raw Error:', parsedError.rawError);
   }
+};
+
+/**
+ * Interface commune pour les erreurs Axios-like dans les composants.
+ */
+export interface ApiErrorLike {
+  code?: string;
+  message?: string;
+  response?: {
+    data?: Record<string, unknown> | string;
+  };
+}
+
+/**
+ * Détecte si une erreur est une erreur réseau (pas de réponse du serveur).
+ * Centralisé ici pour éviter duplication dans chaque écran.
+ */
+export const isNetworkError = (error: unknown): boolean => {
+  if (!error || typeof error !== 'object') return false;
+  const candidate = error as ApiErrorLike;
+  const message = candidate.message?.toLowerCase() ?? '';
+  return (
+    candidate.code === 'NETWORK_ERROR' ||
+    message.includes('network') ||
+    message.includes('connection') ||
+    !candidate.response
+  );
+};
+
+/**
+ * Extrait un message d'erreur lisible depuis une erreur API.
+ * Centralisé ici pour éviter duplication dans chaque écran.
+ *
+ * @param error - Erreur attrapée
+ * @param fallback - Message par défaut si aucun message trouvé
+ */
+export const getApiErrorMessage = (error: unknown, fallback = 'Une erreur est survenue'): string => {
+  if (!error || typeof error !== 'object') return fallback;
+  const candidate = error as ApiErrorLike;
+  const responseData = candidate.response?.data;
+
+  if (typeof responseData === 'string') return responseData;
+
+  if (responseData && typeof responseData === 'object') {
+    const data = responseData as Record<string, unknown>;
+    if (typeof data.message === 'string') return data.message;
+    if (typeof data.detail === 'string') return data.detail;
+
+    const firstKey = Object.keys(data)[0];
+    const firstValue = firstKey ? data[firstKey] : undefined;
+    if (Array.isArray(firstValue) && firstValue.length > 0) {
+      return `${firstKey}: ${String(firstValue[0])}`;
+    }
+  }
+
+  if (candidate.message) return candidate.message;
+  return fallback;
 };
 
 /**
