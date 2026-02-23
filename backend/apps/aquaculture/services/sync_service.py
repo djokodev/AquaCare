@@ -11,6 +11,7 @@ le mobile offline-first et le serveur backend :
 
 Architecture: Service Layer Pattern pour logique de sync complexe.
 """
+import uuid as _uuid
 from typing import Dict, List, Any, Optional
 from datetime import datetime, date
 from django.db import transaction
@@ -19,10 +20,7 @@ from django.core.exceptions import ValidationError
 
 from ..models import ProductionCycle, CycleLog, SanitaryLog, FeedingPlan
 from .base import BaseService
-from ..domain.exceptions import (
-    InvalidSyncDataException,
-    CycleNotFoundException
-)
+from .cycle_service import ProductionCycleService
 
 
 class SyncService(BaseService):
@@ -72,35 +70,71 @@ class SyncService(BaseService):
             'synced_ids': []
         }
 
+        # Batch-fetch all cycles upfront to avoid N+1 queries
+        # Filter invalid UUIDs to prevent ORM ValueError on __in lookup
+        raw_cycle_ids = []
+        for d in logs_data:
+            cid = getattr(d.get('cycle'), 'id', d.get('cycle'))
+            if cid:
+                try:
+                    _uuid.UUID(str(cid))
+                    raw_cycle_ids.append(str(cid))
+                except (ValueError, AttributeError):
+                    pass
+        cycles_map = {
+            str(c.id): c
+            for c in ProductionCycle.objects.filter(
+                id__in=raw_cycle_ids,
+                farm_profile__user=user
+            ).select_related('farm_profile')
+        }
+
         for log_data in logs_data:
             try:
                 # Extract client_uuid for deduplication
                 client_uuid = log_data.get('client_uuid')
-                cycle_id = log_data.get('cycle')
+                cycle_ref = log_data.get('cycle')
+                cycle_id = getattr(cycle_ref, 'id', cycle_ref)
 
-                # Validation: Cycle ownership check
-                if cycle_id:
-                    try:
-                        cycle = ProductionCycle.objects.get(
-                            id=cycle_id,
-                            farm_profile__user=user
-                        )
-                    except ProductionCycle.DoesNotExist:
-                        result['errors'].append({
-                            'type': 'cycle_log',
-                            'client_uuid': client_uuid,
-                            'error': f'Cycle {cycle_id} non trouvé ou non autorisé'
-                        })
-                        continue
+                if not cycle_id:
+                    result['errors'].append({
+                        'type': 'cycle_log',
+                        'client_uuid': client_uuid,
+                        'error': 'Le champ cycle est requis'
+                    })
+                    continue
+
+                # Validation: Cycle ownership check (from pre-fetched map)
+                cycle = cycles_map.get(str(cycle_id))
+                if not cycle:
+                    result['errors'].append({
+                        'type': 'cycle_log',
+                        'client_uuid': client_uuid,
+                        'error': f'Cycle {cycle_id} non trouvé ou non autorisé'
+                    })
+                    continue
 
                 # Deduplication: Check if log already exists
                 existing_log = None
                 if client_uuid:
-                    existing_log = CycleLog.objects.filter(
-                        client_uuid=client_uuid
-                    ).first()
+                    existing_log = CycleLog.objects.filter(client_uuid=client_uuid).first()
+                    if existing_log and existing_log.cycle.farm_profile.user_id != user.id:
+                        result['errors'].append({
+                            'type': 'cycle_log',
+                            'client_uuid': client_uuid,
+                            'error': 'Conflit client_uuid détecté avec un autre utilisateur'
+                        })
+                        continue
 
                 if existing_log:
+                    if existing_log.cycle_id != cycle.id:
+                        result['errors'].append({
+                            'type': 'cycle_log',
+                            'client_uuid': client_uuid,
+                            'error': 'Le client_uuid fourni est lié à un autre cycle'
+                        })
+                        continue
+
                     # UPDATE existing log (avoid duplicates)
                     for key, value in log_data.items():
                         if key not in ['id', 'created_at', 'client_uuid', 'cycle']:
@@ -121,24 +155,26 @@ class SyncService(BaseService):
 
                     # Convert log_date from ISO string to date object if needed
                     if 'log_date' in log_create_data and isinstance(log_create_data['log_date'], str):
-                        log_create_data['log_date'] = date.fromisoformat(log_create_data['log_date'])
+                        try:
+                            log_create_data['log_date'] = date.fromisoformat(log_create_data['log_date'])
+                        except ValueError:
+                            result['errors'].append({
+                                'type': 'cycle_log',
+                                'client_uuid': client_uuid,
+                                'error': 'Format de date invalide (attendu: YYYY-MM-DD)'
+                            })
+                            continue
 
                     new_log = CycleLog.objects.create(**log_create_data)
 
                     result['created'] += 1
                     result['synced_ids'].append(str(new_log.id))
 
-            except ValidationError as e:
+            except (ValidationError, ValueError, TypeError) as e:
                 result['errors'].append({
                     'type': 'cycle_log',
                     'client_uuid': log_data.get('client_uuid'),
                     'error': str(e)
-                })
-            except Exception as e:
-                result['errors'].append({
-                    'type': 'cycle_log',
-                    'client_uuid': log_data.get('client_uuid'),
-                    'error': f'Erreur inattendue: {str(e)}'
                 })
 
         return result
@@ -174,44 +210,65 @@ class SyncService(BaseService):
             'synced_ids': []
         }
 
+        # Batch-fetch all cycles upfront to avoid N+1 queries
+        # Filter invalid UUIDs to prevent ORM ValueError on __in lookup
+        raw_cycle_ids = []
+        for d in logs_data:
+            cid = getattr(d.get('cycle'), 'id', d.get('cycle'))
+            if cid:
+                try:
+                    _uuid.UUID(str(cid))
+                    raw_cycle_ids.append(str(cid))
+                except (ValueError, AttributeError):
+                    pass
+        sanitary_cycles_map = {
+            str(c.id): c
+            for c in ProductionCycle.objects.filter(
+                id__in=raw_cycle_ids,
+                farm_profile__user=user
+            ).select_related('farm_profile')
+        }
+
         for log_data in logs_data:
             try:
-                cycle_id = log_data.get('cycle')
+                cycle_ref = log_data.get('cycle')
+                cycle_id = getattr(cycle_ref, 'id', cycle_ref)
 
-                # Validation: Cycle ownership check
-                if cycle_id:
-                    try:
-                        cycle = ProductionCycle.objects.get(
-                            id=cycle_id,
-                            farm_profile__user=user
-                        )
-                    except ProductionCycle.DoesNotExist:
-                        result['errors'].append({
-                            'type': 'sanitary_log',
-                            'cycle_id': cycle_id,
-                            'error': f'Cycle {cycle_id} non trouvé ou non autorisé'
-                        })
-                        continue
+                if not cycle_id:
+                    result['errors'].append({
+                        'type': 'sanitary_log',
+                        'error': 'Le champ cycle est requis'
+                    })
+                    continue
+
+                # Validation: Cycle ownership check (from pre-fetched map)
+                cycle = sanitary_cycles_map.get(str(cycle_id))
+                if not cycle:
+                    result['errors'].append({
+                        'type': 'sanitary_log',
+                        'cycle_id': cycle_id,
+                        'error': f'Cycle {cycle_id} non trouvé ou non autorisé'
+                    })
+                    continue
 
                 # CREATE new sanitary log
-                log_data.pop('id', None)
-                log_data['cycle'] = cycle
-                log_data['created_offline'] = True
+                log_create_data = {
+                    key: value
+                    for key, value in log_data.items()
+                    if key != 'id'
+                }
+                log_create_data['cycle'] = cycle
+                log_create_data['created_offline'] = True
 
-                new_log = SanitaryLog.objects.create(**log_data)
+                new_log = SanitaryLog.objects.create(**log_create_data)
 
                 result['created'] += 1
                 result['synced_ids'].append(str(new_log.id))
 
-            except ValidationError as e:
+            except (ValidationError, ValueError, TypeError) as e:
                 result['errors'].append({
                     'type': 'sanitary_log',
                     'error': str(e)
-                })
-            except Exception as e:
-                result['errors'].append({
-                    'type': 'sanitary_log',
-                    'error': f'Erreur inattendue: {str(e)}'
                 })
 
         return result
@@ -251,13 +308,16 @@ class SyncService(BaseService):
         for cycle_data in cycles_data:
             try:
                 # Remove farm_profile from data (will be set from user)
-                cycle_data.pop('farm_profile', None)
-                cycle_data.pop('id', None)
+                cycle_payload = {
+                    key: value
+                    for key, value in cycle_data.items()
+                    if key not in {'farm_profile', 'id'}
+                }
 
-                # CREATE new cycle
-                new_cycle = ProductionCycle.objects.create(
+                # CREATE new cycle through service layer to enforce business rules
+                new_cycle = ProductionCycleService.create_cycle(
                     farm_profile=user.farm_profile,
-                    **cycle_data
+                    cycle_data=cycle_payload
                 )
 
                 result['created'] += 1
@@ -269,11 +329,11 @@ class SyncService(BaseService):
                     'cycle_name': cycle_data.get('cycle_name'),
                     'error': str(e)
                 })
-            except Exception as e:
+            except Exception:
                 result['errors'].append({
                     'type': 'cycle',
                     'cycle_name': cycle_data.get('cycle_name'),
-                    'error': f'Erreur inattendue: {str(e)}'
+                    'error': 'Erreur inattendue lors de la synchronisation du cycle'
                 })
 
         return result
@@ -356,9 +416,13 @@ class SyncService(BaseService):
             sanitary_query = sanitary_query.filter(created_at__gt=last_sync_dt)
 
         # Serialize data
+        cycle_logs_data = CycleLogSerializer(logs_query, many=True).data
+
         return {
             'cycles': ProductionCycleSerializer(cycles_query, many=True).data,
-            'cycle_logs': CycleLogSerializer(logs_query, many=True).data,
+            'cycle_logs': cycle_logs_data,
+            # Compat backward pour anciens clients mobile
+            'logs': cycle_logs_data,
             'feeding_plans': FeedingPlanSerializer(plans_query, many=True).data,
             'sanitary_logs': SanitaryLogSerializer(sanitary_query, many=True).data,
             'sync_timestamp': timezone.now().isoformat()
@@ -416,7 +480,7 @@ class SyncService(BaseService):
             },
             'errors': [],
             'server_updates': {},
-            'device_id': sync_data.get('device_id', 'unknown')
+            'device_id': sync_data.get('device_id') or sync_data.get('client_id', 'unknown')
         }
 
         try:
@@ -453,11 +517,11 @@ class SyncService(BaseService):
             else:
                 sync_result['status'] = 'success'
 
-        except Exception as e:
+        except Exception:
             sync_result['status'] = 'error'
             sync_result['errors'].append({
                 'type': 'general',
-                'error': f'Erreur critique de synchronisation: {str(e)}'
+                'error': 'Erreur critique de synchronisation'
             })
 
         return sync_result
@@ -538,6 +602,13 @@ class SyncService(BaseService):
             if field in sync_data:
                 if not isinstance(sync_data[field], list):
                     errors.append(f"Le champ '{field}' doit être une liste")
+                    continue
+
+                if len(sync_data[field]) > SyncService.MAX_SYNC_ITEMS_PER_COLLECTION:
+                    errors.append(
+                        f"Le champ '{field}' dépasse la limite autorisée "
+                        f"({SyncService.MAX_SYNC_ITEMS_PER_COLLECTION} éléments)"
+                    )
 
         # Vérifier last_sync format
         if 'last_sync' in sync_data and sync_data['last_sync']:
@@ -548,3 +619,4 @@ class SyncService(BaseService):
                 errors.append("Le format 'last_sync' doit être ISO 8601 (YYYY-MM-DDTHH:MM:SS)")
 
         return errors
+    MAX_SYNC_ITEMS_PER_COLLECTION = 1000

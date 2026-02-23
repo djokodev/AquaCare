@@ -18,11 +18,18 @@ Basé sur les guides techniques Skretting et Aller Aqua.
 import math
 from decimal import Decimal, ROUND_HALF_UP
 from datetime import date, timedelta
-from typing import Dict, Optional
+from typing import Dict, Optional, Union
 
 from ..constants import (
     FEED_RECOMMENDATIONS, MEALS_PER_DAY, OPTIMAL_PARAMETERS
 )
+
+
+def to_decimal(value: Union[int, float, str, Decimal]) -> Decimal:
+    """Convertit une valeur numérique en Decimal en évitant la perte de précision float."""
+    if isinstance(value, Decimal):
+        return value
+    return Decimal(str(value))
 
 
 class AquacultureCalculator:
@@ -64,7 +71,7 @@ class AquacultureCalculator:
             return Decimal('0')
 
         # Ensure Decimal type
-        average_weight_g = Decimal(str(average_weight_g)) if not isinstance(average_weight_g, Decimal) else average_weight_g
+        average_weight_g = to_decimal(average_weight_g)
 
         biomass_g = Decimal(fish_count) * average_weight_g
         biomass_kg = biomass_g / Decimal('1000')
@@ -116,8 +123,8 @@ class AquacultureCalculator:
             return Decimal('0')
 
         # Ensure Decimal type
-        feed_consumed_kg = Decimal(str(feed_consumed_kg)) if not isinstance(feed_consumed_kg, Decimal) else feed_consumed_kg
-        weight_gain_kg = Decimal(str(weight_gain_kg)) if not isinstance(weight_gain_kg, Decimal) else weight_gain_kg
+        feed_consumed_kg = to_decimal(feed_consumed_kg)
+        weight_gain_kg = to_decimal(weight_gain_kg)
 
         fcr = feed_consumed_kg / weight_gain_kg
 
@@ -150,8 +157,8 @@ class AquacultureCalculator:
             return Decimal('0')
 
         # Ensure Decimal type
-        initial_weight_g = Decimal(str(initial_weight_g)) if not isinstance(initial_weight_g, Decimal) else initial_weight_g
-        current_weight_g = Decimal(str(current_weight_g)) if not isinstance(current_weight_g, Decimal) else current_weight_g
+        initial_weight_g = to_decimal(initial_weight_g)
+        current_weight_g = to_decimal(current_weight_g)
 
         weight_gain = current_weight_g - initial_weight_g
         dgr = weight_gain / Decimal(days)
@@ -187,15 +194,15 @@ class AquacultureCalculator:
             return Decimal('0')
 
         # Ensure Decimal type
-        initial_weight_g = Decimal(str(initial_weight_g)) if not isinstance(initial_weight_g, Decimal) else initial_weight_g
-        final_weight_g = Decimal(str(final_weight_g)) if not isinstance(final_weight_g, Decimal) else final_weight_g
+        initial_weight_g = to_decimal(initial_weight_g)
+        final_weight_g = to_decimal(final_weight_g)
 
         try:
-            ln_final = math.log(float(final_weight_g))
-            ln_initial = math.log(float(initial_weight_g))
-            sgr = ((ln_final - ln_initial) / days) * 100
+            ln_final = Decimal(str(math.log(float(final_weight_g))))
+            ln_initial = Decimal(str(math.log(float(initial_weight_g))))
+            sgr = ((ln_final - ln_initial) / Decimal(str(days))) * Decimal('100')
 
-            return Decimal(str(sgr)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+            return sgr.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
         except (ValueError, OverflowError):
             return Decimal('0')
     
@@ -220,8 +227,8 @@ class AquacultureCalculator:
             return Decimal('0')
 
         # Ensure Decimal type for exponentiation
-        length_cm = Decimal(str(length_cm)) if not isinstance(length_cm, Decimal) else length_cm
-        weight_g = Decimal(str(weight_g)) if not isinstance(weight_g, Decimal) else weight_g
+        length_cm = to_decimal(length_cm)
+        weight_g = to_decimal(weight_g)
 
         length_cubed = length_cm ** 3
         condition_factor = (weight_g / length_cubed) * Decimal('100')
@@ -250,8 +257,8 @@ class AquacultureCalculator:
             return Decimal('0')
 
         # Ensure Decimal type
-        biomass_kg = Decimal(str(biomass_kg)) if not isinstance(biomass_kg, Decimal) else biomass_kg
-        volume_m3 = Decimal(str(volume_m3)) if not isinstance(volume_m3, Decimal) else volume_m3
+        biomass_kg = to_decimal(biomass_kg)
+        volume_m3 = to_decimal(volume_m3)
 
         density = biomass_kg / volume_m3
 
@@ -278,8 +285,8 @@ class AquacultureCalculator:
             return Decimal('0')
 
         # Ensure Decimal type
-        biomass_kg = Decimal(str(biomass_kg)) if not isinstance(biomass_kg, Decimal) else biomass_kg
-        feeding_rate_percentage = Decimal(str(feeding_rate_percentage)) if not isinstance(feeding_rate_percentage, Decimal) else feeding_rate_percentage
+        biomass_kg = to_decimal(biomass_kg)
+        feeding_rate_percentage = to_decimal(feeding_rate_percentage)
 
         daily_feed = biomass_kg * (feeding_rate_percentage / Decimal('100'))
 

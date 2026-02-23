@@ -202,3 +202,289 @@ class TestSyncServiceHealthCheck:
         assert 'unsynced_logs' in stats
         assert 'last_sync_date' in stats
         assert 'offline_percentage' in stats
+
+
+@pytest.mark.django_db
+class TestSyncCycleLogsEdgeCases:
+    """Tests des cas limites pour sync_cycle_logs."""
+
+    def test_invalid_uuid_cycle_id_adds_error(self):
+        """Un cycle_id invalide (non-UUID) est ignoré et ajouté aux erreurs."""
+        from tests.fixtures.factories import FarmProfileFactory
+        import uuid
+
+        user = UserFactory()
+        logs_data = [
+            {
+                'cycle': 'not-a-valid-uuid',
+                'log_date': date.today(),
+                'mortality_count': 5,
+                'client_uuid': str(uuid.uuid4()),
+            }
+        ]
+
+        result = SyncService.sync_cycle_logs(user, logs_data)
+
+        assert result['created'] == 0
+        assert len(result['errors']) == 1
+        assert 'non trouvé' in result['errors'][0]['error']
+
+    def test_missing_cycle_id_adds_error(self):
+        """Un log sans cycle_id est rejeté avec message d'erreur."""
+        import uuid
+
+        user = UserFactory()
+        logs_data = [
+            {
+                'log_date': date.today(),
+                'mortality_count': 5,
+                'client_uuid': str(uuid.uuid4()),
+            }
+        ]
+
+        result = SyncService.sync_cycle_logs(user, logs_data)
+
+        assert result['created'] == 0
+        assert len(result['errors']) == 1
+        assert result['errors'][0]['error'] == 'Le champ cycle est requis'
+
+    def test_uuid_conflict_with_another_user_adds_error(self):
+        """Un client_uuid appartenant à un autre utilisateur est rejeté."""
+        from tests.fixtures.factories import FarmProfileFactory
+        from aquaculture.services.log_service import CycleLogService
+        import uuid
+
+        user1 = UserFactory()
+        user2 = UserFactory()
+        farm1 = FarmProfileFactory(user=user1)
+        farm2 = FarmProfileFactory(user=user2)
+        cycle1 = ProductionCycleFactory(
+            farm_profile=farm1,
+            start_date=date.today() - timedelta(days=10),
+        )
+        cycle2 = ProductionCycleFactory(
+            farm_profile=farm2,
+            start_date=date.today() - timedelta(days=10),
+        )
+
+        conflict_uuid = str(uuid.uuid4())
+        # user1 has a log with this UUID
+        CycleLogService.create_log(cycle1, {
+            'log_date': date.today(),
+            'mortality_count': 5,
+            'client_uuid': conflict_uuid,
+        })
+
+        # user2 tries to sync with the same UUID
+        logs_data = [
+            {
+                'cycle': str(cycle2.id),
+                'log_date': date.today(),
+                'mortality_count': 3,
+                'client_uuid': conflict_uuid,
+            }
+        ]
+
+        result = SyncService.sync_cycle_logs(user2, logs_data)
+
+        assert result['created'] == 0
+        assert len(result['errors']) == 1
+        assert 'autre utilisateur' in result['errors'][0]['error']
+
+    def test_uuid_linked_to_different_cycle_adds_error(self):
+        """Un client_uuid lié à un autre cycle du même utilisateur est rejeté."""
+        from tests.fixtures.factories import FarmProfileFactory
+        from aquaculture.services.log_service import CycleLogService
+        import uuid
+
+        user = UserFactory()
+        farm = FarmProfileFactory(user=user)
+        cycle1 = ProductionCycleFactory(
+            farm_profile=farm,
+            start_date=date.today() - timedelta(days=10),
+        )
+        cycle2 = ProductionCycleFactory(
+            farm_profile=farm,
+            start_date=date.today() - timedelta(days=10),
+        )
+
+        link_uuid = str(uuid.uuid4())
+        # UUID attached to cycle1
+        CycleLogService.create_log(cycle1, {
+            'log_date': date.today(),
+            'mortality_count': 2,
+            'client_uuid': link_uuid,
+        })
+
+        # Try to sync same UUID on cycle2
+        logs_data = [
+            {
+                'cycle': str(cycle2.id),
+                'log_date': date.today(),
+                'mortality_count': 4,
+                'client_uuid': link_uuid,
+            }
+        ]
+
+        result = SyncService.sync_cycle_logs(user, logs_data)
+
+        assert result['created'] == 0
+        assert len(result['errors']) == 1
+        assert 'autre cycle' in result['errors'][0]['error']
+
+    def test_invalid_date_format_adds_error(self):
+        """Un log avec date au mauvais format est rejeté proprement."""
+        from tests.fixtures.factories import FarmProfileFactory
+        import uuid
+
+        user = UserFactory()
+        farm = FarmProfileFactory(user=user)
+        cycle = ProductionCycleFactory(
+            farm_profile=farm,
+            start_date=date.today() - timedelta(days=10),
+        )
+
+        logs_data = [
+            {
+                'cycle': str(cycle.id),
+                'log_date': '22-02-2026',  # Wrong format (should be YYYY-MM-DD)
+                'mortality_count': 5,
+                'client_uuid': str(uuid.uuid4()),
+            }
+        ]
+
+        result = SyncService.sync_cycle_logs(user, logs_data)
+
+        assert result['created'] == 0
+        assert len(result['errors']) == 1
+        assert 'date' in result['errors'][0]['error'].lower()
+
+    def test_partial_batch_succeeds_despite_one_error(self):
+        """Les entrées valides sont créées même si d'autres sont invalides."""
+        from tests.fixtures.factories import FarmProfileFactory
+        import uuid
+
+        user = UserFactory()
+        farm = FarmProfileFactory(user=user)
+        cycle = ProductionCycleFactory(
+            farm_profile=farm,
+            start_date=date.today() - timedelta(days=10),
+        )
+
+        logs_data = [
+            {
+                'cycle': str(cycle.id),
+                'log_date': date.today() - timedelta(days=1),
+                'mortality_count': 5,
+                'client_uuid': str(uuid.uuid4()),
+            },
+            {
+                'cycle': 'invalid-uuid',  # Will produce an error
+                'log_date': date.today(),
+                'client_uuid': str(uuid.uuid4()),
+            },
+        ]
+
+        result = SyncService.sync_cycle_logs(user, logs_data)
+
+        assert result['created'] == 1
+        assert len(result['errors']) == 1
+
+
+@pytest.mark.django_db
+class TestSyncSanitaryLogs:
+    """Tests de synchronisation des logs sanitaires."""
+
+    def test_sync_sanitary_logs_basic_success(self):
+        """Sync d'un log sanitaire valide crée un nouvel enregistrement."""
+        from tests.fixtures.factories import FarmProfileFactory
+
+        user = UserFactory()
+        farm = FarmProfileFactory(user=user)
+        cycle = ProductionCycleFactory(
+            farm_profile=farm,
+            start_date=date.today() - timedelta(days=10),
+        )
+
+        from aquaculture.models import SanitaryLog
+        logs_data = [
+            {
+                'cycle': str(cycle.id),
+                'event_date': date.today(),
+                'event_type': 'treatment',
+                'symptoms': 'Observation de comportement atypique chez plusieurs spécimens.',
+            }
+        ]
+
+        result = SyncService.sync_sanitary_logs(user, logs_data)
+
+        assert result['created'] == 1
+        assert len(result['errors']) == 0
+        assert SanitaryLog.objects.filter(cycle=cycle).count() == 1
+
+    def test_sync_sanitary_logs_invalid_cycle_id_adds_error(self):
+        """Un cycle_id invalide pour un log sanitaire est rejeté."""
+        import uuid
+
+        user = UserFactory()
+        logs_data = [
+            {
+                'cycle': 'not-a-uuid',
+                'event_date': date.today(),
+                'event_type': 'treatment',
+                'symptoms': 'Test symptômes suffisamment longs.',
+            }
+        ]
+
+        result = SyncService.sync_sanitary_logs(user, logs_data)
+
+        assert result['created'] == 0
+        assert len(result['errors']) == 1
+
+    def test_sync_sanitary_logs_missing_cycle_adds_error(self):
+        """Un log sanitaire sans cycle_id est rejeté."""
+        user = UserFactory()
+        logs_data = [
+            {
+                'event_date': date.today(),
+                'event_type': 'treatment',
+                'symptoms': 'Test symptômes.',
+            }
+        ]
+
+        result = SyncService.sync_sanitary_logs(user, logs_data)
+
+        assert result['created'] == 0
+        assert len(result['errors']) == 1
+        assert 'cycle' in result['errors'][0]['error'].lower()
+
+    def test_sync_sanitary_logs_mixed_valid_invalid(self):
+        """Les entrées valides sont créées même si d'autres sont invalides."""
+        from tests.fixtures.factories import FarmProfileFactory
+
+        user = UserFactory()
+        farm = FarmProfileFactory(user=user)
+        cycle = ProductionCycleFactory(
+            farm_profile=farm,
+            start_date=date.today() - timedelta(days=10),
+        )
+
+        logs_data = [
+            {
+                'cycle': str(cycle.id),
+                'event_date': date.today(),
+                'event_type': 'vaccination',
+                'symptoms': 'Vaccination préventive réalisée sur l\'ensemble du bassin.',
+            },
+            {
+                'cycle': 'invalid-cycle-uuid',
+                'event_date': date.today(),
+                'event_type': 'treatment',
+                'symptoms': 'Test invalide.',
+            },
+        ]
+
+        result = SyncService.sync_sanitary_logs(user, logs_data)
+
+        assert result['created'] == 1
+        assert len(result['errors']) == 1

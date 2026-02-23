@@ -15,16 +15,18 @@ Fonctionnalités principales :
 Architecture offline-first avec déduplication UUID et gestion conflits.
 Permissions strictes : utilisateurs accèdent uniquement aux données de leur ferme.
 """
+import logging
+from datetime import date, datetime, time, timedelta
+
 from rest_framework import viewsets, status, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
-from django.db.models import Avg, Sum, Q
+from django.db.models import Avg, Sum, Q, Prefetch
 from django.db import transaction
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
-from datetime import date, datetime, time, timedelta
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiExample
 from drf_spectacular.types import OpenApiTypes
 
@@ -48,13 +50,18 @@ from .serializers import (
 
 from .domain.calculators import AquacultureCalculator
 from .services import (
-    ProductionCycleService, AnalyticsService,
+    ProductionCycleService, AnalyticsService, CycleLogService,
     SanitaryService, SyncService
 )
+from .constants import MAX_BULK_LOGS, MAX_GENERATION_WEEKS, FEEDING_SCHEDULES_BY_MEALS
 from .domain.exceptions import (
     CycleAlreadyHarvestedError,
     InvalidHarvestDataError,
+    InvalidSanitaryDataException,
+    SanitaryLogNotFoundException,
 )
+
+logger = logging.getLogger(__name__)
 
 
 @extend_schema_view(
@@ -573,23 +580,49 @@ class CycleLogViewSet(viewsets.ModelViewSet):
         Crée plusieurs logs pour synchronisation offline.
         """
         logs_data = request.data.get('logs', [])
-        
+
+        if not isinstance(logs_data, list):
+            return Response(
+                {'error': _("Le champ 'logs' doit être une liste.")},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if len(logs_data) > MAX_BULK_LOGS:
+            return Response(
+                {
+                    'error': _(
+                        "Trop d'éléments dans 'logs' (maximum %(max)s par requête)."
+                    ) % {'max': MAX_BULK_LOGS}
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        serializer = CycleLogSyncSerializer(data=logs_data, many=True)
+        serializer.is_valid(raise_exception=True)
+
         with transaction.atomic():
-            serializer = CycleLogSyncSerializer(data=logs_data, many=True)
-            serializer.is_valid(raise_exception=True)
-            logs = serializer.save()
-            
+            result = CycleLogService.create_bulk_logs(
+                logs_data=serializer.validated_data,
+                user=request.user
+            )
+            logs = result['logs']
+
             # Update affected cycles
             cycles_to_update = set(log.cycle_id for log in logs)
             for cycle_id in cycles_to_update:
                 try:
-                    cycle = ProductionCycle.objects.get(id=cycle_id)
+                    cycle = ProductionCycle.objects.get(
+                        id=cycle_id,
+                        farm_profile__user=request.user
+                    )
                     self._recalculate_cycle_metrics(cycle)
                 except ProductionCycle.DoesNotExist:
-                    pass
-        
+                    continue
+
         return Response({
-            'created': len(logs),
+            'created': result['created'],
+            'updated': result['updated'],
+            'errors': result['errors'],
             'logs': CycleLogSerializer(logs, many=True).data
         }, status=status.HTTP_201_CREATED)
     
@@ -736,7 +769,23 @@ class FeedingPlanViewSet(viewsets.ModelViewSet):
         Génère un plan d'alimentation pour un cycle et des semaines spécifiés.
         """
         cycle_id = request.data.get('cycle_id')
-        weeks_ahead = request.data.get('weeks_ahead', 1)
+        try:
+            weeks_ahead = int(request.data.get('weeks_ahead', 1))
+        except (TypeError, ValueError):
+            return Response(
+                {'error': _('Le paramètre weeks_ahead doit être un entier.')},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if weeks_ahead < 1 or weeks_ahead > MAX_GENERATION_WEEKS:
+            return Response(
+                {
+                    'error': _(
+                        'Le paramètre weeks_ahead doit être compris entre 1 et %(max)s.'
+                    ) % {'max': MAX_GENERATION_WEEKS}
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
         
         try:
             cycle = ProductionCycle.objects.get(
@@ -814,10 +863,8 @@ class FeedingPlanViewSet(viewsets.ModelViewSet):
         la d?pendance ? l'ancien mod?le aquaculture.
         """
         feeding_schedules = {
-            1: [time(13, 0)],
-            2: [time(8, 0), time(17, 0)],
-            3: [time(8, 0), time(13, 0), time(18, 0)],
-            4: [time(7, 0), time(11, 0), time(15, 0), time(18, 0)],
+            meals: [time(h, m) for h, m in times]
+            for meals, times in FEEDING_SCHEDULES_BY_MEALS.items()
         }
         meal_names = ['matin', 'midi', 'soir', 'nuit']
 
@@ -998,10 +1045,24 @@ class SanitaryLogViewSet(viewsets.ModelViewSet):
                 SanitaryLogSerializer(resolved_log, context={'request': request}).data,
                 status=status.HTTP_200_OK
             )
-        except Exception as e:
+        except SanitaryLogNotFoundException as exc:
             return Response(
-                {'error': str(e)},
+                {'error': str(exc)},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except InvalidSanitaryDataException as exc:
+            return Response(
+                {'error': str(exc)},
                 status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception:
+            logger.exception(
+                "Unexpected error while resolving sanitary log",
+                extra={'sanitary_log_id': str(log.id)}
+            )
+            return Response(
+                {'error': _('Une erreur interne est survenue lors de la résolution.')},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
     
     @extend_schema(
@@ -1313,11 +1374,13 @@ class DashboardView(APIView):
         user = request.user
         farm_profile = user.farm_profile
         
-        # Active cycles
+        # Active cycles — use Prefetch with to_attr to avoid N+1 in helper methods
         active_cycles = ProductionCycle.objects.filter(
             farm_profile=farm_profile,
             status='active'
-        ).select_related('farm_profile').prefetch_related('logs')
+        ).select_related('farm_profile').prefetch_related(
+            Prefetch('logs', queryset=CycleLog.objects.order_by('log_date'), to_attr='prefetched_logs')
+        )
         
         # Recent logs (last 7 days)
         recent_date = date.today() - timedelta(days=7)
@@ -1367,15 +1430,15 @@ class DashboardView(APIView):
         mortality_data = self._prepare_mortality_chart_data(active_cycles)
         feed_data = self._prepare_feed_chart_data(active_cycles)
         
-        # Environmental alerts
+        # Environmental alerts — filter prefetched_logs in Python (no N+1)
         environmental_alerts = []
         for cycle in active_cycles:
-            latest_log = cycle.logs.filter(
-                Q(water_temperature__isnull=False) |
-                Q(ph_level__isnull=False) |
-                Q(dissolved_oxygen__isnull=False)
-            ).first()
-            
+            env_logs = [
+                l for l in cycle.prefetched_logs
+                if l.water_temperature is not None or l.ph_level is not None or l.dissolved_oxygen is not None
+            ]
+            latest_log = env_logs[-1] if env_logs else None
+
             if latest_log:
                 alerts = AquacultureCalculator.check_environmental_alerts(
                     cycle.species,
@@ -1418,12 +1481,11 @@ class DashboardView(APIView):
     def _prepare_growth_chart_data(self, cycles):
         """Prépare les données de graphique de croissance pour le tableau de bord."""
         chart_data = []
-        
+
         for cycle in cycles:
-            logs = cycle.logs.filter(
-                average_weight__isnull=False
-            ).order_by('log_date')[:30]  # Last 30 measurements
-            
+            # Filter prefetched_logs in Python — no additional DB query
+            logs = [l for l in cycle.prefetched_logs if l.average_weight is not None][:30]
+
             if logs:
                 chart_data.append({
                     'cycle_name': cycle.cycle_name,
@@ -1436,20 +1498,20 @@ class DashboardView(APIView):
                         } for log in logs
                     ]
                 })
-        
+
         return chart_data
-    
+
     def _prepare_mortality_chart_data(self, cycles):
         """Prépare les données de graphique de mortalité pour le tableau de bord."""
         chart_data = []
-        
+
         for cycle in cycles:
-            logs = cycle.logs.filter(mortality_count__gt=0).order_by('log_date')
-            
+            logs = [l for l in cycle.prefetched_logs if l.mortality_count and l.mortality_count > 0]
+
             if logs:
                 cumulative_mortality = 0
                 mortality_series = []
-                
+
                 for log in logs:
                     cumulative_mortality += log.mortality_count
                     mortality_series.append({
@@ -1458,28 +1520,26 @@ class DashboardView(APIView):
                         'cumulative': cumulative_mortality,
                         'percentage': (cumulative_mortality / cycle.initial_count * 100)
                     })
-                
+
                 chart_data.append({
                     'cycle_name': cycle.cycle_name,
                     'cycle_id': str(cycle.id),
                     'data': mortality_series
                 })
-        
+
         return chart_data
-    
+
     def _prepare_feed_chart_data(self, cycles):
         """Prépare les données de graphique de consommation d'aliment pour le tableau de bord."""
         chart_data = []
-        
+
         for cycle in cycles:
-            logs = cycle.logs.filter(
-                feed_quantity__isnull=False
-            ).order_by('log_date')
-            
+            logs = [l for l in cycle.prefetched_logs if l.feed_quantity is not None]
+
             if logs:
                 cumulative_feed = 0
                 feed_series = []
-                
+
                 for log in logs:
                     cumulative_feed += float(log.feed_quantity)
                     feed_series.append({
@@ -1487,21 +1547,21 @@ class DashboardView(APIView):
                         'daily': float(log.feed_quantity),
                         'cumulative': cumulative_feed
                     })
-                
+
                 chart_data.append({
                     'cycle_name': cycle.cycle_name,
                     'cycle_id': str(cycle.id),
                     'data': feed_series
                 })
-        
+
         return chart_data
-    
+
     def _get_feeding_recommendations(self, cycles):
         """Génère des recommandations d'alimentation pour les cycles actifs."""
         recommendations = {}
-        
+
         for cycle in cycles:
-            latest_log = cycle.logs.first()
+            latest_log = cycle.prefetched_logs[-1] if cycle.prefetched_logs else None
             if latest_log and latest_log.average_weight:
                 feeding_rec = AquacultureCalculator.get_feeding_recommendations(
                     latest_log.average_weight

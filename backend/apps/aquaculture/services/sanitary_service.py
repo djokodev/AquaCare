@@ -16,6 +16,7 @@ from decimal import Decimal
 from django.db import transaction
 from django.db.models import Q, Count, Avg
 from django.utils import timezone
+from django.utils.translation import gettext_lazy as _
 
 from ..models import SanitaryLog, ProductionCycle
 # Notification model moved to apps/notifications/models.py
@@ -199,6 +200,14 @@ class SanitaryService(BaseService):
                 "Ce problème sanitaire est déjà résolu"
             )
 
+        if isinstance(resolution_date, str):
+            try:
+                resolution_date = date.fromisoformat(resolution_date)
+            except ValueError as exc:
+                raise InvalidSanitaryDataException(
+                    "Le format de la date de résolution est invalide (YYYY-MM-DD attendu)"
+                ) from exc
+
         resolution_date = resolution_date or date.today()
 
         if resolution_date < sanitary_log.event_date:
@@ -215,18 +224,25 @@ class SanitaryService(BaseService):
         sanitary_log.resolved = True
         sanitary_log.resolution_date = resolution_date
         if resolution_notes:
-            sanitary_log.resolution_notes = resolution_notes
+            notes = (sanitary_log.notes or '').strip()
+            resolution_entry = (
+                f"[Résolution {resolution_date.isoformat()}] "
+                f"{resolution_notes.strip()}"
+            )
+            sanitary_log.notes = f"{notes}\n{resolution_entry}".strip()
         sanitary_log.save()
 
-        # Cr?er notification de r?solution
+        # Créer notification de résolution
         NotificationService.create_notification(
             user=sanitary_log.cycle.farm_profile.user,
             notification_type='ticket_resolved',
-            title=f"Probl?me r?solu - {sanitary_log.cycle.cycle_name}",
-            message=(
-                f"Le probl?me {sanitary_log.get_event_type_display().lower()} du {sanitary_log.event_date} "
-                f"a ?t? marqu? comme r?solu."
-            ),
+            title=_("Problème résolu - %(cycle_name)s") % {'cycle_name': sanitary_log.cycle.cycle_name},
+            message=_(
+                "Le problème %(event_type)s du %(event_date)s a été marqué comme résolu."
+            ) % {
+                'event_type': sanitary_log.get_event_type_display().lower(),
+                'event_date': sanitary_log.event_date,
+            },
             content_object=sanitary_log,
             metadata={'cycle_id': str(sanitary_log.cycle.id), 'sanitary_log_id': str(sanitary_log.id)},
             channels=['in_app', 'push'],
@@ -310,7 +326,7 @@ class SanitaryService(BaseService):
                 'by_type': {},
                 'timeline': [],
                 'health_score': 100,
-                'recommendations': ['Aucun problème sanitaire enregistré. Continuez le bon travail !']
+                'recommendations': [str(_('Aucun problème sanitaire enregistré. Continuez le bon travail !'))]
             }
 
         # Statistiques de base
@@ -387,18 +403,22 @@ class SanitaryService(BaseService):
         cycle = sanitary_log.cycle
 
         if severity == 'critical':
-            title = f"🚨 Alerte sanitaire - {cycle.cycle_name}"
-            message = f"Problème {sanitary_log.get_event_type_display().lower()} détecté. " \
-                     f"Intervention recommandée rapidement."
+            title = _("🚨 Alerte sanitaire - %(cycle_name)s") % {'cycle_name': cycle.cycle_name}
+            message = _("Problème %(event_type)s détecté. Intervention recommandée rapidement.") % {
+                'event_type': sanitary_log.get_event_type_display().lower()
+            }
             notification_type = 'alert'
         elif severity == 'warning':
-            title = f"⚠️ Attention sanitaire - {cycle.cycle_name}"
-            message = f"Problème {sanitary_log.get_event_type_display().lower()} signalé. " \
-                     f"Surveillance recommandée."
+            title = _("⚠️ Attention sanitaire - %(cycle_name)s") % {'cycle_name': cycle.cycle_name}
+            message = _("Problème %(event_type)s signalé. Surveillance recommandée.") % {
+                'event_type': sanitary_log.get_event_type_display().lower()
+            }
             notification_type = 'alert'
         else:
-            title = f"📋 Événement sanitaire - {cycle.cycle_name}"
-            message = f"Événement {sanitary_log.get_event_type_display().lower()} enregistré."
+            title = _("📋 Événement sanitaire - %(cycle_name)s") % {'cycle_name': cycle.cycle_name}
+            message = _("Événement %(event_type)s enregistré.") % {
+                'event_type': sanitary_log.get_event_type_display().lower()
+            }
             notification_type = 'info'
 
         NotificationService.create_notification(
@@ -427,16 +447,20 @@ class SanitaryService(BaseService):
         NotificationService.create_notification(
             user=cycle.farm_profile.user,
             notification_type='mortality_alert',
-            title=f"ALERTE CRITIQUE - {cycle.cycle_name}",
-            message=(
-                f"{percentage:.1f}% de l'effectif affecté ({sanitary_log.affected_count} poissons).\n"
-                f"Type: {sanitary_log.get_event_type_display()}\n"
+            title=_("ALERTE CRITIQUE - %(cycle_name)s") % {'cycle_name': cycle.cycle_name},
+            message=_(
+                "%(percentage).1f%% de l'effectif affecté (%(count)d poissons).\n"
+                "Type: %(event_type)s\n"
                 "ACTION URGENTE :\n"
                 "1. Isoler les poissons malades si possible\n"
                 "2. Vérifier la qualité de l'eau\n"
-                "3. Contacter le support MAVECAM\n"
+                "3. Contacter le support AquaCare\n"
                 "4. Suspendre l'alimentation si besoin"
-            ),
+            ) % {
+                'percentage': percentage,
+                'count': sanitary_log.affected_count,
+                'event_type': sanitary_log.get_event_type_display(),
+            },
             content_object=sanitary_log,
             metadata={'cycle_id': str(cycle.id), 'sanitary_log_id': str(sanitary_log.id)},
             priority='urgent',
@@ -522,53 +546,47 @@ class SanitaryService(BaseService):
         # Recommandations selon problèmes actifs
         if active_count > 0:
             recommendations.append(
-                f"⚠️ {active_count} problème(s) sanitaire(s) actif(s). "
-                "Résolvez-les et marquez-les comme résolus après traitement."
+                _("⚠️ %(count)d problème(s) sanitaire(s) actif(s). "
+                  "Résolvez-les et marquez-les comme résolus après traitement.") % {'count': active_count}
             )
 
         # Recommandations selon types de problèmes
         if 'disease' in by_type and by_type['disease']['active'] > 0:
             recommendations.append(
-                "🦠 Maladie détectée : Isolez les poissons malades, vérifiez la qualité de l'eau "
-                "et contactez un vétérinaire aquacole si nécessaire."
+                _("🦠 Maladie détectée : Isolez les poissons malades, vérifiez la qualité de l'eau "
+                  "et contactez un vétérinaire aquacole si nécessaire.")
             )
 
         if 'water_quality' in by_type and by_type['water_quality']['count'] > 0:
             recommendations.append(
-                "💧 Problèmes de qualité d'eau récurrents : Augmentez la fréquence de renouvellement "
-                "et vérifiez le système de filtration/aération."
+                _("💧 Problèmes de qualité d'eau récurrents : Augmentez la fréquence de renouvellement "
+                  "et vérifiez le système de filtration/aération.")
             )
 
         if 'abnormal_mortality' in by_type and by_type['abnormal_mortality']['count'] > 0:
             recommendations.append(
-                "☠️ Mortalité anormale enregistrée : Surveillez étroitement la température, "
-                "l'oxygène dissous et réduisez l'alimentation temporairement."
+                _("☠️ Mortalité anormale enregistrée : Surveillez étroitement la température, "
+                  "l'oxygène dissous et réduisez l'alimentation temporairement.")
             )
 
         # Recommandations selon score de santé
         if health_score >= 90:
-            recommendations.append(
-                "✅ Excellente santé du cycle ! Maintenez ces bonnes pratiques."
-            )
+            recommendations.append(_("✅ Excellente santé du cycle ! Maintenez ces bonnes pratiques."))
         elif health_score >= 70:
-            recommendations.append(
-                "👍 Santé correcte. Restez vigilant et anticipez les problèmes."
-            )
+            recommendations.append(_("👍 Santé correcte. Restez vigilant et anticipez les problèmes."))
         elif health_score >= 50:
-            recommendations.append(
-                "⚠️ Santé préoccupante. Renforcez la surveillance et le suivi sanitaire."
-            )
+            recommendations.append(_("⚠️ Santé préoccupante. Renforcez la surveillance et le suivi sanitaire."))
         else:
             recommendations.append(
-                "🚨 Santé critique. Intervention urgente requise. "
-                "Contactez le support technique MAVECAM immédiatement."
+                _("🚨 Santé critique. Intervention urgente requise. "
+                  "Contactez le support technique AquaCare immédiatement.")
             )
 
         # Recommandations préventives générales
         if len(recommendations) < 3:
             recommendations.append(
-                "💡 Conseil : Effectuez des observations quotidiennes pour détecter "
-                "précocement les signes de maladie (comportement, appétit, aspect)."
+                _("💡 Conseil : Effectuez des observations quotidiennes pour détecter "
+                  "précocement les signes de maladie (comportement, appétit, aspect).")
             )
 
         return recommendations

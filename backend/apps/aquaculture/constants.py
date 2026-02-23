@@ -1,3 +1,35 @@
+from decimal import Decimal
+
+# ── Validation constants ──────────────────────────────────────────────────────
+# Sampling tolerance: allowed deviation between declared and calculated avg weight
+SAMPLING_TOLERANCE = Decimal('0.10')  # 10%
+
+# Default feed price (FCFA/kg) used when FarmProfile has no custom price
+DEFAULT_FEED_PRICE_PER_KG = Decimal('500')
+
+# Maximum initial stocking density (fish per m²)
+MAX_INITIAL_DENSITY_PER_M2 = 500
+
+# Water temperature valid range for log entries (°C)
+LOG_TEMPERATURE_MIN = 15
+LOG_TEMPERATURE_MAX = 40
+
+# A feeding plan week spans exactly 6 day intervals (start + 6 = end → 7 days)
+FEEDING_WEEK_DURATION_DAYS = 6
+
+# Bulk operation limits
+MAX_BULK_LOGS = 500
+MAX_GENERATION_WEEKS = 12
+
+# Feeding schedules by meals_per_day {count: [time objects]}
+# Defined here to keep views.py free of magic data
+FEEDING_SCHEDULES_BY_MEALS = {
+    1: [(13, 0)],
+    2: [(8, 0), (17, 0)],
+    3: [(8, 0), (13, 0), (18, 0)],
+    4: [(7, 0), (11, 0), (15, 0), (18, 0)],
+}
+
 SPECIES_CHOICES = [
     ('tilapia', 'Tilapia'),
     ('clarias', 'Clarias (Silure)'),

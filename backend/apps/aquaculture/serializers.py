@@ -26,6 +26,10 @@ from .models import (
 )
 # Notification model moved to apps/notifications/models.py
 from .domain.calculators import AquacultureCalculator
+from .constants import (
+    DEFAULT_FEED_PRICE_PER_KG, MAX_INITIAL_DENSITY_PER_M2,
+    LOG_TEMPERATURE_MIN, LOG_TEMPERATURE_MAX, FEEDING_WEEK_DURATION_DAYS,
+)
 from notifications.serializers import NotificationSerializer as GlobalNotificationSerializer
 
 
@@ -135,7 +139,7 @@ class ProductionCycleSerializer(serializers.ModelSerializer):
             return None
 
         # Récupère prix depuis FarmProfile ou défaut
-        price_per_kg = Decimal('500')  # Défaut FCFA/kg
+        price_per_kg = DEFAULT_FEED_PRICE_PER_KG  # Défaut FCFA/kg
         if hasattr(obj.farm_profile, 'default_feed_price_per_kg') and obj.farm_profile.default_feed_price_per_kg:
             price_per_kg = obj.farm_profile.default_feed_price_per_kg
 
@@ -173,7 +177,7 @@ class ProductionCycleSerializer(serializers.ModelSerializer):
         # Validate pond capacity (density check)
         if attrs.get('pond_surface_m2') and attrs.get('initial_count'):
             density_per_m2 = attrs['initial_count'] / float(attrs['pond_surface_m2'])
-            if density_per_m2 > 500:  # Max 500 fish per m2 initially
+            if density_per_m2 > MAX_INITIAL_DENSITY_PER_M2:
                 raise serializers.ValidationError({
                     'initial_count': _("Densité initiale trop élevée (max 500 poissons/m²)")
                 })
@@ -264,7 +268,7 @@ class CycleLogSerializer(serializers.ModelSerializer):
         # Validate environmental parameters
         if attrs.get('water_temperature'):
             temp = attrs['water_temperature']
-            if temp < 15 or temp > 40:
+            if temp < LOG_TEMPERATURE_MIN or temp > LOG_TEMPERATURE_MAX:
                 raise serializers.ValidationError({
                     'water_temperature': _("Température hors plage normale (15-40°C)")
                 })
@@ -275,50 +279,15 @@ class CycleLogSerializer(serializers.ModelSerializer):
 class BulkCycleLogSerializer(serializers.ListSerializer):
     """
     Sérialiseur bulk pour synchronisation offline de multiples logs.
-    Gère la déduplication basée sur client_uuid.
+    Délègue la logique métier (déduplication, upsert) à CycleLogService.
     """
     def create(self, validated_data):
-        """Crée plusieurs logs avec déduplication."""
-        logs = []
-        processed_uuids = {}  # Track UUIDs processed in this batch
-        
-        for item in validated_data:
-            client_uuid = item.get('client_uuid')
-            
-            # Deduplication based on client_uuid
-            if client_uuid:
-                # First check if we already processed this UUID in this batch
-                if client_uuid in processed_uuids:
-                    # Update the already processed log
-                    existing_log = processed_uuids[client_uuid]
-                    for attr, value in item.items():
-                        if attr not in ['id', 'created_at']:
-                            setattr(existing_log, attr, value)
-                    existing_log.synced_at = timezone.now()
-                    existing_log.save()
-                    continue
-                
-                # Then check database for existing log
-                existing = CycleLog.objects.filter(client_uuid=client_uuid).first()
-                if existing:
-                    # Update existing log instead of creating duplicate
-                    for attr, value in item.items():
-                        if attr not in ['id', 'created_at']:
-                            setattr(existing, attr, value)
-                    existing.synced_at = timezone.now()
-                    existing.save()
-                    logs.append(existing)
-                    processed_uuids[client_uuid] = existing
-                    continue
-            
-            # Create new log
-            item['synced_at'] = timezone.now()
-            log = CycleLog.objects.create(**item)
-            logs.append(log)
-            if client_uuid:
-                processed_uuids[client_uuid] = log
-        
-        return logs
+        """Délègue la création bulk au CycleLogService (respect Views → Services)."""
+        from .services.log_service import CycleLogService
+        request = self.context.get('request')
+        user = getattr(request, 'user', None)
+        result = CycleLogService.create_bulk_logs(validated_data, user)
+        return result['logs']
 
 
 class CycleLogSyncSerializer(CycleLogSerializer):
@@ -364,7 +333,7 @@ class FeedingPlanSerializer(serializers.ModelSerializer):
         """Valide les données du plan d'alimentation."""
         # Ensure week dates are consistent
         if attrs.get('start_date') and attrs.get('end_date'):
-            if (attrs['end_date'] - attrs['start_date']).days != 6:
+            if (attrs['end_date'] - attrs['start_date']).days != FEEDING_WEEK_DURATION_DAYS:
                 raise serializers.ValidationError({
                     'end_date': _("La période doit être exactement 7 jours")
                 })
@@ -376,6 +345,9 @@ class SanitaryLogSerializer(serializers.ModelSerializer):
     """
     Sérialiseur pour les logs sanitaires avec support photo.
     """
+    MAX_PHOTO_SIZE_BYTES = 5 * 1024 * 1024
+    ALLOWED_PHOTO_CONTENT_TYPES = {'image/jpeg', 'image/png', 'image/webp'}
+
     cycle_name = serializers.CharField(source='cycle.cycle_name', read_only=True)
     event_type_display = serializers.CharField(source='get_event_type_display', read_only=True)
     photo_url = serializers.SerializerMethodField()
@@ -405,14 +377,53 @@ class SanitaryLogSerializer(serializers.ModelSerializer):
         """Calcule les jours depuis que l'événement s'est produit."""
         return (date.today() - obj.event_date).days
 
+    def validate_photo(self, value):
+        """Valide le type et la taille de la photo uploadée."""
+        if not value:
+            return value
+
+        content_type = getattr(value, 'content_type', None)
+        if content_type and content_type not in self.ALLOWED_PHOTO_CONTENT_TYPES:
+            raise serializers.ValidationError(
+                _("Format photo non supporté. Utilisez JPEG, PNG ou WEBP.")
+            )
+
+        if value.size > self.MAX_PHOTO_SIZE_BYTES:
+            raise serializers.ValidationError(
+                _("La photo dépasse la taille maximale de 5MB.")
+            )
+
+        return value
+
     def validate(self, attrs):
         """Valide les données du log sanitaire."""
+        cycle = attrs.get('cycle') or getattr(self.instance, 'cycle', None)
+        event_date = attrs.get('event_date') or getattr(self.instance, 'event_date', None)
+        request = self.context.get('request')
+        request_user = getattr(request, 'user', None)
+
+        if cycle and request_user and getattr(request_user, 'is_authenticated', False):
+            if cycle.farm_profile.user_id != request_user.id:
+                raise serializers.ValidationError({
+                    'cycle': _("Cycle non autorisé")
+                })
+
+        if cycle and event_date:
+            if event_date < cycle.start_date:
+                raise serializers.ValidationError({
+                    'event_date': _("La date de l'événement ne peut pas être avant le début du cycle")
+                })
+            if event_date > date.today():
+                raise serializers.ValidationError({
+                    'event_date': _("La date de l'événement ne peut pas être dans le futur")
+                })
+
         # Validate resolution date
         if attrs.get('resolved') and not attrs.get('resolution_date'):
             attrs['resolution_date'] = date.today()
         
-        if attrs.get('resolution_date') and attrs.get('event_date'):
-            if attrs['resolution_date'] < attrs['event_date']:
+        if attrs.get('resolution_date') and event_date:
+            if attrs['resolution_date'] < event_date:
                 raise serializers.ValidationError({
                     'resolution_date': _("La date de résolution ne peut être avant l'événement")
                 })
@@ -464,13 +475,8 @@ class HarvestSerializer(serializers.Serializer):
     """
     Sérialiseur pour les données de récolte d'un cycle.
     """
-    harvest_date = serializers.DateField(
-        help_text="Date de récolte du cycle"
-    )
-    final_count = serializers.IntegerField(
-        min_value=0,
-        help_text="Nombre final de poissons récoltés"
-    )
+    harvest_date = serializers.DateField(help_text="Date de récolte du cycle")
+    final_count = serializers.IntegerField(min_value=0, help_text="Nombre final de poissons récoltés")
     final_average_weight = serializers.DecimalField(
         max_digits=6,
         decimal_places=2,
@@ -481,55 +487,50 @@ class HarvestSerializer(serializers.Serializer):
         max_digits=10,
         decimal_places=2,
         min_value=Decimal('0.1'),
-        help_text="Poids total récolté en kilogrammes"
+        help_text="Poids total récolté en kilogrammes",
+        required=False
     )
     harvest_notes = serializers.CharField(
         max_length=500,
         required=False,
+        allow_blank=True,
         help_text="Notes sur la récolte"
     )
+
+    def validate_harvest_date(self, value):
+        """Valide que la date de récolte est raisonnable."""
+        from datetime import timedelta
+        if value < date.today() - timedelta(days=30):
+            raise serializers.ValidationError(_("Date de récolte trop ancienne"))
+        if value > date.today():
+            raise serializers.ValidationError(_("Date de récolte ne peut être dans le futur"))
+        return value
 
 
 class CycleStatisticsSerializer(serializers.Serializer):
     """
     Sérialiseur pour les statistiques détaillées d'un cycle.
     """
-    current_metrics = serializers.DictField(
-        help_text="Métriques actuelles du cycle"
-    )
-    feed_metrics = serializers.DictField(
-        help_text="Métriques d'alimentation"
-    )
-    mortality_analysis = serializers.DictField(
-        help_text="Analyse de la mortalité"
-    )
-    growth_performance = serializers.ListField(
-        help_text="Données de performance de croissance"
-    )
-    environmental_analysis = serializers.DictField(
-        help_text="Analyse des conditions environnementales"
-    )
+    cycle_id = serializers.UUIDField()
+    cycle_name = serializers.CharField()
+    days_active = serializers.IntegerField()
+    current_metrics = serializers.DictField(help_text="Métriques actuelles du cycle")
+    feed_metrics = serializers.DictField(help_text="Métriques d'alimentation")
+    mortality_analysis = serializers.DictField(help_text="Analyse de la mortalité")
+    growth_performance = serializers.ListField(help_text="Données de performance de croissance")
+    environmental_summary = serializers.DictField(help_text="Analyse des conditions environnementales")
+    estimated_costs = serializers.DictField(help_text="Coûts estimés")
 
 
 class CycleComparisonSerializer(serializers.Serializer):
     """
     Sérialiseur pour la comparaison de cycles.
     """
-    current_cycle = serializers.DictField(
-        help_text="Résumé du cycle actuel"
-    )
-    previous_cycles = serializers.ListField(
-        help_text="Cycles précédents pour comparaison"
-    )
-    historical_averages = serializers.DictField(
-        help_text="Moyennes historiques"
-    )
-    performance_ranking = serializers.DictField(
-        help_text="Classement de performance"
-    )
-    improvement_suggestions = serializers.ListField(
-        help_text="Suggestions d'amélioration"
-    )
+    current_cycle = serializers.DictField(help_text="Résumé du cycle actuel")
+    previous_cycles = serializers.ListField(help_text="Cycles précédents pour comparaison")
+    historical_averages = serializers.DictField(help_text="Moyennes historiques")
+    performance_ranking = serializers.CharField(help_text="Classement de performance")
+    improvement_suggestions = serializers.ListField(help_text="Suggestions d'amélioration")
 
 
 # =============================================================================
@@ -583,60 +584,3 @@ class SyncResponseSerializer(serializers.Serializer):
     processed = serializers.DictField()
     errors = serializers.ListField()
     server_updates = serializers.DictField()
-
-
-class HarvestSerializer(serializers.Serializer):
-    """
-    Sérialiseur pour les données de récolte/finalisation de cycle.
-    """
-    harvest_date = serializers.DateField()
-    final_count = serializers.IntegerField(min_value=0)
-    final_average_weight = serializers.DecimalField(
-        max_digits=6, 
-        decimal_places=2, 
-        min_value=Decimal('0.1')
-    )
-    harvest_notes = serializers.CharField(max_length=500, required=False, allow_blank=True)
-
-    def validate_harvest_date(self, value):
-        """Valide que la date de récolte est raisonnable."""
-        from datetime import timedelta
-        if value < date.today() - timedelta(days=30):
-            raise serializers.ValidationError(_("Date de récolte trop ancienne"))
-        if value > date.today():
-            raise serializers.ValidationError(_("Date de récolte ne peut être dans le futur"))
-        return value
-
-
-class CycleStatisticsSerializer(serializers.Serializer):
-    """
-    Sérialiseur pour les statistiques détaillées et analytics de cycle.
-    """
-    cycle_id = serializers.UUIDField()
-    cycle_name = serializers.CharField()
-    days_active = serializers.IntegerField()
-    
-    # Current metrics
-    current_metrics = serializers.DictField()
-    
-    # Performance analysis
-    feed_metrics = serializers.DictField()
-    mortality_analysis = serializers.DictField()
-    growth_performance = serializers.ListField()
-    
-    # Environmental analysis
-    environmental_summary = serializers.DictField()
-    
-    # Cost analysis
-    estimated_costs = serializers.DictField()
-
-
-class CycleComparisonSerializer(serializers.Serializer):
-    """
-    Sérialiseur pour comparer les performances de cycles.
-    """
-    current_cycle = serializers.DictField()
-    previous_cycles = serializers.ListField()
-    historical_averages = serializers.DictField()
-    performance_ranking = serializers.CharField()
-    improvement_suggestions = serializers.ListField()

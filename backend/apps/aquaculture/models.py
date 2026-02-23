@@ -13,6 +13,7 @@ import uuid
 from decimal import Decimal
 from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
+from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
 from django.utils import timezone
 from .constants import (
@@ -375,8 +376,6 @@ class CycleLog(models.Model):
 
     def clean(self):
         """Valide la cohérence des données de log."""
-        from django.core.exceptions import ValidationError
-        
         # Validate log date within cycle period
         if self.cycle:
             if self.log_date < self.cycle.start_date:

@@ -3,7 +3,7 @@ from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
 from datetime import date, timedelta
 
-from ..constants import OPTIMAL_PARAMETERS
+from ..constants import OPTIMAL_PARAMETERS, SAMPLING_TOLERANCE
 
 
 def validate_cycle_duration(start_date: date, end_date: date, species: str):
@@ -197,10 +197,6 @@ def validate_feeding_data(
                 }
             )
         
-        if feeding_rate > 10:
-            # Warning level
-            pass  # Could add warning logic here
-    
     # Per-fish feeding check
     if fish_count > 0:
         feed_per_fish_g = (feed_quantity * 1000) / fish_count
@@ -261,7 +257,7 @@ def validate_sampling_data(
     # If pre-calculated average provided, check consistency
     if calculated_average is not None:
         tolerance = abs(calculated_average - average_weight) / average_weight
-        if tolerance > Decimal('0.1'):  # 10% tolerance
+        if tolerance > SAMPLING_TOLERANCE:
             raise ValidationError(
                 _("Incohérence dans les données d'échantillonnage (écart > 10%%)")
             )

@@ -344,3 +344,188 @@ class TestCycleLogServiceValidation:
         # Ne devrait pas lever d'exception (juste warning dans logs)
         log = CycleLogService.create_log(cycle, log_data)
         assert log is not None
+
+
+@pytest.mark.django_db
+class TestCycleLogServiceCreatedOffline:
+    """Tests du flag created_offline."""
+
+    def test_create_log_offline_flag_defaults_to_false(self):
+        """create_log sans created_offline → False par défaut."""
+        cycle = ProductionCycleFactory()
+        log = CycleLogService.create_log(cycle, {'log_date': date.today()})
+        assert log.created_offline is False
+
+    def test_create_log_with_created_offline_true(self):
+        """create_log avec created_offline=True conserve le flag."""
+        cycle = ProductionCycleFactory()
+        log = CycleLogService.create_log(
+            cycle,
+            {'log_date': date.today()},
+            created_offline=True
+        )
+        assert log.created_offline is True
+
+    def test_create_log_with_client_uuid_stores_uuid_on_log(self):
+        """Créer un log avec client_uuid stocke bien le UUID sur le log créé."""
+        import uuid
+
+        cycle = ProductionCycleFactory()
+        test_uuid = str(uuid.uuid4())
+
+        log = CycleLogService.create_log(
+            cycle,
+            {'log_date': date.today(), 'client_uuid': test_uuid}
+        )
+        assert str(log.client_uuid) == test_uuid
+
+
+@pytest.mark.django_db
+class TestBulkLogsCrossUserConflict:
+    """Tests du conflit UUID cross-utilisateur dans create_bulk_logs."""
+
+    def test_bulk_logs_rejects_uuid_belonging_to_another_user(self):
+        """Un client_uuid appartenant à un autre utilisateur est rejeté."""
+        import uuid
+
+        user1 = UserFactory()
+        user2 = UserFactory()
+        cycle1 = ProductionCycleFactory(farm_profile__user=user1)
+        cycle2 = ProductionCycleFactory(farm_profile__user=user2)
+
+        conflict_uuid = str(uuid.uuid4())
+        # user1 creates a log with this UUID
+        CycleLogService.create_log(cycle1, {
+            'log_date': date.today(),
+            'mortality_count': 2,
+            'client_uuid': conflict_uuid,
+        })
+
+        # user2 tries to sync with the same UUID
+        logs_data = [
+            {
+                'cycle': str(cycle2.id),
+                'log_date': date.today(),
+                'mortality_count': 5,
+                'client_uuid': conflict_uuid,
+            }
+        ]
+
+        result = CycleLogService.create_bulk_logs(logs_data, user2)
+
+        assert result['created'] == 0
+        assert len(result['errors']) == 1
+        assert 'autre utilisateur' in result['errors'][0]['error']
+
+    def test_bulk_logs_rejects_uuid_linked_to_different_cycle(self):
+        """Un client_uuid lié à un autre cycle du même utilisateur est rejeté."""
+        import uuid
+        from tests.fixtures.factories import FarmProfileFactory
+
+        user = UserFactory()
+        farm = FarmProfileFactory(user=user)
+        cycle1 = ProductionCycleFactory(
+            farm_profile=farm,
+            start_date=date.today() - timedelta(days=10)
+        )
+        cycle2 = ProductionCycleFactory(
+            farm_profile=farm,
+            start_date=date.today() - timedelta(days=10)
+        )
+
+        link_uuid = str(uuid.uuid4())
+        CycleLogService.create_log(cycle1, {
+            'log_date': date.today() - timedelta(days=2),
+            'mortality_count': 1,
+            'client_uuid': link_uuid,
+        })
+
+        logs_data = [
+            {
+                'cycle': str(cycle2.id),
+                'log_date': date.today() - timedelta(days=1),
+                'mortality_count': 3,
+                'client_uuid': link_uuid,
+            }
+        ]
+
+        result = CycleLogService.create_bulk_logs(logs_data, user)
+
+        assert result['created'] == 0
+        assert len(result['errors']) == 1
+        assert 'autre cycle' in result['errors'][0]['error']
+
+    def test_bulk_logs_in_batch_duplicate_uuid_updates_not_creates(self):
+        """Un UUID répété dans le même batch update le log, pas en crée un second."""
+        import uuid
+
+        user = UserFactory()
+        cycle = ProductionCycleFactory(
+            farm_profile__user=user,
+            start_date=date.today() - timedelta(days=10)
+        )
+
+        same_uuid = str(uuid.uuid4())
+        logs_data = [
+            {
+                'cycle': str(cycle.id),
+                'log_date': date.today() - timedelta(days=2),
+                'mortality_count': 5,
+                'client_uuid': same_uuid,
+            },
+            {
+                'cycle': str(cycle.id),
+                'log_date': date.today() - timedelta(days=2),
+                'mortality_count': 10,  # Different mortality
+                'client_uuid': same_uuid,  # Same UUID
+            },
+        ]
+
+        result = CycleLogService.create_bulk_logs(logs_data, user)
+
+        # Should create 1, update 1 — not create 2
+        assert result['created'] == 1
+        assert result['updated'] == 1
+        assert len(result['logs']) == 1  # No duplicate in logs list
+
+    def test_bulk_logs_with_user_none_still_processes(self):
+        """create_bulk_logs avec user=None (contexte test) fonctionne sans crash."""
+        import uuid
+
+        cycle = ProductionCycleFactory(
+            start_date=date.today() - timedelta(days=10)
+        )
+
+        logs_data = [
+            {
+                'cycle': str(cycle.id),
+                'log_date': date.today() - timedelta(days=1),
+                'mortality_count': 3,
+                'client_uuid': str(uuid.uuid4()),
+            }
+        ]
+
+        # user=None: should not crash (no ownership filter applied)
+        result = CycleLogService.create_bulk_logs(logs_data, user=None)
+
+        assert result['created'] == 1
+        assert len(result['errors']) == 0
+
+    def test_bulk_logs_missing_cycle_id_adds_error(self):
+        """Un log sans cycle_id est rejeté avec message clair."""
+        import uuid
+
+        user = UserFactory()
+        logs_data = [
+            {
+                'log_date': date.today(),
+                'mortality_count': 5,
+                'client_uuid': str(uuid.uuid4()),
+            }
+        ]
+
+        result = CycleLogService.create_bulk_logs(logs_data, user)
+
+        assert result['created'] == 0
+        assert len(result['errors']) == 1
+        assert 'cycle_id requis' in result['errors'][0]['error']

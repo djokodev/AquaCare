@@ -281,6 +281,16 @@ class TestCycleLogViewSet:
         assert response.data['created'] == 2
         assert len(response.data['logs']) == 2
 
+    def test_bulk_create_rejects_too_many_logs(self, auth_client):
+        """Doit refuser les payloads bulk trop volumineux."""
+        url = reverse('aquaculture:cycle-log-bulk-create')
+        data = {'logs': [{}] * 501}
+
+        response = auth_client.post(url, data, format='json')
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert 'error' in response.data
+
     def test_filter_logs_by_cycle(self, auth_client, production_cycle, farm_profile):
         """Test filtrage logs par cycle."""
         # Créer un autre cycle
@@ -674,3 +684,14 @@ class TestSyncView:
         server_logs = response.data['server_updates']['cycle_logs']
         log_ids = [log['id'] for log in server_logs]
         assert str(server_log.id) in log_ids
+
+    def test_sync_rejects_too_many_cycle_logs(self, auth_client):
+        """Doit refuser les collections de sync trop volumineuses."""
+        url = reverse('aquaculture:sync')
+        data = {'cycle_logs': [{}] * 1001}
+
+        response = auth_client.post(url, data, format='json')
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.data['status'] == 'error'
+        assert len(response.data['errors']) > 0

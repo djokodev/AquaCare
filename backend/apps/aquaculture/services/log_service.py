@@ -10,6 +10,7 @@ Responsabilités :
 - Création bulk avec gestion transactions
 - Validation cohérence données (échantillonnage, paramètres eau)
 """
+import uuid as _uuid
 from typing import List, Dict, Any, Optional
 from decimal import Decimal
 from datetime import date
@@ -24,6 +25,7 @@ from ..domain.exceptions import (
     InvalidDateRangeError,
     OfflineSyncConflictError,
 )
+from ..constants import SAMPLING_TOLERANCE
 from .base import BaseService
 
 
@@ -83,9 +85,9 @@ class CycleLogService(BaseService):
         # 2. Auto-calcul poids moyen si échantillon fourni
         if log_data.get('sample_count') and log_data.get('sample_total_weight'):
             if not log_data.get('average_weight'):
-                log_data['average_weight'] = (
+                log_data['average_weight'] = Decimal(str(
                     log_data['sample_total_weight'] / log_data['sample_count']
-                )
+                ))
 
         # 3. Vérification doublon date (sauf si client_uuid fourni)
         if not log_data.get('client_uuid'):
@@ -145,7 +147,7 @@ class CycleLogService(BaseService):
         """
         CycleLogService.log_operation(
             "create_bulk_logs",
-            {"count": len(logs_data), "user": user.id}
+            {"count": len(logs_data), "user": user.id if user else None}
         )
 
         result = {
@@ -156,37 +158,87 @@ class CycleLogService(BaseService):
             'cycles_affected': set()
         }
 
+        # Batch-fetch all cycles upfront to avoid N+1 queries in the loop
+        # Filter invalid UUIDs to prevent ORM ValueError on __in lookup
+        raw_cycle_ids = []
+        for log_data in logs_data:
+            cycle_ref = log_data.get('cycle')
+            cid = getattr(cycle_ref, 'id', cycle_ref)
+            if cid:
+                try:
+                    _uuid.UUID(str(cid))
+                    raw_cycle_ids.append(str(cid))
+                except (ValueError, AttributeError):
+                    pass  # Will surface as "cycle not found" in the per-item loop
+
+        cycles_map = {}
+        if raw_cycle_ids:
+            cycle_filter = {'id__in': raw_cycle_ids}
+            if user is not None:
+                cycle_filter['farm_profile__user'] = user  # enforce ownership in production
+            cycles_map = {
+                str(c.id): c
+                for c in ProductionCycle.objects.filter(**cycle_filter).select_related('farm_profile')
+            }
+
+        # Track UUIDs already processed in this batch to handle in-batch duplicates
+        batch_uuid_map: dict = {}
+
         for idx, log_data in enumerate(logs_data):
             try:
                 # Récupérer le cycle (avec vérification permission)
-                cycle_id = log_data.get('cycle')
+                cycle_ref = log_data.get('cycle')
+                cycle_id = getattr(cycle_ref, 'id', cycle_ref)
                 if not cycle_id:
                     result['errors'].append({
                         'index': idx,
                         'error': 'cycle_id requis',
-                        'data': log_data
                     })
                     continue
 
-                cycle = ProductionCycle.objects.filter(
-                    id=cycle_id,
-                    farm_profile__user=user
-                ).first()
+                cycle = cycles_map.get(str(cycle_id))
 
                 if not cycle:
                     result['errors'].append({
                         'index': idx,
                         'error': 'Cycle non trouvé ou accès non autorisé',
-                        'data': log_data
                     })
                     continue
 
                 # Déduplication par client_uuid
                 client_uuid = log_data.get('client_uuid')
                 if client_uuid:
+                    client_uuid_str = str(client_uuid)
+
+                    # 1. In-batch duplicate (same UUID appeared earlier in this batch)
+                    if client_uuid_str in batch_uuid_map:
+                        in_batch_log = batch_uuid_map[client_uuid_str]
+                        for key, value in log_data.items():
+                            if key not in ['id', 'created_at', 'cycle']:
+                                setattr(in_batch_log, key, value)
+                        in_batch_log.synced_at = timezone.now()
+                        in_batch_log.save()
+                        result['updated'] += 1
+                        continue  # Don't re-append — already in result['logs']
+
+                    # 2. Database duplicate (UUID exists from previous sync)
                     existing_log = CycleLog.objects.filter(client_uuid=client_uuid).first()
 
                     if existing_log:
+                        if user is not None and existing_log.cycle.farm_profile.user_id != user.id:
+                            result['errors'].append({
+                                'index': idx,
+                                'error': 'Conflit client_uuid détecté avec un autre utilisateur',
+                            })
+                            continue
+
+                        if existing_log.cycle_id != cycle.id:
+                            result['errors'].append({
+                                'index': idx,
+                                'error': 'Le client_uuid fourni est lié à un autre cycle',
+                            })
+                            continue
+
                         # Mise à jour log existant
                         for key, value in log_data.items():
                             if key not in ['id', 'created_at', 'cycle']:
@@ -198,16 +250,18 @@ class CycleLogService(BaseService):
                         result['updated'] += 1
                         result['logs'].append(existing_log)
                         result['cycles_affected'].add(existing_log.cycle_id)
+                        batch_uuid_map[client_uuid_str] = existing_log
                         continue
 
                 # Création nouveau log
                 # Retirer les champs qui ne font pas partie du modèle
                 clean_log_data = {k: v for k, v in log_data.items() if k not in ['cycle', 'id']}
+                created_offline = clean_log_data.pop('created_offline', True)
 
                 log = CycleLogService.create_log(
                     cycle=cycle,
                     log_data=clean_log_data,
-                    created_offline=clean_log_data.get('created_offline', True)
+                    created_offline=created_offline
                 )
 
                 log.synced_at = timezone.now()
@@ -216,12 +270,14 @@ class CycleLogService(BaseService):
                 result['created'] += 1
                 result['logs'].append(log)
                 result['cycles_affected'].add(log.cycle_id)
+                if client_uuid:
+                    batch_uuid_map[str(client_uuid)] = log
 
-            except Exception as e:
+            except (BusinessRuleViolation, InvalidDateRangeError, InsufficientFishCountError,
+                    OfflineSyncConflictError, ValueError, TypeError) as e:
                 result['errors'].append({
                     'index': idx,
                     'error': str(e),
-                    'data': log_data
                 })
 
         CycleLogService.log_operation(
@@ -300,6 +356,18 @@ class CycleLogService(BaseService):
         existing_log = CycleLog.objects.filter(client_uuid=client_uuid).first()
 
         if existing_log:
+            if existing_log.cycle.farm_profile.user_id != user.id:
+                raise OfflineSyncConflictError(
+                    _("Conflit de synchronisation : ce client_uuid appartient à un autre utilisateur.")
+                )
+
+            requested_cycle_ref = log_data.get('cycle')
+            requested_cycle_id = getattr(requested_cycle_ref, 'id', requested_cycle_ref)
+            if requested_cycle_id and str(existing_log.cycle_id) != str(requested_cycle_id):
+                raise OfflineSyncConflictError(
+                    _("Conflit de synchronisation : ce client_uuid est déjà lié à un autre cycle.")
+                )
+
             # Mise à jour
             CycleLogService.log_operation(
                 "deduplicate_found",
@@ -373,7 +441,7 @@ class CycleLogService(BaseService):
                 calculated_avg = sample_total_weight / sample_count
                 tolerance = abs(calculated_avg - average_weight) / calculated_avg
 
-                if tolerance > 0.15:  # Tolérance 15%
+                if Decimal(str(tolerance)) > SAMPLING_TOLERANCE:
                     raise BusinessRuleViolation(
                         _("Poids moyen (%(average).2fg) incohérent avec l'échantillon "
                           "(calculé: %(calculated).2fg, écart: %(tolerance).1f%%)")
