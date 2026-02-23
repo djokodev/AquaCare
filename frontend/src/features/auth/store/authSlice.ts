@@ -25,8 +25,8 @@ export const loginUser = createAsyncThunk(
     try {
       const response = await authService.login(credentials);
       return response;
-    } catch (error: any) {
-      return rejectWithValue(error.message);
+    } catch (error: unknown) {
+      return rejectWithValue(error instanceof Error ? error.message : 'UNKNOWN_ERROR');
     }
   }
 );
@@ -37,8 +37,8 @@ export const registerUser = createAsyncThunk(
     try {
       const response = await authService.register(userData);
       return response;
-    } catch (error: any) {
-      return rejectWithValue(error.message);
+    } catch (error: unknown) {
+      return rejectWithValue(error instanceof Error ? error.message : 'UNKNOWN_ERROR');
     }
   }
 );
@@ -49,8 +49,8 @@ export const logoutUser = createAsyncThunk(
     try {
       await authService.logout();
       return true;
-    } catch (error: any) {
-      return rejectWithValue(error.message);
+    } catch (error: unknown) {
+      return rejectWithValue(error instanceof Error ? error.message : 'UNKNOWN_ERROR');
     }
   }
 );
@@ -65,8 +65,8 @@ export const checkAuthStatus = createAsyncThunk(
         return { user, isAuthenticated: true };
       }
       return { user: null, isAuthenticated: false };
-    } catch (error: any) {
-      return rejectWithValue(error.message);
+    } catch (error: unknown) {
+      return rejectWithValue(error instanceof Error ? error.message : 'UNKNOWN_ERROR');
     }
   }
 );
@@ -80,8 +80,8 @@ export const loadUserProfile = createAsyncThunk(
         authService.getFarmProfile(),
       ]);
       return { user, farmProfile };
-    } catch (error: any) {
-      return rejectWithValue(error.message);
+    } catch (error: unknown) {
+      return rejectWithValue(error instanceof Error ? error.message : 'UNKNOWN_ERROR');
     }
   }
 );
@@ -92,8 +92,8 @@ export const updateUserProfile = createAsyncThunk(
     try {
       const updatedUser = await authService.updateProfile(profileData);
       return updatedUser;
-    } catch (error: any) {
-      return rejectWithValue(error.message);
+    } catch (error: unknown) {
+      return rejectWithValue(error instanceof Error ? error.message : 'UNKNOWN_ERROR');
     }
   }
 );
@@ -104,8 +104,8 @@ export const updateFarmProfile = createAsyncThunk(
     try {
       const updatedFarmProfile = await authService.updateFarmProfile(farmData);
       return updatedFarmProfile;
-    } catch (error: any) {
-      return rejectWithValue(error.message);
+    } catch (error: unknown) {
+      return rejectWithValue(error instanceof Error ? error.message : 'UNKNOWN_ERROR');
     }
   }
 );

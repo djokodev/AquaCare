@@ -5,6 +5,10 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { AuthStackParamList } from '@/navigation/AuthNavigator';
 import { useAuth } from '@/hooks/useAuth';
 import { LoginRequest } from '@/types/auth';
+import logger from '@/utils/logger';
+import { PHONE_REGEX } from '@/utils/phoneFormatter';
+import PhoneInputField from '@/components/common/PhoneInputField';
+import AuthErrorBlock from '@/components/common/AuthErrorBlock';
 
 type LoginScreenNavigationProp = StackNavigationProp<AuthStackParamList, 'Login'>;
 
@@ -34,7 +38,7 @@ export default function LoginScreen({ navigation }: Props) {
     } else {
       if (!formData.phoneNumber.trim()) {
         newErrors.phoneNumber = t('required');
-      } else if (!/^\+237[0-9]{9}$/.test(formData.phoneNumber.trim())) {
+      } else if (!PHONE_REGEX.test(formData.phoneNumber.trim())) {
         newErrors.phoneNumber = t('invalidPhone');
       }
     }
@@ -68,7 +72,7 @@ export default function LoginScreen({ navigation }: Props) {
       await login(credentials);
       // Navigation is handled by AppNavigator after auth state changes
     } catch (err) {
-      console.error('Login error:', err);
+      logger.error('Login error:', err);
     }
   };
 
@@ -89,25 +93,6 @@ export default function LoginScreen({ navigation }: Props) {
     }
   };
 
-  const handlePhoneNumberChange = (value: string) => {
-    const digits = value.replace(/\D/g, '');
-    let formattedPhone = '';
-
-    if (digits.length === 0) {
-      formattedPhone = '';
-    } else if (digits.length <= 9) {
-      formattedPhone = digits.length === 9 ? `+237${digits}` : digits.length > 0 ? `+237${digits}` : '';
-    } else if (digits.length === 12 && digits.startsWith('237')) {
-      formattedPhone = `+${digits}`;
-    } else if (digits.length === 13 && digits.startsWith('237')) {
-      formattedPhone = `+${digits}`;
-    } else {
-      formattedPhone = value;
-    }
-
-    updateField('phoneNumber', formattedPhone);
-  };
-
   const renderError = (field: keyof typeof errors) =>
     errors[field] ? <Text className="text-sm text-error mt-1">{errors[field]}</Text> : null;
 
@@ -121,7 +106,7 @@ export default function LoginScreen({ navigation }: Props) {
           <Text className="text-3xl font-bold text-mavecam-primary text-center">{t('welcomeMessage')}</Text>
         </View>
 
-        <View className="bg-white p-5 rounded-2xl shadow">
+        <View className="bg-white p-5 rounded-2xl">
           <Text className="text-2xl font-bold text-gray-dark mb-5 text-center">{t('login')}</Text>
 
           <View className="flex-row bg-cream rounded-lg mb-5">
@@ -152,33 +137,18 @@ export default function LoginScreen({ navigation }: Props) {
                 }`}
                 value={formData.loginName}
                 onChangeText={(value) => updateField('loginName', value)}
-                placeholder="Jean Farmer ou AquaFerme SARL"
+                placeholder={t('placeholderLoginName')}
                 autoCapitalize="words"
                 autoComplete="name"
               />
               {renderError('loginName')}
             </View>
           ) : (
-            <View className="mb-4">
-              <Text className="text-base font-medium text-gray-dark mb-2">{t('phoneNumber')}</Text>
-              <View
-                className={`flex-row items-center border rounded-lg bg-white px-3 ${
-                  errors.phoneNumber ? 'border-error' : 'border-gray-300'
-                }`}
-              >
-                <Text className="text-base font-semibold text-mavecam-primary mr-2">+237</Text>
-                <TextInput
-                  className="flex-1 text-base py-3"
-                  value={formData.phoneNumber.replace('+237', '')}
-                  onChangeText={handlePhoneNumberChange}
-                  placeholder="652260368"
-                  keyboardType="phone-pad"
-                  maxLength={9}
-                  autoComplete="tel"
-                />
-              </View>
-              {renderError('phoneNumber')}
-            </View>
+            <PhoneInputField
+              value={formData.phoneNumber}
+              onChange={(formatted) => updateField('phoneNumber', formatted)}
+              error={errors.phoneNumber}
+            />
           )}
 
           <View className="mb-4">
@@ -196,11 +166,7 @@ export default function LoginScreen({ navigation }: Props) {
             {renderError('password')}
           </View>
 
-          {error && (
-            <View className="bg-[#fef2f2] p-3 rounded-lg mb-4 border-l-4 border-l-error">
-              <Text className="text-sm font-semibold text-error">{error}</Text>
-            </View>
-          )}
+          <AuthErrorBlock error={error} />
 
           <TouchableOpacity
             className={`py-4 rounded-lg items-center mb-4 ${isLoading ? 'bg-mavecam-primary/70' : 'bg-mavecam-primary'}`}

@@ -39,6 +39,8 @@ describe('store/slices/authSlice', () => {
     account_type: 'individual',
     language_preference: 'fr',
     is_verified: false,
+    is_active: true,
+    date_joined: '2024-01-01T00:00:00Z',
     display_name: 'John Doe',
     is_individual: true,
     is_company: false,

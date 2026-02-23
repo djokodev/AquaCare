@@ -1,5 +1,5 @@
 ﻿import { useSelector, useDispatch } from 'react-redux';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { RootState, AppDispatch } from '@/store/store';
 import { setLogoutCallback } from '@/services/api';
 import {
@@ -14,63 +14,59 @@ import {
 } from '@/features/auth/store/authSlice';
 import { LoginRequest, RegisterRequest, User, FarmProfile } from '@/types/auth';
 
+// Module-level tracking: survives component remounts, prevents duplicate profile loads
+// across all instances of useAuth() (e.g., multiple screens mounted simultaneously).
+const _profileLoad = { attempted: false, userId: null as string | null };
+
 /**
- * Hook personnalisÃ© pour la gestion de l'authentification
+ * Hook personnalisé pour la gestion de l'authentification
  */
 export const useAuth = () => {
   const dispatch = useDispatch<AppDispatch>();
   const authState = useSelector((state: RootState) => state.auth);
 
-  // Configuration de la dÃ©connexion automatique
+  // Configuration de la déconnexion automatique
   useEffect(() => {
     const handleAutoLogout = () => {
       dispatch(logoutUser());
     };
 
-    // S'enregistrer pour la dÃ©connexion automatique
+    // S'enregistrer pour la déconnexion automatique
     setLogoutCallback(handleAutoLogout);
 
-    // Cleanup au dÃ©montage du composant
+    // Cleanup au démontage du composant
     return () => {
       setLogoutCallback(() => {});
     };
   }, [dispatch]);
 
-  // Chargement automatique du profil ferme lors de la connexion (une seule fois)
-  const [profileLoadAttempted, setProfileLoadAttempted] = useState(false);
-  const [lastUserId, setLastUserId] = useState<string | null>(null);
-  
+  // Auto-load farm profile once per user session
   useEffect(() => {
-    // Si l'utilisateur change, reset le flag
     const currentUserId = authState.user?.id;
-    if (currentUserId !== lastUserId) {
-      setLastUserId(currentUserId || null);
-      setProfileLoadAttempted(false);
+
+    // Reset when user changes (e.g. logout → login with different account)
+    if (currentUserId !== _profileLoad.userId) {
+      _profileLoad.userId = currentUserId || null;
+      _profileLoad.attempted = false;
     }
-    
-    // Charger le profil seulement si:
-    // 1. Utilisateur authentifiÃ© ET
-    // 2. Utilisateur existe ET  
-    // 3. Pas de profil ferme ET
-    // 4. Pas en cours de chargement ET
-    // 5. Pas encore tentÃ© pour cet utilisateur ET
-    // 6. Pas d'erreur d'authentification en cours
-    if (authState.isAuthenticated && 
-        authState.user && 
-        !authState.farmProfile && 
-        !authState.isLoading && 
-        !profileLoadAttempted &&
-        !authState.error) {
-      setProfileLoadAttempted(true);
+
+    if (
+      authState.isAuthenticated &&
+      authState.user &&
+      !authState.farmProfile &&
+      !authState.isLoading &&
+      !_profileLoad.attempted &&
+      !authState.error
+    ) {
+      _profileLoad.attempted = true;
       dispatch(loadUserProfile());
     }
-    
-    // Reset complÃ¨tement si dÃ©connexion
+
     if (!authState.isAuthenticated) {
-      setProfileLoadAttempted(false);
-      setLastUserId(null);
+      _profileLoad.attempted = false;
+      _profileLoad.userId = null;
     }
-  }, [authState.isAuthenticated, authState.user?.id, authState.farmProfile, authState.isLoading, authState.error, profileLoadAttempted, lastUserId, dispatch]);
+  }, [authState.isAuthenticated, authState.user?.id, authState.farmProfile, authState.isLoading, authState.error, dispatch]);
 
   // Actions
   const login = useCallback(
@@ -117,6 +113,15 @@ export const useAuth = () => {
     dispatch(clearError());
   }, [dispatch]);
 
+  const displayName = useMemo(() => {
+    const user = authState.user;
+    if (!user) return '';
+    if (user.display_name) return user.display_name;
+    if (user.account_type === 'company' && user.business_name) return user.business_name;
+    if (user.first_name && user.last_name) return `${user.first_name} ${user.last_name}`;
+    return user.phone_number || '';
+  }, [authState.user?.id, authState.user?.display_name, authState.user?.business_name, authState.user?.first_name, authState.user?.last_name]); // eslint-disable-line react-hooks/exhaustive-deps
+
   return {
     // State
     user: authState.user,
@@ -138,17 +143,7 @@ export const useAuth = () => {
     // Computed properties
     isIndividual: authState.user?.is_individual || false,
     isCompany: authState.user?.is_company || false,
-    displayName: (() => {
-      const user = authState.user;
-      if (!user) return '';
-      
-      // PrioritÃ©: display_name > business_name (pour entreprises) > first_name + last_name > phone_number
-      if (user.display_name) return user.display_name;
-      if (user.account_type === 'company' && user.business_name) return user.business_name;
-      if (user.first_name && user.last_name) return `${user.first_name} ${user.last_name}`;
-      if (user.phone_number) return user.phone_number;
-      return '';
-    })(),
+    displayName,
     isFarmCertified: authState.farmProfile?.is_certified || false,
   };
 };

@@ -213,13 +213,13 @@ describe('services/authService', () => {
 
   describe('isAuthenticated', () => {
     it('retourne true si token est valide', async () => {
-      mockSecureStore.getItemAsync.mockResolvedValueOnce('access-token');
-      mockApiService.post.mockResolvedValueOnce({ data: {} } as any);
+      const validToken = `h.${Buffer.from(JSON.stringify({ exp: 9999999999 })).toString('base64')}.s`;
+      mockSecureStore.getItemAsync.mockResolvedValueOnce(validToken);
 
       const result = await authService.isAuthenticated();
 
       expect(result).toBe(true);
-      expect(mockApiService.post).toHaveBeenCalled();
+      expect(mockApiService.post).not.toHaveBeenCalled();
     });
 
     it('retourne false si token manquant', async () => {
@@ -234,11 +234,29 @@ describe('services/authService', () => {
       expect(mockApiService.post).not.toHaveBeenCalled();
     });
 
+    it('retourne true si token expire mais refresh reussit', async () => {
+      mockSecureStore.getItemAsync
+        .mockResolvedValueOnce(`h.${Buffer.from(JSON.stringify({ exp: 1 })).toString('base64')}.s`)
+        .mockResolvedValueOnce('refresh-token-456');
+      mockApiService.post.mockResolvedValueOnce({
+        data: { access: 'new-access-token', refresh: 'new-refresh-token' },
+      } as any);
+
+      const result = await authService.isAuthenticated();
+
+      expect(result).toBe(true);
+      expect(mockApiService.post).toHaveBeenCalledWith(
+        expect.stringContaining('/token/refresh/'),
+        { refresh: 'refresh-token-456' }
+      );
+      expect(mockSecureStore.setItemAsync).toHaveBeenCalledWith(STORAGE_KEYS.ACCESS_TOKEN, 'new-access-token');
+      expect(mockSecureStore.setItemAsync).toHaveBeenCalledWith(STORAGE_KEYS.REFRESH_TOKEN, 'new-refresh-token');
+    });
+
     it('retourne false si token invalide et refresh absent', async () => {
       mockSecureStore.getItemAsync
-        .mockResolvedValueOnce('access-token')
+        .mockResolvedValueOnce(`h.${Buffer.from(JSON.stringify({ exp: 1 })).toString('base64')}.s`)
         .mockResolvedValueOnce(null);
-      mockApiService.post.mockRejectedValueOnce(new Error('Token invalid'));
       mockApiService.clearTokens.mockResolvedValueOnce(undefined);
 
       const result = await authService.isAuthenticated();

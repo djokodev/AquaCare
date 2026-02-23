@@ -20,6 +20,10 @@ export interface User {
   intervention_zone?: string;
   language_preference: 'fr' | 'en';
   is_verified: boolean;
+  is_active: boolean;
+  date_joined: string;
+  full_name?: string;
+  login_name?: string;
   display_name: string;
   is_individual: boolean;
   is_company: boolean;
@@ -29,11 +33,13 @@ export interface FarmProfile {
   id: string;
   farm_name: string;
   certification_status: 'pending' | 'certified' | 'suspended' | 'rejected';
+  certification_status_display?: string;
   total_ponds: number;
   total_area_m2?: number;
   water_source?: string;
   main_species?: string;
   annual_production_kg?: number;
+  default_feed_price_per_kg?: number;
   is_certified: boolean;
   created_at: string;
   updated_at: string;
