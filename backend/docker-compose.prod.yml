@@ -7,6 +7,25 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    # PostgreSQL tuning for 12GB RAM VPS (6 vCPU)
+    command:
+      - postgres
+      - -c
+      - shared_buffers=3GB
+      - -c
+      - effective_cache_size=9GB
+      - -c
+      - work_mem=16MB
+      - -c
+      - maintenance_work_mem=512MB
+      - -c
+      - max_connections=200
+      - -c
+      - random_page_cost=1.1
+      - -c
+      - checkpoint_completion_target=0.9
+      - -c
+      - wal_buffers=64MB
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./backups:/backups  # Pour scripts backup
@@ -18,11 +37,24 @@ services:
     networks:
       - aquacare_network
 
-  redis:
+  redis_cache:
     image: redis:7-alpine
-    container_name: aquacare_redis_prod
+    container_name: aquacare_redis_cache
     restart: always
-    command: redis-server --appendonly yes
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    networks:
+      - aquacare_network
+
+  redis_broker:
+    image: redis:7-alpine
+    container_name: aquacare_redis_broker
+    restart: always
+    command: redis-server --appendonly yes --maxmemory 128mb
     volumes:
       - redis_data:/data
     healthcheck:
@@ -30,6 +62,21 @@ services:
       interval: 30s
       timeout: 5s
       retries: 5
+    networks:
+      - aquacare_network
+
+  pgbouncer:
+    image: edoburu/pgbouncer:1.21.0
+    container_name: aquacare_pgbouncer
+    restart: always
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      MAX_CLIENT_CONN: 200
+      DEFAULT_POOL_SIZE: 20
+      POOL_MODE: transaction
+    depends_on:
+      db:
+        condition: service_healthy
     networks:
       - aquacare_network
 
@@ -42,7 +89,7 @@ services:
     command: >
       bash -c "
       chown -R aquacare:aquacare /app/media /app/staticfiles /app/logs 2>/dev/null || true &&
-      su -s /bin/bash aquacare -c '/usr/local/bin/gunicorn mavecam_api.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 60 --access-logfile - --error-logfile -'
+      su -s /bin/bash aquacare -c '/usr/local/bin/gunicorn mavecam_api.wsgi:application --bind 0.0.0.0:8000 --worker-class gthread --workers 6 --threads 8 --timeout 60 --max-requests 1000 --max-requests-jitter 50 --access-logfile - --error-logfile -'
       "
     environment:
       - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}
@@ -52,18 +99,23 @@ services:
       - POSTGRES_DB=${POSTGRES_DB}
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_HOST=${POSTGRES_HOST}
-      - POSTGRES_PORT=${POSTGRES_PORT}
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - POSTGRES_HOST=pgbouncer
+      - POSTGRES_PORT=6432
+      - CELERY_BROKER_URL=redis://redis_broker:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis_broker:6379/0
+      - REDIS_CACHE_URL=redis://redis_cache:6379/0
     volumes:
       - media_data:/app/media
       - static_data:/app/staticfiles
     depends_on:
       db:
         condition: service_healthy
-      redis:
+      redis_cache:
         condition: service_healthy
+      redis_broker:
+        condition: service_healthy
+      pgbouncer:
+        condition: service_started
     networks:
       - aquacare_network
 
@@ -73,7 +125,7 @@ services:
     restart: always
     command: >
       bash -c "
-      celery -A mavecam_api worker --loglevel=info --concurrency=2
+      celery -A mavecam_api worker --loglevel=info --concurrency=4
       "
     environment:
       - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}
@@ -83,10 +135,11 @@ services:
       - POSTGRES_DB=${POSTGRES_DB}
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_HOST=${POSTGRES_HOST}
-      - POSTGRES_PORT=${POSTGRES_PORT}
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - POSTGRES_HOST=pgbouncer
+      - POSTGRES_PORT=6432
+      - CELERY_BROKER_URL=redis://redis_broker:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis_broker:6379/0
+      - REDIS_CACHE_URL=redis://redis_cache:6379/0
       - EMAIL_HOST=${EMAIL_HOST:-smtp.sendgrid.net}
       - EMAIL_PORT=${EMAIL_PORT:-587}
       - SENDGRID_API_KEY=${SENDGRID_API_KEY:-}
@@ -94,8 +147,10 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      redis:
+      redis_broker:
         condition: service_healthy
+      pgbouncer:
+        condition: service_started
     networks:
       - aquacare_network
 
@@ -115,15 +170,17 @@ services:
       - POSTGRES_DB=${POSTGRES_DB}
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_HOST=${POSTGRES_HOST}
-      - POSTGRES_PORT=${POSTGRES_PORT}
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - POSTGRES_HOST=pgbouncer
+      - POSTGRES_PORT=6432
+      - CELERY_BROKER_URL=redis://redis_broker:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis_broker:6379/0
     depends_on:
       db:
         condition: service_healthy
-      redis:
+      redis_broker:
         condition: service_healthy
+      pgbouncer:
+        condition: service_started
     networks:
       - aquacare_network
 
@@ -132,7 +189,8 @@ services:
     container_name: aquacare_nginx
     restart: always
     ports:
-      - "80:80"
+      # Exposé uniquement en local — le nginx hôte proxie api.aquacare.tech → 127.0.0.1:8080
+      - "127.0.0.1:8080:80"
     volumes:
       - static_data:/app/staticfiles:ro
       - media_data:/app/media:ro
