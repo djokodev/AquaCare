@@ -66,7 +66,7 @@ services:
       - aquacare_network
 
   pgbouncer:
-    image: edoburu/pgbouncer:1.21.0
+    image: edoburu/pgbouncer:1.21.0-p2
     container_name: aquacare_pgbouncer
     restart: always
     environment:
