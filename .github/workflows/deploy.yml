@@ -227,9 +227,10 @@ jobs:
               sleep 5
             done
 
-            # Test health check endpoint (retry 5 fois)
+            # Test health check endpoint via Docker nginx (127.0.0.1:8080, retry 5 fois)
+            # Note: on passe par 8080 car le nginx hôte proxie ce port vers Docker nginx
             for i in {1..5}; do
-              if curl -f http://localhost/api/health/ > /dev/null 2>&1; then
+              if curl -f http://127.0.0.1:8080/api/health/ > /dev/null 2>&1; then
                 echo "✅ Health check passed!"
                 exit 0
               fi
