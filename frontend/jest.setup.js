@@ -42,6 +42,17 @@ jest.mock('react-i18next', () => ({
   },
 }));
 
+// Mock crypto.randomUUID — non disponible dans jsdom (environnement Jest)
+Object.defineProperty(globalThis, 'crypto', {
+  value: {
+    randomUUID: () => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+      const r = Math.random() * 16 | 0;
+      return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+    }),
+  },
+  writable: true,
+});
+
 // Suppression des warnings React Native
 global.console = {
   ...console,
