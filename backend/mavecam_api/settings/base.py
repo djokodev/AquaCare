@@ -128,7 +128,7 @@ SIMPLE_JWT = {
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
     "ROTATE_REFRESH_TOKENS": True,
     "BLACKLIST_AFTER_ROTATION": True,
-    "UPDATE_LAST_LOGIN": True,
+    "UPDATE_LAST_LOGIN": False,  # Avoid 1 DB write per token refresh
     "ALGORITHM": "HS256",
     "SIGNING_KEY": os.getenv('JWT_SECRET_KEY', os.getenv('DJANGO_SECRET_KEY')),
     "VERIFYING_KEY": None,
@@ -197,34 +197,64 @@ CELERY_WORKER_MAX_TASKS_PER_CHILD = 1000  # Restart worker after 1000 tasks
 
 # Celery Beat (Periodic Tasks)
 CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
+CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True  # Suppress Celery 6.0 deprecation warning
 
 # =============================================================================
 # CACHE CONFIGURATION
 # =============================================================================
-# Redis cache — shared across all Gunicorn workers (required for rate limiting)
+# Redis cache — separate DB from broker to avoid interference
+# Broker: redis DB 0 (CELERY_BROKER_URL), Cache: redis DB 1
 CACHES = {
     "default": {
         "BACKEND": "django.core.cache.backends.redis.RedisCache",
-        "LOCATION": os.getenv('CELERY_BROKER_URL', 'redis://redis:6379/0'),
+        "LOCATION": os.getenv('REDIS_CACHE_URL', 'redis://redis:6379/1'),
     }
 }
 
-# Email Configuration (pour notifications email)
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = os.getenv('EMAIL_HOST')
+# Email Configuration — Resend via SMTP
+# Dev: EMAIL_BACKEND=django.core.mail.backends.console.EmailBackend (défaut dans development.py)
+# Prod: EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
+EMAIL_BACKEND = os.getenv('EMAIL_BACKEND', 'django.core.mail.backends.smtp.EmailBackend')
+EMAIL_HOST = os.getenv('EMAIL_HOST', 'smtp.resend.com')
 EMAIL_PORT = int(os.getenv('EMAIL_PORT', '587'))
 EMAIL_USE_TLS = True
-EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER')
-EMAIL_HOST_PASSWORD = os.getenv('SENDGRID_API_KEY')
-DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL')
+EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', 'resend')
+EMAIL_HOST_PASSWORD = os.getenv('RESEND_API_KEY', '')
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'rapports@aquacare.tech')
 
 # Frontend URL (pour les liens dans les emails)
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:8081')
 
-# Upload limits (chat média)
-# Limites alignées sur les validations (images 10MB, vidéos 50MB)
-DATA_UPLOAD_MAX_MEMORY_SIZE = 60 * 1024 * 1024  # 60MB max par requête
-FILE_UPLOAD_MAX_MEMORY_SIZE = 60 * 1024 * 1024
+# Notifications nourrissage : alarmes locales frontend prioritaires
+FEEDING_REMINDER_LOCAL_ALARM_ONLY = os.getenv(
+    'FEEDING_REMINDER_LOCAL_ALARM_ONLY',
+    'true'
+).lower() in ('1', 'true', 'yes', 'on')
+
+# Upload limits
+# Photos compressées côté client (1280×720, max 5MB via serializer)
+DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10MB max par requête
+FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024
+
+# =============================================================================
+# SENTRY ERROR TRACKING
+# Activé uniquement si SENTRY_DSN est défini dans l'environnement.
+# En développement local, laisser SENTRY_DSN vide (ou ne pas le définir).
+# =============================================================================
+_SENTRY_DSN = os.getenv('SENTRY_DSN', '')
+if _SENTRY_DSN:
+    import sentry_sdk
+    sentry_sdk.init(
+        dsn=_SENTRY_DSN,
+        # Trace 10% des transactions pour le monitoring de performance
+        traces_sample_rate=0.1,
+        # Profiling sur 5% des transactions tracées
+        profiles_sample_rate=0.05,
+        # Identifie l'environnement dans Sentry (staging / production)
+        environment=os.getenv('DJANGO_ENVIRONMENT', 'production'),
+        # Ne pas envoyer les données personnelles (IP, email) dans Sentry
+        send_default_pii=False,
+    )
 
 # =============================================================================
 # JAZZMIN ADMIN UI CONFIGURATION
