@@ -1,0 +1,166 @@
+# =============================================================================
+# DOCKER COMPOSE — STAGING
+# Stack simplifiée (pas de PgBouncer, Redis unique)
+# Nginx interne sur 127.0.0.1:8081:80 → proxié par le nginx hôte
+# Démarrage : docker compose -f docker-compose.staging.yml --env-file .env.staging up -d
+# =============================================================================
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: aquacare_db_staging
+    restart: always
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_staging_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - aquacare_staging_network
+
+  redis:
+    image: redis:7-alpine
+    container_name: aquacare_redis_staging
+    restart: always
+    # Redis unique : DB 0 = broker Celery, DB 1 = cache Django
+    command: redis-server --maxmemory 128mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    networks:
+      - aquacare_staging_network
+
+  api:
+    image: ghcr.io/djokodev/aquacare-api:latest
+    container_name: aquacare_api_staging
+    restart: always
+    user: root
+    command: >
+      bash -c "
+      chown -R aquacare:aquacare /app/media /app/staticfiles /app/logs 2>/dev/null || true &&
+      su -s /bin/bash aquacare -c '/usr/local/bin/gunicorn mavecam_api.wsgi:application --bind 0.0.0.0:8000 --workers 2 --timeout 60 --access-logfile - --error-logfile -'
+      "
+    environment:
+      # DJANGO_SETTINGS_MODULE ici surcharge la valeur hardcodée dans le Dockerfile
+      - DJANGO_SETTINGS_MODULE=mavecam_api.settings.staging
+      - DJANGO_ENVIRONMENT=staging
+      - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}
+      - DJANGO_DEBUG=False
+      - DJANGO_ALLOWED_HOSTS=${DJANGO_ALLOWED_HOSTS}
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - REDIS_CACHE_URL=redis://redis:6379/1
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - SENTRY_DSN=${SENTRY_DSN:-}
+      - DEFAULT_FROM_EMAIL=${DEFAULT_FROM_EMAIL:-staging@aquacare.tech}
+    volumes:
+      - media_staging_data:/app/media
+      - static_staging_data:/app/staticfiles
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - aquacare_staging_network
+
+  celery_worker:
+    image: ghcr.io/djokodev/aquacare-api:latest
+    container_name: aquacare_celery_worker_staging
+    restart: always
+    command: >
+      bash -c "
+      celery -A mavecam_api worker --loglevel=info --concurrency=2
+      "
+    environment:
+      - DJANGO_SETTINGS_MODULE=mavecam_api.settings.staging
+      - DJANGO_ENVIRONMENT=staging
+      - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}
+      - DJANGO_DEBUG=False
+      - DJANGO_ALLOWED_HOSTS=${DJANGO_ALLOWED_HOSTS}
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - SENTRY_DSN=${SENTRY_DSN:-}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - aquacare_staging_network
+
+  celery_beat:
+    image: ghcr.io/djokodev/aquacare-api:latest
+    container_name: aquacare_celery_beat_staging
+    restart: always
+    command: >
+      bash -c "
+      celery -A mavecam_api beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+      "
+    environment:
+      - DJANGO_SETTINGS_MODULE=mavecam_api.settings.staging
+      - DJANGO_ENVIRONMENT=staging
+      - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}
+      - DJANGO_DEBUG=False
+      - DJANGO_ALLOWED_HOSTS=${DJANGO_ALLOWED_HOSTS}
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - aquacare_staging_network
+
+  nginx:
+    image: ghcr.io/djokodev/aquacare-nginx:latest
+    container_name: aquacare_nginx_staging
+    restart: always
+    ports:
+      # Exposé uniquement en local — le nginx hôte proxie api-staging.aquacare.tech → 127.0.0.1:8081
+      - "127.0.0.1:8081:80"
+    volumes:
+      - static_staging_data:/app/staticfiles:ro
+      - media_staging_data:/app/media:ro
+    depends_on:
+      - api
+    networks:
+      - aquacare_staging_network
+
+volumes:
+  postgres_staging_data:
+    driver: local
+  media_staging_data:
+    driver: local
+  static_staging_data:
+    driver: local
+
+networks:
+  aquacare_staging_network:
+    driver: bridge

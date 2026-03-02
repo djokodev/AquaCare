@@ -7,3 +7,7 @@ gunicorn==23.0.0
 whitenoise==6.8.2  # Static files serving (fallback si Nginx fail)
 
 python-decouple==3.8
+
+# Error tracking & monitoring
+# Après installation, épingler la version exacte : pip freeze | grep sentry
+sentry-sdk[django]

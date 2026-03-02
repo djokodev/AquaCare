@@ -1,0 +1,25 @@
+from .production import *
+
+# =============================================================================
+# STAGING — Étend production.py avec overrides staging
+# Utilisé via: DJANGO_SETTINGS_MODULE=mavecam_api.settings.staging
+# =============================================================================
+
+# Pas de PgBouncer en staging → connexions directes PostgreSQL
+# (CONN_MAX_AGE=0 est requis avec PgBouncer, mais pas ici)
+DATABASES['default']['CONN_MAX_AGE'] = 60
+
+ALLOWED_HOSTS = config(
+    'DJANGO_ALLOWED_HOSTS',
+    default='77.237.241.223,api-staging.aquacare.tech'
+).split(',')
+
+# CORS staging : Expo dev local + domaine staging
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:8081",
+    "https://api-staging.aquacare.tech",
+]
+
+# Logging verbeux en staging pour faciliter le debug
+LOGGING['root']['level'] = 'DEBUG'
+LOGGING['loggers']['django']['level'] = 'DEBUG'
