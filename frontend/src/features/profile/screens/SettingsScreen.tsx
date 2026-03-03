@@ -82,12 +82,9 @@ export default function SettingsScreen() {
       <View className="px-5 py-4">
         <Text className="text-lg font-bold text-gray-dark mb-3">{t("about")}</Text>
         <View className="bg-white p-4 rounded-xl">
-          <View className="flex-row items-center mb-3">
-            <View className="flex-1">
-              <Text className="text-lg font-bold text-gray-dark">AquaCare</Text>
-            </View>
-          </View>
-          <Text className="text-sm text-gray-light leading-5">{t("appDescription")}</Text>
+          <Text className="text-sm text-gray-dark leading-6">
+            {t("aboutSummary")}
+          </Text>
         </View>
       </View>
 

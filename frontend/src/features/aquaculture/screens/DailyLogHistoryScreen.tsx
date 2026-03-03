@@ -21,23 +21,27 @@ interface DailyLogHistoryScreenProps {
 
 export default function DailyLogHistoryScreen({ navigation }: DailyLogHistoryScreenProps) {
   const { t } = useTranslation();
-  const { dashboardData } = useSelector((state: RootState) => state.aquaculture);
+  const { dashboardData, currentCycle } = useSelector((state: RootState) => state.aquaculture);
   const activeCycles = dashboardData?.active_cycles || [];
 
   const [logs, setLogs] = useState<CycleLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedCycle, setSelectedCycle] = useState<string>('all');
 
   useEffect(() => {
     loadLogs();
-  }, [selectedCycle]);
+  }, [currentCycle?.id]);
 
   const loadLogs = async () => {
+    if (!currentCycle?.id) {
+      setLogs([]);
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
-      const cycleId = selectedCycle === 'all' ? undefined : selectedCycle;
-      const logsData = await aquacultureService.getCycleLogs(cycleId);
+      const logsData = await aquacultureService.getCycleLogs(currentCycle.id);
       setLogs(logsData);
     } catch (error) {
       logger.error('Erreur lors du chargement des logs:', error);
@@ -47,12 +51,18 @@ export default function DailyLogHistoryScreen({ navigation }: DailyLogHistoryScr
   };
 
   const onRefresh = async () => {
+    if (!currentCycle?.id) {
+      return;
+    }
     setRefreshing(true);
     await loadLogs();
     setRefreshing(false);
   };
 
   const getCycleName = (cycleId: string) => {
+    if (currentCycle?.id === cycleId) {
+      return currentCycle.pond_identifier;
+    }
     const cycle = activeCycles.find((currentCycle) => currentCycle.id === cycleId);
     return cycle ? cycle.pond_identifier : `Cycle ${cycleId.slice(-4)}`;
   };
@@ -124,35 +134,26 @@ export default function DailyLogHistoryScreen({ navigation }: DailyLogHistoryScr
       </View>
 
       <View className="bg-white p-4 border-b border-slate-200">
-        <Text className="text-sm font-medium text-gray-dark mb-2">{t('filterByCycle')} :</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: 'row' }}>
-          <TouchableOpacity
-            className={`px-4 py-2 mr-2 rounded-full border ${
-              selectedCycle === 'all' ? 'bg-mavecam-primary border-mavecam-primary' : 'bg-cream border-gray-light'
-            }`}
-            onPress={() => setSelectedCycle('all')}
-          >
-            <Text className={`text-sm ${selectedCycle === 'all' ? 'text-white' : 'text-gray-dark'}`}>{t('allCycles')}</Text>
-          </TouchableOpacity>
-
-          {activeCycles.map((cycle) => (
-            <TouchableOpacity
-              key={cycle.id}
-              className={`px-4 py-2 mr-2 rounded-full border ${
-                selectedCycle === cycle.id ? 'bg-mavecam-primary border-mavecam-primary' : 'bg-cream border-gray-light'
-              }`}
-              onPress={() => setSelectedCycle(cycle.id)}
-            >
-              <Text className={`text-sm ${selectedCycle === cycle.id ? 'text-white' : 'text-gray-dark'}`}>
-                {t('pond')} {cycle.pond_identifier}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+        <Text className="text-sm font-medium text-gray-dark mb-1">
+          {t('sessionActiveCycleLabel', { defaultValue: 'Cycle actif de la session' })}
+        </Text>
+        <Text className="text-base font-bold text-mavecam-primary">
+          {currentCycle?.cycle_name || t('sessionCycleNotSelected')}
+        </Text>
+        {currentCycle && (
+          <Text className="text-xs text-gray-light mt-1">
+            {t('pond')} {currentCycle.pond_identifier}
+          </Text>
+        )}
       </View>
 
       <ScrollView className="flex-1 px-4" refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
-        {logs.length === 0 ? (
+        {!currentCycle ? (
+          <View className="flex-1 items-center justify-center py-24 px-6">
+            <Ionicons name="alert-circle-outline" size={64} color={MAVECAM_COLORS.WARNING} />
+            <Text className="text-xl font-bold text-gray-dark mt-4 mb-2">{t('sessionCycleNotSelected')}</Text>
+          </View>
+        ) : logs.length === 0 ? (
           <View className="flex-1 items-center justify-center py-24 px-6">
             <Ionicons name="document-outline" size={64} color={MAVECAM_COLORS.GRAY_LIGHT} />
             <Text className="text-xl font-bold text-gray-dark mt-4 mb-2">{t('noLogsYet')}</Text>

@@ -27,6 +27,7 @@ import { useNotificationsPolling } from '@/features/notifications/hooks/useNotif
 
 // Aquaculture Screens
 import {
+  CycleSessionEntryScreen,
   DailyLogScreen,
   DailyLogHistoryScreen,
   SanitaryLogScreen,
@@ -35,7 +36,8 @@ import {
   NotificationsScreen,
   FeedingPlanScreen,
   StatisticsScreen,
-  NutritionalGuidesScreen,
+  ReportsScreen,
+  ReportDetailScreen,
 } from '@/features/aquaculture';
 
 // Commerce Screens
@@ -58,6 +60,7 @@ export type MainTabParamList = {
 };
 
 export type RootStackParamList = {
+  CycleSessionEntry: undefined;
   MainTabs: undefined;
   DailyLog: undefined;
   DailyLogHistory: undefined;
@@ -67,14 +70,28 @@ export type RootStackParamList = {
   Notifications: undefined;
   FeedingPlan: undefined;
   Statistics: undefined;
-  NutritionalGuides: undefined;
+  Reports: undefined;
+  ReportDetail: { reportId: string };
   // Commerce Screens
   ProductCatalog: undefined;
   ProductDetail: { productId: string };
   Cart: undefined;
   OrdersHistory: undefined;
   FeedingSuggestions: undefined;
-  CycleSimulator: undefined;
+  CycleSimulator: {
+    cycleId?: string;
+    prefill?: {
+      species: 'tilapia' | 'catfish';
+      initial_fish_count: number;
+      initial_weight_g: number;
+      target_weight_g: number;
+      cycle_duration_days: number;
+      survival_rate: number;
+      selling_price_per_kg_fcfa: number;
+      fingerlings_cost_fcfa: number;
+      other_costs_fcfa: number;
+    };
+  } | undefined;
   // Chat/Support Screens
   Chat: undefined;
 };
@@ -218,7 +235,14 @@ export default function MainNavigator() {
   useNotificationsPolling();
 
   return (
-    <RootStack.Navigator screenOptions={{ headerShown: false }}>
+    <RootStack.Navigator
+      initialRouteName="CycleSessionEntry"
+      screenOptions={{ headerShown: false }}
+    >
+      <RootStack.Screen
+        name="CycleSessionEntry"
+        component={CycleSessionEntryScreen}
+      />
       <RootStack.Screen
         name="MainTabs"
         component={MainTabNavigator}
@@ -263,8 +287,12 @@ export default function MainNavigator() {
         }}
       />
       <RootStack.Screen
-        name="NutritionalGuides"
-        component={NutritionalGuidesScreen}
+        name="Reports"
+        component={ReportsScreen}
+      />
+      <RootStack.Screen
+        name="ReportDetail"
+        component={ReportDetailScreen}
       />
       {/* Commerce Screens */}
       <RootStack.Screen
@@ -306,4 +334,3 @@ export default function MainNavigator() {
     </RootStack.Navigator>
   );
 }
-

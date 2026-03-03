@@ -61,13 +61,14 @@ describe('features/aquaculture/screens/DailyLogScreen', () => {
     updated_at: '2026-01-02T00:00:00Z',
   };
 
-  const setSelectorCycles = (cycles: ProductionCycle[]) => {
+  const setSelectorCycles = (cycles: ProductionCycle[], currentCycle?: ProductionCycle) => {
     mockUseSelector.mockImplementation((selector: (state: any) => unknown) =>
       selector({
         aquaculture: {
           dashboardData: {
             active_cycles: cycles,
           },
+          currentCycle,
         },
       })
     );
@@ -97,7 +98,7 @@ describe('features/aquaculture/screens/DailyLogScreen', () => {
     const { getByText, getByPlaceholderText } = render(<DailyLogScreen navigation={navigation} />);
 
     fireEvent.changeText(getByPlaceholderText('exampleAffectedCount'), '3');
-    fireEvent.changeText(getByPlaceholderText('Ex: 1200'), '150');
+    fireEvent.changeText(getByPlaceholderText('sampleWeightPlaceholder'), '150');
     fireEvent.press(getByText('save'));
 
     expect(alertSpy).toHaveBeenCalledWith('error', 'sampleCountTooLow');
@@ -105,16 +106,52 @@ describe('features/aquaculture/screens/DailyLogScreen', () => {
     alertSpy.mockRestore();
   });
 
-  it('valide sample_count requis si sample_total_weight est fourni', () => {
+  it('utilise currentCycle comme selection par defaut', async () => {
+    const otherCycle = {
+      ...activeCycle,
+      id: 'cycle-2',
+      cycle_name: 'Cycle 2',
+      pond_identifier: 'P2',
+    };
+    setSelectorCycles([activeCycle, otherCycle], otherCycle);
+    mockService.createCycleLog.mockResolvedValueOnce({ id: 'log-2' } as any);
+
+    const { getByText } = render(<DailyLogScreen navigation={navigation} />);
+    fireEvent.press(getByText('save'));
+
+    await waitFor(() => {
+      expect(mockService.createCycleLog).toHaveBeenCalledWith(
+        'cycle-2',
+        expect.objectContaining({
+          log_date: expect.any(String),
+        })
+      );
+    });
+  });
+
+  it('valide la paire echantillonnage si sample_total_weight est fourni seul', () => {
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     setSelectorCycles([activeCycle]);
 
     const { getByText, getByPlaceholderText } = render(<DailyLogScreen navigation={navigation} />);
 
-    fireEvent.changeText(getByPlaceholderText('Ex: 1200'), '250');
+    fireEvent.changeText(getByPlaceholderText('sampleWeightPlaceholder'), '250');
     fireEvent.press(getByText('save'));
 
-    expect(alertSpy).toHaveBeenCalledWith('error', 'sampleCountRequiredWithWeight');
+    expect(alertSpy).toHaveBeenCalledWith('error', 'samplingPairRequired');
+    alertSpy.mockRestore();
+  });
+
+  it('valide la paire echantillonnage si sample_count est fourni seul', () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    setSelectorCycles([activeCycle]);
+
+    const { getByText, getByPlaceholderText } = render(<DailyLogScreen navigation={navigation} />);
+
+    fireEvent.changeText(getByPlaceholderText('exampleAffectedCount'), '20');
+    fireEvent.press(getByText('save'));
+
+    expect(alertSpy).toHaveBeenCalledWith('error', 'samplingPairRequired');
     alertSpy.mockRestore();
   });
 
@@ -141,6 +178,43 @@ describe('features/aquaculture/screens/DailyLogScreen', () => {
       'recordSaved',
       expect.any(Array)
     );
+    alertSpy.mockRestore();
+  });
+
+  it('envoie les nouveaux champs et ignore les horaires invalides', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    setSelectorCycles([activeCycle]);
+    mockService.createCycleLog.mockResolvedValueOnce({ id: 'log-extended' } as any);
+
+    const { getByText, getByPlaceholderText } = render(<DailyLogScreen navigation={navigation} />);
+
+    fireEvent.changeText(getByPlaceholderText('mortalityPlaceholder'), '4');
+    fireEvent.changeText(getByPlaceholderText('mortalityReasonPlaceholder'), 'Stress');
+    fireEvent.changeText(getByPlaceholderText('feedQuantityPlaceholder'), '12.5');
+    fireEvent.changeText(getByPlaceholderText('feedTypePlaceholder'), 'Dibaq');
+    fireEvent.changeText(getByPlaceholderText('feedSizeMmPlaceholder'), '2.5');
+    fireEvent.changeText(getByPlaceholderText('dissolvedOxygenPlaceholder'), '6.4');
+    fireEvent.changeText(getByPlaceholderText('ammoniaLevelPlaceholder'), '0.2');
+    fireEvent.changeText(getByPlaceholderText('feedingTimesPlaceholder'), '08:00,99:99,12:30');
+    fireEvent.press(getByText('save'));
+
+    await waitFor(() => {
+      expect(mockService.createCycleLog).toHaveBeenCalledWith(
+        'cycle-1',
+        expect.objectContaining({
+          mortality_count: 4,
+          mortality_reason: 'Stress',
+          feed_quantity: 12.5,
+          feed_type: 'Dibaq',
+          feed_size_mm: 2.5,
+          dissolved_oxygen: 6.4,
+          ammonia_level: 0.2,
+          feeding_times: ['08:00', '12:30'],
+        })
+      );
+    });
+
+    expect(alertSpy).toHaveBeenCalledWith('warning', 'feedingTimesInvalidIgnored');
     alertSpy.mockRestore();
   });
 

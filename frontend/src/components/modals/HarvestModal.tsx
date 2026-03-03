@@ -17,7 +17,7 @@ import { AppDispatch } from '@/store/store';
 import { harvestCycle } from '@/features/aquaculture/store/aquacultureSlice';
 import { ProductionCycle, HarvestData } from '@/types/aquaculture';
 
-// Couleurs MAVECAM selon spÃ©cifications
+// Couleurs MAVECAM selon spécifications
 const MAVECAM_COLORS = {
   GREEN_PRIMARY: '#059669',
   GREEN_LIGHT: '#10b981',
@@ -36,9 +36,10 @@ interface HarvestModalProps {
   onClose: () => void;
   cycle: ProductionCycle | null;
   onSuccess?: () => void;
+  onContactBuyer?: () => void;
 }
 
-export default function HarvestModal({ visible, onClose, cycle, onSuccess }: HarvestModalProps) {
+export default function HarvestModal({ visible, onClose, cycle, onSuccess, onContactBuyer }: HarvestModalProps) {
   const { t } = useTranslation();
   const dispatch = useDispatch<AppDispatch>();
   const [loading, setLoading] = useState(false);
@@ -52,19 +53,12 @@ export default function HarvestModal({ visible, onClose, cycle, onSuccess }: Har
     harvest_notes: '',
   });
 
-  /**
-   * âš ï¸ TODO BACKEND - CALCUL TEMPORAIRE
-   * Ce calcul de poids total DOIT Ãªtre fait par le backend.
-   * Backend recalcule: final_biomass = final_count Ã— final_average_weight
-   *
-   * Pour l'instant, calcul UX temporaire pour feedback immÃ©diat.
-   * Backend Ã©crasera cette valeur avec son propre calcul.
-   */
+  // Optimistic UI: preview total weight locally; backend overwrites with authoritative value.
   React.useEffect(() => {
     const totalWeight = formData.final_count * formData.final_average_weight;
     setFormData(prev => ({
       ...prev,
-      total_harvested_weight: Math.round(totalWeight * 100) / 100, // Arrondir Ã  2 dÃ©cimales
+      total_harvested_weight: Math.round(totalWeight * 100) / 100, // Arrondir à 2 décimales
     }));
   }, [formData.final_count, formData.final_average_weight]);
 
@@ -108,6 +102,14 @@ export default function HarvestModal({ visible, onClose, cycle, onSuccess }: Har
         t('success'),
         t('harvestSuccess'),
         [
+          ...(onContactBuyer ? [{
+            text: t('buyerNetworkCTA'),
+            onPress: () => {
+              onSuccess?.();
+              onClose();
+              onContactBuyer();
+            },
+          }] : []),
           {
             text: 'OK',
             onPress: () => {
@@ -146,12 +148,12 @@ export default function HarvestModal({ visible, onClose, cycle, onSuccess }: Har
   if (!cycle) return null;
 
   /**
-   * âš ï¸ CALCULS TEMPORAIRES UX UNIQUEMENT
+   * ⚠️ CALCULS TEMPORAIRES UX UNIQUEMENT
    * Ces valeurs sont pour AFFICHAGE IMMÃ‰DIAT pendant saisie.
-   * Backend recalcule survival_rate et weight_gain officiels aprÃ¨s rÃ©colte.
+   * Backend recalcule survival_rate et weight_gain officiels après récolte.
    *
-   * Note: weightGain est OK (simple diffÃ©rence pour UX).
-   * survivalRate devrait idÃ©alement venir du backend aprÃ¨s calcul.
+   * Note: weightGain est OK (simple différence pour UX).
+   * survivalRate devrait idéalement venir du backend après calcul.
    */
   const survivalRate = cycle.initial_count > 0
     ? ((formData.final_count / cycle.initial_count) * 100).toFixed(1)
@@ -196,11 +198,11 @@ export default function HarvestModal({ visible, onClose, cycle, onSuccess }: Har
               </Text>
             </View>
 
-            {/* Formulaire de rÃ©colte */}
+            {/* Formulaire de récolte */}
             <View style={styles.formContainer}>
               <Text style={styles.sectionTitle}>{t('harvestData')}</Text>
 
-              {/* Date de rÃ©colte */}
+              {/* Date de récolte */}
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>{t('harvestDate')} *</Text>
                 <TextInput
@@ -235,7 +237,7 @@ export default function HarvestModal({ visible, onClose, cycle, onSuccess }: Har
                 />
               </View>
 
-              {/* Poids total calculÃ© */}
+              {/* Poids total calculé */}
               <View style={styles.calculatedField}>
                 <Text style={styles.calculatedLabel}>{t('totalHarvestedWeight')} (kg)</Text>
                 <Text style={styles.calculatedValue}>
@@ -243,7 +245,7 @@ export default function HarvestModal({ visible, onClose, cycle, onSuccess }: Har
                 </Text>
               </View>
 
-              {/* Notes de rÃ©colte */}
+              {/* Notes de récolte */}
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>{t('harvestNotes')}</Text>
                 <TextInput
@@ -257,7 +259,7 @@ export default function HarvestModal({ visible, onClose, cycle, onSuccess }: Har
               </View>
             </View>
 
-            {/* MÃ©triques de performance */}
+            {/* Métriques de performance */}
             <View style={styles.performanceContainer}>
               <Text style={styles.sectionTitle}>{t('performanceMetrics')}</Text>
 

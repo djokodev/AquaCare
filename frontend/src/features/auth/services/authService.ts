@@ -238,14 +238,6 @@ class AuthService {
       message?: string;
     };
 
-    if (__DEV__) {
-      logger.error('AUTH ERROR DETAILS:', {
-        status: axiosErr.response?.status,
-        data: axiosErr.response?.data,
-        message: axiosErr.message,
-      });
-    }
-
     if (axiosErr.response) {
       const { status, data } = axiosErr.response;
 

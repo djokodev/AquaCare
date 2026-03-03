@@ -18,6 +18,7 @@ import commerceReducer, {
   fetchOrders,
   fetchOrderDetail,
   createOrder,
+  confirmOrderReceipt,
   fetchOrderStatistics,
   fetchDeliveryFeePreview,
 } from '../commerceSlice';
@@ -35,6 +36,7 @@ jest.mock('@/features/commerce/services/commerceApi', () => ({
     getOrders: jest.fn(),
     getOrderDetail: jest.fn(),
     createOrder: jest.fn(),
+    confirmOrderReceipt: jest.fn(),
     getOrderStatistics: jest.fn(),
     previewDeliveryFee: jest.fn(),
   },
@@ -206,11 +208,15 @@ describe('features/commerce/store/commerceSlice', () => {
     const store = createStore();
 
     mockApi.getFeedingSuggestions.mockResolvedValueOnce({ has_suggestions: true, suggestions: [] } as any);
-    await store.dispatch(fetchFeedingSuggestions('farm-1') as any);
+    await store.dispatch(fetchFeedingSuggestions({ farmProfileId: 'farm-1', cycleId: 'cycle-session-1' }) as any);
 
     let state = store.getState().commerce;
     expect(state.suggestions.loading).toBe(false);
     expect(state.suggestions.data?.has_suggestions).toBe(true);
+    expect(mockApi.getFeedingSuggestions).toHaveBeenCalledWith({
+      farmProfileId: 'farm-1',
+      cycleId: 'cycle-session-1',
+    });
 
     mockApi.simulateCycle.mockResolvedValueOnce({ summary: { estimated_fcr: 1.4 } } as any);
     await store.dispatch(fetchCycleSimulation({ species: 'tilapia' } as any) as any);
@@ -224,7 +230,7 @@ describe('features/commerce/store/commerceSlice', () => {
     expect(state.simulation.error).toBe('Erreur simulation');
   });
 
-  it('fetchOrders, fetchOrderDetail, createOrder et fetchOrderStatistics mettent a jour orders', async () => {
+  it('fetchOrders, fetchOrderDetail, createOrder, confirmOrderReceipt et fetchOrderStatistics mettent a jour orders', async () => {
     const store = createStore();
 
     mockApi.getOrders.mockResolvedValueOnce([orderA] as any);
@@ -246,6 +252,12 @@ describe('features/commerce/store/commerceSlice', () => {
 
     state = store.getState().commerce;
     expect(state.orders.items[0].id).toBe('order-2');
+
+    mockApi.confirmOrderReceipt.mockResolvedValueOnce({ ...newOrder, status: 'received' } as any);
+    await store.dispatch(confirmOrderReceipt('order-2') as any);
+
+    state = store.getState().commerce;
+    expect(state.orders.items[0].status).toBe('received');
 
     mockApi.getOrderStatistics.mockResolvedValueOnce({ total_orders: 2, total_spent: 100000 } as any);
     await store.dispatch(fetchOrderStatistics() as any);

@@ -48,7 +48,7 @@ interface SuggestedAction {
  * - Si cycles actifs → prioriser "Saisie du jour"
  * - Si aucun cycle → prioriser "Nouvel élevage"
  * - Toujours inclure "Catalogue Produits" (commerce)
- * - Si notifications non lues → ajouter "Notifications"
+ * - Si notifications non lues → ajouter "Notifications", sinon "Plan d'alimentation"
  *
  * Affiche également un bouton "Voir toutes les actions" qui ouvre le Bottom Sheet.
  *
@@ -104,7 +104,7 @@ export default function QuickActionsPreview({
       route: 'ProductCatalog',
     });
 
-    // Suggestion 3 : Notifications si non lues, sinon historique cycles
+    // Suggestion 3 : Notifications si non lues, sinon plan d'alimentation
     if (unreadCount > 0) {
       actions.push({
         icon: 'notifications-outline',
@@ -114,10 +114,10 @@ export default function QuickActionsPreview({
       });
     } else {
       actions.push({
-        icon: 'time-outline',
+        icon: 'restaurant-outline',
         color: MAVECAM_COLORS.INFO,
-        label: t('cycleHistoryButton'),
-        route: 'CycleHistory',
+        label: t('feedingPlan'),
+        route: 'FeedingPlan',
       });
     }
 

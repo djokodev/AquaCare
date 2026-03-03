@@ -7,156 +7,46 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
+  Modal,
+  Alert,
 } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedScrollHandler,
   useAnimatedStyle,
-  withTiming,
-  withDelay,
-  withSpring,
-  Easing,
 } from 'react-native-reanimated';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { useDispatch, useSelector } from 'react-redux';
 import { AppDispatch, RootState } from '@/store/store';
-import { fetchDashboardData } from '@/features/aquaculture/store/aquacultureSlice';
+import {
+  clearCurrentCycle,
+  fetchDashboardData,
+  setCurrentCycle,
+} from '@/features/aquaculture/store/aquacultureSlice';
 import { fetchNotifications } from '@/features/notifications/store/notificationSlice';
+import {
+  confirmOrderReceipt,
+  fetchOrderStatistics,
+  fetchOrders,
+} from '@/features/commerce/store/commerceSlice';
 import { offlineService } from '@/services/offlineService';
 import HarvestModal from '@/components/modals/HarvestModal';
+import CyclePicker from '@/features/aquaculture/components/CyclePicker';
 import DashboardHeader from '../components/DashboardHeader';
 import QuickActionsPreview from '../components/QuickActionsPreview';
 import QuickActionsSheet from '../components/QuickActionsSheet';
 import { ProductionCycle } from '@/types/aquaculture';
 import { MAVECAM_COLORS } from '@/constants/colors';
-import { calculateStockValue, calculateFeedSavings } from '@/constants/aquaculture';
 import { formatNumber, formatPercentage, formatCurrency } from '@/utils';
 import { useAuth } from '@/hooks/useAuth';
 
-/**
- * MetricCard - Carte métrique animée avec fade-in, slide-up et icône animée
- */
-interface MetricCardProps {
-  icon: keyof typeof Ionicons.glyphMap;
-  color: string;
-  value: string | number;
-  label: string;
-  index: number;
-  animationType?: 'bounce' | 'wave' | 'rotate' | 'pulse';
-}
-
-const MetricCard: React.FC<MetricCardProps> = ({
-  icon,
-  color,
-  value,
-  label,
-  index,
-  animationType = 'pulse',
-}) => {
-  // Fade-in + slide-up animation
-  const opacity = useSharedValue(0);
-  const translateY = useSharedValue(20);
-
-  React.useEffect(() => {
-    opacity.value = withDelay(
-      index * 50,
-      withTiming(1, { duration: 300, easing: Easing.out(Easing.quad) })
-    );
-    translateY.value = withDelay(
-      index * 50,
-      withSpring(0, { damping: 15, stiffness: 120 })
-    );
-  }, [index]);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    opacity: opacity.value,
-    transform: [{ translateY: translateY.value }],
-  }));
-
-  // Animation continue pour l'icône (boucle infinie)
-  const iconAnimation = useSharedValue(0);
-
-  React.useEffect(() => {
-    const startAnimation = () => {
-      'worklet';
-      if (animationType === 'bounce') {
-        // Mouvement vertical (haut/bas) en boucle
-        iconAnimation.value = withTiming(1, { duration: 800, easing: Easing.inOut(Easing.ease) }, (finished) => {
-          if (finished) {
-            iconAnimation.value = withTiming(0, { duration: 800, easing: Easing.inOut(Easing.ease) }, startAnimation);
-          }
-        });
-      } else if (animationType === 'wave') {
-        // Mouvement ondulant en boucle
-        iconAnimation.value = withTiming(1, { duration: 2000, easing: Easing.inOut(Easing.sin) }, (finished) => {
-          if (finished) {
-            iconAnimation.value = withTiming(0, { duration: 2000, easing: Easing.inOut(Easing.sin) }, startAnimation);
-          }
-        });
-      } else if (animationType === 'rotate') {
-        // Rotation complète en boucle
-        iconAnimation.value = withTiming(1, { duration: 3000, easing: Easing.linear }, (finished) => {
-          if (finished) {
-            iconAnimation.value = 0;
-            startAnimation();
-          }
-        });
-      } else {
-        // Pulse (scale) en boucle
-        iconAnimation.value = withTiming(1, { duration: 1200, easing: Easing.inOut(Easing.ease) }, (finished) => {
-          if (finished) {
-            iconAnimation.value = withTiming(0, { duration: 1200, easing: Easing.inOut(Easing.ease) }, startAnimation);
-          }
-        });
-      }
-    };
-
-    // Démarrer avec un délai initial pour l'effet stagger
-    const timeout = setTimeout(() => {
-      startAnimation();
-    }, index * 100);
-
-    return () => clearTimeout(timeout);
-  }, [animationType, index]);
-
-  const iconAnimatedStyle = useAnimatedStyle(() => {
-    if (animationType === 'bounce') {
-      return {
-        transform: [{ translateY: iconAnimation.value * -8 }],
-      };
-    } else if (animationType === 'wave') {
-      return {
-        transform: [
-          { translateX: iconAnimation.value * 5 },
-          { translateY: Math.sin(iconAnimation.value * Math.PI * 2) * 3 },
-        ],
-      };
-    } else if (animationType === 'rotate') {
-      return {
-        transform: [{ rotate: `${iconAnimation.value * 360}deg` }],
-      };
-    } else {
-      // Pulse
-      return {
-        transform: [{ scale: 1 + iconAnimation.value * 0.1 }],
-      };
-    }
-  });
-
-  return (
-    <Animated.View
-      style={animatedStyle}
-      className="w-[48%] bg-white rounded-2xl p-4 shadow-sm items-center mb-3"
-    >
-      <Animated.View style={iconAnimatedStyle}>
-        <Ionicons name={icon} size={32} color={color} />
-      </Animated.View>
-      <Text className="text-2xl font-bold text-gray-dark mt-2">{value}</Text>
-      <Text className="text-sm text-gray-light text-center mt-1">{label}</Text>
-    </Animated.View>
-  );
-};
+import MetricCard from '../components/MetricCard';
+import {
+  toSafeNumber,
+  calculateCycleEstimatedMarketValue,
+  calculateDashboardBusinessMetrics,
+} from '../utils/dashboardCalculations';
 
 export default function DashboardScreen({ navigation }: any) {
   const { t } = useTranslation();
@@ -166,15 +56,22 @@ export default function DashboardScreen({ navigation }: any) {
   const [harvestModalVisible, setHarvestModalVisible] = useState(false);
   const [selectedCycle, setSelectedCycle] = useState<ProductionCycle | null>(null);
   const [actionsSheetVisible, setActionsSheetVisible] = useState(false);
+  const [cycleSwitchModalVisible, setCycleSwitchModalVisible] = useState(false);
+  const [pendingCycleId, setPendingCycleId] = useState<string | null>(null);
+  const [confirmingOrderId, setConfirmingOrderId] = useState<string | null>(null);
 
-  const { dashboardData, loading, error } = useSelector((state: RootState) => state.aquaculture);
+  const { dashboardData, loading, error, currentCycle } = useSelector(
+    (state: RootState) => state.aquaculture
+  );
   const { unreadCount } = useSelector((state: RootState) => state.notifications);
+  const { items: ordersList } = useSelector((state: RootState) => state.commerce.orders);
 
   useEffect(() => {
     const initializeDashboard = async () => {
       tryGlobalOfflineSync();
-      dispatch(fetchDashboardData());
+      dispatch(fetchDashboardData(undefined));
       dispatch(fetchNotifications());
+      dispatch(fetchOrders());
     };
 
     initializeDashboard();
@@ -184,6 +81,7 @@ export default function DashboardScreen({ navigation }: any) {
   useFocusEffect(
     useCallback(() => {
       dispatch(fetchNotifications());
+      dispatch(fetchOrders());
     }, [dispatch])
   );
 
@@ -194,7 +92,7 @@ export default function DashboardScreen({ navigation }: any) {
         const result = await offlineService.syncAllOfflineData();
 
         if (result.success > 0) {
-          dispatch(fetchDashboardData());
+          dispatch(fetchDashboardData(undefined));
         }
       }
     } catch (err) {
@@ -203,19 +101,47 @@ export default function DashboardScreen({ navigation }: any) {
   };
 
   const onRefresh = useCallback(() => {
-    dispatch(fetchDashboardData());
+    dispatch(fetchDashboardData(undefined));
     dispatch(fetchNotifications());
+    dispatch(fetchOrders());
   }, [dispatch]);
 
-  const summary = {
-    active_cycles_count: dashboardData?.active_cycles_count || 0,
-    total_biomass: dashboardData?.total_biomass || 0,
-    average_fcr: dashboardData?.average_fcr || 0,
-    average_survival_rate: dashboardData?.average_survival_rate || 0,
-    total_fish_count: dashboardData?.total_fish_count || 0,
-  };
+  const pendingDeliveryConfirmations = ordersList.filter((order) => order.status === 'delivered');
 
   const activeCycles = dashboardData?.active_cycles || [];
+  const currentCycleInList = currentCycle
+    ? activeCycles.find((cycle) => cycle.id === currentCycle.id)
+    : undefined;
+  const dashboardBusinessMetrics = calculateDashboardBusinessMetrics(activeCycles, currentCycleInList);
+  const requiresCycleSelection = activeCycles.length > 1 && !currentCycleInList;
+
+  useEffect(() => {
+    if (activeCycles.length === 0) {
+      if (currentCycle) {
+        dispatch(clearCurrentCycle());
+      }
+      setCycleSwitchModalVisible(false);
+      setPendingCycleId(null);
+      return;
+    }
+
+    if (activeCycles.length === 1) {
+      if (currentCycle?.id !== activeCycles[0].id) {
+        dispatch(setCurrentCycle(activeCycles[0]));
+      }
+      setCycleSwitchModalVisible(false);
+      setPendingCycleId(null);
+      return;
+    }
+
+    if (!currentCycleInList) {
+      dispatch(clearCurrentCycle());
+      setCycleSwitchModalVisible(true);
+      setPendingCycleId(null);
+    } else if (currentCycleInList.id !== currentCycle?.id) {
+      dispatch(setCurrentCycle(currentCycleInList));
+    }
+  }, [activeCycles, currentCycle, currentCycleInList, dispatch]);
 
   const openHarvestModal = (cycle: ProductionCycle) => {
     setSelectedCycle(cycle);
@@ -228,7 +154,7 @@ export default function DashboardScreen({ navigation }: any) {
   };
 
   const handleHarvestSuccess = () => {
-    dispatch(fetchDashboardData());
+    dispatch(fetchDashboardData(undefined));
   };
 
   const handleNotificationsPress = () => {
@@ -237,6 +163,63 @@ export default function DashboardScreen({ navigation }: any) {
 
   const handleSettingsPress = () => {
     navigation.navigate('ProfileStack', { screen: 'Settings' });
+  };
+
+  const handleConfirmOrderReceipt = (orderId: string, orderNumber: string) => {
+    Alert.alert(
+      t('confirmReceiptTitle'),
+      t('confirmReceiptMessage', { orderNumber }),
+      [
+        { text: t('cancel'), style: 'cancel' },
+        {
+          text: t('confirm'),
+          onPress: async () => {
+            try {
+              setConfirmingOrderId(orderId);
+              await dispatch(confirmOrderReceipt(orderId)).unwrap();
+              await Promise.all([dispatch(fetchOrders()), dispatch(fetchOrderStatistics())]);
+              Alert.alert(t('success'), t('confirmReceiptSuccess'));
+            } catch {
+              Alert.alert(t('error'), t('confirmReceiptError'));
+            } finally {
+              setConfirmingOrderId(null);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const openCycleSwitchModal = () => {
+    if (activeCycles.length < 2) {
+      return;
+    }
+    setPendingCycleId(currentCycleInList?.id || null);
+    setCycleSwitchModalVisible(true);
+  };
+
+  const closeCycleSwitchModal = () => {
+    if (requiresCycleSelection) {
+      return;
+    }
+    setCycleSwitchModalVisible(false);
+    setPendingCycleId(currentCycleInList?.id || null);
+  };
+
+  const confirmCycleSwitch = () => {
+    if (!pendingCycleId) {
+      return;
+    }
+
+    const selected = activeCycles.find((cycle) => cycle.id === pendingCycleId);
+    if (!selected) {
+      return;
+    }
+
+    dispatch(setCurrentCycle(selected));
+    dispatch(fetchDashboardData({ cycleId: selected.id }));
+    setCycleSwitchModalVisible(false);
+    setPendingCycleId(null);
   };
 
   // Reanimated scroll handler for sticky header
@@ -319,43 +302,111 @@ export default function DashboardScreen({ navigation }: any) {
         ) : (
           <View className="flex-row flex-wrap justify-between">
             <MetricCard
-              icon="nutrition"
+              icon="cash-outline"
               color={MAVECAM_COLORS.GREEN_PRIMARY}
-              value={formatCurrency(calculateFeedSavings(summary.total_biomass, summary.average_fcr))}
-              label={t('feedSavings')}
+              value={formatCurrency(dashboardBusinessMetrics.estimatedMarketValueFcfa)}
+              label={t('dashboardEstimatedMarketValue')}
               index={0}
               animationType="pulse"
             />
 
             <MetricCard
-              icon="water"
+              icon="restaurant-outline"
               color={MAVECAM_COLORS.GREEN_LIGHT}
-              value={activeCycles.length}
-              label={t('ponds')}
+              value={formatCurrency(dashboardBusinessMetrics.feedCostConsumedFcfa)}
+              label={t('dashboardFeedCostConsumed')}
               index={1}
               animationType="wave"
             />
 
             <MetricCard
-              icon="cash-outline"
+              icon="time-outline"
               color={MAVECAM_COLORS.GREEN_DARK}
-              value={formatCurrency(calculateStockValue(summary.total_biomass))}
-              label={t('stockValue')}
+              value={
+                dashboardBusinessMetrics.timeRemainingDays === null
+                  ? '-'
+                  : formatNumber(dashboardBusinessMetrics.timeRemainingDays, t('days'), 0)
+              }
+              label={t('dashboardTimeRemainingCycle')}
               index={2}
               animationType="bounce"
             />
 
             <MetricCard
-              icon="trending-up"
+              icon="calculator-outline"
               color={MAVECAM_COLORS.SUCCESS}
-              value={formatPercentage(summary.average_survival_rate)}
-              label="Survie"
+              value={formatCurrency(dashboardBusinessMetrics.directProductionCostFcfa)}
+              label={t('dashboardDirectProductionCost')}
               index={3}
               animationType="bounce"
             />
           </View>
         )}
       </View>
+
+      {activeCycles.length > 1 && (
+        <View className="px-5 pb-1 items-end">
+          <TouchableOpacity
+            className="px-3 py-2 rounded-lg border border-mavecam-primary bg-white"
+            onPress={openCycleSwitchModal}
+          >
+            <Text className="text-sm font-semibold text-mavecam-primary">
+              {t('changeSessionCycle', { defaultValue: 'Changer de cycle' })}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {pendingDeliveryConfirmations.length > 0 && (
+        <View className="px-5 pb-2">
+          <View className="bg-white rounded-xl p-4 shadow-sm">
+            <View className="flex-row items-center justify-between mb-3">
+              <View className="flex-1 mr-3">
+                <Text className="text-base font-bold text-gray-dark">
+                  {t('ordersPendingConfirmationTitle', { count: pendingDeliveryConfirmations.length })}
+                </Text>
+                <Text className="text-xs text-gray-light mt-1">
+                  {t('ordersPendingConfirmationDescription')}
+                </Text>
+              </View>
+              <TouchableOpacity
+                className="px-3 py-2 rounded-lg border border-mavecam-primary"
+                onPress={() => navigation.navigate('OrdersHistory')}
+              >
+                <Text className="text-sm font-semibold text-mavecam-primary">{t('ordersHistory')}</Text>
+              </TouchableOpacity>
+            </View>
+
+            {pendingDeliveryConfirmations.slice(0, 2).map((order) => {
+              const total = Number.parseFloat(order.total || '0');
+              const isConfirming = confirmingOrderId === order.id;
+              return (
+                <View key={order.id} className="border border-gray-100 rounded-lg p-3 mb-2 last:mb-0">
+                  <View className="flex-row items-center justify-between">
+                    <View className="flex-1 mr-3">
+                      <Text className="text-sm font-semibold text-gray-dark">{order.order_number}</Text>
+                      <Text className="text-xs text-gray-light mt-1">
+                        {Number.isFinite(total) ? `${total.toLocaleString()} FCFA` : order.total}
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      className={`px-3 py-2 rounded-lg ${isConfirming ? 'bg-gray-300' : 'bg-mavecam-primary'}`}
+                      disabled={isConfirming}
+                      onPress={() => handleConfirmOrderReceipt(order.id, order.order_number)}
+                    >
+                      {isConfirming ? (
+                        <ActivityIndicator size="small" color={MAVECAM_COLORS.WHITE} />
+                      ) : (
+                        <Text className="text-white text-xs font-semibold">{t('confirmReceiptAction')}</Text>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        </View>
+      )}
 
       <QuickActionsPreview
         onOpenSheet={() => setActionsSheetVisible(true)}
@@ -370,16 +421,16 @@ export default function DashboardScreen({ navigation }: any) {
           {activeCycles.map((cycle) => (
             <View
               key={cycle.id}
-              className="bg-white rounded-xl p-4 mb-3 shadow"
+              className="bg-white rounded-xl p-4 mb-3 border border-gray-200"
             >
               <View className="flex-row justify-between items-start">
                 <View className="flex-1 mr-3">
                   <Text className="text-base font-bold text-gray-dark mb-1">{cycle.cycle_name}</Text>
                   <Text className="text-sm text-gray-light mb-1">
-                    {cycle.species === 'clarias' ? 'Silure africain (Clarias)' : 'Tilapia'} - {cycle.pond_identifier}
+                    {cycle.species === 'clarias' ? t('catfish') : t('tilapia')} - {cycle.pond_identifier}
                   </Text>
                   <Text className="text-xs text-gray-light">
-                    {Math.floor((new Date().getTime() - new Date(cycle.start_date).getTime()) / (1000 * 60 * 60 * 24))} jours - {formatCurrency(calculateStockValue(cycle.current_biomass))} - {formatPercentage(cycle.survival_rate || 0)} survie
+                    {t('daysCount', { count: Math.floor((new Date().getTime() - new Date(cycle.start_date).getTime()) / (1000 * 60 * 60 * 24)) })} - {formatCurrency(calculateCycleEstimatedMarketValue(cycle))} - {formatPercentage(cycle.survival_rate || 0)} {t('survivalRateShort')}
                   </Text>
                 </View>
 
@@ -400,6 +451,7 @@ export default function DashboardScreen({ navigation }: any) {
         onClose={closeHarvestModal}
         cycle={selectedCycle}
         onSuccess={handleHarvestSuccess}
+        onContactBuyer={() => navigation.navigate('Chat')}
       />
 
       <QuickActionsSheet
@@ -408,6 +460,54 @@ export default function DashboardScreen({ navigation }: any) {
         unreadCount={unreadCount}
         navigation={navigation}
       />
+
+      <Modal
+        visible={cycleSwitchModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={closeCycleSwitchModal}
+      >
+        <View className="flex-1 bg-black/40 items-center justify-center px-4">
+          <View className="bg-white w-full rounded-xl p-4">
+            <Text className="text-lg font-bold text-gray-dark mb-1">
+              {t('sessionCyclePickerTitle', { defaultValue: 'Sélection du cycle' })}
+            </Text>
+            <Text className="text-sm text-gray-light mb-4">
+              {t('sessionCyclePickerDescription', {
+                defaultValue: 'Choisissez le cycle sur lequel vous travaillez maintenant.',
+              })}
+            </Text>
+
+            <CyclePicker
+              cycles={activeCycles}
+              selectedCycleId={pendingCycleId}
+              onSelectCycle={setPendingCycleId}
+            />
+
+            <View className="flex-row justify-end gap-2 mt-3">
+              {!requiresCycleSelection && (
+                <TouchableOpacity
+                  className="px-4 py-2 rounded-lg border border-gray-300"
+                  onPress={closeCycleSwitchModal}
+                >
+                  <Text className="text-sm text-gray-dark">{t('cancel')}</Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity
+                className={`px-4 py-2 rounded-lg ${
+                  pendingCycleId ? 'bg-mavecam-primary' : 'bg-gray-300'
+                }`}
+                disabled={!pendingCycleId}
+                onPress={confirmCycleSwitch}
+              >
+                <Text className="text-sm text-white font-semibold">
+                  {t('sessionCycleConfirm', { defaultValue: 'Confirmer le cycle' })}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
       </Animated.ScrollView>
     </View>
   );

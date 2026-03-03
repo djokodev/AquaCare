@@ -57,7 +57,7 @@ export interface DeliveryFeePreview {
 }
 
 // Orders
-export type OrderStatus = 'confirmed';
+export type OrderStatus = 'confirmed' | 'delivered' | 'received';
 
 export interface OrderItem {
   id: string;
@@ -180,6 +180,9 @@ export interface CycleSimulationParams {
   target_weight_g?: number;
   cycle_duration_days?: number;
   survival_rate?: number;
+  selling_price_per_kg_fcfa?: number;
+  fingerlings_cost_fcfa?: number;
+  other_costs_fcfa?: number;
 }
 
 export interface SimulatedProduct {
@@ -208,6 +211,9 @@ export interface SimulatedFeedingPhase {
 
 export interface SimulationSummary {
   total_feed_kg: number;
+  feed_cost_fcfa: number;
+  fingerlings_cost_fcfa: number;
+  other_costs_fcfa: number;
   total_cost_fcfa: number;
   initial_fish_count: number;
   estimated_final_count: number;
@@ -228,6 +234,9 @@ export interface SimulationResult {
     target_weight_g: number;
     cycle_duration_days: number;
     survival_rate: number;
+    selling_price_per_kg_fcfa: number;
+    fingerlings_cost_fcfa: number;
+    other_costs_fcfa: number;
   };
   feeding_phases: SimulatedFeedingPhase[];
   summary: SimulationSummary;

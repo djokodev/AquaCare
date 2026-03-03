@@ -61,6 +61,7 @@ describe('features/aquaculture/screens/NewCycleScreen', () => {
   const navigation = {
     goBack: jest.fn(),
     navigate: jest.fn(),
+    replace: jest.fn(),
   } as any;
 
   beforeEach(() => {
@@ -114,6 +115,16 @@ describe('features/aquaculture/screens/NewCycleScreen', () => {
       expect.any(Array)
     );
 
+    const successCall = (alertSpy as jest.Mock).mock.calls.find((call) => call[1] === 'cycleCreatedSuccess');
+    const buttons = successCall?.[2] as Array<{ onPress?: () => void }>;
+    buttons?.[0]?.onPress?.();
+    expect(navigation.replace).toHaveBeenCalledWith(
+      'CycleSimulator',
+      expect.objectContaining({
+        cycleId: 'cycle-1',
+      })
+    );
+
     alertSpy.mockRestore();
   });
 
@@ -141,7 +152,7 @@ describe('features/aquaculture/screens/NewCycleScreen', () => {
 
     expect(alertSpy).toHaveBeenCalledWith(
       'success',
-      'cycleCreatedOffline',
+      'cycleCreatedOfflineSimulationInfo',
       expect.any(Array)
     );
     alertSpy.mockRestore();

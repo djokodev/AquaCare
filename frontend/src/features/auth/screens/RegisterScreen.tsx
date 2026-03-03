@@ -10,7 +10,7 @@ import logger from '@/utils/logger';
 import { PHONE_REGEX } from '@/utils/phoneFormatter';
 import PhoneInputField from '@/components/common/PhoneInputField';
 import AuthErrorBlock from '@/components/common/AuthErrorBlock';
-import { REGIONS, ACTIVITY_TYPES, AGE_GROUPS, LEGAL_STATUS_OPTIONS } from '@/constants/registration';
+import { REGIONS, AGE_GROUPS, LEGAL_STATUS_OPTIONS } from '@/constants/registration';
 
 type RegisterScreenNavigationProp = StackNavigationProp<AuthStackParamList, 'Register'>;
 
@@ -30,7 +30,7 @@ export default function RegisterScreen({ navigation }: Props) {
     business_name: '',
     account_type: 'individual',
     age_group: '',
-    activity_type: '',
+    activity_type: 'poisson_table',
     region: '',
     language_preference: 'fr',
     password: '',
@@ -151,18 +151,20 @@ export default function RegisterScreen({ navigation }: Props) {
             value={formData.phone_number}
             onChange={(formatted) => updateField('phone_number', formatted)}
             error={errors.phone_number}
+            hint={t('whatsAppHint')}
             required
           />
 
           <View className="mb-4">
             <Text className="text-base font-medium text-gray-dark mb-2">{t('email')}</Text>
             <TextInput
-              className={`border rounded-lg px-3 py-3 text-base bg-white ${errors.email ? 'border-error' : 'border-gray-300'}`}
+              className={`border rounded-lg px-3 h-12 text-base bg-white ${errors.email ? 'border-error' : 'border-gray-300'}`}
               value={formData.email}
               onChangeText={(value) => updateField('email', value)}
               placeholder={t('placeholderEmail')}
               keyboardType="email-address"
               autoCapitalize="none"
+              textAlignVertical="center"
             />
             {renderError('email')}
           </View>
@@ -172,13 +174,14 @@ export default function RegisterScreen({ navigation }: Props) {
               <View className="mb-4">
                 <Text className="text-base font-medium text-gray-dark mb-2">{t('firstName')} *</Text>
                 <TextInput
-                  className={`border rounded-lg px-3 py-3 text-base bg-white ${
+                  className={`border rounded-lg px-3 h-12 text-base bg-white ${
                     errors.first_name ? 'border-error' : 'border-gray-300'
                   }`}
                   value={formData.first_name}
                   onChangeText={(value) => updateField('first_name', value)}
                   placeholder={t('placeholderFirstName')}
                   autoCapitalize="words"
+                  textAlignVertical="center"
                 />
                 {renderError('first_name')}
               </View>
@@ -186,13 +189,14 @@ export default function RegisterScreen({ navigation }: Props) {
               <View className="mb-4">
                 <Text className="text-base font-medium text-gray-dark mb-2">{t('lastName')} *</Text>
                 <TextInput
-                  className={`border rounded-lg px-3 py-3 text-base bg-white ${
+                  className={`border rounded-lg px-3 h-12 text-base bg-white ${
                     errors.last_name ? 'border-error' : 'border-gray-300'
                   }`}
                   value={formData.last_name}
                   onChangeText={(value) => updateField('last_name', value)}
                   placeholder={t('placeholderLastName')}
                   autoCapitalize="words"
+                  textAlignVertical="center"
                 />
                 {renderError('last_name')}
               </View>
@@ -214,13 +218,14 @@ export default function RegisterScreen({ navigation }: Props) {
               <View className="mb-4">
                 <Text className="text-base font-medium text-gray-dark mb-2">{t('businessName')} *</Text>
                 <TextInput
-                  className={`border rounded-lg px-3 py-3 text-base bg-white ${
+                  className={`border rounded-lg px-3 h-12 text-base bg-white ${
                     errors.business_name ? 'border-error' : 'border-gray-300'
                   }`}
                   value={formData.business_name}
                   onChangeText={(value) => updateField('business_name', value)}
                   placeholder={t('placeholderBusinessName')}
                   autoCapitalize="words"
+                  textAlignVertical="center"
                 />
                 {renderError('business_name')}
               </View>
@@ -238,26 +243,19 @@ export default function RegisterScreen({ navigation }: Props) {
               <View className="mb-4">
                 <Text className="text-base font-medium text-gray-dark mb-2">{t('promoterName')} *</Text>
                 <TextInput
-                  className={`border rounded-lg px-3 py-3 text-base bg-white ${
+                  className={`border rounded-lg px-3 h-12 text-base bg-white ${
                     errors.promoter_name ? 'border-error' : 'border-gray-300'
                   }`}
                   value={formData.promoter_name}
                   onChangeText={(value) => updateField('promoter_name', value)}
                   placeholder={t('placeholderPromoterName')}
                   autoCapitalize="words"
+                  textAlignVertical="center"
                 />
                 {renderError('promoter_name')}
               </View>
             </>
           )}
-
-          <SelectField
-            label={t('activityType')}
-            value={formData.activity_type}
-            onChange={(value) => updateField('activity_type', value)}
-            options={ACTIVITY_TYPES}
-            placeholder={t('selectOption')}
-          />
 
           <SelectField
             label={t('region')}
@@ -270,13 +268,14 @@ export default function RegisterScreen({ navigation }: Props) {
           <View className="mb-4">
             <Text className="text-base font-medium text-gray-dark mb-2">{t('password')} *</Text>
             <TextInput
-              className={`border rounded-lg px-3 py-3 text-base bg-white ${
+              className={`border rounded-lg px-3 h-12 text-base bg-white ${
                 errors.password ? 'border-error' : 'border-gray-300'
               }`}
               value={formData.password}
               onChangeText={(value) => updateField('password', value)}
               placeholder="********"
               secureTextEntry
+              textAlignVertical="center"
             />
             {renderError('password')}
           </View>
@@ -284,13 +283,14 @@ export default function RegisterScreen({ navigation }: Props) {
           <View className="mb-4">
             <Text className="text-base font-medium text-gray-dark mb-2">{t('confirmPassword')} *</Text>
             <TextInput
-              className={`border rounded-lg px-3 py-3 text-base bg-white ${
+              className={`border rounded-lg px-3 h-12 text-base bg-white ${
                 errors.password_confirm ? 'border-error' : 'border-gray-300'
               }`}
               value={formData.password_confirm}
               onChangeText={(value) => updateField('password_confirm', value)}
               placeholder="********"
               secureTextEntry
+              textAlignVertical="center"
             />
             {renderError('password_confirm')}
           </View>

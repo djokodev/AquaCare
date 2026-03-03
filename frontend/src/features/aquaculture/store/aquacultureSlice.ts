@@ -12,6 +12,7 @@ import {
   SyncPayload,
 } from '@/types/aquaculture';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
+import { logoutUser } from '@/features/auth/store/authSlice';
 
 interface ApiErrorPayload {
   detail?: string;
@@ -87,9 +88,17 @@ const initialState: AquacultureState = {
 
 export const fetchDashboardData = createAsyncThunk(
   'aquaculture/fetchDashboardData',
-  async (_, { rejectWithValue }) => {
+  async (
+    options: { cycleId?: string; forceAllCycles?: boolean } | undefined,
+    { getState, rejectWithValue }
+  ) => {
     try {
-      const data = await aquacultureService.getDashboardData();
+      const state = getState() as { aquaculture: AquacultureState };
+      const sessionCycleId = state.aquaculture.currentCycle?.id;
+      const cycleIdToUse = options?.forceAllCycles
+        ? undefined
+        : options?.cycleId || sessionCycleId;
+      const data = await aquacultureService.getDashboardData(cycleIdToUse);
       return data;
     } catch (error: unknown) {
       return rejectWithValue(extractErrorMessage(error, 'Erreur lors du chargement du dashboard'));
@@ -315,6 +324,24 @@ export const aquacultureSlice = createSlice({
 
     setCurrentCycle: (state, action: PayloadAction<ProductionCycle | undefined>) => {
       state.currentCycle = action.payload;
+    },
+
+    clearCurrentCycle: (state) => {
+      state.currentCycle = undefined;
+    },
+
+    setCurrentCycleById: (state, action: PayloadAction<string | undefined>) => {
+      const cycleId = action.payload;
+      if (!cycleId) {
+        state.currentCycle = undefined;
+        return;
+      }
+
+      const cycle =
+        state.activeCycles.find((item) => item.id === cycleId) ||
+        state.cycles.find((item) => item.id === cycleId);
+
+      state.currentCycle = cycle;
     },
 
     addToPendingSync: (state, action: PayloadAction<PendingSyncAction>) => {
@@ -557,6 +584,12 @@ export const aquacultureSlice = createSlice({
       .addCase(synchronizeData.rejected, (state, action) => {
         state.loading.sync = false;
         state.error = action.payload as string;
+      })
+      .addCase(logoutUser.fulfilled, (state) => {
+        state.currentCycle = undefined;
+      })
+      .addCase(logoutUser.rejected, (state) => {
+        state.currentCycle = undefined;
       });
   },
 });
@@ -566,6 +599,8 @@ export const aquacultureSlice = createSlice({
 export const {
   clearError,
   setCurrentCycle,
+  clearCurrentCycle,
+  setCurrentCycleById,
   addToPendingSync,
   clearPendingSync,
   updateLastSyncTime,

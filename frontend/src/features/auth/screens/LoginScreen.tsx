@@ -132,7 +132,7 @@ export default function LoginScreen({ navigation }: Props) {
             <View className="mb-4">
               <Text className="text-base font-medium text-gray-dark mb-2">{t('loginName')}</Text>
               <TextInput
-                className={`border border-gray-300 rounded-lg px-3 py-3 text-base bg-white ${
+                className={`border border-gray-300 rounded-lg px-3 h-12 text-base bg-white ${
                   errors.loginName ? 'border-error' : ''
                 }`}
                 value={formData.loginName}
@@ -140,6 +140,7 @@ export default function LoginScreen({ navigation }: Props) {
                 placeholder={t('placeholderLoginName')}
                 autoCapitalize="words"
                 autoComplete="name"
+                textAlignVertical="center"
               />
               {renderError('loginName')}
             </View>
@@ -154,7 +155,7 @@ export default function LoginScreen({ navigation }: Props) {
           <View className="mb-4">
             <Text className="text-base font-medium text-gray-dark mb-2">{t('password')}</Text>
             <TextInput
-              className={`border border-gray-300 rounded-lg px-3 py-3 text-base bg-white ${
+              className={`border border-gray-300 rounded-lg px-3 h-12 text-base bg-white ${
                 errors.password ? 'border-error' : ''
               }`}
               value={formData.password}
@@ -162,6 +163,7 @@ export default function LoginScreen({ navigation }: Props) {
               placeholder="********"
               secureTextEntry
               autoComplete="password"
+              textAlignVertical="center"
             />
             {renderError('password')}
           </View>

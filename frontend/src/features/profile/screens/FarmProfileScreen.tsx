@@ -26,7 +26,7 @@ export default function FarmProfileScreen() {
   const [editData, setEditData] = useState<Partial<FarmProfile>>({});
 
   useEffect(() => {
-    dispatch(fetchDashboardData());
+    dispatch(fetchDashboardData(undefined));
   }, [dispatch]);
 
   useEffect(() => {
@@ -317,12 +317,13 @@ function FarmInfoRow({
       </View>
       {editable ? (
         <TextInput
-          className="border border-gray-300 rounded-md px-2 py-1 text-sm text-right text-gray-dark flex-1"
+          className="border border-gray-300 rounded-md px-2 h-10 text-sm text-right text-gray-dark flex-1"
           value={inputValue}
           onChangeText={onChangeText}
           placeholder={placeholder}
           keyboardType={keyboardType}
           autoCapitalize="words"
+          textAlignVertical="center"
         />
       ) : (
         <Text className="text-sm text-gray-dark font-medium flex-1 text-right">{value}</Text>

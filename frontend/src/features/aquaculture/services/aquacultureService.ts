@@ -1,4 +1,5 @@
 import { apiService } from '@/services/api';
+import { API_CONFIG } from '@/constants/api';
 import logger from '@/utils/logger';
 import {
   ProductionCycle,
@@ -6,6 +7,8 @@ import {
   FeedingPlan,
   SanitaryLog,
   DashboardData,
+  ProductionReport,
+  ReportType,
   SyncPayload,
   SyncResponse,
   CreateCycleForm,
@@ -55,14 +58,122 @@ class AquacultureService {
 
   // =================== DASHBOARD ===================
 
-  async getDashboardData(): Promise<DashboardData> {
+  async getDashboardData(cycleId?: string): Promise<DashboardData> {
     try {
-      const response = await apiService.get<DashboardData>(`${this.baseUrl}/dashboard/`);
+      const params = cycleId ? `?cycle_id=${cycleId}` : '';
+      const response = await apiService.get<DashboardData>(`${this.baseUrl}/dashboard/${params}`);
       return response.data;
     } catch (error) {
       logger.error('Erreur lors de la recuperation du dashboard:', error);
       throw error;
     }
+  }
+
+  // =================== REPORTS ===================
+
+  async getReports(params?: {
+    report_type?: ReportType;
+    status?: 'draft' | 'validated';
+    cycle_id?: string;
+  }): Promise<ProductionReport[]> {
+    try {
+      const query = new URLSearchParams();
+      if (params?.report_type) {
+        query.append('report_type', params.report_type);
+      }
+      if (params?.status) {
+        query.append('status', params.status);
+      }
+      if (params?.cycle_id) {
+        query.append('cycle_id', params.cycle_id);
+      }
+
+      const queryString = query.toString();
+      const url = `${this.baseUrl}/reports/${queryString ? `?${queryString}` : ''}`;
+
+      const response = await apiService.get<ListResponse<ProductionReport>>(url);
+      return extractResults(response.data);
+    } catch (error) {
+      logger.error('Erreur lors de la recuperation des rapports:', error);
+      throw error;
+    }
+  }
+
+  async getReport(id: string): Promise<ProductionReport> {
+    try {
+      const response = await apiService.get<ProductionReport>(`${this.baseUrl}/reports/${id}/`);
+      return response.data;
+    } catch (error) {
+      logger.error(`Erreur lors de la recuperation du rapport ${id}:`, error);
+      throw error;
+    }
+  }
+
+  async generateReport(payload: {
+    report_type: ReportType;
+    reference_date?: string;
+    cycle_id?: string;
+  }): Promise<ProductionReport> {
+    try {
+      const response = await apiService.post<ProductionReport>(
+        `${this.baseUrl}/reports/generate/`,
+        payload
+      );
+      return response.data;
+    } catch (error) {
+      logger.error('Erreur lors de la generation du rapport:', error);
+      throw error;
+    }
+  }
+
+  async regenerateReport(id: string): Promise<ProductionReport> {
+    try {
+      const response = await apiService.post<ProductionReport>(`${this.baseUrl}/reports/${id}/regenerate/`);
+      return response.data;
+    } catch (error) {
+      logger.error(`Erreur lors de la regeneration du rapport ${id}:`, error);
+      throw error;
+    }
+  }
+
+  async validateReport(id: string): Promise<ProductionReport> {
+    try {
+      const response = await apiService.post<ProductionReport>(`${this.baseUrl}/reports/${id}/validate/`);
+      return response.data;
+    } catch (error) {
+      logger.error(`Erreur lors de la validation du rapport ${id}:`, error);
+      throw error;
+    }
+  }
+
+  async sendReportEmail(id: string): Promise<ProductionReport> {
+    try {
+      const response = await apiService.post<ProductionReport>(`${this.baseUrl}/reports/${id}/send-email/`);
+      return response.data;
+    } catch (error) {
+      logger.error(`Erreur lors de l'envoi email du rapport ${id}:`, error);
+      throw error;
+    }
+  }
+
+  async markReportWhatsAppShared(
+    id: string,
+    payload?: { recipient?: string; metadata?: Record<string, unknown> }
+  ): Promise<ProductionReport> {
+    try {
+      const response = await apiService.post<ProductionReport>(
+        `${this.baseUrl}/reports/${id}/mark-whatsapp-shared/`,
+        payload || {}
+      );
+      return response.data;
+    } catch (error) {
+      logger.error(`Erreur lors du marquage WhatsApp du rapport ${id}:`, error);
+      throw error;
+    }
+  }
+
+  getReportDownloadUrl(id: string): string {
+    return `${API_CONFIG.baseURL}${this.baseUrl}/reports/${id}/download/`;
   }
 
   // =================== PRODUCTION CYCLES ===================
@@ -103,6 +214,16 @@ class AquacultureService {
       return response.data;
     } catch (error) {
       logger.error(`Erreur lors de la mise a jour du cycle ${id}:`, error);
+      throw error;
+    }
+  }
+
+  async patchProductionCycle(id: string, cycleData: Partial<ProductionCycle>): Promise<ProductionCycle> {
+    try {
+      const response = await apiService.patch<ProductionCycle>(`${this.baseUrl}/cycles/${id}/`, cycleData);
+      return response.data;
+    } catch (error) {
+      logger.error(`Erreur lors de la mise a jour partielle du cycle ${id}:`, error);
       throw error;
     }
   }

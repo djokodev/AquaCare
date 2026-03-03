@@ -40,12 +40,14 @@ export const CYCLE_SIMULATION_DEFAULTS = {
     target_weight_g: 300,
     cycle_duration_days: 120,
     survival_rate: 0.85,
+    selling_price_per_kg_fcfa: 2500,
   },
   catfish: {
     initial_weight_g: 5,
     target_weight_g: 400,
     cycle_duration_days: 150,
     survival_rate: 0.85,
+    selling_price_per_kg_fcfa: 2800,
   },
 };
 

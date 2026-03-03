@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,42 +10,110 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useDispatch, useSelector } from 'react-redux';
 
 import { AppDispatch, RootState } from '@/store/store';
-import { fetchCycleSimulation, resetSimulation, addToCart } from '@/features/commerce/store/commerceSlice';
-import { CycleSimulationParams, SimulatedFeedingPhase } from '@/types/commerce';
+import { fetchCycleSimulation, resetSimulation, addToCart, fetchProducts } from '@/features/commerce/store/commerceSlice';
+import { CycleSimulationParams } from '@/types/commerce';
 import { MAVECAM_COLORS } from '@/constants/colors';
 import { CYCLE_SIMULATION_DEFAULTS } from '@/domain/commerce';
-import CustomPicker from '@/components/common/CustomPicker';
 import { RootStackParamList } from '@/navigation/MainNavigator';
+import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
+import { aggregatePhasesByName, DisplayPhase } from '../utils/aggregatePhases';
 
 type NavigationProp = StackNavigationProp<RootStackParamList>;
+type ScreenRouteProp = RouteProp<RootStackParamList, 'CycleSimulator'>;
 
 export default function CycleSimulatorScreen() {
   const { t } = useTranslation();
   const navigation = useNavigation<NavigationProp>();
+  const route = useRoute<ScreenRouteProp>();
   const dispatch = useDispatch<AppDispatch>();
 
   const { simulation, cart, products } = useSelector((state: RootState) => state.commerce);
+  const { currentCycle } = useSelector((state: RootState) => state.aquaculture);
   const { result: simulationResult, loading, error } = simulation;
+
+  const prefill = route.params?.prefill;
+  const autoLaunchDoneRef = useRef(false);
+  const sessionPrefillAppliedRef = useRef(false);
+
+  const sessionCycle = useMemo(
+    () => (currentCycle?.status === 'active' ? currentCycle : undefined),
+    [currentCycle]
+  );
+
+  const effectiveCycleId = sessionCycle?.id;
 
   const [species, setSpecies] = useState<'tilapia' | 'catfish'>('tilapia');
   const [initialFishCount, setInitialFishCount] = useState('1000');
-  const [initialWeightG, setInitialWeightG] = useState(
-    CYCLE_SIMULATION_DEFAULTS.tilapia.initial_weight_g.toString()
+  const [initialWeightG, setInitialWeightG] = useState(CYCLE_SIMULATION_DEFAULTS.tilapia.initial_weight_g.toString());
+  const [targetWeightG, setTargetWeightG] = useState(CYCLE_SIMULATION_DEFAULTS.tilapia.target_weight_g.toString());
+  const [cycleDurationDays, setCycleDurationDays] = useState(CYCLE_SIMULATION_DEFAULTS.tilapia.cycle_duration_days.toString());
+  const [survivalRate, setSurvivalRate] = useState((CYCLE_SIMULATION_DEFAULTS.tilapia.survival_rate * 100).toString());
+  const [sellingPricePerKg, setSellingPricePerKg] = useState(
+    CYCLE_SIMULATION_DEFAULTS.tilapia.selling_price_per_kg_fcfa.toString()
   );
-  const [targetWeightG, setTargetWeightG] = useState(
-    CYCLE_SIMULATION_DEFAULTS.tilapia.target_weight_g.toString()
-  );
-  const [cycleDurationDays, setCycleDurationDays] = useState(
-    CYCLE_SIMULATION_DEFAULTS.tilapia.cycle_duration_days.toString()
-  );
-  const [survivalRate, setSurvivalRate] = useState(
-    (CYCLE_SIMULATION_DEFAULTS.tilapia.survival_rate * 100).toString()
-  );
+  const [fingerlingsCost, setFingerlingsCost] = useState('0');
+  const [otherCosts, setOtherCosts] = useState('0');
+  const [savingCycleParams, setSavingCycleParams] = useState(false);
+
+  useEffect(() => {
+    dispatch(fetchProducts(undefined));
+  }, [dispatch]);
+
+  useEffect(() => {
+    if (!prefill || autoLaunchDoneRef.current) {
+      return;
+    }
+
+    setSpecies(prefill.species);
+    setInitialFishCount(prefill.initial_fish_count.toString());
+    setInitialWeightG(prefill.initial_weight_g.toString());
+    setTargetWeightG(prefill.target_weight_g.toString());
+    setCycleDurationDays(prefill.cycle_duration_days.toString());
+    setSurvivalRate((prefill.survival_rate * 100).toString());
+    setSellingPricePerKg(prefill.selling_price_per_kg_fcfa.toString());
+    setFingerlingsCost(prefill.fingerlings_cost_fcfa.toString());
+    setOtherCosts(prefill.other_costs_fcfa.toString());
+
+    dispatch(fetchCycleSimulation(prefill));
+    autoLaunchDoneRef.current = true;
+  }, [prefill, dispatch]);
+
+  useEffect(() => {
+    if (prefill || sessionPrefillAppliedRef.current || !sessionCycle) {
+      return;
+    }
+
+    const mappedSpecies = sessionCycle.species === 'clarias' ? 'catfish' : 'tilapia';
+    const defaults = CYCLE_SIMULATION_DEFAULTS[mappedSpecies];
+
+    setSpecies(mappedSpecies);
+    setInitialFishCount(String(sessionCycle.initial_count || 1000));
+    setInitialWeightG(String(sessionCycle.initial_average_weight || defaults.initial_weight_g));
+    setTargetWeightG(String(sessionCycle.target_harvest_weight_g || defaults.target_weight_g));
+    setCycleDurationDays(
+      String(sessionCycle.planned_cycle_duration_days || defaults.cycle_duration_days)
+    );
+    setSurvivalRate(
+      String(
+        sessionCycle.expected_survival_rate_pct ||
+          Math.round((sessionCycle.survival_rate || defaults.survival_rate) * 100)
+      )
+    );
+    setSellingPricePerKg(
+      String(
+        sessionCycle.planned_selling_price_per_kg_fcfa || defaults.selling_price_per_kg_fcfa
+      )
+    );
+    setFingerlingsCost(String(sessionCycle.fingerlings_cost_fcfa || 0));
+    setOtherCosts(String(sessionCycle.other_operational_costs_fcfa || 0));
+
+    sessionPrefillAppliedRef.current = true;
+  }, [prefill, sessionCycle]);
 
   const handleSpeciesChange = (newSpecies: 'tilapia' | 'catfish') => {
     setSpecies(newSpecies);
@@ -54,48 +122,94 @@ export default function CycleSimulatorScreen() {
     setTargetWeightG(defaults.target_weight_g.toString());
     setCycleDurationDays(defaults.cycle_duration_days.toString());
     setSurvivalRate((defaults.survival_rate * 100).toString());
+    setSellingPricePerKg(defaults.selling_price_per_kg_fcfa.toString());
   };
 
-  const handleLaunchSimulation = () => {
-    const fishCount = parseInt(initialFishCount, 10);
-    const initWeight = parseFloat(initialWeightG);
-    const targWeight = parseFloat(targetWeightG);
-    const duration = parseInt(cycleDurationDays, 10);
-    const survival = parseFloat(survivalRate) / 100;
+  const parsedValues = useMemo(() => {
+    const fishCount = Number.parseInt(initialFishCount, 10);
+    const initWeight = Number.parseFloat(initialWeightG);
+    const targWeight = Number.parseFloat(targetWeightG);
+    const duration = Number.parseInt(cycleDurationDays, 10);
+    const survival = Number.parseFloat(survivalRate) / 100;
+    const sellingPrice = Number.parseFloat(sellingPricePerKg);
+    const fingerlings = Number.parseFloat(fingerlingsCost || '0');
+    const other = Number.parseFloat(otherCosts || '0');
 
-    if (
-      isNaN(fishCount) ||
-      fishCount <= 0 ||
-      isNaN(initWeight) ||
-      initWeight <= 0 ||
-      isNaN(targWeight) ||
-      targWeight <= initWeight ||
-      isNaN(duration) ||
-      duration < 30 ||
-      duration > 365 ||
-      isNaN(survival) ||
-      survival <= 0 ||
-      survival > 1
-    ) {
+    return {
+      fishCount,
+      initWeight,
+      targWeight,
+      duration,
+      survival,
+      sellingPrice,
+      fingerlings,
+      other,
+    };
+  }, [
+    initialFishCount,
+    initialWeightG,
+    targetWeightG,
+    cycleDurationDays,
+    survivalRate,
+    sellingPricePerKg,
+    fingerlingsCost,
+    otherCosts,
+  ]);
+
+  const displayPhases = useMemo(
+    () => (simulationResult ? aggregatePhasesByName(simulationResult.feeding_phases) : []),
+    [simulationResult]
+  );
+
+  const isInvalidParams = () => {
+    const {
+      fishCount,
+      initWeight,
+      targWeight,
+      duration,
+      survival,
+      sellingPrice,
+      fingerlings,
+      other,
+    } = parsedValues;
+
+    if (!Number.isFinite(fishCount) || fishCount <= 0) return true;
+    if (!Number.isFinite(initWeight) || initWeight <= 0) return true;
+    if (!Number.isFinite(targWeight) || targWeight <= initWeight) return true;
+    if (!Number.isFinite(duration) || duration < 30 || duration > 365) return true;
+    if (!Number.isFinite(survival) || survival <= 0 || survival > 1) return true;
+    if (!Number.isFinite(sellingPrice) || sellingPrice <= 0) return true;
+    if (!Number.isFinite(fingerlings) || fingerlings < 0) return true;
+    if (!Number.isFinite(other) || other < 0) return true;
+    return false;
+  };
+
+  const buildSimulationParams = (): CycleSimulationParams => ({
+    species,
+    initial_fish_count: parsedValues.fishCount,
+    initial_weight_g: parsedValues.initWeight,
+    target_weight_g: parsedValues.targWeight,
+    cycle_duration_days: parsedValues.duration,
+    survival_rate: parsedValues.survival,
+    selling_price_per_kg_fcfa: parsedValues.sellingPrice,
+    fingerlings_cost_fcfa: parsedValues.fingerlings,
+    other_costs_fcfa: parsedValues.other,
+  });
+
+  const handleLaunchSimulation = () => {
+    if (isInvalidParams()) {
       Alert.alert(t('error'), t('invalidSimulationParams'));
       return;
     }
 
-    const params: CycleSimulationParams = {
-      species,
-      initial_fish_count: fishCount,
-      initial_weight_g: initWeight,
-      target_weight_g: targWeight,
-      cycle_duration_days: duration,
-      survival_rate: survival,
-    };
-
-    dispatch(fetchCycleSimulation(params));
+    dispatch(fetchCycleSimulation(buildSimulationParams()));
   };
 
   const handleReset = () => {
     dispatch(resetSimulation());
     setInitialFishCount('1000');
+    setFingerlingsCost('0');
+    setOtherCosts('0');
     handleSpeciesChange(species);
   };
 
@@ -105,7 +219,7 @@ export default function CycleSimulatorScreen() {
     let totalProducts = 0;
     simulationResult.feeding_phases.forEach((phase) => {
       phase.products.forEach((simulatedProduct) => {
-        const product = products.items.find((p) => p.id === simulatedProduct.product_id);
+        const product = products.items.find((entry) => entry.id === simulatedProduct.product_id);
         if (product) {
           dispatch(addToCart({ product, quantity: simulatedProduct.quantity_bags }));
           totalProducts += simulatedProduct.quantity_bags;
@@ -113,10 +227,72 @@ export default function CycleSimulatorScreen() {
       });
     });
 
+    if (totalProducts === 0) {
+      Alert.alert(t('warning'), t('simulationProductsNotFound'));
+      return;
+    }
+
     Alert.alert(t('success'), t('simulationProductsAdded', { count: totalProducts }), [
       { text: t('viewCart'), onPress: () => navigation.navigate('Cart') },
       { text: t('ok') },
     ]);
+  };
+
+  const handleAddPhaseToCart = (phase: DisplayPhase) => {
+    let addedCount = 0;
+
+    phase.products.forEach((simulatedProduct) => {
+      const product = products.items.find((entry) => entry.id === simulatedProduct.product_id);
+      if (product) {
+        dispatch(addToCart({ product, quantity: simulatedProduct.quantity_bags }));
+        addedCount += simulatedProduct.quantity_bags;
+      }
+    });
+
+    if (addedCount === 0) {
+      Alert.alert(t('warning'), t('simulationProductsNotFound'));
+      return;
+    }
+
+    Alert.alert(
+      t('success'),
+      t('simulationPhaseAdded', {
+        phase: getPhaseLabel(phase.phase_name),
+        count: addedCount,
+      }),
+      [
+        { text: t('viewCart'), onPress: () => navigation.navigate('Cart') },
+        { text: t('ok') },
+      ]
+    );
+  };
+
+  const handleUpdateCycleParameters = async () => {
+    if (!effectiveCycleId) {
+      Alert.alert(t('warning'), t('cycleLinkUnavailable'));
+      return;
+    }
+    if (isInvalidParams()) {
+      Alert.alert(t('error'), t('invalidSimulationParams'));
+      return;
+    }
+
+    setSavingCycleParams(true);
+    try {
+      await aquacultureService.patchProductionCycle(effectiveCycleId, {
+        target_harvest_weight_g: parsedValues.targWeight,
+        planned_cycle_duration_days: parsedValues.duration,
+        expected_survival_rate_pct: parsedValues.survival * 100,
+        planned_selling_price_per_kg_fcfa: parsedValues.sellingPrice,
+        fingerlings_cost_fcfa: parsedValues.fingerlings,
+        other_operational_costs_fcfa: parsedValues.other,
+      });
+      Alert.alert(t('success'), t('cycleParametersUpdated'));
+    } catch {
+      Alert.alert(t('error'), t('cycleParametersUpdateError'));
+    } finally {
+      setSavingCycleParams(false);
+    }
   };
 
   const getPhaseLabel = (phaseName: string) => {
@@ -126,12 +302,12 @@ export default function CycleSimulatorScreen() {
     return phaseName
       .replace(/_/g, ' ')
       .split(' ')
-      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
       .join(' ');
   };
 
-  const renderPhaseCard = (phase: SimulatedFeedingPhase, index: number) => {
-    const totalBags = phase.products.reduce((sum, p) => sum + p.quantity_bags, 0);
+  const renderPhaseCard = (phase: DisplayPhase, index: number) => {
+    const totalBags = phase.products.reduce((sum, product) => sum + product.quantity_bags, 0);
 
     return (
       <View key={index} className="bg-white rounded-xl p-4 mb-3">
@@ -142,7 +318,7 @@ export default function CycleSimulatorScreen() {
           <View className="flex-1">
             <Text className="text-sm font-bold text-gray-dark">{getPhaseLabel(phase.phase_name)}</Text>
             <Text className="text-xs text-gray-light">
-              {t('days')} {phase.days_range[0]}-{phase.days_range[1]} - {phase.pellet_size_mm}mm - {phase.weight_range_g[0]}-{phase.weight_range_g[1]}g
+              {t('days')} {phase.days_range[0]}-{phase.days_range[1]} | {phase.pellet_size_label}mm | {phase.weight_range_g[0]}-{phase.weight_range_g[1]}g
             </Text>
           </View>
         </View>
@@ -167,11 +343,11 @@ export default function CycleSimulatorScreen() {
             {totalBags} {t(totalBags > 1 ? 'bags' : 'bag')}
           </Text>
           <Text className="text-base font-bold text-mavecam-primary">
-            {phase.total_price.toLocaleString()} FCFA
+            {Number(phase.total_price).toLocaleString()} FCFA
           </Text>
         </View>
 
-        <View className="bg-cream rounded-lg p-3 gap-2">
+        <View className="bg-cream rounded-lg p-3 gap-2 mb-3">
           {phase.products.map((product, pIndex) => (
             <View key={pIndex} className="flex-row justify-between items-center">
               <Text className="flex-1 text-sm text-gray-dark mr-2" numberOfLines={1}>
@@ -183,13 +359,20 @@ export default function CycleSimulatorScreen() {
             </View>
           ))}
         </View>
+
+        <TouchableOpacity
+          className="bg-cream border border-mavecam-primary rounded-lg py-2 items-center"
+          onPress={() => handleAddPhaseToCart(phase)}
+        >
+          <Text className="text-mavecam-primary font-semibold text-sm">{t('addPhaseToCart')}</Text>
+        </TouchableOpacity>
       </View>
     );
   };
 
   return (
     <View className="flex-1 bg-cream">
-      <View className="bg-white px-5 pt-16 pb-5 flex-row items-center justify-between shadow">
+      <View className="bg-white px-5 pt-16 pb-5 flex-row items-center shadow">
         <TouchableOpacity onPress={() => navigation.goBack()} className="w-10">
           <Ionicons name="arrow-back" size={24} color={MAVECAM_COLORS.GRAY_DARK} />
         </TouchableOpacity>
@@ -197,16 +380,7 @@ export default function CycleSimulatorScreen() {
           <Text className="text-xl font-bold text-gray-dark">{t('cycleSimulator')}</Text>
           <Text className="text-xs text-gray-light mt-1">{t('predictROI')}</Text>
         </View>
-        <TouchableOpacity onPress={() => navigation.navigate('Cart')} className="relative">
-          <Ionicons name="cart-outline" size={24} color={MAVECAM_COLORS.GREEN_PRIMARY} />
-          {cart.items.length > 0 && (
-            <View className="absolute -top-2 -right-2 rounded-full min-w-[20px] h-5 items-center justify-center px-1" style={{ backgroundColor: MAVECAM_COLORS.ERROR }}>
-              <Text className="text-white text-[10px] font-bold">
-                {cart.items.reduce((sum, item) => sum + item.quantity, 0)}
-              </Text>
-            </View>
-          )}
-        </TouchableOpacity>
+        <View className="w-10" />
       </View>
 
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
@@ -227,11 +401,7 @@ export default function CycleSimulatorScreen() {
                   size={20}
                   color={species === 'tilapia' ? MAVECAM_COLORS.WHITE : MAVECAM_COLORS.GRAY_DARK}
                 />
-                <Text
-                  className={`text-sm font-semibold ${
-                    species === 'tilapia' ? 'text-white' : 'text-gray-dark'
-                  }`}
-                >
+                <Text className={`text-sm font-semibold ${species === 'tilapia' ? 'text-white' : 'text-gray-dark'}`}>
                   {t('tilapia')}
                 </Text>
               </TouchableOpacity>
@@ -246,11 +416,7 @@ export default function CycleSimulatorScreen() {
                   size={20}
                   color={species === 'catfish' ? MAVECAM_COLORS.WHITE : MAVECAM_COLORS.GRAY_DARK}
                 />
-                <Text
-                  className={`text-sm font-semibold ${
-                    species === 'catfish' ? 'text-white' : 'text-gray-dark'
-                  }`}
-                >
+                <Text className={`text-sm font-semibold ${species === 'catfish' ? 'text-white' : 'text-gray-dark'}`}>
                   {t('catfish')}
                 </Text>
               </TouchableOpacity>
@@ -312,6 +478,40 @@ export default function CycleSimulatorScreen() {
             />
           </View>
 
+          <View className="mb-4">
+            <Text className="text-sm font-semibold text-gray-dark mb-2">{t('preEstimatedSellingPrice')}</Text>
+            <TextInput
+              className="border border-gray-light rounded-lg px-3 py-3 text-base text-gray-dark"
+              value={sellingPricePerKg}
+              onChangeText={setSellingPricePerKg}
+              keyboardType="numeric"
+              placeholder={species === 'tilapia' ? '2500' : '2800'}
+            />
+          </View>
+
+          <View className="flex-row gap-3 mb-4">
+            <View className="flex-1">
+              <Text className="text-sm font-semibold text-gray-dark mb-2">{t('fingerlingsCostFcfa')}</Text>
+              <TextInput
+                className="border border-gray-light rounded-lg px-3 py-3 text-base text-gray-dark"
+                value={fingerlingsCost}
+                onChangeText={setFingerlingsCost}
+                keyboardType="numeric"
+                placeholder="0"
+              />
+            </View>
+            <View className="flex-1">
+              <Text className="text-sm font-semibold text-gray-dark mb-2">{t('otherOperationalCosts')}</Text>
+              <TextInput
+                className="border border-gray-light rounded-lg px-3 py-3 text-base text-gray-dark"
+                value={otherCosts}
+                onChangeText={setOtherCosts}
+                keyboardType="numeric"
+                placeholder="0"
+              />
+            </View>
+          </View>
+
           <View className="flex-row gap-3">
             <TouchableOpacity
               className={`flex-1 flex-row items-center justify-center py-3 rounded-lg gap-2 ${
@@ -336,6 +536,20 @@ export default function CycleSimulatorScreen() {
               </TouchableOpacity>
             )}
           </View>
+
+          {effectiveCycleId && (
+            <TouchableOpacity
+              className={`mt-3 rounded-lg py-3 items-center ${savingCycleParams ? 'bg-gray-200' : 'bg-cream border border-mavecam-primary'}`}
+              onPress={handleUpdateCycleParameters}
+              disabled={savingCycleParams}
+            >
+              {savingCycleParams ? (
+                <ActivityIndicator size="small" color={MAVECAM_COLORS.GREEN_PRIMARY} />
+              ) : (
+                <Text className="text-mavecam-primary font-semibold">{t('updateCycleParameters')}</Text>
+              )}
+            </TouchableOpacity>
+          )}
         </View>
 
         {error && (
@@ -362,7 +576,7 @@ export default function CycleSimulatorScreen() {
                 <Text className="text-lg font-bold text-mavecam-primary mt-2">
                   {simulationResult.summary.total_cost_fcfa.toLocaleString()}
                 </Text>
-                <Text className="text-xs text-gray-light mt-1 text-center">{t('feedCost')}</Text>
+                <Text className="text-xs text-gray-light mt-1 text-center">{t('totalCosts')}</Text>
               </View>
               <View className="flex-1 min-w-[45%] bg-white rounded-xl p-4 items-center">
                 <Ionicons name="trending-up-outline" size={24} color={MAVECAM_COLORS.GREEN_PRIMARY} />
@@ -383,6 +597,24 @@ export default function CycleSimulatorScreen() {
             <View className="bg-white rounded-xl p-4 mb-4">
               <Text className="text-base font-bold text-gray-dark mb-3">{t('roi')}</Text>
               <View className="gap-3">
+                <View className="flex-row justify-between items-center">
+                  <Text className="text-sm text-gray-light">{t('feedCost')}</Text>
+                  <Text className="text-sm font-semibold text-gray-dark">
+                    {simulationResult.summary.feed_cost_fcfa.toLocaleString()} FCFA
+                  </Text>
+                </View>
+                <View className="flex-row justify-between items-center">
+                  <Text className="text-sm text-gray-light">{t('fingerlingsCostFcfa')}</Text>
+                  <Text className="text-sm font-semibold text-gray-dark">
+                    {simulationResult.summary.fingerlings_cost_fcfa.toLocaleString()} FCFA
+                  </Text>
+                </View>
+                <View className="flex-row justify-between items-center">
+                  <Text className="text-sm text-gray-light">{t('otherOperationalCosts')}</Text>
+                  <Text className="text-sm font-semibold text-gray-dark">
+                    {simulationResult.summary.other_costs_fcfa.toLocaleString()} FCFA
+                  </Text>
+                </View>
                 <View className="flex-row justify-between items-center">
                   <Text className="text-sm text-gray-light">{t('estimatedRevenue')}</Text>
                   <Text className="text-sm font-semibold text-gray-dark">
@@ -413,8 +645,26 @@ export default function CycleSimulatorScreen() {
               </View>
             </View>
 
-            <Text className="text-base font-bold text-gray-dark mb-3">{t('feedingPhases')}</Text>
-            {simulationResult.feeding_phases.map((phase, index) => renderPhaseCard(phase, index))}
+            <View className="bg-white rounded-xl p-4 mb-4 flex-row items-start gap-3 border border-mavecam-primary/30">
+              <Ionicons name="storefront-outline" size={24} color={MAVECAM_COLORS.GREEN_PRIMARY} style={{ marginTop: 2 }} />
+              <View className="flex-1">
+                <Text className="text-sm font-bold text-gray-dark mb-1">{t('buyerNetworkTitle')}</Text>
+                <Text className="text-xs text-gray-light mb-3">{t('buyerNetworkROINote')}</Text>
+                <TouchableOpacity
+                  className="bg-mavecam-primary rounded-lg py-2 items-center"
+                  onPress={() => navigation.navigate('Chat')}
+                >
+                  <Text className="text-white text-xs font-semibold">{t('buyerNetworkCTA')}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <View className="flex-row items-center mb-3 mt-2 gap-2">
+              <Ionicons name="cart-outline" size={20} color={MAVECAM_COLORS.GREEN_PRIMARY} />
+              <Text className="text-base font-bold text-gray-dark">{t('buyFeedSection')}</Text>
+            </View>
+            <Text className="text-xs text-gray-light mb-3">{t('feedingPhases')}</Text>
+            {displayPhases.map((phase, index) => renderPhaseCard(phase, index))}
 
             <TouchableOpacity
               className="bg-mavecam-primary flex-row items-center justify-center py-4 rounded-lg gap-2 mt-3"
@@ -438,5 +688,3 @@ export default function CycleSimulatorScreen() {
     </View>
   );
 }
-
-

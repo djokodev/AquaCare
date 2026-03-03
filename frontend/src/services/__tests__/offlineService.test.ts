@@ -49,6 +49,31 @@ describe('services/offlineService', () => {
     expect(await offlineService.getPendingCount()).toBe(1);
   });
 
+  it('preserve les champs quotidiens et hebdomadaires additionnels en offline', async () => {
+    await offlineService.saveCycleLogOffline('cycle-1', {
+      mortality_reason: 'Stress',
+      feed_quantity: 12.5,
+      feed_type: 'Dibaq 2mm',
+      feed_size_mm: 2.0,
+      dissolved_oxygen: 6.2,
+      ammonia_level: 0.3,
+      feeding_times: ['08:00', '12:00', '16:00'],
+      sample_count: 25,
+      sample_total_weight: 2800,
+    } as any);
+
+    const [savedLog] = await offlineService.getOfflineCycleLogs();
+    expect(savedLog.logData.mortality_reason).toBe('Stress');
+    expect(savedLog.logData.feed_quantity).toBe(12.5);
+    expect(savedLog.logData.feed_type).toBe('Dibaq 2mm');
+    expect(savedLog.logData.feed_size_mm).toBe(2.0);
+    expect(savedLog.logData.dissolved_oxygen).toBe(6.2);
+    expect(savedLog.logData.ammonia_level).toBe(0.3);
+    expect(savedLog.logData.feeding_times).toEqual(['08:00', '12:00', '16:00']);
+    expect(savedLog.logData.sample_count).toBe(25);
+    expect(savedLog.logData.sample_total_weight).toBe(2800);
+  });
+
   it('syncOfflineLogs synchronise succes/erreurs et met last_sync', async () => {
     await offlineService.saveCycleLogOffline('cycle-1', { log_date: '2026-02-20', mortality_count: 1 } as any);
     await offlineService.saveCycleLogOffline('cycle-2', { log_date: '2026-02-20', mortality_count: 3 } as any);

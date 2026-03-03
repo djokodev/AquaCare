@@ -1,5 +1,6 @@
 import { aquacultureService } from '../aquacultureService';
 import { apiService } from '@/services/api';
+import { API_CONFIG } from '@/constants/api';
 import logger from '@/utils/logger';
 import { CycleLog, ProductionCycle, SanitaryLogForm } from '@/types/aquaculture';
 
@@ -8,6 +9,7 @@ jest.mock('@/services/api', () => ({
     get: jest.fn(),
     post: jest.fn(),
     put: jest.fn(),
+    patch: jest.fn(),
     delete: jest.fn(),
   },
 }));
@@ -87,6 +89,31 @@ describe('features/aquaculture/services/aquacultureService', () => {
     expect(mockApi.get).toHaveBeenCalledWith('/aquaculture/cycles/');
   });
 
+  it('compose correctement l URL dashboard avec ou sans cycle de session', async () => {
+    mockApi.get.mockResolvedValue({ data: { active_cycles: [] } } as never);
+
+    await aquacultureService.getDashboardData();
+    await aquacultureService.getDashboardData('cycle-session-1');
+
+    expect(mockApi.get).toHaveBeenNthCalledWith(1, '/aquaculture/dashboard/');
+    expect(mockApi.get).toHaveBeenNthCalledWith(2, '/aquaculture/dashboard/?cycle_id=cycle-session-1');
+  });
+
+  it('utilise PATCH pour la mise a jour partielle d un cycle', async () => {
+    mockApi.patch = jest.fn().mockResolvedValueOnce({ data: cycle } as never);
+
+    const result = await aquacultureService.patchProductionCycle('cycle-1', {
+      planned_cycle_duration_days: 140,
+      planned_selling_price_per_kg_fcfa: 2600,
+    } as any);
+
+    expect(result).toEqual(cycle);
+    expect(mockApi.patch).toHaveBeenCalledWith('/aquaculture/cycles/cycle-1/', {
+      planned_cycle_duration_days: 140,
+      planned_selling_price_per_kg_fcfa: 2600,
+    });
+  });
+
   it('retourne une liste vide si les cycles n\'ont pas de champ results', async () => {
     mockApi.get.mockResolvedValueOnce({ data: {} } as never);
 
@@ -103,6 +130,61 @@ describe('features/aquaculture/services/aquacultureService', () => {
 
     expect(result).toEqual([plan]);
     expect(mockApi.get).toHaveBeenCalledWith('/aquaculture/feeding-plans/?cycle=cycle-1');
+  });
+
+  it('retourne les rapports depuis une reponse paginee avec filtres', async () => {
+    const report = { id: 'report-1', report_type: 'daily' };
+    mockApi.get.mockResolvedValueOnce({ data: { results: [report] } } as never);
+
+    const result = await aquacultureService.getReports({
+      report_type: 'daily',
+      status: 'draft',
+    });
+
+    expect(result).toEqual([report]);
+    expect(mockApi.get).toHaveBeenCalledWith('/aquaculture/reports/?report_type=daily&status=draft');
+  });
+
+  it('ajoute cycle_id dans le filtre des rapports quand fourni', async () => {
+    mockApi.get.mockResolvedValueOnce({ data: { results: [] } } as never);
+
+    await aquacultureService.getReports({ cycle_id: 'cycle-session-1' });
+
+    expect(mockApi.get).toHaveBeenCalledWith('/aquaculture/reports/?cycle_id=cycle-session-1');
+  });
+
+  it('appelle les endpoints de rapport (generate, validate, send, whatsapp)', async () => {
+    const reportPayload = { id: 'report-1', status: 'draft' };
+    mockApi.post.mockResolvedValue({ data: reportPayload } as never);
+
+    await aquacultureService.generateReport({ report_type: 'weekly' });
+    await aquacultureService.validateReport('report-1');
+    await aquacultureService.sendReportEmail('report-1');
+    await aquacultureService.markReportWhatsAppShared('report-1', {
+      recipient: '+237690000000',
+      metadata: { source: 'test' },
+    });
+
+    expect(mockApi.post).toHaveBeenNthCalledWith(
+      1,
+      '/aquaculture/reports/generate/',
+      { report_type: 'weekly' }
+    );
+    expect(mockApi.post).toHaveBeenNthCalledWith(2, '/aquaculture/reports/report-1/validate/');
+    expect(mockApi.post).toHaveBeenNthCalledWith(3, '/aquaculture/reports/report-1/send-email/');
+    expect(mockApi.post).toHaveBeenNthCalledWith(
+      4,
+      '/aquaculture/reports/report-1/mark-whatsapp-shared/',
+      {
+        recipient: '+237690000000',
+        metadata: { source: 'test' },
+      }
+    );
+  });
+
+  it('compose correctement l URL de telechargement PDF', () => {
+    const url = aquacultureService.getReportDownloadUrl('report-42');
+    expect(url).toBe(`${API_CONFIG.baseURL}/aquaculture/reports/report-42/download/`);
   });
 
   it('compose correctement l\'URL des cycle logs avec ou sans cycleId', async () => {

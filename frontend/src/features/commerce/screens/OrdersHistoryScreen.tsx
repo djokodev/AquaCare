@@ -15,7 +15,11 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { useDispatch, useSelector } from 'react-redux';
 
 import { AppDispatch, RootState } from '@/store/store';
-import { fetchOrders, fetchOrderStatistics } from '@/features/commerce/store/commerceSlice';
+import {
+  confirmOrderReceipt,
+  fetchOrders,
+  fetchOrderStatistics,
+} from '@/features/commerce/store/commerceSlice';
 import { Order } from '@/types/commerce';
 import { MAVECAM_COLORS } from '@/constants/colors';
 import { RootStackParamList } from '@/navigation/MainNavigator';
@@ -32,6 +36,7 @@ export default function OrdersHistoryScreen() {
 
   const [refreshing, setRefreshing] = useState(false);
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
+  const [confirmingOrderId, setConfirmingOrderId] = useState<string | null>(null);
 
   useEffect(() => {
     dispatch(fetchOrders());
@@ -46,6 +51,55 @@ export default function OrdersHistoryScreen() {
 
   const toggleOrderExpansion = (orderId: string) => {
     setExpandedOrderId(expandedOrderId === orderId ? null : orderId);
+  };
+
+  const getStatusConfig = (status: Order['status']) => {
+    if (status === 'received') {
+      return {
+        icon: 'checkmark-done-circle' as const,
+        color: MAVECAM_COLORS.SUCCESS,
+        label: t('orderStatusReceived'),
+      };
+    }
+
+    if (status === 'delivered') {
+      return {
+        icon: 'cube-outline' as const,
+        color: MAVECAM_COLORS.WARNING,
+        label: t('orderStatusDelivered'),
+      };
+    }
+
+    return {
+      icon: 'time-outline' as const,
+      color: MAVECAM_COLORS.GREEN_PRIMARY,
+      label: t('orderStatusConfirmed'),
+    };
+  };
+
+  const handleConfirmReceipt = (order: Order) => {
+    Alert.alert(
+      t('confirmReceiptTitle'),
+      t('confirmReceiptMessage', { orderNumber: order.order_number }),
+      [
+        { text: t('cancel'), style: 'cancel' },
+        {
+          text: t('confirm'),
+          onPress: async () => {
+            try {
+              setConfirmingOrderId(order.id);
+              await dispatch(confirmOrderReceipt(order.id)).unwrap();
+              await Promise.all([dispatch(fetchOrders()), dispatch(fetchOrderStatistics())]);
+              Alert.alert(t('success'), t('confirmReceiptSuccess'));
+            } catch {
+              Alert.alert(t('error'), t('confirmReceiptError'));
+            } finally {
+              setConfirmingOrderId(null);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const formatDate = (dateString: string) => {
@@ -65,6 +119,8 @@ export default function OrdersHistoryScreen() {
     const subtotal = parseFloat(order.subtotal);
     const deliveryFee = parseFloat(order.delivery_fee);
     const total = parseFloat(order.total);
+    const statusConfig = getStatusConfig(order.status);
+    const isConfirming = confirmingOrderId === order.id;
 
     return (
       <TouchableOpacity
@@ -91,11 +147,25 @@ export default function OrdersHistoryScreen() {
 
         <View className="flex-row justify-between items-center mb-3">
           <View className="flex-row items-center px-3 py-2 rounded-full bg-cream gap-2">
-            <Ionicons name="checkmark-circle" size={16} color={MAVECAM_COLORS.SUCCESS} />
-            <Text className="text-xs font-semibold text-mavecam-primary">{t('confirmed')}</Text>
+            <Ionicons name={statusConfig.icon} size={16} color={statusConfig.color} />
+            <Text className="text-xs font-semibold text-mavecam-primary">{statusConfig.label}</Text>
           </View>
           <Text className="text-lg font-bold text-mavecam-primary">{total.toLocaleString()} FCFA</Text>
         </View>
+
+        {order.status === 'delivered' && (
+          <TouchableOpacity
+            className={`mb-3 py-2 rounded-lg items-center ${isConfirming ? 'bg-gray-300' : 'bg-mavecam-primary'}`}
+            disabled={isConfirming}
+            onPress={() => handleConfirmReceipt(order)}
+          >
+            {isConfirming ? (
+              <ActivityIndicator size="small" color={MAVECAM_COLORS.WHITE} />
+            ) : (
+              <Text className="text-white text-sm font-semibold">{t('confirmReceiptAction')}</Text>
+            )}
+          </TouchableOpacity>
+        )}
 
         <View className="flex-row flex-wrap gap-3">
           <View className="flex-row items-center gap-2">
@@ -309,5 +379,4 @@ export default function OrdersHistoryScreen() {
     </View>
   );
 }
-
 

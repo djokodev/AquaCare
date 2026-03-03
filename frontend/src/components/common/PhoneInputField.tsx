@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TextInput } from 'react-native';
+import { View, Text, TextInput, Platform } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { formatCameroonPhone } from '@/utils/phoneFormatter';
 
@@ -9,6 +9,7 @@ interface PhoneInputFieldProps {
   error?: string;
   label?: string;
   required?: boolean;
+  hint?: string;
 }
 
 /**
@@ -21,6 +22,7 @@ export default function PhoneInputField({
   error,
   label,
   required,
+  hint,
 }: PhoneInputFieldProps) {
   const { t } = useTranslation();
 
@@ -32,13 +34,31 @@ export default function PhoneInputField({
         {displayLabel}{required ? ' *' : ''}
       </Text>
       <View
-        className={`flex-row items-center border rounded-lg bg-white px-3 ${
+        className={`flex-row items-center h-12 border rounded-lg bg-white px-3 ${
           error ? 'border-error' : 'border-gray-300'
         }`}
       >
-        <Text className="text-base font-semibold text-mavecam-primary mr-2">+237</Text>
+        <View className="h-10 justify-center mr-2">
+          <Text
+            className="text-base font-semibold text-mavecam-primary"
+            style={{ lineHeight: 20, marginVertical: 0, paddingVertical: 0 }}
+          >
+            +237
+          </Text>
+        </View>
         <TextInput
-          className="flex-1 text-base py-3"
+          className="flex-1 h-10 text-base text-gray-dark self-center"
+          style={{
+            paddingVertical: 0,
+            marginVertical: 0,
+            lineHeight: 20,
+            ...(Platform.OS === 'android'
+              ? {
+                  textAlignVertical: 'center',
+                  includeFontPadding: false,
+                }
+              : null),
+          }}
           value={value.replace('+237', '')}
           onChangeText={(raw) => onChange(formatCameroonPhone(raw))}
           placeholder={t('placeholderPhoneExample')}
@@ -47,6 +67,7 @@ export default function PhoneInputField({
           autoComplete="tel"
         />
       </View>
+      {hint && !error ? <Text className="text-xs text-gray-light mt-1">{hint}</Text> : null}
       {error ? <Text className="text-sm text-error mt-1">{error}</Text> : null}
     </View>
   );
