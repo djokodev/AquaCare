@@ -1018,4 +1018,11 @@ export const fr = {
   languageUpdatedToFrench: 'La langue a été changée vers Français',
   languageUpdatedToEnglish: 'La langue a été changée vers English',
   languageChangeError: 'Impossible de changer la langue. Veuillez réessayer.',
+
+  // Settings - App info
+  appInfoSection: 'Informations techniques',
+  appInfoEnvironment: 'Environnement',
+  appInfoApiUrl: 'API',
+  appInfoVersion: 'Version',
+  stagingBannerText: 'BUILD DE TEST — STAGING',
 };

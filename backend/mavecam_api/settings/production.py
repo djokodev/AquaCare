@@ -29,6 +29,11 @@ X_FRAME_OPTIONS = 'DENY'
 # Cloudflare termine le SSL — Django reçoit du HTTP en interne
 # On indique à Django de faire confiance au header X-Forwarded-Proto de Cloudflare
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+CSRF_TRUSTED_ORIGINS = [
+    "https://aquacare.tech",
+    "https://www.aquacare.tech",
+    "https://api.aquacare.tech",
+]
 CSRF_COOKIE_SECURE = True
 SESSION_COOKIE_SECURE = True
 SECURE_SSL_REDIRECT = False  # Cloudflare gère la redirection HTTP→HTTPS
