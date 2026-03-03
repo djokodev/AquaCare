@@ -91,6 +91,10 @@ def test_ensure_pdf_dependencies_patches_legacy_signature(monkeypatch):
     """
     Vérifie que le shim est appliqué lorsque pydyf.PDF n'accepte que `self`.
     """
+    import commerce.services.pdf_service as pdf_module
+
+    # Reset the global guard so the function actually runs (not short-circuits)
+    monkeypatch.setattr(pdf_module, "_pdf_patched", False)
 
     class LegacyPDF:
         def __init__(self):
