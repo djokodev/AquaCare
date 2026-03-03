@@ -1,0 +1,167 @@
+name: Deploy Staging
+
+on:
+  push:
+    branches:
+      - develop
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  DOCKER_IMAGE_API: ghcr.io/${{ github.repository_owner }}/aquacare-api
+  DOCKER_IMAGE_NGINX: ghcr.io/${{ github.repository_owner }}/aquacare-nginx
+
+jobs:
+  tests:
+    name: Tests Unitaires
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install Dependencies
+        working-directory: ./backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements/development.txt
+
+      - name: Run Tests with Coverage
+        working-directory: ./backend
+        env:
+          DJANGO_SETTINGS_MODULE: mavecam_api.settings.test
+        run: |
+          pytest --cov=apps --cov-report=term --cov-fail-under=50 -v
+
+
+  build:
+    name: Build & Push Docker Images (staging)
+    runs-on: ubuntu-latest
+    needs: tests
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build API Image
+        working-directory: ./backend
+        run: |
+          docker build --no-cache \
+            --build-arg CACHEBUST=$(date +%s) \
+            -t ${{ env.DOCKER_IMAGE_API }}:staging \
+            -t ${{ env.DOCKER_IMAGE_API }}:staging-${{ github.sha }} \
+            -f Dockerfile \
+            .
+
+      - name: Build Nginx Image
+        working-directory: ./backend/nginx
+        run: |
+          docker build --no-cache \
+            -t ${{ env.DOCKER_IMAGE_NGINX }}:staging \
+            -t ${{ env.DOCKER_IMAGE_NGINX }}:staging-${{ github.sha }} \
+            -f Dockerfile \
+            .
+
+      - name: Push Images to GitHub Container Registry
+        run: |
+          docker push ${{ env.DOCKER_IMAGE_API }}:staging
+          docker push ${{ env.DOCKER_IMAGE_API }}:staging-${{ github.sha }}
+          docker push ${{ env.DOCKER_IMAGE_NGINX }}:staging
+          docker push ${{ env.DOCKER_IMAGE_NGINX }}:staging-${{ github.sha }}
+
+      - name: Cleanup Local Images
+        if: always()
+        run: docker image prune -af
+
+
+  deploy:
+    name: Deploy to Staging VPS
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup SSH Key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Copy docker-compose.staging.yml to VPS
+        run: |
+          scp -i ~/.ssh/deploy_key \
+            backend/docker-compose.staging.yml \
+            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/root/aquacare/
+
+      - name: Login to GHCR on VPS
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << EOF
+            echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u ${{ github.repository_owner }} --password-stdin
+          EOF
+
+      - name: Pull Staging Images & Deploy
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << 'EOF'
+            cd /root/aquacare
+
+            echo "Pulling staging images..."
+            docker compose -f docker-compose.staging.yml --env-file .env.staging pull
+
+            echo "Starting staging services..."
+            docker compose -f docker-compose.staging.yml --env-file .env.staging up -d --force-recreate --remove-orphans
+
+            echo "Waiting for services to be ready (60s)..."
+            sleep 60
+          EOF
+
+      - name: Health Check Staging
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << 'EOF'
+            # Vérifier que l'API staging tourne
+            if ! docker ps --format '{{.Names}}' | grep -q 'aquacare_api_staging'; then
+              echo "❌ Staging API container not running!"
+              docker compose -f /root/aquacare/docker-compose.staging.yml --env-file /root/aquacare/.env.staging logs api
+              exit 1
+            fi
+
+            echo "=== Staging container statuses ==="
+            docker ps --format "table {{.Names}}\t{{.Status}}" | grep staging || true
+            echo "=================================="
+
+            # Test endpoint HTTP staging (port 8081)
+            for i in {1..5}; do
+              if curl -f http://127.0.0.1:8081/api/health/ > /dev/null 2>&1; then
+                echo "✅ Staging health check passed! → https://api-staging.aquacare.tech"
+                exit 0
+              fi
+              echo "Health check attempt $i/5 failed, retrying..."
+              sleep 5
+            done
+
+            echo "❌ Staging health check failed after 5 attempts"
+            docker compose -f /root/aquacare/docker-compose.staging.yml --env-file /root/aquacare/.env.staging logs api
+            exit 1
+          EOF
+
+      - name: Cleanup SSH Key
+        if: always()
+        run: rm -f ~/.ssh/deploy_key
