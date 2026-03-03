@@ -51,10 +51,23 @@ services:
     container_name: aquacare_pgbouncer
     restart: always
     environment:
-      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      # Individual vars — avoids URL-encoding issues with special chars in password
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_NAME: ${POSTGRES_DB}
+      # pgbouncer listen port (edoburu default is 5432 — force 6432)
+      LISTEN_PORT: 6432
       MAX_CLIENT_CONN: 200
       DEFAULT_POOL_SIZE: 20
       POOL_MODE: transaction
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 6432 || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
     depends_on:
       db:
         condition: service_healthy
@@ -96,7 +109,7 @@ services:
       redis_broker:
         condition: service_healthy
       pgbouncer:
-        condition: service_started
+        condition: service_healthy
     networks:
       - aquacare_network
 
@@ -137,7 +150,7 @@ services:
       redis_broker:
         condition: service_healthy
       pgbouncer:
-        condition: service_started
+        condition: service_healthy
     networks:
       - aquacare_network
 
@@ -172,7 +185,7 @@ services:
       redis_broker:
         condition: service_healthy
       pgbouncer:
-        condition: service_started
+        condition: service_healthy
     networks:
       - aquacare_network
 
