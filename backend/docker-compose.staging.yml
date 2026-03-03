@@ -39,7 +39,7 @@ services:
       - aquacare_staging_network
 
   api:
-    image: ghcr.io/djokodev/aquacare-api:latest
+    image: ghcr.io/djokodev/aquacare-api:staging
     container_name: aquacare_api_staging
     restart: always
     user: root
@@ -78,11 +78,13 @@ services:
       - aquacare_staging_network
 
   celery_worker:
-    image: ghcr.io/djokodev/aquacare-api:latest
+    image: ghcr.io/djokodev/aquacare-api:staging
     container_name: aquacare_celery_worker_staging
     restart: always
+    entrypoint: []
     command: >
       bash -c "
+      while ! nc -z db 5432; do sleep 0.5; done &&
       celery -A mavecam_api worker --loglevel=info --concurrency=2
       "
     environment:
@@ -109,11 +111,13 @@ services:
       - aquacare_staging_network
 
   celery_beat:
-    image: ghcr.io/djokodev/aquacare-api:latest
+    image: ghcr.io/djokodev/aquacare-api:staging
     container_name: aquacare_celery_beat_staging
     restart: always
+    entrypoint: []
     command: >
       bash -c "
+      while ! nc -z db 5432; do sleep 0.5; done &&
       celery -A mavecam_api beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler
       "
     environment:
@@ -139,7 +143,7 @@ services:
       - aquacare_staging_network
 
   nginx:
-    image: ghcr.io/djokodev/aquacare-nginx:latest
+    image: ghcr.io/djokodev/aquacare-nginx:staging
     container_name: aquacare_nginx_staging
     restart: always
     ports:

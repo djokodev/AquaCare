@@ -18,10 +18,20 @@
     "plugins": [
       "expo-secure-store",
       "expo-localization",
-      "expo-font"
+      "expo-font",
+      [
+        "@sentry/react-native",
+        {
+          "organization": "aquacare",
+          "project": "frontend-aquacare"
+        }
+      ]
     ],
     "extra": {
-      "apiUrl": "http://172.20.10.2:8000/api"
-    }
+      "eas": {
+        "projectId": "1e807ed9-807f-42e1-941a-dbe52efd734e"
+      }
+    },
+    "owner": "djokodev"
   }
 }
