@@ -14,7 +14,7 @@ DATABASES = {
         'NAME': config('POSTGRES_DB'),
         'USER': config('POSTGRES_USER'),
         'PASSWORD': config('POSTGRES_PASSWORD'),
-        'HOST': config('POSTGRES_HOST'),
+        'HOST': config('POSTGRES_HOST'),  # Points to PgBouncer in docker-compose.prod.yml
         'PORT': config('POSTGRES_PORT'),
         'CONN_MAX_AGE': 60,
         'OPTIONS': {
