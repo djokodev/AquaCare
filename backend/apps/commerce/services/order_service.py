@@ -252,7 +252,7 @@ class OrderService(BaseCommerceService):
                     user=user,
                     farm_profile=user.farm_profile,
                     order_number=OrderService.generate_order_number(),
-                    status='confirmed',  # MVP : statut unique
+                    status='confirmed',  # Statut initial : commandée
                     delivery_method=delivery_method,
                     pickup_location=pickup_location,
                     client_uuid=client_uuid,
@@ -294,7 +294,7 @@ class OrderService(BaseCommerceService):
         from notifications.services import NotificationService
 
         message = (
-            f"Votre commande {order.order_number} a été confirmée. "
+            f"Votre commande {order.order_number} a été enregistrée. "
             f"Montant total : {order.total:,.0f} FCFA. "
             f"Notre équipe vous contactera pour organiser la livraison."
         )
@@ -302,7 +302,7 @@ class OrderService(BaseCommerceService):
         NotificationService.create_notification(
             user=order.user,
             notification_type='order_confirmed',
-            title="Commande confirmée",
+            title="Commande enregistrée",
             message=message,
             content_object=order,
             metadata={
@@ -313,6 +313,30 @@ class OrderService(BaseCommerceService):
             channels=['in_app', 'email'],
             send_immediately=True
         )
+
+    @staticmethod
+    @transaction.atomic
+    def confirm_order_receipt(order: Order, user) -> Order:
+        """
+        Confirme la réception utilisateur d'une commande livrée.
+
+        Règles:
+        - La commande doit appartenir à l'utilisateur.
+        - Seule une commande 'delivered' peut passer à 'received'.
+        """
+        if order.user_id != user.id:
+            raise InvalidOrderError("Vous n'avez pas accès à cette commande")
+
+        if order.status == 'received':
+            raise InvalidOrderError("Cette commande est déjà confirmée comme reçue")
+
+        if order.status != 'delivered':
+            raise InvalidOrderError("Seules les commandes livrées peuvent être confirmées")
+
+        order.status = 'received'
+        order.save(update_fields=['status', 'updated_at'])
+
+        return order
 
     @staticmethod
     def generate_order_number() -> str:

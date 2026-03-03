@@ -142,23 +142,17 @@ class ConversationSerializer(serializers.ModelSerializer):
         """
         Get preview of last message in conversation.
 
-        Uses prefetched messages cache when available (avoids N+1).
+        1 seule requête légère (ORDER BY + LIMIT 1) — acceptable.
+        Le prefetch illimité a été supprimé pour éviter la bombe mémoire admin.
 
         Returns:
             Dict with message info or None
         """
-        # Use prefetch cache if available (set by prefetch_related in views)
-        prefetched = getattr(obj, '_prefetched_objects_cache', {})
-        if 'messages' in prefetched:
-            messages_list = list(obj.messages.all())
-            last_msg = max(messages_list, key=lambda m: m.created_at, default=None)
-        else:
-            last_msg = obj.messages.order_by('-created_at').first()
-
+        last_msg = obj.messages.order_by('-created_at').first()
         if last_msg:
             return {
                 'id': str(last_msg.id),
-                'content': last_msg.content[:100],  # Preview (max 100 chars)
+                'content': last_msg.content[:100],
                 'sender_type': last_msg.sender_type,
                 'created_at': last_msg.created_at,
                 'has_media': last_msg.media_type != 'none'
@@ -169,11 +163,11 @@ class ConversationSerializer(serializers.ModelSerializer):
         """
         Get total message count in conversation.
 
-        Uses prefetch cache when available (avoids N+1).
+        Utilise l'annotation messages_count_ann si disponible (0 DB),
+        sinon fallback vers count().
         """
-        prefetched = getattr(obj, '_prefetched_objects_cache', {})
-        if 'messages' in prefetched:
-            return len(obj.messages.all())
+        if hasattr(obj, 'messages_count_ann'):
+            return obj.messages_count_ann
         return obj.messages.count()
 
 

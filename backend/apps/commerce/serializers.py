@@ -277,7 +277,7 @@ class CycleSimulationInputSerializer(serializers.Serializer):
     Permet à l'aquaculteur de planifier son budget AVANT démarrage.
     """
     species = serializers.ChoiceField(
-        choices=['tilapia', 'catfish'],
+        choices=['tilapia', 'catfish', 'clarias'],
         required=True,
         help_text="Espèce de poisson"
     )
@@ -315,6 +315,29 @@ class CycleSimulationInputSerializer(serializers.Serializer):
         max_value=1.0,
         help_text="Taux de survie estimé (défaut: 0.85)"
     )
+    selling_price_per_kg_fcfa = serializers.FloatField(
+        required=False,
+        allow_null=True,
+        min_value=1,
+        help_text="Prix de vente estimatif (FCFA/kg) pour le calcul de revenu"
+    )
+    fingerlings_cost_fcfa = serializers.FloatField(
+        required=False,
+        allow_null=True,
+        min_value=0,
+        help_text="Coût des alevins (FCFA)"
+    )
+    other_costs_fcfa = serializers.FloatField(
+        required=False,
+        allow_null=True,
+        min_value=0,
+        help_text="Autres coûts opérationnels (FCFA)"
+    )
+
+    def validate_species(self, value):
+        if value == 'clarias':
+            return 'catfish'
+        return value
 
     def validate(self, attrs):
         """Validation cohérence des paramètres."""

@@ -83,7 +83,13 @@ class ProductionCycle(models.Model):
         verbose_name=_("Volume du bassin (m³)"),
         help_text=_("Optionnel - au moins surface OU volume requis")
     )
-    
+    infrastructure_type = models.JSONField(
+        default=list,
+        blank=True,
+        verbose_name=_("Types d'infrastructure"),
+        help_text=_("Ex: ['etang', 'cage_flottante', 'bac_hors_sol']")
+    )
+
     # Initial data (cycle start)
     start_date = models.DateField(verbose_name=_("Date de début"))
 
@@ -104,6 +110,58 @@ class ProductionCycle(models.Model):
         decimal_places=2,
         verbose_name=_("Biomasse initiale (kg)"),
         help_text=_("Calculé automatiquement")
+    )
+
+    # Economic planning data (pre-production projection)
+    target_harvest_weight_g = models.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal('50'))],
+        verbose_name=_("Poids cible récolte (g)"),
+        help_text=_("Poids moyen cible utilisé pour la projection économique")
+    )
+    planned_cycle_duration_days = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(30), MaxValueValidator(365)],
+        verbose_name=_("Durée prévisionnelle du cycle (jours)")
+    )
+    planned_harvest_date = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name=_("Date prévisionnelle de récolte")
+    )
+    expected_survival_rate_pct = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal('0')), MaxValueValidator(Decimal('100'))],
+        verbose_name=_("Taux de survie prévisionnel (%)")
+    )
+    planned_selling_price_per_kg_fcfa = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal('1'))],
+        verbose_name=_("Prix de vente prévisionnel (FCFA/kg)")
+    )
+    fingerlings_cost_fcfa = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal('0'),
+        validators=[MinValueValidator(Decimal('0'))],
+        verbose_name=_("Coût alevins (FCFA)")
+    )
+    other_operational_costs_fcfa = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal('0'),
+        validators=[MinValueValidator(Decimal('0'))],
+        verbose_name=_("Autres charges opérationnelles (FCFA)")
     )
     
     # Current data (updated daily)
@@ -310,6 +368,15 @@ class CycleLog(models.Model):
         verbose_name=_("Type d'aliment"),
         help_text=_("Référence produit MAVECAM")
     )
+    feed_size_mm = models.DecimalField(
+        max_digits=3,
+        decimal_places=1,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal('0.1')), MaxValueValidator(Decimal('20.0'))],
+        verbose_name=_("Taille d'aliment (mm)"),
+        help_text=_("Diamètre des granulés distribués")
+    )
     feeding_times = models.JSONField(
         default=list,
         blank=True,
@@ -375,27 +442,18 @@ class CycleLog(models.Model):
         return f"{self.cycle.cycle_name} - {self.log_date}"
 
     def clean(self):
-        """Valide la cohérence des données de log."""
-        # Validate log date within cycle period
+        """Valide la cohérence des données de log via les validateurs du domaine."""
+        from .domain.validators import validate_cycle_log_date, validate_sampling_data
+
         if self.cycle:
-            if self.log_date < self.cycle.start_date:
-                raise ValidationError(_("La date du log ne peut être avant le début du cycle"))
-            if self.cycle.end_date and self.log_date > self.cycle.end_date:
-                raise ValidationError(_("La date du log ne peut être après la fin du cycle"))
-        
-        # Validate sampling consistency
+            validate_cycle_log_date(self.log_date, self.cycle.start_date, self.cycle.end_date)
+
         if self.sample_count and self.sample_total_weight:
-            calculated_avg = self.sample_total_weight / self.sample_count
-            if self.average_weight:
-                # Allow 10% tolerance for manual entry errors
-                tolerance = abs(calculated_avg - self.average_weight) / calculated_avg
-                if tolerance > 0.1:
-                    raise ValidationError(
-                        _("Le poids moyen ne correspond pas à l'échantillon (écart > 10%)")
-                    )
-            else:
-                # Auto-calculate if not provided
-                self.average_weight = calculated_avg
+            validate_sampling_data(
+                self.sample_count, self.sample_total_weight, self.average_weight
+            )
+            if not self.average_weight:
+                self.average_weight = self.sample_total_weight / self.sample_count
 
 
 class FeedingPlan(models.Model):
@@ -483,7 +541,27 @@ class FeedingPlan(models.Model):
         default=True,
         verbose_name=_("Actif")
     )
-    
+
+    # Traceability: temperature and data source used during generation
+    temperature_used_c = models.DecimalField(
+        max_digits=4,
+        decimal_places=1,
+        null=True,
+        blank=True,
+        verbose_name=_("Température utilisée (°C)")
+    )
+    used_default_temperature = models.BooleanField(
+        default=False,
+        verbose_name=_("Température de référence utilisée"),
+        help_text=_("True si aucune saisie journalière disponible au moment de la génération")
+    )
+    data_source = models.CharField(
+        max_length=50,
+        default='',
+        blank=True,
+        verbose_name=_("Source des données de rationnement")
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
@@ -595,12 +673,14 @@ class SanitaryLog(models.Model):
 
 class NutritionalGuide(models.Model):
     """
-    Tableau de référence pour les recommandations d'alimentation. 
-    Données préchargées provenant des guides techniques MAVECAM.
+    Tableau de référence pour les recommandations d'alimentation.
+    Source primaire : tables officielles DIBAQ (température-dépendantes).
+    feeding_rate_percentage = taux de référence à reference_temperature_c (26°C par défaut).
+    temperature_rates = dict {temp_c: taux_%} pour interpolation avec température réelle.
     """
     class Meta:
         app_label = 'aquaculture'
-        unique_together = ['species', 'growth_stage']
+        unique_together = ['species', 'min_weight', 'source']
         ordering = ['species', 'min_weight']
         verbose_name = _("Guide nutritionnel")
         verbose_name_plural = _("Guides nutritionnels")
@@ -652,25 +732,44 @@ class NutritionalGuide(models.Model):
     recommended_products = models.JSONField(
         default=list,
         verbose_name=_("Produits recommandés"),
-        help_text=_("Liste des références produits MAVECAM")
+        help_text=_("Liste des références produits (ex: ['DIBAQ Catfish 2mm'])")
     )
 
     expected_fcr = models.DecimalField(
-        max_digits=3, 
+        max_digits=3,
         decimal_places=2,
         validators=[MinValueValidator(Decimal('0.5')), MaxValueValidator(Decimal('3.0'))],
         verbose_name=_("FCR attendu")
     )
-    
+
+    # Source and temperature-dependent data
+    source = models.CharField(
+        max_length=50,
+        default='MAVECAM',
+        choices=[('DIBAQ', 'DIBAQ'), ('ALLER_AQUA', 'Aller Aqua'), ('MAVECAM', 'MAVECAM')],
+        verbose_name=_("Source des données")
+    )
+    temperature_rates = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name=_("Taux par température (%)"),
+        help_text=_("Dict {temp_c: taux_pct_biomasse} ex: {'26': 5.3, '28': 4.8}")
+    )
+    reference_temperature_c = models.IntegerField(
+        default=26,
+        verbose_name=_("Température de référence (°C)"),
+        help_text=_("Température utilisée pour feeding_rate_percentage")
+    )
+
     feeding_notes = models.TextField(
         blank=True,
         verbose_name=_("Notes d'alimentation")
     )
-    
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"{self.get_species_display()} - {self.get_growth_stage_display()}"
+        return f"{self.get_species_display()} - {self.get_growth_stage_display()} ({self.source})"
 
 
 class CycleMetrics(models.Model):
@@ -752,10 +851,209 @@ class CycleMetrics(models.Model):
     def __str__(self):
         return f"Métriques - {self.cycle.cycle_name}"
 
-# ============================================================================
-# NOTIFICATION MODEL REMOVED
-# ============================================================================
-# Le modèle Notification a été déplacé vers le module apps/notifications/
-# pour centraliser toutes les notifications (aquaculture, commerce, chat, etc.)
-# Utilisez apps.notifications.models.Notification à la place
-# ============================================================================
+
+class ProductionReport(models.Model):
+    """
+    Rapport périodique de production (journalier / hebdomadaire / mensuel).
+
+    Le rapport est généré automatiquement sous forme de brouillon, puis validé
+    manuellement avant envoi. Le PDF est stocké pour audit et partage.
+    """
+
+    REPORT_TYPE_CHOICES = [
+        ('daily', _('Journalier')),
+        ('weekly', _('Hebdomadaire')),
+        ('monthly', _('Mensuel')),
+    ]
+
+    STATUS_CHOICES = [
+        ('pending', _('En cours de génération')),
+        ('draft', _('Brouillon')),
+        ('validated', _('Validé')),
+    ]
+
+    EMAIL_STATUS_CHOICES = [
+        ('not_sent', _('Non envoyé')),
+        ('sent', _('Envoyé')),
+        ('failed', _('Échec')),
+    ]
+
+    WHATSAPP_STATUS_CHOICES = [
+        ('not_shared', _('Non partagé')),
+        ('shared', _('Partagé')),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    farm_profile = models.ForeignKey(
+        'accounts.FarmProfile',
+        on_delete=models.CASCADE,
+        related_name='production_reports',
+        verbose_name=_("Profil de ferme")
+    )
+
+    report_type = models.CharField(
+        max_length=20,
+        choices=REPORT_TYPE_CHOICES,
+        verbose_name=_("Type de rapport")
+    )
+    period_start = models.DateField(verbose_name=_("Début période"))
+    period_end = models.DateField(verbose_name=_("Fin période"))
+
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='draft',
+        verbose_name=_("Statut")
+    )
+
+    payload = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name=_("Données du rapport"),
+        help_text=_("Snapshot des données utilisées pour la génération")
+    )
+    pdf_file = models.FileField(
+        upload_to='reports/%Y/%m/',
+        null=True,
+        blank=True,
+        verbose_name=_("Fichier PDF")
+    )
+
+    generated_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name=_("Généré le")
+    )
+    validated_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name=_("Validé le")
+    )
+    validated_by = models.ForeignKey(
+        'accounts.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='validated_reports',
+        verbose_name=_("Validé par")
+    )
+
+    email_status = models.CharField(
+        max_length=20,
+        choices=EMAIL_STATUS_CHOICES,
+        default='not_sent',
+        verbose_name=_("Statut email")
+    )
+    email_sent_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name=_("Email envoyé le")
+    )
+
+    whatsapp_status = models.CharField(
+        max_length=20,
+        choices=WHATSAPP_STATUS_CHOICES,
+        default='not_shared',
+        verbose_name=_("Statut WhatsApp")
+    )
+    whatsapp_shared_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name=_("Partagé sur WhatsApp le")
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name=_("Créé le"))
+    updated_at = models.DateTimeField(auto_now=True, verbose_name=_("Mis à jour le"))
+
+    class Meta:
+        app_label = 'aquaculture'
+        ordering = ['-period_start', '-created_at']
+        verbose_name = _("Rapport de production")
+        verbose_name_plural = _("Rapports de production")
+        constraints = [
+            models.UniqueConstraint(
+                fields=['farm_profile', 'report_type', 'period_start', 'period_end'],
+                name='uniq_report_period_per_farm'
+            )
+        ]
+        indexes = [
+            models.Index(fields=['farm_profile', 'report_type', 'period_start'], name='rpt_farm_type_start_idx'),
+            models.Index(fields=['status', 'generated_at'], name='rpt_status_generated_idx'),
+        ]
+
+    def __str__(self):
+        return f"{self.get_report_type_display()} - {self.farm_profile.farm_name} ({self.period_start} -> {self.period_end})"
+
+
+class ReportDispatchLog(models.Model):
+    """
+    Trace d'envoi et de partage des rapports (audit).
+    """
+
+    CHANNEL_CHOICES = [
+        ('email', _('Email')),
+        ('whatsapp', _('WhatsApp')),
+    ]
+
+    STATUS_CHOICES = [
+        ('success', _('Succès')),
+        ('failed', _('Échec')),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    report = models.ForeignKey(
+        ProductionReport,
+        on_delete=models.CASCADE,
+        related_name='dispatch_logs',
+        verbose_name=_("Rapport")
+    )
+    channel = models.CharField(
+        max_length=20,
+        choices=CHANNEL_CHOICES,
+        verbose_name=_("Canal")
+    )
+    recipient = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name=_("Destinataire")
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        verbose_name=_("Statut")
+    )
+    error_code = models.CharField(
+        max_length=100,
+        blank=True,
+        verbose_name=_("Code erreur")
+    )
+    error_message = models.TextField(
+        blank=True,
+        verbose_name=_("Message erreur")
+    )
+    metadata = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name=_("Métadonnées")
+    )
+    dispatched_by = models.ForeignKey(
+        'accounts.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='report_dispatch_logs',
+        verbose_name=_("Action effectuée par")
+    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name=_("Créé le"))
+
+    class Meta:
+        app_label = 'aquaculture'
+        ordering = ['-created_at']
+        verbose_name = _("Journal d'envoi de rapport")
+        verbose_name_plural = _("Journaux d'envoi de rapports")
+        indexes = [
+            models.Index(fields=['report', 'channel', 'created_at'], name='rptlog_report_chan_idx'),
+        ]
+
+    def __str__(self):
+        return f"{self.report_id} - {self.channel} ({self.status})"

@@ -363,10 +363,10 @@ class TestNutritionalGuide:
             expected_fcr=Decimal('1.0')
         )
         
-        assert str(guide) == "Tilapia - Croissance (50-150g)"
-    
+        assert str(guide) == "Tilapia - Croissance (50-150g) (MAVECAM)"
+
     def test_unique_species_stage(self):
-        """Test contrainte unicité espèce/stade."""
+        """Test contrainte unicité (species, min_weight, source)."""
         # Premier guide
         NutritionalGuide.objects.create(
             species="clarias",
@@ -377,21 +377,23 @@ class TestNutritionalGuide:
             protein_requirement=42,
             meals_per_day=3,
             feed_size_mm=Decimal('1.8'),
-            expected_fcr=Decimal('0.9')
+            expected_fcr=Decimal('0.9'),
+            source='DIBAQ',
         )
-        
-        # Deuxième guide même espèce/stade -> erreur
+
+        # Deuxième guide même (species, min_weight, source) -> erreur
         with pytest.raises(IntegrityError):
             NutritionalGuide.objects.create(
                 species="clarias",
                 growth_stage="juvenile",
-                min_weight=Decimal('8'),
+                min_weight=Decimal('10'),
                 max_weight=Decimal('45'),
                 feeding_rate_percentage=Decimal('7.5'),
                 protein_requirement=40,
                 meals_per_day=3,
                 feed_size_mm=Decimal('1.8'),
-                expected_fcr=Decimal('1.0')
+                expected_fcr=Decimal('1.0'),
+                source='DIBAQ',
             )
 
 

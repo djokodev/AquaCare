@@ -25,6 +25,12 @@ from django.utils.translation import gettext_lazy as _
 
 from ..models import ProductionCycle, CycleLog
 from ..domain.calculators import AquacultureCalculator
+from ..constants import (
+    ECONOMIC_DEFAULTS_BY_SPECIES,
+    DEFAULT_EXPECTED_SURVIVAL_RATE_PCT,
+    DEFAULT_FINGERLINGS_COST_FCFA,
+    DEFAULT_OTHER_OPERATIONAL_COSTS_FCFA,
+)
 from ..domain.exceptions import (
     BusinessRuleViolation,
     CycleNotActiveError,
@@ -93,6 +99,9 @@ class ProductionCycleService(BaseService):
             "create_cycle",
             {"farm_profile": farm_profile.id, "cycle_name": cycle_data.get('cycle_name')}
         )
+
+        # Normaliser et compléter les paramètres économiques.
+        ProductionCycleService._apply_economic_defaults(cycle_data)
 
         # 1. Validation métier approfondie
         ProductionCycleService._validate_cycle_business_rules(cycle_data)
@@ -386,6 +395,13 @@ class ProductionCycleService(BaseService):
         initial_count = cycle_data.get('initial_count')
         initial_weight = cycle_data.get('initial_average_weight')
         start_date = cycle_data.get('start_date')
+        target_weight = cycle_data.get('target_harvest_weight_g')
+        planned_duration = cycle_data.get('planned_cycle_duration_days')
+        planned_harvest_date = cycle_data.get('planned_harvest_date')
+        expected_survival = cycle_data.get('expected_survival_rate_pct')
+        selling_price = cycle_data.get('planned_selling_price_per_kg_fcfa')
+        fingerlings_cost = cycle_data.get('fingerlings_cost_fcfa')
+        other_costs = cycle_data.get('other_operational_costs_fcfa')
 
         # Validation densité maximale
         if species and pond_surface and initial_count:
@@ -418,6 +434,76 @@ class ProductionCycleService(BaseService):
                 raise InvalidDateRangeError(
                     _("La date de début ne peut pas être plus de 30 jours dans le futur")
                 )
+
+        if target_weight and initial_weight and Decimal(str(target_weight)) <= Decimal(str(initial_weight)):
+            raise BusinessRuleViolation(
+                _("Le poids cible de récolte doit être supérieur au poids moyen initial")
+            )
+
+        if planned_duration and (int(planned_duration) < 30 or int(planned_duration) > 365):
+            raise BusinessRuleViolation(
+                _("La durée prévisionnelle du cycle doit être comprise entre 30 et 365 jours")
+            )
+
+        if expected_survival is not None:
+            expected_survival_decimal = Decimal(str(expected_survival))
+            if expected_survival_decimal < Decimal('0') or expected_survival_decimal > Decimal('100'):
+                raise BusinessRuleViolation(
+                    _("Le taux de survie prévisionnel doit être compris entre 0 et 100")
+                )
+
+        if selling_price is not None and Decimal(str(selling_price)) <= Decimal('0'):
+            raise BusinessRuleViolation(
+                _("Le prix de vente prévisionnel (FCFA/kg) doit être strictement positif")
+            )
+
+        if fingerlings_cost is not None and Decimal(str(fingerlings_cost)) < Decimal('0'):
+            raise BusinessRuleViolation(
+                _("Le coût des alevins ne peut pas être négatif")
+            )
+
+        if other_costs is not None and Decimal(str(other_costs)) < Decimal('0'):
+            raise BusinessRuleViolation(
+                _("Les autres charges opérationnelles ne peuvent pas être négatives")
+            )
+
+        if start_date and planned_harvest_date:
+            if isinstance(planned_harvest_date, str):
+                planned_harvest_date = date.fromisoformat(planned_harvest_date)
+            if planned_harvest_date < start_date:
+                raise InvalidDateRangeError(
+                    _("La date prévisionnelle de récolte doit être après la date de début")
+                )
+
+    @staticmethod
+    def _apply_economic_defaults(cycle_data: Dict[str, Any]) -> None:
+        species = cycle_data.get('species') or 'tilapia'
+        defaults = ECONOMIC_DEFAULTS_BY_SPECIES.get(species, ECONOMIC_DEFAULTS_BY_SPECIES['tilapia'])
+
+        if cycle_data.get('target_harvest_weight_g') is None:
+            cycle_data['target_harvest_weight_g'] = defaults['target_harvest_weight_g']
+
+        if cycle_data.get('planned_cycle_duration_days') is None:
+            cycle_data['planned_cycle_duration_days'] = defaults['planned_cycle_duration_days']
+
+        if cycle_data.get('expected_survival_rate_pct') is None:
+            cycle_data['expected_survival_rate_pct'] = DEFAULT_EXPECTED_SURVIVAL_RATE_PCT
+
+        if cycle_data.get('planned_selling_price_per_kg_fcfa') is None:
+            cycle_data['planned_selling_price_per_kg_fcfa'] = defaults['planned_selling_price_per_kg_fcfa']
+
+        if cycle_data.get('fingerlings_cost_fcfa') is None:
+            cycle_data['fingerlings_cost_fcfa'] = DEFAULT_FINGERLINGS_COST_FCFA
+
+        if cycle_data.get('other_operational_costs_fcfa') is None:
+            cycle_data['other_operational_costs_fcfa'] = DEFAULT_OTHER_OPERATIONAL_COSTS_FCFA
+
+        if cycle_data.get('planned_harvest_date') is None and cycle_data.get('start_date'):
+            start_date_value = cycle_data['start_date']
+            if isinstance(start_date_value, str):
+                start_date_value = date.fromisoformat(start_date_value)
+            duration = int(cycle_data['planned_cycle_duration_days'])
+            cycle_data['planned_harvest_date'] = start_date_value + timedelta(days=duration)
 
     @staticmethod
     def _validate_harvest_business_rules(
@@ -505,5 +591,4 @@ class ProductionCycleService(BaseService):
                 level='warning'
             )
 
-        # Créer notification de félicitations (optionnel)
-        # TODO: Implémenter NotificationService si besoin
+        # Notification de félicitations (géré par le signal check_cycle_completion)

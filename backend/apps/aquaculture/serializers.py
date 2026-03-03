@@ -16,19 +16,21 @@ Architecture offline-first avec sérialiseurs bulk pour synchronisation mobile.
 """
 from rest_framework import serializers
 from decimal import Decimal
-from datetime import date
+from datetime import date, timedelta
 from django.utils.translation import gettext_lazy as _
 from django.utils import timezone
 
 from .models import (
     ProductionCycle, CycleLog, FeedingPlan, SanitaryLog,
-    NutritionalGuide, CycleMetrics
+    NutritionalGuide, CycleMetrics, ProductionReport, ReportDispatchLog
 )
-# Notification model moved to apps/notifications/models.py
 from .domain.calculators import AquacultureCalculator
+from .domain.feed_phase_calculator import get_feed_phase
 from .constants import (
     DEFAULT_FEED_PRICE_PER_KG, MAX_INITIAL_DENSITY_PER_M2,
     LOG_TEMPERATURE_MIN, LOG_TEMPERATURE_MAX, FEEDING_WEEK_DURATION_DAYS,
+    ECONOMIC_DEFAULTS_BY_SPECIES, DEFAULT_EXPECTED_SURVIVAL_RATE_PCT,
+    DEFAULT_FINGERLINGS_COST_FCFA, DEFAULT_OTHER_OPERATIONAL_COSTS_FCFA,
 )
 from notifications.serializers import NotificationSerializer as GlobalNotificationSerializer
 
@@ -56,6 +58,9 @@ class ProductionCycleSerializer(serializers.ModelSerializer):
     # Champs calculés pour coûts
     total_feed_cost = serializers.SerializerMethodField()
 
+    # Phase d'alimentation actuelle (basée sur le poids moyen courant)
+    feed_phase = serializers.SerializerMethodField()
+
     # Champs display
     species_display = serializers.CharField(source='get_species_display', read_only=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
@@ -65,8 +70,11 @@ class ProductionCycleSerializer(serializers.ModelSerializer):
         model = ProductionCycle
         fields = [
             'id', 'farm_profile', 'cycle_name', 'species', 'species_display',
-            'pond_identifier', 'pond_surface_m2', 'pond_volume_m3',
+            'pond_identifier', 'pond_surface_m2', 'pond_volume_m3', 'infrastructure_type',
             'start_date', 'initial_count', 'initial_average_weight', 'initial_biomass',
+            'target_harvest_weight_g', 'planned_cycle_duration_days', 'planned_harvest_date',
+            'expected_survival_rate_pct', 'planned_selling_price_per_kg_fcfa',
+            'fingerlings_cost_fcfa', 'other_operational_costs_fcfa',
             'current_count', 'current_average_weight', 'current_biomass',
             'total_feed_consumed', 'end_date', 'final_count', 'final_average_weight',
             'final_biomass', 'survival_rate', 'fcr', 'status', 'status_display',
@@ -75,6 +83,8 @@ class ProductionCycleSerializer(serializers.ModelSerializer):
             'daily_growth_rate', 'specific_growth_rate', 'average_daily_feed', 'performance_score',
             # Coûts calculés
             'total_feed_cost',
+            # Phase alimentation courante
+            'feed_phase',
             'created_at', 'updated_at'
         ]
         read_only_fields = [
@@ -129,6 +139,28 @@ class ProductionCycleSerializer(serializers.ModelSerializer):
             return float(obj.metrics.performance_score)
         return None
 
+    def get_feed_phase(self, obj):
+        """
+        Retourne la phase d'alimentation recommandée selon l'espèce et le poids moyen courant.
+        Phase : 'pre_grossissement' (10-100g) ou 'grossissement' (100g+).
+        """
+        weight = obj.current_average_weight or obj.initial_average_weight
+        if not weight:
+            return None
+        result = get_feed_phase(obj.species, float(weight))
+        if not result:
+            return None
+        return {
+            'phase_key': result.phase_key,
+            'phase_label': result.phase_label,
+            'weight_range_g': list(result.weight_range_g),
+            'recommended_product': result.recommended_product,
+            'products': result.products,
+            'protein_pct': result.protein_pct,
+            'bag_weight_kg': result.bag_weight_kg,
+            'price_per_bag_fcfa': result.price_per_bag_fcfa,
+        }
+
     def get_total_feed_cost(self, obj):
         """
         Calcule le coût total de l'aliment consommé (FCFA).
@@ -151,6 +183,28 @@ class ProductionCycleSerializer(serializers.ModelSerializer):
         return float(total_cost)
 
     def validate(self, attrs):
+        species = attrs.get('species') or getattr(self.instance, 'species', None)
+        defaults = ECONOMIC_DEFAULTS_BY_SPECIES.get(species or 'tilapia', ECONOMIC_DEFAULTS_BY_SPECIES['tilapia'])
+
+        # Set economic defaults when omitted
+        if attrs.get('target_harvest_weight_g') is None and not getattr(self.instance, 'target_harvest_weight_g', None):
+            attrs['target_harvest_weight_g'] = defaults['target_harvest_weight_g']
+
+        if attrs.get('planned_cycle_duration_days') is None and not getattr(self.instance, 'planned_cycle_duration_days', None):
+            attrs['planned_cycle_duration_days'] = defaults['planned_cycle_duration_days']
+
+        if attrs.get('expected_survival_rate_pct') is None and not getattr(self.instance, 'expected_survival_rate_pct', None):
+            attrs['expected_survival_rate_pct'] = DEFAULT_EXPECTED_SURVIVAL_RATE_PCT
+
+        if attrs.get('planned_selling_price_per_kg_fcfa') is None and not getattr(self.instance, 'planned_selling_price_per_kg_fcfa', None):
+            attrs['planned_selling_price_per_kg_fcfa'] = defaults['planned_selling_price_per_kg_fcfa']
+
+        if attrs.get('fingerlings_cost_fcfa') is None and getattr(self.instance, 'fingerlings_cost_fcfa', None) is None:
+            attrs['fingerlings_cost_fcfa'] = DEFAULT_FINGERLINGS_COST_FCFA
+
+        if attrs.get('other_operational_costs_fcfa') is None and getattr(self.instance, 'other_operational_costs_fcfa', None) is None:
+            attrs['other_operational_costs_fcfa'] = DEFAULT_OTHER_OPERATIONAL_COSTS_FCFA
+
         if attrs.get('end_date') and attrs.get('start_date'):
             if attrs['end_date'] < attrs['start_date']:
                 raise serializers.ValidationError({
@@ -161,6 +215,27 @@ class ProductionCycleSerializer(serializers.ModelSerializer):
         if attrs.get('initial_count', 0) > 100000:
             raise serializers.ValidationError({
                 'initial_count': _("Le nombre initial de poissons semble trop élevé")
+            })
+
+        initial_weight = attrs.get('initial_average_weight') or getattr(self.instance, 'initial_average_weight', None)
+        target_weight = attrs.get('target_harvest_weight_g') or getattr(self.instance, 'target_harvest_weight_g', None)
+        if initial_weight and target_weight and Decimal(str(target_weight)) <= Decimal(str(initial_weight)):
+            raise serializers.ValidationError({
+                'target_harvest_weight_g': _("Le poids cible doit être supérieur au poids moyen initial")
+            })
+
+        expected_survival = attrs.get('expected_survival_rate_pct') or getattr(self.instance, 'expected_survival_rate_pct', None)
+        if expected_survival is not None and (
+            Decimal(str(expected_survival)) < Decimal('0') or Decimal(str(expected_survival)) > Decimal('100')
+        ):
+            raise serializers.ValidationError({
+                'expected_survival_rate_pct': _("Le taux de survie prévisionnel doit être compris entre 0 et 100")
+            })
+
+        selling_price = attrs.get('planned_selling_price_per_kg_fcfa') or getattr(self.instance, 'planned_selling_price_per_kg_fcfa', None)
+        if selling_price is not None and Decimal(str(selling_price)) <= Decimal('0'):
+            raise serializers.ValidationError({
+                'planned_selling_price_per_kg_fcfa': _("Le prix de vente prévisionnel doit être strictement positif")
             })
 
         # Validate that at least one of pond_surface_m2 or pond_volume_m3 is provided
@@ -181,6 +256,17 @@ class ProductionCycleSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({
                     'initial_count': _("Densité initiale trop élevée (max 500 poissons/m²)")
                 })
+
+        start_date_value = attrs.get('start_date') or getattr(self.instance, 'start_date', None)
+        planned_duration = attrs.get('planned_cycle_duration_days') or getattr(self.instance, 'planned_cycle_duration_days', None)
+        if attrs.get('planned_harvest_date') is None and start_date_value and planned_duration:
+            attrs['planned_harvest_date'] = start_date_value + timedelta(days=int(planned_duration))
+
+        planned_harvest = attrs.get('planned_harvest_date') or getattr(self.instance, 'planned_harvest_date', None)
+        if start_date_value and planned_harvest and planned_harvest < start_date_value:
+            raise serializers.ValidationError({
+                'planned_harvest_date': _("La date prévisionnelle de récolte doit être après la date de début")
+            })
 
         return attrs
 
@@ -213,7 +299,7 @@ class CycleLogSerializer(serializers.ModelSerializer):
             'id', 'client_uuid', 'cycle', 'log_date', 'log_time',
             'mortality_count', 'mortality_reason', 'sample_count',
             'sample_total_weight', 'average_weight', 'calculated_average_weight',
-            'feed_quantity', 'feed_type', 'feeding_times',
+            'feed_quantity', 'feed_type', 'feed_size_mm', 'feeding_times',
             'water_temperature', 'dissolved_oxygen', 'ph_level', 'ammonia_level',
             'observations', 'created_offline', 'synced_at', 'created_at'
         ]
@@ -230,33 +316,32 @@ class CycleLogSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         """Valide la cohérence des données de log et les règles métier."""
+        from aquaculture.domain.validators import (
+            validate_cycle_log_date, validate_sampling_data,
+        )
+        from django.core.exceptions import ValidationError as DjangoValidationError
+
         cycle = attrs.get('cycle')
         log_date = attrs.get('log_date')
 
-        # Validate log date within cycle period
+        # Validate log date within cycle period (shared domain validator)
         if cycle and log_date:
-            if log_date < cycle.start_date:
-                raise serializers.ValidationError({
-                    'log_date': _("La date du log ne peut être avant le début du cycle")
-                })
-            if cycle.end_date and log_date > cycle.end_date:
-                raise serializers.ValidationError({
-                    'log_date': _("La date du log ne peut être après la fin du cycle")
-                })
+            try:
+                validate_cycle_log_date(log_date, cycle.start_date, cycle.end_date)
+            except DjangoValidationError as e:
+                raise serializers.ValidationError({'log_date': e.message})
 
-        # Validate sampling data consistency
+        # Validate sampling data consistency (shared domain validator)
         if attrs.get('sample_count') and attrs.get('sample_total_weight'):
-            calculated_avg = attrs['sample_total_weight'] / attrs['sample_count']
-            if attrs.get('average_weight'):
-                # Allow 10% tolerance for manual entry errors
-                tolerance = abs(calculated_avg - attrs['average_weight']) / calculated_avg
-                if tolerance > 0.1:
-                    raise serializers.ValidationError({
-                        'average_weight': _("Le poids moyen ne correspond pas à l'échantillon (écart > 10%)")
-                    })
-            else:
-                # Auto-calculate if not provided
-                attrs['average_weight'] = calculated_avg
+            try:
+                validate_sampling_data(
+                    attrs['sample_count'], attrs['sample_total_weight'],
+                    attrs.get('average_weight'),
+                )
+            except DjangoValidationError as e:
+                raise serializers.ValidationError({'average_weight': e.message})
+            if not attrs.get('average_weight'):
+                attrs['average_weight'] = attrs['sample_total_weight'] / attrs['sample_count']
 
         # Validate mortality doesn't exceed current fish count
         if attrs.get('mortality_count') and cycle:
@@ -315,6 +400,7 @@ class FeedingPlanSerializer(serializers.ModelSerializer):
             'meals_per_day', 'feed_per_meal', 'total_week_feed',
             'recommended_feed_type', 'feed_size_mm', 'protein_percentage',
             'start_date', 'end_date', 'is_active', 'feed_per_meal_display',
+            'temperature_used_c', 'used_default_temperature', 'data_source',
             'created_at'
         ]
         read_only_fields = ['id', 'created_at']
@@ -533,13 +619,6 @@ class CycleComparisonSerializer(serializers.Serializer):
     improvement_suggestions = serializers.ListField(help_text="Suggestions d'amélioration")
 
 
-# =============================================================================
-# NOTIFICATION SERIALIZER REMOVED
-# =============================================================================
-# NotificationSerializer a été déplacé vers apps/notifications/serializers.py
-# Utilisez apps.notifications.serializers.NotificationSerializer à la place
-# =============================================================================
-
 class DashboardSerializer(serializers.Serializer):
     """
     Sérialiseur pour les données du dashboard aquaculture.
@@ -562,6 +641,125 @@ class DashboardSerializer(serializers.Serializer):
     
     environmental_alerts = serializers.ListField()
     feeding_recommendations = serializers.DictField()
+
+
+class ReportDispatchLogSerializer(serializers.ModelSerializer):
+    """
+    Serializer pour les journaux d'envoi des rapports.
+    """
+
+    channel_display = serializers.CharField(source='get_channel_display', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    dispatched_by_name = serializers.CharField(source='dispatched_by.display_name', read_only=True)
+
+    class Meta:
+        model = ReportDispatchLog
+        fields = [
+            'id',
+            'channel',
+            'channel_display',
+            'status',
+            'status_display',
+            'recipient',
+            'error_code',
+            'error_message',
+            'metadata',
+            'dispatched_by',
+            'dispatched_by_name',
+            'created_at',
+        ]
+        read_only_fields = fields
+
+
+class ProductionReportListSerializer(serializers.ModelSerializer):
+    """
+    Serializer léger pour listing des rapports.
+    """
+
+    report_type_display = serializers.CharField(source='get_report_type_display', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    farm_name = serializers.CharField(source='farm_profile.farm_name', read_only=True)
+    cycle_scope_id = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ProductionReport
+        fields = [
+            'id',
+            'farm_profile',
+            'farm_name',
+            'report_type',
+            'report_type_display',
+            'period_start',
+            'period_end',
+            'status',
+            'status_display',
+            'cycle_scope_id',
+            'generated_at',
+            'validated_at',
+            'email_status',
+            'email_sent_at',
+            'whatsapp_status',
+            'whatsapp_shared_at',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = fields
+
+    def get_cycle_scope_id(self, obj):
+        if not isinstance(obj.payload, dict):
+            return None
+        report_meta = obj.payload.get('report_meta')
+        if not isinstance(report_meta, dict):
+            return None
+        return report_meta.get('cycle_scope_id')
+
+
+class ProductionReportDetailSerializer(ProductionReportListSerializer):
+    """
+    Serializer détaillé d'un rapport incluant payload et audit d'envoi.
+    """
+
+    validated_by_name = serializers.CharField(source='validated_by.display_name', read_only=True)
+    dispatch_logs = ReportDispatchLogSerializer(many=True, read_only=True)
+    pdf_url = serializers.SerializerMethodField()
+
+    class Meta(ProductionReportListSerializer.Meta):
+        model = ProductionReport
+        fields = ProductionReportListSerializer.Meta.fields + [
+            'payload',
+            'pdf_file',
+            'pdf_url',
+            'validated_by',
+            'validated_by_name',
+            'dispatch_logs',
+        ]
+
+    def get_pdf_url(self, obj):
+        request = self.context.get('request')
+        if not obj.pdf_file:
+            return None
+        if request is None:
+            return obj.pdf_file.url
+        return request.build_absolute_uri(obj.pdf_file.url)
+
+
+class MarkWhatsAppSharedSerializer(serializers.Serializer):
+    """
+    Payload pour marquage partage WhatsApp (audit).
+    """
+
+    recipient = serializers.CharField(required=False, allow_blank=True, max_length=255)
+    metadata = serializers.DictField(required=False)
+
+
+class GenerateReportSerializer(serializers.Serializer):
+    """
+    Payload de génération manuelle d'un rapport.
+    """
+
+    report_type = serializers.ChoiceField(choices=['daily', 'weekly', 'monthly'])
+    reference_date = serializers.DateField(required=False)
+    cycle_id = serializers.UUIDField(required=False)
 
 
 class SyncRequestSerializer(serializers.Serializer):

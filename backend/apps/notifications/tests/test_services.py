@@ -10,6 +10,7 @@ Couvre :
 """
 import pytest
 from django.utils import timezone
+from django.test import override_settings
 from datetime import timedelta
 from unittest.mock import patch
 
@@ -61,6 +62,32 @@ class TestNotificationServiceCreate:
         )
 
         assert notif.metadata == metadata
+
+    @override_settings(FEEDING_REMINDER_LOCAL_ALARM_ONLY=True)
+    def test_feeding_reminder_strips_push_when_local_alarm_policy_enabled(self, user):
+        notif = NotificationService.create_notification(
+            user=user,
+            notification_type='feeding_reminder',
+            title='Feeding time',
+            message='Local reminder',
+            channels=['in_app', 'push'],
+        )
+
+        assert notif is not None
+        assert notif.channels == ['in_app']
+
+    @override_settings(FEEDING_REMINDER_LOCAL_ALARM_ONLY=False)
+    def test_feeding_reminder_keeps_push_when_policy_disabled(self, user):
+        notif = NotificationService.create_notification(
+            user=user,
+            notification_type='feeding_reminder',
+            title='Feeding time',
+            message='Push reminder',
+            channels=['in_app', 'push'],
+        )
+
+        assert notif is not None
+        assert notif.channels == ['in_app', 'push']
 
 
 @pytest.mark.django_db

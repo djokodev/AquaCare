@@ -3,7 +3,10 @@ from decouple import config
 
 SECRET_KEY = config('DJANGO_SECRET_KEY')
 DEBUG = config('DJANGO_DEBUG', default=False, cast=bool)
-ALLOWED_HOSTS = config('DJANGO_ALLOWED_HOSTS', default='77.237.241.223').split(',')
+ALLOWED_HOSTS = config(
+    'DJANGO_ALLOWED_HOSTS',
+    default='77.237.241.223,aquacare.tech,www.aquacare.tech,api.aquacare.tech'
+).split(',')
 
 DATABASES = {
     'default': {
@@ -11,9 +14,11 @@ DATABASES = {
         'NAME': config('POSTGRES_DB'),
         'USER': config('POSTGRES_USER'),
         'PASSWORD': config('POSTGRES_PASSWORD'),
-        'HOST': config('POSTGRES_HOST'),
+        'HOST': config('POSTGRES_HOST'),  # Points to PgBouncer in docker-compose.prod.yml
         'PORT': config('POSTGRES_PORT'),
-        'CONN_MAX_AGE': 600, 
+        # CONN_MAX_AGE=0 is required with PgBouncer transaction pooling mode.
+        # PgBouncer handles connection reuse; Django must release connections after each request.
+        'CONN_MAX_AGE': 0,
         'OPTIONS': {
             'connect_timeout': 10,
         }
@@ -23,14 +28,19 @@ DATABASES = {
 SECURE_BROWSER_XSS_FILTER = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = 'DENY'
-CSRF_COOKIE_SECURE = False  # True quand SSL activé
-SESSION_COOKIE_SECURE = False  # True quand SSL activé
-SECURE_SSL_REDIRECT = False  # True quand SSL activé
+# Cloudflare termine le SSL — Django reçoit du HTTP en interne
+# On indique à Django de faire confiance au header X-Forwarded-Proto de Cloudflare
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+CSRF_COOKIE_SECURE = True
+SESSION_COOKIE_SECURE = True
+SECURE_SSL_REDIRECT = False  # Cloudflare gère la redirection HTTP→HTTPS
 
 CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOWED_ORIGINS = [
     "http://77.237.241.223",
-    # Ajouter domaine mobile app si besoin
+    "https://aquacare.tech",
+    "https://www.aquacare.tech",
+    "https://api.aquacare.tech",
 ]
 
 STATIC_URL = '/static/'

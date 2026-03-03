@@ -30,9 +30,11 @@ BRAND_CHOICES = [
     ('dibaq', _('DIBAQ')),
 ]
 
-# Statuts de commande (MVP simplifié)
+# Statuts de commande
 ORDER_STATUS_CHOICES = [
-    ('confirmed', _('Confirmée')),
+    ('confirmed', _('Commandée')),
+    ('delivered', _('Livrée')),
+    ('received', _('Reçue')),
 ]
 
 # Méthodes de livraison

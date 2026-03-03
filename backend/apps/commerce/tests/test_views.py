@@ -10,6 +10,7 @@ from rest_framework import status
 
 from commerce.models import Product, Order
 from accounts.models import User, FarmProfile
+from aquaculture.models import ProductionCycle
 
 
 @pytest.mark.django_db
@@ -34,6 +35,14 @@ class TestProductViewSet:
     def authenticated_client(self, api_client, test_user):
         api_client.force_authenticate(user=test_user)
         return api_client
+
+    @pytest.fixture
+    def test_farm(self, test_user):
+        farm_profile, _ = FarmProfile.objects.get_or_create(
+            user=test_user,
+            defaults={"farm_name": "Product Test Farm"},
+        )
+        return farm_profile
 
     @pytest.fixture
     def test_products(self):
@@ -82,6 +91,80 @@ class TestProductViewSet:
         response = authenticated_client.get("/api/commerce/products/feeding_suggestions/")
         assert response.status_code == status.HTTP_200_OK
         assert response.data["has_suggestions"] is False
+
+    def test_feeding_suggestions_scoped_to_session_cycle(self, authenticated_client, test_farm):
+        selected_cycle = ProductionCycle.objects.create(
+            farm_profile=test_farm,
+            cycle_name="Cycle Session",
+            species="tilapia",
+            pond_identifier="Pond S1",
+            pond_surface_m2=Decimal("120.0"),
+            start_date=date.today(),
+            initial_count=1200,
+            initial_average_weight=Decimal("5.0"),
+            initial_biomass=Decimal("6.0"),
+            current_count=1200,
+            current_average_weight=Decimal("5.0"),
+            current_biomass=Decimal("6.0"),
+            status="active",
+        )
+        ProductionCycle.objects.create(
+            farm_profile=test_farm,
+            cycle_name="Cycle Hors Session",
+            species="tilapia",
+            pond_identifier="Pond S2",
+            pond_surface_m2=Decimal("110.0"),
+            start_date=date.today(),
+            initial_count=900,
+            initial_average_weight=Decimal("5.0"),
+            initial_biomass=Decimal("4.5"),
+            current_count=900,
+            current_average_weight=Decimal("5.0"),
+            current_biomass=Decimal("4.5"),
+            status="active",
+        )
+
+        response = authenticated_client.get(
+            "/api/commerce/products/feeding_suggestions/",
+            {"cycle_id": str(selected_cycle.id)},
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["analysis"]["total_cycles"] == 1
+
+    def test_feeding_suggestions_rejects_invalid_cycle_scope(self, authenticated_client):
+        response = authenticated_client.get(
+            "/api/commerce/products/feeding_suggestions/",
+            {"cycle_id": "invalid-cycle-id"},
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.data["error"] == "cycle_id invalide"
+
+    def test_feeding_suggestions_rejects_inactive_cycle_scope(self, authenticated_client, test_farm):
+        inactive_cycle = ProductionCycle.objects.create(
+            farm_profile=test_farm,
+            cycle_name="Cycle Inactif",
+            species="tilapia",
+            pond_identifier="Pond Z1",
+            pond_surface_m2=Decimal("100.0"),
+            start_date=date.today(),
+            initial_count=500,
+            initial_average_weight=Decimal("5.0"),
+            initial_biomass=Decimal("2.5"),
+            current_count=500,
+            current_average_weight=Decimal("5.0"),
+            current_biomass=Decimal("2.5"),
+            status="harvested",
+        )
+
+        response = authenticated_client.get(
+            "/api/commerce/products/feeding_suggestions/",
+            {"cycle_id": str(inactive_cycle.id)},
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.data["error"] == "Cycle de session introuvable ou inactif."
 
 
 @pytest.mark.django_db
@@ -159,6 +242,31 @@ class TestOrderViewSet:
         response = authenticated_client.get("/api/commerce/orders/statistics/")
         assert response.status_code == status.HTTP_200_OK
         assert "total_orders" in response.data
+
+    def test_confirm_receipt_success_when_delivered(self, authenticated_client, test_farm, test_product):
+        create_response = authenticated_client.post("/api/commerce/orders/", {
+            "items": [{"product_id": str(test_product.id), "quantity": 1}],
+            "delivery_method": "home"
+        }, format="json")
+        order_id = create_response.data["id"]
+        Order.objects.filter(id=order_id).update(status='delivered')
+
+        response = authenticated_client.post(f"/api/commerce/orders/{order_id}/confirm_receipt/")
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["status"] == "received"
+
+    def test_confirm_receipt_rejects_non_delivered_status(self, authenticated_client, test_farm, test_product):
+        create_response = authenticated_client.post("/api/commerce/orders/", {
+            "items": [{"product_id": str(test_product.id), "quantity": 1}],
+            "delivery_method": "home"
+        }, format="json")
+        order_id = create_response.data["id"]
+
+        response = authenticated_client.post(f"/api/commerce/orders/{order_id}/confirm_receipt/")
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "message" in response.data
 
     def test_order_mutation_methods_are_blocked(self, authenticated_client, test_farm, test_product):
         create_response = authenticated_client.post("/api/commerce/orders/", {

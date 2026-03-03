@@ -8,6 +8,7 @@ from django.utils import timezone
 from django.db import transaction
 from django.contrib.auth import get_user_model
 from django.contrib.contenttypes.models import ContentType
+from django.conf import settings
 from typing import List, Dict, Optional, Any
 
 from .models import Notification, NotificationPreference
@@ -120,6 +121,16 @@ class NotificationService:
         if priority is None:
             priority = DEFAULT_PRIORITY_BY_TYPE.get(notification_type, 'medium')
 
+        # 6.b Politique produit : rappels nourrissage = alarme locale mobile prioritaire
+        if (
+            notification_type == 'feeding_reminder'
+            and getattr(settings, 'FEEDING_REMINDER_LOCAL_ALARM_ONLY', True)
+            and 'push' in channels
+        ):
+            channels = [channel for channel in channels if channel != 'push']
+            if not channels:
+                return None
+
         # 7. Vérifier heures silencieuses pour push
         if 'push' in channels and prefs.is_in_quiet_hours():
             channels.remove('push')
@@ -195,6 +206,12 @@ class NotificationService:
         # Déterminer valeurs par défaut
         if channels is None:
             channels = DEFAULT_CHANNELS_BY_TYPE.get(notification_type, ['in_app'])
+        if (
+            notification_type == 'feeding_reminder'
+            and getattr(settings, 'FEEDING_REMINDER_LOCAL_ALARM_ONLY', True)
+            and 'push' in channels
+        ):
+            channels = [channel for channel in channels if channel != 'push']
         if priority is None:
             priority = DEFAULT_PRIORITY_BY_TYPE.get(notification_type, 'medium')
         if scheduled_for is None:

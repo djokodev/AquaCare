@@ -184,6 +184,12 @@ class CycleLogService(BaseService):
         # Track UUIDs already processed in this batch to handle in-batch duplicates
         batch_uuid_map: dict = {}
 
+        # Collect new logs to bulk_create (bypass signals)
+        new_logs_to_create: list = []
+        # Track (cycle_id, log_date) to prevent in-batch unique constraint violations
+        batch_date_keys: set = set()
+        now = timezone.now()
+
         for idx, log_data in enumerate(logs_data):
             try:
                 # Récupérer le cycle (avec vérification permission)
@@ -216,10 +222,14 @@ class CycleLogService(BaseService):
                         for key, value in log_data.items():
                             if key not in ['id', 'created_at', 'cycle']:
                                 setattr(in_batch_log, key, value)
-                        in_batch_log.synced_at = timezone.now()
-                        in_batch_log.save()
+                        in_batch_log.synced_at = now
+                        # If already persisted to DB, save changes now.
+                        # Note: can't use .pk since UUID PKs are set at construction time.
+                        if not in_batch_log._state.adding:
+                            in_batch_log.save()
+                        # Otherwise it's still in new_logs_to_create — attrs updated in-place
                         result['updated'] += 1
-                        continue  # Don't re-append — already in result['logs']
+                        continue  # Don't re-append — already tracked
 
                     # 2. Database duplicate (UUID exists from previous sync)
                     existing_log = CycleLog.objects.filter(client_uuid=client_uuid).first()
@@ -244,7 +254,7 @@ class CycleLogService(BaseService):
                             if key not in ['id', 'created_at', 'cycle']:
                                 setattr(existing_log, key, value)
 
-                        existing_log.synced_at = timezone.now()
+                        existing_log.synced_at = now
                         existing_log.save()
 
                         result['updated'] += 1
@@ -253,23 +263,58 @@ class CycleLogService(BaseService):
                         batch_uuid_map[client_uuid_str] = existing_log
                         continue
 
-                # Création nouveau log
-                # Retirer les champs qui ne font pas partie du modèle
+                # Validate + prepare new log for bulk_create (no signal)
                 clean_log_data = {k: v for k, v in log_data.items() if k not in ['cycle', 'id']}
                 created_offline = clean_log_data.pop('created_offline', True)
 
-                log = CycleLogService.create_log(
+                CycleLogService._validate_log_business_rules(cycle, clean_log_data)
+
+                # Check for existing log with same (cycle, log_date)
+                log_date_val = clean_log_data.get('log_date')
+                if log_date_val:
+                    existing_date_log = CycleLog.objects.filter(
+                        cycle=cycle, log_date=log_date_val
+                    ).first()
+                    if existing_date_log:
+                        # Update existing log instead of creating a duplicate
+                        for key, value in clean_log_data.items():
+                            if key not in ['id', 'created_at']:
+                                setattr(existing_date_log, key, value)
+                        existing_date_log.synced_at = now
+                        existing_date_log.save()
+                        result['updated'] += 1
+                        result['logs'].append(existing_date_log)
+                        result['cycles_affected'].add(existing_date_log.cycle_id)
+                        if client_uuid:
+                            batch_uuid_map[str(client_uuid)] = existing_date_log
+                        continue
+
+                # Auto-calculate average weight if sample provided
+                if clean_log_data.get('sample_count') and clean_log_data.get('sample_total_weight'):
+                    if not clean_log_data.get('average_weight'):
+                        clean_log_data['average_weight'] = Decimal(str(
+                            clean_log_data['sample_total_weight'] / clean_log_data['sample_count']
+                        ))
+
+                # Prevent in-batch (cycle, log_date) duplicates
+                date_key = (str(cycle.id), str(log_date_val)) if log_date_val else None
+                if date_key and date_key in batch_date_keys:
+                    result['errors'].append({
+                        'index': idx,
+                        'error': str(_("Un log existe déjà pour cette date dans ce batch.")),
+                    })
+                    continue
+
+                log = CycleLog(
                     cycle=cycle,
-                    log_data=clean_log_data,
-                    created_offline=created_offline
+                    created_offline=created_offline,
+                    synced_at=now,
+                    **clean_log_data
                 )
-
-                log.synced_at = timezone.now()
-                log.save()
-
-                result['created'] += 1
-                result['logs'].append(log)
-                result['cycles_affected'].add(log.cycle_id)
+                new_logs_to_create.append(log)
+                result['cycles_affected'].add(cycle.id)
+                if date_key:
+                    batch_date_keys.add(date_key)
                 if client_uuid:
                     batch_uuid_map[str(client_uuid)] = log
 
@@ -279,6 +324,12 @@ class CycleLogService(BaseService):
                     'index': idx,
                     'error': str(e),
                 })
+
+        # Bulk create all new logs at once (bypasses post_save signals)
+        if new_logs_to_create:
+            created_logs = CycleLog.objects.bulk_create(new_logs_to_create)
+            result['created'] = len(created_logs)
+            result['logs'].extend(created_logs)
 
         CycleLogService.log_operation(
             "bulk_logs_processed",

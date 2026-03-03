@@ -78,12 +78,18 @@ class TestCycleSimulationService:
         # Vérifier summary
         summary = result['summary']
         assert 'total_feed_kg' in summary
+        assert 'feed_cost_fcfa' in summary
+        assert 'fingerlings_cost_fcfa' in summary
+        assert 'other_costs_fcfa' in summary
         assert 'total_cost_fcfa' in summary
         assert 'estimated_fcr' in summary
         assert 'estimated_revenue_fcfa' in summary
         assert 'estimated_profit_fcfa' in summary
         assert summary['initial_fish_count'] == 1000
         assert summary['estimated_final_count'] == 850  # 1000 × 0.85
+        assert summary['feed_cost_fcfa'] > 0
+        assert summary['fingerlings_cost_fcfa'] == 0
+        assert summary['other_costs_fcfa'] == 0
 
     def test_simulate_cycle_custom_params(self, tilapia_products):
         """Test simulation avec paramètres personnalisés."""
@@ -105,6 +111,40 @@ class TestCycleSimulationService:
 
         summary = result['summary']
         assert summary['estimated_final_count'] == 450  # 500 × 0.90
+
+    def test_simulate_cycle_with_selling_price_override(self, tilapia_products):
+        """Test prise en compte du prix de vente surchargé."""
+        result = CycleSimulationService.simulate_cycle(
+            species='tilapia',
+            initial_fish_count=1000,
+            selling_price_per_kg_fcfa=4000
+        )
+
+        summary = result['summary']
+        # Biomasse récoltée: 850 * 300g = 255kg -> 1 020 000 FCFA à 4000 FCFA/kg
+        assert summary['estimated_revenue_fcfa'] == 1020000
+
+    def test_simulate_cycle_with_additional_costs(self, tilapia_products):
+        """Test intégration coût alevins + autres charges."""
+        result = CycleSimulationService.simulate_cycle(
+            species='tilapia',
+            initial_fish_count=1000,
+            fingerlings_cost_fcfa=150000,
+            other_costs_fcfa=50000
+        )
+
+        summary = result['summary']
+        assert summary['fingerlings_cost_fcfa'] == 150000
+        assert summary['other_costs_fcfa'] == 50000
+        assert summary['total_cost_fcfa'] == summary['feed_cost_fcfa'] + 200000
+
+    def test_simulate_cycle_accepts_clarias_alias(self, tilapia_products):
+        """Test alias espèce clarias -> catfish."""
+        result = CycleSimulationService.simulate_cycle(
+            species='clarias',
+            initial_fish_count=1000
+        )
+        assert result['parameters']['species'] == 'catfish'
 
     def test_simulate_cycle_multi_granulometry(self, tilapia_products):
         """Test que la simulation suggère plusieurs granulométries."""

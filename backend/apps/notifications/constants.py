@@ -82,7 +82,7 @@ DEFAULT_CHANNELS_BY_TYPE = {
     # Aquaculture - alertes importantes
     'mortality_alert': ['in_app', 'push', 'email'],
     'water_quality_alert': ['in_app', 'push'],
-    'feeding_reminder': ['in_app', 'push'],
+    'feeding_reminder': ['in_app'],
     'sampling_reminder': ['in_app'],
     'cycle_milestone': ['in_app'],
 

@@ -11,7 +11,7 @@ from commerce.models import Product
 from commerce.services import ProductService, OrderService, FeedingSuggestionService
 from commerce.domain.exceptions import InvalidOrderError
 from accounts.models import User, FarmProfile
-from aquaculture.models import ProductionCycle
+from aquaculture.models import ProductionCycle, CycleLog
 
 
 @pytest.mark.django_db
@@ -164,6 +164,29 @@ class TestOrderService:
                 created_offline=True,
             )
 
+    def test_confirm_order_receipt_success(self, test_user, test_farm, test_product):
+        order = OrderService.create_order(
+            user=test_user,
+            items_data=[{"product_id": str(test_product.id), "quantity": 1}],
+            delivery_method="home",
+        )
+        order.status = "delivered"
+        order.save(update_fields=["status", "updated_at"])
+
+        updated = OrderService.confirm_order_receipt(order, test_user)
+
+        assert updated.status == "received"
+
+    def test_confirm_order_receipt_rejects_non_delivered(self, test_user, test_farm, test_product):
+        order = OrderService.create_order(
+            user=test_user,
+            items_data=[{"product_id": str(test_product.id), "quantity": 1}],
+            delivery_method="home",
+        )
+
+        with pytest.raises(InvalidOrderError):
+            OrderService.confirm_order_receipt(order, test_user)
+
 
 @pytest.mark.django_db
 class TestFeedingSuggestionService:
@@ -239,3 +262,49 @@ class TestFeedingSuggestionService:
         result = FeedingSuggestionService.get_feeding_suggestions(test_user.id)
         assert result["has_suggestions"] is True
         assert result["suggestions"][0]["cycle_name"] == test_cycle.cycle_name
+
+    def test_analyze_cycle_handles_clarias_and_planned_harvest_date(self, test_farm):
+        cycle = ProductionCycle.objects.create(
+            farm_profile=test_farm,
+            cycle_name="Cycle Clarias",
+            species="clarias",
+            pond_identifier="Pond C",
+            pond_surface_m2=Decimal("150.0"),
+            start_date=timezone.now().date() - timedelta(days=20),
+            initial_count=2000,
+            initial_average_weight=Decimal("5.0"),
+            initial_biomass=Decimal("10.0"),
+            current_count=1900,
+            current_average_weight=Decimal("80.0"),
+            current_biomass=Decimal("152.0"),
+            status="active",
+            planned_harvest_date=timezone.now().date() + timedelta(days=20),
+            target_harvest_weight_g=Decimal("400.0"),
+        )
+
+        Product.objects.create(
+            name="CATFISH 3MM TEST 20KG",
+            brand="aller_aqua",
+            species="catfish",
+            phase="pre_grossissement",
+            pellet_size_mm=Decimal("3.0"),
+            protein_percentage=Decimal("35.0"),
+            lipid_percentage=10,
+            package_weight_kg=Decimal("20.0"),
+            price_per_package=Decimal("30000.0"),
+        )
+
+        today = timezone.now().date()
+        for offset in range(7):
+            CycleLog.objects.create(
+                cycle=cycle,
+                log_date=today - timedelta(days=offset),
+                feed_quantity=Decimal("2.0"),
+                average_weight=Decimal("80.0"),
+            )
+
+        analysis = FeedingSuggestionService._analyze_cycle_with_phases(cycle)
+
+        assert analysis["has_data"] is True
+        assert analysis["days_remaining"] == 20
+        assert analysis["cycle_id"] == str(cycle.id)

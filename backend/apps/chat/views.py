@@ -8,6 +8,7 @@ from rest_framework import viewsets, status, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.throttling import UserRateThrottle
+from django.db.models import Count
 from django.utils.translation import gettext as _
 
 from .models import Conversation, Message
@@ -82,17 +83,17 @@ class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
         user = self.request.user
 
         if user.is_staff:
-            # Admin sees all conversations
+            # Admin sees all conversations — Count annoté, pas de prefetch illimité
             return (
                 Conversation.objects.all()
                 .select_related('user')
-                .prefetch_related('messages')
+                .annotate(messages_count_ann=Count('messages'))
             )
         else:
             # User sees only their own conversation
             return (
                 Conversation.objects.filter(user=user)
-                .prefetch_related('messages')
+                .annotate(messages_count_ann=Count('messages'))
             )
 
     @action(detail=False, methods=['get'], url_path='me')
