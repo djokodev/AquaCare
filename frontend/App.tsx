@@ -1,6 +1,6 @@
 import 'react-native-gesture-handler';
 import React, { useEffect } from 'react';
-import { Platform } from 'react-native';
+import { Platform, View, Text, StyleSheet } from 'react-native';
 import { Provider } from 'react-redux';
 import { NavigationContainer } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
@@ -158,6 +158,11 @@ function App() {
             <AppNavigator />
             <StatusBar style="auto" />
           </NavigationContainer>
+          {config.environment === 'staging' && (
+            <View style={styles.stagingBanner} pointerEvents="none">
+              <Text style={styles.stagingBannerText}>⚠ BUILD DE TEST — STAGING</Text>
+            </View>
+          )}
         </ErrorBoundary>
       </SafeAreaProvider>
     </Provider>

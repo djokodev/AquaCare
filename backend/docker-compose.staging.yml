@@ -66,6 +66,10 @@ services:
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
       - SENTRY_DSN=${SENTRY_DSN:-}
       - DEFAULT_FROM_EMAIL=${DEFAULT_FROM_EMAIL:-staging@aquacare.tech}
+      - DJANGO_SUPERUSER_PHONE=${DJANGO_SUPERUSER_PHONE:-}
+      - DJANGO_SUPERUSER_PASSWORD=${DJANGO_SUPERUSER_PASSWORD:-}
+      - DJANGO_SUPERUSER_FIRST_NAME=${DJANGO_SUPERUSER_FIRST_NAME:-Admin}
+      - DJANGO_SUPERUSER_LAST_NAME=${DJANGO_SUPERUSER_LAST_NAME:-AquaCare}
     volumes:
       - media_staging_data:/app/media
       - static_staging_data:/app/staticfiles

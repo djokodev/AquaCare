@@ -8,6 +8,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { STORAGE_KEYS } from "@/constants/api";
 import { MAVECAM_COLORS } from "@/constants/colors";
 import logger from "@/utils/logger";
+import config from "@/config/environment";
+import Constants from "expo-constants";
 
 export default function SettingsScreen() {
   const { t, i18n } = useTranslation();
@@ -85,6 +87,25 @@ export default function SettingsScreen() {
           <Text className="text-sm text-gray-dark leading-6">
             {t("aboutSummary")}
           </Text>
+        </View>
+      </View>
+
+      <View className="px-5 py-4">
+        <Text className="text-lg font-bold text-gray-dark mb-3">{t("appInfoSection")}</Text>
+        <View className="bg-white rounded-xl overflow-hidden">
+          {[
+            { label: t("appInfoEnvironment"), value: config.environment },
+            { label: t("appInfoApiUrl"), value: config.apiUrl },
+            { label: t("appInfoVersion"), value: Constants.expoConfig?.version ?? "1.0.0" },
+          ].map((row, index, arr) => (
+            <View
+              key={row.label}
+              className={`flex-row items-center justify-between px-4 py-3 ${index < arr.length - 1 ? "border-b border-gray-100" : ""}`}
+            >
+              <Text className="text-sm text-gray-500">{row.label}</Text>
+              <Text className="text-sm font-medium text-gray-dark max-w-[60%] text-right" numberOfLines={1}>{row.value}</Text>
+            </View>
+          ))}
         </View>
       </View>
 

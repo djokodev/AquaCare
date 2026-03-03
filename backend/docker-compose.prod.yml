@@ -70,6 +70,10 @@ services:
       - CELERY_BROKER_URL=redis://redis_broker:6379/0
       - CELERY_RESULT_BACKEND=redis://redis_broker:6379/0
       - REDIS_CACHE_URL=redis://redis_cache:6379/0
+      - DJANGO_SUPERUSER_PHONE=${DJANGO_SUPERUSER_PHONE:-}
+      - DJANGO_SUPERUSER_PASSWORD=${DJANGO_SUPERUSER_PASSWORD:-}
+      - DJANGO_SUPERUSER_FIRST_NAME=${DJANGO_SUPERUSER_FIRST_NAME:-Admin}
+      - DJANGO_SUPERUSER_LAST_NAME=${DJANGO_SUPERUSER_LAST_NAME:-AquaCare}
     volumes:
       - media_data:/app/media
       - static_data:/app/staticfiles

@@ -1018,4 +1018,11 @@
   languageUpdatedToFrench: 'Language changed to French',
   languageUpdatedToEnglish: 'Language changed to English',
   languageChangeError: 'Unable to change language. Please try again.',
+
+  // Settings - App info
+  appInfoSection: 'Technical info',
+  appInfoEnvironment: 'Environment',
+  appInfoApiUrl: 'API',
+  appInfoVersion: 'Version',
+  stagingBannerText: 'TEST BUILD — STAGING',
 };

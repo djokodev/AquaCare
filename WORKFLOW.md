@@ -82,6 +82,147 @@ curl http://localhost:8000/api/health/  # Doit retourner 200
 
 ---
 
+## 🌐 Infrastructure & Déploiement
+
+### Architecture VPS (77.237.241.223)
+
+```
+VPS 77.237.241.223
+│
+├── Nginx hôte (ports 80 + 443, SSL wildcard *.aquacare.tech)
+│   ├── api.aquacare.tech         → 127.0.0.1:8080  (PROD)
+│   └── api-staging.aquacare.tech → 127.0.0.1:8081  (STAGING)
+│
+├── Stack PROD    (docker-compose.prod.yml)   — tag image :latest
+│   db + redis + api + celery_worker + celery_beat + nginx
+│
+└── Stack STAGING (docker-compose.staging.yml) — tag image :staging
+    db + redis + api + celery_worker + celery_beat + nginx
+```
+
+> Pas de pgbouncer (supprimé — MVP, ~50 connexions max, inutile).
+> Connexion directe Django → PostgreSQL avec `CONN_MAX_AGE=60`.
+
+### Stratégie de Branches & Déploiement Automatique
+
+| Branche | Cible | Déclencheur CI/CD |
+|---------|-------|-------------------|
+| `feature/*` | Développement local | Tests uniquement (pull-request-tests.yml) |
+| `develop` | **Staging** → api-staging.aquacare.tech | Push sur `develop` (deploy-staging.yml) |
+| `main` | **Production** → api.aquacare.tech | Push sur `main` (deploy.yml) |
+
+**Flux standard :**
+```
+feature/ma-feature
+    ↓ PR + review
+develop  ← merge  →  staging auto (build + push :staging + SSH deploy)
+    ↓ PR + validation staging
+main     ← merge  →  prod auto (build + push :latest + SSH deploy)
+```
+
+### URLs Actives
+
+| Environnement | API | Admin Django |
+|---------------|-----|--------------|
+| Local (dev) | `http://{IP_EXPO}:8000/api` | `http://localhost:8000/admin/` |
+| Staging | `https://api-staging.aquacare.tech/api` | `https://api-staging.aquacare.tech/admin/` |
+| Production | `https://api.aquacare.tech/api` | `https://api.aquacare.tech/admin/` |
+
+### Vérifier les Environnements en Ligne
+
+```bash
+curl https://api.aquacare.tech/api/health/           # Production
+curl https://api-staging.aquacare.tech/api/health/   # Staging
+```
+
+---
+
+## 📱 EAS Build — Builds Mobiles (iOS & Android)
+
+### Profils Disponibles
+
+| Profil | Distribution | URL Backend | Usage |
+|--------|-------------|-------------|-------|
+| `development` | Internal (dev client) | `http://{IP}:8000/api` | Dev avec Expo Go |
+| `staging` | Internal (APK direct) | `https://api-staging.aquacare.tech/api` | Bêta testeurs internes |
+| `production` | Store (AAB/IPA) | `https://api.aquacare.tech/api` | App Store / Google Play |
+
+### Commandes Build EAS
+
+```bash
+cd frontend
+
+# Build staging (Android APK + iOS interne)
+eas build --profile staging --platform android
+eas build --profile staging --platform ios
+eas build --profile staging --platform all
+
+# Build production (App Store + Google Play)
+eas build --profile production --platform all
+
+# Soumettre sur les stores
+eas submit --platform ios       # TestFlight / App Store
+eas submit --platform android   # Google Play Internal Testing
+```
+
+### Secrets EAS Configurés
+
+| Variable | Environnements | Usage |
+|----------|---------------|-------|
+| `SENTRY_AUTH_TOKEN` | preview + production | Upload source maps Sentry |
+| `EXPO_PUBLIC_SENTRY_DSN` | staging + production (dans eas.json) | DSN mobile Sentry |
+
+> Le DSN mobile est : `https://213bdf7e8dde80596d43414ad1861152@o4510971830468608.ingest.de.sentry.io/4510981104402512`
+> Projet Sentry : `aquacare / frontend-aquacare`
+
+---
+
+## 🛡️ Sentry — Monitoring des Erreurs
+
+### Backend
+
+Sentry s'active automatiquement si `SENTRY_DSN` est défini dans `.env` :
+
+```bash
+# Dans .env.staging / .env.prod sur le VPS
+SENTRY_DSN=https://<dsn-backend>@sentry.io/...
+DJANGO_ENVIRONMENT=staging  # ou production
+```
+
+Package : `sentry-sdk[django]` (dans `requirements/production.txt`)
+
+### Frontend (Mobile)
+
+Sentry est initialisé dans `App.tsx` avec guards Expo Go :
+
+```typescript
+const isExpoGo = Constants.appOwnership === 'expo';
+if (!__DEV__ && !isExpoGo) {
+  Sentry.init({
+    dsn: process.env.EXPO_PUBLIC_SENTRY_DSN ?? '',
+    environment: getEnvironment(), // 'staging' ou 'production'
+    tracesSampleRate: 0.1,
+  });
+}
+```
+
+**Comportement :**
+- Expo Go (local) → Sentry **désactivé** (dev workflow inchangé)
+- Build EAS staging → Sentry actif, events taggés `environment: "staging"`
+- Build EAS production → Sentry actif, events taggés `environment: "production"`
+
+### Détection Environnement (`environment.ts`)
+
+```typescript
+export function getEnvironment(): Environment {
+  if (__DEV__) return 'development';                                    // Expo Go
+  if (process.env.EXPO_PUBLIC_APP_ENV === 'staging') return 'staging'; // EAS staging build
+  return 'production';                                                  // EAS prod build
+}
+```
+
+---
+
 ## ⚡ Cheatsheet : Commandes & Agents Rapides
 
 ### Custom Commands (8)
