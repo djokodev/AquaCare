@@ -214,8 +214,6 @@ jobs:
             # Show all container statuses before celery check
             echo "=== Container statuses ==="
             docker ps --format "table {{.Names}}\t{{.Status}}" | grep aquacare || true
-            echo "=== pgbouncer logs (last 20 lines) ==="
-            docker compose -f /root/aquacare/docker-compose.prod.yml logs --tail=20 pgbouncer || true
             echo "=========================="
 
             for i in {1..5}; do
@@ -226,10 +224,7 @@ jobs:
 
               if [ "$i" -eq 5 ]; then
                 echo "❌ Celery worker check failed after 5 attempts"
-                echo "=== celery_worker logs ==="
                 docker compose -f /root/aquacare/docker-compose.prod.yml logs --tail=30 celery_worker
-                echo "=== pgbouncer logs ==="
-                docker compose -f /root/aquacare/docker-compose.prod.yml logs --tail=30 pgbouncer
                 exit 1
               fi
 
