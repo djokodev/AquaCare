@@ -16,9 +16,7 @@ DATABASES = {
         'PASSWORD': config('POSTGRES_PASSWORD'),
         'HOST': config('POSTGRES_HOST'),  # Points to PgBouncer in docker-compose.prod.yml
         'PORT': config('POSTGRES_PORT'),
-        # CONN_MAX_AGE=0 is required with PgBouncer transaction pooling mode.
-        # PgBouncer handles connection reuse; Django must release connections after each request.
-        'CONN_MAX_AGE': 0,
+        'CONN_MAX_AGE': 60,
         'OPTIONS': {
             'connect_timeout': 10,
         }
