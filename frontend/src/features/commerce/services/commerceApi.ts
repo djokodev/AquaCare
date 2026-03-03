@@ -30,9 +30,17 @@ export const getRecommendedProduct = async (species: 'tilapia' | 'catfish', weig
   return response.data;
 };
 
-export const getFeedingSuggestions = async (farmProfileId?: string) => {
+export const getFeedingSuggestions = async (options?: { farmProfileId?: string; cycleId?: string }) => {
+  const params: Record<string, string> = {};
+  if (options?.farmProfileId) {
+    params.farm_profile_id = options.farmProfileId;
+  }
+  if (options?.cycleId) {
+    params.cycle_id = options.cycleId;
+  }
+
   const response = await api.get<FeedingSuggestion>('/commerce/products/feeding_suggestions/', {
-    params: farmProfileId ? { farm_profile_id: farmProfileId } : undefined,
+    params: Object.keys(params).length > 0 ? params : undefined,
   });
   return response.data;
 };
@@ -58,6 +66,11 @@ export const createOrder = async (orderData: CreateOrderPayload) => {
   return response.data;
 };
 
+export const confirmOrderReceipt = async (orderId: string) => {
+  const response = await api.post<Order>(`/commerce/orders/${orderId}/confirm_receipt/`, {});
+  return response.data;
+};
+
 export const getOrderStatistics = async () => {
   const response = await api.get<OrderStatistics>('/commerce/orders/statistics/');
   return response.data;
@@ -80,6 +93,7 @@ const commerceApi = {
   getOrders,
   getOrderDetail,
   createOrder,
+  confirmOrderReceipt,
   getOrderStatistics,
   previewDeliveryFee,
 };

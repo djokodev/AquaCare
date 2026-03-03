@@ -43,9 +43,19 @@ class FeedingSuggestionService:
     MAX_ANALYSIS_DAYS = 30
 
     @staticmethod
+    def _normalize_species(species: str) -> str:
+        normalized = (species or '').lower()
+        if normalized == 'clarias':
+            return 'catfish'
+        if normalized in ('tilapia', 'catfish'):
+            return normalized
+        return 'tilapia'
+
+    @staticmethod
     def get_feeding_suggestions(
         user_id: int,
-        farm_profile_id: Optional[int] = None
+        farm_profile_id: Optional[int] = None,
+        cycle_id: Optional[str] = None,
     ) -> Dict:
         """
         Génère suggestions ADAPTÉES avec détection phase actuelle.
@@ -65,8 +75,13 @@ class FeedingSuggestionService:
 
         if farm_profile_id:
             cycles_query = cycles_query.filter(farm_profile__id=farm_profile_id)
+        if cycle_id:
+            cycles_query = cycles_query.filter(id=cycle_id)
 
         active_cycles = cycles_query.select_related('farm_profile')
+
+        if cycle_id and not active_cycles.exists():
+            raise ValueError("Cycle de session introuvable ou inactif.")
 
         if not active_cycles.exists():
             return {
@@ -124,6 +139,8 @@ class FeedingSuggestionService:
         Returns:
             Dict avec suggestions multi-phases
         """
+        normalized_species = FeedingSuggestionService._normalize_species(cycle.species)
+
         # 1. Récupérer historique consommation
         end_date = timezone.now()
         start_date = end_date - timedelta(days=FeedingSuggestionService.MAX_ANALYSIS_DAYS)
@@ -150,16 +167,21 @@ class FeedingSuggestionService:
         if current_avg_weight is None:
             # Fallback : estimer selon durée cycle
             days_since_start = (timezone.now().date() - cycle.start_date).days
-            target_weight = TARGET_WEIGHT_TILAPIA_DEFAULT if cycle.species == 'tilapia' else TARGET_WEIGHT_CATFISH_DEFAULT
+            target_weight = (
+                TARGET_WEIGHT_TILAPIA_DEFAULT
+                if normalized_species == 'tilapia'
+                else TARGET_WEIGHT_CATFISH_DEFAULT
+            )
+            default_duration = 120 if normalized_species == 'tilapia' else 150
             current_avg_weight = GrowthCalculator.calculate_weight_at_day(
                 5,  # Poids initial standard
                 target_weight,
-                120 if cycle.species == 'tilapia' else 150,
+                default_duration,
                 days_since_start
             )
 
         # 3. NOUVEAU : Détecter phase actuelle
-        current_phase = PhaseDetector.detect_phase(cycle.species, current_avg_weight)
+        current_phase = PhaseDetector.detect_phase(normalized_species, current_avg_weight)
 
         # 4. Calculer consommation moyenne
         consumption_stats = logs.aggregate(
@@ -174,17 +196,18 @@ class FeedingSuggestionService:
             days_remaining = max(0, days_remaining)
         else:
             days_since_start = (timezone.now().date() - cycle.start_date).days
-            days_remaining = max(0, 120 - days_since_start)
+            planned_duration = cycle.planned_cycle_duration_days or (120 if normalized_species == 'tilapia' else 150)
+            days_remaining = max(0, planned_duration - days_since_start)
 
         days_with_buffer = days_remaining + FeedingSuggestionService.SAFETY_BUFFER_DAYS
 
         # 6. NOUVEAU : Prévoir changements de phase futurs
-        target_weight = cycle.target_harvest_weight or (
-            TARGET_WEIGHT_TILAPIA_DEFAULT if cycle.species == 'tilapia' else TARGET_WEIGHT_CATFISH_DEFAULT
+        target_weight = float(cycle.target_harvest_weight_g) if cycle.target_harvest_weight_g is not None else (
+            TARGET_WEIGHT_TILAPIA_DEFAULT if normalized_species == 'tilapia' else TARGET_WEIGHT_CATFISH_DEFAULT
         )
 
         future_phases = FeedingSuggestionService._predict_future_phases(
-            cycle.species,
+            normalized_species,
             current_avg_weight,
             target_weight,
             days_remaining
@@ -199,7 +222,7 @@ class FeedingSuggestionService:
 
             # Trouver produits adaptés à cette phase
             products = Product.objects.filter(
-                species=cycle.species,
+                species=normalized_species,
                 pellet_size_mm=Decimal(str(phase_info['pellet_size_mm'])),
                 is_available=True
             ).order_by('-package_weight_kg')
@@ -208,7 +231,7 @@ class FeedingSuggestionService:
                 # Fallback : taille proche
                 pellet_size = phase_info['pellet_size_mm']
                 products = Product.objects.filter(
-                    species=cycle.species,
+                    species=normalized_species,
                     pellet_size_mm__gte=Decimal(str(pellet_size - 0.5)),
                     pellet_size_mm__lte=Decimal(str(pellet_size + 0.5)),
                     is_available=True

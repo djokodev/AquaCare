@@ -26,6 +26,10 @@ DATABASES = {
     }
 }
 
+# Email — console backend en dev (affiche les emails dans les logs Docker)
+# Pour tester l'envoi réel via Resend : EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend dans .env
+EMAIL_BACKEND = config('EMAIL_BACKEND', default='django.core.mail.backends.console.EmailBackend')
+
 # CORS - Allow all pour dev
 CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOWED_ORIGINS = [

@@ -5,6 +5,7 @@ Architecture minimaliste : ViewSets délèguent toute logique métier aux Servic
 Responsabilités : authentification, permissions, sérialisation, routing HTTP.
 """
 import logging
+import uuid
 
 from rest_framework import viewsets, status, permissions, mixins
 from rest_framework.decorators import action
@@ -133,6 +134,7 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
 
         Query params :
         - farm_profile_id: UUID du profil ferme (optionnel, filtre si fourni)
+        - cycle_id: UUID du cycle actif de session (optionnel)
 
         Response :
         {
@@ -184,11 +186,28 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
         }
         """
         farm_profile_id = request.query_params.get('farm_profile_id')
+        cycle_id = request.query_params.get('cycle_id')
 
-        suggestions = FeedingSuggestionService.get_feeding_suggestions(
-            user_id=request.user.id,
-            farm_profile_id=farm_profile_id
-        )
+        if cycle_id:
+            try:
+                uuid.UUID(str(cycle_id))
+            except (TypeError, ValueError):
+                return Response(
+                    {'error': 'cycle_id invalide'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+        try:
+            suggestions = FeedingSuggestionService.get_feeding_suggestions(
+                user_id=request.user.id,
+                farm_profile_id=farm_profile_id,
+                cycle_id=cycle_id
+            )
+        except ValueError as exc:
+            return Response(
+                {'error': str(exc)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         return Response(suggestions)
 
@@ -276,7 +295,10 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
                 initial_weight_g=input_serializer.validated_data.get('initial_weight_g'),
                 target_weight_g=input_serializer.validated_data.get('target_weight_g'),
                 cycle_duration_days=input_serializer.validated_data.get('cycle_duration_days'),
-                survival_rate=input_serializer.validated_data.get('survival_rate')
+                survival_rate=input_serializer.validated_data.get('survival_rate'),
+                selling_price_per_kg_fcfa=input_serializer.validated_data.get('selling_price_per_kg_fcfa'),
+                fingerlings_cost_fcfa=input_serializer.validated_data.get('fingerlings_cost_fcfa'),
+                other_costs_fcfa=input_serializer.validated_data.get('other_costs_fcfa'),
             )
 
             # Sérialiser output
@@ -314,6 +336,7 @@ class OrderViewSet(
     - POST /api/commerce/orders/ : Créer commande
     - GET /api/commerce/orders/ : Liste mes commandes
     - GET /api/commerce/orders/{id}/ : Détail commande
+    - POST /api/commerce/orders/{id}/confirm_receipt/ : Confirmer réception commande
     - GET /api/commerce/orders/statistics/ : Mes statistiques
     - POST /api/commerce/orders/preview_delivery_fee/ : Preview frais livraison
     """
@@ -400,6 +423,23 @@ class OrderViewSet(
         stats = OrderService.get_order_statistics(request.user)
         serializer = OrderStatisticsSerializer(stats)
         return Response(serializer.data)
+
+    @action(detail=True, methods=['post'])
+    def confirm_receipt(self, request, pk=None):
+        """
+        Confirme la réception d'une commande livrée.
+
+        Règle métier:
+        - Transition autorisée uniquement: delivered -> received
+        """
+        order = self.get_object()
+        try:
+            updated_order = OrderService.confirm_order_receipt(order, request.user)
+        except InvalidOrderError as exc:
+            raise ValidationError({'message': str(exc)}) from exc
+
+        serializer = OrderSerializer(updated_order)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
     @action(detail=False, methods=['post'])
     def preview_delivery_fee(self, request):

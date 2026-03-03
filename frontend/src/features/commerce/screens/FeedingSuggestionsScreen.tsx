@@ -29,22 +29,33 @@ export default function FeedingSuggestionsScreen() {
 
   const { suggestions, cart, products } = useSelector((state: RootState) => state.commerce);
   const { data: suggestionsData, loading, error } = suggestions;
-  const { user, farmProfile } = useSelector((state: RootState) => state.auth);
+  const { farmProfile } = useSelector((state: RootState) => state.auth);
+  const currentCycle = useSelector((state: RootState) => state.aquaculture.currentCycle);
 
   const [refreshing, setRefreshing] = useState(false);
   const [expandedCycleId, setExpandedCycleId] = useState<string | null>(null);
   const [expandedPhaseIndex, setExpandedPhaseIndex] = useState<{ [key: string]: number | null }>({});
 
   useEffect(() => {
-    if (farmProfile) {
-      dispatch(fetchFeedingSuggestions(farmProfile.id));
+    if (farmProfile?.id && currentCycle?.id) {
+      dispatch(
+        fetchFeedingSuggestions({
+          farmProfileId: farmProfile.id,
+          cycleId: currentCycle.id,
+        })
+      );
     }
-  }, [farmProfile]);
+  }, [farmProfile?.id, currentCycle?.id, dispatch]);
 
   const handleRefresh = async () => {
-    if (!farmProfile) return;
+    if (!farmProfile?.id || !currentCycle?.id) return;
     setRefreshing(true);
-    await dispatch(fetchFeedingSuggestions(farmProfile.id));
+    await dispatch(
+      fetchFeedingSuggestions({
+        farmProfileId: farmProfile.id,
+        cycleId: currentCycle.id,
+      })
+    );
     setRefreshing(false);
   };
 
@@ -323,7 +334,19 @@ export default function FeedingSuggestionsScreen() {
         </TouchableOpacity>
       </View>
 
-      {loading && !refreshing ? (
+      {!currentCycle?.id ? (
+        <View className="flex-1 items-center justify-center px-8">
+          <Ionicons name="information-circle-outline" size={48} color={MAVECAM_COLORS.WARNING} />
+          <Text className="mt-3 text-base text-gray-dark text-center">{t('sessionCycleNotSelected')}</Text>
+          <Text className="mt-2 text-sm text-gray-light text-center">{t('sessionCyclePickerDescription')}</Text>
+          <TouchableOpacity
+            className="mt-5 bg-mavecam-primary px-6 py-3 rounded-lg"
+            onPress={() => navigation.navigate('CycleSessionEntry')}
+          >
+            <Text className="text-white text-base font-semibold">{t('sessionCycleConfirm')}</Text>
+          </TouchableOpacity>
+        </View>
+      ) : loading && !refreshing ? (
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator size="large" color={MAVECAM_COLORS.GREEN_PRIMARY} />
           <Text className="mt-3 text-base text-gray-light">{t('analyzingCycles')}</Text>
@@ -334,7 +357,16 @@ export default function FeedingSuggestionsScreen() {
           <Text className="mt-3 text-base text-[#dc2626] text-center">{error}</Text>
           <TouchableOpacity
             className="mt-5 bg-mavecam-primary px-6 py-3 rounded-lg"
-            onPress={() => farmProfile && dispatch(fetchFeedingSuggestions(farmProfile.id))}
+            onPress={() =>
+              farmProfile?.id &&
+              currentCycle?.id &&
+              dispatch(
+                fetchFeedingSuggestions({
+                  farmProfileId: farmProfile.id,
+                  cycleId: currentCycle.id,
+                })
+              )
+            }
           >
             <Text className="text-white text-base font-semibold">{t('retry')}</Text>
           </TouchableOpacity>
@@ -375,6 +407,5 @@ export default function FeedingSuggestionsScreen() {
     </View>
   );
 }
-
 
 

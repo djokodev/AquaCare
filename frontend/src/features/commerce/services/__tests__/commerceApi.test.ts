@@ -39,7 +39,7 @@ describe('features/commerce/services/commerceApi', () => {
 
     const detail = await commerceApi.getProductDetail('p1');
     const recommended = await commerceApi.getRecommendedProduct('catfish', 80);
-    const suggestionsWithFarm = await commerceApi.getFeedingSuggestions('farm-1');
+    const suggestionsWithFarm = await commerceApi.getFeedingSuggestions({ farmProfileId: 'farm-1' });
     const suggestionsWithoutFarm = await commerceApi.getFeedingSuggestions();
     const simulation = await commerceApi.simulateCycle({ species: 'tilapia' } as any);
 
@@ -62,6 +62,16 @@ describe('features/commerce/services/commerceApi', () => {
     expect(mockApi.post).toHaveBeenCalledWith('/commerce/products/cycle_simulation/', { species: 'tilapia' });
   });
 
+  it('getFeedingSuggestions ajoute cycle_id quand fourni', async () => {
+    mockApi.get.mockResolvedValueOnce({ data: { has_suggestions: true } } as any);
+
+    await commerceApi.getFeedingSuggestions({ farmProfileId: 'farm-1', cycleId: 'cycle-session-1' });
+
+    expect(mockApi.get).toHaveBeenCalledWith('/commerce/products/feeding_suggestions/', {
+      params: { farm_profile_id: 'farm-1', cycle_id: 'cycle-session-1' },
+    });
+  });
+
   it('getOrders gere array direct et payload pagine', async () => {
     mockApi.get
       .mockResolvedValueOnce({ data: [{ id: 'o1' }] } as any)
@@ -82,10 +92,12 @@ describe('features/commerce/services/commerceApi', () => {
 
     mockApi.post
       .mockResolvedValueOnce({ data: { id: 'o-created' } } as any)
+      .mockResolvedValueOnce({ data: { id: 'o-received', status: 'received' } } as any)
       .mockResolvedValueOnce({ data: { subtotal: '10000', delivery_fee: '3000', total: '13000', total_bags: 2, free_delivery_threshold_reached: false } } as any);
 
     const detail = await commerceApi.getOrderDetail('o1');
     const created = await commerceApi.createOrder({ items: [], delivery_method: 'home' } as any);
+    const confirmedReceipt = await commerceApi.confirmOrderReceipt('o-created');
     const stats = await commerceApi.getOrderStatistics();
     const preview = await commerceApi.previewDeliveryFee({
       items: [{ product_id: 'p1', quantity: 2 }],
@@ -94,6 +106,7 @@ describe('features/commerce/services/commerceApi', () => {
 
     expect(detail.id).toBe('o1');
     expect(created.id).toBe('o-created');
+    expect(confirmedReceipt.status).toBe('received');
     expect(stats.total_orders).toBe(3);
     expect(preview.total).toBe('13000');
 
@@ -103,7 +116,8 @@ describe('features/commerce/services/commerceApi', () => {
       items: [],
       delivery_method: 'home',
     });
-    expect(mockApi.post).toHaveBeenNthCalledWith(2, '/commerce/orders/preview_delivery_fee/', {
+    expect(mockApi.post).toHaveBeenNthCalledWith(2, '/commerce/orders/o-created/confirm_receipt/', {});
+    expect(mockApi.post).toHaveBeenNthCalledWith(3, '/commerce/orders/preview_delivery_fee/', {
       items: [{ product_id: 'p1', quantity: 2 }],
       delivery_method: 'home',
     });

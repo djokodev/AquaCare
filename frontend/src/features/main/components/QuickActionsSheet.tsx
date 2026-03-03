@@ -47,7 +47,7 @@ interface ActionItem {
   icon: keyof typeof Ionicons.glyphMap;
   iconColor: string;
   route: string;
-  category: 'aquaculture' | 'commerce';
+  category: 'aquaculture' | 'commerce' | 'planning';
   badge?: number; // Nombre affiché dans le badge (ex: notifications)
 }
 
@@ -56,8 +56,8 @@ interface ActionItem {
  *
  * Bottom Sheet modal natif (sans dépendance externe) affichant
  * toutes les actions disponibles, catégorisées en :
- * - Aquaculture (8 actions)
- * - Commerce (5 actions)
+ * - Aquaculture
+ * - Commerce
  *
  * Utilise Modal + ScrollView natifs React Native pour une compatibilité
  * 100% Expo et des performances optimales.
@@ -81,7 +81,7 @@ export default function QuickActionsSheet({
   const { t } = useTranslation();
 
   /**
-   * Configuration des actions Aquaculture (8 actions)
+   * Configuration des actions Aquaculture
    */
   const aquacultureActions = useMemo((): ActionItem[] => [
     {
@@ -109,14 +109,6 @@ export default function QuickActionsSheet({
       category: 'aquaculture',
     },
     {
-      id: 'cycleHistory',
-      labelKey: 'cycleHistoryButton',
-      icon: 'time-outline',
-      iconColor: MAVECAM_COLORS.INFO,
-      route: 'CycleHistory',
-      category: 'aquaculture',
-    },
-    {
       id: 'notifications',
       labelKey: 'notifications',
       icon: 'notifications-outline',
@@ -134,25 +126,17 @@ export default function QuickActionsSheet({
       category: 'aquaculture',
     },
     {
-      id: 'nutritionalGuides',
-      labelKey: 'nutritionalGuides',
-      icon: 'library-outline',
-      iconColor: MAVECAM_COLORS.GREEN_DARK,
-      route: 'NutritionalGuides',
-      category: 'aquaculture',
-    },
-    {
-      id: 'statistics',
-      labelKey: 'statistics',
-      icon: 'bar-chart-outline',
-      iconColor: MAVECAM_COLORS.SUCCESS,
-      route: 'Statistics',
+      id: 'reports',
+      labelKey: 'reports',
+      icon: 'document-text-outline',
+      iconColor: MAVECAM_COLORS.BLUE,
+      route: 'Reports',
       category: 'aquaculture',
     },
   ], [unreadCount]);
 
   /**
-   * Configuration des actions Commerce (5 actions)
+   * Configuration des actions Commerce
    */
   const commerceActions = useMemo((): ActionItem[] => [
     {
@@ -179,21 +163,19 @@ export default function QuickActionsSheet({
       route: 'OrdersHistory',
       category: 'commerce',
     },
-    {
-      id: 'feedingSuggestions',
-      labelKey: 'feedingSuggestions',
-      icon: 'bulb-outline',
-      iconColor: MAVECAM_COLORS.SUCCESS,
-      route: 'FeedingSuggestions',
-      category: 'commerce',
-    },
+  ], []);
+
+  /**
+   * Configuration des actions Planification
+   */
+  const planningActions = useMemo((): ActionItem[] => [
     {
       id: 'cycleSimulator',
       labelKey: 'cycleSimulator',
-      icon: 'calculator-outline',
-      iconColor: MAVECAM_COLORS.BLUE,
+      icon: 'analytics-outline',
+      iconColor: MAVECAM_COLORS.GREEN_DARK,
       route: 'CycleSimulator',
-      category: 'commerce',
+      category: 'planning',
     },
   ], []);
 
@@ -281,11 +263,19 @@ export default function QuickActionsSheet({
             </View>
 
             {/* Commerce Section */}
-            <View className="mb-2">
+            <View className="mb-4">
               <Text className="text-lg font-bold text-gray-dark mb-3">
                 {t('categoryCommerce')}
               </Text>
               {commerceActions.map(renderActionItem)}
+            </View>
+
+            {/* Planification Section */}
+            <View className="mb-2">
+              <Text className="text-lg font-bold text-gray-dark mb-3">
+                {t('categoryPlanning')}
+              </Text>
+              {planningActions.map(renderActionItem)}
             </View>
           </ScrollView>
         </View>

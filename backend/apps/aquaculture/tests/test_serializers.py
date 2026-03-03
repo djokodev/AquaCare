@@ -115,6 +115,61 @@ class TestProductionCycleSerializer:
         assert 'status_display' in data
         assert data['days_active'] >= 0
 
+    def test_economic_defaults_are_applied(self, farm_profile):
+        data = {
+            'farm_profile': farm_profile.id,
+            'cycle_name': 'Cycle Tilapia Defaults',
+            'species': 'tilapia',
+            'pond_identifier': 'Bassin E',
+            'pond_surface_m2': Decimal('80.00'),
+            'start_date': date.today(),
+            'initial_count': 1200,
+            'initial_average_weight': Decimal('12.00')
+        }
+
+        serializer = ProductionCycleSerializer(data=data)
+        assert serializer.is_valid(), serializer.errors
+
+        assert serializer.validated_data['target_harvest_weight_g'] == Decimal('300')
+        assert serializer.validated_data['planned_cycle_duration_days'] == 120
+        assert serializer.validated_data['expected_survival_rate_pct'] == Decimal('85')
+        assert serializer.validated_data['planned_selling_price_per_kg_fcfa'] == Decimal('1800')
+        assert serializer.validated_data['planned_harvest_date'] == date.today() + timedelta(days=120)
+
+    def test_target_weight_must_exceed_initial_weight(self, farm_profile):
+        data = {
+            'farm_profile': farm_profile.id,
+            'cycle_name': 'Cycle Invalid Target',
+            'species': 'clarias',
+            'pond_identifier': 'Bassin F',
+            'pond_surface_m2': Decimal('100.00'),
+            'start_date': date.today(),
+            'initial_count': 1000,
+            'initial_average_weight': Decimal('20.00'),
+            'target_harvest_weight_g': Decimal('20.00'),
+        }
+
+        serializer = ProductionCycleSerializer(data=data)
+        assert not serializer.is_valid()
+        assert 'target_harvest_weight_g' in serializer.errors
+
+    def test_expected_survival_rate_validation(self, farm_profile):
+        data = {
+            'farm_profile': farm_profile.id,
+            'cycle_name': 'Cycle Invalid Survival',
+            'species': 'tilapia',
+            'pond_identifier': 'Bassin G',
+            'pond_surface_m2': Decimal('100.00'),
+            'start_date': date.today(),
+            'initial_count': 1000,
+            'initial_average_weight': Decimal('8.00'),
+            'expected_survival_rate_pct': Decimal('105.00'),
+        }
+
+        serializer = ProductionCycleSerializer(data=data)
+        assert not serializer.is_valid()
+        assert 'expected_survival_rate_pct' in serializer.errors
+
 
 @pytest.mark.django_db 
 class TestCycleLogSerializer:
@@ -128,6 +183,7 @@ class TestCycleLogSerializer:
             'mortality_count': 5,
             'feed_quantity': Decimal('2.50'),
             'water_temperature': Decimal('28.0'),
+            'feed_size_mm': Decimal('2.5'),
             'ph_level': Decimal('7.2'),
             'observations': 'Poissons actifs, bonne appétence'
         }
@@ -138,6 +194,7 @@ class TestCycleLogSerializer:
         log = serializer.save()
         assert log.cycle == production_cycle
         assert log.mortality_count == 5
+        assert log.feed_size_mm == Decimal('2.5')
 
     def test_log_date_validation(self, production_cycle):
         """Test validation date du log."""

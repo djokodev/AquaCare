@@ -11,6 +11,7 @@ le mobile offline-first et le serveur backend :
 
 Architecture: Service Layer Pattern pour logique de sync complexe.
 """
+import threading
 import uuid as _uuid
 from typing import Dict, List, Any, Optional
 from datetime import datetime, date
@@ -21,6 +22,23 @@ from django.core.exceptions import ValidationError
 from ..models import ProductionCycle, CycleLog, SanitaryLog, FeedingPlan
 from .base import BaseService
 from .cycle_service import ProductionCycleService
+from .analytics_service import AnalyticsService
+
+# ── Sync flag (threading.local) ──────────────────────────────────────────────
+# Permet aux signals post_save de CycleLog de détecter qu'un sync offline
+# batch est en cours et de sauter le recalcul coûteux par log individuel.
+# Thread-safe avec Gunicorn sync workers.
+_sync_context = threading.local()
+
+
+def mark_sync_in_progress(active: bool) -> None:
+    """Active/désactive le flag de sync offline pour le thread courant."""
+    _sync_context.active = active
+
+
+def is_sync_in_progress() -> bool:
+    """Retourne True si un sync offline batch est en cours dans ce thread."""
+    return getattr(_sync_context, 'active', False)
 
 
 class SyncService(BaseService):
@@ -89,93 +107,111 @@ class SyncService(BaseService):
             ).select_related('farm_profile')
         }
 
-        for log_data in logs_data:
-            try:
-                # Extract client_uuid for deduplication
-                client_uuid = log_data.get('client_uuid')
-                cycle_ref = log_data.get('cycle')
-                cycle_id = getattr(cycle_ref, 'id', cycle_ref)
+        # Désactiver les signals post_save pendant le bulk sync pour éviter
+        # 8× DB ops par log. On fait un batch recalcul unique après.
+        affected_cycle_ids = set()
+        mark_sync_in_progress(True)
+        try:
+            for log_data in logs_data:
+                try:
+                    # Extract client_uuid for deduplication
+                    client_uuid = log_data.get('client_uuid')
+                    cycle_ref = log_data.get('cycle')
+                    cycle_id = getattr(cycle_ref, 'id', cycle_ref)
 
-                if not cycle_id:
-                    result['errors'].append({
-                        'type': 'cycle_log',
-                        'client_uuid': client_uuid,
-                        'error': 'Le champ cycle est requis'
-                    })
-                    continue
-
-                # Validation: Cycle ownership check (from pre-fetched map)
-                cycle = cycles_map.get(str(cycle_id))
-                if not cycle:
-                    result['errors'].append({
-                        'type': 'cycle_log',
-                        'client_uuid': client_uuid,
-                        'error': f'Cycle {cycle_id} non trouvé ou non autorisé'
-                    })
-                    continue
-
-                # Deduplication: Check if log already exists
-                existing_log = None
-                if client_uuid:
-                    existing_log = CycleLog.objects.filter(client_uuid=client_uuid).first()
-                    if existing_log and existing_log.cycle.farm_profile.user_id != user.id:
+                    if not cycle_id:
                         result['errors'].append({
                             'type': 'cycle_log',
                             'client_uuid': client_uuid,
-                            'error': 'Conflit client_uuid détecté avec un autre utilisateur'
+                            'error': 'Le champ cycle est requis'
                         })
                         continue
 
-                if existing_log:
-                    if existing_log.cycle_id != cycle.id:
+                    # Validation: Cycle ownership check (from pre-fetched map)
+                    cycle = cycles_map.get(str(cycle_id))
+                    if not cycle:
                         result['errors'].append({
                             'type': 'cycle_log',
                             'client_uuid': client_uuid,
-                            'error': 'Le client_uuid fourni est lié à un autre cycle'
+                            'error': f'Cycle {cycle_id} non trouvé ou non autorisé'
                         })
                         continue
 
-                    # UPDATE existing log (avoid duplicates)
-                    for key, value in log_data.items():
-                        if key not in ['id', 'created_at', 'client_uuid', 'cycle']:
-                            setattr(existing_log, key, value)
-
-                    existing_log.synced_at = timezone.now()
-                    existing_log.save()
-
-                    result['updated'] += 1
-                    result['synced_ids'].append(str(existing_log.id))
-                else:
-                    # CREATE new log
-                    # Create a copy to avoid modifying the original dict
-                    log_create_data = {k: v for k, v in log_data.items() if k not in ['id', 'cycle']}
-                    log_create_data['cycle'] = cycle
-                    log_create_data['created_offline'] = True
-                    log_create_data['synced_at'] = timezone.now()
-
-                    # Convert log_date from ISO string to date object if needed
-                    if 'log_date' in log_create_data and isinstance(log_create_data['log_date'], str):
-                        try:
-                            log_create_data['log_date'] = date.fromisoformat(log_create_data['log_date'])
-                        except ValueError:
+                    # Deduplication: Check if log already exists
+                    existing_log = None
+                    if client_uuid:
+                        existing_log = CycleLog.objects.filter(client_uuid=client_uuid).first()
+                        if existing_log and existing_log.cycle.farm_profile.user_id != user.id:
                             result['errors'].append({
                                 'type': 'cycle_log',
                                 'client_uuid': client_uuid,
-                                'error': 'Format de date invalide (attendu: YYYY-MM-DD)'
+                                'error': 'Conflit client_uuid détecté avec un autre utilisateur'
                             })
                             continue
 
-                    new_log = CycleLog.objects.create(**log_create_data)
+                    if existing_log:
+                        if existing_log.cycle_id != cycle.id:
+                            result['errors'].append({
+                                'type': 'cycle_log',
+                                'client_uuid': client_uuid,
+                                'error': 'Le client_uuid fourni est lié à un autre cycle'
+                            })
+                            continue
 
-                    result['created'] += 1
-                    result['synced_ids'].append(str(new_log.id))
+                        # UPDATE existing log (avoid duplicates)
+                        for key, value in log_data.items():
+                            if key not in ['id', 'created_at', 'client_uuid', 'cycle']:
+                                setattr(existing_log, key, value)
 
-            except (ValidationError, ValueError, TypeError) as e:
-                result['errors'].append({
-                    'type': 'cycle_log',
-                    'client_uuid': log_data.get('client_uuid'),
-                    'error': str(e)
-                })
+                        existing_log.synced_at = timezone.now()
+                        existing_log.save()
+
+                        result['updated'] += 1
+                        result['synced_ids'].append(str(existing_log.id))
+                    else:
+                        # CREATE new log
+                        log_create_data = {k: v for k, v in log_data.items() if k not in ['id', 'cycle']}
+                        log_create_data['cycle'] = cycle
+                        log_create_data['created_offline'] = True
+                        log_create_data['synced_at'] = timezone.now()
+
+                        # Convert log_date from ISO string to date object if needed
+                        if 'log_date' in log_create_data and isinstance(log_create_data['log_date'], str):
+                            try:
+                                log_create_data['log_date'] = date.fromisoformat(log_create_data['log_date'])
+                            except ValueError:
+                                result['errors'].append({
+                                    'type': 'cycle_log',
+                                    'client_uuid': client_uuid,
+                                    'error': 'Format de date invalide (attendu: YYYY-MM-DD)'
+                                })
+                                continue
+
+                        new_log = CycleLog.objects.create(**log_create_data)
+                        affected_cycle_ids.add(str(cycle.id))
+
+                        result['created'] += 1
+                        result['synced_ids'].append(str(new_log.id))
+
+                except (ValidationError, ValueError, TypeError) as e:
+                    result['errors'].append({
+                        'type': 'cycle_log',
+                        'client_uuid': log_data.get('client_uuid'),
+                        'error': str(e)
+                    })
+        finally:
+            mark_sync_in_progress(False)
+
+        # Batch recalcul APRÈS toutes les créations — 1 fois par cycle affecté
+        for cycle_id in affected_cycle_ids:
+            cycle = cycles_map.get(cycle_id)
+            if cycle:
+                try:
+                    cycle.refresh_from_db()
+                    ProductionCycleService.recalculate_all_metrics(cycle)
+                    AnalyticsService.update_cycle_metrics_data(cycle)
+                except Exception:
+                    pass  # Ne pas bloquer le résultat de sync pour une erreur de recalcul
 
         return result
 
@@ -388,7 +424,7 @@ class SyncService(BaseService):
         # Get updated cycles (changed since last_sync)
         cycles_query = ProductionCycle.objects.filter(
             farm_profile__user=user
-        )
+        ).select_related('farm_profile__user', 'metrics')
         if last_sync_dt:
             cycles_query = cycles_query.filter(updated_at__gt=last_sync_dt)
 
@@ -396,14 +432,14 @@ class SyncService(BaseService):
         logs_query = CycleLog.objects.filter(
             cycle__farm_profile__user=user,
             created_offline=False
-        )
+        ).select_related('cycle')
         if last_sync_dt:
             logs_query = logs_query.filter(created_at__gt=last_sync_dt)
 
         # Get new feeding plans
         plans_query = FeedingPlan.objects.filter(
             cycle__farm_profile__user=user
-        )
+        ).select_related('cycle')
         if last_sync_dt:
             plans_query = plans_query.filter(created_at__gt=last_sync_dt)
 
@@ -411,7 +447,7 @@ class SyncService(BaseService):
         sanitary_query = SanitaryLog.objects.filter(
             cycle__farm_profile__user=user,
             created_offline=False
-        )
+        ).select_related('cycle')
         if last_sync_dt:
             sanitary_query = sanitary_query.filter(created_at__gt=last_sync_dt)
 

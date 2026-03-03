@@ -7,9 +7,8 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     ProductionCycleViewSet, CycleLogViewSet, FeedingPlanViewSet,
     SanitaryLogViewSet, NutritionalGuideViewSet,
-    DashboardView, SyncView
+    DashboardView, SyncView, ProductionReportViewSet
 )
-# NotificationViewSet moved to apps/notifications/views.py
 
 app_name = 'aquaculture'
 
@@ -20,6 +19,7 @@ router.register(r'cycle-logs', CycleLogViewSet, basename='cycle-log')
 router.register(r'feeding-plans', FeedingPlanViewSet, basename='feeding-plan')
 router.register(r'sanitary-logs', SanitaryLogViewSet, basename='sanitary-log')
 router.register(r'nutritional-guides', NutritionalGuideViewSet, basename='nutritional-guide')
+router.register(r'reports', ProductionReportViewSet, basename='production-report')
 # router.register(r'notifications', NotificationViewSet, basename='notification')  # Moved to /api/notifications/
 
 urlpatterns = [

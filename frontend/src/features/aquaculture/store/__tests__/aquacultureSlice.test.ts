@@ -2,6 +2,8 @@ import { configureStore } from '@reduxjs/toolkit';
 import aquacultureReducer, {
   clearError,
   setCurrentCycle,
+  clearCurrentCycle,
+  setCurrentCycleById,
   addToPendingSync,
   clearPendingSync,
   updateLastSyncTime,
@@ -16,6 +18,7 @@ import aquacultureReducer, {
 } from '../aquacultureSlice';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
 import { AquacultureState, ProductionCycle, SyncResponse } from '@/types/aquaculture';
+import { logoutUser } from '@/features/auth/store/authSlice';
 
 jest.mock('@/features/aquaculture/services/aquacultureService', () => ({
   aquacultureService: {
@@ -93,6 +96,20 @@ describe('features/aquaculture/store/aquacultureSlice', () => {
   it('setCurrentCycle met a jour le cycle courant', () => {
     const state = aquacultureReducer(undefined, setCurrentCycle(activeCycle));
     expect(state.currentCycle?.id).toBe('cycle-1');
+  });
+
+  it('setCurrentCycleById selectionne un cycle existant et clearCurrentCycle reinitialise', () => {
+    const initialState: AquacultureState = {
+      ...(aquacultureReducer(undefined, { type: '@@INIT' }) as AquacultureState),
+      activeCycles: [activeCycle],
+      cycles: [activeCycle],
+    };
+
+    const selected = aquacultureReducer(initialState, setCurrentCycleById(activeCycle.id));
+    expect(selected.currentCycle?.id).toBe(activeCycle.id);
+
+    const cleared = aquacultureReducer(selected, clearCurrentCycle());
+    expect(cleared.currentCycle).toBeUndefined();
   });
 
   it('updateLastSyncTime et resetAquacultureState restaurent un etat propre', () => {
@@ -185,6 +202,20 @@ describe('features/aquaculture/store/aquacultureSlice', () => {
 
     expect(nextState.cycles).toHaveLength(0);
     expect(nextState.activeCycles).toHaveLength(0);
+    expect(nextState.currentCycle).toBeUndefined();
+  });
+
+  it('logoutUser.fulfilled vide currentCycle', () => {
+    const initialState: AquacultureState = {
+      ...(aquacultureReducer(undefined, { type: '@@INIT' }) as AquacultureState),
+      currentCycle: activeCycle,
+    };
+
+    const nextState = aquacultureReducer(
+      initialState,
+      logoutUser.fulfilled(true, 'request-id', undefined)
+    );
+
     expect(nextState.currentCycle).toBeUndefined();
   });
 
@@ -321,17 +352,39 @@ describe('features/aquaculture/store/aquacultureSlice', () => {
     const store = createStore();
     mockService.getDashboardData.mockRejectedValueOnce({ response: { data: { detail: 'Dashboard indisponible' } } });
 
-    const action = await store.dispatch(fetchDashboardData());
+    const action = await store.dispatch(fetchDashboardData(undefined));
 
     expect(action.type).toBe('aquaculture/fetchDashboardData/rejected');
     expect(action.payload).toBe('Dashboard indisponible');
+  });
+
+  it('fetchDashboardData utilise le cycle de session courant par defaut', async () => {
+    const store = createStore({ currentCycle: activeCycle });
+    mockService.getDashboardData.mockResolvedValueOnce({
+      active_cycles: [],
+    } as any);
+
+    await store.dispatch(fetchDashboardData(undefined));
+
+    expect(mockService.getDashboardData).toHaveBeenCalledWith(activeCycle.id);
+  });
+
+  it('fetchDashboardData forceAllCycles ignore le cycle de session', async () => {
+    const store = createStore({ currentCycle: activeCycle });
+    mockService.getDashboardData.mockResolvedValueOnce({
+      active_cycles: [],
+    } as any);
+
+    await store.dispatch(fetchDashboardData({ forceAllCycles: true }));
+
+    expect(mockService.getDashboardData).toHaveBeenCalledWith(undefined);
   });
 
   it('fetchDashboardData utilise la chaine brute de l\'API si disponible', async () => {
     const store = createStore();
     mockService.getDashboardData.mockRejectedValueOnce({ response: { data: 'Service indisponible' } });
 
-    const action = await store.dispatch(fetchDashboardData());
+    const action = await store.dispatch(fetchDashboardData(undefined));
 
     expect(action.type).toBe('aquaculture/fetchDashboardData/rejected');
     expect(action.payload).toBe('Service indisponible');
@@ -340,12 +393,12 @@ describe('features/aquaculture/store/aquacultureSlice', () => {
   it('fetchDashboardData fallback sur error.message puis message par defaut', async () => {
     const store = createStore();
     mockService.getDashboardData.mockRejectedValueOnce({ message: 'Erreur réseau temporaire' });
-    const withMessage = await store.dispatch(fetchDashboardData());
+    const withMessage = await store.dispatch(fetchDashboardData(undefined));
 
     expect(withMessage.payload).toBe('Erreur réseau temporaire');
 
     mockService.getDashboardData.mockRejectedValueOnce(null);
-    const fallback = await store.dispatch(fetchDashboardData());
+    const fallback = await store.dispatch(fetchDashboardData(undefined));
     expect(fallback.payload).toBe('Erreur lors du chargement du dashboard');
   });
 

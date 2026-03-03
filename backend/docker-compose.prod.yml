@@ -7,25 +7,6 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    # PostgreSQL tuning for 12GB RAM VPS (6 vCPU)
-    command:
-      - postgres
-      - -c
-      - shared_buffers=3GB
-      - -c
-      - effective_cache_size=9GB
-      - -c
-      - work_mem=16MB
-      - -c
-      - maintenance_work_mem=512MB
-      - -c
-      - max_connections=200
-      - -c
-      - random_page_cost=1.1
-      - -c
-      - checkpoint_completion_target=0.9
-      - -c
-      - wal_buffers=64MB
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./backups:/backups  # Pour scripts backup

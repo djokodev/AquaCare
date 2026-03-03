@@ -184,9 +184,9 @@ const getFieldLabel = (field: string): string => {
     // Cycle de production
     cycle_name: 'Nom du cycle',
     species: 'Espèce',
-    pond_identifier: 'Identifiant bassin',
-    pond_surface_m2: 'Surface bassin (m²)',
-    pond_volume_m3: 'Volume bassin (m³)',
+    pond_identifier: 'Zone de production',
+    pond_surface_m2: 'Surface totale (m²)',
+    pond_volume_m3: 'Volume total (m³)',
     start_date: 'Date de début',
     end_date: 'Date de fin',
     initial_count: 'Nombre initial de poissons',

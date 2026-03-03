@@ -45,7 +45,10 @@ class CycleSimulationService(BaseCommerceService):
         initial_weight_g: Optional[float] = None,
         target_weight_g: Optional[float] = None,
         cycle_duration_days: Optional[int] = None,
-        survival_rate: Optional[float] = None
+        survival_rate: Optional[float] = None,
+        selling_price_per_kg_fcfa: Optional[float] = None,
+        fingerlings_cost_fcfa: Optional[float] = None,
+        other_costs_fcfa: Optional[float] = None,
     ) -> Dict:
         """
         Simule un cycle complet avec estimation détaillée des besoins.
@@ -57,6 +60,9 @@ class CycleSimulationService(BaseCommerceService):
             target_weight_g: Poids cible (défaut: 300g tilapia, 400g catfish)
             cycle_duration_days: Durée cycle (défaut: 120j tilapia, 150j catfish)
             survival_rate: Taux de survie (défaut: 0.85)
+            selling_price_per_kg_fcfa: Prix de vente estimatif (FCFA/kg)
+            fingerlings_cost_fcfa: Coût alevins
+            other_costs_fcfa: Autres charges opérationnelles
 
         Returns:
             dict: Simulation complète avec phases, coûts, ROI
@@ -81,7 +87,10 @@ class CycleSimulationService(BaseCommerceService):
             initial_weight_g,
             target_weight_g,
             cycle_duration_days,
-            survival_rate
+            survival_rate,
+            selling_price_per_kg_fcfa,
+            fingerlings_cost_fcfa,
+            other_costs_fcfa,
         )
 
         # 2. Calculer progression du poids jour par jour
@@ -133,26 +142,45 @@ class CycleSimulationService(BaseCommerceService):
         initial_weight_g: Optional[float],
         target_weight_g: Optional[float],
         cycle_duration_days: Optional[int],
-        survival_rate: Optional[float]
+        survival_rate: Optional[float],
+        selling_price_per_kg_fcfa: Optional[float],
+        fingerlings_cost_fcfa: Optional[float],
+        other_costs_fcfa: Optional[float],
     ) -> Dict:
         """Construit les paramètres de simulation avec valeurs par défaut."""
 
+        normalized_species = CycleSimulationService._normalize_species(species)
+
         # Valeurs par défaut selon espèce
-        if species.lower() == 'tilapia':
+        if normalized_species == 'tilapia':
             default_target_weight = TARGET_WEIGHT_TILAPIA_DEFAULT
             default_duration = CYCLE_DURATION_DEFAULT_TILAPIA
+            default_price = 2500
         else:
             default_target_weight = TARGET_WEIGHT_CATFISH_DEFAULT
             default_duration = CYCLE_DURATION_DEFAULT_CATFISH
+            default_price = 2800
 
         return {
-            'species': species.lower(),
+            'species': normalized_species,
             'initial_fish_count': initial_fish_count,
             'initial_weight_g': initial_weight_g or INITIAL_WEIGHT_DEFAULT,
             'target_weight_g': target_weight_g or default_target_weight,
             'cycle_duration_days': cycle_duration_days or default_duration,
-            'survival_rate': survival_rate or SURVIVAL_RATE_DEFAULT
+            'survival_rate': survival_rate or SURVIVAL_RATE_DEFAULT,
+            'selling_price_per_kg_fcfa': selling_price_per_kg_fcfa or default_price,
+            'fingerlings_cost_fcfa': fingerlings_cost_fcfa or 0,
+            'other_costs_fcfa': other_costs_fcfa or 0,
         }
+
+    @staticmethod
+    def _normalize_species(species: str) -> str:
+        normalized = (species or '').lower()
+        if normalized == 'clarias':
+            return 'catfish'
+        if normalized in ('tilapia', 'catfish'):
+            return normalized
+        return 'tilapia'
 
     @staticmethod
     def _calculate_phase_details(
@@ -329,18 +357,27 @@ class CycleSimulationService(BaseCommerceService):
         revenue = ROICalculator.calculate_revenue(
             species,
             final_fish_count,
-            target_weight_g
+            target_weight_g,
+            selling_price_per_kg_fcfa=params.get('selling_price_per_kg_fcfa'),
         )
 
-        # Profit net (sans compter coût alevins)
-        profit = revenue - total_cost
+        feed_cost = Decimal(str(total_cost))
+        fingerlings_cost = Decimal(str(params.get('fingerlings_cost_fcfa') or 0))
+        other_costs = Decimal(str(params.get('other_costs_fcfa') or 0))
+        total_cost_fcfa = feed_cost + fingerlings_cost + other_costs
+
+        # Profit net
+        profit = revenue - total_cost_fcfa
 
         # ROI en %
-        roi_percentage = (float(profit) / float(total_cost)) * 100 if total_cost > 0 else 0
+        roi_percentage = (float(profit) / float(total_cost_fcfa)) * 100 if total_cost_fcfa > 0 else 0
 
         return {
             'total_feed_kg': float(total_feed_kg),
-            'total_cost_fcfa': float(total_cost),
+            'feed_cost_fcfa': float(feed_cost),
+            'fingerlings_cost_fcfa': float(fingerlings_cost),
+            'other_costs_fcfa': float(other_costs),
+            'total_cost_fcfa': float(total_cost_fcfa),
             'initial_fish_count': initial_count,
             'estimated_final_count': final_fish_count,
             'survival_rate': survival_rate,

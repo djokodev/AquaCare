@@ -166,6 +166,9 @@ class TestProductEndpoints:
         # Vérifier summary
         summary = data['summary']
         assert summary['total_feed_kg'] > 0
+        assert summary['feed_cost_fcfa'] > 0
+        assert summary['fingerlings_cost_fcfa'] == 0
+        assert summary['other_costs_fcfa'] == 0
         assert summary['total_cost_fcfa'] > 0
         assert summary['estimated_fcr'] > 0
         assert summary['estimated_revenue_fcfa'] > 0
@@ -179,7 +182,10 @@ class TestProductEndpoints:
             'initial_weight_g': 10.0,
             'target_weight_g': 250.0,
             'cycle_duration_days': 90,
-            'survival_rate': 0.90
+            'survival_rate': 0.90,
+            'selling_price_per_kg_fcfa': 3000,
+            'fingerlings_cost_fcfa': 100000,
+            'other_costs_fcfa': 50000,
         }
 
         response = self.client.post(
@@ -196,6 +202,24 @@ class TestProductEndpoints:
         assert params['target_weight_g'] == 250.0
         assert params['cycle_duration_days'] == 90
         assert params['survival_rate'] == 0.90
+        assert params['selling_price_per_kg_fcfa'] == 3000
+        assert params['fingerlings_cost_fcfa'] == 100000
+        assert params['other_costs_fcfa'] == 50000
+        assert response.data['summary']['fingerlings_cost_fcfa'] == 100000
+        assert response.data['summary']['other_costs_fcfa'] == 50000
+
+    def test_cycle_simulation_accepts_clarias_alias(self):
+        payload = {
+            'species': 'clarias',
+            'initial_fish_count': 1000
+        }
+        response = self.client.post(
+            '/api/commerce/products/cycle_simulation/',
+            data=payload,
+            format='json'
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data['parameters']['species'] == 'catfish'
 
     def test_cycle_simulation_invalid_data(self):
         """Test validation des données de simulation."""
@@ -460,6 +484,48 @@ class TestOrderEndpoints:
         assert response.status_code == status.HTTP_200_OK
         assert response.data['id'] == str(order.id)
         assert response.data['status'] == 'confirmed'
+
+    def test_confirm_receipt_success(self):
+        """Test POST /api/commerce/orders/{id}/confirm_receipt/."""
+        create_payload = {
+            'delivery_method': 'home',
+            'items': [
+                {
+                    'product_id': str(self.product.id),
+                    'quantity': 1
+                }
+            ]
+        }
+        created = self.client.post('/api/commerce/orders/', data=create_payload, format='json')
+        assert created.status_code == status.HTTP_201_CREATED
+
+        order_id = created.data['id']
+        Order.objects.filter(id=order_id).update(status='delivered')
+
+        response = self.client.post(f'/api/commerce/orders/{order_id}/confirm_receipt/')
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data['status'] == 'received'
+
+    def test_confirm_receipt_rejects_if_not_delivered(self):
+        """La confirmation de réception exige le statut livré."""
+        create_payload = {
+            'delivery_method': 'home',
+            'items': [
+                {
+                    'product_id': str(self.product.id),
+                    'quantity': 1
+                }
+            ]
+        }
+        created = self.client.post('/api/commerce/orders/', data=create_payload, format='json')
+        assert created.status_code == status.HTTP_201_CREATED
+
+        order_id = created.data['id']
+        response = self.client.post(f'/api/commerce/orders/{order_id}/confirm_receipt/')
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert 'message' in response.data
 
     def test_statistics(self):
         """Test GET /api/commerce/orders/statistics/ - Statistiques utilisateur."""

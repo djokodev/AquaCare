@@ -1,201 +1,296 @@
 """
-Commande de management pour charger les données de guides nutritionnels pour MAVECAM AquaCare.
-Basée sur les spécifications techniques de la documentation Skretting et Aller Aqua.
+Commande de management pour charger les données de guides nutritionnels AquaCare.
+Source : Tables officielles DIBAQ (Catfish + Tilapia — phase production uniquement).
+
+Les tables de rationnement DIBAQ sont température-dépendantes.
+temperature_rates = dict {temp_°C: kg_aliment_pour_100kg_biomasse_par_jour}
+feeding_rate_percentage = taux à la température de référence (26°C pour Cameroun tropical).
+
+Starter phase (<10g) non chargée — hors scope (utilisateurs achètent alevins à 10g+).
 """
-from django.core.management.base import BaseCommand
 from decimal import Decimal
+
+from django.core.management.base import BaseCommand
 
 from aquaculture.models import NutritionalGuide
 
 
 class Command(BaseCommand):
-    help = 'Charge les données de guides nutritionnels pour les espèces aquacoles'
+    help = 'Charge les tables de rationnement officielles DIBAQ (production, 10g+)'
 
     def add_arguments(self, parser):
         parser.add_argument(
-            '--update',
-            action='store_true',
-            help='Update existing guides instead of creating new ones',
-        )
-        parser.add_argument(
             '--species',
             type=str,
-            help='Load data for specific species only (clarias or tilapia)',
+            help='Charger une espèce uniquement (clarias ou tilapia)',
         )
 
     def handle(self, *args, **options):
-        self.stdout.write("Loading nutritional guide data...")
+        self.stdout.write('Chargement des tables DIBAQ (production)...')
+        self.load_dibaq_guides(options)
 
-        # ⚠️ PATCH: Ne pas utiliser loaddata avec auto_now_add (bug Django connu)
-        # Django loaddata force created_at=NULL au lieu d'utiliser auto_now_add
-        # Solution: Créer directement via ORM pour que Django gère auto_now_add
-        self.create_nutritional_guides(options)
+        total = NutritionalGuide.objects.count()
+        clarias = NutritionalGuide.objects.filter(species='clarias').count()
+        tilapia = NutritionalGuide.objects.filter(species='tilapia').count()
 
-        # Display summary
-        total_guides = NutritionalGuide.objects.count()
-        clarias_guides = NutritionalGuide.objects.filter(species='clarias').count()
-        tilapia_guides = NutritionalGuide.objects.filter(species='tilapia').count()
-        
-        self.stdout.write(
-            self.style.SUCCESS(
-                f"\nNutritional guide summary:\n"
-                f"Total guides: {total_guides}\n"
-                f"Clarias guides: {clarias_guides}\n"
-                f"Tilapia guides: {tilapia_guides}"
-            )
-        )
+        self.stdout.write(self.style.SUCCESS(
+            f'\nRésumé guides nutritionnels:\n'
+            f'  Total : {total}\n'
+            f'  Clarias : {clarias}\n'
+            f'  Tilapia : {tilapia}'
+        ))
 
-    def create_nutritional_guides(self, options):
-        """Crée les guides nutritionnels par programmation."""
-        
-        # Clarias feeding data based on technical documentation
-        clarias_data = [
-            {
-                'growth_stage': 'alevin',
-                'min_weight': Decimal('2.00'),
-                'max_weight': Decimal('10.00'),
-                'feeding_rate_percentage': Decimal('8.00'),
-                'protein_requirement': 45,
-                'meals_per_day': 4,
-                'feed_size_mm': Decimal('1.0'),
-                'recommended_products': ['MAVECAM Starter Premium 1.0mm'],
-                'expected_fcr': Decimal('0.90'),
-                'feeding_notes': 'Alimentation fréquente requise pour alevins'
+    # ------------------------------------------------------------------ #
+    # DIBAQ CATFISH — Phase Production                                     #
+    # Source: "Tabla de Alimentacion - CATSFISH.pdf"                       #
+    # Unité: kg aliment / 100 kg biomasse / jour  (= % biomasse)          #
+    # ------------------------------------------------------------------ #
+    CLARIAS_DIBAQ = [
+        {
+            'growth_stage': 'alevin',
+            'min_weight': Decimal('10.00'),
+            'max_weight': Decimal('50.00'),
+            'feed_size_mm': Decimal('2.0'),
+            'protein_requirement': 45,
+            'meals_per_day': 3,
+            'recommended_products': ['DIBAQ Catfish 2mm'],
+            'expected_fcr': Decimal('1.10'),
+            'reference_temperature_c': 26,
+            # taux à 26°C = 5.3%
+            'feeding_rate_percentage': Decimal('5.30'),
+            'temperature_rates': {
+                '14': 0.8, '16': 1.5, '18': 2.1, '20': 3.0,
+                '22': 3.9, '24': 4.6, '26': 5.3, '28': 4.8,
+                '30': 4.2, '32': 3.6,
             },
-            {
-                'growth_stage': 'juvenile',
-                'min_weight': Decimal('10.00'),
-                'max_weight': Decimal('50.00'),
-                'feeding_rate_percentage': Decimal('7.00'),
-                'protein_requirement': 42,
-                'meals_per_day': 3,
-                'feed_size_mm': Decimal('1.8'),
-                'recommended_products': ['MAVECAM Starter 1.8mm'],
-                'expected_fcr': Decimal('0.95'),
-                'feeding_notes': 'Transition vers alimentation moins fréquente'
+            'feeding_notes': (
+                'Source: DIBAQ Catfish Production Table. '
+                '<14°C: selon appétit. >33°C: selon appétit / niveau O2.'
+            ),
+        },
+        {
+            'growth_stage': 'juvenile',
+            'min_weight': Decimal('50.00'),
+            'max_weight': Decimal('100.00'),
+            'feed_size_mm': Decimal('2.0'),
+            'protein_requirement': 42,
+            'meals_per_day': 3,
+            'recommended_products': ['DIBAQ Catfish 2mm'],
+            'expected_fcr': Decimal('1.15'),
+            'reference_temperature_c': 26,
+            'feeding_rate_percentage': Decimal('3.80'),
+            'temperature_rates': {
+                '14': 0.6, '16': 1.0, '18': 1.5, '20': 2.2,
+                '22': 2.9, '24': 3.4, '26': 3.8, '28': 3.4,
+                '30': 3.1, '32': 2.8,
             },
-            {
-                'growth_stage': 'croissance',
-                'min_weight': Decimal('50.00'),
-                'max_weight': Decimal('150.00'),
-                'feeding_rate_percentage': Decimal('5.00'),
-                'protein_requirement': 38,
-                'meals_per_day': 3,
-                'feed_size_mm': Decimal('2.5'),
-                'recommended_products': ['MAVECAM Superior 2-3mm'],
-                'expected_fcr': Decimal('1.00'),
-                'feeding_notes': 'Phase de croissance active'
+            'feeding_notes': 'Source: DIBAQ Catfish Production Table.',
+        },
+        {
+            'growth_stage': 'croissance',
+            'min_weight': Decimal('100.00'),
+            'max_weight': Decimal('250.00'),
+            'feed_size_mm': Decimal('4.0'),
+            'protein_requirement': 38,
+            'meals_per_day': 2,
+            'recommended_products': ['DIBAQ Catfish 4mm'],
+            'expected_fcr': Decimal('1.20'),
+            'reference_temperature_c': 26,
+            'feeding_rate_percentage': Decimal('3.20'),
+            'temperature_rates': {
+                '14': 0.5, '16': 0.9, '18': 1.3, '20': 1.8,
+                '22': 2.4, '24': 2.8, '26': 3.2, '28': 2.9,
+                '30': 2.6, '32': 2.3,
             },
-            {
-                'growth_stage': 'finition',
-                'min_weight': Decimal('150.00'),
-                'max_weight': Decimal('500.00'),
-                'feeding_rate_percentage': Decimal('3.50'),
-                'protein_requirement': 35,
-                'meals_per_day': 2,
-                'feed_size_mm': Decimal('4.5'),
-                'recommended_products': ['MAVECAM Superior 4.5mm'],
-                'expected_fcr': Decimal('1.10'),
-                'feeding_notes': 'Préparation pour récolte'
-            }
-        ]
+            'feeding_notes': 'Source: DIBAQ Catfish Production Table.',
+        },
+        {
+            'growth_stage': 'finition',
+            'min_weight': Decimal('250.00'),
+            'max_weight': Decimal('500.00'),
+            'feed_size_mm': Decimal('4.0'),
+            'protein_requirement': 35,
+            'meals_per_day': 2,
+            'recommended_products': ['DIBAQ Catfish 4mm'],
+            'expected_fcr': Decimal('1.30'),
+            'reference_temperature_c': 26,
+            'feeding_rate_percentage': Decimal('2.40'),
+            'temperature_rates': {
+                '14': 0.4, '16': 0.7, '18': 0.9, '20': 1.4,
+                '22': 1.8, '24': 2.1, '26': 2.4, '28': 2.1,
+                '30': 1.9, '32': 1.7,
+            },
+            'feeding_notes': 'Source: DIBAQ Catfish Production Table.',
+        },
+        {
+            'growth_stage': 'pre_recolte',
+            'min_weight': Decimal('500.00'),
+            'max_weight': Decimal('2000.00'),
+            'feed_size_mm': Decimal('6.0'),
+            'protein_requirement': 32,
+            'meals_per_day': 1,
+            'recommended_products': ['DIBAQ Catfish 6mm'],
+            'expected_fcr': Decimal('1.40'),
+            'reference_temperature_c': 26,
+            'feeding_rate_percentage': Decimal('1.70'),
+            'temperature_rates': {
+                '14': 0.3, '16': 0.5, '18': 0.7, '20': 1.0,
+                '22': 1.3, '24': 1.5, '26': 1.7, '28': 1.5,
+                '30': 1.4, '32': 1.2,
+            },
+            'feeding_notes': (
+                'Source: DIBAQ Catfish Production Table (colonne >500g). '
+                '>33°C: selon appétit / niveau O2.'
+            ),
+        },
+    ]
 
-        # Tilapia feeding data
-        tilapia_data = [
-            {
-                'growth_stage': 'alevin',
-                'min_weight': Decimal('1.50'),
-                'max_weight': Decimal('8.00'),
-                'feeding_rate_percentage': Decimal('8.50'),
-                'protein_requirement': 45,
-                'meals_per_day': 4,
-                'feed_size_mm': Decimal('1.0'),
-                'recommended_products': ['MAVECAM Tilapia Starter 1.0mm'],
-                'expected_fcr': Decimal('0.85'),
-                'feeding_notes': 'Très sensible aux conditions environnementales'
+    # ------------------------------------------------------------------ #
+    # DIBAQ TILAPIA — Phase Production                                     #
+    # Source: "Tabla de Alimentacion - TILAPIA.pdf"                        #
+    # ------------------------------------------------------------------ #
+    TILAPIA_DIBAQ = [
+        {
+            'growth_stage': 'alevin',
+            'min_weight': Decimal('10.00'),
+            'max_weight': Decimal('50.00'),
+            'feed_size_mm': Decimal('2.0'),
+            'protein_requirement': 45,
+            'meals_per_day': 3,
+            'recommended_products': ['DIBAQ Tilapia 2mm'],
+            'expected_fcr': Decimal('1.05'),
+            'reference_temperature_c': 26,
+            'feeding_rate_percentage': Decimal('5.30'),
+            'temperature_rates': {
+                '10': 1.2, '12': 1.8, '14': 2.4, '16': 3.1,
+                '18': 3.7, '20': 4.3, '22': 4.9, '24': 5.1,
+                '26': 5.3, '28': 5.5, '30': 6.2, '32': 6.9,
             },
-            {
-                'growth_stage': 'juvenile',
-                'min_weight': Decimal('8.00'),
-                'max_weight': Decimal('40.00'),
-                'feeding_rate_percentage': Decimal('6.50'),
-                'protein_requirement': 40,
-                'meals_per_day': 3,
-                'feed_size_mm': Decimal('1.8'),
-                'recommended_products': ['MAVECAM Tilapia Juvenile 1.8mm'],
-                'expected_fcr': Decimal('0.90'),
-                'feeding_notes': 'Phase critique, éviter suralimentation'
+            'feeding_notes': (
+                'Source: DIBAQ Tilapia Production Table. '
+                '<10°C: selon appétit. >33°C: selon appétit / niveau O2.'
+            ),
+        },
+        {
+            'growth_stage': 'juvenile',
+            'min_weight': Decimal('50.00'),
+            'max_weight': Decimal('100.00'),
+            'feed_size_mm': Decimal('2.0'),
+            'protein_requirement': 40,
+            'meals_per_day': 3,
+            'recommended_products': ['DIBAQ Tilapia 2mm'],
+            'expected_fcr': Decimal('1.10'),
+            'reference_temperature_c': 26,
+            'feeding_rate_percentage': Decimal('5.00'),
+            'temperature_rates': {
+                '10': 1.0, '12': 1.5, '14': 2.0, '16': 2.6,
+                '18': 3.1, '20': 3.6, '22': 4.1, '24': 4.6,
+                '26': 5.0, '28': 5.2, '30': 5.8, '32': 6.5,
             },
-            {
-                'growth_stage': 'croissance',
-                'min_weight': Decimal('40.00'),
-                'max_weight': Decimal('120.00'),
-                'feeding_rate_percentage': Decimal('4.50'),
-                'protein_requirement': 35,
-                'meals_per_day': 3,
-                'feed_size_mm': Decimal('2.5'),
-                'recommended_products': ['MAVECAM Tilapia Growth 2-3mm'],
-                'expected_fcr': Decimal('1.00'),
-                'feeding_notes': 'Surveiller reproduction précoce'
+            'feeding_notes': 'Source: DIBAQ Tilapia Production Table.',
+        },
+        {
+            'growth_stage': 'croissance',
+            'min_weight': Decimal('100.00'),
+            'max_weight': Decimal('250.00'),
+            'feed_size_mm': Decimal('3.5'),
+            'protein_requirement': 35,
+            'meals_per_day': 2,
+            'recommended_products': ['DIBAQ Tilapia 3.5mm'],
+            'expected_fcr': Decimal('1.15'),
+            'reference_temperature_c': 26,
+            'feeding_rate_percentage': Decimal('4.10'),
+            'temperature_rates': {
+                '10': 0.8, '12': 1.0, '14': 1.5, '16': 1.8,
+                '18': 2.3, '20': 2.8, '22': 3.3, '24': 3.8,
+                '26': 4.1, '28': 4.3, '30': 4.8, '32': 5.4,
             },
-            {
-                'growth_stage': 'finition',
-                'min_weight': Decimal('120.00'),
-                'max_weight': Decimal('400.00'),
-                'feeding_rate_percentage': Decimal('3.00'),
-                'protein_requirement': 32,
-                'meals_per_day': 2,
-                'feed_size_mm': Decimal('4.5'),
-                'recommended_products': ['MAVECAM Tilapia Finition 4.5mm'],
-                'expected_fcr': Decimal('1.15'),
-                'feeding_notes': 'Préparation taille commerciale'
-            }
-        ]
+            'feeding_notes': 'Source: DIBAQ Tilapia Production Table.',
+        },
+        {
+            'growth_stage': 'finition',
+            'min_weight': Decimal('250.00'),
+            'max_weight': Decimal('500.00'),
+            'feed_size_mm': Decimal('3.5'),
+            'protein_requirement': 32,
+            'meals_per_day': 2,
+            'recommended_products': ['DIBAQ Tilapia 3.5mm'],
+            'expected_fcr': Decimal('1.25'),
+            'reference_temperature_c': 26,
+            'feeding_rate_percentage': Decimal('3.00'),
+            'temperature_rates': {
+                '10': 0.6, '12': 0.8, '14': 1.0, '16': 1.3,
+                '18': 1.5, '20': 1.8, '22': 2.3, '24': 2.8,
+                '26': 3.0, '28': 3.1, '30': 3.5, '32': 3.9,
+            },
+            'feeding_notes': 'Source: DIBAQ Tilapia Production Table.',
+        },
+        {
+            'growth_stage': 'pre_recolte',
+            'min_weight': Decimal('500.00'),
+            'max_weight': Decimal('1000.00'),
+            'feed_size_mm': Decimal('5.0'),
+            'protein_requirement': 30,
+            'meals_per_day': 1,
+            'recommended_products': ['DIBAQ Tilapia 5mm'],
+            'expected_fcr': Decimal('1.35'),
+            'reference_temperature_c': 26,
+            'feeding_rate_percentage': Decimal('2.10'),
+            'temperature_rates': {
+                '10': 0.5, '12': 0.6, '14': 0.8, '16': 1.0,
+                '18': 1.3, '20': 1.5, '22': 1.8, '24': 2.0,
+                '26': 2.1, '28': 2.2, '30': 2.5, '32': 2.8,
+            },
+            'feeding_notes': (
+                'Source: DIBAQ Tilapia Production Table (colonne >500g). '
+                '>33°C: selon appétit / niveau O2.'
+            ),
+        },
+    ]
 
-        # Create or update guides
+    def load_dibaq_guides(self, options):
+        """Charge ou met à jour les guides DIBAQ via update_or_create (idempotent).
+        Supprime d'abord les anciennes entrées non-DIBAQ pour éviter les conflits de lookup.
+        """
         species_filter = options.get('species')
-        update_mode = options.get('update', False)
 
+        # Nettoyer les anciennes entrées MAVECAM (source par défaut avant cette refonte)
+        old_entries = NutritionalGuide.objects.exclude(source='DIBAQ')
+        if species_filter:
+            old_entries = old_entries.filter(species=species_filter)
+        deleted_count = old_entries.count()
+        if deleted_count:
+            old_entries.delete()
+            self.stdout.write(f'  Supprimé {deleted_count} ancienne(s) entrée(s) non-DIBAQ')
+
+        datasets = []
         if not species_filter or species_filter == 'clarias':
-            self.create_species_guides('clarias', clarias_data, update_mode)
-
+            datasets.append(('clarias', self.CLARIAS_DIBAQ))
         if not species_filter or species_filter == 'tilapia':
-            self.create_species_guides('tilapia', tilapia_data, update_mode)
+            datasets.append(('tilapia', self.TILAPIA_DIBAQ))
 
-    def create_species_guides(self, species, data, update_mode):
-        """Crée les guides pour une espèce spécifique."""
-        created_count = 0
-        updated_count = 0
+        for species, rows in datasets:
+            created_count = 0
+            updated_count = 0
 
-        for guide_data in data:
-            defaults = guide_data.copy()
-            lookup_fields = {
-                'species': species,
-                'growth_stage': guide_data['growth_stage']
-            }
+            for row in rows:
+                lookup = {
+                    'species': species,
+                    'min_weight': row['min_weight'],
+                    'source': 'DIBAQ',
+                }
+                defaults = {k: v for k, v in row.items()}
+                defaults['source'] = 'DIBAQ'
 
-            if update_mode:
-                guide, created = NutritionalGuide.objects.update_or_create(
-                    **lookup_fields,
-                    defaults=defaults
+                _, created = NutritionalGuide.objects.update_or_create(
+                    **lookup,
+                    defaults=defaults,
                 )
                 if created:
                     created_count += 1
                 else:
                     updated_count += 1
-            else:
-                guide, created = NutritionalGuide.objects.get_or_create(
-                    **lookup_fields,
-                    defaults=defaults
-                )
-                if created:
-                    created_count += 1
 
-        if update_mode:
             self.stdout.write(
-                f"Species {species}: {created_count} created, {updated_count} updated"
-            )
-        else:
-            self.stdout.write(
-                f"Species {species}: {created_count} guides created"
+                f'  {species}: {created_count} créés, {updated_count} mis à jour'
             )

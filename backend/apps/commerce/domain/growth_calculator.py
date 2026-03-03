@@ -5,7 +5,7 @@ Architecture Clean : Logique mathématique pure sans dépendances Django.
 Formules basées sur les standards MAVECAM pour tilapia et catfish.
 """
 from decimal import Decimal
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 
 class GrowthCalculator:
@@ -222,13 +222,13 @@ class PhaseDetector:
     # Règles de granulométrie par espèce et poids
     PHASE_RULES = {
         'tilapia': [
-            (0, 20, 'alevinage', 2.0, 'TILAPIA 2MM'),
+            (0, 20, 'pre_grossissement', 2.0, 'TILAPIA 2MM'),
             (20, 100, 'pre_grossissement', 3.0, 'TILAPIA 3MM'),
             (100, 9999, 'grossissement', 4.5, 'TILAPIA 4.5MM')
         ],
         'catfish': [
-            (0, 5, 'alevinage', 1.5, 'CATFISH 1.5MM'),
-            (5, 20, 'alevinage', 2.0, 'CATFISH 2MM'),
+            (0, 5, 'pre_grossissement', 1.5, 'CATFISH 1.5MM'),
+            (5, 20, 'pre_grossissement', 2.0, 'CATFISH 2MM'),
             (20, 100, 'pre_grossissement', 3.0, 'CATFISH 3MM'),
             (100, 250, 'grossissement', 4.5, 'CATFISH 4.5MM'),
             (250, 500, 'grossissement', 6.0, 'CATFISH 6MM'),
@@ -372,7 +372,8 @@ class ROICalculator:
     def calculate_revenue(
         species: str,
         final_fish_count: int,
-        final_avg_weight_g: float
+        final_avg_weight_g: float,
+        selling_price_per_kg_fcfa: Optional[float] = None,
     ) -> Decimal:
         """
         Calcule le revenu estimé de la récolte.
@@ -389,7 +390,10 @@ class ROICalculator:
             >>> ROICalculator.calculate_revenue('tilapia', 850, 300)
             Decimal('637500')  # 637,500 FCFA
         """
-        price_per_kg = ROICalculator.MARKET_PRICE_PER_KG.get(species.lower(), 2500)
+        if selling_price_per_kg_fcfa is not None and float(selling_price_per_kg_fcfa) > 0:
+            price_per_kg = float(selling_price_per_kg_fcfa)
+        else:
+            price_per_kg = ROICalculator.MARKET_PRICE_PER_KG.get(species.lower(), 2500)
 
         # Biomasse totale récoltée
         total_biomass_kg = (final_fish_count * final_avg_weight_g) / 1000

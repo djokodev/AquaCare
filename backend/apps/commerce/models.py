@@ -5,9 +5,10 @@ Architecture offline-first avec support synchronisation mobile via UUID.
 Gestion catalogue produits alimentaires et commandes aquaculteurs.
 
 Workflow commande (MVP simplifié) :
-1. Aquaculteur crée commande → Status 'confirmed' automatiquement
-2. MAVECAM gère livraison hors application
-3. Paiement à la livraison (cash)
+1. Aquaculteur crée commande → statut 'confirmed' (commandée)
+2. Opérateur commerce met la commande en 'delivered' (livrée)
+3. Aquaculteur confirme réception → statut 'received' (reçue)
+4. Paiement à la livraison (cash)
 """
 import uuid
 from decimal import Decimal
@@ -175,8 +176,10 @@ class Order(models.Model):
     """
     Commande de produits MAVECAM par un aquaculteur.
 
-    Workflow MVP simplifié :
-    - Statut unique 'confirmed' dès la création
+    Workflow simplifié :
+    - Statut initial 'confirmed' dès la création
+    - Statut 'delivered' quand la commande est livrée
+    - Statut 'received' après confirmation utilisateur
     - Adresse snapshot depuis User/FarmProfile au moment de la commande
     - Calcul automatique frais de livraison
     - Paiement à la livraison (géré hors app)
@@ -236,7 +239,7 @@ class Order(models.Model):
         help_text=_('Format: ORD-YYYYMMDD-XXXX (généré automatiquement)')
     )
 
-    # Statut (MVP : uniquement 'confirmed')
+    # Statut de traitement commande
     status = models.CharField(
         _('Statut'),
         max_length=20,

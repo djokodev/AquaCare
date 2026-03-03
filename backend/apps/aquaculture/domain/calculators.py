@@ -317,101 +317,178 @@ class AquacultureCalculator:
             return 'finition'
     
     @staticmethod
-    def get_feeding_recommendations(weight_g: Decimal) -> Dict:
+    def get_feeding_rate_for_temp(
+        temperature_rates: Dict,
+        water_temp_c: float,
+    ) -> Optional[float]:
         """
-        Get feeding recommendations based on fish weight.
-        
-        Based on Skretting feeding tables and Aller Aqua guides.
-        
+        Interpole le taux d'alimentation depuis la table DIBAQ pour une température donnée.
+
+        Interpolation linéaire entre les deux points encadrants.
+        Retourne le taux en % de biomasse (ex: 5.3 pour 5.3%).
+        Retourne None si temperature_rates est vide.
+
         Args:
-            weight_g: Average fish weight in grams
-            
+            temperature_rates: Dict {str(temp_c): rate_pct} issu de NutritionalGuide
+            water_temp_c: Température de l'eau en °C (mesurée ou par défaut)
+
         Returns:
-            Dict: Feeding recommendations including rate, size, protein, meals
+            float: taux d'alimentation interpolé (% biomasse/jour), ou None
         """
-        # Find appropriate weight range
+        if not temperature_rates:
+            return None
+
+        points = sorted((float(k), float(v)) for k, v in temperature_rates.items())
+
+        # En dessous du minimum de la table → valeur minimale (poissons peu actifs)
+        if water_temp_c <= points[0][0]:
+            return points[0][1]
+
+        # Au-dessus du maximum → valeur maximale du tableau
+        if water_temp_c >= points[-1][0]:
+            return points[-1][1]
+
+        # Interpolation linéaire entre les deux points encadrants
+        for i in range(len(points) - 1):
+            t1, r1 = points[i]
+            t2, r2 = points[i + 1]
+            if t1 <= water_temp_c <= t2:
+                ratio = (water_temp_c - t1) / (t2 - t1)
+                return r1 + ratio * (r2 - r1)
+
+        return points[-1][1]  # sécurité
+
+    @staticmethod
+    def get_feeding_recommendations(
+        weight_g: Decimal,
+        guide_data: Optional[Dict] = None,
+        water_temp_c: Optional[float] = None,
+    ) -> Dict:
+        """
+        Retourne les recommandations d'alimentation pour un poids donné.
+
+        Priorité :
+        1. guide_data (NutritionalGuide DIBAQ) + water_temp_c → interpolation table officielle
+        2. guide_data seul → taux de référence du guide (feeding_rate_percentage à 26°C)
+        3. Fallback → constantes internes FEED_RECOMMENDATIONS (species-agnostiques)
+
+        Args:
+            weight_g: Poids moyen des poissons (g)
+            guide_data: Dict issu de NutritionalGuide (optionnel)
+            water_temp_c: Température de l'eau en °C (optionnel)
+
+        Returns:
+            Dict: {size_mm, protein_pct, feeding_rate_pct}
+        """
+        if guide_data:
+            rate = None
+            if water_temp_c is not None and guide_data.get('temperature_rates'):
+                rate = AquacultureCalculator.get_feeding_rate_for_temp(
+                    guide_data['temperature_rates'], water_temp_c
+                )
+            if rate is None:
+                rate = float(guide_data['feeding_rate_percentage'])
+            return {
+                'size_mm': float(guide_data['feed_size_mm']),
+                'protein_pct': guide_data['protein_requirement'],
+                'feeding_rate_pct': rate,
+            }
+
+        # Fallback → constantes internes (species-agnostiques, pas de température)
         for (min_weight, max_weight), recommendations in FEED_RECOMMENDATIONS.items():
             if min_weight <= weight_g <= max_weight:
                 return recommendations.copy()
-        
-        # Default for very large fish
-        return {
-            'size_mm': 6.0,
-            'protein_pct': 30,
-            'feeding_rate_pct': 2
-        }
-    
+
+        return {'size_mm': 6.0, 'protein_pct': 30, 'feeding_rate_pct': 2}
+
     @staticmethod
-    def get_meals_per_day(weight_g: Decimal) -> int:
+    def get_meals_per_day(
+        weight_g: Decimal,
+        guide_data: Optional[Dict] = None,
+    ) -> int:
         """
-        Get recommended number of meals per day based on fish weight.
-        
-        Smaller fish need more frequent feeding.
-        
+        Retourne le nombre de repas par jour recommandé.
+
+        Priorité :
+        1. guide_data.meals_per_day (NutritionalGuide DIBAQ)
+        2. Fallback → MEALS_PER_DAY constant (species-agnostique)
+
         Args:
-            weight_g: Average fish weight in grams
-            
+            weight_g: Poids moyen des poissons (g)
+            guide_data: Dict issu de NutritionalGuide (optionnel)
+
         Returns:
-            int: Number of meals per day (1-4)
+            int: Nombre de repas par jour (1-4)
         """
+        if guide_data and guide_data.get('meals_per_day'):
+            return int(guide_data['meals_per_day'])
+
         for (min_weight, max_weight), meals in MEALS_PER_DAY.items():
             if min_weight <= weight_g <= max_weight:
                 return meals
-        
-        # Default for very large fish
+
         return 1
-    
+
     @staticmethod
     def calculate_weekly_feeding_plan(
         current_biomass_kg: Decimal,
         current_weight_g: Decimal,
         current_count: int,
         species: str,
-        week_number: int
+        week_number: int,
+        guide_data: Optional[Dict] = None,
+        water_temp_c: Optional[float] = None,
     ) -> Dict:
         """
-        Generate comprehensive weekly feeding plan.
-        
-        Projects growth and calculates feeding requirements for the week.
-        
+        Génère un plan d'alimentation hebdomadaire complet.
+
+        Utilise les tables DIBAQ officielles si guide_data est fourni,
+        sinon fallback vers les constantes internes.
+
         Args:
-            current_biomass_kg: Current biomass in kg
-            current_weight_g: Current average weight in grams
-            current_count: Current fish count
-            species: Fish species
-            week_number: Week number in cycle
-            
+            current_biomass_kg: Biomasse actuelle (kg)
+            current_weight_g: Poids moyen actuel (g)
+            current_count: Effectif actuel
+            species: Espèce ('tilapia' | 'clarias')
+            week_number: Numéro de semaine dans le cycle
+            guide_data: Dict NutritionalGuide DIBAQ (optionnel)
+            water_temp_c: Température eau réelle ou de référence (optionnel)
+
         Returns:
-            Dict: Complete feeding plan for the week
+            Dict: Plan complet avec rations, repas, granulométrie, source
         """
-        # Get current feeding recommendations
-        feed_rec = AquacultureCalculator.get_feeding_recommendations(current_weight_g)
-        meals_per_day = AquacultureCalculator.get_meals_per_day(current_weight_g)
-        
-        # Calculate daily feed amount
+        feed_rec = AquacultureCalculator.get_feeding_recommendations(
+            current_weight_g, guide_data=guide_data, water_temp_c=water_temp_c
+        )
+        meals_per_day = AquacultureCalculator.get_meals_per_day(
+            current_weight_g, guide_data=guide_data
+        )
+
         daily_feed_kg = AquacultureCalculator.suggest_daily_feed_amount(
             current_biomass_kg,
             Decimal(str(feed_rec['feeding_rate_pct']))
         )
-        
-        # Calculate feed per meal
+
         feed_per_meal_kg = daily_feed_kg / Decimal(meals_per_day) if meals_per_day > 0 else daily_feed_kg
-        
-        # Total week feed
         total_week_feed_kg = daily_feed_kg * Decimal('7')
-        
-        # Projected end-of-week weight (estimated growth)
-        # Conservative estimate: 1-2g/day growth depending on species and stage
+
+        # Projection de croissance hebdomadaire (estimatif)
         if species == 'clarias':
             daily_growth = Decimal('1.5') if current_weight_g < 100 else Decimal('2.0')
         else:  # tilapia
             daily_growth = Decimal('1.0') if current_weight_g < 100 else Decimal('1.5')
-        
+
         projected_weight_g = current_weight_g + (daily_growth * Decimal('7'))
         projected_biomass_kg = AquacultureCalculator.calculate_biomass(
             current_count, projected_weight_g
         )
-        
+
+        # Libellé aliment : utiliser produit DIBAQ si disponible
+        if guide_data and guide_data.get('recommended_products'):
+            feed_label = guide_data['recommended_products'][0]
+        else:
+            feed_label = f"Granulés {feed_rec['size_mm']}mm"
+
         return {
             'week_number': week_number,
             'estimated_fish_count': current_count,
@@ -420,11 +497,11 @@ class AquacultureCalculator:
             'projected_weight_g': projected_weight_g,
             'projected_biomass_kg': projected_biomass_kg,
             'daily_feed_amount': daily_feed_kg,
-            'feeding_rate': Decimal(str(feed_rec['feeding_rate_pct'])),
+            'feeding_rate': Decimal(str(round(feed_rec['feeding_rate_pct'], 2))),
             'meals_per_day': meals_per_day,
             'feed_per_meal': feed_per_meal_kg,
             'total_week_feed': total_week_feed_kg,
-            'recommended_feed_type': f"Granulés {feed_rec['size_mm']}mm",
+            'recommended_feed_type': feed_label,
             'feed_size_mm': Decimal(str(feed_rec['size_mm'])),
             'protein_percentage': feed_rec['protein_pct'],
         }

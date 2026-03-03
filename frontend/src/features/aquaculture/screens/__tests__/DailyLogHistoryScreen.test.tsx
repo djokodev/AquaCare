@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { render, waitFor } from '@testing-library/react-native';
 import DailyLogHistoryScreen from '../DailyLogHistoryScreen';
 import { useSelector } from 'react-redux';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
@@ -54,10 +54,11 @@ describe('features/aquaculture/screens/DailyLogHistoryScreen', () => {
     updated_at: '2026-01-02T00:00:00Z',
   };
 
-  const setSelectorCycles = (cycles: ProductionCycle[]) => {
+  const setSelectorCycles = (cycles: ProductionCycle[], currentCycle?: ProductionCycle) => {
     mockUseSelector.mockImplementation((selector: (state: any) => unknown) =>
       selector({
         aquaculture: {
+          currentCycle,
           dashboardData: {
             active_cycles: cycles,
           },
@@ -87,37 +88,32 @@ describe('features/aquaculture/screens/DailyLogHistoryScreen', () => {
       },
     ];
 
-    setSelectorCycles([activeCycle]);
+    setSelectorCycles([activeCycle], activeCycle);
     mockService.getCycleLogs.mockResolvedValueOnce(logs);
 
     const { getByText } = render(<DailyLogHistoryScreen navigation={navigation} />);
 
     await waitFor(() => {
-      expect(mockService.getCycleLogs).toHaveBeenCalledWith(undefined);
+      expect(mockService.getCycleLogs).toHaveBeenCalledWith('cycle-1');
       expect(getByText(/observations/i)).toBeTruthy();
       expect(getByText('RAS')).toBeTruthy();
     });
   });
 
-  it('filtre par cycle et recharge les logs avec cycleId', async () => {
-    setSelectorCycles([activeCycle]);
-    mockService.getCycleLogs.mockResolvedValue([]);
+  it('n appelle pas l API des logs si aucun cycle de session n est selectionne', async () => {
+    setSelectorCycles([activeCycle], undefined);
+    mockService.getCycleLogs.mockResolvedValueOnce([]);
 
-    const { getByText } = render(<DailyLogHistoryScreen navigation={navigation} />);
-
-    await waitFor(() => {
-      expect(mockService.getCycleLogs).toHaveBeenCalledWith(undefined);
-    });
-
-    fireEvent.press(getByText('pond P1'));
+    const { getAllByText } = render(<DailyLogHistoryScreen navigation={navigation} />);
 
     await waitFor(() => {
-      expect(mockService.getCycleLogs).toHaveBeenCalledWith('cycle-1');
+      expect(mockService.getCycleLogs).not.toHaveBeenCalled();
+      expect(getAllByText('sessionCycleNotSelected').length).toBeGreaterThan(0);
     });
   });
 
   it('affiche un etat vide si aucun log', async () => {
-    setSelectorCycles([activeCycle]);
+    setSelectorCycles([activeCycle], activeCycle);
     mockService.getCycleLogs.mockResolvedValueOnce([]);
 
     const { getByText } = render(<DailyLogHistoryScreen navigation={navigation} />);

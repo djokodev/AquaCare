@@ -17,7 +17,7 @@ from django.db import transaction
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
-from ..models import FeedingPlan, ProductionCycle, NutritionalGuide
+from ..models import CycleLog, FeedingPlan, ProductionCycle, NutritionalGuide
 from notifications.models import Notification
 from notifications.services import NotificationService
 from django.contrib.contenttypes.models import ContentType
@@ -128,17 +128,18 @@ class FeedingPlanService(BaseService):
         Génère un plan d'alimentation pour une semaine spécifique.
 
         Utilise :
-        - Données actuelles du cycle (biomasse, poids moyen)
-        - Guides nutritionnels MAVECAM
-        - Calculators aquaculture
+        - Tables DIBAQ officielles (NutritionalGuide) comme source principale
+        - Dernière température d'eau enregistrée dans les saisies journalières (CycleLog)
+        - Fallback 26°C si aucune saisie disponible
+        - Fallback constantes internes si NutritionalGuide absent
 
         Args:
             cycle: Cycle de production
             week_number: Numéro de semaine depuis début cycle
-            auto_adjust: Ajuster selon données réelles
+            auto_adjust: Paramètre conservé pour compatibilité (non utilisé)
 
         Returns:
-            FeedingPlan créé
+            FeedingPlan créé ou existant (idempotent)
 
         Raises:
             FeedingPlanGenerationError: Si génération impossible
@@ -155,61 +156,97 @@ class FeedingPlanService(BaseService):
         ).first()
 
         if existing_plan:
-            # Régénérer les notifications pour plan existant
             FeedingPlanService.create_feeding_notifications(existing_plan, regenerate=True)
             return existing_plan
 
-        # Calcul des données de base
+        # 1. Chercher le guide DIBAQ pour l'espèce et le poids actuel
+        # On filtre explicitement sur source='DIBAQ' pour ignorer les anciennes entrées MAVECAM
+        guide = NutritionalGuide.objects.filter(
+            species=cycle.species,
+            source='DIBAQ',
+            min_weight__lte=cycle.current_average_weight,
+            max_weight__gte=cycle.current_average_weight
+        ).order_by('min_weight').first()
+
+        guide_data = None
+        data_source = 'fallback_interne'
+
+        if guide:
+            guide_data = {
+                'feed_size_mm': guide.feed_size_mm,
+                'protein_requirement': guide.protein_requirement,
+                'feeding_rate_percentage': guide.feeding_rate_percentage,
+                'meals_per_day': guide.meals_per_day,
+                'temperature_rates': guide.temperature_rates,
+                'recommended_products': guide.recommended_products,
+                'source': guide.source,
+            }
+            data_source = guide.source
+        else:
+            FeedingPlanService.log_operation(
+                "no_nutritional_guide_found",
+                {
+                    "species": cycle.species,
+                    "weight_g": float(cycle.current_average_weight),
+                },
+                level='warning'
+            )
+
+        # 2. Chercher la dernière température d'eau enregistrée pour ce cycle
+        last_log_with_temp = CycleLog.objects.filter(
+            cycle=cycle,
+            water_temperature__isnull=False,
+        ).order_by('-log_date').first()
+
+        used_default_temperature = False
+        if last_log_with_temp:
+            water_temp_c = float(last_log_with_temp.water_temperature)
+        else:
+            water_temp_c = 26.0  # Référence tropicale Cameroun
+            used_default_temperature = True
+            FeedingPlanService.log_operation(
+                "no_temperature_recorded",
+                {"cycle_id": str(cycle.id), "default_temp_c": water_temp_c},
+                level='info'
+            )
+
+        # 3. Calculer le plan avec les données officielles
         plan_data = AquacultureCalculator.calculate_weekly_feeding_plan(
             current_biomass_kg=cycle.current_biomass,
             current_weight_g=cycle.current_average_weight,
             current_count=cycle.current_count,
             species=cycle.species,
-            week_number=week_number
+            week_number=week_number,
+            guide_data=guide_data,
+            water_temp_c=water_temp_c,
         )
 
-        # Recherche guide nutritionnel approprié
-        guide = NutritionalGuide.objects.filter(
-            species=cycle.species,
-            min_weight__lte=cycle.current_average_weight,
-            max_weight__gte=cycle.current_average_weight
-        ).first()
-
-        if not guide:
-            # Utiliser valeurs par défaut si pas de guide
-            FeedingPlanService.log_operation(
-                "no_guide_found",
-                {"species": cycle.species, "weight": float(cycle.current_average_weight)},
-                level='warning'
-            )
-
-        # Calcul dates semaine
+        # 4. Calcul des dates de la semaine
         start_date = cycle.start_date + timedelta(weeks=week_number - 1)
         end_date = start_date + timedelta(days=6)
 
-        # Préparation données plan
-        plan_fields = {
-            'cycle': cycle,
-            'week_number': week_number,
-            'start_date': start_date,
-            'end_date': end_date,
-            'estimated_fish_count': plan_data['estimated_fish_count'],
-            'average_weight': plan_data['average_weight'],
-            'biomass': plan_data['biomass'],
-            'daily_feed_amount': plan_data['daily_feed_amount'],
-            'feeding_rate': plan_data['feeding_rate'],
-            'meals_per_day': plan_data['meals_per_day'],
-            'feed_per_meal': plan_data['feed_per_meal'],
-            'recommended_feed_type': plan_data['recommended_feed_type'],
-            'feed_size_mm': plan_data['feed_size_mm'],
-            'protein_percentage': plan_data['protein_percentage'],
-            'is_active': True,
-        }
+        # 5. Création du plan en base
+        plan = FeedingPlan.objects.create(
+            cycle=cycle,
+            week_number=week_number,
+            start_date=start_date,
+            end_date=end_date,
+            estimated_fish_count=plan_data['estimated_fish_count'],
+            average_weight=plan_data['average_weight'],
+            biomass=plan_data['biomass'],
+            daily_feed_amount=plan_data['daily_feed_amount'],
+            feeding_rate=plan_data['feeding_rate'],
+            meals_per_day=plan_data['meals_per_day'],
+            feed_per_meal=plan_data['feed_per_meal'],
+            recommended_feed_type=plan_data['recommended_feed_type'],
+            feed_size_mm=plan_data['feed_size_mm'],
+            protein_percentage=plan_data['protein_percentage'],
+            temperature_used_c=round(water_temp_c, 1),
+            used_default_temperature=used_default_temperature,
+            data_source=data_source,
+            is_active=True,
+        )
 
-        # Création du plan
-        plan = FeedingPlan.objects.create(**plan_fields)
-
-        # Création notifications rappels
         FeedingPlanService.create_feeding_notifications(plan)
 
         FeedingPlanService.log_operation(
@@ -217,7 +254,10 @@ class FeedingPlanService(BaseService):
             {
                 "plan_id": str(plan.id),
                 "week": week_number,
-                "daily_feed": float(plan.daily_feed_amount)
+                "daily_feed_kg": float(plan.daily_feed_amount),
+                "temperature_c": water_temp_c,
+                "used_default_temp": used_default_temperature,
+                "source": data_source,
             },
             level='info'
         )
@@ -284,6 +324,7 @@ class FeedingPlanService(BaseService):
         - Skip dates passées
         - Skip heures passées si aujourd'hui
         - Suppression anciennes notifications si regenerate=True
+        - Batch insert via bulk_create (au lieu de N appels individuels)
 
         Args:
             plan: Plan d'alimentation
@@ -297,13 +338,27 @@ class FeedingPlanService(BaseService):
             {"plan_id": str(plan.id), "regenerate": regenerate}
         )
 
+        # Pre-load content type and user preferences once (not per notification)
+        cycle_ct = ContentType.objects.get_for_model(plan.cycle)
+        user = plan.cycle.farm_profile.user
+
         # Supprimer anciennes notifications si régénération
         if regenerate:
             Notification.objects.filter(
-                content_type=ContentType.objects.get_for_model(plan.cycle),
+                content_type=cycle_ct,
                 object_id=plan.cycle.id,
                 notification_type='feeding_reminder'
             ).delete()
+
+        # Check user preferences once
+        from notifications.models import NotificationPreference
+        prefs, _created = NotificationPreference.objects.get_or_create(user=user)
+        if not prefs.is_type_enabled('feeding_reminder'):
+            return 0
+
+        channels = ['in_app']
+        if not prefs.in_app_enabled:
+            return 0
 
         # Obtenir heures de repas
         feeding_times = FeedingPlanService.FEEDING_SCHEDULES.get(
@@ -311,7 +366,8 @@ class FeedingPlanService(BaseService):
             FeedingPlanService.FEEDING_SCHEDULES[2]  # Default 2 repas
         )
 
-        notifications_created = 0
+        now = timezone.now()
+        notifications_to_create = []
 
         for day_offset in range(7):
             notification_date = plan.start_date + timedelta(days=day_offset)
@@ -321,7 +377,7 @@ class FeedingPlanService(BaseService):
 
             daily_feeding_times = feeding_times
             if notification_date == date.today():
-                current_time = timezone.now().time()
+                current_time = now.time()
                 daily_feeding_times = [
                     ft for ft in feeding_times
                     if ft >= current_time.replace(second=0, microsecond=0)
@@ -334,13 +390,19 @@ class FeedingPlanService(BaseService):
                 meal_names = ['matin', 'midi', 'soir', 'nuit']
                 meal_name = meal_names[meal_index] if meal_index < len(meal_names) else f'repas {meal_index + 1}'
 
+                base_metadata = {
+                    'cycle_id': str(plan.cycle.id),
+                    'plan_id': str(plan.id),
+                    'meal': meal_name,
+                }
+
                 notification_30min = timezone.make_aware(
                     datetime.combine(notification_date, meal_time)
                 ) - timedelta(minutes=30)
 
-                if notification_30min > timezone.now():
-                    NotificationService.create_notification(
-                        user=plan.cycle.farm_profile.user,
+                if notification_30min > now:
+                    notifications_to_create.append(Notification(
+                        user=user,
                         notification_type='feeding_reminder',
                         title=_('Nourrissage dans 30min - %(cycle_name)s') % {
                             'cycle_name': plan.cycle.cycle_name
@@ -349,21 +411,21 @@ class FeedingPlanService(BaseService):
                             'amount': plan.feed_per_meal,
                             'meal': meal_name
                         },
-                        content_object=plan.cycle,
-                        metadata={'cycle_id': str(plan.cycle.id), 'plan_id': str(plan.id), 'meal': meal_name, 'minutes_before': 30},
-                        channels=['in_app', 'push'],
+                        content_type=cycle_ct,
+                        object_id=plan.cycle.id,
+                        metadata={**base_metadata, 'minutes_before': 30},
+                        channels=list(channels),
                         priority='medium',
-                        scheduled_for=notification_30min
-                    )
-                    notifications_created += 1
+                        scheduled_for=notification_30min,
+                    ))
 
                 notification_15min = timezone.make_aware(
                     datetime.combine(notification_date, meal_time)
                 ) - timedelta(minutes=15)
 
-                if notification_15min > timezone.now():
-                    NotificationService.create_notification(
-                        user=plan.cycle.farm_profile.user,
+                if notification_15min > now:
+                    notifications_to_create.append(Notification(
+                        user=user,
                         notification_type='feeding_reminder',
                         title=_('Nourrissage dans 15min - %(cycle_name)s') % {
                             'cycle_name': plan.cycle.cycle_name
@@ -372,13 +434,19 @@ class FeedingPlanService(BaseService):
                             'amount': plan.feed_per_meal,
                             'meal': meal_name
                         },
-                        content_object=plan.cycle,
-                        metadata={'cycle_id': str(plan.cycle.id), 'plan_id': str(plan.id), 'meal': meal_name, 'minutes_before': 15},
-                        channels=['in_app', 'push'],
+                        content_type=cycle_ct,
+                        object_id=plan.cycle.id,
+                        metadata={**base_metadata, 'minutes_before': 15},
+                        channels=list(channels),
                         priority='medium',
-                        scheduled_for=notification_15min
-                    )
-                    notifications_created += 1
+                        scheduled_for=notification_15min,
+                    ))
+
+        # Batch insert all notifications at once
+        if notifications_to_create:
+            Notification.objects.bulk_create(notifications_to_create, batch_size=100)
+
+        notifications_created = len(notifications_to_create)
         FeedingPlanService.log_operation(
             "notifications_created",
             {"plan_id": str(plan.id), "count": notifications_created},

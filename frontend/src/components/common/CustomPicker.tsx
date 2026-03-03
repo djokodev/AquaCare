@@ -129,7 +129,22 @@ export function CascadingPicker({
   editable = true
 }: CascadingPickerProps) {
   if (!editable) {
-    return null; // TODO: Implement read-only mode for cascading picker
+    return (
+      <View style={styles.cascadingContainer}>
+        <View style={styles.cascadingHeader}>
+          <Ionicons name={icon} size={20} color={MAVECAM_COLORS.GRAY_LIGHT} />
+          <Text style={styles.infoLabel}>{label}</Text>
+        </View>
+        {levels.map((level, index) => {
+          const selected = level.options.find(o => o.value === level.value);
+          return (
+            <View key={index} style={styles.cascadingLevel}>
+              <Text style={styles.readOnlyText}>{selected?.label || level.placeholder}</Text>
+            </View>
+          );
+        })}
+      </View>
+    );
   }
 
   return (
@@ -220,6 +235,12 @@ const styles = StyleSheet.create({
     borderColor: '#d1d5db',
     borderRadius: 6,
     backgroundColor: MAVECAM_COLORS.WHITE,
+  },
+  readOnlyText: {
+    fontSize: 14,
+    color: MAVECAM_COLORS.GRAY_DARK,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
   },
 });
 

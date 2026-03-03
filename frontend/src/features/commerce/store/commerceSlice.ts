@@ -119,9 +119,12 @@ export const fetchRecommendedProduct = createAsyncThunk(
 
 export const fetchFeedingSuggestions = createAsyncThunk(
   'commerce/fetchFeedingSuggestions',
-  async (farmProfileId: string | undefined, { rejectWithValue }) => {
+  async (
+    options: { farmProfileId?: string; cycleId?: string } | undefined,
+    { rejectWithValue }
+  ) => {
     try {
-      return await commerceApi.getFeedingSuggestions(farmProfileId);
+      return await commerceApi.getFeedingSuggestions(options);
     } catch (error) {
       return rejectWithValue(extractApiErrorMessage(error, 'Erreur récupération suggestions'));
     }
@@ -168,6 +171,17 @@ export const createOrder = createAsyncThunk(
       return await commerceApi.createOrder(orderData);
     } catch (error) {
       return rejectWithValue(extractApiErrorMessage(error, 'Erreur création commande'));
+    }
+  }
+);
+
+export const confirmOrderReceipt = createAsyncThunk(
+  'commerce/confirmOrderReceipt',
+  async (orderId: string, { rejectWithValue }) => {
+    try {
+      return await commerceApi.confirmOrderReceipt(orderId);
+    } catch (error) {
+      return rejectWithValue(extractApiErrorMessage(error, 'Erreur confirmation réception'));
     }
   }
 );
@@ -349,6 +363,25 @@ const commerceSlice = createSlice({
         state.orders.items.unshift(action.payload);
       })
       .addCase(createOrder.rejected, (state, action) => {
+        state.orders.loading = false;
+        state.orders.error = action.payload as string;
+      });
+
+    builder
+      .addCase(confirmOrderReceipt.pending, (state) => {
+        state.orders.loading = true;
+        state.orders.error = null;
+      })
+      .addCase(confirmOrderReceipt.fulfilled, (state, action) => {
+        state.orders.loading = false;
+        const existingIndex = state.orders.items.findIndex((order) => order.id === action.payload.id);
+        if (existingIndex >= 0) {
+          state.orders.items[existingIndex] = action.payload;
+        } else {
+          state.orders.items.unshift(action.payload);
+        }
+      })
+      .addCase(confirmOrderReceipt.rejected, (state, action) => {
         state.orders.loading = false;
         state.orders.error = action.payload as string;
       });

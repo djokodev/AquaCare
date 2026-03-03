@@ -20,6 +20,19 @@ from rest_framework_simplejwt.tokens import RefreshToken
 User = get_user_model()
 
 
+@pytest.fixture(autouse=True)
+def celery_always_eager(settings):
+    """
+    Force Celery tasks to execute synchronously during tests.
+
+    The Docker environment sets DJANGO_SETTINGS_MODULE=development, which does
+    not include CELERY_TASK_ALWAYS_EAGER=True. This fixture ensures tasks
+    dispatched via .delay() (e.g. report generation) run in-process.
+    """
+    settings.CELERY_TASK_ALWAYS_EAGER = True
+    settings.CELERY_TASK_EAGER_PROPAGATES = True
+
+
 @pytest.fixture
 def api_client():
     """

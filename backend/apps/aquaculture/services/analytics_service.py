@@ -20,6 +20,7 @@ from django.utils import timezone
 
 from ..models import ProductionCycle, CycleLog
 from ..domain.calculators import AquacultureCalculator
+from ..constants import DEFAULT_FEED_PRICE_PER_KG
 from .base import BaseService
 from notifications.services import NotificationService
 
@@ -111,7 +112,7 @@ class AnalyticsService(BaseService):
             'is_abnormal': mortality_percentage > 20,  # >20% est anormal
             'peak_week': peak_week,
             'peak_week_count': peak_week_count,
-            'has_data': logs.exists()
+            'has_data': total_mortality > 0
         }
 
     # ============================================================================
@@ -319,7 +320,7 @@ class AnalyticsService(BaseService):
         feed_metrics = {
             'total_consumed': float(cycle.total_feed_consumed),
             'average_daily': float(cycle.total_feed_consumed / days_active) if days_active > 0 else 0,
-            'cost_estimate': float(cycle.total_feed_consumed) * 1500,  # 1500 FCFA/kg estimate
+            'cost_estimate': float(cycle.total_feed_consumed) * float(DEFAULT_FEED_PRICE_PER_KG),
             'feed_efficiency': float(cycle.fcr) if cycle.fcr else None
         }
 
@@ -523,131 +524,181 @@ class AnalyticsService(BaseService):
     # ============================================================================
 
     @staticmethod
-    def update_cycle_metrics_data(cycle: ProductionCycle) -> None:
+    def update_cycle_metrics_data(cycle: ProductionCycle, new_log=None) -> None:
         """
         Met à jour l'objet CycleMetrics avec les dernières données analytiques.
 
         Appelé automatiquement par signals après chaque log quotidien.
-        Calcule et sauvegarde:
-            - Courbe de croissance (poids vs temps)
-            - Courbe de survie (effectif vs temps)
-            - Données de consommation alimentaire cumulée
-            - Taux de croissance quotidien et spécifique
-            - Score de performance global
-            - Moyenne quotidienne d'alimentation
+        Deux modes d'opération :
+            - MODE INCRÉMENTAL (new_log fourni) : append du seul nouveau point,
+              0 queryset DB supplémentaire. Utilisé après post_save de CycleLog.
+            - MODE REBUILD COMPLET (new_log=None) : relit tous les logs depuis la DB.
+              Utilisé après suppression de log ou sync offline batch.
 
         Args:
             cycle: Cycle de production à mettre à jour
+            new_log: CycleLog nouvellement créé (mode incrémental) ou None (rebuild)
 
         Note:
             Gestion robuste des erreurs pour ne pas interrompre l'opération principale.
 
         PROTECTION CASCADE:
-            Cette fonction est appelée par le signal post_delete de CycleLog.
-            Pour éviter l'erreur "FOREIGN KEY constraint failed" lors de la suppression
-            d'un ProductionCycle entier, on vérifie que le cycle existe toujours
-            AVANT de tenter toute opération sur CycleMetrics.
-
             Utilise get() au lieu de get_or_create() pour éviter de créer un nouveau
-            CycleMetrics pour un cycle en cours de suppression (ce qui violerait
-            les contraintes FK lors du COMMIT de la transaction).
+            CycleMetrics pour un cycle en cours de suppression.
         """
         from ..models import CycleMetrics
 
         try:
             # PROTECTION CASCADE : Vérifier que le cycle existe toujours
-            # Évite de créer un CycleMetrics pour un cycle en cours de suppression
             if not ProductionCycle.objects.filter(id=cycle.id).exists():
-                return  # Cycle en cours de suppression, skip la mise à jour
+                return
 
-            # Utiliser get() au lieu de get_or_create() pour éviter création pendant CASCADE
             try:
                 metrics = CycleMetrics.objects.get(cycle=cycle)
             except CycleMetrics.DoesNotExist:
-                # Si pas de metrics, c'est probablement que le cycle est en suppression
-                # OU c'est un cycle legacy créé avant l'implémentation des metrics
-                # Dans les deux cas, on skip la mise à jour
                 return
 
-            # Update growth curve data
-            growth_data = []
-            growth_logs = cycle.logs.filter(average_weight__isnull=False).order_by('log_date')
-            for log in growth_logs:
-                growth_data.append({
-                    'date': log.log_date.isoformat(),
-                    'weight': float(log.average_weight),
-                    'day': (log.log_date - cycle.start_date).days
-                })
-            metrics.growth_curve_data = growth_data
+            if new_log is not None:
+                # ── MODE INCRÉMENTAL : append uniquement le nouveau point ──────────
+                if new_log.average_weight:
+                    existing = list(metrics.growth_curve_data or [])
+                    existing.append({
+                        'date': new_log.log_date.isoformat(),
+                        'weight': float(new_log.average_weight),
+                        'day': (new_log.log_date - cycle.start_date).days
+                    })
+                    metrics.growth_curve_data = existing
 
-            # Update survival curve data
-            survival_data = []
-            current_count = cycle.initial_count
-            mortality_logs = cycle.logs.filter(mortality_count__gt=0).order_by('log_date')
-            for log in mortality_logs:
-                current_count = max(0, current_count - log.mortality_count)
-                survival_rate = (current_count / cycle.initial_count * 100) if cycle.initial_count > 0 else 0
-                survival_data.append({
-                    'date': log.log_date.isoformat(),
-                    'count': current_count,
-                    'rate': float(survival_rate)
-                })
-            metrics.survival_curve_data = survival_data
+                if new_log.mortality_count and new_log.mortality_count > 0:
+                    existing = list(metrics.survival_curve_data or [])
+                    prev_count = existing[-1]['count'] if existing else cycle.initial_count
+                    current_count = max(0, prev_count - new_log.mortality_count)
+                    rate = (current_count / cycle.initial_count * 100) if cycle.initial_count > 0 else 0
+                    existing.append({
+                        'date': new_log.log_date.isoformat(),
+                        'count': current_count,
+                        'rate': float(rate)
+                    })
+                    metrics.survival_curve_data = existing
 
-            # Update feed consumption data
-            feed_data = []
-            cumulative_feed = 0
-            feed_logs = cycle.logs.filter(feed_quantity__isnull=False).order_by('log_date')
-            for log in feed_logs:
-                cumulative_feed += float(log.feed_quantity)
-                feed_data.append({
-                    'date': log.log_date.isoformat(),
-                    'daily': float(log.feed_quantity),
-                    'cumulative': cumulative_feed
-                })
-            metrics.cumulative_feed_data = feed_data
+                if new_log.feed_quantity:
+                    existing = list(metrics.cumulative_feed_data or [])
+                    prev_cumul = existing[-1]['cumulative'] if existing else 0
+                    existing.append({
+                        'date': new_log.log_date.isoformat(),
+                        'daily': float(new_log.feed_quantity),
+                        'cumulative': prev_cumul + float(new_log.feed_quantity)
+                    })
+                    metrics.cumulative_feed_data = existing
 
-            # Calculate growth rates
-            if len(growth_data) >= 2:
-                from ..domain.calculators import AquacultureCalculator
-                days_active = cycle.days_active()
-                metrics.daily_growth_rate = AquacultureCalculator.calculate_daily_growth_rate(
-                    cycle.initial_average_weight,
-                    cycle.current_average_weight,
-                    days_active
+                # Recalcul des taux depuis les champs cycle (déjà mis à jour) — 0 DB
+                growth_data = metrics.growth_curve_data or []
+                if len(growth_data) >= 2:
+                    days_active = cycle.days_active()
+                    metrics.daily_growth_rate = AquacultureCalculator.calculate_daily_growth_rate(
+                        cycle.initial_average_weight,
+                        cycle.current_average_weight,
+                        days_active
+                    )
+                    metrics.specific_growth_rate = AquacultureCalculator.calculate_specific_growth_rate(
+                        cycle.initial_average_weight,
+                        cycle.current_average_weight,
+                        days_active
+                    )
+
+                metrics.performance_score = AquacultureCalculator.calculate_performance_score(
+                    survival_rate_pct=cycle.survival_rate,
+                    fcr=cycle.fcr,
+                    daily_growth_rate=metrics.daily_growth_rate,
+                    species=cycle.species
                 )
-                metrics.specific_growth_rate = AquacultureCalculator.calculate_specific_growth_rate(
-                    cycle.initial_average_weight,
-                    cycle.current_average_weight,
-                    days_active
+
+                # average_daily_feed depuis la liste en mémoire (0 DB)
+                feed_data = metrics.cumulative_feed_data or []
+                if feed_data:
+                    total_feed = sum(entry.get('daily', 0) for entry in feed_data)
+                    metrics.average_daily_feed = Decimal(str(total_feed / len(feed_data)))
+
+                AnalyticsService.log_operation(
+                    'update_cycle_metrics_data',
+                    {'cycle_id': str(cycle.id), 'mode': 'incremental'},
+                    level='debug'
                 )
 
-            # Calculate performance score
-            from ..domain.calculators import AquacultureCalculator
-            metrics.performance_score = AquacultureCalculator.calculate_performance_score(
-                survival_rate_pct=cycle.survival_rate,
-                fcr=cycle.fcr,
-                daily_growth_rate=metrics.daily_growth_rate,
-                species=cycle.species
-            )
+            else:
+                # ── MODE REBUILD COMPLET (delete case ou sync batch) ─────────────
+                growth_data = []
+                growth_logs = cycle.logs.filter(average_weight__isnull=False).order_by('log_date')
+                for log in growth_logs:
+                    growth_data.append({
+                        'date': log.log_date.isoformat(),
+                        'weight': float(log.average_weight),
+                        'day': (log.log_date - cycle.start_date).days
+                    })
+                metrics.growth_curve_data = growth_data
 
-            # Calculate average daily feed
-            if feed_logs.exists():
-                total_feed = sum(float(log.feed_quantity) for log in feed_logs)
-                metrics.average_daily_feed = Decimal(str(total_feed / feed_logs.count()))
+                survival_data = []
+                current_count = cycle.initial_count
+                mortality_logs = cycle.logs.filter(mortality_count__gt=0).order_by('log_date')
+                for log in mortality_logs:
+                    current_count = max(0, current_count - log.mortality_count)
+                    survival_rate = (current_count / cycle.initial_count * 100) if cycle.initial_count > 0 else 0
+                    survival_data.append({
+                        'date': log.log_date.isoformat(),
+                        'count': current_count,
+                        'rate': float(survival_rate)
+                    })
+                metrics.survival_curve_data = survival_data
+
+                feed_data = []
+                cumulative_feed = 0
+                feed_logs = cycle.logs.filter(feed_quantity__isnull=False).order_by('log_date')
+                for log in feed_logs:
+                    cumulative_feed += float(log.feed_quantity)
+                    feed_data.append({
+                        'date': log.log_date.isoformat(),
+                        'daily': float(log.feed_quantity),
+                        'cumulative': cumulative_feed
+                    })
+                metrics.cumulative_feed_data = feed_data
+
+                if len(growth_data) >= 2:
+                    days_active = cycle.days_active()
+                    metrics.daily_growth_rate = AquacultureCalculator.calculate_daily_growth_rate(
+                        cycle.initial_average_weight,
+                        cycle.current_average_weight,
+                        days_active
+                    )
+                    metrics.specific_growth_rate = AquacultureCalculator.calculate_specific_growth_rate(
+                        cycle.initial_average_weight,
+                        cycle.current_average_weight,
+                        days_active
+                    )
+
+                metrics.performance_score = AquacultureCalculator.calculate_performance_score(
+                    survival_rate_pct=cycle.survival_rate,
+                    fcr=cycle.fcr,
+                    daily_growth_rate=metrics.daily_growth_rate,
+                    species=cycle.species
+                )
+
+                if feed_logs.exists():
+                    total_feed = sum(float(log.feed_quantity) for log in feed_logs)
+                    metrics.average_daily_feed = Decimal(str(total_feed / feed_logs.count()))
+
+                AnalyticsService.log_operation(
+                    'update_cycle_metrics_data',
+                    {
+                        'cycle_id': str(cycle.id),
+                        'mode': 'rebuild',
+                        'growth_points': len(growth_data),
+                        'survival_points': len(survival_data),
+                        'feed_logs': feed_logs.count()
+                    },
+                    level='debug'
+                )
 
             metrics.save()
-
-            AnalyticsService.log_operation(
-                'update_cycle_metrics_data',
-                {
-                    'cycle_id': str(cycle.id),
-                    'growth_points': len(growth_data),
-                    'survival_points': len(survival_data),
-                    'feed_logs': feed_logs.count()
-                },
-                level='debug'
-            )
 
         except Exception as e:
             AnalyticsService.log_operation(

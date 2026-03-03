@@ -10,18 +10,20 @@ Roles:
 """
 from django.contrib import admin
 from django.contrib.admin.models import CHANGE
-from django.utils.html import format_html
+from django.utils.html import format_html, escape, mark_safe
 from django.urls import reverse
 from django.db.models import Sum, Avg, Count
 from django.utils.translation import gettext_lazy as _
 from django.contrib import messages
 from datetime import date
 import csv
-from django.http import HttpResponse
+import io
+import zipfile
+from django.http import HttpResponse, HttpResponseRedirect
 
 from .models import (
     ProductionCycle, CycleLog, FeedingPlan, SanitaryLog,
-    NutritionalGuide, CycleMetrics
+    NutritionalGuide, CycleMetrics, ProductionReport, ReportDispatchLog
 )
 from common.admin_mixins import (
     SecuredModelAdmin,
@@ -416,7 +418,7 @@ class CycleLogAdmin(AquacultureSecuredAdmin):
             'fields': ('sample_count', 'sample_total_weight', 'average_weight')
         }),
         (_('Alimentation'), {
-            'fields': ('feed_quantity', 'feed_type', 'feeding_times')
+            'fields': ('feed_quantity', 'feed_type', 'feed_size_mm', 'feeding_times')
         }),
         (_('Parametres environnementaux'), {
             'fields': (
@@ -723,4 +725,428 @@ class CycleMetricsAdmin(AquacultureSecuredAdmin):
 
     def has_change_permission(self, request, obj=None):
         """Read-only for all except superusers."""
+        return request.user.is_superuser
+
+
+@admin.register(ProductionReport)
+class ProductionReportAdmin(AquacultureSecuredAdmin):
+    """Administration des rapports de production."""
+
+    list_display = [
+        'id_short',
+        'farm_display',
+        'report_type_badge',
+        'period_display',
+        'status_badge',
+        'email_status',
+        'whatsapp_status',
+        'generated_at',
+        'pdf_download_link',
+    ]
+    list_filter = ['report_type', 'status', 'email_status', 'whatsapp_status']
+    search_fields = ['farm_profile__farm_name', 'farm_profile__user__phone_number']
+    readonly_fields = [
+        'id', 'farm_profile', 'report_type', 'period_start', 'period_end',
+        'status', 'payload', 'pdf_file', 'generated_at', 'validated_at',
+        'validated_by', 'email_status', 'email_sent_at',
+        'whatsapp_status', 'whatsapp_shared_at', 'created_at', 'updated_at',
+        'pdf_download_link', 'report_content_preview',
+    ]
+    fieldsets = (
+        (_('Rapport'), {
+            'fields': ('farm_profile', 'report_type', 'period_start', 'period_end', 'status'),
+        }),
+        (_('Aperçu du contenu'), {
+            'fields': ('report_content_preview',),
+        }),
+        (_('PDF'), {
+            'fields': ('pdf_download_link', 'pdf_file', 'generated_at'),
+        }),
+        (_('Validation'), {
+            'fields': ('validated_by', 'validated_at'),
+            'classes': ('collapse',),
+        }),
+        (_('Diffusion Email'), {
+            'fields': ('email_status', 'email_sent_at'),
+            'classes': ('collapse',),
+        }),
+        (_('WhatsApp'), {
+            'fields': ('whatsapp_status', 'whatsapp_shared_at'),
+            'classes': ('collapse',),
+        }),
+        (_('Données JSON brutes'), {
+            'fields': ('payload',),
+            'classes': ('collapse',),
+        }),
+        (_('Métadonnées'), {
+            'fields': ('id', 'created_at', 'updated_at'),
+            'classes': ('collapse',),
+        }),
+    )
+    actions = ['download_report_pdf_action', 'regenerate_report_action', 'validate_report_action']
+
+    # --- Permissions ---
+
+    def has_view_permission(self, request, obj=None):
+        """Managers et superusers peuvent voir les rapports (lecture seule)."""
+        if request.user.is_superuser:
+            return True
+        return request.user.groups.filter(name=RBACConstants.GROUP_MANAGERS).exists()
+
+    def has_add_permission(self, request):
+        return request.user.is_superuser
+
+    def has_change_permission(self, request, obj=None):
+        """Tout est readonly — seul le superuser garde le droit 'change'."""
+        return request.user.is_superuser
+
+    # --- Custom URL for single-report PDF download ---
+
+    def get_urls(self):
+        from django.urls import path
+        urls = super().get_urls()
+        custom = [
+            path(
+                '<path:object_id>/view-pdf/',
+                self.admin_site.admin_view(self.view_pdf_view),
+                name='aquaculture_productionreport_view_pdf',
+            ),
+            path(
+                '<path:object_id>/download-pdf/',
+                self.admin_site.admin_view(self.download_pdf_view),
+                name='aquaculture_productionreport_download_pdf',
+            ),
+        ]
+        return custom + urls
+
+    def _get_or_generate_pdf_content(self, report):
+        """Retourne le contenu PDF binaire du rapport (génère si absent)."""
+        if not report.pdf_file:
+            from ..services.report_service import ReportService
+            report = ReportService.regenerate(report)
+        report.pdf_file.open('rb')
+        content = report.pdf_file.read()
+        report.pdf_file.close()
+        return report, content
+
+    def view_pdf_view(self, request, object_id):
+        """Ouvre le PDF du rapport directement dans le navigateur (nouvel onglet)."""
+        report = self.get_object(request, object_id)
+        if report is None:
+            return HttpResponse("Rapport introuvable.", status=404)
+        if not self.has_view_permission(request, report):
+            return HttpResponse("Accès refusé.", status=403)
+        try:
+            report, content = self._get_or_generate_pdf_content(report)
+            filename = f"rapport_{report.report_type}_{report.period_start}_{report.period_end}.pdf"
+            response = HttpResponse(content, content_type='application/pdf')
+            response['Content-Disposition'] = f'inline; filename="{filename}"'
+            return response
+        except Exception as exc:
+            return HttpResponse(f"Erreur : {exc}", status=500)
+
+    def download_pdf_view(self, request, object_id):
+        """Télécharge le PDF du rapport."""
+        report = self.get_object(request, object_id)
+        if report is None:
+            return HttpResponse("Rapport introuvable.", status=404)
+        if not self.has_view_permission(request, report):
+            return HttpResponse("Accès refusé.", status=403)
+        try:
+            report, content = self._get_or_generate_pdf_content(report)
+            filename = f"rapport_{report.report_type}_{report.period_start}_{report.period_end}.pdf"
+            response = HttpResponse(content, content_type='application/pdf')
+            response['Content-Disposition'] = f'attachment; filename="{filename}"'
+            return response
+        except Exception as exc:
+            messages.error(request, f"Erreur génération PDF : {exc}")
+            return HttpResponseRedirect(
+                reverse('admin:aquaculture_productionreport_change', args=[object_id])
+            )
+
+    # --- Display methods ---
+
+    def id_short(self, obj):
+        return str(obj.id)[:8] + "..."
+    id_short.short_description = _('ID')
+
+    def farm_display(self, obj):
+        return obj.farm_profile.farm_name
+    farm_display.short_description = _('Ferme')
+
+    def period_display(self, obj):
+        return f"{obj.period_start} → {obj.period_end}"
+    period_display.short_description = _('Période')
+
+    def report_type_badge(self, obj):
+        labels = {'daily': 'Journalier', 'weekly': 'Hebdomadaire', 'monthly': 'Mensuel'}
+        colors = {'daily': '#6b7280', 'weekly': '#3b82f6', 'monthly': '#059669'}
+        color = colors.get(obj.report_type, '#6b7280')
+        label = labels.get(obj.report_type, obj.report_type)
+        return format_html(
+            '<span style="background:{}; color:white; padding:3px 8px; border-radius:4px;">{}</span>',
+            color, label
+        )
+    report_type_badge.short_description = _('Type')
+
+    def status_badge(self, obj):
+        colors = {'draft': '#f59e0b', 'validated': '#059669', 'archived': '#6b7280'}
+        labels = {'draft': 'Brouillon', 'validated': 'Validé', 'archived': 'Archivé'}
+        color = colors.get(obj.status, '#6b7280')
+        label = labels.get(obj.status, obj.status)
+        return format_html(
+            '<span style="background:{}; color:white; padding:3px 8px; border-radius:4px;">{}</span>',
+            color, label
+        )
+    status_badge.short_description = _('Statut')
+
+    def pdf_download_link(self, obj):
+        """Boutons Visualiser + Télécharger PDF (liste + détail)."""
+        if not obj.pk:
+            return "—"
+        view_url = reverse('admin:aquaculture_productionreport_view_pdf', args=[obj.pk])
+        download_url = reverse('admin:aquaculture_productionreport_download_pdf', args=[obj.pk])
+        btn_base = (
+            'display:inline-block;padding:4px 10px;border-radius:4px;'
+            'text-decoration:none;font-size:12px;font-weight:bold;'
+        )
+        if obj.pdf_file:
+            return format_html(
+                '<a href="{}" target="_blank" style="{}background:#3b82f6;color:white;">👁 Visualiser</a>'
+                '&nbsp;'
+                '<a href="{}" style="{}background:#059669;color:white;">📄 Télécharger</a>',
+                view_url, btn_base, download_url, btn_base,
+            )
+        return format_html(
+            '<a href="{}" style="{}background:#6b7280;color:white;">🔄 Générer PDF</a>',
+            download_url, btn_base,
+        )
+    pdf_download_link.short_description = _('PDF')
+
+    def report_content_preview(self, obj):
+        """Affiche un aperçu lisible du contenu du rapport directement dans l'admin."""
+        if not obj.payload or not isinstance(obj.payload, dict):
+            return mark_safe('<em style="color:#6b7280;">Aucune donnée — générez d\'abord le rapport.</em>')
+
+        payload = obj.payload
+        farm = payload.get('farm', {}) or {}
+        summary = payload.get('summary', {}) or {}
+        cycles = payload.get('cycles', []) or []
+        meta = payload.get('report_meta', {}) or {}
+
+        farm_name = escape(str(farm.get('farm_name', '—')))
+        period_start = escape(str(meta.get('period_start', '?')))
+        period_end = escape(str(meta.get('period_end', '?')))
+        promoter = escape(str(farm.get('promoter_name', '') or farm.get('promoter_phone', '')))
+
+        type_labels = {'daily': 'Journalier', 'weekly': 'Hebdomadaire', 'monthly': 'Mensuel'}
+        type_label = escape(type_labels.get(str(meta.get('report_type', '')), meta.get('report_type', '—')))
+
+        # -- Header --
+        html = (
+            '<div style="font-family:sans-serif;max-width:780px;border:1px solid #d1fae5;'
+            'border-radius:8px;overflow:hidden;margin:4px 0;">'
+            f'<div style="background:#059669;color:white;padding:10px 16px;display:flex;'
+            f'justify-content:space-between;align-items:center;">'
+            f'<strong style="font-size:14px;">🐟 {farm_name}</strong>'
+            f'<span style="font-size:12px;opacity:0.85;">{type_label} · {period_start} → {period_end}</span>'
+            f'</div>'
+            f'<div style="font-size:12px;color:#374151;padding:4px 16px;background:#ecfdf5;">'
+            f'Promoteur : {promoter}'
+            f'</div>'
+        )
+
+        # -- Résumé global --
+        html += (
+            '<div style="display:flex;gap:0;border-bottom:1px solid #e5e7eb;">'
+        )
+        for label, value, color in [
+            ('Cycles actifs', summary.get('cycle_count', '—'), '#059669'),
+            ('Logs saisis', summary.get('total_log_count', '—'), '#374151'),
+            ('Aliment (kg)', summary.get('total_feed', '—'), '#374151'),
+            ('Mortalité', summary.get('total_mortality', '—'), '#dc2626'),
+            ('Événements sanitaires', summary.get('total_sanitary_events', '—'), '#f59e0b'),
+        ]:
+            val = escape(str(value if value is not None else '—'))
+            html += (
+                f'<div style="flex:1;padding:10px 12px;border-right:1px solid #e5e7eb;text-align:center;">'
+                f'<div style="font-size:18px;font-weight:bold;color:{color};">{val}</div>'
+                f'<div style="font-size:11px;color:#6b7280;">{escape(label)}</div>'
+                f'</div>'
+            )
+        html += '</div>'
+
+        # -- Détail par cycle --
+        if cycles:
+            html += '<div style="padding:4px 16px 0;background:#f9fafb;border-bottom:1px solid #e5e7eb;"><strong style="font-size:12px;color:#374151;">Détail par cycle</strong></div>'
+            for section in cycles:
+                cycle = section.get('cycle', {}) or {}
+                metrics = section.get('current_metrics', {}) or {}
+                period = section.get('period_metrics', {}) or {}
+                eco = section.get('economic_plan', {}) or {}
+
+                cycle_name = escape(str(cycle.get('cycle_name', '?')))
+                pond = escape(str(cycle.get('pond_identifier', '')))
+                species = escape(str(cycle.get('species_display', '')))
+                days = escape(str(cycle.get('days_active', '?')))
+
+                fcr = metrics.get('fcr')
+                fcr_color = '#059669' if fcr and float(fcr) <= 1.5 else (
+                    '#f59e0b' if fcr and float(fcr) <= 2.0 else '#dc2626'
+                )
+                fcr_str = escape(f'{float(fcr):.2f}' if fcr else '—')
+
+                survival = metrics.get('survival_rate')
+                surv_color = '#059669' if survival and float(survival) >= 85 else (
+                    '#f59e0b' if survival and float(survival) >= 70 else '#dc2626'
+                )
+                surv_str = escape(f'{float(survival):.1f}%' if survival else '—')
+
+                biomass = escape(str(f'{float(metrics["current_biomass"]):.1f} kg' if metrics.get('current_biomass') else '—'))
+                weight = escape(str(f'{float(metrics["current_average_weight"]):.0f} g' if metrics.get('current_average_weight') else '—'))
+                count = escape(str(metrics.get('current_count', '—')))
+                p_feed = escape(str(f'{float(period["total_feed"]):.1f} kg' if period.get('total_feed') else '—'))
+                p_mort = escape(str(period.get('total_mortality', '—')))
+                p_temp = escape(str(f'{float(period["average_temperature"]):.1f}°C' if period.get('average_temperature') else '—'))
+                p_logs = escape(str(period.get('log_count', '—')))
+                roi = eco.get('projected_roi_pct')
+                roi_str = escape(f'{float(roi):.1f}%' if roi is not None else '—')
+                roi_color = '#059669' if roi and float(roi) > 0 else '#dc2626'
+
+                html += (
+                    f'<div style="padding:10px 16px;border-bottom:1px solid #f3f4f6;">'
+                    f'<div style="margin-bottom:6px;">'
+                    f'<strong style="color:#065f46;">{cycle_name}</strong>'
+                    f'<span style="color:#6b7280;font-size:12px;margin-left:8px;">{species} · {pond} · J+{days}</span>'
+                    f'</div>'
+                    f'<div style="display:flex;flex-wrap:wrap;gap:16px;font-size:12px;">'
+                    f'<span>🐟 <strong>{count}</strong> poissons</span>'
+                    f'<span>⚖️ <strong>{weight}</strong> poids moy.</span>'
+                    f'<span>📦 <strong>{biomass}</strong> biomasse</span>'
+                    f'<span style="color:{fcr_color};">📊 FCR <strong>{fcr_str}</strong></span>'
+                    f'<span style="color:{surv_color};">💚 Survie <strong>{surv_str}</strong></span>'
+                    f'<span style="color:{roi_color};">💰 ROI estimé <strong>{roi_str}</strong></span>'
+                    f'</div>'
+                    f'<div style="margin-top:4px;font-size:11px;color:#6b7280;">'
+                    f'Période : {p_logs} logs · Aliment {p_feed} · Mortalité {p_mort} · Temp. moy. {p_temp}'
+                    f'</div>'
+                    f'</div>'
+                )
+        else:
+            html += '<div style="padding:12px 16px;color:#6b7280;font-size:13px;"><em>Aucun cycle actif sur cette période.</em></div>'
+
+        html += '</div>'
+        return mark_safe(html)
+    report_content_preview.short_description = _('Aperçu du rapport')
+
+    # --- Actions ---
+
+    @admin.action(description=_("Télécharger PDF(s) sélectionnés"))
+    def download_report_pdf_action(self, request, queryset):
+        """Télécharge les PDFs des rapports sélectionnés (1 → PDF, N → ZIP)."""
+        if not self.has_view_permission(request):
+            messages.error(request, _("Accès refusé."))
+            return
+        from ..services.report_service import ReportService
+        count = queryset.count()
+        if count == 1:
+            report = queryset.first()
+            try:
+                if not report.pdf_file:
+                    report = ReportService.regenerate(report)
+                report.pdf_file.open('rb')
+                content = report.pdf_file.read()
+                report.pdf_file.close()
+                filename = f"rapport_{report.report_type}_{report.period_start}.pdf"
+                response = HttpResponse(content, content_type='application/pdf')
+                response['Content-Disposition'] = f'attachment; filename="{filename}"'
+                return response
+            except Exception as exc:
+                messages.error(request, f"Erreur PDF : {exc}")
+                return
+        try:
+            zip_buffer = io.BytesIO()
+            with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
+                for report in queryset:
+                    if not report.pdf_file:
+                        report = ReportService.regenerate(report)
+                    report.pdf_file.open('rb')
+                    content = report.pdf_file.read()
+                    report.pdf_file.close()
+                    fname = (
+                        f"rapport_{report.report_type}_"
+                        f"{report.period_start}_{report.period_end}.pdf"
+                    )
+                    zf.writestr(fname, content)
+            zip_buffer.seek(0)
+            response = HttpResponse(zip_buffer.read(), content_type='application/zip')
+            response['Content-Disposition'] = 'attachment; filename="rapports_aquacare.zip"'
+            return response
+        except Exception as exc:
+            messages.error(request, f"Erreur ZIP : {exc}")
+
+    @admin.action(description=_("Régénérer rapport(s) — nouveau PDF"))
+    def regenerate_report_action(self, request, queryset):
+        """Régénère les rapports sélectionnés (données fraîches + nouveau PDF)."""
+        if not request.user.is_superuser and not request.user.groups.filter(
+            name=RBACConstants.GROUP_MANAGERS
+        ).exists():
+            messages.error(request, _("Accès refusé."))
+            return
+        from ..services.report_service import ReportService
+        success = 0
+        for report in queryset:
+            try:
+                ReportService.regenerate(report)
+                success += 1
+            except Exception as exc:
+                messages.warning(request, f"Rapport {str(report.id)[:8]} : {exc}")
+        if success:
+            messages.success(request, _('{} rapport(s) régénéré(s).').format(success))
+
+    @admin.action(description=_("Valider rapport(s)"))
+    def validate_report_action(self, request, queryset):
+        """Valide les rapports sélectionnés (statut → validé). Superuser seulement."""
+        if not request.user.is_superuser:
+            messages.error(request, _("Seul le superuser peut valider les rapports."))
+            return
+        from ..services.report_service import ReportService
+        count = 0
+        for report in queryset:
+            try:
+                ReportService.validate(report, request.user)
+                count += 1
+            except Exception as exc:
+                messages.warning(request, f"Erreur : {exc}")
+        if count:
+            messages.success(request, _('{} rapport(s) validé(s).').format(count))
+
+
+@admin.register(ReportDispatchLog)
+class ReportDispatchLogAdmin(AquacultureSecuredAdmin):
+    """Journal d'audit des envois de rapports."""
+
+    list_display = ['id_short', 'report', 'channel', 'status', 'recipient', 'created_at']
+    list_filter = ['channel', 'status', 'created_at']
+    search_fields = ['report__farm_profile__farm_name', 'recipient', 'error_code']
+    readonly_fields = [
+        'id', 'report', 'channel', 'status', 'recipient',
+        'error_code', 'error_message', 'metadata',
+        'dispatched_by', 'created_at'
+    ]
+
+    def id_short(self, obj):
+        return str(obj.id)[:8] + "..."
+    id_short.short_description = _('ID')
+
+    def has_view_permission(self, request, obj=None):
+        """Managers peuvent consulter les logs d'envoi en lecture seule."""
+        if request.user.is_superuser:
+            return True
+        return request.user.groups.filter(name=RBACConstants.GROUP_MANAGERS).exists()
+
+    def has_add_permission(self, request):
+        return request.user.is_superuser
+
+    def has_change_permission(self, request, obj=None):
         return request.user.is_superuser

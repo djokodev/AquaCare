@@ -1,9 +1,11 @@
 import React from 'react';
 import { Alert } from 'react-native';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { useDispatch, useSelector } from 'react-redux';
 import FeedingPlanScreen from '../FeedingPlanScreen';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
 import { FeedingPlan, ProductionCycle } from '@/types/aquaculture';
+import { useLocalFeedingAlarms } from '@/features/notifications/hooks/useLocalFeedingAlarms';
 
 jest.mock('@/features/aquaculture/services/aquacultureService', () => ({
   aquacultureService: {
@@ -11,6 +13,11 @@ jest.mock('@/features/aquaculture/services/aquacultureService', () => ({
     getFeedingPlans: jest.fn(),
     generateFeedingPlan: jest.fn(),
   },
+}));
+
+jest.mock('react-redux', () => ({
+  useDispatch: jest.fn(),
+  useSelector: jest.fn(),
 }));
 
 jest.mock('@/utils/logger', () => ({
@@ -24,8 +31,18 @@ jest.mock('@/utils/logger', () => ({
   },
 }));
 
+jest.mock('@/features/notifications/hooks/useLocalFeedingAlarms', () => ({
+  useLocalFeedingAlarms: jest.fn(),
+}));
+
 describe('features/aquaculture/screens/FeedingPlanScreen', () => {
+  const mockDispatch = jest.fn();
+  const mockUseSelector = useSelector as unknown as jest.Mock;
   const mockService = aquacultureService as jest.Mocked<typeof aquacultureService>;
+  const mockUseLocalFeedingAlarms = useLocalFeedingAlarms as jest.MockedFunction<typeof useLocalFeedingAlarms>;
+  const mockReconcileCycleAlarms = jest.fn();
+  const mockGetFormattedMealTimes = jest.fn(() => ['08h00', '13h00', '18h00']);
+  const mockSetAlarmsEnabled = jest.fn(() => Promise.resolve());
   const navigation = {
     goBack: jest.fn(),
     navigate: jest.fn(),
@@ -81,6 +98,25 @@ describe('features/aquaculture/screens/FeedingPlanScreen', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    (useDispatch as unknown as jest.Mock).mockReturnValue(mockDispatch);
+    mockUseLocalFeedingAlarms.mockReturnValue({
+      scheduleAlarms: jest.fn(),
+      cancelAlarms: jest.fn(),
+      hasActiveAlarms: jest.fn(() => Promise.resolve(false)),
+      reconcileCycleAlarms: mockReconcileCycleAlarms.mockResolvedValue({
+        status: 'scheduled',
+        scheduledCount: 3,
+      }),
+      getFormattedMealTimes: mockGetFormattedMealTimes,
+      setAlarmsEnabled: mockSetAlarmsEnabled,
+    } as any);
+    mockUseSelector.mockImplementation((selector: (state: any) => unknown) =>
+      selector({
+        aquaculture: {
+          currentCycle: undefined,
+        },
+      })
+    );
   });
 
   it('affiche l etat sans cycle actif et navigue vers NewCycle', async () => {
@@ -104,12 +140,29 @@ describe('features/aquaculture/screens/FeedingPlanScreen', () => {
     const { getByText } = render(<FeedingPlanScreen navigation={navigation} />);
 
     await waitFor(() => {
-      expect(getByText('Cycle A')).toBeTruthy();
-      expect(getByText(/week 1/)).toBeTruthy();
+      expect(getByText(/week.*1/i)).toBeTruthy();
     });
 
     expect(mockService.getActiveCycles).toHaveBeenCalledTimes(1);
     expect(mockService.getFeedingPlans).toHaveBeenCalledWith(cycleA.id);
+  });
+
+  it('utilise currentCycle comme cycle preselectionne quand disponible', async () => {
+    mockUseSelector.mockImplementation((selector: (state: any) => unknown) =>
+      selector({
+        aquaculture: {
+          currentCycle: cycleB,
+        },
+      })
+    );
+    mockService.getActiveCycles.mockResolvedValueOnce([cycleA, cycleB]);
+    mockService.getFeedingPlans.mockResolvedValueOnce([feedingPlanA]);
+
+    render(<FeedingPlanScreen navigation={navigation} />);
+
+    await waitFor(() => {
+      expect(mockService.getFeedingPlans).toHaveBeenCalledWith(cycleB.id);
+    });
   });
 
   it('genere un plan apres confirmation et recharge la liste', async () => {
@@ -137,27 +190,37 @@ describe('features/aquaculture/screens/FeedingPlanScreen', () => {
     await waitFor(() => {
       expect(mockService.generateFeedingPlan).toHaveBeenCalledWith(cycleA.id);
       expect(mockService.getFeedingPlans).toHaveBeenCalledTimes(2);
+      expect(mockReconcileCycleAlarms).toHaveBeenCalled();
     });
 
     alertSpy.mockRestore();
   });
 
-  it('affiche une erreur si le chargement des plans du cycle echoue', async () => {
-    mockService.getActiveCycles.mockResolvedValueOnce([cycleA, cycleB]);
-    mockService.getFeedingPlans
-      .mockResolvedValueOnce([feedingPlanA])
-      .mockRejectedValueOnce(new Error('boom'));
+  it('force les alarmes actives et ne montre plus le toggle utilisateur', async () => {
+    mockService.getActiveCycles.mockResolvedValueOnce([cycleA]);
+    mockService.getFeedingPlans.mockResolvedValueOnce([feedingPlanA]);
+
+    const { getByText, queryByText } = render(<FeedingPlanScreen navigation={navigation} />);
+
+    await waitFor(() => {
+      expect(getByText('alarmsStatusActive')).toBeTruthy();
+    });
+
+    await waitFor(() => {
+      expect(mockSetAlarmsEnabled).toHaveBeenCalledWith(true);
+      expect(mockReconcileCycleAlarms).toHaveBeenCalled();
+    });
+    expect(queryByText('alarmToggle')).toBeNull();
+    expect(queryByText('alarmToggleOff')).toBeNull();
+  });
+
+  it('affiche un etat vide si le chargement des cycles echoue', async () => {
+    mockService.getActiveCycles.mockRejectedValueOnce(new Error('boom'));
 
     const { getByText } = render(<FeedingPlanScreen navigation={navigation} />);
 
     await waitFor(() => {
-      expect(getByText('Cycle B')).toBeTruthy();
-    });
-
-    fireEvent.press(getByText('Cycle B'));
-
-    await waitFor(() => {
-      expect(getByText('feedingPlansLoadByCycleError')).toBeTruthy();
+      expect(getByText('noActiveCycles')).toBeTruthy();
     });
   });
 });

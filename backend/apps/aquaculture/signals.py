@@ -20,7 +20,6 @@ from datetime import date, datetime, timedelta
 from .models import (
     ProductionCycle, CycleLog, SanitaryLog, CycleMetrics
 )
-# Notifications centralisées
 from notifications.services import NotificationService
 from notifications.models import Notification
 from .domain.calculators import AquacultureCalculator
@@ -28,7 +27,7 @@ from .services import (
     ProductionCycleService,
     AnalyticsService
 )
-# NotificationService will be migrated to use apps.notifications.services.NotificationService
+from .services.sync_service import is_sync_in_progress
 
 
 # =============================================================================
@@ -158,85 +157,26 @@ def check_cycle_completion(sender, instance, **kwargs):
 @receiver(post_save, sender=CycleLog)
 def update_cycle_after_log(sender, instance, created, **kwargs):
     """
-    Met à jour automatiquement les métriques de cycle après chaque entrée de log.
+    Met à jour les métriques de cycle après chaque entrée de log.
 
-    DÉLÉGATION : Toute la logique métier est déléguée aux services.
-        - ProductionCycleService : Mise à jour métriques cycle
-        - NotificationService : Alertes mortalité et échantillonnage
-        - AnalyticsService : Alertes environnementales et mise à jour métriques
+    Architecture optimisée :
+        - SYNCHRONE : Seul le recalcul des métriques cycle (nécessaire pour la réponse HTTP)
+        - ASYNCHRONE (Celery) : Notifications, alertes, analytics, cache invalidation
 
-    Architecture: Signal → Service Layer (découplage complet)
+    Cela divise le temps de réponse POST /logs/ par 2-3.
     """
-    if created:
-        cycle = instance.cycle
+    # Skip pendant un sync offline batch (le recalcul est fait en batch après)
+    if not created or is_sync_in_progress():
+        return
 
-        # 1. Delegate business logic to ProductionCycleService
-        ProductionCycleService.update_current_metrics_after_log(cycle, instance)
+    cycle = instance.cycle
 
-        # 2. Check for abnormal mortality and create alert if needed
-        if instance.mortality_count and instance.mortality_count > 0:
-            mortality_rate = (instance.mortality_count / cycle.current_count * 100) if cycle.current_count > 0 else 0
+    # SYNCHRONE — necessary for immediate response accuracy
+    ProductionCycleService.update_current_metrics_after_log(cycle, instance)
 
-            if mortality_rate > 2.0:
-                severity = 'high' if mortality_rate > 5.0 else 'medium'
-                message = (
-                    f"Mortalite anormale detectee : {instance.mortality_count} morts ({mortality_rate:.1f}%). "
-                    "Verifier la qualite de l'eau et l'etat sanitaire."
-                )
-                NotificationService.create_notification(
-                    user=cycle.farm_profile.user,
-                    notification_type='mortality_alert',
-                    title=f"Alerte mortalite - {cycle.cycle_name}",
-                    message=message,
-                    content_object=cycle,
-                    metadata={
-                        'cycle_id': str(cycle.id),
-                        'mortality_count': instance.mortality_count,
-                        'mortality_rate': mortality_rate,
-                    },
-                    channels=['in_app', 'push'],
-                    priority='urgent' if mortality_rate > 5.0 else 'high',
-                )
-
-        # 3. Delegate environmental parameter checks to AnalyticsService
-        AnalyticsService.check_and_create_environmental_alerts(instance)
-
-        # 4. Update cycle metrics data (growth curves, etc.)
-        AnalyticsService.update_cycle_metrics_data(cycle)
-
-        # 5. Check if weekly sampling reminder needed
-        last_sampling = cycle.logs.filter(
-            average_weight__isnull=False
-        ).exclude(id=instance.id).order_by('-log_date').first()
-
-        if last_sampling:
-            days_since_sampling = (instance.log_date - last_sampling.log_date).days
-        else:
-            days_since_sampling = (instance.log_date - cycle.start_date).days
-
-        if days_since_sampling >= 7 and not instance.average_weight:
-            next_sampling_date = instance.log_date + timedelta(days=7)
-
-            if next_sampling_date > date.today():
-                exists = Notification.objects.filter(
-                    user=cycle.farm_profile.user,
-                    notification_type='sampling_reminder',
-                    scheduled_for__date=next_sampling_date
-                ).exists()
-
-                if not exists:
-                    NotificationService.create_notification(
-                        user=cycle.farm_profile.user,
-                        notification_type='sampling_reminder',
-                        title=f"Échantillonnage hebdomadaire - {cycle.cycle_name}",
-                        message="Effectuer une pesée pour suivre la croissance (minimum 20 poissons).",
-                        content_object=cycle,
-                        metadata={'cycle_id': str(cycle.id)},
-                        channels=['in_app', 'push'],
-                        scheduled_for=timezone.make_aware(
-                            datetime.combine(next_sampling_date, datetime.min.time()).replace(hour=9, minute=0)
-                        ),
-                    )
+    # ASYNCHRONE — notifications, alerts, analytics, cache invalidation
+    from .tasks import post_log_async_tasks
+    post_log_async_tasks.delay(str(instance.id))
 
 
 @receiver(post_delete, sender=CycleLog)
@@ -255,9 +195,11 @@ def recalculate_cycle_on_log_delete(sender, instance, **kwargs):
         # Vérifier que le cycle existe toujours en base de données
         # (évite les conflits lors de suppression CASCADE)
         if cycle and ProductionCycle.objects.filter(id=cycle.id).exists():
-            # Le cycle existe → recalcul normal
             ProductionCycleService.recalculate_all_metrics(cycle)
             AnalyticsService.update_cycle_metrics_data(cycle)
+            # Invalidate dashboard cache
+            from .tasks import invalidate_dashboard_cache
+            invalidate_dashboard_cache(str(cycle.farm_profile.user_id))
         # Sinon → le cycle est en cours de suppression, on ne fait rien
 
     except ProductionCycle.DoesNotExist:

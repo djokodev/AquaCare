@@ -97,6 +97,7 @@ const SLIDES: OnboardingSlideData[] = [
       { iconName: 'people-outline', textKey: 'onboarding_stat1' },
       { iconName: 'analytics-outline', textKey: 'onboarding_stat2' },
       { iconName: 'wallet-outline', textKey: 'onboarding_stat3' },
+      { iconName: 'storefront-outline', textKey: 'onboarding_stat4' },
     ],
   },
   // Slide 5: Action

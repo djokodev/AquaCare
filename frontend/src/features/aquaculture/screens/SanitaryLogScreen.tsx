@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState, AppDispatch } from '@/store/store';
-import { fetchDashboardData } from '@/features/aquaculture/store/aquacultureSlice';
+import { fetchDashboardData, setCurrentCycle } from '@/features/aquaculture/store/aquacultureSlice';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
 import { offlineService } from '@/services/offlineService';
 import { ReactNativeUploadFile, SanitaryLogForm, SanitaryEventType } from '@/types/aquaculture';
@@ -52,8 +52,11 @@ interface SanitaryLogData {
 export default function SanitaryLogScreen({ navigation }: SanitaryLogScreenProps) {
   const { t } = useTranslation();
   const dispatch = useDispatch<AppDispatch>();
-  const { dashboardData } = useSelector((state: RootState) => state.aquaculture);
+  const { dashboardData, currentCycle } = useSelector((state: RootState) => state.aquaculture);
   const activeCycles = dashboardData?.active_cycles || [];
+  const sessionScopedCycles = currentCycle?.id
+    ? activeCycles.filter((cycle) => cycle.id === currentCycle.id)
+    : activeCycles;
 
   const [selectedCycle, setSelectedCycle] = useState<string>('');
   const [formData, setFormData] = useState<SanitaryLogData>({
@@ -92,15 +95,21 @@ export default function SanitaryLogScreen({ navigation }: SanitaryLogScreenProps
   };
 
   useEffect(() => {
-    dispatch(fetchDashboardData());
+    dispatch(fetchDashboardData(undefined));
   }, [dispatch]);
 
   useEffect(() => {
-    if (activeCycles.length > 0 && !selectedCycle) {
-      setSelectedCycle(activeCycles[0].id);
-      setFormData((prev) => ({ ...prev, cycle_id: activeCycles[0].id }));
+    if (sessionScopedCycles.length === 0) {
+      return;
     }
-  }, [activeCycles, selectedCycle]);
+
+    const preferredCycle = sessionScopedCycles[0];
+
+    if (selectedCycle !== preferredCycle.id) {
+      setSelectedCycle(preferredCycle.id);
+      setFormData((prev) => ({ ...prev, cycle_id: preferredCycle.id }));
+    }
+  }, [sessionScopedCycles, selectedCycle]);
 
   useEffect(() => {
     if (!shouldShowTreatmentFields) {
@@ -233,7 +242,7 @@ export default function SanitaryLogScreen({ navigation }: SanitaryLogScreenProps
 
       try {
         await aquacultureService.createSanitaryLog(selectedCycle, sanitaryData);
-        dispatch(fetchDashboardData());
+        dispatch(fetchDashboardData(undefined));
 
         Alert.alert(t('success'), getSuccessMessage(formData.event_type), [
           { text: t('ok'), onPress: () => navigation.goBack() },
@@ -257,7 +266,7 @@ export default function SanitaryLogScreen({ navigation }: SanitaryLogScreenProps
     }
   };
 
-  if (activeCycles.length === 0) {
+  if (sessionScopedCycles.length === 0) {
     return (
       <View className="flex-1 items-center justify-center bg-cream px-5">
         <Ionicons name="medical-outline" size={64} color={MAVECAM_COLORS.GRAY_LIGHT} />
@@ -281,11 +290,15 @@ export default function SanitaryLogScreen({ navigation }: SanitaryLogScreenProps
 
       <View className="p-4">
         <CycleSelector
-          cycles={activeCycles}
+          cycles={sessionScopedCycles}
           selectedCycleId={selectedCycle}
           onSelectCycle={(cycleId) => {
             setSelectedCycle(cycleId);
             setFormData((prev) => ({ ...prev, cycle_id: cycleId }));
+            const cycle = sessionScopedCycles.find((item) => item.id === cycleId);
+            if (cycle) {
+              dispatch(setCurrentCycle(cycle));
+            }
           }}
         />
 

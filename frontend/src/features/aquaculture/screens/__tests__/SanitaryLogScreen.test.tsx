@@ -70,13 +70,14 @@ describe('features/aquaculture/screens/SanitaryLogScreen', () => {
     (useDispatch as unknown as jest.Mock).mockReturnValue(mockDispatch);
   });
 
-  const setSelectorState = (cycles: ProductionCycle[]) => {
+  const setSelectorState = (cycles: ProductionCycle[], currentCycle?: ProductionCycle) => {
     mockUseSelector.mockImplementation((selector: (state: any) => unknown) =>
       selector({
         aquaculture: {
           dashboardData: {
             active_cycles: cycles,
           },
+          currentCycle,
         },
       })
     );
@@ -104,6 +105,33 @@ describe('features/aquaculture/screens/SanitaryLogScreen', () => {
     expect(alertSpy).toHaveBeenCalledWith('error', 'selectEventType');
     expect(mockService.createSanitaryLog).not.toHaveBeenCalled();
     alertSpy.mockRestore();
+  });
+
+  it('utilise currentCycle comme cycle par defaut', async () => {
+    const otherCycle = {
+      ...activeCycle,
+      id: 'cycle-2',
+      cycle_name: 'Cycle Sanitaire B',
+      pond_identifier: 'P2',
+    };
+    setSelectorState([activeCycle, otherCycle], otherCycle);
+    mockService.createSanitaryLog.mockResolvedValueOnce({ id: 'san-2' } as any);
+
+    const { getByText, getByPlaceholderText } = render(<SanitaryLogScreen navigation={navigation} />);
+
+    fireEvent.press(getByText('sanitaryEventOther'));
+    fireEvent.changeText(getByPlaceholderText('symptomsPlaceholder'), 'Observation');
+    fireEvent.press(getByText('save'));
+
+    await waitFor(() => {
+      expect(mockService.createSanitaryLog).toHaveBeenCalledWith(
+        'cycle-2',
+        expect.objectContaining({
+          event_type: 'other',
+          symptoms: 'Observation',
+        })
+      );
+    });
   });
 
   it('cree un log sanitaire en ligne', async () => {

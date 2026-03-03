@@ -44,6 +44,10 @@ export default function ProfileScreen({ navigation }: Props) {
 
   const { dashboardData } = useSelector((state: RootState) => state.aquaculture);
   const activeCycles = dashboardData?.active_cycles || [];
+  const totalAreaInProduction = activeCycles.reduce(
+    (sum, cycle) => sum + (Number(cycle.pond_surface_m2) || 0),
+    0
+  );
 
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState<Partial<User>>({});
@@ -51,7 +55,7 @@ export default function ProfileScreen({ navigation }: Props) {
   const [showInterventionZoneModal, setShowInterventionZoneModal] = useState(false);
 
   useEffect(() => {
-    dispatch(fetchDashboardData());
+    dispatch(fetchDashboardData(undefined));
   }, [dispatch]);
 
   useEffect(() => {
@@ -246,7 +250,6 @@ export default function ProfileScreen({ navigation }: Props) {
             </>
           )}
 
-          {user.activity_type && <InfoRow label={t("activityType") || ""} value={user.activity_type} editable={false} />}
         </View>
       </View>
 
@@ -293,10 +296,10 @@ export default function ProfileScreen({ navigation }: Props) {
           <View className="bg-white rounded-xl p-4">
             <InfoRow label={t("farmName") || ""} value={formatFarmName(farmProfile.farm_name)} editable={false} icon="business" />
             <InfoRow label={t("totalPonds") || ""} value={activeCycles.length.toString()} editable={false} icon="water" />
-            {farmProfile.total_area_m2 && (
+            {(totalAreaInProduction > 0 || farmProfile.total_area_m2) && (
               <InfoRow
                 label={t("totalArea") || ""}
-                value={`${farmProfile.total_area_m2} m²`}
+                value={`${totalAreaInProduction > 0 ? totalAreaInProduction : farmProfile.total_area_m2} m²`}
                 editable={false}
                 icon="resize"
               />
@@ -446,12 +449,13 @@ function InfoRow({
       </View>
       {editable ? (
         <TextInput
-          className="border border-gray-300 rounded-md px-2 py-1 text-sm text-right text-gray-dark flex-1"
+          className="border border-gray-300 rounded-md px-2 h-10 text-sm text-right text-gray-dark flex-1"
           value={inputValue}
           onChangeText={onChangeText}
           placeholder={placeholder}
           keyboardType={keyboardType}
           autoCapitalize="words"
+          textAlignVertical="center"
         />
       ) : (
         <Text className={`text-sm text-gray-dark font-medium flex-1 text-right ${isEmail ? "" : ""}`} selectable={isEmail}>

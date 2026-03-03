@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="{{ language_code|default:'fr' }}">
+<head>
+  <meta charset="UTF-8" />
+  <title>{{ labels.report_title }}</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 20mm 14mm;
+    }
+
+    body {
+      font-family: Arial, sans-serif;
+      color: #1e293b;
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    h1, h2, h3 {
+      margin: 0 0 8px 0;
+      color: #047857;
+    }
+
+    h1 {
+      font-size: 22px;
+    }
+
+    h2 {
+      font-size: 16px;
+      margin-top: 14px;
+      border-bottom: 1px solid #e5e7eb;
+      padding-bottom: 4px;
+    }
+
+    h3 {
+      font-size: 14px;
+      margin-top: 12px;
+    }
+
+    .header {
+      border: 1px solid #e5e7eb;
+      border-left: 4px solid {{ brand_color }};
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 16px;
+      background: #f8fafc;
+    }
+
+    .grid {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 6px;
+    }
+
+    .grid th,
+    .grid td {
+      border: 1px solid #e5e7eb;
+      padding: 6px;
+      vertical-align: top;
+    }
+
+    .grid th {
+      background: #f1f5f9;
+      text-align: left;
+      font-weight: bold;
+    }
+
+    .pill {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 12px;
+      background: #dcfce7;
+      color: #065f46;
+      font-size: 11px;
+      font-weight: bold;
+    }
+
+    .muted {
+      color: #64748b;
+    }
+
+    .section {
+      margin-bottom: 16px;
+    }
+
+    .details-section {
+      margin-bottom: 16px;
+    }
+
+    .cycle-list {
+      margin-top: 8px;
+    }
+
+    .cycle-block {
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 10px;
+      margin-bottom: 16px;
+      page-break-before: always;
+    }
+
+    .cycle-block-first {
+      page-break-before: auto;
+    }
+
+    .small {
+      font-size: 11px;
+    }
+
+    .kpi-grid {
+      font-size: 0;
+      margin: 8px 0 14px 0;
+    }
+
+    .kpi-card {
+      display: inline-block;
+      width: 48%;
+      margin: 0 2% 8px 0;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 10px;
+      text-align: center;
+      background: #ffffff;
+      vertical-align: top;
+    }
+
+    .kpi-card.kpi-even {
+      margin-right: 0;
+    }
+
+    .kpi-icon-wrap {
+      width: 28px;
+      height: 28px;
+      line-height: 28px;
+      margin: 0 auto 6px auto;
+      border-radius: 14px;
+      background: #dcfce7;
+      color: #065f46;
+      font-size: 14px;
+      text-align: center;
+    }
+
+    .kpi-value {
+      font-size: 13px;
+      font-weight: bold;
+      color: #1e293b;
+      margin-bottom: 2px;
+    }
+
+    .kpi-label {
+      font-size: 10px;
+      color: #64748b;
+      line-height: 1.25;
+    }
+
+    .footer {
+      margin-top: 24px;
+      padding-top: 10px;
+      border-top: 1px solid #e5e7eb;
+      font-size: 10px;
+      color: #64748b;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>{{ labels.report_title }}</h1>
+    <div>
+      <strong>{{ labels.farm }}:</strong> {{ payload.farm.farm_name }} |
+      <strong>{{ labels.report_type }}:</strong> {{ report_type_label }} |
+      <strong>{{ labels.period_analyzed }}:</strong> {{ period_label }}
+    </div>
+    <div class="small muted">
+      {{ labels.generated_on }} {{ generated_at|date:"d/m/Y H:i" }} | {{ labels.promoter }}: {{ payload.farm.promoter_name }}
+    </div>
+  </div>
+
+  <div class="details-section">
+    <h2>{{ labels.details_by_cycle }}</h2>
+
+    {% if payload.cycles %}
+      <div class="cycle-list">
+      {% for section in payload.cycles %}
+        <div class="cycle-block{% if forloop.first %} cycle-block-first{% endif %}">
+          <h3>{{ section.cycle.cycle_name }} <span class="pill">{{ section.cycle.species_display }}</span></h3>
+          <div class="small muted">
+            {{ labels.pond }}: {{ section.cycle.pond_identifier }} |
+            {{ labels.started_on }} {{ section.cycle.start_date }} |
+            {{ labels.active_days }}: {{ section.cycle.days_active }}
+          </div>
+
+          {% with metrics=section.dashboard_metrics %}
+            <h3>{{ labels.dashboard_metrics }}</h3>
+            <div class="kpi-grid">
+              <div class="kpi-card">
+                <div class="kpi-icon-wrap">💰</div>
+                <div class="kpi-value">
+                  {% if metrics.estimated_market_value_fcfa == 0 %}
+                    0 FCFA
+                  {% elif metrics.estimated_market_value_fcfa %}
+                    {{ metrics.estimated_market_value_fcfa|floatformat:0 }} FCFA
+                  {% else %}
+                    {{ empty_value_label }}
+                  {% endif %}
+                </div>
+                <div class="kpi-label">{{ labels.estimated_market_value }}</div>
+              </div>
+              <div class="kpi-card kpi-even">
+                <div class="kpi-icon-wrap">🍽</div>
+                <div class="kpi-value">
+                  {% if metrics.feed_cost_consumed_fcfa == 0 %}
+                    0 FCFA
+                  {% elif metrics.feed_cost_consumed_fcfa %}
+                    {{ metrics.feed_cost_consumed_fcfa|floatformat:0 }} FCFA
+                  {% else %}
+                    {{ empty_value_label }}
+                  {% endif %}
+                </div>
+                <div class="kpi-label">{{ labels.feed_cost_consumed }}</div>
+              </div>
+              <div class="kpi-card">
+                <div class="kpi-icon-wrap">⏳</div>
+                <div class="kpi-value">
+                  {% if metrics.time_remaining_days == 0 %}
+                    0 {{ labels.days_short }}
+                  {% elif metrics.time_remaining_days %}
+                    {{ metrics.time_remaining_days }} {{ labels.days_short }}
+                  {% else %}
+                    {{ empty_value_label }}
+                  {% endif %}
+                </div>
+                <div class="kpi-label">{{ labels.time_remaining_cycle }}</div>
+              </div>
+              <div class="kpi-card kpi-even">
+                <div class="kpi-icon-wrap">🧮</div>
+                <div class="kpi-value">
+                  {% if metrics.direct_production_cost_fcfa == 0 %}
+                    0 {{ labels.direct_production_cost_unit }}
+                  {% elif metrics.direct_production_cost_fcfa %}
+                    {{ metrics.direct_production_cost_fcfa|floatformat:0 }} {{ labels.direct_production_cost_unit }}
+                  {% else %}
+                    {{ empty_value_label }}
+                  {% endif %}
+                </div>
+                <div class="kpi-label">{{ labels.direct_production_cost }}</div>
+              </div>
+            </div>
+          {% endwith %}
+
+          <h3>{{ labels.current_indicators }}</h3>
+          <table class="grid">
+            <tr>
+              <th>{{ labels.current_fish_count }}</th>
+              <th>{{ labels.average_weight }}</th>
+              <th>{{ labels.biomass }}</th>
+              <th>{{ labels.fcr }}</th>
+              <th>{{ labels.survival }}</th>
+              <th>{{ labels.performance_score }}</th>
+            </tr>
+            <tr>
+              <td>{{ section.current_metrics.current_count }}</td>
+              <td>{{ section.current_metrics.current_average_weight|default_if_none:empty_value_label }}</td>
+              <td>{{ section.current_metrics.current_biomass|default_if_none:empty_value_label }}</td>
+              <td>{{ section.current_metrics.fcr|default_if_none:empty_value_label }}</td>
+              <td>{{ section.current_metrics.survival_rate|default_if_none:empty_value_label }}</td>
+              <td>{{ section.current_metrics.performance_score|default_if_none:empty_value_label }}</td>
+            </tr>
+          </table>
+
+          <h3>{{ labels.period_synthesis }}</h3>
+          <table class="grid">
+            <tr>
+              <th>{{ labels.logs }}</th>
+              <th>{{ labels.total_feed }}</th>
+              <th>{{ labels.mortality }}</th>
+              <th>{{ labels.average_weight }}</th>
+              <th>{{ labels.average_temp }}</th>
+              <th>{{ labels.average_oxygen }}</th>
+              <th>{{ labels.average_ph }}</th>
+            </tr>
+            <tr>
+              <td>{{ section.period_metrics.log_count }}</td>
+              <td>{{ section.period_metrics.total_feed|default_if_none:empty_value_label }}</td>
+              <td>{{ section.period_metrics.total_mortality }}</td>
+              <td>{{ section.period_metrics.average_weight|default_if_none:empty_value_label }}</td>
+              <td>{{ section.period_metrics.average_temperature|default_if_none:empty_value_label }}</td>
+              <td>{{ section.period_metrics.average_oxygen|default_if_none:empty_value_label }}</td>
+              <td>{{ section.period_metrics.average_ph|default_if_none:empty_value_label }}</td>
+            </tr>
+          </table>
+
+          <h3>{{ labels.daily_logs }}</h3>
+          {% if section.logs %}
+            <table class="grid small">
+              <tr>
+                <th>{{ labels.date }}</th>
+                <th>{{ labels.feed }}</th>
+                <th>{{ labels.mortality }}</th>
+                <th>{{ labels.average_weight_short }}</th>
+                <th>{{ labels.temperature }}</th>
+                <th>{{ labels.oxygen }}</th>
+                <th>{{ labels.ph }}</th>
+                <th>{{ labels.observations }}</th>
+              </tr>
+              {% for item in section.logs %}
+                <tr>
+                  <td>{{ item.log_date }}</td>
+                  <td>{{ item.feed_quantity|default_if_none:empty_value_label }}</td>
+                  <td>{{ item.mortality_count }}</td>
+                  <td>{{ item.average_weight|default_if_none:empty_value_label }}</td>
+                  <td>{{ item.water_temperature|default_if_none:empty_value_label }}</td>
+                  <td>{{ item.dissolved_oxygen|default_if_none:empty_value_label }}</td>
+                  <td>{{ item.ph_level|default_if_none:empty_value_label }}</td>
+                  <td>{{ item.observations|default:empty_value_label }}</td>
+                </tr>
+              {% endfor %}
+            </table>
+          {% else %}
+            <div class="small muted">{{ labels.no_daily_logs }}</div>
+          {% endif %}
+
+          <h3>{{ labels.sanitary_logs }}</h3>
+          {% if section.sanitary_logs %}
+            <table class="grid small">
+              <tr>
+                <th>{{ labels.date }}</th>
+                <th>{{ labels.event_type }}</th>
+                <th>{{ labels.affected_fish }}</th>
+                <th>{{ labels.treatment }}</th>
+                <th>{{ labels.status }}</th>
+              </tr>
+              {% for item in section.sanitary_logs %}
+                <tr>
+                  <td>{{ item.event_date }}</td>
+                  <td>{{ item.event_type_display }}</td>
+                  <td>{{ item.affected_count|default_if_none:empty_value_label }}</td>
+                  <td>{{ item.treatment_applied|default:empty_value_label }}</td>
+                  <td>{% if item.resolved %}{{ labels.resolved }}{% else %}{{ labels.active }}{% endif %}</td>
+                </tr>
+              {% endfor %}
+            </table>
+          {% else %}
+            <div class="small muted">{{ labels.no_sanitary_logs }}</div>
+          {% endif %}
+        </div>
+      {% endfor %}
+      </div>
+    {% else %}
+      <div class="muted">{{ labels.no_active_cycle }}</div>
+    {% endif %}
+  </div>
+
+  <div class="footer">
+    {{ labels.footer }}
+  </div>
+</body>
+</html>

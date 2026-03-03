@@ -25,7 +25,10 @@
       "WebSearch",
       "Bash(winget:*)",
       "Bash(python3:*)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "WebFetch(domain:www.develop-group.net)",
+      "WebFetch(domain:www.sciencepublishinggroup.com)",
+      "Bash(xxd:*)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits"

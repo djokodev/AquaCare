@@ -5,7 +5,7 @@ from decimal import Decimal
 SAMPLING_TOLERANCE = Decimal('0.10')  # 10%
 
 # Default feed price (FCFA/kg) used when FarmProfile has no custom price
-DEFAULT_FEED_PRICE_PER_KG = Decimal('500')
+DEFAULT_FEED_PRICE_PER_KG = Decimal('1250')
 
 # Maximum initial stocking density (fish per m²)
 MAX_INITIAL_DENSITY_PER_M2 = 500
@@ -39,7 +39,14 @@ GROWTH_STAGES = [
     ('alevin', 'Alevin (0-10g)'),
     ('juvenile', 'Juvénile (10-50g)'),
     ('croissance', 'Croissance (50-150g)'),
-    ('finition', 'Finition (>150g)'),
+    ('finition', 'Finition (150-500g)'),
+    ('pre_recolte', 'Pré-récolte (>500g)'),
+]
+
+NUTRITIONAL_GUIDE_SOURCES = [
+    ('DIBAQ', 'DIBAQ'),
+    ('ALLER_AQUA', 'Aller Aqua'),
+    ('MAVECAM', 'MAVECAM'),
 ]
 
 CYCLE_STATUS_CHOICES = [
@@ -125,3 +132,22 @@ PERFORMANCE_THRESHOLDS = {
     'fcr_good': 2.0,
     'fcr_poor': 2.5,
 }
+
+# ===== PARAMÈTRES ÉCONOMIQUES CYCLE =====
+
+ECONOMIC_DEFAULTS_BY_SPECIES = {
+    'tilapia': {
+        'target_harvest_weight_g': Decimal('300'),
+        'planned_cycle_duration_days': 120,
+        'planned_selling_price_per_kg_fcfa': Decimal('1800'),
+    },
+    'clarias': {
+        'target_harvest_weight_g': Decimal('400'),
+        'planned_cycle_duration_days': 150,
+        'planned_selling_price_per_kg_fcfa': Decimal('2000'),
+    },
+}
+
+DEFAULT_EXPECTED_SURVIVAL_RATE_PCT = Decimal('85')
+DEFAULT_FINGERLINGS_COST_FCFA = Decimal('0')
+DEFAULT_OTHER_OPERATIONAL_COSTS_FCFA = Decimal('0')

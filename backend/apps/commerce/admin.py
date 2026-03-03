@@ -10,9 +10,10 @@ Roles:
 """
 from django.contrib import admin
 from django.contrib.admin.models import CHANGE
-from django.utils.html import format_html
+from django.utils.html import format_html, escape, mark_safe
 from django.utils.translation import gettext_lazy as _
 from django.http import HttpResponse, FileResponse
+from django.urls import reverse
 from django.contrib import messages
 import io
 import zipfile
@@ -187,7 +188,7 @@ class OrderAdmin(CommerceSecuredAdmin):
     list_display = [
         'order_number', 'user_link', 'farm_link', 'status_badge',
         'delivery_method_badge', 'total_bags_display', 'total_display',
-        'created_at'
+        'created_at', 'pdf_download_link'
     ]
     list_filter = ['status', 'delivery_method', 'created_at', 'created_offline']
     search_fields = [
@@ -198,7 +199,7 @@ class OrderAdmin(CommerceSecuredAdmin):
         'id', 'order_number', 'user', 'farm_profile',
         'subtotal', 'delivery_fee', 'total', 'total_bags',
         'is_free_delivery', 'client_uuid', 'synced_at',
-        'created_at', 'updated_at'
+        'created_at', 'updated_at', 'pdf_download_link', 'order_summary_display',
     ]
     inlines = [OrderItemInline]
     date_hierarchy = 'created_at'
@@ -206,8 +207,11 @@ class OrderAdmin(CommerceSecuredAdmin):
     actions = ['generate_pdf_action']
 
     fieldsets = (
-        (_('Commande'), {
-            'fields': ('id', 'order_number', 'status')
+        (_('Récapitulatif'), {
+            'fields': ('order_summary_display',)
+        }),
+        (_('Statut & téléchargement'), {
+            'fields': ('status', 'pdf_download_link')
         }),
         (_('Client'), {
             'fields': ('user', 'farm_profile')
@@ -225,6 +229,10 @@ class OrderAdmin(CommerceSecuredAdmin):
                 'total_bags', 'is_free_delivery'
             )
         }),
+        (_('Identifiants'), {
+            'fields': ('id', 'order_number'),
+            'classes': ('collapse',)
+        }),
         (_('Synchronisation Offline'), {
             'fields': ('client_uuid', 'created_offline', 'synced_at'),
             'classes': ('collapse',)
@@ -234,6 +242,68 @@ class OrderAdmin(CommerceSecuredAdmin):
             'classes': ('collapse',)
         }),
     )
+
+    def has_view_permission(self, request, obj=None):
+        """Commerce et managers peuvent voir les commandes en lecture seule."""
+        if request.user.is_superuser:
+            return True
+        user_groups = set(request.user.groups.values_list('name', flat=True))
+        return (
+            RBACConstants.GROUP_COMMERCE in user_groups
+            or RBACConstants.GROUP_MANAGERS in user_groups
+        )
+
+    def get_urls(self):
+        from django.urls import path
+        urls = super().get_urls()
+        custom = [
+            path(
+                '<path:object_id>/view-pdf/',
+                self.admin_site.admin_view(self.view_pdf_view),
+                name='commerce_order_view_pdf',
+            ),
+            path(
+                '<path:object_id>/download-pdf/',
+                self.admin_site.admin_view(self.download_pdf_view),
+                name='commerce_order_download_pdf',
+            ),
+        ]
+        return custom + urls
+
+    def view_pdf_view(self, request, object_id):
+        """Ouvre le bon de commande PDF directement dans le navigateur."""
+        order = self.get_object(request, object_id)
+        if order is None:
+            return HttpResponse("Commande introuvable.", status=404)
+        if not self.has_view_permission(request, order):
+            return HttpResponse("Accès refusé.", status=403)
+        try:
+            pdf_bytes = generate_order_pdf(order)
+            response = HttpResponse(pdf_bytes, content_type='application/pdf')
+            response['Content-Disposition'] = (
+                f'inline; filename="commande_{order.order_number}.pdf"'
+            )
+            return response
+        except Exception as exc:
+            return HttpResponse(f"Erreur : {exc}", status=500)
+
+    def download_pdf_view(self, request, object_id):
+        """Télécharge le bon de commande PDF."""
+        order = self.get_object(request, object_id)
+        if order is None:
+            return HttpResponse("Commande introuvable.", status=404)
+        if not self.has_view_permission(request, order):
+            return HttpResponse("Accès refusé.", status=403)
+        try:
+            pdf_bytes = generate_order_pdf(order)
+            response = HttpResponse(pdf_bytes, content_type='application/pdf')
+            response['Content-Disposition'] = (
+                f'attachment; filename="commande_{order.order_number}.pdf"'
+            )
+            return response
+        except Exception as exc:
+            messages.error(request, f"Erreur génération PDF : {exc}")
+            return HttpResponse(str(exc), status=500)
 
     def get_search_fields(self, request):
         """Retire phone_number de la recherche pour non-commerce."""
@@ -280,6 +350,135 @@ class OrderAdmin(CommerceSecuredAdmin):
 
     # --- Display methods ---
 
+    def order_summary_display(self, obj):
+        """Aperçu visuel complet de la commande directement dans l'admin."""
+        if not obj.pk:
+            return mark_safe('<em style="color:#6b7280;">—</em>')
+
+        order_number = escape(str(obj.order_number or '—'))
+        status_labels = {
+            'confirmed': ('Confirmée', '#2563eb'),
+            'delivered': ('Livrée', '#f59e0b'),
+            'received': ('Reçue', '#059669'),
+        }
+        status_label, status_color = status_labels.get(obj.status, (escape(str(obj.status)), '#6b7280'))
+
+        # Delivery info
+        delivery_label = escape(str(obj.get_delivery_method_display() if hasattr(obj, 'get_delivery_method_display') else obj.delivery_method))
+        pickup_label = ''
+        if obj.pickup_location:
+            pickup_label = escape(f' — {obj.get_pickup_location_display()}' if hasattr(obj, 'get_pickup_location_display') else '')
+        delivery_name = escape(str(obj.delivery_name or '—'))
+        delivery_phone = escape(str(obj.delivery_phone or '—'))
+        delivery_city = escape(str(obj.delivery_city or ''))
+        delivery_region = escape(str(obj.delivery_region or ''))
+        delivery_address = escape(str(obj.delivery_full_address or ''))
+
+        # Totals
+        subtotal = f'{obj.subtotal:,.0f}' if obj.subtotal else '—'
+        delivery_fee = f'{obj.delivery_fee:,.0f}' if obj.delivery_fee else '—'
+        total = f'{obj.total:,.0f}' if obj.total else '—'
+        bags = str(obj.total_bags or '—')
+
+        # Items
+        items_html = ''
+        try:
+            items = obj.items.select_related('product').all()
+            if items.exists():
+                items_html = '<table style="width:100%;border-collapse:collapse;font-size:13px;">'
+                items_html += (
+                    '<tr style="background:#f3f4f6;">'
+                    '<th style="padding:6px 10px;text-align:left;border-bottom:1px solid #e5e7eb;">Produit</th>'
+                    '<th style="padding:6px 10px;text-align:center;border-bottom:1px solid #e5e7eb;">Qté (sacs)</th>'
+                    '<th style="padding:6px 10px;text-align:right;border-bottom:1px solid #e5e7eb;">Prix unit.</th>'
+                    '<th style="padding:6px 10px;text-align:right;border-bottom:1px solid #e5e7eb;">Total</th>'
+                    '</tr>'
+                )
+                for item in items:
+                    product_name = escape(str(item.product_name or '—'))
+                    qty = escape(str(item.quantity))
+                    unit_price = f'{item.unit_price:,.0f} FCFA' if item.unit_price else '—'
+                    line_total = f'{item.line_total:,.0f} FCFA' if item.line_total else '—'
+                    items_html += (
+                        f'<tr style="border-bottom:1px solid #f3f4f6;">'
+                        f'<td style="padding:6px 10px;">{product_name}</td>'
+                        f'<td style="padding:6px 10px;text-align:center;">{qty}</td>'
+                        f'<td style="padding:6px 10px;text-align:right;">{escape(unit_price)}</td>'
+                        f'<td style="padding:6px 10px;text-align:right;font-weight:bold;">{escape(line_total)}</td>'
+                        f'</tr>'
+                    )
+                items_html += '</table>'
+            else:
+                items_html = '<em style="color:#6b7280;font-size:13px;">Aucun article.</em>'
+        except Exception:
+            items_html = '<em style="color:#6b7280;">Articles non disponibles.</em>'
+
+        html = (
+            '<div style="font-family:sans-serif;max-width:780px;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;margin:4px 0;">'
+
+            # Header
+            f'<div style="background:#059669;color:white;padding:10px 16px;display:flex;justify-content:space-between;align-items:center;">'
+            f'<strong>Commande #{order_number}</strong>'
+            f'<span style="background:{status_color};color:white;padding:2px 10px;border-radius:20px;font-size:12px;">{status_label}</span>'
+            f'</div>'
+
+            # Items
+            f'<div style="border-bottom:1px solid #e5e7eb;">'
+            f'{items_html}'
+            f'</div>'
+
+            # Totals
+            f'<div style="display:flex;border-bottom:1px solid #e5e7eb;">'
+            f'<div style="flex:1;padding:10px 16px;border-right:1px solid #e5e7eb;">'
+            f'<div style="font-size:12px;color:#6b7280;">Sous-total</div>'
+            f'<div style="font-weight:bold;">{escape(subtotal)} FCFA</div>'
+            f'</div>'
+            f'<div style="flex:1;padding:10px 16px;border-right:1px solid #e5e7eb;">'
+            f'<div style="font-size:12px;color:#6b7280;">Livraison</div>'
+            f'<div style="font-weight:bold;">{escape(delivery_fee)} FCFA</div>'
+            f'</div>'
+            f'<div style="flex:1;padding:10px 16px;border-right:1px solid #e5e7eb;">'
+            f'<div style="font-size:12px;color:#6b7280;">Total</div>'
+            f'<div style="font-weight:bold;color:#059669;font-size:16px;">{escape(total)} FCFA</div>'
+            f'</div>'
+            f'<div style="flex:1;padding:10px 16px;">'
+            f'<div style="font-size:12px;color:#6b7280;">Sacs commandés</div>'
+            f'<div style="font-weight:bold;">{escape(bags)} sacs</div>'
+            f'</div>'
+            f'</div>'
+
+            # Delivery
+            f'<div style="padding:10px 16px;font-size:13px;background:#f9fafb;">'
+            f'<strong>🚚 {delivery_label}{pickup_label}</strong> — '
+            f'{delivery_name} · {delivery_phone}'
+            f'{"  ·  " + delivery_city if delivery_city else ""}'
+            f'{"  ·  " + delivery_region if delivery_region else ""}'
+            f'{"<br><span style=\'color:#6b7280;\'>" + delivery_address + "</span>" if delivery_address else ""}'
+            f'</div>'
+
+            '</div>'
+        )
+        return mark_safe(html)
+    order_summary_display.short_description = _('Aperçu de la commande')
+
+    def pdf_download_link(self, obj):
+        """Boutons Visualiser + Télécharger le bon de commande PDF."""
+        if not obj.pk:
+            return "—"
+        view_url = reverse('admin:commerce_order_view_pdf', args=[obj.pk])
+        download_url = reverse('admin:commerce_order_download_pdf', args=[obj.pk])
+        btn_base = (
+            'display:inline-block;padding:6px 14px;border-radius:4px;'
+            'text-decoration:none;font-weight:bold;font-size:13px;'
+        )
+        return format_html(
+            '<a href="{}" target="_blank" style="{}background:#3b82f6;color:white;">👁 Visualiser</a>'
+            '&nbsp;&nbsp;'
+            '<a href="{}" style="{}background:#059669;color:white;">📄 Télécharger</a>',
+            view_url, btn_base, download_url, btn_base,
+        )
+    pdf_download_link.short_description = _('Bon de commande PDF')
+
     def user_link(self, obj):
         """Lien vers utilisateur."""
         return format_html(
@@ -301,7 +500,9 @@ class OrderAdmin(CommerceSecuredAdmin):
     def status_badge(self, obj):
         """Badge statut colore."""
         colors = {
-            'confirmed': '#10b981'
+            'confirmed': '#2563eb',
+            'delivered': '#f59e0b',
+            'received': '#10b981',
         }
         color = colors.get(obj.status, '#6b7280')
         return format_html(

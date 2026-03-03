@@ -110,6 +110,9 @@ describe('FeedingSuggestionsScreen', () => {
         user: { id: 'u1' },
         farmProfile: { id: 'farm-1' },
       },
+      aquaculture: {
+        currentCycle: { id: 'cycle-1', cycle_name: 'Cycle Tilapia', status: 'active' },
+      },
     };
   });
 
@@ -153,5 +156,15 @@ describe('FeedingSuggestionsScreen', () => {
     fireEvent.press(getByText('retry'));
 
     expect(mockDispatch).toHaveBeenCalled();
+  });
+
+  it('affiche l etat cycle non selectionne quand la session n est pas definie', () => {
+    mockState.aquaculture.currentCycle = undefined;
+
+    const { getByText } = render(<FeedingSuggestionsScreen />);
+
+    expect(getByText('sessionCycleNotSelected')).toBeTruthy();
+    fireEvent.press(getByText('sessionCycleConfirm'));
+    expect(mockNavigate).toHaveBeenCalledWith('CycleSessionEntry');
   });
 });

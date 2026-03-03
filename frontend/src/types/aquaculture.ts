@@ -9,6 +9,10 @@ import { Notification as NotificationPayload } from './notifications';
 
 export type Species = 'tilapia' | 'clarias';
 export type CycleStatus = 'planned' | 'active' | 'harvested' | 'cancelled';
+export type ReportType = 'daily' | 'weekly' | 'monthly';
+export type ReportStatus = 'draft' | 'validated';
+export type EmailReportStatus = 'not_sent' | 'sent' | 'failed';
+export type WhatsAppReportStatus = 'not_shared' | 'shared';
 export type SanitaryEventType =
   | 'disease'
   | 'treatment'
@@ -27,12 +31,22 @@ export interface ProductionCycle {
   pond_identifier: string;
   pond_surface_m2: number;
   pond_volume_m3?: number;
+  infrastructure_type?: string[];
 
   // Donnees initiales
   start_date: string;
   initial_count: number;
   initial_average_weight: number;
   initial_biomass: number;
+
+  // Projection economique
+  target_harvest_weight_g?: number;
+  planned_cycle_duration_days?: number;
+  planned_harvest_date?: string;
+  expected_survival_rate_pct?: number;
+  planned_selling_price_per_kg_fcfa?: number;
+  fingerlings_cost_fcfa?: number;
+  other_operational_costs_fcfa?: number;
 
   // Donnees finales (recolte)
   end_date?: string;
@@ -61,6 +75,18 @@ export interface ProductionCycle {
   // Couts calcules (backend avec prix configurable)
   total_feed_cost?: number; // FCFA
 
+  // Phase d'alimentation courante (calculée backend)
+  feed_phase?: {
+    phase_key: 'pre_grossissement' | 'grossissement';
+    phase_label: string;
+    weight_range_g: [number, number];
+    recommended_product: string;
+    products: string[];
+    protein_pct?: number;
+    bag_weight_kg?: number;
+    price_per_bag_fcfa?: number | null;
+  };
+
   status: CycleStatus;
 
   // Metadonnees
@@ -87,11 +113,14 @@ export interface CycleLog {
   // Alimentation
   feed_quantity?: number;
   feed_type?: string;
+  feed_size_mm?: number;
+  feeding_times?: string[];
 
   // Parametres environnementaux
   water_temperature?: number;
   dissolved_oxygen?: number;
   ph_level?: number;
+  ammonia_level?: number;
 
   // Observations
   observations?: string;
@@ -129,6 +158,15 @@ export interface FeedingPlan {
 
   // Notes optionnelles
   notes?: string;
+
+  // Traçabilité : température et source utilisées lors de la génération
+  temperature_used_c?: number;
+  used_default_temperature?: boolean;
+  data_source?: string;
+
+  // Champs spécifiques backend (granulométrie)
+  feed_size_mm?: number;
+  recommended_feed_type?: string;
 
   created_at: string;
 }
@@ -175,6 +213,48 @@ export interface NutritionalGuide {
   recommended_products: string[];
   expected_fcr: number;
   feeding_notes?: string;
+}
+
+export interface ReportDispatchLog {
+  id: string;
+  channel: 'email' | 'whatsapp';
+  channel_display?: string;
+  status: 'success' | 'failed';
+  status_display?: string;
+  recipient: string;
+  error_code?: string;
+  error_message?: string;
+  metadata: Record<string, unknown>;
+  dispatched_by?: string | null;
+  dispatched_by_name?: string;
+  created_at: string;
+}
+
+export interface ProductionReport {
+  id: string;
+  farm_profile: string;
+  farm_name?: string;
+  report_type: ReportType;
+  report_type_display?: string;
+  cycle_scope_id?: string | null;
+  period_start: string;
+  period_end: string;
+  status: ReportStatus;
+  status_display?: string;
+  payload?: Record<string, unknown>;
+  pdf_file?: string | null;
+  pdf_url?: string | null;
+  generated_at?: string | null;
+  validated_at?: string | null;
+  validated_by?: string | null;
+  validated_by_name?: string;
+  email_status: EmailReportStatus;
+  email_sent_at?: string | null;
+  whatsapp_status: WhatsAppReportStatus;
+  whatsapp_shared_at?: string | null;
+  dispatch_logs?: ReportDispatchLog[];
+  created_at: string;
+  updated_at: string;
 }
 
 // =================== DONNEES DASHBOARD ===================
@@ -274,9 +354,17 @@ export interface CreateCycleForm {
   pond_identifier: string;
   pond_surface_m2?: number;
   pond_volume_m3?: number;
+  infrastructure_type?: string[];
   start_date: string;
   initial_count: number;
   initial_average_weight: number;
+  target_harvest_weight_g?: number;
+  planned_cycle_duration_days?: number;
+  planned_harvest_date?: string;
+  expected_survival_rate_pct?: number;
+  planned_selling_price_per_kg_fcfa?: number;
+  fingerlings_cost_fcfa?: number;
+  other_operational_costs_fcfa?: number;
 }
 
 export interface DailyLogForm {
@@ -287,9 +375,12 @@ export interface DailyLogForm {
   sample_total_weight?: number;
   feed_quantity?: number;
   feed_type?: string;
+  feed_size_mm?: number;
+  feeding_times?: string[];
   water_temperature?: number;
   dissolved_oxygen?: number;
   ph_level?: number;
+  ammonia_level?: number;
   observations?: string;
 }
 

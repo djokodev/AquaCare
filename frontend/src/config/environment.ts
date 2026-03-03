@@ -4,7 +4,7 @@
  *
  * WORKFLOW :
  * - DEV : Expo Go -> Backend local (auto IP derivee)
- * - PROD : build -> API en ligne (77.237.241.223)
+ * - PROD : build -> API en ligne (api.aquacare.tech)
  */
 
 import Constants from 'expo-constants';
@@ -54,7 +54,7 @@ const getApiUrl = (env: Environment) => {
     const host = getDevHost();
     return `http://${host}:8000/api`;
   }
-  return 'http://77.237.241.223/api';
+  return 'https://api.aquacare.tech/api';
 };
 
 export function getEnvironment(): Environment {

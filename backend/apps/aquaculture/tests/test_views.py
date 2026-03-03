@@ -14,8 +14,8 @@ from rest_framework.test import APIClient
 from unittest.mock import patch, MagicMock
 
 from aquaculture.models import (
-    ProductionCycle, CycleLog, FeedingPlan, SanitaryLog, 
-    NutritionalGuide
+    ProductionCycle, CycleLog, FeedingPlan, SanitaryLog,
+    NutritionalGuide, ProductionReport, ReportDispatchLog
 )
 from notifications.models import Notification
 
@@ -249,6 +249,33 @@ class TestCycleLogViewSet:
         assert response.status_code == status.HTTP_201_CREATED
         assert response.data['mortality_count'] == 3
         assert float(response.data['feed_quantity']) == 2.5
+
+    def test_create_cycle_log_with_environment_and_feeding_times(self, auth_client, production_cycle):
+        """Le endpoint accepte les champs environnementaux et feeding_times."""
+        url = reverse('aquaculture:cycle-log-list')
+        data = {
+            'cycle': str(production_cycle.id),
+            'log_date': date.today().isoformat(),
+            'sample_count': 20,
+            'sample_total_weight': '2400',
+            'feed_quantity': '3.2',
+            'feed_type': 'Dibaq 2mm',
+            'feed_size_mm': '2.5',
+            'feeding_times': ['08:00', '12:30', '16:00'],
+            'water_temperature': '28.4',
+            'dissolved_oxygen': '6.3',
+            'ph_level': '7.1',
+            'ammonia_level': '0.2',
+            'observations': 'RAS'
+        }
+
+        response = auth_client.post(url, data, format='json')
+
+        assert response.status_code == status.HTTP_201_CREATED
+        assert response.data['feeding_times'] == ['08:00', '12:30', '16:00']
+        assert float(response.data['feed_size_mm']) == 2.5
+        assert float(response.data['dissolved_oxygen']) == 6.3
+        assert float(response.data['ammonia_level']) == 0.2
 
     def test_bulk_create_logs(self, auth_client, production_cycle):
         """Test création bulk de logs (synchronisation)."""
@@ -591,6 +618,89 @@ class TestDashboardView:
         assert response.data['total_fish_count'] > 0
         assert len(response.data['recent_logs']) > 0
 
+    def test_dashboard_can_scope_to_session_cycle(self, auth_client, farm_profile):
+        """Le dashboard peut être limité à un cycle actif spécifique via cycle_id."""
+        selected_cycle = ProductionCycle.objects.create(
+            farm_profile=farm_profile,
+            cycle_name='Cycle Session A',
+            species='tilapia',
+            pond_identifier='Bassin A',
+            pond_surface_m2=Decimal('60.00'),
+            pond_volume_m3=Decimal('70.00'),
+            start_date=date.today() - timedelta(days=10),
+            initial_count=1000,
+            initial_average_weight=Decimal('10.00'),
+            initial_biomass=Decimal('10.00'),
+            current_count=980,
+            current_average_weight=Decimal('12.00'),
+            current_biomass=Decimal('11.76'),
+            status='active',
+        )
+        other_cycle = ProductionCycle.objects.create(
+            farm_profile=farm_profile,
+            cycle_name='Cycle Session B',
+            species='tilapia',
+            pond_identifier='Bassin B',
+            pond_surface_m2=Decimal('62.00'),
+            pond_volume_m3=Decimal('72.00'),
+            start_date=date.today() - timedelta(days=9),
+            initial_count=900,
+            initial_average_weight=Decimal('11.00'),
+            initial_biomass=Decimal('9.90'),
+            current_count=890,
+            current_average_weight=Decimal('13.00'),
+            current_biomass=Decimal('11.57'),
+            status='active',
+        )
+
+        CycleLog.objects.create(
+            cycle=selected_cycle,
+            log_date=date.today(),
+            mortality_count=1,
+            feed_quantity=Decimal('2.0'),
+        )
+        CycleLog.objects.create(
+            cycle=other_cycle,
+            log_date=date.today(),
+            mortality_count=2,
+            feed_quantity=Decimal('3.0'),
+        )
+
+        url = reverse('aquaculture:dashboard')
+        response = auth_client.get(url, {'cycle_id': str(selected_cycle.id)})
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data['active_cycles_count'] == 1
+        assert len(response.data['active_cycles']) == 1
+        assert response.data['active_cycles'][0]['id'] == str(selected_cycle.id)
+        assert all(str(item['cycle']) == str(selected_cycle.id) for item in response.data['recent_logs'])
+
+    def test_dashboard_rejects_inactive_or_unknown_cycle_scope(self, auth_client, farm_profile):
+        """Le dashboard doit refuser un cycle_id introuvable ou non actif."""
+        harvested_cycle = ProductionCycle.objects.create(
+            farm_profile=farm_profile,
+            cycle_name='Cycle Harvested',
+            species='tilapia',
+            pond_identifier='Bassin H',
+            pond_surface_m2=Decimal('40.00'),
+            pond_volume_m3=Decimal('50.00'),
+            start_date=date.today() - timedelta(days=40),
+            end_date=date.today() - timedelta(days=1),
+            initial_count=800,
+            initial_average_weight=Decimal('10.00'),
+            initial_biomass=Decimal('8.00'),
+            current_count=760,
+            current_average_weight=Decimal('220.00'),
+            current_biomass=Decimal('167.20'),
+            status='harvested',
+        )
+
+        url = reverse('aquaculture:dashboard')
+        response = auth_client.get(url, {'cycle_id': str(harvested_cycle.id)})
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert 'cycle' in response.data['detail'].lower()
+
 
 @pytest.mark.django_db
 class TestSyncView:
@@ -695,3 +805,234 @@ class TestSyncView:
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert response.data['status'] == 'error'
         assert len(response.data['errors']) > 0
+
+
+@pytest.mark.django_db
+class TestProductionReportViewSet:
+    """Tests pour le ViewSet ProductionReport."""
+
+    def test_list_reports_filters_by_owner_and_type(self, auth_client, farm_profile, user_factory):
+        """Un utilisateur ne voit que ses rapports et peut filtrer par type."""
+        own_daily = ProductionReport.objects.create(
+            farm_profile=farm_profile,
+            report_type='daily',
+            period_start=date(2026, 2, 20),
+            period_end=date(2026, 2, 20),
+            status='draft',
+        )
+        ProductionReport.objects.create(
+            farm_profile=farm_profile,
+            report_type='weekly',
+            period_start=date(2026, 2, 17),
+            period_end=date(2026, 2, 23),
+            status='validated',
+        )
+
+        other_user = user_factory(
+            phone_number='+237699990001',
+            email='other-report-owner@test.com',
+        )
+        from accounts.models import FarmProfile
+        other_farm, _ = FarmProfile.objects.get_or_create(
+            user=other_user,
+            defaults={
+                'farm_name': "Ferme Rapport Secondaire",
+                'certification_status': "pending",
+            }
+        )
+        ProductionReport.objects.create(
+            farm_profile=other_farm,
+            report_type='daily',
+            period_start=date(2026, 2, 20),
+            period_end=date(2026, 2, 20),
+            status='draft',
+        )
+
+        url = reverse('aquaculture:production-report-list')
+        response = auth_client.get(url, {'report_type': 'daily'})
+
+        assert response.status_code == status.HTTP_200_OK
+        report_ids = [item['id'] for item in response.data['results']]
+        assert str(own_daily.id) in report_ids
+        assert len(report_ids) == 1
+
+    def test_mark_whatsapp_shared_creates_dispatch_log(self, auth_client, farm_profile):
+        """Le marquage WhatsApp met à jour le statut et crée une trace d'audit."""
+        report = ProductionReport.objects.create(
+            farm_profile=farm_profile,
+            report_type='daily',
+            period_start=date(2026, 2, 21),
+            period_end=date(2026, 2, 21),
+            status='validated',
+        )
+
+        url = reverse('aquaculture:production-report-mark-whatsapp-shared', kwargs={'pk': report.id})
+        payload = {'recipient': '+237690123456', 'metadata': {'source': 'test_api'}}
+        response = auth_client.post(url, payload, format='json')
+
+        assert response.status_code == status.HTTP_200_OK
+
+        report.refresh_from_db()
+        assert report.whatsapp_status == 'shared'
+        assert report.whatsapp_shared_at is not None
+
+        log = ReportDispatchLog.objects.filter(report=report, channel='whatsapp').latest('created_at')
+        assert log.status == 'success'
+        assert log.recipient == '+237690123456'
+        assert log.metadata['source'] == 'test_api'
+
+    def test_generate_report_scoped_to_session_cycle(self, auth_client, farm_profile):
+        """La génération avec cycle_id doit limiter le rapport au cycle actif de session."""
+        selected_cycle = ProductionCycle.objects.create(
+            farm_profile=farm_profile,
+            cycle_name='Cycle Session A',
+            species='tilapia',
+            pond_identifier='Bassin A',
+            pond_surface_m2=Decimal('50.00'),
+            pond_volume_m3=Decimal('60.00'),
+            start_date=timezone.localdate() - timedelta(days=7),
+            initial_count=1000,
+            initial_average_weight=Decimal('10.00'),
+            initial_biomass=Decimal('10.00'),
+            current_count=980,
+            current_average_weight=Decimal('12.00'),
+            current_biomass=Decimal('11.76'),
+            status='active',
+        )
+        other_cycle = ProductionCycle.objects.create(
+            farm_profile=farm_profile,
+            cycle_name='Cycle Session B',
+            species='tilapia',
+            pond_identifier='Bassin B',
+            pond_surface_m2=Decimal('55.00'),
+            pond_volume_m3=Decimal('65.00'),
+            start_date=timezone.localdate() - timedelta(days=8),
+            initial_count=900,
+            initial_average_weight=Decimal('11.00'),
+            initial_biomass=Decimal('9.90'),
+            current_count=890,
+            current_average_weight=Decimal('12.50'),
+            current_biomass=Decimal('11.13'),
+            status='active',
+        )
+        CycleLog.objects.create(
+            cycle=selected_cycle,
+            log_date=timezone.localdate(),
+            feed_quantity=Decimal('5.50'),
+            mortality_count=2,
+        )
+        CycleLog.objects.create(
+            cycle=other_cycle,
+            log_date=timezone.localdate(),
+            feed_quantity=Decimal('3.00'),
+            mortality_count=1,
+        )
+
+        url = reverse('aquaculture:production-report-generate')
+        payload = {
+            'report_type': 'daily',
+            'cycle_id': str(selected_cycle.id),
+        }
+        from unittest.mock import patch
+        with patch('aquaculture.services.report_service.ReportService._render_pdf', return_value=b'%PDF-fake'):
+            response = auth_client.post(url, payload, format='json')
+
+        assert response.status_code == status.HTTP_202_ACCEPTED
+        # With async generation (Celery eager in tests), the report is generated
+        # Reload from DB to verify the payload was built correctly
+        from aquaculture.models import ProductionReport
+        report = ProductionReport.objects.get(id=response.data['id'])
+        assert report.payload['report_meta']['cycle_scope_id'] == str(selected_cycle.id)
+        assert report.payload['summary']['cycle_count'] == 1
+        assert report.payload['summary']['total_log_count'] == 1
+        assert report.payload['cycles'][0]['cycle']['id'] == str(selected_cycle.id)
+
+    def test_generate_report_rejects_inactive_cycle_scope(self, auth_client, farm_profile):
+        """Un cycle de session inactif doit être rejeté."""
+        harvested_cycle = ProductionCycle.objects.create(
+            farm_profile=farm_profile,
+            cycle_name='Cycle Terminé',
+            species='tilapia',
+            pond_identifier='Bassin H',
+            pond_surface_m2=Decimal('40.00'),
+            pond_volume_m3=Decimal('50.00'),
+            start_date=timezone.localdate() - timedelta(days=40),
+            end_date=timezone.localdate() - timedelta(days=3),
+            initial_count=500,
+            initial_average_weight=Decimal('15.00'),
+            initial_biomass=Decimal('7.50'),
+            current_count=450,
+            current_average_weight=Decimal('250.00'),
+            current_biomass=Decimal('112.50'),
+            status='harvested',
+        )
+
+        url = reverse('aquaculture:production-report-generate')
+        response = auth_client.post(
+            url,
+            {'report_type': 'daily', 'cycle_id': str(harvested_cycle.id)},
+            format='json',
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert 'cycle' in response.data['detail'].lower()
+
+    def test_list_reports_can_filter_by_cycle_scope(self, auth_client, farm_profile):
+        """Le listing doit pouvoir filtrer les rapports par cycle_scope_id."""
+        scoped_cycle = ProductionCycle.objects.create(
+            farm_profile=farm_profile,
+            cycle_name='Cycle Filtre',
+            species='tilapia',
+            pond_identifier='Bassin F',
+            pond_surface_m2=Decimal('40.00'),
+            pond_volume_m3=Decimal('50.00'),
+            start_date=timezone.localdate() - timedelta(days=12),
+            initial_count=700,
+            initial_average_weight=Decimal('9.00'),
+            initial_biomass=Decimal('6.30'),
+            current_count=690,
+            current_average_weight=Decimal('11.00'),
+            current_biomass=Decimal('7.59'),
+            status='active',
+        )
+        other_cycle = ProductionCycle.objects.create(
+            farm_profile=farm_profile,
+            cycle_name='Cycle Hors Filtre',
+            species='tilapia',
+            pond_identifier='Bassin G',
+            pond_surface_m2=Decimal('42.00'),
+            pond_volume_m3=Decimal('52.00'),
+            start_date=timezone.localdate() - timedelta(days=10),
+            initial_count=650,
+            initial_average_weight=Decimal('10.00'),
+            initial_biomass=Decimal('6.50'),
+            current_count=640,
+            current_average_weight=Decimal('12.00'),
+            current_biomass=Decimal('7.68'),
+            status='active',
+        )
+
+        report_scoped = ProductionReport.objects.create(
+            farm_profile=farm_profile,
+            report_type='daily',
+            period_start=timezone.localdate(),
+            period_end=timezone.localdate(),
+            status='draft',
+            payload={'report_meta': {'cycle_scope_id': str(scoped_cycle.id)}},
+        )
+        ProductionReport.objects.create(
+            farm_profile=farm_profile,
+            report_type='daily',
+            period_start=timezone.localdate() - timedelta(days=1),
+            period_end=timezone.localdate() - timedelta(days=1),
+            status='draft',
+            payload={'report_meta': {'cycle_scope_id': str(other_cycle.id)}},
+        )
+
+        url = reverse('aquaculture:production-report-list')
+        response = auth_client.get(url, {'cycle_id': str(scoped_cycle.id)})
+
+        assert response.status_code == status.HTTP_200_OK
+        ids = [item['id'] for item in response.data['results']]
+        assert ids == [str(report_scoped.id)]
+        assert response.data['results'][0]['cycle_scope_id'] == str(scoped_cycle.id)
