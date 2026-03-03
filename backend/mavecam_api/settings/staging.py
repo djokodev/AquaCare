@@ -14,6 +14,11 @@ ALLOWED_HOSTS = config(
     default='77.237.241.223,api-staging.aquacare.tech'
 ).split(',')
 
+# CSRF — requis Django 4.0+ pour les requêtes HTTPS (admin, forms)
+CSRF_TRUSTED_ORIGINS = [
+    "https://api-staging.aquacare.tech",
+]
+
 # CORS staging : Expo dev local + domaine staging
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:8081",
