@@ -6,12 +6,29 @@ import { NavigationContainer } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as Notifications from 'expo-notifications';
+import * as Sentry from '@sentry/react-native';
+import Constants from 'expo-constants';
 
 import { store } from '@/store/store';
 import AppNavigator from '@/navigation/AppNavigator';
 import ErrorBoundary from '@/components/common/ErrorBoundary';
 import i18n from '@/i18n/i18n';
 import logger from '@/utils/logger';
+import { getEnvironment } from '@/config/environment';
+
+// Sentry — actif uniquement dans les builds EAS (staging + production).
+// Désactivé en Expo Go (__DEV__) pour éviter les erreurs de module natif.
+const isExpoGo = Constants.appOwnership === 'expo';
+if (!__DEV__ && !isExpoGo) {
+  Sentry.init({
+    dsn: process.env.EXPO_PUBLIC_SENTRY_DSN ?? '',
+    environment: getEnvironment(),
+    // Capture 10 % des traces de performance en staging/prod
+    tracesSampleRate: 0.1,
+    // Désactiver les logs Sentry en staging pour éviter le bruit
+    debug: false,
+  });
+}
 import {
   FEEDING_ALARM_ACTION_FEED_NOW,
   FEEDING_ALARM_ACTION_SNOOZE_10M,
@@ -72,7 +89,7 @@ const scheduleSnoozeNotification = async (notification: Notifications.Notificati
   });
 };
 
-export default function App() {
+function App() {
   useEffect(() => {
     const setupNotifications = async () => {
       try {
@@ -146,3 +163,5 @@ export default function App() {
     </Provider>
   );
 }
+
+export default Sentry.wrap(App);

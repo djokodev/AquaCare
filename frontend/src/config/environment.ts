@@ -1,17 +1,22 @@
-﻿/**
+/**
  * Configuration automatique de l'environnement
- * Detecte si on est en DEV (Expo Dev Server) ou PRODUCTION (Build compile)
  *
- * WORKFLOW :
- * - DEV : Expo Go -> Backend local (auto IP derivee)
- * - PROD : build -> API en ligne (api.aquacare.tech)
+ * ENVIRONNEMENTS :
+ * - development : Expo Go local → backend local (IP auto-détectée)
+ * - staging     : EAS build interne → api-staging.aquacare.tech
+ * - production  : EAS build store  → api.aquacare.tech
+ *
+ * DÉTECTION :
+ * - __DEV__ === true                         → development (Expo Go)
+ * - EXPO_PUBLIC_APP_ENV === 'staging'        → staging (EAS internal build)
+ * - sinon                                    → production (EAS store build)
  */
 
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import logger from '@/utils/logger';
 
-export type Environment = 'development' | 'production';
+export type Environment = 'development' | 'staging' | 'production';
 
 interface EnvironmentConfig {
   apiUrl: string;
@@ -19,7 +24,7 @@ interface EnvironmentConfig {
   debug: boolean;
 }
 
-const DEFAULT_DEV_HOST = '172.20.10.2'; // fallback si host Expo non detecté (à personnaliser)
+const DEFAULT_DEV_HOST = '172.20.10.2'; // fallback si host Expo non détecté (à personnaliser)
 
 const getDevHost = () => {
   // Surcharge optionnelle via extra ou variable Expo
@@ -40,25 +45,29 @@ const getDevHost = () => {
     return cleaned.split(':')[0];
   }
 
-  // Fallbacks connus
   if (Platform.OS === 'android') {
-    // Android emulator sait accéder à l'hôte via 10.0.2.2
     return '10.0.2.2';
   }
 
   return DEFAULT_DEV_HOST;
 };
 
-const getApiUrl = (env: Environment) => {
+const API_BASE: Record<Environment, string> = {
+  development: '', // calculé dynamiquement (IP Expo)
+  staging: 'https://api-staging.aquacare.tech/api',
+  production: 'https://api.aquacare.tech/api',
+};
+
+const getApiUrl = (env: Environment): string => {
   if (env === 'development') {
-    const host = getDevHost();
-    return `http://${host}:8000/api`;
+    return `http://${getDevHost()}:8000/api`;
   }
-  return 'https://api.aquacare.tech/api';
+  return API_BASE[env];
 };
 
 export function getEnvironment(): Environment {
   if (__DEV__) return 'development';
+  if (process.env.EXPO_PUBLIC_APP_ENV === 'staging') return 'staging';
   return 'production';
 }
 
@@ -84,6 +93,3 @@ if (config.debug) {
 }
 
 export default config;
-
-
-

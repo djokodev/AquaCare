@@ -18,10 +18,19 @@
     "plugins": [
       "expo-secure-store",
       "expo-localization",
-      "expo-font"
+      "expo-font",
+      [
+        "@sentry/react-native",
+        {
+          "organization": "aquacare",
+          "project": "frontend-aquacare"
+        }
+      ]
     ],
     "extra": {
-      "apiUrl": "http://172.20.10.2:8000/api"
+      "eas": {
+        "projectId": "REMPLACER_PAR_EAS_PROJECT_ID"
+      }
     }
   }
 }

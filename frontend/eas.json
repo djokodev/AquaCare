@@ -1,0 +1,34 @@
+{
+  "cli": {
+    "version": ">= 12.0.0"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_APP_ENV": "development"
+      }
+    },
+    "staging": {
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_APP_ENV": "staging",
+        "EXPO_PUBLIC_SENTRY_DSN": "https://213bdf7e8dde80596d43414ad1861152@o4510971830468608.ingest.de.sentry.io/4510981104402512"
+      },
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "production": {
+      "distribution": "store",
+      "env": {
+        "EXPO_PUBLIC_APP_ENV": "production",
+        "EXPO_PUBLIC_SENTRY_DSN": "https://213bdf7e8dde80596d43414ad1861152@o4510971830468608.ingest.de.sentry.io/4510981104402512"
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}
