@@ -29,8 +29,9 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "REMPLACER_PAR_EAS_PROJECT_ID"
+        "projectId": "1e807ed9-807f-42e1-941a-dbe52efd734e"
       }
-    }
+    },
+    "owner": "djokodev"
   }
 }
