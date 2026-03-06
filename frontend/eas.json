@@ -1,6 +1,7 @@
 {
   "cli": {
-    "version": ">= 12.0.0"
+    "version": ">= 12.0.0",
+    "appVersionSource": "remote"
   },
   "build": {
     "development": {
@@ -20,8 +21,39 @@
         "buildType": "apk"
       }
     },
+    "testflight-staging": {
+      "distribution": "store",
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_APP_ENV": "staging",
+        "EXPO_PUBLIC_SENTRY_DSN": "https://213bdf7e8dde80596d43414ad1861152@o4510971830468608.ingest.de.sentry.io/4510981104402512"
+      }
+    },
+    "play-internal-staging": {
+      "distribution": "store",
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_APP_ENV": "staging",
+        "EXPO_PUBLIC_SENTRY_DSN": "https://213bdf7e8dde80596d43414ad1861152@o4510971830468608.ingest.de.sentry.io/4510981104402512"
+      },
+      "android": {
+        "buildType": "app-bundle"
+      }
+    },
+    "play-closed-staging": {
+      "distribution": "store",
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_APP_ENV": "staging",
+        "EXPO_PUBLIC_SENTRY_DSN": "https://213bdf7e8dde80596d43414ad1861152@o4510971830468608.ingest.de.sentry.io/4510981104402512"
+      },
+      "android": {
+        "buildType": "app-bundle"
+      }
+    },
     "production": {
       "distribution": "store",
+      "autoIncrement": true,
       "env": {
         "EXPO_PUBLIC_APP_ENV": "production",
         "EXPO_PUBLIC_SENTRY_DSN": "https://213bdf7e8dde80596d43414ad1861152@o4510971830468608.ingest.de.sentry.io/4510981104402512"
@@ -29,6 +61,23 @@
     }
   },
   "submit": {
-    "production": {}
+    "production": {},
+    "testflight-staging": {
+      "ios": {}
+    },
+    "play-internal-staging": {
+      "android": {
+        "serviceAccountKeyPath": "@secret:GOOGLE_SERVICE_ACCOUNT",
+        "track": "internal",
+        "releaseStatus": "completed"
+      }
+    },
+    "play-closed-staging": {
+      "android": {
+        "serviceAccountKeyPath": "@secret:GOOGLE_SERVICE_ACCOUNT",
+        "track": "alpha",
+        "releaseStatus": "completed"
+      }
+    }
   }
 }
