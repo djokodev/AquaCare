@@ -10,7 +10,10 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "cm.mavecam.aquacare"
+      "bundleIdentifier": "cm.mavecam.aquacare",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "cm.mavecam.aquacare"

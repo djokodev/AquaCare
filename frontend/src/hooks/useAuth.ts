@@ -6,6 +6,7 @@ import {
   loginUser,
   registerUser,
   logoutUser,
+  deleteAccountUser,
   checkAuthStatus,
   loadUserProfile,
   updateUserProfile,
@@ -87,6 +88,10 @@ export const useAuth = () => {
     return dispatch(logoutUser());
   }, [dispatch]);
 
+  const deleteAccount = useCallback(() => {
+    return dispatch(deleteAccountUser()).unwrap();
+  }, [dispatch]);
+
   const checkAuth = useCallback(() => {
     return dispatch(checkAuthStatus());
   }, [dispatch]);
@@ -134,6 +139,7 @@ export const useAuth = () => {
     login,
     register,
     logout,
+    deleteAccount,
     checkAuth,
     loadProfile,
     updateProfile,
@@ -147,6 +153,5 @@ export const useAuth = () => {
     isFarmCertified: authState.farmProfile?.is_certified || false,
   };
 };
-
 
 
