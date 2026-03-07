@@ -15,6 +15,7 @@ import authSliceReducer, {
   loadUserProfile,
   updateUserProfile,
   updateFarmProfile,
+  deleteAccountUser,
 } from '../authSlice';
 import { User, FarmProfile } from '@/types/auth';
 
@@ -188,6 +189,48 @@ describe('store/slices/authSlice', () => {
       expect(newState.user).toBeNull();
       expect(newState.farmProfile).toBeNull();
       expect(newState.error).toBe('Erreur réseau');
+    });
+  });
+
+  describe('deleteAccountUser thunk', () => {
+    const authenticatedState = {
+      ...initialState,
+      user: mockUser,
+      farmProfile: mockFarmProfile,
+      isAuthenticated: true,
+    };
+
+    it('gere l etat pending', () => {
+      const action = { type: deleteAccountUser.pending.type };
+      const newState = authSliceReducer(authenticatedState, action);
+
+      expect(newState.isLoading).toBe(true);
+      expect(newState.error).toBeNull();
+    });
+
+    it('gere l etat fulfilled et nettoie l etat', () => {
+      const action = { type: deleteAccountUser.fulfilled.type };
+      const newState = authSliceReducer(authenticatedState, action);
+
+      expect(newState.isLoading).toBe(false);
+      expect(newState.isAuthenticated).toBe(false);
+      expect(newState.user).toBeNull();
+      expect(newState.farmProfile).toBeNull();
+      expect(newState.error).toBeNull();
+    });
+
+    it('gere l etat rejected et conserve la session', () => {
+      const action = {
+        type: deleteAccountUser.rejected.type,
+        payload: 'Erreur reseau',
+      };
+      const newState = authSliceReducer(authenticatedState, action);
+
+      expect(newState.isLoading).toBe(false);
+      expect(newState.isAuthenticated).toBe(true);
+      expect(newState.user).toEqual(mockUser);
+      expect(newState.farmProfile).toEqual(mockFarmProfile);
+      expect(newState.error).toBe('Erreur reseau');
     });
   });
 

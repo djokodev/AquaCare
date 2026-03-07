@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Suppression de compte — AquaCare</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f8fafc; color: #1f2937; line-height: 1.7; }
+    header { background: #059669; color: #fff; padding: 32px 24px; text-align: center; }
+    header h1 { font-size: 1.75rem; font-weight: 700; letter-spacing: -0.5px; }
+    header p { margin-top: 6px; font-size: 0.9rem; opacity: 0.85; }
+    main { max-width: 760px; margin: 0 auto; padding: 32px 24px 64px; }
+    section { margin-bottom: 48px; }
+    h2 { font-size: 1.3rem; font-weight: 700; color: #059669; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 2px solid #d1fae5; }
+    h3 { font-size: 1rem; font-weight: 600; color: #1f2937; margin: 16px 0 8px; }
+    p { margin-bottom: 12px; font-size: 0.95rem; color: #374151; }
+    ul { padding-left: 20px; margin-bottom: 12px; }
+    li { font-size: 0.95rem; color: #374151; margin-bottom: 6px; }
+    .steps { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 12px; padding: 16px 20px; margin: 12px 0; }
+    .steps ol { padding-left: 20px; }
+    .steps li { color: #065f46; font-weight: 500; }
+    .warning { background: #fef2f2; border: 1px solid #fecaca; border-radius: 12px; padding: 12px 16px; margin: 12px 0; }
+    .warning p { color: #991b1b; margin: 0; }
+    .divider { border: none; border-top: 3px solid #059669; margin: 48px 0; opacity: 0.3; }
+    .updated { font-size: 0.8rem; color: #6b7280; margin-top: 4px; }
+    a { color: #059669; text-decoration: underline; }
+    footer { text-align: center; padding: 16px; font-size: 0.8rem; color: #9ca3af; background: #fff; border-top: 1px solid #e5e7eb; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>AquaCare</h1>
+    <p>Suppression de compte · Account Deletion</p>
+  </header>
+
+  <main>
+    <!-- ===== FRANÇAIS ===== -->
+    <section id="fr">
+      <h2>Suppression de compte</h2>
+      <p class="updated">Dernière mise à jour : mars 2026</p>
+
+      <h3>Méthode 1 — Depuis l'application (immédiat)</h3>
+      <div class="steps">
+        <ol>
+          <li>Ouvrez AquaCare et connectez-vous à votre compte</li>
+          <li>Accédez à <strong>Profil</strong> → <strong>Paramètres</strong></li>
+          <li>Section <strong>Gestion du compte</strong> → appuyez sur <strong>Supprimer mon compte</strong></li>
+          <li>Confirmez la suppression dans la fenêtre de dialogue</li>
+        </ol>
+      </div>
+      <p>La suppression est immédiate. Vous serez automatiquement déconnecté.</p>
+
+      <h3>Méthode 2 — Par e-mail (délai 72h)</h3>
+      <p>Envoyez un e-mail à <a href="mailto:contact@aquacare.tech">contact@aquacare.tech</a> avec :</p>
+      <ul>
+        <li>Objet : <strong>Suppression de compte AquaCare</strong></li>
+        <li>Votre numéro de téléphone enregistré (ex. +237 6XX XXX XXX)</li>
+        <li>La demande explicite de suppression de compte</li>
+      </ul>
+      <p>Nous traiterons votre demande dans un délai de 72 heures ouvrées.</p>
+
+      <h3>Données supprimées</h3>
+      <ul>
+        <li>Informations personnelles : numéro de téléphone anonymisé, nom, e-mail supprimés</li>
+        <li>Profil ferme : marqué comme supprimé, données effacées</li>
+        <li>Tokens JWT et tokens de notification push : révoqués immédiatement</li>
+        <li>Accès au compte : désactivé (connexion impossible)</li>
+      </ul>
+
+      <h3>Données conservées temporairement</h3>
+      <p>Conformément à nos obligations légales, certains logs techniques anonymisés peuvent être conservés jusqu'à <strong>90 jours</strong> après la suppression, puis définitivement effacés.</p>
+
+      <div class="warning">
+        <p>⚠️ La suppression de compte est <strong>irréversible</strong>. Toutes vos données de production (cycles, logs, rapports) seront définitivement perdues.</p>
+      </div>
+
+      <h3>Contact</h3>
+      <p>Pour toute question : <a href="mailto:contact@aquacare.tech">contact@aquacare.tech</a></p>
+    </section>
+
+    <hr class="divider">
+
+    <!-- ===== ENGLISH ===== -->
+    <section id="en">
+      <h2>Account Deletion</h2>
+      <p class="updated">Last updated: March 2026</p>
+
+      <h3>Method 1 — From the app (immediate)</h3>
+      <div class="steps">
+        <ol>
+          <li>Open AquaCare and sign in to your account</li>
+          <li>Go to <strong>Profile</strong> → <strong>Settings</strong></li>
+          <li>Section <strong>Account Management</strong> → tap <strong>Delete my account</strong></li>
+          <li>Confirm deletion in the dialog box</li>
+        </ol>
+      </div>
+      <p>Deletion is immediate. You will be automatically signed out.</p>
+
+      <h3>Method 2 — By email (72-hour delay)</h3>
+      <p>Send an email to <a href="mailto:contact@aquacare.tech">contact@aquacare.tech</a> with:</p>
+      <ul>
+        <li>Subject: <strong>AquaCare Account Deletion Request</strong></li>
+        <li>Your registered phone number (e.g. +237 6XX XXX XXX)</li>
+        <li>An explicit request to delete your account</li>
+      </ul>
+      <p>We will process your request within 72 business hours.</p>
+
+      <h3>Data deleted</h3>
+      <ul>
+        <li>Personal information: phone number anonymised, name and email removed</li>
+        <li>Farm profile: marked as deleted, data erased</li>
+        <li>JWT tokens and push notification tokens: immediately revoked</li>
+        <li>Account access: deactivated (sign-in no longer possible)</li>
+      </ul>
+
+      <h3>Temporarily retained data</h3>
+      <p>In compliance with our legal obligations, certain anonymised technical logs may be retained for up to <strong>90 days</strong> after deletion, then permanently erased.</p>
+
+      <div class="warning">
+        <p>⚠️ Account deletion is <strong>irreversible</strong>. All your production data (cycles, logs, reports) will be permanently lost.</p>
+      </div>
+
+      <h3>Contact</h3>
+      <p>For any questions: <a href="mailto:contact@aquacare.tech">contact@aquacare.tech</a></p>
+    </section>
+  </main>
+
+  <footer>AquaCare &mdash; contact@aquacare.tech</footer>
+</body>
+</html>
