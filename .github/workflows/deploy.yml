@@ -125,7 +125,7 @@ jobs:
             cat > .env << 'ENVEOF'
           DJANGO_SECRET_KEY=${{ secrets.DJANGO_SECRET_KEY }}
           DJANGO_DEBUG=False
-          DJANGO_ALLOWED_HOSTS=${{ secrets.VPS_HOST }},localhost,127.0.0.1
+          DJANGO_ALLOWED_HOSTS=${{ secrets.DJANGO_ALLOWED_HOSTS }}
           DJANGO_SETTINGS_MODULE=mavecam_api.settings.production
           POSTGRES_DB=${{ secrets.POSTGRES_DB }}
           POSTGRES_USER=${{ secrets.POSTGRES_USER }}
