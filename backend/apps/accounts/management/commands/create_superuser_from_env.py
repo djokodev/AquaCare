@@ -16,16 +16,15 @@ Usage:
 
 import os
 
-from django.contrib.auth import get_user_model
-from django.core.management.base import BaseCommand
-
-User = get_user_model()
+from accounts.models import User
+from django.core.exceptions import ValidationError
+from django.core.management.base import BaseCommand, CommandError
 
 
 class Command(BaseCommand):
     help = 'Crée un superuser à partir des variables d\'environnement (idempotent)'
 
-    def handle(self, *args, **options):
+    def handle(self, *args: object, **options: object) -> None:
         phone = os.getenv('DJANGO_SUPERUSER_PHONE')
         password = os.getenv('DJANGO_SUPERUSER_PASSWORD')
         first_name = os.getenv('DJANGO_SUPERUSER_FIRST_NAME')
@@ -81,7 +80,5 @@ class Command(BaseCommand):
                     f'  Nom: {first_name} {last_name}'
                 )
             )
-        except Exception as e:
-            self.stdout.write(
-                self.style.ERROR(f'Erreur lors de la création du superuser: {e}')
-            )
+        except (ValidationError, ValueError) as err:
+            raise CommandError(f'Erreur lors de la création du superuser: {err}') from err

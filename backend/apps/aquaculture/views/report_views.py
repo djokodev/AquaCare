@@ -1,6 +1,8 @@
 """
 Report Views pour le module aquaculture.
 """
+from __future__ import annotations
+
 import logging
 from urllib.parse import quote
 
@@ -10,6 +12,7 @@ from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiExample, OpenApiParameter, extend_schema, extend_schema_view
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.request import Request
 from rest_framework.response import Response
 
 from ..models import ProductionCycle, ProductionReport
@@ -172,7 +175,7 @@ class ProductionReportViewSet(viewsets.ReadOnlyModelViewSet):
         responses={202: ProductionReportDetailSerializer},
     )
     @action(detail=False, methods=['post'])
-    def generate(self, request):
+    def generate(self, request: Request) -> Response:
         serializer = GenerateReportSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -220,7 +223,7 @@ class ProductionReportViewSet(viewsets.ReadOnlyModelViewSet):
         responses={202: ProductionReportDetailSerializer},
     )
     @action(detail=True, methods=['post'])
-    def regenerate(self, request, pk=None):
+    def regenerate(self, request: Request, pk: str | None = None) -> Response:
         report = self.get_object()
 
         # Extract cycle_scope_id from existing payload
@@ -247,7 +250,7 @@ class ProductionReportViewSet(viewsets.ReadOnlyModelViewSet):
         responses={200: ProductionReportDetailSerializer},
     )
     @action(detail=True, methods=['post'])
-    def validate(self, request, pk=None):
+    def validate(self, request: Request, pk: str | None = None) -> Response:
         report = self.get_object()
         validated = ReportService.validate(report, request.user)
         serializer = ProductionReportDetailSerializer(validated, context={'request': request})
@@ -265,7 +268,7 @@ class ProductionReportViewSet(viewsets.ReadOnlyModelViewSet):
         },
     )
     @action(detail=True, methods=['post'], url_path='send-email')
-    def send_email(self, request, pk=None):
+    def send_email(self, request: Request, pk: str | None = None) -> Response:
         report = self.get_object()
         if not getattr(request.user, 'email', None):
             return Response(
@@ -285,7 +288,7 @@ class ProductionReportViewSet(viewsets.ReadOnlyModelViewSet):
         responses={200: ProductionReportDetailSerializer},
     )
     @action(detail=True, methods=['post'], url_path='mark-whatsapp-shared')
-    def mark_whatsapp_shared(self, request, pk=None):
+    def mark_whatsapp_shared(self, request: Request, pk: str | None = None) -> Response:
         report = self.get_object()
         serializer = MarkWhatsAppSharedSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -305,7 +308,7 @@ class ProductionReportViewSet(viewsets.ReadOnlyModelViewSet):
         responses={200: OpenApiTypes.BINARY},
     )
     @action(detail=True, methods=['get'])
-    def download(self, request, pk=None):
+    def download(self, request: Request, pk: str | None = None):
         report = self.get_object()
 
         if report.status == 'pending':

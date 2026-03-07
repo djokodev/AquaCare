@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 import re
+from re import Pattern
 
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
@@ -17,14 +20,14 @@ class PhoneNumberValidator:
     """
 
     # Patterns compilés une fois au niveau classe (immuables)
-    _PATTERNS = (
-        r'^\+237[67]\d{8}$',   # +2376XXXXXXXX ou +2377XXXXXXXX
-        r'^237[67]\d{8}$',     # 2376XXXXXXXX ou 2377XXXXXXXX
-        r'^[67]\d{8}$',        # 6XXXXXXXX ou 7XXXXXXXX
-        r'^\+[1-9]\d{1,14}$',  # Format international standard
+    _PATTERNS: tuple[Pattern[str], ...] = (
+        re.compile(r'^\+237[67]\d{8}$'),   # +2376XXXXXXXX ou +2377XXXXXXXX
+        re.compile(r'^237[67]\d{8}$'),     # 2376XXXXXXXX ou 2377XXXXXXXX
+        re.compile(r'^[67]\d{8}$'),        # 6XXXXXXXX ou 7XXXXXXXX
+        re.compile(r'^\+[1-9]\d{1,14}$'),  # Format international standard
     )
 
-    def __call__(self, value):
+    def __call__(self, value: str | None) -> None:
         """
         Valide le numéro de téléphone selon les formats acceptés.
         
@@ -42,7 +45,7 @@ class PhoneNumberValidator:
 
         # Tester les différents formats
         for pattern in self._PATTERNS:
-            if re.match(pattern, cleaned_value):
+            if pattern.match(cleaned_value):
                 return  # Format valide trouvé
         
         # Aucun format valide
@@ -52,7 +55,7 @@ class PhoneNumberValidator:
         )
 
 
-def normalize_phone_number(phone_number):
+def normalize_phone_number(phone_number: str | None) -> str | None:
     """
     Normalise un numéro de téléphone au format international.
     
@@ -92,7 +95,7 @@ def normalize_phone_number(phone_number):
     return cleaned
 
 
-def validate_cameroon_phone(value):
+def validate_cameroon_phone(value: str | None) -> None:
     """
     Validateur Django simple pour numéros camerounais.
     

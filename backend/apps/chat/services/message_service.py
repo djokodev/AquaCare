@@ -3,6 +3,9 @@ Message domain service.
 Handles message creation, retrieval, read status, and offline sync deduplication.
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import UploadedFile
@@ -15,10 +18,14 @@ from ..domain.exceptions import (
     InvalidMessageContent,
     MediaTooLarge,
 )
-from ..domain.value_objects import MediaAttachment, MessageContent
+from ..domain.value_objects import MediaAttachment, MediaKind, MessageContent
 from .conversation_service import ConversationService
 
 User = get_user_model()
+
+if TYPE_CHECKING:
+    from chat.models import Conversation, Message
+    from chat.models import User as ChatUser
 
 
 class MessageService:
@@ -34,15 +41,49 @@ class MessageService:
     """
 
     @staticmethod
+    def _validate_message_content(content: str) -> None:
+        """Valide le contenu textuel et propage une erreur domaine explicite."""
+        try:
+            MessageContent(text=content)
+        except ValueError as err:
+            raise InvalidMessageContent(str(err)) from err
+
+    @staticmethod
+    def _validate_media_attachment(
+        media_file: UploadedFile | None,
+        media_type: str | None,
+    ) -> MediaKind | None:
+        """Valide le media eventuel et renvoie son type normalise."""
+        if not media_file or not media_type:
+            return None
+
+        normalized_media_type = media_type
+
+        try:
+            MediaAttachment(
+                file_path=media_file.name,
+                media_type=normalized_media_type,
+                file_size_bytes=media_file.size,
+                mime_type=media_file.content_type or 'application/octet-stream',
+            )
+        except ValueError as err:
+            error_msg = str(err)
+            if "exceeds maximum size" in error_msg:
+                raise MediaTooLarge(error_msg) from err
+            raise InvalidMediaFormat(error_msg) from err
+
+        return normalized_media_type
+
+    @staticmethod
     @transaction.atomic
     def send_user_message(
-        user,
+        user: ChatUser,
         content: str,
         media_file: UploadedFile | None = None,
         media_type: str | None = None,
         client_uuid: str | None = None,
-        created_offline: bool = False
-    ):
+        created_offline: bool = False,
+    ) -> Message:
         """
         User sends message to administration.
 
@@ -71,28 +112,8 @@ class MessageService:
         """
         from ..models import Message
 
-        # Validate content using Domain Value Object
-        try:
-            MessageContent(text=content)
-        except ValueError as e:
-            raise InvalidMessageContent(str(e))
-
-        # Validate media if provided
-        if media_file and media_type:
-            try:
-                MediaAttachment(
-                    file_path=media_file.name,
-                    media_type=media_type,
-                    file_size_bytes=media_file.size,
-                    mime_type=media_file.content_type or 'application/octet-stream'
-                )
-            except ValueError as e:
-                # Determine specific exception type
-                error_msg = str(e)
-                if "exceeds maximum size" in error_msg:
-                    raise MediaTooLarge(error_msg)
-                else:
-                    raise InvalidMediaFormat(error_msg)
+        MessageService._validate_message_content(content)
+        normalized_media_type = MessageService._validate_media_attachment(media_file, media_type)
 
         # Get or create conversation
         conversation = ConversationService.get_or_create_conversation(user)
@@ -116,7 +137,7 @@ class MessageService:
             sender_type='user',
             sender_user=None,  # User messages don't track sender_user
             content=content,
-            media_type=media_type or 'none',
+            media_type=normalized_media_type or 'none',
             media_file=media_file,
             client_uuid=client_uuid,
             created_offline=created_offline,
@@ -134,12 +155,12 @@ class MessageService:
     @staticmethod
     @transaction.atomic
     def send_admin_message(
-        conversation,
-        admin_user,
+        conversation: Conversation,
+        admin_user: ChatUser,
         content: str,
         media_file: UploadedFile | None = None,
         media_type: str | None = None,
-    ):
+    ) -> Message:
         """
         Admin sends message to user.
 
@@ -162,27 +183,8 @@ class MessageService:
         """
         from ..models import Message
 
-        # Validate content
-        try:
-            MessageContent(text=content)
-        except ValueError as e:
-            raise InvalidMessageContent(str(e))
-
-        # Validate media if provided
-        if media_file and media_type:
-            try:
-                MediaAttachment(
-                    file_path=media_file.name,
-                    media_type=media_type,
-                    file_size_bytes=media_file.size,
-                    mime_type=media_file.content_type or 'application/octet-stream',
-                )
-            except ValueError as e:
-                error_msg = str(e)
-                if "exceeds maximum size" in error_msg:
-                    raise MediaTooLarge(error_msg)
-                else:
-                    raise InvalidMediaFormat(error_msg)
+        MessageService._validate_message_content(content)
+        normalized_media_type = MessageService._validate_media_attachment(media_file, media_type)
 
         # Create message
         message = Message.objects.create(
@@ -190,7 +192,7 @@ class MessageService:
             sender_type='admin',
             sender_user=admin_user,  # Track which admin responded
             content=content,
-            media_type=media_type or 'none',
+            media_type=normalized_media_type or 'none',
             media_file=media_file,
         )
 
@@ -203,7 +205,7 @@ class MessageService:
         return message
 
     @staticmethod
-    def send_system_message(conversation, content: str):
+    def send_system_message(conversation: Conversation, content: str) -> Message:
         """
         Send automated system message (e.g., auto-acknowledgment).
 
@@ -236,7 +238,7 @@ class MessageService:
 
     @staticmethod
     @transaction.atomic
-    def mark_messages_as_read(conversation, reader_is_admin: bool = False):
+    def mark_messages_as_read(conversation: Conversation, reader_is_admin: bool = False) -> None:
         """
         Mark all unread messages in conversation as read.
 

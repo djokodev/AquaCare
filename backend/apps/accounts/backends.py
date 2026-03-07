@@ -1,7 +1,15 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
+
 from django.contrib.auth import get_user_model
 from django.contrib.auth.backends import BaseBackend
+from django.http import HttpRequest
 
 User = get_user_model()
+
+if TYPE_CHECKING:
+    from .models import User as UserModel
 
 
 class MavecamAuthBackend(BaseBackend):
@@ -13,7 +21,14 @@ class MavecamAuthBackend(BaseBackend):
     - phone_number + password (pour compatibilité interne)
     """
     
-    def authenticate(self, request, login_name=None, phone_number=None, password=None, **kwargs):
+    def authenticate(
+        self,
+        request: HttpRequest | None,
+        login_name: str | None = None,
+        phone_number: str | None = None,
+        password: str | None = None,
+        **kwargs: Any,
+    ) -> UserModel | None:
         """
         Authentifie un utilisateur selon les spécifications MAVECAM.
         
@@ -28,7 +43,7 @@ class MavecamAuthBackend(BaseBackend):
         if not password:
             return None
         
-        user = None
+        user: UserModel | None = None
         
         # Méthode 1 : Authentification par login_name (spécification principale)
         if login_name:
@@ -50,7 +65,7 @@ class MavecamAuthBackend(BaseBackend):
         
         return None
     
-    def get_user(self, user_id):
+    def get_user(self, user_id: object) -> UserModel | None:
         """Récupère un utilisateur par son ID."""
         try:
             return User.objects.get(pk=user_id)

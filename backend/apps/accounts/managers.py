@@ -1,7 +1,14 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
+
 from django.contrib.auth.models import BaseUserManager
 from django.utils.translation import gettext_lazy as _
 
 from .validators import normalize_phone_number
+
+if TYPE_CHECKING:
+    from .models import User
 
 
 class UserManager(BaseUserManager):
@@ -13,7 +20,7 @@ class UserManager(BaseUserManager):
     africain où le téléphone est l'identifiant numérique principal.
     """
     
-    def _create_user(self, phone_number, password=None, **extra_fields):
+    def _create_user(self, phone_number: str, password: str | None = None, **extra_fields: Any) -> User:
         """
         Crée et sauvegarde un utilisateur avec le phone_number donné.
         
@@ -32,7 +39,7 @@ class UserManager(BaseUserManager):
             raise ValueError(_("Le numéro de téléphone doit être fourni"))
         
         phone_number = normalize_phone_number(phone_number)
-        user = self.model(phone_number=phone_number, **extra_fields)
+        user: User = self.model(phone_number=phone_number, **extra_fields)
         user.set_password(password)
         user.save(using=self._db)
         
@@ -42,7 +49,14 @@ class UserManager(BaseUserManager):
         
         return user
     
-    def _create_farm_profile(self, user):
+    def _build_farm_name(self, user: User) -> str:
+        """Construit un nom de ferme coherent selon le type de compte."""
+        if user.account_type == 'company' and user.business_name:
+            return f"Ferme {user.business_name}"
+
+        return f"Ferme de {user.display_name}"
+
+    def _create_farm_profile(self, user: User) -> None:
         """
         Crée automatiquement un FarmProfile pour l'utilisateur.
         
@@ -51,18 +65,13 @@ class UserManager(BaseUserManager):
         """
         from .models import FarmProfile
         
-        if user.account_type == 'company' and user.business_name:
-            farm_name = f"Ferme {user.business_name}"
-        else:
-            farm_name = f"Ferme de {user.display_name}"
-        
         FarmProfile.objects.create(
             user=user,
-            farm_name=farm_name,
+            farm_name=self._build_farm_name(user),
             certification_status='pending'
         )
-    
-    def create_user(self, phone_number, password=None, **extra_fields):
+
+    def create_user(self, phone_number: str, password: str | None = None, **extra_fields: Any) -> User:
         """
         Crée un utilisateur standard (pisciculteur MAVECAM).
         
@@ -83,7 +92,7 @@ class UserManager(BaseUserManager):
         
         return self._create_user(phone_number, password, **extra_fields)
     
-    def create_superuser(self, phone_number, password=None, **extra_fields):
+    def create_superuser(self, phone_number: str, password: str | None = None, **extra_fields: Any) -> User:
         """
         Crée un administrateur MAVECAM.
         
@@ -110,7 +119,7 @@ class UserManager(BaseUserManager):
         
         return self._create_user(phone_number, password, **extra_fields)
     
-    def get_by_natural_key(self, phone_number):
+    def get_by_natural_key(self, phone_number: str) -> User:
         """
         Récupère un utilisateur par son identifiant naturel (téléphone).
         
@@ -125,7 +134,7 @@ class UserManager(BaseUserManager):
         phone_number = normalize_phone_number(phone_number)
         return self.get(**{self.model.USERNAME_FIELD: phone_number})
     
-    def get_by_login_name(self, login_name):
+    def get_by_login_name(self, login_name: str) -> User:
         """
         Récupère un utilisateur par son nom de connexion selon les spécifications MAVECAM.
         
@@ -139,18 +148,20 @@ class UserManager(BaseUserManager):
         Returns:
             User: Utilisateur trouvé ou None
         """
+        normalized_login_name = login_name.strip()
+
         # Recherche d'abord dans les entreprises par business_name
         try:
             return self.get(
                 account_type='company',
-                business_name__iexact=login_name.strip()
+                business_name__iexact=normalized_login_name
             )
         except self.model.DoesNotExist:
             pass
         
         # Ensuite recherche dans les personnes par nom complet
         # Séparer le login_name en first_name et last_name
-        name_parts = login_name.strip().split()
+        name_parts = normalized_login_name.split()
         if len(name_parts) >= 2:
             first_name = name_parts[0]
             last_name = ' '.join(name_parts[1:])  # Au cas où il y a plusieurs mots dans le nom
@@ -165,4 +176,4 @@ class UserManager(BaseUserManager):
                 pass
         
         # Aucun utilisateur trouvé
-        raise self.model.DoesNotExist(f"Utilisateur avec le nom '{login_name}' non trouvé")
+        raise self.model.DoesNotExist(f"Utilisateur avec le nom '{normalized_login_name}' non trouvé")

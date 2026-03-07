@@ -7,7 +7,11 @@ Pure Python - no framework dependencies.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal
+from typing import Final, Literal
+
+MessageLanguage = Literal["fr", "en"]
+MediaKind = Literal["image", "video"]
+SenderKind = Literal["user", "admin", "system"]
 
 
 @dataclass(frozen=True)
@@ -60,21 +64,21 @@ class MediaAttachment:
     """
 
     file_path: str
-    media_type: Literal["image", "video"]
+    media_type: MediaKind
     file_size_bytes: int
     mime_type: str
 
     # Class-level constants (business rules)
-    MAX_IMAGE_SIZE_MB = 10
-    MAX_VIDEO_SIZE_MB = 50
+    MAX_IMAGE_SIZE_MB: Final[int] = 10
+    MAX_VIDEO_SIZE_MB: Final[int] = 50
 
-    ALLOWED_IMAGE_TYPES = frozenset([
+    ALLOWED_IMAGE_TYPES: Final[frozenset[str]] = frozenset([
         "image/jpeg",
         "image/png",
         "image/webp",
     ])
 
-    ALLOWED_VIDEO_TYPES = frozenset([
+    ALLOWED_VIDEO_TYPES: Final[frozenset[str]] = frozenset([
         "video/mp4",
         "video/quicktime",
     ])

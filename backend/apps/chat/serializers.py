@@ -3,12 +3,26 @@ DRF serializers for chat API.
 Transform models to/from JSON format for REST endpoints.
 """
 
+from __future__ import annotations
+
+from typing import Any, TypedDict
+
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
 
 from .models import Conversation, Message
 
 User = get_user_model()
+
+
+class LastMessagePreview(TypedDict):
+    """Payload compact renvoye pour l'aperçu du dernier message."""
+
+    id: str
+    content: str
+    sender_type: str
+    created_at: Any
+    has_media: bool
 
 
 class MessageSerializer(serializers.ModelSerializer):
@@ -55,7 +69,7 @@ class MessageSerializer(serializers.ModelSerializer):
             'updated_at',
         ]
 
-    def get_sender_name(self, obj):
+    def get_sender_name(self, obj: Message) -> str:
         """
         Get sender display name based on sender_type.
 
@@ -71,7 +85,7 @@ class MessageSerializer(serializers.ModelSerializer):
             return "Système AquaCare"
         return "Inconnu"
 
-    def get_media_url(self, obj):
+    def get_media_url(self, obj: Message) -> str | None:
         """
         Get full URL for media file.
 
@@ -133,11 +147,11 @@ class ConversationSerializer(serializers.ModelSerializer):
             'unread_count_admin',  # Updated by service layer
         ]
 
-    def get_user_name(self, obj):
+    def get_user_name(self, obj: Conversation) -> str:
         """Get user display name."""
         return obj.user.get_full_name() or obj.user.phone_number
 
-    def get_last_message(self, obj):
+    def get_last_message(self, obj: Conversation) -> LastMessagePreview | None:
         """
         Get preview of last message in conversation.
 
@@ -158,7 +172,7 @@ class ConversationSerializer(serializers.ModelSerializer):
             }
         return None
 
-    def get_message_count(self, obj):
+    def get_message_count(self, obj: Conversation) -> int:
         """
         Get total message count in conversation.
 
@@ -255,7 +269,7 @@ class SendMessageSerializer(serializers.Serializer):
 
         return value
 
-    def validate(self, data):
+    def validate(self, data: dict[str, Any]) -> dict[str, Any]:
         """
         Cross-field validation: media_type and media_file must be consistent.
         Also enforces per-type size limits aligned with domain rules:

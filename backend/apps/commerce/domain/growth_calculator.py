@@ -4,7 +4,32 @@ Calculateurs de croissance et consommation pour cycles aquacoles.
 Architecture Clean : Logique mathématique pure sans dépendances Django.
 Formules basées sur les standards MAVECAM pour tilapia et catfish.
 """
+from __future__ import annotations
+
 from decimal import Decimal
+from typing import Final, TypedDict
+
+
+class WeightProgressionEntry(TypedDict):
+    day: int
+    weight_g: float
+
+
+class DetectedPhase(TypedDict):
+    phase: str
+    pellet_size_mm: float
+    product_pattern: str
+
+
+class FeedingPhase(TypedDict):
+    phase_name: str
+    pellet_size_mm: float
+    product_pattern: str
+    days_range: list[int]
+    weight_range_g: list[float]
+
+
+type PhaseRule = tuple[float, float, str, float, str]
 
 
 class GrowthCalculator:
@@ -105,7 +130,7 @@ class FeedingCalculator:
     """
 
     # Taux d'alimentation selon poids (% de la biomasse)
-    FEEDING_RATES = [
+    FEEDING_RATES: Final[list[tuple[int, int, float]]] = [
         (0, 10, 0.05),      # 0-10g : 5%
         (10, 50, 0.04),     # 10-50g : 4%
         (50, 150, 0.035),   # 50-150g : 3.5%
@@ -173,7 +198,7 @@ class FeedingCalculator:
     @staticmethod
     def calculate_period_consumption(
         fish_count: int,
-        weight_progression: list[dict[str, float]],
+        weight_progression: list[WeightProgressionEntry],
         start_day: int,
         end_day: int,
         survival_rate: float = 0.85
@@ -219,7 +244,7 @@ class PhaseDetector:
     """
 
     # Règles de granulométrie par espèce et poids
-    PHASE_RULES = {
+    PHASE_RULES: Final[dict[str, list[PhaseRule]]] = {
         'tilapia': [
             (0, 20, 'pre_grossissement', 2.0, 'TILAPIA 2MM'),
             (20, 100, 'pre_grossissement', 3.0, 'TILAPIA 3MM'),
@@ -236,7 +261,7 @@ class PhaseDetector:
     }
 
     @staticmethod
-    def detect_phase(species: str, avg_weight_g: float) -> dict[str, any]:
+    def detect_phase(species: str, avg_weight_g: float) -> DetectedPhase:
         """
         Détecte la phase d'élevage selon le poids moyen.
 
@@ -279,8 +304,8 @@ class PhaseDetector:
     @staticmethod
     def group_by_phases(
         species: str,
-        weight_progression: list[dict[str, float]]
-    ) -> list[dict[str, any]]:
+        weight_progression: list[WeightProgressionEntry],
+    ) -> list[FeedingPhase]:
         """
         Regroupe les jours par phases d'alimentation (même granulométrie).
 
@@ -297,8 +322,8 @@ class PhaseDetector:
             >>> len(phases)
             3  # Alevinage, pré-grossissement, grossissement
         """
-        phases = []
-        current_phase_info = None
+        phases: list[FeedingPhase] = []
+        current_phase_info: DetectedPhase | None = None
 
         for day_data in weight_progression:
             phase_info = PhaseDetector.detect_phase(species, day_data['weight_g'])

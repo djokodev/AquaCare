@@ -4,10 +4,12 @@ Service de gestion des commandes MAVECAM AquaCare.
 Architecture Clean : Service stateless coordonnant les opérations commande.
 Gère création, validation, calculs automatiques et notifications.
 """
+from __future__ import annotations
+
 import logging
 from datetime import datetime
 from decimal import Decimal
-from typing import Any
+from typing import TYPE_CHECKING, TypedDict
 
 from django.db import IntegrityError, transaction
 from django.db.models import Count, QuerySet, Sum
@@ -15,12 +17,49 @@ from django.utils import timezone
 
 from ..domain.calculators import DeliveryFeeCalculator, OrderTotalCalculator
 from ..domain.exceptions import InvalidOrderError
-from ..domain.validators import OrderValidator
+from ..domain.validators import DeliveryMethod, OrderItemPayload, OrderValidator
 from ..models import Order, OrderItem
 from .base import BaseCommerceService
 from .product_service import ProductService
 
+if TYPE_CHECKING:
+    from accounts.models import User
+
+    from ..models import Product
+
 logger = logging.getLogger(__name__)
+
+
+class DeliveryAddressSnapshot(TypedDict):
+    delivery_name: str
+    delivery_phone: str
+    delivery_region: str
+    delivery_city: str
+    delivery_full_address: str
+
+
+class OrderLineItemData(TypedDict):
+    product: Product
+    quantity: int
+    unit_price: Decimal
+    line_total: Decimal
+
+
+class OrderStatistics(TypedDict):
+    total_orders: int
+    total_spent: Decimal
+    total_bags_ordered: int
+    average_order_value: Decimal
+    last_order_date: datetime | None
+    last_order_number: str | None
+
+
+class DeliveryFeePreview(TypedDict):
+    subtotal: Decimal
+    delivery_fee: Decimal
+    total: Decimal
+    total_bags: int
+    free_delivery_threshold_reached: bool
 
 
 class OrderService(BaseCommerceService):
@@ -38,12 +77,12 @@ class OrderService(BaseCommerceService):
     @staticmethod
     @transaction.atomic
     def create_order(
-        user,
-        items_data: list[dict[str, Any]],
-        delivery_method: str,
+        user: User,
+        items_data: list[OrderItemPayload],
+        delivery_method: DeliveryMethod,
         pickup_location: str | None = None,
         client_uuid: str | None = None,
-        created_offline: bool = False
+        created_offline: bool = False,
     ) -> Order:
         """
         Crée une commande complète avec validation et calculs automatiques.
@@ -109,7 +148,7 @@ class OrderService(BaseCommerceService):
         OrderValidator.validate_delivery_method(delivery_method, pickup_location)
 
         # 2. Récupération produits et calcul sous-total
-        order_items_data = []
+        order_items_data: list[OrderLineItemData] = []
         total_bags = 0
 
         for item_data in items_data:
@@ -131,7 +170,7 @@ class OrderService(BaseCommerceService):
             total_bags += quantity
 
         # Calcul sous-total
-        subtotal = sum(item['line_total'] for item in order_items_data)
+        subtotal = sum((item['line_total'] for item in order_items_data), start=Decimal("0"))
 
         # 3. Calcul frais de livraison (règles MAVECAM)
         delivery_fee = DeliveryFeeCalculator.calculate(
@@ -177,10 +216,9 @@ class OrderService(BaseCommerceService):
         try:
             OrderService._create_order_notification(order)
         except Exception:
-            logger.error(
+            logger.exception(
                 "Échec envoi notification pour commande %s",
                 order.id,
-                exc_info=True
             )
 
         OrderService.log_operation('order_created', {
@@ -193,7 +231,7 @@ class OrderService(BaseCommerceService):
         return order
 
     @staticmethod
-    def _build_delivery_address_snapshot(user) -> dict[str, str]:
+    def _build_delivery_address_snapshot(user: User) -> DeliveryAddressSnapshot:
         """
         Construit snapshot adresse utilisateur pour commande.
 
@@ -232,12 +270,12 @@ class OrderService(BaseCommerceService):
 
     @staticmethod
     def _create_order_with_retry(
-        user,
-        delivery_method: str,
+        user: User,
+        delivery_method: DeliveryMethod,
         pickup_location: str,
-        client_uuid,
+        client_uuid: str | None,
         created_offline: bool,
-        delivery_address_data: dict[str, str],
+        delivery_address_data: DeliveryAddressSnapshot,
         subtotal: Decimal,
         delivery_fee: Decimal,
         total: Decimal,
@@ -317,7 +355,7 @@ class OrderService(BaseCommerceService):
 
     @staticmethod
     @transaction.atomic
-    def confirm_order_receipt(order: Order, user) -> Order:
+    def confirm_order_receipt(order: Order, user: User) -> Order:
         """
         Confirme la réception utilisateur d'une commande livrée.
 
@@ -380,10 +418,10 @@ class OrderService(BaseCommerceService):
 
     @staticmethod
     def get_user_orders(
-        user,
+        user: User,
         status: str | None = None,
-        limit: int | None = None
-    ) -> QuerySet:
+        limit: int | None = None,
+    ) -> QuerySet[Order]:
         """
         Récupère les commandes d'un utilisateur.
 
@@ -415,7 +453,7 @@ class OrderService(BaseCommerceService):
         return queryset
 
     @staticmethod
-    def get_order_details(order_id: str, user) -> Order:
+    def get_order_details(order_id: str, user: User) -> Order:
         """
         Récupère détails complets d'une commande.
 
@@ -440,7 +478,7 @@ class OrderService(BaseCommerceService):
             .get(id=order_id, user=user)
 
     @staticmethod
-    def get_order_statistics(user) -> dict[str, Any]:
+    def get_order_statistics(user: User) -> OrderStatistics:
         """
         Calcule statistiques commandes pour un utilisateur.
 
@@ -485,10 +523,10 @@ class OrderService(BaseCommerceService):
 
     @staticmethod
     def calculate_delivery_fee_preview(
-        user,
-        items_data: list[dict[str, Any]],
-        delivery_method: str
-    ) -> dict[str, Decimal]:
+        user: User,
+        items_data: list[OrderItemPayload],
+        delivery_method: DeliveryMethod,
+    ) -> DeliveryFeePreview:
         """
         Calcule preview des montants avant création commande.
 

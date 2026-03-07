@@ -1,6 +1,12 @@
+from __future__ import annotations
+
 from decouple import config
 
 from .base import *
+
+
+def _split_csv(value: str) -> list[str]:
+    return [item.strip() for item in value.split(',') if item.strip()]
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = config('DJANGO_SECRET_KEY', default="django-insecure-im6q3xmdo2l%y4b)vo*+hizdj5bckrh(b%7nj54--+cwpp=!pc")
@@ -8,7 +14,7 @@ SECRET_KEY = config('DJANGO_SECRET_KEY', default="django-insecure-im6q3xmdo2l%y4
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = config('DJANGO_DEBUG', default=True, cast=bool)
 
-ALLOWED_HOSTS = config('DJANGO_ALLOWED_HOSTS', default='127.0.0.1,localhost,api,*').split(',')
+ALLOWED_HOSTS = _split_csv(config('DJANGO_ALLOWED_HOSTS', default='127.0.0.1,localhost,api,*'))
 
 # Database - PostgreSQL pour correspondre à la production (environnement Docker)
 # Si POSTGRES_HOST n'existe pas (Python classique sans Docker), bascule sur SQLite

@@ -1,10 +1,16 @@
 """
 Serializers pour l'API REST des notifications.
 """
+from __future__ import annotations
+
+from typing import Literal, cast
 
 from rest_framework import serializers
+from rest_framework.request import Request
 
 from .models import Notification, NotificationPreference, PushToken
+
+type PushPlatform = Literal["ios", "android"]
 
 
 class NotificationErrorVisibilityMixin:
@@ -13,7 +19,7 @@ class NotificationErrorVisibilityMixin:
     """
 
     def _can_expose_delivery_errors(self) -> bool:
-        request = self.context.get('request')
+        request = cast(Request | None, self.context.get("request"))
         user = getattr(request, 'user', None)
         return bool(user and user.is_authenticated and (user.is_staff or user.is_superuser))
 
@@ -35,12 +41,12 @@ class NotificationSerializer(NotificationErrorVisibilityMixin, serializers.Model
     email_error = serializers.SerializerMethodField()
     push_error = serializers.SerializerMethodField()
 
-    def get_email_error(self, obj):
+    def get_email_error(self, obj: Notification) -> str | None:
         if self._can_expose_delivery_errors():
             return obj.email_error
         return None
 
-    def get_push_error(self, obj):
+    def get_push_error(self, obj: Notification) -> str | None:
         if self._can_expose_delivery_errors():
             return obj.push_error
         return None
@@ -97,12 +103,12 @@ class NotificationListSerializer(NotificationErrorVisibilityMixin, serializers.M
     email_error = serializers.SerializerMethodField()
     push_error = serializers.SerializerMethodField()
 
-    def get_email_error(self, obj):
+    def get_email_error(self, obj: Notification) -> str | None:
         if self._can_expose_delivery_errors():
             return obj.email_error
         return None
 
-    def get_push_error(self, obj):
+    def get_push_error(self, obj: Notification) -> str | None:
         if self._can_expose_delivery_errors():
             return obj.push_error
         return None
@@ -193,7 +199,7 @@ class PushTokenSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'user', 'is_active', 'last_used_at', 'created_at']
 
-    def validate_expo_push_token(self, value):
+    def validate_expo_push_token(self, value: str) -> str:
         """
         Valide le format du token Expo Push.
         """
@@ -203,7 +209,7 @@ class PushTokenSerializer(serializers.ModelSerializer):
             )
         return value
 
-    def validate_platform(self, value):
+    def validate_platform(self, value: str | None) -> PushPlatform | None:
         """
         Valide la plateforme.
         """
@@ -211,7 +217,7 @@ class PushTokenSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 "Plateforme doit être 'ios' ou 'android'"
             )
-        return value
+        return cast(PushPlatform | None, value)
 
 
 class MarkNotificationReadSerializer(serializers.Serializer):

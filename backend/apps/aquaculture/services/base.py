@@ -11,13 +11,19 @@ Architecture :
 - Logging centralisé
 - Validation métier systématique
 """
+from __future__ import annotations
+
 import logging
 from abc import ABC
-from typing import Any
+from decimal import Decimal
+from typing import Literal
 
 from django.utils.translation import gettext_lazy as _
 
 logger = logging.getLogger(__name__)
+
+type LogLevel = Literal["debug", "info", "warning", "error"]
+type NumericValue = int | float | Decimal
 
 
 class BaseService(ABC):
@@ -82,7 +88,11 @@ class BaseService(ABC):
             )
 
     @staticmethod
-    def safe_divide(numerator: Any, denominator: Any, default: Any = None) -> Any | None:
+    def safe_divide(
+        numerator: NumericValue | None,
+        denominator: NumericValue | None,
+        default: float | None = None,
+    ) -> float | None:
         """
         Division sécurisée avec gestion division par zéro.
 
@@ -96,7 +106,7 @@ class BaseService(ABC):
         """
         try:
             if denominator and float(denominator) != 0:
-                return numerator / denominator
+                return float(numerator / denominator)
             return default
         except (TypeError, ValueError, ZeroDivisionError):
             return default

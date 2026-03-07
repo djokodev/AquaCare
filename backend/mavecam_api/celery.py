@@ -6,14 +6,18 @@ Celery est utilisé pour les tâches asynchrones :
 - Envoi de notifications push Expo
 - Nettoyage périodique des vieilles notifications
 """
+from __future__ import annotations
 
 import os
+from typing import Final
 
 from celery import Celery
 from celery.schedules import crontab
 
+DEFAULT_DJANGO_SETTINGS_MODULE: Final[str] = 'mavecam_api.settings.development'
+
 # Set default Django settings module
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'mavecam_api.settings.development')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', DEFAULT_DJANGO_SETTINGS_MODULE)
 
 # Create Celery app
 app = Celery('mavecam_api')

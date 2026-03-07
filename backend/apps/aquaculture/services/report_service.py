@@ -14,7 +14,7 @@ import logging
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from importlib import metadata
-from typing import Any
+from typing import Literal, TypedDict
 
 from accounts.models import FarmProfile, User
 from django.conf import settings
@@ -41,6 +41,180 @@ from .base import BaseService
 logger = logging.getLogger(__name__)
 
 _pdf_patched = False
+
+type ReportMetadataValue = (
+    str
+    | int
+    | float
+    | bool
+    | None
+    | list["ReportMetadataValue"]
+    | dict[str, "ReportMetadataValue"]
+)
+type DispatchChannel = Literal["email", "whatsapp"]
+type DispatchStatus = Literal["success", "failed"]
+
+
+class ReportDispatchMetadata(TypedDict, total=False):
+    source: str
+    channel: str
+    reason: str
+    cycle_scope_id: str
+    cycle_scope_name: str
+
+
+class ReportMetaSnapshot(TypedDict):
+    report_type: str
+    period_start: str
+    period_end: str
+    cycle_scope_id: str | None
+    cycle_scope_name: str | None
+    generated_at: str
+    timezone: str
+
+
+class ReportFarmSnapshot(TypedDict):
+    id: str
+    farm_name: str
+    certification_status: str
+    total_ponds: int | None
+    main_species: str
+    annual_production_kg: Decimal | None
+    promoter_name: str
+    promoter_email: str
+    promoter_phone: str
+
+
+class ReportSummarySnapshot(TypedDict):
+    cycle_count: int
+    total_log_count: int
+    total_sanitary_events: int
+    total_feed: float
+    total_mortality: int
+
+
+class ReportCycleInfo(TypedDict):
+    id: str
+    cycle_name: str
+    species: str
+    species_display: str
+    status: str
+    status_display: str
+    pond_identifier: str
+    start_date: str
+    days_active: int
+
+
+class ReportEconomicPlan(TypedDict):
+    planned_selling_price_per_kg_fcfa: float
+    fingerlings_cost_fcfa: float | None
+    other_operational_costs_fcfa: float | None
+    projected_revenue_fcfa: float | None
+    projected_roi_pct: float | None
+
+
+class ReportDashboardMetrics(TypedDict):
+    estimated_market_value_fcfa: float
+    feed_cost_consumed_fcfa: float
+    time_remaining_days: int | None
+    direct_production_cost_fcfa: float
+
+
+class ReportCurrentMetrics(TypedDict):
+    current_count: int
+    current_average_weight: float | None
+    current_biomass: float | None
+    total_feed_consumed: float | None
+    survival_rate: float | None
+    fcr: float | None
+    daily_growth_rate: float | None
+    specific_growth_rate: float | None
+    average_daily_feed: float | None
+    performance_score: float | None
+
+
+class ReportPeriodMetrics(TypedDict):
+    log_count: int
+    sanitary_event_count: int
+    total_feed: float
+    total_mortality: int
+    average_weight: float | None
+    average_temperature: float | None
+    average_oxygen: float | None
+    average_ph: float | None
+
+
+class ReportLogSnapshot(TypedDict):
+    id: str
+    log_date: str
+    mortality_count: int
+    mortality_reason: str | None
+    sample_count: int | None
+    sample_total_weight: float | None
+    average_weight: float | None
+    feed_quantity: float | None
+    feed_type: str | None
+    water_temperature: float | None
+    dissolved_oxygen: float | None
+    ph_level: float | None
+    ammonia_level: float | None
+    observations: str | None
+
+
+class ReportSanitarySnapshot(TypedDict):
+    id: str
+    event_date: str
+    event_type: str
+    event_type_display: str
+    symptoms: str
+    affected_count: int
+    treatment_applied: str | None
+    medication_used: str | None
+    dosage: str | None
+    treatment_duration_days: int | None
+    resolved: bool
+
+
+class ReportFeedingPlanSnapshot(TypedDict):
+    week_number: int
+    start_date: str
+    end_date: str
+    daily_feed_amount: float | None
+    feeding_rate: float | None
+    meals_per_day: int
+    feed_per_meal: float | None
+    recommended_feed_type: str
+    protein_percentage: Decimal | None
+
+
+class ReportCycleSection(TypedDict):
+    cycle: ReportCycleInfo
+    economic_plan: ReportEconomicPlan
+    dashboard_metrics: ReportDashboardMetrics
+    current_metrics: ReportCurrentMetrics
+    period_metrics: ReportPeriodMetrics
+    logs: list[ReportLogSnapshot]
+    sanitary_logs: list[ReportSanitarySnapshot]
+    feeding_plans: list[ReportFeedingPlanSnapshot]
+
+
+class ReportPayload(TypedDict):
+    report_meta: ReportMetaSnapshot
+    farm: ReportFarmSnapshot
+    summary: ReportSummarySnapshot
+    cycles: list[ReportCycleSection]
+
+
+class PDFContext(TypedDict):
+    report: ProductionReport
+    payload: ReportPayload
+    generated_at: datetime
+    language_code: str
+    brand_color: str
+    labels: dict[str, str]
+    report_type_label: str
+    period_label: str
+    empty_value_label: str
 
 
 class ReportService(BaseService):
@@ -245,7 +419,7 @@ class ReportService(BaseService):
         report: ProductionReport,
         user: User,
         recipient: str = '',
-        metadata: dict[str, Any] | None = None,
+        metadata: ReportDispatchMetadata | None = None,
     ) -> ProductionReport:
         """Marque le rapport comme partagé sur WhatsApp (audit manuel)."""
         report.whatsapp_status = 'shared'
@@ -317,7 +491,7 @@ class ReportService(BaseService):
         period_start: date,
         period_end: date,
         cycle_id: str | None = None,
-    ) -> dict[str, Any]:
+    ) -> ReportPayload:
         """Construit le snapshot JSON complet utilisé pour le PDF."""
         cycles_qs = ProductionCycle.objects.filter(
             farm_profile=farm_profile,
@@ -361,7 +535,7 @@ class ReportService(BaseService):
         # Évaluation unique du queryset — les Prefetch sont chargés ici
         cycles = list(cycles_qs)
 
-        cycle_sections: list[dict[str, Any]] = []
+        cycle_sections: list[ReportCycleSection] = []
         global_total_feed = 0.0
         global_total_mortality = 0
         global_log_count = 0
@@ -892,10 +1066,10 @@ class ReportService(BaseService):
     @staticmethod
     def _build_pdf_context(
         report: ProductionReport,
-        payload: dict[str, Any],
+        payload: ReportPayload,
         generated_at: datetime,
         language_code: str,
-    ) -> dict[str, Any]:
+    ) -> PDFContext:
         return {
             'report': report,
             'payload': payload,
@@ -956,7 +1130,7 @@ class ReportService(BaseService):
     @staticmethod
     def _render_pdf(
         report: ProductionReport,
-        payload: dict[str, Any],
+        payload: ReportPayload,
         generated_at: datetime,
         language_code: str | None = None,
     ) -> bytes:
@@ -981,13 +1155,13 @@ class ReportService(BaseService):
     @staticmethod
     def _create_dispatch_log(
         report: ProductionReport,
-        channel: str,
-        status: str,
+        channel: DispatchChannel,
+        status: DispatchStatus,
         dispatched_by: User | None = None,
         recipient: str = '',
         error_code: str = '',
         error_message: str = '',
-        metadata: dict[str, Any] | None = None,
+        metadata: ReportDispatchMetadata | None = None,
     ) -> ReportDispatchLog:
         return ReportDispatchLog.objects.create(
             report=report,
@@ -1001,7 +1175,7 @@ class ReportService(BaseService):
         )
 
     @staticmethod
-    def _to_float(value: Any) -> float | None:
+    def _to_float(value: Decimal | float | int | str | None) -> float | None:
         if value is None:
             return None
         if isinstance(value, Decimal):

@@ -8,16 +8,88 @@ VERSION 2.0 avec :
 
 Analyse la consommation historique + prévoit les changements de phase futurs.
 """
+from __future__ import annotations
+
 from datetime import timedelta
 from decimal import Decimal
+from typing import TypedDict
 
 from aquaculture.models import CycleLog, ProductionCycle
 from commerce.models import Product
-from django.db.models import Avg, Sum
+from django.db.models import Avg, QuerySet, Sum
 from django.utils import timezone
 
 from ..constants import TARGET_WEIGHT_CATFISH_DEFAULT, TARGET_WEIGHT_TILAPIA_DEFAULT
 from ..domain.growth_calculator import GrowthCalculator, PhaseDetector
+
+
+class SuggestedProduct(TypedDict):
+    product_id: str
+    product_name: str
+    package_weight_kg: float
+    quantity_bags: int
+    total_kg: float
+    unit_price: float
+    total_price: float
+    brand: str
+
+
+class PredictedPhase(TypedDict):
+    phase_name: str
+    pellet_size_mm: float
+    weight_range_g: list[float]
+    days_in_phase: int
+
+
+class PhaseSuggestion(TypedDict):
+    phase_name: str
+    pellet_size_mm: float
+    weight_range_g: list[float]
+    days_coverage: int
+    estimated_need_kg: float
+    products: list[SuggestedProduct]
+    total_price: float
+
+
+class CycleSuggestionSummary(TypedDict):
+    total_needed_kg: float
+    total_bags: int
+    total_price: float
+    coverage_days: int
+
+
+class CycleSuggestion(TypedDict):
+    has_data: bool
+    cycle_id: str
+    cycle_name: str
+    species: str
+    current_phase: str
+    current_avg_weight_g: float
+    days_remaining: int
+    avg_daily_consumption_kg: float
+    phases: list[PhaseSuggestion]
+    summary: CycleSuggestionSummary
+
+
+class CycleSuggestionNoData(TypedDict):
+    has_data: bool
+    reason: str
+
+
+class SuggestionAnalysis(TypedDict):
+    total_cycles: int
+    cycles_with_data: int
+    confidence_score: int
+    analysis_period_days: int
+    safety_buffer_days: int
+
+
+class FeedingSuggestionResult(TypedDict):
+    has_suggestions: bool
+    suggestion_type: str
+    suggestions: list[CycleSuggestion]
+    analysis: SuggestionAnalysis
+    generated_at: str
 
 
 class FeedingSuggestionService:
@@ -50,7 +122,7 @@ class FeedingSuggestionService:
         user_id: int,
         farm_profile_id: int | None = None,
         cycle_id: str | None = None,
-    ) -> dict:
+    ) -> FeedingSuggestionResult | dict[str, object]:
         """
         Génère suggestions ADAPTÉES avec détection phase actuelle.
 
@@ -87,7 +159,7 @@ class FeedingSuggestionService:
             }
 
         # Analyser chaque cycle avec détection de phase
-        suggestions_by_cycle = []
+        suggestions_by_cycle: list[CycleSuggestion] = []
         total_cycles_analyzed = 0
         cycles_with_data = 0
 
@@ -121,7 +193,9 @@ class FeedingSuggestionService:
         }
 
     @staticmethod
-    def _analyze_cycle_with_phases(cycle: ProductionCycle) -> dict:
+    def _analyze_cycle_with_phases(
+        cycle: ProductionCycle,
+    ) -> CycleSuggestion | CycleSuggestionNoData:
         """
         Analyse un cycle avec détection automatique de phase actuelle.
 
@@ -275,7 +349,10 @@ class FeedingSuggestionService:
         }
 
     @staticmethod
-    def _calculate_current_average_weight(cycle: ProductionCycle, logs: any) -> float | None:
+    def _calculate_current_average_weight(
+        cycle: ProductionCycle,
+        logs: QuerySet[CycleLog],
+    ) -> float | None:
         """
         Calcule le poids moyen actuel des poissons depuis les logs.
 
@@ -315,8 +392,8 @@ class FeedingSuggestionService:
         species: str,
         current_weight_g: float,
         target_weight_g: float,
-        days_remaining: int
-    ) -> list[dict]:
+        days_remaining: int,
+    ) -> list[PredictedPhase]:
         """
         Prévoit les phases de croissance futures avec changements de granulés.
 
@@ -343,7 +420,7 @@ class FeedingSuggestionService:
         future_phases_grouped = PhaseDetector.group_by_phases(species, future_progression)
 
         # Formater pour sortie
-        result = []
+        result: list[PredictedPhase] = []
         for phase in future_phases_grouped:
             days_start, days_end = phase['days_range']
             result.append({
@@ -356,9 +433,12 @@ class FeedingSuggestionService:
         return result
 
     @staticmethod
-    def _convert_kg_to_bags(total_kg: Decimal, products: any) -> list[dict]:
+    def _convert_kg_to_bags(
+        total_kg: Decimal,
+        products: QuerySet[Product],
+    ) -> list[SuggestedProduct]:
         """Convertit kg en sacs (20kg + 1kg)."""
-        suggested_products = []
+        suggested_products: list[SuggestedProduct] = []
         remaining_kg = total_kg
 
         # Sacs de 20kg

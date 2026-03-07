@@ -4,7 +4,10 @@ Service de gestion des produits du catalogue MAVECAM AquaCare.
 Architecture Clean : Service stateless avec méthodes statiques.
 Gère recherche, filtrage et recommandations de produits alimentaires.
 """
+from __future__ import annotations
+
 from decimal import Decimal
+from typing import TypedDict
 
 from django.db.models import Q, QuerySet
 
@@ -12,6 +15,12 @@ from ..domain.calculators import ProductRecommendationCalculator
 from ..domain.exceptions import ProductNotAvailableError, ProductNotFoundError
 from ..models import Product
 from .base import BaseCommerceService
+
+
+class ProductPriceRange(TypedDict):
+    min: Decimal
+    max: Decimal
+    avg: Decimal
 
 
 class ProductService(BaseCommerceService):
@@ -25,7 +34,7 @@ class ProductService(BaseCommerceService):
     """
 
     @staticmethod
-    def get_all_products(include_unavailable: bool = False) -> QuerySet:
+    def get_all_products(include_unavailable: bool = False) -> QuerySet[Product]:
         """
         Retourne tous les produits du catalogue.
 
@@ -71,8 +80,8 @@ class ProductService(BaseCommerceService):
         """
         try:
             product = Product.objects.get(id=product_id)
-        except Product.DoesNotExist:
-            raise ProductNotFoundError(f"Produit introuvable: {product_id}")
+        except Product.DoesNotExist as err:
+            raise ProductNotFoundError(f"Produit introuvable: {product_id}") from err
 
         if check_availability and not product.is_available:
             raise ProductNotAvailableError(
@@ -82,7 +91,7 @@ class ProductService(BaseCommerceService):
         return product
 
     @staticmethod
-    def filter_by_species(species: str) -> QuerySet:
+    def filter_by_species(species: str) -> QuerySet[Product]:
         """
         Filtre produits par espèce.
 
@@ -103,7 +112,7 @@ class ProductService(BaseCommerceService):
         ).order_by('phase', 'pellet_size_mm')
 
     @staticmethod
-    def filter_by_phase(phase: str, species: str | None = None) -> QuerySet:
+    def filter_by_phase(phase: str, species: str | None = None) -> QuerySet[Product]:
         """
         Filtre produits par phase d'élevage.
 
@@ -127,7 +136,7 @@ class ProductService(BaseCommerceService):
         return queryset.order_by('pellet_size_mm')
 
     @staticmethod
-    def filter_by_brand(brand: str) -> QuerySet:
+    def filter_by_brand(brand: str) -> QuerySet[Product]:
         """
         Filtre produits par marque.
 
@@ -148,7 +157,7 @@ class ProductService(BaseCommerceService):
         ).order_by('species', 'phase', 'pellet_size_mm')
 
     @staticmethod
-    def search_products(query: str) -> QuerySet:
+    def search_products(query: str) -> QuerySet[Product]:
         """
         Recherche textuelle dans le catalogue (nom produit).
 
@@ -228,7 +237,7 @@ class ProductService(BaseCommerceService):
         return product
 
     @staticmethod
-    def get_products_for_cycle(cycle) -> QuerySet:
+    def get_products_for_cycle(cycle: object) -> QuerySet[Product]:
         """
         Retourne produits adaptés pour un cycle de production donné.
 
@@ -248,7 +257,10 @@ class ProductService(BaseCommerceService):
         return ProductService.filter_by_species(cycle.species)
 
     @staticmethod
-    def get_price_range(species: str | None = None, phase: str | None = None) -> dict:
+    def get_price_range(
+        species: str | None = None,
+        phase: str | None = None,
+    ) -> ProductPriceRange:
         """
         Calcule la fourchette de prix (min/max) selon filtres.
 

@@ -1,12 +1,16 @@
 """
 Views (ViewSets) pour l'API REST des notifications.
 """
+from __future__ import annotations
 
-from django.db.models import Count, Q
+from typing import Any, TypedDict, cast
+
+from django.db.models import Count, Q, QuerySet
 from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.request import Request
 from rest_framework.response import Response
 
 from .models import Notification, NotificationPreference, PushToken
@@ -18,6 +22,13 @@ from .serializers import (
     PushTokenSerializer,
 )
 from .services import NotificationService
+
+
+class NotificationStatsPayload(TypedDict):
+    total_count: int
+    unread_count: int
+    read_count: int
+    by_type: dict[str, int]
 
 
 class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
@@ -37,7 +48,7 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [IsAuthenticated]
     serializer_class = NotificationSerializer
 
-    def get_queryset(self):
+    def get_queryset(self) -> QuerySet[Notification]:
         """
         Filtre les notifications par utilisateur authentifié.
         Exclut les notifications futures (scheduled_for > now).
@@ -61,7 +72,7 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
 
         return queryset.order_by('-scheduled_for')
 
-    def get_serializer_class(self):
+    def get_serializer_class(self) -> type[NotificationListSerializer] | type[NotificationSerializer]:
         """
         Utilise un serializer léger pour la liste.
         """
@@ -70,7 +81,7 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
         return NotificationSerializer
 
     @action(detail=True, methods=['post'])
-    def mark_read(self, request, pk=None):
+    def mark_read(self, request: Request, pk: str | None = None) -> Response:
         """
         Marque une notification comme lue.
 
@@ -102,7 +113,7 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
         })
 
     @action(detail=False, methods=['post'])
-    def mark_all_read(self, request):
+    def mark_all_read(self, request: Request) -> Response:
         """
         Marque toutes les notifications comme lues.
 
@@ -124,7 +135,7 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
             'message': f'{count} notification(s) marquée(s) comme lue(s)'
         })
 
-    def destroy(self, request, pk=None):
+    def destroy(self, request: Request, pk: str | None = None) -> Response:
         """
         Supprime une notification.
 
@@ -147,7 +158,7 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
         )
 
     @action(detail=False, methods=['post'])
-    def delete_all_read(self, request):
+    def delete_all_read(self, request: Request) -> Response:
         """
         Supprime toutes les notifications lues.
 
@@ -170,7 +181,7 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
         })
 
     @action(detail=False, methods=['get'])
-    def stats(self, request):
+    def stats(self, request: Request) -> Response:
         """
         Retourne des statistiques sur les notifications.
 
@@ -214,7 +225,7 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
 
         by_type_dict = {item['notification_type']: item['count'] for item in by_type}
 
-        data = {
+        data: NotificationStatsPayload = {
             'total_count': total_count,
             'unread_count': unread_count,
             'read_count': read_count,
@@ -225,7 +236,7 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
         return Response(serializer.data)
 
     @action(detail=False, methods=['post'])
-    def register_push_token(self, request):
+    def register_push_token(self, request: Request) -> Response:
         """
         Enregistre ou met à jour un Expo Push Token.
 
@@ -256,15 +267,16 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
         """
         serializer = PushTokenSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        validated_data = cast(dict[str, Any], serializer.validated_data)
 
         # Créer ou mettre à jour le token
         token, created = PushToken.objects.update_or_create(
             user=request.user,
-            device_id=serializer.validated_data['device_id'],
+            device_id=validated_data['device_id'],
             defaults={
-                'expo_push_token': serializer.validated_data['expo_push_token'],
-                'device_name': serializer.validated_data.get('device_name'),
-                'platform': serializer.validated_data.get('platform'),
+                'expo_push_token': validated_data['expo_push_token'],
+                'device_name': validated_data.get('device_name'),
+                'platform': validated_data.get('platform'),
                 'is_active': True,
             }
         )
@@ -289,7 +301,7 @@ class NotificationPreferenceViewSet(viewsets.ViewSet):
 
     permission_classes = [IsAuthenticated]
 
-    def list(self, request):
+    def list(self, request: Request) -> Response:
         """
         Récupère les préférences de l'utilisateur.
 
@@ -299,7 +311,7 @@ class NotificationPreferenceViewSet(viewsets.ViewSet):
         serializer = NotificationPreferenceSerializer(prefs)
         return Response(serializer.data)
 
-    def update(self, request):
+    def update(self, request: Request) -> Response:
         """
         Met à jour les préférences de l'utilisateur (complet).
 
@@ -311,7 +323,7 @@ class NotificationPreferenceViewSet(viewsets.ViewSet):
         serializer.save()
         return Response(serializer.data)
 
-    def partial_update(self, request):
+    def partial_update(self, request: Request) -> Response:
         """
         Met à jour partiellement les préférences de l'utilisateur.
 

@@ -3,10 +3,13 @@ DRF ViewSets for chat API.
 Handle HTTP requests and delegate business logic to services.
 """
 
+from __future__ import annotations
+
 from django.db.models import Count
 from django.utils.translation import gettext as _
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.throttling import UserRateThrottle
 
@@ -55,7 +58,7 @@ class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = ConversationSerializer
     permission_classes = [permissions.IsAuthenticated, IsConversationOwnerOrAdmin]
 
-    def get_throttles(self):
+    def get_throttles(self) -> list[UserRateThrottle]:
         """Apply ChatMessageThrottle on write/read-heavy actions."""
         if getattr(self, 'action', None) in ('send_message', 'mark_read', 'messages'):
             return [ChatMessageThrottle()]
@@ -92,7 +95,7 @@ class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
             )
 
     @action(detail=False, methods=['get'], url_path='me')
-    def get_my_conversation(self, request):
+    def get_my_conversation(self, request: Request) -> Response:
         """
         Get or create current user's conversation with administration.
 
@@ -110,7 +113,7 @@ class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=['get'])
-    def messages(self, request, pk=None):
+    def messages(self, request: Request, pk: str | None = None) -> Response:
         """
         List messages in conversation (paginated).
 
@@ -154,7 +157,7 @@ class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
         return Response(serializer.data)
 
     @action(detail=True, methods=['post'], throttle_classes=[ChatMessageThrottle])
-    def send_message(self, request, pk=None):
+    def send_message(self, request: Request, pk: str | None = None) -> Response:
         """
         Send message in conversation.
 
@@ -204,7 +207,7 @@ class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
                     media_file=serializer.validated_data.get('media_file'),
                     media_type=serializer.validated_data.get('media_type'),
                     client_uuid=serializer.validated_data.get('client_uuid'),
-                    created_offline=serializer.validated_data.get('created_offline', False)
+                    created_offline=serializer.validated_data.get('created_offline', False),
                 )
 
             # Return created message
@@ -248,7 +251,7 @@ class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
             )
 
     @action(detail=True, methods=['post'])
-    def mark_read(self, request, pk=None):
+    def mark_read(self, request: Request, pk: str | None = None) -> Response:
         """
         Mark all unread messages in conversation as read.
 

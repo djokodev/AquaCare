@@ -3,7 +3,11 @@ Custom permissions for chat module.
 Enforce access control: users can only access their own conversation.
 """
 
+from __future__ import annotations
+
 from rest_framework import permissions
+from rest_framework.request import Request
+from rest_framework.views import View
 
 
 class IsConversationOwnerOrAdmin(permissions.BasePermission):
@@ -20,7 +24,7 @@ class IsConversationOwnerOrAdmin(permissions.BasePermission):
     - Admin: Can access any conversation
     """
 
-    def has_object_permission(self, request, view, obj):
+    def has_object_permission(self, request: Request, view: View, obj: object) -> bool:
         """
         Check object-level permission.
 

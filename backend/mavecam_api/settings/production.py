@@ -1,13 +1,20 @@
+from __future__ import annotations
+
 from decouple import config
 
 from .base import *
+
+
+def _split_csv(value: str) -> list[str]:
+    return [item.strip() for item in value.split(',') if item.strip()]
 
 SECRET_KEY = config('DJANGO_SECRET_KEY')
 DEBUG = config('DJANGO_DEBUG', default=False, cast=bool)
 ALLOWED_HOSTS = config(
     'DJANGO_ALLOWED_HOSTS',
     default='77.237.241.223,aquacare.tech,www.aquacare.tech,api.aquacare.tech'
-).split(',')
+)
+ALLOWED_HOSTS = _split_csv(ALLOWED_HOSTS)
 
 DATABASES = {
     'default': {

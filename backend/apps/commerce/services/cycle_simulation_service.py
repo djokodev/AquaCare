@@ -4,8 +4,11 @@ Service de simulation de cycles aquacoles MAVECAM.
 Permet aux aquaculteurs de planifier leur budget AVANT de démarrer un cycle.
 Calcule automatiquement : aliments nécessaires, coûts, phases, ROI estimé.
 """
+from __future__ import annotations
+
 import math
 from decimal import Decimal
+from typing import TypedDict
 
 from django.db.models import QuerySet
 
@@ -17,9 +20,75 @@ from ..constants import (
     TARGET_WEIGHT_CATFISH_DEFAULT,
     TARGET_WEIGHT_TILAPIA_DEFAULT,
 )
-from ..domain.growth_calculator import FeedingCalculator, GrowthCalculator, PhaseDetector, ROICalculator
+from ..domain.growth_calculator import (
+    FeedingCalculator,
+    FeedingPhase,
+    GrowthCalculator,
+    PhaseDetector,
+    ROICalculator,
+    WeightProgressionEntry,
+)
 from ..models import Product
 from .base import BaseCommerceService
+
+
+class SimulationParams(TypedDict):
+    species: str
+    initial_fish_count: int
+    initial_weight_g: float
+    target_weight_g: float
+    cycle_duration_days: int
+    survival_rate: float
+    selling_price_per_kg_fcfa: float
+    fingerlings_cost_fcfa: float
+    other_costs_fcfa: float
+
+
+class SuggestedProduct(TypedDict):
+    product_id: str
+    product_name: str
+    package_weight_kg: float
+    quantity_bags: int
+    total_kg: float
+    unit_price: float
+    total_price: float
+    brand: str
+
+
+class SimulationPhaseDetails(TypedDict):
+    phase_name: str
+    days_range: list[int]
+    weight_range_g: list[float]
+    pellet_size_mm: float
+    duration_days: int
+    total_consumption_kg: Decimal
+    daily_avg_kg: float
+    products: list[SuggestedProduct]
+    total_bags: int
+    total_price: Decimal
+
+
+class SimulationSummary(TypedDict):
+    total_feed_kg: float
+    feed_cost_fcfa: float
+    fingerlings_cost_fcfa: float
+    other_costs_fcfa: float
+    total_cost_fcfa: float
+    initial_fish_count: int
+    estimated_final_count: int
+    survival_rate: float
+    biomass_gain_kg: float
+    estimated_fcr: float
+    estimated_revenue_fcfa: float
+    estimated_profit_fcfa: float
+    roi_percentage: float
+
+
+class CycleSimulationResult(TypedDict):
+    simulation_type: str
+    parameters: SimulationParams
+    feeding_phases: list[SimulationPhaseDetails]
+    summary: SimulationSummary
 
 
 class CycleSimulationService(BaseCommerceService):
@@ -44,7 +113,7 @@ class CycleSimulationService(BaseCommerceService):
         selling_price_per_kg_fcfa: float | None = None,
         fingerlings_cost_fcfa: float | None = None,
         other_costs_fcfa: float | None = None,
-    ) -> dict:
+    ) -> CycleSimulationResult:
         """
         Simule un cycle complet avec estimation détaillée des besoins.
 
@@ -141,7 +210,7 @@ class CycleSimulationService(BaseCommerceService):
         selling_price_per_kg_fcfa: float | None,
         fingerlings_cost_fcfa: float | None,
         other_costs_fcfa: float | None,
-    ) -> dict:
+    ) -> SimulationParams:
         """Construit les paramètres de simulation avec valeurs par défaut."""
 
         normalized_species = CycleSimulationService._normalize_species(species)
@@ -179,10 +248,10 @@ class CycleSimulationService(BaseCommerceService):
 
     @staticmethod
     def _calculate_phase_details(
-        phase: dict,
-        params: dict,
-        weight_progression: list[dict]
-    ) -> dict:
+        phase: FeedingPhase,
+        params: SimulationParams,
+        weight_progression: list[WeightProgressionEntry],
+    ) -> SimulationPhaseDetails:
         """
         Calcule consommation et produits nécessaires pour une phase.
 
@@ -247,8 +316,8 @@ class CycleSimulationService(BaseCommerceService):
     @staticmethod
     def _convert_kg_to_bags(
         total_kg: Decimal,
-        available_products: QuerySet
-    ) -> list[dict]:
+        available_products: QuerySet[Product],
+    ) -> list[SuggestedProduct]:
         """
         Convertit une quantité en kg en sacs optimisés (20kg + 1kg).
 
@@ -313,10 +382,10 @@ class CycleSimulationService(BaseCommerceService):
 
     @staticmethod
     def _calculate_summary(
-        params: dict,
+        params: SimulationParams,
         total_feed_kg: Decimal,
-        total_cost: Decimal
-    ) -> dict:
+        total_cost: Decimal,
+    ) -> SimulationSummary:
         """
         Calcule le résumé avec ROI, FCR, revenus.
 

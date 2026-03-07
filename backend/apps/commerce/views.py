@@ -4,14 +4,19 @@ ViewSets Django REST Framework pour API commerce MAVECAM AquaCare.
 Architecture minimaliste : ViewSets délèguent toute logique métier aux Services.
 Responsabilités : authentification, permissions, sérialisation, routing HTTP.
 """
+from __future__ import annotations
+
 import logging
 import uuid
+from typing import Any, cast
 
+from django.db.models import QuerySet
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import mixins, permissions, status, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.filters import OrderingFilter, SearchFilter
+from rest_framework.request import Request
 from rest_framework.response import Response
 
 from .domain.exceptions import (
@@ -19,6 +24,7 @@ from .domain.exceptions import (
     ProductNotAvailableError,
     ProductNotFoundError,
 )
+from .models import Order, Product
 from .serializers import (
     CycleSimulationInputSerializer,
     CycleSimulationOutputSerializer,
@@ -57,12 +63,12 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
     ordering_fields = ['price_per_package', 'pellet_size_mm', 'created_at']
     ordering = ['species', 'phase', 'pellet_size_mm']
 
-    def get_queryset(self):
+    def get_queryset(self) -> QuerySet[Product]:
         """Retourne produits disponibles."""
         return ProductService.get_all_products(include_unavailable=False)
 
     @action(detail=False, methods=['get'])
-    def featured(self, request):
+    def featured(self, request: Request) -> Response:
         """
         Retourne produits vedettes (futurs : is_featured=True).
         MVP : Retourne top 5 produits les plus populaires.
@@ -72,7 +78,7 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
         return Response(serializer.data)
 
     @action(detail=False, methods=['get'], url_path='for_cycle/(?P<cycle_id>[^/.]+)')
-    def for_cycle(self, request, cycle_id=None):
+    def for_cycle(self, request: Request, cycle_id: str | None = None) -> Response:
         """
         Retourne produits adaptés pour un cycle de production.
 
@@ -93,7 +99,7 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
             )
 
     @action(detail=False, methods=['get'])
-    def recommended(self, request):
+    def recommended(self, request: Request) -> Response:
         """
         Retourne produit recommandé selon espèce et poids.
 
@@ -129,7 +135,7 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
             )
 
     @action(detail=False, methods=['get'])
-    def feeding_suggestions(self, request):
+    def feeding_suggestions(self, request: Request) -> Response:
         """
         Génère suggestions intelligentes d'achat d'aliments.
 
@@ -216,7 +222,7 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
         return Response(suggestions)
 
     @action(detail=False, methods=['post'])
-    def cycle_simulation(self, request):
+    def cycle_simulation(self, request: Request) -> Response:
         """
         Simule un cycle aquacole complet AVANT démarrage.
 
@@ -351,17 +357,17 @@ class OrderViewSet(
     ordering_fields = ['created_at', 'total']
     ordering = ['-created_at']
 
-    def get_serializer_class(self):
+    def get_serializer_class(self) -> type[OrderCreateSerializer] | type[OrderSerializer]:
         """Serializer selon action."""
         if self.action == 'create':
             return OrderCreateSerializer
         return OrderSerializer
 
-    def get_queryset(self):
+    def get_queryset(self) -> QuerySet[Order]:
         """Retourne uniquement les commandes de l'utilisateur."""
         return OrderService.get_user_orders(self.request.user)
 
-    def retrieve(self, request, *args, **kwargs):
+    def retrieve(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         """
         Récupère détail d'une commande avec vérification de propriété.
 
@@ -372,13 +378,12 @@ class OrderViewSet(
 
         # Vérification explicite de propriété (défense en profondeur)
         if order.user != request.user:
-            from rest_framework.exceptions import PermissionDenied
             raise PermissionDenied("Vous n'avez pas accès à cette commande")
 
         serializer = self.get_serializer(order)
         return Response(serializer.data)
 
-    def create(self, request, *args, **kwargs):
+    def create(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         """
         Crée commande via OrderService.
 
@@ -398,7 +403,7 @@ class OrderViewSet(
         serializer.is_valid(raise_exception=True)
         try:
             # Créer via serializer (qui appelle OrderService)
-            order = serializer.save()
+            order = cast(OrderCreateSerializer, serializer).save()
         except (InvalidOrderError, ProductNotFoundError, ProductNotAvailableError, ValueError) as exc:
             raise ValidationError({'message': str(exc)}) from exc
 
@@ -410,7 +415,7 @@ class OrderViewSet(
         )
 
     @action(detail=False, methods=['get'])
-    def statistics(self, request):
+    def statistics(self, request: Request) -> Response:
         """
         Retourne statistiques commandes de l'utilisateur.
 
@@ -429,7 +434,7 @@ class OrderViewSet(
         return Response(serializer.data)
 
     @action(detail=True, methods=['post'])
-    def confirm_receipt(self, request, pk=None):
+    def confirm_receipt(self, request: Request, pk: str | None = None) -> Response:
         """
         Confirme la réception d'une commande livrée.
 
@@ -446,7 +451,7 @@ class OrderViewSet(
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     @action(detail=False, methods=['post'])
-    def preview_delivery_fee(self, request):
+    def preview_delivery_fee(self, request: Request) -> Response:
         """
         Calcule preview frais livraison avant création commande.
 

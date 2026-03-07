@@ -11,9 +11,11 @@ Architecture:
 
 Author: MAVECAM AquaCare Team
 """
+from __future__ import annotations
+
 from datetime import date
 from decimal import Decimal
-from typing import Any
+from typing import TypedDict
 
 from django.db.models import Avg, F, Max, Min, Sum
 from django.utils import timezone
@@ -24,6 +26,116 @@ from ..constants import DEFAULT_FEED_PRICE_PER_KG
 from ..domain.calculators import AquacultureCalculator
 from ..models import CycleLog, ProductionCycle
 from .base import BaseService
+
+
+class MortalityCause(TypedDict):
+    mortality_reason: str | None
+    count: int
+
+
+class MortalityAnalysis(TypedDict):
+    total: int
+    percentage: float
+    by_week: dict[int, int]
+    main_causes: list[MortalityCause]
+    daily_average: float
+    is_abnormal: bool
+    peak_week: int | None
+    peak_week_count: int
+    has_data: bool
+
+
+class GrowthAnalysisPoint(TypedDict):
+    day: int
+    date: str
+    weight: float
+    daily_gain: float
+    cumulative_gain: float
+
+
+class EnvironmentParameterRange(TypedDict):
+    min: float | None
+    max: float | None
+
+
+class EnvironmentAverages(TypedDict):
+    temperature: float | None
+    ph: float | None
+    oxygen: float | None
+    ammonia: float | None
+
+
+class EnvironmentSummaryNoData(TypedDict):
+    has_data: bool
+    message: str
+
+
+class EnvironmentSummary(TypedDict):
+    has_data: bool
+    averages: EnvironmentAverages
+    ranges: dict[str, EnvironmentParameterRange]
+    alerts: list[dict[str, str]]
+    measurements_count: int
+
+
+class CycleCurrentMetrics(TypedDict):
+    survival_rate: float
+    biomass: float
+    average_weight: float
+    fcr: float
+    daily_growth_rate: float
+    specific_growth_rate: float
+    stocking_density: float
+
+
+class CycleFeedMetrics(TypedDict):
+    total_consumed: float
+    average_daily: float
+    cost_estimate: float
+    feed_efficiency: float | None
+
+
+class CycleCostEstimate(TypedDict):
+    feed_cost: float
+    cost_per_kg: float
+
+
+class CycleSummary(TypedDict):
+    id: str
+    name: str
+    duration_days: int | None
+    survival_rate: float | None
+    fcr: float | None
+    final_average_weight: float | None
+    total_biomass: float | None
+    status: str
+
+
+class HistoricalAverages(TypedDict):
+    survival_rate: float
+    fcr: float
+    final_weight: float
+    duration_days: int
+
+
+class CycleComparison(TypedDict):
+    current_cycle: CycleSummary
+    previous_cycles: list[CycleSummary]
+    historical_averages: HistoricalAverages
+    performance_ranking: str
+    improvement_suggestions: list[str]
+
+
+class CycleStatistics(TypedDict):
+    cycle_id: str
+    cycle_name: str
+    days_active: int
+    current_metrics: CycleCurrentMetrics
+    feed_metrics: CycleFeedMetrics
+    mortality_analysis: MortalityAnalysis
+    growth_performance: list[GrowthAnalysisPoint]
+    environmental_summary: EnvironmentSummary | EnvironmentSummaryNoData
+    estimated_costs: CycleCostEstimate
 
 
 class AnalyticsService(BaseService):
@@ -50,7 +162,7 @@ class AnalyticsService(BaseService):
     # ============================================================================
 
     @staticmethod
-    def analyze_mortality(cycle: ProductionCycle) -> dict[str, Any]:
+    def analyze_mortality(cycle: ProductionCycle) -> MortalityAnalysis:
         """
         Analyse complète des patterns de mortalité pour un cycle.
 
@@ -121,7 +233,7 @@ class AnalyticsService(BaseService):
     # ============================================================================
 
     @staticmethod
-    def analyze_growth(cycle: ProductionCycle) -> list[dict[str, Any]]:
+    def analyze_growth(cycle: ProductionCycle) -> list[GrowthAnalysisPoint]:
         """
         Analyse l'évolution de la croissance du cycle.
 
@@ -174,7 +286,7 @@ class AnalyticsService(BaseService):
     # ============================================================================
 
     @staticmethod
-    def analyze_environment(cycle: ProductionCycle) -> dict[str, Any]:
+    def analyze_environment(cycle: ProductionCycle) -> EnvironmentSummary | EnvironmentSummaryNoData:
         """
         Analyse les conditions environnementales d'un cycle.
 
@@ -274,7 +386,7 @@ class AnalyticsService(BaseService):
     # ============================================================================
 
     @staticmethod
-    def get_cycle_statistics(cycle: ProductionCycle) -> dict[str, Any]:
+    def get_cycle_statistics(cycle: ProductionCycle) -> CycleStatistics:
         """
         Génère les statistiques complètes pour un cycle.
 
@@ -360,8 +472,8 @@ class AnalyticsService(BaseService):
     @staticmethod
     def compare_with_previous_cycles(
         current_cycle: ProductionCycle,
-        limit: int = 3
-    ) -> dict[str, Any]:
+        limit: int = 3,
+    ) -> CycleComparison:
         """
         Compare un cycle avec les cycles précédents de même espèce.
 
@@ -429,7 +541,7 @@ class AnalyticsService(BaseService):
         return comparison_data
 
     @staticmethod
-    def get_cycle_summary(cycle: ProductionCycle) -> dict[str, Any]:
+    def get_cycle_summary(cycle: ProductionCycle) -> CycleSummary:
         """
         Génère un résumé concis d'un cycle pour comparaison.
 
@@ -490,7 +602,7 @@ class AnalyticsService(BaseService):
     @staticmethod
     def generate_improvement_suggestions(
         cycle: ProductionCycle,
-        historical_avg: dict[str, Any]
+        historical_avg: dict[str, Decimal | float | int | None],
     ) -> list[str]:
         """
         Génère des suggestions d'amélioration basées sur la performance.
@@ -717,7 +829,7 @@ class AnalyticsService(BaseService):
             )
 
     @staticmethod
-    def check_and_create_environmental_alerts(log: 'CycleLog') -> None:
+    def check_and_create_environmental_alerts(log: CycleLog) -> None:
         """
         Vérifie les paramètres environnementaux et crée des notifications si nécessaire.
 

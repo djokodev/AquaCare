@@ -9,12 +9,19 @@ Usage:
     class MyModelAdmin(SecuredModelAdmin):
         ...
 """
+from __future__ import annotations
 
 from django.contrib import admin, messages
 from django.contrib.admin.models import ADDITION, CHANGE, DELETION, LogEntry
 from django.contrib.contenttypes.models import ContentType
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import FieldDoesNotExist, PermissionDenied
+from django.db.models import QuerySet
+from django.http import HttpRequest
 from django.utils.translation import gettext_lazy as _
+
+
+def _user_has_group(request: HttpRequest, group_name: str) -> bool:
+    return request.user.groups.filter(name=group_name).exists()
 
 
 class RBACConstants:
@@ -45,7 +52,7 @@ class AuditLogMixin:
     Utilise django.contrib.admin.models.LogEntry (systeme natif Django).
     """
 
-    def log_action(self, request, obj, action_flag, message=''):
+    def log_action(self, request: HttpRequest, obj: object, action_flag: int, message: str = '') -> None:
         """Enregistre une action dans LogEntry."""
         LogEntry.objects.log_action(
             user_id=request.user.pk,
@@ -56,7 +63,7 @@ class AuditLogMixin:
             change_message=message or self._get_change_message(action_flag),
         )
 
-    def _get_change_message(self, action_flag):
+    def _get_change_message(self, action_flag: int) -> str:
         """Message par defaut selon l'action."""
         action_messages = {
             ADDITION: 'Creation via admin',
@@ -86,14 +93,14 @@ class SecuredModelAdmin(AuditLogMixin, admin.ModelAdmin):
     # Champs toujours readonly pour non-superusers
     protected_fields = ['is_staff', 'is_superuser', 'groups', 'user_permissions']
 
-    def get_queryset(self, request):
+    def get_queryset(self, request: HttpRequest) -> QuerySet:
         """
         Retourne le queryset de base.
         Override dans sous-classes pour filtrer selon le role.
         """
         return super().get_queryset(request)
 
-    def has_module_permission(self, request):
+    def has_module_permission(self, request: HttpRequest) -> bool:
         """
         Controle la visibilite du module dans le menu sidebar.
         Verifie si l'utilisateur a acces a cette app selon son groupe.
@@ -114,19 +121,19 @@ class SecuredModelAdmin(AuditLogMixin, admin.ModelAdmin):
 
         return False
 
-    def has_view_permission(self, request, obj=None):
+    def has_view_permission(self, request: HttpRequest, obj: object | None = None) -> bool:
         """Controle l'acces en lecture."""
         if request.user.is_superuser:
             return True
         return self.has_module_permission(request)
 
-    def has_add_permission(self, request):
+    def has_add_permission(self, request: HttpRequest) -> bool:
         """Controle l'acces en creation."""
         if request.user.is_superuser:
             return True
         return self.has_module_permission(request)
 
-    def has_change_permission(self, request, obj=None):
+    def has_change_permission(self, request: HttpRequest, obj: object | None = None) -> bool:
         """
         Controle l'acces en modification.
         Bloque la modification d'admins par non-superusers.
@@ -140,7 +147,7 @@ class SecuredModelAdmin(AuditLogMixin, admin.ModelAdmin):
 
         return self.has_module_permission(request)
 
-    def has_delete_permission(self, request, obj=None):
+    def has_delete_permission(self, request: HttpRequest, obj: object | None = None) -> bool:
         """
         Controle l'acces en suppression.
         Seul le superuser peut supprimer des objets.
@@ -158,7 +165,7 @@ class SecuredModelAdmin(AuditLogMixin, admin.ModelAdmin):
 
         return True
 
-    def get_readonly_fields(self, request, obj=None):
+    def get_readonly_fields(self, request: HttpRequest, obj: object | None = None) -> list[str]:
         """
         Rend les champs sensibles readonly pour non-superusers.
         """
@@ -171,12 +178,12 @@ class SecuredModelAdmin(AuditLogMixin, admin.ModelAdmin):
                     try:
                         self.model._meta.get_field(field)
                         readonly.append(field)
-                    except Exception:
+                    except FieldDoesNotExist:
                         pass
 
         return readonly
 
-    def get_actions(self, request):
+    def get_actions(self, request: HttpRequest) -> dict[str, tuple]:
         """
         Retire les actions dangereuses pour les non-superusers.
         """
@@ -189,7 +196,7 @@ class SecuredModelAdmin(AuditLogMixin, admin.ModelAdmin):
 
         return actions
 
-    def save_model(self, request, obj, form, change):
+    def save_model(self, request: HttpRequest, obj: object, form: object, change: bool) -> None:
         """
         Override save pour audit et protection elevation privileges.
         """
@@ -215,7 +222,7 @@ class SecuredModelAdmin(AuditLogMixin, admin.ModelAdmin):
         action = CHANGE if change else ADDITION
         self.log_action(request, obj, action)
 
-    def delete_model(self, request, obj):
+    def delete_model(self, request: HttpRequest, obj: object) -> None:
         """Override delete pour audit."""
         self.log_action(request, obj, DELETION)
         super().delete_model(request, obj)
@@ -227,31 +234,25 @@ class CommerceOperatorMixin:
     Acces limite au catalogue et commandes.
     """
 
-    def has_module_permission(self, request):
+    def has_module_permission(self, request: HttpRequest) -> bool:
         """Commerce operators peuvent voir le module commerce."""
         if request.user.is_superuser:
             return True
-        return request.user.groups.filter(
-            name=RBACConstants.GROUP_COMMERCE
-        ).exists()
+        return _user_has_group(request, RBACConstants.GROUP_COMMERCE)
 
-    def has_add_permission(self, request):
+    def has_add_permission(self, request: HttpRequest) -> bool:
         """Commerce operators peuvent ajouter produits."""
         if request.user.is_superuser:
             return True
-        return request.user.groups.filter(
-            name=RBACConstants.GROUP_COMMERCE
-        ).exists()
+        return _user_has_group(request, RBACConstants.GROUP_COMMERCE)
 
-    def has_change_permission(self, request, obj=None):
+    def has_change_permission(self, request: HttpRequest, obj: object | None = None) -> bool:
         """Commerce operators peuvent modifier produits."""
         if request.user.is_superuser:
             return True
-        return request.user.groups.filter(
-            name=RBACConstants.GROUP_COMMERCE
-        ).exists()
+        return _user_has_group(request, RBACConstants.GROUP_COMMERCE)
 
-    def has_delete_permission(self, request, obj=None):
+    def has_delete_permission(self, request: HttpRequest, obj: object | None = None) -> bool:
         """Seul superuser peut supprimer."""
         return request.user.is_superuser
 
@@ -262,31 +263,25 @@ class SupportOperatorMixin:
     Acces au chat et notifications.
     """
 
-    def has_module_permission(self, request):
+    def has_module_permission(self, request: HttpRequest) -> bool:
         """Support operators peuvent voir le module chat."""
         if request.user.is_superuser:
             return True
-        return request.user.groups.filter(
-            name=RBACConstants.GROUP_SUPPORT
-        ).exists()
+        return _user_has_group(request, RBACConstants.GROUP_SUPPORT)
 
-    def has_add_permission(self, request):
+    def has_add_permission(self, request: HttpRequest) -> bool:
         """Support operators peuvent creer messages."""
         if request.user.is_superuser:
             return True
-        return request.user.groups.filter(
-            name=RBACConstants.GROUP_SUPPORT
-        ).exists()
+        return _user_has_group(request, RBACConstants.GROUP_SUPPORT)
 
-    def has_change_permission(self, request, obj=None):
+    def has_change_permission(self, request: HttpRequest, obj: object | None = None) -> bool:
         """Support operators peuvent modifier conversations."""
         if request.user.is_superuser:
             return True
-        return request.user.groups.filter(
-            name=RBACConstants.GROUP_SUPPORT
-        ).exists()
+        return _user_has_group(request, RBACConstants.GROUP_SUPPORT)
 
-    def has_delete_permission(self, request, obj=None):
+    def has_delete_permission(self, request: HttpRequest, obj: object | None = None) -> bool:
         """Seul superuser peut supprimer."""
         return request.user.is_superuser
 
@@ -297,27 +292,25 @@ class ManagerMixin:
     Acces complet sauf modification admins.
     """
 
-    def has_module_permission(self, request):
+    def has_module_permission(self, request: HttpRequest) -> bool:
         """Managers peuvent voir accounts et aquaculture."""
         if request.user.is_superuser:
             return True
-        return request.user.groups.filter(
-            name=RBACConstants.GROUP_MANAGERS
-        ).exists()
+        return _user_has_group(request, RBACConstants.GROUP_MANAGERS)
 
-    def get_queryset(self, request):
+    def get_queryset(self, request: HttpRequest) -> QuerySet:
         """Managers ne voient pas les superusers."""
         qs = super().get_queryset(request)
 
         if not request.user.is_superuser:
-            if request.user.groups.filter(name=RBACConstants.GROUP_MANAGERS).exists():
+            if _user_has_group(request, RBACConstants.GROUP_MANAGERS):
                 # Exclure les superusers du queryset
                 if hasattr(self.model, 'is_superuser'):
                     qs = qs.filter(is_superuser=False)
 
         return qs
 
-    def has_change_permission(self, request, obj=None):
+    def has_change_permission(self, request: HttpRequest, obj: object | None = None) -> bool:
         """Managers peuvent modifier sauf admins."""
         if request.user.is_superuser:
             return True
@@ -326,11 +319,9 @@ class ManagerMixin:
         if obj and hasattr(obj, 'is_staff') and obj.is_staff:
             return False
 
-        return request.user.groups.filter(
-            name=RBACConstants.GROUP_MANAGERS
-        ).exists()
+        return _user_has_group(request, RBACConstants.GROUP_MANAGERS)
 
-    def has_delete_permission(self, request, obj=None):
+    def has_delete_permission(self, request: HttpRequest, obj: object | None = None) -> bool:
         """Seul superuser peut supprimer."""
         return request.user.is_superuser
 
@@ -341,7 +332,7 @@ class PIIMaskingMixin:
     Les non-managers voient des donnees partiellement masquees.
     """
 
-    def phone_masked(self, obj):
+    def phone_masked(self, obj: object) -> str:
         """Affiche numero masque: +237 6XX XXX XX 45."""
         phone = getattr(obj, 'phone_number', '') or ''
         if len(phone) > 6:
@@ -349,14 +340,12 @@ class PIIMaskingMixin:
         return phone
     phone_masked.short_description = _('Telephone')
 
-    def get_list_display(self, request):
+    def get_list_display(self, request: HttpRequest) -> list[str]:
         """Remplace les champs sensibles par versions masquees si non-manager."""
         list_display = list(super().get_list_display(request))
 
         if not request.user.is_superuser:
-            is_manager = request.user.groups.filter(
-                name=RBACConstants.GROUP_MANAGERS
-            ).exists()
+            is_manager = _user_has_group(request, RBACConstants.GROUP_MANAGERS)
 
             if not is_manager:
                 # Remplacer phone_number par version masquee

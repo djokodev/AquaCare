@@ -14,12 +14,16 @@ Fonctionnalités principales :
 
 Architecture offline-first avec sérialiseurs bulk pour synchronisation mobile.
 """
+from __future__ import annotations
+
 from datetime import date, timedelta
 from decimal import Decimal
+from typing import Any, cast
 
 from django.utils.translation import gettext_lazy as _
 from notifications.serializers import NotificationSerializer as GlobalNotificationSerializer
 from rest_framework import serializers
+from rest_framework.request import Request
 
 from .constants import (
     DEFAULT_EXPECTED_SURVIVAL_RATE_PCT,
@@ -399,10 +403,10 @@ class BulkCycleLogSerializer(serializers.ListSerializer):
     Sérialiseur bulk pour synchronisation offline de multiples logs.
     Délègue la logique métier (déduplication, upsert) à CycleLogService.
     """
-    def create(self, validated_data):
+    def create(self, validated_data: list[dict[str, Any]]) -> list[CycleLog]:
         """Délègue la création bulk au CycleLogService (respect Views → Services)."""
         from .services.log_service import CycleLogService
-        request = self.context.get('request')
+        request = cast(Request | None, self.context.get('request'))
         user = getattr(request, 'user', None)
         result = CycleLogService.create_bulk_logs(validated_data, user)
         return result['logs']
@@ -738,7 +742,7 @@ class ProductionReportListSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = fields
 
-    def get_cycle_scope_id(self, obj):
+    def get_cycle_scope_id(self, obj: ProductionReport) -> str | None:
         if not isinstance(obj.payload, dict):
             return None
         report_meta = obj.payload.get('report_meta')
@@ -767,8 +771,8 @@ class ProductionReportDetailSerializer(ProductionReportListSerializer):
             'dispatch_logs',
         ]
 
-    def get_pdf_url(self, obj):
-        request = self.context.get('request')
+    def get_pdf_url(self, obj: ProductionReport) -> str | None:
+        request = cast(Request | None, self.context.get('request'))
         if not obj.pdf_file:
             return None
         if request is None:

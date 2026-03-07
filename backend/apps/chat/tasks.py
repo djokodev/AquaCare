@@ -2,6 +2,8 @@
 Celery tasks for asynchronous chat notifications.
 """
 
+from __future__ import annotations
+
 import logging
 
 from celery import shared_task
