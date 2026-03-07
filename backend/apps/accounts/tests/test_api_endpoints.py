@@ -614,3 +614,63 @@ class TestRateLimiting:
             # Les premières tentatives échouent avec 400
             if i < 2:
                 assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+
+@pytest.mark.django_db
+class TestAccountDeletionEndpoint:
+    """
+    Tests pour POST /api/accounts/delete/
+    """
+
+    def setup_method(self):
+        self.client = APIClient()
+        self.url = reverse('accounts:delete_account')
+        self.user = User.objects.create_user(
+            phone_number='+237611000001',
+            password='testpass123',
+            first_name='To',
+            last_name='Delete',
+            age_group='26_35',
+            activity_type='poisson_table',
+            region='centre',
+            department='mfoundi',
+        )
+        self.client.force_authenticate(user=self.user)
+
+    def test_delete_account_success(self):
+        """POST confirm=true → 200 + compte désactivé."""
+        response = self.client.post(self.url, {'confirm': True}, format='json')
+
+        assert response.status_code == status.HTTP_200_OK
+        self.user.refresh_from_db()
+        assert self.user.is_active is False
+
+    def test_delete_account_requires_confirmation(self):
+        """POST confirm=false → 400."""
+        response = self.client.post(self.url, {'confirm': False}, format='json')
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_delete_account_requires_auth(self):
+        """POST sans token → 401."""
+        unauthenticated_client = APIClient()
+        response = unauthenticated_client.post(self.url, {'confirm': True}, format='json')
+
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+    def test_delete_account_anonymizes_data(self):
+        """Vérifie l'anonymisation du numéro de téléphone et la suppression du profil ferme."""
+        original_phone = self.user.phone_number
+        FarmProfile.objects.get_or_create(
+            user=self.user,
+            defaults={'farm_name': 'Ferme Test', 'total_ponds': 2},
+        )
+
+        response = self.client.post(self.url, {'confirm': True}, format='json')
+
+        assert response.status_code == status.HTTP_200_OK
+        self.user.refresh_from_db()
+        assert self.user.phone_number != original_phone
+        farm = FarmProfile.objects.filter(user=self.user).first()
+        if farm:
+            assert farm.is_deleted is True
