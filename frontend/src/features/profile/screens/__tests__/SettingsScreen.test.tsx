@@ -47,6 +47,7 @@ jest.mock('@/utils/logger', () => ({
 describe('features/profile/screens/SettingsScreen', () => {
   const mockUpdateProfile = jest.fn();
   const mockLogout = jest.fn();
+  const mockDeleteAccount = jest.fn();
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -59,6 +60,7 @@ describe('features/profile/screens/SettingsScreen', () => {
       },
       updateProfile: mockUpdateProfile,
       logout: mockLogout,
+      deleteAccount: mockDeleteAccount,
     });
 
     jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
@@ -100,5 +102,36 @@ describe('features/profile/screens/SettingsScreen', () => {
 
     confirmAction?.onPress?.();
     expect(mockLogout).toHaveBeenCalled();
+  });
+
+  it('affiche la modale de confirmation lors de la suppression de compte', () => {
+    const { getByText } = render(<SettingsScreen />);
+
+    fireEvent.press(getByText('deleteAccount'));
+
+    expect(Alert.alert).toHaveBeenCalledWith(
+      'deleteAccountConfirmTitle',
+      'deleteAccountConfirmMessage',
+      expect.arrayContaining([
+        expect.objectContaining({ style: 'cancel' }),
+        expect.objectContaining({ style: 'destructive' }),
+      ])
+    );
+  });
+
+  it('appelle deleteAccount lors de la confirmation de suppression', async () => {
+    mockDeleteAccount.mockResolvedValue(undefined);
+    const { getByText } = render(<SettingsScreen />);
+
+    fireEvent.press(getByText('deleteAccount'));
+
+    const alertCall = (Alert.alert as jest.Mock).mock.calls.find(
+      (call) => call[0] === 'deleteAccountConfirmTitle'
+    );
+    const actions = alertCall?.[2] as Array<{ text: string; style: string; onPress?: () => void }>;
+    const confirmAction = actions.find((a) => a.style === 'destructive');
+
+    await confirmAction?.onPress?.();
+    expect(mockDeleteAccount).toHaveBeenCalled();
   });
 });

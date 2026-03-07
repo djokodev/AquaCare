@@ -182,3 +182,13 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'full_name', 'login_name', 'display_name', 'is_individual', 'is_company',
             'farm_profile'
         )
+
+
+class AccountDeletionSerializer(serializers.Serializer):
+    """
+    Serializer de confirmation suppression de compte.
+    """
+    confirm = serializers.BooleanField(
+        required=True,
+        help_text="Doit être true pour confirmer la suppression du compte."
+    )

@@ -22,4 +22,7 @@ urlpatterns = [
     # Profile management
     path('profile/', views.ProfileView.as_view(), name='profile'),
     path('farm/', views.FarmProfileView.as_view(), name='farm_profile'),
+
+    # Account deletion
+    path('delete/', views.AccountDeletionView.as_view(), name='delete_account'),
 ]

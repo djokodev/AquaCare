@@ -51,6 +51,14 @@ class AuthService {
   }
 
   /**
+   * Suppression définitive du compte
+   */
+  async deleteAccount(): Promise<void> {
+    await apiService.post(API_ENDPOINTS.AUTH.DELETE_ACCOUNT, { confirm: true });
+    await apiService.clearTokens();
+  }
+
+  /**
    * Déconnexion sécurisée
    */
   async logout(): Promise<void> {

@@ -16,9 +16,11 @@ from .serializers import (
     UserRegistrationSerializer,
     UserProfileSerializer,
     FarmProfileSerializer,
-    LoginSerializer
+    LoginSerializer,
+    AccountDeletionSerializer,
 )
 from .permissions import IsOwnerOrReadOnly
+from .services import AccountDeletionService
 
 logger = logging.getLogger(__name__)
 
@@ -312,3 +314,44 @@ class FarmProfileView(generics.RetrieveUpdateAPIView):
             return self.request.user.farm_profile
         except FarmProfile.DoesNotExist:
             raise Http404
+
+
+class AccountDeletionView(APIView):
+    """
+    Suppression logique du compte utilisateur.
+
+    Comportement:
+    - Désactive le compte (`is_active=False`)
+    - Anonymise les données personnelles
+    - Marque le profil ferme comme supprimé
+    - Nettoie les tokens JWT/push connus
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        summary="Supprimer définitivement mon compte",
+        description="Désactive et anonymise le compte utilisateur après confirmation explicite.",
+        request=AccountDeletionSerializer,
+        responses={
+            200: OpenApiResponse(description="Compte supprimé/anonymisé avec succès"),
+            400: OpenApiResponse(description="Confirmation manquante"),
+            401: OpenApiResponse(description="Authentification requise"),
+        },
+    )
+    def post(self, request):
+        serializer = AccountDeletionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        if serializer.validated_data["confirm"] is not True:
+            return Response(
+                {"error": _("Confirmation explicite requise.")},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        AccountDeletionService.anonymize_user_account(request.user)
+
+        return Response(
+            {"message": _("Compte supprimé avec succès.")},
+            status=status.HTTP_200_OK,
+        )

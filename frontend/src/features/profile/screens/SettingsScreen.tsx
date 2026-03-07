@@ -13,7 +13,8 @@ import Constants from "expo-constants";
 
 export default function SettingsScreen() {
   const { t, i18n } = useTranslation();
-  const { user, updateProfile, logout } = useAuth();
+  const { user, updateProfile, logout, deleteAccount } = useAuth();
+  const [isDeleting, setIsDeleting] = useState(false);
   const [settings, setSettings] = useState({ language: i18n.language });
 
   useEffect(() => {
@@ -48,6 +49,31 @@ export default function SettingsScreen() {
       { text: "Annuler", style: "cancel" },
       { text: "Déconnexion", style: "destructive", onPress: () => logout() },
     ]);
+  };
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      t('deleteAccountConfirmTitle'),
+      t('deleteAccountConfirmMessage'),
+      [
+        { text: t('cancel'), style: 'cancel' },
+        {
+          text: t('deleteAccountConfirm'),
+          style: 'destructive',
+          onPress: async () => {
+            setIsDeleting(true);
+            try {
+              await deleteAccount();
+              // Redux state cleared → navigation auto-redirects to login
+            } catch (error) {
+              logger.error('Delete account error:', error);
+              Alert.alert(t('deleteAccountError'));
+              setIsDeleting(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   return (
@@ -107,6 +133,22 @@ export default function SettingsScreen() {
             </View>
           ))}
         </View>
+      </View>
+
+      <View className="px-5 py-4">
+        <Text className="text-lg font-bold text-gray-dark mb-3">{t("accountManagement")}</Text>
+        <TouchableOpacity
+          className="bg-white flex-row items-center p-4 rounded-xl border border-gray-200 opacity-100"
+          onPress={handleDeleteAccount}
+          disabled={isDeleting}
+          style={{ opacity: isDeleting ? 0.5 : 1 }}
+        >
+          <Ionicons name="trash-outline" size={20} color={MAVECAM_COLORS.ERROR} />
+          <View className="ml-3 flex-1">
+            <Text className="text-base font-semibold text-error">{t("deleteAccount")}</Text>
+            <Text className="text-xs text-gray-500 mt-0.5">{t("deleteAccountDesc")}</Text>
+          </View>
+        </TouchableOpacity>
       </View>
 
       <View className="px-5 pb-6">

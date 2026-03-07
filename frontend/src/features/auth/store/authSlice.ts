@@ -55,6 +55,18 @@ export const logoutUser = createAsyncThunk(
   }
 );
 
+export const deleteAccountUser = createAsyncThunk(
+  'auth/deleteAccount',
+  async (_, { rejectWithValue }) => {
+    try {
+      await authService.deleteAccount();
+      return true;
+    } catch (error: unknown) {
+      return rejectWithValue(error instanceof Error ? error.message : 'UNKNOWN_ERROR');
+    }
+  }
+);
+
 export const checkAuthStatus = createAsyncThunk(
   'auth/checkStatus',
   async (_, { rejectWithValue }) => {
@@ -182,6 +194,25 @@ export const authSlice = createSlice({
         state.isAuthenticated = false;
         state.user = null;
         state.farmProfile = null;
+        state.error = action.payload as string;
+      });
+
+    // Delete account
+    builder
+      .addCase(deleteAccountUser.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(deleteAccountUser.fulfilled, (state) => {
+        state.isLoading = false;
+        state.isAuthenticated = false;
+        state.user = null;
+        state.farmProfile = null;
+        state.error = null;
+      })
+      .addCase(deleteAccountUser.rejected, (state, action) => {
+        state.isLoading = false;
+        // En cas d'echec de suppression, on conserve la session utilisateur.
         state.error = action.payload as string;
       });
 
