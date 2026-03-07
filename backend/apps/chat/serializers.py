@@ -5,6 +5,7 @@ Transform models to/from JSON format for REST endpoints.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, TypedDict
 
 from django.contrib.auth import get_user_model
@@ -37,6 +38,7 @@ class MessageSerializer(serializers.ModelSerializer):
     # Computed fields (read-only)
     sender_name = serializers.SerializerMethodField()
     media_url = serializers.SerializerMethodField()
+    sender_user = serializers.SerializerMethodField()
 
     class Meta:
         model = Message
@@ -60,8 +62,8 @@ class MessageSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = [
             'id',
+            'conversation',
             'sender_type',  # Determined by service layer
-            'sender_user',  # Determined by service layer
             'is_read',  # Updated via mark_read action
             'read_at',  # Updated via mark_read action
             'synced_at',  # Updated by service layer
@@ -84,6 +86,21 @@ class MessageSerializer(serializers.ModelSerializer):
         elif obj.sender_type == 'system':
             return "Système AquaCare"
         return "Inconnu"
+
+    def get_sender_user(self, obj: Message) -> str | None:
+        """
+        Expose sender_user only to staff viewers.
+
+        Prevents leaking internal admin identifiers to end users while keeping
+        support tooling usable for staff.
+        """
+        request = self.context.get('request')
+        requester = getattr(request, 'user', None)
+        if requester and requester.is_authenticated and requester.is_staff:
+            if obj.sender_user_id is None:
+                return None
+            return str(obj.sender_user_id)
+        return None
 
     def get_media_url(self, obj: Message) -> str | None:
         """
@@ -259,9 +276,23 @@ class SendMessageSerializer(serializers.Serializer):
             'image/jpeg', 'image/png', 'image/webp',
             'video/mp4', 'video/quicktime'
         ]
+        ALLOWED_EXTENSIONS = {'jpg', 'jpeg', 'png', 'webp', 'mp4', 'mov'}
 
         content_type = getattr(value, 'content_type', '')
-        if content_type and content_type not in ALLOWED_TYPES:
+        file_extension = Path(getattr(value, 'name', '')).suffix.lower().lstrip('.')
+
+        if file_extension not in ALLOWED_EXTENSIONS:
+            raise serializers.ValidationError(
+                f"Extension de fichier non supportée: .{file_extension or 'inconnue'}. "
+                "Formats acceptés: JPG, JPEG, PNG, WebP, MP4, MOV"
+            )
+
+        if not content_type:
+            raise serializers.ValidationError(
+                "Le type MIME du fichier est requis pour valider le média."
+            )
+
+        if content_type not in ALLOWED_TYPES:
             raise serializers.ValidationError(
                 f"Format de fichier non supporté: {content_type}. "
                 f"Formats acceptés: JPEG, PNG, WebP, MP4, QuickTime"

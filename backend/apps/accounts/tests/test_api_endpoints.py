@@ -619,6 +619,28 @@ class TestRateLimiting:
             if i < 2:
                 assert response.status_code == status.HTTP_400_BAD_REQUEST
 
+    def test_phone_number_login_rate_limit_after_repeated_failures(self):
+        """Le rate limiting doit aussi couvrir les connexions par phone_number."""
+        unique_ip = '10.200.200.201'
+
+        for _ in range(3):
+            response = self.client.post(
+                self.url,
+                {"phone_number": "+237699000999", "password": "faux"},
+                format='json',
+                REMOTE_ADDR=unique_ip,
+            )
+            assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+        response = self.client.post(
+            self.url,
+            {"phone_number": "+237699000999", "password": "faux"},
+            format='json',
+            REMOTE_ADDR=unique_ip,
+        )
+
+        assert response.status_code == status.HTTP_429_TOO_MANY_REQUESTS
+
 
 @pytest.mark.django_db
 class TestAccountDeletionEndpoint:

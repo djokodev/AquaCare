@@ -17,6 +17,7 @@ from aquaculture.models import (
     ReportDispatchLog,
     SanitaryLog,
 )
+from django.core.cache import cache
 from django.urls import reverse
 from django.utils import timezone
 from notifications.models import Notification
@@ -808,6 +809,25 @@ class TestSyncView:
         assert response.data['status'] == 'error'
         assert len(response.data['errors']) > 0
 
+    def test_sync_rate_limit_enforced(self, auth_client, settings):
+        """La sync offline doit etre throttle en cas d'abus."""
+        settings.CACHES = {
+            'default': {
+                'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+                'LOCATION': f'aquaculture-sync-throttle-{id(self)}',
+            }
+        }
+        cache.clear()
+        url = reverse('aquaculture:sync')
+        payload = {'last_sync': timezone.now().isoformat()}
+
+        for _ in range(30):
+            response = auth_client.post(url, payload, format='json')
+            assert response.status_code == status.HTTP_200_OK
+
+        response = auth_client.post(url, payload, format='json')
+        assert response.status_code == status.HTTP_429_TOO_MANY_REQUESTS
+
 
 @pytest.mark.django_db
 class TestProductionReportViewSet:
@@ -1037,3 +1057,30 @@ class TestProductionReportViewSet:
         ids = [item['id'] for item in response.data['results']]
         assert ids == [str(report_scoped.id)]
         assert response.data['results'][0]['cycle_scope_id'] == str(scoped_cycle.id)
+
+    def test_report_action_rate_limit_enforced(self, auth_client, farm_profile, settings):
+        """Les actions de rapport doivent etre throttlees en cas d'abus."""
+        settings.CACHES = {
+            'default': {
+                'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+                'LOCATION': f'aquaculture-report-throttle-{id(self)}',
+            }
+        }
+        cache.clear()
+
+        report = ProductionReport.objects.create(
+            farm_profile=farm_profile,
+            report_type='daily',
+            period_start=date(2026, 2, 21),
+            period_end=date(2026, 2, 21),
+            status='validated',
+        )
+        url = reverse('aquaculture:production-report-mark-whatsapp-shared', kwargs={'pk': report.id})
+        payload = {'recipient': '+237690123456', 'metadata': {'source': 'rate-limit-test'}}
+
+        for _ in range(20):
+            response = auth_client.post(url, payload, format='json')
+            assert response.status_code == status.HTTP_200_OK
+
+        response = auth_client.post(url, payload, format='json')
+        assert response.status_code == status.HTTP_429_TOO_MANY_REQUESTS

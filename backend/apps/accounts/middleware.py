@@ -22,6 +22,7 @@ class LoginRequestPayload(TypedDict, total=False):
     """Shape minimale attendue pour le payload de connexion."""
 
     login_name: str
+    phone_number: str
 
 
 class UserLanguageMiddleware:
@@ -191,8 +192,8 @@ class LoginRateLimitMiddleware:
 
         # Vérifier les tentatives par utilisateur (login uniquement)
         if request.path == '/api/accounts/login/':
-            login_name = self.get_login_name(request)
-            if login_name and self.check_user_limit(login_name):
+            login_identifier = self.get_login_identifier(request)
+            if login_identifier and self.check_user_limit(login_identifier):
                 return True
 
         return False
@@ -220,30 +221,39 @@ class LoginRateLimitMiddleware:
         # Enregistrer seulement les tentatives échouées
         if response.status_code != 200:
             ip = self.get_client_ip(request)
-            login_name = self.get_login_name(request)
+            login_identifier = self.get_login_identifier(request)
 
             self._record_attempt(self._cache_key_ip(ip))
 
-            if login_name:
-                self._record_attempt(self._cache_key_user(login_name))
+            if login_identifier:
+                self._record_attempt(self._cache_key_user(login_identifier))
     
     def get_client_ip(self, request: HttpRequest) -> str:
         """Récupère l'IP du client."""
         x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
         if x_forwarded_for:
-            ip = x_forwarded_for.split(',')[0]
+            ip = x_forwarded_for.split(',')[0].strip()
         else:
             ip = request.META.get('REMOTE_ADDR')
         return ip or ''
 
-    def get_login_name(self, request: HttpRequest) -> str:
-        """Récupère le login_name de la requête."""
+    def get_login_identifier(self, request: HttpRequest) -> str:
+        """Recupere l'identifiant de connexion pertinent pour le rate limiting."""
         try:
             body = json.loads(request.body.decode('utf-8'))
             if not isinstance(body, dict):
                 return ''
 
-            return body.get('login_name', '')
+            payload = LoginRequestPayload(**body)
+            login_name = payload.get('login_name', '').strip()
+            if login_name:
+                return login_name.casefold()
+
+            phone_number = payload.get('phone_number', '').strip()
+            if phone_number:
+                return phone_number
+
+            return ''
         except (json.JSONDecodeError, RawPostDataException, UnicodeDecodeError, AttributeError):
             return ''
 

@@ -232,7 +232,7 @@ class TestLoginRateLimitMiddleware:
         ip = self.middleware.get_client_ip(request)
         assert ip == '192.168.1.2'
     
-    def test_get_login_name_from_request_body(self):
+    def test_get_login_identifier_from_login_name(self):
         """Test extraction login_name du body JSON."""
         data = {'login_name': 'Jean Farmer', 'password': 'test123'}
         request = self.factory.post(
@@ -240,20 +240,53 @@ class TestLoginRateLimitMiddleware:
             data=json.dumps(data),
             content_type='application/json'
         )
-        
-        login_name = self.middleware.get_login_name(request)
-        assert login_name == 'Jean Farmer'
-    
-    def test_get_login_name_invalid_json(self):
-        """Test extraction login_name avec JSON invalide."""
+
+        login_identifier = self.middleware.get_login_identifier(request)
+        assert login_identifier == 'jean farmer'
+
+    def test_get_login_identifier_from_phone_number(self):
+        """Test extraction phone_number du body JSON."""
+        data = {'phone_number': '+237690111222', 'password': 'test123'}
+        request = self.factory.post(
+            '/api/accounts/login/',
+            data=json.dumps(data),
+            content_type='application/json'
+        )
+
+        login_identifier = self.middleware.get_login_identifier(request)
+        assert login_identifier == '+237690111222'
+
+    def test_get_login_identifier_invalid_json(self):
+        """Test extraction identifiant avec JSON invalide."""
         request = self.factory.post(
             '/api/accounts/login/',
             data='invalid json',
             content_type='application/json'
         )
-        
-        login_name = self.middleware.get_login_name(request)
-        assert login_name == ''
+
+        login_identifier = self.middleware.get_login_identifier(request)
+        assert login_identifier == ''
+
+    def test_phone_number_user_limit_reached_after_attempts(self):
+        """Test limite utilisateur egalement appliquee via phone_number."""
+        phone_number = '+237690444444'
+
+        current_time = time.time()
+        cache.set(self.middleware._cache_key_user(phone_number), [
+            current_time - 30,
+            current_time - 20,
+            current_time - 10,
+        ], timeout=60)
+
+        request = self.factory.post(
+            '/api/accounts/login/',
+            data=json.dumps({'phone_number': phone_number, 'password': 'faux'}),
+            content_type='application/json'
+        )
+        request.META['REMOTE_ADDR'] = '192.168.1.70'
+
+        should_limit = self.middleware.should_rate_limit(request)
+        assert should_limit is True
     
     def test_rate_limit_response_format(self):
         """Test format de réponse quand rate limit atteint."""

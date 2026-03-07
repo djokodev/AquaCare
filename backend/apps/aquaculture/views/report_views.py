@@ -24,6 +24,7 @@ from ..serializers import (
 )
 from ..services import ReportService
 from ..tasks import generate_report_async_task, send_report_email_task
+from ..throttles import AquacultureReportActionThrottle
 
 logger = logging.getLogger(__name__)
 
@@ -174,7 +175,7 @@ class ProductionReportViewSet(viewsets.ReadOnlyModelViewSet):
         request=GenerateReportSerializer,
         responses={202: ProductionReportDetailSerializer},
     )
-    @action(detail=False, methods=['post'])
+    @action(detail=False, methods=['post'], throttle_classes=[AquacultureReportActionThrottle])
     def generate(self, request: Request) -> Response:
         serializer = GenerateReportSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -222,7 +223,7 @@ class ProductionReportViewSet(viewsets.ReadOnlyModelViewSet):
         description="Lance la régénération PDF en arrière-plan. Retourne 202 Accepted.",
         responses={202: ProductionReportDetailSerializer},
     )
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=['post'], throttle_classes=[AquacultureReportActionThrottle])
     def regenerate(self, request: Request, pk: str | None = None) -> Response:
         report = self.get_object()
 
@@ -267,7 +268,12 @@ class ProductionReportViewSet(viewsets.ReadOnlyModelViewSet):
             )
         },
     )
-    @action(detail=True, methods=['post'], url_path='send-email')
+    @action(
+        detail=True,
+        methods=['post'],
+        url_path='send-email',
+        throttle_classes=[AquacultureReportActionThrottle],
+    )
     def send_email(self, request: Request, pk: str | None = None) -> Response:
         report = self.get_object()
         if not getattr(request.user, 'email', None):
@@ -287,7 +293,12 @@ class ProductionReportViewSet(viewsets.ReadOnlyModelViewSet):
         request=MarkWhatsAppSharedSerializer,
         responses={200: ProductionReportDetailSerializer},
     )
-    @action(detail=True, methods=['post'], url_path='mark-whatsapp-shared')
+    @action(
+        detail=True,
+        methods=['post'],
+        url_path='mark-whatsapp-shared',
+        throttle_classes=[AquacultureReportActionThrottle],
+    )
     def mark_whatsapp_shared(self, request: Request, pk: str | None = None) -> Response:
         report = self.get_object()
         serializer = MarkWhatsAppSharedSerializer(data=request.data)
@@ -307,7 +318,7 @@ class ProductionReportViewSet(viewsets.ReadOnlyModelViewSet):
         description="Retourne le fichier PDF du rapport.",
         responses={200: OpenApiTypes.BINARY},
     )
-    @action(detail=True, methods=['get'])
+    @action(detail=True, methods=['get'], throttle_classes=[AquacultureReportActionThrottle])
     def download(self, request: Request, pk: str | None = None):
         report = self.get_object()
 

@@ -11,6 +11,7 @@ from rest_framework.views import APIView
 
 from ..serializers import SyncRequestSerializer, SyncResponseSerializer
 from ..services import SyncService
+from ..throttles import AquacultureSyncThrottle
 
 logger = logging.getLogger(__name__)
 
@@ -83,6 +84,7 @@ class SyncView(APIView):
     """
     permission_classes = [permissions.IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
+    throttle_classes = [AquacultureSyncThrottle]
     
     def post(self, request):
         """

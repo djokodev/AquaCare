@@ -117,6 +117,13 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # Custom user model
 AUTH_USER_MODEL = "accounts.User"
 
+SESSION_COOKIE_HTTPONLY = True
+CSRF_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = "Lax"
+CSRF_COOKIE_SAMESITE = "Lax"
+SECURE_REFERRER_POLICY = "same-origin"
+SECURE_CROSS_ORIGIN_OPENER_POLICY = "same-origin"
+
 # Django REST Framework
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
@@ -138,6 +145,18 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_RATES": {
         "anon": "20/minute",
         "user": "100/minute",
+        "accounts_login": "5/minute",
+        "accounts_register": "10/minute",
+        "accounts_sensitive_action": "20/hour",
+        "chat_message": "10/minute",
+        "commerce_simulation": "20/hour",
+        "commerce_suggestions": "30/hour",
+        "commerce_delivery_preview": "60/hour",
+        "notifications_bulk_mutation": "20/hour",
+        "notifications_push_token": "30/hour",
+        "aquaculture_sync": "30/hour",
+        "aquaculture_report_action": "20/hour",
+        "aquaculture_sanitary_action": "30/hour",
     },
 }
 

@@ -9,6 +9,7 @@ from accounts.models import FarmProfile
 from commerce.models import Order, Product
 from commerce.services import CycleSimulationService
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from rest_framework import status
 from rest_framework.test import APIClient
 
@@ -708,3 +709,70 @@ class TestOrderEndpoints:
         assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
         assert response.data['error'] == 'simulation_internal_error'
         assert 'secret' not in response.data['message']
+
+    def test_cycle_simulation_rate_limit_enforced(self, settings):
+        """Les simulations intensives doivent etre throttlees."""
+        settings.CACHES = {
+            'default': {
+                'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+                'LOCATION': f'commerce-simulation-throttle-{id(self)}',
+            }
+        }
+        cache.clear()
+
+        payload = {
+            'species': 'tilapia',
+            'initial_fish_count': 1000,
+        }
+
+        for _ in range(20):
+            response = self.client.post(
+                '/api/commerce/products/cycle_simulation/',
+                data=payload,
+                format='json'
+            )
+            assert response.status_code == status.HTTP_200_OK
+
+        response = self.client.post(
+            '/api/commerce/products/cycle_simulation/',
+            data=payload,
+            format='json'
+        )
+
+        assert response.status_code == status.HTTP_429_TOO_MANY_REQUESTS
+
+    def test_preview_delivery_fee_rate_limit_enforced(self, settings):
+        """Le preview de livraison doit etre throttle en cas d'abus."""
+        settings.CACHES = {
+            'default': {
+                'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+                'LOCATION': f'commerce-preview-throttle-{id(self)}',
+            }
+        }
+        cache.clear()
+
+        payload = {
+            'delivery_method': 'home',
+            'items': [
+                {
+                    'product_id': str(self.product.id),
+                    'quantity': 1
+                }
+            ]
+        }
+
+        for _ in range(60):
+            response = self.client.post(
+                '/api/commerce/orders/preview_delivery_fee/',
+                data=payload,
+                format='json'
+            )
+            assert response.status_code == status.HTTP_200_OK
+
+        response = self.client.post(
+            '/api/commerce/orders/preview_delivery_fee/',
+            data=payload,
+            format='json'
+        )
+
+        assert response.status_code == status.HTTP_429_TOO_MANY_REQUESTS

@@ -10,6 +10,7 @@ Roles:
 """
 import csv
 import io
+import logging
 import zipfile
 from datetime import date
 
@@ -35,6 +36,8 @@ from .models import (
     ReportDispatchLog,
     SanitaryLog,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class AquacultureSecuredAdmin(SecuredModelAdmin):
@@ -849,7 +852,12 @@ class ProductionReportAdmin(AquacultureSecuredAdmin):
             response['Content-Disposition'] = f'inline; filename="{filename}"'
             return response
         except Exception as exc:
-            return HttpResponse(f"Erreur : {exc}", status=500)
+            logger.exception(
+                "Erreur admin lors de l'affichage PDF rapport %s",
+                object_id,
+                exc_info=exc,
+            )
+            return HttpResponse("Erreur interne lors de la génération du PDF.", status=500)
 
     def download_pdf_view(self, request, object_id):
         """Télécharge le PDF du rapport."""
@@ -865,7 +873,12 @@ class ProductionReportAdmin(AquacultureSecuredAdmin):
             response['Content-Disposition'] = f'attachment; filename="{filename}"'
             return response
         except Exception as exc:
-            messages.error(request, f"Erreur génération PDF : {exc}")
+            logger.exception(
+                "Erreur admin lors du téléchargement PDF rapport %s",
+                object_id,
+                exc_info=exc,
+            )
+            messages.error(request, _("Erreur interne lors de la génération du PDF."))
             return HttpResponseRedirect(
                 reverse('admin:aquaculture_productionreport_change', args=[object_id])
             )
@@ -1094,7 +1107,12 @@ class ProductionReportAdmin(AquacultureSecuredAdmin):
                 response['Content-Disposition'] = f'attachment; filename="{filename}"'
                 return response
             except Exception as exc:
-                messages.error(request, f"Erreur PDF : {exc}")
+                logger.exception(
+                    "Erreur admin lors de la génération PDF rapport %s",
+                    report.id,
+                    exc_info=exc,
+                )
+                messages.error(request, _("Erreur interne lors de la génération du PDF."))
                 return
         try:
             zip_buffer = io.BytesIO()
@@ -1115,7 +1133,11 @@ class ProductionReportAdmin(AquacultureSecuredAdmin):
             response['Content-Disposition'] = 'attachment; filename="rapports_aquacare.zip"'
             return response
         except Exception as exc:
-            messages.error(request, f"Erreur ZIP : {exc}")
+            logger.exception(
+                "Erreur admin lors de la génération ZIP des rapports",
+                exc_info=exc,
+            )
+            messages.error(request, _("Erreur interne lors de la génération de l'archive ZIP."))
 
     @admin.action(description=_("Régénérer rapport(s) — nouveau PDF"))
     def regenerate_report_action(self, request, queryset):
@@ -1132,7 +1154,17 @@ class ProductionReportAdmin(AquacultureSecuredAdmin):
                 ReportService.regenerate(report)
                 success += 1
             except Exception as exc:
-                messages.warning(request, f"Rapport {str(report.id)[:8]} : {exc}")
+                logger.exception(
+                    "Erreur admin lors de la régénération du rapport %s",
+                    report.id,
+                    exc_info=exc,
+                )
+                messages.warning(
+                    request,
+                    _("Rapport %(report)s : échec de régénération.") % {
+                        'report': str(report.id)[:8]
+                    },
+                )
         if success:
             messages.success(request, _('{} rapport(s) régénéré(s).').format(success))
 
@@ -1149,7 +1181,17 @@ class ProductionReportAdmin(AquacultureSecuredAdmin):
                 ReportService.validate(report, request.user)
                 count += 1
             except Exception as exc:
-                messages.warning(request, f"Erreur : {exc}")
+                logger.exception(
+                    "Erreur admin lors de la validation du rapport %s",
+                    report.id,
+                    exc_info=exc,
+                )
+                messages.warning(
+                    request,
+                    _("Rapport %(report)s : échec de validation.") % {
+                        'report': str(report.id)[:8]
+                    },
+                )
         if count:
             messages.success(request, _('{} rapport(s) validé(s).').format(count))
 

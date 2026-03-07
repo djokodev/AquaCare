@@ -35,7 +35,6 @@ class ChatMessageThrottle(UserRateThrottle):
     Prevents spam and DoS attacks.
     """
     scope = 'chat_message'
-    rate = '10/min'
 
 
 class ConversationViewSet(viewsets.ReadOnlyModelViewSet):

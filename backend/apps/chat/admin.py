@@ -8,6 +8,7 @@ Roles:
 - MANAGERS: Lecture seule pour contexte
 - COMMERCE: Pas d'acces
 """
+import logging
 
 from common.admin_mixins import (
     RBACConstants,
@@ -26,6 +27,8 @@ from django.utils.translation import gettext_lazy as _
 
 from .models import Conversation, Message
 from .services import MessageService
+
+logger = logging.getLogger(__name__)
 
 
 class ChatSecuredAdmin(SupportOperatorMixin, SecuredModelAdmin):
@@ -332,7 +335,12 @@ def support_inbox_view(request):
             MessageService.send_admin_message(conv, request.user, content=content)
             dj_messages.success(request, _("Reponse envoyee."))
         except Exception as exc:
-            dj_messages.error(request, _("Erreur lors de l'envoi: %s") % exc)
+            logger.exception(
+                "Erreur admin lors de l'envoi d'un message support pour conversation %s",
+                conv.id,
+                exc_info=exc,
+            )
+            dj_messages.error(request, _("Erreur interne lors de l'envoi de la réponse."))
         return redirect(f"{reverse('admin:chat_support_inbox')}?conversation={conv.id}")
 
     return render(

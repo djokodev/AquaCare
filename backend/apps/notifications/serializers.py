@@ -3,6 +3,7 @@ Serializers pour l'API REST des notifications.
 """
 from __future__ import annotations
 
+import re
 from typing import Literal, cast
 
 from rest_framework import serializers
@@ -203,11 +204,19 @@ class PushTokenSerializer(serializers.ModelSerializer):
         """
         Valide le format du token Expo Push.
         """
-        if not value.startswith('ExponentPushToken['):
+        token = value.strip()
+        if not re.fullmatch(r"ExponentPushToken\[[^\]\s]{8,}\]", token):
             raise serializers.ValidationError(
-                "Token Expo invalide. Doit commencer par 'ExponentPushToken['"
+                "Token Expo invalide. Format attendu: 'ExponentPushToken[xxxxxxxx]'."
             )
-        return value
+        return token
+
+    def validate_device_id(self, value: str) -> str:
+        """Normalise et refuse les device_id vides/whitespace."""
+        normalized_value = value.strip()
+        if not normalized_value:
+            raise serializers.ValidationError("device_id ne peut pas être vide.")
+        return normalized_value
 
     def validate_platform(self, value: str | None) -> PushPlatform | None:
         """

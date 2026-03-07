@@ -240,6 +240,24 @@ class TestSendMessageAPI:
         assert 'media_url' in response.data
         assert response.data['media_url'] is not None
 
+    def test_send_message_hides_admin_identifier_from_regular_user(
+        self, auth_client, authenticated_user, mavecam_admin
+    ):
+        """User responses must not expose internal admin sender identifiers."""
+        conversation = ConversationService.get_or_create_conversation(authenticated_user)
+        MessageService.send_admin_message(conversation, mavecam_admin, "Réponse support")
+
+        url = reverse('conversation-messages', kwargs={'pk': conversation.id})
+        response = auth_client.get(url)
+
+        assert response.status_code == status.HTTP_200_OK
+        admin_messages = [
+            message for message in response.data['results']
+            if message['sender_type'] == 'admin'
+        ]
+        assert admin_messages
+        assert all(message['sender_user'] is None for message in admin_messages)
+
     def test_send_message_media_without_file_rejected(self, auth_client, authenticated_user):
         """Test that specifying media type without file is rejected."""
         conversation = ConversationService.get_or_create_conversation(authenticated_user)
@@ -515,6 +533,30 @@ class TestMediaValidation:
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         response_text = str(response.data)
         assert 'format' in response_text.lower() or 'supporté' in response_text.lower()
+
+    def test_missing_content_type_rejected(self, auth_client, authenticated_user):
+        """A media upload without MIME type should be rejected."""
+        conversation = ConversationService.get_or_create_conversation(authenticated_user)
+
+        invalid_file = SimpleUploadedFile(
+            name='test.jpg',
+            content=b'image-bytes',
+            content_type='',
+        )
+
+        url = reverse('conversation-send-message', kwargs={'pk': conversation.id})
+        response = auth_client.post(
+            url,
+            {
+                'content': 'Test',
+                'media_type': 'image',
+                'media_file': invalid_file,
+            },
+            format='multipart'
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert 'type mime' in str(response.data).lower() or 'requis' in str(response.data).lower()
 
     def test_image_within_10mb_passes_serializer(self):
         """Test that an image within 10MB passes both serializer validations."""

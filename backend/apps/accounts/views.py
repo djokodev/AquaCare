@@ -19,6 +19,11 @@ from .serializers import (
     UserRegistrationSerializer,
 )
 from .services import AccountDeletionService
+from .throttles import (
+    AccountLoginThrottle,
+    AccountRegisterThrottle,
+    SensitiveAccountActionThrottle,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +49,7 @@ class RegisterView(generics.CreateAPIView):
     queryset = User.objects.all()
     serializer_class = UserRegistrationSerializer
     permission_classes = [permissions.AllowAny]
+    throttle_classes = [AccountRegisterThrottle]
     
     @extend_schema(
         summary="Inscription d'un nouveau pisciculteur",
@@ -128,6 +134,7 @@ class LoginView(APIView):
     - Message de confirmation
     """
     permission_classes = [permissions.AllowAny]
+    throttle_classes = [AccountLoginThrottle]
     
     @extend_schema(
         summary="Connexion utilisateur MAVECAM",
@@ -228,6 +235,7 @@ class LogoutView(APIView):
     - Compatible avec l'architecture JWT stateless
     """
     permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [SensitiveAccountActionThrottle]
     
     @extend_schema(
         summary="Déconnexion sécurisée",
@@ -282,13 +290,6 @@ class LogoutView(APIView):
                 {'error': _('Token invalide')},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        except Exception:
-            logger.exception("Erreur inattendue pendant la deconnexion utilisateur")
-            return Response(
-                {'error': _('Erreur lors de la déconnexion')},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-
 
 class FarmProfileView(generics.RetrieveUpdateAPIView):
     """
@@ -332,6 +333,7 @@ class AccountDeletionView(APIView):
     """
 
     permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [SensitiveAccountActionThrottle]
 
     @extend_schema(
         summary="Supprimer définitivement mon compte",

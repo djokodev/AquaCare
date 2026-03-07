@@ -1,9 +1,9 @@
 """
 Sanitary Views pour le module aquaculture.
 """
+
 import logging
 
-from django.utils.translation import gettext_lazy as _
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiExample, OpenApiParameter, extend_schema, extend_schema_view
 from rest_framework import permissions, status, viewsets
@@ -15,6 +15,7 @@ from ..domain.exceptions import InvalidSanitaryDataException, SanitaryLogNotFoun
 from ..models import SanitaryLog
 from ..serializers import SanitaryLogSerializer
 from ..services import SanitaryService
+from ..throttles import AquacultureSanitaryActionThrottle
 
 logger = logging.getLogger(__name__)
 
@@ -128,7 +129,7 @@ class SanitaryLogViewSet(viewsets.ModelViewSet):
             )
         }
     )
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=['post'], throttle_classes=[AquacultureSanitaryActionThrottle])
     def resolve(self, request, pk=None):
         """
         Marque un problème sanitaire comme résolu.
@@ -164,16 +165,7 @@ class SanitaryLogViewSet(viewsets.ModelViewSet):
                 {'error': str(exc)},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        except Exception:
-            logger.exception(
-                "Unexpected error while resolving sanitary log",
-                extra={'sanitary_log_id': str(log.id)}
-            )
-            return Response(
-                {'error': _('Une erreur interne est survenue lors de la résolution.')},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-    
+
     @extend_schema(
         summary="Problèmes sanitaires actifs",
         description="""

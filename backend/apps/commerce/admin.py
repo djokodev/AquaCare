@@ -9,6 +9,7 @@ Roles:
 - SUPPORT: Pas d'acces
 """
 import io
+import logging
 import zipfile
 
 from common.admin_mixins import (
@@ -25,6 +26,8 @@ from django.utils.translation import gettext_lazy as _
 
 from .models import Order, OrderItem, Product
 from .services.pdf_service import generate_order_pdf
+
+logger = logging.getLogger(__name__)
 
 
 class CommerceSecuredAdmin(CommerceOperatorMixin, SecuredModelAdmin):
@@ -300,7 +303,12 @@ class OrderAdmin(CommerceSecuredAdmin):
             )
             return response
         except Exception as exc:
-            return HttpResponse(f"Erreur : {exc}", status=500)
+            logger.exception(
+                "Erreur admin lors de l'affichage PDF commande %s",
+                object_id,
+                exc_info=exc,
+            )
+            return HttpResponse("Erreur interne lors de la génération du PDF.", status=500)
 
     def download_pdf_view(self, request, object_id):
         """Télécharge le bon de commande PDF."""
@@ -317,8 +325,13 @@ class OrderAdmin(CommerceSecuredAdmin):
             )
             return response
         except Exception as exc:
-            messages.error(request, f"Erreur génération PDF : {exc}")
-            return HttpResponse(str(exc), status=500)
+            logger.exception(
+                "Erreur admin lors du téléchargement PDF commande %s",
+                object_id,
+                exc_info=exc,
+            )
+            messages.error(request, _("Erreur interne lors de la génération du PDF."))
+            return HttpResponse("Erreur interne lors de la génération du PDF.", status=500)
 
     def get_search_fields(self, request):
         """Retire phone_number de la recherche pour non-commerce."""
@@ -620,9 +633,14 @@ class OrderAdmin(CommerceSecuredAdmin):
                 return response
 
             except Exception as e:
+                logger.exception(
+                    "Erreur admin lors de la génération PDF commande %s",
+                    order.id,
+                    exc_info=e,
+                )
                 messages.error(
                     request,
-                    _("Erreur generation PDF : {}").format(str(e))
+                    _("Erreur interne lors de la génération du PDF.")
                 )
                 return
 
@@ -650,9 +668,13 @@ class OrderAdmin(CommerceSecuredAdmin):
             return response
 
         except Exception as e:
+            logger.exception(
+                "Erreur admin lors de la génération ZIP des commandes",
+                exc_info=e,
+            )
             messages.error(
                 request,
-                _("Erreur generation ZIP : {}").format(str(e))
+                _("Erreur interne lors de la génération de l'archive ZIP.")
             )
 
 

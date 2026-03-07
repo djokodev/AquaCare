@@ -7,6 +7,7 @@ Couvre :
 - PushTokenViewSet (register, deactivate)
 """
 import pytest
+from django.core.cache import cache
 from django.urls import reverse
 from django.utils import timezone
 from notifications.models import Notification, PushToken
@@ -192,6 +193,82 @@ class TestPushTokenViewSet:
 
         assert response.status_code == status.HTTP_201_CREATED
         assert PushToken.objects.filter(user=user).exists()
+
+    def test_register_push_token_rejects_malformed_token(self, authenticated_client):
+        """Un token Expo partiel ou mal formé doit être refusé."""
+        url = reverse('notifications:notification-register-push-token')
+        response = authenticated_client.post(
+            url,
+            {
+                'expo_push_token': 'ExponentPushToken[broken',
+                'device_id': 'device-123',
+                'platform': 'android',
+            },
+            format='json'
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert 'expo_push_token' in response.data
+
+    def test_register_push_token_rate_limit_enforced(self, authenticated_client, settings):
+        """L'enregistrement de tokens push doit être throttle en cas d'abus."""
+        settings.CACHES = {
+            'default': {
+                'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+                'LOCATION': f'notifications-push-token-throttle-{id(self)}',
+            }
+        }
+        cache.clear()
+        url = reverse('notifications:notification-register-push-token')
+
+        for index in range(30):
+            response = authenticated_client.post(
+                url,
+                {
+                    'expo_push_token': f'ExponentPushToken[token{index:04d}]',
+                    'device_id': f'device-{index}',
+                    'device_name': 'Pixel 7',
+                    'platform': 'android',
+                },
+                format='json'
+            )
+            assert response.status_code == status.HTTP_201_CREATED
+
+        response = authenticated_client.post(
+            url,
+            {
+                'expo_push_token': 'ExponentPushToken[token9999]',
+                'device_id': 'device-9999',
+                'device_name': 'Pixel 7',
+                'platform': 'android',
+            },
+            format='json'
+        )
+
+        assert response.status_code == status.HTTP_429_TOO_MANY_REQUESTS
+
+
+@pytest.mark.django_db
+class TestNotificationRateLimiting:
+    """Tests des throttles sur actions bulk notifications."""
+
+    def test_mark_all_read_rate_limit_enforced(self, authenticated_client, settings):
+        """Le bulk mark-all-read doit etre throttle."""
+        settings.CACHES = {
+            'default': {
+                'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+                'LOCATION': f'notifications-bulk-throttle-{id(self)}',
+            }
+        }
+        cache.clear()
+        url = reverse('notifications:notification-mark-all-read')
+
+        for _ in range(20):
+            response = authenticated_client.post(url)
+            assert response.status_code == status.HTTP_200_OK
+
+        response = authenticated_client.post(url)
+        assert response.status_code == status.HTTP_429_TOO_MANY_REQUESTS
 
 
 @pytest.mark.django_db

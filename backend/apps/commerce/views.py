@@ -35,6 +35,11 @@ from .serializers import (
     ProductSerializer,
 )
 from .services import CycleSimulationService, FeedingSuggestionService, OrderService, ProductService
+from .throttles import (
+    CommerceDeliveryPreviewThrottle,
+    CommerceSimulationThrottle,
+    CommerceSuggestionThrottle,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -134,7 +139,7 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=['get'], throttle_classes=[CommerceSuggestionThrottle])
     def feeding_suggestions(self, request: Request) -> Response:
         """
         Génère suggestions intelligentes d'achat d'aliments.
@@ -221,7 +226,7 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
 
         return Response(suggestions)
 
-    @action(detail=False, methods=['post'])
+    @action(detail=False, methods=['post'], throttle_classes=[CommerceSimulationThrottle])
     def cycle_simulation(self, request: Request) -> Response:
         """
         Simule un cycle aquacole complet AVANT démarrage.
@@ -450,7 +455,11 @@ class OrderViewSet(
         serializer = OrderSerializer(updated_order)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
-    @action(detail=False, methods=['post'])
+    @action(
+        detail=False,
+        methods=['post'],
+        throttle_classes=[CommerceDeliveryPreviewThrottle],
+    )
     def preview_delivery_fee(self, request: Request) -> Response:
         """
         Calcule preview frais livraison avant création commande.

@@ -22,6 +22,7 @@ from .serializers import (
     PushTokenSerializer,
 )
 from .services import NotificationService
+from .throttles import NotificationBulkMutationThrottle, NotificationPushTokenThrottle
 
 
 class NotificationStatsPayload(TypedDict):
@@ -112,7 +113,11 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
             'notification': serializer.data
         })
 
-    @action(detail=False, methods=['post'])
+    @action(
+        detail=False,
+        methods=['post'],
+        throttle_classes=[NotificationBulkMutationThrottle],
+    )
     def mark_all_read(self, request: Request) -> Response:
         """
         Marque toutes les notifications comme lues.
@@ -157,7 +162,11 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
             status=status.HTTP_204_NO_CONTENT
         )
 
-    @action(detail=False, methods=['post'])
+    @action(
+        detail=False,
+        methods=['post'],
+        throttle_classes=[NotificationBulkMutationThrottle],
+    )
     def delete_all_read(self, request: Request) -> Response:
         """
         Supprime toutes les notifications lues.
@@ -235,7 +244,11 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
         serializer = NotificationStatsSerializer(data)
         return Response(serializer.data)
 
-    @action(detail=False, methods=['post'])
+    @action(
+        detail=False,
+        methods=['post'],
+        throttle_classes=[NotificationPushTokenThrottle],
+    )
     def register_push_token(self, request: Request) -> Response:
         """
         Enregistre ou met à jour un Expo Push Token.
