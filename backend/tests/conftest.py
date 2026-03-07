@@ -4,14 +4,6 @@ Configuration globale pour les tests MAVECAM.
 Ce fichier contient des fixtures réutilisables et la configuration
 partagée entre tous les tests du projet.
 """
-import os
-import django
-
-# Configuration Django pour les tests (utilise pytest.ini ou variable d'environnement)
-# Ne pas forcer 'mavecam_api.settings' car pytest.ini définit déjà 'mavecam_api.settings.test'
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'mavecam_api.settings.test')
-django.setup()
-
 import pytest
 from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient
@@ -36,7 +28,7 @@ def user_factory():
     Simule les pisciculteurs qui s'inscrivent via l'app mobile.
     """
     import random
-    
+
     def create_user(**kwargs):
         # Générer un numéro de téléphone unique
         unique_number = random.randint(100000, 999999)
@@ -51,6 +43,7 @@ def user_factory():
         }
         defaults.update(kwargs)
         return User.objects.create_user(**defaults)
+
     return create_user
 
 
@@ -97,7 +90,7 @@ def farm_profile(authenticated_user):
     Profil de ferme pour les tests aquaculture.
     """
     from accounts.models import FarmProfile
-    
+
     # Utiliser get_or_create pour éviter les doublons
     farm_profile, created = FarmProfile.objects.get_or_create(
         user=authenticated_user,
@@ -119,10 +112,11 @@ def production_cycle(farm_profile):
     """
     Cycle de production de base pour les tests.
     """
-    from decimal import Decimal
     from datetime import date, timedelta
+    from decimal import Decimal
+
     from apps.aquaculture.models import ProductionCycle
-    
+
     # Créer cycle avec tous les champs requis définis explicitement
     cycle = ProductionCycle(
         farm_profile=farm_profile,
@@ -142,11 +136,11 @@ def production_cycle(farm_profile):
         status="active"
     )
     cycle.save()  # Déclenche post_save avec created=True
-    
+
     # Mettre à jour les valeurs courantes manuellement pour simuler le passage du temps
     cycle.current_count = 950  # Quelques mortalités
     cycle.current_average_weight = Decimal('35')
     cycle.current_biomass = Decimal('33.25')
     cycle.save()
-    
+
     return cycle

@@ -1,19 +1,18 @@
 """
 Tests de generation PDF pour les commandes.
 """
-from decimal import Decimal
-import inspect
 import ctypes.util
+import inspect
+from decimal import Decimal
 
+import pydyf
 import pytest
-
-from accounts.models import User, FarmProfile
-from commerce.models import Product, Order, OrderItem
+from accounts.models import User
+from commerce.models import Order, OrderItem, Product
 from commerce.services.pdf_service import (
     _ensure_pdf_dependencies,
     generate_order_pdf,
 )
-import pydyf
 
 
 def _weasyprint_runtime_available() -> bool:

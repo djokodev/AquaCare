@@ -16,16 +16,13 @@ Fonctionnalités principales :
 Basé sur les guides techniques Skretting et Aller Aqua.
 """
 import math
-from decimal import Decimal, ROUND_HALF_UP
 from datetime import date, timedelta
-from typing import Dict, Optional, Union
+from decimal import ROUND_HALF_UP, Decimal
 
-from ..constants import (
-    FEED_RECOMMENDATIONS, MEALS_PER_DAY, OPTIMAL_PARAMETERS
-)
+from ..constants import FEED_RECOMMENDATIONS, MEALS_PER_DAY, OPTIMAL_PARAMETERS
 
 
-def to_decimal(value: Union[int, float, str, Decimal]) -> Decimal:
+def to_decimal(value: int | float | str | Decimal) -> Decimal:
     """Convertit une valeur numérique en Decimal en évitant la perte de précision float."""
     if isinstance(value, Decimal):
         return value
@@ -318,9 +315,9 @@ class AquacultureCalculator:
     
     @staticmethod
     def get_feeding_rate_for_temp(
-        temperature_rates: Dict,
+        temperature_rates: dict,
         water_temp_c: float,
-    ) -> Optional[float]:
+    ) -> float | None:
         """
         Interpole le taux d'alimentation depuis la table DIBAQ pour une température donnée.
 
@@ -361,9 +358,9 @@ class AquacultureCalculator:
     @staticmethod
     def get_feeding_recommendations(
         weight_g: Decimal,
-        guide_data: Optional[Dict] = None,
-        water_temp_c: Optional[float] = None,
-    ) -> Dict:
+        guide_data: dict | None = None,
+        water_temp_c: float | None = None,
+    ) -> dict:
         """
         Retourne les recommandations d'alimentation pour un poids donné.
 
@@ -404,7 +401,7 @@ class AquacultureCalculator:
     @staticmethod
     def get_meals_per_day(
         weight_g: Decimal,
-        guide_data: Optional[Dict] = None,
+        guide_data: dict | None = None,
     ) -> int:
         """
         Retourne le nombre de repas par jour recommandé.
@@ -436,9 +433,9 @@ class AquacultureCalculator:
         current_count: int,
         species: str,
         week_number: int,
-        guide_data: Optional[Dict] = None,
-        water_temp_c: Optional[float] = None,
-    ) -> Dict:
+        guide_data: dict | None = None,
+        water_temp_c: float | None = None,
+    ) -> dict:
         """
         Génère un plan d'alimentation hebdomadaire complet.
 
@@ -509,10 +506,10 @@ class AquacultureCalculator:
     @staticmethod
     def check_environmental_alerts(
         species: str,
-        temperature_c: Optional[Decimal] = None,
-        ph: Optional[Decimal] = None,
-        oxygen_mg_l: Optional[Decimal] = None,
-        density_kg_m3: Optional[Decimal] = None
+        temperature_c: Decimal | None = None,
+        ph: Decimal | None = None,
+        oxygen_mg_l: Decimal | None = None,
+        density_kg_m3: Decimal | None = None
     ) -> list:
         """
         Check environmental parameters against species-specific thresholds.
@@ -556,9 +553,9 @@ class AquacultureCalculator:
     
     @staticmethod
     def calculate_performance_score(
-        survival_rate_pct: Optional[Decimal],
-        fcr: Optional[Decimal],
-        daily_growth_rate: Optional[Decimal],
+        survival_rate_pct: Decimal | None,
+        fcr: Decimal | None,
+        daily_growth_rate: Decimal | None,
         species: str
     ) -> Decimal:
         """

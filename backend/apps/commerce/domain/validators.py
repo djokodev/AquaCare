@@ -4,10 +4,11 @@ Validateurs métier pour le module commerce MAVECAM AquaCare.
 Architecture Clean : Validations de règles métier pures,
 sans dépendances Django (utilisables hors contexte web).
 """
-from typing import List, Dict, Any
 from decimal import Decimal
-from .exceptions import InvalidOrderError
+from typing import Any
+
 from ..constants import PICKUP_LOCATION_CHOICES
+from .exceptions import InvalidOrderError
 
 
 class OrderValidator:
@@ -16,7 +17,7 @@ class OrderValidator:
     """
 
     @staticmethod
-    def validate_items(items: List[Dict[str, Any]]) -> None:
+    def validate_items(items: list[dict[str, Any]]) -> None:
         """
         Valide que les items de commande sont corrects.
 

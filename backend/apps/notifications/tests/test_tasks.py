@@ -4,24 +4,23 @@ Tests pour les taches Celery du module notifications.
 Teste l'envoi asynchrone de notifications par email et push,
 ainsi que les taches de nettoyage et de scheduling.
 """
+from datetime import timedelta
+from unittest.mock import MagicMock, patch
+
 import pytest
 import requests
-from unittest.mock import patch, MagicMock, call
 from django.utils import timezone
-from datetime import timedelta
-
+from notifications.models import Notification, PushToken
 from notifications.tasks import (
-    send_email_notification_task,
-    send_push_notification_task,
-    cleanup_old_notifications,
-    send_scheduled_notifications,
     EMAIL_ERROR_RECIPIENT_MISSING,
     EMAIL_ERROR_SEND_FAILED,
     PUSH_ERROR_NO_VALID_TOKENS,
     PUSH_ERROR_SEND_FAILED,
+    cleanup_old_notifications,
+    send_email_notification_task,
+    send_push_notification_task,
+    send_scheduled_notifications,
 )
-from notifications.models import Notification, PushToken
-
 
 # =================== TESTS EMAIL NOTIFICATIONS ===================
 

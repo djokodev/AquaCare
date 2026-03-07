@@ -1,9 +1,10 @@
-# coding: utf-8
 """
 Domain value objects for chat module.
 Immutable business entities with validation logic.
 Pure Python - no framework dependencies.
 """
+
+from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Literal
@@ -21,7 +22,7 @@ class MessageContent:
 
     text: str
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate message content on initialization."""
         # Check for empty content
         if not self.text or len(self.text.strip()) == 0:
@@ -59,7 +60,7 @@ class MediaAttachment:
     """
 
     file_path: str
-    media_type: Literal['image', 'video']
+    media_type: Literal["image", "video"]
     file_size_bytes: int
     mime_type: str
 
@@ -68,21 +69,21 @@ class MediaAttachment:
     MAX_VIDEO_SIZE_MB = 50
 
     ALLOWED_IMAGE_TYPES = frozenset([
-        'image/jpeg',
-        'image/png',
-        'image/webp',
+        "image/jpeg",
+        "image/png",
+        "image/webp",
     ])
 
     ALLOWED_VIDEO_TYPES = frozenset([
-        'video/mp4',
-        'video/quicktime',
+        "video/mp4",
+        "video/quicktime",
     ])
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate media attachment on initialization."""
-        if self.media_type == 'image':
+        if self.media_type == "image":
             self._validate_image()
-        elif self.media_type == 'video':
+        elif self.media_type == "video":
             self._validate_video()
         else:
             from .exceptions import InvalidMediaFormat
@@ -90,7 +91,7 @@ class MediaAttachment:
                 f"Invalid media type: {self.media_type}. Must be 'image' or 'video'."
             )
 
-    def _validate_image(self):
+    def _validate_image(self) -> None:
         """
         Validate image file.
 
@@ -115,7 +116,7 @@ class MediaAttachment:
                 f"Allowed: JPEG, PNG, WebP"
             )
 
-    def _validate_video(self):
+    def _validate_video(self) -> None:
         """
         Validate video file.
 

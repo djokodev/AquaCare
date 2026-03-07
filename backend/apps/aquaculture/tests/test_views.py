@@ -4,20 +4,24 @@ Tests unitaires pour les vues API aquacoles MAVECAM.
 Teste tous les endpoints de l'API aquaculture : ViewSets, actions personnalisées,
 permissions, validation et logique métier.
 """
-import pytest
-from decimal import Decimal
 from datetime import date, timedelta
+from decimal import Decimal
+from unittest.mock import patch
+
+import pytest
+from aquaculture.models import (
+    CycleLog,
+    NutritionalGuide,
+    ProductionCycle,
+    ProductionReport,
+    ReportDispatchLog,
+    SanitaryLog,
+)
 from django.urls import reverse
 from django.utils import timezone
+from notifications.models import Notification
 from rest_framework import status
 from rest_framework.test import APIClient
-from unittest.mock import patch, MagicMock
-
-from aquaculture.models import (
-    ProductionCycle, CycleLog, FeedingPlan, SanitaryLog,
-    NutritionalGuide, ProductionReport, ReportDispatchLog
-)
-from notifications.models import Notification
 
 
 @pytest.mark.django_db
@@ -96,7 +100,7 @@ class TestProductionCycleViewSet:
         )
         
         # Créer cycle pour autre utilisateur
-        other_cycle = ProductionCycle.objects.create(
+        ProductionCycle.objects.create(
             farm_profile=other_farm,
             cycle_name="Cycle Autre Utilisateur",
             species="clarias",
@@ -192,7 +196,7 @@ class TestProductionCycleViewSet:
     def test_cycle_comparison(self, auth_client, production_cycle):
         """Test endpoint comparaison cycles."""
         # Créer un cycle terminé pour comparaison
-        previous_cycle = ProductionCycle.objects.create(
+        ProductionCycle.objects.create(
             farm_profile=production_cycle.farm_profile,
             cycle_name="Cycle Précédent",
             species=production_cycle.species,
@@ -412,7 +416,7 @@ class TestFeedingPlanViewSet:
             'weeks_ahead': 1
         }
 
-        response = auth_client.post(url, data, format='json')
+        auth_client.post(url, data, format='json')
 
         # Vérifier que des notifications ont été créées
         notif_count_after = Notification.objects.filter(
@@ -449,7 +453,6 @@ class TestSanitaryLogViewSet:
     def test_resolve_sanitary_issue(self, auth_client, production_cycle):
         """Test résolution problème sanitaire."""
         # Créer log sanitaire
-        from aquaculture.models import SanitaryLog
         sanitary_log = SanitaryLog.objects.create(
             cycle=production_cycle,
             event_date=date.today() - timedelta(days=3),
@@ -470,7 +473,6 @@ class TestSanitaryLogViewSet:
     def test_active_issues_endpoint(self, auth_client, production_cycle):
         """Test endpoint problèmes sanitaires actifs."""
         # Créer problèmes sanitaires
-        from aquaculture.models import SanitaryLog
         
         SanitaryLog.objects.create(
             cycle=production_cycle,
@@ -933,7 +935,6 @@ class TestProductionReportViewSet:
             'report_type': 'daily',
             'cycle_id': str(selected_cycle.id),
         }
-        from unittest.mock import patch
         with patch('aquaculture.services.report_service.ReportService._render_pdf', return_value=b'%PDF-fake'):
             response = auth_client.post(url, payload, format='json')
 

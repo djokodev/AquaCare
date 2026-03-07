@@ -21,15 +21,15 @@ Utilisation dans views.py :
         )
         return Response(...)
 """
+from .analytics_service import AnalyticsService
 from .base import BaseService
 from .cycle_service import ProductionCycleService
-from .log_service import CycleLogService
+from .dashboard_service import DashboardService
 from .feeding_service import FeedingPlanService
-from .analytics_service import AnalyticsService
+from .log_service import CycleLogService
 from .report_service import ReportService
 from .sanitary_service import SanitaryService
 from .sync_service import SyncService
-from .dashboard_service import DashboardService
 
 __all__ = [
     'BaseService',

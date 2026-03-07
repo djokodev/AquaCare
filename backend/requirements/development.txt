@@ -18,6 +18,7 @@ Faker==37.5.3
 # Linting & Code Quality
 colorama==0.4.6
 Pygments==2.19.2
+ruff==0.13.0
 
 # Development Tools
 iniconfig==2.1.0

@@ -4,9 +4,9 @@ Service de generation de PDF pour les commandes.
 Genere des bons de commande professionnels au format PDF
 pour transmission aux prestataires MAVECAM.
 """
-from importlib import metadata
 import inspect
 import logging
+from importlib import metadata
 
 from django.conf import settings
 from django.template.loader import render_to_string

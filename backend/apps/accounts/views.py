@@ -1,25 +1,23 @@
 import logging
 
+from django.http import Http404
 from django.utils.translation import gettext as _
-
+from drf_spectacular.utils import OpenApiExample, OpenApiResponse, extend_schema
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import TokenError
-from drf_spectacular.utils import extend_schema, OpenApiResponse, OpenApiExample
+from rest_framework_simplejwt.tokens import RefreshToken
 
-from django.http import Http404
-from .models import User, FarmProfile
-
+from .models import FarmProfile, User
+from .permissions import IsOwnerOrReadOnly
 from .serializers import (
-    UserRegistrationSerializer,
-    UserProfileSerializer,
+    AccountDeletionSerializer,
     FarmProfileSerializer,
     LoginSerializer,
-    AccountDeletionSerializer,
+    UserProfileSerializer,
+    UserRegistrationSerializer,
 )
-from .permissions import IsOwnerOrReadOnly
 from .services import AccountDeletionService
 
 logger = logging.getLogger(__name__)
@@ -49,7 +47,10 @@ class RegisterView(generics.CreateAPIView):
     
     @extend_schema(
         summary="Inscription d'un nouveau pisciculteur",
-        description="Crée un compte utilisateur (individuel ou entreprise) avec génération automatique du profil ferme et des tokens JWT",
+        description=(
+            "Crée un compte utilisateur (individuel ou entreprise) avec génération "
+            "automatique du profil ferme et des tokens JWT"
+        ),
         examples=[
             OpenApiExample(
                 'Personne physique',
@@ -130,7 +131,10 @@ class LoginView(APIView):
     
     @extend_schema(
         summary="Connexion utilisateur MAVECAM",
-        description="Authentification flexible avec deux méthodes : nom d'affichage OU numéro de téléphone + mot de passe",
+        description=(
+            "Authentification flexible avec deux méthodes : nom d'affichage "
+            "OU numéro de téléphone + mot de passe"
+        ),
         examples=[
             OpenApiExample(
                 'Connexion personne physique par nom',

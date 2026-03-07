@@ -4,21 +4,23 @@ Report Views pour le module aquaculture.
 import logging
 from urllib.parse import quote
 
-from rest_framework import viewsets, status, permissions
-from rest_framework.decorators import action
-from rest_framework.response import Response
 from django.http import FileResponse
 from django.utils.translation import gettext_lazy as _
-from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiExample
 from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import OpenApiExample, OpenApiParameter, extend_schema, extend_schema_view
+from rest_framework import permissions, status, viewsets
+from rest_framework.decorators import action
+from rest_framework.response import Response
 
 from ..models import ProductionCycle, ProductionReport
 from ..serializers import (
-    ProductionReportListSerializer, ProductionReportDetailSerializer,
-    MarkWhatsAppSharedSerializer, GenerateReportSerializer,
+    GenerateReportSerializer,
+    MarkWhatsAppSharedSerializer,
+    ProductionReportDetailSerializer,
+    ProductionReportListSerializer,
 )
 from ..services import ReportService
-from ..tasks import send_report_email_task, generate_report_async_task
+from ..tasks import generate_report_async_task, send_report_email_task
 
 logger = logging.getLogger(__name__)
 

@@ -5,12 +5,8 @@ Ces tests vérifient la validation et la sérialisation des données
 échangées entre l'API et l'app mobile React Native.
 """
 import pytest
+from accounts.serializers import LoginSerializer, UserProfileSerializer, UserRegistrationSerializer
 from django.contrib.auth import get_user_model
-from accounts.serializers import (
-    UserRegistrationSerializer,
-    UserProfileSerializer,
-    LoginSerializer
-)
 
 User = get_user_model()
 

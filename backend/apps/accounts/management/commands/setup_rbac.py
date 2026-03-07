@@ -8,12 +8,10 @@ Usage:
     python manage.py setup_rbac --dry-run # Simuler sans modifier
 """
 
-from django.core.management.base import BaseCommand
-from django.contrib.auth.models import Group, Permission
-from django.contrib.contenttypes.models import ContentType
-from django.db import transaction
-
 from common.admin_mixins import RBACConstants
+from django.contrib.auth.models import Group, Permission
+from django.core.management.base import BaseCommand
+from django.db import transaction
 
 
 class Command(BaseCommand):

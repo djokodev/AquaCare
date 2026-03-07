@@ -3,20 +3,22 @@ Cycle Views pour le module aquaculture.
 """
 import logging
 
-from rest_framework import viewsets, status, permissions
+from django.utils.translation import gettext_lazy as _
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import OpenApiExample, OpenApiParameter, extend_schema, extend_schema_view
+from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from django.utils.translation import gettext_lazy as _
-from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiExample
-from drf_spectacular.types import OpenApiTypes
 
+from ..domain.exceptions import CycleAlreadyHarvestedError, InvalidHarvestDataError
 from ..models import ProductionCycle
 from ..serializers import (
-    ProductionCycleSerializer, HarvestSerializer,
-    CycleStatisticsSerializer, CycleComparisonSerializer,
+    CycleComparisonSerializer,
+    CycleStatisticsSerializer,
+    HarvestSerializer,
+    ProductionCycleSerializer,
 )
-from ..services import ProductionCycleService, AnalyticsService
-from ..domain.exceptions import CycleAlreadyHarvestedError, InvalidHarvestDataError
+from ..services import AnalyticsService, ProductionCycleService
 
 logger = logging.getLogger(__name__)
 

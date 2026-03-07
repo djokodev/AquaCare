@@ -1,4 +1,3 @@
-# coding: utf-8
 """
 Celery tasks for asynchronous chat notifications.
 """
@@ -28,7 +27,6 @@ def notify_admins_new_user_message_task(self, message_id: str):
     if message.sender_type != 'user':
         return
 
-    from notifications.services import NotificationService
 
     conversation = message.conversation
     site_url = getattr(settings, 'SITE_URL', '').rstrip('/')

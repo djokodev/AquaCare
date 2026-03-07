@@ -6,13 +6,13 @@ logique métier déléguée aux Services.
 """
 from rest_framework import serializers
 
-from .models import Product, Order, OrderItem
-from .services import OrderService
 from .domain.exceptions import (
     InvalidOrderError,
-    ProductNotFoundError,
     ProductNotAvailableError,
+    ProductNotFoundError,
 )
+from .models import Order, OrderItem, Product
+from .services import OrderService
 
 
 class ProductSerializer(serializers.ModelSerializer):

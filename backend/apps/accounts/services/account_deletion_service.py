@@ -1,16 +1,21 @@
+"""Service applicatif pour l'anonymisation des comptes utilisateurs."""
+
+from __future__ import annotations
+
 import uuid
 from dataclasses import dataclass
 
+from accounts.models import FarmProfile
 from django.contrib.auth import get_user_model
 from django.db import transaction
-
-from accounts.models import FarmProfile
 
 User = get_user_model()
 
 
 @dataclass(frozen=True)
 class AccountDeletionResult:
+    """Resultat de l'anonymisation d'un compte utilisateur."""
+
     anonymized_phone: str
 
 
@@ -25,7 +30,8 @@ class AccountDeletionService:
     """
 
     @staticmethod
-    def _generate_anonymized_phone(user_id) -> str:
+    def _generate_anonymized_phone(user_id: object) -> str:
+        """Genere un numero anonymise unique compatible avec le format camerounais."""
         # Format valide attendu: +2376XXXXXXXX (9 chiffres après +237)
         # user_id peut être un UUID ou un int — on extrait 8 chiffres décimaux via hash
         base = abs(hash(str(user_id))) % 100000000
@@ -39,6 +45,7 @@ class AccountDeletionService:
     @staticmethod
     @transaction.atomic
     def anonymize_user_account(user: User) -> AccountDeletionResult:
+        """Desactive un compte et anonymise ses donnees personnelles."""
         user.refresh_from_db()
 
         # Empêche toute reconnexion avec l'ancien mot de passe

@@ -8,23 +8,23 @@ Roles:
 - MANAGERS: Lecture seule pour contexte
 - SUPPORT: Pas d'acces
 """
-from django.contrib import admin
-from django.contrib.admin.models import CHANGE
-from django.utils.html import format_html, escape, mark_safe
-from django.utils.translation import gettext_lazy as _
-from django.http import HttpResponse, FileResponse
-from django.urls import reverse
-from django.contrib import messages
 import io
 import zipfile
 
-from .models import Product, Order, OrderItem
-from .services.pdf_service import generate_order_pdf
 from common.admin_mixins import (
-    SecuredModelAdmin,
     CommerceOperatorMixin,
     RBACConstants,
+    SecuredModelAdmin,
 )
+from django.contrib import admin, messages
+from django.contrib.admin.models import CHANGE
+from django.http import FileResponse, HttpResponse
+from django.urls import reverse
+from django.utils.html import escape, format_html, mark_safe
+from django.utils.translation import gettext_lazy as _
+
+from .models import Order, OrderItem, Product
+from .services.pdf_service import generate_order_pdf
 
 
 class CommerceSecuredAdmin(CommerceOperatorMixin, SecuredModelAdmin):
@@ -139,10 +139,15 @@ class ProductAdmin(CommerceSecuredAdmin):
             'dibaq': '#3b82f6'
         }
         color = colors.get(obj.brand, '#6b7280')
+        badge_template = (
+            '<span style="display:inline-block; min-width:90px; text-align:center; '
+            'white-space:nowrap; background-color: {}; color: white; '
+            'padding: 4px 10px; border-radius: 6px;">{}</span>'
+        )
         return format_html(
-            '<span style="display:inline-block; min-width:90px; text-align:center; white-space:nowrap; background-color: {}; color: white; padding: 4px 10px; border-radius: 6px;">{}</span>',
+            badge_template,
             color,
-            obj.get_brand_display()
+            obj.get_brand_display(),
         )
     brand_badge.short_description = _('Marque')
 
@@ -153,10 +158,15 @@ class ProductAdmin(CommerceSecuredAdmin):
             'catfish': '#f59e0b'
         }
         color = colors.get(obj.species, '#6b7280')
+        badge_template = (
+            '<span style="display:inline-block; min-width:90px; text-align:center; '
+            'white-space:nowrap; background-color: {}; color: white; '
+            'padding: 4px 10px; border-radius: 6px;">{}</span>'
+        )
         return format_html(
-            '<span style="display:inline-block; min-width:90px; text-align:center; white-space:nowrap; background-color: {}; color: white; padding: 4px 10px; border-radius: 6px;">{}</span>',
+            badge_template,
             color,
-            obj.get_species_display()
+            obj.get_species_display(),
         )
     species_badge.short_description = _('Espece')
 
@@ -169,14 +179,19 @@ class ProductAdmin(CommerceSecuredAdmin):
 
     def availability_badge(self, obj):
         """Badge disponibilite."""
+        available_badge = (
+            '<span style="display:inline-block; min-width:110px; text-align:center; '
+            'white-space:nowrap; background-color: #10b981; color: white; '
+            'padding: 4px 10px; border-radius: 6px;">Disponible</span>'
+        )
+        unavailable_badge = (
+            '<span style="display:inline-block; min-width:120px; text-align:center; '
+            'white-space:nowrap; background-color: #ef4444; color: white; '
+            'padding: 4px 10px; border-radius: 6px;">Indisponible</span>'
+        )
         if obj.is_available:
-            return format_html(
-                '<span style="display:inline-block; min-width:110px; text-align:center; white-space:nowrap; background-color: #10b981; color: white; padding: 4px 10px; border-radius: 6px;">Disponible</span>'
-            )
-        else:
-            return format_html(
-                '<span style="display:inline-block; min-width:120px; text-align:center; white-space:nowrap; background-color: #ef4444; color: white; padding: 4px 10px; border-radius: 6px;">Indisponible</span>'
-            )
+            return format_html(available_badge)
+        return format_html(unavailable_badge)
     availability_badge.short_description = _('Disponibilite')
 
 
@@ -364,10 +379,20 @@ class OrderAdmin(CommerceSecuredAdmin):
         status_label, status_color = status_labels.get(obj.status, (escape(str(obj.status)), '#6b7280'))
 
         # Delivery info
-        delivery_label = escape(str(obj.get_delivery_method_display() if hasattr(obj, 'get_delivery_method_display') else obj.delivery_method))
+        delivery_method_display = (
+            obj.get_delivery_method_display()
+            if hasattr(obj, 'get_delivery_method_display')
+            else obj.delivery_method
+        )
+        delivery_label = escape(str(delivery_method_display))
         pickup_label = ''
         if obj.pickup_location:
-            pickup_label = escape(f' — {obj.get_pickup_location_display()}' if hasattr(obj, 'get_pickup_location_display') else '')
+            pickup_display = (
+                f" — {obj.get_pickup_location_display()}"
+                if hasattr(obj, 'get_pickup_location_display')
+                else ''
+            )
+            pickup_label = escape(pickup_display)
         delivery_name = escape(str(obj.delivery_name or '—'))
         delivery_phone = escape(str(obj.delivery_phone or '—'))
         delivery_city = escape(str(obj.delivery_city or ''))
@@ -413,50 +438,60 @@ class OrderAdmin(CommerceSecuredAdmin):
         except Exception:
             items_html = '<em style="color:#6b7280;">Articles non disponibles.</em>'
 
-        html = (
-            '<div style="font-family:sans-serif;max-width:780px;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;margin:4px 0;">'
-
-            # Header
-            f'<div style="background:#059669;color:white;padding:10px 16px;display:flex;justify-content:space-between;align-items:center;">'
-            f'<strong>Commande #{order_number}</strong>'
-            f'<span style="background:{status_color};color:white;padding:2px 10px;border-radius:20px;font-size:12px;">{status_label}</span>'
-            f'</div>'
-
-            # Items
-            f'<div style="border-bottom:1px solid #e5e7eb;">'
-            f'{items_html}'
-            f'</div>'
-
-            # Totals
-            f'<div style="display:flex;border-bottom:1px solid #e5e7eb;">'
-            f'<div style="flex:1;padding:10px 16px;border-right:1px solid #e5e7eb;">'
-            f'<div style="font-size:12px;color:#6b7280;">Sous-total</div>'
-            f'<div style="font-weight:bold;">{escape(subtotal)} FCFA</div>'
-            f'</div>'
-            f'<div style="flex:1;padding:10px 16px;border-right:1px solid #e5e7eb;">'
-            f'<div style="font-size:12px;color:#6b7280;">Livraison</div>'
-            f'<div style="font-weight:bold;">{escape(delivery_fee)} FCFA</div>'
-            f'</div>'
-            f'<div style="flex:1;padding:10px 16px;border-right:1px solid #e5e7eb;">'
-            f'<div style="font-size:12px;color:#6b7280;">Total</div>'
-            f'<div style="font-weight:bold;color:#059669;font-size:16px;">{escape(total)} FCFA</div>'
-            f'</div>'
-            f'<div style="flex:1;padding:10px 16px;">'
-            f'<div style="font-size:12px;color:#6b7280;">Sacs commandés</div>'
-            f'<div style="font-weight:bold;">{escape(bags)} sacs</div>'
-            f'</div>'
-            f'</div>'
-
-            # Delivery
-            f'<div style="padding:10px 16px;font-size:13px;background:#f9fafb;">'
-            f'<strong>🚚 {delivery_label}{pickup_label}</strong> — '
-            f'{delivery_name} · {delivery_phone}'
-            f'{"  ·  " + delivery_city if delivery_city else ""}'
-            f'{"  ·  " + delivery_region if delivery_region else ""}'
-            f'{"<br><span style=\'color:#6b7280;\'>" + delivery_address + "</span>" if delivery_address else ""}'
-            f'</div>'
-
-            '</div>'
+        card_wrapper_open = (
+            '<div style="font-family:sans-serif;max-width:780px;'
+            'border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;'
+            'margin:4px 0;">'
+        )
+        card_header = (
+            '<div style="background:#059669;color:white;padding:10px 16px;'
+            'display:flex;justify-content:space-between;align-items:center;">'
+        )
+        status_badge = (
+            f'<span style="background:{status_color};color:white;padding:2px 10px;'
+            f'border-radius:20px;font-size:12px;">{status_label}</span>'
+        )
+        html = "".join(
+            [
+                card_wrapper_open,
+                card_header,
+                f"<strong>Commande #{order_number}</strong>",
+                status_badge,
+                "</div>",
+                '<div style="border-bottom:1px solid #e5e7eb;">',
+                items_html,
+                "</div>",
+                '<div style="display:flex;border-bottom:1px solid #e5e7eb;">',
+                '<div style="flex:1;padding:10px 16px;border-right:1px solid #e5e7eb;">',
+                '<div style="font-size:12px;color:#6b7280;">Sous-total</div>',
+                f'<div style="font-weight:bold;">{escape(subtotal)} FCFA</div>',
+                "</div>",
+                '<div style="flex:1;padding:10px 16px;border-right:1px solid #e5e7eb;">',
+                '<div style="font-size:12px;color:#6b7280;">Livraison</div>',
+                f'<div style="font-weight:bold;">{escape(delivery_fee)} FCFA</div>',
+                "</div>",
+                '<div style="flex:1;padding:10px 16px;border-right:1px solid #e5e7eb;">',
+                '<div style="font-size:12px;color:#6b7280;">Total</div>',
+                f'<div style="font-weight:bold;color:#059669;font-size:16px;">{escape(total)} FCFA</div>',
+                "</div>",
+                '<div style="flex:1;padding:10px 16px;">',
+                '<div style="font-size:12px;color:#6b7280;">Sacs commandés</div>',
+                f'<div style="font-weight:bold;">{escape(bags)} sacs</div>',
+                "</div>",
+                "</div>",
+                '<div style="padding:10px 16px;font-size:13px;background:#f9fafb;">',
+                f"<strong>🚚 {delivery_label}{pickup_label}</strong> — ",
+                f"{delivery_name} · {delivery_phone}",
+                f'{"  ·  " + delivery_city if delivery_city else ""}',
+                f'{"  ·  " + delivery_region if delivery_region else ""}',
+                (
+                    f"<br><span style='color:#6b7280;'>{delivery_address}</span>"
+                    if delivery_address
+                    else ""
+                ),
+                "</div>",
+                "</div>",
+            ]
         )
         return mark_safe(html)
     order_summary_display.short_description = _('Aperçu de la commande')

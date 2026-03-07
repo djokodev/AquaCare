@@ -1,7 +1,9 @@
-from pathlib import Path
-from datetime import timedelta
-import sys
 import os
+import sys
+from datetime import timedelta
+from pathlib import Path
+
+from . import jazzmin as jazzmin_config
 
 # Build paths
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
@@ -259,4 +261,5 @@ if _SENTRY_DSN:
 # =============================================================================
 # JAZZMIN ADMIN UI CONFIGURATION
 # =============================================================================
-from .jazzmin import JAZZMIN_SETTINGS, JAZZMIN_UI_TWEAKS
+JAZZMIN_SETTINGS = jazzmin_config.JAZZMIN_SETTINGS
+JAZZMIN_UI_TWEAKS = jazzmin_config.JAZZMIN_UI_TWEAKS

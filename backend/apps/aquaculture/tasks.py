@@ -5,9 +5,9 @@ Taches Celery pour le module aquaculture.
 - Traitements post-log asynchrones (notifications, alertes, analytics)
 - Invalidation du cache Dashboard
 """
-from datetime import date, timedelta, datetime
 import logging
 import uuid
+from datetime import date, datetime, timedelta
 
 from celery import shared_task
 from django.core.cache import cache
@@ -34,10 +34,11 @@ def post_log_async_tasks(log_id: str) -> None:
     - Sampling reminder check
     - Dashboard cache invalidation
     """
+    from notifications.models import Notification
+    from notifications.services import NotificationService
+
     from .models import CycleLog
     from .services import AnalyticsService
-    from notifications.services import NotificationService
-    from notifications.models import Notification
 
     try:
         instance = CycleLog.objects.select_related(
@@ -210,6 +211,7 @@ def generate_single_farm_report_task(
     Generate a report for a single farm. Dispatched by batch tasks below.
     """
     from datetime import date as date_type
+
     from accounts.models import FarmProfile
 
     try:
@@ -310,6 +312,7 @@ def send_report_email_task(self, report_id: str, user_id: str) -> str:
     Effectue jusqu'a 3 tentatives en cas d'echec SMTP.
     """
     from django.contrib.auth import get_user_model
+
     from .models import ProductionReport
 
     User = get_user_model()

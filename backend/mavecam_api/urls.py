@@ -9,13 +9,14 @@ Structure de l'API:
 - /api/support/ : Assistance technique (Phase 4)
 - /api/education/ : Guides et formation (Phase 5)
 """
-from django.contrib import admin
-from django.urls import path, include
-from django.http import JsonResponse
 from django.conf import settings
 from django.conf.urls.static import static
+from django.contrib import admin
+from django.http import JsonResponse
+from django.urls import include, path
 from django.views.generic import TemplateView
-from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
+from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
+
 
 def api_root(request):
     """Endpoint racine fournissant les informations sur l'API."""
@@ -55,10 +56,19 @@ def health_check(request):
             'error': str(e)
         }, status=503)
 
+
 urlpatterns = [
     # Legal pages (required for Google Play Store)
-    path('privacy-policy/', TemplateView.as_view(template_name='legal/privacy_policy.html'), name='privacy-policy'),
-    path('account-deletion/', TemplateView.as_view(template_name='legal/account_deletion.html'), name='account-deletion'),
+    path(
+        'privacy-policy/',
+        TemplateView.as_view(template_name='legal/privacy_policy.html'),
+        name='privacy-policy',
+    ),
+    path(
+        'account-deletion/',
+        TemplateView.as_view(template_name='legal/account_deletion.html'),
+        name='account-deletion',
+    ),
 
     path('i18n/', include('django.conf.urls.i18n')),  # Required for Jazzmin language switcher
     path('admin/', admin.site.urls),

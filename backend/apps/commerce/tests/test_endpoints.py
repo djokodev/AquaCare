@@ -2,15 +2,15 @@
 Tests d'intégration pour tous les endpoints du module commerce.
 Vérifie la logique métier et la cohérence des réponses.
 """
-import pytest
 from decimal import Decimal
-from rest_framework.test import APIClient
-from rest_framework import status
-from django.contrib.auth import get_user_model
 
+import pytest
 from accounts.models import FarmProfile
-from commerce.models import Product, Order
+from commerce.models import Order, Product
 from commerce.services import CycleSimulationService
+from django.contrib.auth import get_user_model
+from rest_framework import status
+from rest_framework.test import APIClient
 
 User = get_user_model()
 
@@ -248,7 +248,7 @@ class TestProductEndpoints:
         assert 'has_suggestions' in data
         assert 'suggestions' in data
         # Sans cycle actif, should be empty
-        assert data['has_suggestions'] == False
+        assert not data['has_suggestions']
         assert len(data['suggestions']) == 0
 
     def test_feeding_suggestions_with_farm_filter(self):

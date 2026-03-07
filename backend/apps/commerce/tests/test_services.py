@@ -2,16 +2,16 @@
 Tests unitaires pour les services commerce.
 Coverage: ProductService, OrderService, FeedingSuggestionService.
 """
-import pytest
-from decimal import Decimal
 from datetime import timedelta
-from django.utils import timezone
+from decimal import Decimal
 
-from commerce.models import Product
-from commerce.services import ProductService, OrderService, FeedingSuggestionService
+import pytest
+from accounts.models import FarmProfile, User
+from aquaculture.models import CycleLog, ProductionCycle
 from commerce.domain.exceptions import InvalidOrderError
-from accounts.models import User, FarmProfile
-from aquaculture.models import ProductionCycle, CycleLog
+from commerce.models import Product
+from commerce.services import FeedingSuggestionService, OrderService, ProductService
+from django.utils import timezone
 
 
 @pytest.mark.django_db

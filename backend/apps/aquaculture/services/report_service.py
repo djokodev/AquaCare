@@ -9,24 +9,25 @@ Flux V1:
 """
 from __future__ import annotations
 
+import inspect
+import logging
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from importlib import metadata
-import inspect
-import logging
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any
 
+from accounts.models import FarmProfile, User
 from django.conf import settings
 from django.core.files.base import ContentFile
 from django.core.mail import EmailMessage
-from django.db.models import Avg, Sum, Prefetch
+from django.db.models import Prefetch
 from django.template.loader import render_to_string
-from django.utils.formats import date_format
 from django.utils import timezone
-from django.utils.translation import gettext as _, override
+from django.utils.formats import date_format
+from django.utils.translation import gettext as _
+from django.utils.translation import override
 
-from accounts.models import FarmProfile, User
-
+from ..constants import DEFAULT_FEED_PRICE_PER_KG, ECONOMIC_DEFAULTS_BY_SPECIES
 from ..models import (
     CycleLog,
     FeedingPlan,
@@ -35,7 +36,6 @@ from ..models import (
     ReportDispatchLog,
     SanitaryLog,
 )
-from ..constants import DEFAULT_FEED_PRICE_PER_KG, ECONOMIC_DEFAULTS_BY_SPECIES
 from .base import BaseService
 
 logger = logging.getLogger(__name__)
@@ -47,7 +47,7 @@ class ReportService(BaseService):
     """Service central des rapports de production."""
 
     @staticmethod
-    def build_period_bounds(report_type: str, reference_date: Optional[date] = None) -> Tuple[date, date]:
+    def build_period_bounds(report_type: str, reference_date: date | None = None) -> tuple[date, date]:
         """
         Construit les bornes de période à partir d'une date de référence.
 
@@ -82,7 +82,7 @@ class ReportService(BaseService):
         report_type: str,
         period_start: date,
         period_end: date,
-        cycle_id: Optional[str] = None,
+        cycle_id: str | None = None,
     ) -> ProductionReport:
         """
         Génère (ou régénère) un rapport consolidé pour une ferme et une période.
@@ -245,7 +245,7 @@ class ReportService(BaseService):
         report: ProductionReport,
         user: User,
         recipient: str = '',
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> ProductionReport:
         """Marque le rapport comme partagé sur WhatsApp (audit manuel)."""
         report.whatsapp_status = 'shared'
@@ -263,21 +263,21 @@ class ReportService(BaseService):
         return report
 
     @staticmethod
-    def generate_daily_drafts(reference_date: Optional[date] = None) -> int:
+    def generate_daily_drafts(reference_date: date | None = None) -> int:
         """Génère les brouillons journaliers pour toutes les fermes actives."""
         ref = reference_date or timezone.localdate()
         start, end = ReportService.build_period_bounds('daily', ref)
         return ReportService._generate_for_all_active_farms('daily', start, end)
 
     @staticmethod
-    def generate_weekly_drafts(reference_date: Optional[date] = None) -> int:
+    def generate_weekly_drafts(reference_date: date | None = None) -> int:
         """Génère les brouillons hebdomadaires pour toutes les fermes actives."""
         ref = reference_date or timezone.localdate()
         start, end = ReportService.build_period_bounds('weekly', ref)
         return ReportService._generate_for_all_active_farms('weekly', start, end)
 
     @staticmethod
-    def generate_monthly_drafts(reference_date: Optional[date] = None) -> int:
+    def generate_monthly_drafts(reference_date: date | None = None) -> int:
         """Génère les brouillons mensuels pour toutes les fermes actives."""
         ref = reference_date or timezone.localdate()
         start, end = ReportService.build_period_bounds('monthly', ref)
@@ -316,8 +316,8 @@ class ReportService(BaseService):
         report_type: str,
         period_start: date,
         period_end: date,
-        cycle_id: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        cycle_id: str | None = None,
+    ) -> dict[str, Any]:
         """Construit le snapshot JSON complet utilisé pour le PDF."""
         cycles_qs = ProductionCycle.objects.filter(
             farm_profile=farm_profile,
@@ -351,7 +351,7 @@ class ReportService(BaseService):
             ),
         ).order_by('start_date')
 
-        scoped_cycle: Optional[ProductionCycle] = None
+        scoped_cycle: ProductionCycle | None = None
         if cycle_id:
             cycles_qs = cycles_qs.filter(id=cycle_id)
             scoped_cycle = cycles_qs.first()
@@ -361,7 +361,7 @@ class ReportService(BaseService):
         # Évaluation unique du queryset — les Prefetch sont chargés ici
         cycles = list(cycles_qs)
 
-        cycle_sections: List[Dict[str, Any]] = []
+        cycle_sections: list[dict[str, Any]] = []
         global_total_feed = 0.0
         global_total_mortality = 0
         global_log_count = 0
@@ -375,13 +375,13 @@ class ReportService(BaseService):
 
             # Agrégat Python — 0 requête DB supplémentaire
             if logs:
-                weights = [float(l.average_weight) for l in logs if l.average_weight is not None]
-                temps = [float(l.water_temperature) for l in logs if l.water_temperature is not None]
-                oxygens = [float(l.dissolved_oxygen) for l in logs if l.dissolved_oxygen is not None]
-                phs = [float(l.ph_level) for l in logs if l.ph_level is not None]
+                weights = [float(log.average_weight) for log in logs if log.average_weight is not None]
+                temps = [float(log.water_temperature) for log in logs if log.water_temperature is not None]
+                oxygens = [float(log.dissolved_oxygen) for log in logs if log.dissolved_oxygen is not None]
+                phs = [float(log.ph_level) for log in logs if log.ph_level is not None]
                 logs_agg = {
-                    'total_feed': sum(float(l.feed_quantity or 0) for l in logs),
-                    'total_mortality': sum(int(l.mortality_count or 0) for l in logs),
+                    'total_feed': sum(float(log.feed_quantity or 0) for log in logs),
+                    'total_mortality': sum(int(log.mortality_count or 0) for log in logs),
                     'avg_weight': sum(weights) / len(weights) if weights else None,
                     'avg_temp': sum(temps) / len(temps) if temps else None,
                     'avg_oxygen': sum(oxygens) / len(oxygens) if oxygens else None,
@@ -428,6 +428,7 @@ class ReportService(BaseService):
 
             time_remaining_days = ReportService._calculate_cycle_days_remaining(cycle)
             direct_production_cost_fcfa = round(feed_cost_consumed_fcfa + (fingerlings_cost or 0.0), 0)
+            cycle_metrics = getattr(cycle, 'metrics', None)
 
             cycle_sections.append({
                 'cycle': {
@@ -461,10 +462,18 @@ class ReportService(BaseService):
                     'total_feed_consumed': ReportService._to_float(cycle.total_feed_consumed),
                     'survival_rate': ReportService._to_float(cycle.survival_rate),
                     'fcr': ReportService._to_float(cycle.fcr),
-                    'daily_growth_rate': ReportService._to_float(getattr(cycle.metrics, 'daily_growth_rate', None)) if hasattr(cycle, 'metrics') else None,
-                    'specific_growth_rate': ReportService._to_float(getattr(cycle.metrics, 'specific_growth_rate', None)) if hasattr(cycle, 'metrics') else None,
-                    'average_daily_feed': ReportService._to_float(getattr(cycle.metrics, 'average_daily_feed', None)) if hasattr(cycle, 'metrics') else None,
-                    'performance_score': ReportService._to_float(getattr(cycle.metrics, 'performance_score', None)) if hasattr(cycle, 'metrics') else None,
+                    'daily_growth_rate': ReportService._to_float(
+                        getattr(cycle_metrics, 'daily_growth_rate', None)
+                    ),
+                    'specific_growth_rate': ReportService._to_float(
+                        getattr(cycle_metrics, 'specific_growth_rate', None)
+                    ),
+                    'average_daily_feed': ReportService._to_float(
+                        getattr(cycle_metrics, 'average_daily_feed', None)
+                    ),
+                    'performance_score': ReportService._to_float(
+                        getattr(cycle_metrics, 'performance_score', None)
+                    ),
                 },
                 'period_metrics': {
                     'log_count': len(logs),
@@ -559,7 +568,7 @@ class ReportService(BaseService):
         }
 
     @staticmethod
-    def _default_selling_price_for_species(species: Optional[str]) -> float:
+    def _default_selling_price_for_species(species: str | None) -> float:
         defaults = ECONOMIC_DEFAULTS_BY_SPECIES.get(
             species or 'tilapia',
             ECONOMIC_DEFAULTS_BY_SPECIES['tilapia'],
@@ -567,7 +576,7 @@ class ReportService(BaseService):
         return ReportService._to_float(defaults.get('planned_selling_price_per_kg_fcfa')) or 0.0
 
     @staticmethod
-    def _calculate_cycle_days_remaining(cycle: ProductionCycle) -> Optional[int]:
+    def _calculate_cycle_days_remaining(cycle: ProductionCycle) -> int | None:
         today = timezone.localdate()
 
         if cycle.planned_harvest_date:
@@ -580,7 +589,7 @@ class ReportService(BaseService):
         return None
 
     @staticmethod
-    def _resolve_language_code(user: Optional[User]) -> str:
+    def _resolve_language_code(user: User | None) -> str:
         available_languages = {code for code, _label in getattr(settings, 'LANGUAGES', [('fr', 'Français')])}
         preferred = (getattr(user, 'language_preference', '') or '').split('-')[0].lower()
         if preferred in available_languages:
@@ -642,8 +651,8 @@ class ReportService(BaseService):
         )
 
     @staticmethod
-    def _extract_cycle_names(report: ProductionReport) -> List[str]:
-        names: List[str] = []
+    def _extract_cycle_names(report: ProductionReport) -> list[str]:
+        names: list[str] = []
         payload = report.payload if isinstance(report.payload, dict) else {}
         sections = payload.get('cycles') if isinstance(payload, dict) else []
 
@@ -759,7 +768,7 @@ class ReportService(BaseService):
         )
 
     @staticmethod
-    def _build_pdf_labels(language_code: str) -> Dict[str, str]:
+    def _build_pdf_labels(language_code: str) -> dict[str, str]:
         is_en = language_code == 'en'
         if is_en:
             return {
@@ -883,10 +892,10 @@ class ReportService(BaseService):
     @staticmethod
     def _build_pdf_context(
         report: ProductionReport,
-        payload: Dict[str, Any],
+        payload: dict[str, Any],
         generated_at: datetime,
         language_code: str,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         return {
             'report': report,
             'payload': payload,
@@ -947,9 +956,9 @@ class ReportService(BaseService):
     @staticmethod
     def _render_pdf(
         report: ProductionReport,
-        payload: Dict[str, Any],
+        payload: dict[str, Any],
         generated_at: datetime,
-        language_code: Optional[str] = None,
+        language_code: str | None = None,
     ) -> bytes:
         from weasyprint import HTML
 
@@ -974,11 +983,11 @@ class ReportService(BaseService):
         report: ProductionReport,
         channel: str,
         status: str,
-        dispatched_by: Optional[User] = None,
+        dispatched_by: User | None = None,
         recipient: str = '',
         error_code: str = '',
         error_message: str = '',
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> ReportDispatchLog:
         return ReportDispatchLog.objects.create(
             report=report,
@@ -992,7 +1001,7 @@ class ReportService(BaseService):
         )
 
     @staticmethod
-    def _to_float(value: Any) -> Optional[float]:
+    def _to_float(value: Any) -> float | None:
         if value is None:
             return None
         if isinstance(value, Decimal):

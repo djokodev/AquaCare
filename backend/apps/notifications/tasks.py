@@ -3,13 +3,14 @@ Celery tasks pour l'envoi asynchrone de notifications email et push.
 """
 
 import logging
+
 import requests
 from celery import shared_task
-from django.core.mail import send_mail
 from django.conf import settings
+from django.core.mail import send_mail
 from django.template.loader import render_to_string
-from django.utils.html import strip_tags
 from django.utils import timezone
+from django.utils.html import strip_tags
 
 from .models import Notification, PushToken
 

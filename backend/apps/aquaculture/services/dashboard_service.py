@@ -3,16 +3,15 @@ Service métier pour la construction des données du dashboard aquaculture.
 """
 import logging
 from datetime import date, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from django.core.cache import cache
-from django.db.models import Avg, Sum, Q, Prefetch
+from django.db.models import Avg, Prefetch, Q, Sum
 from django.utils import timezone
-
 from notifications.models import Notification
 
-from ..models import ProductionCycle, CycleLog, FeedingPlan, SanitaryLog
 from ..domain.calculators import AquacultureCalculator
+from ..models import CycleLog, FeedingPlan, ProductionCycle, SanitaryLog
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +22,7 @@ class DashboardService:
     CACHE_TTL_SECONDS = 60
 
     @staticmethod
-    def build_dashboard_data(user, farm_profile, cycle_id: Optional[str] = None) -> Dict[str, Any]:
+    def build_dashboard_data(user, farm_profile, cycle_id: str | None = None) -> dict[str, Any]:
         """
         Construit les données complètes du dashboard.
 
@@ -131,10 +130,10 @@ class DashboardService:
         return SanitaryLog.objects.filter(**filters).select_related('cycle')[:5]
 
     @staticmethod
-    def _prepare_growth_chart_data(cycles) -> List[Dict]:
+    def _prepare_growth_chart_data(cycles) -> list[dict]:
         chart_data = []
         for cycle in cycles:
-            logs = [l for l in cycle.prefetched_logs if l.average_weight is not None][:30]
+            logs = [log for log in cycle.prefetched_logs if log.average_weight is not None][:30]
             if logs:
                 chart_data.append({
                     'cycle_name': cycle.cycle_name,
@@ -150,10 +149,10 @@ class DashboardService:
         return chart_data
 
     @staticmethod
-    def _prepare_mortality_chart_data(cycles) -> List[Dict]:
+    def _prepare_mortality_chart_data(cycles) -> list[dict]:
         chart_data = []
         for cycle in cycles:
-            logs = [l for l in cycle.prefetched_logs if l.mortality_count and l.mortality_count > 0]
+            logs = [log for log in cycle.prefetched_logs if log.mortality_count and log.mortality_count > 0]
             if logs:
                 cumulative_mortality = 0
                 mortality_series = []
@@ -173,10 +172,10 @@ class DashboardService:
         return chart_data
 
     @staticmethod
-    def _prepare_feed_chart_data(cycles) -> List[Dict]:
+    def _prepare_feed_chart_data(cycles) -> list[dict]:
         chart_data = []
         for cycle in cycles:
-            logs = [l for l in cycle.prefetched_logs if l.feed_quantity is not None]
+            logs = [log for log in cycle.prefetched_logs if log.feed_quantity is not None]
             if logs:
                 cumulative_feed = 0
                 feed_series = []
@@ -195,12 +194,13 @@ class DashboardService:
         return chart_data
 
     @staticmethod
-    def _build_environmental_alerts(cycles) -> List[Dict]:
+    def _build_environmental_alerts(cycles) -> list[dict]:
         environmental_alerts = []
         for cycle in cycles:
             env_logs = [
-                l for l in cycle.prefetched_logs
-                if l.water_temperature is not None or l.ph_level is not None or l.dissolved_oxygen is not None
+                log
+                for log in cycle.prefetched_logs
+                if log.water_temperature is not None or log.ph_level is not None or log.dissolved_oxygen is not None
             ]
             latest_log = env_logs[-1] if env_logs else None
             if latest_log:
@@ -215,7 +215,7 @@ class DashboardService:
         return environmental_alerts
 
     @staticmethod
-    def _get_feeding_recommendations(cycles) -> Dict:
+    def _get_feeding_recommendations(cycles) -> dict:
         recommendations = {}
         for cycle in cycles:
             latest_log = cycle.prefetched_logs[-1] if cycle.prefetched_logs else None

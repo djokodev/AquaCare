@@ -1,18 +1,20 @@
 """
 Dashboard Views pour le module aquaculture.
 """
-from rest_framework import status, permissions
+from django.utils.translation import gettext_lazy as _
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import OpenApiExample, OpenApiParameter, extend_schema
+from notifications.serializers import NotificationSerializer
+from rest_framework import permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from django.utils.translation import gettext_lazy as _
-from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
-from drf_spectacular.types import OpenApiTypes
-
-from notifications.serializers import NotificationSerializer
 
 from ..serializers import (
-    ProductionCycleSerializer, CycleLogSerializer,
-    FeedingPlanSerializer, SanitaryLogSerializer, DashboardSerializer,
+    CycleLogSerializer,
+    DashboardSerializer,
+    FeedingPlanSerializer,
+    ProductionCycleSerializer,
+    SanitaryLogSerializer,
 )
 from ..services.dashboard_service import DashboardService
 

@@ -4,13 +4,13 @@ Tests unitaires ciblés pour ReportService (emails + rendu template PDF).
 from datetime import date
 
 import pytest
+from aquaculture.models import ProductionReport
+from aquaculture.services.report_service import ReportService
 from django.core import mail
 from django.core.files.base import ContentFile
 from django.template.loader import render_to_string
 from django.utils import timezone
 
-from aquaculture.models import ProductionReport
-from aquaculture.services.report_service import ReportService
 from tests.fixtures.factories import FarmProfileFactory, ProductionCycleFactory, UserFactory
 
 

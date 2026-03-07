@@ -1,11 +1,10 @@
-# coding: utf-8
 """
 DRF serializers for chat API.
 Transform models to/from JSON format for REST endpoints.
 """
 
-from rest_framework import serializers
 from django.contrib.auth import get_user_model
+from rest_framework import serializers
 
 from .models import Conversation, Message
 

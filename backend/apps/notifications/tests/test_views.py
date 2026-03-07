@@ -7,12 +7,11 @@ Couvre :
 - PushTokenViewSet (register, deactivate)
 """
 import pytest
-from rest_framework.test import APIClient
-from rest_framework import status
 from django.urls import reverse
 from django.utils import timezone
-
-from notifications.models import Notification, NotificationPreference, PushToken
+from notifications.models import Notification, PushToken
+from rest_framework import status
+from rest_framework.test import APIClient
 
 
 @pytest.fixture

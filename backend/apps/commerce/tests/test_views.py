@@ -2,15 +2,15 @@
 Tests unitaires pour les API ViewSets.
 Coverage: ProductViewSet, OrderViewSet endpoints.
 """
-import pytest
 from datetime import date
 from decimal import Decimal
-from rest_framework.test import APIClient
-from rest_framework import status
 
-from commerce.models import Product, Order
-from accounts.models import User, FarmProfile
+import pytest
+from accounts.models import FarmProfile, User
 from aquaculture.models import ProductionCycle
+from commerce.models import Order, Product
+from rest_framework import status
+from rest_framework.test import APIClient
 
 
 @pytest.mark.django_db
@@ -322,7 +322,6 @@ class TestOrderViewSet:
         """Un utilisateur B ne peut pas accéder aux suggestions produits du cycle d'un utilisateur A."""
         from aquaculture.models import ProductionCycle
 
-        user_a = test_farm.user
         user_b = User.objects.create_user(
             phone_number="+237666555444",
             password="testpass123",

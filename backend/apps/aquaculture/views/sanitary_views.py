@@ -3,18 +3,18 @@ Sanitary Views pour le module aquaculture.
 """
 import logging
 
-from rest_framework import viewsets, status, permissions
-from rest_framework.decorators import action
-from rest_framework.response import Response
-from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.utils.translation import gettext_lazy as _
-from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiExample
 from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import OpenApiExample, OpenApiParameter, extend_schema, extend_schema_view
+from rest_framework import permissions, status, viewsets
+from rest_framework.decorators import action
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
+from rest_framework.response import Response
 
+from ..domain.exceptions import InvalidSanitaryDataException, SanitaryLogNotFoundException
 from ..models import SanitaryLog
 from ..serializers import SanitaryLogSerializer
 from ..services import SanitaryService
-from ..domain.exceptions import InvalidSanitaryDataException, SanitaryLogNotFoundException
 
 logger = logging.getLogger(__name__)
 

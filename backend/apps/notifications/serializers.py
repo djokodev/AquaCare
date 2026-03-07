@@ -3,6 +3,7 @@ Serializers pour l'API REST des notifications.
 """
 
 from rest_framework import serializers
+
 from .models import Notification, NotificationPreference, PushToken
 
 

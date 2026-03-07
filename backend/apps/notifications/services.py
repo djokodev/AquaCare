@@ -4,15 +4,16 @@ Utilisable par tous les modules (aquaculture, commerce, chat, support).
 """
 
 import logging
-from django.utils import timezone
-from django.db import transaction
+from typing import Any
+
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.contenttypes.models import ContentType
-from django.conf import settings
-from typing import List, Dict, Optional, Any
+from django.db import transaction
+from django.utils import timezone
 
-from .models import Notification, NotificationPreference
 from .constants import DEFAULT_CHANNELS_BY_TYPE, DEFAULT_PRIORITY_BY_TYPE
+from .models import Notification, NotificationPreference
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -32,12 +33,12 @@ class NotificationService:
         title: str,
         message: str,
         content_object: Any = None,
-        metadata: Optional[Dict] = None,
-        channels: Optional[List[str]] = None,
-        priority: Optional[str] = None,
-        scheduled_for: Optional[timezone.datetime] = None,
+        metadata: dict | None = None,
+        channels: list[str] | None = None,
+        priority: str | None = None,
+        scheduled_for: timezone.datetime | None = None,
         send_immediately: bool = False
-    ) -> Optional[Notification]:
+    ) -> Notification | None:
         """
         Crée une notification générique.
 
@@ -172,14 +173,14 @@ class NotificationService:
 
     @staticmethod
     def create_bulk_notifications(
-        users: List[User],
+        users: list[User],
         notification_type: str,
         title: str,
         message: str,
-        metadata: Optional[Dict] = None,
-        channels: Optional[List[str]] = None,
-        priority: Optional[str] = None,
-        scheduled_for: Optional[timezone.datetime] = None
+        metadata: dict | None = None,
+        channels: list[str] | None = None,
+        priority: str | None = None,
+        scheduled_for: timezone.datetime | None = None
     ) -> int:
         """
         Crée des notifications pour plusieurs utilisateurs en masse.
@@ -357,10 +358,10 @@ class NotificationService:
     @staticmethod
     def get_user_notifications(
         user: User,
-        is_read: Optional[bool] = None,
-        notification_type: Optional[str] = None,
+        is_read: bool | None = None,
+        notification_type: str | None = None,
         limit: int = 50
-    ) -> List[Notification]:
+    ) -> list[Notification]:
         """
         Récupère les notifications d'un user avec filtres.
 

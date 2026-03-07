@@ -1,10 +1,8 @@
-# coding: utf-8
 """
 Conversation domain service.
 Handles conversation lifecycle and retrieval with permission checks.
 """
 
-from typing import Optional
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.db.models import F
@@ -66,8 +64,8 @@ class ConversationService:
         Raises:
             ConversationNotFound: If user has no conversation yet
         """
-        from ..models import Conversation
         from ..domain.exceptions import ConversationNotFound
+        from ..models import Conversation
 
         try:
             return Conversation.objects.get(user=user)
@@ -96,8 +94,8 @@ class ConversationService:
             ConversationNotFound: If conversation doesn't exist
             UnauthorizedAccess: If user tries to access other user's conversation
         """
-        from ..models import Conversation
         from ..domain.exceptions import ConversationNotFound, UnauthorizedAccess
+        from ..models import Conversation
 
         try:
             conversation = Conversation.objects.get(id=conversation_id)

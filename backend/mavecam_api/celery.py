@@ -8,6 +8,7 @@ Celery est utilisé pour les tâches asynchrones :
 """
 
 import os
+
 from celery import Celery
 from celery.schedules import crontab
 

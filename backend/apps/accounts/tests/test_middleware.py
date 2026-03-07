@@ -3,20 +3,17 @@ Tests unitaires pour les middleware personnalisés.
 
 Teste le rate limiting, la détection de langue, etc.
 """
-import pytest
 import json
 import time
 from unittest.mock import Mock, patch
-from django.http import HttpRequest, JsonResponse
+
+import pytest
+from accounts.middleware import APIResponseLanguageMiddleware, LoginRateLimitMiddleware, UserLanguageMiddleware
 from django.contrib.auth import get_user_model
-from django.test import RequestFactory
 from django.contrib.sessions.middleware import SessionMiddleware
 from django.core.cache import cache
-from accounts.middleware import (
-    UserLanguageMiddleware,
-    APIResponseLanguageMiddleware,
-    LoginRateLimitMiddleware
-)
+from django.http import JsonResponse
+from django.test import RequestFactory
 
 User = get_user_model()
 
@@ -44,7 +41,7 @@ class TestUserLanguageMiddleware:
     def test_user_language_preference_used_when_authenticated(self):
         """Test utilisation langue préférée utilisateur connecté."""
         # Créer un utilisateur avec préférence EN
-        with patch('django.contrib.auth.get_user_model') as mock_get_user:
+        with patch("django.contrib.auth.get_user_model"):
             request = self.factory.get('/')
             request = add_session_to_request(request)
             request.user = Mock()

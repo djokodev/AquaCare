@@ -1,14 +1,20 @@
 import uuid
+
 from django.contrib.auth.models import AbstractUser
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.translation import gettext_lazy as _
-from .managers import UserManager
-from .validators import validate_cameroon_phone, normalize_phone_number
+
 from .constants import (
-    ACCOUNT_TYPE_CHOICES, ACTIVITY_TYPE_CHOICES, LEGAL_STATUS_CHOICES,
-    REGION_CHOICES, AGE_GROUP_CHOICES, LANGUAGE_CHOICES
+    ACCOUNT_TYPE_CHOICES,
+    ACTIVITY_TYPE_CHOICES,
+    AGE_GROUP_CHOICES,
+    LANGUAGE_CHOICES,
+    LEGAL_STATUS_CHOICES,
+    REGION_CHOICES,
 )
+from .managers import UserManager
+from .validators import normalize_phone_number, validate_cameroon_phone
 
 
 class User(AbstractUser):

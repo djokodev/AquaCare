@@ -3,18 +3,14 @@ Modèles pour le système de notifications multi-canal.
 """
 
 import uuid
-from django.db import models
+
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
-from django.utils.translation import gettext_lazy as _
+from django.db import models
 from django.utils import timezone
+from django.utils.translation import gettext_lazy as _
 
-from .constants import (
-    NOTIFICATION_TYPES,
-    NOTIFICATION_CHANNELS,
-    EMAIL_FREQUENCIES,
-    NOTIFICATION_PRIORITIES
-)
+from .constants import EMAIL_FREQUENCIES, NOTIFICATION_PRIORITIES, NOTIFICATION_TYPES
 
 
 class Notification(models.Model):

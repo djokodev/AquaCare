@@ -7,19 +7,20 @@ Gère création, validation, calculs automatiques et notifications.
 import logging
 from datetime import datetime
 from decimal import Decimal
-from typing import List, Dict, Any, Optional
-from django.db import transaction, IntegrityError
+from typing import Any
+
+from django.db import IntegrityError, transaction
+from django.db.models import Count, QuerySet, Sum
 from django.utils import timezone
-from django.db.models import QuerySet, Sum, Count
 
-logger = logging.getLogger(__name__)
-
-from ..models import Order, OrderItem
 from ..domain.calculators import DeliveryFeeCalculator, OrderTotalCalculator
-from ..domain.validators import OrderValidator
 from ..domain.exceptions import InvalidOrderError
+from ..domain.validators import OrderValidator
+from ..models import Order, OrderItem
 from .base import BaseCommerceService
 from .product_service import ProductService
+
+logger = logging.getLogger(__name__)
 
 
 class OrderService(BaseCommerceService):
@@ -38,10 +39,10 @@ class OrderService(BaseCommerceService):
     @transaction.atomic
     def create_order(
         user,
-        items_data: List[Dict[str, Any]],
+        items_data: list[dict[str, Any]],
         delivery_method: str,
-        pickup_location: Optional[str] = None,
-        client_uuid: Optional[str] = None,
+        pickup_location: str | None = None,
+        client_uuid: str | None = None,
         created_offline: bool = False
     ) -> Order:
         """
@@ -192,7 +193,7 @@ class OrderService(BaseCommerceService):
         return order
 
     @staticmethod
-    def _build_delivery_address_snapshot(user) -> Dict[str, str]:
+    def _build_delivery_address_snapshot(user) -> dict[str, str]:
         """
         Construit snapshot adresse utilisateur pour commande.
 
@@ -225,7 +226,7 @@ class OrderService(BaseCommerceService):
         }
 
     @staticmethod
-    def _normalize_region(region: Optional[str]) -> str:
+    def _normalize_region(region: str | None) -> str:
         """Normalise le nom de région pour les règles métier."""
         return (region or '').strip().lower()
 
@@ -236,7 +237,7 @@ class OrderService(BaseCommerceService):
         pickup_location: str,
         client_uuid,
         created_offline: bool,
-        delivery_address_data: Dict[str, str],
+        delivery_address_data: dict[str, str],
         subtotal: Decimal,
         delivery_fee: Decimal,
         total: Decimal,
@@ -380,8 +381,8 @@ class OrderService(BaseCommerceService):
     @staticmethod
     def get_user_orders(
         user,
-        status: Optional[str] = None,
-        limit: Optional[int] = None
+        status: str | None = None,
+        limit: int | None = None
     ) -> QuerySet:
         """
         Récupère les commandes d'un utilisateur.
@@ -439,7 +440,7 @@ class OrderService(BaseCommerceService):
             .get(id=order_id, user=user)
 
     @staticmethod
-    def get_order_statistics(user) -> Dict[str, Any]:
+    def get_order_statistics(user) -> dict[str, Any]:
         """
         Calcule statistiques commandes pour un utilisateur.
 
@@ -485,9 +486,9 @@ class OrderService(BaseCommerceService):
     @staticmethod
     def calculate_delivery_fee_preview(
         user,
-        items_data: List[Dict[str, Any]],
+        items_data: list[dict[str, Any]],
         delivery_method: str
-    ) -> Dict[str, Decimal]:
+    ) -> dict[str, Decimal]:
         """
         Calcule preview des montants avant création commande.
 

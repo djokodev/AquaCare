@@ -1,4 +1,3 @@
-# coding: utf-8
 """
 Auto-response service for system-generated messages.
 Handles automated acknowledgment messages when user sends first message.

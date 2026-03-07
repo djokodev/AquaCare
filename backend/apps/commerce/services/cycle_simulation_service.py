@@ -6,24 +6,19 @@ Calcule automatiquement : aliments nécessaires, coûts, phases, ROI estimé.
 """
 import math
 from decimal import Decimal
-from typing import Dict, List, Optional
+
 from django.db.models import QuerySet
 
-from ..models import Product
-from ..domain.growth_calculator import (
-    GrowthCalculator,
-    FeedingCalculator,
-    PhaseDetector,
-    ROICalculator
-)
 from ..constants import (
-    SURVIVAL_RATE_DEFAULT,
-    INITIAL_WEIGHT_DEFAULT,
-    TARGET_WEIGHT_TILAPIA_DEFAULT,
-    TARGET_WEIGHT_CATFISH_DEFAULT,
+    CYCLE_DURATION_DEFAULT_CATFISH,
     CYCLE_DURATION_DEFAULT_TILAPIA,
-    CYCLE_DURATION_DEFAULT_CATFISH
+    INITIAL_WEIGHT_DEFAULT,
+    SURVIVAL_RATE_DEFAULT,
+    TARGET_WEIGHT_CATFISH_DEFAULT,
+    TARGET_WEIGHT_TILAPIA_DEFAULT,
 )
+from ..domain.growth_calculator import FeedingCalculator, GrowthCalculator, PhaseDetector, ROICalculator
+from ..models import Product
 from .base import BaseCommerceService
 
 
@@ -42,14 +37,14 @@ class CycleSimulationService(BaseCommerceService):
     def simulate_cycle(
         species: str,
         initial_fish_count: int,
-        initial_weight_g: Optional[float] = None,
-        target_weight_g: Optional[float] = None,
-        cycle_duration_days: Optional[int] = None,
-        survival_rate: Optional[float] = None,
-        selling_price_per_kg_fcfa: Optional[float] = None,
-        fingerlings_cost_fcfa: Optional[float] = None,
-        other_costs_fcfa: Optional[float] = None,
-    ) -> Dict:
+        initial_weight_g: float | None = None,
+        target_weight_g: float | None = None,
+        cycle_duration_days: int | None = None,
+        survival_rate: float | None = None,
+        selling_price_per_kg_fcfa: float | None = None,
+        fingerlings_cost_fcfa: float | None = None,
+        other_costs_fcfa: float | None = None,
+    ) -> dict:
         """
         Simule un cycle complet avec estimation détaillée des besoins.
 
@@ -139,14 +134,14 @@ class CycleSimulationService(BaseCommerceService):
     def _build_simulation_params(
         species: str,
         initial_fish_count: int,
-        initial_weight_g: Optional[float],
-        target_weight_g: Optional[float],
-        cycle_duration_days: Optional[int],
-        survival_rate: Optional[float],
-        selling_price_per_kg_fcfa: Optional[float],
-        fingerlings_cost_fcfa: Optional[float],
-        other_costs_fcfa: Optional[float],
-    ) -> Dict:
+        initial_weight_g: float | None,
+        target_weight_g: float | None,
+        cycle_duration_days: int | None,
+        survival_rate: float | None,
+        selling_price_per_kg_fcfa: float | None,
+        fingerlings_cost_fcfa: float | None,
+        other_costs_fcfa: float | None,
+    ) -> dict:
         """Construit les paramètres de simulation avec valeurs par défaut."""
 
         normalized_species = CycleSimulationService._normalize_species(species)
@@ -184,10 +179,10 @@ class CycleSimulationService(BaseCommerceService):
 
     @staticmethod
     def _calculate_phase_details(
-        phase: Dict,
-        params: Dict,
-        weight_progression: List[Dict]
-    ) -> Dict:
+        phase: dict,
+        params: dict,
+        weight_progression: list[dict]
+    ) -> dict:
         """
         Calcule consommation et produits nécessaires pour une phase.
 
@@ -253,7 +248,7 @@ class CycleSimulationService(BaseCommerceService):
     def _convert_kg_to_bags(
         total_kg: Decimal,
         available_products: QuerySet
-    ) -> List[Dict]:
+    ) -> list[dict]:
         """
         Convertit une quantité en kg en sacs optimisés (20kg + 1kg).
 
@@ -318,10 +313,10 @@ class CycleSimulationService(BaseCommerceService):
 
     @staticmethod
     def _calculate_summary(
-        params: Dict,
+        params: dict,
         total_feed_kg: Decimal,
         total_cost: Decimal
-    ) -> Dict:
+    ) -> dict:
         """
         Calcule le résumé avec ROI, FCR, revenus.
 

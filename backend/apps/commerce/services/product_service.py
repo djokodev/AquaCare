@@ -4,13 +4,13 @@ Service de gestion des produits du catalogue MAVECAM AquaCare.
 Architecture Clean : Service stateless avec méthodes statiques.
 Gère recherche, filtrage et recommandations de produits alimentaires.
 """
-from typing import Optional
 from decimal import Decimal
-from django.db.models import QuerySet, Q
 
-from ..models import Product
+from django.db.models import Q, QuerySet
+
 from ..domain.calculators import ProductRecommendationCalculator
-from ..domain.exceptions import ProductNotFoundError, ProductNotAvailableError
+from ..domain.exceptions import ProductNotAvailableError, ProductNotFoundError
+from ..models import Product
 from .base import BaseCommerceService
 
 
@@ -103,7 +103,7 @@ class ProductService(BaseCommerceService):
         ).order_by('phase', 'pellet_size_mm')
 
     @staticmethod
-    def filter_by_phase(phase: str, species: Optional[str] = None) -> QuerySet:
+    def filter_by_phase(phase: str, species: str | None = None) -> QuerySet:
         """
         Filtre produits par phase d'élevage.
 
@@ -175,7 +175,7 @@ class ProductService(BaseCommerceService):
         ).order_by('species', 'phase', 'pellet_size_mm')
 
     @staticmethod
-    def get_recommended_product(species: str, weight_g: float) -> Optional[Product]:
+    def get_recommended_product(species: str, weight_g: float) -> Product | None:
         """
         Recommande le produit adapté selon espèce et poids poisson.
 
@@ -248,7 +248,7 @@ class ProductService(BaseCommerceService):
         return ProductService.filter_by_species(cycle.species)
 
     @staticmethod
-    def get_price_range(species: Optional[str] = None, phase: Optional[str] = None) -> dict:
+    def get_price_range(species: str | None = None, phase: str | None = None) -> dict:
         """
         Calcule la fourchette de prix (min/max) selon filtres.
 
@@ -264,7 +264,7 @@ class ProductService(BaseCommerceService):
             >>> range_catfish
             {'min': Decimal('17500'), 'max': Decimal('100000'), 'avg': Decimal('30000')}
         """
-        from django.db.models import Min, Max, Avg
+        from django.db.models import Avg, Max, Min
 
         queryset = Product.objects.filter(is_available=True)
 

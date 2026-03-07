@@ -1,22 +1,21 @@
-# coding: utf-8
 """
 Message domain service.
 Handles message creation, retrieval, read status, and offline sync deduplication.
 """
 
-from typing import Optional
+
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import UploadedFile
 from django.db import transaction
 from django.utils import timezone
-from django.core.files.uploadedfile import UploadedFile
 
-from ..domain.value_objects import MessageContent, MediaAttachment
 from ..domain.exceptions import (
-    InvalidMessageContent,
-    InvalidMediaFormat,
-    MediaTooLarge,
     ClientUUIDConflict,
+    InvalidMediaFormat,
+    InvalidMessageContent,
+    MediaTooLarge,
 )
+from ..domain.value_objects import MediaAttachment, MessageContent
 from .conversation_service import ConversationService
 
 User = get_user_model()
@@ -39,9 +38,9 @@ class MessageService:
     def send_user_message(
         user,
         content: str,
-        media_file: Optional[UploadedFile] = None,
-        media_type: Optional[str] = None,
-        client_uuid: Optional[str] = None,
+        media_file: UploadedFile | None = None,
+        media_type: str | None = None,
+        client_uuid: str | None = None,
         created_offline: bool = False
     ):
         """
@@ -74,14 +73,14 @@ class MessageService:
 
         # Validate content using Domain Value Object
         try:
-            message_content = MessageContent(text=content)
+            MessageContent(text=content)
         except ValueError as e:
             raise InvalidMessageContent(str(e))
 
         # Validate media if provided
         if media_file and media_type:
             try:
-                media_attachment = MediaAttachment(
+                MediaAttachment(
                     file_path=media_file.name,
                     media_type=media_type,
                     file_size_bytes=media_file.size,
@@ -138,8 +137,8 @@ class MessageService:
         conversation,
         admin_user,
         content: str,
-        media_file: Optional[UploadedFile] = None,
-        media_type: Optional[str] = None,
+        media_file: UploadedFile | None = None,
+        media_type: str | None = None,
     ):
         """
         Admin sends message to user.
@@ -165,14 +164,14 @@ class MessageService:
 
         # Validate content
         try:
-            message_content = MessageContent(text=content)
+            MessageContent(text=content)
         except ValueError as e:
             raise InvalidMessageContent(str(e))
 
         # Validate media if provided
         if media_file and media_type:
             try:
-                media_attachment = MediaAttachment(
+                MediaAttachment(
                     file_path=media_file.name,
                     media_type=media_type,
                     file_size_bytes=media_file.size,
@@ -245,7 +244,6 @@ class MessageService:
             conversation: Conversation instance
             reader_is_admin: True if admin is reading, False if user is reading
         """
-        from ..models import Message
 
         if reader_is_admin:
             # Admin reading user messages

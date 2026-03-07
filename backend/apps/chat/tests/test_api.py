@@ -1,18 +1,17 @@
-# coding: utf-8
 """
 Tests for chat API endpoints.
 
 Tests HTTP layer: viewsets, serializers, permissions, and API responses.
 """
-import pytest
 import uuid
 from unittest.mock import patch
+
+import pytest
+from chat.models import Message
+from chat.services import ConversationService, MessageService
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
 from rest_framework import status
-from django.core.files.uploadedfile import SimpleUploadedFile
-
-from chat.models import Conversation, Message
-from chat.services import ConversationService, MessageService
 
 
 @pytest.mark.django_db
@@ -33,7 +32,7 @@ class TestConversationListAPI:
 
         # Create another user's conversation
         other_user = user_factory()
-        other_conv = ConversationService.get_or_create_conversation(other_user)
+        ConversationService.get_or_create_conversation(other_user)
 
         url = reverse('conversation-list')
         response = auth_client.get(url)
@@ -53,8 +52,8 @@ class TestConversationListAPI:
         # Create multiple conversations
         user1 = user_factory()
         user2 = user_factory()
-        conv1 = ConversationService.get_or_create_conversation(user1)
-        conv2 = ConversationService.get_or_create_conversation(user2)
+        ConversationService.get_or_create_conversation(user1)
+        ConversationService.get_or_create_conversation(user2)
 
         url = reverse('conversation-list')
         response = api_client.get(url)
@@ -608,7 +607,7 @@ class TestBulkNotificationTask:
         from chat.tasks import notify_admins_new_user_message_task
         from notifications.models import Notification
 
-        conversation = ConversationService.get_or_create_conversation(authenticated_user)
+        ConversationService.get_or_create_conversation(authenticated_user)
         message = MessageService.send_user_message(
             user=authenticated_user,
             content="Test message",

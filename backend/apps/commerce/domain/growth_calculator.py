@@ -5,7 +5,6 @@ Architecture Clean : Logique mathématique pure sans dépendances Django.
 Formules basées sur les standards MAVECAM pour tilapia et catfish.
 """
 from decimal import Decimal
-from typing import List, Dict, Optional
 
 
 class GrowthCalculator:
@@ -60,7 +59,7 @@ class GrowthCalculator:
         initial_weight_g: float,
         target_weight_g: float,
         cycle_duration_days: int
-    ) -> List[Dict[str, float]]:
+    ) -> list[dict[str, float]]:
         """
         Calcule la progression complète du poids jour par jour.
 
@@ -174,7 +173,7 @@ class FeedingCalculator:
     @staticmethod
     def calculate_period_consumption(
         fish_count: int,
-        weight_progression: List[Dict[str, float]],
+        weight_progression: list[dict[str, float]],
         start_day: int,
         end_day: int,
         survival_rate: float = 0.85
@@ -237,7 +236,7 @@ class PhaseDetector:
     }
 
     @staticmethod
-    def detect_phase(species: str, avg_weight_g: float) -> Dict[str, any]:
+    def detect_phase(species: str, avg_weight_g: float) -> dict[str, any]:
         """
         Détecte la phase d'élevage selon le poids moyen.
 
@@ -280,8 +279,8 @@ class PhaseDetector:
     @staticmethod
     def group_by_phases(
         species: str,
-        weight_progression: List[Dict[str, float]]
-    ) -> List[Dict[str, any]]:
+        weight_progression: list[dict[str, float]]
+    ) -> list[dict[str, any]]:
         """
         Regroupe les jours par phases d'alimentation (même granulométrie).
 
@@ -373,7 +372,7 @@ class ROICalculator:
         species: str,
         final_fish_count: int,
         final_avg_weight_g: float,
-        selling_price_per_kg_fcfa: Optional[float] = None,
+        selling_price_per_kg_fcfa: float | None = None,
     ) -> Decimal:
         """
         Calcule le revenu estimé de la récolte.

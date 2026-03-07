@@ -1,5 +1,6 @@
 from django.contrib.auth.models import BaseUserManager
 from django.utils.translation import gettext_lazy as _
+
 from .validators import normalize_phone_number
 
 
@@ -48,7 +49,7 @@ class UserManager(BaseUserManager):
         Args:
             user (User): L'utilisateur pour lequel créer le profil ferme
         """
-        from .models import FarmProfile 
+        from .models import FarmProfile
         
         if user.account_type == 'company' and user.business_name:
             farm_name = f"Ferme {user.business_name}"

@@ -1,9 +1,9 @@
 import json
 import time
 
+from django.core.cache import cache
 from django.utils import translation
 from django.utils.translation import gettext as _
-from django.core.cache import cache
 
 
 class UserLanguageMiddleware:

@@ -1,14 +1,14 @@
-# coding: utf-8
 """
 Chat models with offline-first UUID architecture.
 Follows AquaCare patterns from aquaculture module (ProductionCycle, CycleLog).
 """
 
 import uuid
-from django.db import models
+
 from django.conf import settings
-from django.utils import timezone
 from django.core.validators import FileExtensionValidator
+from django.db import models
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 

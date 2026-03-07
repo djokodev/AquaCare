@@ -7,24 +7,28 @@ Responsabilités : authentification, permissions, sérialisation, routing HTTP.
 import logging
 import uuid
 
-from rest_framework import viewsets, status, permissions, mixins
-from rest_framework.decorators import action
-from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework.filters import SearchFilter, OrderingFilter
+from rest_framework import mixins, permissions, status, viewsets
+from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
+from rest_framework.filters import OrderingFilter, SearchFilter
+from rest_framework.response import Response
 
-from .serializers import (
-    ProductSerializer, OrderSerializer, OrderCreateSerializer,
-    DeliveryFeePreviewSerializer, OrderStatisticsSerializer,
-    CycleSimulationInputSerializer, CycleSimulationOutputSerializer
-)
-from .services import ProductService, OrderService, FeedingSuggestionService, CycleSimulationService
 from .domain.exceptions import (
     InvalidOrderError,
-    ProductNotFoundError,
     ProductNotAvailableError,
+    ProductNotFoundError,
 )
+from .serializers import (
+    CycleSimulationInputSerializer,
+    CycleSimulationOutputSerializer,
+    DeliveryFeePreviewSerializer,
+    OrderCreateSerializer,
+    OrderSerializer,
+    OrderStatisticsSerializer,
+    ProductSerializer,
+)
+from .services import CycleSimulationService, FeedingSuggestionService, OrderService, ProductService
 
 logger = logging.getLogger(__name__)
 

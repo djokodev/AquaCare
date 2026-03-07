@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Domain layer pour le module aquaculture.
 
@@ -14,11 +13,11 @@ Architecture Domain-Driven Design (DDD) :
 from .calculators import AquacultureCalculator
 from .exceptions import *  # noqa
 from .value_objects import (
-    Biomass,
     FCR,
+    Biomass,
+    GrowthRate,
     SurvivalRate,
     WaterQuality,
-    GrowthRate,
 )
 
 __all__ = [

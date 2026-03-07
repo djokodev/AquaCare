@@ -3,14 +3,14 @@ Tests unitaires pour l'interface d'administration Django.
 
 Teste les fonctionnalités administratives MAVECAM.
 """
+from unittest.mock import Mock, patch
+
 import pytest
+from accounts.admin import FarmProfileAdmin, UserAdmin
+from accounts.models import FarmProfile
 from django.contrib.admin.sites import AdminSite
 from django.contrib.auth import get_user_model
-from django.http import HttpRequest
 from django.test import RequestFactory
-from unittest.mock import Mock, patch
-from accounts.admin import UserAdmin, FarmProfileAdmin
-from accounts.models import FarmProfile
 
 User = get_user_model()
 

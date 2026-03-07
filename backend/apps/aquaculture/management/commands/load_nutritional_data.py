@@ -10,9 +10,8 @@ Starter phase (<10g) non chargée — hors scope (utilisateurs achètent alevins
 """
 from decimal import Decimal
 
-from django.core.management.base import BaseCommand
-
 from aquaculture.models import NutritionalGuide
+from django.core.management.base import BaseCommand
 
 
 class Command(BaseCommand):

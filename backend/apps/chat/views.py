@@ -1,32 +1,27 @@
-# coding: utf-8
 """
 DRF ViewSets for chat API.
 Handle HTTP requests and delegate business logic to services.
 """
 
-from rest_framework import viewsets, status, permissions
+from django.db.models import Count
+from django.utils.translation import gettext as _
+from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.throttling import UserRateThrottle
-from django.db.models import Count
-from django.utils.translation import gettext as _
 
-from .models import Conversation, Message
-from .serializers import (
-    ConversationSerializer,
-    MessageSerializer,
-    SendMessageSerializer
-)
-from .services import ConversationService, MessageService
-from .permissions import IsConversationOwnerOrAdmin
 from .domain.exceptions import (
-    InvalidMessageContent,
-    InvalidMediaFormat,
-    MediaTooLarge,
-    ConversationNotFound,
-    UnauthorizedAccess,
     ClientUUIDConflict,
+    ConversationNotFound,
+    InvalidMediaFormat,
+    InvalidMessageContent,
+    MediaTooLarge,
+    UnauthorizedAccess,
 )
+from .models import Conversation
+from .permissions import IsConversationOwnerOrAdmin
+from .serializers import ConversationSerializer, MessageSerializer, SendMessageSerializer
+from .services import ConversationService, MessageService
 
 
 class ChatMessageThrottle(UserRateThrottle):

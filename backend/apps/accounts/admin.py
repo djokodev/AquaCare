@@ -8,22 +8,21 @@ Roles:
 - Autres: Acces limite selon groupe
 """
 
-from django.contrib import admin
-from django.contrib.admin.models import CHANGE
-from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from django.utils.html import format_html
-from django.utils.translation import gettext_lazy as _
-from django.contrib import messages
-from django.core.exceptions import PermissionDenied
-
-from .models import User, FarmProfile
 from common.admin_mixins import (
-    SecuredModelAdmin,
+    AuditLogMixin,
     ManagerMixin,
     PIIMaskingMixin,
-    AuditLogMixin,
     RBACConstants,
+    SecuredModelAdmin,
 )
+from django.contrib import admin, messages
+from django.contrib.admin.models import CHANGE
+from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
+from django.core.exceptions import PermissionDenied
+from django.utils.html import format_html
+from django.utils.translation import gettext_lazy as _
+
+from .models import FarmProfile, User
 
 
 class FarmProfileInline(admin.StackedInline):

@@ -1,26 +1,21 @@
-# coding: utf-8
 """
 Tests for chat service layer.
 
 Tests business logic in ConversationService, MessageService, and AutoResponseService.
 Uses Django database with pytest fixtures.
 """
-import pytest
 import uuid
-from decimal import Decimal
-from django.utils import timezone
-from django.core.files.uploadedfile import SimpleUploadedFile
 
-from chat.models import Conversation, Message
-from chat.services import ConversationService, MessageService, AutoResponseService
+import pytest
 from chat.domain import (
-    InvalidMessageContent,
-    MediaTooLarge,
-    InvalidMediaFormat,
-    ConversationNotFound,
-    UnauthorizedAccess,
     ClientUUIDConflict,
+    ConversationNotFound,
+    InvalidMessageContent,
+    UnauthorizedAccess,
 )
+from chat.models import Conversation, Message
+from chat.services import AutoResponseService, ConversationService, MessageService
+from django.core.files.uploadedfile import SimpleUploadedFile
 
 
 @pytest.mark.django_db
@@ -186,7 +181,7 @@ class TestMessageService:
 
     def test_send_user_message_with_client_uuid(self, authenticated_user):
         """Test sending message with client UUID for offline sync."""
-        conversation = ConversationService.get_or_create_conversation(authenticated_user)
+        ConversationService.get_or_create_conversation(authenticated_user)
         client_uuid = uuid.uuid4()
 
         message = MessageService.send_user_message(
@@ -203,7 +198,7 @@ class TestMessageService:
 
     def test_send_user_message_duplicate_uuid_returns_existing(self, authenticated_user):
         """Test that duplicate client_uuid returns existing message (deduplication)."""
-        conversation = ConversationService.get_or_create_conversation(authenticated_user)
+        ConversationService.get_or_create_conversation(authenticated_user)
         client_uuid = uuid.uuid4()
 
         # Send first message
@@ -257,7 +252,7 @@ class TestMessageService:
 
     def test_send_user_message_empty_content_rejected(self, authenticated_user):
         """Test that empty message content is rejected."""
-        conversation = ConversationService.get_or_create_conversation(authenticated_user)
+        ConversationService.get_or_create_conversation(authenticated_user)
 
         with pytest.raises(InvalidMessageContent):
             MessageService.send_user_message(
@@ -271,7 +266,7 @@ class TestMessageService:
 
     def test_send_user_message_too_long_rejected(self, authenticated_user):
         """Test that messages exceeding 5000 chars are rejected."""
-        conversation = ConversationService.get_or_create_conversation(authenticated_user)
+        ConversationService.get_or_create_conversation(authenticated_user)
         long_content = "a" * 5001
 
         with pytest.raises(InvalidMessageContent):
@@ -286,7 +281,7 @@ class TestMessageService:
 
     def test_send_user_message_with_image(self, authenticated_user):
         """Test sending message with image attachment."""
-        conversation = ConversationService.get_or_create_conversation(authenticated_user)
+        ConversationService.get_or_create_conversation(authenticated_user)
 
         # Create small test image
         image_content = b'fake image data'
@@ -447,7 +442,6 @@ class TestUnreadCountFExpressions:
 
     def test_increment_uses_f_expression(self, authenticated_user):
         """Test that increment_unread_count uses F() so no read-modify-write race."""
-        from django.db.models import F
         conversation = ConversationService.get_or_create_conversation(authenticated_user)
 
         # Call twice to ensure both increments are applied

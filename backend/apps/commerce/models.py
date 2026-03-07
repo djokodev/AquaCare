@@ -12,14 +12,18 @@ Workflow commande (MVP simplifié) :
 """
 import uuid
 from decimal import Decimal
-from django.db import models
+
 from django.core.validators import MinValueValidator
+from django.db import models
 from django.utils.translation import gettext_lazy as _
 
 from .constants import (
-    SPECIES_CHOICES, PHASE_CHOICES, BRAND_CHOICES,
-    ORDER_STATUS_CHOICES, DELIVERY_METHOD_CHOICES,
-    PICKUP_LOCATION_CHOICES
+    BRAND_CHOICES,
+    DELIVERY_METHOD_CHOICES,
+    ORDER_STATUS_CHOICES,
+    PHASE_CHOICES,
+    PICKUP_LOCATION_CHOICES,
+    SPECIES_CHOICES,
 )
 
 

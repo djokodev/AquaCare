@@ -3,18 +3,18 @@ Log Views pour le module aquaculture.
 """
 import logging
 
-from rest_framework import viewsets, status, permissions
-from rest_framework.decorators import action
-from rest_framework.response import Response
 from django.db import transaction
 from django.utils.translation import gettext_lazy as _
-from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiExample
 from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import OpenApiExample, OpenApiParameter, extend_schema, extend_schema_view
+from rest_framework import permissions, status, viewsets
+from rest_framework.decorators import action
+from rest_framework.response import Response
 
-from ..models import ProductionCycle, CycleLog
-from ..serializers import CycleLogSerializer, CycleLogSyncSerializer
-from ..services import ProductionCycleService, CycleLogService
 from ..constants import MAX_BULK_LOGS
+from ..models import CycleLog, ProductionCycle
+from ..serializers import CycleLogSerializer, CycleLogSyncSerializer
+from ..services import CycleLogService, ProductionCycleService
 
 logger = logging.getLogger(__name__)
 

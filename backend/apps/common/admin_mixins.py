@@ -10,12 +10,11 @@ Usage:
         ...
 """
 
-from django.contrib import admin
-from django.contrib.admin.models import LogEntry, ADDITION, CHANGE, DELETION
+from django.contrib import admin, messages
+from django.contrib.admin.models import ADDITION, CHANGE, DELETION, LogEntry
 from django.contrib.contenttypes.models import ContentType
-from django.utils.translation import gettext_lazy as _
-from django.contrib import messages
 from django.core.exceptions import PermissionDenied
+from django.utils.translation import gettext_lazy as _
 
 
 class RBACConstants:

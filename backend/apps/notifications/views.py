@@ -2,20 +2,20 @@
 Views (ViewSets) pour l'API REST des notifications.
 """
 
-from rest_framework import viewsets, status
-from rest_framework.decorators import action
-from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
-from django.utils import timezone
 from django.db.models import Count, Q
+from django.utils import timezone
+from rest_framework import status, viewsets
+from rest_framework.decorators import action
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
 
 from .models import Notification, NotificationPreference, PushToken
 from .serializers import (
-    NotificationSerializer,
     NotificationListSerializer,
     NotificationPreferenceSerializer,
+    NotificationSerializer,
+    NotificationStatsSerializer,
     PushTokenSerializer,
-    NotificationStatsSerializer
 )
 from .services import NotificationService
 

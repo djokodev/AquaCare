@@ -1,4 +1,3 @@
-# coding: utf-8
 """
 Signals for chat module.
 Handles auto-acknowledgment and notification triggers.

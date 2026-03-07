@@ -10,22 +10,19 @@ Responsabilités :
 - Création notifications rappels alimentation
 - Désactivation plans après récolte
 """
-from typing import List, Optional
-from decimal import Decimal
-from datetime import date, time, timedelta, datetime
+from datetime import date, datetime, time, timedelta
+
+from django.contrib.contenttypes.models import ContentType
 from django.db import transaction
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
-
-from ..models import CycleLog, FeedingPlan, ProductionCycle, NutritionalGuide
 from notifications.models import Notification
-from notifications.services import NotificationService
-from django.contrib.contenttypes.models import ContentType
+
 from ..domain.calculators import AquacultureCalculator
 from ..domain.exceptions import (
     FeedingPlanGenerationError,
-    BusinessRuleViolation,
 )
+from ..models import CycleLog, FeedingPlan, NutritionalGuide, ProductionCycle
 from .base import BaseService
 
 
@@ -54,7 +51,7 @@ class FeedingPlanService(BaseService):
         cycle: ProductionCycle,
         weeks_ahead: int = 4,
         auto_adjust: bool = True
-    ) -> List[FeedingPlan]:
+    ) -> list[FeedingPlan]:
         """
         Génère des plans d'alimentation pour les N prochaines semaines.
 

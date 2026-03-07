@@ -8,26 +8,32 @@ Roles:
 - COMMERCE (mavecam_commerce): Lecture seule pour contexte
 - SUPPORT: Pas d'acces
 """
-from django.contrib import admin
-from django.contrib.admin.models import CHANGE
-from django.utils.html import format_html, escape, mark_safe
-from django.urls import reverse
-from django.db.models import Sum, Avg, Count
-from django.utils.translation import gettext_lazy as _
-from django.contrib import messages
-from datetime import date
 import csv
 import io
 import zipfile
+from datetime import date
+
+from common.admin_mixins import (
+    RBACConstants,
+    SecuredModelAdmin,
+)
+from django.contrib import admin, messages
+from django.contrib.admin.models import CHANGE
+from django.db.models import Avg, Count, Sum
 from django.http import HttpResponse, HttpResponseRedirect
+from django.urls import reverse
+from django.utils.html import escape, format_html, mark_safe
+from django.utils.translation import gettext_lazy as _
 
 from .models import (
-    ProductionCycle, CycleLog, FeedingPlan, SanitaryLog,
-    NutritionalGuide, CycleMetrics, ProductionReport, ReportDispatchLog
-)
-from common.admin_mixins import (
-    SecuredModelAdmin,
-    RBACConstants,
+    CycleLog,
+    CycleMetrics,
+    FeedingPlan,
+    NutritionalGuide,
+    ProductionCycle,
+    ProductionReport,
+    ReportDispatchLog,
+    SanitaryLog,
 )
 
 
@@ -978,7 +984,11 @@ class ProductionReportAdmin(AquacultureSecuredAdmin):
 
         # -- Détail par cycle --
         if cycles:
-            html += '<div style="padding:4px 16px 0;background:#f9fafb;border-bottom:1px solid #e5e7eb;"><strong style="font-size:12px;color:#374151;">Détail par cycle</strong></div>'
+            html += (
+                '<div style="padding:4px 16px 0;background:#f9fafb;border-bottom:1px solid #e5e7eb;">'
+                '<strong style="font-size:12px;color:#374151;">Détail par cycle</strong>'
+                '</div>'
+            )
             for section in cycles:
                 cycle = section.get('cycle', {}) or {}
                 metrics = section.get('current_metrics', {}) or {}
@@ -1002,12 +1012,30 @@ class ProductionReportAdmin(AquacultureSecuredAdmin):
                 )
                 surv_str = escape(f'{float(survival):.1f}%' if survival else '—')
 
-                biomass = escape(str(f'{float(metrics["current_biomass"]):.1f} kg' if metrics.get('current_biomass') else '—'))
-                weight = escape(str(f'{float(metrics["current_average_weight"]):.0f} g' if metrics.get('current_average_weight') else '—'))
+                biomass = escape(
+                    str(
+                        f'{float(metrics["current_biomass"]):.1f} kg'
+                        if metrics.get('current_biomass')
+                        else '—'
+                    )
+                )
+                weight = escape(
+                    str(
+                        f'{float(metrics["current_average_weight"]):.0f} g'
+                        if metrics.get('current_average_weight')
+                        else '—'
+                    )
+                )
                 count = escape(str(metrics.get('current_count', '—')))
                 p_feed = escape(str(f'{float(period["total_feed"]):.1f} kg' if period.get('total_feed') else '—'))
                 p_mort = escape(str(period.get('total_mortality', '—')))
-                p_temp = escape(str(f'{float(period["average_temperature"]):.1f}°C' if period.get('average_temperature') else '—'))
+                p_temp = escape(
+                    str(
+                        f'{float(period["average_temperature"]):.1f}°C'
+                        if period.get('average_temperature')
+                        else '—'
+                    )
+                )
                 p_logs = escape(str(period.get('log_count', '—')))
                 roi = eco.get('projected_roi_pct')
                 roi_str = escape(f'{float(roi):.1f}%' if roi is not None else '—')
@@ -1033,7 +1061,11 @@ class ProductionReportAdmin(AquacultureSecuredAdmin):
                     f'</div>'
                 )
         else:
-            html += '<div style="padding:12px 16px;color:#6b7280;font-size:13px;"><em>Aucun cycle actif sur cette période.</em></div>'
+            html += (
+                '<div style="padding:12px 16px;color:#6b7280;font-size:13px;">'
+                '<em>Aucun cycle actif sur cette période.</em>'
+                '</div>'
+            )
 
         html += '</div>'
         return mark_safe(html)

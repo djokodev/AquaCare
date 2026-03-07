@@ -17,28 +17,29 @@ Architecture :
 - Validation métier stricte
 - Gestion d'erreurs explicite
 """
-from typing import Optional, Dict, Any
-from decimal import Decimal
 from datetime import date, timedelta
+from decimal import Decimal
+from typing import Any
+
 from django.db import transaction
 from django.utils.translation import gettext_lazy as _
 
-from ..models import ProductionCycle, CycleLog
-from ..domain.calculators import AquacultureCalculator
 from ..constants import (
-    ECONOMIC_DEFAULTS_BY_SPECIES,
     DEFAULT_EXPECTED_SURVIVAL_RATE_PCT,
     DEFAULT_FINGERLINGS_COST_FCFA,
     DEFAULT_OTHER_OPERATIONAL_COSTS_FCFA,
+    ECONOMIC_DEFAULTS_BY_SPECIES,
 )
+from ..domain.calculators import AquacultureCalculator
 from ..domain.exceptions import (
     BusinessRuleViolation,
-    CycleNotActiveError,
     CycleAlreadyHarvestedError,
+    CycleNotActiveError,
+    InvalidDateRangeError,
     InvalidDensityError,
     InvalidHarvestDataError,
-    InvalidDateRangeError,
 )
+from ..models import CycleLog, ProductionCycle
 from .base import BaseService
 
 
@@ -476,7 +477,7 @@ class ProductionCycleService(BaseService):
                 )
 
     @staticmethod
-    def _apply_economic_defaults(cycle_data: Dict[str, Any]) -> None:
+    def _apply_economic_defaults(cycle_data: dict[str, Any]) -> None:
         species = cycle_data.get('species') or 'tilapia'
         defaults = ECONOMIC_DEFAULTS_BY_SPECIES.get(species, ECONOMIC_DEFAULTS_BY_SPECIES['tilapia'])
 

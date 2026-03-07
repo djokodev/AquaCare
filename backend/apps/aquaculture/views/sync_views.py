@@ -3,12 +3,11 @@ Sync Views pour le module aquaculture.
 """
 import logging
 
-from rest_framework import status, permissions
+from drf_spectacular.utils import OpenApiExample, extend_schema
+from rest_framework import permissions, status
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
-from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
-from drf_spectacular.types import OpenApiTypes
 
 from ..serializers import SyncRequestSerializer, SyncResponseSerializer
 from ..services import SyncService

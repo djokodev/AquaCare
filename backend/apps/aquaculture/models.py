@@ -11,15 +11,13 @@ Calculs automatiques basés sur les guides techniques Skretting et 'Aller Aqua'.
 """
 import uuid
 from decimal import Decimal
+
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
-from django.core.validators import MinValueValidator, MaxValueValidator
-from django.core.exceptions import ValidationError
-from django.utils.translation import gettext_lazy as _
 from django.utils import timezone
-from .constants import (
-    SPECIES_CHOICES, CYCLE_STATUS_CHOICES, SANITARY_EVENT_TYPES,
-    GROWTH_STAGES
-)
+from django.utils.translation import gettext_lazy as _
+
+from .constants import CYCLE_STATUS_CHOICES, GROWTH_STAGES, SANITARY_EVENT_TYPES, SPECIES_CHOICES
 
 
 class ProductionCycle(models.Model):
@@ -982,7 +980,10 @@ class ProductionReport(models.Model):
         ]
 
     def __str__(self):
-        return f"{self.get_report_type_display()} - {self.farm_profile.farm_name} ({self.period_start} -> {self.period_end})"
+        return (
+            f"{self.get_report_type_display()} - {self.farm_profile.farm_name} "
+            f"({self.period_start} -> {self.period_end})"
+        )
 
 
 class ReportDispatchLog(models.Model):

@@ -1,4 +1,3 @@
-# coding: utf-8
 """
 Tests for chat domain layer (value objects and exceptions).
 
@@ -7,11 +6,11 @@ Tests business rules and validation logic.
 """
 import pytest
 from chat.domain import (
-    MessageContent,
-    MediaAttachment,
-    InvalidMessageContent,
     InvalidMediaFormat,
+    InvalidMessageContent,
+    MediaAttachment,
     MediaTooLarge,
+    MessageContent,
 )
 
 

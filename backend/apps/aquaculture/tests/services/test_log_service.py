@@ -3,18 +3,13 @@ Tests unitaires pour CycleLogService.
 
 Coverage cible : >70%
 """
-import pytest
-from decimal import Decimal
 from datetime import date, timedelta
-from django.utils import timezone
+from decimal import Decimal
 
+import pytest
+from aquaculture.domain.exceptions import BusinessRuleViolation, InsufficientFishCountError, InvalidDateRangeError
 from aquaculture.services.log_service import CycleLogService
-from aquaculture.models import CycleLog
-from aquaculture.domain.exceptions import (
-    BusinessRuleViolation,
-    InsufficientFishCountError,
-    InvalidDateRangeError
-)
+
 from tests.fixtures.factories import ProductionCycleFactory, UserFactory
 
 
@@ -272,7 +267,7 @@ class TestCycleLogServiceDeduplication:
 
         test_uuid = str(uuid.uuid4())
         # Créer log avec UUID
-        existing_log = CycleLogService.create_log(
+        CycleLogService.create_log(
             cycle,
             {
                 'log_date': date.today(),
@@ -420,6 +415,7 @@ class TestBulkLogsCrossUserConflict:
     def test_bulk_logs_rejects_uuid_linked_to_different_cycle(self):
         """Un client_uuid lié à un autre cycle du même utilisateur est rejeté."""
         import uuid
+
         from tests.fixtures.factories import FarmProfileFactory
 
         user = UserFactory()

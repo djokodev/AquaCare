@@ -13,16 +13,17 @@ Architecture: Service Layer Pattern pour logique de sync complexe.
 """
 import threading
 import uuid as _uuid
-from typing import Dict, List, Any, Optional
-from datetime import datetime, date
+from datetime import date, datetime
+from typing import Any
+
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
-from django.core.exceptions import ValidationError
 
-from ..models import ProductionCycle, CycleLog, SanitaryLog, FeedingPlan
+from ..models import CycleLog, FeedingPlan, ProductionCycle, SanitaryLog
+from .analytics_service import AnalyticsService
 from .base import BaseService
 from .cycle_service import ProductionCycleService
-from .analytics_service import AnalyticsService
 
 # ── Sync flag (threading.local) ──────────────────────────────────────────────
 # Permet aux signals post_save de CycleLog de détecter qu'un sync offline
@@ -58,8 +59,8 @@ class SyncService(BaseService):
     @transaction.atomic
     def sync_cycle_logs(
         user,
-        logs_data: List[Dict[str, Any]]
-    ) -> Dict[str, Any]:
+        logs_data: list[dict[str, Any]]
+    ) -> dict[str, Any]:
         """
         Synchronise les logs de cycles créés offline avec déduplication.
 
@@ -219,8 +220,8 @@ class SyncService(BaseService):
     @transaction.atomic
     def sync_sanitary_logs(
         user,
-        logs_data: List[Dict[str, Any]]
-    ) -> Dict[str, Any]:
+        logs_data: list[dict[str, Any]]
+    ) -> dict[str, Any]:
         """
         Synchronise les logs sanitaires créés offline.
 
@@ -313,8 +314,8 @@ class SyncService(BaseService):
     @transaction.atomic
     def sync_new_cycles(
         user,
-        cycles_data: List[Dict[str, Any]]
-    ) -> Dict[str, Any]:
+        cycles_data: list[dict[str, Any]]
+    ) -> dict[str, Any]:
         """
         Synchronise les nouveaux cycles créés offline.
 
@@ -377,8 +378,8 @@ class SyncService(BaseService):
     @staticmethod
     def get_server_updates(
         user,
-        last_sync: Optional[str] = None
-    ) -> Dict[str, Any]:
+        last_sync: str | None = None
+    ) -> dict[str, Any]:
         """
         Récupère les mises à jour serveur depuis la dernière synchronisation.
 
@@ -400,10 +401,10 @@ class SyncService(BaseService):
                 }
         """
         from ..serializers import (
-            ProductionCycleSerializer,
             CycleLogSerializer,
             FeedingPlanSerializer,
-            SanitaryLogSerializer
+            ProductionCycleSerializer,
+            SanitaryLogSerializer,
         )
 
         # Parse last_sync timestamp
@@ -468,8 +469,8 @@ class SyncService(BaseService):
     @transaction.atomic
     def perform_full_sync(
         user,
-        sync_data: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        sync_data: dict[str, Any]
+    ) -> dict[str, Any]:
         """
         Effectue une synchronisation bidirectionnelle complète.
 
@@ -563,7 +564,7 @@ class SyncService(BaseService):
         return sync_result
 
     @staticmethod
-    def get_sync_statistics(user) -> Dict[str, Any]:
+    def get_sync_statistics(user) -> dict[str, Any]:
         """
         Génère des statistiques sur l'état de synchronisation.
 
@@ -616,7 +617,7 @@ class SyncService(BaseService):
         }
 
     @staticmethod
-    def validate_sync_data(sync_data: Dict[str, Any]) -> List[str]:
+    def validate_sync_data(sync_data: dict[str, Any]) -> list[str]:
         """
         Valide la structure des données de synchronisation.
 

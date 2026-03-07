@@ -2,12 +2,12 @@
 Tests unitaires pour les modeles Product et Order du module commerce.
 Coverage: Creation, validation, contraintes, methodes metier.
 """
-import pytest
 from decimal import Decimal
-from django.core.exceptions import ValidationError
 
-from commerce.models import Product, Order, OrderItem
-from accounts.models import User, FarmProfile
+import pytest
+from accounts.models import FarmProfile, User
+from commerce.models import Order, OrderItem, Product
+from django.core.exceptions import ValidationError
 
 
 @pytest.mark.django_db

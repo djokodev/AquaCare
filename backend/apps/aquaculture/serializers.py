@@ -14,25 +14,36 @@ Fonctionnalités principales :
 
 Architecture offline-first avec sérialiseurs bulk pour synchronisation mobile.
 """
-from rest_framework import serializers
-from decimal import Decimal
 from datetime import date, timedelta
-from django.utils.translation import gettext_lazy as _
-from django.utils import timezone
+from decimal import Decimal
 
-from .models import (
-    ProductionCycle, CycleLog, FeedingPlan, SanitaryLog,
-    NutritionalGuide, CycleMetrics, ProductionReport, ReportDispatchLog
+from django.utils.translation import gettext_lazy as _
+from notifications.serializers import NotificationSerializer as GlobalNotificationSerializer
+from rest_framework import serializers
+
+from .constants import (
+    DEFAULT_EXPECTED_SURVIVAL_RATE_PCT,
+    DEFAULT_FEED_PRICE_PER_KG,
+    DEFAULT_FINGERLINGS_COST_FCFA,
+    DEFAULT_OTHER_OPERATIONAL_COSTS_FCFA,
+    ECONOMIC_DEFAULTS_BY_SPECIES,
+    FEEDING_WEEK_DURATION_DAYS,
+    LOG_TEMPERATURE_MAX,
+    LOG_TEMPERATURE_MIN,
+    MAX_INITIAL_DENSITY_PER_M2,
 )
 from .domain.calculators import AquacultureCalculator
 from .domain.feed_phase_calculator import get_feed_phase
-from .constants import (
-    DEFAULT_FEED_PRICE_PER_KG, MAX_INITIAL_DENSITY_PER_M2,
-    LOG_TEMPERATURE_MIN, LOG_TEMPERATURE_MAX, FEEDING_WEEK_DURATION_DAYS,
-    ECONOMIC_DEFAULTS_BY_SPECIES, DEFAULT_EXPECTED_SURVIVAL_RATE_PCT,
-    DEFAULT_FINGERLINGS_COST_FCFA, DEFAULT_OTHER_OPERATIONAL_COSTS_FCFA,
+from .models import (
+    CycleLog,
+    CycleMetrics,
+    FeedingPlan,
+    NutritionalGuide,
+    ProductionCycle,
+    ProductionReport,
+    ReportDispatchLog,
+    SanitaryLog,
 )
-from notifications.serializers import NotificationSerializer as GlobalNotificationSerializer
 
 
 class ProductionCycleSerializer(serializers.ModelSerializer):
@@ -190,19 +201,31 @@ class ProductionCycleSerializer(serializers.ModelSerializer):
         if attrs.get('target_harvest_weight_g') is None and not getattr(self.instance, 'target_harvest_weight_g', None):
             attrs['target_harvest_weight_g'] = defaults['target_harvest_weight_g']
 
-        if attrs.get('planned_cycle_duration_days') is None and not getattr(self.instance, 'planned_cycle_duration_days', None):
+        if (
+            attrs.get('planned_cycle_duration_days') is None
+            and not getattr(self.instance, 'planned_cycle_duration_days', None)
+        ):
             attrs['planned_cycle_duration_days'] = defaults['planned_cycle_duration_days']
 
-        if attrs.get('expected_survival_rate_pct') is None and not getattr(self.instance, 'expected_survival_rate_pct', None):
+        if (
+            attrs.get('expected_survival_rate_pct') is None
+            and not getattr(self.instance, 'expected_survival_rate_pct', None)
+        ):
             attrs['expected_survival_rate_pct'] = DEFAULT_EXPECTED_SURVIVAL_RATE_PCT
 
-        if attrs.get('planned_selling_price_per_kg_fcfa') is None and not getattr(self.instance, 'planned_selling_price_per_kg_fcfa', None):
+        if (
+            attrs.get('planned_selling_price_per_kg_fcfa') is None
+            and not getattr(self.instance, 'planned_selling_price_per_kg_fcfa', None)
+        ):
             attrs['planned_selling_price_per_kg_fcfa'] = defaults['planned_selling_price_per_kg_fcfa']
 
         if attrs.get('fingerlings_cost_fcfa') is None and getattr(self.instance, 'fingerlings_cost_fcfa', None) is None:
             attrs['fingerlings_cost_fcfa'] = DEFAULT_FINGERLINGS_COST_FCFA
 
-        if attrs.get('other_operational_costs_fcfa') is None and getattr(self.instance, 'other_operational_costs_fcfa', None) is None:
+        if (
+            attrs.get('other_operational_costs_fcfa') is None
+            and getattr(self.instance, 'other_operational_costs_fcfa', None) is None
+        ):
             attrs['other_operational_costs_fcfa'] = DEFAULT_OTHER_OPERATIONAL_COSTS_FCFA
 
         if attrs.get('end_date') and attrs.get('start_date'):
@@ -224,7 +247,10 @@ class ProductionCycleSerializer(serializers.ModelSerializer):
                 'target_harvest_weight_g': _("Le poids cible doit être supérieur au poids moyen initial")
             })
 
-        expected_survival = attrs.get('expected_survival_rate_pct') or getattr(self.instance, 'expected_survival_rate_pct', None)
+        expected_survival = (
+            attrs.get('expected_survival_rate_pct')
+            or getattr(self.instance, 'expected_survival_rate_pct', None)
+        )
         if expected_survival is not None and (
             Decimal(str(expected_survival)) < Decimal('0') or Decimal(str(expected_survival)) > Decimal('100')
         ):
@@ -232,7 +258,10 @@ class ProductionCycleSerializer(serializers.ModelSerializer):
                 'expected_survival_rate_pct': _("Le taux de survie prévisionnel doit être compris entre 0 et 100")
             })
 
-        selling_price = attrs.get('planned_selling_price_per_kg_fcfa') or getattr(self.instance, 'planned_selling_price_per_kg_fcfa', None)
+        selling_price = (
+            attrs.get('planned_selling_price_per_kg_fcfa')
+            or getattr(self.instance, 'planned_selling_price_per_kg_fcfa', None)
+        )
         if selling_price is not None and Decimal(str(selling_price)) <= Decimal('0'):
             raise serializers.ValidationError({
                 'planned_selling_price_per_kg_fcfa': _("Le prix de vente prévisionnel doit être strictement positif")
@@ -258,7 +287,10 @@ class ProductionCycleSerializer(serializers.ModelSerializer):
                 })
 
         start_date_value = attrs.get('start_date') or getattr(self.instance, 'start_date', None)
-        planned_duration = attrs.get('planned_cycle_duration_days') or getattr(self.instance, 'planned_cycle_duration_days', None)
+        planned_duration = (
+            attrs.get('planned_cycle_duration_days')
+            or getattr(self.instance, 'planned_cycle_duration_days', None)
+        )
         if attrs.get('planned_harvest_date') is None and start_date_value and planned_duration:
             attrs['planned_harvest_date'] = start_date_value + timedelta(days=int(planned_duration))
 
@@ -317,7 +349,8 @@ class CycleLogSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         """Valide la cohérence des données de log et les règles métier."""
         from aquaculture.domain.validators import (
-            validate_cycle_log_date, validate_sampling_data,
+            validate_cycle_log_date,
+            validate_sampling_data,
         )
         from django.core.exceptions import ValidationError as DjangoValidationError
 

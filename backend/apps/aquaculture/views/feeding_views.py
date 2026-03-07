@@ -3,17 +3,17 @@ Feeding Views pour le module aquaculture.
 """
 from datetime import date
 
-from rest_framework import viewsets, status, permissions
+from django.utils.translation import gettext_lazy as _
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import OpenApiExample, OpenApiParameter, extend_schema, extend_schema_view
+from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from django.utils.translation import gettext_lazy as _
-from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiExample
-from drf_spectacular.types import OpenApiTypes
 
-from ..models import ProductionCycle, FeedingPlan
+from ..constants import MAX_GENERATION_WEEKS
+from ..models import FeedingPlan, ProductionCycle
 from ..serializers import FeedingPlanSerializer
 from ..services import FeedingPlanService
-from ..constants import MAX_GENERATION_WEEKS
 
 
 @extend_schema_view(

@@ -1,20 +1,19 @@
-# coding: utf-8
 """
 Fixtures for chat module tests.
 Imports shared fixtures from global conftest and adds chat-specific fixtures.
 """
 import pytest
-from django.db.models.signals import post_save
 from django.core.cache import cache
+from django.db.models.signals import post_save
 
 # Import shared fixtures from the global test configuration without
 # re-registering the plugin (avoids duplicate plugin errors with xdist).
 from tests.conftest import (  # noqa: F401
     api_client,
-    user_factory,
-    authenticated_user,
     auth_client,
+    authenticated_user,
     mavecam_admin,
+    user_factory,
 )
 
 

@@ -6,12 +6,11 @@ Couvre :
 - NotificationPreference (préférences utilisateur)
 - PushToken (tokens Expo, désactivation)
 """
-import pytest
-from django.utils import timezone
-from django.contrib.contenttypes.models import ContentType
-from datetime import timedelta
 from unittest.mock import patch
 
+import pytest
+from django.contrib.contenttypes.models import ContentType
+from django.utils import timezone
 from notifications.models import Notification, NotificationPreference, PushToken
 
 
@@ -98,13 +97,13 @@ class TestPushTokenModel:
 
     def test_multiple_tokens_per_user(self, user):
         """Test : un utilisateur peut avoir plusieurs tokens (multi-device)."""
-        token1 = PushToken.objects.create(
+        PushToken.objects.create(
             user=user,
             expo_push_token='ExponentPushToken[device1]',
             device_id='device-1',
             platform='ios'
         )
-        token2 = PushToken.objects.create(
+        PushToken.objects.create(
             user=user,
             expo_push_token='ExponentPushToken[device2]',
             device_id='device-2',
@@ -141,7 +140,6 @@ class TestNotificationPreferenceQuietHours:
             quiet_hours_end=time(22, 0),
         )
         with patch('django.utils.timezone.localtime') as mock_local:
-            from datetime import datetime
             mock_local.return_value = timezone.now().replace(hour=12, minute=0)
             assert pref.is_in_quiet_hours() is True
 

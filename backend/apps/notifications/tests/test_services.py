@@ -8,14 +8,13 @@ Couvre :
 - Compteurs (non lues)
 - Récupération filtrée
 """
-import pytest
-from django.utils import timezone
-from django.test import override_settings
 from datetime import timedelta
-from unittest.mock import patch
 
-from notifications.services import NotificationService
+import pytest
+from django.test import override_settings
+from django.utils import timezone
 from notifications.models import Notification
+from notifications.services import NotificationService
 
 
 @pytest.mark.django_db

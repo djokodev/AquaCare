@@ -10,20 +10,14 @@ Analyse la consommation historique + prévoit les changements de phase futurs.
 """
 from datetime import timedelta
 from decimal import Decimal
-from typing import Dict, List, Optional
+
+from aquaculture.models import CycleLog, ProductionCycle
+from commerce.models import Product
 from django.db.models import Avg, Sum
 from django.utils import timezone
 
-from aquaculture.models import ProductionCycle, CycleLog
-from commerce.models import Product
-from ..domain.growth_calculator import (
-    GrowthCalculator,
-    PhaseDetector
-)
-from ..constants import (
-    TARGET_WEIGHT_TILAPIA_DEFAULT,
-    TARGET_WEIGHT_CATFISH_DEFAULT
-)
+from ..constants import TARGET_WEIGHT_CATFISH_DEFAULT, TARGET_WEIGHT_TILAPIA_DEFAULT
+from ..domain.growth_calculator import GrowthCalculator, PhaseDetector
 
 
 class FeedingSuggestionService:
@@ -54,9 +48,9 @@ class FeedingSuggestionService:
     @staticmethod
     def get_feeding_suggestions(
         user_id: int,
-        farm_profile_id: Optional[int] = None,
-        cycle_id: Optional[str] = None,
-    ) -> Dict:
+        farm_profile_id: int | None = None,
+        cycle_id: str | None = None,
+    ) -> dict:
         """
         Génère suggestions ADAPTÉES avec détection phase actuelle.
 
@@ -127,7 +121,7 @@ class FeedingSuggestionService:
         }
 
     @staticmethod
-    def _analyze_cycle_with_phases(cycle: ProductionCycle) -> Dict:
+    def _analyze_cycle_with_phases(cycle: ProductionCycle) -> dict:
         """
         Analyse un cycle avec détection automatique de phase actuelle.
 
@@ -281,7 +275,7 @@ class FeedingSuggestionService:
         }
 
     @staticmethod
-    def _calculate_current_average_weight(cycle: ProductionCycle, logs: any) -> Optional[float]:
+    def _calculate_current_average_weight(cycle: ProductionCycle, logs: any) -> float | None:
         """
         Calcule le poids moyen actuel des poissons depuis les logs.
 
@@ -322,7 +316,7 @@ class FeedingSuggestionService:
         current_weight_g: float,
         target_weight_g: float,
         days_remaining: int
-    ) -> List[Dict]:
+    ) -> list[dict]:
         """
         Prévoit les phases de croissance futures avec changements de granulés.
 
@@ -362,7 +356,7 @@ class FeedingSuggestionService:
         return result
 
     @staticmethod
-    def _convert_kg_to_bags(total_kg: Decimal, products: any) -> List[Dict]:
+    def _convert_kg_to_bags(total_kg: Decimal, products: any) -> list[dict]:
         """Convertit kg en sacs (20kg + 1kg)."""
         suggested_products = []
         remaining_kg = total_kg

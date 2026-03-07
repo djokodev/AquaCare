@@ -1,4 +1,3 @@
-# coding: utf-8
 """
 Custom permissions for chat module.
 Enforce access control: users can only access their own conversation.

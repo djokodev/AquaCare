@@ -11,18 +11,19 @@ Architecture:
 
 Author: MAVECAM AquaCare Team
 """
-from typing import List, Dict, Any, Optional
+from datetime import date
 from decimal import Decimal
-from datetime import date, timedelta
-from django.db.models import Avg, Sum, Min, Max, F
-from django.utils.translation import gettext_lazy as _
-from django.utils import timezone
+from typing import Any
 
-from ..models import ProductionCycle, CycleLog
-from ..domain.calculators import AquacultureCalculator
-from ..constants import DEFAULT_FEED_PRICE_PER_KG
-from .base import BaseService
+from django.db.models import Avg, F, Max, Min, Sum
+from django.utils import timezone
+from django.utils.translation import gettext_lazy as _
 from notifications.services import NotificationService
+
+from ..constants import DEFAULT_FEED_PRICE_PER_KG
+from ..domain.calculators import AquacultureCalculator
+from ..models import CycleLog, ProductionCycle
+from .base import BaseService
 
 
 class AnalyticsService(BaseService):
@@ -49,7 +50,7 @@ class AnalyticsService(BaseService):
     # ============================================================================
 
     @staticmethod
-    def analyze_mortality(cycle: ProductionCycle) -> Dict[str, Any]:
+    def analyze_mortality(cycle: ProductionCycle) -> dict[str, Any]:
         """
         Analyse complète des patterns de mortalité pour un cycle.
 
@@ -120,7 +121,7 @@ class AnalyticsService(BaseService):
     # ============================================================================
 
     @staticmethod
-    def analyze_growth(cycle: ProductionCycle) -> List[Dict[str, Any]]:
+    def analyze_growth(cycle: ProductionCycle) -> list[dict[str, Any]]:
         """
         Analyse l'évolution de la croissance du cycle.
 
@@ -151,7 +152,11 @@ class AnalyticsService(BaseService):
         growth_data = []
         for log in logs:
             days_elapsed = (log.log_date - cycle.start_date).days
-            daily_gain = float(log.average_weight - cycle.initial_average_weight) / days_elapsed if days_elapsed > 0 else 0
+            daily_gain = (
+                float(log.average_weight - cycle.initial_average_weight) / days_elapsed
+                if days_elapsed > 0
+                else 0
+            )
             cumulative_gain = float(log.average_weight - cycle.initial_average_weight)
 
             growth_data.append({
@@ -169,7 +174,7 @@ class AnalyticsService(BaseService):
     # ============================================================================
 
     @staticmethod
-    def analyze_environment(cycle: ProductionCycle) -> Dict[str, Any]:
+    def analyze_environment(cycle: ProductionCycle) -> dict[str, Any]:
         """
         Analyse les conditions environnementales d'un cycle.
 
@@ -269,7 +274,7 @@ class AnalyticsService(BaseService):
     # ============================================================================
 
     @staticmethod
-    def get_cycle_statistics(cycle: ProductionCycle) -> Dict[str, Any]:
+    def get_cycle_statistics(cycle: ProductionCycle) -> dict[str, Any]:
         """
         Génère les statistiques complètes pour un cycle.
 
@@ -340,8 +345,12 @@ class AnalyticsService(BaseService):
             'environmental_summary': environmental_summary,
             'estimated_costs': {
                 'feed_cost': feed_metrics['cost_estimate'],
-                'cost_per_kg': feed_metrics['cost_estimate'] / float(cycle.current_biomass) if cycle.current_biomass > 0 else 0
-            }
+                'cost_per_kg': (
+                    feed_metrics['cost_estimate'] / float(cycle.current_biomass)
+                    if cycle.current_biomass > 0
+                    else 0
+                ),
+            },
         }
 
     # ============================================================================
@@ -352,7 +361,7 @@ class AnalyticsService(BaseService):
     def compare_with_previous_cycles(
         current_cycle: ProductionCycle,
         limit: int = 3
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Compare un cycle avec les cycles précédents de même espèce.
 
@@ -420,7 +429,7 @@ class AnalyticsService(BaseService):
         return comparison_data
 
     @staticmethod
-    def get_cycle_summary(cycle: ProductionCycle) -> Dict[str, Any]:
+    def get_cycle_summary(cycle: ProductionCycle) -> dict[str, Any]:
         """
         Génère un résumé concis d'un cycle pour comparaison.
 
@@ -444,7 +453,7 @@ class AnalyticsService(BaseService):
     @staticmethod
     def calculate_performance_ranking(
         current_cycle: ProductionCycle,
-        previous_cycles: List[ProductionCycle]
+        previous_cycles: list[ProductionCycle]
     ) -> str:
         """
         Calcule le classement de performance du cycle actuel.
@@ -481,8 +490,8 @@ class AnalyticsService(BaseService):
     @staticmethod
     def generate_improvement_suggestions(
         cycle: ProductionCycle,
-        historical_avg: Dict[str, Any]
-    ) -> List[str]:
+        historical_avg: dict[str, Any]
+    ) -> list[str]:
         """
         Génère des suggestions d'amélioration basées sur la performance.
 

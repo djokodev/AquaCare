@@ -1,4 +1,3 @@
-# coding: utf-8
 """
 Administration securisee du module chat AquaCare.
 Implemente le RBAC multi-niveau avec audit logging.
@@ -10,22 +9,23 @@ Roles:
 - COMMERCE: Pas d'acces
 """
 
-from django.contrib import admin, messages as dj_messages
+from common.admin_mixins import (
+    RBACConstants,
+    SecuredModelAdmin,
+    SupportOperatorMixin,
+)
+from django.contrib import admin
+from django.contrib import messages as dj_messages
 from django.contrib.admin.models import ADDITION, CHANGE
+from django.core.exceptions import PermissionDenied
 from django.db.models import Count
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import path, reverse
 from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
-from django.core.exceptions import PermissionDenied
 
 from .models import Conversation, Message
 from .services import MessageService
-from common.admin_mixins import (
-    SecuredModelAdmin,
-    SupportOperatorMixin,
-    RBACConstants,
-)
 
 
 class ChatSecuredAdmin(SupportOperatorMixin, SecuredModelAdmin):

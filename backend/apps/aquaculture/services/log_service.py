@@ -11,21 +11,22 @@ Responsabilités :
 - Validation cohérence données (échantillonnage, paramètres eau)
 """
 import uuid as _uuid
-from typing import List, Dict, Any, Optional
-from decimal import Decimal
 from datetime import date
+from decimal import Decimal
+from typing import Any
+
 from django.db import transaction
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
-from ..models import CycleLog, ProductionCycle
+from ..constants import SAMPLING_TOLERANCE
 from ..domain.exceptions import (
     BusinessRuleViolation,
     InsufficientFishCountError,
     InvalidDateRangeError,
     OfflineSyncConflictError,
 )
-from ..constants import SAMPLING_TOLERANCE
+from ..models import CycleLog, ProductionCycle
 from .base import BaseService
 
 
@@ -120,7 +121,7 @@ class CycleLogService(BaseService):
 
     @staticmethod
     @transaction.atomic
-    def create_bulk_logs(logs_data: List[dict], user) -> Dict[str, Any]:
+    def create_bulk_logs(logs_data: list[dict], user) -> dict[str, Any]:
         """
         Crée plusieurs logs en bulk avec déduplication UUID.
 

@@ -11,7 +11,6 @@ Source : Guides nutritionnels MAVECAM Tilapia et Clarias.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Optional
 
 # ---------------------------------------------------------------------------
 # Données de référence par espèce et phase
@@ -94,10 +93,10 @@ class FeedPhaseResult:
     phase_label: str
     weight_range_g: tuple[int, int]
     recommended_product: str
-    products: List[str]
-    protein_pct: Optional[int]
-    bag_weight_kg: Optional[int]
-    price_per_bag_fcfa: Optional[float]
+    products: list[str]
+    protein_pct: int | None
+    bag_weight_kg: int | None
+    price_per_bag_fcfa: float | None
     current_avg_weight_g: float
 
 
@@ -106,7 +105,7 @@ class FeedPhaseResult:
 # ---------------------------------------------------------------------------
 
 
-def get_feed_phase(species: str, current_avg_weight_g: float) -> Optional[FeedPhaseResult]:
+def get_feed_phase(species: str, current_avg_weight_g: float) -> FeedPhaseResult | None:
     """
     Retourne la phase d'alimentation recommandée pour une espèce et un poids moyen.
 

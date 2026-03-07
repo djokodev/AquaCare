@@ -3,14 +3,14 @@ Tests unitaires complets pour tous les endpoints API accounts.
 
 Teste le comportement exact de chaque endpoint avec différents scénarios.
 """
+
 import pytest
-import json
-from django.urls import reverse
+from accounts.models import FarmProfile
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
-from rest_framework.test import APIClient
+from django.urls import reverse
 from rest_framework import status
-from accounts.models import FarmProfile
+from rest_framework.test import APIClient
 
 User = get_user_model()
 
@@ -135,10 +135,15 @@ class TestRegistrationEndpoint:
         assert response.status_code in [status.HTTP_400_BAD_REQUEST, status.HTTP_500_INTERNAL_SERVER_ERROR]
         if response.status_code == status.HTTP_400_BAD_REQUEST:
             # L'erreur peut être dans phone_number ou non_field_errors selon l'implémentation
-            error_found = ('phone_number' in response.data and 
-                          ('existe déjà' in str(response.data['phone_number']) or 'unique' in str(response.data['phone_number']))) or \
-                         ('non_field_errors' in response.data and 
-                          ('existe déjà' in str(response.data['non_field_errors']) or 'unique' in str(response.data['non_field_errors'])))
+            phone_error = "phone_number" in response.data and (
+                "existe déjà" in str(response.data["phone_number"])
+                or "unique" in str(response.data["phone_number"])
+            )
+            non_field_error = "non_field_errors" in response.data and (
+                "existe déjà" in str(response.data["non_field_errors"])
+                or "unique" in str(response.data["non_field_errors"])
+            )
+            error_found = phone_error or non_field_error
             assert error_found, f"Expected duplicate phone error but got: {response.data}"
     
     def test_register_password_mismatch_fails(self):
@@ -443,7 +448,6 @@ class TestProfileEndpoint:
         self.client.force_authenticate(user=self.user)
         
         original_phone = self.user.phone_number
-        original_date_joined = self.user.date_joined
         
         data = {
             "phone_number": "+237699999999",  # Read-only
