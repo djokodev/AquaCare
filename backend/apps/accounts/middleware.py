@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import time
 from dataclasses import dataclass
@@ -36,8 +37,16 @@ class LoginAttemptTracker:
     def cache_key_ip(self, ip: str) -> str:
         return f"login-rate-limit:ip:{ip}"
 
+    @staticmethod
+    def _normalize_identifier(identifier: str) -> str:
+        return identifier.strip().casefold()
+
     def cache_key_user(self, login_name: str) -> str:
-        return f"login-rate-limit:user:{login_name}"
+        normalized_identifier = self._normalize_identifier(login_name)
+        identifier_hash = hashlib.sha256(
+            normalized_identifier.encode('utf-8')
+        ).hexdigest()[:16]
+        return f"login-rate-limit:user:{identifier_hash}"
 
     def get_recent_attempts(
         self,

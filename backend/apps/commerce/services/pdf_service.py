@@ -47,6 +47,12 @@ def _ensure_pdf_dependencies():
     sig = inspect.signature(pydyf.PDF.__init__)
     needs_patch = len(sig.parameters) == 1  # seulement `self`
 
+    stream_class = pydyf.Stream
+    if hasattr(stream_class, 'set_text_matrix'):
+        stream_class.text_matrix = stream_class.set_text_matrix
+    if hasattr(stream_class, 'set_matrix'):
+        stream_class.transform = stream_class.set_matrix
+
     if needs_patch:
         original_pdf_class = pydyf.PDF
 

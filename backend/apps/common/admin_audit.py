@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from django.contrib.admin.models import ADDITION, CHANGE, DELETION, LogEntry
-from django.contrib.contenttypes.models import ContentType
 from django.http import HttpRequest
 
 
@@ -15,13 +14,13 @@ class AuditLogMixin:
 
     def log_action(self, request: HttpRequest, obj: object, action_flag: int, message: str = "") -> None:
         """Enregistre une action dans LogEntry."""
-        LogEntry.objects.log_action(
+        queryset = obj.__class__._default_manager.filter(pk=obj.pk)
+        LogEntry.objects.log_actions(
             user_id=request.user.pk,
-            content_type_id=ContentType.objects.get_for_model(obj).pk,
-            object_id=str(obj.pk),
-            object_repr=str(obj)[:200],
+            queryset=queryset,
             action_flag=action_flag,
             change_message=message or self._get_change_message(action_flag),
+            single_object=True,
         )
 
     def _get_change_message(self, action_flag: int) -> str:

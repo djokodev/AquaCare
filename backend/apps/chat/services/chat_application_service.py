@@ -32,7 +32,7 @@ class ChatApplicationService:
     @staticmethod
     def get_conversation_queryset_for_user(user: ChatUser):
         """Retourne le scope de conversations visible pour un acteur donne."""
-        queryset = Conversation.objects.with_api_annotations()
+        queryset = Conversation.objects.with_api_annotations().order_by('-last_message_at', '-created_at', '-pk')
         if user.is_staff:
             return queryset
         return queryset.filter(user=user)
