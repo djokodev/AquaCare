@@ -6,19 +6,12 @@ logique métier déléguée aux Services.
 """
 from __future__ import annotations
 
-from typing import Any, cast
+from typing import Any
 
 from rest_framework import serializers
-from rest_framework.request import Request
 
-from .domain.exceptions import (
-    InvalidOrderError,
-    ProductNotAvailableError,
-    ProductNotFoundError,
-)
-from .domain.validators import DeliveryMethod, OrderItemPayload
+from .domain.validators import OrderItemPayload
 from .models import Order, OrderItem, Product
-from .services import OrderService
 
 
 class ProductSerializer(serializers.ModelSerializer):
@@ -194,9 +187,23 @@ class OrderCreateSerializer(serializers.Serializer):
             for item in items
         ]
 
+    @staticmethod
+    def _validate_available_products(items: list[OrderItemPayload]) -> None:
+        product_ids = [item['product_id'] for item in items]
+        available_products = Product.objects.filter(
+            id__in=product_ids,
+            is_available=True,
+        ).values_list('id', flat=True)
+        found_ids = {str(product_id) for product_id in available_products}
+        missing = [product_id for product_id in product_ids if product_id not in found_ids]
+        if missing:
+            raise serializers.ValidationError({
+                'items': f"Produit(s) introuvable(s) ou indisponible(s) : {', '.join(missing)}"
+            })
+
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
         """Validation métier cross-field."""
-        delivery_method = cast(DeliveryMethod | None, attrs.get('delivery_method'))
+        delivery_method = attrs.get('delivery_method')
         pickup_location = attrs.get('pickup_location', '')
 
         # Si pickup, pickup_location requis
@@ -211,51 +218,13 @@ class OrderCreateSerializer(serializers.Serializer):
 
         # Validation batch des produits : 1 seule requête DB pour tous les items
         # (évite les N+1 de validate_product_id sur chaque OrderItemInputSerializer)
-        items = cast(list[dict[str, Any]], attrs.get('items', []))
+        items = attrs.get('items', [])
         if items:
-            product_ids = [item['product_id'] for item in OrderCreateSerializer._build_items_payload(items)]
-            available_products = Product.objects.filter(
-                id__in=product_ids,
-                is_available=True
-            ).values_list('id', flat=True)
-            found_ids = {str(pid) for pid in available_products}
-            missing = [pid for pid in product_ids if pid not in found_ids]
-            if missing:
-                raise serializers.ValidationError({
-                    'items': f"Produit(s) introuvable(s) ou indisponible(s) : {', '.join(missing)}"
-                })
+            OrderCreateSerializer._validate_available_products(
+                OrderCreateSerializer._build_items_payload(items),
+            )
 
         return attrs
-
-    def create(self, validated_data: dict[str, Any]) -> Order:
-        """
-        Crée commande via OrderService.
-
-        Note : `request.user` doit être injecté via context.
-        """
-        request = cast(Request, self.context['request'])
-        user = request.user
-        items_data = self._build_items_payload(cast(list[dict[str, Any]], validated_data['items']))
-
-        # Déléguer création au service
-        try:
-            order = OrderService.create_order(
-                user=user,
-                items_data=items_data,
-                delivery_method=cast(DeliveryMethod, validated_data['delivery_method']),
-                pickup_location=validated_data.get('pickup_location', None),
-                client_uuid=validated_data.get('client_uuid', None),
-                created_offline=bool(validated_data.get('created_offline', False)),
-            )
-        except (
-            InvalidOrderError,
-            ProductNotFoundError,
-            ProductNotAvailableError,
-            ValueError,
-        ) as exc:
-            raise serializers.ValidationError({'message': str(exc)}) from exc
-
-        return order
 
 
 class DeliveryFeePreviewSerializer(serializers.Serializer):
@@ -272,26 +241,10 @@ class DeliveryFeePreviewSerializer(serializers.Serializer):
     )
 
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
-        """Calcule preview via OrderService."""
-        request = cast(Request, self.context['request'])
-        user = request.user
-        items_data = OrderCreateSerializer._build_items_payload(cast(list[dict[str, Any]], attrs['items']))
-
-        try:
-            preview = OrderService.calculate_delivery_fee_preview(
-                user=user,
-                items_data=items_data,
-                delivery_method=cast(DeliveryMethod, attrs['delivery_method']),
-            )
-            attrs['preview'] = preview
-        except (
-            InvalidOrderError,
-            ProductNotFoundError,
-            ProductNotAvailableError,
-            ValueError,
-        ) as exc:
-            raise serializers.ValidationError({'message': str(exc)}) from exc
-
+        """Valide les items via la meme strategie batch que la creation."""
+        OrderCreateSerializer._validate_available_products(
+            OrderCreateSerializer._build_items_payload(attrs['items']),
+        )
         return attrs
 
 

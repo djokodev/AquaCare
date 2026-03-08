@@ -11,7 +11,7 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 
 from .models import Message
-from .services import AutoResponseService
+from .services import AutoResponseService, MessageEventPolicyService
 from .tasks import (
     notify_admins_new_user_message_task,
     notify_user_admin_message_task,
@@ -32,24 +32,15 @@ def handle_new_message(sender, instance, created, **kwargs):
     if not created:
         return
 
-    conversation = instance.conversation
+    plan = MessageEventPolicyService.build_new_message_effects_plan(instance)
 
-    # =========================================================================
-    # USER MESSAGE: Send acknowledgment + notify admin
-    # =========================================================================
-    if instance.sender_type == 'user':
-        # Send acknowledgment only for the first user message in a conversation.
-        has_previous_user_message = conversation.messages.filter(
-            sender_type='user'
-        ).exclude(id=instance.id).exists()
-        if not has_previous_user_message:
-            language = getattr(conversation.user, 'language_preference', 'fr')
-            AutoResponseService.send_acknowledgment_message(
-                conversation=conversation,
-                language=language,
-            )
+    if plan.should_send_acknowledgment and plan.acknowledgment_language is not None:
+        AutoResponseService.send_acknowledgment_message(
+            conversation=instance.conversation,
+            language=plan.acknowledgment_language,
+        )
 
-        # Notifications admin (email + in-app), sent asynchronously.
+    if plan.should_notify_admins:
         try:
             notify_admins_new_user_message_task.delay(str(instance.id))
         except Exception:
@@ -58,10 +49,7 @@ def handle_new_message(sender, instance, created, **kwargs):
                 instance.id,
             )
 
-    # =========================================================================
-    # ADMIN MESSAGE: Trigger notification to user
-    # =========================================================================
-    elif instance.sender_type == 'admin':
+    if plan.should_notify_user:
         try:
             notify_user_admin_message_task.delay(str(instance.id))
         except Exception:
@@ -69,5 +57,3 @@ def handle_new_message(sender, instance, created, **kwargs):
                 "Failed to queue async user chat notification for message %s.",
                 instance.id,
             )
-
-    # SYSTEM messages: no-op

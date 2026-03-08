@@ -11,7 +11,17 @@ from accounts.models import FarmProfile, User
 from aquaculture.models import CycleLog, ProductionCycle
 from commerce.domain.exceptions import InvalidOrderError, ProductNotAvailableError, ProductNotFoundError
 from commerce.models import Product
-from commerce.services import FeedingSuggestionService, OrderService, ProductService
+from commerce.services import (
+    CatalogApplicationService,
+    CreateOrderCommand,
+    DeliveryFeePreviewCommand,
+    FeedingSuggestionService,
+    FeedingSuggestionsQuery,
+    OrderApplicationService,
+    OrderService,
+    ProductService,
+    RecommendedProductQuery,
+)
 from django.utils import timezone
 
 
@@ -164,6 +174,93 @@ class TestProductService:
             "max": Decimal("0"),
             "avg": Decimal("0"),
         }
+
+
+@pytest.mark.django_db
+class TestCatalogApplicationService:
+    """Tests pour les use cases applicatifs catalogue."""
+
+    @pytest.fixture
+    def test_user(self):
+        return User.objects.create_user(
+            phone_number="+237555111222",
+            password="testpass123",
+            first_name="Catalog",
+            last_name="User",
+            age_group="26_35",
+        )
+
+    @pytest.fixture
+    def test_farm(self, test_user):
+        farm_profile, _ = FarmProfile.objects.get_or_create(
+            user=test_user,
+            defaults={"farm_name": "Catalog Farm"},
+        )
+        return farm_profile
+
+    @pytest.fixture
+    def test_cycle(self, test_farm):
+        return ProductionCycle.objects.create(
+            farm_profile=test_farm,
+            cycle_name="Cycle Catalogue",
+            species="tilapia",
+            pond_identifier="Pond C1",
+            pond_surface_m2=Decimal("100.0"),
+            start_date=timezone.now().date() - timedelta(days=7),
+            initial_count=1000,
+            initial_average_weight=Decimal("5.0"),
+            initial_biomass=Decimal("5.0"),
+            current_count=1000,
+            current_average_weight=Decimal("5.0"),
+            current_biomass=Decimal("5.0"),
+            status="active",
+        )
+
+    @pytest.fixture
+    def tilapia_products(self):
+        Product.objects.create(
+            name="ALLER AQUA TILAPIA 1MM 20KG",
+            brand="aller_aqua",
+            species="tilapia",
+            phase="alevinage",
+            pellet_size_mm=Decimal("1.0"),
+            protein_percentage=Decimal("45.0"),
+            lipid_percentage=10,
+            package_weight_kg=Decimal("20.0"),
+            price_per_package=Decimal("35000.00"),
+        )
+        Product.objects.create(
+            name="ALLER AQUA TILAPIA 3MM 20KG",
+            brand="aller_aqua",
+            species="tilapia",
+            phase="grossissement",
+            pellet_size_mm=Decimal("3.0"),
+            protein_percentage=Decimal("32.0"),
+            lipid_percentage=10,
+            package_weight_kg=Decimal("20.0"),
+            price_per_package=Decimal("30000.00"),
+        )
+
+    def test_get_products_for_user_cycle(self, test_user, test_cycle, tilapia_products):
+        products = CatalogApplicationService.get_products_for_user_cycle(test_user, str(test_cycle.id))
+
+        assert products.count() == 2
+
+    def test_get_recommended_product(self, tilapia_products):
+        product = CatalogApplicationService.get_recommended_product(
+            RecommendedProductQuery(species="tilapia", weight_g=2.0),
+        )
+
+        assert product is not None
+        assert product.pellet_size_mm == Decimal("1.0")
+
+    def test_get_feeding_suggestions_without_cycles(self, test_user):
+        suggestions = CatalogApplicationService.get_feeding_suggestions(
+            user=test_user,
+            query=FeedingSuggestionsQuery(),
+        )
+
+        assert suggestions["has_suggestions"] is False
 
 
 @pytest.mark.django_db
@@ -333,6 +430,67 @@ class TestOrderService:
 
         with pytest.raises(InvalidOrderError):
             OrderService.confirm_order_receipt(order, test_user)
+
+
+@pytest.mark.django_db
+class TestOrderApplicationService:
+    """Tests pour les use cases applicatifs commande."""
+
+    @pytest.fixture
+    def test_user(self):
+        return User.objects.create_user(
+            phone_number="+237666111222",
+            password="testpass123",
+            first_name="Order",
+            last_name="User",
+            age_group="26_35",
+        )
+
+    @pytest.fixture
+    def test_farm(self, test_user):
+        farm_profile, _ = FarmProfile.objects.get_or_create(
+            user=test_user,
+            defaults={"farm_name": "Order App Farm"},
+        )
+        return farm_profile
+
+    @pytest.fixture
+    def test_product(self):
+        return Product.objects.create(
+            name="Order App Product",
+            brand="aller_aqua",
+            species="tilapia",
+            phase="grossissement",
+            pellet_size_mm=Decimal("3.0"),
+            protein_percentage=Decimal("32.0"),
+            lipid_percentage=10,
+            package_weight_kg=Decimal("20.0"),
+            price_per_package=Decimal("30000.00"),
+        )
+
+    def test_create_order_use_case(self, test_user, test_farm, test_product):
+        order = OrderApplicationService.create_order(
+            user=test_user,
+            command=CreateOrderCommand(
+                items_data=[{"product_id": str(test_product.id), "quantity": 1}],
+                delivery_method="home",
+            ),
+        )
+
+        assert order.user == test_user
+        assert order.items.count() == 1
+
+    def test_preview_delivery_fee_use_case(self, test_user, test_product):
+        preview = OrderApplicationService.preview_delivery_fee(
+            user=test_user,
+            command=DeliveryFeePreviewCommand(
+                items_data=[{"product_id": str(test_product.id), "quantity": 2}],
+                delivery_method="home",
+            ),
+        )
+
+        assert preview["subtotal"] == Decimal("60000.00")
+        assert preview["total_bags"] == 2
 
 
 @pytest.mark.django_db

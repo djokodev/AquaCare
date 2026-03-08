@@ -15,15 +15,21 @@ from rest_framework.decorators import action
 from rest_framework.request import Request
 from rest_framework.response import Response
 
-from ..models import ProductionCycle, ProductionReport
+from ..models import ProductionReport
 from ..serializers import (
     GenerateReportSerializer,
     MarkWhatsAppSharedSerializer,
     ProductionReportDetailSerializer,
     ProductionReportListSerializer,
 )
-from ..services import ReportService
-from ..tasks import generate_report_async_task, send_report_email_task
+from ..services import (
+    GenerateReportCommand,
+    InvalidReportCycleScopeError,
+    MissingReportEmailError,
+    ReportApplicationService,
+    ReportDownloadDecision,
+    WhatsAppShareCommand,
+)
 from ..throttles import AquacultureReportActionThrottle
 
 logger = logging.getLogger(__name__)
@@ -150,42 +156,8 @@ class ProductionReportViewSet(viewsets.ReadOnlyModelViewSet):
         return Response(serializer.data, status=status_code)
 
     @staticmethod
-    def _set_pending_status(report: ProductionReport) -> None:
-        if report.status != 'pending':
-            report.status = 'pending'
-            report.save(update_fields=['status', 'updated_at'])
-
-    @staticmethod
-    def _dispatch_generation(report: ProductionReport, cycle_scope_id: str | None = None) -> None:
-        generate_report_async_task.delay(str(report.id), cycle_scope_id)
-
-    @staticmethod
-    def _extract_cycle_scope_id(report: ProductionReport) -> str | None:
-        if not isinstance(report.payload, dict):
-            return None
-        return (report.payload.get('report_meta', {}) or {}).get('cycle_scope_id')
-
-    @staticmethod
     def _pending_response(message: str) -> Response:
         return Response({'detail': message}, status=status.HTTP_409_CONFLICT)
-
-    @staticmethod
-    def _validate_cycle_scope(request: Request, cycle_id: str | None) -> Response | None:
-        if not cycle_id:
-            return None
-
-        cycle_exists = ProductionCycle.objects.filter(
-            id=cycle_id,
-            farm_profile=request.user.farm_profile,
-            status='active',
-        ).exists()
-        if cycle_exists:
-            return None
-
-        return Response(
-            {'detail': _("Cycle de session introuvable ou inactif.")},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
 
     def get_queryset(self):
         detail_actions = {
@@ -240,25 +212,24 @@ class ProductionReportViewSet(viewsets.ReadOnlyModelViewSet):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        report_type = serializer.validated_data['report_type']
-        reference_date = serializer.validated_data.get('reference_date')
-        cycle_id = serializer.validated_data.get('cycle_id')
-        period_start, period_end = ReportService.build_period_bounds(report_type, reference_date)
-
-        cycle_id_str = str(cycle_id) if cycle_id else None
-        invalid_cycle_response = self._validate_cycle_scope(request, cycle_id_str)
-        if invalid_cycle_response is not None:
-            return invalid_cycle_response
-
-        report, _created = ProductionReport.objects.get_or_create(
-            farm_profile=request.user.farm_profile,
-            report_type=report_type,
-            period_start=period_start,
-            period_end=period_end,
-            defaults={'status': 'pending'},
-        )
-        self._set_pending_status(report)
-        self._dispatch_generation(report, cycle_id_str)
+        try:
+            report = ReportApplicationService.request_report_generation(
+                request.user,
+                GenerateReportCommand(
+                    report_type=serializer.validated_data['report_type'],
+                    reference_date=serializer.validated_data.get('reference_date'),
+                    cycle_id=(
+                        str(serializer.validated_data['cycle_id'])
+                        if serializer.validated_data.get('cycle_id')
+                        else None
+                    ),
+                ),
+            )
+        except InvalidReportCycleScopeError as exc:
+            return Response(
+                {'detail': str(exc)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         return self._serialize_report_detail(report, request, status_code=status.HTTP_202_ACCEPTED)
 
     @extend_schema(
@@ -268,10 +239,7 @@ class ProductionReportViewSet(viewsets.ReadOnlyModelViewSet):
     )
     @action(detail=True, methods=['post'], throttle_classes=[AquacultureReportActionThrottle])
     def regenerate(self, request: Request, pk: str | None = None) -> Response:
-        report = self.get_object()
-        cycle_scope_id = self._extract_cycle_scope_id(report)
-        self._set_pending_status(report)
-        self._dispatch_generation(report, cycle_scope_id)
+        report = ReportApplicationService.request_report_regeneration(self.get_object())
         return self._serialize_report_detail(report, request, status_code=status.HTTP_202_ACCEPTED)
 
     @extend_schema(
@@ -281,8 +249,7 @@ class ProductionReportViewSet(viewsets.ReadOnlyModelViewSet):
     )
     @action(detail=True, methods=['post'])
     def validate(self, request: Request, pk: str | None = None) -> Response:
-        report = self.get_object()
-        validated = ReportService.validate(report, request.user)
+        validated = ReportApplicationService.validate_report(self.get_object(), request.user)
         return self._serialize_report_detail(validated, request, status_code=status.HTTP_200_OK)
 
     @extend_schema(
@@ -303,13 +270,16 @@ class ProductionReportViewSet(viewsets.ReadOnlyModelViewSet):
         throttle_classes=[AquacultureReportActionThrottle],
     )
     def send_email(self, request: Request, pk: str | None = None) -> Response:
-        report = self.get_object()
-        if not getattr(request.user, 'email', None):
+        try:
+            report = ReportApplicationService.request_report_email_dispatch(
+                self.get_object(),
+                request.user,
+            )
+        except MissingReportEmailError as exc:
             return Response(
-                {'detail': 'Aucune adresse email renseignée pour ce compte.'},
+                {'detail': str(exc)},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        send_report_email_task.delay(str(report.id), str(request.user.id))
         return self._serialize_report_detail(report, request, status_code=status.HTTP_202_ACCEPTED)
 
     @extend_schema(
@@ -327,15 +297,16 @@ class ProductionReportViewSet(viewsets.ReadOnlyModelViewSet):
         throttle_classes=[AquacultureReportActionThrottle],
     )
     def mark_whatsapp_shared(self, request: Request, pk: str | None = None) -> Response:
-        report = self.get_object()
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        updated = ReportService.mark_whatsapp_shared(
-            report=report,
+        updated = ReportApplicationService.mark_report_whatsapp_shared(
+            report=self.get_object(),
             user=request.user,
-            recipient=serializer.validated_data.get('recipient', ''),
-            metadata=serializer.validated_data.get('metadata', {}),
+            command=WhatsAppShareCommand(
+                recipient=serializer.validated_data.get('recipient', ''),
+                metadata=serializer.validated_data.get('metadata', {}),
+            ),
         )
         return self._serialize_report_detail(updated, request, status_code=status.HTTP_200_OK)
 
@@ -347,20 +318,17 @@ class ProductionReportViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=True, methods=['get'], throttle_classes=[AquacultureReportActionThrottle])
     def download(self, request: Request, pk: str | None = None):
         report = self.get_object()
-
-        if report.status == 'pending':
+        decision: ReportDownloadDecision = ReportApplicationService.prepare_report_download(report)
+        if decision.status == 'pending':
             return self._pending_response(
                 _("Le rapport est en cours de génération. Réessayez dans quelques instants.")
             )
-
-        if not report.pdf_file:
-            self._set_pending_status(report)
-            self._dispatch_generation(report)
+        if decision.status == 'regenerating':
             return self._pending_response(
                 _("Le PDF est en cours de génération. Réessayez dans quelques instants.")
             )
 
-        filename = report.pdf_file.name.split('/')[-1] or f"report_{report.id}.pdf"
+        filename = decision.filename or f"report_{report.id}.pdf"
         response = FileResponse(report.pdf_file.open('rb'), content_type='application/pdf')
         response['Content-Disposition'] = f'attachment; filename="{quote(filename)}"'
         return response

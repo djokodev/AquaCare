@@ -19,7 +19,10 @@ from ..serializers import (
     HarvestSerializer,
     ProductionCycleSerializer,
 )
-from ..services import AnalyticsService, ProductionCycleService
+from ..services import (
+    HarvestCycleCommand,
+    ProductionCycleApplicationService,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -152,9 +155,9 @@ class ProductionCycleViewSet(viewsets.ModelViewSet):
         la cohérence des validations et calculs (biomasse, densité, etc.).
         """
         # Delegate business logic to service layer
-        cycle = ProductionCycleService.create_cycle(
-            farm_profile=self.request.user.farm_profile,
-            cycle_data=serializer.validated_data
+        cycle = ProductionCycleApplicationService.create_cycle(
+            user=self.request.user,
+            cycle_data=serializer.validated_data,
         )
 
         # Update serializer instance with created cycle
@@ -201,16 +204,15 @@ class ProductionCycleViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        harvest_data = serializer.validated_data
-
         try:
-            # Delegate business logic to service layer
-            harvested_cycle = ProductionCycleService.harvest_cycle(
+            harvested_cycle = ProductionCycleApplicationService.harvest_cycle(
                 cycle=cycle,
-                harvest_date=harvest_data['harvest_date'],
-                final_count=harvest_data['final_count'],
-                final_average_weight=harvest_data['final_average_weight'],
-                harvest_notes=harvest_data.get('harvest_notes', '')
+                command=HarvestCycleCommand(
+                    harvest_date=serializer.validated_data['harvest_date'],
+                    final_count=serializer.validated_data['final_count'],
+                    final_average_weight=serializer.validated_data['final_average_weight'],
+                    harvest_notes=serializer.validated_data.get('harvest_notes', ''),
+                ),
             )
 
             response_serializer = CycleHarvestResponseSerializer(
@@ -274,7 +276,7 @@ class ProductionCycleViewSet(viewsets.ModelViewSet):
         cycle = self.get_object()
 
         # Delegate analytics to service layer
-        statistics = AnalyticsService.get_cycle_statistics(cycle)
+        statistics = ProductionCycleApplicationService.get_cycle_statistics(cycle)
 
         serializer = CycleStatisticsSerializer(statistics)
         return Response(serializer.data)
@@ -337,9 +339,9 @@ class ProductionCycleViewSet(viewsets.ModelViewSet):
         current_cycle = self.get_object()
 
         # Delegate comparison to service layer
-        comparison_data = AnalyticsService.compare_with_previous_cycles(
+        comparison_data = ProductionCycleApplicationService.compare_cycle_with_history(
             current_cycle,
-            limit=3
+            limit=3,
         )
 
         serializer = CycleComparisonSerializer(comparison_data)

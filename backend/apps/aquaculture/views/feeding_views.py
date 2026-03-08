@@ -1,8 +1,6 @@
 """
 Feeding Views pour le module aquaculture.
 """
-from datetime import date
-
 from django.utils.translation import gettext_lazy as _
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiExample, OpenApiParameter, extend_schema, extend_schema_view
@@ -10,9 +8,13 @@ from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from ..models import FeedingPlan, ProductionCycle
+from ..models import FeedingPlan
 from ..serializers import FeedingPlanGenerationRequestSerializer, FeedingPlanSerializer
-from ..services import FeedingPlanService
+from ..services import (
+    FeedingCycleNotFoundError,
+    FeedingPlanApplicationService,
+    GenerateFeedingPlansCommand,
+)
 
 
 @extend_schema_view(
@@ -130,30 +132,19 @@ class FeedingPlanViewSet(viewsets.ModelViewSet):
         """
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        cycle_id = serializer.validated_data['cycle_id']
-        weeks_ahead = serializer.validated_data['weeks_ahead']
-        
         try:
-            cycle = ProductionCycle.objects.get(
-                id=cycle_id,
-                farm_profile__user=request.user
+            plans = FeedingPlanApplicationService.generate_feeding_plans(
+                user=request.user,
+                command=GenerateFeedingPlansCommand(
+                    cycle_id=serializer.validated_data['cycle_id'],
+                    weeks_ahead=serializer.validated_data['weeks_ahead'],
+                ),
             )
-        except ProductionCycle.DoesNotExist:
+        except FeedingCycleNotFoundError as exc:
             return Response(
-                {'error': _('Cycle non trouvé')},
+                {'error': str(exc) or _('Cycle non trouvé')},
                 status=status.HTTP_404_NOT_FOUND
             )
-        
-        # Numéro de semaine actuelle dans le cycle
-        days_elapsed = (date.today() - cycle.start_date).days
-        current_week = max(1, days_elapsed // 7 + 1)
-
-        plans = []
-        for week_offset in range(weeks_ahead):
-            week_number = current_week + week_offset
-            # Déléguer entièrement au service (source DIBAQ + température réelle)
-            plan = FeedingPlanService.generate_plan_for_week(cycle, week_number)
-            plans.append(plan)
 
         response_serializer = FeedingPlanSerializer(plans, many=True, context={'request': request})
         return Response(response_serializer.data, status=status.HTTP_201_CREATED)

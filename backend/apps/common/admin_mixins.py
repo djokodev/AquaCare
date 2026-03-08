@@ -12,77 +12,14 @@ Usage:
 from __future__ import annotations
 
 from django.contrib import admin, messages
-from django.contrib.admin.models import ADDITION, CHANGE, DELETION, LogEntry
-from django.contrib.contenttypes.models import ContentType
+from django.contrib.admin.models import ADDITION, CHANGE, DELETION
 from django.core.exceptions import FieldDoesNotExist, PermissionDenied
 from django.db.models import QuerySet
 from django.http import HttpRequest
 from django.utils.translation import gettext_lazy as _
 
-
-def _user_has_group(request: HttpRequest, group_name: str) -> bool:
-    return request.user.groups.filter(name=group_name).exists()
-
-
-class RBACConstants:
-    """Constantes pour le systeme RBAC AquaCare."""
-
-    # Noms des groupes Django
-    GROUP_MANAGERS = 'mavecam_managers'
-    GROUP_COMMERCE = 'mavecam_commerce'
-    GROUP_SUPPORT = 'mavecam_support'
-
-    # Mapping role -> apps visibles (utilise app_label, pas le chemin complet)
-    ROLE_APPS = {
-        GROUP_MANAGERS: ['accounts', 'aquaculture', 'notifications'],
-        GROUP_COMMERCE: ['commerce', 'aquaculture'],
-        GROUP_SUPPORT: ['chat', 'notifications'],
-    }
-
-    # Champs sensibles (PII) a masquer
-    SENSITIVE_FIELDS = [
-        'phone_number', 'password', 'last_login',
-        'expo_push_token', 'device_id'
-    ]
-
-
-class AuditLogMixin:
-    """
-    Mixin pour l'audit logging automatique des actions admin.
-    Utilise django.contrib.admin.models.LogEntry (systeme natif Django).
-    """
-
-    def log_action(self, request: HttpRequest, obj: object, action_flag: int, message: str = '') -> None:
-        """Enregistre une action dans LogEntry."""
-        LogEntry.objects.log_action(
-            user_id=request.user.pk,
-            content_type_id=ContentType.objects.get_for_model(obj).pk,
-            object_id=str(obj.pk),
-            object_repr=str(obj)[:200],
-            action_flag=action_flag,
-            change_message=message or self._get_change_message(action_flag),
-        )
-
-    def _get_change_message(self, action_flag: int) -> str:
-        """Message par defaut selon l'action."""
-        action_messages = {
-            ADDITION: 'Creation via admin',
-            CHANGE: 'Modification via admin',
-            DELETION: 'Suppression via admin',
-        }
-        return action_messages.get(action_flag, '')
-
-
-class RoleAwareAdminMixin:
-    """Helpers compacts pour exprimer les checks de role admin."""
-
-    @staticmethod
-    def _is_superuser(request: HttpRequest) -> bool:
-        return request.user.is_superuser
-
-    @staticmethod
-    def _has_role(request: HttpRequest, group_name: str) -> bool:
-        return _user_has_group(request, group_name)
+from .admin_audit import AuditLogMixin
+from .admin_policies import RBACConstants, RoleAwareAdminMixin
 
 
 class SecuredModelAdmin(RoleAwareAdminMixin, AuditLogMixin, admin.ModelAdmin):

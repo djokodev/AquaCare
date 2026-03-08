@@ -12,13 +12,16 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from ..constants import MAX_BULK_LOGS
-from ..models import CycleLog, ProductionCycle
+from ..models import CycleLog
 from ..serializers import (
     BulkCycleLogRequestSerializer,
     BulkCycleLogResponseSerializer,
     CycleLogSerializer,
 )
-from ..services import CycleLogService, ProductionCycleService
+from ..services import (
+    CycleLogApplicationService,
+    UnauthorizedCycleAccessError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -146,35 +149,21 @@ class CycleLogViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        cycle = serializer.validated_data.get('cycle')
-        log_date = serializer.validated_data.get('log_date')
-
-        # Sécurité : s'assurer que le cycle appartient bien à l'utilisateur
-        if cycle.farm_profile.user_id != request.user.id:
+        try:
+            mutation_result = CycleLogApplicationService.create_or_update_log(
+                user=request.user,
+                validated_data=serializer.validated_data,
+            )
+        except UnauthorizedCycleAccessError as exc:
             return Response(
-                {"detail": "Cycle non autorisé."},
-                status=status.HTTP_403_FORBIDDEN
+                {"detail": str(exc)},
+                status=status.HTTP_403_FORBIDDEN,
             )
 
-        existing_log = CycleLog.objects.filter(
-            cycle=cycle,
-            log_date=log_date
-        ).first()
-
-        if existing_log:
-            # Mettre à jour les champs fournis
-            for field, value in serializer.validated_data.items():
-                setattr(existing_log, field, value)
-            existing_log.save()
-            # Recalculer les métriques du cycle
-            self._recalculate_cycle_metrics(cycle)
-
-            output_serializer = self.get_serializer(existing_log)
-            return Response(output_serializer.data, status=status.HTTP_200_OK)
-
-        self.perform_create(serializer)
-        headers = self.get_success_headers(serializer.data)
-        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+        output_serializer = self.get_serializer(mutation_result.log)
+        response_status = status.HTTP_201_CREATED if mutation_result.created else status.HTTP_200_OK
+        headers = self.get_success_headers(output_serializer.data) if mutation_result.created else {}
+        return Response(output_serializer.data, status=response_status, headers=headers)
     
     @extend_schema(
         summary="Création en bulk de logs (sync offline)",
@@ -243,23 +232,11 @@ class CycleLogViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
 
         with transaction.atomic():
-            result = CycleLogService.create_bulk_logs(
+            result = CycleLogApplicationService.create_bulk_logs(
                 logs_data=serializer.validated_data['logs'],
                 user=request.user
             )
             logs = result['logs']
-
-            # Update affected cycles
-            cycles_to_update = set(log.cycle_id for log in logs)
-            for cycle_id in cycles_to_update:
-                try:
-                    cycle = ProductionCycle.objects.get(
-                        id=cycle_id,
-                        farm_profile__user=request.user
-                    )
-                    self._recalculate_cycle_metrics(cycle)
-                except ProductionCycle.DoesNotExist:
-                    continue
 
         response_serializer = BulkCycleLogResponseSerializer(
             {
@@ -271,16 +248,3 @@ class CycleLogViewSet(viewsets.ModelViewSet):
             context={'request': request},
         )
         return Response(response_serializer.data, status=status.HTTP_201_CREATED)
-    
-    # SUPPRIMÉ: _update_cycle_metrics() - duplication avec signal post_save
-    # Les mises à jour de cycle sont gérées automatiquement par le signal
-    # update_cycle_after_log() dans signals.py pour éviter la duplication
-
-    def _recalculate_cycle_metrics(self, cycle):
-        """
-        Recalcule toutes les métriques de cycle à partir des logs.
-
-        Délègue la logique métier au ProductionCycleService pour
-        garantir la cohérence avec les autres méthodes de calcul.
-        """
-        ProductionCycleService.recalculate_all_metrics(cycle)

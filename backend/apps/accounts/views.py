@@ -1,12 +1,8 @@
-from typing import TypedDict
-
 from django.http import Http404
 from django.utils.translation import gettext as _
 from drf_spectacular.utils import OpenApiExample, OpenApiResponse, extend_schema
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
-from rest_framework_simplejwt.exceptions import TokenError
-from rest_framework_simplejwt.tokens import RefreshToken
 
 from .models import FarmProfile, User
 from .permissions import IsOwnerOrReadOnly
@@ -21,41 +17,17 @@ from .serializers import (
     UserProfileSerializer,
     UserRegistrationSerializer,
 )
-from .services import AccountDeletionService
+from .services import (
+    AccountDeletionService,
+    AuthApplicationService,
+    InvalidRefreshTokenError,
+    ProfileQueryService,
+)
 from .throttles import (
     AccountLoginThrottle,
     AccountRegisterThrottle,
     SensitiveAccountActionThrottle,
 )
-
-
-class AuthTokenPayload(TypedDict):
-    refresh: str
-    access: str
-
-
-class AuthSuccessPayload(TypedDict):
-    user: User
-    tokens: AuthTokenPayload
-    message: str
-
-
-def build_auth_tokens(user: User) -> AuthTokenPayload:
-    """Construit la paire de tokens JWT d'un utilisateur."""
-    refresh = RefreshToken.for_user(user)
-    return {
-        'refresh': str(refresh),
-        'access': str(refresh.access_token),
-    }
-
-
-def build_auth_success_payload(user: User, message: str) -> AuthSuccessPayload:
-    """Construit le payload commun aux vues register/login."""
-    return {
-        'user': user,
-        'tokens': build_auth_tokens(user),
-        'message': message,
-    }
 
 
 class RegisterView(generics.CreateAPIView):
@@ -134,8 +106,12 @@ class RegisterView(generics.CreateAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
+        auth_result = AuthApplicationService.build_auth_success_result(
+            user=user,
+            message=_('Compte créé avec succès'),
+        )
         response_serializer = AuthSuccessResponseSerializer(
-            build_auth_success_payload(user, _('Compte créé avec succès'))
+            auth_result.to_payload()
         )
 
         return Response(
@@ -214,8 +190,12 @@ class LoginView(generics.GenericAPIView):
         serializer.is_valid(raise_exception=True)
 
         user = serializer.validated_data['user']
+        auth_result = AuthApplicationService.build_auth_success_result(
+            user=user,
+            message=_('Connexion réussie'),
+        )
         response_serializer = AuthSuccessResponseSerializer(
-            build_auth_success_payload(user, _('Connexion réussie'))
+            auth_result.to_payload()
         )
         return Response(response_serializer.data)
 
@@ -244,7 +224,7 @@ class ProfileView(generics.RetrieveUpdateAPIView):
     permission_classes = [permissions.IsAuthenticated, IsOwnerOrReadOnly]
     
     def get_object(self):
-        return User.objects.with_farm_profile().get(pk=self.request.user.pk)
+        return ProfileQueryService.get_user_profile(self.request.user.pk)
 
 
 class LogoutView(generics.GenericAPIView):
@@ -298,8 +278,7 @@ class LogoutView(generics.GenericAPIView):
         refresh_token = serializer.validated_data['refresh']
 
         try:
-            token = RefreshToken(refresh_token)
-            token.blacklist()
+            AuthApplicationService.blacklist_refresh_token(refresh_token)
             response_serializer = MessageResponseSerializer(
                 {'message': _('Déconnexion réussie')}
             )
@@ -308,7 +287,7 @@ class LogoutView(generics.GenericAPIView):
                 status=status.HTTP_200_OK,
             )
 
-        except TokenError:
+        except InvalidRefreshTokenError:
             response_serializer = ErrorResponseSerializer(
                 {'error': _('Token invalide')}
             )
@@ -343,7 +322,7 @@ class FarmProfileView(generics.RetrieveUpdateAPIView):
     
     def get_object(self):
         try:
-            return FarmProfile.objects.with_user().get(user_id=self.request.user.pk)
+            return ProfileQueryService.get_farm_profile(self.request.user.pk)
         except FarmProfile.DoesNotExist:
             raise Http404
 

@@ -15,7 +15,14 @@ from chat.domain import (
 )
 from chat.models import Conversation, Message
 from chat.serializers import ConversationSerializer, MessageSerializer
-from chat.services import AutoResponseService, ConversationService, MessageService
+from chat.services import (
+    AutoResponseService,
+    ChatApplicationService,
+    ConversationService,
+    MessageEventPolicyService,
+    MessageService,
+    SendMessageCommand,
+)
 from django.core.files.uploadedfile import SimpleUploadedFile
 
 
@@ -406,6 +413,90 @@ class TestMessageService:
         assert message.sender_user == mavecam_admin
         assert message.content == "Bonjour, comment puis-je vous aider?"
         assert message.conversation == conversation
+
+
+@pytest.mark.django_db
+class TestChatApplicationService:
+    """Tests des use cases applicatifs exposes a l'API."""
+
+    def test_get_conversation_queryset_for_user_filters_regular_user(
+        self,
+        authenticated_user,
+        user_factory,
+    ):
+        own_conversation = ConversationService.get_or_create_conversation(authenticated_user)
+        other_user = user_factory()
+        ConversationService.get_or_create_conversation(other_user)
+
+        queryset = ChatApplicationService.get_conversation_queryset_for_user(authenticated_user)
+
+        assert list(queryset.values_list("id", flat=True)) == [own_conversation.id]
+
+    def test_send_message_routes_regular_user_command(self, authenticated_user):
+        conversation = ConversationService.get_or_create_conversation(authenticated_user)
+
+        message = ChatApplicationService.send_message(
+            conversation=conversation,
+            actor=authenticated_user,
+            command=SendMessageCommand(content="Bonjour depuis le use case"),
+        )
+
+        assert message.sender_type == "user"
+        assert message.content == "Bonjour depuis le use case"
+
+
+@pytest.mark.django_db
+class TestMessageEventPolicyService:
+    """Tests de la politique d'effets post-creation."""
+
+    def test_first_user_message_requires_ack_and_admin_notification(self, authenticated_user):
+        conversation = ConversationService.get_or_create_conversation(authenticated_user)
+        message = Message.objects.create(
+            conversation=conversation,
+            sender_type="user",
+            content="Premier message",
+        )
+
+        plan = MessageEventPolicyService.build_new_message_effects_plan(message)
+
+        assert plan.should_send_acknowledgment is True
+        assert plan.should_notify_admins is True
+        assert plan.should_notify_user is False
+        assert plan.acknowledgment_language == authenticated_user.language_preference
+
+    def test_followup_user_message_skips_ack(self, authenticated_user):
+        conversation = ConversationService.get_or_create_conversation(authenticated_user)
+        Message.objects.create(
+            conversation=conversation,
+            sender_type="user",
+            content="Premier message",
+        )
+        follow_up = Message.objects.create(
+            conversation=conversation,
+            sender_type="user",
+            content="Second message",
+        )
+
+        plan = MessageEventPolicyService.build_new_message_effects_plan(follow_up)
+
+        assert plan.should_send_acknowledgment is False
+        assert plan.should_notify_admins is True
+        assert plan.acknowledgment_language is None
+
+    def test_admin_message_notifies_user_only(self, authenticated_user, mavecam_admin):
+        conversation = ConversationService.get_or_create_conversation(authenticated_user)
+        admin_message = Message.objects.create(
+            conversation=conversation,
+            sender_type="admin",
+            sender_user=mavecam_admin,
+            content="Reponse support",
+        )
+
+        plan = MessageEventPolicyService.build_new_message_effects_plan(admin_message)
+
+        assert plan.should_send_acknowledgment is False
+        assert plan.should_notify_admins is False
+        assert plan.should_notify_user is True
 
     def test_send_admin_message_increments_unread_user(self, authenticated_user, mavecam_admin):
         """Test that admin message increments unread count for user."""

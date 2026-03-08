@@ -38,7 +38,15 @@ from .serializers import (
     ProductSerializer,
     RecommendedProductQuerySerializer,
 )
-from .services import CycleSimulationService, FeedingSuggestionService, OrderService, ProductService
+from .services import (
+    CatalogApplicationService,
+    CreateOrderCommand,
+    CycleSimulationCommand,
+    DeliveryFeePreviewCommand,
+    FeedingSuggestionsQuery,
+    OrderApplicationService,
+    RecommendedProductQuery,
+)
 from .throttles import (
     CommerceDeliveryPreviewThrottle,
     CommerceSimulationThrottle,
@@ -139,24 +147,18 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
         return Response(serializer.data)
 
     @staticmethod
-    def _get_user_cycle(request: Request, cycle_id: str | None):
-        from aquaculture.models import ProductionCycle
-
-        return ProductionCycle.objects.get(id=cycle_id, farm_profile__user=request.user)
-
-    @staticmethod
-    def _build_simulation_payload(validated_data: dict[str, Any]) -> dict[str, Any]:
-        return {
-            'species': validated_data['species'],
-            'initial_fish_count': validated_data['initial_fish_count'],
-            'initial_weight_g': validated_data.get('initial_weight_g'),
-            'target_weight_g': validated_data.get('target_weight_g'),
-            'cycle_duration_days': validated_data.get('cycle_duration_days'),
-            'survival_rate': validated_data.get('survival_rate'),
-            'selling_price_per_kg_fcfa': validated_data.get('selling_price_per_kg_fcfa'),
-            'fingerlings_cost_fcfa': validated_data.get('fingerlings_cost_fcfa'),
-            'other_costs_fcfa': validated_data.get('other_costs_fcfa'),
-        }
+    def _build_simulation_command(validated_data: dict[str, Any]) -> CycleSimulationCommand:
+        return CycleSimulationCommand(
+            species=validated_data['species'],
+            initial_fish_count=validated_data['initial_fish_count'],
+            initial_weight_g=validated_data.get('initial_weight_g'),
+            target_weight_g=validated_data.get('target_weight_g'),
+            cycle_duration_days=validated_data.get('cycle_duration_days'),
+            survival_rate=validated_data.get('survival_rate'),
+            selling_price_per_kg_fcfa=validated_data.get('selling_price_per_kg_fcfa'),
+            fingerlings_cost_fcfa=validated_data.get('fingerlings_cost_fcfa'),
+            other_costs_fcfa=validated_data.get('other_costs_fcfa'),
+        )
 
     @staticmethod
     def _simulation_validation_response(exc: Exception) -> Response:
@@ -168,7 +170,7 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self) -> QuerySet[Product]:
         """Retourne produits disponibles."""
-        return ProductService.get_all_products(include_unavailable=False)
+        return CatalogApplicationService.get_catalog()
 
     @action(detail=False, methods=['get'])
     def featured(self, request: Request) -> Response:
@@ -176,7 +178,7 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
         Retourne produits vedettes (futurs : is_featured=True).
         MVP : Retourne top 5 produits les plus populaires.
         """
-        products = self.get_queryset()[:5]
+        products = CatalogApplicationService.get_featured_products()
         return self._serialize_products(products)
 
     @action(detail=False, methods=['get'], url_path='for_cycle/(?P<cycle_id>[^/.]+)')
@@ -188,8 +190,10 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
             cycle_id: UUID du cycle
         """
         try:
-            cycle = self._get_user_cycle(request, cycle_id)
-            products = ProductService.get_products_for_cycle(cycle)
+            products = CatalogApplicationService.get_products_for_user_cycle(
+                request.user,
+                cycle_id,
+            )
             return self._serialize_products(products)
         except Exception as exc:
             from aquaculture.models import ProductionCycle
@@ -219,9 +223,11 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
                 status.HTTP_400_BAD_REQUEST,
             )
 
-        product = ProductService.get_recommended_product(
-            serializer.validated_data['species'],
-            serializer.validated_data['weight_g'],
+        product = CatalogApplicationService.get_recommended_product(
+            RecommendedProductQuery(
+                species=serializer.validated_data['species'],
+                weight_g=serializer.validated_data['weight_g'],
+            ),
         )
 
         if product:
@@ -300,10 +306,12 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
             return self._error_response('Paramètres de suggestions invalides', status.HTTP_400_BAD_REQUEST)
 
         try:
-            suggestions = FeedingSuggestionService.get_feeding_suggestions(
-                user_id=request.user.id,
-                farm_profile_id=serializer.validated_data.get('farm_profile_id'),
-                cycle_id=serializer.validated_data.get('cycle_id'),
+            suggestions = CatalogApplicationService.get_feeding_suggestions(
+                user=request.user,
+                query=FeedingSuggestionsQuery(
+                    farm_profile_id=serializer.validated_data.get('farm_profile_id'),
+                    cycle_id=serializer.validated_data.get('cycle_id'),
+                ),
             )
         except ValueError as exc:
             return self._error_response(str(exc), status.HTTP_400_BAD_REQUEST)
@@ -386,8 +394,8 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
             input_serializer = self.get_serializer(data=request.data)
             input_serializer.is_valid(raise_exception=True)
 
-            simulation_result = CycleSimulationService.simulate_cycle(
-                **self._build_simulation_payload(input_serializer.validated_data)
+            simulation_result = CatalogApplicationService.simulate_cycle(
+                self._build_simulation_command(input_serializer.validated_data),
             )
 
             output_serializer = CycleSimulationOutputSerializer(simulation_result)
@@ -501,7 +509,7 @@ class OrderViewSet(
 
     def get_queryset(self) -> QuerySet[Order]:
         """Retourne uniquement les commandes de l'utilisateur."""
-        return OrderService.get_user_orders(self.request.user)
+        return OrderApplicationService.get_user_orders(self.request.user)
 
     def retrieve(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         """
@@ -538,7 +546,21 @@ class OrderViewSet(
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         try:
-            order = cast(OrderCreateSerializer, serializer).save()
+            validated_data = cast(OrderCreateSerializer, serializer).validated_data
+            order = OrderApplicationService.create_order(
+                user=request.user,
+                command=CreateOrderCommand(
+                    items_data=OrderCreateSerializer._build_items_payload(validated_data['items']),
+                    delivery_method=validated_data['delivery_method'],
+                    pickup_location=validated_data.get('pickup_location'),
+                    client_uuid=(
+                        str(validated_data['client_uuid'])
+                        if validated_data.get('client_uuid') is not None
+                        else None
+                    ),
+                    created_offline=bool(validated_data.get('created_offline', False)),
+                ),
+            )
         except (InvalidOrderError, ProductNotFoundError, ProductNotAvailableError, ValueError) as exc:
             self._raise_service_validation_error(exc)
 
@@ -559,7 +581,7 @@ class OrderViewSet(
             "last_order_number": "ORD-20250110-0001"
         }
         """
-        stats = OrderService.get_order_statistics(request.user)
+        stats = OrderApplicationService.get_order_statistics(request.user)
         serializer = OrderStatisticsSerializer(stats)
         return Response(serializer.data)
 
@@ -573,7 +595,7 @@ class OrderViewSet(
         """
         order = self.get_object()
         try:
-            updated_order = OrderService.confirm_order_receipt(order, request.user)
+            updated_order = OrderApplicationService.confirm_order_receipt(order, request.user)
         except InvalidOrderError as exc:
             self._raise_service_validation_error(exc)
 
@@ -607,6 +629,11 @@ class OrderViewSet(
         """
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-
-        preview = serializer.validated_data['preview']
+        preview = OrderApplicationService.preview_delivery_fee(
+            user=request.user,
+            command=DeliveryFeePreviewCommand(
+                items_data=OrderCreateSerializer._build_items_payload(serializer.validated_data['items']),
+                delivery_method=serializer.validated_data['delivery_method'],
+            ),
+        )
         return self._build_delivery_preview_response(preview)

@@ -18,7 +18,7 @@ from ..serializers import (
     SanitaryLogSerializer,
     SanitaryResolutionSerializer,
 )
-from ..services import SanitaryService
+from ..services import ResolveSanitaryIssueCommand, SanitaryApplicationService
 from ..throttles import AquacultureSanitaryActionThrottle
 
 logger = logging.getLogger(__name__)
@@ -149,15 +149,13 @@ class SanitaryLogViewSet(viewsets.ModelViewSet):
         # Extract resolution data from request
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        resolution_date = serializer.validated_data.get('resolution_date')
-        resolution_notes = serializer.validated_data.get('resolution_notes', '')
-
         try:
-            # Delegate business logic to service layer
-            resolved_log = SanitaryService.resolve_sanitary_issue(
-                sanitary_log_id=str(log.id),
-                resolution_date=resolution_date,
-                resolution_notes=resolution_notes
+            resolved_log = SanitaryApplicationService.resolve_issue(
+                sanitary_log=log,
+                command=ResolveSanitaryIssueCommand(
+                    resolution_date=serializer.validated_data.get('resolution_date'),
+                    resolution_notes=serializer.validated_data.get('resolution_notes', ''),
+                ),
             )
 
             response_serializer = SanitaryLogSerializer(resolved_log, context={'request': request})
@@ -192,7 +190,7 @@ class SanitaryLogViewSet(viewsets.ModelViewSet):
         pour maintenir une séparation claire des responsabilités.
         """
         # Delegate business logic to service layer
-        active_issues_by_cycle = SanitaryService.get_active_issues_by_cycle(request.user)
+        active_issues_by_cycle = SanitaryApplicationService.get_active_issues(request.user)
 
         response_serializer = ActiveSanitaryIssueGroupSerializer(
             active_issues_by_cycle,

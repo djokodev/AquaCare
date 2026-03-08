@@ -13,7 +13,7 @@ from ..serializers import (
     SyncResponseSerializer,
     SyncValidationErrorResponseSerializer,
 )
-from ..services import SyncService
+from ..services import SyncApplicationService
 from ..throttles import AquacultureSyncThrottle
 
 logger = logging.getLogger(__name__)
@@ -90,24 +90,6 @@ class SyncView(generics.GenericAPIView):
     throttle_classes = [AquacultureSyncThrottle]
     serializer_class = SyncRequestSerializer
 
-    @staticmethod
-    def _validation_error_response(validation_errors: list[str]) -> Response:
-        serializer = SyncValidationErrorResponseSerializer(
-            {
-                'status': 'error',
-                'errors': [{'type': 'validation', 'error': err} for err in validation_errors],
-            }
-        )
-        return Response(serializer.data, status=status.HTTP_400_BAD_REQUEST)
-
-    @staticmethod
-    def _resolve_sync_status_code(sync_status: str) -> int:
-        if sync_status == 'error':
-            return status.HTTP_500_INTERNAL_SERVER_ERROR
-        if sync_status == 'partial_success':
-            return status.HTTP_207_MULTI_STATUS
-        return status.HTTP_200_OK
-
     def post(self, request):
         """
         Gère les requêtes de synchronisation offline.
@@ -117,17 +99,14 @@ class SyncView(generics.GenericAPIView):
 
         POST /api/aquaculture/sync/
         """
-        sync_payload = dict(request.data)
-        if 'client_id' in sync_payload and 'device_id' not in sync_payload:
-            sync_payload['device_id'] = sync_payload['client_id']
-
-        validation_errors = SyncService.validate_sync_data(sync_payload)
-        if validation_errors:
-            return self._validation_error_response(validation_errors)
-
-        sync_result = SyncService.perform_full_sync(
+        sync_result = SyncApplicationService.execute_sync(
             user=request.user,
-            sync_data=sync_payload
+            raw_payload=dict(request.data),
         )
-        response_serializer = SyncResponseSerializer(sync_result)
-        return Response(response_serializer.data, status=self._resolve_sync_status_code(sync_result['status']))
+        serializer_class = (
+            SyncValidationErrorResponseSerializer
+            if sync_result.status_code == status.HTTP_400_BAD_REQUEST
+            else SyncResponseSerializer
+        )
+        response_serializer = serializer_class(sync_result.payload)
+        return Response(response_serializer.data, status=sync_result.status_code)

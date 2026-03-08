@@ -31,7 +31,7 @@ from .serializers import (
     MessageSerializer,
     SendMessageSerializer,
 )
-from .services import ConversationService, MessageService
+from .services import ChatApplicationService, SendMessageCommand
 
 
 class ChatMessageThrottle(UserRateThrottle):
@@ -163,16 +163,9 @@ class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
 
         raise error
 
-    def _get_accessible_conversation(
-        self,
-        conversation_id: str | None,
-        request_user: Any,
-    ) -> Conversation | Response:
+    def _get_accessible_conversation(self, conversation_id: str | None, request_user: Any) -> Conversation | Response:
         try:
-            return ConversationService.get_conversation_by_id(
-                conversation_id=conversation_id,
-                requesting_user=request_user,
-            )
+            return ChatApplicationService.get_conversation_for_actor(conversation_id, request_user)
         except (ConversationNotFound, UnauthorizedAccess):
             return self._conversation_not_found_response()
 
@@ -190,7 +183,7 @@ class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
         return Response(serializer.data)
 
     def _serialize_conversation(self, conversation: Conversation, request: Request) -> Response:
-        refreshed_conversation = Conversation.objects.with_api_annotations().get(pk=conversation.pk)
+        refreshed_conversation = ChatApplicationService.refresh_conversation_for_api(conversation)
         serializer = ConversationSerializer(refreshed_conversation, context={'request': request})
         return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -200,22 +193,16 @@ class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
         request: Request,
         validated_data: dict[str, Any],
     ) -> Message:
-        if request.user.is_staff:
-            return MessageService.send_admin_message(
-                conversation=conversation,
-                admin_user=request.user,
+        return ChatApplicationService.send_message(
+            conversation=conversation,
+            actor=request.user,
+            command=SendMessageCommand(
                 content=validated_data['content'],
                 media_file=validated_data.get('media_file'),
                 media_type=validated_data.get('media_type'),
-            )
-
-        return MessageService.send_user_message(
-            user=request.user,
-            content=validated_data['content'],
-            media_file=validated_data.get('media_file'),
-            media_type=validated_data.get('media_type'),
-            client_uuid=validated_data.get('client_uuid'),
-            created_offline=validated_data.get('created_offline', False),
+                client_uuid=validated_data.get('client_uuid'),
+                created_offline=validated_data.get('created_offline', False),
+            ),
         )
 
     def get_queryset(self):
@@ -225,12 +212,7 @@ class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
         Returns:
             QuerySet: User's conversation or all conversations (if admin)
         """
-        user = self.request.user
-
-        if user.is_staff:
-            return Conversation.objects.with_api_annotations()
-
-        return Conversation.objects.with_api_annotations().filter(user=user)
+        return ChatApplicationService.get_conversation_queryset_for_user(self.request.user)
 
     @action(detail=False, methods=['get'], url_path='me')
     def get_my_conversation(self, request: Request) -> Response:
@@ -245,8 +227,7 @@ class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
         This endpoint ensures the user always has a conversation available,
         creating it automatically on first access.
         """
-        conversation = ConversationService.get_or_create_conversation(request.user)
-        conversation = Conversation.objects.with_api_annotations().get(pk=conversation.pk)
+        conversation = ChatApplicationService.get_or_create_user_conversation(request.user)
 
         serializer = self.get_serializer(conversation)
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -265,7 +246,7 @@ class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
         if isinstance(conversation, Response):
             return conversation
 
-        messages = Message.objects.for_feed().filter(conversation=conversation).order_by('created_at')
+        messages = ChatApplicationService.get_conversation_messages(conversation)
         return self._serialize_messages(request, messages)
 
     @action(detail=True, methods=['post'], throttle_classes=[ChatMessageThrottle])
@@ -322,8 +303,8 @@ class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
         if isinstance(conversation, Response):
             return conversation
 
-        MessageService.mark_messages_as_read(
+        refreshed_conversation = ChatApplicationService.mark_conversation_as_read(
             conversation=conversation,
-            reader_is_admin=request.user.is_staff
+            actor=request.user,
         )
-        return self._serialize_conversation(conversation, request)
+        return self._serialize_conversation(refreshed_conversation, request)

@@ -14,6 +14,13 @@ from unittest.mock import patch
 import pytest
 from django.test import override_settings
 from django.utils import timezone
+from notifications.application_services import (
+    NotificationInboxApplicationService,
+    NotificationOwnershipError,
+    NotificationPreferenceApplicationService,
+    NotificationQueryFilters,
+    PushTokenRegistrationCommand,
+)
 from notifications.models import Notification, NotificationPreference
 from notifications.services import NotificationService
 
@@ -279,6 +286,84 @@ class TestNotificationServiceQuery:
 
         notifications = NotificationService.get_user_notifications(user)
         assert len(notifications) == 3
+
+
+@pytest.mark.django_db
+class TestNotificationInboxApplicationService:
+    """Tests des use cases applicatifs inbox."""
+
+    def test_get_user_notifications_applies_filters(self, user):
+        Notification.objects.create(
+            user=user,
+            notification_type='alert',
+            title='Unread alert',
+            message='Unread',
+            is_read=False,
+            scheduled_for=timezone.now(),
+        )
+        Notification.objects.create(
+            user=user,
+            notification_type='order_confirmed',
+            title='Read order',
+            message='Read',
+            is_read=True,
+            scheduled_for=timezone.now(),
+        )
+
+        queryset = NotificationInboxApplicationService.get_user_notifications(
+            user,
+            NotificationQueryFilters(is_read=True, notification_type='order_confirmed'),
+        )
+
+        assert queryset.count() == 1
+        assert queryset.first().notification_type == 'order_confirmed'
+
+    def test_mark_notification_as_read_rejects_foreign_owner(self, user, user2):
+        notification = Notification.objects.create(
+            user=user2,
+            notification_type='alert',
+            title='Foreign',
+            message='Forbidden',
+            scheduled_for=timezone.now(),
+        )
+
+        with pytest.raises(NotificationOwnershipError):
+            NotificationInboxApplicationService.mark_notification_as_read(notification, user)
+
+    def test_register_push_token_creates_active_token(self, user):
+        token, created = NotificationInboxApplicationService.register_push_token(
+            user,
+            PushTokenRegistrationCommand(
+                expo_push_token='ExponentPushToken[abcdefgh12345678]',
+                device_id='device-1',
+                device_name='Pixel',
+                platform='android',
+            ),
+        )
+
+        assert created is True
+        assert token.is_active is True
+
+
+@pytest.mark.django_db
+class TestNotificationPreferenceApplicationService:
+    """Tests des use cases applicatifs preferences."""
+
+    def test_update_preferences(self, user):
+        preferences = NotificationPreferenceApplicationService.get_or_create_preferences(user)
+
+        updated_preferences = NotificationPreferenceApplicationService.update_preferences(
+            preferences,
+            {
+                'email_enabled': False,
+                'push_enabled': False,
+                'email_frequency': 'never',
+            },
+        )
+
+        assert updated_preferences.email_enabled is False
+        assert updated_preferences.push_enabled is False
+        assert updated_preferences.email_frequency == 'never'
 
 
 @pytest.mark.django_db

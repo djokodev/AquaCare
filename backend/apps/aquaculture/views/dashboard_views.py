@@ -11,7 +11,7 @@ from ..serializers import (
     DashboardQuerySerializer,
     DashboardSerializer,
 )
-from ..services.dashboard_service import DashboardService
+from ..services import DashboardApplicationService, InvalidDashboardCycleScopeError
 
 
 @extend_schema(
@@ -50,26 +50,18 @@ class DashboardView(generics.GenericAPIView):
 
     def get(self, request):
         """GET /api/aquaculture/dashboard/"""
-        user = request.user
         query_serializer = self.get_query_serializer(data=request.query_params)
         query_serializer.is_valid(raise_exception=True)
-        cycle_id = query_serializer.validated_data.get('cycle_id')
-
-        data = DashboardService.build_dashboard_data(user, cycle_id)
-
-        if data is None:
+        try:
+            data = DashboardApplicationService.build_dashboard_payload(
+                user=request.user,
+                cycle_id=query_serializer.validated_data.get('cycle_id'),
+            )
+        except InvalidDashboardCycleScopeError as exc:
             return Response(
-                {'detail': _("Cycle de session introuvable ou inactif.")},
+                {'detail': str(exc) or _("Cycle de session introuvable ou inactif.")},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-
-        # Let the response serializer handle nested DRF serialization with request context.
-        qs = data.pop('_querysets')
-        data['active_cycles'] = qs['active_cycles_list']
-        data['recent_logs'] = qs['recent_logs']
-        data['current_feeding_plans'] = qs['current_plans']
-        data['pending_notifications'] = qs['pending_notifications']
-        data['active_sanitary_issues'] = qs['active_issues']
 
         serializer = self.get_serializer(data, context={'request': request})
         return Response(serializer.data)
