@@ -7,13 +7,13 @@ Fournit des fixtures réutilisables pour :
 - Commandes (pour tester les notifications commerce)
 - Notifications de différents types
 """
-import pytest
-from django.utils import timezone
 from datetime import timedelta
 from decimal import Decimal
 
-from accounts.models import User, FarmProfile
+import pytest
+from accounts.models import User
 from aquaculture.models import ProductionCycle
+from django.utils import timezone
 from notifications.models import Notification, NotificationPreference, PushToken
 
 

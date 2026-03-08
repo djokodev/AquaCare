@@ -3,10 +3,10 @@ Configuration URLs pour le module commerce MAVECAM AquaCare.
 
 Routes API REST pour catalogue produits et gestion commandes.
 """
-from django.urls import path, include
+from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
-from .views import ProductViewSet, OrderViewSet
+from .views import OrderViewSet, ProductViewSet
 
 # Router DRF pour URLs automatiques
 router = DefaultRouter()

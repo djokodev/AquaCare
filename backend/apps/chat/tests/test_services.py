@@ -1,26 +1,29 @@
-# coding: utf-8
 """
 Tests for chat service layer.
 
 Tests business logic in ConversationService, MessageService, and AutoResponseService.
 Uses Django database with pytest fixtures.
 """
-import pytest
 import uuid
-from decimal import Decimal
-from django.utils import timezone
-from django.core.files.uploadedfile import SimpleUploadedFile
 
-from chat.models import Conversation, Message
-from chat.services import ConversationService, MessageService, AutoResponseService
+import pytest
 from chat.domain import (
-    InvalidMessageContent,
-    MediaTooLarge,
-    InvalidMediaFormat,
-    ConversationNotFound,
-    UnauthorizedAccess,
     ClientUUIDConflict,
+    ConversationNotFound,
+    InvalidMessageContent,
+    UnauthorizedAccess,
 )
+from chat.models import Conversation, Message
+from chat.serializers import ConversationSerializer, MessageSerializer
+from chat.services import (
+    AutoResponseService,
+    ChatApplicationService,
+    ConversationService,
+    MessageEventPolicyService,
+    MessageService,
+    SendMessageCommand,
+)
+from django.core.files.uploadedfile import SimpleUploadedFile
 
 
 @pytest.mark.django_db
@@ -50,6 +53,19 @@ class TestConversationService:
 
         assert conv1.id == conv2.id
         assert Conversation.objects.filter(user=authenticated_user).count() == 1
+
+    def test_get_or_create_conversation_existing_uses_single_query(
+        self,
+        authenticated_user,
+        django_assert_num_queries,
+    ):
+        """Le chemin nominal ne doit pas relire la conversation apres get_or_create()."""
+        ConversationService.get_or_create_conversation(authenticated_user)
+
+        with django_assert_num_queries(1):
+            conversation = ConversationService.get_or_create_conversation(authenticated_user)
+
+        assert conversation.user_id == authenticated_user.id
 
     def test_get_user_conversation_success(self, authenticated_user):
         """Test getting user's conversation successfully."""
@@ -117,6 +133,16 @@ class TestConversationService:
 
         assert conversation.last_message_at > original_timestamp
 
+    def test_update_last_message_timestamp_uses_single_query(
+        self,
+        authenticated_user,
+        django_assert_num_queries,
+    ):
+        conversation = ConversationService.get_or_create_conversation(authenticated_user)
+
+        with django_assert_num_queries(1):
+            ConversationService.update_last_message_timestamp(conversation)
+
     def test_increment_unread_count_user(self, authenticated_user):
         """Test incrementing unread count for user."""
         conversation = ConversationService.get_or_create_conversation(authenticated_user)
@@ -126,6 +152,16 @@ class TestConversationService:
         conversation.refresh_from_db()
 
         assert conversation.unread_count_user == 1
+
+    def test_increment_unread_count_user_uses_single_query(
+        self,
+        authenticated_user,
+        django_assert_num_queries,
+    ):
+        conversation = ConversationService.get_or_create_conversation(authenticated_user)
+
+        with django_assert_num_queries(1):
+            ConversationService.increment_unread_count(conversation, for_user=True)
 
     def test_increment_unread_count_admin(self, authenticated_user):
         """Test incrementing unread count for admin."""
@@ -148,6 +184,18 @@ class TestConversationService:
 
         assert conversation.unread_count_user == 0
 
+    def test_reset_unread_count_user_uses_single_query(
+        self,
+        authenticated_user,
+        django_assert_num_queries,
+    ):
+        conversation = ConversationService.get_or_create_conversation(authenticated_user)
+        conversation.unread_count_user = 5
+        conversation.save()
+
+        with django_assert_num_queries(1):
+            ConversationService.reset_unread_count(conversation, for_user=True)
+
     def test_reset_unread_count_admin(self, authenticated_user):
         """Test resetting unread count for admin."""
         conversation = ConversationService.get_or_create_conversation(authenticated_user)
@@ -158,6 +206,31 @@ class TestConversationService:
         conversation.refresh_from_db()
 
         assert conversation.unread_count_admin == 0
+
+    def test_conversation_list_serialization_avoids_n_plus_one(
+        self,
+        authenticated_user,
+        user_factory,
+        mavecam_admin,
+        django_assert_num_queries,
+    ):
+        """La liste serializee des conversations doit rester en une seule requete."""
+        other_user = user_factory()
+        own_conversation = ConversationService.get_or_create_conversation(authenticated_user)
+        other_conversation = ConversationService.get_or_create_conversation(other_user)
+
+        MessageService.send_user_message(authenticated_user, "Premier message")
+        MessageService.send_admin_message(own_conversation, mavecam_admin, "Réponse support")
+        MessageService.send_user_message(other_user, "Message autre utilisateur")
+        MessageService.send_admin_message(other_conversation, mavecam_admin, "Suivi support")
+
+        with django_assert_num_queries(1):
+            queryset = list(Conversation.objects.with_api_annotations().order_by('created_at'))
+            data = ConversationSerializer(queryset, many=True).data
+
+        assert len(data) == 2
+        assert all(item['message_count'] >= 1 for item in data)
+        assert all(item['last_message'] is not None for item in data)
 
 
 @pytest.mark.django_db
@@ -186,7 +259,7 @@ class TestMessageService:
 
     def test_send_user_message_with_client_uuid(self, authenticated_user):
         """Test sending message with client UUID for offline sync."""
-        conversation = ConversationService.get_or_create_conversation(authenticated_user)
+        ConversationService.get_or_create_conversation(authenticated_user)
         client_uuid = uuid.uuid4()
 
         message = MessageService.send_user_message(
@@ -203,7 +276,7 @@ class TestMessageService:
 
     def test_send_user_message_duplicate_uuid_returns_existing(self, authenticated_user):
         """Test that duplicate client_uuid returns existing message (deduplication)."""
-        conversation = ConversationService.get_or_create_conversation(authenticated_user)
+        ConversationService.get_or_create_conversation(authenticated_user)
         client_uuid = uuid.uuid4()
 
         # Send first message
@@ -257,7 +330,7 @@ class TestMessageService:
 
     def test_send_user_message_empty_content_rejected(self, authenticated_user):
         """Test that empty message content is rejected."""
-        conversation = ConversationService.get_or_create_conversation(authenticated_user)
+        ConversationService.get_or_create_conversation(authenticated_user)
 
         with pytest.raises(InvalidMessageContent):
             MessageService.send_user_message(
@@ -269,9 +342,26 @@ class TestMessageService:
                 created_offline=False
             )
 
+    def test_message_feed_serialization_avoids_n_plus_one(
+        self,
+        authenticated_user,
+        mavecam_admin,
+        django_assert_num_queries,
+    ):
+        """Le feed messages doit charger conversation.user et sender_user en eager loading."""
+        conversation = ConversationService.get_or_create_conversation(authenticated_user)
+        MessageService.send_user_message(authenticated_user, "Question support")
+        MessageService.send_admin_message(conversation, mavecam_admin, "Réponse support")
+
+        with django_assert_num_queries(1):
+            queryset = list(Message.objects.for_feed().filter(conversation=conversation))
+            data = MessageSerializer(queryset, many=True).data
+
+        assert len(data) >= 2
+
     def test_send_user_message_too_long_rejected(self, authenticated_user):
         """Test that messages exceeding 5000 chars are rejected."""
-        conversation = ConversationService.get_or_create_conversation(authenticated_user)
+        ConversationService.get_or_create_conversation(authenticated_user)
         long_content = "a" * 5001
 
         with pytest.raises(InvalidMessageContent):
@@ -286,7 +376,7 @@ class TestMessageService:
 
     def test_send_user_message_with_image(self, authenticated_user):
         """Test sending message with image attachment."""
-        conversation = ConversationService.get_or_create_conversation(authenticated_user)
+        ConversationService.get_or_create_conversation(authenticated_user)
 
         # Create small test image
         image_content = b'fake image data'
@@ -323,6 +413,90 @@ class TestMessageService:
         assert message.sender_user == mavecam_admin
         assert message.content == "Bonjour, comment puis-je vous aider?"
         assert message.conversation == conversation
+
+
+@pytest.mark.django_db
+class TestChatApplicationService:
+    """Tests des use cases applicatifs exposes a l'API."""
+
+    def test_get_conversation_queryset_for_user_filters_regular_user(
+        self,
+        authenticated_user,
+        user_factory,
+    ):
+        own_conversation = ConversationService.get_or_create_conversation(authenticated_user)
+        other_user = user_factory()
+        ConversationService.get_or_create_conversation(other_user)
+
+        queryset = ChatApplicationService.get_conversation_queryset_for_user(authenticated_user)
+
+        assert list(queryset.values_list("id", flat=True)) == [own_conversation.id]
+
+    def test_send_message_routes_regular_user_command(self, authenticated_user):
+        conversation = ConversationService.get_or_create_conversation(authenticated_user)
+
+        message = ChatApplicationService.send_message(
+            conversation=conversation,
+            actor=authenticated_user,
+            command=SendMessageCommand(content="Bonjour depuis le use case"),
+        )
+
+        assert message.sender_type == "user"
+        assert message.content == "Bonjour depuis le use case"
+
+
+@pytest.mark.django_db
+class TestMessageEventPolicyService:
+    """Tests de la politique d'effets post-creation."""
+
+    def test_first_user_message_requires_ack_and_admin_notification(self, authenticated_user):
+        conversation = ConversationService.get_or_create_conversation(authenticated_user)
+        message = Message.objects.create(
+            conversation=conversation,
+            sender_type="user",
+            content="Premier message",
+        )
+
+        plan = MessageEventPolicyService.build_new_message_effects_plan(message)
+
+        assert plan.should_send_acknowledgment is True
+        assert plan.should_notify_admins is True
+        assert plan.should_notify_user is False
+        assert plan.acknowledgment_language == authenticated_user.language_preference
+
+    def test_followup_user_message_skips_ack(self, authenticated_user):
+        conversation = ConversationService.get_or_create_conversation(authenticated_user)
+        Message.objects.create(
+            conversation=conversation,
+            sender_type="user",
+            content="Premier message",
+        )
+        follow_up = Message.objects.create(
+            conversation=conversation,
+            sender_type="user",
+            content="Second message",
+        )
+
+        plan = MessageEventPolicyService.build_new_message_effects_plan(follow_up)
+
+        assert plan.should_send_acknowledgment is False
+        assert plan.should_notify_admins is True
+        assert plan.acknowledgment_language is None
+
+    def test_admin_message_notifies_user_only(self, authenticated_user, mavecam_admin):
+        conversation = ConversationService.get_or_create_conversation(authenticated_user)
+        admin_message = Message.objects.create(
+            conversation=conversation,
+            sender_type="admin",
+            sender_user=mavecam_admin,
+            content="Reponse support",
+        )
+
+        plan = MessageEventPolicyService.build_new_message_effects_plan(admin_message)
+
+        assert plan.should_send_acknowledgment is False
+        assert plan.should_notify_admins is False
+        assert plan.should_notify_user is True
 
     def test_send_admin_message_increments_unread_user(self, authenticated_user, mavecam_admin):
         """Test that admin message increments unread count for user."""
@@ -447,7 +621,6 @@ class TestUnreadCountFExpressions:
 
     def test_increment_uses_f_expression(self, authenticated_user):
         """Test that increment_unread_count uses F() so no read-modify-write race."""
-        from django.db.models import F
         conversation = ConversationService.get_or_create_conversation(authenticated_user)
 
         # Call twice to ensure both increments are applied

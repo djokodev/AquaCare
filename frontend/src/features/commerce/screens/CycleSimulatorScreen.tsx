@@ -18,7 +18,7 @@ import { AppDispatch, RootState } from '@/store/store';
 import { fetchCycleSimulation, resetSimulation, addToCart, fetchProducts } from '@/features/commerce/store/commerceSlice';
 import { CycleSimulationParams } from '@/types/commerce';
 import { MAVECAM_COLORS } from '@/constants/colors';
-import { CYCLE_SIMULATION_DEFAULTS } from '@/domain/commerce';
+import { CYCLE_SIMULATION_DEFAULTS } from '@/domain/commerce/constants';
 import { RootStackParamList } from '@/navigation/MainNavigator';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
 import { aggregatePhasesByName, DisplayPhase } from '../utils/aggregatePhases';

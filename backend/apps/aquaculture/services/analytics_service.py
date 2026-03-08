@@ -11,18 +11,143 @@ Architecture:
 
 Author: MAVECAM AquaCare Team
 """
-from typing import List, Dict, Any, Optional
-from decimal import Decimal
-from datetime import date, timedelta
-from django.db.models import Avg, Sum, Min, Max, F
-from django.utils.translation import gettext_lazy as _
-from django.utils import timezone
+from __future__ import annotations
 
-from ..models import ProductionCycle, CycleLog
-from ..domain.calculators import AquacultureCalculator
-from ..constants import DEFAULT_FEED_PRICE_PER_KG
-from .base import BaseService
+from dataclasses import dataclass
+from datetime import date
+from decimal import Decimal
+from typing import TypedDict
+
+from django.db.models import Avg, F, Max, Min, Sum
+from django.utils import timezone
+from django.utils.translation import gettext_lazy as _
 from notifications.services import NotificationService
+
+from ..constants import DEFAULT_FEED_PRICE_PER_KG
+from ..domain.calculators import AquacultureCalculator
+from ..models import CycleLog, ProductionCycle
+from .base import BaseService
+
+
+class MortalityCause(TypedDict):
+    mortality_reason: str | None
+    count: int
+
+
+class MortalityAnalysis(TypedDict):
+    total: int
+    percentage: float
+    by_week: dict[int, int]
+    main_causes: list[MortalityCause]
+    daily_average: float
+    is_abnormal: bool
+    peak_week: int | None
+    peak_week_count: int
+    has_data: bool
+
+
+class GrowthAnalysisPoint(TypedDict):
+    day: int
+    date: str
+    weight: float
+    daily_gain: float
+    cumulative_gain: float
+
+
+class EnvironmentParameterRange(TypedDict):
+    min: float | None
+    max: float | None
+
+
+class EnvironmentAverages(TypedDict):
+    temperature: float | None
+    ph: float | None
+    oxygen: float | None
+    ammonia: float | None
+
+
+class EnvironmentSummaryNoData(TypedDict):
+    has_data: bool
+    message: str
+
+
+class EnvironmentSummary(TypedDict):
+    has_data: bool
+    averages: EnvironmentAverages
+    ranges: dict[str, EnvironmentParameterRange]
+    alerts: list[dict[str, str]]
+    measurements_count: int
+
+
+class CycleCurrentMetrics(TypedDict):
+    survival_rate: float
+    biomass: float
+    average_weight: float
+    fcr: float
+    daily_growth_rate: float
+    specific_growth_rate: float
+    stocking_density: float
+
+
+class CycleFeedMetrics(TypedDict):
+    total_consumed: float
+    average_daily: float
+    cost_estimate: float
+    feed_efficiency: float | None
+
+
+class CycleCostEstimate(TypedDict):
+    feed_cost: float
+    cost_per_kg: float
+
+
+class CycleSummary(TypedDict):
+    id: str
+    name: str
+    duration_days: int | None
+    survival_rate: float | None
+    fcr: float | None
+    final_average_weight: float | None
+    total_biomass: float | None
+    status: str
+
+
+class HistoricalAverages(TypedDict):
+    survival_rate: float
+    fcr: float
+    final_weight: float
+    duration_days: int
+
+
+class CycleComparison(TypedDict):
+    current_cycle: CycleSummary
+    previous_cycles: list[CycleSummary]
+    historical_averages: HistoricalAverages
+    performance_ranking: str
+    improvement_suggestions: list[str]
+
+
+class CycleStatistics(TypedDict):
+    cycle_id: str
+    cycle_name: str
+    days_active: int
+    current_metrics: CycleCurrentMetrics
+    feed_metrics: CycleFeedMetrics
+    mortality_analysis: MortalityAnalysis
+    growth_performance: list[GrowthAnalysisPoint]
+    environmental_summary: EnvironmentSummary | EnvironmentSummaryNoData
+    estimated_costs: CycleCostEstimate
+
+
+@dataclass(frozen=True)
+class AnalyticsLogBuckets:
+    """Classification memoisee des logs prefetchés utiles aux analytics."""
+
+    all_logs: list[CycleLog]
+    growth_logs: list[CycleLog]
+    mortality_logs: list[CycleLog]
+    environment_logs: list[CycleLog]
+    feed_logs: list[CycleLog]
 
 
 class AnalyticsService(BaseService):
@@ -44,12 +169,60 @@ class AnalyticsService(BaseService):
         - Rapports PDF de fin de cycle
     """
 
+    @staticmethod
+    def _get_prefetched_logs(cycle: ProductionCycle) -> list[CycleLog] | None:
+        """Retourne les logs préféchargés pour un cycle si disponibles."""
+        prefetched_logs = getattr(cycle, 'analytics_logs', None)
+        if prefetched_logs is None:
+            return None
+        return list(prefetched_logs)
+
+    @staticmethod
+    def _get_prefetched_log_buckets(cycle: ProductionCycle) -> AnalyticsLogBuckets | None:
+        """Construit et memoise les sous-ensembles de logs prefetchés utiles."""
+        cached_buckets = getattr(cycle, '_analytics_log_buckets', None)
+        if cached_buckets is not None:
+            return cached_buckets
+
+        prefetched_logs = AnalyticsService._get_prefetched_logs(cycle)
+        if prefetched_logs is None:
+            return None
+
+        growth_logs: list[CycleLog] = []
+        mortality_logs: list[CycleLog] = []
+        environment_logs: list[CycleLog] = []
+        feed_logs: list[CycleLog] = []
+
+        for log in prefetched_logs:
+            if log.average_weight is not None:
+                growth_logs.append(log)
+            if log.mortality_count and log.mortality_count > 0:
+                mortality_logs.append(log)
+            if not (
+                log.water_temperature is None
+                and log.ph_level is None
+                and log.dissolved_oxygen is None
+            ):
+                environment_logs.append(log)
+            if log.feed_quantity is not None:
+                feed_logs.append(log)
+
+        buckets = AnalyticsLogBuckets(
+            all_logs=prefetched_logs,
+            growth_logs=growth_logs,
+            mortality_logs=mortality_logs,
+            environment_logs=environment_logs,
+            feed_logs=feed_logs,
+        )
+        setattr(cycle, '_analytics_log_buckets', buckets)
+        return buckets
+
     # ============================================================================
     # ANALYSE MORTALITÉ
     # ============================================================================
 
     @staticmethod
-    def analyze_mortality(cycle: ProductionCycle) -> Dict[str, Any]:
+    def analyze_mortality(cycle: ProductionCycle) -> MortalityAnalysis:
         """
         Analyse complète des patterns de mortalité pour un cycle.
 
@@ -77,23 +250,37 @@ class AnalyticsService(BaseService):
             >>> analysis = AnalyticsService.analyze_mortality(cycle)
             >>> print(f"Mortalité: {analysis['percentage']:.1f}%")
         """
-        logs = cycle.logs.filter(mortality_count__gt=0)
+        prefetched_buckets = AnalyticsService._get_prefetched_log_buckets(cycle)
 
-        total_mortality = logs.aggregate(Sum('mortality_count'))['mortality_count__sum'] or 0
+        weekly_mortality: dict[int, int] = {}
+        if prefetched_buckets is not None:
+            mortality_logs = prefetched_buckets.mortality_logs
+            total_mortality = sum(int(log.mortality_count or 0) for log in mortality_logs)
+
+            causes: dict[str | None, int] = {}
+            for log in mortality_logs:
+                week = (log.log_date - cycle.start_date).days // 7 + 1
+                weekly_mortality[week] = weekly_mortality.get(week, 0) + int(log.mortality_count)
+                cause_key = log.mortality_reason or None
+                causes[cause_key] = causes.get(cause_key, 0) + int(log.mortality_count)
+
+            main_causes = [
+                {'mortality_reason': reason, 'count': count}
+                for reason, count in sorted(causes.items(), key=lambda item: item[1], reverse=True)[:5]
+            ]
+        else:
+            logs = cycle.logs.filter(mortality_count__gt=0)
+            total_mortality = logs.aggregate(Sum('mortality_count'))['mortality_count__sum'] or 0
+
+            for log in logs:
+                week = (log.log_date - cycle.start_date).days // 7 + 1
+                weekly_mortality[week] = weekly_mortality.get(week, 0) + log.mortality_count
+
+            main_causes = list(
+                logs.values('mortality_reason').annotate(count=Sum('mortality_count')).order_by('-count')[:5]
+            )
+
         mortality_percentage = (total_mortality / cycle.initial_count * 100) if cycle.initial_count > 0 else 0
-
-        # Weekly mortality breakdown
-        weekly_mortality = {}
-        for log in logs:
-            week = (log.log_date - cycle.start_date).days // 7 + 1
-            if week not in weekly_mortality:
-                weekly_mortality[week] = 0
-            weekly_mortality[week] += log.mortality_count
-
-        # Main causes (top 5)
-        main_causes = list(logs.values('mortality_reason').annotate(
-            count=Sum('mortality_count')
-        ).order_by('-count')[:5])
 
         # Calculate daily average
         days_active = cycle.days_active() if cycle.days_active() > 0 else 1
@@ -120,7 +307,7 @@ class AnalyticsService(BaseService):
     # ============================================================================
 
     @staticmethod
-    def analyze_growth(cycle: ProductionCycle) -> List[Dict[str, Any]]:
+    def analyze_growth(cycle: ProductionCycle) -> list[GrowthAnalysisPoint]:
         """
         Analyse l'évolution de la croissance du cycle.
 
@@ -146,12 +333,21 @@ class AnalyticsService(BaseService):
             >>> for point in growth_data:
             >>>     print(f"Jour {point['day']}: {point['weight']}g")
         """
-        logs = cycle.logs.filter(average_weight__isnull=False).order_by('log_date')
+        prefetched_buckets = AnalyticsService._get_prefetched_log_buckets(cycle)
+        logs = (
+            prefetched_buckets.growth_logs
+            if prefetched_buckets is not None
+            else cycle.logs.filter(average_weight__isnull=False).order_by('log_date')
+        )
 
         growth_data = []
         for log in logs:
             days_elapsed = (log.log_date - cycle.start_date).days
-            daily_gain = float(log.average_weight - cycle.initial_average_weight) / days_elapsed if days_elapsed > 0 else 0
+            daily_gain = (
+                float(log.average_weight - cycle.initial_average_weight) / days_elapsed
+                if days_elapsed > 0
+                else 0
+            )
             cumulative_gain = float(log.average_weight - cycle.initial_average_weight)
 
             growth_data.append({
@@ -169,7 +365,7 @@ class AnalyticsService(BaseService):
     # ============================================================================
 
     @staticmethod
-    def analyze_environment(cycle: ProductionCycle) -> Dict[str, Any]:
+    def analyze_environment(cycle: ProductionCycle) -> EnvironmentSummary | EnvironmentSummaryNoData:
         """
         Analyse les conditions environnementales d'un cycle.
 
@@ -196,31 +392,56 @@ class AnalyticsService(BaseService):
             >>> if env_data['alerts']:
             >>>     print("Alertes:", env_data['alerts'])
         """
-        logs = cycle.logs.exclude(
-            water_temperature__isnull=True,
-            ph_level__isnull=True,
-            dissolved_oxygen__isnull=True
-        )
+        prefetched_buckets = AnalyticsService._get_prefetched_log_buckets(cycle)
+        if prefetched_buckets is not None:
+            logs = prefetched_buckets.environment_logs
+        else:
+            logs = cycle.logs.exclude(
+                water_temperature__isnull=True,
+                ph_level__isnull=True,
+                dissolved_oxygen__isnull=True,
+            )
 
-        if not logs.exists():
+        if not logs:
             return {
                 'has_data': False,
                 'message': _('Aucune donnée environnementale disponible')
             }
+        if prefetched_buckets is not None:
+            temperatures = [float(log.water_temperature) for log in logs if log.water_temperature is not None]
+            ph_levels = [float(log.ph_level) for log in logs if log.ph_level is not None]
+            oxygens = [float(log.dissolved_oxygen) for log in logs if log.dissolved_oxygen is not None]
+            ammonia_levels = [float(log.ammonia_level) for log in logs if log.ammonia_level is not None]
 
-        env_data = logs.aggregate(
-            avg_temperature=Avg('water_temperature'),
-            min_temperature=Min('water_temperature'),
-            max_temperature=Max('water_temperature'),
-            avg_ph=Avg('ph_level'),
-            min_ph=Min('ph_level'),
-            max_ph=Max('ph_level'),
-            avg_oxygen=Avg('dissolved_oxygen'),
-            min_oxygen=Min('dissolved_oxygen'),
-            max_oxygen=Max('dissolved_oxygen'),
-            avg_ammonia=Avg('ammonia_level'),
-            max_ammonia=Max('ammonia_level')
-        )
+            env_data = {
+                'avg_temperature': sum(temperatures) / len(temperatures) if temperatures else None,
+                'min_temperature': min(temperatures) if temperatures else None,
+                'max_temperature': max(temperatures) if temperatures else None,
+                'avg_ph': sum(ph_levels) / len(ph_levels) if ph_levels else None,
+                'min_ph': min(ph_levels) if ph_levels else None,
+                'max_ph': max(ph_levels) if ph_levels else None,
+                'avg_oxygen': sum(oxygens) / len(oxygens) if oxygens else None,
+                'min_oxygen': min(oxygens) if oxygens else None,
+                'max_oxygen': max(oxygens) if oxygens else None,
+                'avg_ammonia': sum(ammonia_levels) / len(ammonia_levels) if ammonia_levels else None,
+                'max_ammonia': max(ammonia_levels) if ammonia_levels else None,
+            }
+            measurements_count = len(logs)
+        else:
+            env_data = logs.aggregate(
+                avg_temperature=Avg('water_temperature'),
+                min_temperature=Min('water_temperature'),
+                max_temperature=Max('water_temperature'),
+                avg_ph=Avg('ph_level'),
+                min_ph=Min('ph_level'),
+                max_ph=Max('ph_level'),
+                avg_oxygen=Avg('dissolved_oxygen'),
+                min_oxygen=Min('dissolved_oxygen'),
+                max_oxygen=Max('dissolved_oxygen'),
+                avg_ammonia=Avg('ammonia_level'),
+                max_ammonia=Max('ammonia_level'),
+            )
+            measurements_count = logs.count()
 
         # Generate alerts for out-of-range values
         alerts = AquacultureCalculator.check_environmental_alerts(
@@ -261,7 +482,7 @@ class AnalyticsService(BaseService):
                 }
             },
             'alerts': alerts,
-            'measurements_count': logs.count()
+            'measurements_count': measurements_count
         }
 
     # ============================================================================
@@ -269,7 +490,7 @@ class AnalyticsService(BaseService):
     # ============================================================================
 
     @staticmethod
-    def get_cycle_statistics(cycle: ProductionCycle) -> Dict[str, Any]:
+    def get_cycle_statistics(cycle: ProductionCycle) -> CycleStatistics:
         """
         Génère les statistiques complètes pour un cycle.
 
@@ -340,8 +561,12 @@ class AnalyticsService(BaseService):
             'environmental_summary': environmental_summary,
             'estimated_costs': {
                 'feed_cost': feed_metrics['cost_estimate'],
-                'cost_per_kg': feed_metrics['cost_estimate'] / float(cycle.current_biomass) if cycle.current_biomass > 0 else 0
-            }
+                'cost_per_kg': (
+                    feed_metrics['cost_estimate'] / float(cycle.current_biomass)
+                    if cycle.current_biomass > 0
+                    else 0
+                ),
+            },
         }
 
     # ============================================================================
@@ -351,8 +576,8 @@ class AnalyticsService(BaseService):
     @staticmethod
     def compare_with_previous_cycles(
         current_cycle: ProductionCycle,
-        limit: int = 3
-    ) -> Dict[str, Any]:
+        limit: int = 3,
+    ) -> CycleComparison:
         """
         Compare un cycle avec les cycles précédents de même espèce.
 
@@ -420,7 +645,7 @@ class AnalyticsService(BaseService):
         return comparison_data
 
     @staticmethod
-    def get_cycle_summary(cycle: ProductionCycle) -> Dict[str, Any]:
+    def get_cycle_summary(cycle: ProductionCycle) -> CycleSummary:
         """
         Génère un résumé concis d'un cycle pour comparaison.
 
@@ -444,7 +669,7 @@ class AnalyticsService(BaseService):
     @staticmethod
     def calculate_performance_ranking(
         current_cycle: ProductionCycle,
-        previous_cycles: List[ProductionCycle]
+        previous_cycles: list[ProductionCycle]
     ) -> str:
         """
         Calcule le classement de performance du cycle actuel.
@@ -481,8 +706,8 @@ class AnalyticsService(BaseService):
     @staticmethod
     def generate_improvement_suggestions(
         cycle: ProductionCycle,
-        historical_avg: Dict[str, Any]
-    ) -> List[str]:
+        historical_avg: dict[str, Decimal | float | int | None],
+    ) -> list[str]:
         """
         Génère des suggestions d'amélioration basées sur la performance.
 
@@ -627,8 +852,13 @@ class AnalyticsService(BaseService):
 
             else:
                 # ── MODE REBUILD COMPLET (delete case ou sync batch) ─────────────
+                prefetched_buckets = AnalyticsService._get_prefetched_log_buckets(cycle)
                 growth_data = []
-                growth_logs = cycle.logs.filter(average_weight__isnull=False).order_by('log_date')
+                growth_logs = (
+                    prefetched_buckets.growth_logs
+                    if prefetched_buckets is not None
+                    else cycle.logs.filter(average_weight__isnull=False).order_by('log_date')
+                )
                 for log in growth_logs:
                     growth_data.append({
                         'date': log.log_date.isoformat(),
@@ -639,7 +869,11 @@ class AnalyticsService(BaseService):
 
                 survival_data = []
                 current_count = cycle.initial_count
-                mortality_logs = cycle.logs.filter(mortality_count__gt=0).order_by('log_date')
+                mortality_logs = (
+                    prefetched_buckets.mortality_logs
+                    if prefetched_buckets is not None
+                    else cycle.logs.filter(mortality_count__gt=0).order_by('log_date')
+                )
                 for log in mortality_logs:
                     current_count = max(0, current_count - log.mortality_count)
                     survival_rate = (current_count / cycle.initial_count * 100) if cycle.initial_count > 0 else 0
@@ -652,7 +886,11 @@ class AnalyticsService(BaseService):
 
                 feed_data = []
                 cumulative_feed = 0
-                feed_logs = cycle.logs.filter(feed_quantity__isnull=False).order_by('log_date')
+                feed_logs = (
+                    prefetched_buckets.feed_logs
+                    if prefetched_buckets is not None
+                    else cycle.logs.filter(feed_quantity__isnull=False).order_by('log_date')
+                )
                 for log in feed_logs:
                     cumulative_feed += float(log.feed_quantity)
                     feed_data.append({
@@ -682,9 +920,9 @@ class AnalyticsService(BaseService):
                     species=cycle.species
                 )
 
-                if feed_logs.exists():
+                if feed_logs:
                     total_feed = sum(float(log.feed_quantity) for log in feed_logs)
-                    metrics.average_daily_feed = Decimal(str(total_feed / feed_logs.count()))
+                    metrics.average_daily_feed = Decimal(str(total_feed / len(feed_logs)))
 
                 AnalyticsService.log_operation(
                     'update_cycle_metrics_data',
@@ -693,7 +931,7 @@ class AnalyticsService(BaseService):
                         'mode': 'rebuild',
                         'growth_points': len(growth_data),
                         'survival_points': len(survival_data),
-                        'feed_logs': feed_logs.count()
+                        'feed_logs': len(feed_logs)
                     },
                     level='debug'
                 )
@@ -708,7 +946,7 @@ class AnalyticsService(BaseService):
             )
 
     @staticmethod
-    def check_and_create_environmental_alerts(log: 'CycleLog') -> None:
+    def check_and_create_environmental_alerts(log: CycleLog) -> None:
         """
         Vérifie les paramètres environnementaux et crée des notifications si nécessaire.
 

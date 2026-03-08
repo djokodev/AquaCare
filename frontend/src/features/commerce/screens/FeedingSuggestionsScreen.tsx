@@ -1,8 +1,8 @@
-﻿import React, { useEffect, useState } from 'react';
+﻿import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
-  ScrollView,
+  FlatList,
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
@@ -35,6 +35,14 @@ export default function FeedingSuggestionsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [expandedCycleId, setExpandedCycleId] = useState<string | null>(null);
   const [expandedPhaseIndex, setExpandedPhaseIndex] = useState<{ [key: string]: number | null }>({});
+  const cartItemsCount = useMemo(
+    () => cart.items.reduce((sum, item) => sum + item.quantity, 0),
+    [cart.items]
+  );
+  const suggestionCycles = useMemo(
+    () => (suggestionsData?.has_suggestions ? suggestionsData.suggestions : []),
+    [suggestionsData]
+  );
 
   useEffect(() => {
     if (farmProfile?.id && currentCycle?.id) {
@@ -47,7 +55,7 @@ export default function FeedingSuggestionsScreen() {
     }
   }, [farmProfile?.id, currentCycle?.id, dispatch]);
 
-  const handleRefresh = async () => {
+  const handleRefresh = useCallback(async () => {
     if (!farmProfile?.id || !currentCycle?.id) return;
     setRefreshing(true);
     await dispatch(
@@ -57,20 +65,20 @@ export default function FeedingSuggestionsScreen() {
       })
     );
     setRefreshing(false);
-  };
+  }, [currentCycle?.id, dispatch, farmProfile?.id]);
 
-  const toggleCycleExpansion = (cycleId: string) => {
-    setExpandedCycleId(expandedCycleId === cycleId ? null : cycleId);
-  };
+  const toggleCycleExpansion = useCallback((cycleId: string) => {
+    setExpandedCycleId((currentCycleId) => (currentCycleId === cycleId ? null : cycleId));
+  }, []);
 
-  const togglePhaseExpansion = (cycleId: string, phaseIndex: number) => {
-    setExpandedPhaseIndex({
-      ...expandedPhaseIndex,
-      [cycleId]: expandedPhaseIndex[cycleId] === phaseIndex ? null : phaseIndex,
-    });
-  };
+  const togglePhaseExpansion = useCallback((cycleId: string, phaseIndex: number) => {
+    setExpandedPhaseIndex((currentState) => ({
+      ...currentState,
+      [cycleId]: currentState[cycleId] === phaseIndex ? null : phaseIndex,
+    }));
+  }, []);
 
-  const handleAddToCart = (productId: string, quantity: number) => {
+  const handleAddToCart = useCallback((productId: string, quantity: number) => {
     const product = products.items.find((p) => p.id === productId);
     if (!product) {
       Alert.alert(t('error'), t('productNotFound'));
@@ -79,9 +87,9 @@ export default function FeedingSuggestionsScreen() {
 
     dispatch(addToCart({ product, quantity }));
     Alert.alert(t('success'), t('productAddedToCart', { quantity }), [{ text: t('ok') }]);
-  };
+  }, [dispatch, products.items, t]);
 
-  const handleAddCycleToCart = (cycle: CycleSuggestion) => {
+  const handleAddCycleToCart = useCallback((cycle: CycleSuggestion) => {
     let totalProducts = 0;
     cycle.phases.forEach((phase) => {
       phase.products.forEach((suggestedProduct) => {
@@ -101,9 +109,9 @@ export default function FeedingSuggestionsScreen() {
         { text: t('ok') },
       ]
     );
-  };
+  }, [dispatch, navigation, products.items, t]);
 
-  const renderConfidenceScore = () => {
+  const renderConfidenceScore = useCallback(() => {
     if (!suggestionsData?.analysis) return null;
 
     const { confidence_score, cycles_with_data, total_cycles } = suggestionsData.analysis;
@@ -141,9 +149,9 @@ export default function FeedingSuggestionsScreen() {
         </View>
       </View>
     );
-  };
+  }, [suggestionsData?.analysis, t]);
 
-  const renderSuggestedProduct = (suggestedProduct: SuggestedProduct) => {
+  const renderSuggestedProduct = useCallback((suggestedProduct: SuggestedProduct) => {
     const totalPrice = suggestedProduct.total_price;
 
     return (
@@ -170,9 +178,9 @@ export default function FeedingSuggestionsScreen() {
         </View>
       </View>
     );
-  };
+  }, [handleAddToCart, t]);
 
-  const renderFeedingPhase = (phase: FeedingPhase, cycleId: string, index: number) => {
+  const renderFeedingPhase = useCallback((phase: FeedingPhase, cycleId: string, index: number) => {
     const isExpanded = expandedPhaseIndex[cycleId] === index;
     const totalBags = phase.products.reduce((sum, p) => sum + p.quantity_bags, 0);
 
@@ -229,9 +237,9 @@ export default function FeedingSuggestionsScreen() {
         )}
       </View>
     );
-  };
+  }, [expandedPhaseIndex, renderSuggestedProduct, t, togglePhaseExpansion]);
 
-  const renderCycleSuggestion = ({ item: cycle }: { item: CycleSuggestion }) => {
+  const renderCycleSuggestion = useCallback(({ item: cycle }: { item: CycleSuggestion }) => {
     const isExpanded = expandedCycleId === cycle.cycle_id;
 
     return (
@@ -295,21 +303,41 @@ export default function FeedingSuggestionsScreen() {
         )}
       </View>
     );
-  };
+  }, [expandedCycleId, handleAddCycleToCart, renderFeedingPhase, t, toggleCycleExpansion]);
 
-  const renderEmptyState = () => (
-    <View className="py-16 items-center">
-      <Ionicons name="bulb-outline" size={100} color={MAVECAM_COLORS.GRAY_LIGHT} />
-      <Text className="mt-5 text-2xl font-bold text-gray-dark">{t('noSuggestionsYet')}</Text>
-      <Text className="mt-3 text-base text-gray-light text-center px-8">{t('noSuggestionsDescription')}</Text>
-      <TouchableOpacity
-        className="mt-6 bg-mavecam-primary flex-row items-center px-6 py-3 rounded-lg gap-2"
-        onPress={() => navigation.navigate('NewCycle')}
-      >
-        <Ionicons name="add-circle-outline" size={20} color={MAVECAM_COLORS.WHITE} />
-        <Text className="text-white text-base font-semibold">{t('startNewCycle')}</Text>
-      </TouchableOpacity>
-    </View>
+  const renderListHeader = useCallback(
+    () =>
+      suggestionCycles.length > 0 ? (
+        <>
+          <View className="flex-row bg-[#dbeafe] p-3 rounded-lg mb-4 gap-3">
+            <Ionicons name="information-circle" size={24} color={MAVECAM_COLORS.INFO} />
+            <Text className="flex-1 text-sm text-mavecam-primary">{t('suggestionsInfoBanner')}</Text>
+          </View>
+
+          {renderConfidenceScore()}
+        </>
+      ) : null,
+    [renderConfidenceScore, suggestionCycles.length, t]
+  );
+
+  const renderEmptyState = useCallback(
+    () => (
+      <View className="py-16 items-center">
+        <Ionicons name="bulb-outline" size={100} color={MAVECAM_COLORS.GRAY_LIGHT} />
+        <Text className="mt-5 text-2xl font-bold text-gray-dark">{t('noSuggestionsYet')}</Text>
+        <Text className="mt-3 text-base text-gray-light text-center px-8">
+          {t('noSuggestionsDescription')}
+        </Text>
+        <TouchableOpacity
+          className="mt-6 bg-mavecam-primary flex-row items-center px-6 py-3 rounded-lg gap-2"
+          onPress={() => navigation.navigate('NewCycle')}
+        >
+          <Ionicons name="add-circle-outline" size={20} color={MAVECAM_COLORS.WHITE} />
+          <Text className="text-white text-base font-semibold">{t('startNewCycle')}</Text>
+        </TouchableOpacity>
+      </View>
+    ),
+    [navigation, t]
   );
 
   return (
@@ -324,10 +352,10 @@ export default function FeedingSuggestionsScreen() {
         </View>
         <TouchableOpacity onPress={() => navigation.navigate('Cart')} className="relative">
           <Ionicons name="cart-outline" size={24} color={MAVECAM_COLORS.GREEN_PRIMARY} />
-          {cart.items.length > 0 && (
+          {cartItemsCount > 0 && (
             <View className="absolute -top-2 -right-2 bg-[#dc2626] rounded-full min-w-[20px] h-5 items-center justify-center px-1">
               <Text className="text-white text-[10px] font-bold">
-                {cart.items.reduce((sum, item) => sum + item.quantity, 0)}
+                {cartItemsCount}
               </Text>
             </View>
           )}
@@ -372,8 +400,13 @@ export default function FeedingSuggestionsScreen() {
           </TouchableOpacity>
         </View>
       ) : (
-        <ScrollView
-          className="flex-1"
+        <FlatList
+          data={suggestionCycles}
+          keyExtractor={(item) => item.cycle_id}
+          renderItem={renderCycleSuggestion}
+          ListHeaderComponent={renderListHeader}
+          ListEmptyComponent={renderEmptyState}
+          contentContainerStyle={{ padding: 16, paddingBottom: 24 }}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -383,29 +416,9 @@ export default function FeedingSuggestionsScreen() {
             />
           }
           showsVerticalScrollIndicator={false}
-        >
-          {suggestionsData?.has_suggestions ? (
-            <View className="p-4">
-              <View className="flex-row bg-[#dbeafe] p-3 rounded-lg mb-4 gap-3">
-                <Ionicons name="information-circle" size={24} color={MAVECAM_COLORS.INFO} />
-                <Text className="flex-1 text-sm text-mavecam-primary">
-                  {t('suggestionsInfoBanner')}
-                </Text>
-              </View>
-
-              {renderConfidenceScore()}
-
-              {suggestionsData.suggestions.map((cycle) => (
-                <View key={cycle.cycle_id}>{renderCycleSuggestion({ item: cycle })}</View>
-              ))}
-            </View>
-          ) : (
-            renderEmptyState()
-          )}
-        </ScrollView>
+        />
       )}
     </View>
   );
 }
-
 

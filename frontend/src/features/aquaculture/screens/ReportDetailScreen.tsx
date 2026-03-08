@@ -1,10 +1,10 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
   ActivityIndicator,
-  ScrollView,
+  FlatList,
   RefreshControl,
   Alert,
   Share,
@@ -85,11 +85,11 @@ export default function ReportDetailScreen({ navigation, route }: ReportDetailSc
     }, [loadReport])
   );
 
-  const onRefresh = async () => {
+  const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await loadReport();
     setRefreshing(false);
-  };
+  }, [loadReport]);
 
   const runAction = async (actionKey: string, fn: () => Promise<ProductionReport>) => {
     try {
@@ -208,149 +208,179 @@ export default function ReportDetailScreen({ navigation, route }: ReportDetailSc
     );
   }
 
-  const payload = (report.payload || {}) as Record<string, unknown>;
-  const summary = ((payload.summary as ReportSummary) || {}) as ReportSummary;
-  const cycles = ((payload.cycles as ReportCycleData[]) || []) as ReportCycleData[];
+  const payload = useMemo(
+    () => ((report.payload || {}) as Record<string, unknown>),
+    [report.payload]
+  );
+  const summary = useMemo(
+    () => ((payload.summary as ReportSummary) || {}) as ReportSummary,
+    [payload]
+  );
+  const cycles = useMemo(
+    () => ((payload.cycles as ReportCycleData[]) || []) as ReportCycleData[],
+    [payload]
+  );
+
+  const renderCycleSection = useCallback(
+    ({ item: section, index }: { item: ReportCycleData; index: number }) => (
+      <View className="mx-4 mb-3 rounded-xl border border-gray-100 bg-white p-4">
+        <Text className="text-sm font-semibold text-gray-dark">
+          {section.cycle?.cycle_name || t('cycle')}
+        </Text>
+        <Text className="text-xs text-gray-light">
+          {section.cycle?.species_display || ''} - {t('pond')} {section.cycle?.pond_identifier || '-'}
+        </Text>
+        <Text className="text-xs text-gray-dark mt-1">
+          {t('dailyLogHistory')}: {section.period_metrics?.log_count || 0} | {t('feedConsumedStat')}:{' '}
+          {(section.period_metrics?.total_feed || 0).toFixed(2)} kg | {t('mortality')}:{' '}
+          {section.period_metrics?.total_mortality || 0}
+        </Text>
+      </View>
+    ),
+    [t]
+  );
+
+  const renderListHeader = useCallback(
+    () => (
+      <View className="p-4">
+        <View className="bg-white rounded-xl p-4 mb-4">
+          <Text className="text-base font-bold text-gray-dark">
+            {report.report_type === 'daily'
+              ? t('reportTypeDaily')
+              : report.report_type === 'weekly'
+                ? t('reportTypeWeekly')
+                : t('reportTypeMonthly')}
+          </Text>
+          <Text className="text-xs text-gray-light mt-1">
+            {formatDate(report.period_start)} - {formatDate(report.period_end)}
+          </Text>
+          <Text className="text-xs mt-2 text-gray-dark">
+            {t('reportStatusLabel')}: {report.status === 'validated' ? t('reportStatusValidated') : t('reportStatusDraft')}
+          </Text>
+          <Text className="text-xs mt-1 text-gray-dark">
+            {t('email')}: {report.email_status === 'sent' ? t('sent') : report.email_status === 'failed' ? t('failed') : t('notSent')}
+          </Text>
+          <Text className="text-xs mt-1 text-gray-dark">
+            {t('whatsAppLabel')}: {report.whatsapp_status === 'shared' ? t('shared') : t('notShared')}
+          </Text>
+        </View>
+
+        <View className="bg-white rounded-xl p-4 mb-4">
+          <Text className="text-base font-bold text-gray-dark mb-3">{t('reportSummary')}</Text>
+          <View className="flex-row flex-wrap justify-between">
+            <View className="w-[48%] mb-2">
+              <Text className="text-xs text-gray-light">{t('activeCycles')}</Text>
+              <Text className="text-sm font-semibold text-gray-dark">{summary.cycle_count || 0}</Text>
+            </View>
+            <View className="w-[48%] mb-2">
+              <Text className="text-xs text-gray-light">{t('dailyLogHistory')}</Text>
+              <Text className="text-sm font-semibold text-gray-dark">{summary.total_log_count || 0}</Text>
+            </View>
+            <View className="w-[48%] mb-2">
+              <Text className="text-xs text-gray-light">{t('feedConsumedStat')}</Text>
+              <Text className="text-sm font-semibold text-gray-dark">{(summary.total_feed || 0).toFixed(2)} kg</Text>
+            </View>
+            <View className="w-[48%] mb-2">
+              <Text className="text-xs text-gray-light">{t('mortality')}</Text>
+              <Text className="text-sm font-semibold text-gray-dark">{summary.total_mortality || 0}</Text>
+            </View>
+          </View>
+        </View>
+
+        <View className="bg-white rounded-xl p-4 mb-4">
+          <Text className="text-base font-bold text-gray-dark mb-3">{t('cycles')}</Text>
+        </View>
+
+        <View className="bg-white rounded-xl p-4 mb-6">
+          <Text className="text-base font-bold text-gray-dark mb-3">{t('actions')}</Text>
+
+          <TouchableOpacity
+            className="bg-cream border border-gray-200 rounded-lg p-3 mb-2 flex-row items-center justify-center"
+            onPress={() => runAction('regenerate', () => aquacultureService.regenerateReport(report.id))}
+            disabled={Boolean(actionLoading)}
+          >
+            {actionLoading === 'regenerate' ? (
+              <ActivityIndicator color={MAVECAM_COLORS.GREEN_PRIMARY} />
+            ) : (
+              <>
+                <Ionicons name="refresh-outline" size={18} color={MAVECAM_COLORS.GREEN_PRIMARY} />
+                <Text className="text-sm font-semibold text-mavecam-primary ml-2">{t('regenerateReport')}</Text>
+              </>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            className="bg-mavecam-primary rounded-lg p-3 mb-2 flex-row items-center justify-center"
+            onPress={() => runAction('validate', () => aquacultureService.validateReport(report.id))}
+            disabled={Boolean(actionLoading) || report.status === 'validated'}
+          >
+            {actionLoading === 'validate' ? (
+              <ActivityIndicator color={MAVECAM_COLORS.WHITE} />
+            ) : (
+              <>
+                <Ionicons name="checkmark-done-outline" size={18} color={MAVECAM_COLORS.WHITE} />
+                <Text className="text-sm font-semibold text-white ml-2">{t('validateReport')}</Text>
+              </>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            className="bg-[#1d4ed8] rounded-lg p-3 mb-2 flex-row items-center justify-center"
+            onPress={handleEmailAction}
+            disabled={Boolean(actionLoading)}
+          >
+            {actionLoading === 'email' ? (
+              <ActivityIndicator color={MAVECAM_COLORS.WHITE} />
+            ) : (
+              <>
+                <Ionicons name="mail-outline" size={18} color={MAVECAM_COLORS.WHITE} />
+                <Text className="text-sm font-semibold text-white ml-2">{t('sendByEmail')}</Text>
+              </>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            className="bg-[#16a34a] rounded-lg p-3 flex-row items-center justify-center"
+            onPress={handleShareWhatsApp}
+            disabled={Boolean(actionLoading)}
+          >
+            {actionLoading === 'whatsapp' ? (
+              <ActivityIndicator color={MAVECAM_COLORS.WHITE} />
+            ) : (
+              <>
+                <Ionicons name="logo-whatsapp" size={18} color={MAVECAM_COLORS.WHITE} />
+                <Text className="text-sm font-semibold text-white ml-2">{t('shareOnWhatsApp')}</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
+      </View>
+    ),
+    [actionLoading, handleEmailAction, handleShareWhatsApp, report, runAction, summary, t]
+  );
+
+  const renderEmptyCycles = useCallback(
+    () => (
+      <View className="mx-4 rounded-xl bg-white p-5 items-center">
+        <Text className="text-sm text-gray-light">{t('noData')}</Text>
+      </View>
+    ),
+    [t]
+  );
 
   return (
     <View className="flex-1 bg-cream">
       {renderHeader()}
 
-      <ScrollView refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
-        <View className="p-4">
-          <View className="bg-white rounded-xl p-4 mb-4">
-            <Text className="text-base font-bold text-gray-dark">
-              {report.report_type === 'daily'
-                ? t('reportTypeDaily')
-                : report.report_type === 'weekly'
-                  ? t('reportTypeWeekly')
-                  : t('reportTypeMonthly')}
-            </Text>
-            <Text className="text-xs text-gray-light mt-1">
-              {formatDate(report.period_start)} - {formatDate(report.period_end)}
-            </Text>
-            <Text className="text-xs mt-2 text-gray-dark">
-              {t('reportStatusLabel')}: {report.status === 'validated' ? t('reportStatusValidated') : t('reportStatusDraft')}
-            </Text>
-            <Text className="text-xs mt-1 text-gray-dark">
-              {t('email')}: {report.email_status === 'sent' ? t('sent') : report.email_status === 'failed' ? t('failed') : t('notSent')}
-            </Text>
-            <Text className="text-xs mt-1 text-gray-dark">
-              {t('whatsAppLabel')}: {report.whatsapp_status === 'shared' ? t('shared') : t('notShared')}
-            </Text>
-          </View>
-
-          <View className="bg-white rounded-xl p-4 mb-4">
-            <Text className="text-base font-bold text-gray-dark mb-3">{t('reportSummary')}</Text>
-            <View className="flex-row flex-wrap justify-between">
-              <View className="w-[48%] mb-2">
-                <Text className="text-xs text-gray-light">{t('activeCycles')}</Text>
-                <Text className="text-sm font-semibold text-gray-dark">{summary.cycle_count || 0}</Text>
-              </View>
-              <View className="w-[48%] mb-2">
-                <Text className="text-xs text-gray-light">{t('dailyLogHistory')}</Text>
-                <Text className="text-sm font-semibold text-gray-dark">{summary.total_log_count || 0}</Text>
-              </View>
-              <View className="w-[48%] mb-2">
-                <Text className="text-xs text-gray-light">{t('feedConsumedStat')}</Text>
-                <Text className="text-sm font-semibold text-gray-dark">{(summary.total_feed || 0).toFixed(2)} kg</Text>
-              </View>
-              <View className="w-[48%] mb-2">
-                <Text className="text-xs text-gray-light">{t('mortality')}</Text>
-                <Text className="text-sm font-semibold text-gray-dark">{summary.total_mortality || 0}</Text>
-              </View>
-            </View>
-          </View>
-
-          <View className="bg-white rounded-xl p-4 mb-4">
-            <Text className="text-base font-bold text-gray-dark mb-3">{t('cycles')}</Text>
-            {cycles.length === 0 ? (
-              <Text className="text-sm text-gray-light">{t('noData')}</Text>
-            ) : (
-              cycles.map((section, index) => (
-                <View key={section.cycle?.id || `cycle-${index}`} className="mb-3 pb-3 border-b border-gray-100">
-                  <Text className="text-sm font-semibold text-gray-dark">
-                    {section.cycle?.cycle_name || t('cycle')}
-                  </Text>
-                  <Text className="text-xs text-gray-light">
-                    {section.cycle?.species_display || ''} - {t('pond')} {section.cycle?.pond_identifier || '-'}
-                  </Text>
-                  <Text className="text-xs text-gray-dark mt-1">
-                    {t('dailyLogHistory')}: {section.period_metrics?.log_count || 0} | {t('feedConsumedStat')}:{' '}
-                    {(section.period_metrics?.total_feed || 0).toFixed(2)} kg | {t('mortality')}:{' '}
-                    {section.period_metrics?.total_mortality || 0}
-                  </Text>
-                </View>
-              ))
-            )}
-          </View>
-
-          <View className="bg-white rounded-xl p-4 mb-6">
-            <Text className="text-base font-bold text-gray-dark mb-3">{t('actions')}</Text>
-
-            <TouchableOpacity
-              className="bg-cream border border-gray-200 rounded-lg p-3 mb-2 flex-row items-center justify-center"
-              onPress={() => runAction('regenerate', () => aquacultureService.regenerateReport(report.id))}
-              disabled={Boolean(actionLoading)}
-            >
-              {actionLoading === 'regenerate' ? (
-                <ActivityIndicator color={MAVECAM_COLORS.GREEN_PRIMARY} />
-              ) : (
-                <>
-                  <Ionicons name="refresh-outline" size={18} color={MAVECAM_COLORS.GREEN_PRIMARY} />
-                  <Text className="text-sm font-semibold text-mavecam-primary ml-2">{t('regenerateReport')}</Text>
-                </>
-              )}
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              className="bg-mavecam-primary rounded-lg p-3 mb-2 flex-row items-center justify-center"
-              onPress={() => runAction('validate', () => aquacultureService.validateReport(report.id))}
-              disabled={Boolean(actionLoading) || report.status === 'validated'}
-            >
-              {actionLoading === 'validate' ? (
-                <ActivityIndicator color={MAVECAM_COLORS.WHITE} />
-              ) : (
-                <>
-                  <Ionicons name="checkmark-done-outline" size={18} color={MAVECAM_COLORS.WHITE} />
-                  <Text className="text-sm font-semibold text-white ml-2">{t('validateReport')}</Text>
-                </>
-              )}
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              className="bg-[#1d4ed8] rounded-lg p-3 mb-2 flex-row items-center justify-center"
-              onPress={handleEmailAction}
-              disabled={Boolean(actionLoading)}
-            >
-              {actionLoading === 'email' ? (
-                <ActivityIndicator color={MAVECAM_COLORS.WHITE} />
-              ) : (
-                <>
-                  <Ionicons name="mail-outline" size={18} color={MAVECAM_COLORS.WHITE} />
-                  <Text className="text-sm font-semibold text-white ml-2">{t('sendByEmail')}</Text>
-                </>
-              )}
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              className="bg-[#16a34a] rounded-lg p-3 flex-row items-center justify-center"
-              onPress={handleShareWhatsApp}
-              disabled={Boolean(actionLoading)}
-            >
-              {actionLoading === 'whatsapp' ? (
-                <ActivityIndicator color={MAVECAM_COLORS.WHITE} />
-              ) : (
-                <>
-                  <Ionicons name="logo-whatsapp" size={18} color={MAVECAM_COLORS.WHITE} />
-                  <Text className="text-sm font-semibold text-white ml-2">{t('shareOnWhatsApp')}</Text>
-                </>
-              )}
-            </TouchableOpacity>
-
-          </View>
-        </View>
-      </ScrollView>
+      <FlatList
+        data={cycles}
+        keyExtractor={(item, index) => item.cycle?.id || `cycle-${index}`}
+        renderItem={renderCycleSection}
+        ListHeaderComponent={renderListHeader}
+        ListEmptyComponent={renderEmptyCycles}
+        contentContainerStyle={{ paddingBottom: 24 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      />
     </View>
   );
 }

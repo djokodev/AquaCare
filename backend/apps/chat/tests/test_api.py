@@ -1,18 +1,17 @@
-# coding: utf-8
 """
 Tests for chat API endpoints.
 
 Tests HTTP layer: viewsets, serializers, permissions, and API responses.
 """
-import pytest
 import uuid
 from unittest.mock import patch
-from django.urls import reverse
-from rest_framework import status
-from django.core.files.uploadedfile import SimpleUploadedFile
 
+import pytest
 from chat.models import Conversation, Message
 from chat.services import ConversationService, MessageService
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.urls import reverse
+from rest_framework import status
 
 
 @pytest.mark.django_db
@@ -33,7 +32,7 @@ class TestConversationListAPI:
 
         # Create another user's conversation
         other_user = user_factory()
-        other_conv = ConversationService.get_or_create_conversation(other_user)
+        ConversationService.get_or_create_conversation(other_user)
 
         url = reverse('conversation-list')
         response = auth_client.get(url)
@@ -53,8 +52,8 @@ class TestConversationListAPI:
         # Create multiple conversations
         user1 = user_factory()
         user2 = user_factory()
-        conv1 = ConversationService.get_or_create_conversation(user1)
-        conv2 = ConversationService.get_or_create_conversation(user2)
+        ConversationService.get_or_create_conversation(user1)
+        ConversationService.get_or_create_conversation(user2)
 
         url = reverse('conversation-list')
         response = api_client.get(url)
@@ -89,6 +88,17 @@ class TestConversationDetailAPI:
 
         # Either 403 or 404 is acceptable for security (don't reveal existence)
         assert response.status_code in [status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND]
+
+    def test_get_my_conversation_creates_conversation_when_missing(self, auth_client, authenticated_user):
+        """Test l'action custom /me pour garantir une conversation disponible."""
+        Conversation.objects.filter(user=authenticated_user).delete()
+
+        url = reverse('conversation-get-my-conversation')
+        response = auth_client.get(url)
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data['user'] == authenticated_user.id
+        assert Conversation.objects.filter(user=authenticated_user).count() == 1
 
 
 @pytest.mark.django_db
@@ -240,6 +250,24 @@ class TestSendMessageAPI:
         assert response.data['media_type'] == 'image'
         assert 'media_url' in response.data
         assert response.data['media_url'] is not None
+
+    def test_send_message_hides_admin_identifier_from_regular_user(
+        self, auth_client, authenticated_user, mavecam_admin
+    ):
+        """User responses must not expose internal admin sender identifiers."""
+        conversation = ConversationService.get_or_create_conversation(authenticated_user)
+        MessageService.send_admin_message(conversation, mavecam_admin, "Réponse support")
+
+        url = reverse('conversation-messages', kwargs={'pk': conversation.id})
+        response = auth_client.get(url)
+
+        assert response.status_code == status.HTTP_200_OK
+        admin_messages = [
+            message for message in response.data['results']
+            if message['sender_type'] == 'admin'
+        ]
+        assert admin_messages
+        assert all(message['sender_user'] is None for message in admin_messages)
 
     def test_send_message_media_without_file_rejected(self, auth_client, authenticated_user):
         """Test that specifying media type without file is rejected."""
@@ -517,6 +545,30 @@ class TestMediaValidation:
         response_text = str(response.data)
         assert 'format' in response_text.lower() or 'supporté' in response_text.lower()
 
+    def test_missing_content_type_rejected(self, auth_client, authenticated_user):
+        """A media upload without MIME type should be rejected."""
+        conversation = ConversationService.get_or_create_conversation(authenticated_user)
+
+        invalid_file = SimpleUploadedFile(
+            name='test.jpg',
+            content=b'image-bytes',
+            content_type='',
+        )
+
+        url = reverse('conversation-send-message', kwargs={'pk': conversation.id})
+        response = auth_client.post(
+            url,
+            {
+                'content': 'Test',
+                'media_type': 'image',
+                'media_file': invalid_file,
+            },
+            format='multipart'
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert 'type mime' in str(response.data).lower() or 'requis' in str(response.data).lower()
+
     def test_image_within_10mb_passes_serializer(self):
         """Test that an image within 10MB passes both serializer validations."""
         from chat.serializers import SendMessageSerializer
@@ -608,7 +660,7 @@ class TestBulkNotificationTask:
         from chat.tasks import notify_admins_new_user_message_task
         from notifications.models import Notification
 
-        conversation = ConversationService.get_or_create_conversation(authenticated_user)
+        ConversationService.get_or_create_conversation(authenticated_user)
         message = MessageService.send_user_message(
             user=authenticated_user,
             content="Test message",

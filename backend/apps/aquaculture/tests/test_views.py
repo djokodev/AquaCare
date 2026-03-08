@@ -4,20 +4,33 @@ Tests unitaires pour les vues API aquacoles MAVECAM.
 Teste tous les endpoints de l'API aquaculture : ViewSets, actions personnalisées,
 permissions, validation et logique métier.
 """
-import pytest
-from decimal import Decimal
 from datetime import date, timedelta
+from decimal import Decimal
+from unittest.mock import patch
+
+import pytest
+from aquaculture.models import (
+    CycleLog,
+    FeedingPlan,
+    NutritionalGuide,
+    ProductionCycle,
+    ProductionReport,
+    ReportDispatchLog,
+    SanitaryLog,
+)
+from django.core.cache import cache
 from django.urls import reverse
 from django.utils import timezone
+from notifications.models import Notification
 from rest_framework import status
 from rest_framework.test import APIClient
-from unittest.mock import patch, MagicMock
 
-from aquaculture.models import (
-    ProductionCycle, CycleLog, FeedingPlan, SanitaryLog,
-    NutritionalGuide, ProductionReport, ReportDispatchLog
-)
-from notifications.models import Notification
+
+@pytest.fixture
+def authenticated_client(api_client, authenticated_user):
+    """Client authentifié sans coût JWT pour les tests de requêtes."""
+    api_client.force_authenticate(user=authenticated_user)
+    return api_client
 
 
 @pytest.mark.django_db
@@ -39,6 +52,20 @@ class TestProductionCycleViewSet:
         response = api_client.get(url)
         
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+    def test_list_cycles_uses_two_queries(self, authenticated_client, production_cycle, django_assert_num_queries):
+        """La liste des cycles doit éviter les préchargements inutiles."""
+        CycleLog.objects.create(
+            cycle=production_cycle,
+            log_date=date.today(),
+            mortality_count=1,
+        )
+
+        url = reverse('aquaculture:production-cycle-list')
+        with django_assert_num_queries(2):
+            response = authenticated_client.get(url)
+
+        assert response.status_code == status.HTTP_200_OK
 
     def test_create_cycle(self, auth_client, authenticated_user, farm_profile):
         """Test création nouveau cycle."""
@@ -96,7 +123,7 @@ class TestProductionCycleViewSet:
         )
         
         # Créer cycle pour autre utilisateur
-        other_cycle = ProductionCycle.objects.create(
+        ProductionCycle.objects.create(
             farm_profile=other_farm,
             cycle_name="Cycle Autre Utilisateur",
             species="clarias",
@@ -189,10 +216,35 @@ class TestProductionCycleViewSet:
         assert 'growth_performance' in response.data
         assert 'environmental_summary' in response.data
 
+    def test_cycle_statistics_uses_two_queries(
+        self,
+        authenticated_client,
+        production_cycle,
+        django_assert_num_queries,
+    ):
+        """Les statistiques doivent réutiliser les logs préféchargés."""
+        for offset, weight in enumerate((Decimal('35.0'), Decimal('38.0'), Decimal('42.0')), start=1):
+            CycleLog.objects.create(
+                cycle=production_cycle,
+                log_date=date.today() - timedelta(days=offset * 3),
+                mortality_count=offset,
+                feed_quantity=Decimal('2.0') + Decimal(str(offset)),
+                average_weight=weight,
+                water_temperature=Decimal('28.5'),
+                ph_level=Decimal('7.1'),
+                dissolved_oxygen=Decimal('6.4'),
+            )
+
+        url = reverse('aquaculture:production-cycle-statistics', kwargs={'pk': production_cycle.id})
+        with django_assert_num_queries(2):
+            response = authenticated_client.get(url)
+
+        assert response.status_code == status.HTTP_200_OK
+
     def test_cycle_comparison(self, auth_client, production_cycle):
         """Test endpoint comparaison cycles."""
         # Créer un cycle terminé pour comparaison
-        previous_cycle = ProductionCycle.objects.create(
+        ProductionCycle.objects.create(
             farm_profile=production_cycle.farm_profile,
             cycle_name="Cycle Précédent",
             species=production_cycle.species,
@@ -412,7 +464,7 @@ class TestFeedingPlanViewSet:
             'weeks_ahead': 1
         }
 
-        response = auth_client.post(url, data, format='json')
+        auth_client.post(url, data, format='json')
 
         # Vérifier que des notifications ont été créées
         notif_count_after = Notification.objects.filter(
@@ -449,7 +501,6 @@ class TestSanitaryLogViewSet:
     def test_resolve_sanitary_issue(self, auth_client, production_cycle):
         """Test résolution problème sanitaire."""
         # Créer log sanitaire
-        from aquaculture.models import SanitaryLog
         sanitary_log = SanitaryLog.objects.create(
             cycle=production_cycle,
             event_date=date.today() - timedelta(days=3),
@@ -470,7 +521,6 @@ class TestSanitaryLogViewSet:
     def test_active_issues_endpoint(self, auth_client, production_cycle):
         """Test endpoint problèmes sanitaires actifs."""
         # Créer problèmes sanitaires
-        from aquaculture.models import SanitaryLog
         
         SanitaryLog.objects.create(
             cycle=production_cycle,
@@ -561,6 +611,14 @@ class TestNutritionalGuideViewSet:
         assert len(response.data) == 1
         assert response.data[0]['species'] == 'clarias'
 
+    def test_for_species_requires_species_query_param(self, auth_client):
+        """Le filtre par espèce doit exiger un query param valide."""
+        url = reverse('aquaculture:nutritional-guide-for-species')
+        response = auth_client.get(url)
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert 'species' in response.data
+
     def test_create_guide_not_allowed(self, auth_client):
         """Test création guide non autorisée (lecture seule)."""
         url = reverse('aquaculture:nutritional-guide-list')
@@ -617,6 +675,56 @@ class TestDashboardView:
         assert response.data['active_cycles_count'] == 1
         assert response.data['total_fish_count'] > 0
         assert len(response.data['recent_logs']) > 0
+
+    def test_dashboard_uses_six_queries(self, authenticated_client, production_cycle, django_assert_num_queries):
+        """Le dashboard doit rester sur un budget de requêtes stable."""
+        cache.clear()
+        Notification.objects.create(
+            user=production_cycle.farm_profile.user,
+            notification_type='feeding_reminder',
+            title='Rappel alimentation',
+            message='Distribuer la ration du matin',
+            scheduled_for=timezone.now(),
+        )
+        CycleLog.objects.create(
+            cycle=production_cycle,
+            log_date=date.today(),
+            mortality_count=2,
+            feed_quantity=Decimal('2.5'),
+            average_weight=Decimal('45.0'),
+        )
+        FeedingPlan.objects.create(
+            cycle=production_cycle,
+            week_number=1,
+            estimated_fish_count=production_cycle.current_count,
+            average_weight=Decimal('45.0'),
+            biomass=production_cycle.current_biomass,
+            daily_feed_amount=Decimal('2.5'),
+            feeding_rate=Decimal('4.5'),
+            meals_per_day=2,
+            feed_per_meal=Decimal('1.25'),
+            recommended_feed_type='MAVECAM Superior 2-3mm',
+            feed_size_mm=Decimal('2.0'),
+            protein_percentage=32,
+            start_date=date.today(),
+            end_date=date.today() + timedelta(days=6),
+            is_active=True,
+        )
+        SanitaryLog.objects.create(
+            cycle=production_cycle,
+            event_date=date.today(),
+            event_type='disease',
+            symptoms='Comportement anormal avec perte d appetit marquee',
+            affected_count=5,
+            resolved=False,
+        )
+
+        url = reverse('aquaculture:dashboard')
+        with django_assert_num_queries(6):
+            response = authenticated_client.get(url)
+
+        assert response.status_code == status.HTTP_200_OK
+        cache.clear()
 
     def test_dashboard_can_scope_to_session_cycle(self, auth_client, farm_profile):
         """Le dashboard peut être limité à un cycle actif spécifique via cycle_id."""
@@ -806,6 +914,25 @@ class TestSyncView:
         assert response.data['status'] == 'error'
         assert len(response.data['errors']) > 0
 
+    def test_sync_rate_limit_enforced(self, auth_client, settings):
+        """La sync offline doit etre throttle en cas d'abus."""
+        settings.CACHES = {
+            'default': {
+                'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+                'LOCATION': f'aquaculture-sync-throttle-{id(self)}',
+            }
+        }
+        cache.clear()
+        url = reverse('aquaculture:sync')
+        payload = {'last_sync': timezone.now().isoformat()}
+
+        for _ in range(30):
+            response = auth_client.post(url, payload, format='json')
+            assert response.status_code == status.HTTP_200_OK
+
+        response = auth_client.post(url, payload, format='json')
+        assert response.status_code == status.HTTP_429_TOO_MANY_REQUESTS
+
 
 @pytest.mark.django_db
 class TestProductionReportViewSet:
@@ -855,6 +982,27 @@ class TestProductionReportViewSet:
         report_ids = [item['id'] for item in response.data['results']]
         assert str(own_daily.id) in report_ids
         assert len(report_ids) == 1
+
+    def test_list_reports_uses_two_queries(
+        self,
+        authenticated_client,
+        farm_profile,
+        django_assert_num_queries,
+    ):
+        """Le listing des rapports ne doit pas précharger l'audit détaillé."""
+        ProductionReport.objects.create(
+            farm_profile=farm_profile,
+            report_type='daily',
+            period_start=date(2026, 2, 20),
+            period_end=date(2026, 2, 20),
+            status='draft',
+        )
+
+        url = reverse('aquaculture:production-report-list')
+        with django_assert_num_queries(2):
+            response = authenticated_client.get(url)
+
+        assert response.status_code == status.HTTP_200_OK
 
     def test_mark_whatsapp_shared_creates_dispatch_log(self, auth_client, farm_profile):
         """Le marquage WhatsApp met à jour le statut et crée une trace d'audit."""
@@ -933,7 +1081,6 @@ class TestProductionReportViewSet:
             'report_type': 'daily',
             'cycle_id': str(selected_cycle.id),
         }
-        from unittest.mock import patch
         with patch('aquaculture.services.report_service.ReportService._render_pdf', return_value=b'%PDF-fake'):
             response = auth_client.post(url, payload, format='json')
 
@@ -1036,3 +1183,30 @@ class TestProductionReportViewSet:
         ids = [item['id'] for item in response.data['results']]
         assert ids == [str(report_scoped.id)]
         assert response.data['results'][0]['cycle_scope_id'] == str(scoped_cycle.id)
+
+    def test_report_action_rate_limit_enforced(self, auth_client, farm_profile, settings):
+        """Les actions de rapport doivent etre throttlees en cas d'abus."""
+        settings.CACHES = {
+            'default': {
+                'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+                'LOCATION': f'aquaculture-report-throttle-{id(self)}',
+            }
+        }
+        cache.clear()
+
+        report = ProductionReport.objects.create(
+            farm_profile=farm_profile,
+            report_type='daily',
+            period_start=date(2026, 2, 21),
+            period_end=date(2026, 2, 21),
+            status='validated',
+        )
+        url = reverse('aquaculture:production-report-mark-whatsapp-shared', kwargs={'pk': report.id})
+        payload = {'recipient': '+237690123456', 'metadata': {'source': 'rate-limit-test'}}
+
+        for _ in range(20):
+            response = auth_client.post(url, payload, format='json')
+            assert response.status_code == status.HTTP_200_OK
+
+        response = auth_client.post(url, payload, format='json')
+        assert response.status_code == status.HTTP_429_TOO_MANY_REQUESTS

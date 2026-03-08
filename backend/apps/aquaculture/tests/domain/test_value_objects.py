@@ -3,12 +3,10 @@ Tests unitaires pour les Value Objects (domain/value_objects.py).
 
 Coverage cible : >95% (objets critiques)
 """
-import pytest
 from decimal import Decimal
 
-from aquaculture.domain.value_objects import (
-    Biomass, FCR, SurvivalRate, WaterQuality, GrowthRate
-)
+import pytest
+from aquaculture.domain.value_objects import FCR, Biomass, GrowthRate, SurvivalRate, WaterQuality
 
 
 class TestBiomassValueObject:

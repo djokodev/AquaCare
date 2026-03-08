@@ -2,9 +2,10 @@
 URLs pour l'API REST des notifications.
 """
 
-from django.urls import path, include
+from django.urls import include, path
 from rest_framework.routers import DefaultRouter
-from .views import NotificationViewSet, NotificationPreferenceViewSet
+
+from .views import NotificationPreferenceViewSet, NotificationViewSet
 
 # Router pour les ViewSets
 router = DefaultRouter()

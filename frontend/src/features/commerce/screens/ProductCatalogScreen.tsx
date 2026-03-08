@@ -22,7 +22,7 @@ import { AppDispatch, RootState } from '@/store/store';
 import { fetchProducts, applyFilters, addToCart } from '@/features/commerce/store/commerceSlice';
 import { Product } from '@/types/commerce';
 import { MAVECAM_COLORS } from '@/constants/colors';
-import { PRODUCT_SPECIES, PRODUCT_BRANDS } from '@/domain/commerce';
+import { PRODUCT_BRANDS, PRODUCT_SPECIES } from '@/domain/commerce/constants';
 import { RootStackParamList } from '@/navigation/MainNavigator';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'ProductCatalog'>;
@@ -297,6 +297,5 @@ export default function ProductCatalogScreen() {
     </View>
   );
 }
-
 
 

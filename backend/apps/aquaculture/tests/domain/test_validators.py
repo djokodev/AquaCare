@@ -3,22 +3,22 @@ Tests unitaires pour les validateurs métier (domain/validators.py).
 
 Coverage cible : >85%
 """
-import pytest
-from decimal import Decimal
 from datetime import date, timedelta
-from django.core.exceptions import ValidationError
+from decimal import Decimal
 
+import pytest
 from aquaculture.domain.validators import (
     validate_cycle_duration,
+    validate_cycle_log_date,
+    validate_feeding_data,
+    validate_mortality_data,
+    validate_pond_dimensions,
+    validate_sampling_data,
     validate_stocking_density,
     validate_water_parameters,
-    validate_feeding_data,
-    validate_sampling_data,
-    validate_mortality_data,
-    validate_cycle_log_date,
-    validate_pond_dimensions,
-    validate_weight_progression
+    validate_weight_progression,
 )
+from django.core.exceptions import ValidationError
 
 
 class TestCycleDurationValidation:

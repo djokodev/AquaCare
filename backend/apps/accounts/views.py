@@ -1,28 +1,33 @@
-import logging
-
+from django.http import Http404
 from django.utils.translation import gettext as _
-
+from drf_spectacular.utils import OpenApiExample, OpenApiResponse, extend_schema
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
-from rest_framework.views import APIView
-from rest_framework_simplejwt.tokens import RefreshToken
-from rest_framework_simplejwt.exceptions import TokenError
-from drf_spectacular.utils import extend_schema, OpenApiResponse, OpenApiExample
 
-from django.http import Http404
-from .models import User, FarmProfile
-
+from .models import FarmProfile, User
+from .permissions import IsOwnerOrReadOnly
 from .serializers import (
-    UserRegistrationSerializer,
-    UserProfileSerializer,
+    AccountDeletionSerializer,
+    AuthSuccessResponseSerializer,
+    ErrorResponseSerializer,
     FarmProfileSerializer,
     LoginSerializer,
-    AccountDeletionSerializer,
+    LogoutSerializer,
+    MessageResponseSerializer,
+    UserProfileSerializer,
+    UserRegistrationSerializer,
 )
-from .permissions import IsOwnerOrReadOnly
-from .services import AccountDeletionService
-
-logger = logging.getLogger(__name__)
+from .services import (
+    AccountDeletionService,
+    AuthApplicationService,
+    InvalidRefreshTokenError,
+    ProfileQueryService,
+)
+from .throttles import (
+    AccountLoginThrottle,
+    AccountRegisterThrottle,
+    SensitiveAccountActionThrottle,
+)
 
 
 class RegisterView(generics.CreateAPIView):
@@ -43,13 +48,18 @@ class RegisterView(generics.CreateAPIView):
     - Vérification de l'unicité du téléphone
     - Validation des champs métier selon le type de compte
     """
-    queryset = User.objects.all()
+    queryset = User.objects.with_farm_profile()
     serializer_class = UserRegistrationSerializer
     permission_classes = [permissions.AllowAny]
+    throttle_classes = [AccountRegisterThrottle]
     
     @extend_schema(
         summary="Inscription d'un nouveau pisciculteur",
-        description="Crée un compte utilisateur (individuel ou entreprise) avec génération automatique du profil ferme et des tokens JWT",
+        description=(
+            "Crée un compte utilisateur (individuel ou entreprise) avec génération "
+            "automatique du profil ferme et des tokens JWT"
+        ),
+        request=UserRegistrationSerializer,
         examples=[
             OpenApiExample(
                 'Personne physique',
@@ -85,7 +95,10 @@ class RegisterView(generics.CreateAPIView):
             )
         ],
         responses={
-            201: OpenApiResponse(description="Compte créé avec succès"),
+            201: OpenApiResponse(
+                response=AuthSuccessResponseSerializer,
+                description="Compte créé avec succès",
+            ),
             400: OpenApiResponse(description="Erreurs de validation"),
         }
     )
@@ -93,20 +106,21 @@ class RegisterView(generics.CreateAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
-        
-        refresh = RefreshToken.for_user(user)
-        
-        return Response({
-            'user': UserProfileSerializer(user).data,
-            'tokens': {
-                'refresh': str(refresh),
-                'access': str(refresh.access_token),
-            },
-            'message': _('Compte créé avec succès')
-        }, status=status.HTTP_201_CREATED)
+        auth_result = AuthApplicationService.build_auth_success_result(
+            user=user,
+            message=_('Compte créé avec succès'),
+        )
+        response_serializer = AuthSuccessResponseSerializer(
+            auth_result.to_payload()
+        )
+
+        return Response(
+            response_serializer.data,
+            status=status.HTTP_201_CREATED,
+        )
 
 
-class LoginView(APIView):
+class LoginView(generics.GenericAPIView):
     """
     Authentification flexible des pisciculteurs MAVECAM.
     
@@ -126,11 +140,17 @@ class LoginView(APIView):
     - Tokens JWT (access valide 15 min, refresh 7 jours)
     - Message de confirmation
     """
+    serializer_class = LoginSerializer
     permission_classes = [permissions.AllowAny]
+    throttle_classes = [AccountLoginThrottle]
     
     @extend_schema(
         summary="Connexion utilisateur MAVECAM",
-        description="Authentification flexible avec deux méthodes : nom d'affichage OU numéro de téléphone + mot de passe",
+        description=(
+            "Authentification flexible avec deux méthodes : nom d'affichage "
+            "OU numéro de téléphone + mot de passe"
+        ),
+        request=LoginSerializer,
         examples=[
             OpenApiExample(
                 'Connexion personne physique par nom',
@@ -158,26 +178,26 @@ class LoginView(APIView):
             )
         ],
         responses={
-            200: OpenApiResponse(description="Connexion réussie avec tokens JWT"),
+            200: OpenApiResponse(
+                response=AuthSuccessResponseSerializer,
+                description="Connexion réussie avec tokens JWT",
+            ),
             400: OpenApiResponse(description="Identifiants incorrects ou manquants"),
         }
     )
-    def post(self, request):
-        serializer = LoginSerializer(data=request.data)
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         user = serializer.validated_data['user']
-
-        refresh = RefreshToken.for_user(user)
-
-        return Response({
-            'user': UserProfileSerializer(user).data,
-            'tokens': {
-                'refresh': str(refresh),
-                'access': str(refresh.access_token),
-            },
-            'message': _('Connexion réussie')
-        })
+        auth_result = AuthApplicationService.build_auth_success_result(
+            user=user,
+            message=_('Connexion réussie'),
+        )
+        response_serializer = AuthSuccessResponseSerializer(
+            auth_result.to_payload()
+        )
+        return Response(response_serializer.data)
 
 
 class ProfileView(generics.RetrieveUpdateAPIView):
@@ -199,14 +219,15 @@ class ProfileView(generics.RetrieveUpdateAPIView):
     - phone_number : Non modifiable (identifiant unique)
     - certification_status : Réservé aux admins MAVECAM
     """
+    queryset = User.objects.with_farm_profile()
     serializer_class = UserProfileSerializer
     permission_classes = [permissions.IsAuthenticated, IsOwnerOrReadOnly]
     
     def get_object(self):
-        return self.request.user
+        return ProfileQueryService.get_user_profile(self.request.user.pk)
 
 
-class LogoutView(APIView):
+class LogoutView(generics.GenericAPIView):
     """
     Déconnexion sécurisée des pisciculteurs MAVECAM.
     
@@ -223,23 +244,14 @@ class LogoutView(APIView):
     - Déconnexion immédiate côté serveur
     - Compatible avec l'architecture JWT stateless
     """
+    serializer_class = LogoutSerializer
     permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [SensitiveAccountActionThrottle]
     
     @extend_schema(
         summary="Déconnexion sécurisée",
         description="Invalide le refresh token pour une déconnexion complète et sécurisée",
-        request={
-            'application/json': {
-                'type': 'object',
-                'properties': {
-                    'refresh': {
-                        'type': 'string',
-                        'description': 'Token de rafraîchissement à invalider'
-                    }
-                },
-                'required': ['refresh']
-            }
-        },
+        request=LogoutSerializer,
         examples=[
             OpenApiExample(
                 'Déconnexion standard',
@@ -250,41 +262,39 @@ class LogoutView(APIView):
             )
         ],
         responses={
-            200: OpenApiResponse(description="Déconnexion réussie"),
-            400: OpenApiResponse(description="Token invalide ou manquant"),
+            200: OpenApiResponse(
+                response=MessageResponseSerializer,
+                description="Déconnexion réussie",
+            ),
+            400: OpenApiResponse(
+                response=ErrorResponseSerializer,
+                description="Token invalide",
+            ),
         }
     )
-    def post(self, request):
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        refresh_token = serializer.validated_data['refresh']
+
         try:
-            refresh_token = request.data.get('refresh')
-            
-            if not refresh_token:
-                return Response(
-                    {'error': _('Token de rafraîchissement requis')},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
-            # Blacklist du refresh token
-            token = RefreshToken(refresh_token)
-            token.blacklist()
-            
-            return Response(
-                {'message': _('Déconnexion réussie')},
-                status=status.HTTP_200_OK
+            AuthApplicationService.blacklist_refresh_token(refresh_token)
+            response_serializer = MessageResponseSerializer(
+                {'message': _('Déconnexion réussie')}
             )
-            
-        except TokenError:
             return Response(
-                {'error': _('Token invalide')},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        except Exception:
-            logger.exception("Erreur inattendue pendant la deconnexion utilisateur")
-            return Response(
-                {'error': _('Erreur lors de la déconnexion')},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                response_serializer.data,
+                status=status.HTTP_200_OK,
             )
 
+        except InvalidRefreshTokenError:
+            response_serializer = ErrorResponseSerializer(
+                {'error': _('Token invalide')}
+            )
+            return Response(
+                response_serializer.data,
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
 class FarmProfileView(generics.RetrieveUpdateAPIView):
     """
@@ -306,17 +316,18 @@ class FarmProfileView(generics.RetrieveUpdateAPIView):
     - created_at/updated_at : Timestamps automatiques
     - id : UUID non modifiable pour la synchronisation mobile
     """
+    queryset = FarmProfile.objects.with_user()
     serializer_class = FarmProfileSerializer
     permission_classes = [permissions.IsAuthenticated]
     
     def get_object(self):
         try:
-            return self.request.user.farm_profile
+            return ProfileQueryService.get_farm_profile(self.request.user.pk)
         except FarmProfile.DoesNotExist:
             raise Http404
 
 
-class AccountDeletionView(APIView):
+class AccountDeletionView(generics.GenericAPIView):
     """
     Suppression logique du compte utilisateur.
 
@@ -327,31 +338,32 @@ class AccountDeletionView(APIView):
     - Nettoie les tokens JWT/push connus
     """
 
+    serializer_class = AccountDeletionSerializer
     permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [SensitiveAccountActionThrottle]
 
     @extend_schema(
         summary="Supprimer définitivement mon compte",
         description="Désactive et anonymise le compte utilisateur après confirmation explicite.",
         request=AccountDeletionSerializer,
         responses={
-            200: OpenApiResponse(description="Compte supprimé/anonymisé avec succès"),
+            200: OpenApiResponse(
+                response=MessageResponseSerializer,
+                description="Compte supprimé/anonymisé avec succès",
+            ),
             400: OpenApiResponse(description="Confirmation manquante"),
             401: OpenApiResponse(description="Authentification requise"),
         },
     )
-    def post(self, request):
-        serializer = AccountDeletionSerializer(data=request.data)
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-
-        if serializer.validated_data["confirm"] is not True:
-            return Response(
-                {"error": _("Confirmation explicite requise.")},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
         AccountDeletionService.anonymize_user_account(request.user)
+        response_serializer = MessageResponseSerializer(
+            {"message": _("Compte supprimé avec succès.")}
+        )
 
         return Response(
-            {"message": _("Compte supprimé avec succès.")},
+            response_serializer.data,
             status=status.HTTP_200_OK,
         )

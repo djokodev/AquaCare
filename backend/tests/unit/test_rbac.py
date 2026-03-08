@@ -8,30 +8,24 @@ Couvre:
 - Masquage PII
 - Audit logging
 """
+from io import StringIO
+from unittest.mock import Mock
 
 import pytest
-from io import StringIO
-from unittest.mock import Mock, patch, MagicMock
-from django.contrib.auth import get_user_model
-from django.contrib.auth.models import Group, Permission, AnonymousUser
-from django.contrib.admin.sites import AdminSite
-from django.contrib.admin.models import LogEntry
-from django.contrib.contenttypes.models import ContentType
-from django.test import RequestFactory
-from django.core.exceptions import PermissionDenied
-
-from common.admin_mixins import (
-    RBACConstants,
-    AuditLogMixin,
-    SecuredModelAdmin,
-    CommerceOperatorMixin,
-    SupportOperatorMixin,
-    ManagerMixin,
-    PIIMaskingMixin,
-)
 from accounts.admin import UserAdmin
 from commerce.admin import ProductAdmin
 from commerce.models import Product
+from common.admin_mixins import (
+    AuditLogMixin,
+    PIIMaskingMixin,
+    RBACConstants,
+)
+from django.contrib.admin.models import LogEntry
+from django.contrib.admin.sites import AdminSite
+from django.contrib.auth import get_user_model
+from django.contrib.auth.models import AnonymousUser, Group
+from django.core.exceptions import PermissionDenied
+from django.test import RequestFactory
 
 User = get_user_model()
 
@@ -203,9 +197,6 @@ class TestSetupRBACCommand:
         call_command('setup_rbac', stdout=StringIO())
 
         # Ajouter une permission custom a un groupe
-        group = Group.objects.get(name=RBACConstants.GROUP_MANAGERS)
-        initial_perms = group.permissions.count()
-
         # Reset
         call_command('setup_rbac', '--reset', stdout=StringIO())
 
@@ -701,7 +692,7 @@ class TestSupportInbox:
 
         # Ne devrait pas lever PermissionDenied
         try:
-            response = support_inbox_view(request)
+            support_inbox_view(request)
             # Si on arrive ici, le support a acces
             assert True
         except PermissionDenied:

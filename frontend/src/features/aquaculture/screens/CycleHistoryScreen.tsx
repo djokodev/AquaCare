@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, RefreshControl } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -33,17 +33,17 @@ export default function CycleHistoryScreen({ navigation }: CycleHistoryScreenPro
     dispatch(fetchProductionCycles());
   }, [dispatch]);
 
-  const harvestedCycles = cycles.filter((cycle) => cycle.status === 'harvested');
-
-  const filteredCycles = harvestedCycles.filter((cycle) => {
-    if (selectedFilter === 'all') return true;
-    return cycle.species === selectedFilter;
-  });
-
-  const sortedCycles = [...filteredCycles].sort((a, b) => {
-    if (!a.end_date || !b.end_date) return 0;
-    return new Date(b.end_date).getTime() - new Date(a.end_date).getTime();
-  });
+  const sortedCycles = useMemo(
+    () =>
+      [...cycles]
+        .filter((cycle) => cycle.status === 'harvested')
+        .filter((cycle) => (selectedFilter === 'all' ? true : cycle.species === selectedFilter))
+        .sort((a, b) => {
+          if (!a.end_date || !b.end_date) return 0;
+          return new Date(b.end_date).getTime() - new Date(a.end_date).getTime();
+        }),
+    [cycles, selectedFilter]
+  );
 
   const getDurationInDays = (startDate: string, endDate: string): number => {
     const start = new Date(startDate);
@@ -83,14 +83,14 @@ export default function CycleHistoryScreen({ navigation }: CycleHistoryScreenPro
     };
   }, [sortedCycles]);
 
-  const renderCycleCard = (cycle: ProductionCycle) => {
+  const renderCycleCard = useCallback(({ item: cycle }: { item: ProductionCycle }) => {
     const duration = cycle.end_date ? getDurationInDays(cycle.start_date, cycle.end_date) : 0;
     const performanceColor = getPerformanceColor(cycle.survival_rate, cycle.fcr);
     const performanceText = getPerformanceText(cycle.survival_rate, cycle.fcr);
     const speciesLabel = cycle.species === 'clarias' ? t('clariasSpeciesFull') : t('tilapia');
 
     return (
-      <View key={cycle.id} className="bg-white rounded-xl p-4 mb-3">
+      <View className="bg-white rounded-xl p-4 mb-3">
         <View className="flex-row justify-between items-start mb-3">
           <View className="flex-1 mr-3">
             <Text className="text-base font-bold text-gray-dark" numberOfLines={1}>{cycle.cycle_name}</Text>
@@ -130,22 +130,11 @@ export default function CycleHistoryScreen({ navigation }: CycleHistoryScreenPro
         </View>
       </View>
     );
-  };
+  }, [t]);
 
-  return (
-    <View className="flex-1 bg-cream">
-      <View className="bg-mavecam-primary flex-row items-center pt-14 pb-4 px-4">
-        <TouchableOpacity className="mr-4" onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color={MAVECAM_COLORS.WHITE} />
-        </TouchableOpacity>
-        <Text className="text-xl font-bold text-white flex-1">{t('cycleHistory')}</Text>
-      </View>
-
-      <ScrollView
-        className="flex-1"
-        refreshControl={<RefreshControl refreshing={loading.cycles} onRefresh={onRefresh} />}
-        showsVerticalScrollIndicator={false}
-      >
+  const renderListHeader = useCallback(
+    () => (
+      <>
         <View className="bg-white mx-4 my-4 p-4 rounded-xl">
           <Text className="text-lg font-bold text-gray-dark mb-4">{t('historySummary')}</Text>
 
@@ -198,23 +187,51 @@ export default function CycleHistoryScreen({ navigation }: CycleHistoryScreenPro
           <Text className="text-lg font-bold text-gray-dark mb-4">
             {t('harvestedCycles')} ({sortedCycles.length})
           </Text>
-
-          {loading.cycles && sortedCycles.length === 0 ? (
-            <View className="items-center py-10">
-              <ActivityIndicator size="large" color={MAVECAM_COLORS.GREEN_PRIMARY} />
-              <Text className="text-base text-gray-light mt-3">{t('loading')}</Text>
-            </View>
-          ) : sortedCycles.length === 0 ? (
-            <View className="items-center py-10">
-              <Ionicons name="fish-outline" size={64} color={MAVECAM_COLORS.GRAY_LIGHT} />
-              <Text className="text-xl font-bold text-gray-dark mt-4 mb-2">{t('noHarvestedCycles')}</Text>
-              <Text className="text-sm text-gray-light text-center">{t('completeCycleToSeeHistory')}</Text>
-            </View>
-          ) : (
-            sortedCycles.map((cycle) => renderCycleCard(cycle))
-          )}
         </View>
-      </ScrollView>
+      </>
+    ),
+    [avgFCR, avgSurvival, selectedFilter, sortedCycles.length, t, totalBiomass, totalCycles]
+  );
+
+  const renderEmptyState = useCallback(
+    () => (
+      <View className="items-center py-10 px-4">
+        {loading.cycles ? (
+          <>
+            <ActivityIndicator size="large" color={MAVECAM_COLORS.GREEN_PRIMARY} />
+            <Text className="text-base text-gray-light mt-3">{t('loading')}</Text>
+          </>
+        ) : (
+          <>
+            <Ionicons name="fish-outline" size={64} color={MAVECAM_COLORS.GRAY_LIGHT} />
+            <Text className="text-xl font-bold text-gray-dark mt-4 mb-2">{t('noHarvestedCycles')}</Text>
+            <Text className="text-sm text-gray-light text-center">{t('completeCycleToSeeHistory')}</Text>
+          </>
+        )}
+      </View>
+    ),
+    [loading.cycles, t]
+  );
+
+  return (
+    <View className="flex-1 bg-cream">
+      <View className="bg-mavecam-primary flex-row items-center pt-14 pb-4 px-4">
+        <TouchableOpacity className="mr-4" onPress={() => navigation.goBack()}>
+          <Ionicons name="arrow-back" size={24} color={MAVECAM_COLORS.WHITE} />
+        </TouchableOpacity>
+        <Text className="text-xl font-bold text-white flex-1">{t('cycleHistory')}</Text>
+      </View>
+
+      <FlatList
+        data={sortedCycles}
+        keyExtractor={(item) => item.id}
+        renderItem={renderCycleCard}
+        ListHeaderComponent={renderListHeader}
+        ListEmptyComponent={renderEmptyState}
+        contentContainerStyle={{ paddingBottom: 16 }}
+        refreshControl={<RefreshControl refreshing={loading.cycles} onRefresh={onRefresh} />}
+        showsVerticalScrollIndicator={false}
+      />
     </View>
   );
 }

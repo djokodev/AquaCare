@@ -10,23 +10,64 @@ Responsabilités :
 - Création bulk avec gestion transactions
 - Validation cohérence données (échantillonnage, paramètres eau)
 """
+from __future__ import annotations
+
 import uuid as _uuid
-from typing import List, Dict, Any, Optional
-from decimal import Decimal
 from datetime import date
+from decimal import Decimal
+from typing import TYPE_CHECKING, TypedDict
+from uuid import UUID
+
 from django.db import transaction
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
-from ..models import CycleLog, ProductionCycle
+from ..constants import SAMPLING_TOLERANCE
 from ..domain.exceptions import (
     BusinessRuleViolation,
     InsufficientFishCountError,
     InvalidDateRangeError,
     OfflineSyncConflictError,
 )
-from ..constants import SAMPLING_TOLERANCE
+from ..models import CycleLog, ProductionCycle
 from .base import BaseService
+
+if TYPE_CHECKING:
+    from accounts.models import User
+
+
+class CycleLogPayload(TypedDict, total=False):
+    cycle: ProductionCycle | str | UUID
+    client_uuid: str | UUID
+    log_date: date | str
+    mortality_count: int
+    mortality_reason: str
+    sample_count: int
+    sample_total_weight: Decimal
+    average_weight: Decimal
+    feed_quantity: Decimal
+    feed_type: str
+    feed_size_mm: Decimal
+    feeding_times: str
+    water_temperature: Decimal
+    dissolved_oxygen: Decimal
+    ph_level: Decimal
+    ammonia_level: Decimal
+    observations: str
+    created_offline: bool
+
+
+class BulkLogError(TypedDict):
+    index: int
+    error: str
+
+
+class BulkLogResult(TypedDict):
+    created: int
+    updated: int
+    errors: list[BulkLogError]
+    logs: list[CycleLog]
+    cycles_affected: set[UUID]
 
 
 class CycleLogService(BaseService):
@@ -50,7 +91,11 @@ class CycleLogService(BaseService):
 
     @staticmethod
     @transaction.atomic
-    def create_log(cycle: ProductionCycle, log_data: dict, created_offline: bool = False) -> CycleLog:
+    def create_log(
+        cycle: ProductionCycle,
+        log_data: CycleLogPayload,
+        created_offline: bool = False,
+    ) -> CycleLog:
         """
         Crée un nouveau log quotidien avec validation métier complète.
 
@@ -120,7 +165,7 @@ class CycleLogService(BaseService):
 
     @staticmethod
     @transaction.atomic
-    def create_bulk_logs(logs_data: List[dict], user) -> Dict[str, Any]:
+    def create_bulk_logs(logs_data: list[CycleLogPayload], user: User | None) -> BulkLogResult:
         """
         Crée plusieurs logs en bulk avec déduplication UUID.
 
@@ -150,7 +195,7 @@ class CycleLogService(BaseService):
             {"count": len(logs_data), "user": user.id if user else None}
         )
 
-        result = {
+        result: BulkLogResult = {
             'created': 0,
             'updated': 0,
             'errors': [],
@@ -182,10 +227,10 @@ class CycleLogService(BaseService):
             }
 
         # Track UUIDs already processed in this batch to handle in-batch duplicates
-        batch_uuid_map: dict = {}
+        batch_uuid_map: dict[str, CycleLog] = {}
 
         # Collect new logs to bulk_create (bypass signals)
-        new_logs_to_create: list = []
+        new_logs_to_create: list[CycleLog] = []
         # Track (cycle_id, log_date) to prevent in-batch unique constraint violations
         batch_date_keys: set = set()
         now = timezone.now()
@@ -346,7 +391,7 @@ class CycleLogService(BaseService):
 
     @staticmethod
     @transaction.atomic
-    def update_log(log: CycleLog, update_data: dict) -> CycleLog:
+    def update_log(log: CycleLog, update_data: CycleLogPayload) -> CycleLog:
         """
         Met à jour un log existant.
 
@@ -385,7 +430,11 @@ class CycleLogService(BaseService):
         return log
 
     @staticmethod
-    def deduplicate_by_uuid(client_uuid: str, log_data: dict, user) -> CycleLog:
+    def deduplicate_by_uuid(
+        client_uuid: str | UUID,
+        log_data: CycleLogPayload,
+        user: User,
+    ) -> CycleLog:
         """
         Déduplique un log par son UUID client.
 
@@ -438,7 +487,7 @@ class CycleLogService(BaseService):
     # =================== MÉTHODES PRIVÉES (VALIDATION) ===================
 
     @staticmethod
-    def _validate_log_business_rules(cycle: ProductionCycle, log_data: dict) -> None:
+    def _validate_log_business_rules(cycle: ProductionCycle, log_data: CycleLogPayload) -> None:
         """
         Valide les règles métier pour la création d'un log.
 
@@ -507,7 +556,7 @@ class CycleLogService(BaseService):
         CycleLogService._validate_environmental_parameters(log_data)
 
     @staticmethod
-    def _validate_environmental_parameters(log_data: dict) -> None:
+    def _validate_environmental_parameters(log_data: CycleLogPayload) -> None:
         """
         Valide les paramètres environnementaux et génère warnings.
 

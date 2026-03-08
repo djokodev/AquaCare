@@ -1,10 +1,17 @@
-# coding: utf-8
 """
 Auto-response service for system-generated messages.
 Handles automated acknowledgment messages when user sends first message.
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Final
+
+from ..domain.value_objects import MessageLanguage
 from .message_service import MessageService
+
+if TYPE_CHECKING:
+    from chat.models import Conversation, Message
 
 
 class AutoResponseService:
@@ -16,7 +23,7 @@ class AutoResponseService:
     """
 
     # Predefined acknowledgment messages (multilingual)
-    ACKNOWLEDGMENT_MESSAGES = {
+    ACKNOWLEDGMENT_MESSAGES: Final[dict[MessageLanguage, str]] = {
         'fr': (
             "Nous avons bien reçu votre message. "
             "Un membre de l'équipe AquaCare vous répondra dans les 24 heures."
@@ -28,7 +35,10 @@ class AutoResponseService:
     }
 
     @staticmethod
-    def send_acknowledgment_message(conversation, language: str = 'fr'):
+    def send_acknowledgment_message(
+        conversation: Conversation,
+        language: MessageLanguage = 'fr',
+    ) -> Message:
         """
         Send automated acknowledgment message.
 
@@ -49,9 +59,7 @@ class AutoResponseService:
         )
 
         # Send as system message (won't trigger notification)
-        message = MessageService.send_system_message(
+        return MessageService.send_system_message(
             conversation=conversation,
             content=acknowledgment_text
         )
-
-        return message

@@ -1,16 +1,18 @@
+"""Service applicatif pour l'anonymisation des comptes utilisateurs."""
+
+from __future__ import annotations
+
 import uuid
 from dataclasses import dataclass
 
-from django.contrib.auth import get_user_model
+from accounts.models import FarmProfile, User
 from django.db import transaction
-
-from accounts.models import FarmProfile
-
-User = get_user_model()
 
 
 @dataclass(frozen=True)
 class AccountDeletionResult:
+    """Resultat de l'anonymisation d'un compte utilisateur."""
+
     anonymized_phone: str
 
 
@@ -25,7 +27,8 @@ class AccountDeletionService:
     """
 
     @staticmethod
-    def _generate_anonymized_phone(user_id) -> str:
+    def _generate_anonymized_phone(user_id: object) -> str:
+        """Genere un numero anonymise unique compatible avec le format camerounais."""
         # Format valide attendu: +2376XXXXXXXX (9 chiffres après +237)
         # user_id peut être un UUID ou un int — on extrait 8 chiffres décimaux via hash
         base = abs(hash(str(user_id))) % 100000000
@@ -37,8 +40,29 @@ class AccountDeletionService:
         raise RuntimeError("Impossible de générer un numéro anonymisé unique.")
 
     @staticmethod
+    def _cleanup_blacklisted_tokens(user_id: object) -> None:
+        """Supprime les refresh tokens encore enregistrés pour l'utilisateur."""
+        try:
+            from rest_framework_simplejwt.token_blacklist.models import OutstandingToken
+        except ImportError:
+            return
+
+        OutstandingToken.objects.filter(user_id=user_id).delete()
+
+    @staticmethod
+    def _cleanup_push_tokens(user_id: object) -> None:
+        """Supprime les tokens push stockés pour l'utilisateur anonymisé."""
+        try:
+            from notifications.models import PushToken
+        except ImportError:
+            return
+
+        PushToken.objects.filter(user_id=user_id).delete()
+
+    @staticmethod
     @transaction.atomic
     def anonymize_user_account(user: User) -> AccountDeletionResult:
+        """Desactive un compte et anonymise ses donnees personnelles."""
         user.refresh_from_db()
 
         # Empêche toute reconnexion avec l'ancien mot de passe
@@ -80,20 +104,9 @@ class AccountDeletionService:
         )
 
         # Nettoyage tokens JWT (blacklist models)
-        try:
-            from rest_framework_simplejwt.token_blacklist.models import OutstandingToken
-
-            OutstandingToken.objects.filter(user_id=user.id).delete()
-        except Exception:
-            # Ne bloque pas la suppression si blacklist indisponible
-            pass
+        AccountDeletionService._cleanup_blacklisted_tokens(user.id)
 
         # Nettoyage des tokens push stockés (si module notifications installé)
-        try:
-            from notifications.models import PushToken
-
-            PushToken.objects.filter(user_id=user.id).delete()
-        except Exception:
-            pass
+        AccountDeletionService._cleanup_push_tokens(user.id)
 
         return AccountDeletionResult(anonymized_phone=anonymized_phone)

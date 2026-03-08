@@ -1,15 +1,19 @@
 """
 Celery tasks pour l'envoi asynchrone de notifications email et push.
 """
+from __future__ import annotations
 
 import logging
+from typing import Any, TypedDict
+
 import requests
 from celery import shared_task
-from django.core.mail import send_mail
 from django.conf import settings
+from django.core.mail import send_mail
+from django.template import TemplateDoesNotExist
 from django.template.loader import render_to_string
-from django.utils.html import strip_tags
 from django.utils import timezone
+from django.utils.html import strip_tags
 
 from .models import Notification, PushToken
 
@@ -19,6 +23,105 @@ EMAIL_ERROR_RECIPIENT_MISSING = "EMAIL_RECIPIENT_MISSING"
 EMAIL_ERROR_SEND_FAILED = "EMAIL_SEND_FAILED"
 PUSH_ERROR_NO_VALID_TOKENS = "PUSH_NO_VALID_TOKENS"
 PUSH_ERROR_SEND_FAILED = "PUSH_SEND_FAILED"
+
+
+class EmailTemplateContext(TypedDict):
+    user: Any
+    notification: Notification
+    title: str
+    message: str
+    metadata: dict[str, Any]
+    notification_type: str
+    created_at: timezone.datetime
+    site_url: str
+
+
+class ExpoPayloadData(TypedDict):
+    notification_id: str
+    notification_type: str
+    metadata: dict[str, Any]
+    priority: str
+
+
+class ExpoPushMessage(TypedDict, total=False):
+    to: str
+    sound: str
+    title: str
+    body: str
+    data: ExpoPayloadData
+    priority: str
+    badge: int
+    channelId: str
+
+
+def _get_notification_with_user(notification_id: str) -> Notification:
+    """Charge une notification avec son utilisateur en une seule requete."""
+    return Notification.objects.select_related("user").get(id=notification_id)
+
+
+def _build_email_context(notification: Notification) -> EmailTemplateContext:
+    user = notification.user
+    return {
+        "user": user,
+        "notification": notification,
+        "title": notification.title,
+        "message": notification.message,
+        "metadata": notification.metadata,
+        "notification_type": notification.get_notification_type_display(),
+        "created_at": notification.created_at,
+        "site_url": settings.FRONTEND_URL if hasattr(settings, "FRONTEND_URL") else "https://aquacare.mavecam.com",
+    }
+
+
+def _render_fallback_email_html(notification: Notification) -> str:
+    return f"""
+            <html>
+            <body>
+                <h2>{notification.title}</h2>
+                <p>{notification.message}</p>
+                <hr>
+                <p style="color: gray; font-size: 12px;">
+                    AquaCare - Notifications
+                </p>
+            </body>
+            </html>
+            """
+
+
+def _save_email_error(notification_id: str, error_code: str) -> None:
+    Notification.objects.filter(id=notification_id).update(email_error=error_code)
+
+
+def _save_push_error(notification_id: str, error_code: str) -> None:
+    Notification.objects.filter(id=notification_id).update(push_error=error_code)
+
+
+def _build_expo_messages(notification: Notification, tokens: list[PushToken]) -> list[ExpoPushMessage]:
+    unread_badge = notification.user.notifications.filter(is_read=False).count()
+    messages: list[ExpoPushMessage] = []
+
+    for token in tokens:
+        message: ExpoPushMessage = {
+            "to": token.expo_push_token,
+            "sound": "default",
+            "title": notification.title,
+            "body": notification.message,
+            "data": {
+                "notification_id": str(notification.id),
+                "notification_type": notification.notification_type,
+                "metadata": notification.metadata,
+                "priority": notification.priority,
+            },
+            "priority": "high" if notification.priority in ["high", "urgent"] else "default",
+            "badge": unread_badge,
+        }
+
+        if token.platform == "android":
+            message["channelId"] = "default"
+
+        messages.append(message)
+
+    return messages
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
@@ -36,7 +139,7 @@ def send_email_notification_task(self, notification_id: str):
         Exception: Si échec après 3 tentatives
     """
     try:
-        notification = Notification.objects.get(id=notification_id)
+        notification = _get_notification_with_user(notification_id)
         user = notification.user
 
         # Vérifier que l'utilisateur a un email
@@ -50,34 +153,14 @@ def send_email_notification_task(self, notification_id: str):
             return
 
         # Préparer le contexte pour le template
-        context = {
-            'user': user,
-            'notification': notification,
-            'title': notification.title,
-            'message': notification.message,
-            'metadata': notification.metadata,
-            'notification_type': notification.get_notification_type_display(),
-            'created_at': notification.created_at,
-            'site_url': settings.FRONTEND_URL if hasattr(settings, 'FRONTEND_URL') else 'https://aquacare.mavecam.com',
-        }
+        context = _build_email_context(notification)
 
         # Render email template
         try:
             html_message = render_to_string('notifications/email_notification.html', context)
-        except Exception:
+        except TemplateDoesNotExist:
             # Fallback si template n'existe pas encore
-            html_message = f"""
-            <html>
-            <body>
-                <h2>{notification.title}</h2>
-                <p>{notification.message}</p>
-                <hr>
-                <p style="color: gray; font-size: 12px;">
-                    AquaCare - Notifications
-                </p>
-            </body>
-            </html>
-            """
+            html_message = _render_fallback_email_html(notification)
 
         plain_message = strip_tags(html_message)
 
@@ -106,12 +189,7 @@ def send_email_notification_task(self, notification_id: str):
         logger.exception("Email delivery failed for notification %s", notification_id)
 
         # Enregistrer une erreur neutre (pas de détails techniques en base)
-        try:
-            notification = Notification.objects.get(id=notification_id)
-            notification.email_error = EMAIL_ERROR_SEND_FAILED
-            notification.save(update_fields=['email_error'])
-        except Exception:
-            pass
+        _save_email_error(notification_id, EMAIL_ERROR_SEND_FAILED)
 
         # Retry avec exponential backoff
         raise self.retry(exc=exc)
@@ -132,14 +210,14 @@ def send_push_notification_task(self, notification_id: str):
         Exception: Si échec après 3 tentatives
     """
     try:
-        notification = Notification.objects.get(id=notification_id)
+        notification = _get_notification_with_user(notification_id)
         user = notification.user
 
         # Récupérer les push tokens actifs de l'utilisateur
         push_tokens = PushToken.objects.filter(
             user=user,
             is_active=True
-        ).order_by('created_at', 'id')
+        ).only('id', 'expo_push_token', 'platform', 'is_active').order_by('created_at', 'id')
         tokens = list(push_tokens)
 
         if not tokens:
@@ -151,29 +229,8 @@ def send_push_notification_task(self, notification_id: str):
         token_order = []  # Liste ordonnée pour correspondre aux résultats Expo
 
         # Préparer les messages Expo Push
-        expo_messages = []
-        unread_badge = user.notifications.filter(is_read=False).count()
+        expo_messages = _build_expo_messages(notification, tokens)
         for token in tokens:
-            message = {
-                'to': token.expo_push_token,
-                'sound': 'default',
-                'title': notification.title,
-                'body': notification.message,
-                'data': {
-                    'notification_id': str(notification.id),
-                    'notification_type': notification.notification_type,
-                    'metadata': notification.metadata,
-                    'priority': notification.priority,
-                },
-                'priority': 'high' if notification.priority in ['high', 'urgent'] else 'default',
-                'badge': unread_badge,  # Update app badge
-            }
-
-            # Ajouter channelId pour Android
-            if token.platform == 'android':
-                message['channelId'] = 'default'
-
-            expo_messages.append(message)
             token_order.append(token.expo_push_token)
 
         # Envoyer à l'API Expo Push Notifications
@@ -250,12 +307,7 @@ def send_push_notification_task(self, notification_id: str):
         logger.exception("Push delivery failed for notification %s", notification_id)
 
         # Enregistrer une erreur neutre (pas de détails techniques en base)
-        try:
-            notification = Notification.objects.get(id=notification_id)
-            notification.push_error = PUSH_ERROR_SEND_FAILED
-            notification.save(update_fields=['push_error'])
-        except Exception:
-            pass
+        _save_push_error(notification_id, PUSH_ERROR_SEND_FAILED)
 
         # Retry avec exponential backoff
         raise self.retry(exc=exc)
@@ -279,7 +331,7 @@ def cleanup_old_notifications():
         logger.info("Cleanup task deleted %s old notifications", count)
         return f"Deleted {count} old notifications"
     except Exception:
-        logger.error("Cleanup task failed")
+        logger.exception("Cleanup task failed")
         return "Cleanup failed"
 
 
@@ -299,7 +351,7 @@ def send_scheduled_notifications():
         pending_notifications = Notification.objects.filter(
             scheduled_for__lte=now,
             is_sent=False
-        )
+        ).only('id', 'channels').order_by('scheduled_for', 'id')
 
         dispatched_ids = []
         for notification in pending_notifications[:500]:
@@ -321,5 +373,5 @@ def send_scheduled_notifications():
         return f"Sent {count} scheduled notifications"
 
     except Exception:
-        logger.error("Send scheduled notifications task failed")
+        logger.exception("Send scheduled notifications task failed")
         return "Send scheduled failed"

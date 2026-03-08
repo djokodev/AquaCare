@@ -8,18 +8,20 @@ Usage:
     python manage.py setup_rbac --dry-run # Simuler sans modifier
 """
 
-from django.core.management.base import BaseCommand
-from django.contrib.auth.models import Group, Permission
-from django.contrib.contenttypes.models import ContentType
-from django.db import transaction
+from __future__ import annotations
+
+from typing import Any
 
 from common.admin_mixins import RBACConstants
+from django.contrib.auth.models import Group, Permission
+from django.core.management.base import BaseCommand
+from django.db import transaction
 
 
 class Command(BaseCommand):
     help = 'Configure les groupes et permissions RBAC pour AquaCare Admin'
 
-    def add_arguments(self, parser):
+    def add_arguments(self, parser) -> None:
         parser.add_argument(
             '--reset',
             action='store_true',
@@ -31,7 +33,7 @@ class Command(BaseCommand):
             help='Afficher les modifications sans les appliquer',
         )
 
-    def handle(self, *args, **options):
+    def handle(self, *args: object, **options: Any) -> None:
         self.dry_run = options['dry_run']
         self.verbosity = options['verbosity']
 
@@ -49,17 +51,14 @@ class Command(BaseCommand):
                 if self.dry_run:
                     # Rollback en mode dry-run
                     raise DryRunException()
-
-            self.stdout.write(self.style.SUCCESS('RBAC configure avec succes!'))
-            self._print_summary()
-
         except DryRunException:
             self.stdout.write(self.style.SUCCESS('DRY-RUN termine - aucune modification'))
-        except Exception as e:
-            self.stdout.write(self.style.ERROR(f'Erreur: {e}'))
-            raise
+            return
 
-    def _delete_groups(self):
+        self.stdout.write(self.style.SUCCESS('RBAC configure avec succes!'))
+        self._print_summary()
+
+    def _delete_groups(self) -> None:
         """Supprime les groupes RBAC existants."""
         group_names = [
             RBACConstants.GROUP_MANAGERS,
@@ -73,7 +72,7 @@ class Command(BaseCommand):
                     Group.objects.filter(name=name).delete()
                 self.stdout.write(f'  Supprime groupe: {name}')
 
-    def _create_groups(self):
+    def _create_groups(self) -> None:
         """Cree les 3 groupes RBAC."""
         self.stdout.write('\n--- Creation des groupes ---')
 
@@ -83,14 +82,14 @@ class Command(BaseCommand):
             (RBACConstants.GROUP_SUPPORT, 'Operateurs Support - Chat et notifications'),
         ]
 
-        self.groups = {}
+        self.groups: dict[str, Group] = {}
         for name, description in groups_config:
             group, created = Group.objects.get_or_create(name=name)
             self.groups[name] = group
             status = 'Cree' if created else 'Existe deja'
             self.stdout.write(f'  {status}: {name}')
 
-    def _assign_permissions(self):
+    def _assign_permissions(self) -> None:
         """Assigne les permissions a chaque groupe."""
         self.stdout.write('\n--- Attribution des permissions ---')
 
@@ -103,7 +102,7 @@ class Command(BaseCommand):
         # Permissions pour SUPPORT
         self._assign_support_permissions()
 
-    def _assign_manager_permissions(self):
+    def _assign_manager_permissions(self) -> None:
         """Permissions pour mavecam_managers."""
         group = self.groups[RBACConstants.GROUP_MANAGERS]
         permissions = []
@@ -136,7 +135,7 @@ class Command(BaseCommand):
 
         self._set_group_permissions(group, permissions, 'MANAGERS')
 
-    def _assign_commerce_permissions(self):
+    def _assign_commerce_permissions(self) -> None:
         """Permissions pour mavecam_commerce."""
         group = self.groups[RBACConstants.GROUP_COMMERCE]
         permissions = []
@@ -158,7 +157,7 @@ class Command(BaseCommand):
 
         self._set_group_permissions(group, permissions, 'COMMERCE')
 
-    def _assign_support_permissions(self):
+    def _assign_support_permissions(self) -> None:
         """Permissions pour mavecam_support."""
         group = self.groups[RBACConstants.GROUP_SUPPORT]
         permissions = []
@@ -180,7 +179,7 @@ class Command(BaseCommand):
 
         self._set_group_permissions(group, permissions, 'SUPPORT')
 
-    def _get_permissions_for_app(self, app_label, codenames):
+    def _get_permissions_for_app(self, app_label: str, codenames: list[str]) -> list[Permission]:
         """Recupere les permissions par app et codename."""
         permissions = []
         for codename in codenames:
@@ -196,7 +195,7 @@ class Command(BaseCommand):
                 )
         return permissions
 
-    def _set_group_permissions(self, group, permissions, group_label):
+    def _set_group_permissions(self, group: Group, permissions: list[Permission], group_label: str) -> None:
         """Assigne les permissions au groupe."""
         if not self.dry_run:
             group.permissions.clear()
@@ -206,7 +205,7 @@ class Command(BaseCommand):
         for perm in permissions:
             self.stdout.write(f'  + {perm.content_type.app_label}.{perm.codename}')
 
-    def _print_summary(self):
+    def _print_summary(self) -> None:
         """Affiche un resume de la configuration."""
         self.stdout.write('\n' + '=' * 50)
         self.stdout.write('RESUME RBAC AquaCare')

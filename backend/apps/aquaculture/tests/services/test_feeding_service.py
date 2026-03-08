@@ -9,16 +9,16 @@ Couvre :
 - Idempotence generate_plan_for_week (2 appels même semaine → même plan)
 - Management command load_nutritional_data (idempotence)
 """
-import pytest
-from decimal import Decimal
 from datetime import date, timedelta
+from decimal import Decimal
 
+import pytest
 from aquaculture.domain.calculators import AquacultureCalculator
 from aquaculture.models import CycleLog, FeedingPlan, NutritionalGuide
 from aquaculture.services.feeding_service import FeedingPlanService
 from notifications.models import Notification
-from tests.fixtures.factories import ProductionCycleFactory
 
+from tests.fixtures.factories import ProductionCycleFactory
 
 # ============================================================
 # Tests purs (sans base de données) : interpolation température
@@ -104,7 +104,7 @@ class TestFeedingPlanServiceWithDibaq:
 
     def test_generates_plan_with_real_temperature(self):
         """Plan généré avec température réelle depuis le dernier CycleLog."""
-        guide = self._create_guide()
+        self._create_guide()
         cycle = ProductionCycleFactory(
             species='tilapia',
             current_count=1000,
@@ -132,7 +132,7 @@ class TestFeedingPlanServiceWithDibaq:
 
     def test_generates_plan_with_default_temperature_when_no_log(self):
         """Plan généré avec 26°C par défaut si aucun CycleLog enregistré."""
-        guide = self._create_guide()
+        self._create_guide()
         cycle = ProductionCycleFactory(
             species='tilapia',
             current_count=1000,

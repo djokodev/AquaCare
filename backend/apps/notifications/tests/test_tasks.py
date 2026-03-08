@@ -4,24 +4,23 @@ Tests pour les taches Celery du module notifications.
 Teste l'envoi asynchrone de notifications par email et push,
 ainsi que les taches de nettoyage et de scheduling.
 """
+from datetime import timedelta
+from unittest.mock import MagicMock, patch
+
 import pytest
 import requests
-from unittest.mock import patch, MagicMock, call
 from django.utils import timezone
-from datetime import timedelta
-
+from notifications.models import Notification, PushToken
 from notifications.tasks import (
-    send_email_notification_task,
-    send_push_notification_task,
-    cleanup_old_notifications,
-    send_scheduled_notifications,
     EMAIL_ERROR_RECIPIENT_MISSING,
     EMAIL_ERROR_SEND_FAILED,
     PUSH_ERROR_NO_VALID_TOKENS,
     PUSH_ERROR_SEND_FAILED,
+    cleanup_old_notifications,
+    send_email_notification_task,
+    send_push_notification_task,
+    send_scheduled_notifications,
 )
-from notifications.models import Notification, PushToken
-
 
 # =================== TESTS EMAIL NOTIFICATIONS ===================
 
@@ -87,6 +86,22 @@ class TestEmailNotificationTask:
             assert "Network error" in str(exc_info.value)
             notification.refresh_from_db()
             assert notification.email_error == EMAIL_ERROR_SEND_FAILED
+
+    def test_send_email_notification_task_success_uses_two_queries(
+        self,
+        notification,
+        user,
+        django_assert_num_queries,
+    ):
+        """Le chemin nominal email charge user + update final sans requete supplementaire."""
+        user.email = "farmer@example.com"
+        user.save()
+
+        with patch('notifications.tasks.send_mail') as mock_send:
+            mock_send.return_value = 1
+
+            with django_assert_num_queries(2):
+                send_email_notification_task(str(notification.id))
 
 
 # =================== TESTS PUSH NOTIFICATIONS ===================
@@ -194,6 +209,22 @@ class TestPushNotificationTask:
             assert "API unreachable" in str(exc_info.value)
             notification.refresh_from_db()
             assert notification.push_error == PUSH_ERROR_SEND_FAILED
+
+    def test_send_push_notification_task_success_uses_four_queries(
+        self,
+        notification,
+        push_token,
+        django_assert_num_queries,
+    ):
+        """Le chemin nominal push reste borne en requetes ORM."""
+        with patch('requests.post') as mock_post:
+            mock_response = MagicMock()
+            mock_response.status_code = 200
+            mock_response.json.return_value = {'data': [{'status': 'ok'}]}
+            mock_post.return_value = mock_response
+
+            with django_assert_num_queries(4):
+                send_push_notification_task(str(notification.id))
 
 
 # =================== TESTS CLEANUP & SCHEDULED ===================

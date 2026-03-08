@@ -1,4 +1,3 @@
-# coding: utf-8
 """
 Administration securisee du module chat AquaCare.
 Implemente le RBAC multi-niveau avec audit logging.
@@ -9,23 +8,27 @@ Roles:
 - MANAGERS: Lecture seule pour contexte
 - COMMERCE: Pas d'acces
 """
+import logging
 
-from django.contrib import admin, messages as dj_messages
+from common.admin_mixins import (
+    RBACConstants,
+    SecuredModelAdmin,
+    SupportOperatorMixin,
+)
+from django.contrib import admin
+from django.contrib import messages as dj_messages
 from django.contrib.admin.models import ADDITION, CHANGE
+from django.core.exceptions import PermissionDenied
 from django.db.models import Count
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import path, reverse
 from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
-from django.core.exceptions import PermissionDenied
 
 from .models import Conversation, Message
 from .services import MessageService
-from common.admin_mixins import (
-    SecuredModelAdmin,
-    SupportOperatorMixin,
-    RBACConstants,
-)
+
+logger = logging.getLogger(__name__)
 
 
 class ChatSecuredAdmin(SupportOperatorMixin, SecuredModelAdmin):
@@ -332,7 +335,12 @@ def support_inbox_view(request):
             MessageService.send_admin_message(conv, request.user, content=content)
             dj_messages.success(request, _("Reponse envoyee."))
         except Exception as exc:
-            dj_messages.error(request, _("Erreur lors de l'envoi: %s") % exc)
+            logger.exception(
+                "Erreur admin lors de l'envoi d'un message support pour conversation %s",
+                conv.id,
+                exc_info=exc,
+            )
+            dj_messages.error(request, _("Erreur interne lors de l'envoi de la réponse."))
         return redirect(f"{reverse('admin:chat_support_inbox')}?conversation={conv.id}")
 
     return render(

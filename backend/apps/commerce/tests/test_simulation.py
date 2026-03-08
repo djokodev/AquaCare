@@ -2,11 +2,11 @@
 Tests unitaires pour CycleSimulationService.
 Coverage: Simulation prédictive de cycles aquacoles.
 """
-import pytest
 from decimal import Decimal
 
-from commerce.services import CycleSimulationService
+import pytest
 from commerce.models import Product
+from commerce.services import CycleSimulationService
 
 
 @pytest.mark.django_db

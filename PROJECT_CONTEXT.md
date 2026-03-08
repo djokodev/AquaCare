@@ -18,6 +18,71 @@ Etat actuel du projet et decisions cles. A lire quand on reprend apres une pause
 - [ ] RBAC + Jazzmin admin (branche `feature/rbac-jazzmin-admin`)
 - [ ] Push notifications (Expo)
 
+## Mise a jour campagne Skills Quality (Mars 2026)
+
+### Statut
+- Campagne de qualite complete sur la branche `feature/codebase-improvements-skills`
+- 10 skills appliques et clotures
+- warnings backend de reference elimines
+
+### Perimetre couvert
+- Backend:
+  - `python-code-style`
+  - `python-best-practices`
+  - `django-security`
+  - `django-orm-patterns`
+  - `python-design-patterns`
+  - `django-rest-framework`
+  - `python-testing-patterns`
+  - `python-performance-optimization`
+  - `clean-ddd-hexagonal`
+- Frontend:
+  - `react-native-best-practices`
+
+### Resultats techniques
+- baseline Ruff active sur tout le backend Python avec job CI dedie
+- contrats Python, frontieres DRF et orchestration applicative renforces
+- modules backend coeur refactores en profondeur:
+  - `accounts`
+  - `chat`
+  - `commerce`
+  - `notifications`
+  - `aquaculture`
+- frontend optimise sur:
+  - `main/navigation`
+  - `aquaculture`
+  - `commerce`
+  - `chat + notifications`
+- warnings backend supprimes:
+  - deprecation admin Django
+  - `CacheKeyWarning`
+  - `UnorderedObjectListWarning`
+  - warnings `pydyf`
+
+### Validation de reference
+```bash
+docker-compose exec api env DJANGO_SETTINGS_MODULE=mavecam_api.settings.test pytest -q
+# 873 passed
+
+cd frontend && npx tsc --noEmit
+cd frontend && npm test -- --watchAll=false
+# 52 suites passees, 547 tests passes
+```
+
+### Commits de campagne
+- `bb468fa` `chore: establish backend python code style baseline`
+- `cbcec7a` `refactor: strengthen backend python best practices`
+- `2cd24b4` `security: harden backend django surfaces`
+- `4790f88` `refactor: optimize backend django orm patterns`
+- `cb05cb8` `refactor: apply backend python design patterns`
+- `7f5105c` `refactor: standardize backend drf contracts`
+- `e177f36` `test: strengthen backend testing patterns`
+- `8ca6605` `test: complete backend testing patterns campaign`
+- `678a858` `perf: optimize backend hotspots`
+- `b326f1f` `refactor: align backend clean ddd boundaries`
+- `0c9c514` `refactor: optimize react native app surfaces`
+- `ca87b05` `chore: eliminate backend test warnings`
+
 ## Decisions techniques (le WHY)
 
 ### Offline-first avec UUID

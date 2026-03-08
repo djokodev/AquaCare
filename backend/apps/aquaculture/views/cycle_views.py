@@ -3,20 +3,26 @@ Cycle Views pour le module aquaculture.
 """
 import logging
 
-from rest_framework import viewsets, status, permissions
+from django.utils.translation import gettext_lazy as _
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import OpenApiExample, OpenApiParameter, extend_schema, extend_schema_view
+from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from django.utils.translation import gettext_lazy as _
-from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiExample
-from drf_spectacular.types import OpenApiTypes
 
+from ..domain.exceptions import CycleAlreadyHarvestedError, InvalidHarvestDataError
 from ..models import ProductionCycle
 from ..serializers import (
-    ProductionCycleSerializer, HarvestSerializer,
-    CycleStatisticsSerializer, CycleComparisonSerializer,
+    CycleComparisonSerializer,
+    CycleHarvestResponseSerializer,
+    CycleStatisticsSerializer,
+    HarvestSerializer,
+    ProductionCycleSerializer,
 )
-from ..services import ProductionCycleService, AnalyticsService
-from ..domain.exceptions import CycleAlreadyHarvestedError, InvalidHarvestDataError
+from ..services import (
+    HarvestCycleCommand,
+    ProductionCycleApplicationService,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -117,14 +123,22 @@ class ProductionCycleViewSet(viewsets.ModelViewSet):
     """
     serializer_class = ProductionCycleSerializer
     permission_classes = [permissions.IsAuthenticated]
-    
+
+    def get_serializer_class(self):
+        if self.action == 'harvest':
+            return HarvestSerializer
+        return super().get_serializer_class()
+
     def get_queryset(self):
         """Retourne les cycles uniquement pour la ferme de l'utilisateur authentifié."""
         queryset = ProductionCycle.objects.filter(
             farm_profile__user=self.request.user
-        ).select_related('farm_profile').prefetch_related(
-            'logs', 'feeding_plans', 'sanitary_logs', 'metrics'
         )
+
+        if self.action == 'statistics':
+            queryset = queryset.for_statistics()
+        else:
+            queryset = queryset.for_api()
 
         # Filtrage par status si spécifié dans les query parameters
         status_filter = self.request.query_params.get('status', None)
@@ -141,9 +155,9 @@ class ProductionCycleViewSet(viewsets.ModelViewSet):
         la cohérence des validations et calculs (biomasse, densité, etc.).
         """
         # Delegate business logic to service layer
-        cycle = ProductionCycleService.create_cycle(
-            farm_profile=self.request.user.farm_profile,
-            cycle_data=serializer.validated_data
+        cycle = ProductionCycleApplicationService.create_cycle(
+            user=self.request.user,
+            cycle_data=serializer.validated_data,
         )
 
         # Update serializer instance with created cycle
@@ -157,7 +171,7 @@ class ProductionCycleViewSet(viewsets.ModelViewSet):
         """,
         request=HarvestSerializer,
         responses={
-            200: ProductionCycleSerializer,
+            200: CycleHarvestResponseSerializer,
             400: OpenApiExample(
                 'Cycle déjà récolté',
                 value={'error': 'Ce cycle a déjà été récolté'}
@@ -187,28 +201,28 @@ class ProductionCycleViewSet(viewsets.ModelViewSet):
         cycle = self.get_object()
 
         # Validate harvest data
-        serializer = HarvestSerializer(data=request.data)
+        serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        harvest_data = serializer.validated_data
-
         try:
-            # Delegate business logic to service layer
-            harvested_cycle = ProductionCycleService.harvest_cycle(
+            harvested_cycle = ProductionCycleApplicationService.harvest_cycle(
                 cycle=cycle,
-                harvest_date=harvest_data['harvest_date'],
-                final_count=harvest_data['final_count'],
-                final_average_weight=harvest_data['final_average_weight'],
-                harvest_notes=harvest_data.get('harvest_notes', '')
+                command=HarvestCycleCommand(
+                    harvest_date=serializer.validated_data['harvest_date'],
+                    final_count=serializer.validated_data['final_count'],
+                    final_average_weight=serializer.validated_data['final_average_weight'],
+                    harvest_notes=serializer.validated_data.get('harvest_notes', ''),
+                ),
             )
 
-            return Response(
+            response_serializer = CycleHarvestResponseSerializer(
                 {
                     'message': _('Cycle récolté avec succès'),
-                    'cycle': ProductionCycleSerializer(harvested_cycle).data
+                    'cycle': harvested_cycle,
                 },
-                status=status.HTTP_200_OK
+                context={'request': request},
             )
+            return Response(response_serializer.data, status=status.HTTP_200_OK)
         except (CycleAlreadyHarvestedError, InvalidHarvestDataError) as e:
             return Response(
                 {'error': str(e)},
@@ -262,9 +276,10 @@ class ProductionCycleViewSet(viewsets.ModelViewSet):
         cycle = self.get_object()
 
         # Delegate analytics to service layer
-        statistics = AnalyticsService.get_cycle_statistics(cycle)
+        statistics = ProductionCycleApplicationService.get_cycle_statistics(cycle)
 
-        return Response(statistics)
+        serializer = CycleStatisticsSerializer(statistics)
+        return Response(serializer.data)
     
     @extend_schema(
         summary="Comparaison avec cycles précédents",
@@ -324,9 +339,10 @@ class ProductionCycleViewSet(viewsets.ModelViewSet):
         current_cycle = self.get_object()
 
         # Delegate comparison to service layer
-        comparison_data = AnalyticsService.compare_with_previous_cycles(
+        comparison_data = ProductionCycleApplicationService.compare_cycle_with_history(
             current_cycle,
-            limit=3
+            limit=3,
         )
 
-        return Response(comparison_data)
+        serializer = CycleComparisonSerializer(comparison_data)
+        return Response(serializer.data)

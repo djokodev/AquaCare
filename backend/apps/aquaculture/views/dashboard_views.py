@@ -1,20 +1,17 @@
 """
 Dashboard Views pour le module aquaculture.
 """
-from rest_framework import status, permissions
-from rest_framework.response import Response
-from rest_framework.views import APIView
 from django.utils.translation import gettext_lazy as _
-from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
 from drf_spectacular.types import OpenApiTypes
-
-from notifications.serializers import NotificationSerializer
+from drf_spectacular.utils import OpenApiExample, OpenApiParameter, extend_schema
+from rest_framework import generics, permissions, status
+from rest_framework.response import Response
 
 from ..serializers import (
-    ProductionCycleSerializer, CycleLogSerializer,
-    FeedingPlanSerializer, SanitaryLogSerializer, DashboardSerializer,
+    DashboardQuerySerializer,
+    DashboardSerializer,
 )
-from ..services.dashboard_service import DashboardService
+from ..services import DashboardApplicationService, InvalidDashboardCycleScopeError
 
 
 @extend_schema(
@@ -39,34 +36,32 @@ from ..services.dashboard_service import DashboardService
         )
     },
 )
-class DashboardView(APIView):
+class DashboardView(generics.GenericAPIView):
     """
     Vue principale de tableau de bord agrégeant toutes les données aquacoles.
     Délègue la logique métier au DashboardService.
     """
     permission_classes = [permissions.IsAuthenticated]
+    serializer_class = DashboardSerializer
+    query_serializer_class = DashboardQuerySerializer
+
+    def get_query_serializer(self, *args, **kwargs):
+        return self.query_serializer_class(*args, **kwargs)
 
     def get(self, request):
         """GET /api/aquaculture/dashboard/"""
-        user = request.user
-        cycle_id = request.query_params.get('cycle_id')
-
-        data = DashboardService.build_dashboard_data(user, user.farm_profile, cycle_id)
-
-        if data is None:
+        query_serializer = self.get_query_serializer(data=request.query_params)
+        query_serializer.is_valid(raise_exception=True)
+        try:
+            data = DashboardApplicationService.build_dashboard_payload(
+                user=request.user,
+                cycle_id=query_serializer.validated_data.get('cycle_id'),
+            )
+        except InvalidDashboardCycleScopeError as exc:
             return Response(
-                {'detail': _("Cycle de session introuvable ou inactif.")},
+                {'detail': str(exc) or _("Cycle de session introuvable ou inactif.")},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Serialize querysets (kept out of service to maintain request context)
-        qs = data.pop('_querysets')
-        data['active_cycles'] = ProductionCycleSerializer(qs['active_cycles_list'], many=True).data
-        data['recent_logs'] = CycleLogSerializer(qs['recent_logs'], many=True).data
-        data['current_feeding_plans'] = FeedingPlanSerializer(qs['current_plans'], many=True).data
-        data['pending_notifications'] = NotificationSerializer(qs['pending_notifications'], many=True).data
-        data['active_sanitary_issues'] = SanitaryLogSerializer(
-            qs['active_issues'], many=True, context={'request': request}
-        ).data
-
-        return Response(data)
+        serializer = self.get_serializer(data, context={'request': request})
+        return Response(serializer.data)

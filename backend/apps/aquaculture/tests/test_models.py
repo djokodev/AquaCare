@@ -1,17 +1,13 @@
 """
 Tests unitaires pour les modèles aquacoles.
 """
-import pytest
-from decimal import Decimal
 from datetime import date, timedelta
+from decimal import Decimal
+
+import pytest
+from aquaculture.models import CycleLog, FeedingPlan, NutritionalGuide, ProductionCycle, SanitaryLog
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError
-from django.utils import timezone
-
-from aquaculture.models import (
-    ProductionCycle, CycleLog, FeedingPlan, SanitaryLog,
-    NutritionalGuide, CycleMetrics
-)
 
 
 @pytest.mark.django_db

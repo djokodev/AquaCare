@@ -12,15 +12,36 @@ Workflow commande (MVP simplifié) :
 """
 import uuid
 from decimal import Decimal
-from django.db import models
+
 from django.core.validators import MinValueValidator
+from django.db import models
 from django.utils.translation import gettext_lazy as _
 
 from .constants import (
-    SPECIES_CHOICES, PHASE_CHOICES, BRAND_CHOICES,
-    ORDER_STATUS_CHOICES, DELIVERY_METHOD_CHOICES,
-    PICKUP_LOCATION_CHOICES
+    BRAND_CHOICES,
+    DELIVERY_METHOD_CHOICES,
+    ORDER_STATUS_CHOICES,
+    PHASE_CHOICES,
+    PICKUP_LOCATION_CHOICES,
+    SPECIES_CHOICES,
 )
+
+
+class ProductQuerySet(models.QuerySet["Product"]):
+    """QuerySet utilitaire pour le catalogue produits."""
+
+    def available(self) -> models.QuerySet["Product"]:
+        return self.filter(is_available=True)
+
+    def catalog_ordered(self) -> models.QuerySet["Product"]:
+        return self.order_by('species', 'phase', 'pellet_size_mm')
+
+
+class OrderQuerySet(models.QuerySet["Order"]):
+    """QuerySet utilitaire pour les commandes avec details precharges."""
+
+    def with_details(self) -> models.QuerySet["Order"]:
+        return self.select_related('user', 'farm_profile').prefetch_related('items__product')
 
 
 class Product(models.Model):
@@ -132,6 +153,8 @@ class Product(models.Model):
         _('Modifié le'),
         auto_now=True
     )
+
+    objects = ProductQuerySet.as_manager()
 
     def __str__(self):
         return f"{self.name} ({self.package_weight_kg}kg)"
@@ -335,6 +358,8 @@ class Order(models.Model):
         _('Modifiée le'),
         auto_now=True
     )
+
+    objects = OrderQuerySet.as_manager()
 
     def __str__(self):
         return f"{self.order_number} - {self.user.display_name}"

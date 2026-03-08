@@ -11,4 +11,4 @@ class AquacultureConfig(AppConfig):
 
     def ready(self):
         """Initialise les signaux et autres composants au démarrage."""
-        from . import signals
+        from . import signals  # noqa: F401

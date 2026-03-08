@@ -3,15 +3,18 @@ Sync Views pour le module aquaculture.
 """
 import logging
 
-from rest_framework import status, permissions
+from drf_spectacular.utils import OpenApiExample, extend_schema
+from rest_framework import generics, permissions, status
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
-from rest_framework.views import APIView
-from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
-from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
-from drf_spectacular.types import OpenApiTypes
 
-from ..serializers import SyncRequestSerializer, SyncResponseSerializer
-from ..services import SyncService
+from ..serializers import (
+    SyncRequestSerializer,
+    SyncResponseSerializer,
+    SyncValidationErrorResponseSerializer,
+)
+from ..services import SyncApplicationService
+from ..throttles import AquacultureSyncThrottle
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +78,7 @@ logger = logging.getLogger(__name__)
         )
     ]
 )
-class SyncView(APIView):
+class SyncView(generics.GenericAPIView):
     """
     Endpoint principal de synchronisation pour l'app mobile offline-first.
     
@@ -84,7 +87,9 @@ class SyncView(APIView):
     """
     permission_classes = [permissions.IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
-    
+    throttle_classes = [AquacultureSyncThrottle]
+    serializer_class = SyncRequestSerializer
+
     def post(self, request):
         """
         Gère les requêtes de synchronisation offline.
@@ -94,29 +99,14 @@ class SyncView(APIView):
 
         POST /api/aquaculture/sync/
         """
-        # Validate sync data structure
-        validation_errors = SyncService.validate_sync_data(request.data)
-        if validation_errors:
-            return Response(
-                {
-                    'status': 'error',
-                    'errors': [{'type': 'validation', 'error': err} for err in validation_errors]
-                },
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        # Delegate full sync to service layer
-        sync_result = SyncService.perform_full_sync(
+        sync_result = SyncApplicationService.execute_sync(
             user=request.user,
-            sync_data=request.data
+            raw_payload=dict(request.data),
         )
-
-        # Determine HTTP status code based on sync result
-        if sync_result['status'] == 'error':
-            http_status = status.HTTP_500_INTERNAL_SERVER_ERROR
-        elif sync_result['status'] == 'partial_success':
-            http_status = status.HTTP_207_MULTI_STATUS
-        else:
-            http_status = status.HTTP_200_OK
-
-        return Response(sync_result, status=http_status)
+        serializer_class = (
+            SyncValidationErrorResponseSerializer
+            if sync_result.status_code == status.HTTP_400_BAD_REQUEST
+            else SyncResponseSerializer
+        )
+        response_serializer = serializer_class(sync_result.payload)
+        return Response(response_serializer.data, status=sync_result.status_code)

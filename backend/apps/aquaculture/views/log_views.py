@@ -3,18 +3,25 @@ Log Views pour le module aquaculture.
 """
 import logging
 
-from rest_framework import viewsets, status, permissions
-from rest_framework.decorators import action
-from rest_framework.response import Response
 from django.db import transaction
 from django.utils.translation import gettext_lazy as _
-from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiExample
 from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import OpenApiExample, OpenApiParameter, extend_schema, extend_schema_view
+from rest_framework import permissions, status, viewsets
+from rest_framework.decorators import action
+from rest_framework.response import Response
 
-from ..models import ProductionCycle, CycleLog
-from ..serializers import CycleLogSerializer, CycleLogSyncSerializer
-from ..services import ProductionCycleService, CycleLogService
 from ..constants import MAX_BULK_LOGS
+from ..models import CycleLog
+from ..serializers import (
+    BulkCycleLogRequestSerializer,
+    BulkCycleLogResponseSerializer,
+    CycleLogSerializer,
+)
+from ..services import (
+    CycleLogApplicationService,
+    UnauthorizedCycleAccessError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -112,12 +119,17 @@ class CycleLogViewSet(viewsets.ModelViewSet):
     """
     serializer_class = CycleLogSerializer
     permission_classes = [permissions.IsAuthenticated]
-    
+
+    def get_serializer_class(self):
+        if self.action == 'bulk_create':
+            return BulkCycleLogRequestSerializer
+        return super().get_serializer_class()
+
     def get_queryset(self):
         """Filtre les logs par les cycles de l'utilisateur."""
-        queryset = CycleLog.objects.filter(
+        queryset = CycleLog.objects.for_api().filter(
             cycle__farm_profile__user=self.request.user
-        ).select_related('cycle').order_by('-log_date')
+        ).order_by('-log_date')
         
         # Filter by cycle if specified
         cycle_id = self.request.query_params.get('cycle_id')
@@ -137,35 +149,21 @@ class CycleLogViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        cycle = serializer.validated_data.get('cycle')
-        log_date = serializer.validated_data.get('log_date')
-
-        # Sécurité : s'assurer que le cycle appartient bien à l'utilisateur
-        if cycle.farm_profile.user_id != request.user.id:
+        try:
+            mutation_result = CycleLogApplicationService.create_or_update_log(
+                user=request.user,
+                validated_data=serializer.validated_data,
+            )
+        except UnauthorizedCycleAccessError as exc:
             return Response(
-                {"detail": "Cycle non autorisé."},
-                status=status.HTTP_403_FORBIDDEN
+                {"detail": str(exc)},
+                status=status.HTTP_403_FORBIDDEN,
             )
 
-        existing_log = CycleLog.objects.filter(
-            cycle=cycle,
-            log_date=log_date
-        ).first()
-
-        if existing_log:
-            # Mettre à jour les champs fournis
-            for field, value in serializer.validated_data.items():
-                setattr(existing_log, field, value)
-            existing_log.save()
-            # Recalculer les métriques du cycle
-            self._recalculate_cycle_metrics(cycle)
-
-            output_serializer = self.get_serializer(existing_log)
-            return Response(output_serializer.data, status=status.HTTP_200_OK)
-
-        self.perform_create(serializer)
-        headers = self.get_success_headers(serializer.data)
-        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+        output_serializer = self.get_serializer(mutation_result.log)
+        response_status = status.HTTP_201_CREATED if mutation_result.created else status.HTTP_200_OK
+        headers = self.get_success_headers(output_serializer.data) if mutation_result.created else {}
+        return Response(output_serializer.data, status=response_status, headers=headers)
     
     @extend_schema(
         summary="Création en bulk de logs (sync offline)",
@@ -174,22 +172,9 @@ class CycleLogViewSet(viewsets.ModelViewSet):
         Utilise la déduplication par client_uuid pour éviter les doublons.
         Recalcule automatiquement les métriques de tous les cycles affectés.
         """,
-        request=CycleLogSyncSerializer,
+        request=BulkCycleLogRequestSerializer,
         responses={
-            201: OpenApiExample(
-                'Logs créés avec succès',
-                value={
-                    'created': 5,
-                    'logs': [
-                        {
-                            'id': '789e0123-e89b-12d3-a456-426614174002',
-                            'client_uuid': 'offline-log-001',
-                            'log_date': '2025-08-18',
-                            'created_offline': True
-                        }
-                    ]
-                }
-            ),
+            201: BulkCycleLogResponseSerializer,
             400: OpenApiExample(
                 'Erreur de validation',
                 value={'logs': ['Données invalides pour le log']}
@@ -198,23 +183,25 @@ class CycleLogViewSet(viewsets.ModelViewSet):
         examples=[
             OpenApiExample(
                 'Logs offline à synchroniser',
-                value=[
-                    {
-                        'client_uuid': 'offline-log-001',
-                        'cycle': '456e7890-e89b-12d3-a456-426614174001',
-                        'log_date': '2025-08-18',
-                        'feed_quantity': 47.00,
-                        'mortality_count': 1,
-                        'created_offline': True
-                    },
-                    {
-                        'client_uuid': 'offline-log-002',
-                        'cycle': '456e7890-e89b-12d3-a456-426614174001',
-                        'log_date': '2025-08-17',
-                        'feed_quantity': 46.50,
-                        'created_offline': True
-                    }
-                ]
+                value={
+                    'logs': [
+                        {
+                            'client_uuid': 'offline-log-001',
+                            'cycle': '456e7890-e89b-12d3-a456-426614174001',
+                            'log_date': '2025-08-18',
+                            'feed_quantity': 47.00,
+                            'mortality_count': 1,
+                            'created_offline': True
+                        },
+                        {
+                            'client_uuid': 'offline-log-002',
+                            'cycle': '456e7890-e89b-12d3-a456-426614174001',
+                            'log_date': '2025-08-17',
+                            'feed_quantity': 46.50,
+                            'created_offline': True
+                        }
+                    ]
+                }
             )
         ]
     )
@@ -241,44 +228,23 @@ class CycleLogViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        serializer = CycleLogSyncSerializer(data=logs_data, many=True)
+        serializer = self.get_serializer(data={'logs': logs_data})
         serializer.is_valid(raise_exception=True)
 
         with transaction.atomic():
-            result = CycleLogService.create_bulk_logs(
-                logs_data=serializer.validated_data,
+            result = CycleLogApplicationService.create_bulk_logs(
+                logs_data=serializer.validated_data['logs'],
                 user=request.user
             )
             logs = result['logs']
 
-            # Update affected cycles
-            cycles_to_update = set(log.cycle_id for log in logs)
-            for cycle_id in cycles_to_update:
-                try:
-                    cycle = ProductionCycle.objects.get(
-                        id=cycle_id,
-                        farm_profile__user=request.user
-                    )
-                    self._recalculate_cycle_metrics(cycle)
-                except ProductionCycle.DoesNotExist:
-                    continue
-
-        return Response({
-            'created': result['created'],
-            'updated': result['updated'],
-            'errors': result['errors'],
-            'logs': CycleLogSerializer(logs, many=True).data
-        }, status=status.HTTP_201_CREATED)
-    
-    # SUPPRIMÉ: _update_cycle_metrics() - duplication avec signal post_save
-    # Les mises à jour de cycle sont gérées automatiquement par le signal
-    # update_cycle_after_log() dans signals.py pour éviter la duplication
-
-    def _recalculate_cycle_metrics(self, cycle):
-        """
-        Recalcule toutes les métriques de cycle à partir des logs.
-
-        Délègue la logique métier au ProductionCycleService pour
-        garantir la cohérence avec les autres méthodes de calcul.
-        """
-        ProductionCycleService.recalculate_all_metrics(cycle)
+        response_serializer = BulkCycleLogResponseSerializer(
+            {
+                'created': result['created'],
+                'updated': result['updated'],
+                'errors': result['errors'],
+                'logs': logs,
+            },
+            context={'request': request},
+        )
+        return Response(response_serializer.data, status=status.HTTP_201_CREATED)

@@ -8,22 +8,87 @@ VERSION 2.0 avec :
 
 Analyse la consommation historique + prévoit les changements de phase futurs.
 """
+from __future__ import annotations
+
 from datetime import timedelta
 from decimal import Decimal
-from typing import Dict, List, Optional
-from django.db.models import Avg, Sum
+from typing import TypedDict
+
+from aquaculture.models import CycleLog, ProductionCycle
+from commerce.models import Product
 from django.utils import timezone
 
-from aquaculture.models import ProductionCycle, CycleLog
-from commerce.models import Product
-from ..domain.growth_calculator import (
-    GrowthCalculator,
-    PhaseDetector
-)
-from ..constants import (
-    TARGET_WEIGHT_TILAPIA_DEFAULT,
-    TARGET_WEIGHT_CATFISH_DEFAULT
-)
+from ..constants import TARGET_WEIGHT_CATFISH_DEFAULT, TARGET_WEIGHT_TILAPIA_DEFAULT
+from ..domain.growth_calculator import GrowthCalculator, PhaseDetector
+
+
+class SuggestedProduct(TypedDict):
+    product_id: str
+    product_name: str
+    package_weight_kg: float
+    quantity_bags: int
+    total_kg: float
+    unit_price: float
+    total_price: float
+    brand: str
+
+
+class PredictedPhase(TypedDict):
+    phase_name: str
+    pellet_size_mm: float
+    weight_range_g: list[float]
+    days_in_phase: int
+
+
+class PhaseSuggestion(TypedDict):
+    phase_name: str
+    pellet_size_mm: float
+    weight_range_g: list[float]
+    days_coverage: int
+    estimated_need_kg: float
+    products: list[SuggestedProduct]
+    total_price: float
+
+
+class CycleSuggestionSummary(TypedDict):
+    total_needed_kg: float
+    total_bags: int
+    total_price: float
+    coverage_days: int
+
+
+class CycleSuggestion(TypedDict):
+    has_data: bool
+    cycle_id: str
+    cycle_name: str
+    species: str
+    current_phase: str
+    current_avg_weight_g: float
+    days_remaining: int
+    avg_daily_consumption_kg: float
+    phases: list[PhaseSuggestion]
+    summary: CycleSuggestionSummary
+
+
+class CycleSuggestionNoData(TypedDict):
+    has_data: bool
+    reason: str
+
+
+class SuggestionAnalysis(TypedDict):
+    total_cycles: int
+    cycles_with_data: int
+    confidence_score: int
+    analysis_period_days: int
+    safety_buffer_days: int
+
+
+class FeedingSuggestionResult(TypedDict):
+    has_suggestions: bool
+    suggestion_type: str
+    suggestions: list[CycleSuggestion]
+    analysis: SuggestionAnalysis
+    generated_at: str
 
 
 class FeedingSuggestionService:
@@ -54,9 +119,9 @@ class FeedingSuggestionService:
     @staticmethod
     def get_feeding_suggestions(
         user_id: int,
-        farm_profile_id: Optional[int] = None,
-        cycle_id: Optional[str] = None,
-    ) -> Dict:
+        farm_profile_id: int | None = None,
+        cycle_id: str | None = None,
+    ) -> FeedingSuggestionResult | dict[str, object]:
         """
         Génère suggestions ADAPTÉES avec détection phase actuelle.
 
@@ -78,12 +143,12 @@ class FeedingSuggestionService:
         if cycle_id:
             cycles_query = cycles_query.filter(id=cycle_id)
 
-        active_cycles = cycles_query.select_related('farm_profile')
+        active_cycles = list(cycles_query.select_related('farm_profile'))
 
-        if cycle_id and not active_cycles.exists():
+        if cycle_id and not active_cycles:
             raise ValueError("Cycle de session introuvable ou inactif.")
 
-        if not active_cycles.exists():
+        if not active_cycles:
             return {
                 'has_suggestions': False,
                 'suggestion_type': 'no_active_cycles',
@@ -93,7 +158,7 @@ class FeedingSuggestionService:
             }
 
         # Analyser chaque cycle avec détection de phase
-        suggestions_by_cycle = []
+        suggestions_by_cycle: list[CycleSuggestion] = []
         total_cycles_analyzed = 0
         cycles_with_data = 0
 
@@ -127,7 +192,9 @@ class FeedingSuggestionService:
         }
 
     @staticmethod
-    def _analyze_cycle_with_phases(cycle: ProductionCycle) -> Dict:
+    def _analyze_cycle_with_phases(
+        cycle: ProductionCycle,
+    ) -> CycleSuggestion | CycleSuggestionNoData:
         """
         Analyse un cycle avec détection automatique de phase actuelle.
 
@@ -145,15 +212,16 @@ class FeedingSuggestionService:
         end_date = timezone.now()
         start_date = end_date - timedelta(days=FeedingSuggestionService.MAX_ANALYSIS_DAYS)
 
-        logs = CycleLog.objects.filter(
-            cycle=cycle,
-            log_date__gte=start_date.date(),
-            log_date__lte=end_date.date(),
-            feed_quantity__isnull=False,
-            feed_quantity__gt=0
-        ).order_by('log_date')
-
-        logs_count = logs.count()
+        logs = list(
+            CycleLog.objects.filter(
+                cycle=cycle,
+                log_date__gte=start_date.date(),
+                log_date__lte=end_date.date(),
+                feed_quantity__isnull=False,
+                feed_quantity__gt=0,
+            ).order_by('log_date')
+        )
+        logs_count = len(logs)
 
         if logs_count < FeedingSuggestionService.MIN_DAYS_FOR_SUGGESTION:
             return {
@@ -184,11 +252,12 @@ class FeedingSuggestionService:
         current_phase = PhaseDetector.detect_phase(normalized_species, current_avg_weight)
 
         # 4. Calculer consommation moyenne
-        consumption_stats = logs.aggregate(
-            avg_daily=Avg('feed_quantity'),
-            total=Sum('feed_quantity')
+        total_feed_quantity = sum(log.feed_quantity for log in logs if log.feed_quantity is not None)
+        avg_daily_consumption = (
+            total_feed_quantity / Decimal(str(logs_count))
+            if logs_count > 0
+            else Decimal('0')
         )
-        avg_daily_consumption = consumption_stats['avg_daily'] or Decimal('0')
 
         # 5. Calculer jours restants
         if cycle.planned_harvest_date:
@@ -216,26 +285,21 @@ class FeedingSuggestionService:
         # 7. Suggérer produits pour chaque phase future
         phase_suggestions = []
         total_needed_kg = Decimal('0')
+        available_products = list(
+            Product.objects.filter(
+                species=normalized_species,
+                is_available=True,
+            ).order_by('-package_weight_kg')
+        )
 
         for phase_info in future_phases:
             phase_need_kg = avg_daily_consumption * Decimal(str(phase_info['days_in_phase']))
 
             # Trouver produits adaptés à cette phase
-            products = Product.objects.filter(
-                species=normalized_species,
-                pellet_size_mm=Decimal(str(phase_info['pellet_size_mm'])),
-                is_available=True
-            ).order_by('-package_weight_kg')
-
-            if not products.exists():
-                # Fallback : taille proche
-                pellet_size = phase_info['pellet_size_mm']
-                products = Product.objects.filter(
-                    species=normalized_species,
-                    pellet_size_mm__gte=Decimal(str(pellet_size - 0.5)),
-                    pellet_size_mm__lte=Decimal(str(pellet_size + 0.5)),
-                    is_available=True
-                ).order_by('-package_weight_kg')
+            products = FeedingSuggestionService._get_products_for_pellet_size(
+                available_products,
+                phase_info['pellet_size_mm'],
+            )
 
             # Convertir en sacs
             suggested_products = FeedingSuggestionService._convert_kg_to_bags(
@@ -281,7 +345,10 @@ class FeedingSuggestionService:
         }
 
     @staticmethod
-    def _calculate_current_average_weight(cycle: ProductionCycle, logs: any) -> Optional[float]:
+    def _calculate_current_average_weight(
+        cycle: ProductionCycle,
+        logs: list[CycleLog],
+    ) -> float | None:
         """
         Calcule le poids moyen actuel des poissons depuis les logs.
 
@@ -295,23 +362,23 @@ class FeedingSuggestionService:
             float: Poids moyen en grammes OU None si impossible
         """
         # Méthode 1 : Dernier log avec avg_weight renseigné
-        last_log_with_weight = logs.filter(average_weight__isnull=False).order_by('-log_date').first()
+        logs_with_weight = [log for log in logs if log.average_weight is not None]
+        last_log_with_weight = logs_with_weight[-1] if logs_with_weight else None
         if last_log_with_weight and last_log_with_weight.average_weight:
             return float(last_log_with_weight.average_weight)
 
         # Méthode 2 : Calculer depuis échantillonnages
-        recent_samples = logs.filter(
-            sample_total_weight__isnull=False,
-            sample_count__isnull=False,
-            sample_count__gt=0
-        ).order_by('-log_date')[:5]  # 5 derniers échantillonnages
+        recent_samples = [
+            log for log in reversed(logs)
+            if log.sample_total_weight is not None
+            and log.sample_count is not None
+            and log.sample_count > 0
+            and log.average_weight is not None
+        ][:5]
 
-        if recent_samples.exists():
-            avg_from_samples = recent_samples.aggregate(
-                avg=Avg('average_weight')
-            )['avg']
-            if avg_from_samples:
-                return float(avg_from_samples)
+        if recent_samples:
+            average_weight = sum(log.average_weight for log in recent_samples) / Decimal(str(len(recent_samples)))
+            return float(average_weight)
 
         # Méthode 3 : Impossible de calculer
         return None
@@ -321,8 +388,8 @@ class FeedingSuggestionService:
         species: str,
         current_weight_g: float,
         target_weight_g: float,
-        days_remaining: int
-    ) -> List[Dict]:
+        days_remaining: int,
+    ) -> list[PredictedPhase]:
         """
         Prévoit les phases de croissance futures avec changements de granulés.
 
@@ -349,7 +416,7 @@ class FeedingSuggestionService:
         future_phases_grouped = PhaseDetector.group_by_phases(species, future_progression)
 
         # Formater pour sortie
-        result = []
+        result: list[PredictedPhase] = []
         for phase in future_phases_grouped:
             days_start, days_end = phase['days_range']
             result.append({
@@ -362,13 +429,20 @@ class FeedingSuggestionService:
         return result
 
     @staticmethod
-    def _convert_kg_to_bags(total_kg: Decimal, products: any) -> List[Dict]:
+    def _convert_kg_to_bags(
+        total_kg: Decimal,
+        products: list[Product],
+    ) -> list[SuggestedProduct]:
         """Convertit kg en sacs (20kg + 1kg)."""
-        suggested_products = []
+        suggested_products: list[SuggestedProduct] = []
         remaining_kg = total_kg
+        products_by_weight = {
+            float(product.package_weight_kg): product
+            for product in products
+        }
 
         # Sacs de 20kg
-        product_20kg = products.filter(package_weight_kg=20).first()
+        product_20kg = products_by_weight.get(20.0)
         if product_20kg and remaining_kg >= Decimal('20'):
             bags_20kg = int(remaining_kg / Decimal('20'))
             suggested_products.append({
@@ -384,7 +458,7 @@ class FeedingSuggestionService:
             remaining_kg -= Decimal(str(bags_20kg * 20))
 
         # Sacs de 1kg
-        product_1kg = products.filter(package_weight_kg=1).first()
+        product_1kg = products_by_weight.get(1.0)
         if product_1kg and remaining_kg > 0:
             bags_1kg = int(remaining_kg) + 1
             suggested_products.append({
@@ -399,8 +473,8 @@ class FeedingSuggestionService:
             })
 
         # Fallback
-        if not suggested_products and products.exists():
-            product_any = products.first()
+        if not suggested_products and products:
+            product_any = products[0]
             bags = int(total_kg / product_any.package_weight_kg) + 1
             suggested_products.append({
                 'product_id': str(product_any.id),
@@ -414,6 +488,27 @@ class FeedingSuggestionService:
             })
 
         return suggested_products
+
+    @staticmethod
+    def _get_products_for_pellet_size(
+        available_products: list[Product],
+        pellet_size_mm: float,
+    ) -> list[Product]:
+        """Retourne les produits les plus adaptes a une granulometrie cible."""
+        target_size = Decimal(str(pellet_size_mm))
+        exact_matches = [
+            product for product in available_products
+            if product.pellet_size_mm == target_size
+        ]
+        if exact_matches:
+            return exact_matches
+
+        min_size = Decimal(str(pellet_size_mm - 0.5))
+        max_size = Decimal(str(pellet_size_mm + 0.5))
+        return [
+            product for product in available_products
+            if min_size <= product.pellet_size_mm <= max_size
+        ]
 
     @staticmethod
     def _calculate_confidence(total_cycles: int, cycles_with_data: int) -> int:

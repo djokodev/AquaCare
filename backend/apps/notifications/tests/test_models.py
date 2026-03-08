@@ -6,12 +6,11 @@ Couvre :
 - NotificationPreference (préférences utilisateur)
 - PushToken (tokens Expo, désactivation)
 """
-import pytest
-from django.utils import timezone
-from django.contrib.contenttypes.models import ContentType
-from datetime import timedelta
 from unittest.mock import patch
 
+import pytest
+from django.contrib.contenttypes.models import ContentType
+from django.utils import timezone
 from notifications.models import Notification, NotificationPreference, PushToken
 
 
@@ -56,6 +55,14 @@ class TestNotificationModel:
         """Test représentation string du modèle."""
         assert notification.user.phone_number in str(notification)
 
+    def test_mark_as_sent_sets_timestamp(self, notification):
+        """mark_as_sent() doit marquer la notification sans erreur."""
+        notification.mark_as_sent()
+        notification.refresh_from_db()
+
+        assert notification.is_sent is True
+        assert notification.sent_at is not None
+
 
 @pytest.mark.django_db
 class TestNotificationPreferenceModel:
@@ -76,6 +83,10 @@ class TestNotificationPreferenceModel:
 
         with pytest.raises(Exception):
             NotificationPreference.objects.create(user=user)
+
+    def test_preference_string_representation(self, notification_preference):
+        """La representation doit contenir le numero de l'utilisateur."""
+        assert notification_preference.user.phone_number in str(notification_preference)
 
 
 @pytest.mark.django_db
@@ -98,13 +109,13 @@ class TestPushTokenModel:
 
     def test_multiple_tokens_per_user(self, user):
         """Test : un utilisateur peut avoir plusieurs tokens (multi-device)."""
-        token1 = PushToken.objects.create(
+        PushToken.objects.create(
             user=user,
             expo_push_token='ExponentPushToken[device1]',
             device_id='device-1',
             platform='ios'
         )
-        token2 = PushToken.objects.create(
+        PushToken.objects.create(
             user=user,
             expo_push_token='ExponentPushToken[device2]',
             device_id='device-2',
@@ -127,6 +138,10 @@ class TestPushTokenModel:
         token.refresh_from_db()
         assert token.is_active is False
 
+    def test_push_token_string_prefers_device_name(self, push_token):
+        """La representation string doit preferer le nom du device."""
+        assert str(push_token).endswith("Test Device")
+
 
 @pytest.mark.django_db
 class TestNotificationPreferenceQuietHours:
@@ -141,7 +156,6 @@ class TestNotificationPreferenceQuietHours:
             quiet_hours_end=time(22, 0),
         )
         with patch('django.utils.timezone.localtime') as mock_local:
-            from datetime import datetime
             mock_local.return_value = timezone.now().replace(hour=12, minute=0)
             assert pref.is_in_quiet_hours() is True
 

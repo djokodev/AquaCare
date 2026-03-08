@@ -11,18 +11,20 @@ le mobile offline-first et le serveur backend :
 
 Architecture: Service Layer Pattern pour logique de sync complexe.
 """
+
 import threading
 import uuid as _uuid
-from typing import Dict, List, Any, Optional
-from datetime import datetime, date
+from datetime import date, datetime
+from typing import Any
+
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
-from django.core.exceptions import ValidationError
 
-from ..models import ProductionCycle, CycleLog, SanitaryLog, FeedingPlan
+from ..models import CycleLog, FeedingPlan, ProductionCycle, SanitaryLog
+from .analytics_service import AnalyticsService
 from .base import BaseService
 from .cycle_service import ProductionCycleService
-from .analytics_service import AnalyticsService
 
 # ── Sync flag (threading.local) ──────────────────────────────────────────────
 # Permet aux signals post_save de CycleLog de détecter qu'un sync offline
@@ -55,11 +57,127 @@ class SyncService(BaseService):
     """
 
     @staticmethod
+    def _build_sync_result() -> dict[str, Any]:
+        return {
+            'created': 0,
+            'updated': 0,
+            'errors': [],
+            'synced_ids': [],
+        }
+
+    @staticmethod
+    def _append_sync_error(
+        result: dict[str, Any],
+        *,
+        error_type: str,
+        error: str,
+        **metadata: Any,
+    ) -> None:
+        error_payload: dict[str, Any] = {'type': error_type, 'error': error}
+        error_payload.update({key: value for key, value in metadata.items() if value is not None})
+        result['errors'].append(error_payload)
+
+    @staticmethod
+    def _extract_cycle_id(raw_cycle_ref: Any) -> str | None:
+        cycle_id = getattr(raw_cycle_ref, 'id', raw_cycle_ref)
+        if cycle_id is None:
+            return None
+        return str(cycle_id)
+
+    @staticmethod
+    def _build_user_cycles_map(
+        user,
+        items_data: list[dict[str, Any]],
+    ) -> dict[str, ProductionCycle]:
+        cycle_ids: list[str] = []
+        for item_data in items_data:
+            cycle_id = SyncService._extract_cycle_id(item_data.get('cycle'))
+            if not cycle_id:
+                continue
+            try:
+                _uuid.UUID(cycle_id)
+            except (ValueError, AttributeError):
+                continue
+            cycle_ids.append(cycle_id)
+
+        return {
+            str(cycle.id): cycle
+            for cycle in ProductionCycle.objects.filter(
+                id__in=cycle_ids,
+                farm_profile__user=user,
+            ).select_related('farm_profile')
+        }
+
+    @staticmethod
+    def _parse_sync_date_field(
+        value: Any,
+        *,
+        field_name: str,
+    ) -> date:
+        if isinstance(value, date):
+            return value
+
+        if isinstance(value, str):
+            try:
+                return date.fromisoformat(value)
+            except ValueError as exc:
+                raise ValueError(
+                    f"Format de date invalide pour {field_name} (attendu: YYYY-MM-DD)"
+                ) from exc
+
+        raise ValueError(f"Le champ {field_name} doit être une date ISO valide")
+
+    @staticmethod
+    def _record_sync_success(
+        result: dict[str, Any],
+        *,
+        key: str,
+        synced_id: str,
+    ) -> None:
+        result[key] += 1
+        result['synced_ids'].append(synced_id)
+
+    @staticmethod
+    def _parse_last_sync(last_sync: str | None) -> datetime | None:
+        if not last_sync:
+            return None
+
+        try:
+            last_sync_clean = last_sync.replace('Z', '+00:00')
+            parsed_last_sync = datetime.fromisoformat(last_sync_clean)
+            if parsed_last_sync.tzinfo is None:
+                return timezone.make_aware(parsed_last_sync)
+            return parsed_last_sync
+        except (ValueError, AttributeError):
+            return None
+
+    @staticmethod
+    def _build_full_sync_response(sync_data: dict[str, Any]) -> dict[str, Any]:
+        return {
+            'status': 'success',
+            'timestamp': timezone.now(),
+            'processed': {
+                'cycles': 0,
+                'cycle_logs': 0,
+                'cycle_logs_updated': 0,
+                'sanitary_logs': 0,
+            },
+            'errors': [],
+            'server_updates': {},
+            'device_id': sync_data.get('device_id') or sync_data.get('client_id', 'unknown'),
+        }
+
+    @staticmethod
+    def _finalize_full_sync_status(sync_result: dict[str, Any]) -> dict[str, Any]:
+        sync_result['status'] = 'partial_success' if sync_result['errors'] else 'success'
+        return sync_result
+
+    @staticmethod
     @transaction.atomic
     def sync_cycle_logs(
         user,
-        logs_data: List[Dict[str, Any]]
-    ) -> Dict[str, Any]:
+        logs_data: list[dict[str, Any]]
+    ) -> dict[str, Any]:
         """
         Synchronise les logs de cycles créés offline avec déduplication.
 
@@ -81,31 +199,8 @@ class SyncService(BaseService):
                     'synced_ids': List[str]
                 }
         """
-        result = {
-            'created': 0,
-            'updated': 0,
-            'errors': [],
-            'synced_ids': []
-        }
-
-        # Batch-fetch all cycles upfront to avoid N+1 queries
-        # Filter invalid UUIDs to prevent ORM ValueError on __in lookup
-        raw_cycle_ids = []
-        for d in logs_data:
-            cid = getattr(d.get('cycle'), 'id', d.get('cycle'))
-            if cid:
-                try:
-                    _uuid.UUID(str(cid))
-                    raw_cycle_ids.append(str(cid))
-                except (ValueError, AttributeError):
-                    pass
-        cycles_map = {
-            str(c.id): c
-            for c in ProductionCycle.objects.filter(
-                id__in=raw_cycle_ids,
-                farm_profile__user=user
-            ).select_related('farm_profile')
-        }
+        result = SyncService._build_sync_result()
+        cycles_map = SyncService._build_user_cycles_map(user, logs_data)
 
         # Désactiver les signals post_save pendant le bulk sync pour éviter
         # 8× DB ops par log. On fait un batch recalcul unique après.
@@ -116,49 +211,49 @@ class SyncService(BaseService):
                 try:
                     # Extract client_uuid for deduplication
                     client_uuid = log_data.get('client_uuid')
-                    cycle_ref = log_data.get('cycle')
-                    cycle_id = getattr(cycle_ref, 'id', cycle_ref)
+                    cycle_id = SyncService._extract_cycle_id(log_data.get('cycle'))
 
                     if not cycle_id:
-                        result['errors'].append({
-                            'type': 'cycle_log',
-                            'client_uuid': client_uuid,
-                            'error': 'Le champ cycle est requis'
-                        })
+                        SyncService._append_sync_error(
+                            result,
+                            error_type='cycle_log',
+                            client_uuid=client_uuid,
+                            error='Le champ cycle est requis',
+                        )
                         continue
 
-                    # Validation: Cycle ownership check (from pre-fetched map)
                     cycle = cycles_map.get(str(cycle_id))
                     if not cycle:
-                        result['errors'].append({
-                            'type': 'cycle_log',
-                            'client_uuid': client_uuid,
-                            'error': f'Cycle {cycle_id} non trouvé ou non autorisé'
-                        })
+                        SyncService._append_sync_error(
+                            result,
+                            error_type='cycle_log',
+                            client_uuid=client_uuid,
+                            error=f'Cycle {cycle_id} non trouvé ou non autorisé',
+                        )
                         continue
 
-                    # Deduplication: Check if log already exists
                     existing_log = None
                     if client_uuid:
                         existing_log = CycleLog.objects.filter(client_uuid=client_uuid).first()
                         if existing_log and existing_log.cycle.farm_profile.user_id != user.id:
-                            result['errors'].append({
-                                'type': 'cycle_log',
-                                'client_uuid': client_uuid,
-                                'error': 'Conflit client_uuid détecté avec un autre utilisateur'
-                            })
+                            SyncService._append_sync_error(
+                                result,
+                                error_type='cycle_log',
+                                client_uuid=client_uuid,
+                                error='Conflit client_uuid détecté avec un autre utilisateur',
+                            )
                             continue
 
                     if existing_log:
                         if existing_log.cycle_id != cycle.id:
-                            result['errors'].append({
-                                'type': 'cycle_log',
-                                'client_uuid': client_uuid,
-                                'error': 'Le client_uuid fourni est lié à un autre cycle'
-                            })
+                            SyncService._append_sync_error(
+                                result,
+                                error_type='cycle_log',
+                                client_uuid=client_uuid,
+                                error='Le client_uuid fourni est lié à un autre cycle',
+                            )
                             continue
 
-                        # UPDATE existing log (avoid duplicates)
                         for key, value in log_data.items():
                             if key not in ['id', 'created_at', 'client_uuid', 'cycle']:
                                 setattr(existing_log, key, value)
@@ -166,39 +261,48 @@ class SyncService(BaseService):
                         existing_log.synced_at = timezone.now()
                         existing_log.save()
 
-                        result['updated'] += 1
-                        result['synced_ids'].append(str(existing_log.id))
+                        SyncService._record_sync_success(
+                            result,
+                            key='updated',
+                            synced_id=str(existing_log.id),
+                        )
                     else:
-                        # CREATE new log
                         log_create_data = {k: v for k, v in log_data.items() if k not in ['id', 'cycle']}
                         log_create_data['cycle'] = cycle
                         log_create_data['created_offline'] = True
                         log_create_data['synced_at'] = timezone.now()
 
-                        # Convert log_date from ISO string to date object if needed
-                        if 'log_date' in log_create_data and isinstance(log_create_data['log_date'], str):
+                        if 'log_date' in log_create_data:
                             try:
-                                log_create_data['log_date'] = date.fromisoformat(log_create_data['log_date'])
-                            except ValueError:
-                                result['errors'].append({
-                                    'type': 'cycle_log',
-                                    'client_uuid': client_uuid,
-                                    'error': 'Format de date invalide (attendu: YYYY-MM-DD)'
-                                })
+                                log_create_data['log_date'] = SyncService._parse_sync_date_field(
+                                    log_create_data['log_date'],
+                                    field_name='log_date',
+                                )
+                            except ValueError as exc:
+                                SyncService._append_sync_error(
+                                    result,
+                                    error_type='cycle_log',
+                                    client_uuid=client_uuid,
+                                    error=str(exc),
+                                )
                                 continue
 
                         new_log = CycleLog.objects.create(**log_create_data)
                         affected_cycle_ids.add(str(cycle.id))
 
-                        result['created'] += 1
-                        result['synced_ids'].append(str(new_log.id))
+                        SyncService._record_sync_success(
+                            result,
+                            key='created',
+                            synced_id=str(new_log.id),
+                        )
 
-                except (ValidationError, ValueError, TypeError) as e:
-                    result['errors'].append({
-                        'type': 'cycle_log',
-                        'client_uuid': log_data.get('client_uuid'),
-                        'error': str(e)
-                    })
+                except (ValidationError, ValueError, TypeError) as exc:
+                    SyncService._append_sync_error(
+                        result,
+                        error_type='cycle_log',
+                        client_uuid=log_data.get('client_uuid'),
+                        error=str(exc),
+                    )
         finally:
             mark_sync_in_progress(False)
 
@@ -219,8 +323,8 @@ class SyncService(BaseService):
     @transaction.atomic
     def sync_sanitary_logs(
         user,
-        logs_data: List[Dict[str, Any]]
-    ) -> Dict[str, Any]:
+        logs_data: list[dict[str, Any]]
+    ) -> dict[str, Any]:
         """
         Synchronise les logs sanitaires créés offline.
 
@@ -240,54 +344,31 @@ class SyncService(BaseService):
                     'synced_ids': List[str]
                 }
         """
-        result = {
-            'created': 0,
-            'errors': [],
-            'synced_ids': []
-        }
-
-        # Batch-fetch all cycles upfront to avoid N+1 queries
-        # Filter invalid UUIDs to prevent ORM ValueError on __in lookup
-        raw_cycle_ids = []
-        for d in logs_data:
-            cid = getattr(d.get('cycle'), 'id', d.get('cycle'))
-            if cid:
-                try:
-                    _uuid.UUID(str(cid))
-                    raw_cycle_ids.append(str(cid))
-                except (ValueError, AttributeError):
-                    pass
-        sanitary_cycles_map = {
-            str(c.id): c
-            for c in ProductionCycle.objects.filter(
-                id__in=raw_cycle_ids,
-                farm_profile__user=user
-            ).select_related('farm_profile')
-        }
+        result = SyncService._build_sync_result()
+        sanitary_cycles_map = SyncService._build_user_cycles_map(user, logs_data)
 
         for log_data in logs_data:
             try:
-                cycle_ref = log_data.get('cycle')
-                cycle_id = getattr(cycle_ref, 'id', cycle_ref)
+                cycle_id = SyncService._extract_cycle_id(log_data.get('cycle'))
 
                 if not cycle_id:
-                    result['errors'].append({
-                        'type': 'sanitary_log',
-                        'error': 'Le champ cycle est requis'
-                    })
+                    SyncService._append_sync_error(
+                        result,
+                        error_type='sanitary_log',
+                        error='Le champ cycle est requis',
+                    )
                     continue
 
-                # Validation: Cycle ownership check (from pre-fetched map)
                 cycle = sanitary_cycles_map.get(str(cycle_id))
                 if not cycle:
-                    result['errors'].append({
-                        'type': 'sanitary_log',
-                        'cycle_id': cycle_id,
-                        'error': f'Cycle {cycle_id} non trouvé ou non autorisé'
-                    })
+                    SyncService._append_sync_error(
+                        result,
+                        error_type='sanitary_log',
+                        cycle_id=cycle_id,
+                        error=f'Cycle {cycle_id} non trouvé ou non autorisé',
+                    )
                     continue
 
-                # CREATE new sanitary log
                 log_create_data = {
                     key: value
                     for key, value in log_data.items()
@@ -295,17 +376,26 @@ class SyncService(BaseService):
                 }
                 log_create_data['cycle'] = cycle
                 log_create_data['created_offline'] = True
+                if 'event_date' in log_create_data:
+                    log_create_data['event_date'] = SyncService._parse_sync_date_field(
+                        log_create_data['event_date'],
+                        field_name='event_date',
+                    )
 
                 new_log = SanitaryLog.objects.create(**log_create_data)
 
-                result['created'] += 1
-                result['synced_ids'].append(str(new_log.id))
+                SyncService._record_sync_success(
+                    result,
+                    key='created',
+                    synced_id=str(new_log.id),
+                )
 
-            except (ValidationError, ValueError, TypeError) as e:
-                result['errors'].append({
-                    'type': 'sanitary_log',
-                    'error': str(e)
-                })
+            except (ValidationError, ValueError, TypeError) as exc:
+                SyncService._append_sync_error(
+                    result,
+                    error_type='sanitary_log',
+                    error=str(exc),
+                )
 
         return result
 
@@ -313,8 +403,8 @@ class SyncService(BaseService):
     @transaction.atomic
     def sync_new_cycles(
         user,
-        cycles_data: List[Dict[str, Any]]
-    ) -> Dict[str, Any]:
+        cycles_data: list[dict[str, Any]]
+    ) -> dict[str, Any]:
         """
         Synchronise les nouveaux cycles créés offline.
 
@@ -335,50 +425,49 @@ class SyncService(BaseService):
                     'synced_ids': List[str]
                 }
         """
-        result = {
-            'created': 0,
-            'errors': [],
-            'synced_ids': []
-        }
+        result = SyncService._build_sync_result()
 
         for cycle_data in cycles_data:
             try:
-                # Remove farm_profile from data (will be set from user)
                 cycle_payload = {
                     key: value
                     for key, value in cycle_data.items()
                     if key not in {'farm_profile', 'id'}
                 }
 
-                # CREATE new cycle through service layer to enforce business rules
                 new_cycle = ProductionCycleService.create_cycle(
                     farm_profile=user.farm_profile,
                     cycle_data=cycle_payload
                 )
 
-                result['created'] += 1
-                result['synced_ids'].append(str(new_cycle.id))
+                SyncService._record_sync_success(
+                    result,
+                    key='created',
+                    synced_id=str(new_cycle.id),
+                )
 
-            except ValidationError as e:
-                result['errors'].append({
-                    'type': 'cycle',
-                    'cycle_name': cycle_data.get('cycle_name'),
-                    'error': str(e)
-                })
+            except ValidationError as exc:
+                SyncService._append_sync_error(
+                    result,
+                    error_type='cycle',
+                    cycle_name=cycle_data.get('cycle_name'),
+                    error=str(exc),
+                )
             except Exception:
-                result['errors'].append({
-                    'type': 'cycle',
-                    'cycle_name': cycle_data.get('cycle_name'),
-                    'error': 'Erreur inattendue lors de la synchronisation du cycle'
-                })
+                SyncService._append_sync_error(
+                    result,
+                    error_type='cycle',
+                    cycle_name=cycle_data.get('cycle_name'),
+                    error='Erreur inattendue lors de la synchronisation du cycle',
+                )
 
         return result
 
     @staticmethod
     def get_server_updates(
         user,
-        last_sync: Optional[str] = None
-    ) -> Dict[str, Any]:
+        last_sync: str | None = None
+    ) -> dict[str, Any]:
         """
         Récupère les mises à jour serveur depuis la dernière synchronisation.
 
@@ -400,26 +489,13 @@ class SyncService(BaseService):
                 }
         """
         from ..serializers import (
-            ProductionCycleSerializer,
             CycleLogSerializer,
             FeedingPlanSerializer,
-            SanitaryLogSerializer
+            ProductionCycleSerializer,
+            SanitaryLogSerializer,
         )
 
-        # Parse last_sync timestamp
-        last_sync_dt = None
-        if last_sync:
-            try:
-                # Support ISO format with Z or timezone
-                last_sync_clean = last_sync.replace('Z', '+00:00')
-                last_sync_dt = datetime.fromisoformat(last_sync_clean)
-
-                # Make timezone-aware if naive
-                if last_sync_dt.tzinfo is None:
-                    last_sync_dt = timezone.make_aware(last_sync_dt)
-            except (ValueError, AttributeError):
-                # Invalid format, return all data
-                last_sync_dt = None
+        last_sync_dt = SyncService._parse_last_sync(last_sync)
 
         # Get updated cycles (changed since last_sync)
         cycles_query = ProductionCycle.objects.filter(
@@ -468,8 +544,8 @@ class SyncService(BaseService):
     @transaction.atomic
     def perform_full_sync(
         user,
-        sync_data: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        sync_data: dict[str, Any]
+    ) -> dict[str, Any]:
         """
         Effectue une synchronisation bidirectionnelle complète.
 
@@ -505,29 +581,15 @@ class SyncService(BaseService):
                     'device_id': str
                 }
         """
-        sync_result = {
-            'status': 'success',
-            'timestamp': timezone.now(),
-            'processed': {
-                'cycles': 0,
-                'cycle_logs': 0,
-                'cycle_logs_updated': 0,
-                'sanitary_logs': 0
-            },
-            'errors': [],
-            'server_updates': {},
-            'device_id': sync_data.get('device_id') or sync_data.get('client_id', 'unknown')
-        }
+        sync_result = SyncService._build_full_sync_response(sync_data)
 
         try:
-            # 1. Sync new cycles
             new_cycles = sync_data.get('new_cycles', [])
             if new_cycles:
                 cycles_result = SyncService.sync_new_cycles(user, new_cycles)
                 sync_result['processed']['cycles'] = cycles_result['created']
                 sync_result['errors'].extend(cycles_result['errors'])
 
-            # 2. Sync cycle logs (with deduplication)
             cycle_logs = sync_data.get('cycle_logs', [])
             if cycle_logs:
                 logs_result = SyncService.sync_cycle_logs(user, cycle_logs)
@@ -535,23 +597,15 @@ class SyncService(BaseService):
                 sync_result['processed']['cycle_logs_updated'] = logs_result['updated']
                 sync_result['errors'].extend(logs_result['errors'])
 
-            # 3. Sync sanitary logs
             sanitary_logs = sync_data.get('sanitary_logs', [])
             if sanitary_logs:
                 sanitary_result = SyncService.sync_sanitary_logs(user, sanitary_logs)
                 sync_result['processed']['sanitary_logs'] = sanitary_result['created']
                 sync_result['errors'].extend(sanitary_result['errors'])
 
-            # 4. Get server updates (delta sync)
             last_sync = sync_data.get('last_sync')
-            server_updates = SyncService.get_server_updates(user, last_sync)
-            sync_result['server_updates'] = server_updates
-
-            # 5. Determine final status
-            if sync_result['errors']:
-                sync_result['status'] = 'partial_success'
-            else:
-                sync_result['status'] = 'success'
+            sync_result['server_updates'] = SyncService.get_server_updates(user, last_sync)
+            return SyncService._finalize_full_sync_status(sync_result)
 
         except Exception:
             sync_result['status'] = 'error'
@@ -563,7 +617,7 @@ class SyncService(BaseService):
         return sync_result
 
     @staticmethod
-    def get_sync_statistics(user) -> Dict[str, Any]:
+    def get_sync_statistics(user) -> dict[str, Any]:
         """
         Génère des statistiques sur l'état de synchronisation.
 
@@ -616,7 +670,7 @@ class SyncService(BaseService):
         }
 
     @staticmethod
-    def validate_sync_data(sync_data: Dict[str, Any]) -> List[str]:
+    def validate_sync_data(sync_data: dict[str, Any]) -> list[str]:
         """
         Valide la structure des données de synchronisation.
 

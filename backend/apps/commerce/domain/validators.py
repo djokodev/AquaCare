@@ -4,10 +4,20 @@ Validateurs métier pour le module commerce MAVECAM AquaCare.
 Architecture Clean : Validations de règles métier pures,
 sans dépendances Django (utilisables hors contexte web).
 """
-from typing import List, Dict, Any
+from __future__ import annotations
+
 from decimal import Decimal
-from .exceptions import InvalidOrderError
+from typing import Final, Literal, TypedDict
+
 from ..constants import PICKUP_LOCATION_CHOICES
+from .exceptions import InvalidOrderError
+
+DeliveryMethod = Literal["home", "pickup"]
+
+
+class OrderItemPayload(TypedDict):
+    product_id: str
+    quantity: int
 
 
 class OrderValidator:
@@ -15,8 +25,10 @@ class OrderValidator:
     Validateur pour les données de commande.
     """
 
+    VALID_DELIVERY_METHODS: Final[tuple[DeliveryMethod, ...]] = ("home", "pickup")
+
     @staticmethod
-    def validate_items(items: List[Dict[str, Any]]) -> None:
+    def validate_items(items: list[OrderItemPayload]) -> None:
         """
         Valide que les items de commande sont corrects.
 
@@ -57,7 +69,10 @@ class OrderValidator:
                 )
 
     @staticmethod
-    def validate_delivery_method(delivery_method: str, pickup_location: str = None) -> None:
+    def validate_delivery_method(
+        delivery_method: DeliveryMethod,
+        pickup_location: str | None = None,
+    ) -> None:
         """
         Valide la méthode de livraison et le point de retrait si applicable.
 
@@ -68,11 +83,10 @@ class OrderValidator:
         Raises:
             InvalidOrderError: Si validation échoue
         """
-        valid_methods = ['home', 'pickup']
-        if delivery_method not in valid_methods:
+        if delivery_method not in OrderValidator.VALID_DELIVERY_METHODS:
             raise InvalidOrderError(
                 f"Méthode de livraison invalide: {delivery_method}. "
-                f"Valeurs acceptées: {', '.join(valid_methods)}"
+                f"Valeurs acceptées: {', '.join(OrderValidator.VALID_DELIVERY_METHODS)}"
             )
 
         # Si retrait en magasin, vérifier point de retrait

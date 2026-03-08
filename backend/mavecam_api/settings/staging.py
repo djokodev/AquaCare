@@ -1,4 +1,11 @@
+from __future__ import annotations
+
 from .production import *
+
+
+def _split_csv(value: str) -> list[str]:
+    return [item.strip() for item in value.split(',') if item.strip()]
+
 
 # =============================================================================
 # STAGING — Étend production.py avec overrides staging
@@ -12,7 +19,8 @@ DATABASES['default']['CONN_MAX_AGE'] = 60
 ALLOWED_HOSTS = config(
     'DJANGO_ALLOWED_HOSTS',
     default='77.237.241.223,api-staging.aquacare.tech'
-).split(',')
+)
+ALLOWED_HOSTS = _split_csv(ALLOWED_HOSTS)
 
 # CSRF — requis Django 4.0+ pour les requêtes HTTPS (admin, forms)
 CSRF_TRUSTED_ORIGINS = [

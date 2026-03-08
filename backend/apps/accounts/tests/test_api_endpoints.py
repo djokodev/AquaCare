@@ -3,14 +3,15 @@ Tests unitaires complets pour tous les endpoints API accounts.
 
 Teste le comportement exact de chaque endpoint avec différents scénarios.
 """
+
 import pytest
-import json
-from django.urls import reverse
+from accounts.models import FarmProfile
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
-from rest_framework.test import APIClient
+from django.urls import reverse
 from rest_framework import status
-from accounts.models import FarmProfile
+from rest_framework.test import APIClient
+from rest_framework_simplejwt.tokens import RefreshToken
 
 User = get_user_model()
 
@@ -105,6 +106,25 @@ class TestRegistrationEndpoint:
         # Vérifier FarmProfile entreprise
         user = User.objects.get(phone_number="+237691234567")
         assert user.farm_profile.farm_name == "Ferme AquaFarm SARL"
+
+    def test_register_success_keeps_query_budget(self, django_assert_num_queries):
+        """L'inscription ne doit pas relire l'utilisateur pour construire la reponse."""
+        data = {
+            "phone_number": "+237691240001",
+            "email": "register-perf@example.com",
+            "first_name": "Register",
+            "last_name": "Perf",
+            "password": "motdepasse123",
+            "password_confirm": "motdepasse123",
+            "account_type": "individual",
+            "age_group": "26_35",
+        }
+
+        with django_assert_num_queries(4):
+            response = self.client.post(self.url, data, format='json')
+
+        assert response.status_code == status.HTTP_201_CREATED
+        assert response.data["user"]["farm_profile"]["farm_name"] == "Ferme de Register Perf"
     
     def test_register_duplicate_phone_fails(self):
         """Test échec inscription avec téléphone existant."""
@@ -135,10 +155,15 @@ class TestRegistrationEndpoint:
         assert response.status_code in [status.HTTP_400_BAD_REQUEST, status.HTTP_500_INTERNAL_SERVER_ERROR]
         if response.status_code == status.HTTP_400_BAD_REQUEST:
             # L'erreur peut être dans phone_number ou non_field_errors selon l'implémentation
-            error_found = ('phone_number' in response.data and 
-                          ('existe déjà' in str(response.data['phone_number']) or 'unique' in str(response.data['phone_number']))) or \
-                         ('non_field_errors' in response.data and 
-                          ('existe déjà' in str(response.data['non_field_errors']) or 'unique' in str(response.data['non_field_errors'])))
+            phone_error = "phone_number" in response.data and (
+                "existe déjà" in str(response.data["phone_number"])
+                or "unique" in str(response.data["phone_number"])
+            )
+            non_field_error = "non_field_errors" in response.data and (
+                "existe déjà" in str(response.data["non_field_errors"])
+                or "unique" in str(response.data["non_field_errors"])
+            )
+            error_found = phone_error or non_field_error
             assert error_found, f"Expected duplicate phone error but got: {response.data}"
     
     def test_register_password_mismatch_fails(self):
@@ -265,6 +290,18 @@ class TestLoginEndpoint:
         user_data = response.data['user']
         assert user_data['business_name'] == "AquaFarm SARL"
         assert user_data['account_type'] == "company"
+
+    def test_login_by_name_uses_single_query(self, django_assert_num_queries):
+        """La connexion par login_name doit rester sur un seul acces ORM."""
+        data = {
+            "login_name": "Jean Farmer",
+            "password": "motdepasse123",
+        }
+
+        with django_assert_num_queries(2):
+            response = self.client.post(self.url, data, format='json')
+
+        assert response.status_code == status.HTTP_200_OK
     
     def test_login_wrong_credentials_fails(self):
         """Test échec avec identifiants incorrects."""
@@ -305,6 +342,48 @@ class TestLoginEndpoint:
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         # L'utilisateur inactif peut être traité comme identifiants incorrects ou compte désactivé
         assert ("désactivé" in str(response.data) or "incorrect" in str(response.data))
+
+
+@pytest.mark.django_db
+class TestLogoutEndpoint:
+    """
+    Tests pour POST /api/accounts/logout/
+    """
+
+    def setup_method(self):
+        self.client = APIClient()
+        self.url = reverse('accounts:logout')
+        self.user = User.objects.create_user(
+            phone_number="+237690565656",
+            first_name="Logout",
+            last_name="User",
+            password="motdepasse123",
+            age_group="26_35",
+        )
+        self.client.force_authenticate(user=self.user)
+
+    def test_logout_success(self):
+        """Test deconnexion avec refresh token valide."""
+        refresh_token = str(RefreshToken.for_user(self.user))
+
+        response = self.client.post(self.url, {"refresh": refresh_token}, format='json')
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["message"] == "Déconnexion réussie"
+
+    def test_logout_missing_refresh_fails(self):
+        """Le contrat DRF doit exiger le refresh token."""
+        response = self.client.post(self.url, {}, format='json')
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "refresh" in response.data
+
+    def test_logout_invalid_refresh_fails(self):
+        """Les tokens invalides doivent retourner une erreur metier claire."""
+        response = self.client.post(self.url, {"refresh": "invalid_token"}, format='json')
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.data["error"] == "Token invalide"
 
 
 @pytest.mark.django_db
@@ -405,6 +484,15 @@ class TestProfileEndpoint:
         assert farm_data['farm_name'] == "Ferme de Profile User"
         assert farm_data['certification_status'] == "pending"
         assert farm_data['is_certified'] is False
+
+    def test_get_profile_uses_single_query(self, django_assert_num_queries):
+        """Le profil utilisateur doit rester sur un seul chargement ORM."""
+        self.client.force_authenticate(user=self.user)
+
+        with django_assert_num_queries(1):
+            response = self.client.get(self.url)
+
+        assert response.status_code == status.HTTP_200_OK
     
     def test_get_profile_unauthenticated_fails(self):
         """Test échec consultation sans authentification."""
@@ -443,7 +531,6 @@ class TestProfileEndpoint:
         self.client.force_authenticate(user=self.user)
         
         original_phone = self.user.phone_number
-        original_date_joined = self.user.date_joined
         
         data = {
             "phone_number": "+237699999999",  # Read-only
@@ -499,6 +586,15 @@ class TestFarmProfileEndpoint:
         # assert response.data['certification_status_display'] == "En attente"  # Field not in serializer
         assert response.data['is_certified'] is False
         assert response.data['total_ponds'] == 0
+
+    def test_get_farm_profile_uses_single_query(self, django_assert_num_queries):
+        """Le profil ferme doit etre charge en une seule requete."""
+        self.client.force_authenticate(user=self.user)
+
+        with django_assert_num_queries(1):
+            response = self.client.get(self.url)
+
+        assert response.status_code == status.HTTP_200_OK
     
     def test_patch_farm_profile_success(self):
         """Test modification ferme réussie."""
@@ -614,6 +710,28 @@ class TestRateLimiting:
             # Les premières tentatives échouent avec 400
             if i < 2:
                 assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_phone_number_login_rate_limit_after_repeated_failures(self):
+        """Le rate limiting doit aussi couvrir les connexions par phone_number."""
+        unique_ip = '10.200.200.201'
+
+        for _ in range(3):
+            response = self.client.post(
+                self.url,
+                {"phone_number": "+237699000999", "password": "faux"},
+                format='json',
+                REMOTE_ADDR=unique_ip,
+            )
+            assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+        response = self.client.post(
+            self.url,
+            {"phone_number": "+237699000999", "password": "faux"},
+            format='json',
+            REMOTE_ADDR=unique_ip,
+        )
+
+        assert response.status_code == status.HTTP_429_TOO_MANY_REQUESTS
 
 
 @pytest.mark.django_db

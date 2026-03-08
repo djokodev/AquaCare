@@ -1,12 +1,20 @@
-from .base import *
+from __future__ import annotations
+
 from decouple import config
+
+from .base import *
+
+
+def _split_csv(value: str) -> list[str]:
+    return [item.strip() for item in value.split(',') if item.strip()]
 
 SECRET_KEY = config('DJANGO_SECRET_KEY')
 DEBUG = config('DJANGO_DEBUG', default=False, cast=bool)
 ALLOWED_HOSTS = config(
     'DJANGO_ALLOWED_HOSTS',
     default='77.237.241.223,aquacare.tech,www.aquacare.tech,api.aquacare.tech'
-).split(',')
+)
+ALLOWED_HOSTS = _split_csv(ALLOWED_HOSTS)
 
 DATABASES = {
     'default': {
@@ -36,6 +44,9 @@ CSRF_TRUSTED_ORIGINS = [
 ]
 CSRF_COOKIE_SECURE = True
 SESSION_COOKIE_SECURE = True
+SECURE_HSTS_SECONDS = config('DJANGO_SECURE_HSTS_SECONDS', default=31536000, cast=int)
+SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+SECURE_HSTS_PRELOAD = True
 SECURE_SSL_REDIRECT = False  # Cloudflare gère la redirection HTTP→HTTPS
 
 CORS_ALLOW_ALL_ORIGINS = False

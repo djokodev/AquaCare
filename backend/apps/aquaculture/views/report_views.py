@@ -1,24 +1,36 @@
 """
 Report Views pour le module aquaculture.
 """
+from __future__ import annotations
+
 import logging
 from urllib.parse import quote
 
-from rest_framework import viewsets, status, permissions
-from rest_framework.decorators import action
-from rest_framework.response import Response
 from django.http import FileResponse
 from django.utils.translation import gettext_lazy as _
-from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiExample
 from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import OpenApiExample, OpenApiParameter, extend_schema, extend_schema_view
+from rest_framework import permissions, status, viewsets
+from rest_framework.decorators import action
+from rest_framework.request import Request
+from rest_framework.response import Response
 
-from ..models import ProductionCycle, ProductionReport
+from ..models import ProductionReport
 from ..serializers import (
-    ProductionReportListSerializer, ProductionReportDetailSerializer,
-    MarkWhatsAppSharedSerializer, GenerateReportSerializer,
+    GenerateReportSerializer,
+    MarkWhatsAppSharedSerializer,
+    ProductionReportDetailSerializer,
+    ProductionReportListSerializer,
 )
-from ..services import ReportService
-from ..tasks import send_report_email_task, generate_report_async_task
+from ..services import (
+    GenerateReportCommand,
+    InvalidReportCycleScopeError,
+    MissingReportEmailError,
+    ReportApplicationService,
+    ReportDownloadDecision,
+    WhatsAppShareCommand,
+)
+from ..throttles import AquacultureReportActionThrottle
 
 logger = logging.getLogger(__name__)
 
@@ -133,13 +145,35 @@ class ProductionReportViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = ProductionReportListSerializer
 
+    @staticmethod
+    def _serialize_report_detail(
+        report: ProductionReport,
+        request: Request,
+        *,
+        status_code: int,
+    ) -> Response:
+        serializer = ProductionReportDetailSerializer(report, context={'request': request})
+        return Response(serializer.data, status=status_code)
+
+    @staticmethod
+    def _pending_response(message: str) -> Response:
+        return Response({'detail': message}, status=status.HTTP_409_CONFLICT)
+
     def get_queryset(self):
-        queryset = ProductionReport.objects.filter(
-            farm_profile__user=self.request.user
-        ).select_related(
-            'farm_profile',
-            'validated_by',
-        ).prefetch_related('dispatch_logs')
+        detail_actions = {
+            'retrieve',
+            'regenerate',
+            'validate',
+            'send_email',
+            'mark_whatsapp_shared',
+            'download',
+        }
+        base_queryset = (
+            ProductionReport.objects.for_detail()
+            if self.action in detail_actions
+            else ProductionReport.objects.for_list()
+        )
+        queryset = base_queryset.filter(farm_profile__user=self.request.user)
 
         report_type = self.request.query_params.get('report_type')
         if report_type:
@@ -156,6 +190,10 @@ class ProductionReportViewSet(viewsets.ReadOnlyModelViewSet):
         return queryset.order_by('-period_start', '-created_at')
 
     def get_serializer_class(self):
+        if self.action == 'generate':
+            return GenerateReportSerializer
+        if self.action == 'mark_whatsapp_shared':
+            return MarkWhatsAppSharedSerializer
         if self.action == 'retrieve':
             return ProductionReportDetailSerializer
         return ProductionReportListSerializer
@@ -169,75 +207,40 @@ class ProductionReportViewSet(viewsets.ReadOnlyModelViewSet):
         request=GenerateReportSerializer,
         responses={202: ProductionReportDetailSerializer},
     )
-    @action(detail=False, methods=['post'])
-    def generate(self, request):
-        serializer = GenerateReportSerializer(data=request.data)
+    @action(detail=False, methods=['post'], throttle_classes=[AquacultureReportActionThrottle])
+    def generate(self, request: Request) -> Response:
+        serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        report_type = serializer.validated_data['report_type']
-        reference_date = serializer.validated_data.get('reference_date')
-        cycle_id = serializer.validated_data.get('cycle_id')
-        period_start, period_end = ReportService.build_period_bounds(report_type, reference_date)
-
-        # Validate cycle_id early (before dispatching async task)
-        cycle_id_str = str(cycle_id) if cycle_id else None
-        if cycle_id_str:
-            cycle_exists = ProductionCycle.objects.filter(
-                id=cycle_id_str,
-                farm_profile=request.user.farm_profile,
-                status='active',
-            ).exists()
-            if not cycle_exists:
-                return Response(
-                    {'detail': _("Cycle de session introuvable ou inactif.")},  # noqa: F811
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-        # Create report record with pending status (no PDF yet)
-        report, _created = ProductionReport.objects.get_or_create(
-            farm_profile=request.user.farm_profile,
-            report_type=report_type,
-            period_start=period_start,
-            period_end=period_end,
-            defaults={'status': 'pending'},
-        )
-
-        if report.status != 'pending':
-            report.status = 'pending'
-            report.save(update_fields=['status', 'updated_at'])
-
-        # Dispatch async PDF generation
-        generate_report_async_task.delay(str(report.id), cycle_id_str)
-
-        detail = ProductionReportDetailSerializer(report, context={'request': request})
-        return Response(detail.data, status=status.HTTP_202_ACCEPTED)
+        try:
+            report = ReportApplicationService.request_report_generation(
+                request.user,
+                GenerateReportCommand(
+                    report_type=serializer.validated_data['report_type'],
+                    reference_date=serializer.validated_data.get('reference_date'),
+                    cycle_id=(
+                        str(serializer.validated_data['cycle_id'])
+                        if serializer.validated_data.get('cycle_id')
+                        else None
+                    ),
+                ),
+            )
+        except InvalidReportCycleScopeError as exc:
+            return Response(
+                {'detail': str(exc)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return self._serialize_report_detail(report, request, status_code=status.HTTP_202_ACCEPTED)
 
     @extend_schema(
         summary="Régénérer un rapport (asynchrone)",
         description="Lance la régénération PDF en arrière-plan. Retourne 202 Accepted.",
         responses={202: ProductionReportDetailSerializer},
     )
-    @action(detail=True, methods=['post'])
-    def regenerate(self, request, pk=None):
-        report = self.get_object()
-
-        # Extract cycle_scope_id from existing payload
-        cycle_scope_id = None
-        if isinstance(report.payload, dict):
-            cycle_scope_id = (
-                report.payload.get('report_meta', {}) or {}
-            ).get('cycle_scope_id')
-
-        report.status = 'pending'
-        report.save(update_fields=['status', 'updated_at'])
-
-        generate_report_async_task.delay(
-            str(report.id),
-            cycle_scope_id,
-        )
-
-        serializer = ProductionReportDetailSerializer(report, context={'request': request})
-        return Response(serializer.data, status=status.HTTP_202_ACCEPTED)
+    @action(detail=True, methods=['post'], throttle_classes=[AquacultureReportActionThrottle])
+    def regenerate(self, request: Request, pk: str | None = None) -> Response:
+        report = ReportApplicationService.request_report_regeneration(self.get_object())
+        return self._serialize_report_detail(report, request, status_code=status.HTTP_202_ACCEPTED)
 
     @extend_schema(
         summary="Valider un rapport",
@@ -245,34 +248,39 @@ class ProductionReportViewSet(viewsets.ReadOnlyModelViewSet):
         responses={200: ProductionReportDetailSerializer},
     )
     @action(detail=True, methods=['post'])
-    def validate(self, request, pk=None):
-        report = self.get_object()
-        validated = ReportService.validate(report, request.user)
-        serializer = ProductionReportDetailSerializer(validated, context={'request': request})
-        return Response(serializer.data, status=status.HTTP_200_OK)
+    def validate(self, request: Request, pk: str | None = None) -> Response:
+        validated = ReportApplicationService.validate_report(self.get_object(), request.user)
+        return self._serialize_report_detail(validated, request, status_code=status.HTTP_200_OK)
 
     @extend_schema(
         summary="Envoyer un rapport par email",
         description="Envoie le rapport PDF en pièce jointe à l'email du promoteur.",
         responses={
-            200: ProductionReportDetailSerializer,
+            202: ProductionReportDetailSerializer,
             400: OpenApiExample(
                 'Email manquant',
                 value={'detail': 'Aucune adresse email renseignée pour ce compte.'}
             )
         },
     )
-    @action(detail=True, methods=['post'], url_path='send-email')
-    def send_email(self, request, pk=None):
-        report = self.get_object()
-        if not getattr(request.user, 'email', None):
+    @action(
+        detail=True,
+        methods=['post'],
+        url_path='send-email',
+        throttle_classes=[AquacultureReportActionThrottle],
+    )
+    def send_email(self, request: Request, pk: str | None = None) -> Response:
+        try:
+            report = ReportApplicationService.request_report_email_dispatch(
+                self.get_object(),
+                request.user,
+            )
+        except MissingReportEmailError as exc:
             return Response(
-                {'detail': 'Aucune adresse email renseignée pour ce compte.'},
+                {'detail': str(exc)},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        send_report_email_task.delay(str(report.id), str(request.user.id))
-        serializer = ProductionReportDetailSerializer(report, context={'request': request})
-        return Response(serializer.data, status=status.HTTP_202_ACCEPTED)
+        return self._serialize_report_detail(report, request, status_code=status.HTTP_202_ACCEPTED)
 
     @extend_schema(
         summary="Marquer un partage WhatsApp",
@@ -282,47 +290,45 @@ class ProductionReportViewSet(viewsets.ReadOnlyModelViewSet):
         request=MarkWhatsAppSharedSerializer,
         responses={200: ProductionReportDetailSerializer},
     )
-    @action(detail=True, methods=['post'], url_path='mark-whatsapp-shared')
-    def mark_whatsapp_shared(self, request, pk=None):
-        report = self.get_object()
-        serializer = MarkWhatsAppSharedSerializer(data=request.data)
+    @action(
+        detail=True,
+        methods=['post'],
+        url_path='mark-whatsapp-shared',
+        throttle_classes=[AquacultureReportActionThrottle],
+    )
+    def mark_whatsapp_shared(self, request: Request, pk: str | None = None) -> Response:
+        serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        updated = ReportService.mark_whatsapp_shared(
-            report=report,
+        updated = ReportApplicationService.mark_report_whatsapp_shared(
+            report=self.get_object(),
             user=request.user,
-            recipient=serializer.validated_data.get('recipient', ''),
-            metadata=serializer.validated_data.get('metadata', {}),
+            command=WhatsAppShareCommand(
+                recipient=serializer.validated_data.get('recipient', ''),
+                metadata=serializer.validated_data.get('metadata', {}),
+            ),
         )
-        detail = ProductionReportDetailSerializer(updated, context={'request': request})
-        return Response(detail.data, status=status.HTTP_200_OK)
+        return self._serialize_report_detail(updated, request, status_code=status.HTTP_200_OK)
 
     @extend_schema(
         summary="Télécharger le PDF d'un rapport",
         description="Retourne le fichier PDF du rapport.",
         responses={200: OpenApiTypes.BINARY},
     )
-    @action(detail=True, methods=['get'])
-    def download(self, request, pk=None):
+    @action(detail=True, methods=['get'], throttle_classes=[AquacultureReportActionThrottle])
+    def download(self, request: Request, pk: str | None = None):
         report = self.get_object()
-
-        if report.status == 'pending':
-            return Response(
-                {'detail': _("Le rapport est en cours de génération. Réessayez dans quelques instants.")},
-                status=status.HTTP_409_CONFLICT,
+        decision: ReportDownloadDecision = ReportApplicationService.prepare_report_download(report)
+        if decision.status == 'pending':
+            return self._pending_response(
+                _("Le rapport est en cours de génération. Réessayez dans quelques instants.")
+            )
+        if decision.status == 'regenerating':
+            return self._pending_response(
+                _("Le PDF est en cours de génération. Réessayez dans quelques instants.")
             )
 
-        if not report.pdf_file:
-            # Dispatch async regeneration instead of blocking
-            report.status = 'pending'
-            report.save(update_fields=['status', 'updated_at'])
-            generate_report_async_task.delay(str(report.id))
-            return Response(
-                {'detail': _("Le PDF est en cours de génération. Réessayez dans quelques instants.")},
-                status=status.HTTP_409_CONFLICT,
-            )
-
-        filename = report.pdf_file.name.split('/')[-1] or f"report_{report.id}.pdf"
+        filename = decision.filename or f"report_{report.id}.pdf"
         response = FileResponse(report.pdf_file.open('rb'), content_type='application/pdf')
         response['Content-Disposition'] = f'attachment; filename="{quote(filename)}"'
         return response

@@ -1,32 +1,37 @@
-# coding: utf-8
 """
 DRF ViewSets for chat API.
 Handle HTTP requests and delegate business logic to services.
 """
 
-from rest_framework import viewsets, status, permissions
+from __future__ import annotations
+
+from typing import Any
+
+from django.utils.translation import gettext as _
+from drf_spectacular.utils import OpenApiResponse, extend_schema, extend_schema_view
+from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.throttling import UserRateThrottle
-from django.db.models import Count
-from django.utils.translation import gettext as _
 
+from .domain.exceptions import (
+    ClientUUIDConflict,
+    ConversationNotFound,
+    InvalidMediaFormat,
+    InvalidMessageContent,
+    MediaTooLarge,
+    UnauthorizedAccess,
+)
 from .models import Conversation, Message
+from .permissions import IsConversationOwnerOrAdmin
 from .serializers import (
+    ChatErrorResponseSerializer,
     ConversationSerializer,
     MessageSerializer,
-    SendMessageSerializer
+    SendMessageSerializer,
 )
-from .services import ConversationService, MessageService
-from .permissions import IsConversationOwnerOrAdmin
-from .domain.exceptions import (
-    InvalidMessageContent,
-    InvalidMediaFormat,
-    MediaTooLarge,
-    ConversationNotFound,
-    UnauthorizedAccess,
-    ClientUUIDConflict,
-)
+from .services import ChatApplicationService, SendMessageCommand
 
 
 class ChatMessageThrottle(UserRateThrottle):
@@ -37,9 +42,49 @@ class ChatMessageThrottle(UserRateThrottle):
     Prevents spam and DoS attacks.
     """
     scope = 'chat_message'
-    rate = '10/min'
 
 
+@extend_schema_view(
+    list=extend_schema(
+        summary="Lister les conversations support",
+        responses={200: ConversationSerializer(many=True)},
+    ),
+    retrieve=extend_schema(
+        summary="Recuperer une conversation",
+        responses={
+            200: ConversationSerializer,
+            404: OpenApiResponse(description="Conversation introuvable"),
+        },
+    ),
+    get_my_conversation=extend_schema(
+        summary="Recuperer ou creer ma conversation support",
+        responses={200: ConversationSerializer},
+    ),
+    messages=extend_schema(
+        summary="Lister les messages d'une conversation",
+        responses={
+            200: MessageSerializer(many=True),
+            404: OpenApiResponse(description="Conversation introuvable"),
+        },
+    ),
+    send_message=extend_schema(
+        summary="Envoyer un message dans une conversation",
+        request=SendMessageSerializer,
+        responses={
+            201: MessageSerializer,
+            400: ChatErrorResponseSerializer,
+            404: OpenApiResponse(description="Conversation introuvable"),
+            409: ChatErrorResponseSerializer,
+        },
+    ),
+    mark_read=extend_schema(
+        summary="Marquer les messages comme lus",
+        responses={
+            200: ConversationSerializer,
+            404: OpenApiResponse(description="Conversation introuvable"),
+        },
+    ),
+)
 class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
     """
     ViewSet for listing and retrieving conversations.
@@ -59,18 +104,105 @@ class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
 
     serializer_class = ConversationSerializer
     permission_classes = [permissions.IsAuthenticated, IsConversationOwnerOrAdmin]
+    queryset = Conversation.objects.with_api_annotations()
 
-    def get_throttles(self):
+    def get_serializer_class(self):
+        if self.action == 'send_message':
+            return SendMessageSerializer
+        return super().get_serializer_class()
+
+    def get_throttles(self) -> list[UserRateThrottle]:
         """Apply ChatMessageThrottle on write/read-heavy actions."""
         if getattr(self, 'action', None) in ('send_message', 'mark_read', 'messages'):
             return [ChatMessageThrottle()]
         return super().get_throttles()
 
     @staticmethod
-    def _conversation_not_found_response():
+    def _conversation_not_found_response() -> Response:
         return Response(
-            {'error': _('Conversation introuvable.')},
+            ChatErrorResponseSerializer({'error': _('Conversation introuvable.')}).data,
             status=status.HTTP_404_NOT_FOUND
+        )
+
+    @staticmethod
+    def _get_message_error_response(error: Exception) -> Response:
+        if isinstance(error, InvalidMessageContent):
+            return Response(
+                ChatErrorResponseSerializer(
+                    {'error': _('Contenu du message invalide.'), 'field': 'content'}
+                ).data,
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if isinstance(error, ClientUUIDConflict):
+            return Response(
+                ChatErrorResponseSerializer(
+                    {
+                        'error': _(
+                            "Conflit de synchronisation détecté. "
+                            "Veuillez actualiser la conversation."
+                        ),
+                        'field': 'client_uuid',
+                    }
+                ).data,
+                status=status.HTTP_409_CONFLICT
+            )
+
+        if isinstance(error, (InvalidMediaFormat, MediaTooLarge)):
+            message = (
+                _('Fichier média trop volumineux.')
+                if isinstance(error, MediaTooLarge)
+                else _('Format de média non pris en charge.')
+            )
+            return Response(
+                ChatErrorResponseSerializer(
+                    {'error': message, 'field': 'media_file'}
+                ).data,
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        raise error
+
+    def _get_accessible_conversation(self, conversation_id: str | None, request_user: Any) -> Conversation | Response:
+        try:
+            return ChatApplicationService.get_conversation_for_actor(conversation_id, request_user)
+        except (ConversationNotFound, UnauthorizedAccess):
+            return self._conversation_not_found_response()
+
+    def _serialize_message(self, message: Message, request: Request) -> Response:
+        serializer = MessageSerializer(message, context={'request': request})
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    def _serialize_messages(self, request: Request, messages) -> Response:
+        page = self.paginate_queryset(messages)
+        if page is not None:
+            serializer = MessageSerializer(page, many=True, context={'request': request})
+            return self.get_paginated_response(serializer.data)
+
+        serializer = MessageSerializer(messages, many=True, context={'request': request})
+        return Response(serializer.data)
+
+    def _serialize_conversation(self, conversation: Conversation, request: Request) -> Response:
+        refreshed_conversation = ChatApplicationService.refresh_conversation_for_api(conversation)
+        serializer = ConversationSerializer(refreshed_conversation, context={'request': request})
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def _send_validated_message(
+        self,
+        conversation: Conversation,
+        request: Request,
+        validated_data: dict[str, Any],
+    ) -> Message:
+        return ChatApplicationService.send_message(
+            conversation=conversation,
+            actor=request.user,
+            command=SendMessageCommand(
+                content=validated_data['content'],
+                media_file=validated_data.get('media_file'),
+                media_type=validated_data.get('media_type'),
+                client_uuid=validated_data.get('client_uuid'),
+                created_offline=validated_data.get('created_offline', False),
+            ),
         )
 
     def get_queryset(self):
@@ -80,24 +212,10 @@ class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
         Returns:
             QuerySet: User's conversation or all conversations (if admin)
         """
-        user = self.request.user
-
-        if user.is_staff:
-            # Admin sees all conversations — Count annoté, pas de prefetch illimité
-            return (
-                Conversation.objects.all()
-                .select_related('user')
-                .annotate(messages_count_ann=Count('messages'))
-            )
-        else:
-            # User sees only their own conversation
-            return (
-                Conversation.objects.filter(user=user)
-                .annotate(messages_count_ann=Count('messages'))
-            )
+        return ChatApplicationService.get_conversation_queryset_for_user(self.request.user)
 
     @action(detail=False, methods=['get'], url_path='me')
-    def get_my_conversation(self, request):
+    def get_my_conversation(self, request: Request) -> Response:
         """
         Get or create current user's conversation with administration.
 
@@ -109,13 +227,13 @@ class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
         This endpoint ensures the user always has a conversation available,
         creating it automatically on first access.
         """
-        conversation = ConversationService.get_or_create_conversation(request.user)
+        conversation = ChatApplicationService.get_or_create_user_conversation(request.user)
 
         serializer = self.get_serializer(conversation)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=['get'])
-    def messages(self, request, pk=None):
+    def messages(self, request: Request, pk: str | None = None) -> Response:
         """
         List messages in conversation (paginated).
 
@@ -124,42 +242,15 @@ class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
         Returns:
             Paginated list of messages ordered by created_at (ascending)
         """
-        try:
-            # Get conversation with permission check
-            conversation = ConversationService.get_conversation_by_id(
-                conversation_id=pk,
-                requesting_user=request.user
-            )
-        except ConversationNotFound:
-            return self._conversation_not_found_response()
-        except UnauthorizedAccess:
-            # Do not reveal conversation existence to unauthorized users.
-            return self._conversation_not_found_response()
+        conversation = self._get_accessible_conversation(pk, request.user)
+        if isinstance(conversation, Response):
+            return conversation
 
-        # Get messages ordered by creation date
-        messages = conversation.messages.all().order_by('created_at')
-
-        # Paginate
-        page = self.paginate_queryset(messages)
-
-        if page is not None:
-            serializer = MessageSerializer(
-                page,
-                many=True,
-                context={'request': request}
-            )
-            return self.get_paginated_response(serializer.data)
-
-        # No pagination (small number of messages)
-        serializer = MessageSerializer(
-            messages,
-            many=True,
-            context={'request': request}
-        )
-        return Response(serializer.data)
+        messages = ChatApplicationService.get_conversation_messages(conversation)
+        return self._serialize_messages(request, messages)
 
     @action(detail=True, methods=['post'], throttle_classes=[ChatMessageThrottle])
-    def send_message(self, request, pk=None):
+    def send_message(self, request: Request, pk: str | None = None) -> Response:
         """
         Send message in conversation.
 
@@ -176,84 +267,30 @@ class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
             Message object (HTTP 201)
             or error (HTTP 400/403)
         """
-        try:
-            # Get conversation with permission check
-            conversation = ConversationService.get_conversation_by_id(
-                conversation_id=pk,
-                requesting_user=request.user
-            )
-        except ConversationNotFound:
-            return self._conversation_not_found_response()
-        except UnauthorizedAccess:
-            # Do not reveal conversation existence to unauthorized users.
-            return self._conversation_not_found_response()
+        conversation = self._get_accessible_conversation(pk, request.user)
+        if isinstance(conversation, Response):
+            return conversation
 
-        # Validate input
-        serializer = SendMessageSerializer(data=request.data)
+        serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         try:
-            # Determine sender type based on user role
-            if request.user.is_staff:
-                # Admin sending message
-                message = MessageService.send_admin_message(
-                    conversation=conversation,
-                    admin_user=request.user,
-                    content=serializer.validated_data['content']
-                )
-            else:
-                # User sending message
-                message = MessageService.send_user_message(
-                    user=request.user,
-                    content=serializer.validated_data['content'],
-                    media_file=serializer.validated_data.get('media_file'),
-                    media_type=serializer.validated_data.get('media_type'),
-                    client_uuid=serializer.validated_data.get('client_uuid'),
-                    created_offline=serializer.validated_data.get('created_offline', False)
-                )
-
-            # Return created message
-            response_serializer = MessageSerializer(
-                message,
-                context={'request': request}
+            message = self._send_validated_message(
+                conversation=conversation,
+                request=request,
+                validated_data=serializer.validated_data,
             )
-            return Response(response_serializer.data, status=status.HTTP_201_CREATED)
-
-        except InvalidMessageContent:
-            return Response(
-                {'error': _('Contenu du message invalide.'), 'field': 'content'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        except ClientUUIDConflict:
-            return Response(
-                {
-                    'error': _(
-                        "Conflit de synchronisation détecté. "
-                        "Veuillez actualiser la conversation."
-                    ),
-                    'field': 'client_uuid',
-                },
-                status=status.HTTP_409_CONFLICT
-            )
-        except InvalidMediaFormat:
-            return Response(
-                {
-                    'error': _('Format de média non pris en charge.'),
-                    'field': 'media_file',
-                },
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        except MediaTooLarge:
-            return Response(
-                {
-                    'error': _('Fichier média trop volumineux.'),
-                    'field': 'media_file',
-                },
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return self._serialize_message(message, request)
+        except (
+            InvalidMessageContent,
+            ClientUUIDConflict,
+            InvalidMediaFormat,
+            MediaTooLarge,
+        ) as err:
+            return self._get_message_error_response(err)
 
     @action(detail=True, methods=['post'])
-    def mark_read(self, request, pk=None):
+    def mark_read(self, request: Request, pk: str | None = None) -> Response:
         """
         Mark all unread messages in conversation as read.
 
@@ -262,25 +299,12 @@ class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
         Returns:
             Success message (HTTP 200)
         """
-        try:
-            # Get conversation with permission check
-            conversation = ConversationService.get_conversation_by_id(
-                conversation_id=pk,
-                requesting_user=request.user
-            )
-        except ConversationNotFound:
-            return self._conversation_not_found_response()
-        except UnauthorizedAccess:
-            # Do not reveal conversation existence to unauthorized users.
-            return self._conversation_not_found_response()
+        conversation = self._get_accessible_conversation(pk, request.user)
+        if isinstance(conversation, Response):
+            return conversation
 
-        # Mark as read
-        MessageService.mark_messages_as_read(
+        refreshed_conversation = ChatApplicationService.mark_conversation_as_read(
             conversation=conversation,
-            reader_is_admin=request.user.is_staff
+            actor=request.user,
         )
-
-        # Return updated conversation with new unread counts
-        conversation.refresh_from_db()
-        serializer = ConversationSerializer(conversation, context={'request': request})
-        return Response(serializer.data)
+        return self._serialize_conversation(refreshed_conversation, request)

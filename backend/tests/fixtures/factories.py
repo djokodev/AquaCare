@@ -4,9 +4,10 @@ Factories pour générer des données de test cohérentes.
 Factory Boy permet de créer facilement des objets de test
 avec des données réalistes pour simuler les vrais utilisateurs MAVECAM.
 """
-import factory
-from decimal import Decimal
 from datetime import date
+from decimal import Decimal
+
+import factory
 from django.contrib.auth import get_user_model
 from factory.django import DjangoModelFactory
 
@@ -17,11 +18,12 @@ class UserFactory(DjangoModelFactory):
     """
     Factory pour créer des utilisateurs pisciculteurs de test.
     
-    Génère des données réalistes pour simuler les vrais clients MAVECAM.
+    Genere des donnees realistes pour simuler les vrais clients MAVECAM.
     """
+
     class Meta:
         model = User
-    
+
     phone_number = factory.Sequence(lambda n: f"+23769123456{n:01d}")
     email = factory.LazyAttribute(lambda obj: f"user{obj.phone_number[-1]}@exemple.com")
     first_name = factory.Faker('first_name', locale='fr_FR')
@@ -49,8 +51,9 @@ class MavecamAdminFactory(UserFactory):
     """
     Factory pour créer des administrateurs MAVECAM.
     
-    Simule les comptes du personnel MAVECAM qui gèrent les certifications.
+    Simule les comptes du personnel MAVECAM qui gerent les certifications.
     """
+
     phone_number = factory.Sequence(lambda n: f"+23767000000{n:01d}")
     email = factory.LazyAttribute(lambda obj: f"admin{obj.phone_number[-1]}@mavecam.com")
     first_name = "Admin"

@@ -5,8 +5,8 @@ Architecture Clean : Logique de calcul pure, sans dépendances Django.
 Tous les calculs sont testables unitairement sans base de données.
 """
 from decimal import Decimal
-from typing import Optional
-from ..constants import REGION_DOUALA, DELIVERY_FEE_STANDARD, DELIVERY_FEE_FREE_THRESHOLD_BAGS
+
+from ..constants import DELIVERY_FEE_FREE_THRESHOLD_BAGS, DELIVERY_FEE_STANDARD, REGION_DOUALA
 
 
 class DeliveryFeeCalculator:
@@ -22,7 +22,7 @@ class DeliveryFeeCalculator:
     @staticmethod
     def calculate(
         delivery_method: str,
-        region: Optional[str],
+        region: str | None,
         total_bags: int
     ) -> Decimal:
         """

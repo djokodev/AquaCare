@@ -1,11 +1,11 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useRegisterPushNotifications } from '@/hooks/useRegisterPushNotifications';
 import AuthNavigator from './AuthNavigator';
 import MainNavigator from './MainNavigator';
-import { LoadingScreen } from '@/features/main';
+import LoadingScreen from '@/features/main/screens/LoadingScreen';
 import OnboardingService from '@/features/onboarding/services/onboardingService';
 import OnboardingScreen from '@/features/onboarding/screens/OnboardingScreen';
 import logger from '@/utils/logger';
@@ -56,11 +56,11 @@ export default function AppNavigator() {
   }, [isAuthenticated, registerPushToken]);
 
   // Déterminer la route initiale
-  const initialRouteName = useMemo(() => {
-    if (!isAuthenticated) return 'Auth';
-    if (!hasCompletedOnboarding) return 'Onboarding';
-    return 'Main';
-  }, [isAuthenticated, hasCompletedOnboarding]);
+  const initialRouteName = !isAuthenticated
+    ? 'Auth'
+    : hasCompletedOnboarding
+      ? 'Main'
+      : 'Onboarding';
 
   // Force un reset du navigator quand l'état change (auth ou onboarding)
   const navigatorKey = `${isAuthenticated}-${hasCompletedOnboarding}`;

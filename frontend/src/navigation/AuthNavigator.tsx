@@ -1,7 +1,8 @@
 ﻿import React from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
 
-import { LoginScreen, RegisterScreen } from '@/features/auth';
+import LoginScreen from '@/features/auth/screens/LoginScreen';
+import RegisterScreen from '@/features/auth/screens/RegisterScreen';
 
 export type AuthStackParamList = {
   Login: undefined;
@@ -25,7 +26,6 @@ export default function AuthNavigator() {
     </Stack.Navigator>
   );
 }
-
 
 
 

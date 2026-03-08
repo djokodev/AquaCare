@@ -10,16 +10,108 @@ Architecture offline-first avec support de synchronisation mobile via UUID.
 Calculs automatiques basés sur les guides techniques Skretting et 'Aller Aqua'.
 """
 import uuid
+from datetime import date
 from decimal import Decimal
+
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
-from django.core.validators import MinValueValidator, MaxValueValidator
-from django.core.exceptions import ValidationError
-from django.utils.translation import gettext_lazy as _
+from django.db.models import Prefetch
 from django.utils import timezone
-from .constants import (
-    SPECIES_CHOICES, CYCLE_STATUS_CHOICES, SANITARY_EVENT_TYPES,
-    GROWTH_STAGES
-)
+from django.utils.translation import gettext_lazy as _
+
+from .constants import CYCLE_STATUS_CHOICES, GROWTH_STAGES, SANITARY_EVENT_TYPES, SPECIES_CHOICES
+
+
+class ProductionCycleQuerySet(models.QuerySet):
+    """QuerySet optimisé pour les cycles de production."""
+
+    def for_api(self):
+        return self.select_related('farm_profile', 'metrics')
+
+    def for_statistics(self):
+        return self.for_api().prefetch_related(
+            Prefetch(
+                'logs',
+                queryset=CycleLog.objects.order_by('log_date'),
+                to_attr='analytics_logs',
+            )
+        )
+
+    def active_for_farm(self, farm_profile):
+        return self.filter(farm_profile=farm_profile, status='active')
+
+    def with_dashboard_logs(self, since: date):
+        return self.for_api().prefetch_related(
+            Prefetch(
+                'logs',
+                queryset=CycleLog.objects.filter(log_date__gte=since).order_by('log_date'),
+                to_attr='prefetched_logs',
+            )
+        )
+
+    def with_report_snapshot(self, period_start: date, period_end: date):
+        return self.select_related('farm_profile__user', 'metrics').prefetch_related(
+            Prefetch(
+                'logs',
+                queryset=CycleLog.objects.filter(
+                    log_date__gte=period_start,
+                    log_date__lte=period_end,
+                ).order_by('log_date'),
+                to_attr='period_logs',
+            ),
+            Prefetch(
+                'sanitary_logs',
+                queryset=SanitaryLog.objects.filter(
+                    event_date__gte=period_start,
+                    event_date__lte=period_end,
+                ).order_by('event_date'),
+                to_attr='period_sanitary',
+            ),
+            Prefetch(
+                'feeding_plans',
+                queryset=FeedingPlan.objects.filter(
+                    start_date__lte=period_end,
+                    end_date__gte=period_start,
+                ).order_by('week_number'),
+                to_attr='period_feeding_plans',
+            ),
+        ).order_by('start_date')
+
+
+class CycleLogQuerySet(models.QuerySet):
+    """QuerySet optimisé pour les logs quotidiens."""
+
+    def for_api(self):
+        return self.select_related('cycle')
+
+
+class FeedingPlanQuerySet(models.QuerySet):
+    """QuerySet optimisé pour les plans d'alimentation."""
+
+    def for_api(self):
+        return self.select_related('cycle')
+
+
+class SanitaryLogQuerySet(models.QuerySet):
+    """QuerySet optimisé pour les logs sanitaires."""
+
+    def for_api(self):
+        return self.select_related('cycle')
+
+
+class ProductionReportQuerySet(models.QuerySet):
+    """QuerySet optimisé pour les rapports de production."""
+
+    def for_list(self):
+        return self.select_related('farm_profile')
+
+    def for_detail(self):
+        return self.select_related('farm_profile', 'validated_by').prefetch_related(
+            Prefetch(
+                'dispatch_logs',
+                queryset=ReportDispatchLog.objects.select_related('dispatched_by'),
+            )
+        )
 
 
 class ProductionCycle(models.Model):
@@ -240,6 +332,7 @@ class ProductionCycle(models.Model):
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    objects = ProductionCycleQuerySet.as_manager()
 
     def __str__(self):
         return f"{self.cycle_name} - {self.get_species_display()}"
@@ -437,6 +530,7 @@ class CycleLog(models.Model):
     )
     
     created_at = models.DateTimeField(auto_now_add=True)
+    objects = CycleLogQuerySet.as_manager()
 
     def __str__(self):
         return f"{self.cycle.cycle_name} - {self.log_date}"
@@ -563,6 +657,7 @@ class FeedingPlan(models.Model):
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
+    objects = FeedingPlanQuerySet.as_manager()
 
     def __str__(self):
         return f"{self.cycle.cycle_name} - Semaine {self.week_number}"
@@ -666,6 +761,7 @@ class SanitaryLog(models.Model):
     )
     
     created_at = models.DateTimeField(auto_now_add=True)
+    objects = SanitaryLogQuerySet.as_manager()
 
     def __str__(self):
         return f"{self.cycle.cycle_name} - {self.get_event_type_display()} ({self.event_date})"
@@ -964,6 +1060,7 @@ class ProductionReport(models.Model):
 
     created_at = models.DateTimeField(auto_now_add=True, verbose_name=_("Créé le"))
     updated_at = models.DateTimeField(auto_now=True, verbose_name=_("Mis à jour le"))
+    objects = ProductionReportQuerySet.as_manager()
 
     class Meta:
         app_label = 'aquaculture'
@@ -982,7 +1079,10 @@ class ProductionReport(models.Model):
         ]
 
     def __str__(self):
-        return f"{self.get_report_type_display()} - {self.farm_profile.farm_name} ({self.period_start} -> {self.period_end})"
+        return (
+            f"{self.get_report_type_display()} - {self.farm_profile.farm_name} "
+            f"({self.period_start} -> {self.period_end})"
+        )
 
 
 class ReportDispatchLog(models.Model):

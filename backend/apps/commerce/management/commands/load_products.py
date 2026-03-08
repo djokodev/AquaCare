@@ -2,11 +2,11 @@
 Commande de management pour charger les produits MAVECAM dans le catalogue.
 27 produits au total : 18 Aller Aqua + 9 DIBAQ.
 """
-from django.core.management.base import BaseCommand
 import json
 from pathlib import Path
 
 from commerce.models import Product
+from django.core.management.base import BaseCommand
 
 
 class Command(BaseCommand):
@@ -41,7 +41,7 @@ class Command(BaseCommand):
             )
             return
 
-        with open(json_path, 'r', encoding='utf-8') as f:
+        with open(json_path, encoding='utf-8') as f:
             products_data = json.load(f)
 
         created_count = 0

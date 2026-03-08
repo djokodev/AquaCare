@@ -8,21 +8,20 @@ Couvre :
 - Validation règles métier
 - Gestion d'erreurs
 """
-import pytest
-from decimal import Decimal
 from datetime import date, timedelta
-from django.utils import timezone
+from decimal import Decimal
 
-from aquaculture.services import ProductionCycleService
+import pytest
 from aquaculture.domain.exceptions import (
-    InvalidDensityError,
-    CycleAlreadyHarvestedError,
-    CycleNotActiveError,
-    InvalidHarvestDataError,
     BusinessRuleViolation,
+    CycleAlreadyHarvestedError,
+    InvalidDensityError,
+    InvalidHarvestDataError,
 )
-from aquaculture.models import ProductionCycle, CycleLog
-from tests.fixtures.factories import FarmProfileFactory, ProductionCycleFactory
+from aquaculture.models import CycleLog
+from aquaculture.services import ProductionCycleService
+
+from tests.fixtures.factories import FarmProfileFactory
 
 
 @pytest.mark.django_db
@@ -276,7 +275,7 @@ class TestProductionCycleService:
         cycle = self._create_test_cycle()
 
         # Créer un log - le signal post_save va automatiquement appeler le service
-        log = CycleLog.objects.create(
+        CycleLog.objects.create(
             cycle=cycle,
             log_date=cycle.start_date + timedelta(days=15),
             mortality_count=100,
