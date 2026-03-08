@@ -7,7 +7,7 @@ import uuid
 from unittest.mock import patch
 
 import pytest
-from chat.models import Message
+from chat.models import Conversation, Message
 from chat.services import ConversationService, MessageService
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
@@ -88,6 +88,17 @@ class TestConversationDetailAPI:
 
         # Either 403 or 404 is acceptable for security (don't reveal existence)
         assert response.status_code in [status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND]
+
+    def test_get_my_conversation_creates_conversation_when_missing(self, auth_client, authenticated_user):
+        """Test l'action custom /me pour garantir une conversation disponible."""
+        Conversation.objects.filter(user=authenticated_user).delete()
+
+        url = reverse('conversation-get-my-conversation')
+        response = auth_client.get(url)
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data['user'] == authenticated_user.id
+        assert Conversation.objects.filter(user=authenticated_user).count() == 1
 
 
 @pytest.mark.django_db

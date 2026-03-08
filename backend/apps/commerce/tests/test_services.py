@@ -4,11 +4,12 @@ Coverage: ProductService, OrderService, FeedingSuggestionService.
 """
 from datetime import timedelta
 from decimal import Decimal
+from uuid import uuid4
 
 import pytest
 from accounts.models import FarmProfile, User
 from aquaculture.models import CycleLog, ProductionCycle
-from commerce.domain.exceptions import InvalidOrderError
+from commerce.domain.exceptions import InvalidOrderError, ProductNotAvailableError, ProductNotFoundError
 from commerce.models import Product
 from commerce.services import FeedingSuggestionService, OrderService, ProductService
 from django.utils import timezone
@@ -64,6 +65,105 @@ class TestProductService:
             result = ProductService.get_products_by_ids(product_ids)
 
         assert set(result.keys()) == set(product_ids)
+
+    def test_get_products_by_ids_returns_empty_mapping_for_empty_payload(self):
+        assert ProductService.get_products_by_ids([]) == {}
+
+    def test_get_products_by_ids_raises_not_available_for_missing_or_unavailable_product(self, tilapia_products):
+        unavailable_product = Product.objects.create(
+            name="ALLER AQUA TILAPIA 5MM 20KG",
+            brand="aller_aqua",
+            species="tilapia",
+            phase="grossissement",
+            pellet_size_mm=Decimal("5.0"),
+            protein_percentage=32,
+            lipid_percentage=10,
+            package_weight_kg=Decimal("20.0"),
+            price_per_package=Decimal("31000.00"),
+            is_available=False,
+        )
+
+        with pytest.raises(ProductNotAvailableError, match=str(unavailable_product.id)):
+            ProductService.get_products_by_ids([str(unavailable_product.id)])
+
+    def test_get_products_by_ids_raises_not_found_when_availability_check_disabled(self, tilapia_products):
+        missing_product_id = str(uuid4())
+
+        with pytest.raises(ProductNotFoundError, match=missing_product_id):
+            ProductService.get_products_by_ids([missing_product_id], check_availability=False)
+
+    def test_get_product_by_id_raises_for_unavailable_product(self, tilapia_products):
+        unavailable_product = Product.objects.create(
+            name="DIBAQ TILAPIA 4MM 20KG",
+            brand="dibaq",
+            species="tilapia",
+            phase="grossissement",
+            pellet_size_mm=Decimal("4.0"),
+            protein_percentage=30,
+            lipid_percentage=10,
+            package_weight_kg=Decimal("20.0"),
+            price_per_package=Decimal("28000.00"),
+            is_available=False,
+        )
+
+        with pytest.raises(ProductNotAvailableError, match=unavailable_product.name):
+            ProductService.get_product_by_id(str(unavailable_product.id))
+
+        assert ProductService.get_product_by_id(
+            str(unavailable_product.id),
+            check_availability=False,
+        ) == unavailable_product
+
+    def test_get_product_by_id_raises_not_found_for_unknown_uuid(self):
+        missing_product_id = str(uuid4())
+
+        with pytest.raises(ProductNotFoundError, match=missing_product_id):
+            ProductService.get_product_by_id(missing_product_id)
+
+    def test_filter_by_phase_and_brand(self, tilapia_products):
+        phase_products = ProductService.filter_by_phase("grossissement", species="tilapia")
+        brand_products = ProductService.filter_by_brand("aller_aqua")
+
+        assert phase_products.count() == 1
+        assert phase_products.first().phase == "grossissement"
+        assert brand_products.count() == 2
+
+    def test_search_products_returns_none_for_short_query(self, tilapia_products):
+        assert ProductService.search_products("").count() == 0
+        assert ProductService.search_products("a").count() == 0
+
+    def test_search_products_matches_brand_and_name(self, tilapia_products):
+        assert ProductService.search_products("aller").count() == 2
+        assert ProductService.search_products("3MM").count() == 1
+
+    def test_get_recommended_product_falls_back_to_nearest_pellet_size(self, tilapia_products):
+        fallback_product = ProductService.get_recommended_product("tilapia", 20.0)
+
+        assert fallback_product is not None
+        assert fallback_product.pellet_size_mm == Decimal("3.0")
+
+    def test_get_products_for_cycle_returns_species_scope(self, tilapia_products):
+        cycle = type("CycleStub", (), {"species": "tilapia"})()
+
+        products = ProductService.get_products_for_cycle(cycle)
+
+        assert products.count() == 2
+
+    def test_get_price_range_with_filters(self, tilapia_products):
+        price_range = ProductService.get_price_range(species="tilapia", phase="grossissement")
+
+        assert price_range["min"] == Decimal("30000.00")
+        assert price_range["max"] == Decimal("30000.00")
+        assert price_range["avg"] == Decimal("30000.00")
+
+    def test_get_price_range_returns_zeroes_when_no_product_matches(self):
+        price_range = ProductService.get_price_range(species="catfish")
+
+        assert price_range == {
+            "min": Decimal("0"),
+            "max": Decimal("0"),
+            "avg": Decimal("0"),
+        }
 
 
 @pytest.mark.django_db

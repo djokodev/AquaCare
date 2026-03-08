@@ -8,12 +8,13 @@ Couvre :
 - Compteurs (non lues)
 - Récupération filtrée
 """
-from datetime import timedelta
+from datetime import time, timedelta
+from unittest.mock import patch
 
 import pytest
 from django.test import override_settings
 from django.utils import timezone
-from notifications.models import Notification
+from notifications.models import Notification, NotificationPreference
 from notifications.services import NotificationService
 
 
@@ -87,6 +88,80 @@ class TestNotificationServiceCreate:
 
         assert notif is not None
         assert notif.channels == ['in_app', 'push']
+
+    def test_create_notification_returns_none_when_channels_all_disabled(self, user):
+        prefs, _ = NotificationPreference.objects.get_or_create(user=user)
+        prefs.in_app_enabled = False
+        prefs.email_enabled = False
+        prefs.push_enabled = False
+        prefs.save(
+            update_fields=['in_app_enabled', 'email_enabled', 'push_enabled']
+        )
+
+        notif = NotificationService.create_notification(
+            user=user,
+            notification_type='system_update',
+            title='System Update',
+            message='No channel should remain',
+            channels=['in_app', 'email', 'push'],
+        )
+
+        assert notif is None
+
+    def test_create_notification_returns_none_when_type_is_opted_out(self, user):
+        prefs, _ = NotificationPreference.objects.get_or_create(user=user)
+        prefs.system_alerts = False
+        prefs.save(update_fields=['system_alerts'])
+
+        notif = NotificationService.create_notification(
+            user=user,
+            notification_type='system_update',
+            title='System Update',
+            message='Type disabled',
+            channels=['in_app'],
+        )
+
+        assert notif is None
+
+    def test_create_notification_strips_push_during_quiet_hours(self, user):
+        prefs, _ = NotificationPreference.objects.get_or_create(user=user)
+        prefs.quiet_hours_start = time(22, 0)
+        prefs.quiet_hours_end = time(7, 0)
+        prefs.save(update_fields=['quiet_hours_start', 'quiet_hours_end'])
+
+        with patch.object(
+            NotificationPreference,
+            'is_in_quiet_hours',
+            return_value=True,
+        ):
+            notif = NotificationService.create_notification(
+                user=user,
+                notification_type='new_message',
+                title='Late message',
+                message='Push should be removed',
+                channels=['in_app', 'push'],
+            )
+
+        assert notif is not None
+        assert notif.channels == ['in_app']
+
+    def test_create_notification_logs_dispatch_failure_without_aborting(self, user):
+        with patch(
+            'notifications.tasks.send_email_notification_task.delay',
+            side_effect=RuntimeError('queue unavailable'),
+        ), patch('notifications.services.logger.exception') as mock_logger:
+            notif = NotificationService.create_notification(
+                user=user,
+                notification_type='system_update',
+                title='Dispatch',
+                message='Still persisted',
+                channels=['email'],
+                send_immediately=True,
+            )
+
+        assert notif is not None
+        assert Notification.objects.filter(id=notif.id).exists()
+        mock_logger.assert_called_once()
 
 
 @pytest.mark.django_db
@@ -264,3 +339,19 @@ class TestCreateBulkNotificationsN1:
             )
 
         assert count == 3
+
+    def test_bulk_notifications_skip_users_who_opted_out(self, user, user2):
+        prefs, _ = NotificationPreference.objects.get_or_create(user=user)
+        prefs.system_alerts = False
+        prefs.save(update_fields=['system_alerts'])
+
+        count = NotificationService.create_bulk_notifications(
+            users=[user, user2],
+            notification_type='system_update',
+            title='Bulk Test',
+            message='Only one user should receive it',
+        )
+
+        assert count == 1
+        assert Notification.objects.filter(user=user).count() == 0
+        assert Notification.objects.filter(user=user2).count() == 1
