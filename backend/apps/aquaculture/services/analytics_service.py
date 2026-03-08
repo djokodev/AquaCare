@@ -13,6 +13,7 @@ Author: MAVECAM AquaCare Team
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 from typing import TypedDict
@@ -138,6 +139,17 @@ class CycleStatistics(TypedDict):
     estimated_costs: CycleCostEstimate
 
 
+@dataclass(frozen=True)
+class AnalyticsLogBuckets:
+    """Classification memoisee des logs prefetchés utiles aux analytics."""
+
+    all_logs: list[CycleLog]
+    growth_logs: list[CycleLog]
+    mortality_logs: list[CycleLog]
+    environment_logs: list[CycleLog]
+    feed_logs: list[CycleLog]
+
+
 class AnalyticsService(BaseService):
     """
     Service d'analytics aquaculture pour analyses approfondies.
@@ -164,6 +176,46 @@ class AnalyticsService(BaseService):
         if prefetched_logs is None:
             return None
         return list(prefetched_logs)
+
+    @staticmethod
+    def _get_prefetched_log_buckets(cycle: ProductionCycle) -> AnalyticsLogBuckets | None:
+        """Construit et memoise les sous-ensembles de logs prefetchés utiles."""
+        cached_buckets = getattr(cycle, '_analytics_log_buckets', None)
+        if cached_buckets is not None:
+            return cached_buckets
+
+        prefetched_logs = AnalyticsService._get_prefetched_logs(cycle)
+        if prefetched_logs is None:
+            return None
+
+        growth_logs: list[CycleLog] = []
+        mortality_logs: list[CycleLog] = []
+        environment_logs: list[CycleLog] = []
+        feed_logs: list[CycleLog] = []
+
+        for log in prefetched_logs:
+            if log.average_weight is not None:
+                growth_logs.append(log)
+            if log.mortality_count and log.mortality_count > 0:
+                mortality_logs.append(log)
+            if not (
+                log.water_temperature is None
+                and log.ph_level is None
+                and log.dissolved_oxygen is None
+            ):
+                environment_logs.append(log)
+            if log.feed_quantity is not None:
+                feed_logs.append(log)
+
+        buckets = AnalyticsLogBuckets(
+            all_logs=prefetched_logs,
+            growth_logs=growth_logs,
+            mortality_logs=mortality_logs,
+            environment_logs=environment_logs,
+            feed_logs=feed_logs,
+        )
+        setattr(cycle, '_analytics_log_buckets', buckets)
+        return buckets
 
     # ============================================================================
     # ANALYSE MORTALITÉ
@@ -198,13 +250,11 @@ class AnalyticsService(BaseService):
             >>> analysis = AnalyticsService.analyze_mortality(cycle)
             >>> print(f"Mortalité: {analysis['percentage']:.1f}%")
         """
-        prefetched_logs = AnalyticsService._get_prefetched_logs(cycle)
+        prefetched_buckets = AnalyticsService._get_prefetched_log_buckets(cycle)
 
         weekly_mortality: dict[int, int] = {}
-        if prefetched_logs is not None:
-            mortality_logs = [
-                log for log in prefetched_logs if log.mortality_count and log.mortality_count > 0
-            ]
+        if prefetched_buckets is not None:
+            mortality_logs = prefetched_buckets.mortality_logs
             total_mortality = sum(int(log.mortality_count or 0) for log in mortality_logs)
 
             causes: dict[str | None, int] = {}
@@ -283,10 +333,10 @@ class AnalyticsService(BaseService):
             >>> for point in growth_data:
             >>>     print(f"Jour {point['day']}: {point['weight']}g")
         """
-        prefetched_logs = AnalyticsService._get_prefetched_logs(cycle)
+        prefetched_buckets = AnalyticsService._get_prefetched_log_buckets(cycle)
         logs = (
-            [log for log in prefetched_logs if log.average_weight is not None]
-            if prefetched_logs is not None
+            prefetched_buckets.growth_logs
+            if prefetched_buckets is not None
             else cycle.logs.filter(average_weight__isnull=False).order_by('log_date')
         )
 
@@ -342,17 +392,9 @@ class AnalyticsService(BaseService):
             >>> if env_data['alerts']:
             >>>     print("Alertes:", env_data['alerts'])
         """
-        prefetched_logs = AnalyticsService._get_prefetched_logs(cycle)
-        if prefetched_logs is not None:
-            logs = [
-                log
-                for log in prefetched_logs
-                if not (
-                    log.water_temperature is None
-                    and log.ph_level is None
-                    and log.dissolved_oxygen is None
-                )
-            ]
+        prefetched_buckets = AnalyticsService._get_prefetched_log_buckets(cycle)
+        if prefetched_buckets is not None:
+            logs = prefetched_buckets.environment_logs
         else:
             logs = cycle.logs.exclude(
                 water_temperature__isnull=True,
@@ -365,7 +407,7 @@ class AnalyticsService(BaseService):
                 'has_data': False,
                 'message': _('Aucune donnée environnementale disponible')
             }
-        if prefetched_logs is not None:
+        if prefetched_buckets is not None:
             temperatures = [float(log.water_temperature) for log in logs if log.water_temperature is not None]
             ph_levels = [float(log.ph_level) for log in logs if log.ph_level is not None]
             oxygens = [float(log.dissolved_oxygen) for log in logs if log.dissolved_oxygen is not None]
@@ -810,11 +852,11 @@ class AnalyticsService(BaseService):
 
             else:
                 # ── MODE REBUILD COMPLET (delete case ou sync batch) ─────────────
-                prefetched_logs = AnalyticsService._get_prefetched_logs(cycle)
+                prefetched_buckets = AnalyticsService._get_prefetched_log_buckets(cycle)
                 growth_data = []
                 growth_logs = (
-                    [log for log in prefetched_logs if log.average_weight is not None]
-                    if prefetched_logs is not None
+                    prefetched_buckets.growth_logs
+                    if prefetched_buckets is not None
                     else cycle.logs.filter(average_weight__isnull=False).order_by('log_date')
                 )
                 for log in growth_logs:
@@ -828,8 +870,8 @@ class AnalyticsService(BaseService):
                 survival_data = []
                 current_count = cycle.initial_count
                 mortality_logs = (
-                    [log for log in prefetched_logs if log.mortality_count and log.mortality_count > 0]
-                    if prefetched_logs is not None
+                    prefetched_buckets.mortality_logs
+                    if prefetched_buckets is not None
                     else cycle.logs.filter(mortality_count__gt=0).order_by('log_date')
                 )
                 for log in mortality_logs:
@@ -845,8 +887,8 @@ class AnalyticsService(BaseService):
                 feed_data = []
                 cumulative_feed = 0
                 feed_logs = (
-                    [log for log in prefetched_logs if log.feed_quantity is not None]
-                    if prefetched_logs is not None
+                    prefetched_buckets.feed_logs
+                    if prefetched_buckets is not None
                     else cycle.logs.filter(feed_quantity__isnull=False).order_by('log_date')
                 )
                 for log in feed_logs:

@@ -106,6 +106,25 @@ class TestRegistrationEndpoint:
         # Vérifier FarmProfile entreprise
         user = User.objects.get(phone_number="+237691234567")
         assert user.farm_profile.farm_name == "Ferme AquaFarm SARL"
+
+    def test_register_success_keeps_query_budget(self, django_assert_num_queries):
+        """L'inscription ne doit pas relire l'utilisateur pour construire la reponse."""
+        data = {
+            "phone_number": "+237691240001",
+            "email": "register-perf@example.com",
+            "first_name": "Register",
+            "last_name": "Perf",
+            "password": "motdepasse123",
+            "password_confirm": "motdepasse123",
+            "account_type": "individual",
+            "age_group": "26_35",
+        }
+
+        with django_assert_num_queries(4):
+            response = self.client.post(self.url, data, format='json')
+
+        assert response.status_code == status.HTTP_201_CREATED
+        assert response.data["user"]["farm_profile"]["farm_name"] == "Ferme de Register Perf"
     
     def test_register_duplicate_phone_fails(self):
         """Test échec inscription avec téléphone existant."""
@@ -271,6 +290,18 @@ class TestLoginEndpoint:
         user_data = response.data['user']
         assert user_data['business_name'] == "AquaFarm SARL"
         assert user_data['account_type'] == "company"
+
+    def test_login_by_name_uses_single_query(self, django_assert_num_queries):
+        """La connexion par login_name doit rester sur un seul acces ORM."""
+        data = {
+            "login_name": "Jean Farmer",
+            "password": "motdepasse123",
+        }
+
+        with django_assert_num_queries(2):
+            response = self.client.post(self.url, data, format='json')
+
+        assert response.status_code == status.HTTP_200_OK
     
     def test_login_wrong_credentials_fails(self):
         """Test échec avec identifiants incorrects."""
@@ -453,6 +484,15 @@ class TestProfileEndpoint:
         assert farm_data['farm_name'] == "Ferme de Profile User"
         assert farm_data['certification_status'] == "pending"
         assert farm_data['is_certified'] is False
+
+    def test_get_profile_uses_single_query(self, django_assert_num_queries):
+        """Le profil utilisateur doit rester sur un seul chargement ORM."""
+        self.client.force_authenticate(user=self.user)
+
+        with django_assert_num_queries(1):
+            response = self.client.get(self.url)
+
+        assert response.status_code == status.HTTP_200_OK
     
     def test_get_profile_unauthenticated_fails(self):
         """Test échec consultation sans authentification."""
@@ -546,6 +586,15 @@ class TestFarmProfileEndpoint:
         # assert response.data['certification_status_display'] == "En attente"  # Field not in serializer
         assert response.data['is_certified'] is False
         assert response.data['total_ponds'] == 0
+
+    def test_get_farm_profile_uses_single_query(self, django_assert_num_queries):
+        """Le profil ferme doit etre charge en une seule requete."""
+        self.client.force_authenticate(user=self.user)
+
+        with django_assert_num_queries(1):
+            response = self.client.get(self.url)
+
+        assert response.status_code == status.HTTP_200_OK
     
     def test_patch_farm_profile_success(self):
         """Test modification ferme réussie."""

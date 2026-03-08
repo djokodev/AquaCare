@@ -8,7 +8,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Literal
 
 from django.contrib.auth import get_user_model
-from django.db import transaction
 from django.db.models import F
 from django.utils import timezone
 
@@ -52,8 +51,7 @@ class ConversationService:
             user=user,
             defaults={'is_active': True}
         )
-
-        return Conversation.objects.with_user().get(pk=conversation.pk)
+        return conversation
 
     @staticmethod
     def get_user_conversation(user: ChatUser) -> Conversation:
@@ -120,7 +118,6 @@ class ConversationService:
         return conversation
 
     @staticmethod
-    @transaction.atomic
     def update_last_message_timestamp(conversation: Conversation) -> None:
         """
         Update conversation's last_message_at timestamp to now.
@@ -130,21 +127,18 @@ class ConversationService:
         Args:
             conversation: Conversation instance
         """
-        conversation.last_message_at = timezone.now()
-        conversation.save(update_fields=['last_message_at', 'updated_at'])
+        now = timezone.now()
+        conversation.__class__.objects.filter(pk=conversation.pk).update(
+            last_message_at=now,
+            updated_at=now,
+        )
+        conversation.last_message_at = now
+        conversation.updated_at = now
 
-    @staticmethod
-    @transaction.atomic
-    def _refresh_counter_state(conversation: Conversation) -> None:
-        """Recharge les compteurs mis a jour par `F()` expressions."""
-        conversation.refresh_from_db()
-
-    @staticmethod
     def _get_unread_counter_field(for_user: bool) -> UnreadCounterTarget:
         return 'user' if for_user else 'admin'
 
     @staticmethod
-    @transaction.atomic
     def _save_unread_count(
         conversation: Conversation,
         *,
@@ -152,12 +146,17 @@ class ConversationService:
         value: int | F,
     ) -> None:
         field_name = f'unread_count_{target}'
-        setattr(conversation, field_name, value)
-        conversation.save(update_fields=[field_name, 'updated_at'])
-        ConversationService._refresh_counter_state(conversation)
+        now = timezone.now()
+        updates: dict[str, int | F | timezone.datetime] = {
+            field_name: value,
+            'updated_at': now,
+        }
+        conversation.__class__.objects.filter(pk=conversation.pk).update(**updates)
+        if isinstance(value, int):
+            setattr(conversation, field_name, value)
+        conversation.updated_at = now
 
     @staticmethod
-    @transaction.atomic
     def increment_unread_count(conversation: Conversation, for_user: bool = True) -> None:
         """
         Increment unread message count.
@@ -175,7 +174,6 @@ class ConversationService:
         )
 
     @staticmethod
-    @transaction.atomic
     def reset_unread_count(conversation: Conversation, for_user: bool = True) -> None:
         """
         Reset unread message count to zero.

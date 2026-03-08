@@ -134,7 +134,6 @@ class RegisterView(generics.CreateAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
-        user = User.objects.with_farm_profile().get(pk=user.pk)
         response_serializer = AuthSuccessResponseSerializer(
             build_auth_success_payload(user, _('Compte créé avec succès'))
         )

@@ -47,6 +47,19 @@ class TestConversationService:
         assert conv1.id == conv2.id
         assert Conversation.objects.filter(user=authenticated_user).count() == 1
 
+    def test_get_or_create_conversation_existing_uses_single_query(
+        self,
+        authenticated_user,
+        django_assert_num_queries,
+    ):
+        """Le chemin nominal ne doit pas relire la conversation apres get_or_create()."""
+        ConversationService.get_or_create_conversation(authenticated_user)
+
+        with django_assert_num_queries(1):
+            conversation = ConversationService.get_or_create_conversation(authenticated_user)
+
+        assert conversation.user_id == authenticated_user.id
+
     def test_get_user_conversation_success(self, authenticated_user):
         """Test getting user's conversation successfully."""
         # Create conversation
@@ -113,6 +126,16 @@ class TestConversationService:
 
         assert conversation.last_message_at > original_timestamp
 
+    def test_update_last_message_timestamp_uses_single_query(
+        self,
+        authenticated_user,
+        django_assert_num_queries,
+    ):
+        conversation = ConversationService.get_or_create_conversation(authenticated_user)
+
+        with django_assert_num_queries(1):
+            ConversationService.update_last_message_timestamp(conversation)
+
     def test_increment_unread_count_user(self, authenticated_user):
         """Test incrementing unread count for user."""
         conversation = ConversationService.get_or_create_conversation(authenticated_user)
@@ -122,6 +145,16 @@ class TestConversationService:
         conversation.refresh_from_db()
 
         assert conversation.unread_count_user == 1
+
+    def test_increment_unread_count_user_uses_single_query(
+        self,
+        authenticated_user,
+        django_assert_num_queries,
+    ):
+        conversation = ConversationService.get_or_create_conversation(authenticated_user)
+
+        with django_assert_num_queries(1):
+            ConversationService.increment_unread_count(conversation, for_user=True)
 
     def test_increment_unread_count_admin(self, authenticated_user):
         """Test incrementing unread count for admin."""
@@ -143,6 +176,18 @@ class TestConversationService:
         conversation.refresh_from_db()
 
         assert conversation.unread_count_user == 0
+
+    def test_reset_unread_count_user_uses_single_query(
+        self,
+        authenticated_user,
+        django_assert_num_queries,
+    ):
+        conversation = ConversationService.get_or_create_conversation(authenticated_user)
+        conversation.unread_count_user = 5
+        conversation.save()
+
+        with django_assert_num_queries(1):
+            ConversationService.reset_unread_count(conversation, for_user=True)
 
     def test_reset_unread_count_admin(self, authenticated_user):
         """Test resetting unread count for admin."""

@@ -76,7 +76,7 @@ class UserManager(BaseUserManager.from_queryset(UserQuerySet)):
 
         return f"Ferme de {user.display_name}"
 
-    def _create_farm_profile(self, user: User) -> None:
+    def _create_farm_profile(self, user: User) -> FarmProfile:
         """
         Crée automatiquement un FarmProfile pour l'utilisateur.
         
@@ -84,12 +84,15 @@ class UserManager(BaseUserManager.from_queryset(UserQuerySet)):
             user (User): L'utilisateur pour lequel créer le profil ferme
         """
         from .models import FarmProfile
-        
-        FarmProfile.objects.create(
+
+        farm_profile = FarmProfile(
             user=user,
             farm_name=self._build_farm_name(user),
-            certification_status='pending'
+            certification_status='pending',
         )
+        farm_profile.save(validate=False)
+        user.farm_profile = farm_profile
+        return farm_profile
 
     def create_user(self, phone_number: str, password: str | None = None, **extra_fields: Any) -> User:
         """

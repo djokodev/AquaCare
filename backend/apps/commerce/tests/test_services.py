@@ -410,6 +410,38 @@ class TestFeedingSuggestionService:
         assert result["has_suggestions"] is True
         assert result["suggestions"][0]["cycle_name"] == test_cycle.cycle_name
 
+    def test_get_feeding_suggestions_uses_three_queries(
+        self,
+        test_user,
+        test_cycle,
+        django_assert_num_queries,
+    ):
+        Product.objects.create(
+            name="TILAPIA 3MM TEST 20KG",
+            brand="aller_aqua",
+            species="tilapia",
+            phase="pre_grossissement",
+            pellet_size_mm=Decimal("3.0"),
+            protein_percentage=Decimal("35.0"),
+            lipid_percentage=10,
+            package_weight_kg=Decimal("20.0"),
+            price_per_package=Decimal("30000.0"),
+        )
+
+        today = timezone.now().date()
+        for offset in range(7):
+            CycleLog.objects.create(
+                cycle=test_cycle,
+                log_date=today - timedelta(days=offset),
+                feed_quantity=Decimal("2.0"),
+                average_weight=Decimal("80.0"),
+            )
+
+        with django_assert_num_queries(3):
+            result = FeedingSuggestionService.get_feeding_suggestions(test_user.id)
+
+        assert result["has_suggestions"] is True
+
     def test_analyze_cycle_handles_clarias_and_planned_harvest_date(self, test_farm):
         cycle = ProductionCycle.objects.create(
             farm_profile=test_farm,

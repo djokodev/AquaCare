@@ -54,6 +54,11 @@ class ExpoPushMessage(TypedDict, total=False):
     channelId: str
 
 
+def _get_notification_with_user(notification_id: str) -> Notification:
+    """Charge une notification avec son utilisateur en une seule requete."""
+    return Notification.objects.select_related("user").get(id=notification_id)
+
+
 def _build_email_context(notification: Notification) -> EmailTemplateContext:
     user = notification.user
     return {
@@ -84,23 +89,11 @@ def _render_fallback_email_html(notification: Notification) -> str:
 
 
 def _save_email_error(notification_id: str, error_code: str) -> None:
-    try:
-        notification = Notification.objects.get(id=notification_id)
-    except Notification.DoesNotExist:
-        return
-
-    notification.email_error = error_code
-    notification.save(update_fields=["email_error"])
+    Notification.objects.filter(id=notification_id).update(email_error=error_code)
 
 
 def _save_push_error(notification_id: str, error_code: str) -> None:
-    try:
-        notification = Notification.objects.get(id=notification_id)
-    except Notification.DoesNotExist:
-        return
-
-    notification.push_error = error_code
-    notification.save(update_fields=["push_error"])
+    Notification.objects.filter(id=notification_id).update(push_error=error_code)
 
 
 def _build_expo_messages(notification: Notification, tokens: list[PushToken]) -> list[ExpoPushMessage]:
@@ -146,7 +139,7 @@ def send_email_notification_task(self, notification_id: str):
         Exception: Si échec après 3 tentatives
     """
     try:
-        notification = Notification.objects.get(id=notification_id)
+        notification = _get_notification_with_user(notification_id)
         user = notification.user
 
         # Vérifier que l'utilisateur a un email
@@ -217,14 +210,14 @@ def send_push_notification_task(self, notification_id: str):
         Exception: Si échec après 3 tentatives
     """
     try:
-        notification = Notification.objects.get(id=notification_id)
+        notification = _get_notification_with_user(notification_id)
         user = notification.user
 
         # Récupérer les push tokens actifs de l'utilisateur
         push_tokens = PushToken.objects.filter(
             user=user,
             is_active=True
-        ).order_by('created_at', 'id')
+        ).only('id', 'expo_push_token', 'platform', 'is_active').order_by('created_at', 'id')
         tokens = list(push_tokens)
 
         if not tokens:
@@ -358,7 +351,7 @@ def send_scheduled_notifications():
         pending_notifications = Notification.objects.filter(
             scheduled_for__lte=now,
             is_sent=False
-        )
+        ).only('id', 'channels').order_by('scheduled_for', 'id')
 
         dispatched_ids = []
         for notification in pending_notifications[:500]:

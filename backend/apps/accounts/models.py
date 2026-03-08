@@ -214,7 +214,7 @@ class User(AbstractUser):
             raise ValidationError(errors)
 
 
-    def save(self, *args, **kwargs):
+    def save(self, *args, validate: bool = True, **kwargs):
         """
         Sauvegarde avec normalisation automatique du téléphone.
         
@@ -225,7 +225,8 @@ class User(AbstractUser):
             self.phone_number = normalize_phone_number(self.phone_number)
         
         # Validation avant sauvegarde
-        self.full_clean()
+        if validate:
+            self.full_clean()
         super().save(*args, **kwargs)
     
 
@@ -419,6 +420,7 @@ class FarmProfile(models.Model):
         if errors:
             raise ValidationError(errors)
     
-    def save(self, *args, **kwargs):
-        self.full_clean()
+    def save(self, *args, validate: bool = True, **kwargs):
+        if validate:
+            self.full_clean()
         super().save(*args, **kwargs)
