@@ -115,9 +115,9 @@ class CycleLogViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         """Filtre les logs par les cycles de l'utilisateur."""
-        queryset = CycleLog.objects.filter(
+        queryset = CycleLog.objects.for_api().filter(
             cycle__farm_profile__user=self.request.user
-        ).select_related('cycle').order_by('-log_date')
+        ).order_by('-log_date')
         
         # Filter by cycle if specified
         cycle_id = self.request.query_params.get('cycle_id')

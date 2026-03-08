@@ -6,7 +6,6 @@ from datetime import date, timedelta
 from typing import Any
 
 from django.core.cache import cache
-from django.db.models import Avg, Prefetch, Q, Sum
 from django.utils import timezone
 from notifications.models import Notification
 
@@ -22,7 +21,7 @@ class DashboardService:
     CACHE_TTL_SECONDS = 60
 
     @staticmethod
-    def build_dashboard_data(user, farm_profile, cycle_id: str | None = None) -> dict[str, Any]:
+    def build_dashboard_data(user, cycle_id: str | None = None) -> dict[str, Any]:
         """
         Construit les données complètes du dashboard.
 
@@ -39,16 +38,10 @@ class DashboardService:
         thirty_days_ago = date.today() - timedelta(days=30)
 
         active_cycles = ProductionCycle.objects.filter(
-            farm_profile=farm_profile,
-            status='active'
-        ).select_related('farm_profile', 'metrics').prefetch_related(
-            Prefetch(
-                'logs',
-                queryset=CycleLog.objects.filter(
-                    log_date__gte=thirty_days_ago
-                ).order_by('log_date'),
-                to_attr='prefetched_logs'
-            )
+            farm_profile__user=user,
+            status='active',
+        ).with_dashboard_logs(
+            thirty_days_ago
         )
 
         if cycle_id:
@@ -58,24 +51,24 @@ class DashboardService:
             active_cycles = active_cycles.filter(id=cycle_scope.id)
 
         active_cycles_list = list(active_cycles)
+        fcr_values = [float(cycle.fcr) for cycle in active_cycles_list if cycle.fcr is not None]
+        survival_values = [
+            float(cycle.survival_rate) for cycle in active_cycles_list if cycle.survival_rate is not None
+        ]
 
-        recent_logs = DashboardService._get_recent_logs(farm_profile, cycle_scope)
-        current_plans = DashboardService._get_current_plans(farm_profile, cycle_scope)
+        recent_logs = DashboardService._get_recent_logs(user, cycle_scope)
+        current_plans = DashboardService._get_current_plans(user, cycle_scope)
         pending_notifications = DashboardService._get_pending_notifications(user)
-        active_issues = DashboardService._get_active_issues(farm_profile, cycle_scope)
-
-        stats = active_cycles.aggregate(
-            total_biomass=Sum('current_biomass'),
-            avg_fcr=Avg('fcr', filter=Q(fcr__isnull=False)),
-            avg_survival=Avg('survival_rate', filter=Q(survival_rate__isnull=False)),
-        )
+        active_issues = DashboardService._get_active_issues(user, cycle_scope)
 
         dashboard_data = {
             'active_cycles_count': len(active_cycles_list),
-            'total_biomass': float(stats['total_biomass'] or 0),
+            'total_biomass': sum(float(cycle.current_biomass or 0) for cycle in active_cycles_list),
             'total_fish_count': sum(c.current_count for c in active_cycles_list),
-            'average_fcr': float(stats['avg_fcr'] or 0),
-            'average_survival_rate': float(stats['avg_survival'] or 0),
+            'average_fcr': (sum(fcr_values) / len(fcr_values)) if fcr_values else 0,
+            'average_survival_rate': (
+                sum(survival_values) / len(survival_values)
+            ) if survival_values else 0,
 
             '_querysets': {
                 'active_cycles_list': active_cycles_list,
@@ -97,24 +90,24 @@ class DashboardService:
         return dashboard_data
 
     @staticmethod
-    def _get_recent_logs(farm_profile, cycle_scope):
+    def _get_recent_logs(user, cycle_scope):
         recent_date = date.today() - timedelta(days=7)
-        filters = {'cycle__farm_profile': farm_profile, 'log_date__gte': recent_date}
+        filters = {'cycle__farm_profile__user': user, 'log_date__gte': recent_date}
         if cycle_scope:
             filters['cycle_id'] = cycle_scope.id
-        return CycleLog.objects.filter(**filters).select_related('cycle').order_by('-log_date')[:20]
+        return CycleLog.objects.for_api().filter(**filters).order_by('-log_date')[:20]
 
     @staticmethod
-    def _get_current_plans(farm_profile, cycle_scope):
+    def _get_current_plans(user, cycle_scope):
         filters = {
-            'cycle__farm_profile': farm_profile,
+            'cycle__farm_profile__user': user,
             'is_active': True,
             'start_date__lte': date.today(),
             'end_date__gte': date.today(),
         }
         if cycle_scope:
             filters['cycle_id'] = cycle_scope.id
-        return FeedingPlan.objects.filter(**filters).select_related('cycle')
+        return FeedingPlan.objects.for_api().filter(**filters)
 
     @staticmethod
     def _get_pending_notifications(user):
@@ -123,11 +116,11 @@ class DashboardService:
         ).order_by('scheduled_for')[:10]
 
     @staticmethod
-    def _get_active_issues(farm_profile, cycle_scope):
-        filters = {'cycle__farm_profile': farm_profile, 'resolved': False}
+    def _get_active_issues(user, cycle_scope):
+        filters = {'cycle__farm_profile__user': user, 'resolved': False}
         if cycle_scope:
             filters['cycle_id'] = cycle_scope.id
-        return SanitaryLog.objects.filter(**filters).select_related('cycle')[:5]
+        return SanitaryLog.objects.for_api().filter(**filters)[:5]
 
     @staticmethod
     def _prepare_growth_chart_data(cycles) -> list[dict]:

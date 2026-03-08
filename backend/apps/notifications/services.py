@@ -251,10 +251,7 @@ class NotificationService:
 
         # Charger toutes les préférences existantes en une seule requête
         user_ids = [u.pk for u in users]
-        existing_prefs = {
-            p.user_id: p
-            for p in NotificationPreference.objects.filter(user__in=user_ids)
-        }
+        existing_prefs = NotificationPreference.objects.in_bulk(user_ids, field_name='user_id')
 
         # Créer les préférences manquantes en batch
         missing_user_ids = [uid for uid in user_ids if uid not in existing_prefs]
@@ -263,8 +260,14 @@ class NotificationService:
                 [NotificationPreference(user_id=uid) for uid in missing_user_ids],
                 ignore_conflicts=True,
             )
-            for p in new_prefs:
-                existing_prefs[p.user_id] = p
+            for pref in new_prefs:
+                existing_prefs[pref.user_id] = pref
+
+            still_missing_ids = [uid for uid in missing_user_ids if uid not in existing_prefs]
+            if still_missing_ids:
+                existing_prefs.update(
+                    NotificationPreference.objects.in_bulk(still_missing_ids, field_name='user_id')
+                )
 
         # Construire les notifications en filtrant par préférences (lookup O(1))
         notifications: list[Notification] = []
@@ -383,11 +386,7 @@ class NotificationService:
         Returns:
             Nombre de notifications non lues
         """
-        return Notification.objects.filter(
-            user=user,
-            is_read=False,
-            scheduled_for__lte=timezone.now()
-        ).count()
+        return Notification.objects.visible_for_user(user).filter(is_read=False).count()
 
     @staticmethod
     def get_user_notifications(
@@ -408,10 +407,7 @@ class NotificationService:
         Returns:
             Liste de notifications
         """
-        queryset = Notification.objects.filter(
-            user=user,
-            scheduled_for__lte=timezone.now()
-        )
+        queryset = Notification.objects.visible_for_user(user).with_display_context()
 
         if is_read is not None:
             queryset = queryset.filter(is_read=is_read)

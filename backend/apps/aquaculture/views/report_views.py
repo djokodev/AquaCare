@@ -140,12 +140,20 @@ class ProductionReportViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = ProductionReportListSerializer
 
     def get_queryset(self):
-        queryset = ProductionReport.objects.filter(
-            farm_profile__user=self.request.user
-        ).select_related(
-            'farm_profile',
-            'validated_by',
-        ).prefetch_related('dispatch_logs')
+        detail_actions = {
+            'retrieve',
+            'regenerate',
+            'validate',
+            'send_email',
+            'mark_whatsapp_shared',
+            'download',
+        }
+        base_queryset = (
+            ProductionReport.objects.for_detail()
+            if self.action in detail_actions
+            else ProductionReport.objects.for_list()
+        )
+        queryset = base_queryset.filter(farm_profile__user=self.request.user)
 
         report_type = self.request.query_params.get('report_type')
         if report_type:

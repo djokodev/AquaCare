@@ -20,7 +20,6 @@ from accounts.models import FarmProfile, User
 from django.conf import settings
 from django.core.files.base import ContentFile
 from django.core.mail import EmailMessage
-from django.db.models import Prefetch
 from django.template.loader import render_to_string
 from django.utils import timezone
 from django.utils.formats import date_format
@@ -29,12 +28,9 @@ from django.utils.translation import override
 
 from ..constants import DEFAULT_FEED_PRICE_PER_KG, ECONOMIC_DEFAULTS_BY_SPECIES
 from ..models import (
-    CycleLog,
-    FeedingPlan,
     ProductionCycle,
     ProductionReport,
     ReportDispatchLog,
-    SanitaryLog,
 )
 from .base import BaseService
 
@@ -496,34 +492,7 @@ class ReportService(BaseService):
         cycles_qs = ProductionCycle.objects.filter(
             farm_profile=farm_profile,
             status='active',
-        ).select_related(
-            'farm_profile__user', 'metrics'
-        ).prefetch_related(
-            Prefetch(
-                'logs',
-                queryset=CycleLog.objects.filter(
-                    log_date__gte=period_start,
-                    log_date__lte=period_end,
-                ).order_by('log_date'),
-                to_attr='period_logs',
-            ),
-            Prefetch(
-                'sanitary_logs',
-                queryset=SanitaryLog.objects.filter(
-                    event_date__gte=period_start,
-                    event_date__lte=period_end,
-                ).order_by('event_date'),
-                to_attr='period_sanitary',
-            ),
-            Prefetch(
-                'feeding_plans',
-                queryset=FeedingPlan.objects.filter(
-                    start_date__lte=period_end,
-                    end_date__gte=period_start,
-                ).order_by('week_number'),
-                to_attr='period_feeding_plans',
-            ),
-        ).order_by('start_date')
+        ).with_report_snapshot(period_start, period_end)
 
         scoped_cycle: ProductionCycle | None = None
         if cycle_id:

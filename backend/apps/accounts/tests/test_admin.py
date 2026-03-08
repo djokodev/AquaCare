@@ -259,6 +259,7 @@ class TestFarmProfileAdmin:
         """Configuration pour chaque test."""
         self.site = AdminSite()
         self.admin = FarmProfileAdmin(FarmProfile, self.site)
+        self.factory = RequestFactory()
     
     def test_list_display_fields(self):
         """Test champs affichés dans la liste."""
@@ -307,6 +308,31 @@ class TestFarmProfileAdmin:
         """Test champs en lecture seule."""
         expected_readonly = ('id', 'created_at', 'updated_at')
         assert self.admin.readonly_fields == expected_readonly
+
+    def test_get_queryset_loads_user_relation_in_single_query(self, django_assert_num_queries):
+        """La liste admin des fermes doit charger l'utilisateur en eager loading."""
+        request = self.factory.get('/admin/accounts/farmprofile/')
+        request.user = User.objects.create_superuser(
+            phone_number='+237699999993',
+            first_name='Admin',
+            last_name='Farm',
+            password='admin123',
+        )
+
+        for index in range(3):
+            User.objects.create_user(
+                phone_number=f'+23769410000{index}',
+                first_name=f'Farm{index}',
+                last_name='Owner',
+                password='test123',
+                age_group='26_35',
+            )
+
+        with django_assert_num_queries(1):
+            queryset = self.admin.get_queryset(request)
+            owners = [farm.user.display_name for farm in queryset]
+
+        assert owners == ['Farm2 Owner', 'Farm1 Owner', 'Farm0 Owner']
 
 
 @pytest.mark.django_db

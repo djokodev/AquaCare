@@ -157,6 +157,14 @@ class AnalyticsService(BaseService):
         - Rapports PDF de fin de cycle
     """
 
+    @staticmethod
+    def _get_prefetched_logs(cycle: ProductionCycle) -> list[CycleLog] | None:
+        """Retourne les logs préféchargés pour un cycle si disponibles."""
+        prefetched_logs = getattr(cycle, 'analytics_logs', None)
+        if prefetched_logs is None:
+            return None
+        return list(prefetched_logs)
+
     # ============================================================================
     # ANALYSE MORTALITÉ
     # ============================================================================
@@ -190,23 +198,39 @@ class AnalyticsService(BaseService):
             >>> analysis = AnalyticsService.analyze_mortality(cycle)
             >>> print(f"Mortalité: {analysis['percentage']:.1f}%")
         """
-        logs = cycle.logs.filter(mortality_count__gt=0)
+        prefetched_logs = AnalyticsService._get_prefetched_logs(cycle)
 
-        total_mortality = logs.aggregate(Sum('mortality_count'))['mortality_count__sum'] or 0
+        weekly_mortality: dict[int, int] = {}
+        if prefetched_logs is not None:
+            mortality_logs = [
+                log for log in prefetched_logs if log.mortality_count and log.mortality_count > 0
+            ]
+            total_mortality = sum(int(log.mortality_count or 0) for log in mortality_logs)
+
+            causes: dict[str | None, int] = {}
+            for log in mortality_logs:
+                week = (log.log_date - cycle.start_date).days // 7 + 1
+                weekly_mortality[week] = weekly_mortality.get(week, 0) + int(log.mortality_count)
+                cause_key = log.mortality_reason or None
+                causes[cause_key] = causes.get(cause_key, 0) + int(log.mortality_count)
+
+            main_causes = [
+                {'mortality_reason': reason, 'count': count}
+                for reason, count in sorted(causes.items(), key=lambda item: item[1], reverse=True)[:5]
+            ]
+        else:
+            logs = cycle.logs.filter(mortality_count__gt=0)
+            total_mortality = logs.aggregate(Sum('mortality_count'))['mortality_count__sum'] or 0
+
+            for log in logs:
+                week = (log.log_date - cycle.start_date).days // 7 + 1
+                weekly_mortality[week] = weekly_mortality.get(week, 0) + log.mortality_count
+
+            main_causes = list(
+                logs.values('mortality_reason').annotate(count=Sum('mortality_count')).order_by('-count')[:5]
+            )
+
         mortality_percentage = (total_mortality / cycle.initial_count * 100) if cycle.initial_count > 0 else 0
-
-        # Weekly mortality breakdown
-        weekly_mortality = {}
-        for log in logs:
-            week = (log.log_date - cycle.start_date).days // 7 + 1
-            if week not in weekly_mortality:
-                weekly_mortality[week] = 0
-            weekly_mortality[week] += log.mortality_count
-
-        # Main causes (top 5)
-        main_causes = list(logs.values('mortality_reason').annotate(
-            count=Sum('mortality_count')
-        ).order_by('-count')[:5])
 
         # Calculate daily average
         days_active = cycle.days_active() if cycle.days_active() > 0 else 1
@@ -259,7 +283,12 @@ class AnalyticsService(BaseService):
             >>> for point in growth_data:
             >>>     print(f"Jour {point['day']}: {point['weight']}g")
         """
-        logs = cycle.logs.filter(average_weight__isnull=False).order_by('log_date')
+        prefetched_logs = AnalyticsService._get_prefetched_logs(cycle)
+        logs = (
+            [log for log in prefetched_logs if log.average_weight is not None]
+            if prefetched_logs is not None
+            else cycle.logs.filter(average_weight__isnull=False).order_by('log_date')
+        )
 
         growth_data = []
         for log in logs:
@@ -313,31 +342,64 @@ class AnalyticsService(BaseService):
             >>> if env_data['alerts']:
             >>>     print("Alertes:", env_data['alerts'])
         """
-        logs = cycle.logs.exclude(
-            water_temperature__isnull=True,
-            ph_level__isnull=True,
-            dissolved_oxygen__isnull=True
-        )
+        prefetched_logs = AnalyticsService._get_prefetched_logs(cycle)
+        if prefetched_logs is not None:
+            logs = [
+                log
+                for log in prefetched_logs
+                if not (
+                    log.water_temperature is None
+                    and log.ph_level is None
+                    and log.dissolved_oxygen is None
+                )
+            ]
+        else:
+            logs = cycle.logs.exclude(
+                water_temperature__isnull=True,
+                ph_level__isnull=True,
+                dissolved_oxygen__isnull=True,
+            )
 
-        if not logs.exists():
+        if not logs:
             return {
                 'has_data': False,
                 'message': _('Aucune donnée environnementale disponible')
             }
+        if prefetched_logs is not None:
+            temperatures = [float(log.water_temperature) for log in logs if log.water_temperature is not None]
+            ph_levels = [float(log.ph_level) for log in logs if log.ph_level is not None]
+            oxygens = [float(log.dissolved_oxygen) for log in logs if log.dissolved_oxygen is not None]
+            ammonia_levels = [float(log.ammonia_level) for log in logs if log.ammonia_level is not None]
 
-        env_data = logs.aggregate(
-            avg_temperature=Avg('water_temperature'),
-            min_temperature=Min('water_temperature'),
-            max_temperature=Max('water_temperature'),
-            avg_ph=Avg('ph_level'),
-            min_ph=Min('ph_level'),
-            max_ph=Max('ph_level'),
-            avg_oxygen=Avg('dissolved_oxygen'),
-            min_oxygen=Min('dissolved_oxygen'),
-            max_oxygen=Max('dissolved_oxygen'),
-            avg_ammonia=Avg('ammonia_level'),
-            max_ammonia=Max('ammonia_level')
-        )
+            env_data = {
+                'avg_temperature': sum(temperatures) / len(temperatures) if temperatures else None,
+                'min_temperature': min(temperatures) if temperatures else None,
+                'max_temperature': max(temperatures) if temperatures else None,
+                'avg_ph': sum(ph_levels) / len(ph_levels) if ph_levels else None,
+                'min_ph': min(ph_levels) if ph_levels else None,
+                'max_ph': max(ph_levels) if ph_levels else None,
+                'avg_oxygen': sum(oxygens) / len(oxygens) if oxygens else None,
+                'min_oxygen': min(oxygens) if oxygens else None,
+                'max_oxygen': max(oxygens) if oxygens else None,
+                'avg_ammonia': sum(ammonia_levels) / len(ammonia_levels) if ammonia_levels else None,
+                'max_ammonia': max(ammonia_levels) if ammonia_levels else None,
+            }
+            measurements_count = len(logs)
+        else:
+            env_data = logs.aggregate(
+                avg_temperature=Avg('water_temperature'),
+                min_temperature=Min('water_temperature'),
+                max_temperature=Max('water_temperature'),
+                avg_ph=Avg('ph_level'),
+                min_ph=Min('ph_level'),
+                max_ph=Max('ph_level'),
+                avg_oxygen=Avg('dissolved_oxygen'),
+                min_oxygen=Min('dissolved_oxygen'),
+                max_oxygen=Max('dissolved_oxygen'),
+                avg_ammonia=Avg('ammonia_level'),
+                max_ammonia=Max('ammonia_level'),
+            )
+            measurements_count = logs.count()
 
         # Generate alerts for out-of-range values
         alerts = AquacultureCalculator.check_environmental_alerts(
@@ -378,7 +440,7 @@ class AnalyticsService(BaseService):
                 }
             },
             'alerts': alerts,
-            'measurements_count': logs.count()
+            'measurements_count': measurements_count
         }
 
     # ============================================================================
@@ -748,8 +810,13 @@ class AnalyticsService(BaseService):
 
             else:
                 # ── MODE REBUILD COMPLET (delete case ou sync batch) ─────────────
+                prefetched_logs = AnalyticsService._get_prefetched_logs(cycle)
                 growth_data = []
-                growth_logs = cycle.logs.filter(average_weight__isnull=False).order_by('log_date')
+                growth_logs = (
+                    [log for log in prefetched_logs if log.average_weight is not None]
+                    if prefetched_logs is not None
+                    else cycle.logs.filter(average_weight__isnull=False).order_by('log_date')
+                )
                 for log in growth_logs:
                     growth_data.append({
                         'date': log.log_date.isoformat(),
@@ -760,7 +827,11 @@ class AnalyticsService(BaseService):
 
                 survival_data = []
                 current_count = cycle.initial_count
-                mortality_logs = cycle.logs.filter(mortality_count__gt=0).order_by('log_date')
+                mortality_logs = (
+                    [log for log in prefetched_logs if log.mortality_count and log.mortality_count > 0]
+                    if prefetched_logs is not None
+                    else cycle.logs.filter(mortality_count__gt=0).order_by('log_date')
+                )
                 for log in mortality_logs:
                     current_count = max(0, current_count - log.mortality_count)
                     survival_rate = (current_count / cycle.initial_count * 100) if cycle.initial_count > 0 else 0
@@ -773,7 +844,11 @@ class AnalyticsService(BaseService):
 
                 feed_data = []
                 cumulative_feed = 0
-                feed_logs = cycle.logs.filter(feed_quantity__isnull=False).order_by('log_date')
+                feed_logs = (
+                    [log for log in prefetched_logs if log.feed_quantity is not None]
+                    if prefetched_logs is not None
+                    else cycle.logs.filter(feed_quantity__isnull=False).order_by('log_date')
+                )
                 for log in feed_logs:
                     cumulative_feed += float(log.feed_quantity)
                     feed_data.append({
@@ -803,9 +878,9 @@ class AnalyticsService(BaseService):
                     species=cycle.species
                 )
 
-                if feed_logs.exists():
+                if feed_logs:
                     total_feed = sum(float(log.feed_quantity) for log in feed_logs)
-                    metrics.average_daily_feed = Decimal(str(total_feed / feed_logs.count()))
+                    metrics.average_daily_feed = Decimal(str(total_feed / len(feed_logs)))
 
                 AnalyticsService.log_operation(
                     'update_cycle_metrics_data',
@@ -814,7 +889,7 @@ class AnalyticsService(BaseService):
                         'mode': 'rebuild',
                         'growth_points': len(growth_data),
                         'survival_points': len(survival_data),
-                        'feed_logs': feed_logs.count()
+                        'feed_logs': len(feed_logs)
                     },
                     level='debug'
                 )

@@ -5,7 +5,6 @@ Handle HTTP requests and delegate business logic to services.
 
 from __future__ import annotations
 
-from django.db.models import Count
 from django.utils.translation import gettext as _
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
@@ -21,7 +20,7 @@ from .domain.exceptions import (
     MediaTooLarge,
     UnauthorizedAccess,
 )
-from .models import Conversation
+from .models import Conversation, Message
 from .permissions import IsConversationOwnerOrAdmin
 from .serializers import ConversationSerializer, MessageSerializer, SendMessageSerializer
 from .services import ConversationService, MessageService
@@ -80,18 +79,9 @@ class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
         user = self.request.user
 
         if user.is_staff:
-            # Admin sees all conversations — Count annoté, pas de prefetch illimité
-            return (
-                Conversation.objects.all()
-                .select_related('user')
-                .annotate(messages_count_ann=Count('messages'))
-            )
-        else:
-            # User sees only their own conversation
-            return (
-                Conversation.objects.filter(user=user)
-                .annotate(messages_count_ann=Count('messages'))
-            )
+            return Conversation.objects.with_api_annotations()
+
+        return Conversation.objects.with_api_annotations().filter(user=user)
 
     @action(detail=False, methods=['get'], url_path='me')
     def get_my_conversation(self, request: Request) -> Response:
@@ -107,6 +97,7 @@ class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
         creating it automatically on first access.
         """
         conversation = ConversationService.get_or_create_conversation(request.user)
+        conversation = Conversation.objects.with_api_annotations().get(pk=conversation.pk)
 
         serializer = self.get_serializer(conversation)
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -134,7 +125,7 @@ class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
             return self._conversation_not_found_response()
 
         # Get messages ordered by creation date
-        messages = conversation.messages.all().order_by('created_at')
+        messages = Message.objects.for_feed().filter(conversation=conversation).order_by('created_at')
 
         # Paginate
         page = self.paginate_queryset(messages)
@@ -278,6 +269,6 @@ class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
         )
 
         # Return updated conversation with new unread counts
-        conversation.refresh_from_db()
+        conversation = Conversation.objects.with_api_annotations().get(pk=conversation.pk)
         serializer = ConversationSerializer(conversation, context={'request': request})
         return Response(serializer.data)

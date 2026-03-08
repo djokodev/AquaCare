@@ -50,7 +50,7 @@ class ConversationService:
             defaults={'is_active': True}
         )
 
-        return conversation
+        return Conversation.objects.with_user().get(pk=conversation.pk)
 
     @staticmethod
     def get_user_conversation(user: ChatUser) -> Conversation:
@@ -72,7 +72,7 @@ class ConversationService:
         from ..models import Conversation
 
         try:
-            return Conversation.objects.get(user=user)
+            return Conversation.objects.with_user().get(user=user)
         except Conversation.DoesNotExist as err:
             raise ConversationNotFound(
                 f"No conversation found for user {user.id}"
@@ -102,7 +102,7 @@ class ConversationService:
         from ..models import Conversation
 
         try:
-            conversation = Conversation.objects.get(id=conversation_id)
+            conversation = Conversation.objects.with_user().get(id=conversation_id)
         except Conversation.DoesNotExist as err:
             raise ConversationNotFound(
                 f"Conversation {conversation_id} not found"

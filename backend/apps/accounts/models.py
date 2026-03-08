@@ -13,7 +13,7 @@ from .constants import (
     LEGAL_STATUS_CHOICES,
     REGION_CHOICES,
 )
-from .managers import UserManager
+from .managers import FarmProfileQuerySet, UserManager
 from .validators import normalize_phone_number, validate_cameroon_phone
 
 
@@ -158,6 +158,8 @@ class User(AbstractUser):
         indexes = [
             models.Index(fields=['account_type'], name='idx_user_account_type'),
             models.Index(fields=['region'], name='idx_user_region'),
+            models.Index(fields=['account_type', 'business_name'], name='idx_user_company_login'),
+            models.Index(fields=['account_type', 'first_name', 'last_name'], name='idx_user_person_login'),
         ]
     
     def clean(self):
@@ -307,6 +309,8 @@ class FarmProfile(models.Model):
         verbose_name=_('Utilisateur'),
         help_text=_('Utilisateur propriétaire de cette ferme')
     )
+
+    objects = FarmProfileQuerySet.as_manager()
     
     farm_name = models.CharField(
         _('Nom de la ferme'),

@@ -124,9 +124,12 @@ class ProductionCycleViewSet(viewsets.ModelViewSet):
         """Retourne les cycles uniquement pour la ferme de l'utilisateur authentifié."""
         queryset = ProductionCycle.objects.filter(
             farm_profile__user=self.request.user
-        ).select_related('farm_profile').prefetch_related(
-            'logs', 'feeding_plans', 'sanitary_logs', 'metrics'
         )
+
+        if self.action == 'statistics':
+            queryset = queryset.for_statistics()
+        else:
+            queryset = queryset.for_api()
 
         # Filtrage par status si spécifié dans les query parameters
         status_filter = self.request.query_params.get('status', None)

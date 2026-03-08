@@ -104,9 +104,9 @@ class SanitaryLogViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         """Retourne les logs sanitaires pour les cycles de l'utilisateur."""
-        return SanitaryLog.objects.filter(
+        return SanitaryLog.objects.for_api().filter(
             cycle__farm_profile__user=self.request.user
-        ).select_related('cycle').order_by('-event_date')
+        ).order_by('-event_date')
     
     @extend_schema(
         summary="Résoudre un problème sanitaire",

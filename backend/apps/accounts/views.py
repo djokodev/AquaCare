@@ -46,7 +46,7 @@ class RegisterView(generics.CreateAPIView):
     - Vérification de l'unicité du téléphone
     - Validation des champs métier selon le type de compte
     """
-    queryset = User.objects.all()
+    queryset = User.objects.with_farm_profile()
     serializer_class = UserRegistrationSerializer
     permission_classes = [permissions.AllowAny]
     throttle_classes = [AccountRegisterThrottle]
@@ -100,6 +100,7 @@ class RegisterView(generics.CreateAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
+        user = User.objects.with_farm_profile().get(pk=user.pk)
         
         refresh = RefreshToken.for_user(user)
         
@@ -214,7 +215,7 @@ class ProfileView(generics.RetrieveUpdateAPIView):
     permission_classes = [permissions.IsAuthenticated, IsOwnerOrReadOnly]
     
     def get_object(self):
-        return self.request.user
+        return User.objects.with_farm_profile().get(pk=self.request.user.pk)
 
 
 class LogoutView(APIView):
@@ -316,7 +317,7 @@ class FarmProfileView(generics.RetrieveUpdateAPIView):
     
     def get_object(self):
         try:
-            return self.request.user.farm_profile
+            return FarmProfile.objects.with_user().get(user_id=self.request.user.pk)
         except FarmProfile.DoesNotExist:
             raise Http404
 

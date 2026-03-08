@@ -53,7 +53,7 @@ class DashboardView(APIView):
         user = request.user
         cycle_id = request.query_params.get('cycle_id')
 
-        data = DashboardService.build_dashboard_data(user, user.farm_profile, cycle_id)
+        data = DashboardService.build_dashboard_data(user, cycle_id)
 
         if data is None:
             return Response(

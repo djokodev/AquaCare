@@ -186,7 +186,7 @@ class UserAdmin(ManagerMixin, PIIMaskingMixin, AuditLogMixin, BaseUserAdmin):
         - Managers ne voient pas les superusers
         - Non-managers voient tous les users non-admin
         """
-        qs = super().get_queryset(request)
+        qs = super().get_queryset(request).select_related('farm_profile')
 
         if request.user.is_superuser:
             return qs
@@ -260,7 +260,7 @@ class UserAdmin(ManagerMixin, PIIMaskingMixin, AuditLogMixin, BaseUserAdmin):
         """
         if change:
             try:
-                original = User.objects.get(pk=obj.pk)
+                original = User.objects.only('id', 'is_superuser', 'is_staff').get(pk=obj.pk)
 
                 # Verifier elevation de privileges
                 if not request.user.is_superuser:
@@ -344,13 +344,18 @@ class UserAdmin(ManagerMixin, PIIMaskingMixin, AuditLogMixin, BaseUserAdmin):
                 messages.error(request, _("Vous n'avez pas la permission de certifier les fermes."))
                 return
 
-        count = 0
-        for user in queryset:
+        target_users = list(queryset.select_related('farm_profile'))
+        farm_profile_ids = [
+            user.farm_profile.pk
+            for user in target_users
+            if hasattr(user, 'farm_profile')
+        ]
+        count = FarmProfile.objects.filter(pk__in=farm_profile_ids).exclude(
+            certification_status='certified'
+        ).update(certification_status='certified')
+
+        for user in target_users:
             if hasattr(user, 'farm_profile'):
-                user.farm_profile.certification_status = 'certified'
-                user.farm_profile.save()
-                count += 1
-                # Audit
                 self.log_action(request, user, CHANGE, message="Ferme certifiee via action admin")
 
         messages.success(request, _('{} ferme(s) certifiee(s).').format(count))
@@ -366,13 +371,18 @@ class UserAdmin(ManagerMixin, PIIMaskingMixin, AuditLogMixin, BaseUserAdmin):
                 messages.error(request, _("Vous n'avez pas la permission de suspendre les certifications."))
                 return
 
-        count = 0
-        for user in queryset:
+        target_users = list(queryset.select_related('farm_profile'))
+        farm_profile_ids = [
+            user.farm_profile.pk
+            for user in target_users
+            if hasattr(user, 'farm_profile')
+        ]
+        count = FarmProfile.objects.filter(pk__in=farm_profile_ids).exclude(
+            certification_status='suspended'
+        ).update(certification_status='suspended')
+
+        for user in target_users:
             if hasattr(user, 'farm_profile'):
-                user.farm_profile.certification_status = 'suspended'
-                user.farm_profile.save()
-                count += 1
-                # Audit
                 self.log_action(request, user, CHANGE, message="Certification suspendue via action admin")
 
         messages.success(request, _('{} certification(s) suspendue(s).').format(count))
@@ -414,6 +424,10 @@ class FarmProfileAdmin(ManagerMixin, PIIMaskingMixin, SecuredModelAdmin):
     )
 
     readonly_fields = ('id', 'created_at', 'updated_at')
+
+    def get_queryset(self, request):
+        """Charge le proprietaire en eager loading pour la liste admin."""
+        return super().get_queryset(request).select_related('user')
 
     def get_search_fields(self, request):
         """Ajoute phone_number pour managers uniquement."""

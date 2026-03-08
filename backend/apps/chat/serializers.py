@@ -172,12 +172,19 @@ class ConversationSerializer(serializers.ModelSerializer):
         """
         Get preview of last message in conversation.
 
-        1 seule requête légère (ORDER BY + LIMIT 1) — acceptable.
-        Le prefetch illimité a été supprimé pour éviter la bombe mémoire admin.
-
         Returns:
             Dict with message info or None
         """
+        last_message_id = getattr(obj, 'last_message_id_ann', None)
+        if last_message_id is not None:
+            return {
+                'id': str(last_message_id),
+                'content': getattr(obj, 'last_message_content_ann', '')[:100],
+                'sender_type': getattr(obj, 'last_message_sender_type_ann', ''),
+                'created_at': getattr(obj, 'last_message_created_at_ann', None),
+                'has_media': getattr(obj, 'last_message_media_type_ann', 'none') != 'none',
+            }
+
         last_msg = obj.messages.order_by('-created_at').first()
         if last_msg:
             return {

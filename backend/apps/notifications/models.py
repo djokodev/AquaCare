@@ -13,6 +13,22 @@ from django.utils.translation import gettext_lazy as _
 from .constants import EMAIL_FREQUENCIES, NOTIFICATION_PRIORITIES, NOTIFICATION_TYPES
 
 
+class NotificationQuerySet(models.QuerySet["Notification"]):
+    """QuerySet utilitaire pour les notifications visibles cote utilisateur."""
+
+    def with_display_context(self) -> models.QuerySet["Notification"]:
+        return self.select_related('content_type')
+
+    def visible_for_user(
+        self,
+        user: object,
+        *,
+        now: timezone.datetime | None = None,
+    ) -> models.QuerySet["Notification"]:
+        effective_now = now or timezone.now()
+        return self.filter(user=user, scheduled_for__lte=effective_now)
+
+
 class Notification(models.Model):
     """
     Notification universelle utilisable par tous les modules.
@@ -148,6 +164,8 @@ class Notification(models.Model):
         auto_now=True,
         verbose_name=_('Modifiée le')
     )
+
+    objects = NotificationQuerySet.as_manager()
 
     class Meta:
         ordering = ['-scheduled_for']

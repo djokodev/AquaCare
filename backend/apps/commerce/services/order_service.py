@@ -150,12 +150,11 @@ class OrderService(BaseCommerceService):
         # 2. Récupération produits et calcul sous-total
         order_items_data: list[OrderLineItemData] = []
         total_bags = 0
+        product_ids = [item_data['product_id'] for item_data in items_data]
+        products_by_id = ProductService.get_products_by_ids(product_ids, check_availability=True)
 
         for item_data in items_data:
-            product = ProductService.get_product_by_id(
-                item_data['product_id'],
-                check_availability=True
-            )
+            product = products_by_id[item_data['product_id']]
 
             quantity = item_data['quantity']
             line_total = product.price_per_package * quantity
@@ -228,7 +227,7 @@ class OrderService(BaseCommerceService):
             'total_bags': total_bags
         })
 
-        return order
+        return Order.objects.with_details().get(pk=order.pk)
 
     @staticmethod
     def _build_delivery_address_snapshot(user: User) -> DeliveryAddressSnapshot:
@@ -314,7 +313,7 @@ class OrderService(BaseCommerceService):
                             raise InvalidOrderError(
                                 "client_uuid déjà utilisé par un autre utilisateur"
                             )
-                        return existing_order
+                        return Order.objects.with_details().get(pk=existing_order.pk)
                 # Sinon collision order_number -> retry.
                 continue
         raise InvalidOrderError("Impossible de créer la commande, veuillez réessayer.")
@@ -375,7 +374,7 @@ class OrderService(BaseCommerceService):
         order.status = 'received'
         order.save(update_fields=['status', 'updated_at'])
 
-        return order
+        return Order.objects.with_details().get(pk=order.pk)
 
     @staticmethod
     def generate_order_number() -> str:
@@ -438,9 +437,7 @@ class OrderService(BaseCommerceService):
             >>> orders.count()
             5
         """
-        queryset = Order.objects.filter(user=user) \
-            .select_related('user', 'farm_profile') \
-            .prefetch_related('items__product')
+        queryset = Order.objects.with_details().filter(user=user)
 
         if status:
             queryset = queryset.filter(status=status)
@@ -472,10 +469,7 @@ class OrderService(BaseCommerceService):
             >>> order.items.count()
             3
         """
-        return Order.objects \
-            .select_related('user', 'farm_profile') \
-            .prefetch_related('items__product') \
-            .get(id=order_id, user=user)
+        return Order.objects.with_details().get(id=order_id, user=user)
 
     @staticmethod
     def get_order_statistics(user: User) -> OrderStatistics:
@@ -550,9 +544,11 @@ class OrderService(BaseCommerceService):
         # Calcul sous-total
         subtotal = Decimal('0')
         total_bags = 0
+        product_ids = [item_data['product_id'] for item_data in items_data]
+        products_by_id = ProductService.get_products_by_ids(product_ids)
 
         for item_data in items_data:
-            product = ProductService.get_product_by_id(item_data['product_id'])
+            product = products_by_id[item_data['product_id']]
             quantity = item_data['quantity']
             subtotal += product.price_per_package * quantity
             total_bags += quantity

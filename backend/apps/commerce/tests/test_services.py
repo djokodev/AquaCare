@@ -56,6 +56,15 @@ class TestProductService:
         assert product is not None
         assert product.pellet_size_mm == Decimal("1.0")
 
+    def test_get_products_by_ids_uses_single_query(self, tilapia_products, django_assert_num_queries):
+        products = list(Product.objects.all())
+        product_ids = [str(product.id) for product in products]
+
+        with django_assert_num_queries(1):
+            result = ProductService.get_products_by_ids(product_ids)
+
+        assert set(result.keys()) == set(product_ids)
+
 
 @pytest.mark.django_db
 class TestOrderService:
@@ -117,6 +126,44 @@ class TestOrderService:
         preview = OrderService.calculate_delivery_fee_preview(test_user, items_data, "home")
         assert preview['delivery_fee'] == Decimal("0.00")  # Gratuit (20+ sacs à Douala)
         assert preview['subtotal'] == Decimal("600000.00")  # 20×30000
+
+    def test_calculate_delivery_fee_preview_batches_product_lookup(
+        self,
+        test_user,
+        django_assert_num_queries,
+    ):
+        product_one = Product.objects.create(
+            name="Product 2",
+            brand="aller_aqua",
+            species="tilapia",
+            phase="grossissement",
+            pellet_size_mm=Decimal("4.0"),
+            protein_percentage=Decimal("32.0"),
+            lipid_percentage=10,
+            package_weight_kg=Decimal("20.0"),
+            price_per_package=Decimal("32000.00"),
+        )
+        product_two = Product.objects.create(
+            name="Product 3",
+            brand="dibaq",
+            species="tilapia",
+            phase="grossissement",
+            pellet_size_mm=Decimal("5.0"),
+            protein_percentage=Decimal("30.0"),
+            lipid_percentage=10,
+            package_weight_kg=Decimal("20.0"),
+            price_per_package=Decimal("28000.00"),
+        )
+
+        items_data = [
+            {"product_id": str(product_one.id), "quantity": 2},
+            {"product_id": str(product_two.id), "quantity": 3},
+        ]
+
+        with django_assert_num_queries(1):
+            preview = OrderService.calculate_delivery_fee_preview(test_user, items_data, "home")
+
+        assert preview['total_bags'] == 5
 
     def test_create_order_idempotent_same_client_uuid(self, test_user, test_farm, test_product):
         items_data = [{"product_id": str(test_product.id), "quantity": 1}]

@@ -50,6 +50,23 @@ class TestNotificationViewSet:
         assert response.status_code == status.HTTP_200_OK
         assert len(response.data['results']) == 3
 
+    def test_list_notifications_uses_two_queries(self, authenticated_client, user, django_assert_num_queries):
+        """La liste doit faire 2 requêtes: count pagination + select principal."""
+        for index in range(3):
+            Notification.objects.create(
+                user=user,
+                notification_type='alert',
+                title=f'Alert {index}',
+                message='Test message',
+                scheduled_for=timezone.now(),
+            )
+
+        url = reverse('notifications:notification-list')
+        with django_assert_num_queries(2):
+            response = authenticated_client.get(url)
+
+        assert response.status_code == status.HTTP_200_OK
+
     def test_list_notifications_masks_delivery_errors(self, authenticated_client, user):
         """Les erreurs techniques d'envoi sont masquées pour un utilisateur standard."""
         notification = Notification.objects.create(

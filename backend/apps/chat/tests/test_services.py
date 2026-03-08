@@ -14,6 +14,7 @@ from chat.domain import (
     UnauthorizedAccess,
 )
 from chat.models import Conversation, Message
+from chat.serializers import ConversationSerializer, MessageSerializer
 from chat.services import AutoResponseService, ConversationService, MessageService
 from django.core.files.uploadedfile import SimpleUploadedFile
 
@@ -154,6 +155,31 @@ class TestConversationService:
 
         assert conversation.unread_count_admin == 0
 
+    def test_conversation_list_serialization_avoids_n_plus_one(
+        self,
+        authenticated_user,
+        user_factory,
+        mavecam_admin,
+        django_assert_num_queries,
+    ):
+        """La liste serializee des conversations doit rester en une seule requete."""
+        other_user = user_factory()
+        own_conversation = ConversationService.get_or_create_conversation(authenticated_user)
+        other_conversation = ConversationService.get_or_create_conversation(other_user)
+
+        MessageService.send_user_message(authenticated_user, "Premier message")
+        MessageService.send_admin_message(own_conversation, mavecam_admin, "Réponse support")
+        MessageService.send_user_message(other_user, "Message autre utilisateur")
+        MessageService.send_admin_message(other_conversation, mavecam_admin, "Suivi support")
+
+        with django_assert_num_queries(1):
+            queryset = list(Conversation.objects.with_api_annotations().order_by('created_at'))
+            data = ConversationSerializer(queryset, many=True).data
+
+        assert len(data) == 2
+        assert all(item['message_count'] >= 1 for item in data)
+        assert all(item['last_message'] is not None for item in data)
+
 
 @pytest.mark.django_db
 class TestMessageService:
@@ -263,6 +289,23 @@ class TestMessageService:
                 client_uuid=None,
                 created_offline=False
             )
+
+    def test_message_feed_serialization_avoids_n_plus_one(
+        self,
+        authenticated_user,
+        mavecam_admin,
+        django_assert_num_queries,
+    ):
+        """Le feed messages doit charger conversation.user et sender_user en eager loading."""
+        conversation = ConversationService.get_or_create_conversation(authenticated_user)
+        MessageService.send_user_message(authenticated_user, "Question support")
+        MessageService.send_admin_message(conversation, mavecam_admin, "Réponse support")
+
+        with django_assert_num_queries(1):
+            queryset = list(Message.objects.for_feed().filter(conversation=conversation))
+            data = MessageSerializer(queryset, many=True).data
+
+        assert len(data) >= 2
 
     def test_send_user_message_too_long_rejected(self, authenticated_user):
         """Test that messages exceeding 5000 chars are rejected."""
