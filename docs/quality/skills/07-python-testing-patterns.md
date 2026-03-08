@@ -51,6 +51,15 @@
   - `services/base.py` n'avait aucun test dedie malgre son role transversal pour le logging, la validation et les calculs defensifs
 - le gain utile etait donc de completer les zones de coordination a plus fort risque de regression, sans re-dupliquer les couches deja tres bien couvertes du module
 
+### Bloc 6 - common + mavecam_api
+- `backend/apps/common/` avait deja une couverture utile via `backend/tests/unit/test_rbac.py`
+- l'audit n'a pas revele de trou critique supplementaire justifiant une nouvelle passe de tests sur `common` pour ce skill
+- en revanche `backend/mavecam_api/` restait quasi non verrouille sur:
+  - `urls.py` pour le contrat de `api_root()` et `health_check()`
+  - `celery.py` pour la configuration de base et le planning des taches periodiques
+  - `settings/__init__.py` pour la resolution du module de settings
+- le gain utile pour cloturer le backend etait donc d'ajouter un test unitaire transversal de configuration projet, plutot qu'une nouvelle passe cosmetique sur `common`
+
 ## Plan d'execution
 
 ### Bloc 1 - accounts
@@ -86,6 +95,12 @@
 - ajouter un module dedie `services/test_base_service.py` pour les utilitaires transverses
 - couvrir les branches de retry, erreurs metier non retryables, dispatch batch et invalidation de cache
 - valider le bloc via `apps/aquaculture/tests`, puis mesurer `apps/aquaculture/*`
+
+### Bloc 6 - common + mavecam_api
+- verifier si `common` a encore un vrai trou critique au-dela de `test_rbac.py`
+- ajouter un module unitaire transversal pour `mavecam_api`
+- couvrir les points d'entree HTTP (`api_root`, `health_check`) et la config Celery/settings
+- relancer `pytest` backend complet pour confirmer la stabilite du skill
 
 ## Execution
 
@@ -210,12 +225,28 @@
   - `validate_required_fields()` sur champs manquants et `None`
   - `safe_divide()` sur cas valides et cas defensifs
 
+### Bloc 6 - common + mavecam_api
+- nouveau module de tests ajoute dans `backend/tests/unit/`:
+  - `test_project_config.py`
+- `backend/tests/unit/test_project_config.py` couvre maintenant:
+  - le contrat JSON de `api_root()`
+  - `health_check()` en cas sain et en cas d'erreur base de donnees
+  - l'export `celery_app` du package principal
+  - la constante de module par defaut de `celery.py`
+  - les taches periodiques attendues dans `beat_schedule`
+  - `_resolve_settings_module()` avec fallback et variable d'environnement explicite
+  - la selection du module `test` dans `settings/__init__.py`
+- conclusion d'audit sur `common`:
+  - pas de nouvelle passe ajoutee
+  - la couverture existante via `test_rbac.py` est suffisante pour cloturer le backend sur ce skill
+
 ## Conclusion provisoire
 - bloc `accounts` valide pour le skill `python-testing-patterns`
 - bloc `chat` valide pour le skill `python-testing-patterns`
 - bloc `commerce` valide pour le skill `python-testing-patterns`
 - bloc `notifications` valide pour le skill `python-testing-patterns`
 - bloc `aquaculture` valide pour le skill `python-testing-patterns`
+- bloc `common + mavecam_api` valide pour le skill `python-testing-patterns`
 - le module couvre maintenant ses frontieres critiques manquantes, pas seulement les endpoints DRF
 - gains mesurables cote `accounts`:
   - `backends.py`: 100%
@@ -241,7 +272,12 @@
   - `tasks.py`: 100%
   - `services/base.py`: 100%
   - couverture globale `apps/aquaculture/*`: 88%
-- prochain bloc logique: `common` puis `mavecam_api`
+- gains mesurables cote `mavecam_api`:
+  - `tests/unit/test_project_config.py`: points d'entree et config projet verrouilles
+- etat du skill 7:
+  - backend complet valide
+  - validation globale backend: `840 passed, 1 skipped`
+- prochain skill logique: `python-performance-optimization`
 
 ## Verification bloc 1
 - `python3 -m ruff check backend/apps/accounts/tests`
@@ -267,3 +303,8 @@
 - `cd backend && DJANGO_SETTINGS_MODULE=mavecam_api.settings.test python3 -m pytest apps/aquaculture/tests/test_tasks.py apps/aquaculture/tests/services/test_base_service.py`
 - `cd backend && DJANGO_SETTINGS_MODULE=mavecam_api.settings.test python3 -m pytest apps/aquaculture/tests`
 - `cd backend && python3 -m coverage report -m --include='apps/aquaculture/*'`
+
+## Verification bloc 6
+- `python3 -m ruff check backend/tests/unit/test_project_config.py`
+- `cd backend && DJANGO_SETTINGS_MODULE=mavecam_api.settings.test python3 -m pytest tests/unit/test_project_config.py`
+- `cd backend && DJANGO_SETTINGS_MODULE=mavecam_api.settings.test python3 -m pytest`
