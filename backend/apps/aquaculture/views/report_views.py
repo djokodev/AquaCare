@@ -218,6 +218,10 @@ class ProductionReportViewSet(viewsets.ReadOnlyModelViewSet):
         return queryset.order_by('-period_start', '-created_at')
 
     def get_serializer_class(self):
+        if self.action == 'generate':
+            return GenerateReportSerializer
+        if self.action == 'mark_whatsapp_shared':
+            return MarkWhatsAppSharedSerializer
         if self.action == 'retrieve':
             return ProductionReportDetailSerializer
         return ProductionReportListSerializer
@@ -233,7 +237,7 @@ class ProductionReportViewSet(viewsets.ReadOnlyModelViewSet):
     )
     @action(detail=False, methods=['post'], throttle_classes=[AquacultureReportActionThrottle])
     def generate(self, request: Request) -> Response:
-        serializer = GenerateReportSerializer(data=request.data)
+        serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         report_type = serializer.validated_data['report_type']
@@ -285,7 +289,7 @@ class ProductionReportViewSet(viewsets.ReadOnlyModelViewSet):
         summary="Envoyer un rapport par email",
         description="Envoie le rapport PDF en pièce jointe à l'email du promoteur.",
         responses={
-            200: ProductionReportDetailSerializer,
+            202: ProductionReportDetailSerializer,
             400: OpenApiExample(
                 'Email manquant',
                 value={'detail': 'Aucune adresse email renseignée pour ce compte.'}
@@ -324,7 +328,7 @@ class ProductionReportViewSet(viewsets.ReadOnlyModelViewSet):
     )
     def mark_whatsapp_shared(self, request: Request, pk: str | None = None) -> Response:
         report = self.get_object()
-        serializer = MarkWhatsAppSharedSerializer(data=request.data)
+        serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         updated = ReportService.mark_whatsapp_shared(

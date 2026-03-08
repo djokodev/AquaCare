@@ -91,6 +91,12 @@ class NotificationSerializer(NotificationErrorVisibilityMixin, serializers.Model
         ]
 
 
+class NotificationActionErrorSerializer(serializers.Serializer):
+    """Payload d'erreur simple des actions notifications."""
+
+    error = serializers.CharField(read_only=True)
+
+
 class NotificationListSerializer(NotificationErrorVisibilityMixin, serializers.ModelSerializer):
     """
     Serializer léger pour la liste de notifications.
@@ -132,6 +138,15 @@ class NotificationListSerializer(NotificationErrorVisibilityMixin, serializers.M
             'created_at',
         ]
         read_only_fields = fields
+
+
+class NotificationMutationResponseSerializer(serializers.Serializer):
+    """Contrat DRF commun des actions de mutation sur notifications."""
+
+    status = serializers.CharField(read_only=True)
+    count = serializers.IntegerField(read_only=True, required=False)
+    message = serializers.CharField(read_only=True, required=False)
+    notification = serializers.DictField(read_only=True, required=False)
 
 
 class NotificationPreferenceSerializer(serializers.ModelSerializer):

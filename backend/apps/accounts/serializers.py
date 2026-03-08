@@ -129,6 +129,15 @@ class LoginSerializer(serializers.Serializer):
         return attrs
 
 
+class LogoutSerializer(serializers.Serializer):
+    """Serializer de validation pour la deconnexion JWT."""
+
+    refresh = serializers.CharField(
+        required=True,
+        help_text="Token de rafraichissement a invalider.",
+    )
+
+
 class FarmProfileSerializer(serializers.ModelSerializer):
     """
     Serializer pour les profils de fermes MAVECAM.
@@ -187,6 +196,33 @@ class UserProfileSerializer(serializers.ModelSerializer):
         )
 
 
+class AuthTokenSerializer(serializers.Serializer):
+    """Paire de tokens JWT retournee apres authentification."""
+
+    refresh = serializers.CharField(read_only=True)
+    access = serializers.CharField(read_only=True)
+
+
+class AuthSuccessResponseSerializer(serializers.Serializer):
+    """Contrat DRF commun des reponses register/login."""
+
+    user = UserProfileSerializer(read_only=True)
+    tokens = AuthTokenSerializer(read_only=True)
+    message = serializers.CharField(read_only=True)
+
+
+class MessageResponseSerializer(serializers.Serializer):
+    """Message simple de succes pour les endpoints d'action."""
+
+    message = serializers.CharField(read_only=True)
+
+
+class ErrorResponseSerializer(serializers.Serializer):
+    """Payload d'erreur metier simple pour les endpoints d'action."""
+
+    error = serializers.CharField(read_only=True)
+
+
 class AccountDeletionSerializer(serializers.Serializer):
     """
     Serializer de confirmation suppression de compte.
@@ -195,3 +231,8 @@ class AccountDeletionSerializer(serializers.Serializer):
         required=True,
         help_text="Doit être true pour confirmer la suppression du compte."
     )
+
+    def validate_confirm(self, value: bool) -> bool:
+        if value is not True:
+            raise serializers.ValidationError(_("Confirmation explicite requise."))
+        return value

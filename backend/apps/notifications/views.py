@@ -7,6 +7,7 @@ from typing import Any, TypedDict, cast
 
 from django.db.models import Count, Q, QuerySet
 from django.utils import timezone
+from drf_spectacular.utils import OpenApiResponse, extend_schema, extend_schema_view
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
@@ -15,7 +16,9 @@ from rest_framework.response import Response
 
 from .models import Notification, NotificationPreference, PushToken
 from .serializers import (
+    NotificationActionErrorSerializer,
     NotificationListSerializer,
+    NotificationMutationResponseSerializer,
     NotificationPreferenceSerializer,
     NotificationSerializer,
     NotificationStatsSerializer,
@@ -32,6 +35,47 @@ class NotificationStatsPayload(TypedDict):
     by_type: dict[str, int]
 
 
+@extend_schema_view(
+    list=extend_schema(
+        summary="Lister mes notifications",
+        responses={200: NotificationListSerializer(many=True)},
+    ),
+    retrieve=extend_schema(
+        summary="Recuperer une notification",
+        responses={200: NotificationSerializer},
+    ),
+    mark_read=extend_schema(
+        summary="Marquer une notification comme lue",
+        responses={
+            200: NotificationMutationResponseSerializer,
+            403: NotificationActionErrorSerializer,
+        },
+    ),
+    mark_all_read=extend_schema(
+        summary="Marquer toutes mes notifications comme lues",
+        responses={200: NotificationMutationResponseSerializer},
+    ),
+    destroy=extend_schema(
+        summary="Supprimer une notification",
+        responses={
+            204: OpenApiResponse(description="Notification supprimee"),
+            403: NotificationActionErrorSerializer,
+        },
+    ),
+    delete_all_read=extend_schema(
+        summary="Supprimer toutes mes notifications lues",
+        responses={200: NotificationMutationResponseSerializer},
+    ),
+    stats=extend_schema(
+        summary="Recuperer les statistiques de notifications",
+        responses={200: NotificationStatsSerializer},
+    ),
+    register_push_token=extend_schema(
+        summary="Enregistrer un token push Expo",
+        request=PushTokenSerializer,
+        responses={200: PushTokenSerializer, 201: PushTokenSerializer},
+    ),
+)
 class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
     """
     API endpoints pour les notifications.
@@ -51,10 +95,8 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
 
     @staticmethod
     def _forbidden_response(message: str) -> Response:
-        return Response(
-            {'error': message},
-            status=status.HTTP_403_FORBIDDEN
-        )
+        serializer = NotificationActionErrorSerializer({'error': message})
+        return Response(serializer.data, status=status.HTTP_403_FORBIDDEN)
 
     @staticmethod
     def _build_mutation_response(
@@ -72,7 +114,8 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
             payload['message'] = message
         if notification is not None:
             payload['notification'] = notification
-        return Response(payload, status=status_code)
+        serializer = NotificationMutationResponseSerializer(payload)
+        return Response(serializer.data, status=status_code)
 
     def _ensure_notification_owner(
         self,
@@ -115,6 +158,10 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
         """
         if self.action == 'list':
             return NotificationListSerializer
+        if self.action == 'stats':
+            return NotificationStatsSerializer
+        if self.action == 'register_push_token':
+            return PushTokenSerializer
         return NotificationSerializer
 
     @action(detail=True, methods=['post'])
@@ -274,7 +321,7 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
             'by_type': by_type_dict
         }
 
-        serializer = NotificationStatsSerializer(data)
+        serializer = self.get_serializer(data)
         return Response(serializer.data)
 
     @action(
@@ -311,7 +358,7 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
         }
         ```
         """
-        serializer = PushTokenSerializer(data=request.data)
+        serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         validated_data = cast(dict[str, Any], serializer.validated_data)
 
@@ -327,7 +374,7 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
             }
         )
 
-        response_serializer = PushTokenSerializer(token)
+        response_serializer = self.get_serializer(token)
 
         return Response(
             response_serializer.data,
@@ -335,7 +382,23 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
         )
 
 
-class NotificationPreferenceViewSet(viewsets.ViewSet):
+@extend_schema_view(
+    list=extend_schema(
+        summary="Recuperer mes preferences de notification",
+        responses={200: NotificationPreferenceSerializer},
+    ),
+    update=extend_schema(
+        summary="Mettre a jour toutes mes preferences de notification",
+        request=NotificationPreferenceSerializer,
+        responses={200: NotificationPreferenceSerializer},
+    ),
+    partial_update=extend_schema(
+        summary="Mettre a jour partiellement mes preferences de notification",
+        request=NotificationPreferenceSerializer,
+        responses={200: NotificationPreferenceSerializer},
+    ),
+)
+class NotificationPreferenceViewSet(viewsets.GenericViewSet):
     """
     API endpoints pour les préférences de notifications.
 
@@ -346,6 +409,7 @@ class NotificationPreferenceViewSet(viewsets.ViewSet):
     """
 
     permission_classes = [IsAuthenticated]
+    serializer_class = NotificationPreferenceSerializer
 
     @staticmethod
     def _get_or_create_preferences(user) -> NotificationPreference:
@@ -354,7 +418,7 @@ class NotificationPreferenceViewSet(viewsets.ViewSet):
 
     def _save_preferences(self, request: Request, *, partial: bool) -> Response:
         prefs = self._get_or_create_preferences(request.user)
-        serializer = NotificationPreferenceSerializer(
+        serializer = self.get_serializer(
             prefs,
             data=request.data,
             partial=partial,
@@ -370,7 +434,7 @@ class NotificationPreferenceViewSet(viewsets.ViewSet):
         **GET** /api/notification-preferences/
         """
         prefs = self._get_or_create_preferences(request.user)
-        serializer = NotificationPreferenceSerializer(prefs)
+        serializer = self.get_serializer(prefs)
         return Response(serializer.data)
 
     def update(self, request: Request) -> Response:

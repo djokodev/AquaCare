@@ -11,6 +11,7 @@ from django.core.cache import cache
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
+from rest_framework_simplejwt.tokens import RefreshToken
 
 User = get_user_model()
 
@@ -310,6 +311,48 @@ class TestLoginEndpoint:
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         # L'utilisateur inactif peut être traité comme identifiants incorrects ou compte désactivé
         assert ("désactivé" in str(response.data) or "incorrect" in str(response.data))
+
+
+@pytest.mark.django_db
+class TestLogoutEndpoint:
+    """
+    Tests pour POST /api/accounts/logout/
+    """
+
+    def setup_method(self):
+        self.client = APIClient()
+        self.url = reverse('accounts:logout')
+        self.user = User.objects.create_user(
+            phone_number="+237690565656",
+            first_name="Logout",
+            last_name="User",
+            password="motdepasse123",
+            age_group="26_35",
+        )
+        self.client.force_authenticate(user=self.user)
+
+    def test_logout_success(self):
+        """Test deconnexion avec refresh token valide."""
+        refresh_token = str(RefreshToken.for_user(self.user))
+
+        response = self.client.post(self.url, {"refresh": refresh_token}, format='json')
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["message"] == "Déconnexion réussie"
+
+    def test_logout_missing_refresh_fails(self):
+        """Le contrat DRF doit exiger le refresh token."""
+        response = self.client.post(self.url, {}, format='json')
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "refresh" in response.data
+
+    def test_logout_invalid_refresh_fails(self):
+        """Les tokens invalides doivent retourner une erreur metier claire."""
+        response = self.client.post(self.url, {"refresh": "invalid_token"}, format='json')
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.data["error"] == "Token invalide"
 
 
 @pytest.mark.django_db

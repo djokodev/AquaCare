@@ -34,7 +34,9 @@ from .constants import (
     FEEDING_WEEK_DURATION_DAYS,
     LOG_TEMPERATURE_MAX,
     LOG_TEMPERATURE_MIN,
+    MAX_GENERATION_WEEKS,
     MAX_INITIAL_DENSITY_PER_M2,
+    SPECIES_CHOICES,
 )
 from .domain.calculators import AquacultureCalculator
 from .domain.feed_phase_calculator import get_feed_phase
@@ -421,6 +423,21 @@ class CycleLogSyncSerializer(CycleLogSerializer):
         list_serializer_class = BulkCycleLogSerializer
 
 
+class BulkCycleLogRequestSerializer(serializers.Serializer):
+    """Payload de creation bulk des logs quotidiens."""
+
+    logs = CycleLogSyncSerializer(many=True)
+
+
+class BulkCycleLogResponseSerializer(serializers.Serializer):
+    """Reponse DRF de creation bulk des logs quotidiens."""
+
+    created = serializers.IntegerField()
+    updated = serializers.IntegerField()
+    errors = serializers.ListField()
+    logs = CycleLogSerializer(many=True)
+
+
 class FeedingPlanSerializer(serializers.ModelSerializer):
     """
     Sérialiseur pour les plans d'alimentation avec calculs automatiques.
@@ -462,6 +479,13 @@ class FeedingPlanSerializer(serializers.ModelSerializer):
                 })
 
         return attrs
+
+
+class FeedingPlanGenerationRequestSerializer(serializers.Serializer):
+    """Payload DRF de generation automatique de plans d'alimentation."""
+
+    cycle_id = serializers.UUIDField()
+    weeks_ahead = serializers.IntegerField(min_value=1, max_value=MAX_GENERATION_WEEKS, default=1)
 
 
 class SanitaryLogSerializer(serializers.ModelSerializer):
@@ -578,6 +602,12 @@ class NutritionalGuideSerializer(serializers.ModelSerializer):
         return f"{obj.min_weight}-{obj.max_weight}g"
 
 
+class NutritionalGuideSpeciesQuerySerializer(serializers.Serializer):
+    """Validation des query params du filtre nutritionnel par espece."""
+
+    species = serializers.ChoiceField(choices=SPECIES_CHOICES)
+
+
 class CycleMetricsSerializer(serializers.ModelSerializer):
     """
     Sérialiseur pour les métriques de cycle et données analytiques.
@@ -630,6 +660,13 @@ class HarvestSerializer(serializers.Serializer):
         return value
 
 
+class CycleHarvestResponseSerializer(serializers.Serializer):
+    """Reponse de recolte d'un cycle."""
+
+    message = serializers.CharField()
+    cycle = ProductionCycleSerializer()
+
+
 class CycleStatisticsSerializer(serializers.Serializer):
     """
     Sérialiseur pour les statistiques détaillées d'un cycle.
@@ -678,6 +715,12 @@ class DashboardSerializer(serializers.Serializer):
     
     environmental_alerts = serializers.ListField()
     feeding_recommendations = serializers.DictField()
+
+
+class DashboardQuerySerializer(serializers.Serializer):
+    """Validation des query params du dashboard aquaculture."""
+
+    cycle_id = serializers.UUIDField(required=False)
 
 
 class ReportDispatchLogSerializer(serializers.ModelSerializer):
@@ -799,6 +842,21 @@ class GenerateReportSerializer(serializers.Serializer):
     cycle_id = serializers.UUIDField(required=False)
 
 
+class SanitaryResolutionSerializer(serializers.Serializer):
+    """Payload de resolution d'un incident sanitaire."""
+
+    resolution_date = serializers.DateField(required=False)
+    resolution_notes = serializers.CharField(required=False, allow_blank=True, max_length=500)
+
+
+class ActiveSanitaryIssueGroupSerializer(serializers.Serializer):
+    """Groupe de problemes sanitaires actifs pour un cycle."""
+
+    cycle_name = serializers.CharField()
+    cycle_id = serializers.UUIDField()
+    issues = SanitaryLogSerializer(many=True)
+
+
 class SyncRequestSerializer(serializers.Serializer):
     """
     Sérialiseur pour les requêtes de synchronisation.
@@ -808,6 +866,13 @@ class SyncRequestSerializer(serializers.Serializer):
     new_cycles = ProductionCycleSerializer(many=True, required=False)
     last_sync = serializers.DateTimeField(required=False)
     device_id = serializers.CharField(max_length=100, required=False)
+    client_id = serializers.CharField(max_length=100, required=False, write_only=True)
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        client_id = attrs.pop('client_id', None)
+        if client_id and 'device_id' not in attrs:
+            attrs['device_id'] = client_id
+        return attrs
 
 
 class SyncResponseSerializer(serializers.Serializer):
@@ -819,3 +884,10 @@ class SyncResponseSerializer(serializers.Serializer):
     processed = serializers.DictField()
     errors = serializers.ListField()
     server_updates = serializers.DictField()
+
+
+class SyncValidationErrorResponseSerializer(serializers.Serializer):
+    """Reponse d'erreur de validation pour la synchronisation."""
+
+    status = serializers.CharField()
+    errors = serializers.ListField()

@@ -14,6 +14,7 @@ from ..domain.exceptions import CycleAlreadyHarvestedError, InvalidHarvestDataEr
 from ..models import ProductionCycle
 from ..serializers import (
     CycleComparisonSerializer,
+    CycleHarvestResponseSerializer,
     CycleStatisticsSerializer,
     HarvestSerializer,
     ProductionCycleSerializer,
@@ -119,7 +120,12 @@ class ProductionCycleViewSet(viewsets.ModelViewSet):
     """
     serializer_class = ProductionCycleSerializer
     permission_classes = [permissions.IsAuthenticated]
-    
+
+    def get_serializer_class(self):
+        if self.action == 'harvest':
+            return HarvestSerializer
+        return super().get_serializer_class()
+
     def get_queryset(self):
         """Retourne les cycles uniquement pour la ferme de l'utilisateur authentifié."""
         queryset = ProductionCycle.objects.filter(
@@ -162,7 +168,7 @@ class ProductionCycleViewSet(viewsets.ModelViewSet):
         """,
         request=HarvestSerializer,
         responses={
-            200: ProductionCycleSerializer,
+            200: CycleHarvestResponseSerializer,
             400: OpenApiExample(
                 'Cycle déjà récolté',
                 value={'error': 'Ce cycle a déjà été récolté'}
@@ -192,7 +198,7 @@ class ProductionCycleViewSet(viewsets.ModelViewSet):
         cycle = self.get_object()
 
         # Validate harvest data
-        serializer = HarvestSerializer(data=request.data)
+        serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         harvest_data = serializer.validated_data
@@ -207,13 +213,14 @@ class ProductionCycleViewSet(viewsets.ModelViewSet):
                 harvest_notes=harvest_data.get('harvest_notes', '')
             )
 
-            return Response(
+            response_serializer = CycleHarvestResponseSerializer(
                 {
                     'message': _('Cycle récolté avec succès'),
-                    'cycle': ProductionCycleSerializer(harvested_cycle).data
+                    'cycle': harvested_cycle,
                 },
-                status=status.HTTP_200_OK
+                context={'request': request},
             )
+            return Response(response_serializer.data, status=status.HTTP_200_OK)
         except (CycleAlreadyHarvestedError, InvalidHarvestDataError) as e:
             return Response(
                 {'error': str(e)},
@@ -269,7 +276,8 @@ class ProductionCycleViewSet(viewsets.ModelViewSet):
         # Delegate analytics to service layer
         statistics = AnalyticsService.get_cycle_statistics(cycle)
 
-        return Response(statistics)
+        serializer = CycleStatisticsSerializer(statistics)
+        return Response(serializer.data)
     
     @extend_schema(
         summary="Comparaison avec cycles précédents",
@@ -334,4 +342,5 @@ class ProductionCycleViewSet(viewsets.ModelViewSet):
             limit=3
         )
 
-        return Response(comparison_data)
+        serializer = CycleComparisonSerializer(comparison_data)
+        return Response(serializer.data)

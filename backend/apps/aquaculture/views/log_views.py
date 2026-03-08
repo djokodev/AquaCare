@@ -13,7 +13,11 @@ from rest_framework.response import Response
 
 from ..constants import MAX_BULK_LOGS
 from ..models import CycleLog, ProductionCycle
-from ..serializers import CycleLogSerializer, CycleLogSyncSerializer
+from ..serializers import (
+    BulkCycleLogRequestSerializer,
+    BulkCycleLogResponseSerializer,
+    CycleLogSerializer,
+)
 from ..services import CycleLogService, ProductionCycleService
 
 logger = logging.getLogger(__name__)
@@ -112,7 +116,12 @@ class CycleLogViewSet(viewsets.ModelViewSet):
     """
     serializer_class = CycleLogSerializer
     permission_classes = [permissions.IsAuthenticated]
-    
+
+    def get_serializer_class(self):
+        if self.action == 'bulk_create':
+            return BulkCycleLogRequestSerializer
+        return super().get_serializer_class()
+
     def get_queryset(self):
         """Filtre les logs par les cycles de l'utilisateur."""
         queryset = CycleLog.objects.for_api().filter(
@@ -174,22 +183,9 @@ class CycleLogViewSet(viewsets.ModelViewSet):
         Utilise la déduplication par client_uuid pour éviter les doublons.
         Recalcule automatiquement les métriques de tous les cycles affectés.
         """,
-        request=CycleLogSyncSerializer,
+        request=BulkCycleLogRequestSerializer,
         responses={
-            201: OpenApiExample(
-                'Logs créés avec succès',
-                value={
-                    'created': 5,
-                    'logs': [
-                        {
-                            'id': '789e0123-e89b-12d3-a456-426614174002',
-                            'client_uuid': 'offline-log-001',
-                            'log_date': '2025-08-18',
-                            'created_offline': True
-                        }
-                    ]
-                }
-            ),
+            201: BulkCycleLogResponseSerializer,
             400: OpenApiExample(
                 'Erreur de validation',
                 value={'logs': ['Données invalides pour le log']}
@@ -198,23 +194,25 @@ class CycleLogViewSet(viewsets.ModelViewSet):
         examples=[
             OpenApiExample(
                 'Logs offline à synchroniser',
-                value=[
-                    {
-                        'client_uuid': 'offline-log-001',
-                        'cycle': '456e7890-e89b-12d3-a456-426614174001',
-                        'log_date': '2025-08-18',
-                        'feed_quantity': 47.00,
-                        'mortality_count': 1,
-                        'created_offline': True
-                    },
-                    {
-                        'client_uuid': 'offline-log-002',
-                        'cycle': '456e7890-e89b-12d3-a456-426614174001',
-                        'log_date': '2025-08-17',
-                        'feed_quantity': 46.50,
-                        'created_offline': True
-                    }
-                ]
+                value={
+                    'logs': [
+                        {
+                            'client_uuid': 'offline-log-001',
+                            'cycle': '456e7890-e89b-12d3-a456-426614174001',
+                            'log_date': '2025-08-18',
+                            'feed_quantity': 47.00,
+                            'mortality_count': 1,
+                            'created_offline': True
+                        },
+                        {
+                            'client_uuid': 'offline-log-002',
+                            'cycle': '456e7890-e89b-12d3-a456-426614174001',
+                            'log_date': '2025-08-17',
+                            'feed_quantity': 46.50,
+                            'created_offline': True
+                        }
+                    ]
+                }
             )
         ]
     )
@@ -241,12 +239,12 @@ class CycleLogViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        serializer = CycleLogSyncSerializer(data=logs_data, many=True)
+        serializer = self.get_serializer(data={'logs': logs_data})
         serializer.is_valid(raise_exception=True)
 
         with transaction.atomic():
             result = CycleLogService.create_bulk_logs(
-                logs_data=serializer.validated_data,
+                logs_data=serializer.validated_data['logs'],
                 user=request.user
             )
             logs = result['logs']
@@ -263,12 +261,16 @@ class CycleLogViewSet(viewsets.ModelViewSet):
                 except ProductionCycle.DoesNotExist:
                     continue
 
-        return Response({
-            'created': result['created'],
-            'updated': result['updated'],
-            'errors': result['errors'],
-            'logs': CycleLogSerializer(logs, many=True).data
-        }, status=status.HTTP_201_CREATED)
+        response_serializer = BulkCycleLogResponseSerializer(
+            {
+                'created': result['created'],
+                'updated': result['updated'],
+                'errors': result['errors'],
+                'logs': logs,
+            },
+            context={'request': request},
+        )
+        return Response(response_serializer.data, status=status.HTTP_201_CREATED)
     
     # SUPPRIMÉ: _update_cycle_metrics() - duplication avec signal post_save
     # Les mises à jour de cycle sont gérées automatiquement par le signal

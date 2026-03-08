@@ -7,11 +7,11 @@ Responsabilités : authentification, permissions, sérialisation, routing HTTP.
 from __future__ import annotations
 
 import logging
-import uuid
 from typing import Any, cast
 
 from django.db.models import QuerySet
 from django_filters.rest_framework import DjangoFilterBackend
+from drf_spectacular.utils import OpenApiResponse, extend_schema, extend_schema_view
 from rest_framework import mixins, permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
@@ -26,13 +26,17 @@ from .domain.exceptions import (
 )
 from .models import Order, Product
 from .serializers import (
+    CommerceErrorResponseSerializer,
     CycleSimulationInputSerializer,
     CycleSimulationOutputSerializer,
+    DeliveryFeePreviewResponseSerializer,
     DeliveryFeePreviewSerializer,
+    FeedingSuggestionsQuerySerializer,
     OrderCreateSerializer,
     OrderSerializer,
     OrderStatisticsSerializer,
     ProductSerializer,
+    RecommendedProductQuerySerializer,
 )
 from .services import CycleSimulationService, FeedingSuggestionService, OrderService, ProductService
 from .throttles import (
@@ -44,6 +48,53 @@ from .throttles import (
 logger = logging.getLogger(__name__)
 
 
+@extend_schema_view(
+    list=extend_schema(
+        summary="Lister les produits du catalogue",
+        responses={200: ProductSerializer(many=True)},
+    ),
+    retrieve=extend_schema(
+        summary="Recuperer le detail d'un produit",
+        responses={200: ProductSerializer},
+    ),
+    featured=extend_schema(
+        summary="Lister les produits vedettes",
+        responses={200: ProductSerializer(many=True)},
+    ),
+    for_cycle=extend_schema(
+        summary="Lister les produits recommandes pour un cycle",
+        responses={
+            200: ProductSerializer(many=True),
+            404: CommerceErrorResponseSerializer,
+        },
+    ),
+    recommended=extend_schema(
+        summary="Recuperer le produit recommande selon espece et poids",
+        parameters=[RecommendedProductQuerySerializer],
+        responses={
+            200: ProductSerializer,
+            400: CommerceErrorResponseSerializer,
+            404: CommerceErrorResponseSerializer,
+        },
+    ),
+    feeding_suggestions=extend_schema(
+        summary="Generer des suggestions d'achat d'aliments",
+        parameters=[FeedingSuggestionsQuerySerializer],
+        responses={
+            200: OpenApiResponse(description="Suggestions d'aliments generees"),
+            400: CommerceErrorResponseSerializer,
+        },
+    ),
+    cycle_simulation=extend_schema(
+        summary="Simuler un cycle aquacole",
+        request=CycleSimulationInputSerializer,
+        responses={
+            200: CycleSimulationOutputSerializer,
+            400: CommerceErrorResponseSerializer,
+            500: CommerceErrorResponseSerializer,
+        },
+    ),
+)
 class ProductViewSet(viewsets.ReadOnlyModelViewSet):
     """
     API catalogue produits MAVECAM (lecture seule).
@@ -68,9 +119,20 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
     ordering_fields = ['price_per_package', 'pellet_size_mm', 'created_at']
     ordering = ['species', 'phase', 'pellet_size_mm']
 
+    def get_serializer_class(self):
+        if self.action == 'cycle_simulation':
+            return CycleSimulationInputSerializer
+        return super().get_serializer_class()
+
     @staticmethod
     def _error_response(message: str, status_code: int) -> Response:
-        return Response({'error': message}, status=status_code)
+        serializer = CommerceErrorResponseSerializer({'error': message})
+        return Response(serializer.data, status=status_code)
+
+    @staticmethod
+    def _error_with_message_response(error: str, message: str, status_code: int) -> Response:
+        serializer = CommerceErrorResponseSerializer({'error': error, 'message': message})
+        return Response(serializer.data, status=status_code)
 
     def _serialize_products(self, products: QuerySet[Product] | list[Product]) -> Response:
         serializer = self.get_serializer(products, many=True)
@@ -81,12 +143,6 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
         from aquaculture.models import ProductionCycle
 
         return ProductionCycle.objects.get(id=cycle_id, farm_profile__user=request.user)
-
-    @staticmethod
-    def _parse_weight(weight_g_value: str | None) -> float:
-        if not weight_g_value:
-            raise ValueError('missing_weight')
-        return float(weight_g_value)
 
     @staticmethod
     def _build_simulation_payload(validated_data: dict[str, Any]) -> dict[str, Any]:
@@ -104,9 +160,10 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
 
     @staticmethod
     def _simulation_validation_response(exc: Exception) -> Response:
-        return Response(
-            {'message': str(exc), 'error': 'simulation_validation_error'},
-            status=status.HTTP_400_BAD_REQUEST
+        return ProductViewSet._error_with_message_response(
+            'simulation_validation_error',
+            str(exc),
+            status.HTTP_400_BAD_REQUEST,
         )
 
     def get_queryset(self) -> QuerySet[Product]:
@@ -150,31 +207,30 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
         - species: tilapia|catfish (requis)
         - weight_g: Poids poisson en grammes (requis)
         """
-        species = request.query_params.get('species')
-        weight_g_str = request.query_params.get('weight_g')
-
-        if not species or not weight_g_str:
+        serializer = RecommendedProductQuerySerializer(data=request.query_params)
+        if not serializer.is_valid():
+            if 'weight_g' in serializer.errors and request.query_params.get('weight_g'):
+                return self._error_response(
+                    'weight_g doit être un nombre',
+                    status.HTTP_400_BAD_REQUEST,
+                )
             return self._error_response(
                 'Paramètres species et weight_g requis',
                 status.HTTP_400_BAD_REQUEST,
             )
 
-        try:
-            weight_g = self._parse_weight(weight_g_str)
-            product = ProductService.get_recommended_product(species, weight_g)
+        product = ProductService.get_recommended_product(
+            serializer.validated_data['species'],
+            serializer.validated_data['weight_g'],
+        )
 
-            if product:
-                serializer = self.get_serializer(product)
-                return Response(serializer.data)
-            return self._error_response(
-                'Aucun produit recommandé trouvé',
-                status.HTTP_404_NOT_FOUND,
-            )
-        except ValueError:
-            return self._error_response(
-                'weight_g doit être un nombre',
-                status.HTTP_400_BAD_REQUEST,
-            )
+        if product:
+            output_serializer = ProductSerializer(product, context=self.get_serializer_context())
+            return Response(output_serializer.data)
+        return self._error_response(
+            'Aucun produit recommandé trouvé',
+            status.HTTP_404_NOT_FOUND,
+        )
 
     @action(detail=False, methods=['get'], throttle_classes=[CommerceSuggestionThrottle])
     def feeding_suggestions(self, request: Request) -> Response:
@@ -237,20 +293,17 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
             "generated_at": "2025-01-10T14:30:00Z"
         }
         """
-        farm_profile_id = request.query_params.get('farm_profile_id')
-        cycle_id = request.query_params.get('cycle_id')
-
-        if cycle_id:
-            try:
-                uuid.UUID(str(cycle_id))
-            except (TypeError, ValueError):
+        serializer = FeedingSuggestionsQuerySerializer(data=request.query_params)
+        if not serializer.is_valid():
+            if 'cycle_id' in serializer.errors:
                 return self._error_response('cycle_id invalide', status.HTTP_400_BAD_REQUEST)
+            return self._error_response('Paramètres de suggestions invalides', status.HTTP_400_BAD_REQUEST)
 
         try:
             suggestions = FeedingSuggestionService.get_feeding_suggestions(
                 user_id=request.user.id,
-                farm_profile_id=farm_profile_id,
-                cycle_id=cycle_id
+                farm_profile_id=serializer.validated_data.get('farm_profile_id'),
+                cycle_id=serializer.validated_data.get('cycle_id'),
             )
         except ValueError as exc:
             return self._error_response(str(exc), status.HTTP_400_BAD_REQUEST)
@@ -330,7 +383,7 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
         }
         """
         try:
-            input_serializer = CycleSimulationInputSerializer(data=request.data)
+            input_serializer = self.get_serializer(data=request.data)
             input_serializer.is_valid(raise_exception=True)
 
             simulation_result = CycleSimulationService.simulate_cycle(
@@ -346,15 +399,50 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
             return self._simulation_validation_response(exc)
         except Exception:
             logger.exception("Echec simulation cycle commerce")
-            return Response(
-                {
-                    'message': "Une erreur interne est survenue pendant la simulation.",
-                    'error': 'simulation_internal_error',
-                },
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            return self._error_with_message_response(
+                'simulation_internal_error',
+                "Une erreur interne est survenue pendant la simulation.",
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
 
+@extend_schema_view(
+    list=extend_schema(
+        summary="Lister mes commandes",
+        responses={200: OrderSerializer(many=True)},
+    ),
+    retrieve=extend_schema(
+        summary="Recuperer le detail d'une commande",
+        responses={200: OrderSerializer},
+    ),
+    create=extend_schema(
+        summary="Creer une commande",
+        request=OrderCreateSerializer,
+        responses={
+            201: OrderSerializer,
+            400: OpenApiResponse(description="Erreurs de validation"),
+        },
+    ),
+    statistics=extend_schema(
+        summary="Recuperer mes statistiques de commande",
+        responses={200: OrderStatisticsSerializer},
+    ),
+    confirm_receipt=extend_schema(
+        summary="Confirmer la reception d'une commande",
+        responses={
+            200: OrderSerializer,
+            400: OpenApiResponse(description="Transition de statut invalide"),
+        },
+    ),
+    preview_delivery_fee=extend_schema(
+        summary="Previsualiser les frais de livraison",
+        request=DeliveryFeePreviewSerializer,
+        responses={
+            200: DeliveryFeePreviewResponseSerializer,
+            400: OpenApiResponse(description="Erreurs de validation"),
+        },
+    ),
+)
 class OrderViewSet(
     mixins.CreateModelMixin,
     mixins.ListModelMixin,
@@ -390,18 +478,25 @@ class OrderViewSet(
 
     @staticmethod
     def _build_delivery_preview_response(preview: dict[str, Any]) -> Response:
-        return Response({
-            'subtotal': str(preview['subtotal']),
-            'delivery_fee': str(preview['delivery_fee']),
-            'total': str(preview['total']),
-            'total_bags': preview['total_bags'],
-            'free_delivery_threshold_reached': preview['free_delivery_threshold_reached']
-        })
+        serializer = DeliveryFeePreviewResponseSerializer(
+            {
+                'subtotal': preview['subtotal'],
+                'delivery_fee': preview['delivery_fee'],
+                'total': preview['total'],
+                'total_bags': preview['total_bags'],
+                'free_delivery_threshold_reached': preview['free_delivery_threshold_reached'],
+            }
+        )
+        return Response(serializer.data)
 
     def get_serializer_class(self) -> type[OrderCreateSerializer] | type[OrderSerializer]:
         """Serializer selon action."""
         if self.action == 'create':
             return OrderCreateSerializer
+        if self.action == 'preview_delivery_fee':
+            return DeliveryFeePreviewSerializer
+        if self.action == 'statistics':
+            return OrderStatisticsSerializer
         return OrderSerializer
 
     def get_queryset(self) -> QuerySet[Order]:
@@ -510,10 +605,7 @@ class OrderViewSet(
             "free_delivery_threshold_reached": false
         }
         """
-        serializer = DeliveryFeePreviewSerializer(
-            data=request.data,
-            context={'request': request}
-        )
+        serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         preview = serializer.validated_data['preview']

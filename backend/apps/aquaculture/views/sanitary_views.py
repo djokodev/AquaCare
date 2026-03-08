@@ -13,7 +13,11 @@ from rest_framework.response import Response
 
 from ..domain.exceptions import InvalidSanitaryDataException, SanitaryLogNotFoundException
 from ..models import SanitaryLog
-from ..serializers import SanitaryLogSerializer
+from ..serializers import (
+    ActiveSanitaryIssueGroupSerializer,
+    SanitaryLogSerializer,
+    SanitaryResolutionSerializer,
+)
 from ..services import SanitaryService
 from ..throttles import AquacultureSanitaryActionThrottle
 
@@ -101,7 +105,12 @@ class SanitaryLogViewSet(viewsets.ModelViewSet):
     serializer_class = SanitaryLogSerializer
     permission_classes = [permissions.IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
-    
+
+    def get_serializer_class(self):
+        if self.action == 'resolve':
+            return SanitaryResolutionSerializer
+        return super().get_serializer_class()
+
     def get_queryset(self):
         """Retourne les logs sanitaires pour les cycles de l'utilisateur."""
         return SanitaryLog.objects.for_api().filter(
@@ -114,15 +123,13 @@ class SanitaryLogViewSet(viewsets.ModelViewSet):
         Marque un problème sanitaire comme résolu avec date de résolution.
         Peut inclure des notes sur le traitement et l'évolution.
         """,
-        request=OpenApiExample(
-            'Résolution avec notes',
-            value={
-                'resolution_date': '2025-08-22',
-                'resolution_notes': 'Traitement efficace, poissons retrouvent leur vitalité'
-            }
-        ),
+        request=SanitaryResolutionSerializer,
         responses={
             200: SanitaryLogSerializer,
+            400: OpenApiExample(
+                'Données invalides',
+                value={'resolution_date': ['La date de résolution ne peut être avant l’événement']}
+            ),
             404: OpenApiExample(
                 'Log non trouvé',
                 value={'detail': 'Log sanitaire non trouvé'}
@@ -140,8 +147,10 @@ class SanitaryLogViewSet(viewsets.ModelViewSet):
         log = self.get_object()
 
         # Extract resolution data from request
-        resolution_date = request.data.get('resolution_date')
-        resolution_notes = request.data.get('resolution_notes', '')
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        resolution_date = serializer.validated_data.get('resolution_date')
+        resolution_notes = serializer.validated_data.get('resolution_notes', '')
 
         try:
             # Delegate business logic to service layer
@@ -151,10 +160,8 @@ class SanitaryLogViewSet(viewsets.ModelViewSet):
                 resolution_notes=resolution_notes
             )
 
-            return Response(
-                SanitaryLogSerializer(resolved_log, context={'request': request}).data,
-                status=status.HTTP_200_OK
-            )
+            response_serializer = SanitaryLogSerializer(resolved_log, context={'request': request})
+            return Response(response_serializer.data, status=status.HTTP_200_OK)
         except SanitaryLogNotFoundException as exc:
             return Response(
                 {'error': str(exc)},
@@ -173,25 +180,7 @@ class SanitaryLogViewSet(viewsets.ModelViewSet):
         Utile pour dashboard et alertes de suivi sanitaire.
         """,
         responses={
-            200: OpenApiExample(
-                'Problèmes actifs groupés',
-                value=[
-                    {
-                        'cycle_name': 'Cycle Clarias P1-2025',
-                        'cycle_id': '456e7890-e89b-12d3-a456-426614174001',
-                        'issues': [
-                            {
-                                'id': 'sanitary-001',
-                                'event_date': '2025-08-19',
-                                'event_type': 'disease',
-                                'symptoms': 'Points blancs sur la peau',
-                                'affected_count': 15,
-                                'days_since_reported': 3
-                            }
-                        ]
-                    }
-                ]
-            )
+            200: ActiveSanitaryIssueGroupSerializer(many=True)
         }
     )
     @action(detail=False, methods=['get'])
@@ -205,12 +194,9 @@ class SanitaryLogViewSet(viewsets.ModelViewSet):
         # Delegate business logic to service layer
         active_issues_by_cycle = SanitaryService.get_active_issues_by_cycle(request.user)
 
-        # Serialize issues for API response
-        for cycle_data in active_issues_by_cycle:
-            cycle_data['issues'] = SanitaryLogSerializer(
-                cycle_data['issues'],
-                many=True,
-                context={'request': request}
-            ).data
-
-        return Response(active_issues_by_cycle)
+        response_serializer = ActiveSanitaryIssueGroupSerializer(
+            active_issues_by_cycle,
+            many=True,
+            context={'request': request},
+        )
+        return Response(response_serializer.data)

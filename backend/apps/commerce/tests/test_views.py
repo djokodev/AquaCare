@@ -87,6 +87,43 @@ class TestProductViewSet:
         assert response.data['count'] == 1
         assert len(response.data['results']) == 1
 
+    def test_recommended_product_success(self, authenticated_client, test_products):
+        Product.objects.create(
+            name="TILAPIA 1MM 20KG",
+            brand="aller_aqua",
+            species="tilapia",
+            phase="alevinage",
+            pellet_size_mm=Decimal("1.0"),
+            protein_percentage=Decimal("45.0"),
+            lipid_percentage=10,
+            package_weight_kg=Decimal("20.0"),
+            price_per_package=Decimal("31000.00"),
+            is_available=True,
+        )
+
+        response = authenticated_client.get(
+            "/api/commerce/products/recommended/",
+            {"species": "tilapia", "weight_g": "2.0"},
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["species"] == "tilapia"
+
+    def test_recommended_product_requires_query_params(self, authenticated_client, test_products):
+        response = authenticated_client.get("/api/commerce/products/recommended/")
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.data["error"] == "Paramètres species et weight_g requis"
+
+    def test_recommended_product_rejects_invalid_weight(self, authenticated_client, test_products):
+        response = authenticated_client.get(
+            "/api/commerce/products/recommended/",
+            {"species": "tilapia", "weight_g": "abc"},
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.data["error"] == "weight_g doit être un nombre"
+
     def test_feeding_suggestions_no_cycles(self, authenticated_client):
         response = authenticated_client.get("/api/commerce/products/feeding_suggestions/")
         assert response.status_code == status.HTTP_200_OK

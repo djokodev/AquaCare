@@ -4,16 +4,15 @@ Nutritional Views pour le module aquaculture.
 import logging
 
 from django.utils.decorators import method_decorator
-from django.utils.translation import gettext_lazy as _
 from django.views.decorators.cache import cache_page
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiExample, OpenApiParameter, extend_schema, extend_schema_view
-from rest_framework import permissions, status, viewsets
+from rest_framework import permissions, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from ..models import NutritionalGuide
-from ..serializers import NutritionalGuideSerializer
+from ..serializers import NutritionalGuideSerializer, NutritionalGuideSpeciesQuerySerializer
 
 logger = logging.getLogger(__name__)
 
@@ -78,6 +77,7 @@ class NutritionalGuideViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = NutritionalGuide.objects.all()
     serializer_class = NutritionalGuideSerializer
     permission_classes = [permissions.IsAuthenticated]
+    query_serializer_class = NutritionalGuideSpeciesQuerySerializer
 
     @method_decorator(cache_page(3600))
     def list(self, request, *args, **kwargs):
@@ -140,13 +140,10 @@ class NutritionalGuideViewSet(viewsets.ReadOnlyModelViewSet):
         """
         Obtient les guides nutritionnels pour une espèce spécifique.
         """
-        species = request.query_params.get('species')
-        if not species:
-            return Response(
-                {'error': _('Paramètre species requis')},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
+        query_serializer = self.query_serializer_class(data=request.query_params)
+        query_serializer.is_valid(raise_exception=True)
+        species = query_serializer.validated_data['species']
+
         guides = self.queryset.filter(species=species).order_by('min_weight')
         serializer = self.get_serializer(guides, many=True)
         return Response(serializer.data)

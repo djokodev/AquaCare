@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, TypedDict
 
 from django.contrib.auth import get_user_model
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from .models import Conversation, Message
@@ -24,6 +25,23 @@ class LastMessagePreview(TypedDict):
     sender_type: str
     created_at: Any
     has_media: bool
+
+
+class LastMessagePreviewSerializer(serializers.Serializer):
+    """Schema explicite du dernier message affiche dans une conversation."""
+
+    id = serializers.UUIDField(read_only=True)
+    content = serializers.CharField(read_only=True)
+    sender_type = serializers.CharField(read_only=True)
+    created_at = serializers.DateTimeField(read_only=True, allow_null=True)
+    has_media = serializers.BooleanField(read_only=True)
+
+
+class ChatErrorResponseSerializer(serializers.Serializer):
+    """Payload d'erreur uniforme des actions chat."""
+
+    error = serializers.CharField(read_only=True)
+    field = serializers.CharField(read_only=True, required=False, allow_null=True)
 
 
 class MessageSerializer(serializers.ModelSerializer):
@@ -87,6 +105,7 @@ class MessageSerializer(serializers.ModelSerializer):
             return "Système AquaCare"
         return "Inconnu"
 
+    @extend_schema_field(serializers.UUIDField(allow_null=True))
     def get_sender_user(self, obj: Message) -> str | None:
         """
         Expose sender_user only to staff viewers.
@@ -168,6 +187,7 @@ class ConversationSerializer(serializers.ModelSerializer):
         """Get user display name."""
         return obj.user.get_full_name() or obj.user.phone_number
 
+    @extend_schema_field(LastMessagePreviewSerializer(allow_null=True))
     def get_last_message(self, obj: Conversation) -> LastMessagePreview | None:
         """
         Get preview of last message in conversation.

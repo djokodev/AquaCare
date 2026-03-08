@@ -611,6 +611,14 @@ class TestNutritionalGuideViewSet:
         assert len(response.data) == 1
         assert response.data[0]['species'] == 'clarias'
 
+    def test_for_species_requires_species_query_param(self, auth_client):
+        """Le filtre par espèce doit exiger un query param valide."""
+        url = reverse('aquaculture:nutritional-guide-for-species')
+        response = auth_client.get(url)
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert 'species' in response.data
+
     def test_create_guide_not_allowed(self, auth_client):
         """Test création guide non autorisée (lecture seule)."""
         url = reverse('aquaculture:nutritional-guide-list')

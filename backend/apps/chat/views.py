@@ -8,6 +8,7 @@ from __future__ import annotations
 from typing import Any
 
 from django.utils.translation import gettext as _
+from drf_spectacular.utils import OpenApiResponse, extend_schema, extend_schema_view
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.request import Request
@@ -24,7 +25,12 @@ from .domain.exceptions import (
 )
 from .models import Conversation, Message
 from .permissions import IsConversationOwnerOrAdmin
-from .serializers import ConversationSerializer, MessageSerializer, SendMessageSerializer
+from .serializers import (
+    ChatErrorResponseSerializer,
+    ConversationSerializer,
+    MessageSerializer,
+    SendMessageSerializer,
+)
 from .services import ConversationService, MessageService
 
 
@@ -38,6 +44,47 @@ class ChatMessageThrottle(UserRateThrottle):
     scope = 'chat_message'
 
 
+@extend_schema_view(
+    list=extend_schema(
+        summary="Lister les conversations support",
+        responses={200: ConversationSerializer(many=True)},
+    ),
+    retrieve=extend_schema(
+        summary="Recuperer une conversation",
+        responses={
+            200: ConversationSerializer,
+            404: OpenApiResponse(description="Conversation introuvable"),
+        },
+    ),
+    get_my_conversation=extend_schema(
+        summary="Recuperer ou creer ma conversation support",
+        responses={200: ConversationSerializer},
+    ),
+    messages=extend_schema(
+        summary="Lister les messages d'une conversation",
+        responses={
+            200: MessageSerializer(many=True),
+            404: OpenApiResponse(description="Conversation introuvable"),
+        },
+    ),
+    send_message=extend_schema(
+        summary="Envoyer un message dans une conversation",
+        request=SendMessageSerializer,
+        responses={
+            201: MessageSerializer,
+            400: ChatErrorResponseSerializer,
+            404: OpenApiResponse(description="Conversation introuvable"),
+            409: ChatErrorResponseSerializer,
+        },
+    ),
+    mark_read=extend_schema(
+        summary="Marquer les messages comme lus",
+        responses={
+            200: ConversationSerializer,
+            404: OpenApiResponse(description="Conversation introuvable"),
+        },
+    ),
+)
 class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
     """
     ViewSet for listing and retrieving conversations.
@@ -57,6 +104,12 @@ class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
 
     serializer_class = ConversationSerializer
     permission_classes = [permissions.IsAuthenticated, IsConversationOwnerOrAdmin]
+    queryset = Conversation.objects.with_api_annotations()
+
+    def get_serializer_class(self):
+        if self.action == 'send_message':
+            return SendMessageSerializer
+        return super().get_serializer_class()
 
     def get_throttles(self) -> list[UserRateThrottle]:
         """Apply ChatMessageThrottle on write/read-heavy actions."""
@@ -67,7 +120,7 @@ class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
     @staticmethod
     def _conversation_not_found_response() -> Response:
         return Response(
-            {'error': _('Conversation introuvable.')},
+            ChatErrorResponseSerializer({'error': _('Conversation introuvable.')}).data,
             status=status.HTTP_404_NOT_FOUND
         )
 
@@ -75,19 +128,23 @@ class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
     def _get_message_error_response(error: Exception) -> Response:
         if isinstance(error, InvalidMessageContent):
             return Response(
-                {'error': _('Contenu du message invalide.'), 'field': 'content'},
+                ChatErrorResponseSerializer(
+                    {'error': _('Contenu du message invalide.'), 'field': 'content'}
+                ).data,
                 status=status.HTTP_400_BAD_REQUEST
             )
 
         if isinstance(error, ClientUUIDConflict):
             return Response(
-                {
-                    'error': _(
-                        "Conflit de synchronisation détecté. "
-                        "Veuillez actualiser la conversation."
-                    ),
-                    'field': 'client_uuid',
-                },
+                ChatErrorResponseSerializer(
+                    {
+                        'error': _(
+                            "Conflit de synchronisation détecté. "
+                            "Veuillez actualiser la conversation."
+                        ),
+                        'field': 'client_uuid',
+                    }
+                ).data,
                 status=status.HTTP_409_CONFLICT
             )
 
@@ -98,7 +155,9 @@ class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
                 else _('Format de média non pris en charge.')
             )
             return Response(
-                {'error': message, 'field': 'media_file'},
+                ChatErrorResponseSerializer(
+                    {'error': message, 'field': 'media_file'}
+                ).data,
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -231,7 +290,7 @@ class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
         if isinstance(conversation, Response):
             return conversation
 
-        serializer = SendMessageSerializer(data=request.data)
+        serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         try:

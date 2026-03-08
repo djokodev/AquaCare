@@ -10,9 +10,8 @@ from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from ..constants import MAX_GENERATION_WEEKS
 from ..models import FeedingPlan, ProductionCycle
-from ..serializers import FeedingPlanSerializer
+from ..serializers import FeedingPlanGenerationRequestSerializer, FeedingPlanSerializer
 from ..services import FeedingPlanService
 
 
@@ -89,7 +88,12 @@ class FeedingPlanViewSet(viewsets.ModelViewSet):
     """
     serializer_class = FeedingPlanSerializer
     permission_classes = [permissions.IsAuthenticated]
-    
+
+    def get_serializer_class(self):
+        if self.action == 'generate':
+            return FeedingPlanGenerationRequestSerializer
+        return super().get_serializer_class()
+
     def get_queryset(self):
         """Retourne les plans d'alimentation actifs pour les cycles de l'utilisateur."""
         queryset = FeedingPlan.objects.for_api().filter(
@@ -110,29 +114,9 @@ class FeedingPlanViewSet(viewsets.ModelViewSet):
         Génère automatiquement des plans d'alimentation pour les semaines à venir d'un cycle.
         Calcule les quantités optimales basées sur la croissance prévue et les guides nutritionnels.
         """,
-        request=OpenApiExample(
-            'Paramètres de génération',
-            value={
-                'cycle_id': '456e7890-e89b-12d3-a456-426614174001',
-                'weeks_ahead': 4,
-                'auto_adjust': True
-            }
-        ),
+        request=FeedingPlanGenerationRequestSerializer,
         responses={
-            201: OpenApiExample(
-                'Plans générés',
-                value={
-                    'generated': 4,
-                    'plans': [
-                        {
-                            'week_number': 1,
-                            'daily_feed_amount': '5.70',
-                            'feeding_rate': '4.50',
-                            'meals_per_day': 2
-                        }
-                    ]
-                }
-            ),
+            201: FeedingPlanSerializer(many=True),
             404: OpenApiExample(
                 'Cycle non trouvé',
                 value={'error': 'Cycle non trouvé'}
@@ -144,24 +128,10 @@ class FeedingPlanViewSet(viewsets.ModelViewSet):
         """
         Génère un plan d'alimentation pour un cycle et des semaines spécifiés.
         """
-        cycle_id = request.data.get('cycle_id')
-        try:
-            weeks_ahead = int(request.data.get('weeks_ahead', 1))
-        except (TypeError, ValueError):
-            return Response(
-                {'error': _('Le paramètre weeks_ahead doit être un entier.')},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        if weeks_ahead < 1 or weeks_ahead > MAX_GENERATION_WEEKS:
-            return Response(
-                {
-                    'error': _(
-                        'Le paramètre weeks_ahead doit être compris entre 1 et %(max)s.'
-                    ) % {'max': MAX_GENERATION_WEEKS}
-                },
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        cycle_id = serializer.validated_data['cycle_id']
+        weeks_ahead = serializer.validated_data['weeks_ahead']
         
         try:
             cycle = ProductionCycle.objects.get(
@@ -185,7 +155,5 @@ class FeedingPlanViewSet(viewsets.ModelViewSet):
             plan = FeedingPlanService.generate_plan_for_week(cycle, week_number)
             plans.append(plan)
 
-        return Response(
-            FeedingPlanSerializer(plans, many=True).data,
-            status=status.HTTP_201_CREATED
-        )
+        response_serializer = FeedingPlanSerializer(plans, many=True, context={'request': request})
+        return Response(response_serializer.data, status=status.HTTP_201_CREATED)

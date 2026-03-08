@@ -4,12 +4,15 @@ Sync Views pour le module aquaculture.
 import logging
 
 from drf_spectacular.utils import OpenApiExample, extend_schema
-from rest_framework import permissions, status
+from rest_framework import generics, permissions, status
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
-from rest_framework.views import APIView
 
-from ..serializers import SyncRequestSerializer, SyncResponseSerializer
+from ..serializers import (
+    SyncRequestSerializer,
+    SyncResponseSerializer,
+    SyncValidationErrorResponseSerializer,
+)
 from ..services import SyncService
 from ..throttles import AquacultureSyncThrottle
 
@@ -75,7 +78,7 @@ logger = logging.getLogger(__name__)
         )
     ]
 )
-class SyncView(APIView):
+class SyncView(generics.GenericAPIView):
     """
     Endpoint principal de synchronisation pour l'app mobile offline-first.
     
@@ -85,16 +88,17 @@ class SyncView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
     throttle_classes = [AquacultureSyncThrottle]
+    serializer_class = SyncRequestSerializer
 
     @staticmethod
     def _validation_error_response(validation_errors: list[str]) -> Response:
-        return Response(
+        serializer = SyncValidationErrorResponseSerializer(
             {
                 'status': 'error',
                 'errors': [{'type': 'validation', 'error': err} for err in validation_errors],
-            },
-            status=status.HTTP_400_BAD_REQUEST,
+            }
         )
+        return Response(serializer.data, status=status.HTTP_400_BAD_REQUEST)
 
     @staticmethod
     def _resolve_sync_status_code(sync_status: str) -> int:
@@ -113,15 +117,17 @@ class SyncView(APIView):
 
         POST /api/aquaculture/sync/
         """
-        validation_errors = SyncService.validate_sync_data(request.data)
+        sync_payload = dict(request.data)
+        if 'client_id' in sync_payload and 'device_id' not in sync_payload:
+            sync_payload['device_id'] = sync_payload['client_id']
+
+        validation_errors = SyncService.validate_sync_data(sync_payload)
         if validation_errors:
             return self._validation_error_response(validation_errors)
 
         sync_result = SyncService.perform_full_sync(
             user=request.user,
-            sync_data=request.data
+            sync_data=sync_payload
         )
-        return Response(
-            sync_result,
-            status=self._resolve_sync_status_code(sync_result['status']),
-        )
+        response_serializer = SyncResponseSerializer(sync_result)
+        return Response(response_serializer.data, status=self._resolve_sync_status_code(sync_result['status']))

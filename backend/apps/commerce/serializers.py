@@ -118,6 +118,40 @@ class OrderItemInputSerializer(serializers.Serializer):
     )
 
 
+class CommerceErrorResponseSerializer(serializers.Serializer):
+    """Payload d'erreur standardise pour les actions commerce."""
+
+    error = serializers.CharField(read_only=True)
+    message = serializers.CharField(read_only=True, required=False, allow_blank=True)
+
+
+class RecommendedProductQuerySerializer(serializers.Serializer):
+    """Validation DRF des query params de recommandation produit."""
+
+    species = serializers.ChoiceField(
+        choices=['tilapia', 'catfish', 'clarias'],
+        required=True,
+        help_text="Espèce du cycle ou du poisson",
+    )
+    weight_g = serializers.FloatField(
+        required=True,
+        min_value=0.1,
+        help_text="Poids moyen en grammes",
+    )
+
+    def validate_species(self, value: str) -> str:
+        if value == 'clarias':
+            return 'catfish'
+        return value
+
+
+class FeedingSuggestionsQuerySerializer(serializers.Serializer):
+    """Validation DRF des query params des suggestions d'aliments."""
+
+    farm_profile_id = serializers.UUIDField(required=False)
+    cycle_id = serializers.UUIDField(required=False)
+
+
 class OrderCreateSerializer(serializers.Serializer):
     """
     Serializer pour création de commande.
@@ -259,6 +293,16 @@ class DeliveryFeePreviewSerializer(serializers.Serializer):
             raise serializers.ValidationError({'message': str(exc)}) from exc
 
         return attrs
+
+
+class DeliveryFeePreviewResponseSerializer(serializers.Serializer):
+    """Serializer de sortie pour le preview des frais de livraison."""
+
+    subtotal = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    delivery_fee = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    total = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    total_bags = serializers.IntegerField(read_only=True)
+    free_delivery_threshold_reached = serializers.BooleanField(read_only=True)
 
 
 class OrderStatisticsSerializer(serializers.Serializer):
