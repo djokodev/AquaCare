@@ -83,6 +83,8 @@ export function ChatScreen() {
   const flatListRef = useRef<FlatList>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
+  const autoScrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const sendScrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isScreenFocusedRef = useRef(false);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
 
@@ -137,10 +139,20 @@ export function ChatScreen() {
    */
   useEffect(() => {
     if (messages.length > 0) {
-      setTimeout(() => {
+      if (autoScrollTimeoutRef.current) {
+        clearTimeout(autoScrollTimeoutRef.current);
+      }
+      autoScrollTimeoutRef.current = setTimeout(() => {
         flatListRef.current?.scrollToEnd({ animated: true });
       }, 300);
     }
+
+    return () => {
+      if (autoScrollTimeoutRef.current) {
+        clearTimeout(autoScrollTimeoutRef.current);
+        autoScrollTimeoutRef.current = null;
+      }
+    };
   }, [messages.length]);
 
   /**
@@ -297,7 +309,10 @@ export function ChatScreen() {
       await dispatch(fetchMessages({ conversationId, page: 1 }));
 
       // Scroll to bottom after sending
-      setTimeout(() => {
+      if (sendScrollTimeoutRef.current) {
+        clearTimeout(sendScrollTimeoutRef.current);
+      }
+      sendScrollTimeoutRef.current = setTimeout(() => {
         flatListRef.current?.scrollToEnd({ animated: true });
       }, 100);
     },
@@ -334,7 +349,7 @@ export function ChatScreen() {
   /**
    * Render empty state
    */
-  const renderEmptyState = () => {
+  const renderEmptyState = useCallback(() => {
     if (conversationLoading || messagesLoading) {
       return (
         <View style={styles.emptyContainer}>
@@ -361,12 +376,19 @@ export function ChatScreen() {
         <Text style={styles.emptySubtext}>{t('chatEmptyStateDescription')}</Text>
       </View>
     );
-  };
+  }, [
+    conversationError,
+    conversationLoading,
+    formatError,
+    messagesError,
+    messagesLoading,
+    t,
+  ]);
 
   /**
    * Render list header (sync status)
    */
-  const renderListHeader = () => {
+  const renderListHeader = useCallback(() => {
     if (syncingOffline && offlineQueueCount > 0) {
       return (
         <View style={styles.syncBanner}>
@@ -378,7 +400,27 @@ export function ChatScreen() {
       );
     }
     return null;
-  };
+  }, [offlineQueueCount, syncingOffline, t]);
+
+  const handleScroll = useCallback(({ nativeEvent }: { nativeEvent: any }) => {
+    const { contentOffset, contentSize, layoutMeasurement } = nativeEvent;
+    const distanceFromBottom = contentSize.height - (contentOffset.y + layoutMeasurement.height);
+    const shouldShowButton = distanceFromBottom > 160;
+    setShowScrollToBottom((currentValue) =>
+      currentValue === shouldShowButton ? currentValue : shouldShowButton
+    );
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (autoScrollTimeoutRef.current) {
+        clearTimeout(autoScrollTimeoutRef.current);
+      }
+      if (sendScrollTimeoutRef.current) {
+        clearTimeout(sendScrollTimeoutRef.current);
+      }
+    };
+  }, []);
 
   return (
     <KeyboardAvoidingView
@@ -395,6 +437,10 @@ export function ChatScreen() {
         contentContainerStyle={styles.messagesList}
         ListEmptyComponent={renderEmptyState}
         ListHeaderComponent={renderListHeader}
+        removeClippedSubviews
+        initialNumToRender={12}
+        maxToRenderPerBatch={12}
+        windowSize={7}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -408,12 +454,9 @@ export function ChatScreen() {
             flatListRef.current?.scrollToEnd({ animated: false });
           }
         }}
-        onScroll={({ nativeEvent }) => {
-          const { contentOffset, contentSize, layoutMeasurement } = nativeEvent;
-          const distanceFromBottom = contentSize.height - (contentOffset.y + layoutMeasurement.height);
-          setShowScrollToBottom(distanceFromBottom > 160);
-        }}
+        onScroll={handleScroll}
         scrollEventThrottle={200}
+        keyboardShouldPersistTaps="handled"
         maintainVisibleContentPosition={{
           minIndexForVisible: 0,
         }}

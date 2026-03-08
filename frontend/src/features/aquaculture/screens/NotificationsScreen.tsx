@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState, View, Text, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl, Alert } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AppState, View, Text, FlatList, TouchableOpacity, ActivityIndicator, RefreshControl, Alert } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -92,14 +92,22 @@ export default function NotificationsScreen({ navigation }: NotificationsScreenP
     dispatch(fetchNotifications());
   }, [dispatch]);
 
-  const filteredNotifications = notifications.filter((notification) => {
-    if (selectedFilter === 'unread') return !notification.is_read;
-    if (selectedFilter === 'read') return notification.is_read;
-    return true;
-  });
-
-  const sortedNotifications = [...filteredNotifications].sort(
-    (a, b) => new Date(b.scheduled_for).getTime() - new Date(a.scheduled_for).getTime()
+  const sortedNotifications = useMemo(
+    () =>
+      [...notifications]
+        .filter((notification) => {
+          if (selectedFilter === 'unread') return !notification.is_read;
+          if (selectedFilter === 'read') return notification.is_read;
+          return true;
+        })
+        .sort(
+          (a, b) => new Date(b.scheduled_for).getTime() - new Date(a.scheduled_for).getTime()
+        ),
+    [notifications, selectedFilter]
+  );
+  const readNotificationsCount = useMemo(
+    () => notifications.filter((notification) => notification.is_read).length,
+    [notifications]
   );
 
   const formatRelativeDate = (dateString: string) => {
@@ -224,54 +232,65 @@ export default function NotificationsScreen({ navigation }: NotificationsScreenP
 
   const totalNotifications = notifications.length;
 
-  const renderHeader = () => (
-    <View className="bg-mavecam-primary flex-row items-center pt-14 pb-4 px-4">
-      <TouchableOpacity className="mr-4" onPress={() => navigation.goBack()}>
-        <Ionicons name="arrow-back" size={24} color={MAVECAM_COLORS.WHITE} />
-      </TouchableOpacity>
-      <View className="flex-1 flex-row items-center">
-        <Text className="text-xl font-bold text-white mr-2">{t('notifications')}</Text>
-        {unreadCount > 0 && (
-          <View className="bg-error rounded-full px-2 py-0.5 min-w-[24px] items-center">
-            <Text className="text-white text-xs font-bold">{unreadCount}</Text>
+  const renderNotificationItem = useCallback(
+    ({ item: notification }: { item: Notification }) => {
+      const iconName = getNotificationIcon(notification.notification_type);
+      const color = getNotificationColor(notification.notification_type);
+
+      return (
+        <View
+          className={`bg-white rounded-xl p-4 mb-3 ${!notification.is_read ? 'border-l-4 border-l-mavecam-primary bg-[#f0fdf4]' : ''}`}
+        >
+          <View className="flex-row">
+            <View className="w-12 h-12 rounded-full items-center justify-center mr-3" style={{ backgroundColor: `${color}20` }}>
+              <Ionicons name={iconName} size={24} color={color} />
+            </View>
+
+            <View className="flex-1">
+              <View className="flex-row items-center mb-1">
+                <Text className={`text-base font-semibold flex-1 ${!notification.is_read ? 'text-mavecam-primary' : 'text-gray-dark'}`}>
+                  {notification.title}
+                </Text>
+              </View>
+
+              <Text className="text-sm text-gray-light mb-2 leading-5">{notification.message}</Text>
+
+              <View className="flex-row justify-between items-center">
+                <Text className="text-xs text-gray-light">{formatRelativeDate(notification.scheduled_for)}</Text>
+                <Text className="text-xs font-semibold" style={{ color }}>
+                  {t(`notificationType_${notification.notification_type}`, notification.notification_type)}
+                </Text>
+              </View>
+            </View>
           </View>
-        )}
-      </View>
-      <View className="flex-row items-center gap-2">
-        {unreadCount > 0 && (
-          <TouchableOpacity className="p-2 bg-white/20 rounded-md" onPress={handleMarkAllAsRead}>
-            <Ionicons name="checkmark-done" size={20} color={MAVECAM_COLORS.WHITE} />
-          </TouchableOpacity>
-        )}
-        {notifications.filter((notification) => notification.is_read).length > 0 && (
-          <TouchableOpacity className="p-2 bg-white/20 rounded-md" onPress={handleDeleteAllRead}>
-            <Ionicons name="trash" size={20} color={MAVECAM_COLORS.WHITE} />
-          </TouchableOpacity>
-        )}
-      </View>
-    </View>
+
+          <View className="flex-row justify-between items-center pt-3 mt-2 border-t border-slate-100">
+            <TouchableOpacity
+              className="px-3 py-2 rounded-md bg-success/10"
+              onPress={() => handleMarkAsRead(notification)}
+            >
+              <Text className="text-xs font-semibold text-success">
+                {notification.is_read ? t('read') : t('markAsRead')}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              className="px-3 py-2 rounded-md bg-error/10 flex-row items-center"
+              onPress={() => handleDeleteNotification(notification)}
+            >
+              <Ionicons name="trash-outline" size={16} color={MAVECAM_COLORS.ERROR} />
+              <Text className="ml-2 text-xs font-semibold text-error">{t('deleteNotification')}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      );
+    },
+    [t]
   );
 
-  if (error) {
-    return (
-      <View className="flex-1 bg-cream">
-        {renderHeader()}
-        <View className="flex-1 items-center justify-center p-6">
-          <Ionicons name="alert-circle" size={48} color={MAVECAM_COLORS.ERROR} />
-          <Text className="text-lg text-error text-center mt-3">{error ? t(error) : ''}</Text>
-          <TouchableOpacity className="mt-4 bg-mavecam-primary px-5 py-3 rounded-lg" onPress={() => dispatch(fetchNotifications())}>
-            <Text className="text-white text-base font-semibold">{t('retry')}</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-  }
-
-  return (
-    <View className="flex-1 bg-cream">
-      {renderHeader()}
-
-      <ScrollView refreshControl={<RefreshControl refreshing={loading} onRefresh={onRefresh} />}>
+  const renderListHeader = useCallback(
+    () => (
+      <>
         <View className="bg-white mx-4 mt-4 mb-4 p-4 rounded-xl flex-row justify-around">
           <View className="items-center">
             <Text className="text-2xl font-bold text-mavecam-primary">{totalNotifications}</Text>
@@ -306,81 +325,97 @@ export default function NotificationsScreen({ navigation }: NotificationsScreenP
           <Text className="text-lg font-bold text-gray-dark mb-4">
             {t('notificationsList')} ({sortedNotifications.length})
           </Text>
-
-          {loading && sortedNotifications.length === 0 ? (
-            <View className="items-center py-10">
-              <ActivityIndicator size="large" color={MAVECAM_COLORS.GREEN_PRIMARY} />
-              <Text className="text-sm text-gray-light mt-3">{t('loading')}</Text>
-            </View>
-          ) : sortedNotifications.length === 0 ? (
-            <View className="items-center py-10">
-              <Ionicons name="notifications-outline" size={64} color={MAVECAM_COLORS.GRAY_LIGHT} />
-              <Text className="text-lg font-bold text-gray-dark mt-3">
-                {selectedFilter === 'unread'
-                  ? t('noUnreadNotifications')
-                  : selectedFilter === 'read'
-                    ? t('noReadNotifications')
-                    : t('noNotifications')}
-              </Text>
-              <Text className="text-sm text-gray-light text-center mt-1">{t('notificationsWillAppear')}</Text>
-            </View>
-          ) : (
-            sortedNotifications.map((notification) => {
-              const iconName = getNotificationIcon(notification.notification_type);
-              const color = getNotificationColor(notification.notification_type);
-
-              return (
-                <View
-                  key={notification.id}
-                  className={`bg-white rounded-xl p-4 mb-3 ${!notification.is_read ? 'border-l-4 border-l-mavecam-primary bg-[#f0fdf4]' : ''}`}
-                >
-                  <View className="flex-row">
-                    <View className="w-12 h-12 rounded-full items-center justify-center mr-3" style={{ backgroundColor: `${color}20` }}>
-                      <Ionicons name={iconName} size={24} color={color} />
-                    </View>
-
-                    <View className="flex-1">
-                      <View className="flex-row items-center mb-1">
-                        <Text className={`text-base font-semibold flex-1 ${!notification.is_read ? 'text-mavecam-primary' : 'text-gray-dark'}`}>
-                          {notification.title}
-                        </Text>
-                      </View>
-
-                      <Text className="text-sm text-gray-light mb-2 leading-5">{notification.message}</Text>
-
-                      <View className="flex-row justify-between items-center">
-                        <Text className="text-xs text-gray-light">{formatRelativeDate(notification.scheduled_for)}</Text>
-                        <Text className="text-xs font-semibold" style={{ color }}>
-                          {t(`notificationType_${notification.notification_type}`, notification.notification_type)}
-                        </Text>
-                      </View>
-                    </View>
-                  </View>
-
-                  <View className="flex-row justify-between items-center pt-3 mt-2 border-t border-slate-100">
-                    <TouchableOpacity
-                      className="px-3 py-2 rounded-md bg-success/10"
-                      onPress={() => handleMarkAsRead(notification)}
-                    >
-                      <Text className="text-xs font-semibold text-success">
-                        {notification.is_read ? t('read') : t('markAsRead')}
-                      </Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      className="px-3 py-2 rounded-md bg-error/10 flex-row items-center"
-                      onPress={() => handleDeleteNotification(notification)}
-                    >
-                      <Ionicons name="trash-outline" size={16} color={MAVECAM_COLORS.ERROR} />
-                      <Text className="ml-2 text-xs font-semibold text-error">{t('deleteNotification')}</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              );
-            })
-          )}
         </View>
-      </ScrollView>
+      </>
+    ),
+    [selectedFilter, sortedNotifications.length, t, totalNotifications, unreadCount]
+  );
+
+  const renderEmptyList = useCallback(
+    () => {
+      if (loading) {
+        return (
+          <View className="items-center py-10">
+            <ActivityIndicator size="large" color={MAVECAM_COLORS.GREEN_PRIMARY} />
+            <Text className="text-sm text-gray-light mt-3">{t('loading')}</Text>
+          </View>
+        );
+      }
+
+      return (
+        <View className="items-center py-10 px-4">
+          <Ionicons name="notifications-outline" size={64} color={MAVECAM_COLORS.GRAY_LIGHT} />
+          <Text className="text-lg font-bold text-gray-dark mt-3">
+            {selectedFilter === 'unread'
+              ? t('noUnreadNotifications')
+              : selectedFilter === 'read'
+                ? t('noReadNotifications')
+                : t('noNotifications')}
+          </Text>
+          <Text className="text-sm text-gray-light text-center mt-1">{t('notificationsWillAppear')}</Text>
+        </View>
+      );
+    },
+    [loading, selectedFilter, t]
+  );
+
+  const renderHeader = () => (
+    <View className="bg-mavecam-primary flex-row items-center pt-14 pb-4 px-4">
+      <TouchableOpacity className="mr-4" onPress={() => navigation.goBack()}>
+        <Ionicons name="arrow-back" size={24} color={MAVECAM_COLORS.WHITE} />
+      </TouchableOpacity>
+      <View className="flex-1 flex-row items-center">
+        <Text className="text-xl font-bold text-white mr-2">{t('notifications')}</Text>
+        {unreadCount > 0 && (
+          <View className="bg-error rounded-full px-2 py-0.5 min-w-[24px] items-center">
+            <Text className="text-white text-xs font-bold">{unreadCount}</Text>
+          </View>
+        )}
+      </View>
+      <View className="flex-row items-center gap-2">
+        {unreadCount > 0 && (
+          <TouchableOpacity className="p-2 bg-white/20 rounded-md" onPress={handleMarkAllAsRead}>
+            <Ionicons name="checkmark-done" size={20} color={MAVECAM_COLORS.WHITE} />
+          </TouchableOpacity>
+        )}
+        {readNotificationsCount > 0 && (
+          <TouchableOpacity className="p-2 bg-white/20 rounded-md" onPress={handleDeleteAllRead}>
+            <Ionicons name="trash" size={20} color={MAVECAM_COLORS.WHITE} />
+          </TouchableOpacity>
+        )}
+      </View>
+    </View>
+  );
+
+  if (error) {
+    return (
+      <View className="flex-1 bg-cream">
+        {renderHeader()}
+        <View className="flex-1 items-center justify-center p-6">
+          <Ionicons name="alert-circle" size={48} color={MAVECAM_COLORS.ERROR} />
+          <Text className="text-lg text-error text-center mt-3">{error ? t(error) : ''}</Text>
+          <TouchableOpacity className="mt-4 bg-mavecam-primary px-5 py-3 rounded-lg" onPress={() => dispatch(fetchNotifications())}>
+            <Text className="text-white text-base font-semibold">{t('retry')}</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View className="flex-1 bg-cream">
+      {renderHeader()}
+
+      <FlatList
+        data={sortedNotifications}
+        keyExtractor={(item) => item.id}
+        renderItem={renderNotificationItem}
+        ListHeaderComponent={renderListHeader}
+        ListEmptyComponent={renderEmptyList}
+        contentContainerStyle={{ paddingBottom: 16 }}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={loading} onRefresh={onRefresh} />}
+      />
     </View>
   );
 }

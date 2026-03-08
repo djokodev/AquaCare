@@ -11,7 +11,7 @@ import { offlineService } from '@/services/offlineService';
 import { DailyLogForm } from '@/types/aquaculture';
 import { RootStackParamList } from '@/navigation/MainNavigator';
 import { MAVECAM_COLORS } from '@/constants/colors';
-import { estimateAverageWeight } from '@/domain';
+import { estimateAverageWeight } from '@/domain/aquaculture/estimators';
 import { calculateStockValue, calculateEstimatedBiomass } from '@/constants/aquaculture';
 import SuccessRewardModal from '@/components/modals/SuccessRewardModal';
 import CycleSelector from '@/components/common/CycleSelector';

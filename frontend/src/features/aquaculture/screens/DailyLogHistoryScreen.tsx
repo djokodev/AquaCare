@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, RefreshControl } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -10,7 +10,7 @@ import { CycleLog } from '@/types/aquaculture';
 import { RootStackParamList } from '@/navigation/MainNavigator';
 import { MAVECAM_COLORS } from '@/constants/colors';
 import { formatDate } from '@/utils';
-import { estimateAverageWeight } from '@/domain';
+import { estimateAverageWeight } from '@/domain/aquaculture/estimators';
 import logger from '@/utils/logger';
 
 type DailyLogHistoryScreenNavigationProp = StackNavigationProp<RootStackParamList, 'DailyLogHistory'>;
@@ -67,8 +67,8 @@ export default function DailyLogHistoryScreen({ navigation }: DailyLogHistoryScr
     return cycle ? cycle.pond_identifier : `Cycle ${cycleId.slice(-4)}`;
   };
 
-  const renderLogCard = (log: CycleLog) => (
-    <View key={log.id} className="bg-white rounded-xl p-4 mb-3">
+  const renderLogCard = useCallback(({ item: log }: { item: CycleLog }) => (
+    <View className="bg-white rounded-xl p-4 mb-3">
       <View className="flex-row justify-between items-center mb-3 pb-2 border-b border-slate-100">
         <Text className="text-base font-semibold text-gray-dark">{formatDate(log.log_date)}</Text>
         <Text className="text-sm font-medium text-mavecam-primary">{getCycleName(log.cycle)}</Text>
@@ -113,6 +113,47 @@ export default function DailyLogHistoryScreen({ navigation }: DailyLogHistoryScr
         </View>
       )}
     </View>
+  ), [currentCycle?.id, activeCycles, t]);
+
+  const renderListHeader = useCallback(
+    () => (
+      <View className="bg-white p-4 border-b border-slate-200">
+        <Text className="text-sm font-medium text-gray-dark mb-1">
+          {t('sessionActiveCycleLabel', { defaultValue: 'Cycle actif de la session' })}
+        </Text>
+        <Text className="text-base font-bold text-mavecam-primary">
+          {currentCycle?.cycle_name || t('sessionCycleNotSelected')}
+        </Text>
+        {currentCycle && (
+          <Text className="text-xs text-gray-light mt-1">
+            {t('pond')} {currentCycle.pond_identifier}
+          </Text>
+        )}
+      </View>
+    ),
+    [currentCycle, t]
+  );
+
+  const renderEmptyState = useCallback(
+    () => {
+      if (!currentCycle) {
+        return (
+          <View className="flex-1 items-center justify-center py-24 px-6">
+            <Ionicons name="alert-circle-outline" size={64} color={MAVECAM_COLORS.WARNING} />
+            <Text className="text-xl font-bold text-gray-dark mt-4 mb-2">{t('sessionCycleNotSelected')}</Text>
+          </View>
+        );
+      }
+
+      return (
+        <View className="flex-1 items-center justify-center py-24 px-6">
+          <Ionicons name="document-outline" size={64} color={MAVECAM_COLORS.GRAY_LIGHT} />
+          <Text className="text-xl font-bold text-gray-dark mt-4 mb-2">{t('noLogsYet')}</Text>
+          <Text className="text-sm text-gray-light text-center">{t('startLoggingData')}</Text>
+        </View>
+      );
+    },
+    [currentCycle, t]
   );
 
   if (loading) {
@@ -133,36 +174,15 @@ export default function DailyLogHistoryScreen({ navigation }: DailyLogHistoryScr
         <Text className="text-xl font-bold text-white">{t('dailyLogHistory')}</Text>
       </View>
 
-      <View className="bg-white p-4 border-b border-slate-200">
-        <Text className="text-sm font-medium text-gray-dark mb-1">
-          {t('sessionActiveCycleLabel', { defaultValue: 'Cycle actif de la session' })}
-        </Text>
-        <Text className="text-base font-bold text-mavecam-primary">
-          {currentCycle?.cycle_name || t('sessionCycleNotSelected')}
-        </Text>
-        {currentCycle && (
-          <Text className="text-xs text-gray-light mt-1">
-            {t('pond')} {currentCycle.pond_identifier}
-          </Text>
-        )}
-      </View>
-
-      <ScrollView className="flex-1 px-4" refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
-        {!currentCycle ? (
-          <View className="flex-1 items-center justify-center py-24 px-6">
-            <Ionicons name="alert-circle-outline" size={64} color={MAVECAM_COLORS.WARNING} />
-            <Text className="text-xl font-bold text-gray-dark mt-4 mb-2">{t('sessionCycleNotSelected')}</Text>
-          </View>
-        ) : logs.length === 0 ? (
-          <View className="flex-1 items-center justify-center py-24 px-6">
-            <Ionicons name="document-outline" size={64} color={MAVECAM_COLORS.GRAY_LIGHT} />
-            <Text className="text-xl font-bold text-gray-dark mt-4 mb-2">{t('noLogsYet')}</Text>
-            <Text className="text-sm text-gray-light text-center">{t('startLoggingData')}</Text>
-          </View>
-        ) : (
-          logs.map((log) => renderLogCard(log))
-        )}
-      </ScrollView>
+      <FlatList
+        data={currentCycle ? logs : []}
+        keyExtractor={(item) => item.id}
+        renderItem={renderLogCard}
+        ListHeaderComponent={renderListHeader}
+        ListEmptyComponent={renderEmptyState}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 16 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      />
     </View>
   );
 }

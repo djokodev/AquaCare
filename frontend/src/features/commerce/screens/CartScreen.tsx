@@ -1,5 +1,5 @@
-﻿import React, { useEffect, useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+﻿import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
@@ -18,7 +18,11 @@ import {
 } from '@/features/commerce/store/commerceSlice';
 import { CartItem, DeliveryMethod, PickupLocation } from '@/types/commerce';
 import { MAVECAM_COLORS } from '@/constants/colors';
-import { DELIVERY_METHODS, PICKUP_LOCATIONS, FREE_DELIVERY_THRESHOLD } from '@/domain/commerce';
+import {
+  DELIVERY_METHODS,
+  FREE_DELIVERY_THRESHOLD,
+  PICKUP_LOCATIONS,
+} from '@/domain/commerce/constants';
 import SelectField from '@/components/SelectField';
 import logger from '@/utils/logger';
 import { RootStackParamList } from '@/navigation/MainNavigator';
@@ -55,13 +59,12 @@ export default function CartScreen() {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  useEffect(() => {
-    if (cartItems.length > 0) {
-      handleFetchPreview();
-    }
-  }, [cartItems, delivery_method]);
+  const cartItemsCount = useMemo(
+    () => cartItems.reduce((sum, item) => sum + item.quantity, 0),
+    [cartItems]
+  );
 
-  const handleFetchPreview = async () => {
+  const handleFetchPreview = useCallback(async () => {
     if (cartItems.length === 0) return;
 
     const items = cartItems.map((item) => ({ product_id: item.product.id, quantity: item.quantity }));
@@ -72,25 +75,31 @@ export default function CartScreen() {
         delivery_method,
       })
     );
-  };
+  }, [cartItems, delivery_method, dispatch]);
 
-  const handleUpdateQuantity = (productId: string, newQuantity: number) => {
+  useEffect(() => {
+    if (cartItems.length > 0) {
+      handleFetchPreview();
+    }
+  }, [cartItems.length, handleFetchPreview]);
+
+  const handleUpdateQuantity = useCallback((productId: string, newQuantity: number) => {
     dispatch(updateCartQuantity({ productId, quantity: newQuantity }));
-  };
+  }, [dispatch]);
 
-  const handleRemoveItem = (productId: string, productName: string) => {
+  const handleRemoveItem = useCallback((productId: string, productName: string) => {
     Alert.alert(t('confirmRemoval'), t('confirmRemovalMessage', { productName }), [
       { text: t('cancel'), style: 'cancel' },
       { text: t('remove'), style: 'destructive', onPress: () => dispatch(removeFromCart(productId)) },
     ]);
-  };
+  }, [dispatch, t]);
 
-  const handleClearCart = () => {
+  const handleClearCart = useCallback(() => {
     Alert.alert(t('confirmClearCart'), t('confirmClearCartMessage'), [
       { text: t('cancel'), style: 'cancel' },
       { text: t('clear'), style: 'destructive', onPress: () => dispatch(clearCart()) },
     ]);
-  };
+  }, [dispatch, t]);
 
   const handleDeliveryMethodChange = (method: DeliveryMethod) => {
     dispatch(setDeliveryMethod(method));
@@ -168,16 +177,16 @@ export default function CartScreen() {
     );
   };
 
-  const handleBackToCatalog = () => {
+  const handleBackToCatalog = useCallback(() => {
     navigation.navigate('ProductCatalog');
-  };
+  }, [navigation]);
 
-  const renderCartItem = (item: CartItem) => {
+  const renderCartItem = useCallback(({ item }: { item: CartItem }) => {
     const { product, quantity } = item;
     const lineTotal = parseFloat(product.price_per_package) * quantity;
 
     return (
-      <View key={product.id} className="bg-white rounded-xl p-4 mb-3">
+      <View className="bg-white rounded-xl p-4 mb-3">
         <View className="w-14 h-14 bg-cream rounded-lg items-center justify-center mb-3">
           <Ionicons name="cube-outline" size={32} color={MAVECAM_COLORS.GREEN_PRIMARY} />
         </View>
@@ -229,50 +238,20 @@ export default function CartScreen() {
         <Text className="text-lg font-bold text-mavecam-primary text-right">{lineTotal.toLocaleString()} FCFA</Text>
       </View>
     );
-  };
+  }, [handleRemoveItem, handleUpdateQuantity, t]);
 
-  if (cartItems.length === 0) {
-    return (
-      <View className="flex-1 bg-cream">
-        <View className="flex-1 justify-center items-center px-10">
-          <Ionicons name="cart-outline" size={100} color={MAVECAM_COLORS.GRAY_LIGHT} />
-          <Text className="mt-5 text-2xl font-bold text-gray-dark">{t('emptyCart')}</Text>
-          <Text className="mt-3 text-base text-gray-light text-center">{t('emptyCartDescription')}</Text>
-          <TouchableOpacity
-            className="mt-6 bg-mavecam-primary flex-row items-center px-6 py-3 rounded-lg gap-2"
-            onPress={handleBackToCatalog}
-          >
-            <Ionicons name="albums-outline" size={20} color={MAVECAM_COLORS.WHITE} />
-            <Text className="text-white text-base font-semibold">{t('browseCatalog')}</Text>
-          </TouchableOpacity>
-        </View>
+  const renderListHeader = useCallback(
+    () => (
+      <View className="px-4 py-4">
+        <Text className="text-lg font-bold text-gray-dark mb-3">{t('myProducts')}</Text>
       </View>
-    );
-  }
+    ),
+    [t]
+  );
 
-  return (
-    <View className="flex-1 bg-cream">
-      <View className="bg-white px-5 pt-16 pb-5 flex-row items-center justify-between shadow">
-        <TouchableOpacity onPress={() => navigation.goBack()} className="w-10">
-          <Ionicons name="arrow-back" size={24} color={MAVECAM_COLORS.GRAY_DARK} />
-        </TouchableOpacity>
-        <View className="flex-1 items-center">
-          <Text className="text-2xl font-bold text-gray-dark">{t('cart')}</Text>
-          <Text className="text-sm text-gray-light mt-1">
-            {cartItems.length} {t(cartItems.length > 1 ? 'products' : 'product')}
-          </Text>
-        </View>
-        <TouchableOpacity onPress={handleClearCart}>
-          <Ionicons name="trash-outline" size={24} color={MAVECAM_COLORS.ERROR} />
-        </TouchableOpacity>
-      </View>
-
-      <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
-        <View className="px-4 py-4">
-          <Text className="text-lg font-bold text-gray-dark mb-3">{t('myProducts')}</Text>
-          {cartItems.map(renderCartItem)}
-        </View>
-
+  const renderListFooter = useCallback(
+    () => (
+      <>
         <View className="bg-white px-4 py-4 mb-3">
           <Text className="text-lg font-bold text-gray-dark mb-3">{t('deliveryMethod')}</Text>
 
@@ -288,12 +267,16 @@ export default function CartScreen() {
                 name={method.value === 'home' ? 'home-outline' : 'storefront-outline'}
                 size={24}
                 color={
-                  delivery_method === method.value ? MAVECAM_COLORS.GREEN_PRIMARY : MAVECAM_COLORS.GRAY_LIGHT
+                  delivery_method === method.value
+                    ? MAVECAM_COLORS.GREEN_PRIMARY
+                    : MAVECAM_COLORS.GRAY_LIGHT
                 }
               />
               <Text
                 className={`flex-1 text-base ${
-                  delivery_method === method.value ? 'text-mavecam-primary font-semibold' : 'text-gray-dark'
+                  delivery_method === method.value
+                    ? 'text-mavecam-primary font-semibold'
+                    : 'text-gray-dark'
                 }`}
               >
                 {t(method.labelKey)}
@@ -348,7 +331,9 @@ export default function CartScreen() {
             {deliveryPreview.free_delivery_threshold_reached && (
               <View className="flex-row items-center bg-cream p-3 rounded-lg gap-2 mb-3">
                 <Ionicons name="checkmark-circle" size={20} color={MAVECAM_COLORS.SUCCESS} />
-                <Text className="text-sm font-semibold text-mavecam-primary">{t('freeDeliveryApplied')}</Text>
+                <Text className="text-sm font-semibold text-mavecam-primary">
+                  {t('freeDeliveryApplied')}
+                </Text>
               </View>
             )}
 
@@ -383,7 +368,63 @@ export default function CartScreen() {
             </View>
           </View>
         ) : null}
-      </ScrollView>
+      </>
+    ),
+    [
+      deliveryPreview,
+      delivery_method,
+      pickup_location,
+      previewLoading,
+      t,
+      user?.region,
+    ]
+  );
+
+  if (cartItems.length === 0) {
+    return (
+      <View className="flex-1 bg-cream">
+        <View className="flex-1 justify-center items-center px-10">
+          <Ionicons name="cart-outline" size={100} color={MAVECAM_COLORS.GRAY_LIGHT} />
+          <Text className="mt-5 text-2xl font-bold text-gray-dark">{t('emptyCart')}</Text>
+          <Text className="mt-3 text-base text-gray-light text-center">{t('emptyCartDescription')}</Text>
+          <TouchableOpacity
+            className="mt-6 bg-mavecam-primary flex-row items-center px-6 py-3 rounded-lg gap-2"
+            onPress={handleBackToCatalog}
+          >
+            <Ionicons name="albums-outline" size={20} color={MAVECAM_COLORS.WHITE} />
+            <Text className="text-white text-base font-semibold">{t('browseCatalog')}</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View className="flex-1 bg-cream">
+      <View className="bg-white px-5 pt-16 pb-5 flex-row items-center justify-between shadow">
+        <TouchableOpacity onPress={() => navigation.goBack()} className="w-10">
+          <Ionicons name="arrow-back" size={24} color={MAVECAM_COLORS.GRAY_DARK} />
+        </TouchableOpacity>
+        <View className="flex-1 items-center">
+          <Text className="text-2xl font-bold text-gray-dark">{t('cart')}</Text>
+          <Text className="text-sm text-gray-light mt-1">
+            {cartItems.length} {t(cartItems.length > 1 ? 'products' : 'product')}
+          </Text>
+        </View>
+        <TouchableOpacity onPress={handleClearCart}>
+          <Ionicons name="trash-outline" size={24} color={MAVECAM_COLORS.ERROR} />
+        </TouchableOpacity>
+      </View>
+
+      <FlatList
+        data={cartItems}
+        keyExtractor={(item) => item.product.id}
+        renderItem={renderCartItem}
+        ListHeaderComponent={renderListHeader}
+        ListFooterComponent={renderListFooter}
+        contentContainerStyle={{ paddingBottom: 16 }}
+        showsVerticalScrollIndicator={false}
+      />
 
       <View className="bg-white p-4 shadow">
         <TouchableOpacity

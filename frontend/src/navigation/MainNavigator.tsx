@@ -20,38 +20,35 @@ const MAVECAM_COLORS = {
   GRAY_DARK: '#1e293b',
 };
 
-// Screens
-import { DashboardScreen } from '@/features/main';
-import { ProfileScreen, FarmProfileScreen, SettingsScreen } from '@/features/profile';
 import { useNotificationsPolling } from '@/features/notifications/hooks/useNotificationsPolling';
+import DashboardScreen from '@/features/main/screens/DashboardScreen';
+import FarmProfileScreen from '@/features/profile/screens/FarmProfileScreen';
+import ProfileScreen from '@/features/profile/screens/ProfileScreen';
+import SettingsScreen from '@/features/profile/screens/SettingsScreen';
 
 // Aquaculture Screens
-import {
-  CycleSessionEntryScreen,
-  DailyLogScreen,
-  DailyLogHistoryScreen,
-  SanitaryLogScreen,
-  NewCycleScreen,
-  CycleHistoryScreen,
-  NotificationsScreen,
-  FeedingPlanScreen,
-  StatisticsScreen,
-  ReportsScreen,
-  ReportDetailScreen,
-} from '@/features/aquaculture';
+import CycleHistoryScreen from '@/features/aquaculture/screens/CycleHistoryScreen';
+import CycleSessionEntryScreen from '@/features/aquaculture/screens/CycleSessionEntryScreen';
+import DailyLogHistoryScreen from '@/features/aquaculture/screens/DailyLogHistoryScreen';
+import DailyLogScreen from '@/features/aquaculture/screens/DailyLogScreen';
+import FeedingPlanScreen from '@/features/aquaculture/screens/FeedingPlanScreen';
+import NewCycleScreen from '@/features/aquaculture/screens/NewCycleScreen';
+import NotificationsScreen from '@/features/aquaculture/screens/NotificationsScreen';
+import ReportDetailScreen from '@/features/aquaculture/screens/ReportDetailScreen';
+import ReportsScreen from '@/features/aquaculture/screens/ReportsScreen';
+import SanitaryLogScreen from '@/features/aquaculture/screens/SanitaryLogScreen';
+import StatisticsScreen from '@/features/aquaculture/screens/StatisticsScreen';
 
 // Commerce Screens
-import {
-  ProductCatalogScreen,
-  ProductDetailScreen,
-  CartScreen,
-  OrdersHistoryScreen,
-  FeedingSuggestionsScreen,
-  CycleSimulatorScreen,
-} from '@/features/commerce';
+import CartScreen from '@/features/commerce/screens/CartScreen';
+import CycleSimulatorScreen from '@/features/commerce/screens/CycleSimulatorScreen';
+import FeedingSuggestionsScreen from '@/features/commerce/screens/FeedingSuggestionsScreen';
+import OrdersHistoryScreen from '@/features/commerce/screens/OrdersHistoryScreen';
+import ProductCatalogScreen from '@/features/commerce/screens/ProductCatalogScreen';
+import ProductDetailScreen from '@/features/commerce/screens/ProductDetailScreen';
 
 // Chat/Support Screens
-import { ChatScreen } from '@/features/chat';
+import { ChatScreen } from '@/features/chat/screens/ChatScreen';
 
 export type MainTabParamList = {
   Dashboard: undefined;
@@ -107,20 +104,7 @@ const ProfileStack = createStackNavigator<ProfileStackParamList>();
 const RootStack = createStackNavigator<RootStackParamList>();
 
 function ProfileNavigator() {
-  const { t, i18n } = useTranslation();
-  const [currentLanguage, setCurrentLanguage] = React.useState(i18n.language);
-
-  // Listen to language changes without force re-render
-  React.useEffect(() => {
-    const handleLanguageChanged = (lng: string) => {
-      setCurrentLanguage(lng);
-    };
-
-    i18n.on('languageChanged', handleLanguageChanged);
-    return () => {
-      i18n.off('languageChanged', handleLanguageChanged);
-    };
-  }, [i18n]);
+  const { t } = useTranslation();
 
   return (
     <ProfileStack.Navigator
@@ -150,20 +134,7 @@ function ProfileNavigator() {
 }
 
 function MainTabNavigator() {
-  const { t, i18n } = useTranslation();
-  const [currentLanguage, setCurrentLanguage] = React.useState(i18n.language);
-
-  // Listen to language changes without force re-render
-  React.useEffect(() => {
-    const handleLanguageChanged = (lng: string) => {
-      setCurrentLanguage(lng);
-    };
-
-    i18n.on('languageChanged', handleLanguageChanged);
-    return () => {
-      i18n.off('languageChanged', handleLanguageChanged);
-    };
-  }, [i18n]);
+  const { t } = useTranslation();
 
   return (
     <Tab.Navigator
@@ -186,11 +157,6 @@ function MainTabNavigator() {
         tabBarActiveTintColor: MAVECAM_COLORS.GREEN_PRIMARY,
         tabBarInactiveTintColor: MAVECAM_COLORS.GRAY_LIGHT,
         headerShown: false,
-      })}
-      screenListeners={({ navigation, route }) => ({
-        tabPress: (e) => {
-          // Allow the default behavior
-        },
       })}
     >
       <Tab.Screen

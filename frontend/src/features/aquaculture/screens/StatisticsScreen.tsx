@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, RefreshControl, TouchableOpacity, ActivityIndicator } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { View, Text, ScrollView, RefreshControl, TouchableOpacity, ActivityIndicator, FlatList } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -22,15 +22,10 @@ export default function StatisticsScreen({ navigation }: StatisticsScreenProps) 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [harvestedCycles, setHarvestedCycles] = useState<ProductionCycle[]>([]);
-  const [selectedCycle, setSelectedCycle] = useState<ProductionCycle | null>(null);
-  const [cycleStats, setCycleStats] = useState<CycleStatistics | null>(null);
+  const [selectedCycleId, setSelectedCycleId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -38,60 +33,96 @@ export default function StatisticsScreen({ navigation }: StatisticsScreenProps) 
       const cycles = await aquacultureService.getHarvestedCycles();
       setHarvestedCycles(cycles);
     } catch {
-      setError(t('statisticsLoadError'));
+      setError('statisticsLoadError');
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const loadCycleStatistics = async (cycleId: string) => {
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  const selectedCycle = useMemo(
+    () => harvestedCycles.find((cycle) => cycle.id === selectedCycleId) ?? null,
+    [harvestedCycles, selectedCycleId]
+  );
+
+  const cycleStats = useMemo<CycleStatistics | null>(() => {
+    if (!selectedCycle) {
+      return null;
+    }
+
     try {
-      const cycle = harvestedCycles.find((currentCycle) => currentCycle.id === cycleId);
-      if (cycle) {
-        const stats: CycleStatistics = {
-          cycle_id: cycleId,
-          days_active: Number(cycle.days_active) || 0,
-          current_metrics: {
-            survival_rate: Number(cycle.survival_rate) || 0,
-            biomass: Number(cycle.final_biomass || cycle.current_biomass) || 0,
-            average_weight: Number(cycle.final_average_weight || cycle.current_average_weight) || 0,
-            fcr: Number(cycle.fcr) || 0,
-            daily_growth_rate: Number(cycle.daily_growth_rate) || 0,
-            specific_growth_rate: Number(cycle.specific_growth_rate) || 0,
-          },
-          feed_metrics: {
-            total_consumed: Number(cycle.total_feed_consumed) || 0,
-            average_daily: Number(cycle.average_daily_feed) || 0,
-            cost_estimate: Number(cycle.total_feed_cost) || 0,
-          },
-          mortality_analysis: {
-            total: Math.max(
-              0,
-              (Number(cycle.initial_count) || 0) - (Number(cycle.final_count || cycle.current_count) || 0)
-            ),
-            percentage: Math.max(0, 100 - (Number(cycle.survival_rate) || 0)),
-            by_week: {},
-            main_causes: [],
-          },
-          growth_performance: [],
-        };
-        setCycleStats(stats);
-      }
+      return {
+        cycle_id: selectedCycle.id,
+        days_active: Number(selectedCycle.days_active) || 0,
+        current_metrics: {
+          survival_rate: Number(selectedCycle.survival_rate) || 0,
+          biomass: Number(selectedCycle.final_biomass || selectedCycle.current_biomass) || 0,
+          average_weight:
+            Number(selectedCycle.final_average_weight || selectedCycle.current_average_weight) || 0,
+          fcr: Number(selectedCycle.fcr) || 0,
+          daily_growth_rate: Number(selectedCycle.daily_growth_rate) || 0,
+          specific_growth_rate: Number(selectedCycle.specific_growth_rate) || 0,
+        },
+        feed_metrics: {
+          total_consumed: Number(selectedCycle.total_feed_consumed) || 0,
+          average_daily: Number(selectedCycle.average_daily_feed) || 0,
+          cost_estimate: Number(selectedCycle.total_feed_cost) || 0,
+        },
+        mortality_analysis: {
+          total: Math.max(
+            0,
+            (Number(selectedCycle.initial_count) || 0) -
+              (Number(selectedCycle.final_count || selectedCycle.current_count) || 0)
+          ),
+          percentage: Math.max(0, 100 - (Number(selectedCycle.survival_rate) || 0)),
+          by_week: {},
+          main_causes: [],
+        },
+        growth_performance: [],
+      };
     } catch (statsError: unknown) {
       logger.error('Erreur chargement stats cycle:', statsError);
+      return null;
     }
-  };
+  }, [selectedCycle]);
 
-  const handleCycleSelection = async (cycle: ProductionCycle) => {
-    setSelectedCycle(cycle);
-    await loadCycleStatistics(cycle.id);
-  };
+  const handleCycleSelection = useCallback((cycleId: string) => {
+    setSelectedCycleId(cycleId);
+  }, []);
 
-  const onRefresh = React.useCallback(async () => {
+  const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await loadData();
     setRefreshing(false);
-  }, []);
+  }, [loadData]);
+
+  const renderCycleSelectorItem = useCallback(
+    ({ item: cycle }: { item: ProductionCycle }) => {
+      const isSelected = selectedCycle?.id === cycle.id;
+      return (
+        <TouchableOpacity
+          className={`mr-3 p-3 min-w-[160px] rounded-lg border ${
+            isSelected ? 'bg-mavecam-primary border-mavecam-primary' : 'bg-cream border-gray-light'
+          }`}
+          onPress={() => handleCycleSelection(cycle.id)}
+        >
+          <Text
+            className={`text-sm font-semibold ${isSelected ? 'text-white' : 'text-gray-dark'}`}
+            numberOfLines={1}
+          >
+            {cycle.cycle_name}
+          </Text>
+          <Text className={`text-xs mt-1 ${isSelected ? 'text-white' : 'text-gray-light'}`}>
+            {t(cycle.species)} - {formatPercentage(cycle.survival_rate || 0)}
+          </Text>
+        </TouchableOpacity>
+      );
+    },
+    [handleCycleSelection, selectedCycle?.id, t]
+  );
 
   const renderHeader = () => (
     <View className="bg-mavecam-primary flex-row items-center pt-14 pb-4 px-4">
@@ -149,30 +180,18 @@ export default function StatisticsScreen({ navigation }: StatisticsScreenProps) 
       <ScrollView refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
         <View className="bg-white mx-4 mt-4 mb-4 p-4 rounded-xl">
           <Text className="text-lg font-bold text-gray-dark mb-3">{t('harvestedCycles')}</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-row">
-            {harvestedCycles.map((cycle) => {
-              const isSelected = selectedCycle?.id === cycle.id;
-              return (
-                <TouchableOpacity
-                  key={cycle.id}
-                  className={`mr-3 p-3 min-w-[160px] rounded-lg border ${
-                    isSelected ? 'bg-mavecam-primary border-mavecam-primary' : 'bg-cream border-gray-light'
-                  }`}
-                  onPress={() => handleCycleSelection(cycle)}
-                >
-                  <Text
-                    className={`text-sm font-semibold ${isSelected ? 'text-white' : 'text-gray-dark'}`}
-                    numberOfLines={1}
-                  >
-                    {cycle.cycle_name}
-                  </Text>
-                  <Text className={`text-xs mt-1 ${isSelected ? 'text-white' : 'text-gray-light'}`}>
-                    {t(cycle.species)} - {formatPercentage(cycle.survival_rate || 0)}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
+          <FlatList
+            horizontal
+            data={harvestedCycles}
+            keyExtractor={(item) => item.id}
+            renderItem={renderCycleSelectorItem}
+            extraData={selectedCycle?.id}
+            showsHorizontalScrollIndicator={false}
+            removeClippedSubviews
+            initialNumToRender={4}
+            maxToRenderPerBatch={6}
+            windowSize={5}
+          />
         </View>
 
         {!selectedCycle && harvestedCycles.length > 0 && (

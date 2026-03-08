@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, ActivityIndicator, ScrollView, RefreshControl } from 'react-native';
+import { View, Text, TouchableOpacity, ActivityIndicator, FlatList, RefreshControl } from 'react-native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
@@ -108,11 +108,48 @@ export default function ReportsScreen({ navigation }: ReportsScreenProps) {
     );
   }
 
-  return (
-    <View className="flex-1 bg-cream">
-      {renderHeader()}
+  const renderReportItem = useCallback(
+    ({ item: report }: { item: ProductionReport }) => (
+      <TouchableOpacity
+        className="bg-white rounded-xl p-4 mb-3 border border-gray-100"
+        onPress={() => navigation.navigate('ReportDetail', { reportId: report.id })}
+      >
+        <View className="flex-row items-center justify-between">
+          <Text className="text-sm font-bold text-gray-dark">
+            {report.report_type === 'daily'
+              ? t('reportTypeDaily')
+              : report.report_type === 'weekly'
+                ? t('reportTypeWeekly')
+                : t('reportTypeMonthly')}
+          </Text>
+          <Text
+            className={`text-xs font-semibold ${
+              report.status === 'validated' ? 'text-mavecam-primary' : 'text-warning'
+            }`}
+          >
+            {report.status === 'validated' ? t('reportStatusValidated') : t('reportStatusDraft')}
+          </Text>
+        </View>
 
-      <ScrollView refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
+        <Text className="text-xs text-gray-light mt-1">
+          {formatDate(report.period_start)} - {formatDate(report.period_end)}
+        </Text>
+
+        <View className="flex-row mt-2">
+          <Text className="text-xs text-gray-light mr-4">
+            {t('email')}: {report.email_status === 'sent' ? t('sent') : report.email_status === 'failed' ? t('failed') : t('notSent')}
+          </Text>
+          <Text className="text-xs text-gray-light">
+            {t('whatsAppLabel')}: {report.whatsapp_status === 'shared' ? t('shared') : t('notShared')}
+          </Text>
+        </View>
+      </TouchableOpacity>
+    ),
+    [navigation, t]
+  );
+
+  const renderListHeader = useCallback(
+    () => (
         <View className="px-4 py-4">
           <Text className="text-base font-bold text-gray-dark mb-3">{t('generateReport')}</Text>
 
@@ -139,9 +176,7 @@ export default function ReportsScreen({ navigation }: ReportsScreenProps) {
               </TouchableOpacity>
             ))}
           </View>
-        </View>
 
-        <View className="px-4 pb-4">
           <Text className="text-base font-bold text-gray-dark mb-3">{t('reportHistory')}</Text>
 
           <View className="flex-row mb-3">
@@ -173,54 +208,35 @@ export default function ReportsScreen({ navigation }: ReportsScreenProps) {
               <Text className="text-sm text-error">{error}</Text>
             </View>
           )}
-
-          {filteredReports.length === 0 ? (
-            <View className="bg-white rounded-xl p-5 items-center">
-              <Ionicons name="documents-outline" size={44} color={MAVECAM_COLORS.GRAY_LIGHT} />
-              <Text className="text-base font-semibold text-gray-dark mt-3">{t('noReportsYet')}</Text>
-              <Text className="text-sm text-gray-light text-center mt-1">{t('generateFirstReportHint')}</Text>
-            </View>
-          ) : (
-            filteredReports.map((report) => (
-              <TouchableOpacity
-                key={report.id}
-                className="bg-white rounded-xl p-4 mb-3 border border-gray-100"
-                onPress={() => navigation.navigate('ReportDetail', { reportId: report.id })}
-              >
-                <View className="flex-row items-center justify-between">
-                  <Text className="text-sm font-bold text-gray-dark">
-                    {report.report_type === 'daily'
-                      ? t('reportTypeDaily')
-                      : report.report_type === 'weekly'
-                        ? t('reportTypeWeekly')
-                        : t('reportTypeMonthly')}
-                  </Text>
-                  <Text
-                    className={`text-xs font-semibold ${
-                      report.status === 'validated' ? 'text-mavecam-primary' : 'text-warning'
-                    }`}
-                  >
-                    {report.status === 'validated' ? t('reportStatusValidated') : t('reportStatusDraft')}
-                  </Text>
-                </View>
-
-                <Text className="text-xs text-gray-light mt-1">
-                  {formatDate(report.period_start)} - {formatDate(report.period_end)}
-                </Text>
-
-                <View className="flex-row mt-2">
-                  <Text className="text-xs text-gray-light mr-4">
-                    {t('email')}: {report.email_status === 'sent' ? t('sent') : report.email_status === 'failed' ? t('failed') : t('notSent')}
-                  </Text>
-                  <Text className="text-xs text-gray-light">
-                    {t('whatsAppLabel')}: {report.whatsapp_status === 'shared' ? t('shared') : t('notShared')}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            ))
-          )}
         </View>
-      </ScrollView>
+    ),
+    [currentCycle?.id, error, filteredReports.length, generatingType, onRefresh, selectedType, t]
+  );
+
+  const renderEmptyState = useCallback(
+    () => (
+      <View className="bg-white rounded-xl p-5 items-center mx-4">
+        <Ionicons name="documents-outline" size={44} color={MAVECAM_COLORS.GRAY_LIGHT} />
+        <Text className="text-base font-semibold text-gray-dark mt-3">{t('noReportsYet')}</Text>
+        <Text className="text-sm text-gray-light text-center mt-1">{t('generateFirstReportHint')}</Text>
+      </View>
+    ),
+    [t]
+  );
+
+  return (
+    <View className="flex-1 bg-cream">
+      {renderHeader()}
+
+      <FlatList
+        data={filteredReports}
+        keyExtractor={(item) => item.id}
+        renderItem={renderReportItem}
+        ListHeaderComponent={renderListHeader}
+        ListEmptyComponent={renderEmptyState}
+        contentContainerStyle={{ paddingBottom: 16 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      />
     </View>
   );
 }
