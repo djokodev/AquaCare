@@ -1,14 +1,20 @@
 import uuid
+
 from django.contrib.auth.models import AbstractUser
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.translation import gettext_lazy as _
-from .managers import UserManager
-from .validators import validate_cameroon_phone, normalize_phone_number
+
 from .constants import (
-    ACCOUNT_TYPE_CHOICES, ACTIVITY_TYPE_CHOICES, LEGAL_STATUS_CHOICES,
-    REGION_CHOICES, AGE_GROUP_CHOICES, LANGUAGE_CHOICES
+    ACCOUNT_TYPE_CHOICES,
+    ACTIVITY_TYPE_CHOICES,
+    AGE_GROUP_CHOICES,
+    LANGUAGE_CHOICES,
+    LEGAL_STATUS_CHOICES,
+    REGION_CHOICES,
 )
+from .managers import FarmProfileQuerySet, UserManager
+from .validators import normalize_phone_number, validate_cameroon_phone
 
 
 class User(AbstractUser):
@@ -152,6 +158,8 @@ class User(AbstractUser):
         indexes = [
             models.Index(fields=['account_type'], name='idx_user_account_type'),
             models.Index(fields=['region'], name='idx_user_region'),
+            models.Index(fields=['account_type', 'business_name'], name='idx_user_company_login'),
+            models.Index(fields=['account_type', 'first_name', 'last_name'], name='idx_user_person_login'),
         ]
     
     def clean(self):
@@ -206,7 +214,7 @@ class User(AbstractUser):
             raise ValidationError(errors)
 
 
-    def save(self, *args, **kwargs):
+    def save(self, *args, validate: bool = True, **kwargs):
         """
         Sauvegarde avec normalisation automatique du téléphone.
         
@@ -217,7 +225,8 @@ class User(AbstractUser):
             self.phone_number = normalize_phone_number(self.phone_number)
         
         # Validation avant sauvegarde
-        self.full_clean()
+        if validate:
+            self.full_clean()
         super().save(*args, **kwargs)
     
 
@@ -301,6 +310,8 @@ class FarmProfile(models.Model):
         verbose_name=_('Utilisateur'),
         help_text=_('Utilisateur propriétaire de cette ferme')
     )
+
+    objects = FarmProfileQuerySet.as_manager()
     
     farm_name = models.CharField(
         _('Nom de la ferme'),
@@ -409,6 +420,7 @@ class FarmProfile(models.Model):
         if errors:
             raise ValidationError(errors)
     
-    def save(self, *args, **kwargs):
-        self.full_clean()
+    def save(self, *args, validate: bool = True, **kwargs):
+        if validate:
+            self.full_clean()
         super().save(*args, **kwargs)

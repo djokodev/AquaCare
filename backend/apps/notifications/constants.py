@@ -5,7 +5,6 @@ Types de notifications extensibles pour tous les modules.
 
 from django.utils.translation import gettext_lazy as _
 
-
 # Types de notifications par module
 NOTIFICATION_TYPES = [
     # ===== AQUACULTURE =====

@@ -1,5 +1,5 @@
 # Données de test MAVECAM
 
-from .factories import UserFactory, MavecamAdminFactory, CompanyUserFactory
+from .factories import CompanyUserFactory, MavecamAdminFactory, UserFactory
 
-__all__ = ['UserFactory', 'MavecamAdminFactory', 'CompanyUserFactory']
+__all__ = ["UserFactory", "MavecamAdminFactory", "CompanyUserFactory"]

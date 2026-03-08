@@ -2,12 +2,18 @@
 Configuration des URLs pour le module aquaculture de MAVECAM AquaCare.
 Définit les endpoints d'API REST pour la gestion de la pisciculture.
 """
-from django.urls import path, include
+from django.urls import include, path
 from rest_framework.routers import DefaultRouter
+
 from .views import (
-    ProductionCycleViewSet, CycleLogViewSet, FeedingPlanViewSet,
-    SanitaryLogViewSet, NutritionalGuideViewSet,
-    DashboardView, SyncView, ProductionReportViewSet
+    CycleLogViewSet,
+    DashboardView,
+    FeedingPlanViewSet,
+    NutritionalGuideViewSet,
+    ProductionCycleViewSet,
+    ProductionReportViewSet,
+    SanitaryLogViewSet,
+    SyncView,
 )
 
 app_name = 'aquaculture'

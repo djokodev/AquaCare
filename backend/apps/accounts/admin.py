@@ -8,22 +8,53 @@ Roles:
 - Autres: Acces limite selon groupe
 """
 
-from django.contrib import admin
-from django.contrib.admin.models import CHANGE
-from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from django.utils.html import format_html
-from django.utils.translation import gettext_lazy as _
-from django.contrib import messages
-from django.core.exceptions import PermissionDenied
+from collections.abc import Iterable
+from typing import Final
 
-from .models import User, FarmProfile
 from common.admin_mixins import (
-    SecuredModelAdmin,
+    AuditLogMixin,
     ManagerMixin,
     PIIMaskingMixin,
-    AuditLogMixin,
     RBACConstants,
+    SecuredModelAdmin,
 )
+from django.contrib import admin, messages
+from django.contrib.admin.models import CHANGE
+from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
+from django.core.exceptions import PermissionDenied
+from django.utils.html import format_html
+from django.utils.translation import gettext_lazy as _
+
+from .models import FarmProfile, User
+
+
+class AccountsAdminRoleMixin:
+    """Centralise les decisions RBAC communes au module accounts admin."""
+
+    manager_actions: Final[tuple[str, ...]] = (
+        'verify_users',
+        'certify_farms',
+        'suspend_certifications',
+    )
+
+    def _is_superuser(self, request) -> bool:
+        return request.user.is_superuser
+
+    def _is_manager(self, request) -> bool:
+        return request.user.groups.filter(name=RBACConstants.GROUP_MANAGERS).exists()
+
+    def _can_manage_accounts(self, request) -> bool:
+        return self._is_superuser(request) or self._is_manager(request)
+
+    def _can_view_phone_number(self, request) -> bool:
+        return self._can_manage_accounts(request)
+
+    def _ensure_manager_access(self, request, error_message: str) -> bool:
+        if self._can_manage_accounts(request):
+            return True
+
+        messages.error(request, error_message)
+        return False
 
 
 class FarmProfileInline(admin.StackedInline):
@@ -53,7 +84,13 @@ class FarmProfileInline(admin.StackedInline):
 
 
 @admin.register(User)
-class UserAdmin(ManagerMixin, PIIMaskingMixin, AuditLogMixin, BaseUserAdmin):
+class UserAdmin(
+    AccountsAdminRoleMixin,
+    ManagerMixin,
+    PIIMaskingMixin,
+    AuditLogMixin,
+    BaseUserAdmin,
+):
     """
     Interface d'administration securisee pour les utilisateurs AquaCare.
 
@@ -139,16 +176,56 @@ class UserAdmin(ManagerMixin, PIIMaskingMixin, AuditLogMixin, BaseUserAdmin):
     # Champs proteges pour non-superusers
     protected_fields = ['is_staff', 'is_superuser', 'groups', 'user_permissions']
 
+    def _append_unique_field(self, fields: list[str], field_name: str) -> list[str]:
+        if field_name not in fields:
+            fields.append(field_name)
+        return fields
+
+    def _get_target_users(self, queryset) -> list[User]:
+        return list(queryset.select_related('farm_profile'))
+
+    def _log_bulk_change(self, request, users: Iterable[User], message: str) -> None:
+        for user in users:
+            self.log_action(request, user, CHANGE, message=message)
+
+    def _update_farm_certification_status(
+        self,
+        request,
+        queryset,
+        *,
+        target_status: str,
+        audit_message: str,
+        success_message: str,
+        permission_error: str,
+    ) -> None:
+        if not self._ensure_manager_access(request, permission_error):
+            return
+
+        target_users = self._get_target_users(queryset)
+        farm_profile_ids = [
+            user.farm_profile.pk
+            for user in target_users
+            if hasattr(user, 'farm_profile')
+        ]
+        count = FarmProfile.objects.filter(pk__in=farm_profile_ids).exclude(
+            certification_status=target_status
+        ).update(certification_status=target_status)
+
+        self._log_bulk_change(
+            request,
+            [user for user in target_users if hasattr(user, 'farm_profile')],
+            audit_message,
+        )
+        messages.success(request, success_message.format(count=count))
+
     def get_search_fields(self, request):
         """
         Retire phone_number de la recherche pour non-managers (PII).
         """
         search_fields = list(super().get_search_fields(request))
 
-        if request.user.is_superuser:
-            search_fields.append('phone_number')
-        elif request.user.groups.filter(name=RBACConstants.GROUP_MANAGERS).exists():
-            search_fields.append('phone_number')
+        if self._can_view_phone_number(request):
+            self._append_unique_field(search_fields, 'phone_number')
 
         return search_fields
 
@@ -156,15 +233,9 @@ class UserAdmin(ManagerMixin, PIIMaskingMixin, AuditLogMixin, BaseUserAdmin):
         """Masque phone_number pour non-managers."""
         list_display = list(super().get_list_display(request))
 
-        if not request.user.is_superuser:
-            is_manager = request.user.groups.filter(
-                name=RBACConstants.GROUP_MANAGERS
-            ).exists()
-
-            if not is_manager and 'phone_number' in list_display:
-                # Remplacer par version masquee
-                idx = list_display.index('phone_number')
-                list_display[idx] = 'phone_masked'
+        if not self._can_view_phone_number(request) and 'phone_number' in list_display:
+            idx = list_display.index('phone_number')
+            list_display[idx] = 'phone_masked'
 
         return list_display
 
@@ -187,46 +258,39 @@ class UserAdmin(ManagerMixin, PIIMaskingMixin, AuditLogMixin, BaseUserAdmin):
         - Managers ne voient pas les superusers
         - Non-managers voient tous les users non-admin
         """
-        qs = super().get_queryset(request)
+        qs = super().get_queryset(request).select_related('farm_profile')
 
-        if request.user.is_superuser:
+        if self._is_superuser(request):
             return qs
 
-        # Managers: exclure superusers
-        if request.user.groups.filter(name=RBACConstants.GROUP_MANAGERS).exists():
+        if self._is_manager(request):
             return qs.filter(is_superuser=False)
 
-        # Autres: exclure tous les staff
         return qs.filter(is_staff=False, is_superuser=False)
 
     def has_change_permission(self, request, obj=None):
         """
         Bloque modification d'un admin par un non-superuser.
         """
-        if request.user.is_superuser:
+        if self._is_superuser(request):
             return True
 
-        # Bloquer modification d'un admin
         if obj and obj.is_staff:
             return False
 
-        return request.user.groups.filter(
-            name=RBACConstants.GROUP_MANAGERS
-        ).exists()
+        return self._is_manager(request)
 
     def has_delete_permission(self, request, obj=None):
         """
         Seul superuser peut supprimer des utilisateurs.
         Impossible de supprimer un autre superuser ou soi-meme.
         """
-        if not request.user.is_superuser:
+        if not self._is_superuser(request):
             return False
 
         if obj:
-            # Ne peut pas supprimer un superuser
             if obj.is_superuser:
                 return False
-            # Ne peut pas se supprimer soi-meme
             if obj.pk == request.user.pk:
                 return False
 
@@ -238,20 +302,12 @@ class UserAdmin(ManagerMixin, PIIMaskingMixin, AuditLogMixin, BaseUserAdmin):
         """
         actions = super().get_actions(request)
 
-        if not request.user.is_superuser:
-            # Retirer delete_selected pour non-superusers
-            if 'delete_selected' in actions:
-                del actions['delete_selected']
+        if not self._is_superuser(request):
+            actions.pop('delete_selected', None)
 
-            # Seuls managers peuvent certifier/suspendre
-            is_manager = request.user.groups.filter(
-                name=RBACConstants.GROUP_MANAGERS
-            ).exists()
-
-            if not is_manager:
-                for action in ['verify_users', 'certify_farms', 'suspend_certifications']:
-                    if action in actions:
-                        del actions[action]
+            if not self._is_manager(request):
+                for action_name in self.manager_actions:
+                    actions.pop(action_name, None)
 
         return actions
 
@@ -261,7 +317,7 @@ class UserAdmin(ManagerMixin, PIIMaskingMixin, AuditLogMixin, BaseUserAdmin):
         """
         if change:
             try:
-                original = User.objects.get(pk=obj.pk)
+                original = User.objects.only('id', 'is_superuser', 'is_staff').get(pk=obj.pk)
 
                 # Verifier elevation de privileges
                 if not request.user.is_superuser:
@@ -320,19 +376,15 @@ class UserAdmin(ManagerMixin, PIIMaskingMixin, AuditLogMixin, BaseUserAdmin):
         Action pour verifier les numeros de telephone.
         Requiert permission manager.
         """
-        # Verifier permission
-        if not request.user.is_superuser:
-            if not request.user.groups.filter(name=RBACConstants.GROUP_MANAGERS).exists():
-                messages.error(request, _("Vous n'avez pas la permission de verifier les utilisateurs."))
-                return
+        if not self._ensure_manager_access(
+            request,
+            _("Vous n'avez pas la permission de verifier les utilisateurs."),
+        ):
+            return
 
         count = queryset.update(is_verified=True)
-
-        # Audit logging pour chaque user verifie
-        for user in queryset:
-            self.log_action(request, user, CHANGE, message="Telephone verifie via action admin")
-
-        messages.success(request, _('{} utilisateur(s) verifie(s).').format(count))
+        self._log_bulk_change(request, queryset, "Telephone verifie via action admin")
+        messages.success(request, _('{count} utilisateur(s) verifie(s).').format(count=count))
 
     @admin.action(description=_("Certifier les fermes selectionnees"))
     def certify_farms(self, request, queryset):
@@ -340,21 +392,14 @@ class UserAdmin(ManagerMixin, PIIMaskingMixin, AuditLogMixin, BaseUserAdmin):
         Action pour certifier les fermes.
         Requiert permission manager.
         """
-        if not request.user.is_superuser:
-            if not request.user.groups.filter(name=RBACConstants.GROUP_MANAGERS).exists():
-                messages.error(request, _("Vous n'avez pas la permission de certifier les fermes."))
-                return
-
-        count = 0
-        for user in queryset:
-            if hasattr(user, 'farm_profile'):
-                user.farm_profile.certification_status = 'certified'
-                user.farm_profile.save()
-                count += 1
-                # Audit
-                self.log_action(request, user, CHANGE, message="Ferme certifiee via action admin")
-
-        messages.success(request, _('{} ferme(s) certifiee(s).').format(count))
+        self._update_farm_certification_status(
+            request,
+            queryset,
+            target_status='certified',
+            audit_message="Ferme certifiee via action admin",
+            success_message=_('{count} ferme(s) certifiee(s).'),
+            permission_error=_("Vous n'avez pas la permission de certifier les fermes."),
+        )
 
     @admin.action(description=_("Suspendre les certifications"))
     def suspend_certifications(self, request, queryset):
@@ -362,25 +407,18 @@ class UserAdmin(ManagerMixin, PIIMaskingMixin, AuditLogMixin, BaseUserAdmin):
         Action pour suspendre les certifications.
         Requiert permission manager.
         """
-        if not request.user.is_superuser:
-            if not request.user.groups.filter(name=RBACConstants.GROUP_MANAGERS).exists():
-                messages.error(request, _("Vous n'avez pas la permission de suspendre les certifications."))
-                return
-
-        count = 0
-        for user in queryset:
-            if hasattr(user, 'farm_profile'):
-                user.farm_profile.certification_status = 'suspended'
-                user.farm_profile.save()
-                count += 1
-                # Audit
-                self.log_action(request, user, CHANGE, message="Certification suspendue via action admin")
-
-        messages.success(request, _('{} certification(s) suspendue(s).').format(count))
+        self._update_farm_certification_status(
+            request,
+            queryset,
+            target_status='suspended',
+            audit_message="Certification suspendue via action admin",
+            success_message=_('{count} certification(s) suspendue(s).'),
+            permission_error=_("Vous n'avez pas la permission de suspendre les certifications."),
+        )
 
 
 @admin.register(FarmProfile)
-class FarmProfileAdmin(ManagerMixin, PIIMaskingMixin, SecuredModelAdmin):
+class FarmProfileAdmin(AccountsAdminRoleMixin, ManagerMixin, PIIMaskingMixin, SecuredModelAdmin):
     """
     Administration securisee des profils de ferme.
     """
@@ -416,13 +454,15 @@ class FarmProfileAdmin(ManagerMixin, PIIMaskingMixin, SecuredModelAdmin):
 
     readonly_fields = ('id', 'created_at', 'updated_at')
 
+    def get_queryset(self, request):
+        """Charge le proprietaire en eager loading pour la liste admin."""
+        return super().get_queryset(request).select_related('user')
+
     def get_search_fields(self, request):
         """Ajoute phone_number pour managers uniquement."""
         search_fields = list(super().get_search_fields(request) or self.search_fields)
 
-        if request.user.is_superuser:
-            search_fields.append('user__phone_number')
-        elif request.user.groups.filter(name=RBACConstants.GROUP_MANAGERS).exists():
+        if self._can_view_phone_number(request) and 'user__phone_number' not in search_fields:
             search_fields.append('user__phone_number')
 
         return search_fields

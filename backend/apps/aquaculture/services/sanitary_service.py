@@ -10,24 +10,20 @@ Centralise toute la logique métier liée aux événements sanitaires :
 
 Architecture: Service Layer Pattern avec responsabilité unique.
 """
-from typing import Dict, List, Any, Optional
 from datetime import date, timedelta
-from decimal import Decimal
+from typing import Any
+
 from django.db import transaction
-from django.db.models import Q, Count, Avg
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
+from notifications.services import NotificationService
 
-from ..models import SanitaryLog, ProductionCycle
+from ..domain.exceptions import CycleNotFoundException, InvalidSanitaryDataException, SanitaryLogNotFoundException
+from ..models import ProductionCycle, SanitaryLog
+
 # Notification model moved to apps/notifications/models.py
 # Will be migrated to use NotificationService in Phase 1B
 from .base import BaseService
-from notifications.services import NotificationService
-from ..domain.exceptions import (
-    InvalidSanitaryDataException,
-    SanitaryLogNotFoundException,
-    CycleNotFoundException
-)
 
 
 class SanitaryService(BaseService):
@@ -63,11 +59,11 @@ class SanitaryService(BaseService):
         event_date: date,
         event_type: str,
         symptoms: str,
-        affected_count: Optional[int] = None,
+        affected_count: int | None = None,
         treatment_applied: str = '',
         medication_used: str = '',
         dosage: str = '',
-        treatment_duration_days: Optional[int] = None,
+        treatment_duration_days: int | None = None,
         photo = None,
         notes: str = '',
         **kwargs
@@ -167,7 +163,7 @@ class SanitaryService(BaseService):
     @transaction.atomic
     def resolve_sanitary_issue(
         sanitary_log_id: str,
-        resolution_date: Optional[date] = None,
+        resolution_date: date | None = None,
         resolution_notes: str = ''
     ) -> SanitaryLog:
         """
@@ -252,7 +248,7 @@ class SanitaryService(BaseService):
         return sanitary_log
 
     @staticmethod
-    def get_active_issues_by_cycle(user) -> List[Dict[str, Any]]:
+    def get_active_issues_by_cycle(user) -> list[dict[str, Any]]:
         """
         Obtient tous les problèmes sanitaires actifs groupés par cycle.
 
@@ -306,7 +302,7 @@ class SanitaryService(BaseService):
         return list(by_cycle.values())
 
     @staticmethod
-    def analyze_sanitary_history(cycle: ProductionCycle) -> Dict[str, Any]:
+    def analyze_sanitary_history(cycle: ProductionCycle) -> dict[str, Any]:
         """
         Analyse l'historique sanitaire complet d'un cycle.
 
@@ -473,7 +469,7 @@ class SanitaryService(BaseService):
         cycle: ProductionCycle,
         total_events: int,
         active_count: int,
-        by_type: Dict[str, Dict]
+        by_type: dict[str, dict]
     ) -> int:
         """
         Calcule un score de santé sur 100 pour le cycle.
@@ -525,10 +521,10 @@ class SanitaryService(BaseService):
     @staticmethod
     def _generate_health_recommendations(
         cycle: ProductionCycle,
-        by_type: Dict[str, Dict],
+        by_type: dict[str, dict],
         active_count: int,
         health_score: int
-    ) -> List[str]:
+    ) -> list[str]:
         """
         Génère des recommandations préventives et curatives.
 
@@ -592,7 +588,7 @@ class SanitaryService(BaseService):
         return recommendations
 
     @staticmethod
-    def get_sanitary_summary_for_dashboard(user) -> Dict[str, Any]:
+    def get_sanitary_summary_for_dashboard(user) -> dict[str, Any]:
         """
         Génère un résumé sanitaire pour le dashboard utilisateur.
 

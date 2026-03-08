@@ -1,25 +1,36 @@
-# coding: utf-8
 """
 Message domain service.
 Handles message creation, retrieval, read status, and offline sync deduplication.
 """
 
-from typing import Optional
-from django.contrib.auth import get_user_model
-from django.db import transaction
-from django.utils import timezone
-from django.core.files.uploadedfile import UploadedFile
+from __future__ import annotations
 
-from ..domain.value_objects import MessageContent, MediaAttachment
+from typing import TYPE_CHECKING, Literal
+
+from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import UploadedFile
+from django.db import transaction
+from django.db.models import QuerySet
+from django.utils import timezone
+
 from ..domain.exceptions import (
-    InvalidMessageContent,
-    InvalidMediaFormat,
-    MediaTooLarge,
     ClientUUIDConflict,
+    InvalidMediaFormat,
+    InvalidMessageContent,
+    MediaTooLarge,
 )
+from ..domain.value_objects import MediaAttachment, MediaKind, MessageContent
 from .conversation_service import ConversationService
 
 User = get_user_model()
+
+if TYPE_CHECKING:
+    from chat.models import Conversation, Message
+    from chat.models import User as ChatUser
+
+
+UnreadRecipient = Literal['user', 'admin']
+SenderType = Literal['user', 'admin', 'system']
 
 
 class MessageService:
@@ -35,15 +46,142 @@ class MessageService:
     """
 
     @staticmethod
+    def _validate_message_content(content: str) -> None:
+        """Valide le contenu textuel et propage une erreur domaine explicite."""
+        try:
+            MessageContent(text=content)
+        except ValueError as err:
+            raise InvalidMessageContent(str(err)) from err
+
+    @staticmethod
+    def _validate_media_attachment(
+        media_file: UploadedFile | None,
+        media_type: str | None,
+    ) -> MediaKind | None:
+        """Valide le media eventuel et renvoie son type normalise."""
+        if not media_file or not media_type:
+            return None
+
+        normalized_media_type = media_type
+
+        try:
+            MediaAttachment(
+                file_path=media_file.name,
+                media_type=normalized_media_type,
+                file_size_bytes=media_file.size,
+                mime_type=media_file.content_type or 'application/octet-stream',
+            )
+        except ValueError as err:
+            error_msg = str(err)
+            if "exceeds maximum size" in error_msg:
+                raise MediaTooLarge(error_msg) from err
+            raise InvalidMediaFormat(error_msg) from err
+
+        return normalized_media_type
+
+    @staticmethod
+    def _get_existing_message_for_client_uuid(
+        client_uuid: str | None,
+    ) -> Message | None:
+        if not client_uuid:
+            return None
+
+        from ..models import Message
+
+        return Message.objects.filter(client_uuid=client_uuid).select_related(
+            'conversation__user'
+        ).first()
+
+    @staticmethod
+    def _build_message_payload(
+        *,
+        conversation: Conversation,
+        sender_type: SenderType,
+        content: str,
+        sender_user: ChatUser | None = None,
+        media_type: MediaKind | None = None,
+        media_file: UploadedFile | None = None,
+        client_uuid: str | None = None,
+        created_offline: bool = False,
+    ) -> dict[str, object]:
+        payload: dict[str, object] = {
+            'conversation': conversation,
+            'sender_type': sender_type,
+            'sender_user': sender_user,
+            'content': content,
+            'media_type': media_type or 'none',
+            'media_file': media_file,
+        }
+        if client_uuid is not None:
+            payload['client_uuid'] = client_uuid
+        if created_offline:
+            payload['created_offline'] = True
+            payload['synced_at'] = None
+        elif sender_type == 'user':
+            payload['created_offline'] = False
+            payload['synced_at'] = timezone.now()
+        return payload
+
+    @staticmethod
+    def _create_message(
+        *,
+        conversation: Conversation,
+        sender_type: SenderType,
+        content: str,
+        sender_user: ChatUser | None = None,
+        media_file: UploadedFile | None = None,
+        media_type: MediaKind | None = None,
+        client_uuid: str | None = None,
+        created_offline: bool = False,
+    ) -> Message:
+        from ..models import Message
+
+        payload = MessageService._build_message_payload(
+            conversation=conversation,
+            sender_type=sender_type,
+            sender_user=sender_user,
+            content=content,
+            media_type=media_type,
+            media_file=media_file,
+            client_uuid=client_uuid,
+            created_offline=created_offline,
+        )
+        return Message.objects.create(**payload)
+
+    @staticmethod
+    def _finalize_sent_message(
+        conversation: Conversation,
+        unread_recipient: UnreadRecipient | None,
+    ) -> None:
+        ConversationService.update_last_message_timestamp(conversation)
+        if unread_recipient == 'user':
+            ConversationService.increment_unread_count(conversation, for_user=True)
+        elif unread_recipient == 'admin':
+            ConversationService.increment_unread_count(conversation, for_user=False)
+
+    @staticmethod
+    def _get_unread_messages_queryset(
+        conversation: Conversation,
+        *,
+        reader_is_admin: bool,
+    ) -> QuerySet:
+        if reader_is_admin:
+            ConversationService.reset_unread_count(conversation, for_user=False)
+            return conversation.messages.filter(sender_type='user', is_read=False)
+
+        ConversationService.reset_unread_count(conversation, for_user=True)
+        return conversation.messages.filter(sender_type__in=['admin', 'system'], is_read=False)
+
+    @staticmethod
     @transaction.atomic
     def send_user_message(
-        user,
+        user: ChatUser,
         content: str,
-        media_file: Optional[UploadedFile] = None,
-        media_type: Optional[str] = None,
-        client_uuid: Optional[str] = None,
-        created_offline: bool = False
-    ):
+        media_file: UploadedFile | None = None,
+        media_type: str | None = None,
+        client_uuid: str | None = None,
+        created_offline: bool = False,
+    ) -> Message:
         """
         User sends message to administration.
 
@@ -70,77 +208,40 @@ class MessageService:
             InvalidMediaFormat: If media format not supported
             MediaTooLarge: If media exceeds size limits
         """
-        from ..models import Message
-
-        # Validate content using Domain Value Object
-        try:
-            message_content = MessageContent(text=content)
-        except ValueError as e:
-            raise InvalidMessageContent(str(e))
-
-        # Validate media if provided
-        if media_file and media_type:
-            try:
-                media_attachment = MediaAttachment(
-                    file_path=media_file.name,
-                    media_type=media_type,
-                    file_size_bytes=media_file.size,
-                    mime_type=media_file.content_type or 'application/octet-stream'
-                )
-            except ValueError as e:
-                # Determine specific exception type
-                error_msg = str(e)
-                if "exceeds maximum size" in error_msg:
-                    raise MediaTooLarge(error_msg)
-                else:
-                    raise InvalidMediaFormat(error_msg)
-
-        # Get or create conversation
+        MessageService._validate_message_content(content)
+        normalized_media_type = MessageService._validate_media_attachment(media_file, media_type)
         conversation = ConversationService.get_or_create_conversation(user)
 
-        # Deduplication: Check for existing message with same client_uuid
-        if client_uuid:
-            existing = Message.objects.filter(client_uuid=client_uuid).select_related(
-                'conversation__user'
-            ).first()
-            if existing:
-                # Idempotent for same user only.
-                if existing.conversation.user_id != user.id:
-                    raise ClientUUIDConflict(
-                        "Client UUID already used by another user."
-                    )
-                return existing
+        existing_message = MessageService._get_existing_message_for_client_uuid(client_uuid)
+        if existing_message:
+            if existing_message.conversation.user_id != user.id:
+                raise ClientUUIDConflict(
+                    "Client UUID already used by another user."
+                )
+            return existing_message
 
-        # Create new message
-        message = Message.objects.create(
+        message = MessageService._create_message(
             conversation=conversation,
             sender_type='user',
-            sender_user=None,  # User messages don't track sender_user
+            sender_user=None,
             content=content,
-            media_type=media_type or 'none',
             media_file=media_file,
+            media_type=normalized_media_type,
             client_uuid=client_uuid,
             created_offline=created_offline,
-            synced_at=None if created_offline else timezone.now()
         )
-
-        # Update conversation metadata
-        ConversationService.update_last_message_timestamp(conversation)
-        ConversationService.increment_unread_count(conversation, for_user=False)
-
-        # Note: Auto-acknowledgment will be triggered by signal (not here)
-
+        MessageService._finalize_sent_message(conversation, unread_recipient='admin')
         return message
 
     @staticmethod
     @transaction.atomic
     def send_admin_message(
-        conversation,
-        admin_user,
+        conversation: Conversation,
+        admin_user: ChatUser,
         content: str,
-        media_file: Optional[UploadedFile] = None,
-        media_type: Optional[str] = None,
-    ):
+        media_file: UploadedFile | None = None,
+        media_type: str | None = None,
+    ) -> Message:
         """
         Admin sends message to user.
 
@@ -161,50 +262,21 @@ class MessageService:
         Raises:
             InvalidMessageContent: If content is empty or too long
         """
-        from ..models import Message
-
-        # Validate content
-        try:
-            message_content = MessageContent(text=content)
-        except ValueError as e:
-            raise InvalidMessageContent(str(e))
-
-        # Validate media if provided
-        if media_file and media_type:
-            try:
-                media_attachment = MediaAttachment(
-                    file_path=media_file.name,
-                    media_type=media_type,
-                    file_size_bytes=media_file.size,
-                    mime_type=media_file.content_type or 'application/octet-stream',
-                )
-            except ValueError as e:
-                error_msg = str(e)
-                if "exceeds maximum size" in error_msg:
-                    raise MediaTooLarge(error_msg)
-                else:
-                    raise InvalidMediaFormat(error_msg)
-
-        # Create message
-        message = Message.objects.create(
+        MessageService._validate_message_content(content)
+        normalized_media_type = MessageService._validate_media_attachment(media_file, media_type)
+        message = MessageService._create_message(
             conversation=conversation,
             sender_type='admin',
-            sender_user=admin_user,  # Track which admin responded
+            sender_user=admin_user,
             content=content,
-            media_type=media_type or 'none',
             media_file=media_file,
+            media_type=normalized_media_type,
         )
-
-        # Update conversation metadata
-        ConversationService.update_last_message_timestamp(conversation)
-        ConversationService.increment_unread_count(conversation, for_user=True)
-
-        # Note: Notification will be triggered by signal (not here)
-
+        MessageService._finalize_sent_message(conversation, unread_recipient='user')
         return message
 
     @staticmethod
-    def send_system_message(conversation, content: str):
+    def send_system_message(conversation: Conversation, content: str) -> Message:
         """
         Send automated system message (e.g., auto-acknowledgment).
 
@@ -220,24 +292,18 @@ class MessageService:
         Returns:
             Message instance
         """
-        from ..models import Message
-
-        message = Message.objects.create(
+        message = MessageService._create_message(
             conversation=conversation,
             sender_type='system',
             sender_user=None,
             content=content,
-            media_type='none'
         )
-
-        # Update conversation timestamp (but not unread count)
-        ConversationService.update_last_message_timestamp(conversation)
-
+        MessageService._finalize_sent_message(conversation, unread_recipient=None)
         return message
 
     @staticmethod
     @transaction.atomic
-    def mark_messages_as_read(conversation, reader_is_admin: bool = False):
+    def mark_messages_as_read(conversation: Conversation, reader_is_admin: bool = False) -> None:
         """
         Mark all unread messages in conversation as read.
 
@@ -245,26 +311,10 @@ class MessageService:
             conversation: Conversation instance
             reader_is_admin: True if admin is reading, False if user is reading
         """
-        from ..models import Message
-
-        if reader_is_admin:
-            # Admin reading user messages
-            unread_messages = conversation.messages.filter(
-                sender_type='user',
-                is_read=False
-            )
-            # Reset admin's unread count
-            ConversationService.reset_unread_count(conversation, for_user=False)
-        else:
-            # User reading admin/system messages
-            unread_messages = conversation.messages.filter(
-                sender_type__in=['admin', 'system'],
-                is_read=False
-            )
-            # Reset user's unread count
-            ConversationService.reset_unread_count(conversation, for_user=True)
-
-        # Bulk update all unread messages
+        unread_messages = MessageService._get_unread_messages_queryset(
+            conversation,
+            reader_is_admin=reader_is_admin,
+        )
         unread_messages.update(
             is_read=True,
             read_at=timezone.now()

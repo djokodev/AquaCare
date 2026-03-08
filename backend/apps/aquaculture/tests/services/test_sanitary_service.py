@@ -3,13 +3,14 @@ Tests unitaires pour SanitaryService.
 
 Coverage cible : >50%
 """
-import pytest
 from datetime import date
-from django.contrib.contenttypes.models import ContentType
 
-from aquaculture.services.sanitary_service import SanitaryService
+import pytest
 from aquaculture.models import SanitaryLog
+from aquaculture.services.sanitary_service import SanitaryService
+from django.contrib.contenttypes.models import ContentType
 from notifications.models import Notification
+
 from tests.fixtures.factories import ProductionCycleFactory
 
 
@@ -181,8 +182,8 @@ class TestSanitaryServiceAnalysis:
 
     def test_resolve_event_creates_resolution_notification(self):
         """Résolution d'un événement doit créer une notification."""
-        from notifications.models import Notification
         from django.contrib.contenttypes.models import ContentType
+        from notifications.models import Notification
 
         cycle = ProductionCycleFactory()
         log = SanitaryService.create_sanitary_log(

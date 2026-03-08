@@ -9,15 +9,19 @@ Structure de l'API:
 - /api/support/ : Assistance technique (Phase 4)
 - /api/education/ : Guides et formation (Phase 5)
 """
-from django.contrib import admin
-from django.urls import path, include
-from django.http import JsonResponse
+from __future__ import annotations
+
 from django.conf import settings
 from django.conf.urls.static import static
+from django.contrib import admin
+from django.db.utils import DatabaseError
+from django.http import HttpRequest, JsonResponse
+from django.urls import include, path
 from django.views.generic import TemplateView
-from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
+from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
 
-def api_root(request):
+
+def api_root(request: HttpRequest) -> JsonResponse:
     """Endpoint racine fournissant les informations sur l'API."""
     return JsonResponse({
         'api': 'AquaCare API',
@@ -37,7 +41,7 @@ def api_root(request):
         },
     })
 
-def health_check(request):
+def health_check(request: HttpRequest) -> JsonResponse:
     """Health check endpoint pour Docker healthchecks et monitoring."""
     from django.db import connection
     try:
@@ -48,17 +52,26 @@ def health_check(request):
             'database': 'connected',
             'api': 'operational'
         }, status=200)
-    except Exception as e:
+    except DatabaseError as err:
         return JsonResponse({
             'status': 'unhealthy',
             'database': 'disconnected',
-            'error': str(e)
+            'error': str(err)
         }, status=503)
+
 
 urlpatterns = [
     # Legal pages (required for Google Play Store)
-    path('privacy-policy/', TemplateView.as_view(template_name='legal/privacy_policy.html'), name='privacy-policy'),
-    path('account-deletion/', TemplateView.as_view(template_name='legal/account_deletion.html'), name='account-deletion'),
+    path(
+        'privacy-policy/',
+        TemplateView.as_view(template_name='legal/privacy_policy.html'),
+        name='privacy-policy',
+    ),
+    path(
+        'account-deletion/',
+        TemplateView.as_view(template_name='legal/account_deletion.html'),
+        name='account-deletion',
+    ),
 
     path('i18n/', include('django.conf.urls.i18n')),  # Required for Jazzmin language switcher
     path('admin/', admin.site.urls),

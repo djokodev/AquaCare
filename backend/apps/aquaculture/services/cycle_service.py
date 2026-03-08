@@ -17,29 +17,54 @@ Architecture :
 - Validation métier stricte
 - Gestion d'erreurs explicite
 """
-from typing import Optional, Dict, Any
-from decimal import Decimal
+from __future__ import annotations
+
 from datetime import date, timedelta
+from decimal import Decimal
+from typing import TYPE_CHECKING, TypedDict
+
 from django.db import transaction
 from django.utils.translation import gettext_lazy as _
 
-from ..models import ProductionCycle, CycleLog
-from ..domain.calculators import AquacultureCalculator
 from ..constants import (
-    ECONOMIC_DEFAULTS_BY_SPECIES,
     DEFAULT_EXPECTED_SURVIVAL_RATE_PCT,
     DEFAULT_FINGERLINGS_COST_FCFA,
     DEFAULT_OTHER_OPERATIONAL_COSTS_FCFA,
+    ECONOMIC_DEFAULTS_BY_SPECIES,
 )
+from ..domain.calculators import AquacultureCalculator
 from ..domain.exceptions import (
     BusinessRuleViolation,
-    CycleNotActiveError,
     CycleAlreadyHarvestedError,
+    CycleNotActiveError,
+    InvalidDateRangeError,
     InvalidDensityError,
     InvalidHarvestDataError,
-    InvalidDateRangeError,
 )
+from ..models import CycleLog, ProductionCycle
 from .base import BaseService
+
+if TYPE_CHECKING:
+    from accounts.models import FarmProfile
+
+
+class CycleCreatePayload(TypedDict, total=False):
+    cycle_name: str
+    species: str
+    pond_identifier: str
+    pond_surface_m2: Decimal
+    pond_volume_m3: Decimal
+    infrastructure_type: str
+    start_date: date | str
+    initial_count: int
+    initial_average_weight: Decimal
+    target_harvest_weight_g: Decimal
+    planned_cycle_duration_days: int
+    planned_harvest_date: date | str
+    expected_survival_rate_pct: Decimal
+    planned_selling_price_per_kg_fcfa: Decimal
+    fingerlings_cost_fcfa: Decimal
+    other_operational_costs_fcfa: Decimal
 
 
 class ProductionCycleService(BaseService):
@@ -67,7 +92,7 @@ class ProductionCycleService(BaseService):
 
     @staticmethod
     @transaction.atomic
-    def create_cycle(farm_profile, cycle_data: dict) -> ProductionCycle:
+    def create_cycle(farm_profile: FarmProfile, cycle_data: CycleCreatePayload) -> ProductionCycle:
         """
         Crée un nouveau cycle de production avec validation métier complète.
 
@@ -382,7 +407,7 @@ class ProductionCycleService(BaseService):
     # =================== MÉTHODES PRIVÉES (VALIDATION) ===================
 
     @staticmethod
-    def _validate_cycle_business_rules(cycle_data: dict) -> None:
+    def _validate_cycle_business_rules(cycle_data: CycleCreatePayload) -> None:
         """
         Valide les règles métier pour la création d'un cycle.
 
@@ -476,7 +501,7 @@ class ProductionCycleService(BaseService):
                 )
 
     @staticmethod
-    def _apply_economic_defaults(cycle_data: Dict[str, Any]) -> None:
+    def _apply_economic_defaults(cycle_data: CycleCreatePayload) -> None:
         species = cycle_data.get('species') or 'tilapia'
         defaults = ECONOMIC_DEFAULTS_BY_SPECIES.get(species, ECONOMIC_DEFAULTS_BY_SPECIES['tilapia'])
 

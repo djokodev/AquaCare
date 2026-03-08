@@ -11,24 +11,18 @@ Responsabilités des signals :
 
 Architecture : Signal → Service Layer (découplage complet)
 """
-from django.db.models.signals import post_save, pre_save, post_delete
+from datetime import date, datetime, timedelta
+from decimal import Decimal
+
+from django.db.models.signals import post_delete, post_save, pre_save
 from django.dispatch import receiver
 from django.utils import timezone
-from decimal import Decimal
-from datetime import date, datetime, timedelta
-
-from .models import (
-    ProductionCycle, CycleLog, SanitaryLog, CycleMetrics
-)
 from notifications.services import NotificationService
-from notifications.models import Notification
-from .domain.calculators import AquacultureCalculator
-from .services import (
-    ProductionCycleService,
-    AnalyticsService
-)
-from .services.sync_service import is_sync_in_progress
 
+from .domain.calculators import AquacultureCalculator
+from .models import CycleLog, CycleMetrics, ProductionCycle, SanitaryLog
+from .services import AnalyticsService, ProductionCycleService
+from .services.sync_service import is_sync_in_progress
 
 # =============================================================================
 # SIGNALS PRODUCTIONCY CLE
@@ -105,7 +99,9 @@ def create_cycle_metrics(sender, instance, created, **kwargs):
                 content_object=instance,
                 metadata={'cycle_id': str(instance.id)},
                 channels=['in_app', 'push'],
-                scheduled_for=timezone.make_aware(datetime.combine(sampling_date, datetime.min.time()).replace(hour=9, minute=0)),
+                scheduled_for=timezone.make_aware(
+                    datetime.combine(sampling_date, datetime.min.time()).replace(hour=9, minute=0)
+                ),
             )
 
 

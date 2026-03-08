@@ -9,17 +9,16 @@ Roles:
 - COMMERCE: Lecture seule (contexte commandes)
 """
 
-from django.contrib import admin
+from common.admin_mixins import (
+    RBACConstants,
+    SecuredModelAdmin,
+)
+from django.contrib import admin, messages
 from django.contrib.admin.models import CHANGE
 from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
-from django.contrib import messages
 
 from .models import Notification, NotificationPreference, PushToken
-from common.admin_mixins import (
-    SecuredModelAdmin,
-    RBACConstants,
-)
 
 
 class NotificationsSecuredAdmin(SecuredModelAdmin):

@@ -3,14 +3,15 @@ Tests unitaires pour AnalyticsService.
 
 Coverage cible : >60%
 """
-import pytest
-from decimal import Decimal
 from datetime import date, timedelta
+from decimal import Decimal
 
-from aquaculture.services.analytics_service import AnalyticsService
+import pytest
 from aquaculture.models import CycleMetrics
-from tests.fixtures.factories import ProductionCycleFactory
+from aquaculture.services.analytics_service import AnalyticsService
 from aquaculture.services.log_service import CycleLogService
+
+from tests.fixtures.factories import ProductionCycleFactory
 
 
 @pytest.mark.django_db

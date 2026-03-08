@@ -1,15 +1,44 @@
-# coding: utf-8
 """
 Chat models with offline-first UUID architecture.
 Follows AquaCare patterns from aquaculture module (ProductionCycle, CycleLog).
 """
 
 import uuid
-from django.db import models
+
 from django.conf import settings
-from django.utils import timezone
 from django.core.validators import FileExtensionValidator
+from django.db import models
+from django.db.models import OuterRef, QuerySet, Subquery
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
+
+
+class ConversationQuerySet(QuerySet["Conversation"]):
+    """QuerySet utilitaire pour les conversations de support."""
+
+    def with_user(self) -> QuerySet["Conversation"]:
+        return self.select_related('user')
+
+    def with_api_annotations(self) -> QuerySet["Conversation"]:
+        latest_message_queryset = Message.objects.filter(
+            conversation_id=OuterRef('pk')
+        ).order_by('-created_at')
+
+        return self.with_user().annotate(
+            messages_count_ann=models.Count('messages'),
+            last_message_id_ann=Subquery(latest_message_queryset.values('id')[:1]),
+            last_message_content_ann=Subquery(latest_message_queryset.values('content')[:1]),
+            last_message_sender_type_ann=Subquery(latest_message_queryset.values('sender_type')[:1]),
+            last_message_created_at_ann=Subquery(latest_message_queryset.values('created_at')[:1]),
+            last_message_media_type_ann=Subquery(latest_message_queryset.values('media_type')[:1]),
+        )
+
+
+class MessageQuerySet(QuerySet["Message"]):
+    """QuerySet utilitaire pour les feeds de messages."""
+
+    def for_feed(self) -> QuerySet["Message"]:
+        return self.select_related('conversation__user', 'sender_user')
 
 
 class Conversation(models.Model):
@@ -73,6 +102,8 @@ class Conversation(models.Model):
         verbose_name=_("Conversation active"),
         help_text=_("Désactiver pour archiver la conversation")
     )
+
+    objects = ConversationQuerySet.as_manager()
 
     class Meta:
         db_table = 'chat_conversations'
@@ -227,6 +258,8 @@ class Message(models.Model):
         auto_now=True,
         verbose_name=_("Date de modification")
     )
+
+    objects = MessageQuerySet.as_manager()
 
     class Meta:
         db_table = 'chat_messages'

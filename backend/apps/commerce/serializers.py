@@ -4,15 +4,14 @@ Serializers Django REST Framework pour le module commerce MAVECAM AquaCare.
 Architecture minimaliste : Serializers pour validation/transformation données,
 logique métier déléguée aux Services.
 """
+from __future__ import annotations
+
+from typing import Any
+
 from rest_framework import serializers
 
-from .models import Product, Order, OrderItem
-from .services import OrderService
-from .domain.exceptions import (
-    InvalidOrderError,
-    ProductNotFoundError,
-    ProductNotAvailableError,
-)
+from .domain.validators import OrderItemPayload
+from .models import Order, OrderItem, Product
 
 
 class ProductSerializer(serializers.ModelSerializer):
@@ -112,6 +111,40 @@ class OrderItemInputSerializer(serializers.Serializer):
     )
 
 
+class CommerceErrorResponseSerializer(serializers.Serializer):
+    """Payload d'erreur standardise pour les actions commerce."""
+
+    error = serializers.CharField(read_only=True)
+    message = serializers.CharField(read_only=True, required=False, allow_blank=True)
+
+
+class RecommendedProductQuerySerializer(serializers.Serializer):
+    """Validation DRF des query params de recommandation produit."""
+
+    species = serializers.ChoiceField(
+        choices=['tilapia', 'catfish', 'clarias'],
+        required=True,
+        help_text="Espèce du cycle ou du poisson",
+    )
+    weight_g = serializers.FloatField(
+        required=True,
+        min_value=0.1,
+        help_text="Poids moyen en grammes",
+    )
+
+    def validate_species(self, value: str) -> str:
+        if value == 'clarias':
+            return 'catfish'
+        return value
+
+
+class FeedingSuggestionsQuerySerializer(serializers.Serializer):
+    """Validation DRF des query params des suggestions d'aliments."""
+
+    farm_profile_id = serializers.UUIDField(required=False)
+    cycle_id = serializers.UUIDField(required=False)
+
+
 class OrderCreateSerializer(serializers.Serializer):
     """
     Serializer pour création de commande.
@@ -144,7 +177,31 @@ class OrderCreateSerializer(serializers.Serializer):
         help_text="True si commande créée en mode offline"
     )
 
-    def validate(self, attrs):
+    @staticmethod
+    def _build_items_payload(items: list[dict[str, Any]]) -> list[OrderItemPayload]:
+        return [
+            {
+                'product_id': str(item['product_id']),
+                'quantity': int(item['quantity']),
+            }
+            for item in items
+        ]
+
+    @staticmethod
+    def _validate_available_products(items: list[OrderItemPayload]) -> None:
+        product_ids = [item['product_id'] for item in items]
+        available_products = Product.objects.filter(
+            id__in=product_ids,
+            is_available=True,
+        ).values_list('id', flat=True)
+        found_ids = {str(product_id) for product_id in available_products}
+        missing = [product_id for product_id in product_ids if product_id not in found_ids]
+        if missing:
+            raise serializers.ValidationError({
+                'items': f"Produit(s) introuvable(s) ou indisponible(s) : {', '.join(missing)}"
+            })
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
         """Validation métier cross-field."""
         delivery_method = attrs.get('delivery_method')
         pickup_location = attrs.get('pickup_location', '')
@@ -163,56 +220,11 @@ class OrderCreateSerializer(serializers.Serializer):
         # (évite les N+1 de validate_product_id sur chaque OrderItemInputSerializer)
         items = attrs.get('items', [])
         if items:
-            product_ids = [str(item['product_id']) for item in items]
-            available_products = Product.objects.filter(
-                id__in=product_ids,
-                is_available=True
-            ).values_list('id', flat=True)
-            found_ids = {str(pid) for pid in available_products}
-            missing = [pid for pid in product_ids if pid not in found_ids]
-            if missing:
-                raise serializers.ValidationError({
-                    'items': f"Produit(s) introuvable(s) ou indisponible(s) : {', '.join(missing)}"
-                })
+            OrderCreateSerializer._validate_available_products(
+                OrderCreateSerializer._build_items_payload(items),
+            )
 
         return attrs
-
-    def create(self, validated_data):
-        """
-        Crée commande via OrderService.
-
-        Note : `request.user` doit être injecté via context.
-        """
-        user = self.context['request'].user
-
-        # Préparer items_data pour OrderService
-        items_data = [
-            {
-                'product_id': str(item['product_id']),
-                'quantity': item['quantity']
-            }
-            for item in validated_data['items']
-        ]
-
-        # Déléguer création au service
-        try:
-            order = OrderService.create_order(
-                user=user,
-                items_data=items_data,
-                delivery_method=validated_data['delivery_method'],
-                pickup_location=validated_data.get('pickup_location', None),
-                client_uuid=validated_data.get('client_uuid', None),
-                created_offline=validated_data.get('created_offline', False)
-            )
-        except (
-            InvalidOrderError,
-            ProductNotFoundError,
-            ProductNotAvailableError,
-            ValueError,
-        ) as exc:
-            raise serializers.ValidationError({'message': str(exc)}) from exc
-
-        return order
 
 
 class DeliveryFeePreviewSerializer(serializers.Serializer):
@@ -228,34 +240,22 @@ class DeliveryFeePreviewSerializer(serializers.Serializer):
         required=True
     )
 
-    def validate(self, attrs):
-        """Calcule preview via OrderService."""
-        user = self.context['request'].user
-
-        items_data = [
-            {
-                'product_id': str(item['product_id']),
-                'quantity': item['quantity']
-            }
-            for item in attrs['items']
-        ]
-
-        try:
-            preview = OrderService.calculate_delivery_fee_preview(
-                user=user,
-                items_data=items_data,
-                delivery_method=attrs['delivery_method']
-            )
-            attrs['preview'] = preview
-        except (
-            InvalidOrderError,
-            ProductNotFoundError,
-            ProductNotAvailableError,
-            ValueError,
-        ) as exc:
-            raise serializers.ValidationError({'message': str(exc)}) from exc
-
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        """Valide les items via la meme strategie batch que la creation."""
+        OrderCreateSerializer._validate_available_products(
+            OrderCreateSerializer._build_items_payload(attrs['items']),
+        )
         return attrs
+
+
+class DeliveryFeePreviewResponseSerializer(serializers.Serializer):
+    """Serializer de sortie pour le preview des frais de livraison."""
+
+    subtotal = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    delivery_fee = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    total = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    total_bags = serializers.IntegerField(read_only=True)
+    free_delivery_threshold_reached = serializers.BooleanField(read_only=True)
 
 
 class OrderStatisticsSerializer(serializers.Serializer):
@@ -334,12 +334,12 @@ class CycleSimulationInputSerializer(serializers.Serializer):
         help_text="Autres coûts opérationnels (FCFA)"
     )
 
-    def validate_species(self, value):
+    def validate_species(self, value: str) -> str:
         if value == 'clarias':
             return 'catfish'
         return value
 
-    def validate(self, attrs):
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
         """Validation cohérence des paramètres."""
         initial_weight = attrs.get('initial_weight_g', 5)
         target_weight = attrs.get('target_weight_g')

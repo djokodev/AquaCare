@@ -1,13 +1,16 @@
+from __future__ import annotations
+
+from typing import Any
+
 from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.validators import EmailValidator
 from django.db import IntegrityError
 from django.utils.translation import gettext as _
-
 from rest_framework import serializers
 
-from .models import User, FarmProfile
+from .models import FarmProfile, User
 from .validators import PhoneNumberValidator
 
 
@@ -37,40 +40,40 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
             'legal_status', 'promoter_name', 'age_group', 'intervention_zone'
         )
 
-    def validate(self, attrs):
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
         if attrs['password'] != attrs['password_confirm']:
             raise serializers.ValidationError(_("Les mots de passe ne correspondent pas."))
 
         try:
             validate_password(attrs['password'])
-        except DjangoValidationError as e:
-            raise serializers.ValidationError({'password': list(e.messages)})
+        except DjangoValidationError as err:
+            raise serializers.ValidationError({'password': list(err.messages)}) from err
 
         return attrs
 
-    def create(self, validated_data):
+    def create(self, validated_data: dict[str, Any]) -> User:
         validated_data.pop('password_confirm')
 
         try:
             user = User.objects.create_user(**validated_data)
             return user
-        except DjangoValidationError as e:
-            if hasattr(e, 'error_dict'):
+        except DjangoValidationError as err:
+            if hasattr(err, 'error_dict'):
                 raise serializers.ValidationError({
                     field: [str(error) for error in errors]
-                    for field, errors in e.error_dict.items()
-                })
+                    for field, errors in err.error_dict.items()
+                }) from err
             else:
-                raise serializers.ValidationError(str(e))
-        except IntegrityError as e:
-            if 'phone_number' in str(e):
+                raise serializers.ValidationError(str(err)) from err
+        except IntegrityError as err:
+            if 'phone_number' in str(err):
                 raise serializers.ValidationError({
                     'phone_number': [_('Un utilisateur avec ce numéro de téléphone existe déjà.')]
-                })
+                }) from err
             else:
                 raise serializers.ValidationError(
                     _('Une erreur inattendue s\'est produite. Veuillez réessayer.')
-                )
+                ) from err
 
 
 class LoginSerializer(serializers.Serializer):
@@ -91,7 +94,7 @@ class LoginSerializer(serializers.Serializer):
     )
     password = serializers.CharField(write_only=True, required=False)
 
-    def validate(self, attrs):
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
         login_name = attrs.get('login_name')
         phone_number = attrs.get('phone_number')
         password = attrs.get('password')
@@ -126,6 +129,15 @@ class LoginSerializer(serializers.Serializer):
         return attrs
 
 
+class LogoutSerializer(serializers.Serializer):
+    """Serializer de validation pour la deconnexion JWT."""
+
+    refresh = serializers.CharField(
+        required=True,
+        help_text="Token de rafraichissement a invalider.",
+    )
+
+
 class FarmProfileSerializer(serializers.ModelSerializer):
     """
     Serializer pour les profils de fermes MAVECAM.
@@ -149,7 +161,7 @@ class FarmProfileSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at', 'is_certified', 'certification_status_display'
         )
 
-    def validate_farm_name(self, value):
+    def validate_farm_name(self, value: str) -> str:
         if not value or not value.strip():
             raise serializers.ValidationError(_("Le nom de la ferme ne peut pas être vide."))
         return value.strip()
@@ -184,6 +196,33 @@ class UserProfileSerializer(serializers.ModelSerializer):
         )
 
 
+class AuthTokenSerializer(serializers.Serializer):
+    """Paire de tokens JWT retournee apres authentification."""
+
+    refresh = serializers.CharField(read_only=True)
+    access = serializers.CharField(read_only=True)
+
+
+class AuthSuccessResponseSerializer(serializers.Serializer):
+    """Contrat DRF commun des reponses register/login."""
+
+    user = UserProfileSerializer(read_only=True)
+    tokens = AuthTokenSerializer(read_only=True)
+    message = serializers.CharField(read_only=True)
+
+
+class MessageResponseSerializer(serializers.Serializer):
+    """Message simple de succes pour les endpoints d'action."""
+
+    message = serializers.CharField(read_only=True)
+
+
+class ErrorResponseSerializer(serializers.Serializer):
+    """Payload d'erreur metier simple pour les endpoints d'action."""
+
+    error = serializers.CharField(read_only=True)
+
+
 class AccountDeletionSerializer(serializers.Serializer):
     """
     Serializer de confirmation suppression de compte.
@@ -192,3 +231,8 @@ class AccountDeletionSerializer(serializers.Serializer):
         required=True,
         help_text="Doit être true pour confirmer la suppression du compte."
     )
+
+    def validate_confirm(self, value: bool) -> bool:
+        if value is not True:
+            raise serializers.ValidationError(_("Confirmation explicite requise."))
+        return value

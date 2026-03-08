@@ -1,25 +1,80 @@
 """
 Views (ViewSets) pour l'API REST des notifications.
 """
+from __future__ import annotations
 
-from rest_framework import viewsets, status
+from typing import Any, cast
+
+from django.db.models import QuerySet
+from drf_spectacular.utils import OpenApiResponse, extend_schema, extend_schema_view
+from rest_framework import status, viewsets
 from rest_framework.decorators import action
-from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from django.utils import timezone
-from django.db.models import Count, Q
+from rest_framework.request import Request
+from rest_framework.response import Response
 
-from .models import Notification, NotificationPreference, PushToken
-from .serializers import (
-    NotificationSerializer,
-    NotificationListSerializer,
-    NotificationPreferenceSerializer,
-    PushTokenSerializer,
-    NotificationStatsSerializer
+from .application_services import (
+    NotificationInboxApplicationService,
+    NotificationOwnershipError,
+    NotificationPreferenceApplicationService,
+    NotificationQueryFilters,
+    NotificationStatsPayload,
+    PushTokenRegistrationCommand,
 )
-from .services import NotificationService
+from .models import Notification
+from .serializers import (
+    NotificationActionErrorSerializer,
+    NotificationListSerializer,
+    NotificationMutationResponseSerializer,
+    NotificationPreferenceSerializer,
+    NotificationSerializer,
+    NotificationStatsSerializer,
+    PushTokenSerializer,
+)
+from .throttles import NotificationBulkMutationThrottle, NotificationPushTokenThrottle
 
 
+@extend_schema_view(
+    list=extend_schema(
+        summary="Lister mes notifications",
+        responses={200: NotificationListSerializer(many=True)},
+    ),
+    retrieve=extend_schema(
+        summary="Recuperer une notification",
+        responses={200: NotificationSerializer},
+    ),
+    mark_read=extend_schema(
+        summary="Marquer une notification comme lue",
+        responses={
+            200: NotificationMutationResponseSerializer,
+            403: NotificationActionErrorSerializer,
+        },
+    ),
+    mark_all_read=extend_schema(
+        summary="Marquer toutes mes notifications comme lues",
+        responses={200: NotificationMutationResponseSerializer},
+    ),
+    destroy=extend_schema(
+        summary="Supprimer une notification",
+        responses={
+            204: OpenApiResponse(description="Notification supprimee"),
+            403: NotificationActionErrorSerializer,
+        },
+    ),
+    delete_all_read=extend_schema(
+        summary="Supprimer toutes mes notifications lues",
+        responses={200: NotificationMutationResponseSerializer},
+    ),
+    stats=extend_schema(
+        summary="Recuperer les statistiques de notifications",
+        responses={200: NotificationStatsSerializer},
+    ),
+    register_push_token=extend_schema(
+        summary="Enregistrer un token push Expo",
+        request=PushTokenSerializer,
+        responses={200: PushTokenSerializer, 201: PushTokenSerializer},
+    ),
+)
 class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
     """
     API endpoints pour les notifications.
@@ -37,40 +92,56 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [IsAuthenticated]
     serializer_class = NotificationSerializer
 
-    def get_queryset(self):
+    @staticmethod
+    def _forbidden_response(message: str) -> Response:
+        serializer = NotificationActionErrorSerializer({'error': message})
+        return Response(serializer.data, status=status.HTTP_403_FORBIDDEN)
+
+    @staticmethod
+    def _build_mutation_response(
+        *,
+        status_text: str,
+        count: int | None = None,
+        message: str | None = None,
+        notification: dict[str, Any] | None = None,
+        status_code: int = status.HTTP_200_OK,
+    ) -> Response:
+        payload: dict[str, Any] = {'status': status_text}
+        if count is not None:
+            payload['count'] = count
+        if message is not None:
+            payload['message'] = message
+        if notification is not None:
+            payload['notification'] = notification
+        serializer = NotificationMutationResponseSerializer(payload)
+        return Response(serializer.data, status=status_code)
+
+    def get_queryset(self) -> QuerySet[Notification]:
         """
         Filtre les notifications par utilisateur authentifié.
         Exclut les notifications futures (scheduled_for > now).
         """
-        user = self.request.user
-        queryset = Notification.objects.filter(
-            user=user,
-            scheduled_for__lte=timezone.now()
-        ).select_related('user').prefetch_related('content_type')
+        is_read_param = self.request.query_params.get("is_read")
+        filters = NotificationQueryFilters(
+            is_read=is_read_param.lower() == "true" if is_read_param is not None else None,
+            notification_type=self.request.query_params.get("type"),
+        )
+        return NotificationInboxApplicationService.get_user_notifications(self.request.user, filters)
 
-        # Filtres optionnels via query params
-        is_read = self.request.query_params.get('is_read', None)
-        notification_type = self.request.query_params.get('type', None)
-
-        if is_read is not None:
-            is_read_bool = is_read.lower() == 'true'
-            queryset = queryset.filter(is_read=is_read_bool)
-
-        if notification_type:
-            queryset = queryset.filter(notification_type=notification_type)
-
-        return queryset.order_by('-scheduled_for')
-
-    def get_serializer_class(self):
+    def get_serializer_class(self) -> type[NotificationListSerializer] | type[NotificationSerializer]:
         """
         Utilise un serializer léger pour la liste.
         """
         if self.action == 'list':
             return NotificationListSerializer
+        if self.action == 'stats':
+            return NotificationStatsSerializer
+        if self.action == 'register_push_token':
+            return PushTokenSerializer
         return NotificationSerializer
 
     @action(detail=True, methods=['post'])
-    def mark_read(self, request, pk=None):
+    def mark_read(self, request: Request, pk: str | None = None) -> Response:
         """
         Marque une notification comme lue.
 
@@ -85,24 +156,27 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
         ```
         """
         notification = self.get_object()
-
-        # Vérifier propriété
-        if notification.user != request.user:
-            return Response(
-                {'error': 'Vous ne pouvez pas modifier cette notification'},
-                status=status.HTTP_403_FORBIDDEN
+        try:
+            updated_notification = NotificationInboxApplicationService.mark_notification_as_read(
+                notification,
+                request.user,
             )
+        except NotificationOwnershipError as exc:
+            return self._forbidden_response(str(exc))
 
-        notification.mark_as_read()
-        serializer = self.get_serializer(notification)
+        serializer = self.get_serializer(updated_notification)
 
-        return Response({
-            'status': 'marked as read',
-            'notification': serializer.data
-        })
+        return self._build_mutation_response(
+            status_text='marked as read',
+            notification=serializer.data,
+        )
 
-    @action(detail=False, methods=['post'])
-    def mark_all_read(self, request):
+    @action(
+        detail=False,
+        methods=['post'],
+        throttle_classes=[NotificationBulkMutationThrottle],
+    )
+    def mark_all_read(self, request: Request) -> Response:
         """
         Marque toutes les notifications comme lues.
 
@@ -116,38 +190,37 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
         }
         ```
         """
-        count = NotificationService.mark_all_as_read(request.user)
+        count = NotificationInboxApplicationService.mark_all_notifications_as_read(request.user)
 
-        return Response({
-            'status': 'success',
-            'count': count,
-            'message': f'{count} notification(s) marquée(s) comme lue(s)'
-        })
+        return self._build_mutation_response(
+            status_text='success',
+            count=count,
+            message=f'{count} notification(s) marquée(s) comme lue(s)',
+        )
 
-    def destroy(self, request, pk=None):
+    def destroy(self, request: Request, pk: str | None = None) -> Response:
         """
         Supprime une notification.
 
         **DELETE** /api/notifications/{id}/
         """
         notification = self.get_object()
+        try:
+            NotificationInboxApplicationService.delete_notification(notification, request.user)
+        except NotificationOwnershipError as exc:
+            return self._forbidden_response(str(exc))
 
-        # Vérifier propriété
-        if notification.user != request.user:
-            return Response(
-                {'error': 'Vous ne pouvez pas supprimer cette notification'},
-                status=status.HTTP_403_FORBIDDEN
-            )
-
-        notification.delete()
-
-        return Response(
-            {'status': 'deleted'},
-            status=status.HTTP_204_NO_CONTENT
+        return self._build_mutation_response(
+            status_text='deleted',
+            status_code=status.HTTP_204_NO_CONTENT,
         )
 
-    @action(detail=False, methods=['post'])
-    def delete_all_read(self, request):
+    @action(
+        detail=False,
+        methods=['post'],
+        throttle_classes=[NotificationBulkMutationThrottle],
+    )
+    def delete_all_read(self, request: Request) -> Response:
         """
         Supprime toutes les notifications lues.
 
@@ -161,16 +234,16 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
         }
         ```
         """
-        count = NotificationService.delete_all_read_notifications(request.user)
+        count = NotificationInboxApplicationService.delete_all_read_notifications(request.user)
 
-        return Response({
-            'status': 'success',
-            'count': count,
-            'message': f'{count} notification(s) supprimée(s)'
-        })
+        return self._build_mutation_response(
+            status_text='success',
+            count=count,
+            message=f'{count} notification(s) supprimée(s)',
+        )
 
     @action(detail=False, methods=['get'])
-    def stats(self, request):
+    def stats(self, request: Request) -> Response:
         """
         Retourne des statistiques sur les notifications.
 
@@ -190,42 +263,19 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
         }
         ```
         """
-        user = request.user
-        now = timezone.now()
-
-        # Combiner total et unread en un seul aggregate (2 requêtes au lieu de 3)
-        agg = Notification.objects.filter(
-            user=user,
-            scheduled_for__lte=now,
-        ).aggregate(
-            total_count=Count('id'),
-            unread_count=Count('id', filter=Q(is_read=False)),
+        data: NotificationStatsPayload = NotificationInboxApplicationService.get_notification_stats(
+            request.user,
         )
-        total_count = agg['total_count']
-        unread_count = agg['unread_count']
-        read_count = total_count - unread_count
 
-        by_type = Notification.objects.filter(
-            user=user,
-            scheduled_for__lte=now,
-        ).values('notification_type').annotate(
-            count=Count('id')
-        ).order_by('-count')
-
-        by_type_dict = {item['notification_type']: item['count'] for item in by_type}
-
-        data = {
-            'total_count': total_count,
-            'unread_count': unread_count,
-            'read_count': read_count,
-            'by_type': by_type_dict
-        }
-
-        serializer = NotificationStatsSerializer(data)
+        serializer = self.get_serializer(data)
         return Response(serializer.data)
 
-    @action(detail=False, methods=['post'])
-    def register_push_token(self, request):
+    @action(
+        detail=False,
+        methods=['post'],
+        throttle_classes=[NotificationPushTokenThrottle],
+    )
+    def register_push_token(self, request: Request) -> Response:
         """
         Enregistre ou met à jour un Expo Push Token.
 
@@ -254,22 +304,20 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
         }
         ```
         """
-        serializer = PushTokenSerializer(data=request.data)
+        serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-
-        # Créer ou mettre à jour le token
-        token, created = PushToken.objects.update_or_create(
-            user=request.user,
-            device_id=serializer.validated_data['device_id'],
-            defaults={
-                'expo_push_token': serializer.validated_data['expo_push_token'],
-                'device_name': serializer.validated_data.get('device_name'),
-                'platform': serializer.validated_data.get('platform'),
-                'is_active': True,
-            }
+        validated_data = cast(dict[str, Any], serializer.validated_data)
+        token, created = NotificationInboxApplicationService.register_push_token(
+            request.user,
+            PushTokenRegistrationCommand(
+                expo_push_token=validated_data['expo_push_token'],
+                device_id=validated_data['device_id'],
+                device_name=validated_data.get('device_name'),
+                platform=validated_data.get('platform'),
+            ),
         )
 
-        response_serializer = PushTokenSerializer(token)
+        response_serializer = self.get_serializer(token)
 
         return Response(
             response_serializer.data,
@@ -277,7 +325,23 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
         )
 
 
-class NotificationPreferenceViewSet(viewsets.ViewSet):
+@extend_schema_view(
+    list=extend_schema(
+        summary="Recuperer mes preferences de notification",
+        responses={200: NotificationPreferenceSerializer},
+    ),
+    update=extend_schema(
+        summary="Mettre a jour toutes mes preferences de notification",
+        request=NotificationPreferenceSerializer,
+        responses={200: NotificationPreferenceSerializer},
+    ),
+    partial_update=extend_schema(
+        summary="Mettre a jour partiellement mes preferences de notification",
+        request=NotificationPreferenceSerializer,
+        responses={200: NotificationPreferenceSerializer},
+    ),
+)
+class NotificationPreferenceViewSet(viewsets.GenericViewSet):
     """
     API endpoints pour les préférences de notifications.
 
@@ -288,37 +352,45 @@ class NotificationPreferenceViewSet(viewsets.ViewSet):
     """
 
     permission_classes = [IsAuthenticated]
+    serializer_class = NotificationPreferenceSerializer
 
-    def list(self, request):
+    def _save_preferences(self, request: Request, *, partial: bool) -> Response:
+        prefs = NotificationPreferenceApplicationService.get_or_create_preferences(request.user)
+        serializer = self.get_serializer(
+            prefs,
+            data=request.data,
+            partial=partial,
+        )
+        serializer.is_valid(raise_exception=True)
+        updated_preferences = NotificationPreferenceApplicationService.update_preferences(
+            prefs,
+            cast(dict[str, Any], serializer.validated_data),
+        )
+        response_serializer = self.get_serializer(updated_preferences)
+        return Response(response_serializer.data)
+
+    def list(self, request: Request) -> Response:
         """
         Récupère les préférences de l'utilisateur.
 
         **GET** /api/notification-preferences/
         """
-        prefs, _ = NotificationPreference.objects.get_or_create(user=request.user)
-        serializer = NotificationPreferenceSerializer(prefs)
+        prefs = NotificationPreferenceApplicationService.get_or_create_preferences(request.user)
+        serializer = self.get_serializer(prefs)
         return Response(serializer.data)
 
-    def update(self, request):
+    def update(self, request: Request) -> Response:
         """
         Met à jour les préférences de l'utilisateur (complet).
 
         **PUT** /api/notification-preferences/
         """
-        prefs, _ = NotificationPreference.objects.get_or_create(user=request.user)
-        serializer = NotificationPreferenceSerializer(prefs, data=request.data)
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
-        return Response(serializer.data)
+        return self._save_preferences(request, partial=False)
 
-    def partial_update(self, request):
+    def partial_update(self, request: Request) -> Response:
         """
         Met à jour partiellement les préférences de l'utilisateur.
 
         **PATCH** /api/notification-preferences/
         """
-        prefs, _ = NotificationPreference.objects.get_or_create(user=request.user)
-        serializer = NotificationPreferenceSerializer(prefs, data=request.data, partial=True)
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
-        return Response(serializer.data)
+        return self._save_preferences(request, partial=True)

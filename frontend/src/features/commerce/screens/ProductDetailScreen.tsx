@@ -1,11 +1,12 @@
 ﻿/**
  * ProductDetailScreen - Details Produit MAVECAM (NativeWind)
  */
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
   ScrollView,
+  FlatList,
   TouchableOpacity,
   ActivityIndicator,
   Alert,
@@ -60,7 +61,7 @@ export default function ProductDetailScreen() {
     };
 
     loadProduct();
-  }, [productId]);
+  }, [allProducts, dispatch, productId, t]);
 
   const handleAddToCart = () => {
     if (!product) return;
@@ -84,12 +85,40 @@ export default function ProductDetailScreen() {
     if (quantity > 1) setQuantity((prev) => prev - 1);
   };
 
-  const getSimilarProducts = () => {
+  const similarProducts = useMemo(() => {
     if (!product) return [];
     return allProducts
       .filter((p) => p.species === product.species && p.id !== product.id && p.is_available)
       .slice(0, 3);
-  };
+  }, [allProducts, product]);
+
+  const cartItemsCount = useMemo(
+    () => cart.items.reduce((sum, item) => sum + item.quantity, 0),
+    [cart.items]
+  );
+
+  const renderSimilarProduct = useCallback(
+    ({ item: similarProduct }: { item: Product }) => (
+      <TouchableOpacity
+        className="w-36 bg-cream rounded-xl p-3 mr-3"
+        onPress={() => navigation.setParams({ productId: similarProduct.id } as never)}
+      >
+        <View className="w-full h-24 bg-white rounded-lg items-center justify-center mb-2">
+          <Ionicons name="cube-outline" size={32} color={MAVECAM_COLORS.GREEN_PRIMARY} />
+        </View>
+        <Text className="text-[10px] text-gray-light font-semibold mb-1">
+          {similarProduct.brand.toUpperCase()}
+        </Text>
+        <Text className="text-sm text-gray-dark font-semibold mb-2 min-h-[36px]" numberOfLines={2}>
+          {similarProduct.name}
+        </Text>
+        <Text className="text-sm font-bold text-mavecam-primary">
+          {parseFloat(similarProduct.price_per_package).toLocaleString()} FCFA
+        </Text>
+      </TouchableOpacity>
+    ),
+    [navigation]
+  );
 
   if (isLoading || !product) {
     return (
@@ -109,7 +138,6 @@ export default function ProductDetailScreen() {
     );
   }
 
-  const similarProducts = getSimilarProducts();
   const pricePerPackage = parseFloat(product.price_per_package);
   const pricePerKg = parseFloat(product.price_per_kg);
   const totalPrice = pricePerPackage * quantity;
@@ -123,11 +151,9 @@ export default function ProductDetailScreen() {
         <Text className="text-lg font-bold text-gray-dark">{t('productDetails')}</Text>
         <TouchableOpacity onPress={() => navigation.navigate('Cart' as never)} className="relative">
           <Ionicons name="cart-outline" size={24} color={MAVECAM_COLORS.GREEN_PRIMARY} />
-          {cart.items.length > 0 && (
+          {cartItemsCount > 0 && (
             <View className="absolute -top-2 -right-2 bg-[#dc2626] rounded-full min-w-[20px] h-5 justify-center items-center px-1">
-              <Text className="text-white text-[10px] font-bold">
-                {cart.items.reduce((sum, item) => sum + item.quantity, 0)}
-              </Text>
+              <Text className="text-white text-[10px] font-bold">{cartItemsCount}</Text>
             </View>
           )}
         </TouchableOpacity>
@@ -232,28 +258,13 @@ export default function ProductDetailScreen() {
         {similarProducts.length > 0 && (
           <View className="bg-white px-5 py-5 mt-2 mb-24">
             <Text className="text-lg font-bold text-gray-dark mb-4">{t('similarProducts')}</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              {similarProducts.map((similarProduct) => (
-                <TouchableOpacity
-                  key={similarProduct.id}
-                  className="w-36 bg-cream rounded-xl p-3 mr-3"
-                  onPress={() => navigation.setParams({ productId: similarProduct.id } as never)}
-                >
-                  <View className="w-full h-24 bg-white rounded-lg items-center justify-center mb-2">
-                    <Ionicons name="cube-outline" size={32} color={MAVECAM_COLORS.GREEN_PRIMARY} />
-                  </View>
-                  <Text className="text-[10px] text-gray-light font-semibold mb-1">
-                    {similarProduct.brand.toUpperCase()}
-                  </Text>
-                  <Text className="text-sm text-gray-dark font-semibold mb-2 min-h-[36px]" numberOfLines={2}>
-                    {similarProduct.name}
-                  </Text>
-                  <Text className="text-sm font-bold text-mavecam-primary">
-                    {parseFloat(similarProduct.price_per_package).toLocaleString()} FCFA
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
+            <FlatList
+              horizontal
+              data={similarProducts}
+              keyExtractor={(item) => item.id}
+              renderItem={renderSimilarProduct}
+              showsHorizontalScrollIndicator={false}
+            />
           </View>
         )}
       </ScrollView>
@@ -272,7 +283,5 @@ export default function ProductDetailScreen() {
     </View>
   );
 }
-
-
 
 

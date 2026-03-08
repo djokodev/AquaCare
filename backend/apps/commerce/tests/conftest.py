@@ -2,6 +2,7 @@
 Configuration pytest pour les tests du module commerce.
 """
 import os
+
 import django
 
 # Configure Django settings avant de charger les modeles

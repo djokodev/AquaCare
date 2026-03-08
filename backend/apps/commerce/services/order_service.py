@@ -4,22 +4,84 @@ Service de gestion des commandes MAVECAM AquaCare.
 Architecture Clean : Service stateless coordonnant les opérations commande.
 Gère création, validation, calculs automatiques et notifications.
 """
+from __future__ import annotations
+
 import logging
+from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
-from typing import List, Dict, Any, Optional
-from django.db import transaction, IntegrityError
+from typing import TYPE_CHECKING, TypedDict
+
+from django.db import IntegrityError, transaction
+from django.db.models import Count, QuerySet, Sum
 from django.utils import timezone
-from django.db.models import QuerySet, Sum, Count
+
+from ..domain.calculators import DeliveryFeeCalculator, OrderTotalCalculator
+from ..domain.exceptions import InvalidOrderError
+from ..domain.validators import DeliveryMethod, OrderItemPayload, OrderValidator
+from ..models import Order, OrderItem
+from .base import BaseCommerceService
+from .product_service import ProductService
+
+if TYPE_CHECKING:
+    from accounts.models import User
+
+    from ..models import Product
 
 logger = logging.getLogger(__name__)
 
-from ..models import Order, OrderItem
-from ..domain.calculators import DeliveryFeeCalculator, OrderTotalCalculator
-from ..domain.validators import OrderValidator
-from ..domain.exceptions import InvalidOrderError
-from .base import BaseCommerceService
-from .product_service import ProductService
+
+class DeliveryAddressSnapshot(TypedDict):
+    delivery_name: str
+    delivery_phone: str
+    delivery_region: str
+    delivery_city: str
+    delivery_full_address: str
+
+
+class OrderLineItemData(TypedDict):
+    product: Product
+    quantity: int
+    unit_price: Decimal
+    line_total: Decimal
+
+
+class OrderStatistics(TypedDict):
+    total_orders: int
+    total_spent: Decimal
+    total_bags_ordered: int
+    average_order_value: Decimal
+    last_order_date: datetime | None
+    last_order_number: str | None
+
+
+class DeliveryFeePreview(TypedDict):
+    subtotal: Decimal
+    delivery_fee: Decimal
+    total: Decimal
+    total_bags: int
+    free_delivery_threshold_reached: bool
+
+
+@dataclass(frozen=True)
+class PreparedOrderLine:
+    product: Product
+    quantity: int
+    unit_price: Decimal
+    line_total: Decimal
+
+
+@dataclass(frozen=True)
+class PreparedOrderItems:
+    lines: list[PreparedOrderLine]
+    subtotal: Decimal
+    total_bags: int
+
+
+@dataclass(frozen=True)
+class CalculatedOrderAmounts:
+    delivery_fee: Decimal
+    total: Decimal
 
 
 class OrderService(BaseCommerceService):
@@ -37,12 +99,12 @@ class OrderService(BaseCommerceService):
     @staticmethod
     @transaction.atomic
     def create_order(
-        user,
-        items_data: List[Dict[str, Any]],
-        delivery_method: str,
-        pickup_location: Optional[str] = None,
-        client_uuid: Optional[str] = None,
-        created_offline: bool = False
+        user: User,
+        items_data: list[OrderItemPayload],
+        delivery_method: DeliveryMethod,
+        pickup_location: str | None = None,
+        client_uuid: str | None = None,
+        created_offline: bool = False,
     ) -> Order:
         """
         Crée une commande complète avec validation et calculs automatiques.
@@ -90,65 +152,25 @@ class OrderService(BaseCommerceService):
             'delivery_method': delivery_method
         })
 
-        # Idempotence offline : même client_uuid pour le même utilisateur
-        # doit retourner la commande déjà créée.
-        if client_uuid:
-            existing_order = Order.objects.filter(client_uuid=client_uuid).select_related(
-                'user', 'farm_profile'
-            ).prefetch_related('items__product').first()
-            if existing_order:
-                if existing_order.user_id != user.id:
-                    raise InvalidOrderError(
-                        "client_uuid déjà utilisé par un autre utilisateur"
-                    )
-                return existing_order
+        existing_order = OrderService._get_existing_order_for_user(
+            user,
+            client_uuid,
+            with_details=True,
+        )
+        if existing_order:
+            return existing_order
 
-        # 1. Validation données
         OrderValidator.validate_items(items_data)
         OrderValidator.validate_delivery_method(delivery_method, pickup_location)
 
-        # 2. Récupération produits et calcul sous-total
-        order_items_data = []
-        total_bags = 0
-
-        for item_data in items_data:
-            product = ProductService.get_product_by_id(
-                item_data['product_id'],
-                check_availability=True
-            )
-
-            quantity = item_data['quantity']
-            line_total = product.price_per_package * quantity
-
-            order_items_data.append({
-                'product': product,
-                'quantity': quantity,
-                'unit_price': product.price_per_package,
-                'line_total': line_total
-            })
-
-            total_bags += quantity
-
-        # Calcul sous-total
-        subtotal = sum(item['line_total'] for item in order_items_data)
-
-        # 3. Calcul frais de livraison (règles MAVECAM)
-        delivery_fee = DeliveryFeeCalculator.calculate(
+        prepared_items = OrderService._prepare_order_items(items_data)
+        calculated_amounts = OrderService._calculate_order_amounts(
             delivery_method=delivery_method,
             region=OrderService._normalize_region(user.region),
-            total_bags=total_bags
+            prepared_items=prepared_items,
         )
 
-        # Calcul total
-        total = OrderTotalCalculator.calculate_total(subtotal, delivery_fee)
-
-        # Validation cohérence montants
-        OrderValidator.validate_amounts(subtotal, delivery_fee, total)
-
-        # 4. Snapshot adresse utilisateur
         delivery_address_data = OrderService._build_delivery_address_snapshot(user)
-
-        # 5. Création Order
         order = OrderService._create_order_with_retry(
             user=user,
             delivery_method=delivery_method,
@@ -156,43 +178,116 @@ class OrderService(BaseCommerceService):
             client_uuid=client_uuid,
             created_offline=created_offline,
             delivery_address_data=delivery_address_data,
-            subtotal=subtotal,
-            delivery_fee=delivery_fee,
-            total=total,
+            subtotal=prepared_items.subtotal,
+            delivery_fee=calculated_amounts.delivery_fee,
+            total=calculated_amounts.total,
         )
 
-        # 6. Création OrderItems
-        for item_data in order_items_data:
-            OrderItem.objects.create(
-                order=order,
-                product=item_data['product'],
-                product_name=item_data['product'].name,
-                unit_price=item_data['unit_price'],
-                quantity=item_data['quantity'],
-                line_total=item_data['line_total']
-            )
-
-        # 7. Notification utilisateur (non-bloquante : échec ne doit pas annuler la commande)
-        try:
-            OrderService._create_order_notification(order)
-        except Exception:
-            logger.error(
-                "Échec envoi notification pour commande %s",
-                order.id,
-                exc_info=True
-            )
+        OrderService._create_order_items(order, prepared_items)
+        OrderService._notify_order_created(order)
 
         OrderService.log_operation('order_created', {
             'order_id': str(order.id),
             'order_number': order.order_number,
             'total': float(order.total),
-            'total_bags': total_bags
+            'total_bags': prepared_items.total_bags,
         })
 
-        return order
+        return Order.objects.with_details().get(pk=order.pk)
 
     @staticmethod
-    def _build_delivery_address_snapshot(user) -> Dict[str, str]:
+    def _get_existing_order_for_user(
+        user: User,
+        client_uuid: str | None,
+        *,
+        with_details: bool,
+    ) -> Order | None:
+        if not client_uuid:
+            return None
+
+        queryset = Order.objects.with_details() if with_details else Order.objects.select_related(
+            'user', 'farm_profile'
+        ).prefetch_related('items__product')
+        existing_order = queryset.filter(client_uuid=client_uuid).first()
+        if not existing_order:
+            return None
+
+        if existing_order.user_id != user.id:
+            raise InvalidOrderError("client_uuid déjà utilisé par un autre utilisateur")
+
+        return existing_order
+
+    @staticmethod
+    def _prepare_order_items(items_data: list[OrderItemPayload]) -> PreparedOrderItems:
+        product_ids = [item_data['product_id'] for item_data in items_data]
+        products_by_id = ProductService.get_products_by_ids(product_ids, check_availability=True)
+
+        prepared_lines: list[PreparedOrderLine] = []
+        subtotal = Decimal('0')
+        total_bags = 0
+
+        for item_data in items_data:
+            product = products_by_id[item_data['product_id']]
+            quantity = item_data['quantity']
+            line_total = product.price_per_package * quantity
+
+            prepared_lines.append(
+                PreparedOrderLine(
+                    product=product,
+                    quantity=quantity,
+                    unit_price=product.price_per_package,
+                    line_total=line_total,
+                )
+            )
+            subtotal += line_total
+            total_bags += quantity
+
+        return PreparedOrderItems(
+            lines=prepared_lines,
+            subtotal=subtotal,
+            total_bags=total_bags,
+        )
+
+    @staticmethod
+    def _calculate_order_amounts(
+        *,
+        delivery_method: DeliveryMethod,
+        region: str,
+        prepared_items: PreparedOrderItems,
+    ) -> CalculatedOrderAmounts:
+        delivery_fee = DeliveryFeeCalculator.calculate(
+            delivery_method=delivery_method,
+            region=region,
+            total_bags=prepared_items.total_bags,
+        )
+        total = OrderTotalCalculator.calculate_total(prepared_items.subtotal, delivery_fee)
+        OrderValidator.validate_amounts(prepared_items.subtotal, delivery_fee, total)
+        return CalculatedOrderAmounts(delivery_fee=delivery_fee, total=total)
+
+    @staticmethod
+    def _create_order_items(order: Order, prepared_items: PreparedOrderItems) -> None:
+        order_items = [
+            OrderItem(
+                order=order,
+                product=line.product,
+                product_name=line.product.name,
+                unit_price=line.unit_price,
+                quantity=line.quantity,
+                line_total=line.line_total,
+            )
+            for line in prepared_items.lines
+        ]
+        OrderItem.objects.bulk_create(order_items)
+
+    @staticmethod
+    def _notify_order_created(order: Order) -> None:
+        try:
+            OrderService._create_order_notification(order)
+        except Exception:
+            logger.exception("Échec envoi notification pour commande %s", order.id)
+
+    @staticmethod
+    def _build_delivery_address_snapshot(user: User) -> DeliveryAddressSnapshot:
         """
         Construit snapshot adresse utilisateur pour commande.
 
@@ -225,18 +320,18 @@ class OrderService(BaseCommerceService):
         }
 
     @staticmethod
-    def _normalize_region(region: Optional[str]) -> str:
+    def _normalize_region(region: str | None) -> str:
         """Normalise le nom de région pour les règles métier."""
         return (region or '').strip().lower()
 
     @staticmethod
     def _create_order_with_retry(
-        user,
-        delivery_method: str,
+        user: User,
+        delivery_method: DeliveryMethod,
         pickup_location: str,
-        client_uuid,
+        client_uuid: str | None,
         created_offline: bool,
-        delivery_address_data: Dict[str, str],
+        delivery_address_data: DeliveryAddressSnapshot,
         subtotal: Decimal,
         delivery_fee: Decimal,
         total: Decimal,
@@ -266,17 +361,13 @@ class OrderService(BaseCommerceService):
                     total=total
                 )
             except IntegrityError:
-                # Si collision sur client_uuid, on retourne la commande existante
-                # si elle appartient au même utilisateur.
-                if client_uuid:
-                    existing_order = Order.objects.filter(client_uuid=client_uuid).first()
-                    if existing_order:
-                        if existing_order.user_id != user.id:
-                            raise InvalidOrderError(
-                                "client_uuid déjà utilisé par un autre utilisateur"
-                            )
-                        return existing_order
-                # Sinon collision order_number -> retry.
+                existing_order = OrderService._get_existing_order_for_user(
+                    user,
+                    client_uuid,
+                    with_details=True,
+                )
+                if existing_order:
+                    return existing_order
                 continue
         raise InvalidOrderError("Impossible de créer la commande, veuillez réessayer.")
 
@@ -316,7 +407,7 @@ class OrderService(BaseCommerceService):
 
     @staticmethod
     @transaction.atomic
-    def confirm_order_receipt(order: Order, user) -> Order:
+    def confirm_order_receipt(order: Order, user: User) -> Order:
         """
         Confirme la réception utilisateur d'une commande livrée.
 
@@ -336,7 +427,7 @@ class OrderService(BaseCommerceService):
         order.status = 'received'
         order.save(update_fields=['status', 'updated_at'])
 
-        return order
+        return Order.objects.with_details().get(pk=order.pk)
 
     @staticmethod
     def generate_order_number() -> str:
@@ -379,10 +470,10 @@ class OrderService(BaseCommerceService):
 
     @staticmethod
     def get_user_orders(
-        user,
-        status: Optional[str] = None,
-        limit: Optional[int] = None
-    ) -> QuerySet:
+        user: User,
+        status: str | None = None,
+        limit: int | None = None,
+    ) -> QuerySet[Order]:
         """
         Récupère les commandes d'un utilisateur.
 
@@ -399,9 +490,7 @@ class OrderService(BaseCommerceService):
             >>> orders.count()
             5
         """
-        queryset = Order.objects.filter(user=user) \
-            .select_related('user', 'farm_profile') \
-            .prefetch_related('items__product')
+        queryset = Order.objects.with_details().filter(user=user)
 
         if status:
             queryset = queryset.filter(status=status)
@@ -414,7 +503,7 @@ class OrderService(BaseCommerceService):
         return queryset
 
     @staticmethod
-    def get_order_details(order_id: str, user) -> Order:
+    def get_order_details(order_id: str, user: User) -> Order:
         """
         Récupère détails complets d'une commande.
 
@@ -433,13 +522,10 @@ class OrderService(BaseCommerceService):
             >>> order.items.count()
             3
         """
-        return Order.objects \
-            .select_related('user', 'farm_profile') \
-            .prefetch_related('items__product') \
-            .get(id=order_id, user=user)
+        return Order.objects.with_details().get(id=order_id, user=user)
 
     @staticmethod
-    def get_order_statistics(user) -> Dict[str, Any]:
+    def get_order_statistics(user: User) -> OrderStatistics:
         """
         Calcule statistiques commandes pour un utilisateur.
 
@@ -484,10 +570,10 @@ class OrderService(BaseCommerceService):
 
     @staticmethod
     def calculate_delivery_fee_preview(
-        user,
-        items_data: List[Dict[str, Any]],
-        delivery_method: str
-    ) -> Dict[str, Decimal]:
+        user: User,
+        items_data: list[OrderItemPayload],
+        delivery_method: DeliveryMethod,
+    ) -> DeliveryFeePreview:
         """
         Calcule preview des montants avant création commande.
 
@@ -508,31 +594,19 @@ class OrderService(BaseCommerceService):
             >>> preview
             {'subtotal': Decimal('60000'), 'delivery_fee': Decimal('3000'), 'total': Decimal('63000')}
         """
-        # Calcul sous-total
-        subtotal = Decimal('0')
-        total_bags = 0
-
-        for item_data in items_data:
-            product = ProductService.get_product_by_id(item_data['product_id'])
-            quantity = item_data['quantity']
-            subtotal += product.price_per_package * quantity
-            total_bags += quantity
-
-        # Calcul frais livraison
-        delivery_fee = DeliveryFeeCalculator.calculate(
+        prepared_items = OrderService._prepare_order_items(items_data)
+        calculated_amounts = OrderService._calculate_order_amounts(
             delivery_method=delivery_method,
             region=OrderService._normalize_region(user.region),
-            total_bags=total_bags
+            prepared_items=prepared_items,
         )
 
-        total = subtotal + delivery_fee
-
         return {
-            'subtotal': subtotal,
-            'delivery_fee': delivery_fee,
-            'total': total,
-            'total_bags': total_bags,
+            'subtotal': prepared_items.subtotal,
+            'delivery_fee': calculated_amounts.delivery_fee,
+            'total': calculated_amounts.total,
+            'total_bags': prepared_items.total_bags,
             'free_delivery_threshold_reached': (
-                delivery_fee == 0 and delivery_method == 'home'
-            )
+                calculated_amounts.delivery_fee == 0 and delivery_method == 'home'
+            ),
         }

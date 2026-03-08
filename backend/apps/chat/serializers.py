@@ -1,15 +1,47 @@
-# coding: utf-8
 """
 DRF serializers for chat API.
 Transform models to/from JSON format for REST endpoints.
 """
 
-from rest_framework import serializers
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any, TypedDict
+
 from django.contrib.auth import get_user_model
+from drf_spectacular.utils import extend_schema_field
+from rest_framework import serializers
 
 from .models import Conversation, Message
 
 User = get_user_model()
+
+
+class LastMessagePreview(TypedDict):
+    """Payload compact renvoye pour l'aperçu du dernier message."""
+
+    id: str
+    content: str
+    sender_type: str
+    created_at: Any
+    has_media: bool
+
+
+class LastMessagePreviewSerializer(serializers.Serializer):
+    """Schema explicite du dernier message affiche dans une conversation."""
+
+    id = serializers.UUIDField(read_only=True)
+    content = serializers.CharField(read_only=True)
+    sender_type = serializers.CharField(read_only=True)
+    created_at = serializers.DateTimeField(read_only=True, allow_null=True)
+    has_media = serializers.BooleanField(read_only=True)
+
+
+class ChatErrorResponseSerializer(serializers.Serializer):
+    """Payload d'erreur uniforme des actions chat."""
+
+    error = serializers.CharField(read_only=True)
+    field = serializers.CharField(read_only=True, required=False, allow_null=True)
 
 
 class MessageSerializer(serializers.ModelSerializer):
@@ -24,6 +56,7 @@ class MessageSerializer(serializers.ModelSerializer):
     # Computed fields (read-only)
     sender_name = serializers.SerializerMethodField()
     media_url = serializers.SerializerMethodField()
+    sender_user = serializers.SerializerMethodField()
 
     class Meta:
         model = Message
@@ -47,8 +80,8 @@ class MessageSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = [
             'id',
+            'conversation',
             'sender_type',  # Determined by service layer
-            'sender_user',  # Determined by service layer
             'is_read',  # Updated via mark_read action
             'read_at',  # Updated via mark_read action
             'synced_at',  # Updated by service layer
@@ -56,7 +89,7 @@ class MessageSerializer(serializers.ModelSerializer):
             'updated_at',
         ]
 
-    def get_sender_name(self, obj):
+    def get_sender_name(self, obj: Message) -> str:
         """
         Get sender display name based on sender_type.
 
@@ -72,7 +105,23 @@ class MessageSerializer(serializers.ModelSerializer):
             return "Système AquaCare"
         return "Inconnu"
 
-    def get_media_url(self, obj):
+    @extend_schema_field(serializers.UUIDField(allow_null=True))
+    def get_sender_user(self, obj: Message) -> str | None:
+        """
+        Expose sender_user only to staff viewers.
+
+        Prevents leaking internal admin identifiers to end users while keeping
+        support tooling usable for staff.
+        """
+        request = self.context.get('request')
+        requester = getattr(request, 'user', None)
+        if requester and requester.is_authenticated and requester.is_staff:
+            if obj.sender_user_id is None:
+                return None
+            return str(obj.sender_user_id)
+        return None
+
+    def get_media_url(self, obj: Message) -> str | None:
         """
         Get full URL for media file.
 
@@ -134,20 +183,28 @@ class ConversationSerializer(serializers.ModelSerializer):
             'unread_count_admin',  # Updated by service layer
         ]
 
-    def get_user_name(self, obj):
+    def get_user_name(self, obj: Conversation) -> str:
         """Get user display name."""
         return obj.user.get_full_name() or obj.user.phone_number
 
-    def get_last_message(self, obj):
+    @extend_schema_field(LastMessagePreviewSerializer(allow_null=True))
+    def get_last_message(self, obj: Conversation) -> LastMessagePreview | None:
         """
         Get preview of last message in conversation.
-
-        1 seule requête légère (ORDER BY + LIMIT 1) — acceptable.
-        Le prefetch illimité a été supprimé pour éviter la bombe mémoire admin.
 
         Returns:
             Dict with message info or None
         """
+        last_message_id = getattr(obj, 'last_message_id_ann', None)
+        if last_message_id is not None:
+            return {
+                'id': str(last_message_id),
+                'content': getattr(obj, 'last_message_content_ann', '')[:100],
+                'sender_type': getattr(obj, 'last_message_sender_type_ann', ''),
+                'created_at': getattr(obj, 'last_message_created_at_ann', None),
+                'has_media': getattr(obj, 'last_message_media_type_ann', 'none') != 'none',
+            }
+
         last_msg = obj.messages.order_by('-created_at').first()
         if last_msg:
             return {
@@ -159,7 +216,7 @@ class ConversationSerializer(serializers.ModelSerializer):
             }
         return None
 
-    def get_message_count(self, obj):
+    def get_message_count(self, obj: Conversation) -> int:
         """
         Get total message count in conversation.
 
@@ -246,9 +303,23 @@ class SendMessageSerializer(serializers.Serializer):
             'image/jpeg', 'image/png', 'image/webp',
             'video/mp4', 'video/quicktime'
         ]
+        ALLOWED_EXTENSIONS = {'jpg', 'jpeg', 'png', 'webp', 'mp4', 'mov'}
 
         content_type = getattr(value, 'content_type', '')
-        if content_type and content_type not in ALLOWED_TYPES:
+        file_extension = Path(getattr(value, 'name', '')).suffix.lower().lstrip('.')
+
+        if file_extension not in ALLOWED_EXTENSIONS:
+            raise serializers.ValidationError(
+                f"Extension de fichier non supportée: .{file_extension or 'inconnue'}. "
+                "Formats acceptés: JPG, JPEG, PNG, WebP, MP4, MOV"
+            )
+
+        if not content_type:
+            raise serializers.ValidationError(
+                "Le type MIME du fichier est requis pour valider le média."
+            )
+
+        if content_type not in ALLOWED_TYPES:
             raise serializers.ValidationError(
                 f"Format de fichier non supporté: {content_type}. "
                 f"Formats acceptés: JPEG, PNG, WebP, MP4, QuickTime"
@@ -256,7 +327,7 @@ class SendMessageSerializer(serializers.Serializer):
 
         return value
 
-    def validate(self, data):
+    def validate(self, data: dict[str, Any]) -> dict[str, Any]:
         """
         Cross-field validation: media_type and media_file must be consistent.
         Also enforces per-type size limits aligned with domain rules:

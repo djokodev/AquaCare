@@ -1,12 +1,17 @@
-# coding: utf-8
 """
 Domain value objects for chat module.
 Immutable business entities with validation logic.
 Pure Python - no framework dependencies.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
-from typing import Literal
+from typing import Final, Literal
+
+MessageLanguage = Literal["fr", "en"]
+MediaKind = Literal["image", "video"]
+SenderKind = Literal["user", "admin", "system"]
 
 
 @dataclass(frozen=True)
@@ -21,7 +26,7 @@ class MessageContent:
 
     text: str
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate message content on initialization."""
         # Check for empty content
         if not self.text or len(self.text.strip()) == 0:
@@ -59,30 +64,30 @@ class MediaAttachment:
     """
 
     file_path: str
-    media_type: Literal['image', 'video']
+    media_type: MediaKind
     file_size_bytes: int
     mime_type: str
 
     # Class-level constants (business rules)
-    MAX_IMAGE_SIZE_MB = 10
-    MAX_VIDEO_SIZE_MB = 50
+    MAX_IMAGE_SIZE_MB: Final[int] = 10
+    MAX_VIDEO_SIZE_MB: Final[int] = 50
 
-    ALLOWED_IMAGE_TYPES = frozenset([
-        'image/jpeg',
-        'image/png',
-        'image/webp',
+    ALLOWED_IMAGE_TYPES: Final[frozenset[str]] = frozenset([
+        "image/jpeg",
+        "image/png",
+        "image/webp",
     ])
 
-    ALLOWED_VIDEO_TYPES = frozenset([
-        'video/mp4',
-        'video/quicktime',
+    ALLOWED_VIDEO_TYPES: Final[frozenset[str]] = frozenset([
+        "video/mp4",
+        "video/quicktime",
     ])
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate media attachment on initialization."""
-        if self.media_type == 'image':
+        if self.media_type == "image":
             self._validate_image()
-        elif self.media_type == 'video':
+        elif self.media_type == "video":
             self._validate_video()
         else:
             from .exceptions import InvalidMediaFormat
@@ -90,7 +95,7 @@ class MediaAttachment:
                 f"Invalid media type: {self.media_type}. Must be 'image' or 'video'."
             )
 
-    def _validate_image(self):
+    def _validate_image(self) -> None:
         """
         Validate image file.
 
@@ -115,7 +120,7 @@ class MediaAttachment:
                 f"Allowed: JPEG, PNG, WebP"
             )
 
-    def _validate_video(self):
+    def _validate_video(self) -> None:
         """
         Validate video file.
 

@@ -1,17 +1,3 @@
-"""
-Configuration globale pour les tests MAVECAM.
-
-Ce fichier contient des fixtures réutilisables et la configuration
-partagée entre tous les tests du projet.
-"""
-import os
-import django
-
-# Configuration Django pour les tests (utilise pytest.ini ou variable d'environnement)
-# Ne pas forcer 'mavecam_api.settings' car pytest.ini définit déjà 'mavecam_api.settings.test'
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'mavecam_api.settings.test')
-django.setup()
-
 import pytest
 from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient
@@ -49,7 +35,7 @@ def user_factory():
     Simule les pisciculteurs qui s'inscrivent via l'app mobile.
     """
     import random
-    
+
     def create_user(**kwargs):
         # Générer un numéro de téléphone unique
         unique_number = random.randint(100000, 999999)
@@ -64,6 +50,7 @@ def user_factory():
         }
         defaults.update(kwargs)
         return User.objects.create_user(**defaults)
+
     return create_user
 
 
@@ -132,8 +119,9 @@ def production_cycle(farm_profile):
     """
     Cycle de production de base pour les tests.
     """
-    from decimal import Decimal
     from datetime import date, timedelta
+    from decimal import Decimal
+
     from aquaculture.models import ProductionCycle
     
     # Créer cycle avec tous les champs requis définis explicitement

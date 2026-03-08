@@ -5,12 +5,14 @@ Ces tests vérifient la validation et la sérialisation des données
 échangées entre l'API et l'app mobile React Native.
 """
 import pytest
-from django.contrib.auth import get_user_model
 from accounts.serializers import (
-    UserRegistrationSerializer,
+    AccountDeletionSerializer,
+    LoginSerializer,
+    LogoutSerializer,
     UserProfileSerializer,
-    LoginSerializer
+    UserRegistrationSerializer,
 )
+from django.contrib.auth import get_user_model
 
 User = get_user_model()
 
@@ -339,6 +341,22 @@ class TestLoginSerializer:
         assert not serializer.is_valid()
         assert 'non_field_errors' in serializer.errors
         assert 'mot de passe est requis' in str(serializer.errors)
+
+
+class TestActionSerializers:
+    """Tests des serializers DRF utilitaires des endpoints d'action."""
+
+    def test_logout_serializer_requires_refresh(self):
+        serializer = LogoutSerializer(data={})
+
+        assert not serializer.is_valid()
+        assert "refresh" in serializer.errors
+
+    def test_account_deletion_serializer_requires_explicit_confirmation(self):
+        serializer = AccountDeletionSerializer(data={"confirm": False})
+
+        assert not serializer.is_valid()
+        assert "confirm" in serializer.errors
         
         # Phone sans password - doit échouer
         data = {'phone_number': '+237691234567'}

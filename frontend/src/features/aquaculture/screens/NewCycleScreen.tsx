@@ -12,7 +12,7 @@ import { CreateCycleForm } from '@/types/aquaculture';
 import { AppDispatch } from '@/store/store';
 import { fetchDashboardData } from '@/features/aquaculture/store/aquacultureSlice';
 import { MAVECAM_COLORS } from '@/constants/colors';
-import { estimateBiomass, estimateDensityWithUnit } from '@/domain';
+import { estimateBiomass, estimateDensityWithUnit } from '@/domain/aquaculture/estimators';
 import { parseApiError, formatErrorForDisplay, logApiError, hasFieldError, isNetworkError } from '@/utils/errorParser';
 import { RootStackParamList } from '@/navigation/MainNavigator';
 import logger from '@/utils/logger';

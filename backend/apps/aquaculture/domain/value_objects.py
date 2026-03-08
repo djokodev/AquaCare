@@ -16,8 +16,9 @@ Références :
 - Value Objects Pattern (Martin Fowler)
 """
 from dataclasses import dataclass
-from decimal import Decimal, ROUND_HALF_UP
-from typing import Optional, Dict
+from decimal import ROUND_HALF_UP, Decimal
+from typing import Optional
+
 from django.utils.translation import gettext_lazy as _
 
 
@@ -374,10 +375,10 @@ class WaterQuality:
         )
         alerts = quality.get_alerts_for_species('tilapia')
     """
-    temperature_c: Optional[Decimal]
-    ph: Optional[Decimal]
-    dissolved_oxygen_mg_l: Optional[Decimal]
-    ammonia_ppm: Optional[Decimal] = None
+    temperature_c: Decimal | None
+    ph: Decimal | None
+    dissolved_oxygen_mg_l: Decimal | None
+    ammonia_ppm: Decimal | None = None
 
     def __post_init__(self):
         """Valide les paramètres à la création."""
@@ -423,7 +424,7 @@ class WaterQuality:
         alerts = self.get_alerts_for_species(species)
         return len(alerts) == 0
 
-    def critical_parameters(self) -> Dict[str, bool]:
+    def critical_parameters(self) -> dict[str, bool]:
         """
         Identifie les paramètres critiques (très hors limites).
 

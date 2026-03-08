@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState, useCallback } from 'react';
+﻿import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
@@ -10,11 +10,6 @@ import {
   Modal,
   Alert,
 } from 'react-native';
-import Animated, {
-  useSharedValue,
-  useAnimatedScrollHandler,
-  useAnimatedStyle,
-} from 'react-native-reanimated';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { useDispatch, useSelector } from 'react-redux';
@@ -43,7 +38,6 @@ import { useAuth } from '@/hooks/useAuth';
 
 import MetricCard from '../components/MetricCard';
 import {
-  toSafeNumber,
   calculateCycleEstimatedMarketValue,
   calculateDashboardBusinessMetrics,
 } from '../utils/dashboardCalculations';
@@ -106,14 +100,31 @@ export default function DashboardScreen({ navigation }: any) {
     dispatch(fetchOrders());
   }, [dispatch]);
 
-  const pendingDeliveryConfirmations = ordersList.filter((order) => order.status === 'delivered');
+  const pendingDeliveryConfirmations = useMemo(
+    () => ordersList.filter((order) => order.status === 'delivered'),
+    [ordersList]
+  );
 
   const activeCycles = dashboardData?.active_cycles || [];
   const currentCycleInList = currentCycle
     ? activeCycles.find((cycle) => cycle.id === currentCycle.id)
     : undefined;
-  const dashboardBusinessMetrics = calculateDashboardBusinessMetrics(activeCycles, currentCycleInList);
+  const dashboardBusinessMetrics = useMemo(
+    () => calculateDashboardBusinessMetrics(activeCycles, currentCycleInList),
+    [activeCycles, currentCycleInList]
+  );
   const requiresCycleSelection = activeCycles.length > 1 && !currentCycleInList;
+  const cycleCards = useMemo(
+    () =>
+      activeCycles.map((cycle) => ({
+        ...cycle,
+        cycleAgeDays: Math.floor(
+          (Date.now() - new Date(cycle.start_date).getTime()) / (1000 * 60 * 60 * 24)
+        ),
+        estimatedMarketValueFcfa: calculateCycleEstimatedMarketValue(cycle),
+      })),
+    [activeCycles]
+  );
 
   useEffect(() => {
     if (activeCycles.length === 0) {
@@ -222,24 +233,6 @@ export default function DashboardScreen({ navigation }: any) {
     setPendingCycleId(null);
   };
 
-  // Reanimated scroll handler for sticky header
-  const scrollY = useSharedValue(0);
-
-  const scrollHandler = useAnimatedScrollHandler({
-    onScroll: (event) => {
-      scrollY.value = event.contentOffset.y; 
-    },
-  });
-
-  const headerAnimatedStyle = useAnimatedStyle(() => ({
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 100,
-    // Keep header fully opaque - no transparency
-  }));
-
   if (error && !dashboardData) {
     return (
       <ScrollView
@@ -272,19 +265,24 @@ export default function DashboardScreen({ navigation }: any) {
   return (
     <View className="flex-1 bg-cream">
       {/* Header Sticky - Outside ScrollView */}
-      <Animated.View style={headerAnimatedStyle}>
+      <View
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          zIndex: 100,
+        }}
+      >
         <DashboardHeader
           displayName={displayName}
           unreadCount={unreadCount}
           onNotificationsPress={handleNotificationsPress}
           onSettingsPress={handleSettingsPress}
         />
-      </Animated.View>
+      </View>
 
-      {/* Animated ScrollView with sticky header */}
-      <Animated.ScrollView
-        onScroll={scrollHandler}
-        scrollEventThrottle={16}
+      <ScrollView
         refreshControl={
           <RefreshControl refreshing={loading.dashboard} onRefresh={onRefresh} />
         }
@@ -418,7 +416,7 @@ export default function DashboardScreen({ navigation }: any) {
       {activeCycles.length > 0 && (
         <View className="px-5 py-5">
 
-          {activeCycles.map((cycle) => (
+          {cycleCards.map((cycle) => (
             <View
               key={cycle.id}
               className="bg-white rounded-xl p-4 mb-3 border border-gray-200"
@@ -430,7 +428,7 @@ export default function DashboardScreen({ navigation }: any) {
                     {cycle.species === 'clarias' ? t('catfish') : t('tilapia')} - {cycle.pond_identifier}
                   </Text>
                   <Text className="text-xs text-gray-light">
-                    {t('daysCount', { count: Math.floor((new Date().getTime() - new Date(cycle.start_date).getTime()) / (1000 * 60 * 60 * 24)) })} - {formatCurrency(calculateCycleEstimatedMarketValue(cycle))} - {formatPercentage(cycle.survival_rate || 0)} {t('survivalRateShort')}
+                    {t('daysCount', { count: cycle.cycleAgeDays })} - {formatCurrency(cycle.estimatedMarketValueFcfa)} - {formatPercentage(cycle.survival_rate || 0)} {t('survivalRateShort')}
                   </Text>
                 </View>
 
@@ -508,7 +506,7 @@ export default function DashboardScreen({ navigation }: any) {
           </View>
         </View>
       </Modal>
-      </Animated.ScrollView>
+      </ScrollView>
     </View>
   );
 }

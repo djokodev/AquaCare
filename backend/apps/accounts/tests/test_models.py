@@ -6,8 +6,8 @@ de façon isolée, incluant toutes les validations métier MAVECAM.
 """
 import pytest
 from django.contrib.auth import get_user_model
-from django.db import IntegrityError
 from django.core.exceptions import ValidationError
+from django.db import IntegrityError
 
 User = get_user_model()
 
@@ -116,6 +116,38 @@ class TestUserModel:
         assert admin.is_superuser is True
         assert admin.is_active is True
         assert admin.phone_number == '+237699000000'
+
+    def test_get_by_login_name_loads_farm_profile_in_single_query(self, django_assert_num_queries):
+        """Le lookup par login_name doit charger la ferme sans requete additionnelle."""
+        User.objects.create_user(
+            phone_number='+237699000010',
+            first_name='Jeanne',
+            last_name='Piscicultrice',
+            password='motdepasse123',
+            account_type='individual',
+            age_group='26_35',
+        )
+
+        with django_assert_num_queries(1):
+            user = User.objects.get_by_login_name('Jeanne Piscicultrice')
+            assert user.farm_profile.farm_name == 'Ferme de Jeanne Piscicultrice'
+
+    def test_get_by_natural_key_loads_farm_profile_in_single_query(self, django_assert_num_queries):
+        """Le lookup par numero de telephone doit aussi charger la ferme."""
+        User.objects.create_user(
+            phone_number='+237699000011',
+            first_name='Entreprise',
+            last_name='Owner',
+            password='motdepasse123',
+            account_type='company',
+            business_name='Aqua Owner SARL',
+            legal_status='sarl',
+            promoter_name='Entreprise Owner',
+        )
+
+        with django_assert_num_queries(1):
+            user = User.objects.get_by_natural_key('+237699000011')
+            assert user.farm_profile.farm_name == 'Ferme Aqua Owner SARL'
     
     def test_user_string_representation(self):
         """

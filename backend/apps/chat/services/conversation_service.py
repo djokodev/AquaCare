@@ -1,20 +1,24 @@
-# coding: utf-8
 """
 Conversation domain service.
 Handles conversation lifecycle and retrieval with permission checks.
 """
 
-from typing import Optional
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Literal
+
 from django.contrib.auth import get_user_model
-from django.db import transaction
 from django.db.models import F
 from django.utils import timezone
 
-# Import when models are available - circular import prevention
-# from ..models import Conversation
-# from ..domain.exceptions import ConversationNotFound, UnauthorizedAccess
-
 User = get_user_model()
+
+if TYPE_CHECKING:
+    from chat.models import Conversation
+    from chat.models import User as ChatUser
+
+
+UnreadCounterTarget = Literal['user', 'admin']
 
 
 class ConversationService:
@@ -28,7 +32,7 @@ class ConversationService:
     """
 
     @staticmethod
-    def get_or_create_conversation(user):
+    def get_or_create_conversation(user: ChatUser) -> Conversation:
         """
         Get existing conversation for user or create new one.
 
@@ -43,15 +47,14 @@ class ConversationService:
         """
         from ..models import Conversation
 
-        conversation, created = Conversation.objects.get_or_create(
+        conversation, _created = Conversation.objects.get_or_create(
             user=user,
             defaults={'is_active': True}
         )
-
         return conversation
 
     @staticmethod
-    def get_user_conversation(user):
+    def get_user_conversation(user: ChatUser) -> Conversation:
         """
         Get user's conversation.
 
@@ -66,18 +69,18 @@ class ConversationService:
         Raises:
             ConversationNotFound: If user has no conversation yet
         """
-        from ..models import Conversation
         from ..domain.exceptions import ConversationNotFound
+        from ..models import Conversation
 
         try:
-            return Conversation.objects.get(user=user)
-        except Conversation.DoesNotExist:
+            return Conversation.objects.with_user().get(user=user)
+        except Conversation.DoesNotExist as err:
             raise ConversationNotFound(
                 f"No conversation found for user {user.id}"
-            )
+            ) from err
 
     @staticmethod
-    def get_conversation_by_id(conversation_id: str, requesting_user):
+    def get_conversation_by_id(conversation_id: str, requesting_user: ChatUser) -> Conversation:
         """
         Get conversation by ID with permission check.
 
@@ -96,15 +99,15 @@ class ConversationService:
             ConversationNotFound: If conversation doesn't exist
             UnauthorizedAccess: If user tries to access other user's conversation
         """
-        from ..models import Conversation
         from ..domain.exceptions import ConversationNotFound, UnauthorizedAccess
+        from ..models import Conversation
 
         try:
-            conversation = Conversation.objects.get(id=conversation_id)
-        except Conversation.DoesNotExist:
+            conversation = Conversation.objects.with_user().get(id=conversation_id)
+        except Conversation.DoesNotExist as err:
             raise ConversationNotFound(
                 f"Conversation {conversation_id} not found"
-            )
+            ) from err
 
         # Permission check
         if not requesting_user.is_staff and conversation.user != requesting_user:
@@ -115,8 +118,7 @@ class ConversationService:
         return conversation
 
     @staticmethod
-    @transaction.atomic
-    def update_last_message_timestamp(conversation):
+    def update_last_message_timestamp(conversation: Conversation) -> None:
         """
         Update conversation's last_message_at timestamp to now.
 
@@ -125,12 +127,37 @@ class ConversationService:
         Args:
             conversation: Conversation instance
         """
-        conversation.last_message_at = timezone.now()
-        conversation.save(update_fields=['last_message_at', 'updated_at'])
+        now = timezone.now()
+        conversation.__class__.objects.filter(pk=conversation.pk).update(
+            last_message_at=now,
+            updated_at=now,
+        )
+        conversation.last_message_at = now
+        conversation.updated_at = now
+
+    def _get_unread_counter_field(for_user: bool) -> UnreadCounterTarget:
+        return 'user' if for_user else 'admin'
 
     @staticmethod
-    @transaction.atomic
-    def increment_unread_count(conversation, for_user: bool = True):
+    def _save_unread_count(
+        conversation: Conversation,
+        *,
+        target: UnreadCounterTarget,
+        value: int | F,
+    ) -> None:
+        field_name = f'unread_count_{target}'
+        now = timezone.now()
+        updates: dict[str, int | F | timezone.datetime] = {
+            field_name: value,
+            'updated_at': now,
+        }
+        conversation.__class__.objects.filter(pk=conversation.pk).update(**updates)
+        if isinstance(value, int):
+            setattr(conversation, field_name, value)
+        conversation.updated_at = now
+
+    @staticmethod
+    def increment_unread_count(conversation: Conversation, for_user: bool = True) -> None:
         """
         Increment unread message count.
 
@@ -139,18 +166,15 @@ class ConversationService:
             for_user: If True, increment user's unread count (admin sent message)
                      If False, increment admin's unread count (user sent message)
         """
-        if for_user:
-            conversation.unread_count_user = F('unread_count_user') + 1
-            conversation.save(update_fields=['unread_count_user', 'updated_at'])
-            conversation.refresh_from_db()
-        else:
-            conversation.unread_count_admin = F('unread_count_admin') + 1
-            conversation.save(update_fields=['unread_count_admin', 'updated_at'])
-            conversation.refresh_from_db()
+        target = ConversationService._get_unread_counter_field(for_user)
+        ConversationService._save_unread_count(
+            conversation,
+            target=target,
+            value=F(f'unread_count_{target}') + 1,
+        )
 
     @staticmethod
-    @transaction.atomic
-    def reset_unread_count(conversation, for_user: bool = True):
+    def reset_unread_count(conversation: Conversation, for_user: bool = True) -> None:
         """
         Reset unread message count to zero.
 
@@ -161,11 +185,5 @@ class ConversationService:
             for_user: If True, reset user's unread count
                      If False, reset admin's unread count
         """
-        if for_user:
-            conversation.unread_count_user = 0
-            conversation.save(update_fields=['unread_count_user', 'updated_at'])
-            conversation.refresh_from_db()
-        else:
-            conversation.unread_count_admin = 0
-            conversation.save(update_fields=['unread_count_admin', 'updated_at'])
-            conversation.refresh_from_db()
+        target = ConversationService._get_unread_counter_field(for_user)
+        ConversationService._save_unread_count(conversation, target=target, value=0)

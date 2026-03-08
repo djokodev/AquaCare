@@ -21,24 +21,66 @@ Utilisation dans views.py :
         )
         return Response(...)
 """
-from .base import BaseService
-from .cycle_service import ProductionCycleService
-from .log_service import CycleLogService
-from .feeding_service import FeedingPlanService
 from .analytics_service import AnalyticsService
-from .report_service import ReportService
-from .sanitary_service import SanitaryService
-from .sync_service import SyncService
+from .base import BaseService
+from .cycle_application_service import HarvestCycleCommand, ProductionCycleApplicationService
+from .cycle_service import ProductionCycleService
+from .dashboard_application_service import DashboardApplicationService, InvalidDashboardCycleScopeError
 from .dashboard_service import DashboardService
+from .feeding_application_service import (
+    FeedingCycleNotFoundError,
+    FeedingPlanApplicationService,
+    GenerateFeedingPlansCommand,
+)
+from .feeding_service import FeedingPlanService
+from .log_application_service import (
+    CycleLogApplicationService,
+    CycleLogMutationResult,
+    UnauthorizedCycleAccessError,
+)
+from .log_service import CycleLogService
+from .report_application_service import (
+    GenerateReportCommand,
+    InvalidReportCycleScopeError,
+    MissingReportEmailError,
+    ReportApplicationService,
+    ReportDownloadDecision,
+    WhatsAppShareCommand,
+)
+from .report_service import ReportService
+from .sanitary_application_service import ResolveSanitaryIssueCommand, SanitaryApplicationService
+from .sanitary_service import SanitaryService
+from .sync_application_service import SyncApplicationService, SyncExecutionResult
+from .sync_service import SyncService
 
 __all__ = [
     'BaseService',
     'ProductionCycleService',
+    'ProductionCycleApplicationService',
+    'HarvestCycleCommand',
     'CycleLogService',
+    'CycleLogApplicationService',
+    'CycleLogMutationResult',
+    'UnauthorizedCycleAccessError',
     'FeedingPlanService',
+    'FeedingPlanApplicationService',
+    'FeedingCycleNotFoundError',
+    'GenerateFeedingPlansCommand',
     'AnalyticsService',
+    'DashboardApplicationService',
+    'InvalidDashboardCycleScopeError',
+    'GenerateReportCommand',
+    'InvalidReportCycleScopeError',
+    'MissingReportEmailError',
+    'ReportApplicationService',
+    'ReportDownloadDecision',
     'ReportService',
     'SanitaryService',
+    'SanitaryApplicationService',
+    'ResolveSanitaryIssueCommand',
     'SyncService',
+    'SyncApplicationService',
+    'SyncExecutionResult',
+    'WhatsAppShareCommand',
     'DashboardService',
 ]

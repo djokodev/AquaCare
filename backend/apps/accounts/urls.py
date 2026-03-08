@@ -7,6 +7,7 @@ Ces URLs seront préfixées par '/api/accounts/' dans le projet principal.
 
 from django.urls import path
 from rest_framework_simplejwt.views import TokenRefreshView, TokenVerifyView
+
 from . import views
 
 app_name = 'accounts'

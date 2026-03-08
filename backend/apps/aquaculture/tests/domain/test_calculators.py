@@ -3,9 +3,8 @@ Tests unitaires pour AquacultureCalculator (domain/calculators.py).
 
 Coverage cible : >90% (calculs critiques)
 """
-import pytest
-from decimal import Decimal
 from datetime import date, timedelta
+from decimal import Decimal
 
 from aquaculture.domain.calculators import AquacultureCalculator
 
@@ -337,7 +336,6 @@ class TestHarvestProjection:
             species='clarias'
         )
         # (250 - 100) / 2.0 = 75 jours supplémentaires
-        expected_days = 75  # Approximativement
         assert (projected - date.today()).days > 0
 
     def test_project_harvest_date_zero_growth(self):

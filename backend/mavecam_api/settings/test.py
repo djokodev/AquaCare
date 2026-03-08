@@ -1,16 +1,26 @@
 """
 Settings spécifiques pour les tests (pytest + CI/CD)
 """
+from __future__ import annotations
+
 import os
 
-# ⚠️ CRITIQUE : Désactiver PostgreSQL AVANT d'importer base.py
-os.environ.pop('POSTGRES_HOST', None)
-os.environ.pop('POSTGRES_DB', None)
-os.environ.pop('POSTGRES_USER', None)
-os.environ.pop('POSTGRES_PASSWORD', None)
-os.environ.pop('POSTGRES_PORT', None)
 
-from .base import *
+def _clear_postgres_env() -> None:
+    for variable_name in (
+        'POSTGRES_HOST',
+        'POSTGRES_DB',
+        'POSTGRES_USER',
+        'POSTGRES_PASSWORD',
+        'POSTGRES_PORT',
+    ):
+        os.environ.pop(variable_name, None)
+
+
+# ⚠️ CRITIQUE : Désactiver PostgreSQL AVANT d'importer base.py
+_clear_postgres_env()
+
+from .base import *  # noqa: E402
 
 # SECRET_KEY pour tests
 SECRET_KEY = 'test-secret-key-for-pytest-only-not-secure-9x8c7v6b5n4m3'
@@ -38,10 +48,10 @@ CACHES = {
 # Désactiver les migrations pour accélérer les tests
 # (créer les tables directement depuis les modèles)
 class DisableMigrations:
-    def __contains__(self, item):
+    def __contains__(self, item: object) -> bool:
         return True
 
-    def __getitem__(self, item):
+    def __getitem__(self, item: object) -> None:
         return None
 
 MIGRATION_MODULES = DisableMigrations()

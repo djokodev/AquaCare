@@ -3,12 +3,13 @@ Tests unitaires pour SyncService.
 
 Coverage cible : >50%
 """
-import pytest
 from datetime import date, timedelta
+
+import pytest
+from aquaculture.models import CycleLog
+from aquaculture.services.sync_service import SyncService
 from django.utils import timezone
 
-from aquaculture.services.sync_service import SyncService
-from aquaculture.models import ProductionCycle, CycleLog
 from tests.fixtures.factories import ProductionCycleFactory, UserFactory
 
 
@@ -47,7 +48,6 @@ class TestSyncServicePullData:
         )
 
         # Créer logs (pas offline pour être dans server_updates)
-        from aquaculture.models import CycleLog
         CycleLog.objects.create(
             cycle=cycle,
             log_date=date.today() - timedelta(days=5),
@@ -108,8 +108,9 @@ class TestSyncServicePushData:
 
     def test_sync_deduplicates_by_uuid(self):
         """Test déduplication par UUID lors sync."""
-        from tests.fixtures.factories import FarmProfileFactory
         import uuid
+
+        from tests.fixtures.factories import FarmProfileFactory
 
         user = UserFactory()
         farm = FarmProfileFactory(user=user)
@@ -150,6 +151,7 @@ class TestSyncServiceConflictResolution:
 
         # Créer log serveur
         import uuid
+
         from aquaculture.services.log_service import CycleLogService
 
         conflict_uuid = str(uuid.uuid4())
@@ -189,7 +191,6 @@ class TestSyncServiceHealthCheck:
         cycle = ProductionCycleFactory(farm_profile=farm)
 
         # Créer logs offline
-        from aquaculture.models import CycleLog
         CycleLog.objects.create(
             cycle=cycle,
             log_date=date.today(),
@@ -210,7 +211,6 @@ class TestSyncCycleLogsEdgeCases:
 
     def test_invalid_uuid_cycle_id_adds_error(self):
         """Un cycle_id invalide (non-UUID) est ignoré et ajouté aux erreurs."""
-        from tests.fixtures.factories import FarmProfileFactory
         import uuid
 
         user = UserFactory()
@@ -250,9 +250,11 @@ class TestSyncCycleLogsEdgeCases:
 
     def test_uuid_conflict_with_another_user_adds_error(self):
         """Un client_uuid appartenant à un autre utilisateur est rejeté."""
-        from tests.fixtures.factories import FarmProfileFactory
-        from aquaculture.services.log_service import CycleLogService
         import uuid
+
+        from aquaculture.services.log_service import CycleLogService
+
+        from tests.fixtures.factories import FarmProfileFactory
 
         user1 = UserFactory()
         user2 = UserFactory()
@@ -293,9 +295,11 @@ class TestSyncCycleLogsEdgeCases:
 
     def test_uuid_linked_to_different_cycle_adds_error(self):
         """Un client_uuid lié à un autre cycle du même utilisateur est rejeté."""
-        from tests.fixtures.factories import FarmProfileFactory
-        from aquaculture.services.log_service import CycleLogService
         import uuid
+
+        from aquaculture.services.log_service import CycleLogService
+
+        from tests.fixtures.factories import FarmProfileFactory
 
         user = UserFactory()
         farm = FarmProfileFactory(user=user)
@@ -334,8 +338,9 @@ class TestSyncCycleLogsEdgeCases:
 
     def test_invalid_date_format_adds_error(self):
         """Un log avec date au mauvais format est rejeté proprement."""
-        from tests.fixtures.factories import FarmProfileFactory
         import uuid
+
+        from tests.fixtures.factories import FarmProfileFactory
 
         user = UserFactory()
         farm = FarmProfileFactory(user=user)
@@ -361,8 +366,9 @@ class TestSyncCycleLogsEdgeCases:
 
     def test_partial_batch_succeeds_despite_one_error(self):
         """Les entrées valides sont créées même si d'autres sont invalides."""
-        from tests.fixtures.factories import FarmProfileFactory
         import uuid
+
+        from tests.fixtures.factories import FarmProfileFactory
 
         user = UserFactory()
         farm = FarmProfileFactory(user=user)
@@ -424,7 +430,6 @@ class TestSyncSanitaryLogs:
 
     def test_sync_sanitary_logs_invalid_cycle_id_adds_error(self):
         """Un cycle_id invalide pour un log sanitaire est rejeté."""
-        import uuid
 
         user = UserFactory()
         logs_data = [

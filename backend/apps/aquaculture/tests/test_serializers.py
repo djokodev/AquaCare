@@ -4,19 +4,23 @@ Tests unitaires pour les sérialiseurs aquacoles MAVECAM.
 Teste la validation des données, sérialisation/désérialisation et logique métier
 des sérialiseurs pour l'API aquaculture.
 """
-import pytest
-from decimal import Decimal
 from datetime import date, timedelta
-from django.utils import timezone
-from rest_framework.test import APIRequestFactory
-from rest_framework.request import Request
+from decimal import Decimal
 
+import pytest
+from aquaculture.models import CycleLog, NutritionalGuide
 from aquaculture.serializers import (
-    ProductionCycleSerializer, CycleLogSerializer, CycleLogSyncSerializer,
-    FeedingPlanSerializer, SanitaryLogSerializer, NutritionalGuideSerializer,
-    DashboardSerializer, HarvestSerializer
+    CycleLogSerializer,
+    CycleLogSyncSerializer,
+    DashboardSerializer,
+    FeedingPlanSerializer,
+    HarvestSerializer,
+    NutritionalGuideSerializer,
+    ProductionCycleSerializer,
+    SanitaryLogSerializer,
 )
-from aquaculture.models import ProductionCycle, CycleLog, NutritionalGuide
+from rest_framework.request import Request
+from rest_framework.test import APIRequestFactory
 
 
 @pytest.mark.django_db
