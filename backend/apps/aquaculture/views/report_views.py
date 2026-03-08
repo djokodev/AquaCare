@@ -139,6 +139,54 @@ class ProductionReportViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = ProductionReportListSerializer
 
+    @staticmethod
+    def _serialize_report_detail(
+        report: ProductionReport,
+        request: Request,
+        *,
+        status_code: int,
+    ) -> Response:
+        serializer = ProductionReportDetailSerializer(report, context={'request': request})
+        return Response(serializer.data, status=status_code)
+
+    @staticmethod
+    def _set_pending_status(report: ProductionReport) -> None:
+        if report.status != 'pending':
+            report.status = 'pending'
+            report.save(update_fields=['status', 'updated_at'])
+
+    @staticmethod
+    def _dispatch_generation(report: ProductionReport, cycle_scope_id: str | None = None) -> None:
+        generate_report_async_task.delay(str(report.id), cycle_scope_id)
+
+    @staticmethod
+    def _extract_cycle_scope_id(report: ProductionReport) -> str | None:
+        if not isinstance(report.payload, dict):
+            return None
+        return (report.payload.get('report_meta', {}) or {}).get('cycle_scope_id')
+
+    @staticmethod
+    def _pending_response(message: str) -> Response:
+        return Response({'detail': message}, status=status.HTTP_409_CONFLICT)
+
+    @staticmethod
+    def _validate_cycle_scope(request: Request, cycle_id: str | None) -> Response | None:
+        if not cycle_id:
+            return None
+
+        cycle_exists = ProductionCycle.objects.filter(
+            id=cycle_id,
+            farm_profile=request.user.farm_profile,
+            status='active',
+        ).exists()
+        if cycle_exists:
+            return None
+
+        return Response(
+            {'detail': _("Cycle de session introuvable ou inactif.")},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
     def get_queryset(self):
         detail_actions = {
             'retrieve',
@@ -193,21 +241,11 @@ class ProductionReportViewSet(viewsets.ReadOnlyModelViewSet):
         cycle_id = serializer.validated_data.get('cycle_id')
         period_start, period_end = ReportService.build_period_bounds(report_type, reference_date)
 
-        # Validate cycle_id early (before dispatching async task)
         cycle_id_str = str(cycle_id) if cycle_id else None
-        if cycle_id_str:
-            cycle_exists = ProductionCycle.objects.filter(
-                id=cycle_id_str,
-                farm_profile=request.user.farm_profile,
-                status='active',
-            ).exists()
-            if not cycle_exists:
-                return Response(
-                    {'detail': _("Cycle de session introuvable ou inactif.")},  # noqa: F811
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+        invalid_cycle_response = self._validate_cycle_scope(request, cycle_id_str)
+        if invalid_cycle_response is not None:
+            return invalid_cycle_response
 
-        # Create report record with pending status (no PDF yet)
         report, _created = ProductionReport.objects.get_or_create(
             farm_profile=request.user.farm_profile,
             report_type=report_type,
@@ -215,16 +253,9 @@ class ProductionReportViewSet(viewsets.ReadOnlyModelViewSet):
             period_end=period_end,
             defaults={'status': 'pending'},
         )
-
-        if report.status != 'pending':
-            report.status = 'pending'
-            report.save(update_fields=['status', 'updated_at'])
-
-        # Dispatch async PDF generation
-        generate_report_async_task.delay(str(report.id), cycle_id_str)
-
-        detail = ProductionReportDetailSerializer(report, context={'request': request})
-        return Response(detail.data, status=status.HTTP_202_ACCEPTED)
+        self._set_pending_status(report)
+        self._dispatch_generation(report, cycle_id_str)
+        return self._serialize_report_detail(report, request, status_code=status.HTTP_202_ACCEPTED)
 
     @extend_schema(
         summary="Régénérer un rapport (asynchrone)",
@@ -234,24 +265,10 @@ class ProductionReportViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=True, methods=['post'], throttle_classes=[AquacultureReportActionThrottle])
     def regenerate(self, request: Request, pk: str | None = None) -> Response:
         report = self.get_object()
-
-        # Extract cycle_scope_id from existing payload
-        cycle_scope_id = None
-        if isinstance(report.payload, dict):
-            cycle_scope_id = (
-                report.payload.get('report_meta', {}) or {}
-            ).get('cycle_scope_id')
-
-        report.status = 'pending'
-        report.save(update_fields=['status', 'updated_at'])
-
-        generate_report_async_task.delay(
-            str(report.id),
-            cycle_scope_id,
-        )
-
-        serializer = ProductionReportDetailSerializer(report, context={'request': request})
-        return Response(serializer.data, status=status.HTTP_202_ACCEPTED)
+        cycle_scope_id = self._extract_cycle_scope_id(report)
+        self._set_pending_status(report)
+        self._dispatch_generation(report, cycle_scope_id)
+        return self._serialize_report_detail(report, request, status_code=status.HTTP_202_ACCEPTED)
 
     @extend_schema(
         summary="Valider un rapport",
@@ -262,8 +279,7 @@ class ProductionReportViewSet(viewsets.ReadOnlyModelViewSet):
     def validate(self, request: Request, pk: str | None = None) -> Response:
         report = self.get_object()
         validated = ReportService.validate(report, request.user)
-        serializer = ProductionReportDetailSerializer(validated, context={'request': request})
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        return self._serialize_report_detail(validated, request, status_code=status.HTTP_200_OK)
 
     @extend_schema(
         summary="Envoyer un rapport par email",
@@ -290,8 +306,7 @@ class ProductionReportViewSet(viewsets.ReadOnlyModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         send_report_email_task.delay(str(report.id), str(request.user.id))
-        serializer = ProductionReportDetailSerializer(report, context={'request': request})
-        return Response(serializer.data, status=status.HTTP_202_ACCEPTED)
+        return self._serialize_report_detail(report, request, status_code=status.HTTP_202_ACCEPTED)
 
     @extend_schema(
         summary="Marquer un partage WhatsApp",
@@ -318,8 +333,7 @@ class ProductionReportViewSet(viewsets.ReadOnlyModelViewSet):
             recipient=serializer.validated_data.get('recipient', ''),
             metadata=serializer.validated_data.get('metadata', {}),
         )
-        detail = ProductionReportDetailSerializer(updated, context={'request': request})
-        return Response(detail.data, status=status.HTTP_200_OK)
+        return self._serialize_report_detail(updated, request, status_code=status.HTTP_200_OK)
 
     @extend_schema(
         summary="Télécharger le PDF d'un rapport",
@@ -331,19 +345,15 @@ class ProductionReportViewSet(viewsets.ReadOnlyModelViewSet):
         report = self.get_object()
 
         if report.status == 'pending':
-            return Response(
-                {'detail': _("Le rapport est en cours de génération. Réessayez dans quelques instants.")},
-                status=status.HTTP_409_CONFLICT,
+            return self._pending_response(
+                _("Le rapport est en cours de génération. Réessayez dans quelques instants.")
             )
 
         if not report.pdf_file:
-            # Dispatch async regeneration instead of blocking
-            report.status = 'pending'
-            report.save(update_fields=['status', 'updated_at'])
-            generate_report_async_task.delay(str(report.id))
-            return Response(
-                {'detail': _("Le PDF est en cours de génération. Réessayez dans quelques instants.")},
-                status=status.HTTP_409_CONFLICT,
+            self._set_pending_status(report)
+            self._dispatch_generation(report)
+            return self._pending_response(
+                _("Le PDF est en cours de génération. Réessayez dans quelques instants.")
             )
 
         filename = report.pdf_file.name.split('/')[-1] or f"report_{report.id}.pdf"

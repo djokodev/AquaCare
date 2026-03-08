@@ -217,6 +217,60 @@ class ReportService(BaseService):
     """Service central des rapports de production."""
 
     @staticmethod
+    def _resolve_cycle_scope_id(report: ProductionReport) -> str | None:
+        if not isinstance(report.payload, dict):
+            return None
+        return (report.payload.get('report_meta', {}) or {}).get('cycle_scope_id')
+
+    @staticmethod
+    def _build_report_filename(
+        *,
+        report_type: str,
+        farm_profile_id: str,
+        period_start: date,
+        period_end: date,
+        cycle_id: str | None,
+    ) -> str:
+        filename_parts = [f"report_{report_type}", str(farm_profile_id)]
+        if cycle_id:
+            filename_parts.append(cycle_id)
+        filename_parts.extend([period_start.isoformat(), period_end.isoformat()])
+        return '_'.join(filename_parts) + '.pdf'
+
+    @staticmethod
+    def _apply_generated_report_content(
+        report: ProductionReport,
+        *,
+        payload: ReportPayload,
+        pdf_bytes: bytes,
+        filename: str,
+        generated_at: datetime,
+    ) -> ProductionReport:
+        report.payload = payload
+        report.status = 'draft'
+        report.generated_at = generated_at
+        report.validated_at = None
+        report.validated_by = None
+        report.email_status = 'not_sent'
+        report.email_sent_at = None
+        report.whatsapp_status = 'not_shared'
+        report.whatsapp_shared_at = None
+        report.pdf_file.save(filename, ContentFile(pdf_bytes), save=False)
+        report.save()
+        return report
+
+    @staticmethod
+    def _load_report_pdf_content(report: ProductionReport) -> bytes:
+        try:
+            report.pdf_file.open('rb')
+            return report.pdf_file.read()
+        finally:
+            try:
+                report.pdf_file.close()
+            except Exception:
+                pass
+
+    @staticmethod
     def build_period_bounds(report_type: str, reference_date: date | None = None) -> tuple[date, date]:
         """
         Construit les bornes de période à partir d'une date de référence.
@@ -283,45 +337,30 @@ class ReportService(BaseService):
         )
 
         now = timezone.now()
-        filename = (
-            f"report_{report_type}_{farm_profile.id}_"
-            f"{period_start.isoformat()}_{period_end.isoformat()}.pdf"
+        filename = ReportService._build_report_filename(
+            report_type=report_type,
+            farm_profile_id=str(farm_profile.id),
+            period_start=period_start,
+            period_end=period_end,
+            cycle_id=cycle_id,
         )
-        if cycle_id:
-            filename = (
-                f"report_{report_type}_{farm_profile.id}_{cycle_id}_"
-                f"{period_start.isoformat()}_{period_end.isoformat()}.pdf"
-            )
-
-        report.payload = payload
-        report.status = 'draft'
-        report.generated_at = now
-        report.validated_at = None
-        report.validated_by = None
-        report.email_status = 'not_sent'
-        report.email_sent_at = None
-        report.whatsapp_status = 'not_shared'
-        report.whatsapp_shared_at = None
-        report.pdf_file.save(filename, ContentFile(pdf_bytes), save=False)
-        report.save()
-
-        return report
+        return ReportService._apply_generated_report_content(
+            report,
+            payload=payload,
+            pdf_bytes=pdf_bytes,
+            filename=filename,
+            generated_at=now,
+        )
 
     @staticmethod
     def regenerate(report: ProductionReport) -> ProductionReport:
         """Régénère un rapport existant en conservant sa période/type."""
-        cycle_scope_id = None
-        if isinstance(report.payload, dict):
-            cycle_scope_id = (
-                report.payload.get('report_meta', {}) or {}
-            ).get('cycle_scope_id')
-
         return ReportService.generate_for_farm(
             farm_profile=report.farm_profile,
             report_type=report.report_type,
             period_start=report.period_start,
             period_end=report.period_end,
-            cycle_id=cycle_scope_id,
+            cycle_id=ReportService._resolve_cycle_scope_id(report),
         )
 
     @staticmethod
@@ -354,14 +393,7 @@ class ReportService(BaseService):
         if not report.pdf_file:
             report = ReportService.regenerate(report)
 
-        try:
-            report.pdf_file.open('rb')
-            pdf_content = report.pdf_file.read()
-        finally:
-            try:
-                report.pdf_file.close()
-            except Exception:
-                pass
+        pdf_content = ReportService._load_report_pdf_content(report)
 
         language_code = ReportService._resolve_language_code(report.farm_profile.user)
         with override(language_code):

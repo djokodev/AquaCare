@@ -5,7 +5,7 @@ Handles conversation lifecycle and retrieval with permission checks.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from django.contrib.auth import get_user_model
 from django.db import transaction
@@ -17,6 +17,9 @@ User = get_user_model()
 if TYPE_CHECKING:
     from chat.models import Conversation
     from chat.models import User as ChatUser
+
+
+UnreadCounterTarget = Literal['user', 'admin']
 
 
 class ConversationService:
@@ -137,6 +140,23 @@ class ConversationService:
         conversation.refresh_from_db()
 
     @staticmethod
+    def _get_unread_counter_field(for_user: bool) -> UnreadCounterTarget:
+        return 'user' if for_user else 'admin'
+
+    @staticmethod
+    @transaction.atomic
+    def _save_unread_count(
+        conversation: Conversation,
+        *,
+        target: UnreadCounterTarget,
+        value: int | F,
+    ) -> None:
+        field_name = f'unread_count_{target}'
+        setattr(conversation, field_name, value)
+        conversation.save(update_fields=[field_name, 'updated_at'])
+        ConversationService._refresh_counter_state(conversation)
+
+    @staticmethod
     @transaction.atomic
     def increment_unread_count(conversation: Conversation, for_user: bool = True) -> None:
         """
@@ -147,14 +167,12 @@ class ConversationService:
             for_user: If True, increment user's unread count (admin sent message)
                      If False, increment admin's unread count (user sent message)
         """
-        if for_user:
-            conversation.unread_count_user = F('unread_count_user') + 1
-            conversation.save(update_fields=['unread_count_user', 'updated_at'])
-            ConversationService._refresh_counter_state(conversation)
-        else:
-            conversation.unread_count_admin = F('unread_count_admin') + 1
-            conversation.save(update_fields=['unread_count_admin', 'updated_at'])
-            ConversationService._refresh_counter_state(conversation)
+        target = ConversationService._get_unread_counter_field(for_user)
+        ConversationService._save_unread_count(
+            conversation,
+            target=target,
+            value=F(f'unread_count_{target}') + 1,
+        )
 
     @staticmethod
     @transaction.atomic
@@ -169,11 +187,5 @@ class ConversationService:
             for_user: If True, reset user's unread count
                      If False, reset admin's unread count
         """
-        if for_user:
-            conversation.unread_count_user = 0
-            conversation.save(update_fields=['unread_count_user', 'updated_at'])
-            ConversationService._refresh_counter_state(conversation)
-        else:
-            conversation.unread_count_admin = 0
-            conversation.save(update_fields=['unread_count_admin', 'updated_at'])
-            ConversationService._refresh_counter_state(conversation)
+        target = ConversationService._get_unread_counter_field(for_user)
+        ConversationService._save_unread_count(conversation, target=target, value=0)

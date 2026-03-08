@@ -68,6 +68,47 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
     ordering_fields = ['price_per_package', 'pellet_size_mm', 'created_at']
     ordering = ['species', 'phase', 'pellet_size_mm']
 
+    @staticmethod
+    def _error_response(message: str, status_code: int) -> Response:
+        return Response({'error': message}, status=status_code)
+
+    def _serialize_products(self, products: QuerySet[Product] | list[Product]) -> Response:
+        serializer = self.get_serializer(products, many=True)
+        return Response(serializer.data)
+
+    @staticmethod
+    def _get_user_cycle(request: Request, cycle_id: str | None):
+        from aquaculture.models import ProductionCycle
+
+        return ProductionCycle.objects.get(id=cycle_id, farm_profile__user=request.user)
+
+    @staticmethod
+    def _parse_weight(weight_g_value: str | None) -> float:
+        if not weight_g_value:
+            raise ValueError('missing_weight')
+        return float(weight_g_value)
+
+    @staticmethod
+    def _build_simulation_payload(validated_data: dict[str, Any]) -> dict[str, Any]:
+        return {
+            'species': validated_data['species'],
+            'initial_fish_count': validated_data['initial_fish_count'],
+            'initial_weight_g': validated_data.get('initial_weight_g'),
+            'target_weight_g': validated_data.get('target_weight_g'),
+            'cycle_duration_days': validated_data.get('cycle_duration_days'),
+            'survival_rate': validated_data.get('survival_rate'),
+            'selling_price_per_kg_fcfa': validated_data.get('selling_price_per_kg_fcfa'),
+            'fingerlings_cost_fcfa': validated_data.get('fingerlings_cost_fcfa'),
+            'other_costs_fcfa': validated_data.get('other_costs_fcfa'),
+        }
+
+    @staticmethod
+    def _simulation_validation_response(exc: Exception) -> Response:
+        return Response(
+            {'message': str(exc), 'error': 'simulation_validation_error'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
     def get_queryset(self) -> QuerySet[Product]:
         """Retourne produits disponibles."""
         return ProductService.get_all_products(include_unavailable=False)
@@ -79,8 +120,7 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
         MVP : Retourne top 5 produits les plus populaires.
         """
         products = self.get_queryset()[:5]
-        serializer = self.get_serializer(products, many=True)
-        return Response(serializer.data)
+        return self._serialize_products(products)
 
     @action(detail=False, methods=['get'], url_path='for_cycle/(?P<cycle_id>[^/.]+)')
     def for_cycle(self, request: Request, cycle_id: str | None = None) -> Response:
@@ -90,18 +130,16 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
         Args:
             cycle_id: UUID du cycle
         """
-        from aquaculture.models import ProductionCycle
-
         try:
-            cycle = ProductionCycle.objects.get(id=cycle_id, farm_profile__user=request.user)
+            cycle = self._get_user_cycle(request, cycle_id)
             products = ProductService.get_products_for_cycle(cycle)
-            serializer = self.get_serializer(products, many=True)
-            return Response(serializer.data)
-        except ProductionCycle.DoesNotExist:
-            return Response(
-                {'error': 'Cycle introuvable'},
-                status=status.HTTP_404_NOT_FOUND
-            )
+            return self._serialize_products(products)
+        except Exception as exc:
+            from aquaculture.models import ProductionCycle
+
+            if isinstance(exc, ProductionCycle.DoesNotExist):
+                return self._error_response('Cycle introuvable', status.HTTP_404_NOT_FOUND)
+            raise
 
     @action(detail=False, methods=['get'])
     def recommended(self, request: Request) -> Response:
@@ -116,27 +154,26 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
         weight_g_str = request.query_params.get('weight_g')
 
         if not species or not weight_g_str:
-            return Response(
-                {'error': 'Paramètres species et weight_g requis'},
-                status=status.HTTP_400_BAD_REQUEST
+            return self._error_response(
+                'Paramètres species et weight_g requis',
+                status.HTTP_400_BAD_REQUEST,
             )
 
         try:
-            weight_g = float(weight_g_str)
+            weight_g = self._parse_weight(weight_g_str)
             product = ProductService.get_recommended_product(species, weight_g)
 
             if product:
                 serializer = self.get_serializer(product)
                 return Response(serializer.data)
-            else:
-                return Response(
-                    {'error': 'Aucun produit recommandé trouvé'},
-                    status=status.HTTP_404_NOT_FOUND
-                )
+            return self._error_response(
+                'Aucun produit recommandé trouvé',
+                status.HTTP_404_NOT_FOUND,
+            )
         except ValueError:
-            return Response(
-                {'error': 'weight_g doit être un nombre'},
-                status=status.HTTP_400_BAD_REQUEST
+            return self._error_response(
+                'weight_g doit être un nombre',
+                status.HTTP_400_BAD_REQUEST,
             )
 
     @action(detail=False, methods=['get'], throttle_classes=[CommerceSuggestionThrottle])
@@ -207,10 +244,7 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
             try:
                 uuid.UUID(str(cycle_id))
             except (TypeError, ValueError):
-                return Response(
-                    {'error': 'cycle_id invalide'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+                return self._error_response('cycle_id invalide', status.HTTP_400_BAD_REQUEST)
 
         try:
             suggestions = FeedingSuggestionService.get_feeding_suggestions(
@@ -219,10 +253,7 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
                 cycle_id=cycle_id
             )
         except ValueError as exc:
-            return Response(
-                {'error': str(exc)},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return self._error_response(str(exc), status.HTTP_400_BAD_REQUEST)
 
         return Response(suggestions)
 
@@ -299,34 +330,20 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
         }
         """
         try:
-            # Validation input
             input_serializer = CycleSimulationInputSerializer(data=request.data)
             input_serializer.is_valid(raise_exception=True)
 
-            # Exécuter simulation
             simulation_result = CycleSimulationService.simulate_cycle(
-                species=input_serializer.validated_data['species'],
-                initial_fish_count=input_serializer.validated_data['initial_fish_count'],
-                initial_weight_g=input_serializer.validated_data.get('initial_weight_g'),
-                target_weight_g=input_serializer.validated_data.get('target_weight_g'),
-                cycle_duration_days=input_serializer.validated_data.get('cycle_duration_days'),
-                survival_rate=input_serializer.validated_data.get('survival_rate'),
-                selling_price_per_kg_fcfa=input_serializer.validated_data.get('selling_price_per_kg_fcfa'),
-                fingerlings_cost_fcfa=input_serializer.validated_data.get('fingerlings_cost_fcfa'),
-                other_costs_fcfa=input_serializer.validated_data.get('other_costs_fcfa'),
+                **self._build_simulation_payload(input_serializer.validated_data)
             )
 
-            # Sérialiser output
             output_serializer = CycleSimulationOutputSerializer(simulation_result)
             return Response(output_serializer.data, status=status.HTTP_200_OK)
 
         except ValidationError:
             raise
         except (InvalidOrderError, ProductNotFoundError, ProductNotAvailableError, ValueError) as exc:
-            return Response(
-                {'message': str(exc), 'error': 'simulation_validation_error'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return self._simulation_validation_response(exc)
         except Exception:
             logger.exception("Echec simulation cycle commerce")
             return Response(
@@ -361,6 +378,25 @@ class OrderViewSet(
     filterset_fields = ['status', 'delivery_method']
     ordering_fields = ['created_at', 'total']
     ordering = ['-created_at']
+
+    @staticmethod
+    def _raise_service_validation_error(exc: Exception) -> None:
+        raise ValidationError({'message': str(exc)}) from exc
+
+    @staticmethod
+    def _serialize_order_response(order: Order, *, status_code: int) -> Response:
+        serializer = OrderSerializer(order)
+        return Response(serializer.data, status=status_code)
+
+    @staticmethod
+    def _build_delivery_preview_response(preview: dict[str, Any]) -> Response:
+        return Response({
+            'subtotal': str(preview['subtotal']),
+            'delivery_fee': str(preview['delivery_fee']),
+            'total': str(preview['total']),
+            'total_bags': preview['total_bags'],
+            'free_delivery_threshold_reached': preview['free_delivery_threshold_reached']
+        })
 
     def get_serializer_class(self) -> type[OrderCreateSerializer] | type[OrderSerializer]:
         """Serializer selon action."""
@@ -407,17 +443,11 @@ class OrderViewSet(
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         try:
-            # Créer via serializer (qui appelle OrderService)
             order = cast(OrderCreateSerializer, serializer).save()
         except (InvalidOrderError, ProductNotFoundError, ProductNotAvailableError, ValueError) as exc:
-            raise ValidationError({'message': str(exc)}) from exc
+            self._raise_service_validation_error(exc)
 
-        # Retourner avec OrderSerializer
-        output_serializer = OrderSerializer(order)
-        return Response(
-            output_serializer.data,
-            status=status.HTTP_201_CREATED
-        )
+        return self._serialize_order_response(order, status_code=status.HTTP_201_CREATED)
 
     @action(detail=False, methods=['get'])
     def statistics(self, request: Request) -> Response:
@@ -450,10 +480,9 @@ class OrderViewSet(
         try:
             updated_order = OrderService.confirm_order_receipt(order, request.user)
         except InvalidOrderError as exc:
-            raise ValidationError({'message': str(exc)}) from exc
+            self._raise_service_validation_error(exc)
 
-        serializer = OrderSerializer(updated_order)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        return self._serialize_order_response(updated_order, status_code=status.HTTP_200_OK)
 
     @action(
         detail=False,
@@ -488,12 +517,4 @@ class OrderViewSet(
         serializer.is_valid(raise_exception=True)
 
         preview = serializer.validated_data['preview']
-
-        # Convertir Decimal en str pour JSON
-        return Response({
-            'subtotal': str(preview['subtotal']),
-            'delivery_fee': str(preview['delivery_fee']),
-            'total': str(preview['total']),
-            'total_bags': preview['total_bags'],
-            'free_delivery_threshold_reached': preview['free_delivery_threshold_reached']
-        })
+        return self._build_delivery_preview_response(preview)

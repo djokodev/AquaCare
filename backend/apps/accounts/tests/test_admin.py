@@ -10,6 +10,7 @@ from accounts.admin import FarmProfileAdmin, UserAdmin
 from accounts.models import FarmProfile
 from django.contrib.admin.sites import AdminSite
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.test import RequestFactory
 
 User = get_user_model()
@@ -44,6 +45,25 @@ class TestUserAdmin:
         )
         # phone_number ajouté dynamiquement via get_search_fields() pour managers
         assert self.admin.search_fields == expected_fields
+
+    def test_get_search_fields_includes_phone_for_manager(self):
+        """Le telephone reste searchable pour les managers."""
+        manager_group, _ = Group.objects.get_or_create(name='mavecam_managers')
+        manager_user = User.objects.create_user(
+            phone_number='+237699111111',
+            first_name='Manager',
+            last_name='User',
+            password='test123',
+            age_group='26_35',
+        )
+        manager_user.groups.add(manager_group)
+
+        request = self.factory.get('/admin/accounts/user/')
+        request.user = manager_user
+
+        search_fields = self.admin.get_search_fields(request)
+
+        assert 'phone_number' in search_fields
     
     def test_list_filter_configured(self):
         """Test filtres de liste configurés."""
@@ -52,6 +72,23 @@ class TestUserAdmin:
             'is_active', 'is_staff', 'date_joined', 'farm_profile__certification_status'
         )
         assert self.admin.list_filter == expected_filters
+
+    def test_get_list_display_masks_phone_for_non_manager(self):
+        """Les non-managers ne voient pas le numero brut dans la liste."""
+        regular_user = User.objects.create_user(
+            phone_number='+237699111112',
+            first_name='Regular',
+            last_name='User',
+            password='test123',
+            age_group='26_35',
+        )
+        request = self.factory.get('/admin/accounts/user/')
+        request.user = regular_user
+
+        list_display = self.admin.get_list_display(request)
+
+        assert 'phone_masked' in list_display
+        assert 'phone_number' not in list_display
     
     def test_farm_certification_status_display_certified(self):
         """Test affichage statut certification certifié."""
@@ -213,6 +250,24 @@ class TestUserAdmin:
             assert user.farm_profile.certification_status == 'suspended'
 
             mock_messages.success.assert_called_once()
+
+    def test_get_actions_removes_manager_actions_for_non_manager(self):
+        """Les actions sensibles sont retirees pour un utilisateur sans role manager."""
+        regular_user = User.objects.create_user(
+            phone_number='+237699111113',
+            first_name='Limited',
+            last_name='User',
+            password='test123',
+            age_group='26_35',
+        )
+        request = self.factory.get('/admin/accounts/user/')
+        request.user = regular_user
+
+        actions = self.admin.get_actions(request)
+
+        assert 'verify_users' not in actions
+        assert 'certify_farms' not in actions
+        assert 'suspend_certifications' not in actions
     
     # DEPRECATED: export_csv action removed with RBAC implementation
     # def test_export_csv_action(self):

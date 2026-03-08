@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import time
+from dataclasses import dataclass
 from typing import Final, TypedDict
 
 from django.core.cache import cache
@@ -23,6 +24,56 @@ class LoginRequestPayload(TypedDict, total=False):
 
     login_name: str
     phone_number: str
+
+
+@dataclass
+class LoginAttemptTracker:
+    """Composant dedie a la persistance et au comptage des tentatives."""
+
+    user_limit: int
+    window_seconds: int
+
+    def cache_key_ip(self, ip: str) -> str:
+        return f"login-rate-limit:ip:{ip}"
+
+    def cache_key_user(self, login_name: str) -> str:
+        return f"login-rate-limit:user:{login_name}"
+
+    def get_recent_attempts(
+        self,
+        key: str,
+        window_seconds: int | None = None,
+    ) -> list[float]:
+        window = window_seconds if window_seconds is not None else self.window_seconds
+        current_time = time.time()
+        attempts = cache.get(key, [])
+        recent_attempts = [
+            attempt for attempt in attempts
+            if current_time - attempt < window
+        ]
+
+        if recent_attempts != attempts:
+            cache.set(key, recent_attempts, timeout=window)
+
+        return recent_attempts
+
+    def exceeds_limit(self, key: str, limit: int, window_seconds: int) -> bool:
+        attempts = self.get_recent_attempts(key, window_seconds)
+        return len(attempts) >= limit
+
+    def exceeds_user_limit(self, login_name: str) -> bool:
+        attempts = self.get_recent_attempts(self.cache_key_user(login_name))
+        return len(attempts) >= self.user_limit
+
+    def record_failure(self, ip: str, login_name: str) -> None:
+        self._record_attempt(self.cache_key_ip(ip))
+        if login_name:
+            self._record_attempt(self.cache_key_user(login_name))
+
+    def _record_attempt(self, key: str) -> None:
+        attempts = self.get_recent_attempts(key)
+        attempts.append(time.time())
+        cache.set(key, attempts, timeout=self.window_seconds)
 
 
 class UserLanguageMiddleware:
@@ -151,6 +202,10 @@ class LoginRateLimitMiddleware:
         self.ip_limit = 5
         self.user_limit = 3
         self.window_seconds = 60
+        self.tracker = LoginAttemptTracker(
+            user_limit=self.user_limit,
+            window_seconds=self.window_seconds,
+        )
 
     def __call__(self, request: HttpRequest) -> HttpResponse:
         # Vérifier le rate limiting avant traitement
@@ -207,14 +262,11 @@ class LoginRateLimitMiddleware:
     
     def _check_limit(self, key: str, limit: int, window_seconds: int) -> bool:
         """Vérifie si une clé de cache dépasse sa limite dans la fenêtre."""
-        attempts = self._get_recent_attempts(key, window_seconds)
-        return len(attempts) >= limit
+        return self.tracker.exceeds_limit(key, limit, window_seconds)
 
     def check_user_limit(self, login_name: str) -> bool:
         """Vérifie la limite par utilisateur."""
-        key = self._cache_key_user(login_name)
-        attempts = self._get_recent_attempts(key)
-        return len(attempts) >= self.user_limit
+        return self.tracker.exceeds_user_limit(login_name)
     
     def record_attempt(self, request: HttpRequest, response: HttpResponse) -> None:
         """Enregistre une tentative de connexion."""
@@ -222,11 +274,7 @@ class LoginRateLimitMiddleware:
         if response.status_code != 200:
             ip = self.get_client_ip(request)
             login_identifier = self.get_login_identifier(request)
-
-            self._record_attempt(self._cache_key_ip(ip))
-
-            if login_identifier:
-                self._record_attempt(self._cache_key_user(login_identifier))
+            self.tracker.record_failure(ip, login_identifier)
     
     def get_client_ip(self, request: HttpRequest) -> str:
         """Récupère l'IP du client."""
@@ -258,26 +306,13 @@ class LoginRateLimitMiddleware:
             return ''
 
     def _cache_key_ip(self, ip: str) -> str:
-        return f"login-rate-limit:ip:{ip}"
+        return self.tracker.cache_key_ip(ip)
 
     def _cache_key_user(self, login_name: str) -> str:
-        return f"login-rate-limit:user:{login_name}"
+        return self.tracker.cache_key_user(login_name)
 
     def _get_recent_attempts(self, key: str, window_seconds: int | None = None) -> list[float]:
-        window = window_seconds if window_seconds is not None else self.window_seconds
-        current_time = time.time()
-        attempts = cache.get(key, [])
-        recent_attempts = [
-            attempt for attempt in attempts
-            if current_time - attempt < window
-        ]
-
-        if recent_attempts != attempts:
-            cache.set(key, recent_attempts, timeout=window)
-
-        return recent_attempts
+        return self.tracker.get_recent_attempts(key, window_seconds)
 
     def _record_attempt(self, key: str) -> None:
-        attempts = self._get_recent_attempts(key)
-        attempts.append(time.time())
-        cache.set(key, attempts, timeout=self.window_seconds)
+        self.tracker._record_attempt(key)

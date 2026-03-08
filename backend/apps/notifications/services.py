@@ -53,6 +53,11 @@ class NotificationService:
         return list(channels)
 
     @staticmethod
+    def _get_or_create_preferences(user: AccountUser) -> NotificationPreference:
+        prefs, _ = NotificationPreference.objects.get_or_create(user=user)
+        return prefs
+
+    @staticmethod
     def _filter_channels_by_preferences(
         prefs: NotificationPreference,
         channels: list[NotificationChannel],
@@ -65,6 +70,73 @@ class NotificationService:
         if not prefs.push_enabled and "push" in filtered_channels:
             filtered_channels.remove("push")
         return filtered_channels
+
+    @staticmethod
+    def _resolve_priority(
+        notification_type: str,
+        priority: NotificationPriority | None,
+    ) -> NotificationPriority:
+        if priority is not None:
+            return priority
+        return DEFAULT_PRIORITY_BY_TYPE.get(notification_type, "medium")
+
+    @staticmethod
+    def _apply_feeding_reminder_push_policy(
+        notification_type: str,
+        channels: list[NotificationChannel],
+    ) -> list[NotificationChannel]:
+        if (
+            notification_type == 'feeding_reminder'
+            and getattr(settings, 'FEEDING_REMINDER_LOCAL_ALARM_ONLY', True)
+            and 'push' in channels
+        ):
+            return [channel for channel in channels if channel != 'push']
+        return channels
+
+    @staticmethod
+    def _apply_quiet_hours_policy(
+        prefs: NotificationPreference,
+        channels: list[NotificationChannel],
+    ) -> list[NotificationChannel]:
+        if 'push' in channels and prefs.is_in_quiet_hours():
+            return [channel for channel in channels if channel != 'push']
+        return channels
+
+    @staticmethod
+    def _resolve_user_channels(
+        *,
+        notification_type: str,
+        prefs: NotificationPreference,
+        channels: list[NotificationChannel] | None,
+        apply_quiet_hours: bool,
+    ) -> list[NotificationChannel]:
+        resolved_channels = NotificationService._resolve_channels(notification_type, channels)
+        resolved_channels = NotificationService._filter_channels_by_preferences(prefs, resolved_channels)
+        resolved_channels = NotificationService._apply_feeding_reminder_push_policy(
+            notification_type,
+            resolved_channels,
+        )
+        if apply_quiet_hours:
+            resolved_channels = NotificationService._apply_quiet_hours_policy(prefs, resolved_channels)
+        return resolved_channels
+
+    @staticmethod
+    def _dispatch_immediate_notifications(
+        notification: Notification,
+        channels: list[NotificationChannel],
+    ) -> None:
+        try:
+            from .tasks import send_email_notification_task, send_push_notification_task
+
+            if "email" in channels:
+                send_email_notification_task.delay(str(notification.id))
+            if "push" in channels:
+                send_push_notification_task.delay(str(notification.id))
+        except Exception:
+            logger.exception(
+                "Immediate notification dispatch failed for %s",
+                notification.id,
+            )
 
     @staticmethod
     @transaction.atomic
@@ -132,46 +204,21 @@ class NotificationService:
                 channels=['in_app', 'email']
             )
         """
+        prefs = NotificationService._get_or_create_preferences(user)
+        channels = NotificationService._resolve_user_channels(
+            notification_type=notification_type,
+            prefs=prefs,
+            channels=channels,
+            apply_quiet_hours=True,
+        )
 
-        # 1. Récupérer ou créer préférences utilisateur
-        prefs, _ = NotificationPreference.objects.get_or_create(user=user)
-
-        # 2. Déterminer canaux (auto ou spécifiés)
-        channels = NotificationService._resolve_channels(notification_type, channels)
-
-        # 3. Filtrer canaux selon préférences globales
-        channels = NotificationService._filter_channels_by_preferences(prefs, channels)
-
-        # 4. Si aucun canal activé, ne pas créer notification
         if not channels:
             return None
 
-        # 5. Vérifier préférences par type
         if not prefs.is_type_enabled(notification_type):
             return None
 
-        # 6. Déterminer priorité (auto ou spécifiée)
-        if priority is None:
-            priority = DEFAULT_PRIORITY_BY_TYPE.get(notification_type, "medium")
-
-        # 6.b Politique produit : rappels nourrissage = alarme locale mobile prioritaire
-        if (
-            notification_type == 'feeding_reminder'
-            and getattr(settings, 'FEEDING_REMINDER_LOCAL_ALARM_ONLY', True)
-            and 'push' in channels
-        ):
-            channels = [channel for channel in channels if channel != 'push']
-            if not channels:
-                return None
-
-        # 7. Vérifier heures silencieuses pour push
-        if 'push' in channels and prefs.is_in_quiet_hours():
-            channels.remove('push')
-            # Si push était le seul canal, ne pas créer notification
-            if not channels:
-                return None
-
-        # 8. Créer la notification
+        priority = NotificationService._resolve_priority(notification_type, priority)
         notification = Notification.objects.create(
             user=user,
             notification_type=notification_type,
@@ -185,23 +232,34 @@ class NotificationService:
             scheduled_for=scheduled_for or timezone.now()
         )
 
-        # 9. Envoyer immédiatement si demandé (via Celery)
         if send_immediately:
-            try:
-                from .tasks import send_email_notification_task, send_push_notification_task
-
-                if "email" in channels:
-                    send_email_notification_task.delay(str(notification.id))
-                if "push" in channels:
-                    send_push_notification_task.delay(str(notification.id))
-            except Exception:
-                # Ne pas bloquer la création de notification si l'envoi immédiat échoue
-                logger.exception(
-                    "Immediate notification dispatch failed for %s",
-                    notification.id,
-                )
+            NotificationService._dispatch_immediate_notifications(notification, channels)
 
         return notification
+
+    @staticmethod
+    def _ensure_bulk_preferences(
+        users: list[AccountUser],
+    ) -> dict[UUID, NotificationPreference]:
+        user_ids = [u.pk for u in users]
+        existing_prefs = NotificationPreference.objects.in_bulk(user_ids, field_name='user_id')
+
+        missing_user_ids = [uid for uid in user_ids if uid not in existing_prefs]
+        if missing_user_ids:
+            new_prefs = NotificationPreference.objects.bulk_create(
+                [NotificationPreference(user_id=uid) for uid in missing_user_ids],
+                ignore_conflicts=True,
+            )
+            for pref in new_prefs:
+                existing_prefs[pref.user_id] = pref
+
+            still_missing_ids = [uid for uid in missing_user_ids if uid not in existing_prefs]
+            if still_missing_ids:
+                existing_prefs.update(
+                    NotificationPreference.objects.in_bulk(still_missing_ids, field_name='user_id')
+                )
+
+        return existing_prefs
 
     @staticmethod
     def create_bulk_notifications(
@@ -236,45 +294,25 @@ class NotificationService:
         Returns:
             Nombre de notifications créées
         """
-        # Déterminer valeurs par défaut
-        channels = NotificationService._resolve_channels(notification_type, channels)
-        if (
-            notification_type == "feeding_reminder"
-            and getattr(settings, 'FEEDING_REMINDER_LOCAL_ALARM_ONLY', True)
-            and "push" in channels
-        ):
-            channels = [channel for channel in channels if channel != "push"]
-        if priority is None:
-            priority = DEFAULT_PRIORITY_BY_TYPE.get(notification_type, "medium")
+        channels = NotificationService._apply_feeding_reminder_push_policy(
+            notification_type,
+            NotificationService._resolve_channels(notification_type, channels),
+        )
+        priority = NotificationService._resolve_priority(notification_type, priority)
         if scheduled_for is None:
             scheduled_for = timezone.now()
 
-        # Charger toutes les préférences existantes en une seule requête
-        user_ids = [u.pk for u in users]
-        existing_prefs = NotificationPreference.objects.in_bulk(user_ids, field_name='user_id')
-
-        # Créer les préférences manquantes en batch
-        missing_user_ids = [uid for uid in user_ids if uid not in existing_prefs]
-        if missing_user_ids:
-            new_prefs = NotificationPreference.objects.bulk_create(
-                [NotificationPreference(user_id=uid) for uid in missing_user_ids],
-                ignore_conflicts=True,
-            )
-            for pref in new_prefs:
-                existing_prefs[pref.user_id] = pref
-
-            still_missing_ids = [uid for uid in missing_user_ids if uid not in existing_prefs]
-            if still_missing_ids:
-                existing_prefs.update(
-                    NotificationPreference.objects.in_bulk(still_missing_ids, field_name='user_id')
-                )
-
-        # Construire les notifications en filtrant par préférences (lookup O(1))
+        existing_prefs = NotificationService._ensure_bulk_preferences(users)
         notifications: list[Notification] = []
         for user in users:
             prefs = existing_prefs.get(user.pk)
             if prefs and prefs.is_type_enabled(notification_type):
-                user_channels = NotificationService._filter_channels_by_preferences(prefs, channels)
+                user_channels = NotificationService._resolve_user_channels(
+                    notification_type=notification_type,
+                    prefs=prefs,
+                    channels=channels,
+                    apply_quiet_hours=False,
+                )
                 if not user_channels:
                     continue
                 notifications.append(Notification(
@@ -288,7 +326,6 @@ class NotificationService:
                     scheduled_for=scheduled_for,
                 ))
 
-        # Créer en batch
         Notification.objects.bulk_create(notifications, batch_size=500)
         return len(notifications)
 

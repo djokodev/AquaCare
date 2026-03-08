@@ -85,7 +85,25 @@ class SyncView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
     throttle_classes = [AquacultureSyncThrottle]
-    
+
+    @staticmethod
+    def _validation_error_response(validation_errors: list[str]) -> Response:
+        return Response(
+            {
+                'status': 'error',
+                'errors': [{'type': 'validation', 'error': err} for err in validation_errors],
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    @staticmethod
+    def _resolve_sync_status_code(sync_status: str) -> int:
+        if sync_status == 'error':
+            return status.HTTP_500_INTERNAL_SERVER_ERROR
+        if sync_status == 'partial_success':
+            return status.HTTP_207_MULTI_STATUS
+        return status.HTTP_200_OK
+
     def post(self, request):
         """
         Gère les requêtes de synchronisation offline.
@@ -95,29 +113,15 @@ class SyncView(APIView):
 
         POST /api/aquaculture/sync/
         """
-        # Validate sync data structure
         validation_errors = SyncService.validate_sync_data(request.data)
         if validation_errors:
-            return Response(
-                {
-                    'status': 'error',
-                    'errors': [{'type': 'validation', 'error': err} for err in validation_errors]
-                },
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return self._validation_error_response(validation_errors)
 
-        # Delegate full sync to service layer
         sync_result = SyncService.perform_full_sync(
             user=request.user,
             sync_data=request.data
         )
-
-        # Determine HTTP status code based on sync result
-        if sync_result['status'] == 'error':
-            http_status = status.HTTP_500_INTERNAL_SERVER_ERROR
-        elif sync_result['status'] == 'partial_success':
-            http_status = status.HTTP_207_MULTI_STATUS
-        else:
-            http_status = status.HTTP_200_OK
-
-        return Response(sync_result, status=http_status)
+        return Response(
+            sync_result,
+            status=self._resolve_sync_status_code(sync_result['status']),
+        )

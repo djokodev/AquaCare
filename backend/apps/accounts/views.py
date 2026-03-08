@@ -1,4 +1,5 @@
 import logging
+from typing import TypedDict
 
 from django.http import Http404
 from django.utils.translation import gettext as _
@@ -26,6 +27,29 @@ from .throttles import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+class AuthTokenPayload(TypedDict):
+    refresh: str
+    access: str
+
+
+def build_auth_tokens(user: User) -> AuthTokenPayload:
+    """Construit la paire de tokens JWT d'un utilisateur."""
+    refresh = RefreshToken.for_user(user)
+    return {
+        'refresh': str(refresh),
+        'access': str(refresh.access_token),
+    }
+
+
+def build_auth_success_response(user: User, message: str) -> dict[str, object]:
+    """Construit le payload HTTP commun aux vues register/login."""
+    return {
+        'user': UserProfileSerializer(user).data,
+        'tokens': build_auth_tokens(user),
+        'message': message,
+    }
 
 
 class RegisterView(generics.CreateAPIView):
@@ -101,17 +125,11 @@ class RegisterView(generics.CreateAPIView):
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
         user = User.objects.with_farm_profile().get(pk=user.pk)
-        
-        refresh = RefreshToken.for_user(user)
-        
-        return Response({
-            'user': UserProfileSerializer(user).data,
-            'tokens': {
-                'refresh': str(refresh),
-                'access': str(refresh.access_token),
-            },
-            'message': _('Compte créé avec succès')
-        }, status=status.HTTP_201_CREATED)
+
+        return Response(
+            build_auth_success_response(user, _('Compte créé avec succès')),
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class LoginView(APIView):
@@ -179,17 +197,7 @@ class LoginView(APIView):
         serializer.is_valid(raise_exception=True)
 
         user = serializer.validated_data['user']
-
-        refresh = RefreshToken.for_user(user)
-
-        return Response({
-            'user': UserProfileSerializer(user).data,
-            'tokens': {
-                'refresh': str(refresh),
-                'access': str(refresh.access_token),
-            },
-            'message': _('Connexion réussie')
-        })
+        return Response(build_auth_success_response(user, _('Connexion réussie')))
 
 
 class ProfileView(generics.RetrieveUpdateAPIView):
@@ -268,28 +276,25 @@ class LogoutView(APIView):
         }
     )
     def post(self, request):
+        refresh_token = request.data.get('refresh')
+        if not refresh_token:
+            return Response(
+                {'error': _('Token de rafraîchissement requis')},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         try:
-            refresh_token = request.data.get('refresh')
-            
-            if not refresh_token:
-                return Response(
-                    {'error': _('Token de rafraîchissement requis')},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
-            # Blacklist du refresh token
             token = RefreshToken(refresh_token)
             token.blacklist()
-            
             return Response(
                 {'message': _('Déconnexion réussie')},
-                status=status.HTTP_200_OK
+                status=status.HTTP_200_OK,
             )
-            
+
         except TokenError:
             return Response(
                 {'error': _('Token invalide')},
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
 class FarmProfileView(generics.RetrieveUpdateAPIView):

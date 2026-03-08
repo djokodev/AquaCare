@@ -5,6 +5,8 @@ Handle HTTP requests and delegate business logic to services.
 
 from __future__ import annotations
 
+from typing import Any
+
 from django.utils.translation import gettext as _
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
@@ -63,10 +65,98 @@ class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
         return super().get_throttles()
 
     @staticmethod
-    def _conversation_not_found_response():
+    def _conversation_not_found_response() -> Response:
         return Response(
             {'error': _('Conversation introuvable.')},
             status=status.HTTP_404_NOT_FOUND
+        )
+
+    @staticmethod
+    def _get_message_error_response(error: Exception) -> Response:
+        if isinstance(error, InvalidMessageContent):
+            return Response(
+                {'error': _('Contenu du message invalide.'), 'field': 'content'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if isinstance(error, ClientUUIDConflict):
+            return Response(
+                {
+                    'error': _(
+                        "Conflit de synchronisation détecté. "
+                        "Veuillez actualiser la conversation."
+                    ),
+                    'field': 'client_uuid',
+                },
+                status=status.HTTP_409_CONFLICT
+            )
+
+        if isinstance(error, (InvalidMediaFormat, MediaTooLarge)):
+            message = (
+                _('Fichier média trop volumineux.')
+                if isinstance(error, MediaTooLarge)
+                else _('Format de média non pris en charge.')
+            )
+            return Response(
+                {'error': message, 'field': 'media_file'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        raise error
+
+    def _get_accessible_conversation(
+        self,
+        conversation_id: str | None,
+        request_user: Any,
+    ) -> Conversation | Response:
+        try:
+            return ConversationService.get_conversation_by_id(
+                conversation_id=conversation_id,
+                requesting_user=request_user,
+            )
+        except (ConversationNotFound, UnauthorizedAccess):
+            return self._conversation_not_found_response()
+
+    def _serialize_message(self, message: Message, request: Request) -> Response:
+        serializer = MessageSerializer(message, context={'request': request})
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    def _serialize_messages(self, request: Request, messages) -> Response:
+        page = self.paginate_queryset(messages)
+        if page is not None:
+            serializer = MessageSerializer(page, many=True, context={'request': request})
+            return self.get_paginated_response(serializer.data)
+
+        serializer = MessageSerializer(messages, many=True, context={'request': request})
+        return Response(serializer.data)
+
+    def _serialize_conversation(self, conversation: Conversation, request: Request) -> Response:
+        refreshed_conversation = Conversation.objects.with_api_annotations().get(pk=conversation.pk)
+        serializer = ConversationSerializer(refreshed_conversation, context={'request': request})
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def _send_validated_message(
+        self,
+        conversation: Conversation,
+        request: Request,
+        validated_data: dict[str, Any],
+    ) -> Message:
+        if request.user.is_staff:
+            return MessageService.send_admin_message(
+                conversation=conversation,
+                admin_user=request.user,
+                content=validated_data['content'],
+                media_file=validated_data.get('media_file'),
+                media_type=validated_data.get('media_type'),
+            )
+
+        return MessageService.send_user_message(
+            user=request.user,
+            content=validated_data['content'],
+            media_file=validated_data.get('media_file'),
+            media_type=validated_data.get('media_type'),
+            client_uuid=validated_data.get('client_uuid'),
+            created_offline=validated_data.get('created_offline', False),
         )
 
     def get_queryset(self):
@@ -112,39 +202,12 @@ class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
         Returns:
             Paginated list of messages ordered by created_at (ascending)
         """
-        try:
-            # Get conversation with permission check
-            conversation = ConversationService.get_conversation_by_id(
-                conversation_id=pk,
-                requesting_user=request.user
-            )
-        except ConversationNotFound:
-            return self._conversation_not_found_response()
-        except UnauthorizedAccess:
-            # Do not reveal conversation existence to unauthorized users.
-            return self._conversation_not_found_response()
+        conversation = self._get_accessible_conversation(pk, request.user)
+        if isinstance(conversation, Response):
+            return conversation
 
-        # Get messages ordered by creation date
         messages = Message.objects.for_feed().filter(conversation=conversation).order_by('created_at')
-
-        # Paginate
-        page = self.paginate_queryset(messages)
-
-        if page is not None:
-            serializer = MessageSerializer(
-                page,
-                many=True,
-                context={'request': request}
-            )
-            return self.get_paginated_response(serializer.data)
-
-        # No pagination (small number of messages)
-        serializer = MessageSerializer(
-            messages,
-            many=True,
-            context={'request': request}
-        )
-        return Response(serializer.data)
+        return self._serialize_messages(request, messages)
 
     @action(detail=True, methods=['post'], throttle_classes=[ChatMessageThrottle])
     def send_message(self, request: Request, pk: str | None = None) -> Response:
@@ -164,81 +227,27 @@ class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
             Message object (HTTP 201)
             or error (HTTP 400/403)
         """
-        try:
-            # Get conversation with permission check
-            conversation = ConversationService.get_conversation_by_id(
-                conversation_id=pk,
-                requesting_user=request.user
-            )
-        except ConversationNotFound:
-            return self._conversation_not_found_response()
-        except UnauthorizedAccess:
-            # Do not reveal conversation existence to unauthorized users.
-            return self._conversation_not_found_response()
+        conversation = self._get_accessible_conversation(pk, request.user)
+        if isinstance(conversation, Response):
+            return conversation
 
-        # Validate input
         serializer = SendMessageSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         try:
-            # Determine sender type based on user role
-            if request.user.is_staff:
-                # Admin sending message
-                message = MessageService.send_admin_message(
-                    conversation=conversation,
-                    admin_user=request.user,
-                    content=serializer.validated_data['content']
-                )
-            else:
-                # User sending message
-                message = MessageService.send_user_message(
-                    user=request.user,
-                    content=serializer.validated_data['content'],
-                    media_file=serializer.validated_data.get('media_file'),
-                    media_type=serializer.validated_data.get('media_type'),
-                    client_uuid=serializer.validated_data.get('client_uuid'),
-                    created_offline=serializer.validated_data.get('created_offline', False),
-                )
-
-            # Return created message
-            response_serializer = MessageSerializer(
-                message,
-                context={'request': request}
+            message = self._send_validated_message(
+                conversation=conversation,
+                request=request,
+                validated_data=serializer.validated_data,
             )
-            return Response(response_serializer.data, status=status.HTTP_201_CREATED)
-
-        except InvalidMessageContent:
-            return Response(
-                {'error': _('Contenu du message invalide.'), 'field': 'content'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        except ClientUUIDConflict:
-            return Response(
-                {
-                    'error': _(
-                        "Conflit de synchronisation détecté. "
-                        "Veuillez actualiser la conversation."
-                    ),
-                    'field': 'client_uuid',
-                },
-                status=status.HTTP_409_CONFLICT
-            )
-        except InvalidMediaFormat:
-            return Response(
-                {
-                    'error': _('Format de média non pris en charge.'),
-                    'field': 'media_file',
-                },
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        except MediaTooLarge:
-            return Response(
-                {
-                    'error': _('Fichier média trop volumineux.'),
-                    'field': 'media_file',
-                },
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return self._serialize_message(message, request)
+        except (
+            InvalidMessageContent,
+            ClientUUIDConflict,
+            InvalidMediaFormat,
+            MediaTooLarge,
+        ) as err:
+            return self._get_message_error_response(err)
 
     @action(detail=True, methods=['post'])
     def mark_read(self, request: Request, pk: str | None = None) -> Response:
@@ -250,25 +259,12 @@ class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
         Returns:
             Success message (HTTP 200)
         """
-        try:
-            # Get conversation with permission check
-            conversation = ConversationService.get_conversation_by_id(
-                conversation_id=pk,
-                requesting_user=request.user
-            )
-        except ConversationNotFound:
-            return self._conversation_not_found_response()
-        except UnauthorizedAccess:
-            # Do not reveal conversation existence to unauthorized users.
-            return self._conversation_not_found_response()
+        conversation = self._get_accessible_conversation(pk, request.user)
+        if isinstance(conversation, Response):
+            return conversation
 
-        # Mark as read
         MessageService.mark_messages_as_read(
             conversation=conversation,
             reader_is_admin=request.user.is_staff
         )
-
-        # Return updated conversation with new unread counts
-        conversation = Conversation.objects.with_api_annotations().get(pk=conversation.pk)
-        serializer = ConversationSerializer(conversation, context={'request': request})
-        return Response(serializer.data)
+        return self._serialize_conversation(conversation, request)
