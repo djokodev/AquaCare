@@ -51,9 +51,23 @@ export default function FarmProfileScreen() {
     const coords = await requestLocation();
     if (!coords) {
       if (locationStatus === 'denied') {
-        Alert.alert(t('farmLocation'), t('locationPermissionDenied'));
+        Alert.alert(
+          t('farmLocation'),
+          t('locationPermissionDenied'),
+          [
+            { text: t('cancel'), style: 'cancel' },
+            { text: t('openSettings'), onPress: () => Linking.openSettings() },
+          ]
+        );
       } else if (locationStatus === 'unavailable') {
-        Alert.alert(t('farmLocation'), t('locationServicesDisabled'));
+        Alert.alert(
+          t('farmLocation'),
+          t('locationServicesDisabled'),
+          [
+            { text: t('cancel'), style: 'cancel' },
+            { text: t('openSettings'), onPress: () => Linking.openSettings() },
+          ]
+        );
       } else {
         Alert.alert(t('farmLocation'), t('locationCaptureError'));
       }

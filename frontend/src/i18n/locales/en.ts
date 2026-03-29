@@ -365,6 +365,7 @@
   locationServicesDisabled: 'Location services are disabled. Enable them in phone settings.',
   locationCaptureSuccess: 'Farm location saved.',
   locationCaptureError: 'Unable to retrieve location. Please try again.',
+  openSettings: 'Open Settings',
 
   // Intervention Zones
   urbaine: 'Urban area',

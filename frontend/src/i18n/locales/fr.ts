@@ -365,6 +365,7 @@ export const fr = {
   locationServicesDisabled: 'Localisation désactivée. Activez-la dans les réglages du téléphone.',
   locationCaptureSuccess: 'Localisation enregistrée.',
   locationCaptureError: 'Impossible de récupérer la localisation. Réessayez.',
+  openSettings: 'Ouvrir les réglages',
 
   // Intervention Zones
   urbaine: 'Zone urbaine',
