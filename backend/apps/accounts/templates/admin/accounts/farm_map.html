@@ -180,6 +180,8 @@
             : '—';
 
           const adminUrl = `/admin/accounts/farmprofile/${farm.id}/change/`;
+          const mapsUrl = `https://maps.google.com/?q=${lat},${lng}`;
+          const mapsShareUrl = `https://maps.google.com/?q=${lat},${lng}&ll=${lat},${lng}&z=15`;
 
           marker.bindPopup(`
             <h4>🐟 ${farm.farm_name}</h4>
@@ -189,7 +191,12 @@
               <span class="cert-badge cert-${farm.certification_status}">${label}</span>
             </p>
             ${farm.location_address ? `<p>📍 ${farm.location_address}</p>` : ''}
-            <p><a href="${adminUrl}" target="_blank">Voir dans l'admin →</a></p>
+            <p style="font-size:11px;color:#888;">${lat.toFixed(6)}, ${lng.toFixed(6)}</p>
+            <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
+              <a href="${mapsUrl}" target="_blank" style="background:#4285F4;color:white;padding:4px 8px;border-radius:4px;text-decoration:none;font-size:11px;">🗺️ Google Maps</a>
+              <a href="${mapsShareUrl}" target="_blank" style="background:#34A853;color:white;padding:4px 8px;border-radius:4px;text-decoration:none;font-size:11px;">📤 Partager</a>
+              <a href="${adminUrl}" target="_blank" style="background:#417690;color:white;padding:4px 8px;border-radius:4px;text-decoration:none;font-size:11px;">⚙️ Admin</a>
+            </div>
           `);
 
           markersLayer.addLayer(marker);

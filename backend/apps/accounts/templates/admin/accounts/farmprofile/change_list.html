@@ -1,0 +1,13 @@
+{% extends "admin/change_list.html" %}
+{% load i18n %}
+
+{% block object-tools-items %}
+{% if farm_map_url %}
+<li>
+  <a href="{{ farm_map_url }}" class="viewsitelink">
+    🗺️ Carte des fermes géolocalisées
+  </a>
+</li>
+{% endif %}
+{{ block.super }}
+{% endblock %}

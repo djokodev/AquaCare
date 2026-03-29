@@ -96,13 +96,6 @@ export default function FarmProfileScreen() {
     navigation.navigate('FarmMap');
   };
 
-  const handleGoogleMaps = () => {
-    const lat = farmProfile?.latitude;
-    const lng = farmProfile?.longitude;
-    if (!lat || !lng) return;
-    Linking.openURL(`https://maps.google.com/?saddr=current&daddr=${lat},${lng}`);
-  };
-
   const formatFarmName = (farmName: string | undefined) => {
     if (!farmName) return "";
     if (farmName.startsWith("Ferme de ") && farmName.includes(" ")) {
@@ -299,22 +292,13 @@ export default function FarmProfileScreen() {
                   </Text>
                 </View>
               </View>
-              <View className="flex-row gap-3">
-                <TouchableOpacity
-                  className="flex-1 flex-row items-center justify-center gap-2 py-3 rounded-lg border border-mavecam-primary"
-                  onPress={handleOpenMap}
-                >
-                  <Ionicons name="map-outline" size={16} color={MAVECAM_COLORS.GREEN_PRIMARY} />
-                  <Text className="text-sm font-semibold text-mavecam-primary">{t('viewOnMap')}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  className="flex-1 flex-row items-center justify-center gap-2 py-3 rounded-lg bg-mavecam-primary"
-                  onPress={handleGoogleMaps}
-                >
-                  <Ionicons name="navigate" size={16} color="white" />
-                  <Text className="text-sm font-semibold text-white">{t('navigateToFarm')}</Text>
-                </TouchableOpacity>
-              </View>
+              <TouchableOpacity
+                className="flex-row items-center justify-center gap-2 py-3 rounded-lg border border-mavecam-primary"
+                onPress={handleOpenMap}
+              >
+                <Ionicons name="map-outline" size={16} color={MAVECAM_COLORS.GREEN_PRIMARY} />
+                <Text className="text-sm font-semibold text-mavecam-primary">{t('viewOnMap')}</Text>
+              </TouchableOpacity>
               {isEditing && (
                 <TouchableOpacity
                   className="mt-3 flex-row items-center justify-center gap-2 py-3 rounded-lg border border-gray-200"
