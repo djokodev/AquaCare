@@ -1,7 +1,5 @@
 import React from 'react';
 import {
-  Alert,
-  Linking,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -27,14 +25,6 @@ const FarmMapScreen: React.FC = () => {
   const latitude = farmProfile?.latitude ? Number(farmProfile.latitude) : null;
   const longitude = farmProfile?.longitude ? Number(farmProfile.longitude) : null;
   const hasLocation = latitude !== null && longitude !== null;
-
-  const handleNavigate = () => {
-    if (!hasLocation) return;
-    const url = `https://maps.google.com/?saddr=current&daddr=${latitude},${longitude}`;
-    Linking.openURL(url).catch(() => {
-      Alert.alert('Erreur', "Impossible d'ouvrir Google Maps.");
-    });
-  };
 
   if (!hasLocation) {
     return (
@@ -95,9 +85,9 @@ const FarmMapScreen: React.FC = () => {
           </View>
         </View>
 
-        <TouchableOpacity style={styles.navigateButton} onPress={handleNavigate}>
-          <Ionicons name="navigate" size={18} color="white" />
-          <Text style={styles.navigateButtonText}>{t('navigateToFarm')}</Text>
+        <TouchableOpacity style={styles.infoBackButton} onPress={() => navigation.goBack()}>
+          <Ionicons name="arrow-back" size={18} color={MAVECAM_COLORS.GREEN_PRIMARY} />
+          <Text style={styles.infoBackButtonText}>{t('back')}</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -148,17 +138,18 @@ const styles = StyleSheet.create({
     marginTop: 2,
     fontFamily: 'monospace',
   },
-  navigateButton: {
-    backgroundColor: MAVECAM_COLORS.GREEN_PRIMARY,
+  infoBackButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
     paddingVertical: 14,
     borderRadius: 12,
+    borderWidth: 1,
+    borderColor: MAVECAM_COLORS.GREEN_PRIMARY,
   },
-  navigateButtonText: {
-    color: 'white',
+  infoBackButtonText: {
+    color: MAVECAM_COLORS.GREEN_PRIMARY,
     fontWeight: '600',
     fontSize: 15,
   },

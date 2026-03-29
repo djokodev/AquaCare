@@ -310,6 +310,7 @@ export default function MainNavigator() {
           headerTintColor: MAVECAM_COLORS.WHITE,
           headerTitleStyle: { fontWeight: 'bold' },
           title: 'Carte de ma ferme',
+          headerBackTitle: 'Profil',
         }}
       />
     </RootStack.Navigator>
