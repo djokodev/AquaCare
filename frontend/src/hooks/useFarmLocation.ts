@@ -72,7 +72,9 @@ export const useFarmLocation = () => {
         return null;
       }
 
-      const { latitude, longitude } = position.coords;
+      // Arrondir à 7 décimales pour correspondre au DecimalField Django (max_digits=10)
+      const latitude = Math.round(position.coords.latitude * 1e7) / 1e7;
+      const longitude = Math.round(position.coords.longitude * 1e7) / 1e7;
 
       // 5. Reverse geocoding → adresse lisible (gratuit, sans clé API)
       let address: string | undefined;
