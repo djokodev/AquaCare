@@ -40,6 +40,9 @@ export interface FarmProfile {
   main_species?: string;
   annual_production_kg?: number;
   default_feed_price_per_kg?: number;
+  latitude?: number | null;
+  longitude?: number | null;
+  location_address?: string;
   is_certified: boolean;
   created_at: string;
   updated_at: string;

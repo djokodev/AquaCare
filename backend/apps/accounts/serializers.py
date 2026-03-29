@@ -153,6 +153,7 @@ class FarmProfileSerializer(serializers.ModelSerializer):
             'id', 'farm_name', 'certification_status',
             'total_ponds', 'total_area_m2', 'water_source', 'main_species',
             'annual_production_kg', 'default_feed_price_per_kg',
+            'latitude', 'longitude', 'location_address',
             'created_at', 'updated_at',
             'is_certified', 'certification_status_display'
         )
@@ -165,6 +166,26 @@ class FarmProfileSerializer(serializers.ModelSerializer):
         if not value or not value.strip():
             raise serializers.ValidationError(_("Le nom de la ferme ne peut pas être vide."))
         return value.strip()
+
+
+class FarmMapSerializer(serializers.ModelSerializer):
+    """
+    Serializer léger pour afficher les fermes géolocalisées sur la carte admin.
+    Uniquement les fermes ayant des coordonnées GPS.
+    """
+    owner_name = serializers.CharField(source='user.display_name', read_only=True)
+    owner_phone = serializers.CharField(source='user.phone_number', read_only=True)
+    certification_status_display = serializers.CharField(
+        source='get_certification_status_display', read_only=True
+    )
+
+    class Meta:
+        model = FarmProfile
+        fields = (
+            'id', 'farm_name', 'latitude', 'longitude', 'location_address',
+            'certification_status', 'certification_status_display',
+            'owner_name', 'owner_phone',
+        )
 
 
 class UserProfileSerializer(serializers.ModelSerializer):

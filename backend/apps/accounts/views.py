@@ -10,6 +10,7 @@ from .serializers import (
     AccountDeletionSerializer,
     AuthSuccessResponseSerializer,
     ErrorResponseSerializer,
+    FarmMapSerializer,
     FarmProfileSerializer,
     LoginSerializer,
     LogoutSerializer,
@@ -341,6 +342,43 @@ class AccountDeletionView(generics.GenericAPIView):
     serializer_class = AccountDeletionSerializer
     permission_classes = [permissions.IsAuthenticated]
     throttle_classes = [SensitiveAccountActionThrottle]
+
+
+class FarmMapView(generics.ListAPIView):
+    """
+    🗺️ Carte des fermes géolocalisées — réservé aux admins.
+
+    Retourne toutes les fermes ayant des coordonnées GPS.
+    Utilisé pour la carte Leaflet dans l'interface d'administration.
+
+    **Filtres disponibles :**
+    - `?region=centre` — filtre par région administrative
+    - `?certification_status=certified` — filtre par statut
+
+    **Permissions :** is_staff uniquement.
+    """
+    serializer_class = FarmMapSerializer
+    permission_classes = [permissions.IsAdminUser]
+
+    def get_queryset(self):
+        qs = (
+            FarmProfile.objects
+            .select_related('user')
+            .filter(
+                latitude__isnull=False,
+                longitude__isnull=False,
+                is_deleted=False,
+            )
+        )
+        region = self.request.query_params.get('region')
+        if region:
+            qs = qs.filter(user__region=region)
+
+        cert_status = self.request.query_params.get('certification_status')
+        if cert_status:
+            qs = qs.filter(certification_status=cert_status)
+
+        return qs
 
     @extend_schema(
         summary="Supprimer définitivement mon compte",

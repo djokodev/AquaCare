@@ -1,5 +1,5 @@
 ﻿import React, { useEffect, useState } from "react";
-import { View, Text, ScrollView, TouchableOpacity, TextInput, Alert } from "react-native";
+import { Alert, Linking, ScrollView, Text, TouchableOpacity, TextInput, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
@@ -7,6 +7,7 @@ import type { RootStackParamList } from "@/navigation/MainNavigator";
 import type { StackNavigationProp } from "@react-navigation/stack";
 import { MAVECAM_COLORS } from "@/constants/colors";
 import { useAuth } from "@/hooks/useAuth";
+import { useFarmLocation } from "@/hooks/useFarmLocation";
 import { useSelector, useDispatch } from "react-redux";
 import { RootState, AppDispatch } from "@/store/store";
 import { fetchDashboardData } from "@/features/aquaculture/store/aquacultureSlice";
@@ -24,6 +25,7 @@ export default function FarmProfileScreen() {
 
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState<Partial<FarmProfile>>({});
+  const { status: locationStatus, requestLocation } = useFarmLocation();
 
   useEffect(() => {
     dispatch(fetchDashboardData(undefined));
@@ -38,9 +40,54 @@ export default function FarmProfileScreen() {
         water_source: farmProfile.water_source || "",
         main_species: farmProfile.main_species || "",
         annual_production_kg: farmProfile.annual_production_kg || 0,
+        latitude: farmProfile.latitude ?? null,
+        longitude: farmProfile.longitude ?? null,
+        location_address: farmProfile.location_address || "",
       });
     }
   }, [farmProfile]);
+
+  const handleLocateFarm = async () => {
+    const coords = await requestLocation();
+    if (!coords) {
+      if (locationStatus === 'denied') {
+        Alert.alert(t('farmLocation'), t('locationPermissionDenied'));
+      } else if (locationStatus === 'unavailable') {
+        Alert.alert(t('farmLocation'), t('locationServicesDisabled'));
+      } else {
+        Alert.alert(t('farmLocation'), t('locationCaptureError'));
+      }
+      return;
+    }
+    setEditData((prev) => ({
+      ...prev,
+      latitude: coords.latitude,
+      longitude: coords.longitude,
+      location_address: coords.address || "",
+    }));
+    // Sauvegarde immédiate sans attendre le bouton "Enregistrer"
+    try {
+      await updateFarm({
+        latitude: coords.latitude,
+        longitude: coords.longitude,
+        location_address: coords.address || "",
+      });
+      Alert.alert(t('farmLocation'), t('locationCaptureSuccess'));
+    } catch {
+      Alert.alert(t('farmLocation'), t('locationCaptureError'));
+    }
+  };
+
+  const handleOpenMap = () => {
+    navigation.navigate('FarmMap');
+  };
+
+  const handleGoogleMaps = () => {
+    const lat = farmProfile?.latitude;
+    const lng = farmProfile?.longitude;
+    if (!lat || !lng) return;
+    Linking.openURL(`https://maps.google.com/?saddr=current&daddr=${lat},${lng}`);
+  };
 
   const formatFarmName = (farmName: string | undefined) => {
     if (!farmName) return "";
@@ -216,6 +263,75 @@ export default function FarmProfileScreen() {
             placeholder={t("productionPlaceholder") || ""}
             keyboardType="numeric"
           />
+        </View>
+      </View>
+
+      {/* Section GPS */}
+      <View className="px-5 py-4">
+        <Text className="text-lg font-bold text-gray-dark mb-3">{t('farmLocation')}</Text>
+        <View className="bg-white rounded-xl p-4">
+          {farmProfile.latitude && farmProfile.longitude ? (
+            <>
+              <View className="flex-row items-start gap-3 mb-4">
+                <Ionicons name="location" size={20} color={MAVECAM_COLORS.GREEN_PRIMARY} />
+                <View className="flex-1">
+                  {farmProfile.location_address ? (
+                    <Text className="text-sm font-medium text-gray-dark mb-1">
+                      {farmProfile.location_address}
+                    </Text>
+                  ) : null}
+                  <Text className="text-xs text-gray-light" style={{ fontVariant: ['tabular-nums'] }}>
+                    {Number(farmProfile.latitude).toFixed(6)}, {Number(farmProfile.longitude).toFixed(6)}
+                  </Text>
+                </View>
+              </View>
+              <View className="flex-row gap-3">
+                <TouchableOpacity
+                  className="flex-1 flex-row items-center justify-center gap-2 py-3 rounded-lg border border-mavecam-primary"
+                  onPress={handleOpenMap}
+                >
+                  <Ionicons name="map-outline" size={16} color={MAVECAM_COLORS.GREEN_PRIMARY} />
+                  <Text className="text-sm font-semibold text-mavecam-primary">{t('viewOnMap')}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  className="flex-1 flex-row items-center justify-center gap-2 py-3 rounded-lg bg-mavecam-primary"
+                  onPress={handleGoogleMaps}
+                >
+                  <Ionicons name="navigate" size={16} color="white" />
+                  <Text className="text-sm font-semibold text-white">{t('navigateToFarm')}</Text>
+                </TouchableOpacity>
+              </View>
+              {isEditing && (
+                <TouchableOpacity
+                  className="mt-3 flex-row items-center justify-center gap-2 py-3 rounded-lg border border-gray-200"
+                  onPress={handleLocateFarm}
+                  disabled={locationStatus === 'requesting'}
+                >
+                  <Ionicons name="locate" size={16} color={MAVECAM_COLORS.GRAY_LIGHT} />
+                  <Text className="text-sm text-gray-light">
+                    {locationStatus === 'requesting' ? t('locatingFarm') : 'Mettre à jour la localisation'}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </>
+          ) : (
+            <>
+              <View className="items-center py-2 mb-3">
+                <Ionicons name="location-outline" size={32} color={MAVECAM_COLORS.GRAY_LIGHT} />
+                <Text className="text-sm text-gray-light mt-2 text-center">{t('farmNoLocation')}</Text>
+              </View>
+              <TouchableOpacity
+                className="flex-row items-center justify-center gap-2 py-3 rounded-lg bg-mavecam-primary"
+                onPress={handleLocateFarm}
+                disabled={locationStatus === 'requesting'}
+              >
+                <Ionicons name="locate" size={18} color="white" />
+                <Text className="text-sm font-semibold text-white">
+                  {locationStatus === 'requesting' ? t('locatingFarm') : t('locateFarm')}
+                </Text>
+              </TouchableOpacity>
+            </>
+          )}
         </View>
       </View>
 

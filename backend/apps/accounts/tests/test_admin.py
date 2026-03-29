@@ -319,8 +319,8 @@ class TestFarmProfileAdmin:
     def test_list_display_fields(self):
         """Test champs affichés dans la liste."""
         expected_fields = (
-            'farm_name', 'user_display_name', 'certification_status', 
-            'total_ponds', 'annual_production_kg', 'created_at'
+            'farm_name', 'user_display_name', 'certification_status',
+            'total_ponds', 'annual_production_kg', 'gps_status', 'created_at'
         )
         assert self.admin.list_display == expected_fields
     

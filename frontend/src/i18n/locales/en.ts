@@ -354,6 +354,18 @@
   currentDensity: 'Current density',
   yieldPerSquareMeter: 'Yield per m²',
 
+  // GPS / Geolocation
+  farmLocation: 'GPS Location',
+  farmNoLocation: 'No location recorded',
+  locateFarm: 'Locate my farm',
+  locatingFarm: 'Locating...',
+  viewOnMap: 'View on map',
+  navigateToFarm: 'Get directions',
+  locationPermissionDenied: 'Location access denied. Please enable it in your device settings.',
+  locationServicesDisabled: 'Location services are disabled. Enable them in phone settings.',
+  locationCaptureSuccess: 'Farm location saved.',
+  locationCaptureError: 'Unable to retrieve location. Please try again.',
+
   // Intervention Zones
   urbaine: 'Urban area',
   periurbaine: 'Peri-urban area',

@@ -371,6 +371,31 @@ class FarmProfile(models.Model):
         help_text=_('Prix unitaire de l\'aliment en FCFA par kg (utilisé pour calcul coûts)')
     )
 
+    latitude = models.DecimalField(
+        _('Latitude GPS'),
+        max_digits=10,
+        decimal_places=7,
+        null=True,
+        blank=True,
+        help_text=_('Coordonnée GPS latitude de la ferme (WGS84)')
+    )
+
+    longitude = models.DecimalField(
+        _('Longitude GPS'),
+        max_digits=10,
+        decimal_places=7,
+        null=True,
+        blank=True,
+        help_text=_('Coordonnée GPS longitude de la ferme (WGS84)')
+    )
+
+    location_address = models.CharField(
+        _('Adresse GPS'),
+        max_length=300,
+        blank=True,
+        help_text=_('Adresse lisible issue du reverse geocoding (ex: Mbalmayo, Centre)')
+    )
+
     created_at = models.DateTimeField(
         _('Date de création'),
         auto_now_add=True,

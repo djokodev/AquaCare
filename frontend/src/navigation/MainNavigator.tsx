@@ -22,6 +22,7 @@ const MAVECAM_COLORS = {
 
 import { useNotificationsPolling } from '@/features/notifications/hooks/useNotificationsPolling';
 import DashboardScreen from '@/features/main/screens/DashboardScreen';
+import FarmMapScreen from '@/features/profile/screens/FarmMapScreen';
 import FarmProfileScreen from '@/features/profile/screens/FarmProfileScreen';
 import ProfileScreen from '@/features/profile/screens/ProfileScreen';
 import SettingsScreen from '@/features/profile/screens/SettingsScreen';
@@ -91,6 +92,8 @@ export type RootStackParamList = {
   } | undefined;
   // Chat/Support Screens
   Chat: undefined;
+  // Map Screen
+  FarmMap: undefined;
 };
 
 export type ProfileStackParamList = {
@@ -295,6 +298,18 @@ export default function MainNavigator() {
           headerTintColor: MAVECAM_COLORS.WHITE,
           headerTitleStyle: { fontWeight: 'bold' },
           title: t('chatTitle'),
+        }}
+      />
+      {/* Farm Map Screen */}
+      <RootStack.Screen
+        name="FarmMap"
+        component={FarmMapScreen}
+        options={{
+          headerShown: true,
+          headerStyle: { backgroundColor: MAVECAM_COLORS.GREEN_PRIMARY },
+          headerTintColor: MAVECAM_COLORS.WHITE,
+          headerTitleStyle: { fontWeight: 'bold' },
+          title: 'Carte de ma ferme',
         }}
       />
     </RootStack.Navigator>
