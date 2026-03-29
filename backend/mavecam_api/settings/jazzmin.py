@@ -84,6 +84,10 @@ JAZZMIN_SETTINGS = {
         "django_celery_beat.SolarSchedule": "fas fa-sun",
         "django_celery_beat.ClockedSchedule": "fas fa-history",
 
+        # GPS — Fermes géolocalisées
+        "farm_gps": "fas fa-map-marked-alt",
+        "farm_gps.GeolocatedFarm": "fas fa-map-pin",
+
         # Token Blacklist (simplejwt)
         "token_blacklist": "fas fa-ban",
         "token_blacklist.BlacklistedToken": "fas fa-user-slash",
@@ -95,6 +99,8 @@ JAZZMIN_SETTINGS = {
         "accounts",
         "accounts.User",
         "accounts.FarmProfile",
+        "farm_gps",
+        "farm_gps.GeolocatedFarm",
         "aquaculture",
         "commerce",
         "notifications",

@@ -77,11 +77,12 @@ export const useFarmLocation = () => {
       const longitude = Math.round(position.coords.longitude * 1e7) / 1e7;
 
       // 5. Reverse geocoding → adresse lisible (gratuit, sans clé API)
+      // Format : Quartier, Ville, Pays (ex: Bonanjo, Douala, Cameroun)
       let address: string | undefined;
       try {
         const [result] = await Location.reverseGeocodeAsync({ latitude, longitude });
         if (result) {
-          const parts = [result.city, result.region, result.country].filter(Boolean);
+          const parts = [result.district || result.subregion, result.city, result.country].filter(Boolean);
           address = parts.join(', ');
         }
       } catch {
