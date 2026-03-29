@@ -280,37 +280,34 @@ export default function FarmProfileScreen() {
           {farmProfile.latitude && farmProfile.longitude ? (
             <>
               <View className="flex-row items-start gap-3 mb-4">
-                <Ionicons name="location" size={20} color={MAVECAM_COLORS.GREEN_PRIMARY} />
+                <Ionicons name="checkmark-circle" size={20} color={MAVECAM_COLORS.GREEN_PRIMARY} />
                 <View className="flex-1">
+                  <Text className="text-sm font-medium text-mavecam-primary mb-1">
+                    {t('locationCaptureSuccess')}
+                  </Text>
                   {farmProfile.location_address ? (
-                    <Text className="text-sm font-medium text-gray-dark mb-1">
+                    <Text className="text-sm text-gray-dark">
                       {farmProfile.location_address}
                     </Text>
                   ) : null}
-                  <Text className="text-xs text-gray-light" style={{ fontVariant: ['tabular-nums'] }}>
-                    {Number(farmProfile.latitude).toFixed(6)}, {Number(farmProfile.longitude).toFixed(6)}
-                  </Text>
                 </View>
               </View>
               <TouchableOpacity
-                className="flex-row items-center justify-center gap-2 py-3 rounded-lg border border-mavecam-primary"
+                className="py-3 rounded-lg border border-mavecam-primary items-center mb-3"
                 onPress={handleOpenMap}
               >
-                <Ionicons name="map-outline" size={16} color={MAVECAM_COLORS.GREEN_PRIMARY} />
                 <Text className="text-sm font-semibold text-mavecam-primary">{t('viewOnMap')}</Text>
               </TouchableOpacity>
-              {isEditing && (
-                <TouchableOpacity
-                  className="mt-3 flex-row items-center justify-center gap-2 py-3 rounded-lg border border-gray-200"
-                  onPress={handleLocateFarm}
-                  disabled={locationStatus === 'requesting'}
-                >
-                  <Ionicons name="locate" size={16} color={MAVECAM_COLORS.GRAY_LIGHT} />
-                  <Text className="text-sm text-gray-light">
-                    {locationStatus === 'requesting' ? t('locatingFarm') : 'Mettre à jour la localisation'}
-                  </Text>
-                </TouchableOpacity>
-              )}
+              <TouchableOpacity
+                className="flex-row items-center justify-center gap-2 py-3 rounded-lg border border-gray-200"
+                onPress={handleLocateFarm}
+                disabled={locationStatus === 'requesting'}
+              >
+                <Ionicons name="locate" size={16} color={MAVECAM_COLORS.GRAY_LIGHT} />
+                <Text className="text-sm text-gray-light">
+                  {locationStatus === 'requesting' ? t('locatingFarm') : t('updateLocation')}
+                </Text>
+              </TouchableOpacity>
             </>
           ) : (
             <>

@@ -354,8 +354,13 @@ def support_inbox_view(request):
     )
 
 
-def get_admin_urls(urls):
-    """Expose custom inbox under /admin/chat/inbox/."""
+def get_admin_urls(original_get_urls):
+    """
+    Expose custom inbox under /admin/chat/inbox/.
+
+    NOTE: original_get_urls doit être la FONCTION (pas son résultat) pour éviter
+    de geler la liste d'URLs à l'import et d'exclure les apps enregistrées après.
+    """
     def _get_urls():
         custom_urls = [
             path(
@@ -364,9 +369,10 @@ def get_admin_urls(urls):
                 name="chat_support_inbox",
             ),
         ]
-        return custom_urls + urls
+        return custom_urls + original_get_urls()
 
     return _get_urls
 
 
-admin.site.get_urls = get_admin_urls(admin.site.get_urls())
+# Passer la référence de la fonction (pas son résultat) pour un appel paresseux
+admin.site.get_urls = get_admin_urls(admin.site.get_urls)

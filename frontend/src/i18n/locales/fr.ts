@@ -366,6 +366,7 @@ export const fr = {
   locationCaptureSuccess: 'Localisation enregistrée.',
   locationCaptureError: 'Impossible de récupérer la localisation. Réessayez.',
   openSettings: 'Ouvrir les réglages',
+  updateLocation: 'Mettre à jour la localisation',
 
   // Intervention Zones
   urbaine: 'Zone urbaine',

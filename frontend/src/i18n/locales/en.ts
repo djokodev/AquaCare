@@ -366,6 +366,7 @@
   locationCaptureSuccess: 'Farm location saved.',
   locationCaptureError: 'Unable to retrieve location. Please try again.',
   openSettings: 'Open Settings',
+  updateLocation: 'Update farm location',
 
   // Intervention Zones
   urbaine: 'Urban area',
