@@ -140,9 +140,16 @@
     if (region) url += `&region=${region}`;
     if (status) url += `&certification_status=${status}`;
 
+    function getCsrfToken() {
+      return document.cookie.split(';')
+        .find(c => c.trim().startsWith('csrftoken='))
+        ?.split('=')[1] ?? '';
+    }
+
     fetch(url, {
       headers: {
         'X-Requested-With': 'XMLHttpRequest',
+        'X-CSRFToken': getCsrfToken(),
       },
       credentials: 'include',
     })

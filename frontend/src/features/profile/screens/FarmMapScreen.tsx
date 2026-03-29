@@ -182,7 +182,7 @@ const styles = StyleSheet.create({
   },
   backButton: {
     marginTop: 8,
-    paddingVertical: 10,
+    paddingVertical: 14,
     paddingHorizontal: 20,
   },
   backButtonText: {

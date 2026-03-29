@@ -327,6 +327,37 @@ npx expo install {package-name}
 
 ## 🔄 Routine de Développement (10 Étapes)
 
+### Étape 0 : Lire et Appliquer les Skills (OBLIGATOIRE)
+
+**Avant toute implémentation, backend OU frontend :**
+
+1. Lire la liste complète des skills disponibles (system-reminder en début de session)
+2. Pour chaque skill, évaluer s'il s'applique à la tâche en cours
+3. Activer explicitement les skills concernés pendant l'implémentation
+
+**Règle :** Aucun code ne doit être écrit sans avoir fait cette évaluation.
+
+| Scope | Skills à évaluer systématiquement |
+|-------|----------------------------------|
+| **Backend (model)** | `offline-first-models`, `django-security`, `python-best-practices`, `python-testing-patterns` |
+| **Backend (API/view)** | `django-rest-framework`, `django-security`, `python-testing-patterns`, `code-review-aquacare` |
+| **Frontend (screen)** | `bilingual-strings`, `react-native-best-practices`, `expo-go-check`, `code-review-aquacare` |
+| **Frontend (package)** | `expo-go-check`, `check-package` |
+| **Commit** | `commit-conventions` |
+| **PR/Release** | `code-review-aquacare`, `pre-release` |
+
+**Checklist pré-implémentation :**
+- [ ] `offline-first-models` → modèle Django modifié/créé ? UUID PK + sync metadata vérifiés
+- [ ] `django-security` → endpoint exposé ? Permissions, injection, CSRF vérifiés
+- [ ] `django-rest-framework` → `@extend_schema` sur chaque vue
+- [ ] `python-testing-patterns` → tests écrits AVANT ou PENDANT (pas après)
+- [ ] `bilingual-strings` → zéro texte hardcodé dans les composants
+- [ ] `react-native-best-practices` → touch targets 44px, FlatList si liste, pas de re-renders inutiles
+- [ ] `expo-go-check` → tout nouveau package vérifié compatible Expo Go
+- [ ] `commit-conventions` → format `type(scope): description` respecté
+
+---
+
 ### Étape 1 : Choisir une Feature
 
 **Identifier la prochaine feature :**

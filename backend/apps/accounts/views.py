@@ -1,6 +1,6 @@
 from django.http import Http404
 from django.utils.translation import gettext as _
-from drf_spectacular.utils import OpenApiExample, OpenApiResponse, extend_schema
+from drf_spectacular.utils import OpenApiExample, OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 
@@ -343,43 +343,6 @@ class AccountDeletionView(generics.GenericAPIView):
     permission_classes = [permissions.IsAuthenticated]
     throttle_classes = [SensitiveAccountActionThrottle]
 
-
-class FarmMapView(generics.ListAPIView):
-    """
-    🗺️ Carte des fermes géolocalisées — réservé aux admins.
-
-    Retourne toutes les fermes ayant des coordonnées GPS.
-    Utilisé pour la carte Leaflet dans l'interface d'administration.
-
-    **Filtres disponibles :**
-    - `?region=centre` — filtre par région administrative
-    - `?certification_status=certified` — filtre par statut
-
-    **Permissions :** is_staff uniquement.
-    """
-    serializer_class = FarmMapSerializer
-    permission_classes = [permissions.IsAdminUser]
-
-    def get_queryset(self):
-        qs = (
-            FarmProfile.objects
-            .select_related('user')
-            .filter(
-                latitude__isnull=False,
-                longitude__isnull=False,
-                is_deleted=False,
-            )
-        )
-        region = self.request.query_params.get('region')
-        if region:
-            qs = qs.filter(user__region=region)
-
-        cert_status = self.request.query_params.get('certification_status')
-        if cert_status:
-            qs = qs.filter(certification_status=cert_status)
-
-        return qs
-
     @extend_schema(
         summary="Supprimer définitivement mon compte",
         description="Désactive et anonymise le compte utilisateur après confirmation explicite.",
@@ -405,3 +368,52 @@ class FarmMapView(generics.ListAPIView):
             response_serializer.data,
             status=status.HTTP_200_OK,
         )
+
+
+class FarmMapView(generics.ListAPIView):
+    """
+    🗺️ Carte des fermes géolocalisées — réservé aux admins.
+
+    Retourne toutes les fermes ayant des coordonnées GPS.
+    Utilisé pour la carte Leaflet dans l'interface d'administration.
+
+    **Filtres disponibles :**
+    - `?region=centre` — filtre par région administrative
+    - `?certification_status=certified` — filtre par statut
+
+    **Permissions :** is_staff uniquement.
+    """
+    serializer_class = FarmMapSerializer
+    permission_classes = [permissions.IsAdminUser]
+
+    @extend_schema(
+        summary="Carte des fermes géolocalisées (admin)",
+        description="Retourne toutes les fermes ayant des coordonnées GPS. Réservé aux admins.",
+        parameters=[
+            OpenApiParameter('region', str, description='Filtre par région administrative (ex: centre, littoral)'),
+            OpenApiParameter('certification_status', str, description='Filtre par statut de certification (certified, pending, suspended, rejected)'),
+        ],
+        responses={200: FarmMapSerializer(many=True)},
+    )
+    def get(self, request, *args, **kwargs):
+        return super().get(request, *args, **kwargs)
+
+    def get_queryset(self):
+        qs = (
+            FarmProfile.objects
+            .select_related('user')
+            .filter(
+                latitude__isnull=False,
+                longitude__isnull=False,
+                is_deleted=False,
+            )
+        )
+        region = self.request.query_params.get('region')
+        if region:
+            qs = qs.filter(user__region=region)
+
+        cert_status = self.request.query_params.get('certification_status')
+        if cert_status:
+            qs = qs.filter(certification_status=cert_status)
+
+        return qs
