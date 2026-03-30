@@ -3,9 +3,6 @@
 
 gunicorn==23.0.0
 
-# Security & Performance
-whitenoise==6.8.2  # Static files serving (fallback si Nginx fail)
-
 python-decouple==3.8
 
 # Error tracking & monitoring
