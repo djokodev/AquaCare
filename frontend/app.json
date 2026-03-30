@@ -16,12 +16,22 @@
       }
     },
     "android": {
-      "package": "cm.mavecam.aquacare"
+      "package": "cm.mavecam.aquacare",
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
+      ]
     },
     "plugins": [
       "expo-secure-store",
       "expo-localization",
       "expo-font",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "AquaCare a besoin de votre position pour enregistrer la localisation de votre ferme."
+        }
+      ],
       [
         "@sentry/react-native",
         {

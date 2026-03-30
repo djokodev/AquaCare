@@ -22,6 +22,9 @@ from django.contrib import admin, messages
 from django.contrib.admin.models import CHANGE
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.core.exceptions import PermissionDenied
+from django.http import HttpResponseForbidden
+from django.shortcuts import render
+from django.urls import path
 from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
 
@@ -425,7 +428,7 @@ class FarmProfileAdmin(AccountsAdminRoleMixin, ManagerMixin, PIIMaskingMixin, Se
 
     list_display = (
         'farm_name', 'user_display_name', 'certification_status',
-        'total_ponds', 'annual_production_kg', 'created_at'
+        'total_ponds', 'annual_production_kg', 'gps_status', 'created_at'
     )
     list_filter = (
         'certification_status', 'created_at', 'user__region',
@@ -450,6 +453,10 @@ class FarmProfileAdmin(AccountsAdminRoleMixin, ManagerMixin, PIIMaskingMixin, Se
             'fields': ('annual_production_kg',),
             'classes': ('collapse',)
         }),
+        (_('Localisation GPS'), {
+            'fields': ('latitude', 'longitude', 'location_address'),
+            'classes': ('collapse',)
+        }),
     )
 
     readonly_fields = ('id', 'created_at', 'updated_at')
@@ -472,3 +479,31 @@ class FarmProfileAdmin(AccountsAdminRoleMixin, ManagerMixin, PIIMaskingMixin, Se
         return obj.user.display_name
     user_display_name.short_description = _('Proprietaire')
     user_display_name.admin_order_field = 'user__first_name'
+
+    def gps_status(self, obj):
+        """Affiche si la ferme est géolocalisée."""
+        if obj.latitude and obj.longitude:
+            return format_html('<span style="color: green;">📍 Géolocalisée</span>')
+        return format_html('<span style="color: #aaa;">— Non localisée</span>')
+    gps_status.short_description = _('GPS')
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path('map/', self.admin_site.admin_view(self.farm_map_view), name='accounts_farmprofile_map'),
+        ]
+        return custom_urls + urls
+
+    def farm_map_view(self, request):
+        """Page carte Leaflet des fermes géolocalisées."""
+        if not (request.user.is_staff or request.user.is_superuser):
+            return HttpResponseForbidden()
+        return render(request, 'admin/accounts/farm_map.html', {
+            'title': 'Carte des fermes',
+            'opts': self.model._meta,
+        })
+
+    def changelist_view(self, request, extra_context=None):
+        extra_context = extra_context or {}
+        extra_context['farm_map_url'] = '../map/'
+        return super().changelist_view(request, extra_context=extra_context)

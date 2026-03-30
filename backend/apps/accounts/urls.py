@@ -26,4 +26,7 @@ urlpatterns = [
 
     # Account deletion
     path('delete/', views.AccountDeletionView.as_view(), name='delete_account'),
+
+    # Admin — carte des fermes géolocalisées (is_staff only)
+    path('farms/map/', views.FarmMapView.as_view(), name='farms_map'),
 ]

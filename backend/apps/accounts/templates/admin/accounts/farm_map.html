@@ -1,0 +1,224 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block title %}Carte des fermes — AquaCare Admin{% endblock %}
+
+{% block extrahead %}
+{{ block.super }}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+  #farm-map {
+    height: 600px;
+    width: 100%;
+    border-radius: 8px;
+    border: 1px solid #ddd;
+  }
+  .map-controls {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .map-controls select, .map-controls button {
+    padding: 6px 12px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 13px;
+  }
+  .map-controls button {
+    background: #417690;
+    color: white;
+    cursor: pointer;
+    border-color: #417690;
+  }
+  .map-controls button:hover { background: #2b5170; }
+  .map-stats {
+    margin-bottom: 12px;
+    color: #666;
+    font-size: 13px;
+  }
+  .leaflet-popup-content h4 { margin: 0 0 6px; font-size: 14px; }
+  .leaflet-popup-content p { margin: 3px 0; font-size: 12px; color: #444; }
+  .leaflet-popup-content a { font-size: 12px; }
+  .cert-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: bold;
+    color: white;
+  }
+  .cert-certified { background: #28a745; }
+  .cert-pending { background: #fd7e14; }
+  .cert-suspended { background: #dc3545; }
+  .cert-rejected { background: #6c757d; }
+</style>
+{% endblock %}
+
+{% block content %}
+<h1>🗺️ Carte des fermes AquaCare</h1>
+
+<div class="map-controls">
+  <label>
+    Région :
+    <select id="filter-region">
+      <option value="">Toutes les régions</option>
+      <option value="adamaoua">Adamaoua</option>
+      <option value="centre">Centre</option>
+      <option value="est">Est</option>
+      <option value="extreme_nord">Extrême-Nord</option>
+      <option value="littoral">Littoral</option>
+      <option value="nord">Nord</option>
+      <option value="nord_ouest">Nord-Ouest</option>
+      <option value="ouest">Ouest</option>
+      <option value="sud">Sud</option>
+      <option value="sud_ouest">Sud-Ouest</option>
+    </select>
+  </label>
+  <label>
+    Statut :
+    <select id="filter-status">
+      <option value="">Tous les statuts</option>
+      <option value="certified">Certifiée</option>
+      <option value="pending">En attente</option>
+      <option value="suspended">Suspendue</option>
+      <option value="rejected">Rejetée</option>
+    </select>
+  </label>
+  <button onclick="loadFarms()">Filtrer</button>
+  <button onclick="resetFilters()">Réinitialiser</button>
+</div>
+
+<div class="map-stats" id="map-stats">Chargement des fermes...</div>
+<div id="farm-map"></div>
+{% endblock %}
+
+{% block extrascripts %}
+{{ block.super }}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+  const CERT_COLORS = {
+    certified: '#28a745',
+    pending: '#fd7e14',
+    suspended: '#dc3545',
+    rejected: '#6c757d',
+  };
+
+  const CERT_LABELS = {
+    certified: 'Certifiée',
+    pending: 'En attente',
+    suspended: 'Suspendue',
+    rejected: 'Rejetée',
+  };
+
+  function makeDot(color) {
+    return L.divIcon({
+      className: '',
+      html: `<svg width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="10" cy="10" r="8" fill="${color}" stroke="white" stroke-width="2"/>
+      </svg>`,
+      iconSize: [20, 20],
+      iconAnchor: [10, 10],
+    });
+  }
+
+  const map = L.map('farm-map').setView([4.5, 12.5], 6);
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    maxZoom: 18,
+  }).addTo(map);
+
+  let markersLayer = L.layerGroup().addTo(map);
+
+  function loadFarms() {
+    const region = document.getElementById('filter-region').value;
+    const status = document.getElementById('filter-status').value;
+
+    let url = '/api/accounts/farms/map/?format=json';
+    if (region) url += `&region=${region}`;
+    if (status) url += `&certification_status=${status}`;
+
+    function getCsrfToken() {
+      return document.cookie.split(';')
+        .find(c => c.trim().startsWith('csrftoken='))
+        ?.split('=')[1] ?? '';
+    }
+
+    fetch(url, {
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-CSRFToken': getCsrfToken(),
+      },
+      credentials: 'include',
+    })
+      .then(r => {
+        if (!r.ok) throw new Error('Erreur API: ' + r.status);
+        return r.json();
+      })
+      .then(data => {
+        markersLayer.clearLayers();
+
+        const farms = Array.isArray(data) ? data : (data.results || []);
+        document.getElementById('map-stats').textContent =
+          `${farms.length} ferme${farms.length > 1 ? 's' : ''} affichée${farms.length > 1 ? 's' : ''}`;
+
+        farms.forEach(farm => {
+          const lat = parseFloat(farm.latitude);
+          const lng = parseFloat(farm.longitude);
+          if (isNaN(lat) || isNaN(lng)) return;
+
+          const color = CERT_COLORS[farm.certification_status] || '#417690';
+          const label = CERT_LABELS[farm.certification_status] || farm.certification_status;
+
+          const marker = L.marker([lat, lng], { icon: makeDot(color) });
+
+          const phone = farm.owner_phone || '';
+          const phoneLink = phone
+            ? `<a href="tel:${phone}">${phone}</a>`
+            : '—';
+
+          const adminUrl = `/admin/accounts/farmprofile/${farm.id}/change/`;
+          const mapsUrl = `https://maps.google.com/?q=${lat},${lng}`;
+          const mapsShareUrl = `https://maps.google.com/?q=${lat},${lng}&ll=${lat},${lng}&z=15`;
+
+          marker.bindPopup(`
+            <h4>🐟 ${farm.farm_name}</h4>
+            <p>👤 ${farm.owner_name}</p>
+            <p>📞 ${phoneLink}</p>
+            <p>
+              <span class="cert-badge cert-${farm.certification_status}">${label}</span>
+            </p>
+            ${farm.location_address ? `<p>📍 ${farm.location_address}</p>` : ''}
+            <p style="font-size:11px;color:#888;">${lat.toFixed(6)}, ${lng.toFixed(6)}</p>
+            <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
+              <a href="${mapsUrl}" target="_blank" style="background:#4285F4;color:white;padding:4px 8px;border-radius:4px;text-decoration:none;font-size:11px;">🗺️ Google Maps</a>
+              <a href="${mapsShareUrl}" target="_blank" style="background:#34A853;color:white;padding:4px 8px;border-radius:4px;text-decoration:none;font-size:11px;">📤 Partager</a>
+              <a href="${adminUrl}" target="_blank" style="background:#417690;color:white;padding:4px 8px;border-radius:4px;text-decoration:none;font-size:11px;">⚙️ Admin</a>
+            </div>
+          `);
+
+          markersLayer.addLayer(marker);
+        });
+
+        if (farms.length > 0) {
+          const bounds = markersLayer.getBounds();
+          if (bounds.isValid()) map.fitBounds(bounds, { padding: [30, 30] });
+        }
+      })
+      .catch(err => {
+        document.getElementById('map-stats').textContent = 'Erreur de chargement : ' + err.message;
+        console.error(err);
+      });
+  }
+
+  function resetFilters() {
+    document.getElementById('filter-region').value = '';
+    document.getElementById('filter-status').value = '';
+    loadFarms();
+  }
+
+  loadFarms();
+</script>
+{% endblock %}

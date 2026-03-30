@@ -354,6 +354,21 @@ export const fr = {
   currentDensity: 'Densité actuelle',
   yieldPerSquareMeter: 'Rendement par m²',
 
+  // GPS / Géolocalisation
+  farmLocation: 'Localisation GPS',
+  farmNoLocation: 'Aucune localisation enregistrée',
+  locateFarm: 'Localiser ma ferme',
+  locatingFarm: 'Localisation en cours...',
+  viewOnMap: 'Voir sur la carte',
+  navigateToFarm: 'Y aller',
+  locationPermissionDenied: 'Accès refusé. Activez la localisation dans les réglages de votre appareil.',
+  locationServicesDisabled: 'Localisation désactivée. Activez-la dans les réglages du téléphone.',
+  locationCaptureSuccess: 'Localisation enregistrée.',
+  locationCaptureError: 'Impossible de récupérer la localisation. Réessayez.',
+  openSettings: 'Ouvrir les réglages',
+  updateLocation: 'Mettre à jour la localisation',
+  back: 'Retour',
+
   // Intervention Zones
   urbaine: 'Zone urbaine',
   periurbaine: 'Zone périurbaine',

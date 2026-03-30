@@ -51,11 +51,13 @@ INSTALLED_APPS = [
     "notifications",  # Module notifications multi-canal
     "chat",  # Module chat/support utilisateur-administration
     "common",  # Module commun (admin mixins, static CSS)
+    "farm_gps",  # Section GPS admin — fermes géolocalisées
 ]
 
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "accounts.middleware.LoginRateLimitMiddleware",
     "django.middleware.locale.LocaleMiddleware",
