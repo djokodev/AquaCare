@@ -18,7 +18,7 @@ from .validators import normalize_phone_number, validate_cameroon_phone
 
 
 class User(AbstractUser):
-    
+
     phone_number = models.CharField(
         _('Numéro de téléphone'),
         max_length=20,
