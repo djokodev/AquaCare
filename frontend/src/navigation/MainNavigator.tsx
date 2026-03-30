@@ -28,6 +28,8 @@ import ProfileScreen from '@/features/profile/screens/ProfileScreen';
 import SettingsScreen from '@/features/profile/screens/SettingsScreen';
 
 // Aquaculture Screens
+import AnnualSimulationScreen from '@/features/aquaculture/screens/AnnualSimulationScreen';
+import CreateFarmScreen from '@/features/aquaculture/screens/CreateFarmScreen';
 import CycleHistoryScreen from '@/features/aquaculture/screens/CycleHistoryScreen';
 import CycleSessionEntryScreen from '@/features/aquaculture/screens/CycleSessionEntryScreen';
 import DailyLogHistoryScreen from '@/features/aquaculture/screens/DailyLogHistoryScreen';
@@ -94,6 +96,9 @@ export type RootStackParamList = {
   Chat: undefined;
   // Map Screen
   FarmMap: undefined;
+  // Farm creation flow
+  CreateFarm: undefined;
+  AnnualSimulation: { formData: Record<string, string> };
 };
 
 export type ProfileStackParamList = {
@@ -311,6 +316,30 @@ export default function MainNavigator() {
           headerTitleStyle: { fontWeight: 'bold' },
           title: 'Carte de ma ferme',
           headerBackTitle: 'Profil',
+        }}
+      />
+      {/* Farm creation flow */}
+      <RootStack.Screen
+        name="CreateFarm"
+        component={CreateFarmScreen}
+        options={{
+          headerShown: true,
+          headerStyle: { backgroundColor: MAVECAM_COLORS.GREEN_PRIMARY },
+          headerTintColor: MAVECAM_COLORS.WHITE,
+          headerTitleStyle: { fontWeight: 'bold' },
+          title: t('createFarmTitle'),
+          headerLeft: () => null,
+        }}
+      />
+      <RootStack.Screen
+        name="AnnualSimulation"
+        component={AnnualSimulationScreen}
+        options={{
+          headerShown: true,
+          headerStyle: { backgroundColor: MAVECAM_COLORS.GREEN_PRIMARY },
+          headerTintColor: MAVECAM_COLORS.WHITE,
+          headerTitleStyle: { fontWeight: 'bold' },
+          title: t('simulationTitle'),
         }}
       />
     </RootStack.Navigator>

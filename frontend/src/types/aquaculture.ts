@@ -446,6 +446,25 @@ export interface CycleStatistics {
   }>;
 }
 
+// ── Statut aliments par cycle ───────────────────────────────────────────────
+
+export interface FeedProductStatus {
+  product_id: string;
+  product_name: string;
+  package_weight_kg: number;
+  bags_ordered: number;
+}
+
+export interface CycleFeedStatus {
+  total_bags_needed: number;
+  total_feed_needed_kg: number;
+  bags_by_product: FeedProductStatus[];
+  total_bags_ordered: number;
+  total_feed_consumed_kg: number;
+  bags_consumed_equivalent: number;
+  bags_remaining_to_order: number;
+}
+
 // =================== ETATS REDUX ===================
 
 export interface AquacultureState {
@@ -461,6 +480,13 @@ export interface AquacultureState {
 
   // Dashboard
   dashboardData?: DashboardData;
+
+  // Statut aliments cycle actif
+  cycleFeedStatus: {
+    data: CycleFeedStatus | null;
+    loading: boolean;
+    error: string | null;
+  };
 
   // Etat de chargement
   loading: {

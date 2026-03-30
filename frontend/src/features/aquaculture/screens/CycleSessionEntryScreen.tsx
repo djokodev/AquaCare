@@ -129,7 +129,7 @@ export default function CycleSessionEntryScreen({ navigation }: Props) {
         </Text>
         <TouchableOpacity
           className="bg-mavecam-primary px-8 py-4 rounded-xl flex-row items-center gap-2"
-          onPress={() => navigation.replace('MainTabs')}
+          onPress={() => navigation.replace('CreateFarm')}
         >
           <Ionicons name="add-circle-outline" size={20} color={MAVECAM_COLORS.WHITE} />
           <Text className="text-white text-base font-semibold">

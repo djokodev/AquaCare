@@ -29,6 +29,8 @@ export const API_ENDPOINTS = {
     LOGOUT: '/accounts/logout/',
     PROFILE: '/accounts/profile/',
     FARM_PROFILE: '/accounts/farm/',
+    FARM_SETUP: '/accounts/farm/setup/',
+    FARM_SIMULATE: '/accounts/farm/simulate/',
     TOKEN_REFRESH: '/accounts/token/refresh/',
     TOKEN_VERIFY: '/accounts/token/verify/',
     DELETE_ACCOUNT: '/accounts/delete/',

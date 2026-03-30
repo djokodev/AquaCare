@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Any
 
 from django.contrib.auth import authenticate
@@ -154,6 +155,12 @@ class FarmProfileSerializer(serializers.ModelSerializer):
             'total_ponds', 'total_area_m2', 'water_source', 'main_species',
             'annual_production_kg', 'default_feed_price_per_kg',
             'latitude', 'longitude', 'location_address',
+            # Champs setup élevage
+            'annual_production_target_kg', 'num_cycles_per_year',
+            'setup_infrastructure_type', 'setup_unit_count',
+            'setup_unit_volume_m3', 'setup_unit_surface_m2',
+            'setup_species', 'fingerlings_cost_per_unit_fcfa',
+            'planned_selling_price_per_kg_fcfa', 'farm_setup_completed',
             'created_at', 'updated_at',
             'is_certified', 'certification_status_display'
         )
@@ -166,6 +173,120 @@ class FarmProfileSerializer(serializers.ModelSerializer):
         if not value or not value.strip():
             raise serializers.ValidationError(_("Le nom de la ferme ne peut pas être vide."))
         return value.strip()
+
+
+class FarmSetupSerializer(serializers.ModelSerializer):
+    """
+    Serializer dédié au flux "Créer mon élevage".
+
+    Valide et persiste les données du formulaire annuel (espèce, infrastructure,
+    objectifs de production, paramètres économiques).
+    Marque farm_setup_completed=True une fois sauvegardé.
+    """
+
+    class Meta:
+        model = FarmProfile
+        fields = (
+            'setup_species',
+            'setup_infrastructure_type',
+            'setup_unit_count',
+            'setup_unit_volume_m3',
+            'setup_unit_surface_m2',
+            'annual_production_target_kg',
+            'num_cycles_per_year',
+            'fingerlings_cost_per_unit_fcfa',
+            'planned_selling_price_per_kg_fcfa',
+        )
+
+    def validate_annual_production_target_kg(self, value: Any) -> Any:
+        if value is not None and value <= 0:
+            raise serializers.ValidationError(
+                _("La production cible doit être supérieure à 0.")
+            )
+        return value
+
+    def validate_setup_unit_count(self, value: Any) -> Any:
+        if value is not None and value <= 0:
+            raise serializers.ValidationError(
+                _("Le nombre d'unités doit être supérieur à 0.")
+            )
+        return value
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        infra = attrs.get('setup_infrastructure_type', '')
+        unit_vol = attrs.get('setup_unit_volume_m3')
+        unit_surf = attrs.get('setup_unit_surface_m2')
+
+        # Étangs → surface obligatoire, autres → volume obligatoire
+        if infra == 'etang' and not unit_surf:
+            raise serializers.ValidationError(
+                {'setup_unit_surface_m2': _("La surface par unité est requise pour les étangs.")}
+            )
+        if infra in ('cage_flottante', 'bac_hors_sol', 'bac_en_sol') and not unit_vol:
+            raise serializers.ValidationError(
+                {'setup_unit_volume_m3': _("Le volume par unité est requis pour ce type d'infrastructure.")}
+            )
+        return attrs
+
+    def update(self, instance: FarmProfile, validated_data: dict[str, Any]) -> FarmProfile:
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.farm_setup_completed = True
+        instance.save(validate=False)
+        return instance
+
+
+class AnnualSimulationInputSerializer(serializers.Serializer):
+    """
+    Serializer de validation pour l'endpoint de simulation annuelle.
+    Ne persiste rien — calcule uniquement.
+    """
+    species = serializers.ChoiceField(
+        choices=['tilapia', 'clarias'],
+        help_text="Espèce : 'tilapia' ou 'clarias'"
+    )
+    annual_production_target_kg = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        min_value=Decimal('1'),
+        help_text="Production annuelle cible en kg"
+    )
+    num_cycles = serializers.ChoiceField(
+        choices=[2, 3],
+        help_text="Nombre de cycles par an : 2 ou 3"
+    )
+    start_date = serializers.DateField(
+        required=False,
+        allow_null=True,
+        help_text="Date de démarrage du premier cycle (YYYY-MM-DD)"
+    )
+    selling_price_per_kg_fcfa = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        required=False,
+        allow_null=True,
+        min_value=Decimal('1'),
+        help_text="Prix de vente estimé (FCFA/kg)"
+    )
+    fingerlings_cost_per_unit_fcfa = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        required=False,
+        allow_null=True,
+        min_value=Decimal('0'),
+        help_text="Coût par alevin (FCFA)"
+    )
+    other_costs_fcfa_per_year = serializers.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        required=False,
+        default=Decimal('0'),
+        min_value=Decimal('0'),
+        help_text="Autres charges annuelles (FCFA)"
+    )
+
+    def validate_num_cycles(self, value: Any) -> int:
+        return int(value)
 
 
 class FarmMapSerializer(serializers.ModelSerializer):

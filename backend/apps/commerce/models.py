@@ -254,6 +254,16 @@ class Order(models.Model):
         help_text=_('Ferme associée à la commande')
     )
 
+    production_cycle = models.ForeignKey(
+        'aquaculture.ProductionCycle',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='orders',
+        verbose_name=_('Cycle de production'),
+        help_text=_('Cycle de production pour lequel cette commande est passée')
+    )
+
     # Identification commande
     order_number = models.CharField(
         _('Numéro de commande'),

@@ -346,3 +346,74 @@ class ProductionCycleViewSet(viewsets.ModelViewSet):
 
         serializer = CycleComparisonSerializer(comparison_data)
         return Response(serializer.data)
+
+    @extend_schema(
+        summary="Statut des aliments pour un cycle",
+        description=(
+            "Retourne le suivi des achats d'aliments pour ce cycle : "
+            "total nécessaire (d'après les plans d'alimentation), "
+            "déjà commandé (commandes liées au cycle), consommé et reste à commander."
+        ),
+        responses={200: dict},
+    )
+    @action(detail=True, methods=['get'], url_path='feed-status')
+    def feed_status(self, request, pk=None):
+        """
+        GET /api/aquaculture/cycles/{id}/feed-status/
+
+        Calcule pour chaque type de produit DIBAQ :
+        - bags_needed  : issu des FeedingPlans du cycle
+        - bags_ordered : commandes liées à ce cycle (Order.production_cycle)
+        - bags_consumed: total_feed_consumed / package_weight_kg
+        """
+        import math
+        from decimal import Decimal
+
+        from apps.aquaculture.models import FeedingPlan
+        from apps.commerce.models import Order, OrderItem, Product
+
+        cycle = self.get_object()
+
+        # 1. Besoins totaux issus des FeedingPlans
+        feeding_plans = FeedingPlan.objects.filter(cycle=cycle)
+        total_feed_needed_kg = sum(
+            float(fp.daily_feed_amount) * 7  # 7 jours par semaine
+            for fp in feeding_plans
+        )
+        total_bags_needed = math.ceil(total_feed_needed_kg / 25) if total_feed_needed_kg else 0
+
+        # 2. Sacs commandés pour ce cycle
+        order_items = OrderItem.objects.filter(
+            order__production_cycle=cycle
+        ).select_related('product')
+
+        bags_by_product: dict[str, dict] = {}
+        for item in order_items:
+            pid = str(item.product.id)
+            if pid not in bags_by_product:
+                bags_by_product[pid] = {
+                    'product_id': pid,
+                    'product_name': item.product.name,
+                    'package_weight_kg': float(item.product.package_weight_kg),
+                    'bags_ordered': 0,
+                }
+            bags_by_product[pid]['bags_ordered'] += item.quantity
+
+        total_bags_ordered = sum(p['bags_ordered'] for p in bags_by_product.values())
+
+        # 3. Consommé (converti depuis kg → sacs de 25kg)
+        feed_consumed_kg = float(cycle.total_feed_consumed or 0)
+        bags_consumed_equivalent = math.floor(feed_consumed_kg / 25)
+
+        # 4. Reste à commander
+        bags_remaining = max(0, total_bags_needed - total_bags_ordered)
+
+        return Response({
+            'total_bags_needed': total_bags_needed,
+            'total_feed_needed_kg': round(total_feed_needed_kg, 2),
+            'bags_by_product': list(bags_by_product.values()),
+            'total_bags_ordered': total_bags_ordered,
+            'total_feed_consumed_kg': feed_consumed_kg,
+            'bags_consumed_equivalent': bags_consumed_equivalent,
+            'bags_remaining_to_order': bags_remaining,
+        })

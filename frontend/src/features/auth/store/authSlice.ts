@@ -1,6 +1,14 @@
 ﻿import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import { authService } from '@/features/auth/services/authService';
-import { User, FarmProfile, LoginRequest, RegisterRequest } from '@/types/auth';
+import {
+  User,
+  FarmProfile,
+  FarmSetupData,
+  AnnualSimulationInput,
+  AnnualSimulationResult,
+  LoginRequest,
+  RegisterRequest,
+} from '@/types/auth';
 
 interface AuthState {
   user: User | null;
@@ -8,6 +16,11 @@ interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
+  annualSimulation: {
+    result: AnnualSimulationResult | null;
+    loading: boolean;
+    error: string | null;
+  };
 }
 
 const initialState: AuthState = {
@@ -16,6 +29,11 @@ const initialState: AuthState = {
   isAuthenticated: false,
   isLoading: false,
   error: null,
+  annualSimulation: {
+    result: null,
+    loading: false,
+    error: null,
+  },
 };
 
 // Actions asynchrones
@@ -116,6 +134,30 @@ export const updateFarmProfile = createAsyncThunk(
     try {
       const updatedFarmProfile = await authService.updateFarmProfile(farmData);
       return updatedFarmProfile;
+    } catch (error: unknown) {
+      return rejectWithValue(error instanceof Error ? error.message : 'UNKNOWN_ERROR');
+    }
+  }
+);
+
+export const completeFarmSetup = createAsyncThunk(
+  'auth/completeFarmSetup',
+  async (setupData: FarmSetupData, { rejectWithValue }) => {
+    try {
+      const updatedFarmProfile = await authService.completeFarmSetup(setupData);
+      return updatedFarmProfile;
+    } catch (error: unknown) {
+      return rejectWithValue(error instanceof Error ? error.message : 'UNKNOWN_ERROR');
+    }
+  }
+);
+
+export const runAnnualSimulation = createAsyncThunk(
+  'auth/runAnnualSimulation',
+  async (params: AnnualSimulationInput, { rejectWithValue }) => {
+    try {
+      const result = await authService.simulateAnnualProduction(params);
+      return result;
     } catch (error: unknown) {
       return rejectWithValue(error instanceof Error ? error.message : 'UNKNOWN_ERROR');
     }
@@ -267,6 +309,38 @@ export const authSlice = createSlice({
       })
       .addCase(updateFarmProfile.rejected, (state, action) => {
         state.error = action.payload as string;
+      });
+
+    // Complete farm setup
+    builder
+      .addCase(completeFarmSetup.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(completeFarmSetup.fulfilled, (state, action) => {
+        state.isLoading = false;
+        state.farmProfile = action.payload;
+        state.error = null;
+      })
+      .addCase(completeFarmSetup.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.payload as string;
+      });
+
+    // Annual simulation
+    builder
+      .addCase(runAnnualSimulation.pending, (state) => {
+        state.annualSimulation.loading = true;
+        state.annualSimulation.error = null;
+      })
+      .addCase(runAnnualSimulation.fulfilled, (state, action) => {
+        state.annualSimulation.loading = false;
+        state.annualSimulation.result = action.payload;
+        state.annualSimulation.error = null;
+      })
+      .addCase(runAnnualSimulation.rejected, (state, action) => {
+        state.annualSimulation.loading = false;
+        state.annualSimulation.error = action.payload as string;
       });
   },
 });

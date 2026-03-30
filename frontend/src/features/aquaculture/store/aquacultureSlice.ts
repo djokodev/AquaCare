@@ -1,6 +1,7 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import {
   AquacultureState,
+  CycleFeedStatus,
   ProductionCycle,
   CycleLog,
   FeedingPlan,
@@ -11,6 +12,7 @@ import {
   HarvestData,
   SyncPayload,
 } from '@/types/aquaculture';
+import { apiService } from '@/services/api';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
 import { logoutUser } from '@/features/auth/store/authSlice';
 
@@ -69,6 +71,11 @@ const initialState: AquacultureState = {
   feedingPlans: [],
   sanitaryLogs: [],
   dashboardData: undefined,
+  cycleFeedStatus: {
+    data: null,
+    loading: false,
+    error: null,
+  },
   loading: {
     dashboard: false,
     cycles: false,
@@ -126,6 +133,22 @@ export const fetchProductionCycle = createAsyncThunk(
       return cycle;
     } catch (error: unknown) {
       return rejectWithValue(extractErrorMessage(error, 'Erreur lors du chargement du cycle'));
+    }
+  }
+);
+
+export const fetchCycleFeedStatus = createAsyncThunk(
+  'aquaculture/fetchCycleFeedStatus',
+  async (cycleId: string, { rejectWithValue }) => {
+    try {
+      const response = await apiService.get<CycleFeedStatus>(
+        `/aquaculture/cycles/${cycleId}/feed-status/`
+      );
+      return response.data;
+    } catch (error: unknown) {
+      return rejectWithValue(
+        extractErrorMessage(error, 'Erreur lors du chargement du statut des aliments')
+      );
     }
   }
 );
@@ -590,6 +613,19 @@ export const aquacultureSlice = createSlice({
       })
       .addCase(logoutUser.rejected, (state) => {
         state.currentCycle = undefined;
+      })
+
+      .addCase(fetchCycleFeedStatus.pending, (state) => {
+        state.cycleFeedStatus.loading = true;
+        state.cycleFeedStatus.error = null;
+      })
+      .addCase(fetchCycleFeedStatus.fulfilled, (state, action) => {
+        state.cycleFeedStatus.loading = false;
+        state.cycleFeedStatus.data = action.payload;
+      })
+      .addCase(fetchCycleFeedStatus.rejected, (state, action) => {
+        state.cycleFeedStatus.loading = false;
+        state.cycleFeedStatus.error = action.payload as string;
       });
   },
 });

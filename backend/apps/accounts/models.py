@@ -363,6 +363,108 @@ class FarmProfile(models.Model):
         help_text=_('Production annuelle estimée en kilogrammes')
     )
 
+    # ── Élevage setup (rempli lors du flux "Créer mon élevage") ──────────────
+    INFRASTRUCTURE_CHOICES = [
+        ('etang', _('Étang')),
+        ('cage_flottante', _('Cage flottante')),
+        ('bac_hors_sol', _('Bac hors sol')),
+        ('bac_en_sol', _('Bac en sol')),
+    ]
+
+    SPECIES_SETUP_CHOICES = [
+        ('tilapia', _('Tilapia')),
+        ('clarias', _('Silure (Clarias)')),
+        ('autre', _('Autre espèce')),
+    ]
+
+    NUM_CYCLES_CHOICES = [
+        (2, _('2 cycles par an')),
+        (3, _('3 cycles par an')),
+    ]
+
+    annual_production_target_kg = models.DecimalField(
+        _('Production cible annuelle (kg)'),
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text=_('Objectif de production annuelle en kg (utilisé pour la simulation)')
+    )
+
+    num_cycles_per_year = models.PositiveSmallIntegerField(
+        _('Nombre de cycles par an'),
+        null=True,
+        blank=True,
+        choices=NUM_CYCLES_CHOICES,
+        help_text=_('2 ou 3 cycles par an, selon le choix lors de la simulation')
+    )
+
+    setup_infrastructure_type = models.CharField(
+        _('Type d\'infrastructure'),
+        max_length=30,
+        blank=True,
+        choices=INFRASTRUCTURE_CHOICES,
+        help_text=_('Type principal d\'infrastructure d\'élevage')
+    )
+
+    setup_unit_count = models.PositiveIntegerField(
+        _('Nombre d\'unités (bacs/étangs)'),
+        null=True,
+        blank=True,
+        help_text=_('Nombre de bacs, étangs ou cages')
+    )
+
+    setup_unit_volume_m3 = models.DecimalField(
+        _('Volume par unité (m³)'),
+        max_digits=8,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text=_('Volume de chaque bac ou cage en m³')
+    )
+
+    setup_unit_surface_m2 = models.DecimalField(
+        _('Surface par unité (m²)'),
+        max_digits=8,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text=_('Surface de chaque étang en m²')
+    )
+
+    setup_species = models.CharField(
+        _('Espèce principale (setup)'),
+        max_length=20,
+        blank=True,
+        choices=SPECIES_SETUP_CHOICES,
+        help_text=_('Espèce choisie lors du flux de création d\'élevage')
+    )
+
+    fingerlings_cost_per_unit_fcfa = models.DecimalField(
+        _('Coût par alevin (FCFA)'),
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text=_('Prix unitaire d\'un alevin en FCFA')
+    )
+
+    planned_selling_price_per_kg_fcfa = models.DecimalField(
+        _('Prix de vente estimé (FCFA/kg)'),
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text=_('Prix de vente prévu du poisson en FCFA/kg')
+    )
+
+    farm_setup_completed = models.BooleanField(
+        _('Configuration élevage complétée'),
+        default=False,
+        help_text=_('True quand l\'utilisateur a terminé le flux "Créer mon élevage"')
+    )
+    # ─────────────────────────────────────────────────────────────────────────
+
     default_feed_price_per_kg = models.DecimalField(
         _('Prix aliment par défaut (FCFA/kg)'),
         max_digits=8,
