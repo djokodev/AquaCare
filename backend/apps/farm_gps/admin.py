@@ -1,5 +1,3 @@
-import json
-
 from django.contrib import admin
 from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
@@ -10,8 +8,7 @@ from .models import GeolocatedFarm
 @admin.register(GeolocatedFarm)
 class GeolocatedFarmAdmin(admin.ModelAdmin):
     """
-    Section GPS de l'admin : liste des fermes géolocalisées + carte Leaflet interactive.
-    Cliquer sur une ligne de la liste centre la carte sur cette ferme.
+    Section GPS de l'admin : liste des fermes géolocalisées.
     """
 
     list_display = (
@@ -20,10 +17,9 @@ class GeolocatedFarmAdmin(admin.ModelAdmin):
         'owner_phone_display',
         'location_address',
         'coordinates_display',
-        'certification_badge',
         'gps_captured_at',
     )
-    list_filter = ('certification_status', 'user__region', 'user__activity_type')
+    list_filter = ('user__region',)
     search_fields = (
         'farm_name',
         'user__first_name',
@@ -33,7 +29,6 @@ class GeolocatedFarmAdmin(admin.ModelAdmin):
     )
     ordering = ('-updated_at',)
 
-    # Tous les champs GPS sont en lecture seule (saisis depuis le mobile)
     readonly_fields = (
         'id', 'latitude', 'longitude', 'location_address',
         'created_at', 'updated_at',
@@ -41,7 +36,7 @@ class GeolocatedFarmAdmin(admin.ModelAdmin):
 
     fieldsets = (
         (_('Ferme'), {
-            'fields': ('user', 'farm_name', 'certification_status'),
+            'fields': ('user', 'farm_name'),
         }),
         (_('Coordonnées GPS'), {
             'fields': ('latitude', 'longitude', 'location_address', 'updated_at'),
@@ -56,7 +51,6 @@ class GeolocatedFarmAdmin(admin.ModelAdmin):
         )
 
     def has_add_permission(self, request):
-        """La géolocalisation se fait depuis le mobile, pas depuis l'admin."""
         return False
 
     # ── Display methods ──────────────────────────────────────────────────────
@@ -80,46 +74,9 @@ class GeolocatedFarmAdmin(admin.ModelAdmin):
         return '—'
     coordinates_display.short_description = _('Coordonnées')
 
-    def certification_badge(self, obj):
-        colors = {
-            'certified': ('#28a745', 'Certifiée'),
-            'pending': ('#fd7e14', 'En attente'),
-            'suspended': ('#dc3545', 'Suspendue'),
-            'rejected': ('#6c757d', 'Rejetée'),
-        }
-        color, label = colors.get(obj.certification_status, ('#999', obj.certification_status))
-        return format_html(
-            '<span style="background:{};color:white;padding:2px 8px;border-radius:10px;font-size:11px;">{}</span>',
-            color, label,
-        )
-    certification_badge.short_description = _('Certification')
-    certification_badge.admin_order_field = 'certification_status'
-
     def gps_captured_at(self, obj):
         if obj.updated_at:
             return obj.updated_at.strftime('%d/%m/%Y %H:%M')
         return '—'
     gps_captured_at.short_description = _('Capturé le')
     gps_captured_at.admin_order_field = 'updated_at'
-
-    # ── Changelist view avec carte ────────────────────────────────────────────
-
-    def changelist_view(self, request, extra_context=None):
-        extra_context = extra_context or {}
-
-        farms_qs = self.get_queryset(request)
-        farms_data = [
-            {
-                'id': str(farm.pk),
-                'farm_name': farm.farm_name or '',
-                'latitude': str(farm.latitude),
-                'longitude': str(farm.longitude),
-                'location_address': farm.location_address or '',
-                'certification_status': farm.certification_status,
-                'owner_name': farm.user.display_name,
-                'owner_phone': farm.user.phone_number,
-            }
-            for farm in farms_qs
-        ]
-        extra_context['farms_json'] = json.dumps(farms_data, ensure_ascii=False)
-        return super().changelist_view(request, extra_context)

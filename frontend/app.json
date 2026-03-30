@@ -33,12 +33,6 @@
         }
       ],
       [
-        "react-native-maps",
-        {
-          "enableGoogleMapsOnIOS": false
-        }
-      ],
-      [
         "@sentry/react-native",
         {
           "organization": "aquacare",
