@@ -44,39 +44,39 @@ class TestProductEndpoints:
         # Authentifier
         self.client.force_authenticate(user=self.user)
 
-        # Créer produits de test (tilapia)
+        # Créer produits de test DIBAQ (tilapia)
         self.product_2mm = Product.objects.create(
-            name="ALLER AQUA TILAPIA 2MM 20KG",
-            brand="aller_aqua",
+            name="DIBAQ TILAPIA 2MM 20KG",
+            brand="dibaq",
             species="tilapia",
-            phase="alevinage",
+            phase=None,
             pellet_size_mm=Decimal("2.0"),
-            protein_percentage=Decimal("45.0"),
-            lipid_percentage=10,
+            protein_percentage=None,
+            lipid_percentage=None,
             package_weight_kg=Decimal("20.0"),
             price_per_package=Decimal("30000.00")
         )
 
-        self.product_3mm = Product.objects.create(
-            name="ALLER AQUA TILAPIA 3MM 20KG",
-            brand="aller_aqua",
+        self.product_3_5mm = Product.objects.create(
+            name="DIBAQ TILAPIA 3.5MM 20KG",
+            brand="dibaq",
             species="tilapia",
-            phase="pre_grossissement",
-            pellet_size_mm=Decimal("3.0"),
-            protein_percentage=Decimal("32.0"),
-            lipid_percentage=10,
+            phase=None,
+            pellet_size_mm=Decimal("3.5"),
+            protein_percentage=None,
+            lipid_percentage=None,
             package_weight_kg=Decimal("20.0"),
             price_per_package=Decimal("28000.00")
         )
 
-        self.product_4_5mm = Product.objects.create(
-            name="ALLER AQUA TILAPIA 4.5MM 20KG",
-            brand="aller_aqua",
+        self.product_4mm = Product.objects.create(
+            name="DIBAQ TILAPIA 4MM 20KG",
+            brand="dibaq",
             species="tilapia",
-            phase="grossissement",
-            pellet_size_mm=Decimal("4.5"),
-            protein_percentage=Decimal("30.0"),
-            lipid_percentage=10,
+            phase=None,
+            pellet_size_mm=Decimal("4.0"),
+            protein_percentage=None,
+            lipid_percentage=None,
             package_weight_kg=Decimal("20.0"),
             price_per_package=Decimal("27000.00")
         )
@@ -126,8 +126,8 @@ class TestProductEndpoints:
         response = self.client.get(f'/api/commerce/products/{self.product_2mm.id}/')
 
         assert response.status_code == status.HTTP_200_OK
-        assert response.data['name'] == "ALLER AQUA TILAPIA 2MM 20KG"
-        assert response.data['brand'] == "aller_aqua"
+        assert response.data['name'] == "DIBAQ TILAPIA 2MM 20KG"
+        assert response.data['brand'] == "dibaq"
         assert Decimal(response.data['price_per_package']) == Decimal("30000.00")
 
     def test_cycle_simulation_basic(self):
@@ -157,9 +157,9 @@ class TestProductEndpoints:
         assert params['species'] == 'tilapia'
         assert params['initial_fish_count'] == 1000
         assert params['initial_weight_g'] == 5.0
-        assert params['target_weight_g'] == 300.0
-        assert params['cycle_duration_days'] == 120
-        assert params['survival_rate'] == 0.85
+        assert params['target_weight_g'] == 350.0
+        assert params['cycle_duration_days'] == 180
+        assert params['survival_rate'] == 0.95
 
         # Vérifier phases
         assert len(data['feeding_phases']) == 3  # Tilapia = 3 phases
@@ -292,13 +292,13 @@ class TestOrderEndpoints:
 
         # Créer produit de test
         self.product = Product.objects.create(
-            name="ALLER AQUA TILAPIA 2MM 20KG",
-            brand="aller_aqua",
+            name="DIBAQ TILAPIA 2MM 20KG",
+            brand="dibaq",
             species="tilapia",
-            phase="alevinage",
+            phase=None,
             pellet_size_mm=Decimal("2.0"),
-            protein_percentage=Decimal("45.0"),
-            lipid_percentage=10,
+            protein_percentage=None,
+            lipid_percentage=None,
             package_weight_kg=Decimal("20.0"),
             price_per_package=Decimal("30000.00")
         )
