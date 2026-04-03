@@ -15,37 +15,37 @@ class TestCycleSimulationService:
 
     @pytest.fixture
     def tilapia_products(self):
-        """Créer produits tilapia pour tests."""
+        """Créer produits tilapia DIBAQ pour tests."""
         Product.objects.create(
-            name="ALLER AQUA TILAPIA 2MM 20KG",
-            brand="aller_aqua",
+            name="DIBAQ TILAPIA 2MM 20KG",
+            brand="dibaq",
             species="tilapia",
-            phase="alevinage",
+            phase=None,
             pellet_size_mm=Decimal("2.0"),
-            protein_percentage=Decimal("45.0"),
-            lipid_percentage=10,
+            protein_percentage=None,
+            lipid_percentage=None,
             package_weight_kg=Decimal("20.0"),
             price_per_package=Decimal("30000.00")
         )
         Product.objects.create(
-            name="ALLER AQUA TILAPIA 3MM 20KG",
-            brand="aller_aqua",
+            name="DIBAQ TILAPIA 3.5MM 20KG",
+            brand="dibaq",
             species="tilapia",
-            phase="pre_grossissement",
-            pellet_size_mm=Decimal("3.0"),
-            protein_percentage=Decimal("32.0"),
-            lipid_percentage=10,
+            phase=None,
+            pellet_size_mm=Decimal("3.5"),
+            protein_percentage=None,
+            lipid_percentage=None,
             package_weight_kg=Decimal("20.0"),
             price_per_package=Decimal("28000.00")
         )
         Product.objects.create(
-            name="ALLER AQUA TILAPIA 4.5MM 20KG",
-            brand="aller_aqua",
+            name="DIBAQ TILAPIA 4MM 20KG",
+            brand="dibaq",
             species="tilapia",
-            phase="grossissement",
-            pellet_size_mm=Decimal("4.5"),
-            protein_percentage=Decimal("30.0"),
-            lipid_percentage=10,
+            phase=None,
+            pellet_size_mm=Decimal("4.0"),
+            protein_percentage=None,
+            lipid_percentage=None,
             package_weight_kg=Decimal("20.0"),
             price_per_package=Decimal("27000.00")
         )
@@ -68,9 +68,9 @@ class TestCycleSimulationService:
         assert params['species'] == 'tilapia'
         assert params['initial_fish_count'] == 1000
         assert params['initial_weight_g'] == 5.0  # Défaut
-        assert params['target_weight_g'] == 300.0  # Défaut tilapia
-        assert params['cycle_duration_days'] == 120  # Défaut tilapia
-        assert params['survival_rate'] == 0.85  # Défaut
+        assert params['target_weight_g'] == 350.0  # Défaut tilapia
+        assert params['cycle_duration_days'] == 180  # Défaut tilapia
+        assert params['survival_rate'] == 0.95  # Défaut
 
         # Vérifier phases (tilapia = 3 phases)
         assert len(result['feeding_phases']) == 3
@@ -86,7 +86,7 @@ class TestCycleSimulationService:
         assert 'estimated_revenue_fcfa' in summary
         assert 'estimated_profit_fcfa' in summary
         assert summary['initial_fish_count'] == 1000
-        assert summary['estimated_final_count'] == 850  # 1000 × 0.85
+        assert summary['estimated_final_count'] == 950  # 1000 × 0.95
         assert summary['feed_cost_fcfa'] > 0
         assert summary['fingerlings_cost_fcfa'] == 0
         assert summary['other_costs_fcfa'] == 0
@@ -121,8 +121,8 @@ class TestCycleSimulationService:
         )
 
         summary = result['summary']
-        # Biomasse récoltée: 850 * 300g = 255kg -> 1 020 000 FCFA à 4000 FCFA/kg
-        assert summary['estimated_revenue_fcfa'] == 1020000
+        # Biomasse récoltée: 950 * 350g = 332.5kg -> 1 330 000 FCFA à 4000 FCFA/kg
+        assert summary['estimated_revenue_fcfa'] == 1330000
 
     def test_simulate_cycle_with_additional_costs(self, tilapia_products):
         """Test intégration coût alevins + autres charges."""
