@@ -137,13 +137,13 @@ PERFORMANCE_THRESHOLDS = {
 
 ECONOMIC_DEFAULTS_BY_SPECIES = {
     'tilapia': {
-        'target_harvest_weight_g': Decimal('300'),
-        'planned_cycle_duration_days': 120,
-        'planned_selling_price_per_kg_fcfa': Decimal('1800'),
+        'target_harvest_weight_g': Decimal('350'),
+        'planned_cycle_duration_days': 180,
+        'planned_selling_price_per_kg_fcfa': Decimal('2800'),
     },
     'clarias': {
         'target_harvest_weight_g': Decimal('400'),
-        'planned_cycle_duration_days': 150,
+        'planned_cycle_duration_days': 120,
         'planned_selling_price_per_kg_fcfa': Decimal('2000'),
     },
 }

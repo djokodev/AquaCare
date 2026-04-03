@@ -111,7 +111,14 @@ const MetricCard: React.FC<MetricCardProps> = ({
       <Animated.View style={iconAnimatedStyle}>
         <Ionicons name={icon} size={32} color={color} />
       </Animated.View>
-      <Text className="text-2xl font-bold text-gray-dark mt-2">{value}</Text>
+      <Text
+        className="text-2xl font-bold text-gray-dark mt-2 text-center w-full"
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.65}
+      >
+        {value}
+      </Text>
       <Text className="text-sm text-gray-light text-center mt-1">{label}</Text>
     </Animated.View>
   );

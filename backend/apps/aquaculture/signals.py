@@ -77,10 +77,10 @@ def create_cycle_metrics(sender, instance, created, **kwargs):
         NotificationService.create_notification(
             user=instance.farm_profile.user,
             notification_type='cycle_milestone',
-            title=f"Nouveau cycle demarre - {instance.cycle_name}",
+            title=f"Nouveau cycle démarré, {instance.cycle_name}",
             message=(
-                f"Votre cycle {instance.cycle_name} a ete cree avec succes. "
-                f"Nous vous accompagnerons tout au long de ces {instance.species}."
+                f"Votre cycle {instance.cycle_name} a été créé avec succès. "
+                f"Nous vous accompagnerons tout au long de cette production."
             ),
             content_object=instance,
             metadata={'cycle_id': str(instance.id)},

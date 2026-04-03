@@ -48,9 +48,7 @@ class Product(models.Model):
     """
     Produit du catalogue MAVECAM (aliments pour poissons).
 
-    Catalogue fixe de 22 produits :
-    - Aller Aqua : INFA, FUTURA, CLARIAS FLOAT, TIL-PRO
-    - DIBAQ : Catfish et Tilapia (différentes tailles)
+    Catalogue DIBAQ : Catfish et Tilapia (différentes tailles de granulés).
 
     Pas de gestion de stock pour MVP (toujours disponible).
     """
@@ -252,6 +250,16 @@ class Order(models.Model):
         related_name='orders',
         verbose_name=_('Ferme'),
         help_text=_('Ferme associée à la commande')
+    )
+
+    production_cycle = models.ForeignKey(
+        'aquaculture.ProductionCycle',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='orders',
+        verbose_name=_('Cycle de production'),
+        help_text=_('Cycle de production pour lequel cette commande est passée')
     )
 
     # Identification commande

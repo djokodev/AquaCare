@@ -219,11 +219,11 @@ class CycleSimulationService(BaseCommerceService):
         if normalized_species == 'tilapia':
             default_target_weight = TARGET_WEIGHT_TILAPIA_DEFAULT
             default_duration = CYCLE_DURATION_DEFAULT_TILAPIA
-            default_price = 2500
+            default_price = 2800
         else:
             default_target_weight = TARGET_WEIGHT_CATFISH_DEFAULT
             default_duration = CYCLE_DURATION_DEFAULT_CATFISH
-            default_price = 2800
+            default_price = 2000
 
         return {
             'species': normalized_species,
@@ -273,17 +273,19 @@ class CycleSimulationService(BaseCommerceService):
             params['survival_rate']
         )
 
-        # Trouver produits disponibles pour cette granulométrie
+        # Trouver produits DIBAQ disponibles pour cette granulométrie
         products = Product.objects.filter(
+            brand='dibaq',
             species=params['species'],
             pellet_size_mm=Decimal(str(phase['pellet_size_mm'])),
             is_available=True
         ).order_by('-package_weight_kg')  # Privilégier gros formats
 
         if not products.exists():
-            # Fallback : chercher taille proche (±0.5mm)
+            # Fallback : chercher taille proche (±0.5mm) parmi les produits DIBAQ
             pellet_size = phase['pellet_size_mm']
             products = Product.objects.filter(
+                brand='dibaq',
                 species=params['species'],
                 pellet_size_mm__gte=Decimal(str(pellet_size - 0.5)),
                 pellet_size_mm__lte=Decimal(str(pellet_size + 0.5)),

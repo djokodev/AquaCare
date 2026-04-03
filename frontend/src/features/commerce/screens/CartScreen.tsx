@@ -50,7 +50,14 @@ export default function CartScreen() {
   const navigation = useNavigation<NavigationProp>();
   const dispatch = useDispatch<AppDispatch>();
   const generateClientUuid = (): string => {
-    return (globalThis.crypto as Crypto).randomUUID();
+    if (typeof globalThis.crypto?.randomUUID === 'function') {
+      return globalThis.crypto.randomUUID();
+    }
+    // Fallback UUID v4 (RFC 4122) pour React Native / Expo Go
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+      const r = (Math.random() * 16) | 0;
+      return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
+    });
   };
 
   const { cart } = useSelector((state: RootState) => state.commerce);
@@ -166,8 +173,9 @@ export default function CartScreen() {
                 },
               ]);
             } catch (error) {
-              logger.error('[CartScreen] Order error');
-              Alert.alert(t('error'), extractErrorMessage(error, t('orderCreationError')));
+              const msg = extractErrorMessage(error, t('orderCreationError'));
+              logger.warn('[CartScreen] Order error:', msg);
+              Alert.alert(t('error'), msg);
             } finally {
               setIsSubmitting(false);
             }

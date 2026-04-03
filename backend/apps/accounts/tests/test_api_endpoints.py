@@ -792,3 +792,214 @@ class TestAccountDeletionEndpoint:
         farm = FarmProfile.objects.filter(user=self.user).first()
         if farm:
             assert farm.is_deleted is True
+
+
+@pytest.mark.django_db
+class TestFarmSetupView:
+    """
+    Tests pour POST /api/accounts/farm/setup/
+
+    Vérifie la sauvegarde du formulaire "Créer mon élevage" et le marquage
+    farm_setup_completed=True pour débloquer la navigation vers le dashboard.
+    """
+
+    def setup_method(self):
+        self.client = APIClient()
+        self.url = reverse('accounts:farm_setup')
+        self.user = User.objects.create_user(
+            phone_number="+237691000001",
+            first_name="Setup",
+            last_name="Farmer",
+            password="test123",
+            age_group="26_35",
+        )
+        self.client.force_authenticate(user=self.user)
+
+    def test_setup_etang_success(self):
+        """Formulaire étang valide → 200, farm_setup_completed=True."""
+        data = {
+            'setup_species': 'tilapia',
+            'setup_infrastructure_type': 'etang',
+            'setup_unit_count': 3,
+            'setup_unit_surface_m2': '200.00',
+            'annual_production_target_kg': '600.00',
+            'num_cycles_per_year': 2,
+        }
+        response = self.client.post(self.url, data, format='json')
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data['farm_setup_completed'] is True
+
+    def test_setup_bac_uses_volume(self):
+        """Infrastructure bac_hors_sol avec volume → 200."""
+        data = {
+            'setup_species': 'clarias',
+            'setup_infrastructure_type': 'bac_hors_sol',
+            'setup_unit_count': 5,
+            'setup_unit_volume_m3': '10.00',
+            'annual_production_target_kg': '800.00',
+            'num_cycles_per_year': 3,
+        }
+        response = self.client.post(self.url, data, format='json')
+
+        assert response.status_code == status.HTTP_200_OK
+        farm = self.user.farm_profile
+        farm.refresh_from_db()
+        assert farm.farm_setup_completed is True
+
+    def test_setup_etang_without_surface_fails(self):
+        """Étang sans superficie → 400 (champ obligatoire pour ce type)."""
+        data = {
+            'setup_species': 'tilapia',
+            'setup_infrastructure_type': 'etang',
+            'setup_unit_count': 2,
+            # setup_unit_surface_m2 absent
+            'annual_production_target_kg': '500.00',
+        }
+        response = self.client.post(self.url, data, format='json')
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_setup_bac_without_volume_fails(self):
+        """Bac sans volume → 400 (champ obligatoire pour ce type)."""
+        data = {
+            'setup_species': 'tilapia',
+            'setup_infrastructure_type': 'bac_en_sol',
+            'setup_unit_count': 4,
+            # setup_unit_volume_m3 absent
+            'annual_production_target_kg': '400.00',
+        }
+        response = self.client.post(self.url, data, format='json')
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_setup_optional_economic_fields(self):
+        """Champs économiques optionnels acceptés sans erreur."""
+        data = {
+            'setup_species': 'tilapia',
+            'setup_infrastructure_type': 'cage_flottante',
+            'setup_unit_count': 2,
+            'setup_unit_volume_m3': '30.00',
+            'annual_production_target_kg': '1000.00',
+            'num_cycles_per_year': 2,
+            'fingerlings_cost_per_unit_fcfa': '50.00',
+            'planned_selling_price_per_kg_fcfa': '1800.00',
+        }
+        response = self.client.post(self.url, data, format='json')
+
+        assert response.status_code == status.HTTP_200_OK
+
+    def test_setup_requires_auth(self):
+        """POST sans token → 401."""
+        unauthenticated = APIClient()
+        data = {'setup_species': 'tilapia', 'setup_infrastructure_type': 'etang'}
+        response = unauthenticated.post(self.url, data, format='json')
+
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+@pytest.mark.django_db
+class TestAnnualSimulationView:
+    """
+    Tests pour POST /api/accounts/farm/simulate/
+
+    Vérifie le calcul de simulation annuelle : chiffre d'affaires, coûts,
+    frais AquaCare (20 FCFA/kg), ROI et décomposition par cycle.
+    """
+
+    def setup_method(self):
+        self.client = APIClient()
+        self.url = reverse('accounts:annual_simulation')
+        self.user = User.objects.create_user(
+            phone_number="+237691000002",
+            first_name="Simulation",
+            last_name="Farmer",
+            password="test123",
+            age_group="26_35",
+        )
+        self.client.force_authenticate(user=self.user)
+
+    def test_simulate_tilapia_2_cycles(self):
+        """Simulation tilapia 2 cycles/an → 200 avec structure complète."""
+        data = {
+            'species': 'tilapia',
+            'annual_production_target_kg': '1000',
+            'num_cycles': 2,
+        }
+        response = self.client.post(self.url, data, format='json')
+
+        assert response.status_code == status.HTTP_200_OK
+        result = response.data
+        # Champs annuels obligatoires
+        assert 'annual_production_target_kg' in result
+        assert 'annual_revenue_fcfa' in result
+        assert 'annual_feed_cost_fcfa' in result
+        assert 'aquacare_fee_fcfa' in result
+        assert 'annual_net_profit_fcfa' in result
+        assert 'annual_roi_pct' in result
+        # Champs par cycle
+        assert 'production_per_cycle_kg' in result
+        assert 'feed_bags_per_cycle' in result
+
+    def test_simulate_aquacare_fee_is_20_fcfa_per_kg(self):
+        """Le frais AquaCare doit être exactement 20 FCFA × kg produit."""
+        data = {
+            'species': 'tilapia',
+            'annual_production_target_kg': '500',
+            'num_cycles': 2,
+        }
+        response = self.client.post(self.url, data, format='json')
+
+        assert response.status_code == status.HTTP_200_OK
+        # 500 kg × 20 FCFA = 10 000 FCFA
+        assert response.data['aquacare_fee_fcfa'] == 10000
+
+    def test_simulate_clarias_3_cycles(self):
+        """Simulation clarias 3 cycles/an → 200 avec durée cycle correcte."""
+        data = {
+            'species': 'clarias',
+            'annual_production_target_kg': '900',
+            'num_cycles': 3,
+        }
+        response = self.client.post(self.url, data, format='json')
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data['annual_production_target_kg'] == 900
+
+    def test_simulate_with_custom_prices(self):
+        """Simulation avec prix personnalisés → revenus calculés correctement."""
+        data = {
+            'species': 'tilapia',
+            'annual_production_target_kg': '1000',
+            'num_cycles': 2,
+            'selling_price_per_kg_fcfa': '2000',
+            'fingerlings_cost_per_unit_fcfa': '60',
+            'other_costs_fcfa_per_year': '50000',
+        }
+        response = self.client.post(self.url, data, format='json')
+
+        assert response.status_code == status.HTTP_200_OK
+        # 1000 kg × 2000 FCFA = 2 000 000 FCFA de revenu
+        assert response.data['annual_revenue_fcfa'] == 2_000_000
+
+    def test_simulate_missing_required_fields_fails(self):
+        """Champs requis manquants (species absent) → 400."""
+        data = {
+            'annual_production_target_kg': '1000',
+            'num_cycles': 2,
+        }
+        response = self.client.post(self.url, data, format='json')
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_simulate_requires_auth(self):
+        """POST sans token → 401."""
+        unauthenticated = APIClient()
+        data = {
+            'species': 'tilapia',
+            'annual_production_target_kg': '1000',
+            'num_cycles': 2,
+        }
+        response = unauthenticated.post(self.url, data, format='json')
+
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED

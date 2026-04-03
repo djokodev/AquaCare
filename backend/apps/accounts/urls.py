@@ -24,6 +24,10 @@ urlpatterns = [
     path('profile/', views.ProfileView.as_view(), name='profile'),
     path('farm/', views.FarmProfileView.as_view(), name='farm_profile'),
 
+    # Farm setup + simulation
+    path('farm/setup/', views.FarmSetupView.as_view(), name='farm_setup'),
+    path('farm/simulate/', views.AnnualSimulationView.as_view(), name='annual_simulation'),
+
     # Account deletion
     path('delete/', views.AccountDeletionView.as_view(), name='delete_account'),
 

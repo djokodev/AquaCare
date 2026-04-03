@@ -12,6 +12,7 @@ from rest_framework.response import Response
 
 from ..domain.exceptions import CycleAlreadyHarvestedError, InvalidHarvestDataError
 from ..models import ProductionCycle
+from ..services.cycle_feed_service import CycleFeedService
 from ..serializers import (
     CycleComparisonSerializer,
     CycleHarvestResponseSerializer,
@@ -346,3 +347,66 @@ class ProductionCycleViewSet(viewsets.ModelViewSet):
 
         serializer = CycleComparisonSerializer(comparison_data)
         return Response(serializer.data)
+
+    @extend_schema(
+        summary="Phases d'alimentation simulées pour un cycle",
+        description=(
+            "Retourne les phases d'alimentation et les produits recommandés "
+            "estimés via CycleSimulationService avec les paramètres du cycle. "
+            "Utilisé pour l'écran de commande par phase."
+        ),
+        responses={200: dict},
+    )
+    @action(detail=True, methods=['get'], url_path='feed-phases')
+    def feed_phases(self, request, pk=None):
+        """
+        GET /api/aquaculture/cycles/{id}/feed-phases/
+
+        Retourne les phases d'alimentation issues de CycleSimulationService.
+        Chaque phase contient les produits recommandés avec quantity_bags.
+        """
+        cycle = self.get_object()
+
+        if not cycle.initial_count or not cycle.target_harvest_weight_g:
+            return Response({'feeding_phases': []})
+
+        try:
+            from commerce.services.cycle_simulation_service import CycleSimulationService  # noqa: PLC0415
+            survival_rate = float(cycle.expected_survival_rate_pct or 95) / 100
+            sim = CycleSimulationService.simulate_cycle(
+                species=cycle.species,
+                initial_fish_count=cycle.initial_count,
+                target_weight_g=float(cycle.target_harvest_weight_g),
+                cycle_duration_days=cycle.planned_cycle_duration_days or 180,
+                survival_rate=survival_rate,
+                selling_price_per_kg_fcfa=float(cycle.planned_selling_price_per_kg_fcfa or 2800),
+                fingerlings_cost_fcfa=float(cycle.fingerlings_cost_fcfa or 0),
+                other_costs_fcfa=float(cycle.other_operational_costs_fcfa or 0),
+            )
+            return Response({'feeding_phases': sim['feeding_phases']})
+        except Exception:
+            logger.exception('Erreur calcul feed_phases pour cycle %s', pk)
+            return Response({'feeding_phases': []})
+
+    @extend_schema(
+        summary="Statut des aliments pour un cycle",
+        description=(
+            "Retourne le suivi des achats d'aliments pour ce cycle : "
+            "total nécessaire (d'après les plans d'alimentation), "
+            "déjà commandé (commandes liées au cycle), consommé et reste à commander."
+        ),
+        responses={200: dict},
+    )
+    @action(detail=True, methods=['get'], url_path='feed-status')
+    def feed_status(self, request, pk=None):
+        """
+        GET /api/aquaculture/cycles/{id}/feed-status/
+
+        Délègue à CycleFeedService le calcul du statut des aliments :
+        - bags_needed  : issu des FeedingPlans du cycle (agrégation SQL)
+        - bags_ordered : commandes liées à ce cycle (Order.production_cycle)
+        - bags_consumed: total_feed_consumed / 25 kg
+        """
+        cycle = self.get_object()
+        result = CycleFeedService.get_feed_status(cycle)
+        return Response(result)

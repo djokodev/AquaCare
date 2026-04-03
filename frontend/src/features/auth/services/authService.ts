@@ -9,6 +9,9 @@ import {
   AuthResponse,
   User,
   FarmProfile,
+  FarmSetupData,
+  AnnualSimulationInput,
+  AnnualSimulationResult,
 } from '@/types/auth';
 
 class AuthService {
@@ -146,6 +149,39 @@ class AuthService {
       const response = await apiService.patch<FarmProfile>(
         API_ENDPOINTS.AUTH.FARM_PROFILE,
         farmData
+      );
+      return response.data;
+    } catch (error: unknown) {
+      throw this.handleAuthError(error);
+    }
+  }
+
+  /**
+   * Sauvegarder les données du formulaire "Créer mon élevage"
+   * et marquer farm_setup_completed = true
+   */
+  async completeFarmSetup(setupData: FarmSetupData): Promise<FarmProfile> {
+    try {
+      const response = await apiService.post<FarmProfile>(
+        API_ENDPOINTS.AUTH.FARM_SETUP,
+        setupData
+      );
+      return response.data;
+    } catch (error: unknown) {
+      throw this.handleAuthError(error);
+    }
+  }
+
+  /**
+   * Calculer la simulation annuelle (ne persiste rien)
+   */
+  async simulateAnnualProduction(
+    params: AnnualSimulationInput
+  ): Promise<AnnualSimulationResult> {
+    try {
+      const response = await apiService.post<AnnualSimulationResult>(
+        API_ENDPOINTS.AUTH.FARM_SIMULATE,
+        params
       );
       return response.data;
     } catch (error: unknown) {

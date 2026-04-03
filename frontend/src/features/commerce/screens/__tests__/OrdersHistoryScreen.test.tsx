@@ -36,7 +36,7 @@ jest.mock('react-redux', () => ({
                   id: 'item-1',
                   product: 'p1',
                   product_name: 'Feed',
-                  product_brand: 'aller_aqua',
+                  product_brand: 'dibaq',
                   product_package_weight: 20,
                   unit_price: '30000',
                   quantity: 1,

@@ -19,16 +19,17 @@ type AppStackParamList = {
 const Stack = createStackNavigator<AppStackParamList>();
 
 export default function AppNavigator() {
-  const { isAuthenticated, isLoading, checkAuth } = useAuth();
+  const { isAuthenticated, checkAuth } = useAuth();
   const { registerPushToken } = useRegisterPushNotifications();
 
   // Etat onboarding
   const [isCheckingOnboarding, setIsCheckingOnboarding] = useState(true);
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
+  const [authReady, setAuthReady] = useState(false);
 
   useEffect(() => {
-    // Check authentication status on app start
-    checkAuth();
+    // Check authentication status on app start — one-time gate only
+    checkAuth().finally(() => setAuthReady(true));
   }, [checkAuth]);
 
   // Verifier onboarding au montage
@@ -65,7 +66,7 @@ export default function AppNavigator() {
   // Force un reset du navigator quand l'état change (auth ou onboarding)
   const navigatorKey = `${isAuthenticated}-${hasCompletedOnboarding}`;
 
-  if (isLoading || isCheckingOnboarding) {
+  if (!authReady || isCheckingOnboarding) {
     return <LoadingScreen />;
   }
 

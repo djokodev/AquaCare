@@ -19,7 +19,6 @@ export const FREE_DELIVERY_THRESHOLD = 20;
 export const DELIVERY_FEE_FCFA = 3000;
 
 export const PRODUCT_BRANDS = [
-  { value: 'aller_aqua', label: 'Aller Aqua' },
   { value: 'dibaq', label: 'DIBAQ' },
 ] as const;
 
@@ -37,17 +36,17 @@ export const PRODUCT_PHASES: Array<{ value: ProductPhase; labelKey: string }> = 
 export const CYCLE_SIMULATION_DEFAULTS = {
   tilapia: {
     initial_weight_g: 5,
-    target_weight_g: 300,
-    cycle_duration_days: 120,
-    survival_rate: 0.85,
-    selling_price_per_kg_fcfa: 2500,
+    target_weight_g: 350,
+    cycle_duration_days: 180,
+    survival_rate: 0.95,
+    selling_price_per_kg_fcfa: 2800,
   },
   catfish: {
     initial_weight_g: 5,
     target_weight_g: 400,
-    cycle_duration_days: 150,
-    survival_rate: 0.85,
-    selling_price_per_kg_fcfa: 2800,
+    cycle_duration_days: 120,
+    survival_rate: 0.95,
+    selling_price_per_kg_fcfa: 2000,
   },
 };
 
@@ -57,6 +56,6 @@ export const FCR_TARGET = {
 };
 
 export const MARKET_PRICE_PER_KG = {
-  tilapia: 2500,
-  catfish: 2800,
+  tilapia: 2800,
+  catfish: 2000,
 };

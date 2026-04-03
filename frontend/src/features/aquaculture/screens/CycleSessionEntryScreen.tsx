@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useDispatch } from 'react-redux';
@@ -15,6 +15,99 @@ import {
 import { ProductionCycle } from '@/types/aquaculture';
 import { MAVECAM_COLORS } from '@/constants/colors';
 import CyclePicker from '../components/CyclePicker';
+
+// ── Welcome screen styles ────────────────────────────────────────────────────
+const welcomeStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+    paddingHorizontal: 24,
+    justifyContent: 'center',
+  },
+  hero: {
+    alignItems: 'center',
+    marginBottom: 28,
+  },
+  iconCircle: {
+    width: 104,
+    height: 104,
+    borderRadius: 52,
+    backgroundColor: '#ecfdf5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
+  title: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: '#1e293b',
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  subtitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: MAVECAM_COLORS.GREEN_PRIMARY,
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  body: {
+    fontSize: 14,
+    color: '#64748b',
+    textAlign: 'center',
+    lineHeight: 21,
+  },
+  featuresCard: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 28,
+    gap: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  featureRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  featureIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#ecfdf5',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  featureText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#334155',
+  },
+  ctaBtn: {
+    backgroundColor: MAVECAM_COLORS.GREEN_PRIMARY,
+    borderRadius: 14,
+    paddingVertical: 17,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    shadowColor: MAVECAM_COLORS.GREEN_PRIMARY,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  ctaBtnText: {
+    color: '#fff',
+    fontSize: 17,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
+});
 
 type CycleSessionEntryNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -116,25 +209,17 @@ export default function CycleSessionEntryScreen({ navigation }: Props) {
     );
   }
 
-  // 0 active cycles — show CTA to create a cycle
+  // 0 active cycles — CTA only
   if (activeCycles.length === 0) {
     return (
-      <View className="flex-1 bg-cream items-center justify-center px-6">
-        <Ionicons name="water-outline" size={64} color={MAVECAM_COLORS.GREEN_PRIMARY} />
-        <Text className="text-xl font-bold text-gray-dark text-center mt-4 mb-2">
-          {t('noCycles')}
-        </Text>
-        <Text className="text-sm text-gray-light text-center mb-8">
-          {t('sessionNoCyclesHint', { defaultValue: 'Créez votre premier cycle pour commencer le suivi.' })}
-        </Text>
+      <View style={welcomeStyles.container}>
         <TouchableOpacity
-          className="bg-mavecam-primary px-8 py-4 rounded-xl flex-row items-center gap-2"
-          onPress={() => navigation.replace('MainTabs')}
+          style={welcomeStyles.ctaBtn}
+          onPress={() => navigation.replace('CreateFarm')}
+          activeOpacity={0.85}
         >
-          <Ionicons name="add-circle-outline" size={20} color={MAVECAM_COLORS.WHITE} />
-          <Text className="text-white text-base font-semibold">
-            {t('sessionCreateFirstCycle', { defaultValue: 'Créer mon premier cycle' })}
-          </Text>
+          <Text style={welcomeStyles.ctaBtnText}>{t('welcomeScreenCta')}</Text>
+          <Ionicons name="arrow-forward" size={20} color="#fff" />
         </TouchableOpacity>
       </View>
     );

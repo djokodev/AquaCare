@@ -8,10 +8,12 @@ from .models import FarmProfile, User
 from .permissions import IsOwnerOrReadOnly
 from .serializers import (
     AccountDeletionSerializer,
+    AnnualSimulationInputSerializer,
     AuthSuccessResponseSerializer,
     ErrorResponseSerializer,
     FarmMapSerializer,
     FarmProfileSerializer,
+    FarmSetupSerializer,
     LoginSerializer,
     LogoutSerializer,
     MessageResponseSerializer,
@@ -20,6 +22,7 @@ from .serializers import (
 )
 from .services import (
     AccountDeletionService,
+    AnnualSimulationService,
     AuthApplicationService,
     InvalidRefreshTokenError,
     ProfileQueryService,
@@ -368,6 +371,91 @@ class AccountDeletionView(generics.GenericAPIView):
             response_serializer.data,
             status=status.HTTP_200_OK,
         )
+
+
+class FarmSetupView(generics.UpdateAPIView):
+    """
+    POST/PATCH — Sauvegarde le formulaire "Créer mon élevage".
+
+    Persiste les données annuelles dans FarmProfile et marque
+    farm_setup_completed=True pour débloquer la navigation vers le dashboard.
+    """
+    serializer_class = FarmSetupSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    http_method_names = ['patch', 'post']
+
+    def get_object(self):
+        try:
+            return ProfileQueryService.get_farm_profile(self.request.user.pk)
+        except FarmProfile.DoesNotExist:
+            raise Http404
+
+    def patch(self, request, *args, **kwargs):
+        farm = self.get_object()
+        serializer = self.get_serializer(farm, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        updated = serializer.save()
+        return Response(
+            FarmProfileSerializer(updated).data,
+            status=status.HTTP_200_OK,
+        )
+
+    def post(self, request, *args, **kwargs):
+        return self.patch(request, *args, **kwargs)
+
+
+class AnnualSimulationView(generics.GenericAPIView):
+    """
+    POST — Calcule une simulation annuelle sans rien persister.
+
+    Reçoit les paramètres de production et retourne :
+    - Résumé annuel (revenus, coûts, bénéfice, ROI)
+    - Frais d'accompagnement AquaCare (20 FCFA/kg)
+    - Détail par cycle (production, sacs d'aliment, dates estimées)
+    """
+    serializer_class = AnnualSimulationInputSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        summary="Simulation annuelle de production",
+        description=(
+            "Calcule la rentabilité prévisionnelle sur l'année entière. "
+            "Inclut les frais d'accompagnement AquaCare (20 FCFA/kg produit). "
+            "Ne persiste aucune donnée — utilisez /farm/setup/ pour sauvegarder."
+        ),
+        request=AnnualSimulationInputSerializer,
+        responses={200: dict},
+    )
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        result = AnnualSimulationService.simulate(
+            species=data['species'],
+            annual_production_target_kg=float(data['annual_production_target_kg']),
+            num_cycles=data['num_cycles'],
+            start_date=data.get('start_date'),
+            selling_price_per_kg_fcfa=(
+                float(data['selling_price_per_kg_fcfa'])
+                if data.get('selling_price_per_kg_fcfa') else None
+            ),
+            fingerlings_cost_per_unit_fcfa=(
+                float(data['fingerlings_cost_per_unit_fcfa'])
+                if data.get('fingerlings_cost_per_unit_fcfa') else None
+            ),
+            other_costs_fcfa_per_year=float(data.get('other_costs_fcfa_per_year') or 0),
+            target_harvest_weight_g=(
+                float(data['target_harvest_weight_g'])
+                if data.get('target_harvest_weight_g') else None
+            ),
+            expected_survival_rate_pct=(
+                float(data['expected_survival_rate_pct'])
+                if data.get('expected_survival_rate_pct') else None
+            ),
+            total_fingerlings_count=data.get('total_fingerlings_count'),
+        )
+        return Response(result, status=status.HTTP_200_OK)
 
 
 class FarmMapView(generics.ListAPIView):

@@ -201,7 +201,7 @@ class FeedingCalculator:
         weight_progression: list[WeightProgressionEntry],
         start_day: int,
         end_day: int,
-        survival_rate: float = 0.85
+        survival_rate: float = 0.95
     ) -> Decimal:
         """
         Calcule la consommation totale sur une période.
@@ -356,8 +356,8 @@ class ROICalculator:
 
     # Prix de vente moyen par kg (FCFA)
     MARKET_PRICE_PER_KG = {
-        'tilapia': 2500,
-        'catfish': 2800
+        'tilapia': 2800,
+        'catfish': 2000
     }
 
     # FCR cible MAVECAM
@@ -366,8 +366,8 @@ class ROICalculator:
         'catfish': 1.9
     }
 
-    # Taux de survie standard
-    SURVIVAL_RATE_DEFAULT = 0.85
+    # Taux de survie avec accompagnement AquaCare — validé DT
+    SURVIVAL_RATE_DEFAULT = 0.95
 
     @staticmethod
     def calculate_fcr(total_feed_kg: float, total_biomass_gain_kg: float) -> float:

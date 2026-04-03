@@ -43,6 +43,7 @@ export interface ProductionCycle {
   target_harvest_weight_g?: number;
   planned_cycle_duration_days?: number;
   planned_harvest_date?: string;
+  planned_feed_bags?: number;
   expected_survival_rate_pct?: number;
   planned_selling_price_per_kg_fcfa?: number;
   fingerlings_cost_fcfa?: number;
@@ -361,6 +362,7 @@ export interface CreateCycleForm {
   target_harvest_weight_g?: number;
   planned_cycle_duration_days?: number;
   planned_harvest_date?: string;
+  planned_feed_bags?: number;
   expected_survival_rate_pct?: number;
   planned_selling_price_per_kg_fcfa?: number;
   fingerlings_cost_fcfa?: number;
@@ -446,6 +448,51 @@ export interface CycleStatistics {
   }>;
 }
 
+// ── Statut aliments par cycle ───────────────────────────────────────────────
+
+// ── Feed phases (simulation-based ordering) ──────────────────────────────
+
+export interface FeedPhaseProduct {
+  product_id: string;
+  product_name: string;
+  package_weight_kg: number;
+  quantity_bags: number;
+  total_kg: number;
+  unit_price: number;
+  total_price: number;
+  brand: string;
+}
+
+export interface FeedPhase {
+  phase_name: string;
+  days_range: [number, number];
+  weight_range_g: [number, number];
+  pellet_size_mm: number;
+  duration_days: number;
+  total_consumption_kg: number;
+  daily_avg_kg: number;
+  products: FeedPhaseProduct[];
+  total_bags: number;
+  total_price: number;
+}
+
+export interface FeedProductStatus {
+  product_id: string;
+  product_name: string;
+  package_weight_kg: number;
+  bags_ordered: number;
+}
+
+export interface CycleFeedStatus {
+  total_bags_needed: number;
+  total_feed_needed_kg: number;
+  bags_by_product: FeedProductStatus[];
+  total_bags_ordered: number;
+  total_feed_consumed_kg: number;
+  bags_consumed_equivalent: number;
+  bags_remaining_to_order: number;
+}
+
 // =================== ETATS REDUX ===================
 
 export interface AquacultureState {
@@ -461,6 +508,13 @@ export interface AquacultureState {
 
   // Dashboard
   dashboardData?: DashboardData;
+
+  // Statut aliments cycle actif
+  cycleFeedStatus: {
+    data: CycleFeedStatus | null;
+    loading: boolean;
+    error: string | null;
+  };
 
   // Etat de chargement
   loading: {

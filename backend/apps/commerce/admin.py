@@ -61,11 +61,14 @@ class OrderItemInline(admin.TabularInline):
     model = OrderItem
     extra = 0
     readonly_fields = ['product', 'product_name', 'unit_price', 'quantity', 'line_total']
-    can_delete = False
 
     def has_add_permission(self, request, obj=None):
         """Empeche ajout items apres creation commande."""
         return False
+
+    def has_delete_permission(self, request, obj=None):
+        """Seul superuser peut supprimer des articles de commande."""
+        return request.user.is_superuser
 
 
 @admin.register(Product)
@@ -138,7 +141,6 @@ class ProductAdmin(CommerceSecuredAdmin):
     def brand_badge(self, obj):
         """Badge couleur pour marque."""
         colors = {
-            'aller_aqua': '#059669',
             'dibaq': '#3b82f6'
         }
         color = colors.get(obj.brand, '#6b7280')
@@ -373,8 +375,8 @@ class OrderAdmin(CommerceSecuredAdmin):
         ).exists()
 
     def has_delete_permission(self, request, obj=None):
-        """Empeche suppression commande."""
-        return False
+        """Seul superuser peut supprimer des commandes."""
+        return request.user.is_superuser
 
     # --- Display methods ---
 
@@ -723,5 +725,5 @@ class OrderItemAdmin(CommerceSecuredAdmin):
         return False
 
     def has_delete_permission(self, request, obj=None):
-        """Empeche suppression item."""
-        return False
+        """Seul superuser peut supprimer des articles de commande."""
+        return request.user.is_superuser

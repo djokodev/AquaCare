@@ -1,0 +1,721 @@
+/**
+ * CreateFarmScreen — Flux "Créer mon élevage"
+ *
+ * Formulaire annuel affiché après les slides d'onboarding (première connexion)
+ * ou quand un utilisateur n'a pas encore de cycle actif.
+ * Collecte les données d'exploitation pour lancer la simulation de rentabilité.
+ */
+import React, { useState, useMemo } from 'react';
+import {
+  View,
+  Text,
+  ScrollView,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  Alert,
+  ActivityIndicator,
+  Platform,
+  KeyboardAvoidingView,
+} from 'react-native';
+import { useTranslation } from 'react-i18next';
+import { Ionicons } from '@expo/vector-icons';
+import { StackNavigationProp } from '@react-navigation/stack';
+import { useDispatch, useSelector } from 'react-redux';
+
+import { MAVECAM_COLORS } from '@/constants/colors';
+import {
+  STOCKING_DENSITY_TANK_PER_M3,
+  STOCKING_DENSITY_POND_PER_M2,
+  RECOMMENDED_STOCKING_DENSITY_POND_PER_M2,
+  RECOMMENDED_STOCKING_DENSITY_TANK_PER_M3,
+} from '@/constants/aquaculture';
+import { RootStackParamList } from '@/navigation/MainNavigator';
+import { AppDispatch, RootState } from '@/store/store';
+import { runAnnualSimulation } from '@/features/auth/store/authSlice';
+import type { AnnualSimulationInput } from '@/types/auth';
+
+type NavigationProp = StackNavigationProp<RootStackParamList, 'CreateFarm'>;
+
+interface Props {
+  navigation: NavigationProp;
+}
+
+type Species = 'tilapia' | 'clarias' | 'autre';
+type InfraType = 'etang' | 'cage_flottante' | 'bac_hors_sol' | 'bac_en_sol';
+
+interface FormState {
+  species: Species | '';
+  infraType: InfraType | '';
+  unitCount: string;
+  unitVolume: string;
+  unitSurface: string;
+  annualTarget: string;
+  startDate: string;
+  fingerlingsPrice: string;
+  sellingPrice: string;
+  otherCosts: string;
+  fingerlingsCount: string;
+  harvestWeight: string;
+  survivalRate: string;
+}
+
+const SELLING_PRICE_DEFAULTS: Record<string, string> = {
+  tilapia: '2800',
+  clarias: '2000',
+  autre: '2800',
+};
+
+const FINGERLINGS_DEFAULTS: Record<string, string> = {
+  tilapia: '50',
+  clarias: '75',
+  autre: '50',
+};
+
+const HARVEST_WEIGHT_DEFAULTS: Record<string, string> = {
+  tilapia: '350',
+  clarias: '400',
+  autre: '350',
+};
+
+function todayISO(): string {
+  return new Date().toISOString().split('T')[0];
+}
+
+export default function CreateFarmScreen({ navigation }: Props) {
+  const { t } = useTranslation();
+  const dispatch = useDispatch<AppDispatch>();
+  const { loading: simLoading } = useSelector(
+    (s: RootState) => s.auth.annualSimulation
+  );
+
+  const [form, setForm] = useState<FormState>({
+    species: '',
+    infraType: '',
+    unitCount: '',
+    unitVolume: '',
+    unitSurface: '',
+    annualTarget: '',
+    startDate: todayISO(),
+    fingerlingsPrice: '',
+    sellingPrice: '',
+    otherCosts: '',
+    fingerlingsCount: '',
+    harvestWeight: '',
+    survivalRate: '95',
+  });
+
+  // Vérification 2 — densité d'empoissonnement dans les infrastructures
+  const stockingDensityCheck = useMemo(() => {
+    const count = parseInt(form.fingerlingsCount, 10);
+    if (!count || !form.infraType || !form.unitCount) return null;
+
+    const units = parseFloat(form.unitCount) || 0;
+    if (!units) return null;
+
+    const fingerlingsPerCycle = count / 2;
+
+    if (form.infraType === 'etang') {
+      const surface = parseFloat(form.unitSurface || '0') || 0;
+      if (!surface) return null;
+      const totalSurface = units * surface;
+      const density = Math.round(fingerlingsPerCycle / totalSurface);
+      const isOk = density <= STOCKING_DENSITY_POND_PER_M2;
+      return { density, max: STOCKING_DENSITY_POND_PER_M2, unit: 'm²', isOk };
+    }
+
+    const volume = parseFloat(form.unitVolume || '0') || 0;
+    if (!volume) return null;
+    const totalVolume = units * volume;
+    const density = Math.round(fingerlingsPerCycle / totalVolume);
+    const isOk = density <= STOCKING_DENSITY_TANK_PER_M3;
+    return { density, max: STOCKING_DENSITY_TANK_PER_M3, unit: 'm³', isOk };
+  }, [form.fingerlingsCount, form.infraType, form.unitCount, form.unitVolume, form.unitSurface]);
+
+  // Cohérence alevins / production cible — calculée en temps réel
+  const fingerlingsCoherence = useMemo(() => {
+    const count = parseInt(form.fingerlingsCount, 10);
+    const target = parseFloat(form.annualTarget);
+    if (!count || !target) return null;
+
+    const survivalRate = parseFloat(form.survivalRate || '85') / 100;
+    const defaultWeight = form.species === 'clarias' ? 400 : 350;
+    const harvestWeightG = parseFloat(form.harvestWeight || String(defaultWeight));
+    const NUM_CYCLES = 2; // valeur par défaut avant choix de l'utilisateur
+
+    const maxAnnual = Math.round(
+      (count * survivalRate * harvestWeightG) / 1000
+    );
+
+    const ratio = maxAnnual / target;
+    let level: 'ok' | 'warn' | 'error';
+    if (ratio >= 0.9) level = 'ok';
+    else if (ratio >= 0.75) level = 'warn';
+    else level = 'error';
+
+    return { maxAnnual, level, target: Math.round(target) };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.fingerlingsCount, form.annualTarget, form.survivalRate, form.harvestWeight, form.species]);
+
+  // Capacité totale calculée en temps réel
+  const totalCapacity = useMemo(() => {
+    const count = parseFloat(form.unitCount) || 0;
+    if (form.infraType === 'etang') {
+      const surf = parseFloat(form.unitSurface) || 0;
+      return count * surf > 0 ? `${count * surf} m²` : null;
+    }
+    const vol = parseFloat(form.unitVolume) || 0;
+    return count * vol > 0 ? `${count * vol} m³` : null;
+  }, [form.infraType, form.unitCount, form.unitVolume, form.unitSurface]);
+
+  // Suggestion automatique du nombre d'alevins
+  // Priorité : objectif annuel → besoin réel pour l'atteindre
+  // Fallback  : capacité infrastructure × densité recommandée
+  const fingerlingsSuggestion = useMemo(() => {
+    if (!form.infraType || !form.unitCount) return null;
+    const units = parseFloat(form.unitCount) || 0;
+    if (!units) return null;
+
+    const NUM_CYCLES = 2;
+    const survivalRate = parseFloat(form.survivalRate || '95') / 100;
+    const defaultWeight = form.species === 'clarias' ? 400 : 350;
+    const harvestWeightKg = parseFloat(form.harvestWeight || String(defaultWeight)) / 1000;
+
+    // Calcul basé sur capacité infrastructure
+    let capacitySuggested = 0;
+    if (form.infraType === 'etang') {
+      const surface = parseFloat(form.unitSurface || '0') || 0;
+      if (!surface) return null;
+      capacitySuggested = Math.round(units * surface * RECOMMENDED_STOCKING_DENSITY_POND_PER_M2 * NUM_CYCLES);
+    } else {
+      const volume = parseFloat(form.unitVolume || '0') || 0;
+      if (!volume) return null;
+      capacitySuggested = Math.round(units * volume * RECOMMENDED_STOCKING_DENSITY_TANK_PER_M3 * NUM_CYCLES);
+    }
+
+    if (!capacitySuggested) return null;
+
+    // Plafond absolu basé sur la densité maximale autorisée (pas la recommandée)
+    const maxAllowed = form.infraType === 'etang'
+      ? Math.round(units * (parseFloat(form.unitSurface || '0') || 0) * STOCKING_DENSITY_POND_PER_M2 * NUM_CYCLES)
+      : Math.round(units * (parseFloat(form.unitVolume || '0') || 0) * STOCKING_DENSITY_TANK_PER_M3 * NUM_CYCLES);
+
+    // Si objectif annuel renseigné → calcul basé sur la production cible, plafonné au max infra
+    const annualTarget = parseFloat(form.annualTarget);
+    if (annualTarget > 0 && survivalRate > 0 && harvestWeightKg > 0) {
+      const needed = Math.ceil((annualTarget / harvestWeightKg) / survivalRate);
+      const capped = Math.min(needed, maxAllowed);
+      // Si on a dû plafonner, l'objectif n'est pas atteignable avec cette infra
+      const achievable = needed <= maxAllowed;
+      return { value: capped, target: Math.round(annualTarget), achievable };
+    }
+
+    // Fallback : capacité seule
+    return { value: capacitySuggested, target: null, achievable: true };
+  }, [form.infraType, form.unitCount, form.unitVolume, form.unitSurface, form.annualTarget, form.survivalRate, form.harvestWeight, form.species]);
+
+  function setField(key: keyof FormState, value: string) {
+    setForm(prev => {
+      const next = { ...prev, [key]: value };
+      // Pré-remplir les prix par défaut quand l'espèce change
+      if (key === 'species' && value) {
+        // Toujours pré-remplir quand l'espèce change — l'utilisateur peut modifier ensuite
+        next.sellingPrice = SELLING_PRICE_DEFAULTS[value] ?? '2800';
+        next.fingerlingsPrice = FINGERLINGS_DEFAULTS[value] ?? '50';
+        next.harvestWeight = HARVEST_WEIGHT_DEFAULTS[value] ?? '350';
+      }
+      return next;
+    });
+  }
+
+  async function handleSimulate() {
+    // Validation des champs requis
+    if (!form.species || !form.infraType || !form.unitCount || !form.annualTarget) {
+      Alert.alert(t('error'), t('createFarmRequiredFieldsError'));
+      return;
+    }
+    if (form.infraType === 'etang' && !form.unitSurface) {
+      Alert.alert(t('error'), t('createFarmRequiredFieldsError'));
+      return;
+    }
+    if (form.infraType !== 'etang' && !form.unitVolume) {
+      Alert.alert(t('error'), t('createFarmRequiredFieldsError'));
+      return;
+    }
+
+    const speciesForSim: 'tilapia' | 'clarias' =
+      form.species === 'clarias' ? 'clarias' : 'tilapia';
+
+    const params: AnnualSimulationInput = {
+      species: speciesForSim,
+      annual_production_target_kg: parseFloat(form.annualTarget),
+      num_cycles: 2, // valeur par défaut — l'utilisateur choisit sur l'écran suivant
+      start_date: form.startDate || todayISO(),
+      selling_price_per_kg_fcfa: form.sellingPrice ? parseFloat(form.sellingPrice) : undefined,
+      fingerlings_cost_per_unit_fcfa: form.fingerlingsPrice
+        ? parseFloat(form.fingerlingsPrice)
+        : undefined,
+      other_costs_fcfa_per_year: form.otherCosts ? parseFloat(form.otherCosts) : 0,
+      target_harvest_weight_g: form.harvestWeight ? parseFloat(form.harvestWeight) : undefined,
+      expected_survival_rate_pct: form.survivalRate ? parseFloat(form.survivalRate) : undefined,
+      total_fingerlings_count: form.fingerlingsCount ? parseInt(form.fingerlingsCount, 10) : undefined,
+    };
+
+    const result = await dispatch(runAnnualSimulation(params));
+    if (runAnnualSimulation.fulfilled.match(result)) {
+      navigation.navigate('AnnualSimulation', { formData: form as unknown as Record<string, string> });
+    } else {
+      Alert.alert(t('error'), t('simulationErrorRetry'));
+    }
+  }
+
+  return (
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.content}
+      keyboardShouldPersistTaps="handled"
+    >
+      <FieldLabel label={t('createFarmSpeciesLabel')} required />
+      <View style={styles.chipRow}>
+        {(['tilapia', 'clarias'] as Species[]).map(sp => (
+          <Chip
+            key={sp}
+            label={t(`createFarmSpecies${sp.charAt(0).toUpperCase() + sp.slice(1)}` as any)}
+            selected={form.species === sp}
+            onPress={() => setField('species', sp)}
+          />
+        ))}
+      </View>
+
+      <FieldLabel label={t('createFarmInfraLabel')} required />
+      <View style={styles.chipRow}>
+        {(
+          [
+            ['etang', 'createFarmInfraEtang'],
+            ['cage_flottante', 'createFarmInfraCageFlottante'],
+            ['bac_hors_sol', 'createFarmInfraBacHorsSol'],
+          ] as [InfraType, string][]
+        ).map(([val, key]) => (
+          <Chip
+            key={val}
+            label={t(key as any)}
+            selected={form.infraType === val}
+            onPress={() => setField('infraType', val)}
+          />
+        ))}
+      </View>
+
+      <FieldLabel label={t('createFarmUnitCountLabel')} required />
+      <TextInput
+        style={styles.input}
+        keyboardType="numeric"
+        placeholder={t('createFarmUnitCountPlaceholder')}
+        placeholderTextColor={MAVECAM_COLORS.GRAY_LIGHT}
+        value={form.unitCount}
+        onChangeText={v => setField('unitCount', v)}
+      />
+
+      {form.infraType === 'etang' ? (
+        <>
+          <FieldLabel label={t('createFarmUnitSurfaceLabel')} required />
+          <TextInput
+            style={styles.input}
+            keyboardType="numeric"
+            placeholder={t('createFarmUnitSurfacePlaceholder')}
+            placeholderTextColor={MAVECAM_COLORS.GRAY_LIGHT}
+            value={form.unitSurface}
+            onChangeText={v => setField('unitSurface', v)}
+          />
+        </>
+      ) : form.infraType !== '' ? (
+        <>
+          <FieldLabel label={t('createFarmUnitVolumeLabel')} required />
+          <TextInput
+            style={styles.input}
+            keyboardType="numeric"
+            placeholder={t('createFarmUnitVolumePlaceholder')}
+            placeholderTextColor={MAVECAM_COLORS.GRAY_LIGHT}
+            value={form.unitVolume}
+            onChangeText={v => setField('unitVolume', v)}
+          />
+        </>
+      ) : null}
+
+      {totalCapacity && (
+        <View style={styles.capacityBadge}>
+          <Ionicons name="checkmark-circle" size={16} color={MAVECAM_COLORS.GREEN_PRIMARY} />
+          <Text style={styles.capacityText}>
+            {t('createFarmTotalCapacity')} : <Text style={styles.capacityValue}>{totalCapacity}</Text>
+          </Text>
+        </View>
+      )}
+
+      <FieldLabel label={t('createFarmAnnualTargetLabel')} required />
+      <TextInput
+        style={styles.input}
+        keyboardType="numeric"
+        placeholder={t('createFarmAnnualTargetPlaceholder')}
+        placeholderTextColor={MAVECAM_COLORS.GRAY_LIGHT}
+        value={form.annualTarget}
+        onChangeText={v => setField('annualTarget', v)}
+      />
+
+      <FieldLabel label={t('createFarmStartDateLabel')} />
+      <TextInput
+        style={styles.input}
+        placeholder="YYYY-MM-DD"
+        placeholderTextColor={MAVECAM_COLORS.GRAY_LIGHT}
+        value={form.startDate}
+        onChangeText={v => setField('startDate', v)}
+      />
+
+      <FieldLabel label={t('createFarmFingerlingsLabel')} />
+      <TextInput
+        style={styles.input}
+        keyboardType="numeric"
+        placeholder={t('createFarmFingerlingsPlaceholder')}
+        placeholderTextColor={MAVECAM_COLORS.GRAY_LIGHT}
+        value={form.fingerlingsPrice}
+        onChangeText={v => setField('fingerlingsPrice', v)}
+      />
+
+      <FieldLabel label={t('createFarmFingerlingsCountLabel')} />
+      {fingerlingsSuggestion && (
+        <TouchableOpacity onPress={() => setField('fingerlingsCount', String(fingerlingsSuggestion.value))} activeOpacity={0.6}>
+          <Text style={styles.suggestionHint}>
+            {fingerlingsSuggestion.target !== null && !fingerlingsSuggestion.achievable
+              ? t('createFarmFingerlingsCountSuggestionCapped', {
+                  total: fingerlingsSuggestion.value.toLocaleString('fr-FR'),
+                  target: fingerlingsSuggestion.target.toLocaleString('fr-FR'),
+                })
+              : fingerlingsSuggestion.target !== null
+              ? t('createFarmFingerlingsCountSuggestionTarget', {
+                  total: fingerlingsSuggestion.value.toLocaleString('fr-FR'),
+                  target: fingerlingsSuggestion.target.toLocaleString('fr-FR'),
+                })
+              : t('createFarmFingerlingsCountSuggestion', {
+                  total: fingerlingsSuggestion.value.toLocaleString('fr-FR'),
+                })
+            }
+          </Text>
+        </TouchableOpacity>
+      )}
+      <TextInput
+        style={[
+          styles.input,
+          fingerlingsCoherence?.level === 'error' && styles.inputError,
+        ]}
+        keyboardType="numeric"
+        placeholder={t('createFarmFingerlingsCountPlaceholder')}
+        placeholderTextColor={MAVECAM_COLORS.GRAY_LIGHT}
+        value={form.fingerlingsCount}
+        onChangeText={v => setField('fingerlingsCount', v)}
+      />
+      {stockingDensityCheck && (
+        <View style={[
+          styles.coherenceBadge,
+          stockingDensityCheck.isOk ? styles.coherenceBadgeOk : styles.coherenceBadgeError,
+        ]}>
+          <Text style={[
+            styles.coherenceText,
+            stockingDensityCheck.isOk ? styles.coherenceTextOk : styles.coherenceTextError,
+          ]}>
+            {stockingDensityCheck.isOk
+              ? t('createFarmStockingDensityOk', { density: stockingDensityCheck.density, unit: stockingDensityCheck.unit, max: stockingDensityCheck.max })
+              : t('createFarmStockingDensityWarn', { density: stockingDensityCheck.density, unit: stockingDensityCheck.unit, max: stockingDensityCheck.max })
+            }
+          </Text>
+        </View>
+      )}
+      {fingerlingsCoherence && (
+        <View style={[
+          styles.coherenceBadge,
+          fingerlingsCoherence.level === 'ok' && styles.coherenceBadgeOk,
+          fingerlingsCoherence.level === 'warn' && styles.coherenceBadgeWarn,
+          fingerlingsCoherence.level === 'error' && styles.coherenceBadgeError,
+        ]}>
+          <Text style={[
+            styles.coherenceText,
+            fingerlingsCoherence.level === 'ok' && styles.coherenceTextOk,
+            fingerlingsCoherence.level === 'warn' && styles.coherenceTextWarn,
+            fingerlingsCoherence.level === 'error' && styles.coherenceTextError,
+          ]}>
+            {t('createFarmFingerlingsMaxProduction', { max: fingerlingsCoherence.maxAnnual.toLocaleString('fr-FR') })}
+            {', '}
+            {fingerlingsCoherence.level === 'ok'
+              ? t('createFarmFingerlingsCoherenceOk', { target: fingerlingsCoherence.target.toLocaleString('fr-FR') })
+              : fingerlingsCoherence.level === 'warn'
+              ? t('createFarmFingerlingsCoherenceWarn', { target: fingerlingsCoherence.target.toLocaleString('fr-FR') })
+              : t('createFarmFingerlingsCoherenceError', { target: fingerlingsCoherence.target.toLocaleString('fr-FR') })
+            }
+          </Text>
+        </View>
+      )}
+
+      <FieldLabel label={t('createFarmSellingPriceLabel')} />
+      <TextInput
+        style={styles.input}
+        keyboardType="numeric"
+        placeholder={t('createFarmSellingPricePlaceholder')}
+        placeholderTextColor={MAVECAM_COLORS.GRAY_LIGHT}
+        value={form.sellingPrice}
+        onChangeText={v => setField('sellingPrice', v)}
+      />
+
+      <FieldLabel label={t('createFarmOtherCostsLabel')} />
+      <TextInput
+        style={styles.input}
+        keyboardType="numeric"
+        placeholder={t('createFarmOtherCostsPlaceholder')}
+        placeholderTextColor={MAVECAM_COLORS.GRAY_LIGHT}
+        value={form.otherCosts}
+        onChangeText={v => setField('otherCosts', v)}
+      />
+
+      <FieldLabel label={t('createFarmHarvestWeightLabel')} />
+      <TextInput
+        style={styles.input}
+        keyboardType="numeric"
+        placeholder={t('createFarmHarvestWeightPlaceholder')}
+        placeholderTextColor={MAVECAM_COLORS.GRAY_LIGHT}
+        value={form.harvestWeight}
+        onChangeText={v => setField('harvestWeight', v)}
+      />
+
+      <FieldLabel label={t('createFarmSurvivalRateLabel')} />
+      <TextInput
+        style={styles.input}
+        keyboardType="numeric"
+        placeholder={t('createFarmSurvivalRatePlaceholder')}
+        placeholderTextColor={MAVECAM_COLORS.GRAY_LIGHT}
+        value={form.survivalRate}
+        onChangeText={v => setField('survivalRate', v)}
+      />
+
+      {/* CTA */}
+      <TouchableOpacity
+        style={[styles.ctaBtn, simLoading && styles.ctaBtnDisabled]}
+        onPress={handleSimulate}
+        disabled={simLoading}
+        activeOpacity={0.8}
+      >
+        {simLoading ? (
+          <ActivityIndicator color="#fff" />
+        ) : (
+          <Text style={styles.ctaBtnText}>{t('createFarmSimulateBtn')}</Text>
+        )}
+      </TouchableOpacity>
+
+      <View style={{ height: 40 }} />
+    </ScrollView>
+    </KeyboardAvoidingView>
+  );
+}
+
+// ── Sub-components ───────────────────────────────────────────────────────────
+
+function SectionTitle({ label, icon }: { label: string; icon: string }) {
+  return (
+    <View style={styles.sectionTitle}>
+      <Ionicons name={icon as any} size={18} color={MAVECAM_COLORS.GREEN_PRIMARY} />
+      <Text style={styles.sectionTitleText}>{label}</Text>
+    </View>
+  );
+}
+
+function FieldLabel({ label, required }: { label: string; required?: boolean }) {
+  return (
+    <Text style={styles.fieldLabel}>
+      {label}
+      {required && <Text style={{ color: MAVECAM_COLORS.ERROR }}> *</Text>}
+    </Text>
+  );
+}
+
+function Chip({
+  label,
+  selected,
+  onPress,
+}: {
+  label: string;
+  selected: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <TouchableOpacity
+      style={[styles.chip, selected && styles.chipSelected]}
+      onPress={onPress}
+      activeOpacity={0.7}
+    >
+      <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{label}</Text>
+    </TouchableOpacity>
+  );
+}
+
+// ── Styles ───────────────────────────────────────────────────────────────────
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: MAVECAM_COLORS.CREAM,
+  },
+  content: {
+    padding: 16,
+  },
+  header: {
+    alignItems: 'center',
+    paddingVertical: 24,
+    gap: 8,
+  },
+  title: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: MAVECAM_COLORS.GRAY_DARK,
+    textAlign: 'center',
+  },
+  subtitle: {
+    fontSize: 14,
+    color: MAVECAM_COLORS.GRAY_LIGHT,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  sectionTitle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 24,
+    marginBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+    paddingBottom: 8,
+  },
+  sectionTitleText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: MAVECAM_COLORS.GREEN_DARK,
+  },
+  fieldLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: MAVECAM_COLORS.GRAY_DARK,
+    marginBottom: 6,
+    marginTop: 12,
+  },
+  chipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 4,
+  },
+  chip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: '#cbd5e1',
+    backgroundColor: '#fff',
+  },
+  chipSelected: {
+    borderColor: MAVECAM_COLORS.GREEN_PRIMARY,
+    backgroundColor: '#ecfdf5',
+  },
+  chipText: {
+    fontSize: 13,
+    color: MAVECAM_COLORS.GRAY_LIGHT,
+    fontWeight: '500',
+  },
+  chipTextSelected: {
+    color: MAVECAM_COLORS.GREEN_PRIMARY,
+    fontWeight: '600',
+  },
+  input: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: Platform.OS === 'ios' ? 14 : 10,
+    fontSize: 15,
+    color: MAVECAM_COLORS.GRAY_DARK,
+  },
+  inputError: {
+    borderColor: MAVECAM_COLORS.ERROR,
+  },
+  coherenceBadge: {
+    marginTop: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderLeftWidth: 3,
+  },
+  coherenceBadgeOk: {
+    backgroundColor: '#ecfdf5',
+    borderLeftColor: MAVECAM_COLORS.GREEN_PRIMARY,
+  },
+  coherenceBadgeWarn: {
+    backgroundColor: '#fffbeb',
+    borderLeftColor: MAVECAM_COLORS.WARNING,
+  },
+  coherenceBadgeError: {
+    backgroundColor: '#fef2f2',
+    borderLeftColor: MAVECAM_COLORS.ERROR,
+  },
+  coherenceText: {
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  coherenceTextOk: {
+    color: MAVECAM_COLORS.GREEN_DARK,
+  },
+  coherenceTextWarn: {
+    color: '#92400e',
+  },
+  coherenceTextError: {
+    color: MAVECAM_COLORS.ERROR,
+    fontWeight: '600',
+  },
+  capacityBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 8,
+    backgroundColor: '#ecfdf5',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  capacityText: {
+    fontSize: 13,
+    color: MAVECAM_COLORS.GRAY_DARK,
+  },
+  capacityValue: {
+    fontWeight: '700',
+    color: MAVECAM_COLORS.GREEN_PRIMARY,
+  },
+  suggestionHint: {
+    fontSize: 12,
+    color: MAVECAM_COLORS.GRAY_LIGHT,
+    fontStyle: 'italic',
+    marginBottom: 6,
+  },
+  ctaBtn: {
+    backgroundColor: MAVECAM_COLORS.GREEN_PRIMARY,
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginTop: 32,
+  },
+  ctaBtnDisabled: {
+    opacity: 0.6,
+  },
+  ctaBtnText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+});

@@ -1,5 +1,9 @@
 ﻿/**
- * ProductCatalogScreen - Catalogue Produits MAVECAM (NativeWind)
+ * ProductCatalogScreen — "Acheter mes aliments"
+ *
+ * Vue personnalisée : affiche en tête le suivi des besoins en aliments
+ * pour le cycle actif (total nécessaire / commandé / consommé / reste),
+ * puis le catalogue DIBAQ filtré par espèce du cycle.
  */
 import React, { useEffect, useState } from 'react';
 import {
@@ -11,6 +15,7 @@ import {
   ActivityIndicator,
   RefreshControl,
   Alert,
+  StyleSheet,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
@@ -20,9 +25,10 @@ import { useDispatch, useSelector } from 'react-redux';
 
 import { AppDispatch, RootState } from '@/store/store';
 import { fetchProducts, applyFilters, addToCart } from '@/features/commerce/store/commerceSlice';
-import { Product } from '@/types/commerce';
+import { fetchCycleFeedStatus } from '@/features/aquaculture/store/aquacultureSlice';
+import { Product, ProductSpecies } from '@/types/commerce';
 import { MAVECAM_COLORS } from '@/constants/colors';
-import { PRODUCT_BRANDS, PRODUCT_SPECIES } from '@/domain/commerce/constants';
+import { PRODUCT_SPECIES } from '@/domain/commerce/constants';
 import { RootStackParamList } from '@/navigation/MainNavigator';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'ProductCatalog'>;
@@ -36,31 +42,38 @@ export default function ProductCatalogScreen() {
   const { items: productsList, loading, error, filters } = products;
   const cartItemsCount = cart.items.reduce((sum, item) => sum + item.quantity, 0);
 
+  const currentCycle = useSelector((s: RootState) => s.aquaculture.currentCycle);
+  const { data: feedStatus, loading: feedLoading } = useSelector(
+    (s: RootState) => s.aquaculture.cycleFeedStatus
+  );
+
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedSpecies, setSelectedSpecies] = useState<string | undefined>();
-  const [selectedBrand, setSelectedBrand] = useState<string | undefined>();
+  const [selectedSpecies, setSelectedSpecies] = useState<ProductSpecies | undefined>();
   const [refreshing, setRefreshing] = useState(false);
 
+  // Charger les produits DIBAQ uniquement
   useEffect(() => {
-    dispatch(fetchProducts(filters));
-  }, []);
+    const dibaqFilters = {
+      brand: 'dibaq' as const,
+      ...(selectedSpecies ? { species: selectedSpecies } : {}),
+    };
+    dispatch(applyFilters(dibaqFilters));
+    dispatch(fetchProducts(dibaqFilters));
+  }, [selectedSpecies]);
 
+  // Charger le statut aliments pour le cycle actif
   useEffect(() => {
-    const newFilters: any = {};
-    if (selectedSpecies) newFilters.species = selectedSpecies;
-    if (selectedBrand) newFilters.brand = selectedBrand;
-    if (searchQuery.trim()) newFilters.search = searchQuery.trim();
+    if (currentCycle?.id) {
+      dispatch(fetchCycleFeedStatus(currentCycle.id));
+    }
+  }, [currentCycle?.id]);
 
-    dispatch(applyFilters(newFilters));
-    dispatch(fetchProducts(newFilters));
-  }, [selectedSpecies, selectedBrand]);
-
-  const handleApplyFilters = () => {
-    const newFilters: any = {};
-    if (selectedSpecies) newFilters.species = selectedSpecies;
-    if (selectedBrand) newFilters.brand = selectedBrand;
-    if (searchQuery.trim()) newFilters.search = searchQuery.trim();
-
+  const handleApplySearch = () => {
+    const newFilters = {
+      brand: 'dibaq' as const,
+      ...(selectedSpecies ? { species: selectedSpecies } : {}),
+      ...(searchQuery.trim() ? { search: searchQuery.trim() } : {}),
+    };
     dispatch(applyFilters(newFilters));
     dispatch(fetchProducts(newFilters));
   };
@@ -68,14 +81,18 @@ export default function ProductCatalogScreen() {
   const handleResetFilters = () => {
     setSearchQuery('');
     setSelectedSpecies(undefined);
-    setSelectedBrand(undefined);
-    dispatch(applyFilters({}));
-    dispatch(fetchProducts(undefined));
+    dispatch(applyFilters({ brand: 'dibaq' as const }));
+    dispatch(fetchProducts({ brand: 'dibaq' as const }));
   };
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await dispatch(fetchProducts(filters));
+    const dibaqFilters = {
+      brand: 'dibaq' as const,
+      ...(selectedSpecies ? { species: selectedSpecies } : {}),
+    };
+    await dispatch(fetchProducts(dibaqFilters));
+    if (currentCycle?.id) await dispatch(fetchCycleFeedStatus(currentCycle.id));
     setRefreshing(false);
   };
 
@@ -90,6 +107,12 @@ export default function ProductCatalogScreen() {
 
   const handleCartPress = () => {
     navigation.navigate('Cart');
+  };
+
+  const handleOrderRemaining = () => {
+    if (currentCycle?.id) {
+      navigation.navigate('CycleFeedPhases', { cycleId: currentCycle.id });
+    }
   };
 
   const renderProductCard = ({ item }: { item: Product }) => (
@@ -154,13 +177,14 @@ export default function ProductCatalogScreen() {
 
   return (
     <View className="flex-1 bg-cream">
+      {/* Header */}
       <View className="bg-white px-5 pt-16 pb-5 flex-row justify-between items-center shadow">
         <TouchableOpacity onPress={() => navigation.goBack()} className="w-10">
           <Ionicons name="arrow-back" size={24} color={MAVECAM_COLORS.GRAY_DARK} />
         </TouchableOpacity>
 
         <View className="flex-1 items-center">
-          <Text className="text-2xl font-bold text-gray-dark">{t('productCatalog')}</Text>
+          <Text className="text-2xl font-bold text-gray-dark">{t('myFeedTitle')}</Text>
           <Text className="text-sm text-gray-light mt-1">
             {productsList.length} {t('products')}
           </Text>
@@ -176,86 +200,119 @@ export default function ProductCatalogScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* Bannière suivi aliments cycle actif */}
+      {currentCycle ? (
+        <View style={cycleCardStyles.card}>
+          <Text style={cycleCardStyles.cardTitle}>{t('myFeedCycleHeader')}</Text>
+
+          {feedLoading ? (
+            <ActivityIndicator size="small" color={MAVECAM_COLORS.GREEN_PRIMARY} style={{ marginVertical: 8 }} />
+          ) : feedStatus ? (
+            <>
+              {/* Total + barre de progression */}
+              <View style={cycleCardStyles.totalRow}>
+                <View>
+                  <Text style={cycleCardStyles.totalLabel}>{t('myFeedTotalNeeded')}</Text>
+                  <Text style={cycleCardStyles.totalValue}>
+                    {feedStatus.total_bags_needed} {t('bags')}
+                  </Text>
+                </View>
+                <View style={cycleCardStyles.progressBlock}>
+                  <FeedProgressBar
+                    ordered={feedStatus.total_bags_ordered}
+                    total={feedStatus.total_bags_needed}
+                  />
+                  <Text style={cycleCardStyles.progressLabel}>
+                    {feedStatus.total_bags_ordered}/{feedStatus.total_bags_needed} {t('myFeedOrderedShort')}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Détails secondaires */}
+              <FeedRow label={t('myFeedOrdered')} value={feedStatus.total_bags_ordered} />
+              <FeedRow label={t('myFeedConsumed')} value={feedStatus.bags_consumed_equivalent} />
+              <FeedRow
+                label={t('myFeedRemaining')}
+                value={feedStatus.bags_remaining_to_order}
+                highlight
+              />
+
+              {/* CTA toujours visible */}
+              <TouchableOpacity
+                style={[
+                  cycleCardStyles.orderBtn,
+                  feedStatus.bags_remaining_to_order === 0 && cycleCardStyles.orderBtnSecondary,
+                ]}
+                onPress={handleOrderRemaining}
+                activeOpacity={0.8}
+              >
+                <Ionicons
+                  name={feedStatus.bags_remaining_to_order > 0 ? 'cart-outline' : 'list-outline'}
+                  size={16}
+                  color="#fff"
+                  style={{ marginRight: 6 }}
+                />
+                <Text style={cycleCardStyles.orderBtnText}>
+                  {feedStatus.bags_remaining_to_order > 0
+                    ? t('myFeedOrderRemainingBtn', { count: feedStatus.bags_remaining_to_order })
+                    : t('myFeedViewPlanBtn')}
+                </Text>
+              </TouchableOpacity>
+            </>
+          ) : null}
+        </View>
+      ) : (
+        <View style={cycleCardStyles.noCycleCard}>
+          <Ionicons name="information-circle-outline" size={20} color={MAVECAM_COLORS.GRAY_LIGHT} />
+          <Text style={cycleCardStyles.noCycleText}>{t('myFeedNoCycle')}</Text>
+        </View>
+      )}
+
+      {/* Filtres produits (espèce uniquement, plus de filtre marque) */}
       <View className="bg-white px-4 py-4 mb-2">
-        <View className="flex-row items-center bg-cream rounded-lg px-3 mb-4">
+        <View className="flex-row items-center bg-cream rounded-lg px-3 mb-3">
           <Ionicons name="search-outline" size={20} color={MAVECAM_COLORS.GRAY_LIGHT} />
           <TextInput
             className="flex-1 py-3 pl-2 text-base text-gray-dark"
             placeholder={t('searchProducts')}
             value={searchQuery}
             onChangeText={setSearchQuery}
-            onSubmitEditing={handleApplyFilters}
+            onSubmitEditing={handleApplySearch}
           />
         </View>
 
-        <View className="gap-3">
-          <View className="gap-2">
-            <Text className="text-sm font-semibold text-gray-dark">{t('species')}</Text>
-            <View className="flex-row flex-wrap gap-2">
-              {PRODUCT_SPECIES.map((species) => (
-                <TouchableOpacity
-                  key={species.value}
-                  className={`px-4 py-2 rounded-full border ${
-                    selectedSpecies === species.value
-                      ? 'bg-mavecam-primary border-mavecam-primary'
-                      : 'bg-cream border-gray-light'
+        <View className="gap-2 mb-1">
+          <Text className="text-sm font-semibold text-gray-dark">{t('species')}</Text>
+          <View className="flex-row flex-wrap gap-2">
+            {PRODUCT_SPECIES.map((species) => (
+              <TouchableOpacity
+                key={species.value}
+                className={`px-4 py-2 rounded-full border ${
+                  selectedSpecies === species.value
+                    ? 'bg-mavecam-primary border-mavecam-primary'
+                    : 'bg-cream border-gray-light'
+                }`}
+                onPress={() =>
+                  setSelectedSpecies(selectedSpecies === species.value ? undefined : species.value)
+                }
+              >
+                <Text
+                  className={`text-sm ${
+                    selectedSpecies === species.value ? 'text-white font-semibold' : 'text-gray-dark'
                   }`}
-                  onPress={() =>
-                    setSelectedSpecies(selectedSpecies === species.value ? undefined : species.value)
-                  }
                 >
-                  <Text
-                    className={`text-sm ${
-                      selectedSpecies === species.value ? 'text-white font-semibold' : 'text-gray-dark'
-                    }`}
-                  >
-                    {t(species.labelKey)}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-
-          <View className="gap-2">
-            <Text className="text-sm font-semibold text-gray-dark">{t('brand')}</Text>
-            <View className="flex-row flex-wrap gap-2">
-              {PRODUCT_BRANDS.map((brand) => (
-                <TouchableOpacity
-                  key={brand.value}
-                  className={`px-4 py-2 rounded-full border ${
-                    selectedBrand === brand.value
-                      ? 'bg-mavecam-primary border-mavecam-primary'
-                      : 'bg-cream border-gray-light'
-                  }`}
-                  onPress={() =>
-                    setSelectedBrand(selectedBrand === brand.value ? undefined : brand.value)
-                  }
-                >
-                  <Text
-                    className={`text-sm ${
-                      selectedBrand === brand.value ? 'text-white font-semibold' : 'text-gray-dark'
-                    }`}
-                  >
-                    {brand.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-
-          <View className="flex-row gap-3 mt-1">
-            <TouchableOpacity
-              className="flex-1 bg-mavecam-primary py-3 rounded-lg items-center"
-              onPress={handleApplyFilters}
-            >
-              <Text className="text-white text-base font-semibold">{t('applyFilters')}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              className="py-3 px-5 rounded-lg border border-gray-light"
-              onPress={handleResetFilters}
-            >
-              <Text className="text-base text-gray-dark">{t('clear')}</Text>
-            </TouchableOpacity>
+                  {t(species.labelKey)}
+                </Text>
+              </TouchableOpacity>
+            ))}
+            {selectedSpecies && (
+              <TouchableOpacity
+                className="py-2 px-4 rounded-full border border-gray-light"
+                onPress={handleResetFilters}
+              >
+                <Text className="text-sm text-gray-dark">{t('clear')}</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
       </View>
@@ -297,5 +354,146 @@ export default function ProductCatalogScreen() {
     </View>
   );
 }
+
+// ── Sub-components for cycle feed banner ─────────────────────────────────────
+
+function FeedRow({
+  label,
+  value,
+  highlight,
+}: {
+  label: string;
+  value: number;
+  highlight?: boolean;
+}) {
+  return (
+    <View style={cycleCardStyles.row}>
+      <Text style={cycleCardStyles.rowLabel}>{label}</Text>
+      <Text style={[cycleCardStyles.rowValue, highlight && cycleCardStyles.rowValueHighlight]}>
+        {value} sacs
+      </Text>
+    </View>
+  );
+}
+
+function FeedProgressBar({ ordered, total }: { ordered: number; total: number }) {
+  const pct = total > 0 ? Math.min(ordered / total, 1) : 0;
+  return (
+    <View style={cycleCardStyles.progressTrack}>
+      <View style={[cycleCardStyles.progressFill, { width: `${Math.round(pct * 100)}%` }]} />
+    </View>
+  );
+}
+
+const cycleCardStyles = StyleSheet.create({
+  card: {
+    backgroundColor: '#fff',
+    marginHorizontal: 12,
+    marginVertical: 8,
+    borderRadius: 12,
+    padding: 14,
+    borderLeftWidth: 4,
+    borderLeftColor: MAVECAM_COLORS.GREEN_PRIMARY,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  cardTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: MAVECAM_COLORS.GRAY_DARK,
+    marginBottom: 10,
+  },
+  totalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  totalLabel: {
+    fontSize: 12,
+    color: MAVECAM_COLORS.GRAY_LIGHT,
+    marginBottom: 2,
+  },
+  totalValue: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: MAVECAM_COLORS.GREEN_PRIMARY,
+  },
+  progressBlock: {
+    flex: 1,
+    marginLeft: 16,
+  },
+  progressLabel: {
+    fontSize: 11,
+    color: MAVECAM_COLORS.GRAY_LIGHT,
+    marginTop: 3,
+    textAlign: 'right',
+  },
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 4,
+  },
+  rowLabel: {
+    fontSize: 13,
+    color: MAVECAM_COLORS.GRAY_LIGHT,
+  },
+  rowValue: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: MAVECAM_COLORS.GRAY_DARK,
+  },
+  rowValueHighlight: {
+    color: MAVECAM_COLORS.GREEN_PRIMARY,
+    fontSize: 14,
+  },
+  progressTrack: {
+    height: 6,
+    backgroundColor: '#e2e8f0',
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: MAVECAM_COLORS.GREEN_PRIMARY,
+    borderRadius: 3,
+  },
+  orderBtn: {
+    backgroundColor: MAVECAM_COLORS.GREEN_PRIMARY,
+    borderRadius: 8,
+    paddingVertical: 11,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 12,
+  },
+  orderBtnSecondary: {
+    backgroundColor: MAVECAM_COLORS.GREEN_DARK,
+  },
+  orderBtnText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  noCycleCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#f1f5f9',
+    marginHorizontal: 12,
+    marginVertical: 8,
+    borderRadius: 10,
+    padding: 12,
+  },
+  noCycleText: {
+    fontSize: 13,
+    color: MAVECAM_COLORS.GRAY_LIGHT,
+    flex: 1,
+    lineHeight: 18,
+  },
+});
 
 
