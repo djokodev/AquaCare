@@ -12,8 +12,8 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
-import { useDispatch } from 'react-redux';
-import { AppDispatch } from '@/store/store';
+import { useDispatch, useSelector } from 'react-redux';
+import { AppDispatch, RootState } from '@/store/store';
 import { harvestCycle } from '@/features/aquaculture/store/aquacultureSlice';
 import { ProductionCycle, HarvestData } from '@/types/aquaculture';
 
@@ -37,11 +37,22 @@ interface HarvestModalProps {
   cycle: ProductionCycle | null;
   onSuccess?: () => void;
   onContactBuyer?: () => void;
+  onNextCycle?: (harvestedCycleId: string) => void;
 }
 
-export default function HarvestModal({ visible, onClose, cycle, onSuccess, onContactBuyer }: HarvestModalProps) {
+export default function HarvestModal({ visible, onClose, cycle, onSuccess, onContactBuyer, onNextCycle }: HarvestModalProps) {
   const { t } = useTranslation();
   const dispatch = useDispatch<AppDispatch>();
+  const farmProfile = useSelector((s: RootState) => s.auth.farmProfile);
+  const cycles = useSelector((s: RootState) => s.aquaculture.cycles);
+
+  const currentYear = new Date().getFullYear();
+  const harvestedThisYear = cycles.filter(
+    (c) => c.status === 'harvested' && c.end_date && new Date(c.end_date).getFullYear() === currentYear
+  ).length;
+  const numCyclesPerYear = farmProfile?.num_cycles_per_year ?? 1;
+  // +1 because the current cycle being harvested is not yet counted
+  const hasMoreCycles = onNextCycle != null && (harvestedThisYear + 1) < numCyclesPerYear;
   const [loading, setLoading] = useState(false);
 
   // Ã‰tat du formulaire
@@ -98,10 +109,19 @@ export default function HarvestModal({ visible, onClose, cycle, onSuccess, onCon
         harvestData: formData,
       })).unwrap();
 
+      const harvestedId = cycle.id;
       Alert.alert(
         t('success'),
         t('harvestSuccess'),
         [
+          ...(hasMoreCycles ? [{
+            text: t('consolidationStartNextCycle', { num: harvestedThisYear + 2 }),
+            onPress: () => {
+              onSuccess?.();
+              onClose();
+              onNextCycle!(harvestedId);
+            },
+          }] : []),
           ...(onContactBuyer ? [{
             text: t('buyerNetworkCTA'),
             onPress: () => {

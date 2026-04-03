@@ -5,6 +5,7 @@ import {
   ProductionCycle,
   CycleLog,
   FeedingPlan,
+  FeedPhase,
   SanitaryLog,
   DashboardData,
   ProductionReport,
@@ -463,6 +464,18 @@ class AquacultureService {
     } catch (error) {
       logger.error("Erreur lors de la recuperation des plans d'alimentation:", error);
       throw error;
+    }
+  }
+
+  async getCycleFeedPhases(cycleId: string): Promise<{ feeding_phases: FeedPhase[] }> {
+    try {
+      const response = await apiService.get<{ feeding_phases: FeedPhase[] }>(
+        `${this.baseUrl}/cycles/${cycleId}/feed-phases/`
+      );
+      return response.data;
+    } catch (error) {
+      logger.error('Erreur lors du chargement des phases aliments:', error);
+      return { feeding_phases: [] };
     }
   }
 

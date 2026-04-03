@@ -225,6 +225,11 @@ class ProductionCycle(models.Model):
         blank=True,
         verbose_name=_("Date prévisionnelle de récolte")
     )
+    planned_feed_bags = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        verbose_name=_("Nombre de sacs d'aliments planifiés (simulation)")
+    )
     expected_survival_rate_pct = models.DecimalField(
         max_digits=5,
         decimal_places=2,
@@ -348,7 +353,7 @@ class ProductionCycle(models.Model):
         if not self.start_date:
             return 0
 
-        end_date = self.end_date or timezone.now().date()
+        end_date = self.end_date or date.today()
         return (end_date - self.start_date).days
 
     def current_density_kg_m3(self):

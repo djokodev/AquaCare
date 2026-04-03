@@ -412,7 +412,7 @@ export default function NotificationsScreen({ navigation }: NotificationsScreenP
         renderItem={renderNotificationItem}
         ListHeaderComponent={renderListHeader}
         ListEmptyComponent={renderEmptyList}
-        contentContainerStyle={{ paddingBottom: 16 }}
+        contentContainerStyle={{ paddingBottom: 16, paddingHorizontal: 16 }}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={onRefresh} />}
       />

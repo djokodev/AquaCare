@@ -5,12 +5,22 @@
  * @module constants/aquaculture
  */
 
+// Densités terrain — validées DT AquaCare
+export const STOCKING_DENSITY_TANK_PER_M3 = 300;    // alevins/m³ au départ (bacs/cages) — maximum
+export const HARVEST_DENSITY_TANK_KG_PER_M3 = 150;  // kg/m³ à la récolte (bacs/cages)
+export const STOCKING_DENSITY_POND_PER_M2 = 10;     // alevins/m² au départ (étangs) — maximum
+export const HARVEST_DENSITY_POND_KG_PER_M2 = 10;   // kg/m² à la récolte (étangs)
+
+// Densités recommandées (semi-intensif) — utilisées pour les suggestions automatiques
+export const RECOMMENDED_STOCKING_DENSITY_POND_PER_M2 = 3;   // 3 poissons/m² (étangs)
+export const RECOMMENDED_STOCKING_DENSITY_TANK_PER_M3 = 100;  // 100 poissons/m³ (bacs/cages)
+
 export const AQUACULTURE_CONSTANTS = {
   /**
    * Prix de vente du poisson au kg (FCFA)
-   * Source: Prix moyen vente en gros au Cameroun
+   * Source: DT AquaCare — marché local Cameroun 2026
    */
-  FISH_SALE_PRICE_PER_KG: 1800,
+  FISH_SALE_PRICE_PER_KG: 2800,
 
   /**
    * Prix moyen de l'aliment au kg (FCFA)

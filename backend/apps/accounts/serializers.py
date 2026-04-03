@@ -7,7 +7,7 @@ from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.validators import EmailValidator
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 from django.utils.translation import gettext as _
 from rest_framework import serializers
 
@@ -228,6 +228,7 @@ class FarmSetupSerializer(serializers.ModelSerializer):
             )
         return attrs
 
+    @transaction.atomic
     def update(self, instance: FarmProfile, validated_data: dict[str, Any]) -> FarmProfile:
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
@@ -283,6 +284,30 @@ class AnnualSimulationInputSerializer(serializers.Serializer):
         default=Decimal('0'),
         min_value=Decimal('0'),
         help_text="Autres charges annuelles (FCFA)"
+    )
+    target_harvest_weight_g = serializers.DecimalField(
+        max_digits=8,
+        decimal_places=1,
+        required=False,
+        allow_null=True,
+        min_value=Decimal('50'),
+        max_value=Decimal('5000'),
+        help_text="Poids cible à la récolte (g)"
+    )
+    expected_survival_rate_pct = serializers.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        required=False,
+        allow_null=True,
+        min_value=Decimal('1'),
+        max_value=Decimal('100'),
+        help_text="Taux de survie attendu (%, ex: 85)"
+    )
+    total_fingerlings_count = serializers.IntegerField(
+        required=False,
+        allow_null=True,
+        min_value=1,
+        help_text="Nombre total d'alevins achetés sur l'année (tous cycles confondus)"
     )
 
     def validate_num_cycles(self, value: Any) -> int:

@@ -47,7 +47,7 @@ describe('features/commerce/store/commerceSlice', () => {
 
   const productA: Product = {
     id: 'prod-1',
-    brand: 'aller_aqua',
+    brand: 'dibaq',
     name: 'Aliment Tilapia 2mm',
     species: 'tilapia',
     phase: 'juvenile',

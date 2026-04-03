@@ -26,7 +26,6 @@ PHASE_CHOICES = [
 
 # Marques d'aliments
 BRAND_CHOICES = [
-    ('aller_aqua', _('Aller Aqua')),
     ('dibaq', _('DIBAQ')),
 ]
 
@@ -57,23 +56,23 @@ DELIVERY_FEE_FREE_THRESHOLD_BAGS = 20  # Sacs minimum pour livraison gratuite à
 # ===== CONSTANTES SIMULATION CYCLE =====
 
 # Taux de survie standard MAVECAM
-SURVIVAL_RATE_DEFAULT = 0.85  # 85% survie
+SURVIVAL_RATE_DEFAULT = 0.95  # 95% survie avec accompagnement AquaCare
 
 # FCR (Feed Conversion Ratio) cible MAVECAM
 FCR_TARGET_TILAPIA = 1.8  # kg aliment / kg gain de poids
 FCR_TARGET_CATFISH = 1.9
 
 # Prix de vente moyen au marché camerounais (FCFA/kg)
-MARKET_PRICE_PER_KG_TILAPIA = 2500
-MARKET_PRICE_PER_KG_CATFISH = 2800
+MARKET_PRICE_PER_KG_TILAPIA = 2800
+MARKET_PRICE_PER_KG_CATFISH = 2000
 
-# Durée standard des cycles (jours)
-CYCLE_DURATION_DEFAULT_TILAPIA = 120
-CYCLE_DURATION_DEFAULT_CATFISH = 150
+# Durée standard des cycles (jours) — validé DT AquaCare
+CYCLE_DURATION_DEFAULT_TILAPIA = 180
+CYCLE_DURATION_DEFAULT_CATFISH = 120
 
-# Poids standards (grammes)
+# Poids standards (grammes) — validé DT AquaCare
 INITIAL_WEIGHT_DEFAULT = 5  # Alevins standards
-TARGET_WEIGHT_TILAPIA_DEFAULT = 300  # Taille commerciale
+TARGET_WEIGHT_TILAPIA_DEFAULT = 350  # Taille commerciale marché local Cameroun
 TARGET_WEIGHT_CATFISH_DEFAULT = 400
 
 # Taux d'alimentation selon poids (% biomasse)

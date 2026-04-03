@@ -3,7 +3,7 @@
  */
 
 // Products
-export type ProductBrand = 'aller_aqua' | 'dibaq';
+export type ProductBrand = 'dibaq';
 export type ProductSpecies = 'tilapia' | 'catfish' | 'mixed';
 export type ProductPhase =
   | 'alevinage'

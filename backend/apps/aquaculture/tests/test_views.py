@@ -1210,3 +1210,135 @@ class TestProductionReportViewSet:
 
         response = auth_client.post(url, payload, format='json')
         assert response.status_code == status.HTTP_429_TOO_MANY_REQUESTS
+
+
+@pytest.mark.django_db
+class TestCycleFeedStatus:
+    """
+    Tests pour GET /api/aquaculture/cycles/{id}/feed-status/
+
+    Vérifie le calcul du suivi des aliments :
+    - total_bags_needed  : issu des FeedingPlans (daily_feed_amount × 7 jours / 25kg)
+    - total_bags_ordered : commandes liées au cycle via Order.production_cycle
+    - bags_consumed_equivalent : total_feed_consumed / 25kg
+    - bags_remaining_to_order  : needed - ordered (min 0)
+    """
+
+    def _url(self, cycle_id):
+        return reverse('aquaculture:production-cycle-feed-status', kwargs={'pk': cycle_id})
+
+    def test_feed_status_no_plans_returns_zeros(self, auth_client, production_cycle):
+        """Cycle sans FeedingPlan → tous les compteurs à zéro."""
+        FeedingPlan.objects.filter(cycle=production_cycle).delete()
+
+        response = auth_client.get(self._url(production_cycle.id))
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data['total_bags_needed'] == 0
+        assert response.data['total_bags_ordered'] == 0
+        assert response.data['bags_remaining_to_order'] == 0
+
+    def test_feed_status_with_feeding_plans(self, auth_client, production_cycle):
+        """Cycle avec FeedingPlan → total_bags_needed calculé correctement."""
+        from decimal import Decimal
+        FeedingPlan.objects.filter(cycle=production_cycle).delete()
+        # 2 semaines × 5 kg/jour × 7 jours = 70 kg → ceil(70/25) = 3 sacs
+        from datetime import date, timedelta
+        start = date.today()
+        for week in [1, 2]:
+            FeedingPlan.objects.create(
+                cycle=production_cycle,
+                week_number=week,
+                estimated_fish_count=950,
+                average_weight=Decimal('35'),
+                biomass=Decimal('33.25'),
+                daily_feed_amount=Decimal('5.00'),
+                feeding_rate=Decimal('1.5'),
+                meals_per_day=2,
+                feed_per_meal=Decimal('2.50'),
+                recommended_feed_type='DIBAQ Tilapia 2mm',
+                feed_size_mm=Decimal('2.0'),
+                protein_percentage=32,
+                start_date=start + timedelta(weeks=week - 1),
+                end_date=start + timedelta(weeks=week) - timedelta(days=1),
+            )
+
+        response = auth_client.get(self._url(production_cycle.id))
+
+        assert response.status_code == status.HTTP_200_OK
+        # 2 semaines × 5 kg × 7 jours = 70 kg → ceil(70/25) = 3 sacs
+        assert response.data['total_bags_needed'] == 3
+        assert response.data['total_feed_needed_kg'] == 70.0
+
+    def test_feed_status_with_orders(self, auth_client, authenticated_user, farm_profile, production_cycle):
+        """Commandes liées au cycle → bags_ordered comptés et bags_remaining réduit."""
+        from decimal import Decimal
+        from commerce.models import Order, OrderItem, Product
+
+        FeedingPlan.objects.filter(cycle=production_cycle).delete()
+        # 4 semaines × 5 kg/jour = 140 kg → ceil(140/25) = 6 sacs
+        from datetime import date, timedelta
+        start = date.today()
+        for week in range(1, 5):
+            FeedingPlan.objects.create(
+                cycle=production_cycle,
+                week_number=week,
+                estimated_fish_count=950,
+                average_weight=Decimal('35'),
+                biomass=Decimal('33.25'),
+                daily_feed_amount=Decimal('5.00'),
+                feeding_rate=Decimal('1.5'),
+                meals_per_day=2,
+                feed_per_meal=Decimal('2.50'),
+                recommended_feed_type='DIBAQ Tilapia 2mm',
+                feed_size_mm=Decimal('2.0'),
+                protein_percentage=32,
+                start_date=start + timedelta(weeks=week - 1),
+                end_date=start + timedelta(weeks=week) - timedelta(days=1),
+            )
+
+        product = Product.objects.create(
+            brand='dibaq',
+            name='DIBAQ Tilapia 2mm',
+            species='tilapia',
+            pellet_size_mm=Decimal('2.00'),
+            package_weight_kg=25,
+            price_per_package=Decimal('15000.00'),
+        )
+        order = Order.objects.create(
+            user=authenticated_user,
+            farm_profile=farm_profile,
+            production_cycle=production_cycle,
+            order_number='ORD-20260101-0001',
+            status='confirmed',
+            delivery_method='pickup',
+            pickup_location='ndokoti',
+            delivery_name='Setup Farmer',
+            delivery_phone='+237691000002',
+            delivery_region='Centre',
+            delivery_city='Yaoundé',
+            delivery_full_address='Yaoundé, Centre',
+            subtotal=Decimal('30000.00'),
+            delivery_fee=Decimal('0.00'),
+            total=Decimal('30000.00'),
+        )
+        OrderItem.objects.create(
+            order=order,
+            product=product,
+            product_name=product.name,
+            unit_price=Decimal('15000.00'),
+            quantity=2,
+            line_total=Decimal('30000.00'),
+        )
+
+        response = auth_client.get(self._url(production_cycle.id))
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data['total_bags_ordered'] == 2
+        assert response.data['total_bags_needed'] == 6
+        assert response.data['bags_remaining_to_order'] == 4
+
+    def test_feed_status_requires_auth(self, api_client, production_cycle):
+        """GET sans token → 401."""
+        response = api_client.get(self._url(production_cycle.id))
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED

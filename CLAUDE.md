@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Style de communication
+
+Dans les messages texte, utiliser **","** comme séparateur dans les listes inline, jamais le tiret **"-"**. Exemple : "prix 2800 FCFA, poids 350g" (pas "prix 2800 FCFA - poids 350g").
+
 ## 🚀 IMPORTANT : Workflow de Développement
 
 **AVANT toute tâche de développement, LIRE `WORKFLOW.md`** à la racine du projet.
@@ -40,6 +44,9 @@ docker-compose exec api python manage.py setup_rbac              # Admin roles/p
 
 # Create superuser from environment variables
 docker-compose exec api python manage.py create_superuser_from_env
+
+# Linting (Ruff — also runs in CI on PRs)
+docker-compose exec api ruff check backend/manage.py backend/apps backend/mavecam_api backend/tests
 
 # Testing
 docker-compose exec api pytest                                   # Run all tests
@@ -170,15 +177,34 @@ FCR_TARGET = 0.7;               // With AquaCare optimization
 GREEN_PRIMARY = '#059669';     // Buttons, headers, main actions
 GREEN_LIGHT = '#10b981';       // Hover states, accents
 GREEN_DARK = '#047857';        // Emphasis, active borders
-CREAM = '#f8fafc';             // App background
-ERROR = '#dc2626';             // Errors, high mortality alerts
-WARNING = '#f59e0b';           // Warnings, FCR > 2.0
+WHITE     = '#ffffff';         // Cards, modals
+CREAM     = '#f8fafc';         // App background
+GRAY_DARK = '#1e293b';         // Primary text
+GRAY_LIGHT = '#64748b';        // Secondary text, placeholders
+ERROR     = '#dc2626';         // Errors, mortality > 40%
+WARNING   = '#f59e0b';         // Warnings, FCR > 2.0
+INFO      = '#0ea5e9';         // Tooltips, info messages
 ```
 
-**Typography & Spacing:**
-- Base spacing: multiples of 4px (4, 8, 12, 16, 20, 24, 32)
-- Border radius: 12px (cards/buttons), 8px (inputs)
-- Touch targets: minimum 44x44px (Apple HIG)
+**Typography:**
+```typescript
+h1: { fontSize: 32, fontWeight: 'bold' }    h2: { fontSize: 24, fontWeight: 'bold' }
+h3: { fontSize: 20, fontWeight: 'bold' }    h4: { fontSize: 18, fontWeight: '600' }
+body: { fontSize: 16 }   small: { fontSize: 14 }   caption: { fontSize: 12, color: GRAY_LIGHT }
+```
+
+**Spacing & Radius:** Base 4px multiples (4, 8, 12, 16, 20, 24, 32). Cards/buttons: `borderRadius: 12`. Inputs: `borderRadius: 8`. Touch targets: minimum 44x44px.
+
+**Shadows:**
+```typescript
+shadow_sm: { shadowOffset:{width:0,height:1}, shadowOpacity:0.1, shadowRadius:2, elevation:2 }   // cards
+shadow_md: { shadowOffset:{width:0,height:2}, shadowOpacity:0.1, shadowRadius:3, elevation:3 }   // buttons
+shadow_lg: { shadowOffset:{width:0,height:4}, shadowOpacity:0.15, shadowRadius:6, elevation:6 }  // modals
+```
+
+**Animations:** Always `useNativeDriver: true` for 60fps. Durations: 150ms (micro), 300ms (standard), 500ms (major).
+
+**Icons:** `@expo/vector-icons/Ionicons`. Sizes: 20 (inline), 24 (standard), 32 (stat cards), 48 (empty states).
 
 ## Expo Go Compatibility (CRITICAL)
 
@@ -326,6 +352,7 @@ Services in `docker-compose.yml`:
 5. **Native packages in Expo Go** → Will crash, check compatibility first
 6. **TypeScript errors ignored** → Must run `npx tsc --noEmit` and fix ALL errors
 7. **Decimal for money** → Use `models.DecimalField` for FCFA amounts (not Float)
+8. **Migrating prod without backup** → Always `dumpdata > backup_$(date +%Y%m%d).json` first
 
 ## Security Considerations
 
@@ -338,17 +365,20 @@ Services in `docker-compose.yml`:
 
 ## CI/CD Pipeline
 
-**GitHub Actions workflows:**
-```
-.github/workflows/
-├── pull-request-tests.yml  # Run pytest on PR to main
-└── deploy.yml              # Build + Push to ghcr.io + Deploy on push to main
-```
+**Branch strategy:**
+| Branch | Target | Trigger |
+|--------|--------|---------|
+| `feature/*` | Local dev | Tests only (`pull-request-tests.yml`) |
+| `develop` | **Staging** → api-staging.aquacare.tech | `deploy-staging.yml` on push |
+| `main` | **Production** → api.aquacare.tech | `deploy.yml` on push |
 
-**Production:**
-- API: http://77.237.241.223/api
-- Registry: ghcr.io/{owner}/aquacare-api
-- Nginx serves `/static/` and `/media/`, proxies to Django
+**Flow:** `feature/* → develop (staging auto-deploy) → main (prod auto-deploy)`
+
+**Environments:**
+- Production API: `https://api.aquacare.tech/api`
+- Staging API: `https://api-staging.aquacare.tech/api`
+- Registry: `ghcr.io/{owner}/aquacare-api` (`:latest` for prod, `:staging` for staging)
+- Health check: `curl https://api.aquacare.tech/api/health/`
 
 ## Custom Commands & Skills
 
@@ -368,6 +398,7 @@ Services in `docker-compose.yml`:
 - `code-review-aquacare` - Code review standards
 - `expo-go-check` - Package compatibility verification
 - `offline-first-models` - UUID + sync metadata patterns
+- `react-native-best-practices` - FPS, TTI, bundle size, memory leaks, re-renders
 
 ## File Structure
 
@@ -414,3 +445,179 @@ docker-compose exec api python manage.py setup_rbac
 ## Branding Note
 
 AquaCare is independent of MAVECAM. Do not use "MAVECAM" as owner/author in exports, PDFs, or UI. Use neutral "AquaCare" branding.
+
+---
+
+## Analyse Automatique du Prompt
+
+À chaque nouveau prompt reçu, appliquer cet arbre de décision AVANT toute action :
+
+```
+PROMPT REÇU
+    │
+    ▼
+[Analyser les mots-clés et la portée réelle de la tâche]
+    │
+    ├─ "écran" / "page" / "interface" / "UI" / "composant" / "affiche"
+    │     → /create-frontend-feature
+    │
+    ├─ "modèle" / "API" / "endpoint" / "backend" / "serializer" / "migration"
+    │     → /create-backend-feature
+    │
+    ├─ "bug" / "erreur" / "crash" / "ne fonctionne pas" / "problème"
+    │     → /fix-bug
+    │
+    ├─ "installe" / "ajoute le package" / "ajoute la lib" / "dépendance"
+    │     → /check-package {nom} EN PREMIER (bloquant), puis npx expo install
+    │
+    ├─ "review la PR" / "review #N" / "vérifie la PR"
+    │     → /review-pr [N]
+    │
+    ├─ "release" / "déploie en prod" / "mise en production"
+    │     → /pre-release
+    │
+    └─ [touche backend ET frontend — cas le plus courant pour les features]
+          → /create-backend-feature PUIS /create-frontend-feature dans la même branche
+```
+
+**Si ambiguïté** : lire les fichiers existants pour déterminer la portée réelle (modèle ? écran ? les deux ?), puis décider. Ne pas demander si l'analyse des fichiers suffit.
+
+---
+
+## Mise en Place Automatique (Branch Setup)
+
+Avant toute implémentation, et sans attendre qu'on le demande :
+
+```bash
+git checkout develop
+git pull origin develop
+git checkout -b {prefix}/{nom-kebab-case}
+```
+
+| Préfixe | Usage |
+|---------|-------|
+| `feature/` | Nouvelle fonctionnalité |
+| `fix/` | Correction de bug |
+| `refactor/` | Refactoring sans changement fonctionnel |
+
+**Ne jamais coder directement sur `main` ou `develop`.** Les hooks bloquent les éditions sur ces branches.
+
+---
+
+## Skills — Invocation Automatique par Type de Tâche
+
+Invoquer les skills dans l'ordre indiqué, AVANT d'écrire le code correspondant :
+
+| Type de tâche | Skills à invoquer (dans l'ordre) |
+|---------------|----------------------------------|
+| Écran / Composant RN | `bilingual-strings` → `react-native-best-practices` → `expo-go-check` (si nouveau package) → `code-review-aquacare` (en fin) |
+| Modèle Django | `offline-first-models` → `django-orm-patterns` → `django-security` → `python-testing` |
+| API / Vue DRF | `django-rest-framework` → `clean-ddd-hexagonal` → `django-security` → `python-testing` |
+| Feature fullstack | Tous les skills backend D'ABORD, puis tous les skills frontend |
+| Refactoring Python | `python-design-patterns` → `python-code-style` |
+| Optimisation perf | `python-performance-optimization` |
+
+**Pour toute librairie utilisée** : consulter context7 AVANT d'écrire le code. Ne pas se fier aux connaissances d'entraînement pour les APIs de librairies — elles changent.
+
+---
+
+## Cycle Post-Implémentation (Non-Négociable)
+
+Après avoir écrit le code, ce cycle est OBLIGATOIRE avant de créer le commit :
+
+```
+ÉTAPE 1 — Code Review automatique
+  → Invoquer skill: code-review-aquacare
+  → Vérifier : i18n FR+EN ? UUID PKs ? offline sync ? TypeScript strict ?, code est securiser, MAVECAM colors ?
+  → Si problèmes détectés → corriger MAINTENANT, puis relancer la review
+  → Bloquer : ne pas avancer si la review identifie des violations
+
+ÉTAPE 2 — Tests
+  Backend (si modifié) :
+    cd backend && docker-compose exec api pytest --cov=apps -v
+    → Coverage ≥ 50% obligatoire
+
+  Frontend (si modifié) :
+    cd frontend && npx tsc --noEmit     ← DOIT afficher 0 erreurs
+    cd frontend && npm test
+
+  → Si erreurs ou tests échoués → corriger MAINTENANT, puis relancer
+  → Bloquer : ne pas avancer tant que tous les checks ne passent pas
+
+ÉTAPE 3 — Commit
+  → Invoquer skill: commit-conventions
+  → Format strict :
+     type(scope): description courte < 72 chars
+
+     Corps optionnel — POURQUOI, pas QUOI.
+
+     Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+ÉTAPE 4 — Résumé + Attendre Validation
+  → Présenter à l'utilisateur un résumé clair :
+     ✅ Ce qui a été implémenté (liste concise)
+     ✅ Review : points vérifiés
+     ✅ Tests : résultats (coverage %, 0 erreurs TS)
+     ✅ Commit : hash + message
+  → ATTENDRE la validation explicite avant toute autre action
+```
+
+---
+
+## Après Validation : Prochaines Étapes
+
+Une fois la validation reçue, proposer proactivement les options suivantes :
+
+**Option A — Créer la Pull Request vers develop**
+```bash
+gh pr create \
+  --base develop \
+  --head feature/{nom} \
+  --title "feat(scope): description" \
+  --body "$(cat <<'EOF'
+## Résumé
+- [changements apportés]
+
+## Tests
+- Backend: pytest ✅ (coverage X%)
+- Frontend: tsc ✅ + jest ✅
+
+## Checklist qualité
+- [ ] i18n FR + EN complet
+- [ ] UUID PK si nouveau modèle
+- [ ] offline sync si nouveau modèle
+- [ ] TypeScript strict — 0 erreurs
+- [ ] MAVECAM colors respectées
+
+🤖 Generated with [Claude Code](https://claude.ai/code)
+EOF
+)"
+```
+
+**Option B — Merger vers develop** (déclenche staging auto-deploy)
+- Merge PR → develop
+- Staging auto-deploy : `https://api-staging.aquacare.tech`
+- Vérifier santé : `curl https://api-staging.aquacare.tech/api/health/`
+
+**Option C — Continuer sur une autre feature**
+```bash
+git checkout develop && git pull origin develop
+# → Recommencer le cycle depuis Analyse du Prompt
+```
+
+**Option D — Release en production**
+```bash
+# 1. Lancer /pre-release pour validation complète
+# 2. Merger develop → main déclenche le deploy prod automatique
+# 3. Vérifier : curl https://api.aquacare.tech/api/health/
+```
+
+---
+
+# Context 7
+
+This project integrates Context7 MCP (Model Context Protocol) as a central knowledge layer to enhance agent intelligence and ensure system-wide consistency. Agents must treat Context7 as the single source of truth for understanding the system’s architecture, business logic, conventions, and evolving state.
+
+Before performing any task — especially when generating or modifying code, proposing architectural decisions, or introducing new patterns — agents are required to first consult Context7 to align with existing structures and avoid inconsistencies. No code, design, or structural change should be made without verifying its coherence with the current context.
+
+Additionally, agents should proactively update and enrich Context7 whenever they introduce meaningful changes (e.g., new modules, patterns, or decisions), ensuring that the shared knowledge remains accurate, up-to-date, and continuously improves over time.

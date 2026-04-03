@@ -12,6 +12,7 @@ from rest_framework.response import Response
 
 from ..domain.exceptions import CycleAlreadyHarvestedError, InvalidHarvestDataError
 from ..models import ProductionCycle
+from ..services.cycle_feed_service import CycleFeedService
 from ..serializers import (
     CycleComparisonSerializer,
     CycleHarvestResponseSerializer,
@@ -348,6 +349,46 @@ class ProductionCycleViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
     @extend_schema(
+        summary="Phases d'alimentation simulées pour un cycle",
+        description=(
+            "Retourne les phases d'alimentation et les produits recommandés "
+            "estimés via CycleSimulationService avec les paramètres du cycle. "
+            "Utilisé pour l'écran de commande par phase."
+        ),
+        responses={200: dict},
+    )
+    @action(detail=True, methods=['get'], url_path='feed-phases')
+    def feed_phases(self, request, pk=None):
+        """
+        GET /api/aquaculture/cycles/{id}/feed-phases/
+
+        Retourne les phases d'alimentation issues de CycleSimulationService.
+        Chaque phase contient les produits recommandés avec quantity_bags.
+        """
+        cycle = self.get_object()
+
+        if not cycle.initial_count or not cycle.target_harvest_weight_g:
+            return Response({'feeding_phases': []})
+
+        try:
+            from commerce.services.cycle_simulation_service import CycleSimulationService  # noqa: PLC0415
+            survival_rate = float(cycle.expected_survival_rate_pct or 95) / 100
+            sim = CycleSimulationService.simulate_cycle(
+                species=cycle.species,
+                initial_fish_count=cycle.initial_count,
+                target_weight_g=float(cycle.target_harvest_weight_g),
+                cycle_duration_days=cycle.planned_cycle_duration_days or 180,
+                survival_rate=survival_rate,
+                selling_price_per_kg_fcfa=float(cycle.planned_selling_price_per_kg_fcfa or 2800),
+                fingerlings_cost_fcfa=float(cycle.fingerlings_cost_fcfa or 0),
+                other_costs_fcfa=float(cycle.other_operational_costs_fcfa or 0),
+            )
+            return Response({'feeding_phases': sim['feeding_phases']})
+        except Exception:
+            logger.exception('Erreur calcul feed_phases pour cycle %s', pk)
+            return Response({'feeding_phases': []})
+
+    @extend_schema(
         summary="Statut des aliments pour un cycle",
         description=(
             "Retourne le suivi des achats d'aliments pour ce cycle : "
@@ -361,59 +402,11 @@ class ProductionCycleViewSet(viewsets.ModelViewSet):
         """
         GET /api/aquaculture/cycles/{id}/feed-status/
 
-        Calcule pour chaque type de produit DIBAQ :
-        - bags_needed  : issu des FeedingPlans du cycle
+        Délègue à CycleFeedService le calcul du statut des aliments :
+        - bags_needed  : issu des FeedingPlans du cycle (agrégation SQL)
         - bags_ordered : commandes liées à ce cycle (Order.production_cycle)
-        - bags_consumed: total_feed_consumed / package_weight_kg
+        - bags_consumed: total_feed_consumed / 25 kg
         """
-        import math
-        from decimal import Decimal
-
-        from apps.aquaculture.models import FeedingPlan
-        from apps.commerce.models import Order, OrderItem, Product
-
         cycle = self.get_object()
-
-        # 1. Besoins totaux issus des FeedingPlans
-        feeding_plans = FeedingPlan.objects.filter(cycle=cycle)
-        total_feed_needed_kg = sum(
-            float(fp.daily_feed_amount) * 7  # 7 jours par semaine
-            for fp in feeding_plans
-        )
-        total_bags_needed = math.ceil(total_feed_needed_kg / 25) if total_feed_needed_kg else 0
-
-        # 2. Sacs commandés pour ce cycle
-        order_items = OrderItem.objects.filter(
-            order__production_cycle=cycle
-        ).select_related('product')
-
-        bags_by_product: dict[str, dict] = {}
-        for item in order_items:
-            pid = str(item.product.id)
-            if pid not in bags_by_product:
-                bags_by_product[pid] = {
-                    'product_id': pid,
-                    'product_name': item.product.name,
-                    'package_weight_kg': float(item.product.package_weight_kg),
-                    'bags_ordered': 0,
-                }
-            bags_by_product[pid]['bags_ordered'] += item.quantity
-
-        total_bags_ordered = sum(p['bags_ordered'] for p in bags_by_product.values())
-
-        # 3. Consommé (converti depuis kg → sacs de 25kg)
-        feed_consumed_kg = float(cycle.total_feed_consumed or 0)
-        bags_consumed_equivalent = math.floor(feed_consumed_kg / 25)
-
-        # 4. Reste à commander
-        bags_remaining = max(0, total_bags_needed - total_bags_ordered)
-
-        return Response({
-            'total_bags_needed': total_bags_needed,
-            'total_feed_needed_kg': round(total_feed_needed_kg, 2),
-            'bags_by_product': list(bags_by_product.values()),
-            'total_bags_ordered': total_bags_ordered,
-            'total_feed_consumed_kg': feed_consumed_kg,
-            'bags_consumed_equivalent': bags_consumed_equivalent,
-            'bags_remaining_to_order': bags_remaining,
-        })
+        result = CycleFeedService.get_feed_status(cycle)
+        return Response(result)

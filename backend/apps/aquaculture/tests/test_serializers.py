@@ -134,11 +134,11 @@ class TestProductionCycleSerializer:
         serializer = ProductionCycleSerializer(data=data)
         assert serializer.is_valid(), serializer.errors
 
-        assert serializer.validated_data['target_harvest_weight_g'] == Decimal('300')
-        assert serializer.validated_data['planned_cycle_duration_days'] == 120
+        assert serializer.validated_data['target_harvest_weight_g'] == Decimal('350')
+        assert serializer.validated_data['planned_cycle_duration_days'] == 180
         assert serializer.validated_data['expected_survival_rate_pct'] == Decimal('85')
-        assert serializer.validated_data['planned_selling_price_per_kg_fcfa'] == Decimal('1800')
-        assert serializer.validated_data['planned_harvest_date'] == date.today() + timedelta(days=120)
+        assert serializer.validated_data['planned_selling_price_per_kg_fcfa'] == Decimal('2800')
+        assert serializer.validated_data['planned_harvest_date'] == date.today() + timedelta(days=180)
 
     def test_target_weight_must_exceed_initial_weight(self, farm_profile):
         data = {

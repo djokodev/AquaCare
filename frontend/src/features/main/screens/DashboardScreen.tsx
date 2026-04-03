@@ -450,6 +450,7 @@ export default function DashboardScreen({ navigation }: any) {
         cycle={selectedCycle}
         onSuccess={handleHarvestSuccess}
         onContactBuyer={() => navigation.navigate('Chat')}
+        onNextCycle={(cycleId) => navigation.navigate('PostHarvestConsolidation', { harvestedCycleId: cycleId })}
       />
 
       <QuickActionsSheet

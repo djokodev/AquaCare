@@ -57,17 +57,17 @@ export default function AnnualSimulationScreen({ navigation, route }: Props) {
   );
   const farmProfile = useSelector((s: RootState) => s.auth.farmProfile);
 
-  const [selectedCycles, setSelectedCycles] = useState<2 | 3>(2);
+  const selectedCycles = 2 as const;
   const [launching, setLaunching] = useState(false);
   const [currentResult, setCurrentResult] = useState<AnnualSimulationResult | null>(
     simulationResult
   );
 
-  // Recalculer quand l'utilisateur change le nombre de cycles
+  // Charger la simulation initiale
   useEffect(() => {
     recalculate(selectedCycles);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedCycles]);
+  }, []);
 
   async function recalculate(numCycles: 2 | 3) {
     const speciesForSim: 'tilapia' | 'clarias' =
@@ -85,6 +85,15 @@ export default function AnnualSimulationScreen({ navigation, route }: Props) {
         ? parseFloat(formData.fingerlingsPrice)
         : undefined,
       other_costs_fcfa_per_year: formData.otherCosts ? parseFloat(formData.otherCosts) : 0,
+      target_harvest_weight_g: formData.harvestWeight
+        ? parseFloat(formData.harvestWeight)
+        : undefined,
+      expected_survival_rate_pct: formData.survivalRate
+        ? parseFloat(formData.survivalRate)
+        : undefined,
+      total_fingerlings_count: formData.fingerlingsCount
+        ? parseInt(formData.fingerlingsCount, 10)
+        : undefined,
     };
 
     const res = await dispatch(runAnnualSimulation(params));
@@ -131,28 +140,39 @@ export default function AnnualSimulationScreen({ navigation, route }: Props) {
           species: speciesForCycle,
           cycle_name: `Cycle ${speciesForCycle === 'tilapia' ? 'Tilapia' : 'Silure'} 1`,
           pond_identifier: 'Bassin principal',
+          pond_surface_m2: formData.unitSurface ? parseFloat(formData.unitSurface) : undefined,
+          pond_volume_m3: formData.unitVolume ? parseFloat(formData.unitVolume) : undefined,
           initial_count: firstCycle.initial_fish_count,
           initial_average_weight: 5,
           start_date: firstCycle.start_date_estimate,
-          target_harvest_weight_g: speciesForCycle === 'tilapia' ? 300 : 400,
+          target_harvest_weight_g: formData.harvestWeight
+            ? parseFloat(formData.harvestWeight)
+            : speciesForCycle === 'tilapia' ? 350 : 400,
           planned_cycle_duration_days: firstCycle.duration_days,
-          expected_survival_rate_pct: 85,
+          expected_survival_rate_pct: formData.survivalRate
+            ? parseFloat(formData.survivalRate)
+            : 95,
           planned_selling_price_per_kg_fcfa: formData.sellingPrice
             ? parseFloat(formData.sellingPrice)
             : speciesForCycle === 'tilapia'
-              ? 1800
+              ? 2800
               : 2000,
           fingerlings_cost_fcfa: firstCycle.fingerlings_cost_fcfa,
           other_operational_costs_fcfa: formData.otherCosts
             ? parseFloat(formData.otherCosts) / selectedCycles
             : 0,
+          planned_feed_bags: firstCycle.feed_bags_total || currentResult.feed_bags_per_cycle || undefined,
         })
       );
 
       // 3. Aller sur le dashboard
       navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
-    } catch {
-      Alert.alert(t('error'), t('genericError'));
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: unknown } };
+      const detail = axiosErr?.response?.data
+        ? JSON.stringify(axiosErr.response.data)
+        : t('genericError');
+      Alert.alert(t('error'), detail);
     } finally {
       setLaunching(false);
     }
@@ -180,6 +200,21 @@ export default function AnnualSimulationScreen({ navigation, route }: Props) {
 
   const productionPerCycle = currentResult.production_per_cycle_kg;
   const cycleDuration = currentResult.cycle_duration_days;
+
+  // Capacité physique maximale par cycle (null = pas de données infra)
+  const capacityWarning: number | null = (() => {
+    const unitCount = parseFloat(formData.unitCount || '0') || 0;
+    const infraType = formData.infraType || '';
+    if (!unitCount || !infraType) return null;
+    if (infraType === 'etang') {
+      const surface = parseFloat(formData.unitSurface || '0') || 0;
+      // Densité max récolte étang : 10 kg/m² — validé DT AquaCare
+      return unitCount * surface * 10;
+    }
+    const volume = parseFloat(formData.unitVolume || '0') || 0;
+    // Densité max récolte bac/cage : 150 kg/m³ — validé DT AquaCare
+    return unitCount * volume * 150;
+  })();
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -209,7 +244,7 @@ export default function AnnualSimulationScreen({ navigation, route }: Props) {
         />
         {currentResult.annual_fingerlings_cost_fcfa > 0 && (
           <MetricRow
-            label={t('simulationFingerlingsCoast')}
+            label={t('simulationFingerlingsCost')}
             value={`- ${formatFCFA(currentResult.annual_fingerlings_cost_fcfa)}`}
             negative
           />
@@ -237,60 +272,32 @@ export default function AnnualSimulationScreen({ navigation, route }: Props) {
 
       {/* Carte frais AquaCare */}
       <View style={[styles.card, styles.aquacareCard]}>
-        <View style={styles.aquacareHeader}>
-          <Ionicons name="briefcase-outline" size={20} color={MAVECAM_COLORS.GREEN_PRIMARY} />
-          <Text style={styles.cardTitle}>{t('simulationAquacareFeeTitle')}</Text>
-        </View>
+        <Text style={styles.cardTitle}>{t('simulationAquacareFeeTitle')}</Text>
         <Text style={styles.aquacareFeeText}>
-          {t('simulationAquacareFeeDesc', {
-            kg: Math.round(currentResult.annual_production_target_kg).toLocaleString('fr-FR'),
-            amount: Math.round(currentResult.aquacare_fee_fcfa).toLocaleString('fr-FR'),
-          })}
+          {t('simulationAquacareFeePhrase')}
+          <Text style={styles.aquacareFeeRate}>{t('simulationAquacareFeeRate')}</Text>
+          {t('simulationAquacareFeePhrase2')}
+          <Text style={styles.aquacareFeeAmount}>{formatFCFA(currentResult.aquacare_fee_fcfa)}</Text>
+          {' '}{t('simulationAquacareFeePhrase3')}
         </Text>
       </View>
 
-      {/* Choix du nombre de cycles */}
+      {/* Rythme de production — 2 cycles fixes */}
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>{t('simulationChooseCycles')}</Text>
-        {simLoading && (
-          <ActivityIndicator
-            size="small"
-            color={MAVECAM_COLORS.GREEN_PRIMARY}
-            style={{ marginBottom: 8 }}
-          />
+        <Text style={styles.cardTitle}>{t('simulationRythmTitle')}</Text>
+        <View style={styles.cycleFixedBadge}>
+          <Text style={styles.cycleFixedText}>
+            {t('simulationCycles2Fixed', {
+              kg: Math.round(currentResult.annual_production_target_kg / 2),
+            })}
+          </Text>
+        </View>
+        {capacityWarning !== null &&
+          currentResult.annual_production_target_kg / 2 > capacityWarning && (
+          <Text style={styles.cycleWarningText}>
+            {t('simulationCapacityWarning', { max: Math.round(capacityWarning) })}
+          </Text>
         )}
-        {([2, 3] as const).map(n => {
-          const perCycle = currentResult.annual_production_target_kg / n;
-          const key = n === 2 ? 'simulationCyclesOption2' : 'simulationCyclesOption3';
-          return (
-            <TouchableOpacity
-              key={n}
-              style={[styles.cycleOption, selectedCycles === n && styles.cycleOptionSelected]}
-              onPress={() => setSelectedCycles(n)}
-              activeOpacity={0.7}
-            >
-              <View style={styles.cycleOptionLeft}>
-                <View
-                  style={[
-                    styles.radio,
-                    selectedCycles === n && styles.radioSelected,
-                  ]}
-                />
-                <Text
-                  style={[
-                    styles.cycleOptionText,
-                    selectedCycles === n && styles.cycleOptionTextSelected,
-                  ]}
-                >
-                  {t(key as any, {
-                    kg: Math.round(perCycle),
-                    days: cycleDuration,
-                  })}
-                </Text>
-              </View>
-            </TouchableOpacity>
-          );
-        })}
       </View>
 
       {/* Détail par cycle */}
@@ -298,7 +305,7 @@ export default function AnnualSimulationScreen({ navigation, route }: Props) {
         <Text style={styles.cardTitle}>{t('simulationCycleDetail')}</Text>
         <MetricRow
           label={t('simulationFeedBags')}
-          value={`${currentResult.feed_bags_per_cycle} sacs`}
+          value={t('myFeedSacks', { count: currentResult.feed_bags_per_cycle })}
         />
         <MetricRow
           label={t('simulationFeedCostPerCycle')}
@@ -474,57 +481,37 @@ const styles = StyleSheet.create({
     borderLeftWidth: 4,
     borderLeftColor: MAVECAM_COLORS.GREEN_PRIMARY,
   },
-  aquacareHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 8,
-  },
   aquacareFeeText: {
-    fontSize: 15,
+    fontSize: 14,
     color: MAVECAM_COLORS.GRAY_DARK,
-    fontWeight: '500',
     lineHeight: 22,
   },
-  cycleOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    borderWidth: 1.5,
-    borderColor: '#e2e8f0',
-    marginBottom: 8,
-  },
-  cycleOptionSelected: {
-    borderColor: MAVECAM_COLORS.GREEN_PRIMARY,
-    backgroundColor: '#ecfdf5',
-  },
-  cycleOptionLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    flex: 1,
-  },
-  radio: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    borderWidth: 2,
-    borderColor: '#94a3b8',
-  },
-  radioSelected: {
-    borderColor: MAVECAM_COLORS.GREEN_PRIMARY,
-    backgroundColor: MAVECAM_COLORS.GREEN_PRIMARY,
-  },
-  cycleOptionText: {
-    fontSize: 14,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
-    fontWeight: '500',
-    flex: 1,
-  },
-  cycleOptionTextSelected: {
+  aquacareFeeRate: {
+    fontSize: 15,
     color: MAVECAM_COLORS.GREEN_PRIMARY,
+    fontWeight: '700',
+  },
+  aquacareFeeAmount: {
+    fontSize: 15,
+    color: MAVECAM_COLORS.GREEN_PRIMARY,
+    fontWeight: '700',
+  },
+  cycleWarningText: {
+    fontSize: 12,
+    color: MAVECAM_COLORS.WARNING,
+    marginTop: 2,
+  },
+  cycleFixedBadge: {
+    backgroundColor: '#ecfdf5',
+    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderLeftWidth: 3,
+    borderLeftColor: MAVECAM_COLORS.GREEN_PRIMARY,
+  },
+  cycleFixedText: {
+    fontSize: 14,
+    color: MAVECAM_COLORS.GREEN_DARK,
     fontWeight: '600',
   },
   modifyBtn: {

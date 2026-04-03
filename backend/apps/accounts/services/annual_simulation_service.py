@@ -21,20 +21,20 @@ AQUACARE_FEE_PER_KG = Decimal('20')
 # Defaults par espèce
 SPECIES_DEFAULTS = {
     'tilapia': {
-        'target_weight_g': 300.0,
-        'duration_days': 120,
-        'selling_price_fcfa': 1800.0,
+        'target_weight_g': 350.0,
+        'duration_days': 180,
+        'selling_price_fcfa': 2800.0,
         'fingerlings_cost_per_unit': 50.0,
     },
     'clarias': {
         'target_weight_g': 400.0,
-        'duration_days': 150,
+        'duration_days': 120,
         'selling_price_fcfa': 2000.0,
         'fingerlings_cost_per_unit': 75.0,
     },
 }
 
-DEFAULT_SURVIVAL_RATE = 0.85
+DEFAULT_SURVIVAL_RATE = 0.95  # 95% avec accompagnement AquaCare — validé DT
 INITIAL_WEIGHT_G = 5.0
 
 
@@ -97,6 +97,9 @@ class AnnualSimulationService:
         selling_price_per_kg_fcfa: float | None = None,
         fingerlings_cost_per_unit_fcfa: float | None = None,
         other_costs_fcfa_per_year: float = 0,
+        target_harvest_weight_g: float | None = None,
+        expected_survival_rate_pct: float | None = None,
+        total_fingerlings_count: int | None = None,
     ) -> AnnualSimulationResult:
         """
         Simule la production annuelle en réutilisant CycleSimulationService.
@@ -119,10 +122,15 @@ class AnnualSimulationService:
         normalized = AnnualSimulationService._normalize_species(species)
         defaults = SPECIES_DEFAULTS.get(normalized, SPECIES_DEFAULTS['tilapia'])
 
-        # Valeurs finales
+        # Valeurs finales — les paramètres utilisateur priment sur les defaults espèce
         selling_price = selling_price_per_kg_fcfa or defaults['selling_price_fcfa']
         fingerlings_cost_unit = fingerlings_cost_per_unit_fcfa or defaults['fingerlings_cost_per_unit']
-        target_weight_g = defaults['target_weight_g']
+        target_weight_g = target_harvest_weight_g or defaults['target_weight_g']
+        survival_rate = (
+            (expected_survival_rate_pct / 100.0)
+            if expected_survival_rate_pct is not None
+            else DEFAULT_SURVIVAL_RATE
+        )
         duration_days = defaults['duration_days']
         effective_start = start_date or date.today()
 
@@ -132,10 +140,15 @@ class AnnualSimulationService:
         # Estimer le nombre initial d'alevins par cycle
         # production = final_count × target_weight_g / 1000
         # final_count = initial_count × survival_rate
-        final_count_per_cycle = math.ceil(
-            (production_per_cycle_kg * 1000) / target_weight_g
-        )
-        initial_fish_count = math.ceil(final_count_per_cycle / DEFAULT_SURVIVAL_RATE)
+        # Si le promoteur connaît son nombre d'alevins, on l'utilise directement.
+        # Sinon on le back-calcule depuis la production cible.
+        if total_fingerlings_count is not None:
+            initial_fish_count = math.ceil(total_fingerlings_count / num_cycles)
+        else:
+            final_count_per_cycle = math.ceil(
+                (production_per_cycle_kg * 1000) / target_weight_g
+            )
+            initial_fish_count = math.ceil(final_count_per_cycle / survival_rate)
 
         # Coût alevins par cycle
         fingerlings_cost_per_cycle = initial_fish_count * fingerlings_cost_unit
@@ -149,7 +162,7 @@ class AnnualSimulationService:
             initial_fish_count=initial_fish_count,
             target_weight_g=target_weight_g,
             cycle_duration_days=duration_days,
-            survival_rate=DEFAULT_SURVIVAL_RATE,
+            survival_rate=survival_rate,
             selling_price_per_kg_fcfa=selling_price,
             fingerlings_cost_fcfa=fingerlings_cost_per_cycle,
             other_costs_fcfa=other_costs_fcfa_per_year / num_cycles,

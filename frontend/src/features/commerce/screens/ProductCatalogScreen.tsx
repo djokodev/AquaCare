@@ -110,7 +110,9 @@ export default function ProductCatalogScreen() {
   };
 
   const handleOrderRemaining = () => {
-    navigation.navigate('FeedingSuggestions');
+    if (currentCycle?.id) {
+      navigation.navigate('CycleFeedPhases', { cycleId: currentCycle.id });
+    }
   };
 
   const renderProductCard = ({ item }: { item: Product }) => (
@@ -201,21 +203,32 @@ export default function ProductCatalogScreen() {
       {/* Bannière suivi aliments cycle actif */}
       {currentCycle ? (
         <View style={cycleCardStyles.card}>
-          <View style={cycleCardStyles.cardHeader}>
-            <Ionicons name="fish-outline" size={18} color={MAVECAM_COLORS.GREEN_PRIMARY} />
-            <Text style={cycleCardStyles.cardTitle}>
-              {currentCycle.cycle_name} — {t('myFeedCycleHeader')}
-            </Text>
-          </View>
+          <Text style={cycleCardStyles.cardTitle}>{t('myFeedCycleHeader')}</Text>
+
           {feedLoading ? (
             <ActivityIndicator size="small" color={MAVECAM_COLORS.GREEN_PRIMARY} style={{ marginVertical: 8 }} />
           ) : feedStatus ? (
             <>
-              <FeedRow label={t('myFeedTotalNeeded')} value={feedStatus.total_bags_needed} />
-              <FeedProgressBar
-                ordered={feedStatus.total_bags_ordered}
-                total={feedStatus.total_bags_needed}
-              />
+              {/* Total + barre de progression */}
+              <View style={cycleCardStyles.totalRow}>
+                <View>
+                  <Text style={cycleCardStyles.totalLabel}>{t('myFeedTotalNeeded')}</Text>
+                  <Text style={cycleCardStyles.totalValue}>
+                    {feedStatus.total_bags_needed} {t('bags')}
+                  </Text>
+                </View>
+                <View style={cycleCardStyles.progressBlock}>
+                  <FeedProgressBar
+                    ordered={feedStatus.total_bags_ordered}
+                    total={feedStatus.total_bags_needed}
+                  />
+                  <Text style={cycleCardStyles.progressLabel}>
+                    {feedStatus.total_bags_ordered}/{feedStatus.total_bags_needed} {t('myFeedOrderedShort')}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Détails secondaires */}
               <FeedRow label={t('myFeedOrdered')} value={feedStatus.total_bags_ordered} />
               <FeedRow label={t('myFeedConsumed')} value={feedStatus.bags_consumed_equivalent} />
               <FeedRow
@@ -223,17 +236,28 @@ export default function ProductCatalogScreen() {
                 value={feedStatus.bags_remaining_to_order}
                 highlight
               />
-              {feedStatus.bags_remaining_to_order > 0 && (
-                <TouchableOpacity
-                  style={cycleCardStyles.orderBtn}
-                  onPress={handleOrderRemaining}
-                  activeOpacity={0.8}
-                >
-                  <Text style={cycleCardStyles.orderBtnText}>
-                    {t('myFeedOrderRemainingBtn', { count: feedStatus.bags_remaining_to_order })}
-                  </Text>
-                </TouchableOpacity>
-              )}
+
+              {/* CTA toujours visible */}
+              <TouchableOpacity
+                style={[
+                  cycleCardStyles.orderBtn,
+                  feedStatus.bags_remaining_to_order === 0 && cycleCardStyles.orderBtnSecondary,
+                ]}
+                onPress={handleOrderRemaining}
+                activeOpacity={0.8}
+              >
+                <Ionicons
+                  name={feedStatus.bags_remaining_to_order > 0 ? 'cart-outline' : 'list-outline'}
+                  size={16}
+                  color="#fff"
+                  style={{ marginRight: 6 }}
+                />
+                <Text style={cycleCardStyles.orderBtnText}>
+                  {feedStatus.bags_remaining_to_order > 0
+                    ? t('myFeedOrderRemainingBtn', { count: feedStatus.bags_remaining_to_order })
+                    : t('myFeedViewPlanBtn')}
+                </Text>
+              </TouchableOpacity>
             </>
           ) : null}
         </View>
@@ -376,17 +400,37 @@ const cycleCardStyles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 10,
-  },
   cardTitle: {
     fontSize: 14,
     fontWeight: '700',
     color: MAVECAM_COLORS.GRAY_DARK,
+    marginBottom: 10,
+  },
+  totalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  totalLabel: {
+    fontSize: 12,
+    color: MAVECAM_COLORS.GRAY_LIGHT,
+    marginBottom: 2,
+  },
+  totalValue: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: MAVECAM_COLORS.GREEN_PRIMARY,
+  },
+  progressBlock: {
     flex: 1,
+    marginLeft: 16,
+  },
+  progressLabel: {
+    fontSize: 11,
+    color: MAVECAM_COLORS.GRAY_LIGHT,
+    marginTop: 3,
+    textAlign: 'right',
   },
   row: {
     flexDirection: 'row',
@@ -410,7 +454,6 @@ const cycleCardStyles = StyleSheet.create({
     height: 6,
     backgroundColor: '#e2e8f0',
     borderRadius: 3,
-    marginVertical: 6,
     overflow: 'hidden',
   },
   progressFill: {
@@ -421,9 +464,14 @@ const cycleCardStyles = StyleSheet.create({
   orderBtn: {
     backgroundColor: MAVECAM_COLORS.GREEN_PRIMARY,
     borderRadius: 8,
-    paddingVertical: 10,
+    paddingVertical: 11,
+    flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 10,
+    justifyContent: 'center',
+    marginTop: 12,
+  },
+  orderBtnSecondary: {
+    backgroundColor: MAVECAM_COLORS.GREEN_DARK,
   },
   orderBtnText: {
     color: '#fff',

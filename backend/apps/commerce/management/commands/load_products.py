@@ -1,6 +1,5 @@
 """
-Commande de management pour charger les produits MAVECAM dans le catalogue.
-27 produits au total : 18 Aller Aqua + 9 DIBAQ.
+Commande de management pour charger les produits DIBAQ dans le catalogue.
 """
 import json
 from pathlib import Path
@@ -10,7 +9,7 @@ from django.core.management.base import BaseCommand
 
 
 class Command(BaseCommand):
-    help = 'Charge les 27 produits MAVECAM dans le catalogue depuis fixtures JSON'
+    help = 'Charge les produits DIBAQ dans le catalogue depuis fixtures JSON'
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -86,17 +85,15 @@ class Command(BaseCommand):
 
         # Display summary
         total_products = Product.objects.count()
-        aller_aqua = Product.objects.filter(brand='aller_aqua').count()
         dibaq = Product.objects.filter(brand='dibaq').count()
         available = Product.objects.filter(is_available=True).count()
 
         self.stdout.write(
             self.style.SUCCESS(
                 f"\n{'='*50}\n"
-                f"MAVECAM Product Catalog Summary:\n"
+                f"AquaCare Product Catalog Summary:\n"
                 f"{'='*50}\n"
                 f"Total products: {total_products}\n"
-                f"  - Aller Aqua: {aller_aqua}\n"
                 f"  - DIBAQ: {dibaq}\n"
                 f"Available products: {available}\n"
                 f"\nOperation result:\n"

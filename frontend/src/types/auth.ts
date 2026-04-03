@@ -81,6 +81,9 @@ export interface AnnualSimulationInput {
   selling_price_per_kg_fcfa?: number;
   fingerlings_cost_per_unit_fcfa?: number;
   other_costs_fcfa_per_year?: number;
+  target_harvest_weight_g?: number;
+  expected_survival_rate_pct?: number;
+  total_fingerlings_count?: number;
 }
 
 // Annual simulation result

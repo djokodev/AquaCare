@@ -18,21 +18,21 @@ import { RootStackParamList } from '@/navigation/MainNavigator';
 import logger from '@/utils/logger';
 
 const SPECIES_OPTIONS = [
-  { value: 'clarias', labelKey: 'clarias', durationDays: 150 },
-  { value: 'tilapia', labelKey: 'tilapia', durationDays: 120 },
+  { value: 'clarias', labelKey: 'clarias', durationDays: 120 },
+  { value: 'tilapia', labelKey: 'tilapia', durationDays: 180 },
 ] as const;
 
 const ECONOMIC_DEFAULTS = {
   tilapia: {
-    target_harvest_weight_g: 300,
-    planned_cycle_duration_days: 120,
-    expected_survival_rate_pct: 85,
-    planned_selling_price_per_kg_fcfa: 1800,
+    target_harvest_weight_g: 350,
+    planned_cycle_duration_days: 180,
+    expected_survival_rate_pct: 95,
+    planned_selling_price_per_kg_fcfa: 2800,
   },
   clarias: {
     target_harvest_weight_g: 400,
-    planned_cycle_duration_days: 150,
-    expected_survival_rate_pct: 85,
+    planned_cycle_duration_days: 120,
+    expected_survival_rate_pct: 95,
     planned_selling_price_per_kg_fcfa: 2000,
   },
 } as const;

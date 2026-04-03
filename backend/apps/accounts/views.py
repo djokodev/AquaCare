@@ -445,6 +445,15 @@ class AnnualSimulationView(generics.GenericAPIView):
                 if data.get('fingerlings_cost_per_unit_fcfa') else None
             ),
             other_costs_fcfa_per_year=float(data.get('other_costs_fcfa_per_year') or 0),
+            target_harvest_weight_g=(
+                float(data['target_harvest_weight_g'])
+                if data.get('target_harvest_weight_g') else None
+            ),
+            expected_survival_rate_pct=(
+                float(data['expected_survival_rate_pct'])
+                if data.get('expected_survival_rate_pct') else None
+            ),
+            total_fingerlings_count=data.get('total_fingerlings_count'),
         )
         return Response(result, status=status.HTTP_200_OK)
 

@@ -89,7 +89,7 @@ class ProductionCycleSerializer(serializers.ModelSerializer):
             'id', 'farm_profile', 'cycle_name', 'species', 'species_display',
             'pond_identifier', 'pond_surface_m2', 'pond_volume_m3', 'infrastructure_type',
             'start_date', 'initial_count', 'initial_average_weight', 'initial_biomass',
-            'target_harvest_weight_g', 'planned_cycle_duration_days', 'planned_harvest_date',
+            'target_harvest_weight_g', 'planned_cycle_duration_days', 'planned_harvest_date', 'planned_feed_bags',
             'expected_survival_rate_pct', 'planned_selling_price_per_kg_fcfa',
             'fingerlings_cost_fcfa', 'other_operational_costs_fcfa',
             'current_count', 'current_average_weight', 'current_biomass',

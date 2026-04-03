@@ -30,6 +30,7 @@ import SettingsScreen from '@/features/profile/screens/SettingsScreen';
 // Aquaculture Screens
 import AnnualSimulationScreen from '@/features/aquaculture/screens/AnnualSimulationScreen';
 import CreateFarmScreen from '@/features/aquaculture/screens/CreateFarmScreen';
+import PostHarvestConsolidationScreen from '@/features/aquaculture/screens/PostHarvestConsolidationScreen';
 import CycleHistoryScreen from '@/features/aquaculture/screens/CycleHistoryScreen';
 import CycleSessionEntryScreen from '@/features/aquaculture/screens/CycleSessionEntryScreen';
 import DailyLogHistoryScreen from '@/features/aquaculture/screens/DailyLogHistoryScreen';
@@ -49,6 +50,7 @@ import FeedingSuggestionsScreen from '@/features/commerce/screens/FeedingSuggest
 import OrdersHistoryScreen from '@/features/commerce/screens/OrdersHistoryScreen';
 import ProductCatalogScreen from '@/features/commerce/screens/ProductCatalogScreen';
 import ProductDetailScreen from '@/features/commerce/screens/ProductDetailScreen';
+import CycleFeedPhasesScreen from '@/features/commerce/screens/CycleFeedPhasesScreen';
 
 // Chat/Support Screens
 import { ChatScreen } from '@/features/chat/screens/ChatScreen';
@@ -99,6 +101,10 @@ export type RootStackParamList = {
   // Farm creation flow
   CreateFarm: undefined;
   AnnualSimulation: { formData: Record<string, string> };
+  // Post-harvest consolidation
+  PostHarvestConsolidation: { harvestedCycleId: string };
+  // Feed phase ordering
+  CycleFeedPhases: { cycleId: string };
 };
 
 export type ProfileStackParamList = {
@@ -293,6 +299,10 @@ export default function MainNavigator() {
         name="CycleSimulator"
         component={CycleSimulatorScreen}
       />
+      <RootStack.Screen
+        name="CycleFeedPhases"
+        component={CycleFeedPhasesScreen}
+      />
       {/* Chat/Support Screens */}
       <RootStack.Screen
         name="Chat"
@@ -339,7 +349,19 @@ export default function MainNavigator() {
           headerStyle: { backgroundColor: MAVECAM_COLORS.GREEN_PRIMARY },
           headerTintColor: MAVECAM_COLORS.WHITE,
           headerTitleStyle: { fontWeight: 'bold' },
-          title: t('simulationTitle'),
+          title: t('simulationNavTitle'),
+        }}
+      />
+      <RootStack.Screen
+        name="PostHarvestConsolidation"
+        component={PostHarvestConsolidationScreen}
+        options={{
+          headerShown: true,
+          headerStyle: { backgroundColor: MAVECAM_COLORS.GREEN_PRIMARY },
+          headerTintColor: MAVECAM_COLORS.WHITE,
+          headerTitleStyle: { fontWeight: 'bold' },
+          title: t('consolidationTitle'),
+          headerLeft: () => null,
         }}
       />
     </RootStack.Navigator>
