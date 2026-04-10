@@ -164,6 +164,7 @@
   reportsLoadError: 'Unable to load reports',
   reportLoadError: 'Unable to load this report',
   reportGenerateError: 'Error while generating report',
+  noLogsForReportGeneration: 'No daily logs for this cycle. Please add at least one log entry before generating a report.',
   reportActionError: 'An error occurred during this action',
   reportWhatsAppMarked: 'WhatsApp share recorded',
   reportWhatsAppShareError: 'Unable to share PDF on WhatsApp',

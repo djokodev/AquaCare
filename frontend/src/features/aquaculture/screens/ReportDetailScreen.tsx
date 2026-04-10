@@ -184,33 +184,9 @@ export default function ReportDetailScreen({ navigation, route }: ReportDetailSc
     </View>
   );
 
-  if (loading) {
-    return (
-      <View className="flex-1 bg-cream">
-        {renderHeader()}
-        <View className="flex-1 items-center justify-center">
-          <ActivityIndicator size="large" color={MAVECAM_COLORS.GREEN_PRIMARY} />
-          <Text className="mt-3 text-gray-dark">{t('loading')}</Text>
-        </View>
-      </View>
-    );
-  }
-
-  if (!report) {
-    return (
-      <View className="flex-1 bg-cream">
-        {renderHeader()}
-        <View className="flex-1 items-center justify-center px-6">
-          <Ionicons name="alert-circle" size={46} color={MAVECAM_COLORS.ERROR} />
-          <Text className="text-base text-error mt-3 text-center">{error || t('reportLoadError')}</Text>
-        </View>
-      </View>
-    );
-  }
-
   const payload = useMemo(
-    () => ((report.payload || {}) as Record<string, unknown>),
-    [report.payload]
+    () => ((report?.payload || {}) as Record<string, unknown>),
+    [report?.payload]
   );
   const summary = useMemo(
     () => ((payload.summary as ReportSummary) || {}) as ReportSummary,
@@ -245,23 +221,23 @@ export default function ReportDetailScreen({ navigation, route }: ReportDetailSc
       <View className="p-4">
         <View className="bg-white rounded-xl p-4 mb-4">
           <Text className="text-base font-bold text-gray-dark">
-            {report.report_type === 'daily'
+            {report?.report_type === 'daily'
               ? t('reportTypeDaily')
-              : report.report_type === 'weekly'
+              : report?.report_type === 'weekly'
                 ? t('reportTypeWeekly')
                 : t('reportTypeMonthly')}
           </Text>
           <Text className="text-xs text-gray-light mt-1">
-            {formatDate(report.period_start)} - {formatDate(report.period_end)}
+            {formatDate(report?.period_start ?? '')} - {formatDate(report?.period_end ?? '')}
           </Text>
           <Text className="text-xs mt-2 text-gray-dark">
-            {t('reportStatusLabel')}: {report.status === 'validated' ? t('reportStatusValidated') : t('reportStatusDraft')}
+            {t('reportStatusLabel')}: {report?.status === 'validated' ? t('reportStatusValidated') : t('reportStatusDraft')}
           </Text>
           <Text className="text-xs mt-1 text-gray-dark">
-            {t('email')}: {report.email_status === 'sent' ? t('sent') : report.email_status === 'failed' ? t('failed') : t('notSent')}
+            {t('email')}: {report?.email_status === 'sent' ? t('sent') : report?.email_status === 'failed' ? t('failed') : t('notSent')}
           </Text>
           <Text className="text-xs mt-1 text-gray-dark">
-            {t('whatsAppLabel')}: {report.whatsapp_status === 'shared' ? t('shared') : t('notShared')}
+            {t('whatsAppLabel')}: {report?.whatsapp_status === 'shared' ? t('shared') : t('notShared')}
           </Text>
         </View>
 
@@ -296,7 +272,7 @@ export default function ReportDetailScreen({ navigation, route }: ReportDetailSc
 
           <TouchableOpacity
             className="bg-cream border border-gray-200 rounded-lg p-3 mb-2 flex-row items-center justify-center"
-            onPress={() => runAction('regenerate', () => aquacultureService.regenerateReport(report.id))}
+            onPress={() => report && runAction('regenerate', () => aquacultureService.regenerateReport(report.id))}
             disabled={Boolean(actionLoading)}
           >
             {actionLoading === 'regenerate' ? (
@@ -311,8 +287,8 @@ export default function ReportDetailScreen({ navigation, route }: ReportDetailSc
 
           <TouchableOpacity
             className="bg-mavecam-primary rounded-lg p-3 mb-2 flex-row items-center justify-center"
-            onPress={() => runAction('validate', () => aquacultureService.validateReport(report.id))}
-            disabled={Boolean(actionLoading) || report.status === 'validated'}
+            onPress={() => report && runAction('validate', () => aquacultureService.validateReport(report.id))}
+            disabled={Boolean(actionLoading) || report?.status === 'validated'}
           >
             {actionLoading === 'validate' ? (
               <ActivityIndicator color={MAVECAM_COLORS.WHITE} />
@@ -367,6 +343,30 @@ export default function ReportDetailScreen({ navigation, route }: ReportDetailSc
     ),
     [t]
   );
+
+  if (loading) {
+    return (
+      <View className="flex-1 bg-cream">
+        {renderHeader()}
+        <View className="flex-1 items-center justify-center">
+          <ActivityIndicator size="large" color={MAVECAM_COLORS.GREEN_PRIMARY} />
+          <Text className="mt-3 text-gray-dark">{t('loading')}</Text>
+        </View>
+      </View>
+    );
+  }
+
+  if (!report) {
+    return (
+      <View className="flex-1 bg-cream">
+        {renderHeader()}
+        <View className="flex-1 items-center justify-center px-6">
+          <Ionicons name="alert-circle" size={46} color={MAVECAM_COLORS.ERROR} />
+          <Text className="text-base text-error mt-3 text-center">{error || t('reportLoadError')}</Text>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View className="flex-1 bg-cream">
