@@ -69,6 +69,11 @@ export default function ReportsScreen({ navigation }: ReportsScreenProps) {
     }
     try {
       setGeneratingType(reportType);
+      const logs = await aquacultureService.getCycleLogs(currentCycle.id);
+      if (logs.length === 0) {
+        setError(t('noLogsForReportGeneration'));
+        return;
+      }
       await aquacultureService.generateReport({
         report_type: reportType,
         cycle_id: currentCycle.id,

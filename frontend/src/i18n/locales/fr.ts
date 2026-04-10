@@ -164,6 +164,7 @@ export const fr = {
   reportsLoadError: 'Impossible de charger les rapports',
   reportLoadError: 'Impossible de charger ce rapport',
   reportGenerateError: 'Erreur lors de la génération du rapport',
+  noLogsForReportGeneration: 'Aucune saisie journalière pour ce cycle. Effectuez au moins une saisie avant de générer un rapport.',
   reportActionError: 'Une erreur est survenue pendant cette action',
   reportWhatsAppMarked: 'Partage WhatsApp enregistré',
   reportWhatsAppShareError: 'Impossible de partager le PDF sur WhatsApp',
