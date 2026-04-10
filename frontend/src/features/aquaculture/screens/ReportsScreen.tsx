@@ -96,18 +96,6 @@ export default function ReportsScreen({ navigation }: ReportsScreenProps) {
     </View>
   );
 
-  if (loading) {
-    return (
-      <View className="flex-1 bg-cream">
-        {renderHeader()}
-        <View className="flex-1 items-center justify-center">
-          <ActivityIndicator size="large" color={MAVECAM_COLORS.GREEN_PRIMARY} />
-          <Text className="mt-3 text-gray-dark">{t('loading')}</Text>
-        </View>
-      </View>
-    );
-  }
-
   const renderReportItem = useCallback(
     ({ item: report }: { item: ProductionReport }) => (
       <TouchableOpacity
@@ -223,6 +211,18 @@ export default function ReportsScreen({ navigation }: ReportsScreenProps) {
     ),
     [t]
   );
+
+  if (loading) {
+    return (
+      <View className="flex-1 bg-cream">
+        {renderHeader()}
+        <View className="flex-1 items-center justify-center">
+          <ActivityIndicator size="large" color={MAVECAM_COLORS.GREEN_PRIMARY} />
+          <Text className="mt-3 text-gray-dark">{t('loading')}</Text>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View className="flex-1 bg-cream">
