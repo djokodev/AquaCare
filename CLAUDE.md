@@ -2,6 +2,14 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Règle de push — non-négociable
+
+**Ne jamais push de code sans que l'utilisateur ait explicitement confirmé que le test local est OK.**
+Workflow obligatoire : implémenter → tester en local → attendre "c'est ok, tu peux push" → push.
+Ne pas pousser "en avance" même si le code semble correct.
+
+---
+
 ## Style de communication
 
 Dans les messages texte, utiliser **","** comme séparateur dans les listes inline, jamais le tiret **"-"**. Exemple : "prix 2800 FCFA, poids 350g" (pas "prix 2800 FCFA - poids 350g").

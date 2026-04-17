@@ -149,7 +149,7 @@ def invalidate_dashboard_cache(user_id: str) -> None:
     max_retries=2,
     default_retry_delay=30,
 )
-def generate_report_async_task(self, report_id: str, cycle_id: str = None) -> str:
+def generate_report_async_task(self, report_id: str, cycle_id: str = None, restore_validation: bool = False) -> str:
     """
     Generate a single report asynchronously (PDF rendering in Celery worker).
 
@@ -173,19 +173,20 @@ def generate_report_async_task(self, report_id: str, cycle_id: str = None) -> st
             period_start=report.period_start,
             period_end=report.period_end,
             cycle_id=cycle_id,
+            preserve_validation=restore_validation,
         )
         logger.info("Async report generated: %s", report_id)
         return f"Report generated: {report_id}"
     except ValueError as exc:
         # Business rule violation (e.g., cycle not found) — do not retry
         logger.error("Report generation business error %s: %s", report_id, exc)
-        report.status = 'draft'
+        report.status = 'validated' if restore_validation else 'draft'
         report.save(update_fields=['status', 'updated_at'])
         return f"Report failed (business error): {report_id}"
     except OSError as exc:
         # Environment issue (e.g., WeasyPrint native deps missing) — do not retry
         logger.error("Report generation env error %s: %s", report_id, exc)
-        report.status = 'draft'
+        report.status = 'validated' if restore_validation else 'draft'
         report.save(update_fields=['status', 'updated_at'])
         return f"Report failed (env error): {report_id}"
     except Exception as exc:
