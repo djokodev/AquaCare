@@ -155,9 +155,10 @@ export default function ReportDetailScreen({ navigation, route }: ReportDetailSc
         throw new Error(`download_failed_${downloadResult.status}`);
       }
 
+      // Sur iOS, passer message + url simultanément fait rejeter le partage
+      // par WhatsApp. On ne passe que url pour les partages de fichiers.
       const shareResult = await Share.share({
         title: t('reportShareTitle'),
-        message: t('reportShareMessage'),
         url: downloadResult.uri,
       });
 
