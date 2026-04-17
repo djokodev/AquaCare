@@ -37,6 +37,7 @@
     "expo-location": "~19.0.8",
     "expo-notifications": "^0.32.16",
     "expo-secure-store": "~15.0.8",
+    "expo-sharing": "~14.0.8",
     "expo-status-bar": "~3.0.9",
     "i18next": "^23.15.2",
     "jest": "~29.7.0",

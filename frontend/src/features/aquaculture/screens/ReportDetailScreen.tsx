@@ -7,7 +7,6 @@ import {
   FlatList,
   RefreshControl,
   Alert,
-  Share,
 } from 'react-native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RouteProp, useFocusEffect } from '@react-navigation/native';
@@ -15,6 +14,7 @@ import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import * as SecureStore from 'expo-secure-store';
 import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
 
 import { RootStackParamList } from '@/navigation/MainNavigator';
 import { MAVECAM_COLORS } from '@/constants/colors';
@@ -155,20 +155,22 @@ export default function ReportDetailScreen({ navigation, route }: ReportDetailSc
         throw new Error(`download_failed_${downloadResult.status}`);
       }
 
-      // Sur iOS, passer message + url simultanément fait rejeter le partage
-      // par WhatsApp. On ne passe que url pour les partages de fichiers.
-      const shareResult = await Share.share({
-        title: t('reportShareTitle'),
-        url: downloadResult.uri,
+      const isAvailable = await Sharing.isAvailableAsync();
+      if (!isAvailable) {
+        throw new Error('sharing_unavailable');
+      }
+
+      await Sharing.shareAsync(downloadResult.uri, {
+        mimeType: 'application/pdf',
+        dialogTitle: t('reportShareTitle'),
+        UTI: 'com.adobe.pdf',
       });
 
-      if (shareResult.action === Share.sharedAction) {
-        const updated = await aquacultureService.markReportWhatsAppShared(report.id, {
-          metadata: { source: 'native_share' },
-        });
-        setReport(updated);
-        Alert.alert(t('success'), t('reportWhatsAppMarked'));
-      }
+      const updated = await aquacultureService.markReportWhatsAppShared(report.id, {
+        metadata: { source: 'native_share' },
+      });
+      setReport(updated);
+      Alert.alert(t('success'), t('reportWhatsAppMarked'));
     } catch {
       Alert.alert(t('error'), t('reportWhatsAppShareError'));
     } finally {
