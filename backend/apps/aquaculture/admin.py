@@ -478,6 +478,13 @@ class CycleLogAdmin(AquacultureSecuredAdmin):
         return str(obj.id)[:8] + "..."
     id_short.short_description = _('ID')
 
+    def changelist_view(self, request, extra_context=None):
+        from common.models import AdminViewState
+        from django.core.cache import cache
+        AdminViewState.mark_seen(request.user, AdminViewState.SECTION_CYCLE_LOGS)
+        cache.delete(f"admin_badge_counts_{request.user.pk}")
+        return super().changelist_view(request, extra_context)
+
 
 @admin.register(SanitaryLog)
 class SanitaryLogAdmin(AquacultureSecuredAdmin):
@@ -589,6 +596,13 @@ class SanitaryLogAdmin(AquacultureSecuredAdmin):
         """Display short ID for easy reference."""
         return str(obj.id)[:8] + "..."
     id_short.short_description = _('ID')
+
+    def changelist_view(self, request, extra_context=None):
+        from common.models import AdminViewState
+        from django.core.cache import cache
+        AdminViewState.mark_seen(request.user, AdminViewState.SECTION_SANITARY_LOGS)
+        cache.delete(f"admin_badge_counts_{request.user.pk}")
+        return super().changelist_view(request, extra_context)
 
 
 @admin.register(FeedingPlan)
@@ -1195,6 +1209,13 @@ class ProductionReportAdmin(AquacultureSecuredAdmin):
         if count:
             messages.success(request, _('{} rapport(s) validé(s).').format(count))
 
+    def changelist_view(self, request, extra_context=None):
+        from common.models import AdminViewState
+        from django.core.cache import cache
+        AdminViewState.mark_seen(request.user, AdminViewState.SECTION_PRODUCTION_REPORTS)
+        cache.delete(f"admin_badge_counts_{request.user.pk}")
+        return super().changelist_view(request, extra_context)
+
 
 @admin.register(ReportDispatchLog)
 class ReportDispatchLogAdmin(AquacultureSecuredAdmin):
@@ -1224,3 +1245,10 @@ class ReportDispatchLogAdmin(AquacultureSecuredAdmin):
 
     def has_change_permission(self, request, obj=None):
         return request.user.is_superuser
+
+    def changelist_view(self, request, extra_context=None):
+        from common.models import AdminViewState
+        from django.core.cache import cache
+        AdminViewState.mark_seen(request.user, AdminViewState.SECTION_DISPATCH_LOGS)
+        cache.delete(f"admin_badge_counts_{request.user.pk}")
+        return super().changelist_view(request, extra_context)

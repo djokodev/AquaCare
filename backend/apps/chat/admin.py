@@ -141,6 +141,11 @@ class ConversationAdmin(ChatSecuredAdmin):
     message_count.short_description = _("Messages")
     message_count.admin_order_field = '_message_count'
 
+    def changelist_view(self, request, extra_context=None):
+        from django.core.cache import cache
+        cache.delete(f"admin_badge_counts_{request.user.pk}")
+        return super().changelist_view(request, extra_context)
+
 
 @admin.register(Message)
 class MessageAdmin(ChatSecuredAdmin):
