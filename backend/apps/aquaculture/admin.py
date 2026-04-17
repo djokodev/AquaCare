@@ -478,6 +478,13 @@ class CycleLogAdmin(AquacultureSecuredAdmin):
         return str(obj.id)[:8] + "..."
     id_short.short_description = _('ID')
 
+    def changelist_view(self, request, extra_context=None):
+        from common.models import AdminViewState
+        from django.core.cache import cache
+        AdminViewState.mark_seen(request.user, AdminViewState.SECTION_CYCLE_LOGS)
+        cache.delete(f"admin_badge_counts_{request.user.pk}")
+        return super().changelist_view(request, extra_context)
+
 
 @admin.register(SanitaryLog)
 class SanitaryLogAdmin(AquacultureSecuredAdmin):
@@ -589,6 +596,13 @@ class SanitaryLogAdmin(AquacultureSecuredAdmin):
         """Display short ID for easy reference."""
         return str(obj.id)[:8] + "..."
     id_short.short_description = _('ID')
+
+    def changelist_view(self, request, extra_context=None):
+        from common.models import AdminViewState
+        from django.core.cache import cache
+        AdminViewState.mark_seen(request.user, AdminViewState.SECTION_SANITARY_LOGS)
+        cache.delete(f"admin_badge_counts_{request.user.pk}")
+        return super().changelist_view(request, extra_context)
 
 
 @admin.register(FeedingPlan)

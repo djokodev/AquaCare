@@ -679,6 +679,13 @@ class OrderAdmin(CommerceSecuredAdmin):
                 _("Erreur interne lors de la génération de l'archive ZIP.")
             )
 
+    def changelist_view(self, request, extra_context=None):
+        from common.models import AdminViewState
+        from django.core.cache import cache
+        AdminViewState.mark_seen(request.user, AdminViewState.SECTION_ORDERS)
+        cache.delete(f"admin_badge_counts_{request.user.pk}")
+        return super().changelist_view(request, extra_context)
+
 
 @admin.register(OrderItem)
 class OrderItemAdmin(CommerceSecuredAdmin):

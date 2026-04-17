@@ -1,0 +1,7 @@
+{% extends "jazzmin/base.html" %}
+{% load static %}
+
+{% block extrahead %}
+{{ block.super }}
+<script defer src="{% static 'js/admin_badges.js' %}"></script>
+{% endblock %}
