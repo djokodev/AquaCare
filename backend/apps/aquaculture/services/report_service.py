@@ -245,17 +245,26 @@ class ReportService(BaseService):
         pdf_bytes: bytes,
         filename: str,
         generated_at: datetime,
+        preserve_validation: bool = False,
     ) -> ProductionReport:
         report.payload = payload
-        report.status = 'draft'
         report.generated_at = generated_at
-        report.validated_at = None
-        report.validated_by = None
+        report.pdf_file.save(filename, ContentFile(pdf_bytes), save=False)
+
+        if preserve_validation:
+            # Régénération d'un rapport déjà validé : on restaure le statut validé.
+            # validated_at et validated_by sont déjà présents sur l'objet (jamais effacés).
+            report.status = 'validated'
+        else:
+            report.status = 'draft'
+            report.validated_at = None
+            report.validated_by = None
+
+        # Nouveau PDF = nouvelle diffusion requise dans tous les cas
         report.email_status = 'not_sent'
         report.email_sent_at = None
         report.whatsapp_status = 'not_shared'
         report.whatsapp_shared_at = None
-        report.pdf_file.save(filename, ContentFile(pdf_bytes), save=False)
         report.save()
         return report
 
@@ -307,6 +316,7 @@ class ReportService(BaseService):
         period_start: date,
         period_end: date,
         cycle_id: str | None = None,
+        preserve_validation: bool = False,
     ) -> ProductionReport:
         """
         Génère (ou régénère) un rapport consolidé pour une ferme et une période.
@@ -350,6 +360,7 @@ class ReportService(BaseService):
             pdf_bytes=pdf_bytes,
             filename=filename,
             generated_at=now,
+            preserve_validation=preserve_validation,
         )
 
     @staticmethod

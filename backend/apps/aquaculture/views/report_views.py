@@ -315,7 +315,7 @@ class ProductionReportViewSet(viewsets.ReadOnlyModelViewSet):
         description="Retourne le fichier PDF du rapport.",
         responses={200: OpenApiTypes.BINARY},
     )
-    @action(detail=True, methods=['get'], throttle_classes=[AquacultureReportActionThrottle])
+    @action(detail=True, methods=['get'], throttle_classes=[])
     def download(self, request: Request, pk: str | None = None):
         report = self.get_object()
         decision: ReportDownloadDecision = ReportApplicationService.prepare_report_download(report)
@@ -329,6 +329,15 @@ class ProductionReportViewSet(viewsets.ReadOnlyModelViewSet):
             )
 
         filename = decision.filename or f"report_{report.id}.pdf"
-        response = FileResponse(report.pdf_file.open('rb'), content_type='application/pdf')
+        try:
+            file_handle = report.pdf_file.open('rb')
+        except FileNotFoundError:
+            report.pdf_file = None
+            report.save(update_fields=['pdf_file', 'updated_at'])
+            ReportApplicationService.request_report_regeneration(report)
+            return self._pending_response(
+                _("Le fichier PDF est introuvable. Régénération lancée, réessayez dans quelques instants.")
+            )
+        response = FileResponse(file_handle, content_type='application/pdf')
         response['Content-Disposition'] = f'attachment; filename="{quote(filename)}"'
         return response

@@ -56,10 +56,14 @@ class ReportApplicationService:
         return report
 
     @staticmethod
-    def _dispatch_generation(report: ProductionReport, cycle_scope_id: str | None = None) -> None:
+    def _dispatch_generation(
+        report: ProductionReport,
+        cycle_scope_id: str | None = None,
+        restore_validation: bool = False,
+    ) -> None:
         from ..tasks import generate_report_async_task
 
-        generate_report_async_task.delay(str(report.id), cycle_scope_id)
+        generate_report_async_task.delay(str(report.id), cycle_scope_id, restore_validation=restore_validation)
 
     @staticmethod
     def _extract_cycle_scope_id(report: ProductionReport) -> str | None:
@@ -103,9 +107,12 @@ class ReportApplicationService:
     @staticmethod
     def request_report_regeneration(report: ProductionReport) -> ProductionReport:
         """Relance la generation async pour un rapport existant."""
+        was_validated = report.status == "validated"
         cycle_scope_id = ReportApplicationService._extract_cycle_scope_id(report)
         report = ReportApplicationService._set_pending_status(report)
-        ReportApplicationService._dispatch_generation(report, cycle_scope_id)
+        ReportApplicationService._dispatch_generation(
+            report, cycle_scope_id, restore_validation=was_validated
+        )
         return report
 
     @staticmethod
