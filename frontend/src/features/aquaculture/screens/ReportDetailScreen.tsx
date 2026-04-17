@@ -122,9 +122,7 @@ export default function ReportDetailScreen({ navigation, route }: ReportDetailSc
   };
 
   const handleShareWhatsApp = async () => {
-    if (!report) {
-      return;
-    }
+    if (!report) return;
     if (report.status !== 'validated') {
       Alert.alert(t('validateFirst'), t('validateFirstHint'));
       return;
@@ -132,32 +130,67 @@ export default function ReportDetailScreen({ navigation, route }: ReportDetailSc
 
     try {
       setActionLoading('whatsapp');
+      let current = report;
+
+      // Phase 1 : Vérifier que le PDF existe — ne jamais régénérer silencieusement
+      // (la régénération doit être un acte explicite via le bouton dédié)
+      if (!current.pdf_url) {
+        Alert.alert(t('error'), t('reportPdfNotReady'));
+        return;
+      }
+
+      // Phase 2 : Télécharger le PDF
+      const baseDir = FileSystem.cacheDirectory ?? FileSystem.documentDirectory;
+      if (!baseDir) {
+        Alert.alert(t('error'), t('reportStorageError'));
+        return;
+      }
 
       const token = await SecureStore.getItemAsync(STORAGE_KEYS.ACCESS_TOKEN);
-      if (!token) {
-        throw new Error('missing_auth_token');
-      }
+      const fileUri = `${baseDir}report-${current.id}.pdf`;
+      const downloadHeaders = token ? { headers: { Authorization: `Bearer ${token}` } } : {};
 
-      const downloadUrl = aquacultureService.getReportDownloadUrl(report.id);
-      const baseDir = FileSystem.cacheDirectory || FileSystem.documentDirectory;
-      if (!baseDir) {
-        throw new Error('missing_fs_base_dir');
-      }
+      let downloadResult = await FileSystem.downloadAsync(
+        aquacultureService.getReportDownloadUrl(current.id),
+        fileUri,
+        downloadHeaders
+      );
 
-      const fileUri = `${baseDir}report-${report.id}.pdf`;
-      const downloadResult = await FileSystem.downloadAsync(downloadUrl, fileUri, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      // 409 = fichier manquant sur disque, backend a lancé la régénération
+      if (downloadResult.status === 409) {
+        // Force pdf_url à null pour que la boucle de poll tourne effectivement
+        current = { ...current, pdf_url: null };
+        setReport(current);
+
+        const MAX_REGEN = 20;
+        for (let i = 0; i < MAX_REGEN && !current.pdf_url; i++) {
+          await new Promise(resolve => setTimeout(resolve, 3000));
+          current = await aquacultureService.getReport(current.id);
+          setReport(current);
+        }
+
+        if (!current.pdf_url) {
+          Alert.alert(t('error'), t('reportPdfNotReady'));
+          return;
+        }
+
+        downloadResult = await FileSystem.downloadAsync(
+          aquacultureService.getReportDownloadUrl(current.id),
+          fileUri,
+          downloadHeaders
+        );
+      }
 
       if (downloadResult.status !== 200) {
-        throw new Error(`download_failed_${downloadResult.status}`);
+        Alert.alert(t('error'), t('reportWhatsAppShareError'));
+        return;
       }
 
+      // Phase 3 : Ouvrir la share sheet native
       const isAvailable = await Sharing.isAvailableAsync();
       if (!isAvailable) {
-        throw new Error('sharing_unavailable');
+        Alert.alert(t('error'), t('reportSharingUnavailable'));
+        return;
       }
 
       await Sharing.shareAsync(downloadResult.uri, {
@@ -166,7 +199,8 @@ export default function ReportDetailScreen({ navigation, route }: ReportDetailSc
         UTI: 'com.adobe.pdf',
       });
 
-      const updated = await aquacultureService.markReportWhatsAppShared(report.id, {
+      // Phase 4 : Marquer le rapport comme partagé
+      const updated = await aquacultureService.markReportWhatsAppShared(current.id, {
         metadata: { source: 'native_share' },
       });
       setReport(updated);
