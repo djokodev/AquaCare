@@ -20,11 +20,15 @@ class AdminViewState(models.Model):
     SECTION_CYCLE_LOGS = 'cycle_logs'
     SECTION_SANITARY_LOGS = 'sanitary_logs'
     SECTION_ORDERS = 'orders'
+    SECTION_PRODUCTION_REPORTS = 'production_reports'
+    SECTION_DISPATCH_LOGS = 'dispatch_logs'
 
     SECTION_CHOICES = [
         (SECTION_CYCLE_LOGS, _('Logs de cycle')),
         (SECTION_SANITARY_LOGS, _('Journaux sanitaires')),
         (SECTION_ORDERS, _('Commandes')),
+        (SECTION_PRODUCTION_REPORTS, _('Rapports de production')),
+        (SECTION_DISPATCH_LOGS, _("Journaux d'envoi")),
     ]
 
     # Baseline : tout ce qui existe avant cette date sera visible en "nouveau"

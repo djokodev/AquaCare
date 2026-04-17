@@ -9,10 +9,12 @@
   if (document.body && document.body.classList.contains('login')) return;
 
   const SECTIONS = [
-    { key: 'chat',          urlPath: '/admin/chat/conversation/' },
-    { key: 'cycle_logs',    urlPath: '/admin/aquaculture/cyclelog/' },
-    { key: 'sanitary_logs', urlPath: '/admin/aquaculture/sanitarylog/' },
-    { key: 'orders',        urlPath: '/admin/commerce/order/' },
+    { key: 'chat',               urlPath: '/admin/chat/conversation/' },
+    { key: 'cycle_logs',         urlPath: '/admin/aquaculture/cyclelog/' },
+    { key: 'sanitary_logs',      urlPath: '/admin/aquaculture/sanitarylog/' },
+    { key: 'orders',             urlPath: '/admin/commerce/order/' },
+    { key: 'production_reports', urlPath: '/admin/aquaculture/productionreport/' },
+    { key: 'dispatch_logs',      urlPath: '/admin/aquaculture/reportdispatchlog/' },
   ];
 
   function injectBadge(urlPath, count) {

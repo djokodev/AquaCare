@@ -2,11 +2,15 @@
 Vue et enregistrement d'URL pour les badges de notification de l'admin.
 """
 
+import logging
+
 from django.contrib import admin
 from django.core.cache import cache
 from django.db.models import Sum
 from django.http import JsonResponse
 from django.urls import path
+
+logger = logging.getLogger(__name__)
 
 
 def badge_counts_view(request):
@@ -25,20 +29,22 @@ def badge_counts_view(request):
     cycle_logs = 0
     sanitary_logs = 0
     orders = 0
+    production_reports = 0
+    dispatch_logs = 0
 
     try:
         from chat.models import Conversation
         result = Conversation.objects.aggregate(total=Sum('unread_count_admin'))
         chat = result['total'] or 0
     except Exception:
-        pass
+        logger.exception("Erreur badge counts — section chat")
 
     try:
         from aquaculture.models import CycleLog
         last_seen = AdminViewState.get_last_seen(request.user, AdminViewState.SECTION_CYCLE_LOGS)
         cycle_logs = CycleLog.objects.filter(created_at__gt=last_seen).count()
     except Exception:
-        pass
+        logger.exception("Erreur badge counts — section cycle_logs")
 
     try:
         from aquaculture.models import SanitaryLog
@@ -48,31 +54,48 @@ def badge_counts_view(request):
             resolved=False,
         ).count()
     except Exception:
-        pass
+        logger.exception("Erreur badge counts — section sanitary_logs")
 
     try:
         from commerce.models import Order
         last_seen = AdminViewState.get_last_seen(request.user, AdminViewState.SECTION_ORDERS)
         orders = Order.objects.filter(created_at__gt=last_seen).count()
     except Exception:
-        pass
+        logger.exception("Erreur badge counts — section orders")
+
+    try:
+        from aquaculture.models import ProductionReport
+        last_seen = AdminViewState.get_last_seen(request.user, AdminViewState.SECTION_PRODUCTION_REPORTS)
+        production_reports = ProductionReport.objects.filter(generated_at__gt=last_seen).count()
+    except Exception:
+        logger.exception("Erreur badge counts — section production_reports")
+
+    try:
+        from aquaculture.models import ReportDispatchLog
+        last_seen = AdminViewState.get_last_seen(request.user, AdminViewState.SECTION_DISPATCH_LOGS)
+        dispatch_logs = ReportDispatchLog.objects.filter(created_at__gt=last_seen).count()
+    except Exception:
+        logger.exception("Erreur badge counts — section dispatch_logs")
 
     # Filtrage RBAC : chaque groupe ne voit que sa section
     if not request.user.is_superuser:
         user_groups = set(request.user.groups.values_list('name', flat=True))
         if 'mavecam_support' in user_groups:
-            cycle_logs = sanitary_logs = orders = 0
+            cycle_logs = sanitary_logs = orders = production_reports = dispatch_logs = 0
         if 'mavecam_commerce' in user_groups:
-            chat = sanitary_logs = 0
+            chat = sanitary_logs = production_reports = dispatch_logs = 0
         if 'mavecam_managers' in user_groups:
             chat = 0
 
+    total = chat + cycle_logs + sanitary_logs + orders + production_reports + dispatch_logs
     data = {
         'chat': chat,
         'cycle_logs': cycle_logs,
         'sanitary_logs': sanitary_logs,
         'orders': orders,
-        'total': chat + cycle_logs + sanitary_logs + orders,
+        'production_reports': production_reports,
+        'dispatch_logs': dispatch_logs,
+        'total': total,
     }
     cache.set(cache_key, data, 30)
     return JsonResponse(data)
