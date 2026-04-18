@@ -57,10 +57,10 @@ export default function AppNavigator() {
   }, [isAuthenticated, registerPushToken]);
 
   // Déterminer la route initiale
-  const initialRouteName = !isAuthenticated
-    ? 'Auth'
+  const initialRouteName = isAuthenticated
+    ? 'Main'
     : hasCompletedOnboarding
-      ? 'Main'
+      ? 'Auth'
       : 'Onboarding';
 
   // Force un reset du navigator quand l'état change (auth ou onboarding)

@@ -2,10 +2,10 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
-import { useDispatch } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import { StackNavigationProp } from '@react-navigation/stack';
 
-import { AppDispatch } from '@/store/store';
+import { AppDispatch, RootState } from '@/store/store';
 import { RootStackParamList } from '@/navigation/MainNavigator';
 import {
   clearCurrentCycle,
@@ -120,6 +120,7 @@ interface Props {
 
 export default function CycleSessionEntryScreen({ navigation }: Props) {
   const dispatch = useDispatch<AppDispatch>();
+  const isAuthenticated = useSelector((state: RootState) => state.auth.isAuthenticated);
   const { t } = useTranslation();
   const isMounted = useRef(true);
 
@@ -154,7 +155,7 @@ export default function CycleSessionEntryScreen({ navigation }: Props) {
   );
 
   const loadCycles = useCallback(async () => {
-    if (!isMounted.current) return;
+    if (!isMounted.current || !isAuthenticated) return;
     setLoading(true);
     setError(null);
 
@@ -168,13 +169,13 @@ export default function CycleSessionEntryScreen({ navigation }: Props) {
       // Set loading=false after handleEntryLogic in same microtask to minimize intermediate renders
       if (isMounted.current) setLoading(false);
     } else {
-      if (isMounted.current) {
+      if (isMounted.current && isAuthenticated) {
         setError((result.payload as string) || 'sessionCycleLoadError');
         setLoading(false);
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dispatch, handleEntryLogic]);
+  }, [dispatch, handleEntryLogic, isAuthenticated]);
 
   useEffect(() => {
     loadCycles();

@@ -641,9 +641,11 @@ export const aquacultureSlice = createSlice({
       })
       .addCase(logoutUser.fulfilled, (state) => {
         state.currentCycle = undefined;
+        state.error = null;
       })
       .addCase(logoutUser.rejected, (state) => {
         state.currentCycle = undefined;
+        state.error = null;
       })
 
       .addCase(fetchCycleFeedStatus.pending, (state) => {
