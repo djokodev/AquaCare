@@ -7,6 +7,7 @@ import logging
 from urllib.parse import quote
 
 from django.http import FileResponse
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiExample, OpenApiParameter, extend_schema, extend_schema_view
@@ -173,7 +174,7 @@ class ProductionReportViewSet(viewsets.ReadOnlyModelViewSet):
             if self.action in detail_actions
             else ProductionReport.objects.for_list()
         )
-        queryset = base_queryset.filter(farm_profile__user=self.request.user)
+        queryset = base_queryset.filter(farm_profile__user=self.request.user, is_deleted=False)
 
         report_type = self.request.query_params.get('report_type')
         if report_type:
@@ -251,6 +252,19 @@ class ProductionReportViewSet(viewsets.ReadOnlyModelViewSet):
     def validate(self, request: Request, pk: str | None = None) -> Response:
         validated = ReportApplicationService.validate_report(self.get_object(), request.user)
         return self._serialize_report_detail(validated, request, status_code=status.HTTP_200_OK)
+
+    @extend_schema(
+        summary="Supprimer un rapport (soft delete)",
+        description="Marque le rapport comme supprimé. Visible uniquement en admin.",
+        responses={204: None},
+    )
+    @action(detail=True, methods=['delete'], url_path='delete')
+    def delete_report(self, request: Request, pk: str | None = None) -> Response:
+        report = self.get_object()
+        report.is_deleted = True
+        report.deleted_at = timezone.now()
+        report.save(update_fields=['is_deleted', 'deleted_at'])
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     @extend_schema(
         summary="Envoyer un rapport par email",

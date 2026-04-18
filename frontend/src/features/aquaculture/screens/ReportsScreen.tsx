@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, ActivityIndicator, FlatList, RefreshControl } from 'react-native';
+import { View, Text, TouchableOpacity, ActivityIndicator, FlatList, RefreshControl, Alert } from 'react-native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
@@ -31,6 +31,7 @@ export default function ReportsScreen({ navigation }: ReportsScreenProps) {
   const [reports, setReports] = useState<ProductionReport[]>([]);
   const [selectedType, setSelectedType] = useState<ReportType | 'all'>('all');
   const [error, setError] = useState<string | null>(null);
+  const [infoMessage, setInfoMessage] = useState<string | null>(null);
 
   const loadReports = useCallback(async () => {
     try {
@@ -69,6 +70,7 @@ export default function ReportsScreen({ navigation }: ReportsScreenProps) {
     }
     try {
       setGeneratingType(reportType);
+      setInfoMessage(null);
       const logs = await aquacultureService.getCycleLogs(currentCycle.id);
       if (logs.length === 0) {
         setError(t('noLogsForReportGeneration'));
@@ -78,12 +80,52 @@ export default function ReportsScreen({ navigation }: ReportsScreenProps) {
         report_type: reportType,
         cycle_id: currentCycle.id,
       });
+      setInfoMessage(t('reportGenerating'));
       await loadReports();
     } catch {
       setError(t('reportGenerateError'));
     } finally {
       setGeneratingType(null);
     }
+  };
+
+  const handleDeleteReport = useCallback((report: ProductionReport) => {
+    Alert.alert(
+      t('reportDeleteConfirm'),
+      t('reportDeleteConfirmMsg'),
+      [
+        { text: t('cancel'), style: 'cancel' },
+        {
+          text: t('delete'),
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await aquacultureService.deleteReport(report.id);
+              setReports(prev => prev.filter(r => r.id !== report.id));
+            } catch {
+              Alert.alert(t('error'), t('reportDeleteError'));
+            }
+          },
+        },
+      ]
+    );
+  }, [t]);
+
+  const getStatusStyle = (reportStatus: string) => {
+    if (reportStatus === 'validated') return 'text-mavecam-primary';
+    if (reportStatus === 'pending') return 'text-warning';
+    return 'text-gray-light';
+  };
+
+  const getStatusLabel = (reportStatus: string) => {
+    if (reportStatus === 'validated') return t('reportStatusValidated');
+    if (reportStatus === 'pending') return t('reportStatusPending');
+    return t('reportStatusDraft');
+  };
+
+  const getPeriodLabel = (periodStart: string, periodEnd: string) => {
+    if (periodStart === periodEnd) return formatDate(periodStart);
+    return `${formatDate(periodStart)} - ${formatDate(periodEnd)}`;
   };
 
   const filteredReports = reports.filter(
@@ -115,17 +157,21 @@ export default function ReportsScreen({ navigation }: ReportsScreenProps) {
                 ? t('reportTypeWeekly')
                 : t('reportTypeMonthly')}
           </Text>
-          <Text
-            className={`text-xs font-semibold ${
-              report.status === 'validated' ? 'text-mavecam-primary' : 'text-warning'
-            }`}
-          >
-            {report.status === 'validated' ? t('reportStatusValidated') : t('reportStatusDraft')}
-          </Text>
+          <View className="flex-row items-center">
+            <Text className={`text-xs font-semibold mr-3 ${getStatusStyle(report.status)}`}>
+              {getStatusLabel(report.status)}
+            </Text>
+            <TouchableOpacity
+              onPress={() => handleDeleteReport(report)}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Ionicons name="trash-outline" size={16} color={MAVECAM_COLORS.ERROR} />
+            </TouchableOpacity>
+          </View>
         </View>
 
         <Text className="text-xs text-gray-light mt-1">
-          {formatDate(report.period_start)} - {formatDate(report.period_end)}
+          {getPeriodLabel(report.period_start, report.period_end)}
         </Text>
 
         <View className="flex-row mt-2">
@@ -138,7 +184,7 @@ export default function ReportsScreen({ navigation }: ReportsScreenProps) {
         </View>
       </TouchableOpacity>
     ),
-    [navigation, t]
+    [navigation, t, handleDeleteReport]
   );
 
   const renderListHeader = useCallback(
@@ -170,6 +216,18 @@ export default function ReportsScreen({ navigation }: ReportsScreenProps) {
             ))}
           </View>
 
+          {infoMessage && (
+            <View className="bg-green-50 border border-mavecam-primary rounded-lg p-3 mb-3">
+              <Text className="text-sm text-mavecam-primary">{infoMessage}</Text>
+            </View>
+          )}
+
+          {error && (
+            <View className="bg-white border border-error rounded-lg p-3 mb-3">
+              <Text className="text-sm text-error">{error}</Text>
+            </View>
+          )}
+
           <Text className="text-base font-bold text-gray-dark mb-3">{t('reportHistory')}</Text>
 
           <View className="flex-row mb-3">
@@ -195,15 +253,9 @@ export default function ReportsScreen({ navigation }: ReportsScreenProps) {
               </TouchableOpacity>
             ))}
           </View>
-
-          {error && (
-            <View className="bg-white border border-error rounded-lg p-3 mb-3">
-              <Text className="text-sm text-error">{error}</Text>
-            </View>
-          )}
         </View>
     ),
-    [currentCycle?.id, error, filteredReports.length, generatingType, onRefresh, selectedType, t]
+    [currentCycle?.id, error, infoMessage, generatingType, selectedType, t]
   );
 
   const renderEmptyState = useCallback(

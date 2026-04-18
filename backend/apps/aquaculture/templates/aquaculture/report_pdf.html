@@ -107,24 +107,21 @@
       font-size: 11px;
     }
 
-    .kpi-grid {
-      overflow: hidden;
+    .kpi-table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 8px 8px;
       margin: 8px 0 14px 0;
     }
 
-    .kpi-card {
-      float: left;
-      width: 47%;
-      margin: 0 6% 8px 0;
+    .kpi-cell {
+      width: 50%;
       border: 1px solid #e5e7eb;
       border-radius: 12px;
       padding: 10px;
       text-align: center;
       background: #ffffff;
-    }
-
-    .kpi-card.kpi-even {
-      margin-right: 0;
+      vertical-align: top;
     }
 
     .kpi-icon-wrap {
@@ -190,61 +187,64 @@
 
           {% with metrics=section.dashboard_metrics %}
             <h3>{{ labels.dashboard_metrics }}</h3>
-            <div class="kpi-grid">
-              <div class="kpi-card">
-                <div class="kpi-icon-wrap">💰</div>
-                <div class="kpi-value">
-                  {% if metrics.estimated_market_value_fcfa == 0 %}
-                    0 FCFA
-                  {% elif metrics.estimated_market_value_fcfa %}
-                    {{ metrics.estimated_market_value_fcfa|floatformat:0 }} FCFA
-                  {% else %}
-                    {{ empty_value_label }}
-                  {% endif %}
-                </div>
-                <div class="kpi-label">{{ labels.estimated_market_value }}</div>
-              </div>
-              <div class="kpi-card kpi-even">
-                <div class="kpi-icon-wrap">🍽</div>
-                <div class="kpi-value">
-                  {% if metrics.feed_cost_consumed_fcfa == 0 %}
-                    0 FCFA
-                  {% elif metrics.feed_cost_consumed_fcfa %}
-                    {{ metrics.feed_cost_consumed_fcfa|floatformat:0 }} FCFA
-                  {% else %}
-                    {{ empty_value_label }}
-                  {% endif %}
-                </div>
-                <div class="kpi-label">{{ labels.feed_cost_consumed }}</div>
-              </div>
-              <div class="kpi-card">
-                <div class="kpi-icon-wrap">⏳</div>
-                <div class="kpi-value">
-                  {% if metrics.time_remaining_days == 0 %}
-                    0 {{ labels.days_short }}
-                  {% elif metrics.time_remaining_days %}
-                    {{ metrics.time_remaining_days }} {{ labels.days_short }}
-                  {% else %}
-                    {{ empty_value_label }}
-                  {% endif %}
-                </div>
-                <div class="kpi-label">{{ labels.time_remaining_cycle }}</div>
-              </div>
-              <div class="kpi-card kpi-even">
-                <div class="kpi-icon-wrap">🧮</div>
-                <div class="kpi-value">
-                  {% if metrics.direct_production_cost_fcfa == 0 %}
-                    0 {{ labels.direct_production_cost_unit }}
-                  {% elif metrics.direct_production_cost_fcfa %}
-                    {{ metrics.direct_production_cost_fcfa|floatformat:0 }} {{ labels.direct_production_cost_unit }}
-                  {% else %}
-                    {{ empty_value_label }}
-                  {% endif %}
-                </div>
-                <div class="kpi-label">{{ labels.direct_production_cost }}</div>
-              </div>
-              <div style="clear: both;"></div>
-            </div>
+            <table class="kpi-table">
+              <tr>
+                <td class="kpi-cell">
+                  <div class="kpi-icon-wrap">💰</div>
+                  <div class="kpi-value">
+                    {% if metrics.estimated_market_value_fcfa == 0 %}
+                      0 FCFA
+                    {% elif metrics.estimated_market_value_fcfa %}
+                      {{ metrics.estimated_market_value_fcfa|floatformat:0 }} FCFA
+                    {% else %}
+                      {{ empty_value_label }}
+                    {% endif %}
+                  </div>
+                  <div class="kpi-label">{{ labels.estimated_market_value }}</div>
+                </td>
+                <td class="kpi-cell">
+                  <div class="kpi-icon-wrap">🍽</div>
+                  <div class="kpi-value">
+                    {% if metrics.feed_cost_consumed_fcfa == 0 %}
+                      0 FCFA
+                    {% elif metrics.feed_cost_consumed_fcfa %}
+                      {{ metrics.feed_cost_consumed_fcfa|floatformat:0 }} FCFA
+                    {% else %}
+                      {{ empty_value_label }}
+                    {% endif %}
+                  </div>
+                  <div class="kpi-label">{{ labels.feed_cost_consumed }}</div>
+                </td>
+              </tr>
+              <tr>
+                <td class="kpi-cell">
+                  <div class="kpi-icon-wrap">⏳</div>
+                  <div class="kpi-value">
+                    {% if metrics.time_remaining_days == 0 %}
+                      0 {{ labels.days_short }}
+                    {% elif metrics.time_remaining_days %}
+                      {{ metrics.time_remaining_days }} {{ labels.days_short }}
+                    {% else %}
+                      {{ empty_value_label }}
+                    {% endif %}
+                  </div>
+                  <div class="kpi-label">{{ labels.time_remaining_cycle }}</div>
+                </td>
+                <td class="kpi-cell">
+                  <div class="kpi-icon-wrap">🧮</div>
+                  <div class="kpi-value">
+                    {% if metrics.direct_production_cost_fcfa == 0 %}
+                      0 {{ labels.direct_production_cost_unit }}
+                    {% elif metrics.direct_production_cost_fcfa %}
+                      {{ metrics.direct_production_cost_fcfa|floatformat:0 }} {{ labels.direct_production_cost_unit }}
+                    {% else %}
+                      {{ empty_value_label }}
+                    {% endif %}
+                  </div>
+                  <div class="kpi-label">{{ labels.direct_production_cost }}</div>
+                </td>
+              </tr>
+            </table>
           {% endwith %}
 
           <h3>{{ labels.current_indicators }}</h3>

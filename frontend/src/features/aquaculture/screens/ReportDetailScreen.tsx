@@ -147,7 +147,9 @@ export default function ReportDetailScreen({ navigation, route }: ReportDetailSc
       }
 
       const token = await SecureStore.getItemAsync(STORAGE_KEYS.ACCESS_TOKEN);
-      const fileUri = `${baseDir}report-${current.id}.pdf`;
+      const typeSlug = current.report_type === 'daily' ? 'journalier'
+        : current.report_type === 'weekly' ? 'hebdomadaire' : 'mensuel';
+      const fileUri = `${baseDir}rapport_${typeSlug}_${current.period_start}.pdf`;
       const downloadHeaders = token ? { headers: { Authorization: `Bearer ${token}` } } : {};
 
       let downloadResult = await FileSystem.downloadAsync(
@@ -265,7 +267,9 @@ export default function ReportDetailScreen({ navigation, route }: ReportDetailSc
                 : t('reportTypeMonthly')}
           </Text>
           <Text className="text-xs text-gray-light mt-1">
-            {formatDate(report?.period_start ?? '')} - {formatDate(report?.period_end ?? '')}
+            {report?.period_start === report?.period_end
+              ? formatDate(report?.period_start ?? '')
+              : `${formatDate(report?.period_start ?? '')} - ${formatDate(report?.period_end ?? '')}`}
           </Text>
           <Text className="text-xs mt-2 text-gray-dark">
             {t('reportStatusLabel')}: {report?.status === 'validated' ? t('reportStatusValidated') : t('reportStatusDraft')}
@@ -323,16 +327,26 @@ export default function ReportDetailScreen({ navigation, route }: ReportDetailSc
           </TouchableOpacity>
 
           <TouchableOpacity
-            className="bg-mavecam-primary rounded-lg p-3 mb-2 flex-row items-center justify-center"
+            className={`rounded-lg p-3 mb-2 flex-row items-center justify-center ${
+              report?.status === 'validated'
+                ? 'bg-gray-100 border border-gray-200'
+                : 'bg-mavecam-primary'
+            }`}
             onPress={() => report && runAction('validate', () => aquacultureService.validateReport(report.id))}
             disabled={Boolean(actionLoading) || report?.status === 'validated'}
           >
             {actionLoading === 'validate' ? (
-              <ActivityIndicator color={MAVECAM_COLORS.WHITE} />
+              <ActivityIndicator color={report?.status === 'validated' ? MAVECAM_COLORS.GRAY_LIGHT : MAVECAM_COLORS.WHITE} />
             ) : (
               <>
-                <Ionicons name="checkmark-done-outline" size={18} color={MAVECAM_COLORS.WHITE} />
-                <Text className="text-sm font-semibold text-white ml-2">{t('validateReport')}</Text>
+                <Ionicons
+                  name={report?.status === 'validated' ? 'checkmark-circle' : 'checkmark-done-outline'}
+                  size={18}
+                  color={report?.status === 'validated' ? MAVECAM_COLORS.GREEN_PRIMARY : MAVECAM_COLORS.WHITE}
+                />
+                <Text className={`text-sm font-semibold ml-2 ${report?.status === 'validated' ? 'text-gray-400' : 'text-white'}`}>
+                  {t('validateReport')}
+                </Text>
               </>
             )}
           </TouchableOpacity>

@@ -179,6 +179,15 @@ class AquacultureService {
     return `${API_CONFIG.baseURL}${this.baseUrl}/reports/${id}/download/`;
   }
 
+  async deleteReport(id: string): Promise<void> {
+    try {
+      await apiService.delete(`${this.baseUrl}/reports/${id}/delete/`);
+    } catch (error) {
+      logger.error(`Erreur lors de la suppression du rapport ${id}:`, error);
+      throw error;
+    }
+  }
+
   // =================== PRODUCTION CYCLES ===================
 
   async getProductionCycles(): Promise<ProductionCycle[]> {
