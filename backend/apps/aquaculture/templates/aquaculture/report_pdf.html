@@ -108,20 +108,19 @@
     }
 
     .kpi-grid {
-      font-size: 0;
+      overflow: hidden;
       margin: 8px 0 14px 0;
     }
 
     .kpi-card {
-      display: inline-block;
-      width: 48%;
-      margin: 0 2% 8px 0;
+      float: left;
+      width: 47%;
+      margin: 0 6% 8px 0;
       border: 1px solid #e5e7eb;
       border-radius: 12px;
       padding: 10px;
       text-align: center;
       background: #ffffff;
-      vertical-align: top;
     }
 
     .kpi-card.kpi-even {
@@ -129,6 +128,7 @@
     }
 
     .kpi-icon-wrap {
+      font-family: "Noto Color Emoji", Arial, sans-serif;
       width: 28px;
       height: 28px;
       line-height: 28px;
@@ -171,7 +171,7 @@
       <strong>{{ labels.period_analyzed }}:</strong> {{ period_label }}
     </div>
     <div class="small muted">
-      {{ labels.generated_on }} {{ generated_at|date:"d/m/Y H:i" }} | {{ labels.promoter }}: {{ payload.farm.promoter_name }}
+      {{ labels.generated_on }} {{ generated_at|date:"d/m/Y H:i" }}
     </div>
   </div>
 
@@ -184,7 +184,6 @@
         <div class="cycle-block{% if forloop.first %} cycle-block-first{% endif %}">
           <h3>{{ section.cycle.cycle_name }} <span class="pill">{{ section.cycle.species_display }}</span></h3>
           <div class="small muted">
-            {{ labels.pond }}: {{ section.cycle.pond_identifier }} |
             {{ labels.started_on }} {{ section.cycle.start_date }} |
             {{ labels.active_days }}: {{ section.cycle.days_active }}
           </div>
@@ -244,6 +243,7 @@
                 </div>
                 <div class="kpi-label">{{ labels.direct_production_cost }}</div>
               </div>
+              <div style="clear: both;"></div>
             </div>
           {% endwith %}
 
