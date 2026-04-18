@@ -79,7 +79,7 @@ export default function PartialHarvestHistoryModal({ visible, onClose, cycle }: 
                     <View style={styles.summaryDivider} />
                     <View style={styles.summaryItem}>
                       <Text style={[styles.summaryValue, { color: COLORS.GREEN_PRIMARY }]}>
-                        {Math.round(totalRevenue).toLocaleString()}
+                        {Math.round(totalRevenue).toLocaleString()} FCFA
                       </Text>
                       <Text style={styles.summaryLabel}>{t('totalRevenue')}</Text>
                     </View>
