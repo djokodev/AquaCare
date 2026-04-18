@@ -19,6 +19,8 @@ import {
   NutritionalGuide,
   Species,
   ReactNativeUploadFile,
+  PartialHarvest,
+  PartialHarvestData,
 } from '@/types/aquaculture';
 
 interface PaginatedResponse<T> {
@@ -254,6 +256,33 @@ class AquacultureService {
       return response.data;
     } catch (error) {
       logger.error(`Erreur lors de la recolte du cycle ${id}:`, error);
+      throw error;
+    }
+  }
+
+  async partialHarvestCycle(
+    id: string,
+    data: PartialHarvestData
+  ): Promise<{ cycle: ProductionCycle; partial_harvest: PartialHarvest; message: string }> {
+    try {
+      const response = await apiService.post<{ cycle: ProductionCycle; partial_harvest: PartialHarvest; message: string }>(
+        `${this.baseUrl}/cycles/${id}/partial-harvest/`,
+        data
+      );
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  async getPartialHarvests(id: string): Promise<PartialHarvest[]> {
+    try {
+      const response = await apiService.get<PartialHarvest[]>(
+        `${this.baseUrl}/cycles/${id}/partial-harvests/`
+      );
+      return response.data;
+    } catch (error) {
+      logger.error(`Erreur lors de la récupération des récoltes partielles du cycle ${id}:`, error);
       throw error;
     }
   }

@@ -27,6 +27,8 @@ import {
 } from '@/features/commerce/store/commerceSlice';
 import { offlineService } from '@/services/offlineService';
 import HarvestModal from '@/components/modals/HarvestModal';
+import PartialHarvestModal from '@/components/modals/PartialHarvestModal';
+import PartialHarvestHistoryModal from '@/components/modals/PartialHarvestHistoryModal';
 import CyclePicker from '@/features/aquaculture/components/CyclePicker';
 import DashboardHeader from '../components/DashboardHeader';
 import QuickActionsPreview from '../components/QuickActionsPreview';
@@ -48,6 +50,8 @@ export default function DashboardScreen({ navigation }: any) {
   const dispatch = useDispatch<AppDispatch>();
 
   const [harvestModalVisible, setHarvestModalVisible] = useState(false);
+  const [partialHarvestModalVisible, setPartialHarvestModalVisible] = useState(false);
+  const [partialHarvestHistoryModalVisible, setPartialHarvestHistoryModalVisible] = useState(false);
   const [selectedCycle, setSelectedCycle] = useState<ProductionCycle | null>(null);
   const [actionsSheetVisible, setActionsSheetVisible] = useState(false);
   const [cycleSwitchModalVisible, setCycleSwitchModalVisible] = useState(false);
@@ -154,13 +158,32 @@ export default function DashboardScreen({ navigation }: any) {
     }
   }, [activeCycles, currentCycle, currentCycleInList, dispatch]);
 
-  const openHarvestModal = (cycle: ProductionCycle) => {
+  const openHarvestChoice = (cycle: ProductionCycle) => {
     setSelectedCycle(cycle);
-    setHarvestModalVisible(true);
+    Alert.alert(
+      t('harvestTypeTitle'),
+      '',
+      [
+        {
+          text: t('partialHarvestOption'),
+          onPress: () => setPartialHarvestModalVisible(true),
+        },
+        {
+          text: t('completeHarvest'),
+          onPress: () => setHarvestModalVisible(true),
+        },
+        { text: t('cancel'), style: 'cancel', onPress: () => setSelectedCycle(null) },
+      ]
+    );
   };
 
   const closeHarvestModal = () => {
     setHarvestModalVisible(false);
+    setSelectedCycle(null);
+  };
+
+  const closePartialHarvestModal = () => {
+    setPartialHarvestModalVisible(false);
     setSelectedCycle(null);
   };
 
@@ -434,11 +457,18 @@ export default function DashboardScreen({ navigation }: any) {
 
                 <TouchableOpacity
                   className="bg-mavecam-primary flex-row items-center py-2 px-3 rounded-lg"
-                  onPress={() => openHarvestModal(cycle)}
+                  onPress={() => openHarvestChoice(cycle)}
                 >
                   <Text className="text-white text-sm font-semibold ml-1">{t('harvest')}</Text>
                 </TouchableOpacity>
               </View>
+              <TouchableOpacity
+                style={{ marginTop: 10, flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                onPress={() => { setSelectedCycle(cycle); setPartialHarvestHistoryModalVisible(true); }}
+              >
+                <Ionicons name="time-outline" size={14} color={MAVECAM_COLORS.GREEN_PRIMARY} />
+                <Text style={{ fontSize: 13, color: MAVECAM_COLORS.GREEN_PRIMARY }}>{t('partialHarvestHistory')}</Text>
+              </TouchableOpacity>
             </View>
           ))}
         </View>
@@ -451,6 +481,19 @@ export default function DashboardScreen({ navigation }: any) {
         onSuccess={handleHarvestSuccess}
         onContactBuyer={() => navigation.navigate('Chat')}
         onNextCycle={(cycleId) => navigation.navigate('PostHarvestConsolidation', { harvestedCycleId: cycleId })}
+      />
+
+      <PartialHarvestModal
+        visible={partialHarvestModalVisible}
+        onClose={closePartialHarvestModal}
+        cycle={selectedCycle}
+        onSuccess={handleHarvestSuccess}
+      />
+
+      <PartialHarvestHistoryModal
+        visible={partialHarvestHistoryModalVisible}
+        onClose={() => setPartialHarvestHistoryModalVisible(false)}
+        cycle={selectedCycle}
       />
 
       <QuickActionsSheet
