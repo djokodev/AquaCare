@@ -23,7 +23,7 @@ Utilisation dans views.py :
 """
 from .analytics_service import AnalyticsService
 from .base import BaseService
-from .cycle_application_service import HarvestCycleCommand, ProductionCycleApplicationService
+from .cycle_application_service import HarvestCycleCommand, PartialHarvestCommand, ProductionCycleApplicationService
 from .cycle_service import ProductionCycleService
 from .dashboard_application_service import DashboardApplicationService, InvalidDashboardCycleScopeError
 from .dashboard_service import DashboardService
@@ -58,6 +58,7 @@ __all__ = [
     'ProductionCycleService',
     'ProductionCycleApplicationService',
     'HarvestCycleCommand',
+    'PartialHarvestCommand',
     'CycleLogService',
     'CycleLogApplicationService',
     'CycleLogMutationResult',

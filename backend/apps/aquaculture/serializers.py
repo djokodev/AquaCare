@@ -45,6 +45,7 @@ from .models import (
     CycleMetrics,
     FeedingPlan,
     NutritionalGuide,
+    PartialHarvest,
     ProductionCycle,
     ProductionReport,
     ReportDispatchLog,
@@ -658,6 +659,82 @@ class HarvestSerializer(serializers.Serializer):
         if value > date.today():
             raise serializers.ValidationError(_("Date de récolte ne peut être dans le futur"))
         return value
+
+
+class PartialHarvestSerializer(serializers.Serializer):
+    """Sérialiseur pour la création d'une récolte partielle."""
+
+    harvest_date = serializers.DateField(help_text="Date de la récolte partielle")
+    count_harvested = serializers.IntegerField(
+        min_value=1,
+        help_text="Nombre de poissons à récolter"
+    )
+    average_weight_g = serializers.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        min_value=Decimal('0.1'),
+        help_text="Poids moyen des poissons récoltés (grammes)"
+    )
+    sale_price_fcfa_per_kg = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        min_value=Decimal('1'),
+        required=False,
+        allow_null=True,
+        help_text="Prix de vente FCFA/kg (optionnel)"
+    )
+    notes = serializers.CharField(
+        max_length=500,
+        required=False,
+        allow_blank=True,
+        default='',
+        help_text="Notes sur la récolte"
+    )
+    client_uuid = serializers.UUIDField(
+        required=False,
+        allow_null=True,
+        help_text="UUID généré côté mobile pour déduplication"
+    )
+    created_offline = serializers.BooleanField(
+        required=False,
+        default=False,
+        help_text="True si créé sans connexion"
+    )
+
+    def validate_harvest_date(self, value):
+        if value < date.today() - timedelta(days=30):
+            raise serializers.ValidationError(_("Date de récolte trop ancienne"))
+        if value > date.today() + timedelta(days=7):
+            raise serializers.ValidationError(_("Date de récolte trop éloignée dans le futur"))
+        return value
+
+
+class PartialHarvestReadSerializer(serializers.ModelSerializer):
+    """Sérialiseur lecture pour une récolte partielle."""
+
+    estimated_revenue_fcfa = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PartialHarvest
+        fields = [
+            'id', 'harvest_date', 'count_harvested', 'average_weight_g',
+            'total_weight_kg', 'sale_price_fcfa_per_kg', 'estimated_revenue_fcfa',
+            'notes', 'client_uuid', 'created_offline', 'synced_at', 'created_at',
+        ]
+        read_only_fields = fields
+
+    def get_estimated_revenue_fcfa(self, obj):
+        if obj.sale_price_fcfa_per_kg:
+            return round(float(obj.total_weight_kg) * float(obj.sale_price_fcfa_per_kg), 2)
+        return None
+
+
+class PartialHarvestResponseSerializer(serializers.Serializer):
+    """Réponse d'une récolte partielle."""
+
+    message = serializers.CharField()
+    cycle = ProductionCycleSerializer()
+    partial_harvest = PartialHarvestReadSerializer()
 
 
 class CycleHarvestResponseSerializer(serializers.Serializer):

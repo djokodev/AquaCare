@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Any
 
-from ..models import ProductionCycle
+from ..models import PartialHarvest, ProductionCycle
 from .analytics_service import AnalyticsService
 from .cycle_service import CycleCreatePayload, ProductionCycleService
 
@@ -19,6 +19,19 @@ class HarvestCycleCommand:
     final_count: int
     final_average_weight: Decimal
     harvest_notes: str = ""
+
+
+@dataclass(frozen=True)
+class PartialHarvestCommand:
+    """Commande applicative de récolte partielle d'un cycle."""
+
+    harvest_date: Any
+    count_harvested: int
+    average_weight_g: Decimal
+    sale_price_fcfa_per_kg: Decimal | None = None
+    notes: str = ""
+    client_uuid: Any = None
+    created_offline: bool = False
 
 
 class ProductionCycleApplicationService:
@@ -44,6 +57,23 @@ class ProductionCycleApplicationService:
             final_count=command.final_count,
             final_average_weight=command.final_average_weight,
             harvest_notes=command.harvest_notes,
+        )
+
+    @staticmethod
+    def partial_harvest_cycle(
+        cycle: ProductionCycle,
+        command: PartialHarvestCommand,
+    ) -> tuple[ProductionCycle, PartialHarvest]:
+        """Enregistre une récolte partielle via la couche applicative."""
+        return ProductionCycleService.partial_harvest_cycle(
+            cycle=cycle,
+            harvest_date=command.harvest_date,
+            count_harvested=command.count_harvested,
+            average_weight_g=command.average_weight_g,
+            sale_price_fcfa_per_kg=command.sale_price_fcfa_per_kg,
+            notes=command.notes,
+            client_uuid=command.client_uuid,
+            created_offline=command.created_offline,
         )
 
     @staticmethod

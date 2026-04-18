@@ -40,8 +40,9 @@ from ..domain.exceptions import (
     InvalidDateRangeError,
     InvalidDensityError,
     InvalidHarvestDataError,
+    InsufficientFishCountError,
 )
-from ..models import CycleLog, ProductionCycle
+from ..models import CycleLog, PartialHarvest, ProductionCycle
 from .base import BaseService
 
 if TYPE_CHECKING:
@@ -404,6 +405,100 @@ class ProductionCycleService(BaseService):
         cycle.save()
         return cycle
 
+    @staticmethod
+    @transaction.atomic
+    def partial_harvest_cycle(
+        cycle: ProductionCycle,
+        harvest_date: date,
+        count_harvested: int,
+        average_weight_g: Decimal,
+        sale_price_fcfa_per_kg: Decimal | None = None,
+        notes: str = "",
+        client_uuid=None,
+        created_offline: bool = False,
+    ) -> tuple[ProductionCycle, PartialHarvest]:
+        """
+        Enregistre une récolte partielle sur un cycle actif.
+
+        Le cycle reste actif après l'opération. current_count est décrémenté
+        du nombre de poissons récoltés.
+
+        Args:
+            cycle: Cycle actif à récolter partiellement
+            harvest_date: Date de la récolte partielle
+            count_harvested: Nombre de poissons récoltés
+            average_weight_g: Poids moyen des poissons récoltés (grammes)
+            sale_price_fcfa_per_kg: Prix de vente optionnel (FCFA/kg)
+            notes: Notes optionnelles
+            client_uuid: UUID client pour déduplication offline
+            created_offline: True si créé sans connexion
+
+        Returns:
+            Tuple (cycle mis à jour, PartialHarvest créé)
+
+        Raises:
+            CycleNotActiveError: Si le cycle n'est pas actif
+            InsufficientFishCountError: Si count_harvested > current_count
+            InvalidHarvestDataError: Si poids en dessous du minimum commercial
+        """
+        ProductionCycleService.log_operation(
+            "partial_harvest_cycle",
+            {"cycle_id": str(cycle.id), "count_harvested": count_harvested}
+        )
+
+        # 1. Validation état
+        if cycle.status != 'active':
+            raise CycleNotActiveError(
+                _("Seuls les cycles actifs peuvent faire l'objet d'une récolte partielle "
+                  "(statut actuel: %(status)s)") % {'status': cycle.get_status_display()}
+            )
+
+        # 2. Déduplication offline
+        if client_uuid:
+            existing = PartialHarvest.objects.filter(client_uuid=client_uuid).first()
+            if existing:
+                return existing.cycle, existing
+
+        # 3. Validation règles métier
+        ProductionCycleService._validate_partial_harvest_rules(
+            cycle, harvest_date, count_harvested, average_weight_g
+        )
+
+        # 4. Calcul poids total
+        total_weight_kg = Decimal(str(count_harvested)) * average_weight_g / Decimal('1000')
+
+        # 5. Création de l'enregistrement PartialHarvest
+        partial_harvest = PartialHarvest.objects.create(
+            cycle=cycle,
+            harvest_date=harvest_date,
+            count_harvested=count_harvested,
+            average_weight_g=average_weight_g,
+            total_weight_kg=total_weight_kg,
+            sale_price_fcfa_per_kg=sale_price_fcfa_per_kg,
+            notes=notes,
+            client_uuid=client_uuid,
+            created_offline=created_offline,
+        )
+
+        # 6. Mise à jour du cycle (decrement count + recalcul biomasse)
+        cycle.current_count -= count_harvested
+        cycle.current_biomass = AquacultureCalculator.calculate_biomass(
+            cycle.current_count, cycle.current_average_weight
+        )
+        cycle.save(update_fields=['current_count', 'current_biomass', 'updated_at'])
+
+        ProductionCycleService.log_operation(
+            "partial_harvest_recorded",
+            {
+                "cycle_id": str(cycle.id),
+                "partial_harvest_id": str(partial_harvest.id),
+                "remaining_count": cycle.current_count,
+            },
+            level='info'
+        )
+
+        return cycle, partial_harvest
+
     # =================== MÉTHODES PRIVÉES (VALIDATION) ===================
 
     @staticmethod
@@ -593,6 +688,57 @@ class ProductionCycleService(BaseService):
         if errors:
             raise InvalidHarvestDataError(
                 _("Données de récolte invalides : ") + " ; ".join(errors)
+            )
+
+    @staticmethod
+    def _validate_partial_harvest_rules(
+        cycle: ProductionCycle,
+        harvest_date: date,
+        count_harvested: int,
+        average_weight_g: Decimal,
+    ) -> None:
+        """
+        Valide les règles métier d'une récolte partielle.
+
+        Raises:
+            InsufficientFishCountError: count_harvested > current_count
+            InvalidHarvestDataError: poids sous le minimum commercial
+        """
+        # Effectif disponible
+        if count_harvested > cycle.current_count:
+            raise InsufficientFishCountError(
+                _("Nombre à récolter (%(n)d) supérieur à l'effectif disponible (%(c)d)")
+                % {'n': count_harvested, 'c': cycle.current_count}
+            )
+
+        # Poids minimum commercial par espèce
+        min_harvest_weight = {
+            'tilapia': 200,
+            'clarias': 250,
+        }
+        min_weight = min_harvest_weight.get(cycle.species, 150)
+        if float(average_weight_g) < min_weight:
+            raise InvalidHarvestDataError(
+                _("Poids moyen (%(weight).1fg) inférieur au minimum commercial "
+                  "pour %(species)s (%(min)dg)")
+                % {
+                    'weight': average_weight_g,
+                    'species': cycle.get_species_display(),
+                    'min': min_weight,
+                }
+            )
+
+        # Date cohérente
+        if harvest_date < cycle.start_date:
+            raise InvalidHarvestDataError(
+                _("Date de récolte (%(h)s) antérieure au début du cycle (%(s)s)")
+                % {'h': harvest_date, 's': cycle.start_date}
+            )
+
+        future_limit = date.today() + timedelta(days=7)
+        if harvest_date > future_limit:
+            raise InvalidHarvestDataError(
+                _("Date de récolte ne peut être plus de 7 jours dans le futur")
             )
 
     @staticmethod

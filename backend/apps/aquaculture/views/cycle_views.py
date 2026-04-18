@@ -10,7 +10,12 @@ from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from ..domain.exceptions import CycleAlreadyHarvestedError, InvalidHarvestDataError
+from ..domain.exceptions import (
+    CycleAlreadyHarvestedError,
+    CycleNotActiveError,
+    InvalidHarvestDataError,
+    InsufficientFishCountError,
+)
 from ..models import ProductionCycle
 from ..services.cycle_feed_service import CycleFeedService
 from ..serializers import (
@@ -18,10 +23,14 @@ from ..serializers import (
     CycleHarvestResponseSerializer,
     CycleStatisticsSerializer,
     HarvestSerializer,
+    PartialHarvestReadSerializer,
+    PartialHarvestResponseSerializer,
+    PartialHarvestSerializer,
     ProductionCycleSerializer,
 )
 from ..services import (
     HarvestCycleCommand,
+    PartialHarvestCommand,
     ProductionCycleApplicationService,
 )
 
@@ -128,6 +137,8 @@ class ProductionCycleViewSet(viewsets.ModelViewSet):
     def get_serializer_class(self):
         if self.action == 'harvest':
             return HarvestSerializer
+        if self.action == 'partial_harvest':
+            return PartialHarvestSerializer
         return super().get_serializer_class()
 
     def get_queryset(self):
@@ -410,3 +421,74 @@ class ProductionCycleViewSet(viewsets.ModelViewSet):
         cycle = self.get_object()
         result = CycleFeedService.get_feed_status(cycle)
         return Response(result)
+
+    @extend_schema(
+        summary="Enregistrer une récolte partielle",
+        description="""
+        Enregistre une vente partielle de poissons sur un cycle actif.
+        Le cycle reste actif après l'opération. Le current_count est décrémenté
+        du nombre de poissons récoltés.
+        """,
+        request=PartialHarvestSerializer,
+        responses={
+            200: PartialHarvestResponseSerializer,
+            400: OpenApiExample(
+                'Effectif insuffisant',
+                value={'error': 'Nombre à récolter supérieur à l\'effectif disponible'}
+            )
+        },
+    )
+    @action(detail=True, methods=['post'], url_path='partial-harvest')
+    def partial_harvest(self, request, pk=None):
+        """
+        POST /api/aquaculture/cycles/{id}/partial-harvest/
+
+        Récolte partielle : le cycle reste actif, current_count décrémenté.
+        """
+        cycle = self.get_object()
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            updated_cycle, partial = ProductionCycleApplicationService.partial_harvest_cycle(
+                cycle=cycle,
+                command=PartialHarvestCommand(
+                    harvest_date=serializer.validated_data['harvest_date'],
+                    count_harvested=serializer.validated_data['count_harvested'],
+                    average_weight_g=serializer.validated_data['average_weight_g'],
+                    sale_price_fcfa_per_kg=serializer.validated_data.get('sale_price_fcfa_per_kg'),
+                    notes=serializer.validated_data.get('notes', ''),
+                    client_uuid=serializer.validated_data.get('client_uuid'),
+                    created_offline=serializer.validated_data.get('created_offline', False),
+                ),
+            )
+
+            response_serializer = PartialHarvestResponseSerializer(
+                {
+                    'message': _('Récolte partielle enregistrée avec succès'),
+                    'cycle': updated_cycle,
+                    'partial_harvest': partial,
+                },
+                context={'request': request},
+            )
+            return Response(response_serializer.data, status=status.HTTP_200_OK)
+
+        except (CycleNotActiveError, InsufficientFishCountError, InvalidHarvestDataError) as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    @extend_schema(
+        summary="Historique des récoltes partielles d'un cycle",
+        description="Retourne la liste de toutes les récoltes partielles enregistrées pour ce cycle.",
+        responses={200: PartialHarvestReadSerializer(many=True)},
+    )
+    @action(detail=True, methods=['get'], url_path='partial-harvests')
+    def partial_harvests(self, request, pk=None):
+        """
+        GET /api/aquaculture/cycles/{id}/partial-harvests/
+
+        Liste toutes les récoltes partielles du cycle, du plus récent au plus ancien.
+        """
+        cycle = self.get_object()
+        partial_harvests = cycle.partial_harvests.all()
+        serializer = PartialHarvestReadSerializer(partial_harvests, many=True)
+        return Response(serializer.data)

@@ -11,6 +11,8 @@ import {
   SanitaryLogForm,
   HarvestData,
   SyncPayload,
+  PartialHarvestData,
+  PartialHarvest,
 } from '@/types/aquaculture';
 import { apiService } from '@/services/api';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
@@ -197,6 +199,21 @@ export const harvestCycle = createAsyncThunk(
       return cycle;
     } catch (error: unknown) {
       return rejectWithValue(extractErrorMessage(error, 'Erreur lors de la recolte du cycle'));
+    }
+  }
+);
+
+export const createPartialHarvest = createAsyncThunk(
+  'aquaculture/createPartialHarvest',
+  async (
+    { id, data }: { id: string; data: PartialHarvestData },
+    { rejectWithValue }
+  ) => {
+    try {
+      const result = await aquacultureService.partialHarvestCycle(id, data);
+      return result;
+    } catch (error: unknown) {
+      return rejectWithValue(extractErrorMessage(error, 'Erreur lors de la récolte partielle'));
     }
   }
 );
@@ -483,6 +500,16 @@ export const aquacultureSlice = createSlice({
         if (state.currentCycle?.id === harvestedCycle.id) {
           state.currentCycle = harvestedCycle;
         }
+      })
+
+      .addCase(createPartialHarvest.fulfilled, (state, action) => {
+        const { cycle: updatedCycle } = action.payload;
+        // Met à jour le cycle dans les listes (il reste actif)
+        const idx = state.cycles.findIndex((c) => c.id === updatedCycle.id);
+        if (idx !== -1) state.cycles[idx] = updatedCycle;
+        const activeIdx = state.activeCycles.findIndex((c) => c.id === updatedCycle.id);
+        if (activeIdx !== -1) state.activeCycles[activeIdx] = updatedCycle;
+        if (state.currentCycle?.id === updatedCycle.id) state.currentCycle = updatedCycle;
       })
 
       .addCase(fetchCycleLogs.pending, (state) => {

@@ -772,6 +772,107 @@ class SanitaryLog(models.Model):
         return f"{self.cycle.cycle_name} - {self.get_event_type_display()} ({self.event_date})"
 
 
+class PartialHarvestQuerySet(models.QuerySet):
+    """QuerySet optimisé pour les récoltes partielles."""
+
+    def for_api(self):
+        return self.select_related('cycle')
+
+
+class PartialHarvest(models.Model):
+    """
+    Enregistrement d'une récolte partielle sur un cycle actif.
+
+    Permet à l'éleveur de vendre une partie de ses poissons matures
+    tout en laissant le cycle se poursuivre. Chaque récolte partielle
+    diminue le current_count du cycle sans le clôturer.
+
+    Offline-first : client_uuid pour déduplication mobile.
+    """
+
+    class Meta:
+        app_label = 'aquaculture'
+        ordering = ['-harvest_date', '-created_at']
+        verbose_name = _("Récolte partielle")
+        verbose_name_plural = _("Récoltes partielles")
+        indexes = [
+            models.Index(fields=['cycle', 'harvest_date']),
+            models.Index(fields=['client_uuid']),
+            models.Index(fields=['created_offline', 'synced_at']),
+        ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+
+    client_uuid = models.UUIDField(
+        unique=True,
+        null=True,
+        blank=True,
+        verbose_name=_("UUID client"),
+        help_text=_("UUID généré côté mobile pour déduplication")
+    )
+
+    cycle = models.ForeignKey(
+        ProductionCycle,
+        on_delete=models.CASCADE,
+        related_name='partial_harvests',
+        verbose_name=_("Cycle de production")
+    )
+
+    harvest_date = models.DateField(verbose_name=_("Date de récolte partielle"))
+
+    count_harvested = models.PositiveIntegerField(
+        validators=[MinValueValidator(1)],
+        verbose_name=_("Nombre de poissons récoltés")
+    )
+
+    average_weight_g = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal('0.1'))],
+        verbose_name=_("Poids moyen (g)")
+    )
+
+    total_weight_kg = models.DecimalField(
+        max_digits=10,
+        decimal_places=3,
+        verbose_name=_("Poids total récolté (kg)"),
+        help_text=_("Calculé automatiquement : count × poids / 1000")
+    )
+
+    sale_price_fcfa_per_kg = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal('1'))],
+        verbose_name=_("Prix de vente (FCFA/kg)")
+    )
+
+    notes = models.CharField(
+        max_length=500,
+        blank=True,
+        default='',
+        verbose_name=_("Notes")
+    )
+
+    # Sync metadata
+    created_offline = models.BooleanField(
+        default=False,
+        verbose_name=_("Créé hors ligne")
+    )
+    synced_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name=_("Synchronisé le")
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    objects = PartialHarvestQuerySet.as_manager()
+
+    def __str__(self):
+        return f"{self.cycle.cycle_name} — récolte partielle {self.harvest_date} ({self.count_harvested} poissons)"
+
+
 class NutritionalGuide(models.Model):
     """
     Tableau de référence pour les recommandations d'alimentation.

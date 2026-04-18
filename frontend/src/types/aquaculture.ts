@@ -90,9 +90,37 @@ export interface ProductionCycle {
 
   status: CycleStatus;
 
+  // Recoltes partielles (historique)
+  partial_harvests?: PartialHarvest[];
+
   // Metadonnees
   created_at: string;
   updated_at: string;
+}
+
+export interface PartialHarvest {
+  id: string;
+  harvest_date: string;
+  count_harvested: number;
+  average_weight_g: number;
+  total_weight_kg: number;
+  sale_price_fcfa_per_kg?: number;
+  estimated_revenue_fcfa?: number;
+  notes?: string;
+  client_uuid?: string;
+  created_offline?: boolean;
+  synced_at?: string;
+  created_at: string;
+}
+
+export interface PartialHarvestData {
+  harvest_date: string;
+  count_harvested: number;
+  average_weight_g: number;
+  sale_price_fcfa_per_kg?: number;
+  notes?: string;
+  client_uuid?: string;
+  created_offline?: boolean;
 }
 
 export interface CycleLog {
