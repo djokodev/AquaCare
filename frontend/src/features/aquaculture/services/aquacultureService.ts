@@ -271,7 +271,6 @@ class AquacultureService {
       );
       return response.data;
     } catch (error) {
-      logger.error(`Erreur lors de la récolte partielle du cycle ${id}:`, error);
       throw error;
     }
   }

@@ -67,12 +67,12 @@ export default function PartialHarvestHistoryModal({ visible, onClose, cycle }: 
               <View style={styles.summaryRow}>
                 <View style={styles.summaryItem}>
                   <Text style={styles.summaryValue}>{totalFishHarvested}</Text>
-                  <Text style={styles.summaryLabel}>{t('countHarvested')}</Text>
+                  <Text style={styles.summaryLabel}>{t('totalFishHarvested')}</Text>
                 </View>
                 <View style={styles.summaryDivider} />
                 <View style={styles.summaryItem}>
                   <Text style={styles.summaryValue}>{totalWeightKg.toFixed(1)} kg</Text>
-                  <Text style={styles.summaryLabel}>{t('totalHarvestedWeight')}</Text>
+                  <Text style={styles.summaryLabel}>{t('totalWeight')}</Text>
                 </View>
                 {totalRevenue > 0 && (
                   <>
@@ -81,7 +81,7 @@ export default function PartialHarvestHistoryModal({ visible, onClose, cycle }: 
                       <Text style={[styles.summaryValue, { color: COLORS.GREEN_PRIMARY }]}>
                         {Math.round(totalRevenue).toLocaleString()}
                       </Text>
-                      <Text style={styles.summaryLabel}>FCFA</Text>
+                      <Text style={styles.summaryLabel}>{t('totalRevenue')}</Text>
                     </View>
                   </>
                 )}
