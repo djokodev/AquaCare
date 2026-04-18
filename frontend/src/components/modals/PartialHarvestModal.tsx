@@ -132,7 +132,6 @@ export default function PartialHarvestModal({ visible, onClose, cycle, onSuccess
           <ScrollView showsVerticalScrollIndicator={false} style={styles.body}>
             {/* Info disponible */}
             <View style={styles.infoRow}>
-              <Ionicons name="fish-outline" size={16} color={COLORS.GREEN_PRIMARY} />
               <Text style={styles.infoText}>
                 {t('remainingFish')} : <Text style={styles.infoBold}>{cycle.current_count}</Text>
               </Text>

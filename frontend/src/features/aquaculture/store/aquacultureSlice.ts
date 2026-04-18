@@ -21,6 +21,7 @@ import { logoutUser } from '@/features/auth/store/authSlice';
 interface ApiErrorPayload {
   detail?: string;
   message?: string;
+  error?: string;
 }
 
 interface ApiErrorShape {
@@ -53,6 +54,9 @@ const extractErrorMessage = (error: unknown, fallback: string): string => {
     }
     if (responseData.message) {
       return responseData.message;
+    }
+    if (responseData.error) {
+      return responseData.error;
     }
   }
 

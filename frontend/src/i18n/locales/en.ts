@@ -548,6 +548,7 @@
   partialHarvestError: 'Error during partial harvest',
   partialHarvestHistory: 'Partial harvest history',
   noPartialHarvests: 'No partial harvests recorded',
+  viewPartialHarvests: 'View partial harvests ({{count}})',
   partialHarvestCountRequired: 'Number of fish to harvest must be greater than 0',
   partialHarvestCountExceedsAvailable: 'Count exceeds available fish',
   partialHarvestNotesPlaceholder: 'E.g.: Sale to client in Douala, Mokolo market...',

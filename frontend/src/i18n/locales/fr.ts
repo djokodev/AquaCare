@@ -599,6 +599,7 @@ export const fr = {
   partialHarvestError: 'Erreur lors de la récolte partielle',
   partialHarvestHistory: 'Historique des récoltes partielles',
   noPartialHarvests: 'Aucune récolte partielle enregistrée',
+  viewPartialHarvests: 'Voir récoltes partielles ({{count}})',
   partialHarvestCountRequired: 'Le nombre de poissons à récolter doit être supérieur à 0',
   partialHarvestCountExceedsAvailable: "Le nombre à récolter dépasse l'effectif disponible",
   partialHarvestNotesPlaceholder: 'Ex\u00a0: Vente client Douala, marché de Mokolo...',

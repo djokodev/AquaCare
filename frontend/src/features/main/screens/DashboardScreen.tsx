@@ -28,6 +28,7 @@ import {
 import { offlineService } from '@/services/offlineService';
 import HarvestModal from '@/components/modals/HarvestModal';
 import PartialHarvestModal from '@/components/modals/PartialHarvestModal';
+import PartialHarvestHistoryModal from '@/components/modals/PartialHarvestHistoryModal';
 import CyclePicker from '@/features/aquaculture/components/CyclePicker';
 import DashboardHeader from '../components/DashboardHeader';
 import QuickActionsPreview from '../components/QuickActionsPreview';
@@ -50,6 +51,7 @@ export default function DashboardScreen({ navigation }: any) {
 
   const [harvestModalVisible, setHarvestModalVisible] = useState(false);
   const [partialHarvestModalVisible, setPartialHarvestModalVisible] = useState(false);
+  const [partialHarvestHistoryModalVisible, setPartialHarvestHistoryModalVisible] = useState(false);
   const [selectedCycle, setSelectedCycle] = useState<ProductionCycle | null>(null);
   const [actionsSheetVisible, setActionsSheetVisible] = useState(false);
   const [cycleSwitchModalVisible, setCycleSwitchModalVisible] = useState(false);
@@ -460,6 +462,13 @@ export default function DashboardScreen({ navigation }: any) {
                   <Text className="text-white text-sm font-semibold ml-1">{t('harvest')}</Text>
                 </TouchableOpacity>
               </View>
+              <TouchableOpacity
+                style={{ marginTop: 10, flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                onPress={() => { setSelectedCycle(cycle); setPartialHarvestHistoryModalVisible(true); }}
+              >
+                <Ionicons name="time-outline" size={14} color={MAVECAM_COLORS.GREEN_PRIMARY} />
+                <Text style={{ fontSize: 13, color: MAVECAM_COLORS.GREEN_PRIMARY }}>{t('partialHarvestHistory')}</Text>
+              </TouchableOpacity>
             </View>
           ))}
         </View>
@@ -479,6 +488,12 @@ export default function DashboardScreen({ navigation }: any) {
         onClose={closePartialHarvestModal}
         cycle={selectedCycle}
         onSuccess={handleHarvestSuccess}
+      />
+
+      <PartialHarvestHistoryModal
+        visible={partialHarvestHistoryModalVisible}
+        onClose={() => setPartialHarvestHistoryModalVisible(false)}
+        cycle={selectedCycle}
       />
 
       <QuickActionsSheet
