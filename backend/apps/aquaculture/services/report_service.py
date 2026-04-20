@@ -1023,7 +1023,7 @@ class ReportService(BaseService):
             'period_analyzed': 'Période analysée',
             'generated_on': 'Généré le',
             'promoter': 'Promoteur',
-            'dashboard_metrics': 'Indicateurs clés',
+            'dashboard_metrics': 'Indicateurs clés du tableau de bord',
             'estimated_market_value': 'Valeur marchande estimée des poissons',
             'feed_cost_consumed': 'Coût des aliments déjà consommés',
             'time_remaining_cycle': "Temps restant pour la fin du cycle d'élevage",
