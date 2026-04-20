@@ -10,7 +10,7 @@ import { Notification as NotificationPayload } from './notifications';
 export type Species = 'tilapia' | 'clarias';
 export type CycleStatus = 'planned' | 'active' | 'harvested' | 'cancelled';
 export type ReportType = 'daily' | 'weekly' | 'monthly';
-export type ReportStatus = 'draft' | 'validated';
+export type ReportStatus = 'draft' | 'validated' | 'pending';
 export type EmailReportStatus = 'not_sent' | 'sent' | 'failed';
 export type WhatsAppReportStatus = 'not_shared' | 'shared';
 export type SanitaryEventType =

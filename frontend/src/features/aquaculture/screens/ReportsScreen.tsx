@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, ActivityIndicator, FlatList, RefreshControl } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { View, Text, TouchableOpacity, ActivityIndicator, FlatList, RefreshControl, Alert } from 'react-native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
@@ -10,7 +10,7 @@ import { RootStackParamList } from '@/navigation/MainNavigator';
 import { MAVECAM_COLORS } from '@/constants/colors';
 import { ProductionReport, ReportType } from '@/types/aquaculture';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
-import { formatDate } from '@/utils';
+import { formatDate, formatDateTime } from '@/utils';
 import { RootState } from '@/store/store';
 
 type ReportsScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Reports'>;
@@ -31,6 +31,15 @@ export default function ReportsScreen({ navigation }: ReportsScreenProps) {
   const [reports, setReports] = useState<ProductionReport[]>([]);
   const [selectedType, setSelectedType] = useState<ReportType | 'all'>('all');
   const [error, setError] = useState<string | null>(null);
+  const [infoMessage, setInfoMessage] = useState<string | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const stopPolling = useCallback(() => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  }, []);
 
   const loadReports = useCallback(async () => {
     try {
@@ -39,26 +48,50 @@ export default function ReportsScreen({ navigation }: ReportsScreenProps) {
         currentCycle?.id ? { cycle_id: currentCycle.id } : undefined
       );
       setReports(data);
+      return data;
     } catch {
       setError(t('reportsLoadError'));
+      return [];
     } finally {
       setLoading(false);
     }
   }, [currentCycle?.id, t]);
 
+  const startPollingIfPending = useCallback((data: ProductionReport[]) => {
+    const hasPending = data.some((r) => r.status === 'pending');
+    if (!hasPending) {
+      stopPolling();
+      return;
+    }
+    if (pollRef.current) return;
+    pollRef.current = setInterval(async () => {
+      const updated = await loadReports();
+      if (!updated.some((r) => r.status === 'pending')) {
+        stopPolling();
+        setInfoMessage(null);
+      }
+    }, 3000);
+  }, [loadReports, stopPolling]);
+
   useEffect(() => {
-    loadReports();
-  }, [loadReports]);
+    loadReports().then(startPollingIfPending);
+  }, [loadReports, startPollingIfPending]);
+
+  useEffect(() => {
+    return () => stopPolling();
+  }, [stopPolling]);
 
   useFocusEffect(
     useCallback(() => {
-      loadReports();
-    }, [loadReports])
+      loadReports().then(startPollingIfPending);
+      return () => stopPolling();
+    }, [loadReports, startPollingIfPending, stopPolling])
   );
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadReports();
+    const data = await loadReports();
+    startPollingIfPending(data);
     setRefreshing(false);
   };
 
@@ -69,6 +102,7 @@ export default function ReportsScreen({ navigation }: ReportsScreenProps) {
     }
     try {
       setGeneratingType(reportType);
+      setInfoMessage(null);
       const logs = await aquacultureService.getCycleLogs(currentCycle.id);
       if (logs.length === 0) {
         setError(t('noLogsForReportGeneration'));
@@ -78,12 +112,53 @@ export default function ReportsScreen({ navigation }: ReportsScreenProps) {
         report_type: reportType,
         cycle_id: currentCycle.id,
       });
-      await loadReports();
+      setInfoMessage(t('reportGenerating'));
+      const data = await loadReports();
+      startPollingIfPending(data);
     } catch {
       setError(t('reportGenerateError'));
     } finally {
       setGeneratingType(null);
     }
+  };
+
+  const handleDeleteReport = useCallback((report: ProductionReport) => {
+    Alert.alert(
+      t('reportDeleteConfirm'),
+      t('reportDeleteConfirmMsg'),
+      [
+        { text: t('cancel'), style: 'cancel' },
+        {
+          text: t('delete'),
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await aquacultureService.deleteReport(report.id);
+              setReports(prev => prev.filter(r => r.id !== report.id));
+            } catch {
+              Alert.alert(t('error'), t('reportDeleteError'));
+            }
+          },
+        },
+      ]
+    );
+  }, [t]);
+
+  const getStatusStyle = (reportStatus: string) => {
+    if (reportStatus === 'validated') return 'text-mavecam-primary';
+    if (reportStatus === 'pending') return 'text-warning';
+    return 'text-gray-light';
+  };
+
+  const getStatusLabel = (reportStatus: string) => {
+    if (reportStatus === 'validated') return t('reportStatusValidated');
+    if (reportStatus === 'pending') return t('reportStatusPending');
+    return t('reportStatusDraft');
+  };
+
+  const getPeriodLabel = (periodStart: string, periodEnd: string) => {
+    if (periodStart === periodEnd) return formatDate(periodStart);
+    return `${formatDate(periodStart)} - ${formatDate(periodEnd)}`;
   };
 
   const filteredReports = reports.filter(
@@ -104,7 +179,7 @@ export default function ReportsScreen({ navigation }: ReportsScreenProps) {
   const renderReportItem = useCallback(
     ({ item: report }: { item: ProductionReport }) => (
       <TouchableOpacity
-        className="bg-white rounded-xl p-4 mb-3 border border-gray-100"
+        className="bg-white rounded-xl p-4 mb-3 mx-4 border border-gray-200 shadow-sm"
         onPress={() => navigation.navigate('ReportDetail', { reportId: report.id })}
       >
         <View className="flex-row items-center justify-between">
@@ -115,18 +190,24 @@ export default function ReportsScreen({ navigation }: ReportsScreenProps) {
                 ? t('reportTypeWeekly')
                 : t('reportTypeMonthly')}
           </Text>
-          <Text
-            className={`text-xs font-semibold ${
-              report.status === 'validated' ? 'text-mavecam-primary' : 'text-warning'
-            }`}
-          >
-            {report.status === 'validated' ? t('reportStatusValidated') : t('reportStatusDraft')}
-          </Text>
+          <View className="flex-row items-center">
+            <Text className={`text-xs font-semibold mr-3 ${getStatusStyle(report.status)}`}>
+              {getStatusLabel(report.status)}
+            </Text>
+            <TouchableOpacity
+              onPress={() => handleDeleteReport(report)}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Ionicons name="trash-outline" size={16} color={MAVECAM_COLORS.ERROR} />
+            </TouchableOpacity>
+          </View>
         </View>
 
-        <Text className="text-xs text-gray-light mt-1">
-          {formatDate(report.period_start)} - {formatDate(report.period_end)}
-        </Text>
+        {report.generated_at && (
+          <Text className="text-xs text-gray-light mt-1">
+            {formatDateTime(report.generated_at)}
+          </Text>
+        )}
 
         <View className="flex-row mt-2">
           <Text className="text-xs text-gray-light mr-4">
@@ -138,7 +219,7 @@ export default function ReportsScreen({ navigation }: ReportsScreenProps) {
         </View>
       </TouchableOpacity>
     ),
-    [navigation, t]
+    [navigation, t, handleDeleteReport]
   );
 
   const renderListHeader = useCallback(
@@ -170,6 +251,18 @@ export default function ReportsScreen({ navigation }: ReportsScreenProps) {
             ))}
           </View>
 
+          {infoMessage && (
+            <View className="bg-green-50 border border-mavecam-primary rounded-lg p-3 mb-3">
+              <Text className="text-sm text-mavecam-primary">{infoMessage}</Text>
+            </View>
+          )}
+
+          {error && (
+            <View className="bg-white border border-error rounded-lg p-3 mb-3">
+              <Text className="text-sm text-error">{error}</Text>
+            </View>
+          )}
+
           <Text className="text-base font-bold text-gray-dark mb-3">{t('reportHistory')}</Text>
 
           <View className="flex-row mb-3">
@@ -195,15 +288,9 @@ export default function ReportsScreen({ navigation }: ReportsScreenProps) {
               </TouchableOpacity>
             ))}
           </View>
-
-          {error && (
-            <View className="bg-white border border-error rounded-lg p-3 mb-3">
-              <Text className="text-sm text-error">{error}</Text>
-            </View>
-          )}
         </View>
     ),
-    [currentCycle?.id, error, filteredReports.length, generatingType, onRefresh, selectedType, t]
+    [currentCycle?.id, error, infoMessage, generatingType, selectedType, t]
   );
 
   const renderEmptyState = useCallback(

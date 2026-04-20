@@ -50,9 +50,16 @@ class ReportApplicationService:
 
     @staticmethod
     def _set_pending_status(report: ProductionReport) -> ProductionReport:
+        fields_to_update = []
         if report.status != "pending":
             report.status = "pending"
-            report.save(update_fields=["status", "updated_at"])
+            fields_to_update.append("status")
+        if report.is_deleted:
+            report.is_deleted = False
+            report.deleted_at = None
+            fields_to_update.extend(["is_deleted", "deleted_at"])
+        if fields_to_update:
+            report.save(update_fields=[*fields_to_update, "updated_at"])
         return report
 
     @staticmethod
@@ -85,6 +92,20 @@ class ReportApplicationService:
             raise InvalidReportCycleScopeError(_("Cycle de session introuvable ou inactif."))
 
     @staticmethod
+    def _set_cycle_scope_id_in_payload(report: ProductionReport, cycle_id: str | None) -> ProductionReport:
+        """Stocke cycle_scope_id dans payload.report_meta immediatement (avant la tache async)."""
+        if not cycle_id:
+            return report
+        payload = report.payload if isinstance(report.payload, dict) else {}
+        report_meta = dict(payload.get("report_meta", {}) or {})
+        if report_meta.get("cycle_scope_id") == cycle_id:
+            return report
+        report_meta["cycle_scope_id"] = cycle_id
+        report.payload = {**payload, "report_meta": report_meta}
+        report.save(update_fields=["payload", "updated_at"])
+        return report
+
+    @staticmethod
     def request_report_generation(user, command: GenerateReportCommand) -> ProductionReport:
         """Cree ou recharge un rapport en attente puis declenche la generation async."""
         period_start, period_end = ReportService.build_period_bounds(
@@ -101,6 +122,7 @@ class ReportApplicationService:
             defaults={"status": "pending"},
         )
         report = ReportApplicationService._set_pending_status(report)
+        report = ReportApplicationService._set_cycle_scope_id_in_payload(report, command.cycle_id)
         ReportApplicationService._dispatch_generation(report, command.cycle_id)
         return report
 

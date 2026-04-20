@@ -107,37 +107,21 @@
       font-size: 11px;
     }
 
-    .kpi-grid {
-      font-size: 0;
+    .kpi-table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 8px 8px;
       margin: 8px 0 14px 0;
     }
 
-    .kpi-card {
-      display: inline-block;
-      width: 48%;
-      margin: 0 2% 8px 0;
+    .kpi-cell {
+      width: 50%;
       border: 1px solid #e5e7eb;
       border-radius: 12px;
       padding: 10px;
       text-align: center;
       background: #ffffff;
       vertical-align: top;
-    }
-
-    .kpi-card.kpi-even {
-      margin-right: 0;
-    }
-
-    .kpi-icon-wrap {
-      width: 28px;
-      height: 28px;
-      line-height: 28px;
-      margin: 0 auto 6px auto;
-      border-radius: 14px;
-      background: #dcfce7;
-      color: #065f46;
-      font-size: 14px;
-      text-align: center;
     }
 
     .kpi-value {
@@ -154,11 +138,12 @@
     }
 
     .footer {
-      margin-top: 24px;
-      padding-top: 10px;
+      margin-top: 40px;
+      padding-top: 14px;
       border-top: 1px solid #e5e7eb;
       font-size: 10px;
-      color: #64748b;
+      color: #94a3b8;
+      text-align: center;
     }
   </style>
 </head>
@@ -171,7 +156,7 @@
       <strong>{{ labels.period_analyzed }}:</strong> {{ period_label }}
     </div>
     <div class="small muted">
-      {{ labels.generated_on }} {{ generated_at|date:"d/m/Y H:i" }} | {{ labels.promoter }}: {{ payload.farm.promoter_name }}
+      {{ labels.generated_on }} {{ generated_at|date:"d/m/Y H:i" }}
     </div>
   </div>
 
@@ -184,67 +169,66 @@
         <div class="cycle-block{% if forloop.first %} cycle-block-first{% endif %}">
           <h3>{{ section.cycle.cycle_name }} <span class="pill">{{ section.cycle.species_display }}</span></h3>
           <div class="small muted">
-            {{ labels.pond }}: {{ section.cycle.pond_identifier }} |
             {{ labels.started_on }} {{ section.cycle.start_date }} |
             {{ labels.active_days }}: {{ section.cycle.days_active }}
           </div>
 
           {% with metrics=section.dashboard_metrics %}
             <h3>{{ labels.dashboard_metrics }}</h3>
-            <div class="kpi-grid">
-              <div class="kpi-card">
-                <div class="kpi-icon-wrap">💰</div>
-                <div class="kpi-value">
-                  {% if metrics.estimated_market_value_fcfa == 0 %}
-                    0 FCFA
-                  {% elif metrics.estimated_market_value_fcfa %}
-                    {{ metrics.estimated_market_value_fcfa|floatformat:0 }} FCFA
-                  {% else %}
-                    {{ empty_value_label }}
-                  {% endif %}
-                </div>
-                <div class="kpi-label">{{ labels.estimated_market_value }}</div>
-              </div>
-              <div class="kpi-card kpi-even">
-                <div class="kpi-icon-wrap">🍽</div>
-                <div class="kpi-value">
-                  {% if metrics.feed_cost_consumed_fcfa == 0 %}
-                    0 FCFA
-                  {% elif metrics.feed_cost_consumed_fcfa %}
-                    {{ metrics.feed_cost_consumed_fcfa|floatformat:0 }} FCFA
-                  {% else %}
-                    {{ empty_value_label }}
-                  {% endif %}
-                </div>
-                <div class="kpi-label">{{ labels.feed_cost_consumed }}</div>
-              </div>
-              <div class="kpi-card">
-                <div class="kpi-icon-wrap">⏳</div>
-                <div class="kpi-value">
-                  {% if metrics.time_remaining_days == 0 %}
-                    0 {{ labels.days_short }}
-                  {% elif metrics.time_remaining_days %}
-                    {{ metrics.time_remaining_days }} {{ labels.days_short }}
-                  {% else %}
-                    {{ empty_value_label }}
-                  {% endif %}
-                </div>
-                <div class="kpi-label">{{ labels.time_remaining_cycle }}</div>
-              </div>
-              <div class="kpi-card kpi-even">
-                <div class="kpi-icon-wrap">🧮</div>
-                <div class="kpi-value">
-                  {% if metrics.direct_production_cost_fcfa == 0 %}
-                    0 {{ labels.direct_production_cost_unit }}
-                  {% elif metrics.direct_production_cost_fcfa %}
-                    {{ metrics.direct_production_cost_fcfa|floatformat:0 }} {{ labels.direct_production_cost_unit }}
-                  {% else %}
-                    {{ empty_value_label }}
-                  {% endif %}
-                </div>
-                <div class="kpi-label">{{ labels.direct_production_cost }}</div>
-              </div>
-            </div>
+            <table class="kpi-table">
+              <tr>
+                <td class="kpi-cell">
+                  <div class="kpi-value">
+                    {% if metrics.estimated_market_value_fcfa == 0 %}
+                      0 FCFA
+                    {% elif metrics.estimated_market_value_fcfa %}
+                      {{ metrics.estimated_market_value_fcfa|floatformat:0 }} FCFA
+                    {% else %}
+                      {{ empty_value_label }}
+                    {% endif %}
+                  </div>
+                  <div class="kpi-label">{{ labels.estimated_market_value }}</div>
+                </td>
+                <td class="kpi-cell">
+                  <div class="kpi-value">
+                    {% if metrics.feed_cost_consumed_fcfa == 0 %}
+                      0 FCFA
+                    {% elif metrics.feed_cost_consumed_fcfa %}
+                      {{ metrics.feed_cost_consumed_fcfa|floatformat:0 }} FCFA
+                    {% else %}
+                      {{ empty_value_label }}
+                    {% endif %}
+                  </div>
+                  <div class="kpi-label">{{ labels.feed_cost_consumed }}</div>
+                </td>
+              </tr>
+              <tr>
+                <td class="kpi-cell">
+                  <div class="kpi-value">
+                    {% if metrics.time_remaining_days == 0 %}
+                      0 {{ labels.days_short }}
+                    {% elif metrics.time_remaining_days %}
+                      {{ metrics.time_remaining_days }} {{ labels.days_short }}
+                    {% else %}
+                      {{ empty_value_label }}
+                    {% endif %}
+                  </div>
+                  <div class="kpi-label">{{ labels.time_remaining_cycle }}</div>
+                </td>
+                <td class="kpi-cell">
+                  <div class="kpi-value">
+                    {% if metrics.direct_production_cost_fcfa == 0 %}
+                      0 {{ labels.direct_production_cost_unit }}
+                    {% elif metrics.direct_production_cost_fcfa %}
+                      {{ metrics.direct_production_cost_fcfa|floatformat:0 }} {{ labels.direct_production_cost_unit }}
+                    {% else %}
+                      {{ empty_value_label }}
+                    {% endif %}
+                  </div>
+                  <div class="kpi-label">{{ labels.direct_production_cost }}</div>
+                </td>
+              </tr>
+            </table>
           {% endwith %}
 
           <h3>{{ labels.current_indicators }}</h3>

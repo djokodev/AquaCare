@@ -16,8 +16,6 @@ import {
   NativeScrollEvent,
   Alert,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
 import { useTranslation } from 'react-i18next';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -109,12 +107,15 @@ const SLIDES: OnboardingSlideData[] = [
   },
 ];
 
+interface OnboardingScreenProps {
+  onCompleted: () => void | Promise<void>;
+}
+
 /**
  * Écran d'onboarding avec FlatList horizontal
  */
-export default function OnboardingScreen() {
+export default function OnboardingScreen({ onCompleted }: OnboardingScreenProps) {
   const { t } = useTranslation();
-  const navigation = useNavigation<StackNavigationProp<any>>();
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const flatListRef = useRef<FlatList>(null);
@@ -141,11 +142,7 @@ export default function OnboardingScreen() {
     try {
       setIsProcessing(true);
       await OnboardingService.setCompleted();
-      // Reset de la navigation vers Main
-      navigation.reset({
-        index: 0,
-        routes: [{ name: 'Main' }],
-      });
+      await onCompleted();
     } catch (error) {
       Alert.alert(
         t('error'),
@@ -165,11 +162,7 @@ export default function OnboardingScreen() {
     try {
       setIsProcessing(true);
       await OnboardingService.setCompleted();
-      // Reset de la navigation vers Main
-      navigation.reset({
-        index: 0,
-        routes: [{ name: 'Main' }],
-      });
+      await onCompleted();
     } catch (error) {
       Alert.alert(
         t('error'),

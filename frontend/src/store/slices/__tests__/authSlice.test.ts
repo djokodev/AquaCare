@@ -259,7 +259,19 @@ describe('store/slices/authSlice', () => {
       expect(newState.farmProfile).toEqual(mockFarmProfile);
     });
 
-    it('gère l\'état rejected', () => {
+    it('gère l\'état rejected quand l\'utilisateur est authentifié', () => {
+      const action = {
+        type: loadUserProfile.rejected.type,
+        payload: 'Erreur chargement profil',
+      };
+      const authedState = { ...initialState, isAuthenticated: true };
+      const newState = authSliceReducer(authedState, action);
+
+      expect(newState.isLoading).toBe(false);
+      expect(newState.error).toBe('Erreur chargement profil');
+    });
+
+    it('ignore l\'erreur rejected si l\'utilisateur est déjà déconnecté', () => {
       const action = {
         type: loadUserProfile.rejected.type,
         payload: 'Erreur chargement profil',
@@ -267,7 +279,7 @@ describe('store/slices/authSlice', () => {
       const newState = authSliceReducer(initialState, action);
 
       expect(newState.isLoading).toBe(false);
-      expect(newState.error).toBe('Erreur chargement profil');
+      expect(newState.error).toBeNull();
     });
   });
 

@@ -1,6 +1,6 @@
 import React from 'react';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
-import { useDispatch } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 
 import CycleSessionEntryScreen from '../CycleSessionEntryScreen';
 import {
@@ -12,6 +12,7 @@ import { ProductionCycle } from '@/types/aquaculture';
 
 jest.mock('react-redux', () => ({
   useDispatch: jest.fn(),
+  useSelector: jest.fn(),
 }));
 
 describe('features/aquaculture/screens/CycleSessionEntryScreen', () => {
@@ -50,6 +51,12 @@ describe('features/aquaculture/screens/CycleSessionEntryScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     (useDispatch as unknown as jest.Mock).mockReturnValue(mockDispatch);
+    // Le screen ne lit que `state.auth.isAuthenticated` ; l'utilisateur est cense
+    // etre connecte dans ces scenarios.
+    (useSelector as unknown as jest.Mock).mockImplementation(
+      (selector: (state: unknown) => unknown) =>
+        selector({ auth: { isAuthenticated: true } })
+    );
   });
 
   const mockDashboardDispatchResult = (dashboardAction: ReturnType<typeof fetchDashboardData.fulfilled>) => {
@@ -84,7 +91,7 @@ describe('features/aquaculture/screens/CycleSessionEntryScreen', () => {
 
     await waitFor(() => {
       expect(mockDispatch).toHaveBeenCalledWith(clearCurrentCycle());
-      expect(getByText('sessionCreateFirstCycle')).toBeTruthy();
+      expect(getByText('welcomeScreenCta')).toBeTruthy();
     });
   });
 

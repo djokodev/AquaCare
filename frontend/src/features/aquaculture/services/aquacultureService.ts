@@ -38,6 +38,11 @@ const extractResults = <T>(data: ListResponse<T>): T[] => {
   return data.results ?? [];
 };
 
+const isUnauthorizedError = (error: unknown): boolean => {
+  const axiosErr = error as { response?: { status?: number } };
+  return axiosErr?.response?.status === 401;
+};
+
 const isReactNativeUploadFile = (photo: unknown): photo is ReactNativeUploadFile => {
   if (!photo || typeof photo !== 'object') {
     return false;
@@ -67,7 +72,11 @@ class AquacultureService {
       const response = await apiService.get<DashboardData>(`${this.baseUrl}/dashboard/${params}`);
       return response.data;
     } catch (error) {
-      logger.error('Erreur lors de la recuperation du dashboard:', error);
+      // 401 deja gere par l'interceptor axios (refresh + auto-logout) — eviter de
+      // declencher la LogBox d'Expo pendant la transition logout.
+      if (!isUnauthorizedError(error)) {
+        logger.error('Erreur lors de la recuperation du dashboard:', error);
+      }
       throw error;
     }
   }
@@ -177,6 +186,15 @@ class AquacultureService {
 
   getReportDownloadUrl(id: string): string {
     return `${API_CONFIG.baseURL}${this.baseUrl}/reports/${id}/download/`;
+  }
+
+  async deleteReport(id: string): Promise<void> {
+    try {
+      await apiService.delete(`${this.baseUrl}/reports/${id}/delete/`);
+    } catch (error) {
+      logger.error(`Erreur lors de la suppression du rapport ${id}:`, error);
+      throw error;
+    }
   }
 
   // =================== PRODUCTION CYCLES ===================

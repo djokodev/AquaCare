@@ -153,6 +153,12 @@ export const fr = {
   reportStatusLabel: 'Statut',
   reportStatusDraft: 'Brouillon',
   reportStatusValidated: 'Validé',
+  reportStatusPending: 'En cours',
+  reportGenerating: 'Rapport en cours de génération…',
+  reportDeleteConfirm: 'Supprimer ce rapport ?',
+  reportDeleteConfirmMsg: 'Cette action est irréversible.',
+  reportDeleteSuccess: 'Rapport supprimé',
+  reportDeleteError: 'Erreur lors de la suppression',
   reportTypeDaily: 'Rapport journalier',
   reportTypeWeekly: 'Rapport hebdomadaire',
   reportTypeMonthly: 'Rapport mensuel',
@@ -1088,6 +1094,8 @@ export const fr = {
   AUTH_SERVER_ERROR: 'Erreur serveur. Veuillez réessayer plus tard.',
   AUTH_NETWORK_ERROR: 'Impossible de contacter le serveur. Vérifiez votre connexion.',
   AUTH_UNKNOWN_ERROR: 'Une erreur inattendue est survenue.',
+  sessionExpiredTitle: 'Session expirée',
+  sessionExpiredMessage: 'Votre session a expiré. Veuillez vous reconnecter.',
 
   // Réseau d'acheteurs partenaires
   buyerNetworkTitle: 'Valorisez votre production',

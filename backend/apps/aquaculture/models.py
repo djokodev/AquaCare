@@ -1164,6 +1164,9 @@ class ProductionReport(models.Model):
         verbose_name=_("Partagé sur WhatsApp le")
     )
 
+    is_deleted = models.BooleanField(default=False, verbose_name=_("Supprimé"))
+    deleted_at = models.DateTimeField(null=True, blank=True, verbose_name=_("Supprimé le"))
+
     created_at = models.DateTimeField(auto_now_add=True, verbose_name=_("Créé le"))
     updated_at = models.DateTimeField(auto_now=True, verbose_name=_("Mis à jour le"))
     objects = ProductionReportQuerySet.as_manager()

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
 
 import { useAuth } from '@/hooks/useAuth';
@@ -32,22 +32,21 @@ export default function AppNavigator() {
     checkAuth().finally(() => setAuthReady(true));
   }, [checkAuth]);
 
-  // Verifier onboarding au montage
-  useEffect(() => {
-    async function checkOnboarding() {
-      try {
-        const completed = await OnboardingService.hasCompleted();
-        setHasCompletedOnboarding(completed);
-      } catch (error) {
-        logger.error('[AppNavigator] Erreur checkOnboarding:', error);
-        setHasCompletedOnboarding(true); // Failsafe : ne pas bloquer
-      } finally {
-        setIsCheckingOnboarding(false);
-      }
+  const refreshOnboardingFlag = useCallback(async () => {
+    try {
+      const completed = await OnboardingService.hasCompleted();
+      setHasCompletedOnboarding(completed);
+    } catch (error) {
+      logger.error('[AppNavigator] Erreur checkOnboarding:', error);
+      setHasCompletedOnboarding(true); // Failsafe : ne pas bloquer
+    } finally {
+      setIsCheckingOnboarding(false);
     }
-
-    checkOnboarding();
   }, []);
+
+  useEffect(() => {
+    refreshOnboardingFlag();
+  }, [refreshOnboardingFlag]);
 
   // Enregistrer le token push quand authentifié
   useEffect(() => {
@@ -56,29 +55,25 @@ export default function AppNavigator() {
     }
   }, [isAuthenticated, registerPushToken]);
 
-  // Déterminer la route initiale
-  const initialRouteName = !isAuthenticated
-    ? 'Auth'
-    : hasCompletedOnboarding
-      ? 'Main'
-      : 'Onboarding';
-
-  // Force un reset du navigator quand l'état change (auth ou onboarding)
-  const navigatorKey = `${isAuthenticated}-${hasCompletedOnboarding}`;
-
   if (!authReady || isCheckingOnboarding) {
     return <LoadingScreen />;
   }
 
+  // Conditional Stack.Screen children — pattern recommandé par React Navigation
+  // (https://reactnavigation.org/docs/auth-flow/). React Navigation gère la
+  // transition fluidement quand l'ensemble des écrans monté change. Évite les
+  // races du pattern précédent (key dynamique sur Stack.Navigator).
   return (
-    <Stack.Navigator
-      key={navigatorKey}
-      initialRouteName={initialRouteName}
-      screenOptions={{ headerShown: false }}
-    >
-      <Stack.Screen name="Auth" component={AuthNavigator} />
-      <Stack.Screen name="Onboarding" component={OnboardingScreen} />
-      <Stack.Screen name="Main" component={MainNavigator} />
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      {isAuthenticated ? (
+        <Stack.Screen name="Main" component={MainNavigator} />
+      ) : !hasCompletedOnboarding ? (
+        <Stack.Screen name="Onboarding">
+          {() => <OnboardingScreen onCompleted={refreshOnboardingFlag} />}
+        </Stack.Screen>
+      ) : (
+        <Stack.Screen name="Auth" component={AuthNavigator} />
+      )}
     </Stack.Navigator>
   );
 }
