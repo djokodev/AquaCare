@@ -282,6 +282,12 @@ describe('store/slices/authSlice', () => {
   });
 
   describe('loadUserProfile thunk', () => {
+    const authenticatedState = {
+      ...initialState,
+      user: mockUser,
+      isAuthenticated: true,
+    };
+
     it('gère l\'état pending', () => {
       const action = { type: loadUserProfile.pending.type };
       const newState = authSliceReducer(initialState, action);
@@ -302,15 +308,41 @@ describe('store/slices/authSlice', () => {
       expect(newState.farmProfile).toEqual(mockFarmProfile);
     });
 
-    it('gère l\'état rejected', () => {
+    it('gère l\'état fulfilled avec farmProfile null (utilisateur sans élevage)', () => {
+      const action = {
+        type: loadUserProfile.fulfilled.type,
+        payload: { user: mockUser, farmProfile: null },
+      };
+      const newState = authSliceReducer(authenticatedState, action);
+
+      expect(newState.isLoading).toBe(false);
+      expect(newState.user).toEqual(mockUser);
+      expect(newState.farmProfile).toBeNull();
+    });
+
+    it('gère l\'état rejected quand authentifié — affiche l\'erreur', () => {
       const action = {
         type: loadUserProfile.rejected.type,
         payload: 'Erreur chargement profil',
       };
-      const newState = authSliceReducer(initialState, action);
+      const newState = authSliceReducer(authenticatedState, action);
 
       expect(newState.isLoading).toBe(false);
       expect(newState.error).toBe('Erreur chargement profil');
+    });
+
+    it('gère l\'état rejected après logout (requête en-vol) — n\'affiche pas l\'erreur', () => {
+      // Cas réel : loadUserProfile en-vol pendant le logout revient avec 401
+      // après que logoutUser.fulfilled ait mis isAuthenticated = false.
+      // L'erreur NE DOIT PAS s'afficher sur le LoginScreen.
+      const action = {
+        type: loadUserProfile.rejected.type,
+        payload: 'AUTH_INVALID_CREDENTIALS',
+      };
+      const newState = authSliceReducer(initialState, action); // isAuthenticated = false
+
+      expect(newState.isLoading).toBe(false);
+      expect(newState.error).toBeNull();
     });
   });
 

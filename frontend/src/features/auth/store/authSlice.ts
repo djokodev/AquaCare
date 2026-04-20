@@ -288,7 +288,12 @@ export const authSlice = createSlice({
       })
       .addCase(loadUserProfile.rejected, (state, action) => {
         state.isLoading = false;
-        state.error = action.payload as string;
+        // Ne pas écraser l'erreur si l'utilisateur est déjà déconnecté :
+        // les requêtes en-vol (after logout) reviennent avec 401 et ne doivent
+        // pas afficher un message d'erreur sur le LoginScreen.
+        if (state.isAuthenticated) {
+          state.error = action.payload as string;
+        }
       });
 
     // Update profile

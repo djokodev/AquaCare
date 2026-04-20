@@ -132,11 +132,15 @@ class AuthService {
   /**
    * Récupérer le profil ferme
    */
-  async getFarmProfile(): Promise<FarmProfile> {
+  async getFarmProfile(): Promise<FarmProfile | null> {
     try {
       const response = await apiService.get<FarmProfile>(API_ENDPOINTS.AUTH.FARM_PROFILE);
       return response.data;
     } catch (error: unknown) {
+      const axiosErr = error as { response?: { status: number } };
+      if (axiosErr.response?.status === 404) {
+        return null;
+      }
       throw this.handleAuthError(error);
     }
   }

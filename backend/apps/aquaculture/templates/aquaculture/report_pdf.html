@@ -124,19 +124,6 @@
       vertical-align: top;
     }
 
-    .kpi-icon-wrap {
-      font-family: "Noto Color Emoji", Arial, sans-serif;
-      width: 28px;
-      height: 28px;
-      line-height: 28px;
-      margin: 0 auto 6px auto;
-      border-radius: 14px;
-      background: #dcfce7;
-      color: #065f46;
-      font-size: 14px;
-      text-align: center;
-    }
-
     .kpi-value {
       font-size: 13px;
       font-weight: bold;
@@ -151,11 +138,12 @@
     }
 
     .footer {
-      margin-top: 24px;
-      padding-top: 10px;
+      margin-top: 40px;
+      padding-top: 14px;
       border-top: 1px solid #e5e7eb;
       font-size: 10px;
-      color: #64748b;
+      color: #94a3b8;
+      text-align: center;
     }
   </style>
 </head>
@@ -190,7 +178,6 @@
             <table class="kpi-table">
               <tr>
                 <td class="kpi-cell">
-                  <div class="kpi-icon-wrap">💰</div>
                   <div class="kpi-value">
                     {% if metrics.estimated_market_value_fcfa == 0 %}
                       0 FCFA
@@ -203,7 +190,6 @@
                   <div class="kpi-label">{{ labels.estimated_market_value }}</div>
                 </td>
                 <td class="kpi-cell">
-                  <div class="kpi-icon-wrap">🍽</div>
                   <div class="kpi-value">
                     {% if metrics.feed_cost_consumed_fcfa == 0 %}
                       0 FCFA
@@ -218,7 +204,6 @@
               </tr>
               <tr>
                 <td class="kpi-cell">
-                  <div class="kpi-icon-wrap">⏳</div>
                   <div class="kpi-value">
                     {% if metrics.time_remaining_days == 0 %}
                       0 {{ labels.days_short }}
@@ -231,7 +216,6 @@
                   <div class="kpi-label">{{ labels.time_remaining_cycle }}</div>
                 </td>
                 <td class="kpi-cell">
-                  <div class="kpi-icon-wrap">🧮</div>
                   <div class="kpi-value">
                     {% if metrics.direct_production_cost_fcfa == 0 %}
                       0 {{ labels.direct_production_cost_unit }}

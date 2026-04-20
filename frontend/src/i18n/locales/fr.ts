@@ -1094,6 +1094,8 @@ export const fr = {
   AUTH_SERVER_ERROR: 'Erreur serveur. Veuillez réessayer plus tard.',
   AUTH_NETWORK_ERROR: 'Impossible de contacter le serveur. Vérifiez votre connexion.',
   AUTH_UNKNOWN_ERROR: 'Une erreur inattendue est survenue.',
+  sessionExpiredTitle: 'Session expirée',
+  sessionExpiredMessage: 'Votre session a expiré. Veuillez vous reconnecter.',
 
   // Réseau d'acheteurs partenaires
   buyerNetworkTitle: 'Valorisez votre production',

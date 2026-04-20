@@ -1,8 +1,10 @@
 ﻿import axios, { AxiosInstance, AxiosError } from 'axios';
+import { Alert } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 
 import { API_CONFIG, STORAGE_KEYS } from '@/constants/api';
 import logger from '@/utils/logger';
+import i18n from '@/i18n/i18n';
 
 // Event listener pour la dÃ©connexion automatique
 type LogoutCallback = () => void;
@@ -71,12 +73,25 @@ class ApiService {
               return this.api(originalRequest);
             }
           } catch (refreshError) {
-            // Refresh failed - dÃ©connexion automatique
-            await this.clearTokens();
-            
-            // Notifier l'app pour dÃ©connexion automatique
+            // Refresh failed — déconnexion automatique.
+            // clearTokens() est déplacé dans le handler OK : on ne vide le SecureStore
+            // qu'une fois que le vrai logoutCallback est disponible, évitant la fenêtre
+            // d'incohérence (tokens supprimés mais Redux encore authentifié).
             if (logoutCallback) {
-              logoutCallback();
+              const cb = logoutCallback;
+              Alert.alert(
+                i18n.t('sessionExpiredTitle'),
+                i18n.t('sessionExpiredMessage'),
+                [{
+                  text: 'OK',
+                  onPress: async () => {
+                    await this.clearTokens();
+                    cb();
+                  },
+                }]
+              );
+            } else {
+              await this.clearTokens();
             }
           }
         }

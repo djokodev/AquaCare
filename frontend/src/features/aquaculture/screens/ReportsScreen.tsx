@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, ActivityIndicator, FlatList, RefreshControl, Alert } from 'react-native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useFocusEffect } from '@react-navigation/native';
@@ -10,7 +10,7 @@ import { RootStackParamList } from '@/navigation/MainNavigator';
 import { MAVECAM_COLORS } from '@/constants/colors';
 import { ProductionReport, ReportType } from '@/types/aquaculture';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
-import { formatDate } from '@/utils';
+import { formatDate, formatDateTime } from '@/utils';
 import { RootState } from '@/store/store';
 
 type ReportsScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Reports'>;
@@ -32,6 +32,14 @@ export default function ReportsScreen({ navigation }: ReportsScreenProps) {
   const [selectedType, setSelectedType] = useState<ReportType | 'all'>('all');
   const [error, setError] = useState<string | null>(null);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const stopPolling = useCallback(() => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  }, []);
 
   const loadReports = useCallback(async () => {
     try {
@@ -40,26 +48,50 @@ export default function ReportsScreen({ navigation }: ReportsScreenProps) {
         currentCycle?.id ? { cycle_id: currentCycle.id } : undefined
       );
       setReports(data);
+      return data;
     } catch {
       setError(t('reportsLoadError'));
+      return [];
     } finally {
       setLoading(false);
     }
   }, [currentCycle?.id, t]);
 
+  const startPollingIfPending = useCallback((data: ProductionReport[]) => {
+    const hasPending = data.some((r) => r.status === 'pending');
+    if (!hasPending) {
+      stopPolling();
+      return;
+    }
+    if (pollRef.current) return;
+    pollRef.current = setInterval(async () => {
+      const updated = await loadReports();
+      if (!updated.some((r) => r.status === 'pending')) {
+        stopPolling();
+        setInfoMessage(null);
+      }
+    }, 3000);
+  }, [loadReports, stopPolling]);
+
   useEffect(() => {
-    loadReports();
-  }, [loadReports]);
+    loadReports().then(startPollingIfPending);
+  }, [loadReports, startPollingIfPending]);
+
+  useEffect(() => {
+    return () => stopPolling();
+  }, [stopPolling]);
 
   useFocusEffect(
     useCallback(() => {
-      loadReports();
-    }, [loadReports])
+      loadReports().then(startPollingIfPending);
+      return () => stopPolling();
+    }, [loadReports, startPollingIfPending, stopPolling])
   );
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadReports();
+    const data = await loadReports();
+    startPollingIfPending(data);
     setRefreshing(false);
   };
 
@@ -81,7 +113,8 @@ export default function ReportsScreen({ navigation }: ReportsScreenProps) {
         cycle_id: currentCycle.id,
       });
       setInfoMessage(t('reportGenerating'));
-      await loadReports();
+      const data = await loadReports();
+      startPollingIfPending(data);
     } catch {
       setError(t('reportGenerateError'));
     } finally {
@@ -146,7 +179,7 @@ export default function ReportsScreen({ navigation }: ReportsScreenProps) {
   const renderReportItem = useCallback(
     ({ item: report }: { item: ProductionReport }) => (
       <TouchableOpacity
-        className="bg-white rounded-xl p-4 mb-3 border border-gray-100"
+        className="bg-white rounded-xl p-4 mb-3 mx-4 border border-gray-200 shadow-sm"
         onPress={() => navigation.navigate('ReportDetail', { reportId: report.id })}
       >
         <View className="flex-row items-center justify-between">
@@ -170,9 +203,11 @@ export default function ReportsScreen({ navigation }: ReportsScreenProps) {
           </View>
         </View>
 
-        <Text className="text-xs text-gray-light mt-1">
-          {getPeriodLabel(report.period_start, report.period_end)}
-        </Text>
+        {report.generated_at && (
+          <Text className="text-xs text-gray-light mt-1">
+            {formatDateTime(report.generated_at)}
+          </Text>
+        )}
 
         <View className="flex-row mt-2">
           <Text className="text-xs text-gray-light mr-4">

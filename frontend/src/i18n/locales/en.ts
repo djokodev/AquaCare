@@ -1094,6 +1094,8 @@
   AUTH_SERVER_ERROR: 'Server error. Please try again later.',
   AUTH_NETWORK_ERROR: 'Cannot reach the server. Check your internet connection.',
   AUTH_UNKNOWN_ERROR: 'An unexpected error occurred.',
+  sessionExpiredTitle: 'Session expired',
+  sessionExpiredMessage: 'Your session has expired. Please log in again.',
 
   // Partner buyer network
   buyerNetworkTitle: 'Sell Your Harvest',

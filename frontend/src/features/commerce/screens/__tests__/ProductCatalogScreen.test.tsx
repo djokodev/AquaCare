@@ -55,6 +55,13 @@ describe('ProductCatalogScreen', () => {
           items: [{ product, quantity: 2 }],
         },
       },
+      aquaculture: {
+        currentCycle: null,
+        cycleFeedStatus: {
+          data: null,
+          loading: false,
+        },
+      },
     };
   });
 

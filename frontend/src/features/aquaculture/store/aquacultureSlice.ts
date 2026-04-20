@@ -99,14 +99,25 @@ const initialState: AquacultureState = {
 
 // =================== ACTIONS ASYNC ===================
 
+// Marker rejet silencieux : utilise quand un thunk est appele apres logout
+// (tokens supprimes, isAuthenticated=false). Le reducer ignore ce payload pour
+// ne pas afficher d'erreur a l'utilisateur post-deconnexion.
+export const ABORTED_UNAUTHENTICATED = 'ABORTED_UNAUTHENTICATED';
+
 export const fetchDashboardData = createAsyncThunk(
   'aquaculture/fetchDashboardData',
   async (
     options: { cycleId?: string; forceAllCycles?: boolean } | undefined,
     { getState, rejectWithValue }
   ) => {
+    const state = getState() as {
+      aquaculture: AquacultureState;
+      auth: { isAuthenticated: boolean };
+    };
+    if (!state.auth.isAuthenticated) {
+      return rejectWithValue(ABORTED_UNAUTHENTICATED);
+    }
     try {
-      const state = getState() as { aquaculture: AquacultureState };
       const sessionCycleId = state.aquaculture.currentCycle?.id;
       const cycleIdToUse = options?.forceAllCycles
         ? undefined
@@ -431,7 +442,9 @@ export const aquacultureSlice = createSlice({
       })
       .addCase(fetchDashboardData.rejected, (state, action) => {
         state.loading.dashboard = false;
-        state.error = action.payload as string;
+        if (action.payload !== ABORTED_UNAUTHENTICATED) {
+          state.error = action.payload as string;
+        }
       })
 
       .addCase(fetchProductionCycles.pending, (state) => {
@@ -639,14 +652,10 @@ export const aquacultureSlice = createSlice({
         state.loading.sync = false;
         state.error = action.payload as string;
       })
-      .addCase(logoutUser.fulfilled, (state) => {
-        state.currentCycle = undefined;
-        state.error = null;
-      })
-      .addCase(logoutUser.rejected, (state) => {
-        state.currentCycle = undefined;
-        state.error = null;
-      })
+      // Reset complet au logout : evite spinner fantome (loading.dashboard) et
+      // donnees du compte precedent affichees apres re-login.
+      .addCase(logoutUser.fulfilled, () => initialState)
+      .addCase(logoutUser.rejected, () => initialState)
 
       .addCase(fetchCycleFeedStatus.pending, (state) => {
         state.cycleFeedStatus.loading = true;

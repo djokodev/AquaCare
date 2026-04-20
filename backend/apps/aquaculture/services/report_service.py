@@ -958,13 +958,13 @@ class ReportService(BaseService):
         is_en = language_code == 'en'
         if is_en:
             return {
-                'report_title': 'Aquaculture production monitoring report',
+                'report_title': 'Fish farming production monitoring report',
                 'farm': 'Farm',
                 'report_type': 'Type',
                 'period_analyzed': 'Analyzed period',
                 'generated_on': 'Generated on',
                 'promoter': 'Promoter',
-                'dashboard_metrics': 'Key dashboard indicators',
+                'dashboard_metrics': 'Key indicators',
                 'estimated_market_value': 'Estimated market value of fish',
                 'feed_cost_consumed': 'Feed cost already consumed',
                 'time_remaining_cycle': 'Time remaining until cycle end',
@@ -1013,17 +1013,17 @@ class ReportService(BaseService):
                 'active': 'Active',
                 'no_sanitary_logs': 'No sanitary event in this analyzed period.',
                 'no_active_cycle': 'No active cycle with exploitable data for this analyzed period.',
-                'footer': 'AquaCare - Auto-generated report reviewed before dispatch.',
+                'footer': 'by AquaCare',
             }
 
         return {
-            'report_title': 'Rapport de suivi de production aquacole',
+            'report_title': 'Rapport de suivi de production piscicole',
             'farm': 'Ferme',
             'report_type': 'Type',
             'period_analyzed': 'Période analysée',
             'generated_on': 'Généré le',
             'promoter': 'Promoteur',
-            'dashboard_metrics': 'Indicateurs clés du tableau de bord',
+            'dashboard_metrics': 'Indicateurs clés',
             'estimated_market_value': 'Valeur marchande estimée des poissons',
             'feed_cost_consumed': 'Coût des aliments déjà consommés',
             'time_remaining_cycle': "Temps restant pour la fin du cycle d'élevage",
@@ -1072,7 +1072,7 @@ class ReportService(BaseService):
             'active': 'Active',
             'no_sanitary_logs': 'Aucun événement sanitaire dans cette période analysée.',
             'no_active_cycle': 'Aucun cycle actif avec données exploitables pour cette période analysée.',
-            'footer': 'AquaCare - Rapport généré automatiquement et relu avant envoi.',
+            'footer': 'by AquaCare',
         }
 
     @staticmethod

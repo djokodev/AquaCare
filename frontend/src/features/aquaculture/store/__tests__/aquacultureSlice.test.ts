@@ -1,5 +1,6 @@
 import { configureStore } from '@reduxjs/toolkit';
 import aquacultureReducer, {
+  ABORTED_UNAUTHENTICATED,
   clearError,
   setCurrentCycle,
   clearCurrentCycle,
@@ -65,15 +66,23 @@ describe('features/aquaculture/store/aquacultureSlice', () => {
     updated_at: '2026-01-02T00:00:00Z',
   };
 
-  const createStore = (preloadedState?: Partial<AquacultureState>) => {
+  // Reducer auth minimal pour satisfaire le pre-flight check de fetchDashboardData.
+  // Defaut: isAuthenticated=true pour que les tests existants restent equivalents.
+  const authReducer = (state = { isAuthenticated: true }) => state;
+
+  const createStore = (
+    preloadedState?: Partial<AquacultureState>,
+    authState: { isAuthenticated: boolean } = { isAuthenticated: true }
+  ) => {
     const initial = aquacultureReducer(undefined, { type: '@@INIT' }) as AquacultureState;
     return configureStore({
-      reducer: { aquaculture: aquacultureReducer },
+      reducer: { aquaculture: aquacultureReducer, auth: authReducer },
       preloadedState: {
         aquaculture: {
           ...initial,
           ...preloadedState,
         },
+        auth: authState,
       },
     });
   };
@@ -205,18 +214,40 @@ describe('features/aquaculture/store/aquacultureSlice', () => {
     expect(nextState.currentCycle).toBeUndefined();
   });
 
-  it('logoutUser.fulfilled vide currentCycle', () => {
-    const initialState: AquacultureState = {
-      ...(aquacultureReducer(undefined, { type: '@@INIT' }) as AquacultureState),
+  it('logoutUser.fulfilled remet le state aquaculture a son etat initial', () => {
+    const initial = aquacultureReducer(undefined, { type: '@@INIT' }) as AquacultureState;
+    const dirtyState: AquacultureState = {
+      ...initial,
       currentCycle: activeCycle,
+      cycles: [activeCycle],
+      activeCycles: [activeCycle],
+      dashboardData: { active_cycles: [activeCycle] } as any,
+      loading: { ...initial.loading, dashboard: true },
+      error: 'old-error',
     };
 
     const nextState = aquacultureReducer(
-      initialState,
+      dirtyState,
       logoutUser.fulfilled(true, 'request-id', undefined)
     );
 
-    expect(nextState.currentCycle).toBeUndefined();
+    expect(nextState).toEqual(initial);
+  });
+
+  it('logoutUser.rejected remet egalement le state aquaculture a son etat initial', () => {
+    const initial = aquacultureReducer(undefined, { type: '@@INIT' }) as AquacultureState;
+    const dirtyState: AquacultureState = {
+      ...initial,
+      currentCycle: activeCycle,
+      loading: { ...initial.loading, dashboard: true },
+    };
+
+    const nextState = aquacultureReducer(
+      dirtyState,
+      logoutUser.rejected(new Error('boom'), 'request-id', undefined, 'boom')
+    );
+
+    expect(nextState).toEqual(initial);
   });
 
   it('generateFeedingPlan.fulfilled met a jour un plan existant et ajoute un nouveau', () => {
@@ -346,6 +377,17 @@ describe('features/aquaculture/store/aquacultureSlice', () => {
     expect(action.type).toBe('aquaculture/fetchFeedingPlans/rejected');
     expect(action.payload).toBe('ID de cycle requis');
     expect(mockService.getFeedingPlans).not.toHaveBeenCalled();
+  });
+
+  it('fetchDashboardData rejette silencieusement quand isAuthenticated est false', async () => {
+    const store = createStore(undefined, { isAuthenticated: false });
+
+    const action = await store.dispatch(fetchDashboardData(undefined));
+
+    expect(action.type).toBe('aquaculture/fetchDashboardData/rejected');
+    expect(action.payload).toBe(ABORTED_UNAUTHENTICATED);
+    expect(mockService.getDashboardData).not.toHaveBeenCalled();
+    expect(store.getState().aquaculture.error).toBeNull();
   });
 
   it('fetchDashboardData propage detail depuis erreur API', async () => {

@@ -32,13 +32,10 @@ export const useAuth = () => {
       dispatch(logoutUser());
     };
 
-    // S'enregistrer pour la déconnexion automatique
     setLogoutCallback(handleAutoLogout);
-
-    // Cleanup au démontage du composant
-    return () => {
-      setLogoutCallback(() => {});
-    };
+    // Pas de cleanup : le prochain composant monté écrase le callback.
+    // Supprimer le cleanup évite la fenêtre vide pendant la transition Login → Main
+    // qui causait une déconnexion automatique intempestive juste après le login.
   }, [dispatch]);
 
   // Auto-load farm profile once per user session
