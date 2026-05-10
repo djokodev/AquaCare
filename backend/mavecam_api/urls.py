@@ -1,8 +1,8 @@
 """
-Configuration des URLs principales - MAVECAM AquaCare API.
+Configuration des URLs principales - AquaCare API.
 
 Structure de l'API:
-- /admin/ : Interface d'administration Django pour équipe MAVECAM
+- /admin/ : Interface d'administration Django pour l'équipe AquaCare
 - /api/accounts/ : Authentification et profils utilisateurs
 - /api/aquaculture/ : Cycles de production et logs (Phase 2)
 - /api/commerce/ : Catalogue et commandes (Phase 3)
@@ -14,6 +14,7 @@ from __future__ import annotations
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
+from django.core.cache import cache
 from django.db.utils import DatabaseError
 from django.http import HttpRequest, JsonResponse
 from django.urls import include, path
@@ -44,20 +45,32 @@ def api_root(request: HttpRequest) -> JsonResponse:
 def health_check(request: HttpRequest) -> JsonResponse:
     """Health check endpoint pour Docker healthchecks et monitoring."""
     from django.db import connection
+
+    checks = {
+        'database': 'connected',
+        'cache': 'connected',
+    }
+    status_code = 200
+
     try:
         # Test connexion database
         connection.ensure_connection()
-        return JsonResponse({
-            'status': 'healthy',
-            'database': 'connected',
-            'api': 'operational'
-        }, status=200)
-    except DatabaseError as err:
-        return JsonResponse({
-            'status': 'unhealthy',
-            'database': 'disconnected',
-            'error': str(err)
-        }, status=503)
+    except DatabaseError:
+        checks['database'] = 'disconnected'
+        status_code = 503
+
+    try:
+        cache.get('health-check')
+    except Exception:
+        checks['cache'] = 'disconnected'
+        status_code = 503
+
+    return JsonResponse({
+        'status': 'healthy' if status_code == 200 else 'unhealthy',
+        'database': checks['database'],
+        'cache': checks['cache'],
+        'api': 'operational' if status_code == 200 else 'degraded',
+    }, status=status_code)
 
 
 urlpatterns = [

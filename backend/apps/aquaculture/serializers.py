@@ -39,6 +39,7 @@ from .constants import (
     SPECIES_CHOICES,
 )
 from .domain.calculators import AquacultureCalculator
+from .services.farm_production_plan_service import FarmProductionPlanService
 from .domain.feed_phase_calculator import get_feed_phase
 from .models import (
     CycleLog,
@@ -188,10 +189,8 @@ class ProductionCycleSerializer(serializers.ModelSerializer):
         if not obj.total_feed_consumed or obj.total_feed_consumed <= 0:
             return None
 
-        # Récupère prix depuis FarmProfile ou défaut
-        price_per_kg = DEFAULT_FEED_PRICE_PER_KG  # Défaut FCFA/kg
-        if hasattr(obj.farm_profile, 'default_feed_price_per_kg') and obj.farm_profile.default_feed_price_per_kg:
-            price_per_kg = obj.farm_profile.default_feed_price_per_kg
+        plan_data = FarmProductionPlanService.get_plan_data(obj.farm_profile)
+        price_per_kg = plan_data["default_feed_price_per_kg"] or DEFAULT_FEED_PRICE_PER_KG
 
         # Calcul via domain calculator
         total_cost = AquacultureCalculator.calculate_feed_cost(

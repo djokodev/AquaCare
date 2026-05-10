@@ -28,6 +28,16 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 # Ajouter apps au Python path
 sys.path.insert(0, os.path.join(BASE_DIR, "apps"))
 
+from accounts.constants import (  # noqa: E402
+    ACCOUNT_FARM_SETUP_THROTTLE_RATE,
+    ACCOUNT_LOGIN_GLOBAL_THROTTLE_RATE,
+    ACCOUNT_LOGIN_THROTTLE_RATE,
+    ACCOUNT_REGISTER_THROTTLE_RATE,
+    ACCOUNT_SENSITIVE_ACTION_THROTTLE_RATE,
+    ACCOUNT_SIMULATION_THROTTLE_RATE,
+    ACCOUNT_TOKEN_THROTTLE_RATE,
+)
+
 # Application definition
 INSTALLED_APPS = [
     "jazzmin",  # DOIT etre AVANT django.contrib.admin
@@ -57,14 +67,15 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
+    "common.observability.RequestCorrelationMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "accounts.middleware.LoginRateLimitMiddleware",
     "django.middleware.locale.LocaleMiddleware",
-    "accounts.middleware.UserLanguageMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "accounts.middleware.UserLanguageMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "accounts.middleware.APIResponseLanguageMiddleware",
@@ -140,6 +151,7 @@ REST_FRAMEWORK = {
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 50,
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    "EXCEPTION_HANDLER": "common.observability.observability_exception_handler",
     "DEFAULT_THROTTLE_CLASSES": [
         "rest_framework.throttling.AnonRateThrottle",
         "rest_framework.throttling.UserRateThrottle",
@@ -147,9 +159,13 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_RATES": {
         "anon": "20/minute",
         "user": "100/minute",
-        "accounts_login": "5/minute",
-        "accounts_register": "10/minute",
-        "accounts_sensitive_action": "20/hour",
+        "accounts_login_global": ACCOUNT_LOGIN_GLOBAL_THROTTLE_RATE,
+        "accounts_login": ACCOUNT_LOGIN_THROTTLE_RATE,
+        "accounts_register": ACCOUNT_REGISTER_THROTTLE_RATE,
+        "accounts_sensitive_action": ACCOUNT_SENSITIVE_ACTION_THROTTLE_RATE,
+        "accounts_token": ACCOUNT_TOKEN_THROTTLE_RATE,
+        "accounts_farm_setup": ACCOUNT_FARM_SETUP_THROTTLE_RATE,
+        "accounts_simulation": ACCOUNT_SIMULATION_THROTTLE_RATE,
         "chat_message": "10/minute",
         "commerce_simulation": "20/hour",
         "commerce_suggestions": "30/hour",
@@ -161,6 +177,15 @@ REST_FRAMEWORK = {
         "aquaculture_sanitary_action": "30/hour",
     },
 }
+
+ACCOUNT_TRUSTED_PROXY_IPS = tuple(
+    item.strip()
+    for item in _env_str(
+        'ACCOUNT_TRUSTED_PROXY_IPS',
+        '127.0.0.1,::1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16',
+    ).split(',')
+    if item.strip()
+)
 
 # JWT Configuration
 SIMPLE_JWT = {
@@ -197,7 +222,7 @@ LOCALE_PATHS = [
 
 # Authentication backends
 AUTHENTICATION_BACKENDS = [
-    "accounts.backends.MavecamAuthBackend",
+    "accounts.backends.AquaCareAuthBackend",
     "django.contrib.auth.backends.ModelBackend",
 ]
 
@@ -281,6 +306,18 @@ FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024
 _SENTRY_DSN = _env_str('SENTRY_DSN')
 if _SENTRY_DSN:
     import sentry_sdk
+    from sentry_sdk.integrations.celery import CeleryIntegration
+    from sentry_sdk.integrations.django import DjangoIntegration
+    from sentry_sdk.integrations.logging import LoggingIntegration
+
+    from common.observability import get_request_id
+
+    def _sentry_before_send(event, hint):
+        request_id = get_request_id()
+        if request_id != "-":
+            event.setdefault("tags", {})["request_id"] = request_id
+        return event
+
     sentry_sdk.init(
         dsn=_SENTRY_DSN,
         # Trace 10% des transactions pour le monitoring de performance
@@ -289,6 +326,13 @@ if _SENTRY_DSN:
         profiles_sample_rate=0.05,
         # Identifie l'environnement dans Sentry (staging / production)
         environment=_env_str('DJANGO_ENVIRONMENT', SENTRY_ENVIRONMENT_DEFAULT),
+        release=_env_str('SENTRY_RELEASE') or None,
+        integrations=[
+            DjangoIntegration(),
+            CeleryIntegration(monitor_beat_tasks=True),
+            LoggingIntegration(level=None, event_level=None),
+        ],
+        before_send=_sentry_before_send,
         # Ne pas envoyer les données personnelles (IP, email) dans Sentry
         send_default_pii=False,
     )

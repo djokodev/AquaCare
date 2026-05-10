@@ -64,6 +64,9 @@ class Command(BaseCommand):
             RBACConstants.GROUP_MANAGERS,
             RBACConstants.GROUP_COMMERCE,
             RBACConstants.GROUP_SUPPORT,
+            RBACConstants.LEGACY_GROUP_MANAGERS,
+            RBACConstants.LEGACY_GROUP_COMMERCE,
+            RBACConstants.LEGACY_GROUP_SUPPORT,
         ]
 
         for name in group_names:
@@ -88,6 +91,24 @@ class Command(BaseCommand):
             self.groups[name] = group
             status = 'Cree' if created else 'Existe deja'
             self.stdout.write(f'  {status}: {name}')
+            self._migrate_legacy_memberships(group)
+
+    def _migrate_legacy_memberships(self, target_group: Group) -> None:
+        """Copie les membres des anciens groupes vers les groupes AquaCare."""
+        legacy_names = RBACConstants.LEGACY_GROUP_ALIASES.get(target_group.name, ())
+        if not legacy_names:
+            return
+
+        legacy_groups = Group.objects.filter(name__in=legacy_names)
+        for legacy_group in legacy_groups:
+            users = list(legacy_group.user_set.all())
+            if not users:
+                continue
+            if not self.dry_run:
+                target_group.user_set.add(*users)
+            self.stdout.write(
+                f'  Membres migres: {legacy_group.name} -> {target_group.name} ({len(users)})'
+            )
 
     def _assign_permissions(self) -> None:
         """Assigne les permissions a chaque groupe."""
@@ -103,7 +124,7 @@ class Command(BaseCommand):
         self._assign_support_permissions()
 
     def _assign_manager_permissions(self) -> None:
-        """Permissions pour mavecam_managers."""
+        """Permissions pour aquacare_managers."""
         group = self.groups[RBACConstants.GROUP_MANAGERS]
         permissions = []
 
@@ -136,7 +157,7 @@ class Command(BaseCommand):
         self._set_group_permissions(group, permissions, 'MANAGERS')
 
     def _assign_commerce_permissions(self) -> None:
-        """Permissions pour mavecam_commerce."""
+        """Permissions pour aquacare_commerce."""
         group = self.groups[RBACConstants.GROUP_COMMERCE]
         permissions = []
 
@@ -158,7 +179,7 @@ class Command(BaseCommand):
         self._set_group_permissions(group, permissions, 'COMMERCE')
 
     def _assign_support_permissions(self) -> None:
-        """Permissions pour mavecam_support."""
+        """Permissions pour aquacare_support."""
         group = self.groups[RBACConstants.GROUP_SUPPORT]
         permissions = []
 
@@ -223,7 +244,7 @@ class Command(BaseCommand):
         self.stdout.write(f'  {RBACConstants.GROUP_SUPPORT} -> Chat + Notifications')
 
         self.stdout.write('\nPour assigner un role:')
-        self.stdout.write('  user.groups.add(Group.objects.get(name="mavecam_commerce"))')
+        self.stdout.write('  user.groups.add(Group.objects.get(name="aquacare_commerce"))')
         self.stdout.write('  user.is_staff = True')
         self.stdout.write('  user.save()')
 

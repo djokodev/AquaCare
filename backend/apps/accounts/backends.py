@@ -12,9 +12,9 @@ if TYPE_CHECKING:
     from .models import User as UserModel
 
 
-class MavecamAuthBackend(BaseBackend):
+class AquaCareAuthBackend(BaseBackend):
     """
-    Backend d'authentification MAVECAM selon les spécifications.
+    Backend d'authentification AquaCare selon les règles métier.
     
     Permet l'authentification avec :
     - login_name (nom de personne ou d'entreprise) + password
@@ -30,7 +30,7 @@ class MavecamAuthBackend(BaseBackend):
         **kwargs: Any,
     ) -> UserModel | None:
         """
-        Authentifie un utilisateur selon les spécifications MAVECAM.
+        Authentifie un utilisateur selon les règles AquaCare.
         
         Args:
             login_name (str): Nom de connexion (business_name ou "first_name last_name")

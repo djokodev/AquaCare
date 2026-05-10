@@ -1,41 +1,27 @@
-# CLAUDE.md
-
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
-## Règle de push — non-négociable
+## Règle de push
 
 **Ne jamais push de code sans que l'utilisateur ait explicitement confirmé que le test local est OK.**
 Workflow obligatoire : implémenter → tester en local → attendre "c'est ok, tu peux push" → push.
 Ne pas pousser "en avance" même si le code semble correct.
 
----
-
 ## Style de communication
 
 Dans les messages texte, utiliser **","** comme séparateur dans les listes inline, jamais le tiret **"-"**. Exemple : "prix 2800 FCFA, poids 350g" (pas "prix 2800 FCFA - poids 350g").
 
-## 🚀 IMPORTANT : Workflow de Développement
+## IMPORTANT : Workflow de Développement
 
 **AVANT toute tâche de développement, LIRE `WORKFLOW.md`** à la racine du projet.
 
-Ce fichier contient :
-- **Routine 10 étapes** : De la feature jusqu'au merge (feature → branch → implement → test → commit → PR → review → merge)
-- **Cheatsheet** : 8 custom commands, 5 agents, 6 skills, 5 MCP servers
-- **Checklists qualité** : Pre-commit, pre-PR, pre-release
-- **Troubleshooting guidé** : Debug API errors, frontend crashes, offline sync, i18n
-- **Commandes Docker/npm** : Référence complète copiable
-
 **Instruction Claude Code :** Commence chaque session de développement en lisant `WORKFLOW.md` pour connaître la routine appropriée selon la tâche (feature backend/frontend, bug fix, package installation, review PR, pre-release).
-
----
 
 ## Project Overview
 
-AquaCare is a bilingual (French/English) aquaculture management application for Cameroon, targeting fish farmers with offline-first mobile capabilities. Stack: Django REST Framework (backend) + React Native/Expo (frontend).
+AquaCare est une application de gestion aquacole bilingue (français/anglais) conçue pour le Cameroun, destinée aux pisciculteurs, avec des fonctionnalités mobiles fonctionnant hors ligne en priorité.
+Technologies utilisées : Django REST Framework (backend) + React Native/Expo (frontend).
 
 ## Essential Commands
 
-### Backend (Docker)
+### Backend
 ```bash
 # Start full stack (PostgreSQL + Redis + Django + Celery + Nginx)
 cd backend
@@ -46,9 +32,9 @@ docker-compose exec api python manage.py migrate
 docker-compose exec api python manage.py makemigrations
 
 # Load initial data (CRITICAL after migrations)
-docker-compose exec api python manage.py load_nutritional_data  # 8 MAVECAM guides
-docker-compose exec api python manage.py load_products           # 22 products catalog
-docker-compose exec api python manage.py setup_rbac              # Admin roles/permissions
+docker-compose exec api python manage.py load_nutritional_data  
+docker-compose exec api python manage.py load_products         
+docker-compose exec api python manage.py setup_rbac
 
 # Create superuser from environment variables
 docker-compose exec api python manage.py create_superuser_from_env
@@ -57,19 +43,19 @@ docker-compose exec api python manage.py create_superuser_from_env
 docker-compose exec api ruff check backend/manage.py backend/apps backend/mavecam_api backend/tests
 
 # Testing
-docker-compose exec api pytest                                   # Run all tests
-docker-compose exec api pytest apps/aquaculture/tests/          # Specific module
-docker-compose exec api pytest -k test_function_name            # Single test
-docker-compose exec api pytest --cov=apps --cov-report=html     # Coverage report
+docker-compose exec api pytest                                  
+docker-compose exec api pytest apps/aquaculture/tests/          
+docker-compose exec api pytest -k test_function_name           
+docker-compose exec api pytest --cov=apps --cov-report=html     
 
 # Logs and debugging
-docker-compose logs -f api          # Watch Django logs
+docker-compose logs -f api          
 docker-compose logs -f celery_worker
 docker-compose exec api python manage.py shell
 docker-compose exec db psql -U aquacare_user -d aquacare_db
 ```
 
-### Frontend (Expo)
+### Frontend
 ```bash
 cd frontend
 npm start                    # Start Expo Go (auto-detects backend IP)
@@ -136,8 +122,6 @@ const response = await api.post('/cycles/harvest/', data);
 dispatch(updateCycleValue(response.data.final_value));  // Backend is truth
 ```
 
-**Rule:** All FCR, biomass, ROI, feed calculations happen backend-only. Frontend displays results.
-
 ## Bilingual Translations (MANDATORY)
 
 Application MUST be 100% bilingual French/English. **NEVER hardcode text in components.**
@@ -157,25 +141,6 @@ Application MUST be 100% bilingual French/English. **NEVER hardcode text in comp
 
 **Verification:** Run `/i18n-validator` agent to check completeness.
 
-## Cameroon-Specific Constraints
-
-### Phone Numbers (Primary Identifier)
-- Format: `+237` + 9 digits (e.g., `+237652000000`)
-- Phone replaces email as login identifier (90% mobile penetration vs 30% email)
-- Validation: `accounts/validators.py` - `validate_cameroon_phone_number()`
-
-### Geography Constants
-- 10 regions, departments, arrondissements in `constants/cameroon.ts`
-- Timezone: `Africa/Douala` (UTC+1)
-
-### Business Constants
-```typescript
-// frontend/src/constants/aquaculture.ts
-FISH_PRICE_PER_KG = 1800;      // FCFA
-FEED_PRICE_PER_KG = 1250;      // FCFA
-FCR_BASELINE = 1.3;             // Without AquaCare
-FCR_TARGET = 0.7;               // With AquaCare optimization
-```
 
 ## MAVECAM Design System
 
@@ -269,51 +234,8 @@ npm test                    # All tests
 npm run test:coverage       # With coverage
 ```
 
-## Key Django Models
-
-**Core entities:**
-- `User` (accounts): Phone-based auth, JWT tokens
-- `FarmProfile` (accounts): Farm details, location, legal status
-- `ProductionCycle` (aquaculture): 60-180 day cycles, central entity
-- `CycleLog` (aquaculture): Daily logs with `client_uuid` for offline
-- `FeedingPlan` (aquaculture): Auto-generated weekly feeding schedules
-- `NutritionalGuide` (aquaculture): 8 MAVECAM guides (fixtures)
-- `Product` (commerce): Feed catalog (22 products from fixtures)
-- `Order` (commerce): Cart + order management
-
-**Sync metadata fields:**
-```python
-created_offline = models.BooleanField(default=False)
-synced_at = models.DateTimeField(null=True, blank=True)
-client_uuid = models.UUIDField(unique=True, null=True, blank=True)
-```
-
-## Redux State Management
-
-**5 main slices:**
-```
-frontend/src/features/{domain}/store/{domain}Slice.ts
-
-1. auth         - Login, registration, JWT management
-2. aquaculture  - Cycles, logs, feeding plans, stats
-3. commerce     - Products, cart, orders
-4. notifications - Alerts, filtering
-5. chat         - Support messaging
-```
-
-**Async operations use createAsyncThunk:**
-```typescript
-export const fetchCycles = createAsyncThunk(
-  'aquaculture/fetchCycles',
-  async (_, { rejectWithValue }) => {
-    const response = await api.get('/cycles/');
-    return response.data;
-  }
-);
-```
 
 ## Environment Auto-Detection
-
 ```typescript
 // frontend/src/config/environment.ts
 if (__DEV__) {
@@ -322,24 +244,8 @@ if (__DEV__) {
   // Production → http://77.237.241.223/api
 }
 ```
-
 **No manual configuration needed.** Backend IP auto-detected in development.
 
-## Navigation Types
-
-```typescript
-// frontend/src/navigation/MainNavigator.tsx
-export type RootStackParamList = {
-  MainTabs: undefined;
-  DailyLog: undefined;
-  ProductDetail: { productId: string };  // With params
-  // ...
-};
-
-// Usage in screens
-import { NativeStackScreenProps } from '@react-navigation/native-stack';
-type Props = NativeStackScreenProps<RootStackParamList, 'ProductDetail'>;
-```
 
 ## Docker Stack (Development)
 
@@ -388,57 +294,6 @@ Services in `docker-compose.yml`:
 - Registry: `ghcr.io/{owner}/aquacare-api` (`:latest` for prod, `:staging` for staging)
 - Health check: `curl https://api.aquacare.tech/api/health/`
 
-## Custom Commands & Skills
-
-**Available commands** (see `.claude/commands/README.md` for details):
-- `/check-package <name>` - Verify Expo Go compatibility before installing
-- `/create-backend-feature` - Scaffold new Django feature with tests
-- `/create-frontend-feature` - Scaffold new React Native screen with Redux
-- `/fix-bug` - Systematic bug diagnosis and fixing workflow
-- `/review-pr` - Code review following AquaCare standards
-- `/db-debug` - Query PostgreSQL database for debugging
-- `/update-changelog` - Document changes in PROJECT_CONTEXT.md
-- `/pre-release` - Comprehensive validation before production deploy
-
-**Auto-applied skills:**
-- `bilingual-strings` - Enforces i18n translations for all UI text
-- `commit-conventions` - AquaCare commit message format
-- `code-review-aquacare` - Code review standards
-- `expo-go-check` - Package compatibility verification
-- `offline-first-models` - UUID + sync metadata patterns
-- `react-native-best-practices` - FPS, TTI, bundle size, memory leaks, re-renders
-
-## File Structure
-
-```
-AquaCare/
-├── backend/
-│   ├── apps/
-│   │   ├── accounts/          # Auth, users, farm profiles
-│   │   ├── aquaculture/       # Cycles, logs, feeding (core business logic)
-│   │   ├── commerce/          # Products, orders, cart
-│   │   ├── notifications/     # Alerts system
-│   │   └── chat/              # Support messaging
-│   ├── mavecam_api/
-│   │   ├── settings/          # base.py, development.py, production.py, test.py
-│   │   └── urls.py
-│   ├── docker-compose.yml     # Development stack
-│   ├── pytest.ini             # Test configuration
-│   └── requirements.txt
-│
-└── frontend/
-    ├── src/
-    │   ├── features/          # Feature-sliced design
-    │   ├── navigation/        # React Navigation
-    │   ├── store/             # Redux Toolkit
-    │   ├── services/          # API clients (axios)
-    │   ├── i18n/locales/      # fr.ts, en.ts
-    │   ├── constants/         # colors.ts, aquaculture.ts, cameroon.ts
-    │   └── types/             # TypeScript interfaces
-    ├── package.json
-    ├── tsconfig.json
-    └── app.json               # Expo configuration
-```
 
 ## Post-Migration Checklist
 
@@ -453,44 +308,6 @@ docker-compose exec api python manage.py setup_rbac
 ## Branding Note
 
 AquaCare is independent of MAVECAM. Do not use "MAVECAM" as owner/author in exports, PDFs, or UI. Use neutral "AquaCare" branding.
-
----
-
-## Analyse Automatique du Prompt
-
-À chaque nouveau prompt reçu, appliquer cet arbre de décision AVANT toute action :
-
-```
-PROMPT REÇU
-    │
-    ▼
-[Analyser les mots-clés et la portée réelle de la tâche]
-    │
-    ├─ "écran" / "page" / "interface" / "UI" / "composant" / "affiche"
-    │     → /create-frontend-feature
-    │
-    ├─ "modèle" / "API" / "endpoint" / "backend" / "serializer" / "migration"
-    │     → /create-backend-feature
-    │
-    ├─ "bug" / "erreur" / "crash" / "ne fonctionne pas" / "problème"
-    │     → /fix-bug
-    │
-    ├─ "installe" / "ajoute le package" / "ajoute la lib" / "dépendance"
-    │     → /check-package {nom} EN PREMIER (bloquant), puis npx expo install
-    │
-    ├─ "review la PR" / "review #N" / "vérifie la PR"
-    │     → /review-pr [N]
-    │
-    ├─ "release" / "déploie en prod" / "mise en production"
-    │     → /pre-release
-    │
-    └─ [touche backend ET frontend — cas le plus courant pour les features]
-          → /create-backend-feature PUIS /create-frontend-feature dans la même branche
-```
-
-**Si ambiguïté** : lire les fichiers existants pour déterminer la portée réelle (modèle ? écran ? les deux ?), puis décider. Ne pas demander si l'analyse des fichiers suffit.
-
----
 
 ## Mise en Place Automatique (Branch Setup)
 
@@ -510,7 +327,6 @@ git checkout -b {prefix}/{nom-kebab-case}
 
 **Ne jamais coder directement sur `main` ou `develop`.** Les hooks bloquent les éditions sur ces branches.
 
----
 
 ## Skills — Invocation Automatique par Type de Tâche
 
@@ -527,105 +343,7 @@ Invoquer les skills dans l'ordre indiqué, AVANT d'écrire le code correspondant
 
 **Pour toute librairie utilisée** : consulter context7 AVANT d'écrire le code. Ne pas se fier aux connaissances d'entraînement pour les APIs de librairies — elles changent.
 
----
-
-## Cycle Post-Implémentation (Non-Négociable)
-
-Après avoir écrit le code, ce cycle est OBLIGATOIRE avant de créer le commit :
-
-```
-ÉTAPE 1 — Code Review automatique
-  → Invoquer skill: code-review-aquacare
-  → Vérifier : i18n FR+EN ? UUID PKs ? offline sync ? TypeScript strict ?, code est securiser, MAVECAM colors ?
-  → Si problèmes détectés → corriger MAINTENANT, puis relancer la review
-  → Bloquer : ne pas avancer si la review identifie des violations
-
-ÉTAPE 2 — Tests
-  Backend (si modifié) :
-    cd backend && docker-compose exec api pytest --cov=apps -v
-    → Coverage ≥ 50% obligatoire
-
-  Frontend (si modifié) :
-    cd frontend && npx tsc --noEmit     ← DOIT afficher 0 erreurs
-    cd frontend && npm test
-
-  → Si erreurs ou tests échoués → corriger MAINTENANT, puis relancer
-  → Bloquer : ne pas avancer tant que tous les checks ne passent pas
-
-ÉTAPE 3 — Commit
-  → Invoquer skill: commit-conventions
-  → Format strict :
-     type(scope): description courte < 72 chars
-
-     Corps optionnel — POURQUOI, pas QUOI.
-
-     Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
-
-ÉTAPE 4 — Résumé + Attendre Validation
-  → Présenter à l'utilisateur un résumé clair :
-     ✅ Ce qui a été implémenté (liste concise)
-     ✅ Review : points vérifiés
-     ✅ Tests : résultats (coverage %, 0 erreurs TS)
-     ✅ Commit : hash + message
-  → ATTENDRE la validation explicite avant toute autre action
-```
-
----
-
-## Après Validation : Prochaines Étapes
-
-Une fois la validation reçue, proposer proactivement les options suivantes :
-
-**Option A — Créer la Pull Request vers develop**
-```bash
-gh pr create \
-  --base develop \
-  --head feature/{nom} \
-  --title "feat(scope): description" \
-  --body "$(cat <<'EOF'
-## Résumé
-- [changements apportés]
-
-## Tests
-- Backend: pytest ✅ (coverage X%)
-- Frontend: tsc ✅ + jest ✅
-
-## Checklist qualité
-- [ ] i18n FR + EN complet
-- [ ] UUID PK si nouveau modèle
-- [ ] offline sync si nouveau modèle
-- [ ] TypeScript strict — 0 erreurs
-- [ ] MAVECAM colors respectées
-
-🤖 Generated with [Claude Code](https://claude.ai/code)
-EOF
-)"
-```
-
-**Option B — Merger vers develop** (déclenche staging auto-deploy)
-- Merge PR → develop
-- Staging auto-deploy : `https://api-staging.aquacare.tech`
-- Vérifier santé : `curl https://api-staging.aquacare.tech/api/health/`
-
-**Option C — Continuer sur une autre feature**
-```bash
-git checkout develop && git pull origin develop
-# → Recommencer le cycle depuis Analyse du Prompt
-```
-
-**Option D — Release en production**
-```bash
-# 1. Lancer /pre-release pour validation complète
-# 2. Merger develop → main déclenche le deploy prod automatique
-# 3. Vérifier : curl https://api.aquacare.tech/api/health/
-```
-
----
-
 # Context 7
-
 This project integrates Context7 MCP (Model Context Protocol) as a central knowledge layer to enhance agent intelligence and ensure system-wide consistency. Agents must treat Context7 as the single source of truth for understanding the system’s architecture, business logic, conventions, and evolving state.
-
 Before performing any task — especially when generating or modifying code, proposing architectural decisions, or introducing new patterns — agents are required to first consult Context7 to align with existing structures and avoid inconsistencies. No code, design, or structural change should be made without verifying its coherence with the current context.
-
 Additionally, agents should proactively update and enrich Context7 whenever they introduce meaningful changes (e.g., new modules, patterns, or decisions), ensuring that the shared knowledge remains accurate, up-to-date, and continuously improves over time.

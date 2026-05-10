@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import pytest
-from accounts.permissions import IsMavecamAdmin, IsOwnerOrReadOnly
+from accounts.permissions import IsAquaCareAdmin, IsOwnerOrReadOnly
 from django.contrib.auth.models import AnonymousUser
 from rest_framework.test import APIRequestFactory
 
@@ -58,10 +58,10 @@ class TestIsOwnerOrReadOnly:
 
 
 @pytest.mark.django_db
-class TestIsMavecamAdmin:
+class TestIsAquaCareAdmin:
     @pytest.fixture
-    def permission(self) -> IsMavecamAdmin:
-        return IsMavecamAdmin()
+    def permission(self) -> IsAquaCareAdmin:
+        return IsAquaCareAdmin()
 
     @pytest.fixture
     def request_factory(self) -> APIRequestFactory:
@@ -69,7 +69,7 @@ class TestIsMavecamAdmin:
 
     def test_staff_user_has_permission(
         self,
-        permission: IsMavecamAdmin,
+        permission: IsAquaCareAdmin,
         request_factory: APIRequestFactory,
         user_factory,
     ) -> None:
@@ -81,7 +81,7 @@ class TestIsMavecamAdmin:
 
     def test_non_staff_user_is_denied(
         self,
-        permission: IsMavecamAdmin,
+        permission: IsAquaCareAdmin,
         request_factory: APIRequestFactory,
         user_factory,
     ) -> None:
@@ -93,7 +93,7 @@ class TestIsMavecamAdmin:
 
     def test_anonymous_user_is_denied(
         self,
-        permission: IsMavecamAdmin,
+        permission: IsAquaCareAdmin,
         request_factory: APIRequestFactory,
     ) -> None:
         request = request_factory.get("/")

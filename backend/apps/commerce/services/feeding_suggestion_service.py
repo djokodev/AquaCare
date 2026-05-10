@@ -118,8 +118,8 @@ class FeedingSuggestionService:
 
     @staticmethod
     def get_feeding_suggestions(
-        user_id: int,
-        farm_profile_id: int | None = None,
+        user_id: object,
+        farm_profile_id: str | None = None,
         cycle_id: str | None = None,
     ) -> FeedingSuggestionResult | dict[str, object]:
         """

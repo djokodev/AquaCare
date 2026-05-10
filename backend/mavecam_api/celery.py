@@ -1,5 +1,5 @@
 """
-Configuration Celery pour MAVECAM AquaCare.
+Configuration Celery pour AquaCare.
 
 Celery est utilisé pour les tâches asynchrones :
 - Envoi d'emails

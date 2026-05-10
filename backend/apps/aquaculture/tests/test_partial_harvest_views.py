@@ -120,7 +120,6 @@ class TestPartialHarvestEndpoint:
 
     def test_partial_harvest_wrong_user_cannot_access(self, user_factory, production_cycle, api_client):
         """Un autre utilisateur ne peut pas récolter le cycle d'un autre."""
-        from accounts.models import FarmProfile
         other_user = user_factory(phone_number='+237690111222')
         # other_user n'a pas de cycle avec cet ID (cycle appartient à authenticated_user)
         api_client.force_authenticate(user=other_user)

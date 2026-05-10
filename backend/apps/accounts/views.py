@@ -1,17 +1,22 @@
+import logging
+
 from django.http import Http404
 from django.utils.translation import gettext as _
-from drf_spectacular.utils import OpenApiExample, OpenApiParameter, OpenApiResponse, extend_schema
+from drf_spectacular.utils import OpenApiExample, OpenApiResponse, extend_schema, extend_schema_view
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
+from rest_framework_simplejwt.views import TokenRefreshView, TokenVerifyView
 
 from .models import FarmProfile, User
 from .permissions import IsOwnerOrReadOnly
 from .serializers import (
     AccountDeletionSerializer,
+    AccountsTokenRefreshSerializer,
+    AccountsTokenVerifySerializer,
     AnnualSimulationInputSerializer,
+    AnnualSimulationResponseSerializer,
     AuthSuccessResponseSerializer,
     ErrorResponseSerializer,
-    FarmMapSerializer,
     FarmProfileSerializer,
     FarmSetupSerializer,
     LoginSerializer,
@@ -20,23 +25,47 @@ from .serializers import (
     UserProfileSerializer,
     UserRegistrationSerializer,
 )
-from .services import (
-    AccountDeletionService,
-    AnnualSimulationService,
-    AuthApplicationService,
-    InvalidRefreshTokenError,
-    ProfileQueryService,
+from .schemas import (
+    AUTH_REQUIRED_RESPONSE,
+    FORBIDDEN_RESPONSE,
+    NOT_FOUND_RESPONSE,
+    THROTTLED_RESPONSE,
+    TOKEN_ERROR_RESPONSE,
+    VALIDATION_ERROR_RESPONSE,
 )
+from .services.account_deletion_service import AccountDeletionService
+from .services.annual_simulation_service import AnnualSimulationService
+from .services.auth_application_service import AuthApplicationService, InvalidRefreshTokenError
+from .services.farm_setup_service import FarmSetupService
+from .services.profile_mutation_service import AccountProfileMutationService
+from .services.profile_query_service import ProfileQueryService
 from .throttles import (
+    AccountFarmSetupThrottle,
+    AccountLoginGlobalThrottle,
     AccountLoginThrottle,
     AccountRegisterThrottle,
+    AccountSimulationThrottle,
+    AccountTokenThrottle,
     SensitiveAccountActionThrottle,
 )
+
+logger = logging.getLogger(__name__)
+
+def _user_id(user) -> str:
+    return str(user.pk)
+
+
+def _auth_method_from_payload(payload) -> str:
+    if payload.get('phone_number'):
+        return 'phone_number'
+    if payload.get('login_name'):
+        return 'login_name'
+    return 'unknown'
 
 
 class RegisterView(generics.CreateAPIView):
     """
-    🔐 Inscription des nouveaux pisciculteurs MAVECAM.
+    Inscription des nouveaux pisciculteurs AquaCare.
     
     Permet aux pisciculteurs de créer un nouveau compte (individuel ou entreprise)
     et génère automatiquement :
@@ -103,13 +132,24 @@ class RegisterView(generics.CreateAPIView):
                 response=AuthSuccessResponseSerializer,
                 description="Compte créé avec succès",
             ),
-            400: OpenApiResponse(description="Erreurs de validation"),
+            400: VALIDATION_ERROR_RESPONSE,
+            429: THROTTLED_RESPONSE,
         }
     )
-    def create(self, request, *args, **kwargs):
+    def post(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
+        logger.info(
+            "Account registered",
+            extra={
+                "event": "accounts.register.succeeded",
+                "endpoint": request.path,
+                "user_id": _user_id(user),
+                "account_type": user.account_type,
+                "status_code": status.HTTP_201_CREATED,
+            },
+        )
         auth_result = AuthApplicationService.build_auth_success_result(
             user=user,
             message=_('Compte créé avec succès'),
@@ -126,7 +166,7 @@ class RegisterView(generics.CreateAPIView):
 
 class LoginView(generics.GenericAPIView):
     """
-    Authentification flexible des pisciculteurs MAVECAM.
+    Authentification flexible des pisciculteurs AquaCare.
     
     Système de connexion supportant deux méthodes :
     1. **Nom d'affichage + mot de passe** (UX optimisée)
@@ -146,10 +186,10 @@ class LoginView(generics.GenericAPIView):
     """
     serializer_class = LoginSerializer
     permission_classes = [permissions.AllowAny]
-    throttle_classes = [AccountLoginThrottle]
+    throttle_classes = [AccountLoginGlobalThrottle, AccountLoginThrottle]
     
     @extend_schema(
-        summary="Connexion utilisateur MAVECAM",
+        summary="Connexion utilisateur AquaCare",
         description=(
             "Authentification flexible avec deux méthodes : nom d'affichage "
             "OU numéro de téléphone + mot de passe"
@@ -186,7 +226,8 @@ class LoginView(generics.GenericAPIView):
                 response=AuthSuccessResponseSerializer,
                 description="Connexion réussie avec tokens JWT",
             ),
-            400: OpenApiResponse(description="Identifiants incorrects ou manquants"),
+            400: VALIDATION_ERROR_RESPONSE,
+            429: THROTTLED_RESPONSE,
         }
     )
     def post(self, request, *args, **kwargs):
@@ -194,6 +235,16 @@ class LoginView(generics.GenericAPIView):
         serializer.is_valid(raise_exception=True)
 
         user = serializer.validated_data['user']
+        logger.info(
+            "Account login succeeded",
+            extra={
+                "event": "accounts.login.succeeded",
+                "endpoint": request.path,
+                "user_id": _user_id(user),
+                "auth_method": _auth_method_from_payload(request.data),
+                "status_code": status.HTTP_200_OK,
+            },
+        )
         auth_result = AuthApplicationService.build_auth_success_result(
             user=user,
             message=_('Connexion réussie'),
@@ -204,9 +255,42 @@ class LoginView(generics.GenericAPIView):
         return Response(response_serializer.data)
 
 
+@extend_schema_view(
+    get=extend_schema(
+        responses={
+            200: UserProfileSerializer,
+            401: AUTH_REQUIRED_RESPONSE,
+            403: FORBIDDEN_RESPONSE,
+            404: NOT_FOUND_RESPONSE,
+            429: THROTTLED_RESPONSE,
+        },
+    ),
+    put=extend_schema(
+        request=UserProfileSerializer,
+        responses={
+            200: UserProfileSerializer,
+            400: VALIDATION_ERROR_RESPONSE,
+            401: AUTH_REQUIRED_RESPONSE,
+            403: FORBIDDEN_RESPONSE,
+            404: NOT_FOUND_RESPONSE,
+            429: THROTTLED_RESPONSE,
+        },
+    ),
+    patch=extend_schema(
+        request=UserProfileSerializer,
+        responses={
+            200: UserProfileSerializer,
+            400: VALIDATION_ERROR_RESPONSE,
+            401: AUTH_REQUIRED_RESPONSE,
+            403: FORBIDDEN_RESPONSE,
+            404: NOT_FOUND_RESPONSE,
+            429: THROTTLED_RESPONSE,
+        },
+    ),
+)
 class ProfileView(generics.RetrieveUpdateAPIView):
     """
-    👤 Gestion complète du profil utilisateur MAVECAM.
+    Gestion complète du profil utilisateur AquaCare.
     
     **GET :** Récupère le profil complet incluant :
     - Informations personnelles/entreprise
@@ -221,7 +305,7 @@ class ProfileView(generics.RetrieveUpdateAPIView):
     
     **Restrictions :**
     - phone_number : Non modifiable (identifiant unique)
-    - certification_status : Réservé aux admins MAVECAM
+    - certification_status : Réservé aux admins AquaCare
     """
     queryset = User.objects.with_farm_profile()
     serializer_class = UserProfileSerializer
@@ -230,10 +314,26 @@ class ProfileView(generics.RetrieveUpdateAPIView):
     def get_object(self):
         return ProfileQueryService.get_user_profile(self.request.user.pk)
 
+    def perform_update(self, serializer):
+        user = AccountProfileMutationService.update_user_profile(
+            user_id=self.request.user.pk,
+            updates=serializer.validated_data,
+        )
+        serializer.instance = user
+        logger.info(
+            "Account profile updated",
+            extra={
+                "event": "accounts.profile.updated",
+                "endpoint": self.request.path,
+                "user_id": _user_id(user),
+                "status_code": status.HTTP_200_OK,
+            },
+        )
+
 
 class LogoutView(generics.GenericAPIView):
     """
-    Déconnexion sécurisée des pisciculteurs MAVECAM.
+    Déconnexion sécurisée des pisciculteurs AquaCare.
     
     Invalide le refresh token côté serveur pour empêcher toute réutilisation.
     Cette approche garantit une déconnexion complète et sécurisée.
@@ -274,6 +374,8 @@ class LogoutView(generics.GenericAPIView):
                 response=ErrorResponseSerializer,
                 description="Token invalide",
             ),
+            401: AUTH_REQUIRED_RESPONSE,
+            429: THROTTLED_RESPONSE,
         }
     )
     def post(self, request, *args, **kwargs):
@@ -282,7 +384,19 @@ class LogoutView(generics.GenericAPIView):
         refresh_token = serializer.validated_data['refresh']
 
         try:
-            AuthApplicationService.blacklist_refresh_token(refresh_token)
+            AuthApplicationService.blacklist_refresh_token(
+                refresh_token,
+                expected_user=request.user,
+            )
+            logger.info(
+                "Account logout succeeded",
+                extra={
+                    "event": "accounts.logout.succeeded",
+                    "endpoint": request.path,
+                    "user_id": _user_id(request.user),
+                    "status_code": status.HTTP_200_OK,
+                },
+            )
             response_serializer = MessageResponseSerializer(
                 {'message': _('Déconnexion réussie')}
             )
@@ -292,6 +406,16 @@ class LogoutView(generics.GenericAPIView):
             )
 
         except InvalidRefreshTokenError:
+            logger.warning(
+                "Account logout rejected",
+                extra={
+                    "event": "accounts.logout.rejected",
+                    "endpoint": request.path,
+                    "user_id": _user_id(request.user),
+                    "reason_code": "invalid_refresh_token",
+                    "status_code": status.HTTP_400_BAD_REQUEST,
+                },
+            )
             response_serializer = ErrorResponseSerializer(
                 {'error': _('Token invalide')}
             )
@@ -300,6 +424,93 @@ class LogoutView(generics.GenericAPIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+
+class AccountsTokenRefreshView(TokenRefreshView):
+    """Renouvelle un token seulement pour un compte accounts actif."""
+
+    serializer_class = AccountsTokenRefreshSerializer
+    throttle_classes = [AccountTokenThrottle]
+
+    @extend_schema(
+        request=AccountsTokenRefreshSerializer,
+        responses={
+            200: AccountsTokenRefreshSerializer,
+            400: VALIDATION_ERROR_RESPONSE,
+            401: TOKEN_ERROR_RESPONSE,
+            429: THROTTLED_RESPONSE,
+        },
+    )
+    def post(self, request, *args, **kwargs):
+        response = super().post(request, *args, **kwargs)
+        logger.info(
+            "Accounts token refreshed",
+            extra={
+                "event": "accounts.token.refresh.succeeded",
+                "endpoint": request.path,
+                "status_code": response.status_code,
+            },
+        )
+        return response
+
+
+class AccountsTokenVerifyView(TokenVerifyView):
+    """Vérifie un token seulement pour un compte accounts actif."""
+
+    serializer_class = AccountsTokenVerifySerializer
+    throttle_classes = [AccountTokenThrottle]
+
+    @extend_schema(
+        request=AccountsTokenVerifySerializer,
+        responses={
+            200: OpenApiResponse(description="Token valide, réponse vide."),
+            400: VALIDATION_ERROR_RESPONSE,
+            401: TOKEN_ERROR_RESPONSE,
+            429: THROTTLED_RESPONSE,
+        },
+    )
+    def post(self, request, *args, **kwargs):
+        response = super().post(request, *args, **kwargs)
+        logger.info(
+            "Accounts token verified",
+            extra={
+                "event": "accounts.token.verify.succeeded",
+                "endpoint": request.path,
+                "status_code": response.status_code,
+            },
+        )
+        return response
+
+
+@extend_schema_view(
+    get=extend_schema(
+        responses={
+            200: FarmProfileSerializer,
+            401: AUTH_REQUIRED_RESPONSE,
+            404: NOT_FOUND_RESPONSE,
+            429: THROTTLED_RESPONSE,
+        },
+    ),
+    put=extend_schema(
+        request=FarmProfileSerializer,
+        responses={
+            200: FarmProfileSerializer,
+            400: VALIDATION_ERROR_RESPONSE,
+            401: AUTH_REQUIRED_RESPONSE,
+            404: NOT_FOUND_RESPONSE,
+            429: THROTTLED_RESPONSE,
+        },
+    ),
+    patch=extend_schema(
+        request=FarmProfileSerializer,
+        responses={
+            200: FarmProfileSerializer,
+            400: VALIDATION_ERROR_RESPONSE,
+            401: AUTH_REQUIRED_RESPONSE,
+            404: NOT_FOUND_RESPONSE,
+            429: THROTTLED_RESPONSE,
+        },
+    ),
+)
 class FarmProfileView(generics.RetrieveUpdateAPIView):
     """
     Gestion spécialisée du profil ferme piscicole.
@@ -308,7 +519,7 @@ class FarmProfileView(generics.RetrieveUpdateAPIView):
     - Infrastructure : nombre de bassins, superficie totale
     - Production : espèces élevées, production annuelle
     - Ressources : source d'eau utilisée
-    - Certification : statut géré par les admins MAVECAM
+    - Certification : statut géré par les admins AquaCare
     
     **PUT/PATCH :** Modification des données techniques :
     - Informations sur les bassins et la superficie
@@ -329,6 +540,23 @@ class FarmProfileView(generics.RetrieveUpdateAPIView):
             return ProfileQueryService.get_farm_profile(self.request.user.pk)
         except FarmProfile.DoesNotExist:
             raise Http404
+
+    def perform_update(self, serializer):
+        farm = AccountProfileMutationService.update_farm_profile(
+            user_id=self.request.user.pk,
+            updates=serializer.validated_data,
+        )
+        serializer.instance = farm
+        logger.info(
+            "Farm profile updated",
+            extra={
+                "event": "accounts.farm_profile.updated",
+                "endpoint": self.request.path,
+                "user_id": _user_id(self.request.user),
+                "farm_id": str(farm.pk),
+                "status_code": status.HTTP_200_OK,
+            },
+        )
 
 
 class AccountDeletionView(generics.GenericAPIView):
@@ -355,14 +583,24 @@ class AccountDeletionView(generics.GenericAPIView):
                 response=MessageResponseSerializer,
                 description="Compte supprimé/anonymisé avec succès",
             ),
-            400: OpenApiResponse(description="Confirmation manquante"),
-            401: OpenApiResponse(description="Authentification requise"),
+            400: VALIDATION_ERROR_RESPONSE,
+            401: AUTH_REQUIRED_RESPONSE,
+            429: THROTTLED_RESPONSE,
         },
     )
     def post(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         AccountDeletionService.anonymize_user_account(request.user)
+        logger.info(
+            "Account deletion completed",
+            extra={
+                "event": "accounts.delete.succeeded",
+                "endpoint": request.path,
+                "user_id": _user_id(request.user),
+                "status_code": status.HTTP_200_OK,
+            },
+        )
         response_serializer = MessageResponseSerializer(
             {"message": _("Compte supprimé avec succès.")}
         )
@@ -382,6 +620,7 @@ class FarmSetupView(generics.UpdateAPIView):
     """
     serializer_class = FarmSetupSerializer
     permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [AccountFarmSetupThrottle]
     http_method_names = ['patch', 'post']
 
     def get_object(self):
@@ -390,16 +629,66 @@ class FarmSetupView(generics.UpdateAPIView):
         except FarmProfile.DoesNotExist:
             raise Http404
 
+    @extend_schema(
+        summary="Mettre à jour la configuration initiale d'élevage",
+        description=(
+            "Met à jour partiellement le formulaire Créer mon élevage. Une ferme "
+            "incomplète ne peut pas être marquée comme configurée sans tous les "
+            "champs requis."
+        ),
+        request=FarmSetupSerializer,
+        responses={
+            200: OpenApiResponse(
+                response=FarmProfileSerializer,
+                description="Profil ferme complet après sauvegarde du setup.",
+            ),
+            400: VALIDATION_ERROR_RESPONSE,
+            401: AUTH_REQUIRED_RESPONSE,
+            404: NOT_FOUND_RESPONSE,
+            429: THROTTLED_RESPONSE,
+        },
+    )
     def patch(self, request, *args, **kwargs):
         farm = self.get_object()
         serializer = self.get_serializer(farm, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
-        updated = serializer.save()
+        updated = FarmSetupService.complete_setup(
+            farm,
+            serializer.validated_data,
+        )
+        logger.info(
+            "Farm setup completed",
+            extra={
+                "event": "accounts.farm_setup.completed",
+                "endpoint": request.path,
+                "user_id": _user_id(request.user),
+                "farm_id": str(updated.pk),
+                "status_code": status.HTTP_200_OK,
+            },
+        )
         return Response(
             FarmProfileSerializer(updated).data,
             status=status.HTTP_200_OK,
         )
 
+    @extend_schema(
+        summary="Compléter la configuration initiale d'élevage",
+        description=(
+            "Sauvegarde le formulaire Créer mon élevage et retourne le profil ferme "
+            "complet, incluant farm_setup_completed et les champs setup readonly."
+        ),
+        request=FarmSetupSerializer,
+        responses={
+            200: OpenApiResponse(
+                response=FarmProfileSerializer,
+                description="Profil ferme complet après completion du setup.",
+            ),
+            400: VALIDATION_ERROR_RESPONSE,
+            401: AUTH_REQUIRED_RESPONSE,
+            404: NOT_FOUND_RESPONSE,
+            429: THROTTLED_RESPONSE,
+        },
+    )
     def post(self, request, *args, **kwargs):
         return self.patch(request, *args, **kwargs)
 
@@ -415,6 +704,7 @@ class AnnualSimulationView(generics.GenericAPIView):
     """
     serializer_class = AnnualSimulationInputSerializer
     permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [AccountSimulationThrottle]
 
     @extend_schema(
         summary="Simulation annuelle de production",
@@ -424,7 +714,15 @@ class AnnualSimulationView(generics.GenericAPIView):
             "Ne persiste aucune donnée — utilisez /farm/setup/ pour sauvegarder."
         ),
         request=AnnualSimulationInputSerializer,
-        responses={200: dict},
+        responses={
+            200: OpenApiResponse(
+                response=AnnualSimulationResponseSerializer,
+                description="Simulation annuelle calculée sans persistance.",
+            ),
+            400: VALIDATION_ERROR_RESPONSE,
+            401: AUTH_REQUIRED_RESPONSE,
+            429: THROTTLED_RESPONSE,
+        },
     )
     def post(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
@@ -455,53 +753,13 @@ class AnnualSimulationView(generics.GenericAPIView):
             ),
             total_fingerlings_count=data.get('total_fingerlings_count'),
         )
-        return Response(result, status=status.HTTP_200_OK)
-
-
-class FarmMapView(generics.ListAPIView):
-    """
-    🗺️ Carte des fermes géolocalisées — réservé aux admins.
-
-    Retourne toutes les fermes ayant des coordonnées GPS.
-    Utilisé pour la carte Leaflet dans l'interface d'administration.
-
-    **Filtres disponibles :**
-    - `?region=centre` — filtre par région administrative
-    - `?certification_status=certified` — filtre par statut
-
-    **Permissions :** is_staff uniquement.
-    """
-    serializer_class = FarmMapSerializer
-    permission_classes = [permissions.IsAdminUser]
-
-    @extend_schema(
-        summary="Carte des fermes géolocalisées (admin)",
-        description="Retourne toutes les fermes ayant des coordonnées GPS. Réservé aux admins.",
-        parameters=[
-            OpenApiParameter('region', str, description='Filtre par région administrative (ex: centre, littoral)'),
-            OpenApiParameter('certification_status', str, description='Filtre par statut de certification (certified, pending, suspended, rejected)'),
-        ],
-        responses={200: FarmMapSerializer(many=True)},
-    )
-    def get(self, request, *args, **kwargs):
-        return super().get(request, *args, **kwargs)
-
-    def get_queryset(self):
-        qs = (
-            FarmProfile.objects
-            .select_related('user')
-            .filter(
-                latitude__isnull=False,
-                longitude__isnull=False,
-                is_deleted=False,
-            )
+        logger.info(
+            "Annual simulation completed",
+            extra={
+                "event": "accounts.annual_simulation.completed",
+                "endpoint": request.path,
+                "user_id": _user_id(request.user),
+                "status_code": status.HTTP_200_OK,
+            },
         )
-        region = self.request.query_params.get('region')
-        if region:
-            qs = qs.filter(user__region=region)
-
-        cert_status = self.request.query_params.get('certification_status')
-        if cert_status:
-            qs = qs.filter(certification_status=cert_status)
-
-        return qs
+        return Response(result, status=status.HTTP_200_OK)

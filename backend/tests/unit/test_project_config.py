@@ -42,6 +42,7 @@ class TestProjectUrls:
         assert payload == {
             'status': 'healthy',
             'database': 'connected',
+            'cache': 'connected',
             'api': 'operational',
         }
         mock_connection.assert_called_once()
@@ -59,7 +60,26 @@ class TestProjectUrls:
         assert response.status_code == 503
         assert payload['status'] == 'unhealthy'
         assert payload['database'] == 'disconnected'
-        assert 'db down' in payload['error']
+        assert payload['cache'] == 'connected'
+        assert payload['api'] == 'degraded'
+        assert 'error' not in payload
+
+    def test_health_check_returns_unhealthy_status_when_cache_fails(self):
+        request = RequestFactory().get('/api/health/')
+
+        with patch('django.db.connection.ensure_connection'), patch(
+            'mavecam_api.urls.cache.get',
+            side_effect=RuntimeError('cache down'),
+        ):
+            response = health_check(request)
+
+        payload = json.loads(response.content)
+        assert response.status_code == 503
+        assert payload['status'] == 'unhealthy'
+        assert payload['database'] == 'connected'
+        assert payload['cache'] == 'disconnected'
+        assert payload['api'] == 'degraded'
+        assert 'error' not in payload
 
 
 class TestCeleryConfiguration:

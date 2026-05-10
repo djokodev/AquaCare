@@ -4,7 +4,7 @@ Implemente le RBAC multi-niveau avec audit logging.
 
 Roles:
 - OWNER (is_superuser): Controle total
-- MANAGERS (mavecam_managers): Gestion comptes + certifications
+- MANAGERS (aquacare_managers): Gestion comptes + certifications
 - Autres: Acces limite selon groupe
 """
 
@@ -22,12 +22,14 @@ from django.contrib import admin, messages
 from django.contrib.admin.models import CHANGE
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.core.exceptions import PermissionDenied
-from django.http import HttpResponseForbidden
+from django.core.paginator import Paginator
+from django.http import JsonResponse
 from django.shortcuts import render
 from django.urls import path
 from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
 
+from .admin_serializers import FarmMapSerializer
 from .models import FarmProfile, User
 
 
@@ -44,7 +46,9 @@ class AccountsAdminRoleMixin:
         return request.user.is_superuser
 
     def _is_manager(self, request) -> bool:
-        return request.user.groups.filter(name=RBACConstants.GROUP_MANAGERS).exists()
+        return request.user.groups.filter(
+            name__in=RBACConstants.group_names_for(RBACConstants.GROUP_MANAGERS),
+        ).exists()
 
     def _can_manage_accounts(self, request) -> bool:
         return self._is_superuser(request) or self._is_manager(request)
@@ -490,17 +494,63 @@ class FarmProfileAdmin(AccountsAdminRoleMixin, ManagerMixin, PIIMaskingMixin, Se
     def get_urls(self):
         urls = super().get_urls()
         custom_urls = [
-            path('map/', self.admin_site.admin_view(self.farm_map_view), name='accounts_farmprofile_map'),
+            path(
+                'map/',
+                self.admin_site.admin_view(self.farm_map_view),
+                name='accounts_farmprofile_map',
+            ),
+            path(
+                'map-data/',
+                self.admin_site.admin_view(self.farm_map_data_view),
+                name='accounts_farmprofile_map_data',
+            ),
         ]
         return custom_urls + urls
 
     def farm_map_view(self, request):
         """Page carte Leaflet des fermes géolocalisées."""
-        if not (request.user.is_staff or request.user.is_superuser):
-            return HttpResponseForbidden()
-        return render(request, 'admin/accounts/farm_map.html', {
+        if not self.has_view_permission(request):
+            raise PermissionDenied
+
+        context = {
+            **self.admin_site.each_context(request),
             'title': 'Carte des fermes',
             'opts': self.model._meta,
+        }
+        return render(request, 'admin/accounts/farm_map.html', context)
+
+    def farm_map_data_view(self, request):
+        """Payload paginé pour la carte des fermes dans l'admin Django."""
+        if not self.has_view_permission(request):
+            raise PermissionDenied
+
+        queryset = (
+            FarmProfile.objects
+            .select_related('user')
+            .filter(
+                latitude__isnull=False,
+                longitude__isnull=False,
+                is_deleted=False,
+            )
+        )
+
+        region = request.GET.get('region')
+        if region:
+            queryset = queryset.filter(user__region=region)
+
+        certification_status = request.GET.get('certification_status')
+        if certification_status:
+            queryset = queryset.filter(certification_status=certification_status)
+
+        paginator = Paginator(queryset, 50)
+        page = paginator.get_page(request.GET.get('page') or 1)
+        serializer = FarmMapSerializer(page.object_list, many=True)
+
+        return JsonResponse({
+            'count': paginator.count,
+            'next': page.next_page_number() if page.has_next() else None,
+            'previous': page.previous_page_number() if page.has_previous() else None,
+            'results': serializer.data,
         })
 
     def changelist_view(self, request, extra_context=None):

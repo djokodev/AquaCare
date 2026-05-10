@@ -1,5 +1,5 @@
 """
-MAVECAM AquaCare API - Package principal.
+AquaCare API - Package principal.
 """
 
 # Import Celery app pour que Django le charge automatiquement

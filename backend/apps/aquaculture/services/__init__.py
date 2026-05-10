@@ -22,6 +22,11 @@ Utilisation dans views.py :
         return Response(...)
 """
 from .analytics_service import AnalyticsService
+from .annual_simulation_service import (
+    AQUACARE_FEE_PER_KG,
+    AnnualSimulationResult,
+    AnnualSimulationService,
+)
 from .base import BaseService
 from .cycle_application_service import HarvestCycleCommand, PartialHarvestCommand, ProductionCycleApplicationService
 from .cycle_service import ProductionCycleService
@@ -33,6 +38,7 @@ from .feeding_application_service import (
     GenerateFeedingPlansCommand,
 )
 from .feeding_service import FeedingPlanService
+from .farm_production_plan_service import FarmProductionPlanService
 from .log_application_service import (
     CycleLogApplicationService,
     CycleLogMutationResult,
@@ -64,10 +70,14 @@ __all__ = [
     'CycleLogMutationResult',
     'UnauthorizedCycleAccessError',
     'FeedingPlanService',
+    'FarmProductionPlanService',
     'FeedingPlanApplicationService',
     'FeedingCycleNotFoundError',
     'GenerateFeedingPlansCommand',
     'AnalyticsService',
+    'AnnualSimulationService',
+    'AnnualSimulationResult',
+    'AQUACARE_FEE_PER_KG',
     'DashboardApplicationService',
     'InvalidDashboardCycleScopeError',
     'GenerateReportCommand',
