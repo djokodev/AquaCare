@@ -68,7 +68,7 @@ export default function PhoneInputField({
         />
       </View>
       {hint && !error ? <Text className="text-xs text-gray-light mt-1">{hint}</Text> : null}
-      {error ? <Text className="text-sm text-error mt-1">{error}</Text> : null}
+      {error ? <Text className="text-sm text-error mt-1">{t(error)}</Text> : null}
     </View>
   );
 }

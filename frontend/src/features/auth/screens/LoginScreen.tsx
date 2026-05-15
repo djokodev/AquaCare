@@ -4,11 +4,15 @@ import { useTranslation } from 'react-i18next';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { AuthStackParamList } from '@/navigation/AuthNavigator';
 import { useAuth } from '@/hooks/useAuth';
-import { LoginRequest } from '@/types/auth';
+import { LoginRequest } from '@/features/auth/types/auth';
 import logger from '@/utils/logger';
-import { PHONE_REGEX } from '@/utils/phoneFormatter';
 import PhoneInputField from '@/components/common/PhoneInputField';
 import AuthErrorBlock from '@/components/common/AuthErrorBlock';
+import {
+  hasValidationErrors,
+  validateLoginForm,
+  type LoginValidationErrors,
+} from '@/features/auth/domain/accountValidation';
 
 type LoginScreenNavigationProp = StackNavigationProp<AuthStackParamList, 'Login'>;
 
@@ -26,31 +30,12 @@ export default function LoginScreen({ navigation }: Props) {
     password: '',
   });
   const [isPhoneMode, setIsPhoneMode] = useState(false);
-  const [errors, setErrors] = useState<{ [key: string]: string }>({});
+  const [errors, setErrors] = useState<LoginValidationErrors>({});
 
   const validateForm = (): boolean => {
-    const newErrors: { [key: string]: string } = {};
-
-    if (!isPhoneMode) {
-      if (!formData.loginName.trim()) {
-        newErrors.loginName = t('required');
-      }
-    } else {
-      if (!formData.phoneNumber.trim()) {
-        newErrors.phoneNumber = t('required');
-      } else if (!PHONE_REGEX.test(formData.phoneNumber.trim())) {
-        newErrors.phoneNumber = t('invalidPhone');
-      }
-    }
-
-    if (!formData.password.trim()) {
-      newErrors.password = t('required');
-    } else if (formData.password.length < 8) {
-      newErrors.password = t('passwordTooShort');
-    }
-
+    const newErrors = validateLoginForm(formData, isPhoneMode);
     setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    return !hasValidationErrors(newErrors);
   };
 
   const handleLogin = async () => {
@@ -94,7 +79,7 @@ export default function LoginScreen({ navigation }: Props) {
   };
 
   const renderError = (field: keyof typeof errors) =>
-    errors[field] ? <Text className="text-sm text-error mt-1">{errors[field]}</Text> : null;
+    errors[field] ? <Text className="text-sm text-error mt-1">{t(errors[field])}</Text> : null;
 
   return (
     <KeyboardAvoidingView

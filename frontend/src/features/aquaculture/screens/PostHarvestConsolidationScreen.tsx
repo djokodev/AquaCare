@@ -46,7 +46,7 @@ export default function PostHarvestConsolidationScreen({ route, navigation }: Pr
   const { harvestedCycleId } = route.params;
 
   const farmProfile = useSelector((s: RootState) => s.auth.farmProfile);
-  const annualSimulation = useSelector((s: RootState) => s.auth.annualSimulation.result);
+  const annualSimulation = useSelector((s: RootState) => s.farmSetup.annualSimulation.result);
   const cycles = useSelector((s: RootState) => s.aquaculture.cycles);
 
   const harvestedCycle = useMemo(

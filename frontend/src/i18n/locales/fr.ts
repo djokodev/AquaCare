@@ -374,7 +374,9 @@ export const fr = {
 
   // GPS / Géolocalisation
   farmLocation: 'Localisation GPS',
+  farmMapNavTitle: 'Carte de ma ferme',
   farmNoLocation: 'Aucune localisation enregistrée',
+  farmNoLocationHint: 'Ajoutez la localisation de votre ferme depuis votre profil.',
   locateFarm: 'Localiser ma ferme',
   locatingFarm: 'Localisation en cours...',
   viewOnMap: 'Voir sur la carte',
@@ -385,6 +387,7 @@ export const fr = {
   locationCaptureError: 'Impossible de récupérer la localisation. Réessayez.',
   openSettings: 'Ouvrir les réglages',
   updateLocation: 'Mettre à jour la localisation',
+  farmBackToProfile: 'Retour au profil',
   back: 'Retour',
 
   // Intervention Zones
@@ -774,6 +777,7 @@ export const fr = {
 
   // Statistics
   statistics: 'Voir mes statistiques',
+  statisticsNavTitle: 'Statistiques',
   statisticsTitle: 'Statistiques de Performance',
   statisticsSubtitle: 'Analyse détaillée de vos cycles',
   cycleAnalysis: 'Cycle à analyser',
@@ -1094,6 +1098,8 @@ export const fr = {
   AUTH_SERVER_ERROR: 'Erreur serveur. Veuillez réessayer plus tard.',
   AUTH_NETWORK_ERROR: 'Impossible de contacter le serveur. Vérifiez votre connexion.',
   AUTH_UNKNOWN_ERROR: 'Une erreur inattendue est survenue.',
+  UNKNOWN_ERROR: 'Une erreur inattendue est survenue.',
+  accountsErrorGeneric: 'Une erreur est survenue. Vérifiez votre connexion puis réessayez. Si le problème persiste, contactez le support.',
   sessionExpiredTitle: 'Session expirée',
   sessionExpiredMessage: 'Votre session a expiré. Veuillez vous reconnecter.',
 
@@ -1143,6 +1149,7 @@ export const fr = {
   createFarmAnnualTargetLabel: 'Production cible (kg / an)',
   createFarmAnnualTargetPlaceholder: 'Ex : 1000',
   createFarmStartDateLabel: 'Date de démarrage prévue',
+  createFarmStartDatePlaceholder: 'AAAA-MM-JJ',
   createFarmFingerlingsLabel: 'Coût par alevin (FCFA)',
   createFarmFingerlingsPlaceholder: 'Ex : 50',
   createFarmSellingPriceLabel: 'Prix de vente estimé (FCFA / kg)',
@@ -1166,6 +1173,12 @@ export const fr = {
   createFarmSurvivalRatePlaceholder: 'Ex : 85',
   createFarmSimulateBtn: 'Voir ma simulation →',
   createFarmRequiredFieldsError: 'Veuillez renseigner tous les champs obligatoires.',
+  createFarmPositiveNumberError: 'Saisissez un nombre supérieur à 0.',
+  createFarmNonNegativeNumberError: 'Saisissez un nombre positif ou égal à 0.',
+  createFarmPositiveIntegerError: 'Saisissez un nombre entier supérieur à 0.',
+  createFarmInvalidDateError: 'Saisissez une date valide au format AAAA-MM-JJ.',
+  createFarmHarvestWeightRangeError: 'Le poids cible doit être compris entre 50 g et 5000 g.',
+  createFarmSurvivalRateRangeError: 'Le taux de survie doit être compris entre 1 % et 100 %.',
 
   // ── Simulation annuelle ───────────────────────────────────────────────────
   simulationNavTitle: 'Simulation',
@@ -1196,6 +1209,10 @@ export const fr = {
   simulationModifyBtn: '← Modifier mes données',
   simulationLoading: 'Calcul en cours...',
   simulationErrorRetry: 'Erreur de simulation. Réessayer',
+  simulationDefaultCycleName: 'Cycle {{species}} 1',
+  simulationDefaultPondIdentifier: 'Bassin principal',
+  speciesTilapia: 'Tilapia',
+  speciesClarias: 'Silure',
 
   // ── Section "Acheter mes aliments" ───────────────────────────────────────
   myFeedTitle: 'Acheter mes aliments',

@@ -15,6 +15,7 @@ export default function SettingsScreen() {
   const { t, i18n } = useTranslation();
   const { user, updateProfile, logout, deleteAccount } = useAuth();
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isUpdatingLanguage, setIsUpdatingLanguage] = useState(false);
   const [settings, setSettings] = useState({ language: i18n.language });
 
   useEffect(() => {
@@ -28,11 +29,15 @@ export default function SettingsScreen() {
   }, [i18n, settings.language]);
 
   const handleLanguageChange = async (newLanguage: "fr" | "en") => {
+    if (isUpdatingLanguage || settings.language === newLanguage) return;
+
+    const previousLanguage = settings.language as "fr" | "en";
+    setIsUpdatingLanguage(true);
     try {
       setSettings((prev) => ({ ...prev, language: newLanguage }));
       await i18n.changeLanguage(newLanguage);
       await SecureStore.setItemAsync(STORAGE_KEYS.LANGUAGE, newLanguage);
-      updateProfile({ language_preference: newLanguage }).catch((err) => logger.warn("Profile lang update:", err));
+      await updateProfile({ language_preference: newLanguage });
       Alert.alert(
         t('languageUpdatedTitle'),
         newLanguage === "fr" ? t('languageUpdatedToFrench') : t('languageUpdatedToEnglish'),
@@ -40,14 +45,22 @@ export default function SettingsScreen() {
     } catch (error) {
       logger.error("Erreur changement langue:", error);
       Alert.alert(t('error'), t('languageChangeError'));
-      setSettings((prev) => ({ ...prev, language: i18n.language }));
+      setSettings((prev) => ({ ...prev, language: previousLanguage }));
+      try {
+        await i18n.changeLanguage(previousLanguage);
+        await SecureStore.setItemAsync(STORAGE_KEYS.LANGUAGE, previousLanguage);
+      } catch (rollbackError) {
+        logger.warn("Erreur rollback langue:", rollbackError);
+      }
+    } finally {
+      setIsUpdatingLanguage(false);
     }
   };
 
   const handleLogout = () => {
-    Alert.alert("Déconnexion", "Êtes-vous sûr de vouloir vous déconnecter ?", [
-      { text: "Annuler", style: "cancel" },
-      { text: "Déconnexion", style: "destructive", onPress: () => logout() },
+    Alert.alert(t("logoutConfirm"), t("logoutMessage"), [
+      { text: t("cancel"), style: "cancel" },
+      { text: t("logoutConfirm"), style: "destructive", onPress: () => logout() },
     ]);
   };
 
@@ -92,6 +105,8 @@ export default function SettingsScreen() {
               settings.language === lang.code ? "border-mavecam-primary bg-[#f0fdf4]" : "border-gray-200"
             }`}
             onPress={() => handleLanguageChange(lang.code as "fr" | "en")}
+            disabled={isUpdatingLanguage}
+            style={{ opacity: isUpdatingLanguage ? 0.6 : 1 }}
           >
             <Text
               className={`text-base font-semibold ${

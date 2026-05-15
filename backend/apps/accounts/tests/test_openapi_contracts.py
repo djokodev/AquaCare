@@ -62,3 +62,28 @@ class TestAccountsOpenAPIContracts:
         assert "401" in verify["responses"]
         assert "429" in refresh["responses"]
         assert "429" in verify["responses"]
+
+
+class TestAquacultureOpenAPIContracts:
+    def test_production_plan_setup_documents_full_farm_profile_response(self, openapi_schema):
+        path = openapi_schema["paths"]["/api/aquaculture/production-plan/setup/"]
+
+        assert _schema_ref(path["post"], 200).endswith("/FarmProfile")
+        assert _schema_ref(path["patch"], 200).endswith("/FarmProfile")
+        assert "400" in path["post"]["responses"]
+        assert "401" in path["post"]["responses"]
+        assert "429" in path["post"]["responses"]
+
+    def test_production_plan_simulation_documents_exact_response_shape(self, openapi_schema):
+        operation = openapi_schema["paths"][
+            "/api/aquaculture/production-plan/simulate/"
+        ]["post"]
+
+        assert _schema_ref(operation, 200).endswith("/AnnualSimulationResponse")
+        properties = openapi_schema["components"]["schemas"]["AnnualSimulationResponse"]["properties"]
+        assert "annual_revenue_fcfa" in properties
+        assert "aquacare_fee_fcfa" in properties
+        assert "cycles_breakdown" in properties
+        assert "400" in operation["responses"]
+        assert "401" in operation["responses"]
+        assert "429" in operation["responses"]

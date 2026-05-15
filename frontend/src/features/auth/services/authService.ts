@@ -8,11 +8,7 @@ import {
   RegisterRequest,
   AuthResponse,
   User,
-  FarmProfile,
-  FarmSetupData,
-  AnnualSimulationInput,
-  AnnualSimulationResult,
-} from '@/types/auth';
+} from '@/features/auth/types/auth';
 
 class AuthService {
   /**
@@ -85,111 +81,6 @@ class AuthService {
       }
       await apiService.clearTokens();
       // Ne pas propager l'erreur car la déconnexion locale est réussie
-    }
-  }
-
-  /**
-   * Récupérer le profil utilisateur
-   */
-  async getProfile(): Promise<User> {
-    try {
-      const response = await apiService.get<User>(API_ENDPOINTS.AUTH.PROFILE);
-
-      // Mettre à jour les données utilisateur stockées
-      await SecureStore.setItemAsync(
-        STORAGE_KEYS.USER_DATA,
-        JSON.stringify(response.data)
-      );
-
-      return response.data;
-    } catch (error: unknown) {
-      throw this.handleAuthError(error);
-    }
-  }
-
-  /**
-   * Mettre à jour le profil utilisateur
-   */
-  async updateProfile(profileData: Partial<User>): Promise<User> {
-    try {
-      const response = await apiService.patch<User>(
-        API_ENDPOINTS.AUTH.PROFILE,
-        profileData
-      );
-
-      // Mettre à jour les données utilisateur stockées
-      await SecureStore.setItemAsync(
-        STORAGE_KEYS.USER_DATA,
-        JSON.stringify(response.data)
-      );
-
-      return response.data;
-    } catch (error: unknown) {
-      throw this.handleAuthError(error);
-    }
-  }
-
-  /**
-   * Récupérer le profil ferme
-   */
-  async getFarmProfile(): Promise<FarmProfile | null> {
-    try {
-      const response = await apiService.get<FarmProfile>(API_ENDPOINTS.AUTH.FARM_PROFILE);
-      return response.data;
-    } catch (error: unknown) {
-      const axiosErr = error as { response?: { status: number } };
-      if (axiosErr.response?.status === 404) {
-        return null;
-      }
-      throw this.handleAuthError(error);
-    }
-  }
-
-  /**
-   * Mettre à jour le profil ferme
-   */
-  async updateFarmProfile(farmData: Partial<FarmProfile>): Promise<FarmProfile> {
-    try {
-      const response = await apiService.patch<FarmProfile>(
-        API_ENDPOINTS.AUTH.FARM_PROFILE,
-        farmData
-      );
-      return response.data;
-    } catch (error: unknown) {
-      throw this.handleAuthError(error);
-    }
-  }
-
-  /**
-   * Sauvegarder les données du formulaire "Créer mon élevage"
-   * et marquer farm_setup_completed = true
-   */
-  async completeFarmSetup(setupData: FarmSetupData): Promise<FarmProfile> {
-    try {
-      const response = await apiService.post<FarmProfile>(
-        API_ENDPOINTS.AUTH.FARM_SETUP,
-        setupData
-      );
-      return response.data;
-    } catch (error: unknown) {
-      throw this.handleAuthError(error);
-    }
-  }
-
-  /**
-   * Calculer la simulation annuelle (ne persiste rien)
-   */
-  async simulateAnnualProduction(
-    params: AnnualSimulationInput
-  ): Promise<AnnualSimulationResult> {
-    try {
-      const response = await apiService.post<AnnualSimulationResult>(
-        API_ENDPOINTS.AUTH.FARM_SIMULATE,
-        params
-      );
-      return response.data;
-    } catch (error: unknown) {
-      throw this.handleAuthError(error);
     }
   }
 

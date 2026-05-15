@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState } from "react";
+﻿import React, { useEffect, useMemo, useState } from "react";
 import { View, Text, ScrollView, TouchableOpacity, TextInput, Alert, Modal } from "react-native";
 import { useTranslation } from "react-i18next";
 import { Ionicons } from "@expo/vector-icons";
@@ -9,19 +9,13 @@ import { useAuth } from "@/hooks/useAuth";
 import { useSelector, useDispatch } from "react-redux";
 import { RootState, AppDispatch } from "@/store/store";
 import { fetchDashboardData } from "@/features/aquaculture/store/aquacultureSlice";
-import { User } from "@/types/auth";
 import { INTERVENTION_ZONES } from "@/constants/cameroon";
 import LocationSelector from "@/components/common/LocationSelector";
+import { getAccountErrorMessage } from "@/features/auth/utils/accountsErrorPresenter";
+import { useProfileEditor } from "@/features/profile/hooks/useProfileEditor";
+import { formatFarmName, getCertificationPresentation } from "@/features/profile/utils/accountProfilePresentation";
 
 type ProfileScreenNavigationProp = StackNavigationProp<ProfileStackParamList, "ProfileMain">;
-
-interface LocationData {
-  region?: string;
-  department?: string;
-  arrondissement?: string;
-  city?: string;
-  neighborhood?: string;
-}
 
 interface Props {
   navigation: ProfileScreenNavigationProp;
@@ -49,10 +43,21 @@ export default function ProfileScreen({ navigation }: Props) {
     0
   );
 
-  const [isEditing, setIsEditing] = useState(false);
-  const [editData, setEditData] = useState<Partial<User>>({});
-  const [locationData, setLocationData] = useState<LocationData>({});
   const [showInterventionZoneModal, setShowInterventionZoneModal] = useState(false);
+  const {
+    isEditing,
+    setIsEditing,
+    isSaving,
+    editData,
+    updateEditField,
+    locationData,
+    setLocationData,
+    save,
+  } = useProfileEditor({ user, updateProfile });
+  const certification = useMemo(
+    () => getCertificationPresentation(farmProfile, t),
+    [farmProfile, t]
+  );
 
   useEffect(() => {
     dispatch(fetchDashboardData(undefined));
@@ -64,41 +69,12 @@ export default function ProfileScreen({ navigation }: Props) {
     }
   }, []);
 
-  useEffect(() => {
-    if (user) {
-      setEditData({
-        email: user.email || "",
-        intervention_zone: user.intervention_zone || "",
-        legal_status: user.legal_status || "",
-        promoter_name: user.promoter_name || "",
-      });
-      setLocationData({
-        region: user.region || "",
-        department: user.department || "",
-        arrondissement: user.district || "",
-        city: user.city || "",
-        neighborhood: user.neighborhood || "",
-      });
-    }
-  }, [user]);
-
-  const handleLocationChange = (newLocation: LocationData) => setLocationData(newLocation);
-
   const handleSave = async () => {
     try {
-      const combinedData = {
-        ...editData,
-        region: locationData.region,
-        department: locationData.department,
-        district: locationData.arrondissement,
-        city: locationData.city,
-        neighborhood: locationData.neighborhood,
-      };
-      await updateProfile(combinedData);
-      setIsEditing(false);
+      await save();
       Alert.alert(t("success"), t("profileUpdatedSuccess"));
     } catch (err) {
-      Alert.alert(t("error"), t("profileUpdateError"));
+      Alert.alert(t("error"), getAccountErrorMessage(err, t));
     }
   };
 
@@ -107,66 +83,6 @@ export default function ProfileScreen({ navigation }: Props) {
       { text: t("cancel"), style: "cancel" },
       { text: t("logoutConfirm"), style: "destructive", onPress: () => logout() },
     ]);
-  };
-
-  const formatFarmName = (farmName: string | undefined) => {
-    if (!farmName) return "";
-    if (farmName.startsWith("Ferme de ") && farmName.includes(" ")) {
-      const parts = farmName.replace("Ferme de ", "").split(" ");
-      if (parts.length > 1) return `Ferme de ${parts[parts.length - 1]}`;
-    }
-    return farmName;
-  };
-
-  const formatDate = (dateString: string) =>
-    new Date(dateString).toLocaleDateString("fr-FR", { year: "numeric", month: "long", day: "numeric" });
-
-  const getCertificationColor = () => {
-    if (!farmProfile) return MAVECAM_COLORS.GRAY_LIGHT;
-    switch (farmProfile.certification_status) {
-      case "certified":
-        return MAVECAM_COLORS.GREEN_PRIMARY;
-      case "pending":
-        return MAVECAM_COLORS.WARNING;
-      case "suspended":
-        return MAVECAM_COLORS.ERROR;
-      case "rejected":
-        return MAVECAM_COLORS.GRAY_LIGHT;
-      default:
-        return MAVECAM_COLORS.GRAY_LIGHT;
-    }
-  };
-
-  const getCertificationText = () => {
-    if (!farmProfile) return t("noFarmProfile");
-    switch (farmProfile.certification_status) {
-      case "certified":
-        return t("farmCertified");
-      case "pending":
-        return t("certificationPending");
-      case "suspended":
-        return t("certificationSuspended");
-      case "rejected":
-        return t("certificationRejected");
-      default:
-        return t("statusUnknown");
-    }
-  };
-
-  const getCertificationIcon = () => {
-    if (!farmProfile) return "help-circle";
-    switch (farmProfile.certification_status) {
-      case "certified":
-        return "checkmark-circle";
-      case "pending":
-        return "time";
-      case "suspended":
-        return "pause-circle";
-      case "rejected":
-        return "close-circle";
-      default:
-        return "help-circle";
-    }
   };
 
   if (!user) {
@@ -185,10 +101,13 @@ export default function ProfileScreen({ navigation }: Props) {
     );
   }
 
-  if (error) {
+  if (error && !user) {
     return (
       <View className="flex-1 items-center justify-center bg-cream px-6">
-        <Text className="text-error text-center">{t("error")}: {error}</Text>
+        <Text className="text-error text-center">{t("error")}: {getAccountErrorMessage(error, t)}</Text>
+        <TouchableOpacity className="bg-mavecam-primary px-6 py-3 rounded-lg mt-5" onPress={() => loadProfile()}>
+          <Text className="text-white font-semibold text-base">{t("retry")}</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -202,9 +121,9 @@ export default function ProfileScreen({ navigation }: Props) {
         <Text className="text-2xl font-bold text-white text-center mb-1">{displayName}</Text>
         <Text className="text-base text-white/80 mb-3">{isIndividual ? t("individualAccount") : t("companyAccount")}</Text>
         {farmProfile && (
-          <View className="flex-row items-center px-3 py-2 rounded-full" style={{ backgroundColor: getCertificationColor() }}>
-            <Ionicons name={getCertificationIcon()} size={16} color={MAVECAM_COLORS.WHITE} />
-            <Text className="text-sm font-semibold text-white ml-2">{getCertificationText()}</Text>
+          <View className="flex-row items-center px-3 py-2 rounded-full" style={{ backgroundColor: certification.color }}>
+            <Ionicons name={certification.icon} size={16} color={MAVECAM_COLORS.WHITE} />
+            <Text className="text-sm font-semibold text-white ml-2">{certification.text}</Text>
           </View>
         )}
       </View>
@@ -222,7 +141,7 @@ export default function ProfileScreen({ navigation }: Props) {
             label={t("email") || ""}
             value={isEditing ? undefined : user.email || t("notProvided")}
             editable={isEditing}
-            onChangeText={(value) => setEditData((prev) => ({ ...prev, email: value }))}
+            onChangeText={(value) => updateEditField("email", value)}
             inputValue={editData.email}
             placeholder={t("yourEmail") || ""}
             isEmail
@@ -257,7 +176,7 @@ export default function ProfileScreen({ navigation }: Props) {
         <Text className="text-lg font-bold text-gray-dark mb-3">{t("location")}</Text>
         <View className="bg-white rounded-xl p-4">
           {user.region && <InfoRow label={t("region") || ""} value={user.region} editable={false} />}
-          <LocationSelector value={locationData} onChange={handleLocationChange} userRegion={user?.region} editable={isEditing} />
+          <LocationSelector value={locationData} onChange={setLocationData} userRegion={user?.region} editable={isEditing} />
 
           {isEditing ? (
             <TouchableOpacity
@@ -343,11 +262,11 @@ export default function ProfileScreen({ navigation }: Props) {
       {isEditing && (
         <View className="px-5 pb-4">
           <TouchableOpacity
-            className={`py-4 rounded-lg items-center ${isLoading ? "bg-mavecam-primary/70" : "bg-mavecam-primary"}`}
+            className={`py-4 rounded-lg items-center ${isSaving ? "bg-mavecam-primary/70" : "bg-mavecam-primary"}`}
             onPress={handleSave}
-            disabled={isLoading}
+            disabled={isSaving}
           >
-            <Text className="text-white text-base font-semibold">{isLoading ? t("saving") : t("saveChanges")}</Text>
+            <Text className="text-white text-base font-semibold">{isSaving ? t("saving") : t("saveChanges")}</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -394,7 +313,7 @@ export default function ProfileScreen({ navigation }: Props) {
                     editData.intervention_zone === zone.value ? "bg-[#f0fdf4]" : "bg-white"
                   }`}
                   onPress={() => {
-                    setEditData((prev) => ({ ...prev, intervention_zone: zone.value }));
+                    updateEditField("intervention_zone", zone.value);
                     setShowInterventionZoneModal(false);
                   }}
                 >

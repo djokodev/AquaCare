@@ -24,40 +24,25 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { useDispatch, useSelector } from 'react-redux';
 
 import { MAVECAM_COLORS } from '@/constants/colors';
-import {
-  STOCKING_DENSITY_TANK_PER_M3,
-  STOCKING_DENSITY_POND_PER_M2,
-  RECOMMENDED_STOCKING_DENSITY_POND_PER_M2,
-  RECOMMENDED_STOCKING_DENSITY_TANK_PER_M3,
-} from '@/constants/aquaculture';
 import { RootStackParamList } from '@/navigation/MainNavigator';
 import { AppDispatch, RootState } from '@/store/store';
-import { runAnnualSimulation } from '@/features/auth/store/authSlice';
-import type { AnnualSimulationInput } from '@/types/auth';
+import { runAnnualSimulation } from '@/features/aquaculture/store/farmSetupSlice';
+import {  
+  buildAnnualSimulationInput,
+  getFingerlingsCoherencePreview,
+  getFingerlingsSuggestionPreview,
+  getStockingDensityPreview,
+  getTotalCapacityPreview,
+  todayISO,
+  type FarmSetupFormState,
+  type FarmSetupInfraType,
+  type FarmSetupSpecies,
+} from '@/features/aquaculture/utils/farmSetupForm';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'CreateFarm'>;
 
 interface Props {
   navigation: NavigationProp;
-}
-
-type Species = 'tilapia' | 'clarias' | 'autre';
-type InfraType = 'etang' | 'cage_flottante' | 'bac_hors_sol' | 'bac_en_sol';
-
-interface FormState {
-  species: Species | '';
-  infraType: InfraType | '';
-  unitCount: string;
-  unitVolume: string;
-  unitSurface: string;
-  annualTarget: string;
-  startDate: string;
-  fingerlingsPrice: string;
-  sellingPrice: string;
-  otherCosts: string;
-  fingerlingsCount: string;
-  harvestWeight: string;
-  survivalRate: string;
 }
 
 const SELLING_PRICE_DEFAULTS: Record<string, string> = {
@@ -78,18 +63,14 @@ const HARVEST_WEIGHT_DEFAULTS: Record<string, string> = {
   autre: '350',
 };
 
-function todayISO(): string {
-  return new Date().toISOString().split('T')[0];
-}
-
 export default function CreateFarmScreen({ navigation }: Props) {
   const { t } = useTranslation();
   const dispatch = useDispatch<AppDispatch>();
   const { loading: simLoading } = useSelector(
-    (s: RootState) => s.auth.annualSimulation
+    (s: RootState) => s.farmSetup.annualSimulation
   );
 
-  const [form, setForm] = useState<FormState>({
+  const [form, setForm] = useState<FarmSetupFormState>({
     species: '',
     infraType: '',
     unitCount: '',
@@ -105,116 +86,23 @@ export default function CreateFarmScreen({ navigation }: Props) {
     survivalRate: '95',
   });
 
-  // Vérification 2 — densité d'empoissonnement dans les infrastructures
   const stockingDensityCheck = useMemo(() => {
-    const count = parseInt(form.fingerlingsCount, 10);
-    if (!count || !form.infraType || !form.unitCount) return null;
-
-    const units = parseFloat(form.unitCount) || 0;
-    if (!units) return null;
-
-    const fingerlingsPerCycle = count / 2;
-
-    if (form.infraType === 'etang') {
-      const surface = parseFloat(form.unitSurface || '0') || 0;
-      if (!surface) return null;
-      const totalSurface = units * surface;
-      const density = Math.round(fingerlingsPerCycle / totalSurface);
-      const isOk = density <= STOCKING_DENSITY_POND_PER_M2;
-      return { density, max: STOCKING_DENSITY_POND_PER_M2, unit: 'm²', isOk };
-    }
-
-    const volume = parseFloat(form.unitVolume || '0') || 0;
-    if (!volume) return null;
-    const totalVolume = units * volume;
-    const density = Math.round(fingerlingsPerCycle / totalVolume);
-    const isOk = density <= STOCKING_DENSITY_TANK_PER_M3;
-    return { density, max: STOCKING_DENSITY_TANK_PER_M3, unit: 'm³', isOk };
+    return getStockingDensityPreview(form);
   }, [form.fingerlingsCount, form.infraType, form.unitCount, form.unitVolume, form.unitSurface]);
 
-  // Cohérence alevins / production cible — calculée en temps réel
   const fingerlingsCoherence = useMemo(() => {
-    const count = parseInt(form.fingerlingsCount, 10);
-    const target = parseFloat(form.annualTarget);
-    if (!count || !target) return null;
-
-    const survivalRate = parseFloat(form.survivalRate || '85') / 100;
-    const defaultWeight = form.species === 'clarias' ? 400 : 350;
-    const harvestWeightG = parseFloat(form.harvestWeight || String(defaultWeight));
-    const NUM_CYCLES = 2; // valeur par défaut avant choix de l'utilisateur
-
-    const maxAnnual = Math.round(
-      (count * survivalRate * harvestWeightG) / 1000
-    );
-
-    const ratio = maxAnnual / target;
-    let level: 'ok' | 'warn' | 'error';
-    if (ratio >= 0.9) level = 'ok';
-    else if (ratio >= 0.75) level = 'warn';
-    else level = 'error';
-
-    return { maxAnnual, level, target: Math.round(target) };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    return getFingerlingsCoherencePreview(form);
   }, [form.fingerlingsCount, form.annualTarget, form.survivalRate, form.harvestWeight, form.species]);
 
-  // Capacité totale calculée en temps réel
   const totalCapacity = useMemo(() => {
-    const count = parseFloat(form.unitCount) || 0;
-    if (form.infraType === 'etang') {
-      const surf = parseFloat(form.unitSurface) || 0;
-      return count * surf > 0 ? `${count * surf} m²` : null;
-    }
-    const vol = parseFloat(form.unitVolume) || 0;
-    return count * vol > 0 ? `${count * vol} m³` : null;
+    return getTotalCapacityPreview(form);
   }, [form.infraType, form.unitCount, form.unitVolume, form.unitSurface]);
 
-  // Suggestion automatique du nombre d'alevins
-  // Priorité : objectif annuel → besoin réel pour l'atteindre
-  // Fallback  : capacité infrastructure × densité recommandée
   const fingerlingsSuggestion = useMemo(() => {
-    if (!form.infraType || !form.unitCount) return null;
-    const units = parseFloat(form.unitCount) || 0;
-    if (!units) return null;
-
-    const NUM_CYCLES = 2;
-    const survivalRate = parseFloat(form.survivalRate || '95') / 100;
-    const defaultWeight = form.species === 'clarias' ? 400 : 350;
-    const harvestWeightKg = parseFloat(form.harvestWeight || String(defaultWeight)) / 1000;
-
-    // Calcul basé sur capacité infrastructure
-    let capacitySuggested = 0;
-    if (form.infraType === 'etang') {
-      const surface = parseFloat(form.unitSurface || '0') || 0;
-      if (!surface) return null;
-      capacitySuggested = Math.round(units * surface * RECOMMENDED_STOCKING_DENSITY_POND_PER_M2 * NUM_CYCLES);
-    } else {
-      const volume = parseFloat(form.unitVolume || '0') || 0;
-      if (!volume) return null;
-      capacitySuggested = Math.round(units * volume * RECOMMENDED_STOCKING_DENSITY_TANK_PER_M3 * NUM_CYCLES);
-    }
-
-    if (!capacitySuggested) return null;
-
-    // Plafond absolu basé sur la densité maximale autorisée (pas la recommandée)
-    const maxAllowed = form.infraType === 'etang'
-      ? Math.round(units * (parseFloat(form.unitSurface || '0') || 0) * STOCKING_DENSITY_POND_PER_M2 * NUM_CYCLES)
-      : Math.round(units * (parseFloat(form.unitVolume || '0') || 0) * STOCKING_DENSITY_TANK_PER_M3 * NUM_CYCLES);
-
-    // Si objectif annuel renseigné → calcul basé sur la production cible, plafonné au max infra
-    const annualTarget = parseFloat(form.annualTarget);
-    if (annualTarget > 0 && survivalRate > 0 && harvestWeightKg > 0) {
-      const needed = Math.ceil((annualTarget / harvestWeightKg) / survivalRate);
-      const capped = Math.min(needed, maxAllowed);
-      // Si on a dû plafonner, l'objectif n'est pas atteignable avec cette infra
-      const achievable = needed <= maxAllowed;
-      return { value: capped, target: Math.round(annualTarget), achievable };
-    }
-
-    // Fallback : capacité seule
-    return { value: capacitySuggested, target: null, achievable: true };
+    return getFingerlingsSuggestionPreview(form);
   }, [form.infraType, form.unitCount, form.unitVolume, form.unitSurface, form.annualTarget, form.survivalRate, form.harvestWeight, form.species]);
 
-  function setField(key: keyof FormState, value: string) {
+  function setField(key: keyof FarmSetupFormState, value: string) {
     setForm(prev => {
       const next = { ...prev, [key]: value };
       // Pré-remplir les prix par défaut quand l'espèce change
@@ -243,27 +131,11 @@ export default function CreateFarmScreen({ navigation }: Props) {
       return;
     }
 
-    const speciesForSim: 'tilapia' | 'clarias' =
-      form.species === 'clarias' ? 'clarias' : 'tilapia';
-
-    const params: AnnualSimulationInput = {
-      species: speciesForSim,
-      annual_production_target_kg: parseFloat(form.annualTarget),
-      num_cycles: 2, // valeur par défaut — l'utilisateur choisit sur l'écran suivant
-      start_date: form.startDate || todayISO(),
-      selling_price_per_kg_fcfa: form.sellingPrice ? parseFloat(form.sellingPrice) : undefined,
-      fingerlings_cost_per_unit_fcfa: form.fingerlingsPrice
-        ? parseFloat(form.fingerlingsPrice)
-        : undefined,
-      other_costs_fcfa_per_year: form.otherCosts ? parseFloat(form.otherCosts) : 0,
-      target_harvest_weight_g: form.harvestWeight ? parseFloat(form.harvestWeight) : undefined,
-      expected_survival_rate_pct: form.survivalRate ? parseFloat(form.survivalRate) : undefined,
-      total_fingerlings_count: form.fingerlingsCount ? parseInt(form.fingerlingsCount, 10) : undefined,
-    };
+    const params = buildAnnualSimulationInput(form, 2);
 
     const result = await dispatch(runAnnualSimulation(params));
     if (runAnnualSimulation.fulfilled.match(result)) {
-      navigation.navigate('AnnualSimulation', { formData: form as unknown as Record<string, string> });
+      navigation.navigate('AnnualSimulation', { formData: form });
     } else {
       Alert.alert(t('error'), t('simulationErrorRetry'));
     }
@@ -281,7 +153,7 @@ export default function CreateFarmScreen({ navigation }: Props) {
     >
       <FieldLabel label={t('createFarmSpeciesLabel')} required />
       <View style={styles.chipRow}>
-        {(['tilapia', 'clarias'] as Species[]).map(sp => (
+        {(['tilapia', 'clarias'] as FarmSetupSpecies[]).map(sp => (
           <Chip
             key={sp}
             label={t(`createFarmSpecies${sp.charAt(0).toUpperCase() + sp.slice(1)}` as any)}
@@ -298,7 +170,7 @@ export default function CreateFarmScreen({ navigation }: Props) {
             ['etang', 'createFarmInfraEtang'],
             ['cage_flottante', 'createFarmInfraCageFlottante'],
             ['bac_hors_sol', 'createFarmInfraBacHorsSol'],
-          ] as [InfraType, string][]
+          ] as [FarmSetupInfraType, string][]
         ).map(([val, key]) => (
           <Chip
             key={val}
@@ -367,7 +239,7 @@ export default function CreateFarmScreen({ navigation }: Props) {
       <FieldLabel label={t('createFarmStartDateLabel')} />
       <TextInput
         style={styles.input}
-        placeholder="YYYY-MM-DD"
+        placeholder={t('createFarmStartDatePlaceholder')}
         placeholderTextColor={MAVECAM_COLORS.GRAY_LIGHT}
         value={form.startDate}
         onChangeText={v => setField('startDate', v)}
@@ -504,7 +376,7 @@ export default function CreateFarmScreen({ navigation }: Props) {
         activeOpacity={0.8}
       >
         {simLoading ? (
-          <ActivityIndicator color="#fff" />
+          <ActivityIndicator color={MAVECAM_COLORS.WHITE} />
         ) : (
           <Text style={styles.ctaBtnText}>{t('createFarmSimulateBtn')}</Text>
         )}

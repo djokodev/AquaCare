@@ -4,13 +4,17 @@ import { useTranslation } from 'react-i18next';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { AuthStackParamList } from '@/navigation/AuthNavigator';
 import { useAuth } from '@/hooks/useAuth';
-import { RegisterRequest } from '@/types/auth';
+import { RegisterRequest } from '@/features/auth/types/auth';
 import SelectField from '@/components/SelectField';
 import logger from '@/utils/logger';
-import { PHONE_REGEX } from '@/utils/phoneFormatter';
 import PhoneInputField from '@/components/common/PhoneInputField';
 import AuthErrorBlock from '@/components/common/AuthErrorBlock';
 import { REGIONS, AGE_GROUPS, LEGAL_STATUS_OPTIONS } from '@/constants/registration';
+import {
+  hasValidationErrors,
+  validateRegisterForm,
+  type RegisterValidationErrors,
+} from '@/features/auth/domain/accountValidation';
 
 type RegisterScreenNavigationProp = StackNavigationProp<AuthStackParamList, 'Register'>;
 
@@ -39,45 +43,12 @@ export default function RegisterScreen({ navigation }: Props) {
     promoter_name: '',
   });
 
-  const [errors, setErrors] = useState<{ [key: string]: string }>({});
+  const [errors, setErrors] = useState<RegisterValidationErrors>({});
 
   const validateForm = (): boolean => {
-    const newErrors: { [key: string]: string } = {};
-
-    if (!formData.phone_number.trim()) {
-      newErrors.phone_number = t('required');
-    } else if (!PHONE_REGEX.test(formData.phone_number.trim())) {
-      newErrors.phone_number = t('invalidPhone');
-    }
-
-    if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
-      newErrors.email = t('invalidEmail');
-    }
-
-    if (!formData.password.trim()) {
-      newErrors.password = t('required');
-    } else if (formData.password.length < 8) {
-      newErrors.password = t('passwordTooShort');
-    }
-
-    if (formData.password !== formData.password_confirm) {
-      newErrors.password_confirm = t('passwordMismatch');
-    }
-
-    if (formData.account_type === 'individual') {
-      if (!formData.first_name?.trim()) newErrors.first_name = t('required');
-      if (!formData.last_name?.trim()) newErrors.last_name = t('required');
-      if (!formData.age_group) newErrors.age_group = t('required');
-    }
-
-    if (formData.account_type === 'company') {
-      if (!formData.business_name?.trim()) newErrors.business_name = t('required');
-      if (!formData.legal_status) newErrors.legal_status = t('required');
-      if (!formData.promoter_name?.trim()) newErrors.promoter_name = t('required');
-    }
-
+    const newErrors = validateRegisterForm(formData);
     setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    return !hasValidationErrors(newErrors);
   };
 
   const handleRegister = async () => {
@@ -99,7 +70,7 @@ export default function RegisterScreen({ navigation }: Props) {
   };
 
   const renderError = (field: keyof typeof errors) =>
-    errors[field] ? <Text className="text-sm text-error mt-1">{errors[field]}</Text> : null;
+    errors[field] ? <Text className="text-sm text-error mt-1">{t(errors[field])}</Text> : null;
 
   return (
     <KeyboardAvoidingView

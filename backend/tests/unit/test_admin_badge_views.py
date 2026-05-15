@@ -8,7 +8,6 @@ import pytest
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.test import Client
-from django.urls import reverse
 
 User = get_user_model()
 
@@ -108,7 +107,6 @@ class TestAdminViewState:
     def test_mark_seen_updates_existing_row(self, staff_user):
         """mark_seen met à jour le timestamp existant."""
         from common.models import AdminViewState
-        from django.utils import timezone as tz
 
         AdminViewState.objects.create(
             user=staff_user,

@@ -1,9 +1,11 @@
 import logging
 
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.http import Http404
 from django.utils.translation import gettext as _
 from drf_spectacular.utils import OpenApiExample, OpenApiResponse, extend_schema, extend_schema_view
 from rest_framework import generics, permissions, status
+from rest_framework.exceptions import ValidationError as DRFValidationError
 from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenRefreshView, TokenVerifyView
 
@@ -61,6 +63,14 @@ def _auth_method_from_payload(payload) -> str:
     if payload.get('login_name'):
         return 'login_name'
     return 'unknown'
+
+
+def _raise_drf_validation_error(error: DjangoValidationError) -> None:
+    if hasattr(error, 'message_dict'):
+        raise DRFValidationError(error.message_dict) from error
+    if hasattr(error, 'messages'):
+        raise DRFValidationError(error.messages) from error
+    raise DRFValidationError(str(error)) from error
 
 
 class RegisterView(generics.CreateAPIView):
@@ -315,10 +325,13 @@ class ProfileView(generics.RetrieveUpdateAPIView):
         return ProfileQueryService.get_user_profile(self.request.user.pk)
 
     def perform_update(self, serializer):
-        user = AccountProfileMutationService.update_user_profile(
-            user_id=self.request.user.pk,
-            updates=serializer.validated_data,
-        )
+        try:
+            user = AccountProfileMutationService.update_user_profile(
+                user_id=self.request.user.pk,
+                updates=serializer.validated_data,
+            )
+        except DjangoValidationError as err:
+            _raise_drf_validation_error(err)
         serializer.instance = user
         logger.info(
             "Account profile updated",
@@ -542,10 +555,13 @@ class FarmProfileView(generics.RetrieveUpdateAPIView):
             raise Http404
 
     def perform_update(self, serializer):
-        farm = AccountProfileMutationService.update_farm_profile(
-            user_id=self.request.user.pk,
-            updates=serializer.validated_data,
-        )
+        try:
+            farm = AccountProfileMutationService.update_farm_profile(
+                user_id=self.request.user.pk,
+                updates=serializer.validated_data,
+            )
+        except DjangoValidationError as err:
+            _raise_drf_validation_error(err)
         serializer.instance = farm
         logger.info(
             "Farm profile updated",
@@ -652,10 +668,13 @@ class FarmSetupView(generics.UpdateAPIView):
         farm = self.get_object()
         serializer = self.get_serializer(farm, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
-        updated = FarmSetupService.complete_setup(
-            farm,
-            serializer.validated_data,
-        )
+        try:
+            updated = FarmSetupService.complete_setup(
+                farm,
+                serializer.validated_data,
+            )
+        except DjangoValidationError as err:
+            _raise_drf_validation_error(err)
         logger.info(
             "Farm setup completed",
             extra={
@@ -711,7 +730,8 @@ class AnnualSimulationView(generics.GenericAPIView):
         description=(
             "Calcule la rentabilité prévisionnelle sur l'année entière. "
             "Inclut les frais d'accompagnement AquaCare (20 FCFA/kg produit). "
-            "Ne persiste aucune donnée — utilisez /farm/setup/ pour sauvegarder."
+            "Ne persiste aucune donnée. Endpoint legacy, utilisez "
+            "/api/aquaculture/production-plan/setup/ pour sauvegarder."
         ),
         request=AnnualSimulationInputSerializer,
         responses={

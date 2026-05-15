@@ -7,10 +7,10 @@ def _resolve_settings_module() -> str:
 env = _resolve_settings_module()
 
 if env.endswith('.test'):
-    from .test import *
+    from .test import *  # noqa: F403
 elif env.endswith('.staging'):
-    from .staging import *
+    from .staging import *  # noqa: F403
 elif env.endswith('.production'):
-    from .production import *
+    from .production import *  # noqa: F403
 else:
-    from .development import *
+    from .development import *  # noqa: F403

@@ -374,7 +374,9 @@
 
   // GPS / Geolocation
   farmLocation: 'GPS Location',
+  farmMapNavTitle: 'My farm map',
   farmNoLocation: 'No location recorded',
+  farmNoLocationHint: 'Add your farm location from your profile.',
   locateFarm: 'Locate my farm',
   locatingFarm: 'Locating...',
   viewOnMap: 'View on map',
@@ -385,6 +387,7 @@
   locationCaptureError: 'Unable to retrieve location. Please try again.',
   openSettings: 'Open Settings',
   updateLocation: 'Update farm location',
+  farmBackToProfile: 'Back to profile',
   back: 'Back',
 
   // Intervention Zones
@@ -774,6 +777,7 @@
 
   // Statistics
   statistics: 'View my statistics',
+  statisticsNavTitle: 'Statistics',
   statisticsTitle: 'Performance Statistics',
   statisticsSubtitle: 'Detailed analysis of your cycles',
   cycleAnalysis: 'Cycle to analyze',
@@ -1094,6 +1098,8 @@
   AUTH_SERVER_ERROR: 'Server error. Please try again later.',
   AUTH_NETWORK_ERROR: 'Cannot reach the server. Check your internet connection.',
   AUTH_UNKNOWN_ERROR: 'An unexpected error occurred.',
+  UNKNOWN_ERROR: 'An unexpected error occurred.',
+  accountsErrorGeneric: 'Something went wrong. Check your connection and try again. If the issue continues, contact support.',
   sessionExpiredTitle: 'Session expired',
   sessionExpiredMessage: 'Your session has expired. Please log in again.',
 
@@ -1143,6 +1149,7 @@
   createFarmAnnualTargetLabel: 'Production target (kg / year)',
   createFarmAnnualTargetPlaceholder: 'E.g. 1000',
   createFarmStartDateLabel: 'Planned start date',
+  createFarmStartDatePlaceholder: 'YYYY-MM-DD',
   createFarmFingerlingsLabel: 'Cost per fingerling (FCFA)',
   createFarmFingerlingsPlaceholder: 'E.g. 50',
   createFarmSellingPriceLabel: 'Estimated selling price (FCFA / kg)',
@@ -1166,6 +1173,12 @@
   createFarmSurvivalRatePlaceholder: 'E.g. 85',
   createFarmSimulateBtn: 'See my simulation →',
   createFarmRequiredFieldsError: 'Please fill in all required fields.',
+  createFarmPositiveNumberError: 'Enter a number greater than 0.',
+  createFarmNonNegativeNumberError: 'Enter a number greater than or equal to 0.',
+  createFarmPositiveIntegerError: 'Enter a whole number greater than 0.',
+  createFarmInvalidDateError: 'Enter a valid date in YYYY-MM-DD format.',
+  createFarmHarvestWeightRangeError: 'Target weight must be between 50 g and 5000 g.',
+  createFarmSurvivalRateRangeError: 'Survival rate must be between 1% and 100%.',
 
   // ── Annual simulation ─────────────────────────────────────────────────────
   simulationNavTitle: 'Simulation',
@@ -1196,6 +1209,10 @@
   simulationModifyBtn: '← Edit my data',
   simulationLoading: 'Calculating...',
   simulationErrorRetry: 'Simulation error. Retry',
+  simulationDefaultCycleName: '{{species}} cycle 1',
+  simulationDefaultPondIdentifier: 'Main pond',
+  speciesTilapia: 'Tilapia',
+  speciesClarias: 'Catfish',
 
   // ── "Buy my feed" section ─────────────────────────────────────────────────
   myFeedTitle: 'Buy my feed',

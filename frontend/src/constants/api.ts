@@ -44,6 +44,8 @@ export const API_ENDPOINTS = {
     SANITARY_LOGS: '/aquaculture/sanitary-logs/',
     DASHBOARD: '/aquaculture/dashboard/',
     SYNC: '/aquaculture/sync/',
+    PRODUCTION_PLAN_SETUP: '/aquaculture/production-plan/setup/',
+    PRODUCTION_PLAN_SIMULATE: '/aquaculture/production-plan/simulate/',
   },
 };
 
@@ -55,5 +57,4 @@ export const STORAGE_KEYS = {
   LANGUAGE: 'aquacare_language',
   PUSH_DEVICE_ID: 'aquacare_push_device_id',
 };
-
 

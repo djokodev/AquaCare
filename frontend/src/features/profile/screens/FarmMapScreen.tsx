@@ -33,13 +33,13 @@ const FarmMapScreen: React.FC = () => {
           <Ionicons name="location-outline" size={56} color={MAVECAM_COLORS.GREEN_PRIMARY} />
           <Text style={styles.emptyTitle}>{t('farmNoLocation')}</Text>
           <Text style={styles.emptySubtitle}>
-            Ajoutez la localisation de votre ferme depuis votre profil.
+            {t('farmNoLocationHint')}
           </Text>
           <TouchableOpacity
             style={styles.backButton}
             onPress={() => navigation.goBack()}
           >
-            <Text style={styles.backButtonText}>← Retour au profil</Text>
+            <Text style={styles.backButtonText}>{t('farmBackToProfile')}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -65,7 +65,7 @@ const FarmMapScreen: React.FC = () => {
         />
         <Marker
           coordinate={{ latitude, longitude }}
-          title={farmProfile?.farm_name ?? 'Ma ferme'}
+          title={farmProfile?.farm_name ?? t('myFarm')}
           description={farmProfile?.location_address ?? ''}
           pinColor={MAVECAM_COLORS.GREEN_PRIMARY}
         />
@@ -107,7 +107,7 @@ const styles = StyleSheet.create({
     padding: 16,
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
-    shadowColor: '#000',
+    shadowColor: MAVECAM_COLORS.GRAY_DARK,
     shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.08,
     shadowRadius: 8,
@@ -125,16 +125,16 @@ const styles = StyleSheet.create({
   farmName: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#1a1a1a',
+    color: MAVECAM_COLORS.GRAY_DARK,
   },
   address: {
     fontSize: 13,
-    color: '#666',
+    color: MAVECAM_COLORS.GRAY_LIGHT,
     marginTop: 2,
   },
   coords: {
     fontSize: 12,
-    color: '#999',
+    color: MAVECAM_COLORS.GRAY_LIGHT,
     marginTop: 2,
     fontFamily: 'monospace',
   },
@@ -163,12 +163,12 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#1a1a1a',
+    color: MAVECAM_COLORS.GRAY_DARK,
     textAlign: 'center',
   },
   emptySubtitle: {
     fontSize: 14,
-    color: '#666',
+    color: MAVECAM_COLORS.GRAY_LIGHT,
     textAlign: 'center',
   },
   backButton: {

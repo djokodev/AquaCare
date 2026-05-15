@@ -1,14 +1,16 @@
 ﻿import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import { authService } from '@/features/auth/services/authService';
+import { profileService } from '@/features/profile/services/profileService';
 import {
   User,
-  FarmProfile,
-  FarmSetupData,
-  AnnualSimulationInput,
-  AnnualSimulationResult,
   LoginRequest,
   RegisterRequest,
-} from '@/types/auth';
+} from '@/features/auth/types/auth';
+import {
+  FarmProfile,
+  UpdateFarmProfilePayload,
+  UpdateUserProfilePayload,
+} from '@/features/profile/types/profile';
 
 interface AuthState {
   user: User | null;
@@ -16,11 +18,6 @@ interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
-  annualSimulation: {
-    result: AnnualSimulationResult | null;
-    loading: boolean;
-    error: string | null;
-  };
 }
 
 const initialState: AuthState = {
@@ -29,11 +26,31 @@ const initialState: AuthState = {
   isAuthenticated: false,
   isLoading: false,
   error: null,
-  annualSimulation: {
-    result: null,
-    loading: false,
-    error: null,
-  },
+};
+
+const getThunkErrorMessage = (error: unknown): string => {
+  if (error instanceof Error) return error.message;
+
+  const apiError = error as {
+    response?: { data?: Record<string, unknown> | string };
+    message?: string;
+  };
+  const data = apiError.response?.data;
+
+  if (typeof data === 'string' && data.trim()) return data;
+  if (data && typeof data === 'object') {
+    if (typeof data.detail === 'string') return data.detail;
+    if (typeof data.message === 'string') return data.message;
+    if (typeof data.error === 'string') return data.error;
+
+    const firstFieldError = Object.values(data).find(Boolean);
+    if (Array.isArray(firstFieldError) && firstFieldError.length > 0) {
+      return String(firstFieldError[0]);
+    }
+    if (firstFieldError) return String(firstFieldError);
+  }
+
+  return apiError.message || 'UNKNOWN_ERROR';
 };
 
 // Actions asynchrones
@@ -44,7 +61,7 @@ export const loginUser = createAsyncThunk(
       const response = await authService.login(credentials);
       return response;
     } catch (error: unknown) {
-      return rejectWithValue(error instanceof Error ? error.message : 'UNKNOWN_ERROR');
+      return rejectWithValue(getThunkErrorMessage(error));
     }
   }
 );
@@ -56,7 +73,7 @@ export const registerUser = createAsyncThunk(
       const response = await authService.register(userData);
       return response;
     } catch (error: unknown) {
-      return rejectWithValue(error instanceof Error ? error.message : 'UNKNOWN_ERROR');
+      return rejectWithValue(getThunkErrorMessage(error));
     }
   }
 );
@@ -68,7 +85,7 @@ export const logoutUser = createAsyncThunk(
       await authService.logout();
       return true;
     } catch (error: unknown) {
-      return rejectWithValue(error instanceof Error ? error.message : 'UNKNOWN_ERROR');
+      return rejectWithValue(getThunkErrorMessage(error));
     }
   }
 );
@@ -80,7 +97,7 @@ export const deleteAccountUser = createAsyncThunk(
       await authService.deleteAccount();
       return true;
     } catch (error: unknown) {
-      return rejectWithValue(error instanceof Error ? error.message : 'UNKNOWN_ERROR');
+      return rejectWithValue(getThunkErrorMessage(error));
     }
   }
 );
@@ -96,7 +113,7 @@ export const checkAuthStatus = createAsyncThunk(
       }
       return { user: null, isAuthenticated: false };
     } catch (error: unknown) {
-      return rejectWithValue(error instanceof Error ? error.message : 'UNKNOWN_ERROR');
+      return rejectWithValue(getThunkErrorMessage(error));
     }
   }
 );
@@ -106,60 +123,36 @@ export const loadUserProfile = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try {
       const [user, farmProfile] = await Promise.all([
-        authService.getProfile(),
-        authService.getFarmProfile(),
+        profileService.getProfile(),
+        profileService.getFarmProfile(),
       ]);
       return { user, farmProfile };
     } catch (error: unknown) {
-      return rejectWithValue(error instanceof Error ? error.message : 'UNKNOWN_ERROR');
+      return rejectWithValue(getThunkErrorMessage(error));
     }
   }
 );
 
 export const updateUserProfile = createAsyncThunk(
   'auth/updateProfile',
-  async (profileData: Partial<User>, { rejectWithValue }) => {
+  async (profileData: UpdateUserProfilePayload, { rejectWithValue }) => {
     try {
-      const updatedUser = await authService.updateProfile(profileData);
+      const updatedUser = await profileService.updateProfile(profileData);
       return updatedUser;
     } catch (error: unknown) {
-      return rejectWithValue(error instanceof Error ? error.message : 'UNKNOWN_ERROR');
+      return rejectWithValue(getThunkErrorMessage(error));
     }
   }
 );
 
 export const updateFarmProfile = createAsyncThunk(
   'auth/updateFarmProfile',
-  async (farmData: Partial<FarmProfile>, { rejectWithValue }) => {
+  async (farmData: UpdateFarmProfilePayload, { rejectWithValue }) => {
     try {
-      const updatedFarmProfile = await authService.updateFarmProfile(farmData);
+      const updatedFarmProfile = await profileService.updateFarmProfile(farmData);
       return updatedFarmProfile;
     } catch (error: unknown) {
-      return rejectWithValue(error instanceof Error ? error.message : 'UNKNOWN_ERROR');
-    }
-  }
-);
-
-export const completeFarmSetup = createAsyncThunk(
-  'auth/completeFarmSetup',
-  async (setupData: FarmSetupData, { rejectWithValue }) => {
-    try {
-      const updatedFarmProfile = await authService.completeFarmSetup(setupData);
-      return updatedFarmProfile;
-    } catch (error: unknown) {
-      return rejectWithValue(error instanceof Error ? error.message : 'UNKNOWN_ERROR');
-    }
-  }
-);
-
-export const runAnnualSimulation = createAsyncThunk(
-  'auth/runAnnualSimulation',
-  async (params: AnnualSimulationInput, { rejectWithValue }) => {
-    try {
-      const result = await authService.simulateAnnualProduction(params);
-      return result;
-    } catch (error: unknown) {
-      return rejectWithValue(error instanceof Error ? error.message : 'UNKNOWN_ERROR');
+      return rejectWithValue(getThunkErrorMessage(error));
     }
   }
 );
@@ -316,37 +309,6 @@ export const authSlice = createSlice({
         state.error = action.payload as string;
       });
 
-    // Complete farm setup
-    builder
-      .addCase(completeFarmSetup.pending, (state) => {
-        state.isLoading = true;
-        state.error = null;
-      })
-      .addCase(completeFarmSetup.fulfilled, (state, action) => {
-        state.isLoading = false;
-        state.farmProfile = action.payload;
-        state.error = null;
-      })
-      .addCase(completeFarmSetup.rejected, (state, action) => {
-        state.isLoading = false;
-        state.error = action.payload as string;
-      });
-
-    // Annual simulation
-    builder
-      .addCase(runAnnualSimulation.pending, (state) => {
-        state.annualSimulation.loading = true;
-        state.annualSimulation.error = null;
-      })
-      .addCase(runAnnualSimulation.fulfilled, (state, action) => {
-        state.annualSimulation.loading = false;
-        state.annualSimulation.result = action.payload;
-        state.annualSimulation.error = null;
-      })
-      .addCase(runAnnualSimulation.rejected, (state, action) => {
-        state.annualSimulation.loading = false;
-        state.annualSimulation.error = action.payload as string;
-      });
   },
 });
 

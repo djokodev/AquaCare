@@ -131,7 +131,7 @@ Regles:
 1. Un nom de ferme vide est invalide.
 2. Une production annuelle positive impose `total_ponds > 0`.
 3. `certification_status` est readonly cote API mobile.
-4. Les champs setup sont readonly sur `/api/accounts/farm/`, ils passent par `/api/accounts/farm/setup/`.
+4. Les champs setup sont readonly sur `/api/accounts/farm/`, ils passent par `/api/aquaculture/production-plan/setup/`.
 5. La carte admin exclut les fermes sans GPS et les fermes `is_deleted=True`.
 
 Note d'architecture: les champs `setup_*`, `annual_production_target_kg`, `num_cycles_per_year`, `fingerlings_cost_per_unit_fcfa`, `planned_selling_price_per_kg_fcfa`, `default_feed_price_per_kg` et l'etat `farm_setup_completed` sont exposes par compatibilite dans les serializers accounts, mais sont stockes dans `aquaculture.models.FarmProductionPlan`.
@@ -306,7 +306,9 @@ Regles:
 
 ### Setup Elevage
 
-Endpoint: `POST`, `PATCH /api/accounts/farm/setup/`
+Endpoint canonique: `POST`, `PATCH /api/aquaculture/production-plan/setup/`
+
+Alias de compatibilite: `POST`, `PATCH /api/accounts/farm/setup/`
 
 Fichiers principaux:
 
@@ -340,7 +342,9 @@ Regles:
 
 ### Simulation Annuelle
 
-Endpoint: `POST /api/accounts/farm/simulate/`
+Endpoint canonique: `POST /api/aquaculture/production-plan/simulate/`
+
+Alias de compatibilite: `POST /api/accounts/farm/simulate/`
 
 Fichiers principaux:
 
@@ -418,9 +422,16 @@ Base path: `/api/accounts/`
 | `/token/verify/` | `POST` | Non, token requis | Verification token si compte actif |
 | `/profile/` | `GET`, `PUT`, `PATCH` | Oui | Profil utilisateur |
 | `/farm/` | `GET`, `PUT`, `PATCH` | Oui | Profil ferme |
-| `/farm/setup/` | `POST`, `PATCH` | Oui | Setup initial elevage |
-| `/farm/simulate/` | `POST` | Oui | Simulation annuelle sans persistance |
+| `/farm/setup/` | `POST`, `PATCH` | Oui | Alias legacy du setup aquaculture |
+| `/farm/simulate/` | `POST` | Oui | Alias legacy de la simulation aquaculture |
 | `/delete/` | `POST` | Oui | Anonymisation compte |
+
+Base path canonique aquaculture pour le setup mobile:
+
+| Endpoint | Methodes | Auth | Role |
+| --- | --- | --- | --- |
+| `/api/aquaculture/production-plan/setup/` | `POST`, `PATCH` | Oui | Setup initial elevage |
+| `/api/aquaculture/production-plan/simulate/` | `POST` | Oui | Simulation annuelle sans persistance |
 
 Schema OpenAPI:
 
@@ -447,9 +458,9 @@ Conventions de reponse importantes:
 }
 ```
 
-2. `POST` et `PATCH /farm/setup/` retournent le `FarmProfile` complet, pas
+2. `POST` et `PATCH /api/aquaculture/production-plan/setup/` retournent le `FarmProfile` complet, pas
    seulement les champs envoyes dans le formulaire setup.
-3. `POST /farm/simulate/` retourne un schema annuel stable avec resume financier
+3. `POST /api/aquaculture/production-plan/simulate/` retourne un schema annuel stable avec resume financier
    et `cycles_breakdown`.
 4. Les erreurs de validation DRF restent au format dictionnaire par champ ou
    `non_field_errors`. Les erreurs JWT et permissions restent au format `detail`
@@ -720,7 +731,7 @@ Budgets de requetes couverts par tests:
 
 1. Ne pas modifier `phone_number` depuis `/profile/`, c'est l'identifiant principal.
 2. Ne pas rendre `certification_status` modifiable par l'API mobile.
-3. Ne pas ecrire les champs `setup_*` via `/farm/`, utiliser `/farm/setup/`.
+3. Ne pas ecrire les champs `setup_*` via `/farm/`, utiliser `/api/aquaculture/production-plan/setup/`.
 4. Ne pas exposer la carte ferme sous `/api/accounts/`.
 5. Ne pas retirer le claim JWT `language_preference` sans accepter une requete DB supplementaire ou definir une autre strategie.
 6. Ne pas remplacer les compteurs cache atomiques par des listes stockees en cache, cela scale mal.

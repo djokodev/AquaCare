@@ -16,6 +16,8 @@ export const setLogoutCallback = (callback: LogoutCallback) => {
 
 class ApiService {
   private api: AxiosInstance;
+  private refreshPromise: Promise<string | null> | null = null;
+  private sessionExpiredAlertShown = false;
 
   constructor() {
     this.api = axios.create({
@@ -49,56 +51,77 @@ class ApiService {
         const originalRequest = error.config as any;
 
         // Si erreur 401 et pas dÃ©jÃ  en train de refresh
-        if (error.response?.status === 401 && !originalRequest._retry) {
+        if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
           originalRequest._retry = true;
 
           try {
-            const refreshToken = await SecureStore.getItemAsync(STORAGE_KEYS.REFRESH_TOKEN);
-            if (refreshToken) {
-              // Tenter de refresh le token
-              const response = await this.refreshToken(refreshToken);
-
-              // CORRECTION: Simple JWT retourne directement { access, refresh }
-              // PAS { tokens: { access, refresh } } comme le login custom
-              const { access, refresh: newRefresh } = response.data;
-
-              // Sauvegarder les nouveaux tokens (rotation activÃ©e)
-              await SecureStore.setItemAsync(STORAGE_KEYS.ACCESS_TOKEN, access);
-              if (newRefresh) {
-                await SecureStore.setItemAsync(STORAGE_KEYS.REFRESH_TOKEN, newRefresh);
-              }
-
-              // Retry la requÃªte originale
+            const access = await this.getRefreshedAccessToken();
+            if (access) {
+              originalRequest.headers = originalRequest.headers || {};
               originalRequest.headers.Authorization = `Bearer ${access}`;
               return this.api(originalRequest);
             }
+            await this.handleSessionExpired();
           } catch (refreshError) {
-            // Refresh failed — déconnexion automatique.
-            // clearTokens() est déplacé dans le handler OK : on ne vide le SecureStore
-            // qu'une fois que le vrai logoutCallback est disponible, évitant la fenêtre
-            // d'incohérence (tokens supprimés mais Redux encore authentifié).
-            if (logoutCallback) {
-              const cb = logoutCallback;
-              Alert.alert(
-                i18n.t('sessionExpiredTitle'),
-                i18n.t('sessionExpiredMessage'),
-                [{
-                  text: 'OK',
-                  onPress: async () => {
-                    await this.clearTokens();
-                    cb();
-                  },
-                }]
-              );
-            } else {
-              await this.clearTokens();
-            }
+            await this.handleSessionExpired();
           }
         }
 
         return Promise.reject(error);
       }
     );
+  }
+
+  private async getRefreshedAccessToken(): Promise<string | null> {
+    if (!this.refreshPromise) {
+      this.refreshPromise = this.refreshAccessToken().finally(() => {
+        this.refreshPromise = null;
+      });
+    }
+
+    return this.refreshPromise;
+  }
+
+  private async refreshAccessToken(): Promise<string | null> {
+    const refreshToken = await SecureStore.getItemAsync(STORAGE_KEYS.REFRESH_TOKEN);
+    if (!refreshToken) return null;
+
+    const response = await this.refreshToken(refreshToken);
+    const { access, refresh: newRefresh } = response.data;
+
+    if (!access) return null;
+
+    await SecureStore.setItemAsync(STORAGE_KEYS.ACCESS_TOKEN, access);
+    if (newRefresh) {
+      await SecureStore.setItemAsync(STORAGE_KEYS.REFRESH_TOKEN, newRefresh);
+    }
+    this.sessionExpiredAlertShown = false;
+
+    return access;
+  }
+
+  private async handleSessionExpired() {
+    if (this.sessionExpiredAlertShown) return;
+
+    this.sessionExpiredAlertShown = true;
+    if (logoutCallback) {
+      const cb = logoutCallback;
+      Alert.alert(
+        i18n.t('sessionExpiredTitle'),
+        i18n.t('sessionExpiredMessage'),
+        [{
+          text: 'OK',
+          onPress: async () => {
+            await this.clearTokens();
+            cb();
+            this.sessionExpiredAlertShown = false;
+          },
+        }]
+      );
+    } else {
+      await this.clearTokens();
+      this.sessionExpiredAlertShown = false;
+    }
   }
 
   private async refreshToken(refreshToken: string) {
@@ -142,6 +165,4 @@ class ApiService {
 }
 
 export const apiService = new ApiService();
-
-
 

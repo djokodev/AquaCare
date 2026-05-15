@@ -4,11 +4,13 @@ import authReducer, { authSlice } from '@/features/auth/store/authSlice';
 import commerceReducer from '@/features/commerce/store/commerceSlice';
 import notificationReducer from '@/features/notifications/store/notificationSlice';
 import chatReducer from '@/features/chat/store/chatSlice';
+import farmSetupReducer from '@/features/aquaculture/store/farmSetupSlice';
 
 export const store = configureStore({
   reducer: {
     auth: authReducer,
     aquaculture: aquacultureReducer,
+    farmSetup: farmSetupReducer,
     notifications: notificationReducer,
     commerce: commerceReducer,
     chat: chatReducer,
@@ -24,6 +26,5 @@ export const store = configureStore({
 
 export type RootState = ReturnType<typeof store.getState>;
 export type AppDispatch = typeof store.dispatch;
-
 
 

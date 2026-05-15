@@ -9,7 +9,7 @@ import pytest
 from accounts.models import FarmProfile
 from accounts.services.auth_application_service import AuthApplicationService
 from django.contrib.auth import get_user_model
-from django.core.cache import cache
+from django.core.cache import cache, caches
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
@@ -976,10 +976,24 @@ class TestRateLimiting:
     Note : Ces tests sont complexes car le middleware utilise la mémoire.
     En production, utiliser Redis pour des tests plus fiables.
     """
+
+    @pytest.fixture(autouse=True)
+    def isolated_cache(self, settings):
+        """Isole ces tests du cache Redis partage entre workers pytest."""
+        settings.CACHES = {
+            "default": {
+                "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+                "LOCATION": f"accounts-rate-limit-tests-{uuid.uuid4()}",
+            }
+        }
+        caches.close_all()
+        cache.clear()
+        yield
+        cache.clear()
+        caches.close_all()
     
     def setup_method(self):
         """Configuration pour chaque test."""
-        cache.clear()
         self.client = APIClient()
         self.url = reverse('accounts:login')
 

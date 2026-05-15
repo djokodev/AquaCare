@@ -3,6 +3,8 @@ Settings spécifiques pour les tests (pytest + CI/CD)
 """
 from __future__ import annotations
 
+# ruff: noqa: F403,F405
+
 import os
 
 

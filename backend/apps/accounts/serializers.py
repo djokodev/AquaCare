@@ -507,7 +507,7 @@ class AnnualSimulationCycleBreakdownSerializer(serializers.Serializer):
 
 
 class AnnualSimulationResponseSerializer(serializers.Serializer):
-    """Contrat de reponse stable de POST /api/accounts/farm/simulate/."""
+    """Contrat de reponse stable de la simulation annuelle aquaculture."""
 
     species = serializers.ChoiceField(choices=['tilapia', 'clarias'], read_only=True)
     num_cycles = serializers.IntegerField(read_only=True)
