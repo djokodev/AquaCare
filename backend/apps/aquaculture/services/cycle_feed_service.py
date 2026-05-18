@@ -11,8 +11,9 @@ Architecture : Application service conforme DDD/Hexagonal.
 """
 from __future__ import annotations
 
+import logging
 import math
-from typing import TypedDict
+from typing import Any, TypedDict
 
 from django.db.models import Sum
 
@@ -21,6 +22,7 @@ from commerce.models import OrderItem
 
 BAG_WEIGHT_KG = 25  # Poids standard d'un sac DIBAQ (kg)
 DAYS_PER_WEEK = 7
+logger = logging.getLogger(__name__)
 
 
 class ProductFeedStatus(TypedDict):
@@ -38,6 +40,10 @@ class CycleFeedStatusResult(TypedDict):
     total_feed_consumed_kg: float
     bags_consumed_equivalent: int
     bags_remaining_to_order: int
+
+
+class CycleFeedPhasesResult(TypedDict):
+    feeding_phases: list[dict[str, Any]]
 
 
 class CycleFeedService:
@@ -88,6 +94,32 @@ class CycleFeedService:
         }
 
     @staticmethod
+    def get_feed_phases(cycle: ProductionCycle) -> CycleFeedPhasesResult:
+        """
+        Retourne les phases d'alimentation simulées pour un cycle.
+
+        La view ne porte aucune règle métier : les paramètres par défaut et
+        l'appel commerce restent centralisés ici.
+        """
+        if not cycle.initial_count or not cycle.target_harvest_weight_g:
+            return {'feeding_phases': []}
+
+        from commerce.services.cycle_simulation_service import CycleSimulationService  # noqa: PLC0415
+
+        survival_rate = float(cycle.expected_survival_rate_pct or 85) / 100
+        sim = CycleSimulationService.simulate_cycle(
+            species=cycle.species,
+            initial_fish_count=cycle.initial_count,
+            target_weight_g=float(cycle.target_harvest_weight_g),
+            cycle_duration_days=cycle.planned_cycle_duration_days or 180,
+            survival_rate=survival_rate,
+            selling_price_per_kg_fcfa=float(cycle.planned_selling_price_per_kg_fcfa or 2800),
+            fingerlings_cost_fcfa=float(cycle.fingerlings_cost_fcfa or 0),
+            other_costs_fcfa=float(cycle.other_operational_costs_fcfa or 0),
+        )
+        return {'feeding_phases': sim['feeding_phases']}
+
+    @staticmethod
     def _compute_total_feed_needed_kg(cycle: ProductionCycle) -> float:
         """
         Calcule le total kg d'aliment nécessaire.
@@ -127,7 +159,7 @@ class CycleFeedService:
 
         try:
             from commerce.services.cycle_simulation_service import CycleSimulationService  # noqa: PLC0415
-            survival_rate = float(cycle.expected_survival_rate_pct or 95) / 100
+            survival_rate = float(cycle.expected_survival_rate_pct or 85) / 100
             cycle_sim = CycleSimulationService.simulate_cycle(
                 species=cycle.species,
                 initial_fish_count=cycle.initial_count,
@@ -144,7 +176,12 @@ class CycleFeedService:
                 for p in phase.get('products', [])
             )
             return float(total_bags) * BAG_WEIGHT_KG
-        except Exception:
+        except Exception as exc:
+            logger.warning(
+                "Feed estimation fallback to zero for cycle %s: %s",
+                cycle.id,
+                exc,
+            )
             return 0.0
 
     @staticmethod

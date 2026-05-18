@@ -6,12 +6,12 @@ import uuid
 from collections.abc import Iterable
 from dataclasses import dataclass
 
-from aquaculture.services.farm_production_plan_service import FarmProductionPlanService
 from accounts.models import FarmProfile, User
 from accounts.validators import normalize_login_value
 from django.db import transaction
 
 from .account_cleanup_adapters import AccountCleanupPort, get_default_account_cleanup_ports
+from .farm_setup_service import FarmSetupService
 
 
 @dataclass(frozen=True)
@@ -134,7 +134,7 @@ class AccountDeletionService:
         )
         if farm_profile is not None:
             farm_profile.refresh_from_db()
-            FarmProductionPlanService.reset_for_account_deletion(farm_profile)
+            FarmSetupService.reset_for_account_deletion(farm_profile)
 
         AccountDeletionService._cleanup_external_account_data(user.id, cleanup_ports)
 

@@ -20,6 +20,7 @@ class CreateOrderCommand:
     items_data: list[OrderItemPayload]
     delivery_method: DeliveryMethod
     pickup_location: str | None = None
+    production_cycle_id: str | None = None
     client_uuid: str | None = None
     created_offline: bool = False
 
@@ -48,6 +49,7 @@ class OrderApplicationService:
             items_data=command.items_data,
             delivery_method=command.delivery_method,
             pickup_location=command.pickup_location,
+            production_cycle_id=command.production_cycle_id,
             client_uuid=command.client_uuid,
             created_offline=command.created_offline,
         )

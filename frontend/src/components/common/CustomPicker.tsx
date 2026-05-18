@@ -4,8 +4,8 @@ import { Picker } from '@react-native-picker/picker';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 
-// Couleurs MAVECAM selon spÃ©cifications
-const MAVECAM_COLORS = {
+// Couleurs AquaCare selon spÃ©cifications
+const AQUACARE_COLORS = {
   GREEN_PRIMARY: '#059669',
   GREEN_LIGHT: '#10b981',
   GREEN_DARK: '#047857',
@@ -63,7 +63,7 @@ export default function CustomPicker({
     return (
       <View style={styles.infoRow}>
         <View style={styles.infoRowLeft}>
-          <Ionicons name={icon} size={20} color={MAVECAM_COLORS.GRAY_LIGHT} />
+          <Ionicons name={icon} size={20} color={AQUACARE_COLORS.GRAY_LIGHT} />
           <Text style={styles.infoLabel}>{label}</Text>
         </View>
         <Text style={styles.infoValue}>{getDisplayValue()}</Text>
@@ -74,7 +74,7 @@ export default function CustomPicker({
   return (
     <View style={styles.infoRow}>
       <View style={styles.infoRowLeft}>
-        <Ionicons name={icon} size={20} color={MAVECAM_COLORS.GRAY_LIGHT} />
+        <Ionicons name={icon} size={20} color={AQUACARE_COLORS.GRAY_LIGHT} />
         <Text style={styles.infoLabel}>{label}</Text>
       </View>
       
@@ -89,7 +89,7 @@ export default function CustomPicker({
             <Picker.Item 
               label={placeholder} 
               value="" 
-              color={MAVECAM_COLORS.GRAY_LIGHT}
+              color={AQUACARE_COLORS.GRAY_LIGHT}
             />
           )}
           {options.map((option) => (
@@ -98,7 +98,7 @@ export default function CustomPicker({
               label={option.label}
               value={option.value}
               enabled={!option.disabled}
-              color={option.disabled ? MAVECAM_COLORS.GRAY_LIGHT : MAVECAM_COLORS.GRAY_DARK}
+              color={option.disabled ? AQUACARE_COLORS.GRAY_LIGHT : AQUACARE_COLORS.GRAY_DARK}
             />
           ))}
         </Picker>
@@ -132,7 +132,7 @@ export function CascadingPicker({
     return (
       <View style={styles.cascadingContainer}>
         <View style={styles.cascadingHeader}>
-          <Ionicons name={icon} size={20} color={MAVECAM_COLORS.GRAY_LIGHT} />
+          <Ionicons name={icon} size={20} color={AQUACARE_COLORS.GRAY_LIGHT} />
           <Text style={styles.infoLabel}>{label}</Text>
         </View>
         {levels.map((level, index) => {
@@ -150,7 +150,7 @@ export function CascadingPicker({
   return (
     <View style={styles.cascadingContainer}>
       <View style={styles.cascadingHeader}>
-        <Ionicons name={icon} size={20} color={MAVECAM_COLORS.GRAY_LIGHT} />
+        <Ionicons name={icon} size={20} color={AQUACARE_COLORS.GRAY_LIGHT} />
         <Text style={styles.infoLabel}>{label}</Text>
       </View>
       
@@ -165,7 +165,7 @@ export function CascadingPicker({
             <Picker.Item 
               label={level.placeholder} 
               value="" 
-              color={MAVECAM_COLORS.GRAY_LIGHT}
+              color={AQUACARE_COLORS.GRAY_LIGHT}
             />
             {level.options.map((option) => (
               <Picker.Item
@@ -173,7 +173,7 @@ export function CascadingPicker({
                 label={option.label}
                 value={option.value}
                 enabled={!option.disabled}
-                color={option.disabled ? MAVECAM_COLORS.GRAY_LIGHT : MAVECAM_COLORS.GRAY_DARK}
+                color={option.disabled ? AQUACARE_COLORS.GRAY_LIGHT : AQUACARE_COLORS.GRAY_DARK}
               />
             ))}
           </Picker>
@@ -199,13 +199,13 @@ const styles = StyleSheet.create({
   },
   infoLabel: {
     fontSize: 14,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
+    color: AQUACARE_COLORS.GRAY_LIGHT,
     marginLeft: 12,
     flex: 1,
   },
   infoValue: {
     fontSize: 14,
-    color: MAVECAM_COLORS.GRAY_DARK,
+    color: AQUACARE_COLORS.GRAY_DARK,
     fontWeight: '500',
     flex: 1,
     textAlign: 'right',
@@ -215,7 +215,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#d1d5db',
     borderRadius: 6,
-    backgroundColor: MAVECAM_COLORS.WHITE,
+    backgroundColor: AQUACARE_COLORS.WHITE,
   },
   picker: {
     height: 40,
@@ -234,11 +234,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#d1d5db',
     borderRadius: 6,
-    backgroundColor: MAVECAM_COLORS.WHITE,
+    backgroundColor: AQUACARE_COLORS.WHITE,
   },
   readOnlyText: {
     fontSize: 14,
-    color: MAVECAM_COLORS.GRAY_DARK,
+    color: AQUACARE_COLORS.GRAY_DARK,
     paddingVertical: 10,
     paddingHorizontal: 12,
   },

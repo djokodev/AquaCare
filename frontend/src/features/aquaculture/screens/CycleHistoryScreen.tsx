@@ -8,7 +8,7 @@ import { AppDispatch, RootState } from '@/store/store';
 import { fetchProductionCycles } from '@/features/aquaculture/store/aquacultureSlice';
 import { ProductionCycle } from '@/types/aquaculture';
 import { RootStackParamList } from '@/navigation/MainNavigator';
-import { MAVECAM_COLORS } from '@/constants/colors';
+import { AQUACARE_COLORS } from '@/constants/colors';
 import { formatNumber, formatPercentage, formatDate, formatDaysSince } from '@/utils';
 
 type CycleHistoryScreenNavigationProp = StackNavigationProp<RootStackParamList, 'CycleHistory'>;
@@ -55,9 +55,9 @@ export default function CycleHistoryScreen({ navigation }: CycleHistoryScreenPro
     const survival = survivalRate || 0;
     const fcrValue = fcr || 999;
 
-    if (survival >= 85 && fcrValue <= 1.8) return MAVECAM_COLORS.SUCCESS;
-    if (survival >= 75 && fcrValue <= 2.2) return MAVECAM_COLORS.WARNING;
-    return MAVECAM_COLORS.ERROR;
+    if (survival >= 85 && fcrValue <= 1.8) return AQUACARE_COLORS.SUCCESS;
+    if (survival >= 75 && fcrValue <= 2.2) return AQUACARE_COLORS.WARNING;
+    return AQUACARE_COLORS.ERROR;
   };
 
   const getPerformanceText = (survivalRate: number | null | undefined, fcr: number | null | undefined) => {
@@ -140,22 +140,22 @@ export default function CycleHistoryScreen({ navigation }: CycleHistoryScreenPro
 
           <View className="flex-row flex-wrap justify-between">
             <View className="w-[48%] items-center bg-cream p-3 rounded-lg mb-2">
-              <Text className="text-xl font-bold text-mavecam-primary mb-1">{totalCycles}</Text>
+              <Text className="text-xl font-bold text-aquacare-primary mb-1">{totalCycles}</Text>
               <Text className="text-xs text-gray-light text-center">{t('completedCycles')}</Text>
             </View>
 
             <View className="w-[48%] items-center bg-cream p-3 rounded-lg mb-2">
-              <Text className="text-xl font-bold text-mavecam-primary mb-1">{formatPercentage(avgSurvival)}</Text>
+              <Text className="text-xl font-bold text-aquacare-primary mb-1">{formatPercentage(avgSurvival)}</Text>
               <Text className="text-xs text-gray-light text-center">{t('avgSurvival')}</Text>
             </View>
 
             <View className="w-[48%] items-center bg-cream p-3 rounded-lg mb-2">
-              <Text className="text-xl font-bold text-mavecam-primary mb-1">{avgFCR > 0 ? avgFCR.toFixed(2) : '0'}</Text>
+              <Text className="text-xl font-bold text-aquacare-primary mb-1">{avgFCR > 0 ? avgFCR.toFixed(2) : '0'}</Text>
               <Text className="text-xs text-gray-light text-center">{t('avgFCR')}</Text>
             </View>
 
             <View className="w-[48%] items-center bg-cream p-3 rounded-lg mb-2">
-              <Text className="text-xl font-bold text-mavecam-primary mb-1">{formatNumber(totalBiomass, 'kg')}</Text>
+              <Text className="text-xl font-bold text-aquacare-primary mb-1">{formatNumber(totalBiomass, 'kg')}</Text>
               <Text className="text-xs text-gray-light text-center">{t('totalHarvested')}</Text>
             </View>
           </View>
@@ -170,7 +170,7 @@ export default function CycleHistoryScreen({ navigation }: CycleHistoryScreenPro
                 key={filter}
                 className={`px-4 py-2 rounded-full border ${
                   selectedFilter === filter
-                    ? 'bg-mavecam-primary border-mavecam-primary'
+                    ? 'bg-aquacare-primary border-aquacare-primary'
                     : 'bg-cream border-gray-light'
                 }`}
                 onPress={() => setSelectedFilter(filter)}
@@ -198,12 +198,12 @@ export default function CycleHistoryScreen({ navigation }: CycleHistoryScreenPro
       <View className="items-center py-10 px-4">
         {loading.cycles ? (
           <>
-            <ActivityIndicator size="large" color={MAVECAM_COLORS.GREEN_PRIMARY} />
+            <ActivityIndicator size="large" color={AQUACARE_COLORS.GREEN_PRIMARY} />
             <Text className="text-base text-gray-light mt-3">{t('loading')}</Text>
           </>
         ) : (
           <>
-            <Ionicons name="fish-outline" size={64} color={MAVECAM_COLORS.GRAY_LIGHT} />
+            <Ionicons name="fish-outline" size={64} color={AQUACARE_COLORS.GRAY_LIGHT} />
             <Text className="text-xl font-bold text-gray-dark mt-4 mb-2">{t('noHarvestedCycles')}</Text>
             <Text className="text-sm text-gray-light text-center">{t('completeCycleToSeeHistory')}</Text>
           </>
@@ -215,9 +215,9 @@ export default function CycleHistoryScreen({ navigation }: CycleHistoryScreenPro
 
   return (
     <View className="flex-1 bg-cream">
-      <View className="bg-mavecam-primary flex-row items-center pt-14 pb-4 px-4">
+      <View className="bg-aquacare-primary flex-row items-center pt-14 pb-4 px-4">
         <TouchableOpacity className="mr-4" onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color={MAVECAM_COLORS.WHITE} />
+          <Ionicons name="arrow-back" size={24} color={AQUACARE_COLORS.WHITE} />
         </TouchableOpacity>
         <Text className="text-xl font-bold text-white flex-1">{t('cycleHistory')}</Text>
       </View>

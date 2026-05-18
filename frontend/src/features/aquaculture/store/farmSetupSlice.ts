@@ -1,6 +1,7 @@
 import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
 
 import { farmSetupService } from '@/features/aquaculture/services/farmSetupService';
+import { getApiErrorMessage } from '@/utils/errorParser';
 import type {
   AnnualSimulationInput,
   AnnualSimulationResult,
@@ -23,38 +24,13 @@ const initialState: FarmSetupState = {
   },
 };
 
-const getErrorMessage = (error: unknown): string => {
-  if (error instanceof Error) return error.message;
-
-  const apiError = error as {
-    response?: { data?: Record<string, unknown> | string };
-    message?: string;
-  };
-  const data = apiError.response?.data;
-
-  if (typeof data === 'string' && data.trim()) return data;
-  if (data && typeof data === 'object') {
-    if (typeof data.detail === 'string') return data.detail;
-    if (typeof data.message === 'string') return data.message;
-    if (typeof data.error === 'string') return data.error;
-
-    const firstFieldError = Object.values(data).find(Boolean);
-    if (Array.isArray(firstFieldError) && firstFieldError.length > 0) {
-      return String(firstFieldError[0]);
-    }
-    if (firstFieldError) return String(firstFieldError);
-  }
-
-  return apiError.message || 'UNKNOWN_ERROR';
-};
-
 export const completeFarmSetup = createAsyncThunk(
   'farmSetup/completeFarmSetup',
   async (setupData: FarmSetupData, { rejectWithValue }) => {
     try {
       return await farmSetupService.completeFarmSetup(setupData);
     } catch (error: unknown) {
-      return rejectWithValue(getErrorMessage(error));
+      return rejectWithValue(getApiErrorMessage(error, 'UNKNOWN_ERROR'));
     }
   }
 );
@@ -65,7 +41,7 @@ export const runAnnualSimulation = createAsyncThunk(
     try {
       return await farmSetupService.simulateAnnualProduction(params);
     } catch (error: unknown) {
-      return rejectWithValue(getErrorMessage(error));
+      return rejectWithValue(getApiErrorMessage(error, 'UNKNOWN_ERROR'));
     }
   }
 );

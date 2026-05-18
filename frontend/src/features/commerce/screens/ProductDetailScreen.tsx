@@ -1,5 +1,5 @@
 ﻿/**
- * ProductDetailScreen - Details Produit MAVECAM (NativeWind)
+ * ProductDetailScreen - Details Produit AquaCare (NativeWind)
  */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -19,7 +19,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { AppDispatch, RootState } from '@/store/store';
 import { fetchProductDetail, addToCart } from '@/features/commerce/store/commerceSlice';
 import { Product } from '@/types/commerce';
-import { MAVECAM_COLORS } from '@/constants/colors';
+import { AQUACARE_COLORS } from '@/constants/colors';
 
 type RouteParams = {
   ProductDetail: {
@@ -104,7 +104,7 @@ export default function ProductDetailScreen() {
         onPress={() => navigation.setParams({ productId: similarProduct.id } as never)}
       >
         <View className="w-full h-24 bg-white rounded-lg items-center justify-center mb-2">
-          <Ionicons name="cube-outline" size={32} color={MAVECAM_COLORS.GREEN_PRIMARY} />
+          <Ionicons name="cube-outline" size={32} color={AQUACARE_COLORS.GREEN_PRIMARY} />
         </View>
         <Text className="text-[10px] text-gray-light font-semibold mb-1">
           {similarProduct.brand.toUpperCase()}
@@ -112,7 +112,7 @@ export default function ProductDetailScreen() {
         <Text className="text-sm text-gray-dark font-semibold mb-2 min-h-[36px]" numberOfLines={2}>
           {similarProduct.name}
         </Text>
-        <Text className="text-sm font-bold text-mavecam-primary">
+        <Text className="text-sm font-bold text-aquacare-primary">
           {parseFloat(similarProduct.price_per_package).toLocaleString()} FCFA
         </Text>
       </TouchableOpacity>
@@ -125,13 +125,13 @@ export default function ProductDetailScreen() {
       <View className="flex-1 bg-cream">
         <View className="bg-white px-5 pt-16 pb-5 flex-row items-center justify-between shadow">
           <TouchableOpacity onPress={() => navigation.goBack()} className="w-10">
-            <Ionicons name="arrow-back" size={24} color={MAVECAM_COLORS.GRAY_DARK} />
+            <Ionicons name="arrow-back" size={24} color={AQUACARE_COLORS.GRAY_DARK} />
           </TouchableOpacity>
           <Text className="text-lg font-bold text-gray-dark">{t('productDetails')}</Text>
           <View className="w-10" />
         </View>
         <View className="flex-1 items-center justify-center">
-          <ActivityIndicator size="large" color={MAVECAM_COLORS.GREEN_PRIMARY} />
+          <ActivityIndicator size="large" color={AQUACARE_COLORS.GREEN_PRIMARY} />
           <Text className="mt-3 text-base text-gray-light">{t('loading')}</Text>
         </View>
       </View>
@@ -146,11 +146,11 @@ export default function ProductDetailScreen() {
     <View className="flex-1 bg-cream">
       <View className="bg-white px-5 pt-16 pb-5 flex-row items-center justify-between shadow">
         <TouchableOpacity onPress={() => navigation.goBack()} className="w-10">
-          <Ionicons name="arrow-back" size={24} color={MAVECAM_COLORS.GRAY_DARK} />
+          <Ionicons name="arrow-back" size={24} color={AQUACARE_COLORS.GRAY_DARK} />
         </TouchableOpacity>
         <Text className="text-lg font-bold text-gray-dark">{t('productDetails')}</Text>
         <TouchableOpacity onPress={() => navigation.navigate('Cart' as never)} className="relative">
-          <Ionicons name="cart-outline" size={24} color={MAVECAM_COLORS.GREEN_PRIMARY} />
+          <Ionicons name="cart-outline" size={24} color={AQUACARE_COLORS.GREEN_PRIMARY} />
           {cartItemsCount > 0 && (
             <View className="absolute -top-2 -right-2 bg-[#dc2626] rounded-full min-w-[20px] h-5 justify-center items-center px-1">
               <Text className="text-white text-[10px] font-bold">{cartItemsCount}</Text>
@@ -162,7 +162,7 @@ export default function ProductDetailScreen() {
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
         <View className="bg-white items-center py-10">
           <View className="w-48 h-48 bg-cream rounded-full items-center justify-center">
-            <Ionicons name="cube" size={80} color={MAVECAM_COLORS.GREEN_PRIMARY} />
+            <Ionicons name="cube" size={80} color={AQUACARE_COLORS.GREEN_PRIMARY} />
           </View>
         </View>
 
@@ -172,16 +172,16 @@ export default function ProductDetailScreen() {
 
           <View className="flex-row flex-wrap gap-2 mb-5">
             <View className="flex-row items-center bg-cream px-3 py-2 rounded-xl gap-2">
-              <Ionicons name="fish" size={16} color={MAVECAM_COLORS.GREEN_PRIMARY} />
+              <Ionicons name="fish" size={16} color={AQUACARE_COLORS.GREEN_PRIMARY} />
               <Text className="text-sm text-gray-dark font-semibold">{t(product.species)}</Text>
             </View>
             <View className="flex-row items-center bg-cream px-3 py-2 rounded-xl gap-2">
-              <Ionicons name="resize" size={16} color={MAVECAM_COLORS.GREEN_PRIMARY} />
+              <Ionicons name="resize" size={16} color={AQUACARE_COLORS.GREEN_PRIMARY} />
               <Text className="text-sm text-gray-dark font-semibold">{product.pellet_size_mm}mm</Text>
             </View>
             {product.phase && (
               <View className="flex-row items-center bg-cream px-3 py-2 rounded-xl gap-2">
-                <Ionicons name="water" size={16} color={MAVECAM_COLORS.GREEN_PRIMARY} />
+                <Ionicons name="water" size={16} color={AQUACARE_COLORS.GREEN_PRIMARY} />
                 <Text className="text-sm text-gray-dark font-semibold">{t(product.phase)}</Text>
               </View>
             )}
@@ -189,7 +189,7 @@ export default function ProductDetailScreen() {
 
           <View className="pt-4 border-t border-[#f1f5f9]">
             <Text className="text-sm text-gray-light mb-1">{t('pricePerBag')}</Text>
-            <Text className="text-3xl font-bold text-mavecam-primary mb-1">
+            <Text className="text-3xl font-bold text-aquacare-primary mb-1">
               {pricePerPackage.toLocaleString()} FCFA
             </Text>
             <Text className="text-sm text-gray-light">
@@ -203,15 +203,15 @@ export default function ProductDetailScreen() {
             <Text className="text-lg font-bold text-gray-dark mb-4">{t('nutritionalComposition')}</Text>
             <View className="flex-row gap-4">
               <View className="flex-1 bg-cream rounded-xl p-5 items-center">
-                <Ionicons name="nutrition" size={24} color={MAVECAM_COLORS.GREEN_PRIMARY} />
-                <Text className="text-2xl font-bold text-mavecam-primary mt-2">
+                <Ionicons name="nutrition" size={24} color={AQUACARE_COLORS.GREEN_PRIMARY} />
+                <Text className="text-2xl font-bold text-aquacare-primary mt-2">
                   {product.protein_percentage}%
                 </Text>
                 <Text className="text-xs text-gray-light mt-1">{t('protein')}</Text>
               </View>
               <View className="flex-1 bg-cream rounded-xl p-5 items-center">
-                <Ionicons name="water" size={24} color={MAVECAM_COLORS.GREEN_PRIMARY} />
-                <Text className="text-2xl font-bold text-mavecam-primary mt-2">
+                <Ionicons name="water" size={24} color={AQUACARE_COLORS.GREEN_PRIMARY} />
+                <Text className="text-2xl font-bold text-aquacare-primary mt-2">
                   {product.lipid_percentage}%
                 </Text>
                 <Text className="text-xs text-gray-light mt-1">{t('lipids')}</Text>
@@ -225,7 +225,7 @@ export default function ProductDetailScreen() {
           <View className="flex-row items-center justify-center gap-5 mb-4">
             <TouchableOpacity
               className={`w-12 h-12 rounded-full items-center justify-center ${
-                quantity === 1 ? 'bg-cream' : 'bg-mavecam-primary'
+                quantity === 1 ? 'bg-cream' : 'bg-aquacare-primary'
               }`}
               onPress={handleDecrement}
               disabled={quantity === 1}
@@ -233,7 +233,7 @@ export default function ProductDetailScreen() {
               <Ionicons
                 name="remove"
                 size={24}
-                color={quantity === 1 ? MAVECAM_COLORS.GRAY_LIGHT : MAVECAM_COLORS.WHITE}
+                color={quantity === 1 ? AQUACARE_COLORS.GRAY_LIGHT : AQUACARE_COLORS.WHITE}
               />
             </TouchableOpacity>
             <View className="items-center min-w-[80px]">
@@ -243,14 +243,14 @@ export default function ProductDetailScreen() {
               </Text>
             </View>
             <TouchableOpacity
-              className="w-12 h-12 rounded-full items-center justify-center bg-mavecam-primary"
+              className="w-12 h-12 rounded-full items-center justify-center bg-aquacare-primary"
               onPress={handleIncrement}
             >
-              <Ionicons name="add" size={24} color={MAVECAM_COLORS.WHITE} />
+              <Ionicons name="add" size={24} color={AQUACARE_COLORS.WHITE} />
             </TouchableOpacity>
           </View>
           <Text className="text-sm text-gray-light text-center mb-1">{t('total')}</Text>
-          <Text className="text-2xl font-bold text-mavecam-primary text-center">
+          <Text className="text-2xl font-bold text-aquacare-primary text-center">
             {totalPrice.toLocaleString()} FCFA
           </Text>
         </View>
@@ -272,10 +272,10 @@ export default function ProductDetailScreen() {
       {product.is_available && (
         <View className="absolute bottom-0 left-0 right-0 bg-white p-4 shadow">
           <TouchableOpacity
-            className="bg-mavecam-primary flex-row items-center justify-center py-4 rounded-lg gap-3"
+            className="bg-aquacare-primary flex-row items-center justify-center py-4 rounded-lg gap-3"
             onPress={handleAddToCart}
           >
-            <Ionicons name="cart" size={24} color={MAVECAM_COLORS.WHITE} />
+            <Ionicons name="cart" size={24} color={AQUACARE_COLORS.WHITE} />
             <Text className="text-white text-lg font-bold">{t('addToCart')}</Text>
           </TouchableOpacity>
         </View>

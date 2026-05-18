@@ -7,6 +7,8 @@ from typing import Any
 from accounts.models import FarmProfile, User
 from django.db import transaction
 
+from .farm_setup_service import FarmSetupService
+
 
 class AccountRegistrationService:
     """Use case explicite de creation d'un compte pisciculteur AquaCare."""
@@ -20,15 +22,13 @@ class AccountRegistrationService:
 
     @staticmethod
     def _create_default_farm_profile(user: User) -> FarmProfile:
-        from aquaculture.models import FarmProductionPlan
-
         farm_profile = FarmProfile(
             user=user,
             farm_name=AccountRegistrationService._build_default_farm_name(user),
             certification_status="pending",
         )
         farm_profile.save(validate=False)
-        FarmProductionPlan.objects.create(farm_profile=farm_profile)
+        FarmSetupService.ensure_plan_exists(farm_profile)
         user.farm_profile = farm_profile
         return farm_profile
 

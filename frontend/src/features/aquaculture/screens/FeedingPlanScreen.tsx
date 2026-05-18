@@ -7,12 +7,14 @@ import { useDispatch, useSelector } from 'react-redux';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
 import { ProductionCycle, FeedingPlan } from '@/types/aquaculture';
 import { RootStackParamList } from '@/navigation/MainNavigator';
-import { MAVECAM_COLORS } from '@/constants/colors';
+import { AQUACARE_COLORS } from '@/constants/colors';
 import { formatNumber, formatPercentage } from '@/utils';
 import logger from '@/utils/logger';
 import { useLocalFeedingAlarms } from '@/features/notifications/hooks/useLocalFeedingAlarms';
 import { AppDispatch, RootState } from '@/store/store';
 import { setCurrentCycle } from '@/features/aquaculture/store/aquacultureSlice';
+import { parseApiError } from '@/utils/errorParser';
+import { formatAquacultureErrorWithAction } from '@/features/aquaculture/utils/aquacultureErrorPresenter';
 
 type FeedingPlanScreenNavigationProp = StackNavigationProp<RootStackParamList, 'FeedingPlan'>;
 
@@ -92,8 +94,9 @@ export default function FeedingPlanScreen({ navigation }: FeedingPlanScreenProps
         setSelectedCycle(null);
         setFeedingPlans([]);
       }
-    } catch {
-      setError(t('feedingPlansLoadError'));
+    } catch (error: unknown) {
+      logger.error("Erreur chargement plans d'alimentation:", error);
+      setError(formatAquacultureErrorWithAction(parseApiError(error), t));
     } finally {
       setLoading(false);
     }
@@ -173,7 +176,10 @@ export default function FeedingPlanScreen({ navigation }: FeedingPlanScreenProps
             Alert.alert(t('success'), t('feedingPlanGenerated'));
           } catch (error: unknown) {
             logger.error('Erreur generation plan:', error);
-            Alert.alert(t('error'), t('feedingPlanGenerationError'));
+            Alert.alert(
+              t('error'),
+              formatAquacultureErrorWithAction(parseApiError(error), t)
+            );
           } finally {
             setGeneratingPlan(false);
           }
@@ -190,9 +196,9 @@ export default function FeedingPlanScreen({ navigation }: FeedingPlanScreenProps
   }, [selectedCycle, feedingPlans, alarmsReady, syncAlarmsForCurrentCycle]);
 
   const renderHeader = () => (
-    <View className="bg-mavecam-primary flex-row items-center pt-14 pb-4 px-4">
+    <View className="bg-aquacare-primary flex-row items-center pt-14 pb-4 px-4">
       <TouchableOpacity className="mr-4" onPress={() => navigation.goBack()}>
-        <Ionicons name="arrow-back" size={24} color={MAVECAM_COLORS.WHITE} />
+        <Ionicons name="arrow-back" size={24} color={AQUACARE_COLORS.WHITE} />
       </TouchableOpacity>
       <Text className="text-xl font-bold text-white flex-1">{t('feedingPlan')}</Text>
     </View>
@@ -203,7 +209,7 @@ export default function FeedingPlanScreen({ navigation }: FeedingPlanScreenProps
       <View className="flex-1 bg-cream">
         {renderHeader()}
         <View className="flex-1 items-center justify-center p-10">
-          <ActivityIndicator size="large" color={MAVECAM_COLORS.GREEN_PRIMARY} />
+          <ActivityIndicator size="large" color={AQUACARE_COLORS.GREEN_PRIMARY} />
           <Text className="text-base text-gray-light mt-3">{t('loading')}</Text>
         </View>
       </View>
@@ -216,11 +222,11 @@ export default function FeedingPlanScreen({ navigation }: FeedingPlanScreenProps
         {renderHeader()}
         <ScrollView refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
           <View className="flex-1 items-center justify-center py-20 px-6">
-            <Ionicons name="restaurant-outline" size={64} color={MAVECAM_COLORS.GRAY_LIGHT} />
+            <Ionicons name="restaurant-outline" size={64} color={AQUACARE_COLORS.GRAY_LIGHT} />
             <Text className="text-xl font-bold text-gray-dark mt-4 mb-2 text-center">{t('noActiveCycles')}</Text>
             <Text className="text-sm text-gray-light text-center mb-6">{t('createCycleToGeneratePlan')}</Text>
             <TouchableOpacity
-              className="bg-mavecam-primary px-6 py-3 rounded-lg"
+              className="bg-aquacare-primary px-6 py-3 rounded-lg"
               onPress={() => navigation.navigate('NewCycle')}
             >
               <Text className="text-white text-base font-semibold">{t('newCycle')}</Text>
@@ -237,7 +243,7 @@ export default function FeedingPlanScreen({ navigation }: FeedingPlanScreenProps
 
       <ScrollView refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
         <View className="mx-4 mt-4 mb-3 flex-row items-start bg-[#ecfdf5] rounded-xl p-4 gap-3">
-          <Ionicons name="information-circle-outline" size={20} color={MAVECAM_COLORS.GREEN_PRIMARY} style={{ marginTop: 1 }} />
+          <Ionicons name="information-circle-outline" size={20} color={AQUACARE_COLORS.GREEN_PRIMARY} style={{ marginTop: 1 }} />
           <Text className="flex-1 text-sm text-[#065f46] leading-5">
             {t('feedingPlanScreenDescription')}
           </Text>
@@ -263,16 +269,16 @@ export default function FeedingPlanScreen({ navigation }: FeedingPlanScreenProps
                   size={16}
                   color={
                     alarmStatus === 'active'
-                      ? MAVECAM_COLORS.GREEN_PRIMARY
+                      ? AQUACARE_COLORS.GREEN_PRIMARY
                       : alarmStatus === 'permission_denied'
                         ? '#dc2626'
-                        : MAVECAM_COLORS.GRAY_LIGHT
+                        : AQUACARE_COLORS.GRAY_LIGHT
                   }
                 />
                 <Text
                   className={`text-xs font-semibold ml-2 ${
                     alarmStatus === 'active'
-                      ? 'text-mavecam-primary'
+                      ? 'text-aquacare-primary'
                       : alarmStatus === 'permission_denied'
                         ? 'text-[#b91c1c]'
                         : 'text-gray-light'
@@ -284,16 +290,16 @@ export default function FeedingPlanScreen({ navigation }: FeedingPlanScreenProps
               </View>
 
               <TouchableOpacity
-                className={`flex-row items-center justify-center px-4 py-2 rounded-lg bg-mavecam-primary min-w-[124px] ${
+                className={`flex-row items-center justify-center px-4 py-2 rounded-lg bg-aquacare-primary min-w-[124px] ${
                   generatingPlan ? 'opacity-60' : ''
                 }`}
                 onPress={generateFeedingPlan}
                 disabled={generatingPlan}
               >
                 {generatingPlan ? (
-                  <ActivityIndicator size="small" color={MAVECAM_COLORS.WHITE} />
+                  <ActivityIndicator size="small" color={AQUACARE_COLORS.WHITE} />
                 ) : (
-                  <Ionicons name="refresh" size={16} color={MAVECAM_COLORS.WHITE} />
+                  <Ionicons name="refresh" size={16} color={AQUACARE_COLORS.WHITE} />
                 )}
                 <Text className="text-white text-sm font-semibold ml-2">
                   {generatingPlan ? t('generating') : t('generatePlan')}
@@ -317,7 +323,7 @@ export default function FeedingPlanScreen({ navigation }: FeedingPlanScreenProps
               <Text
                 className={`text-xs ${
                   alarmStatus === 'active'
-                    ? 'text-mavecam-primary'
+                    ? 'text-aquacare-primary'
                     : alarmStatus === 'permission_denied'
                       ? 'text-[#b91c1c]'
                       : alarmStatus === 'error'
@@ -332,13 +338,13 @@ export default function FeedingPlanScreen({ navigation }: FeedingPlanScreenProps
 
           {feedingPlans.length === 0 ? (
             <View className="items-center py-10">
-              <Ionicons name="restaurant-outline" size={48} color={MAVECAM_COLORS.GRAY_LIGHT} />
+              <Ionicons name="restaurant-outline" size={48} color={AQUACARE_COLORS.GRAY_LIGHT} />
               <Text className="text-base font-bold text-gray-dark mt-3">{t('noFeedingPlans')}</Text>
               <Text className="text-sm text-gray-light text-center mt-1">{t('generateFirstPlan')}</Text>
             </View>
           ) : (
             feedingPlans.map((plan) => (
-              <View key={plan.id} className="bg-cream rounded-lg p-4 mb-3 border-l-4 border-l-mavecam-primary">
+              <View key={plan.id} className="bg-cream rounded-lg p-4 mb-3 border-l-4 border-l-aquacare-primary">
                 <View className="flex-row justify-between items-center mb-3">
                   <Text className="text-base font-bold text-gray-dark">
                     {t('week')} {plan.week_number}

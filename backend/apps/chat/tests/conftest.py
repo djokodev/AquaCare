@@ -12,7 +12,7 @@ from tests.conftest import (  # noqa: F401
     api_client,
     auth_client,
     authenticated_user,
-    mavecam_admin,
+    aquacare_admin,
     user_factory,
 )
 

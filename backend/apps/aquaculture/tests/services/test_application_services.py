@@ -45,6 +45,60 @@ class TestCycleLogApplicationService:
         assert result.log.id == existing_log.id
         assert existing_log.mortality_count == 5
 
+    def test_update_log_triggers_analytics_and_cache_invalidation(
+        self,
+        authenticated_user,
+        production_cycle,
+    ):
+        log = CycleLog.objects.create(
+            cycle=production_cycle,
+            log_date=date.today(),
+            mortality_count=1,
+        )
+
+        with patch(
+            "aquaculture.services.log_application_service.AnalyticsService.update_cycle_metrics_data"
+        ) as mock_update_metrics, patch(
+            "aquaculture.tasks.invalidate_dashboard_cache"
+        ) as mock_invalidate_cache:
+            updated = CycleLogApplicationService.update_log(
+                user=authenticated_user,
+                log=log,
+                validated_data={"mortality_count": 3},
+            )
+
+        assert updated.mortality_count == 3
+        mock_update_metrics.assert_called_once_with(production_cycle)
+        mock_invalidate_cache.assert_called_once_with(str(authenticated_user.id))
+
+    def test_create_bulk_logs_triggers_analytics_and_cache_invalidation(
+        self,
+        authenticated_user,
+        production_cycle,
+    ):
+        logs_payload = [
+            {
+                "cycle": production_cycle,
+                "log_date": date.today(),
+                "mortality_count": 1,
+                "created_offline": True,
+            }
+        ]
+
+        with patch(
+            "aquaculture.services.log_application_service.AnalyticsService.update_cycle_metrics_data"
+        ) as mock_update_metrics, patch(
+            "aquaculture.tasks.invalidate_dashboard_cache"
+        ) as mock_invalidate_cache:
+            result = CycleLogApplicationService.create_bulk_logs(
+                user=authenticated_user,
+                logs_data=logs_payload,
+            )
+
+        assert result["created"] == 1
+        mock_update_metrics.assert_called_once_with(production_cycle)
+        mock_invalidate_cache.assert_called_once_with(str(authenticated_user.id))
+
 
 @pytest.mark.django_db
 class TestFeedingPlanApplicationService:

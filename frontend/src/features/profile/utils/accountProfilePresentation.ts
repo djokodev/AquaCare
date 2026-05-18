@@ -2,7 +2,7 @@ import type { TFunction } from 'i18next';
 import type { ComponentProps } from 'react';
 import type { Ionicons } from '@expo/vector-icons';
 
-import { MAVECAM_COLORS } from '@/constants/colors';
+import { AQUACARE_COLORS } from '@/constants/colors';
 import type { FarmProfile } from '@/features/profile/types/profile';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
@@ -29,31 +29,31 @@ export const getCertificationPresentation = (
   switch (farmProfile?.certification_status) {
     case 'certified':
       return {
-        color: MAVECAM_COLORS.GREEN_PRIMARY,
+        color: AQUACARE_COLORS.GREEN_PRIMARY,
         icon: 'checkmark-circle',
         text: t('farmCertified'),
       };
     case 'pending':
       return {
-        color: MAVECAM_COLORS.WARNING,
+        color: AQUACARE_COLORS.WARNING,
         icon: 'time',
         text: t('certificationPending'),
       };
     case 'suspended':
       return {
-        color: MAVECAM_COLORS.ERROR,
+        color: AQUACARE_COLORS.ERROR,
         icon: 'pause-circle',
         text: t('certificationSuspended'),
       };
     case 'rejected':
       return {
-        color: MAVECAM_COLORS.GRAY_LIGHT,
+        color: AQUACARE_COLORS.GRAY_LIGHT,
         icon: 'close-circle',
         text: t('certificationRejected'),
       };
     default:
       return {
-        color: MAVECAM_COLORS.GRAY_LIGHT,
+        color: AQUACARE_COLORS.GRAY_LIGHT,
         icon: 'help-circle',
         text: farmProfile ? t('statusUnknown') : t('noFarmProfile'),
       };

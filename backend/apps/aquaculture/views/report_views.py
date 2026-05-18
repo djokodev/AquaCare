@@ -31,69 +31,10 @@ from ..services import (
     ReportDownloadDecision,
     WhatsAppShareCommand,
 )
-from ..throttles import AquacultureReportActionThrottle
+from ..throttles import AquacultureReportActionThrottle, AquacultureReportDownloadThrottle
 
 logger = logging.getLogger(__name__)
 
-
-@extend_schema_view(
-    list=extend_schema(
-        summary="Lister les notifications",
-        description="""
-        Retourne les notifications de l'utilisateur triées par date.
-        Inclut rappels d'alimentation, alertes sanitaires et recommandations.
-        """,
-        parameters=[
-            OpenApiParameter(
-                name='is_read',
-                type=OpenApiTypes.BOOL,
-                location=OpenApiParameter.QUERY,
-                description='Filtrer par statut de lecture'
-            ),
-            OpenApiParameter(
-                name='notification_type',
-                type=OpenApiTypes.STR,
-                location=OpenApiParameter.QUERY,
-                description='Type de notification',
-                enum=['feeding_reminder', 'sanitary_alert', 'growth_alert', 'system_update']
-            ),
-        ],
-        examples=[
-            OpenApiExample(
-                'Notifications récentes',
-                value={
-                    'count': 8,
-                    'results': [
-                        {
-                            'id': 'notif-001',
-                            'notification_type': 'feeding_reminder',
-                            'title': 'Rappel alimentation',
-                            'message': 'Donnez 2.85 kg d\'aliment ce matin - Bassin A1',
-                            'is_read': False,
-                            'scheduled_for': '2025-08-20T07:00:00Z'
-                        }
-                    ]
-                }
-            )
-        ]
-    ),
-    create=extend_schema(
-        summary="Créer une notification",
-        description="Crée une notification personnalisée ou programmée.",
-        examples=[
-            OpenApiExample(
-                'Nouvelle notification',
-                value={
-                    'notification_type': 'feeding_reminder',
-                    'title': 'Rappel alimentation',
-                    'message': 'Il est temps de nourrir les poissons',
-                    'cycle': '456e7890-e89b-12d3-a456-426614174001',
-                    'scheduled_for': '2025-08-20T07:00:00Z'
-                }
-            )
-        ]
-    )
-)
 
 @extend_schema_view(
     list=extend_schema(
@@ -329,7 +270,7 @@ class ProductionReportViewSet(viewsets.ReadOnlyModelViewSet):
         description="Retourne le fichier PDF du rapport.",
         responses={200: OpenApiTypes.BINARY},
     )
-    @action(detail=True, methods=['get'], throttle_classes=[])
+    @action(detail=True, methods=['get'], throttle_classes=[AquacultureReportDownloadThrottle])
     def download(self, request: Request, pk: str | None = None):
         report = self.get_object()
         decision: ReportDownloadDecision = ReportApplicationService.prepare_report_download(report)

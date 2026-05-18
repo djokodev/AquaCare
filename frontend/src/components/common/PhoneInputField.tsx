@@ -40,7 +40,7 @@ export default function PhoneInputField({
       >
         <View className="h-10 justify-center mr-2">
           <Text
-            className="text-base font-semibold text-mavecam-primary"
+            className="text-base font-semibold text-aquacare-primary"
             style={{ lineHeight: 20, marginVertical: 0, paddingVertical: 0 }}
           >
             +237

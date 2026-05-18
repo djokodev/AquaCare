@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
-import { MAVECAM_COLORS } from '@/constants/colors';
+import { AQUACARE_COLORS } from '@/constants/colors';
 
 /**
  * Props pour le composant QuickActionsPreview
@@ -82,7 +82,7 @@ export default function QuickActionsPreview({
       // Si cycles actifs → prioriser saisie quotidienne
       actions.push({
         icon: 'create',
-        color: MAVECAM_COLORS.GREEN_LIGHT,
+        color: AQUACARE_COLORS.GREEN_LIGHT,
         label: t('dailyLog'),
         route: 'DailyLog',
       });
@@ -90,7 +90,7 @@ export default function QuickActionsPreview({
       // Si aucun cycle → prioriser création
       actions.push({
         icon: 'add-circle',
-        color: MAVECAM_COLORS.GREEN_PRIMARY,
+        color: AQUACARE_COLORS.GREEN_PRIMARY,
         label: t('newCycle'),
         route: 'NewCycle',
       });
@@ -99,7 +99,7 @@ export default function QuickActionsPreview({
     // Suggestion 2 : Toujours suggérer catalogue commerce
     actions.push({
       icon: 'storefront-outline',
-      color: MAVECAM_COLORS.GREEN_PRIMARY,
+      color: AQUACARE_COLORS.GREEN_PRIMARY,
       label: t('productCatalog'),
       route: 'ProductCatalog',
     });
@@ -108,14 +108,14 @@ export default function QuickActionsPreview({
     if (unreadCount > 0) {
       actions.push({
         icon: 'notifications-outline',
-        color: MAVECAM_COLORS.WARNING,
+        color: AQUACARE_COLORS.WARNING,
         label: `${t('notifications')} (${unreadCount})`,
         route: 'Notifications',
       });
     } else {
       actions.push({
         icon: 'restaurant-outline',
-        color: MAVECAM_COLORS.INFO,
+        color: AQUACARE_COLORS.INFO,
         label: t('feedingPlan'),
         route: 'FeedingPlan',
       });
@@ -146,7 +146,7 @@ export default function QuickActionsPreview({
             <Text className="text-base font-medium text-gray-dark ml-3 flex-1">
               {action.label}
             </Text>
-            <Ionicons name="chevron-forward" size={20} color={MAVECAM_COLORS.GRAY_LIGHT} />
+            <Ionicons name="chevron-forward" size={20} color={AQUACARE_COLORS.GRAY_LIGHT} />
           </TouchableOpacity>
         ))}
 
@@ -156,10 +156,10 @@ export default function QuickActionsPreview({
           onPress={onOpenSheet}
           activeOpacity={0.7}
         >
-          <Text className="text-base font-semibold text-mavecam-primary mr-2">
+          <Text className="text-base font-semibold text-aquacare-primary mr-2">
             {t('viewAllActions')}
           </Text>
-          <Ionicons name="chevron-down" size={20} color={MAVECAM_COLORS.GREEN_PRIMARY} />
+          <Ionicons name="chevron-down" size={20} color={AQUACARE_COLORS.GREEN_PRIMARY} />
         </TouchableOpacity>
       </View>
     </View>

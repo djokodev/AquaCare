@@ -42,7 +42,7 @@ FROM python:3.12-slim
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    DJANGO_SETTINGS_MODULE=mavecam_api.settings.production
+    DJANGO_SETTINGS_MODULE=aquacare_api.settings.production
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \

@@ -81,7 +81,7 @@ MIDDLEWARE = [
     "accounts.middleware.APIResponseLanguageMiddleware",
 ]
 
-ROOT_URLCONF = "mavecam_api.urls"
+ROOT_URLCONF = "aquacare_api.urls"
 
 TEMPLATES = [
     {
@@ -99,7 +99,7 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = "mavecam_api.wsgi.application"
+WSGI_APPLICATION = "aquacare_api.wsgi.application"
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
@@ -174,6 +174,7 @@ REST_FRAMEWORK = {
         "notifications_push_token": "30/hour",
         "aquaculture_sync": "30/hour",
         "aquaculture_report_action": "20/hour",
+        "aquaculture_report_download": "60/hour",
         "aquaculture_sanitary_action": "30/hour",
     },
 }

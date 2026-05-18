@@ -3,7 +3,7 @@ import { View, Text, ScrollView, TouchableOpacity, TextInput, Alert, Modal } fro
 import { useTranslation } from "react-i18next";
 import { Ionicons } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
-import { MAVECAM_COLORS } from "@/constants/colors";
+import { AQUACARE_COLORS } from "@/constants/colors";
 import { ProfileStackParamList } from "@/navigation/MainNavigator";
 import { useAuth } from "@/hooks/useAuth";
 import { useSelector, useDispatch } from "react-redux";
@@ -105,7 +105,7 @@ export default function ProfileScreen({ navigation }: Props) {
     return (
       <View className="flex-1 items-center justify-center bg-cream px-6">
         <Text className="text-error text-center">{t("error")}: {getAccountErrorMessage(error, t)}</Text>
-        <TouchableOpacity className="bg-mavecam-primary px-6 py-3 rounded-lg mt-5" onPress={() => loadProfile()}>
+        <TouchableOpacity className="bg-aquacare-primary px-6 py-3 rounded-lg mt-5" onPress={() => loadProfile()}>
           <Text className="text-white font-semibold text-base">{t("retry")}</Text>
         </TouchableOpacity>
       </View>
@@ -114,15 +114,15 @@ export default function ProfileScreen({ navigation }: Props) {
 
   return (
     <ScrollView className="flex-1 bg-cream">
-      <View className="bg-mavecam-primary items-center pt-14 pb-6 px-5">
+      <View className="bg-aquacare-primary items-center pt-14 pb-6 px-5">
         <View className="w-20 h-20 rounded-full bg-green-dark items-center justify-center mb-3">
-          <Ionicons name="person" size={32} color={MAVECAM_COLORS.WHITE} />
+          <Ionicons name="person" size={32} color={AQUACARE_COLORS.WHITE} />
         </View>
         <Text className="text-2xl font-bold text-white text-center mb-1">{displayName}</Text>
         <Text className="text-base text-white/80 mb-3">{isIndividual ? t("individualAccount") : t("companyAccount")}</Text>
         {farmProfile && (
           <View className="flex-row items-center px-3 py-2 rounded-full" style={{ backgroundColor: certification.color }}>
-            <Ionicons name={certification.icon} size={16} color={MAVECAM_COLORS.WHITE} />
+            <Ionicons name={certification.icon} size={16} color={AQUACARE_COLORS.WHITE} />
             <Text className="text-sm font-semibold text-white ml-2">{certification.text}</Text>
           </View>
         )}
@@ -132,7 +132,7 @@ export default function ProfileScreen({ navigation }: Props) {
         <View className="flex-row justify-between items-center mb-4">
           <Text className="text-lg font-bold text-gray-dark">{isIndividual ? t("personalInfo") : t("companyInfo")}</Text>
           <TouchableOpacity onPress={() => setIsEditing(!isEditing)} className="p-2">
-            <Ionicons name={isEditing ? "close" : "pencil"} size={20} color={MAVECAM_COLORS.GREEN_PRIMARY} />
+            <Ionicons name={isEditing ? "close" : "pencil"} size={20} color={AQUACARE_COLORS.GREEN_PRIMARY} />
           </TouchableOpacity>
         </View>
         <View className="bg-white rounded-xl p-4">
@@ -181,7 +181,7 @@ export default function ProfileScreen({ navigation }: Props) {
           {isEditing ? (
             <TouchableOpacity
               className={`flex-row items-center justify-between px-4 py-3 mt-3 rounded-xl border ${
-                editData.intervention_zone ? "border-mavecam-primary bg-[#f0fdf4]" : "border-gray-200 bg-white"
+                editData.intervention_zone ? "border-aquacare-primary bg-[#f0fdf4]" : "border-gray-200 bg-white"
               }`}
               onPress={() => setShowInterventionZoneModal(true)}
             >
@@ -193,7 +193,7 @@ export default function ProfileScreen({ navigation }: Props) {
                     : t("selectInterventionZone")}
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={16} color={MAVECAM_COLORS.GRAY_LIGHT} />
+              <Ionicons name="chevron-forward" size={16} color={AQUACARE_COLORS.GRAY_LIGHT} />
             </TouchableOpacity>
           ) : (
             <InfoRow
@@ -262,7 +262,7 @@ export default function ProfileScreen({ navigation }: Props) {
       {isEditing && (
         <View className="px-5 pb-4">
           <TouchableOpacity
-            className={`py-4 rounded-lg items-center ${isSaving ? "bg-mavecam-primary/70" : "bg-mavecam-primary"}`}
+            className={`py-4 rounded-lg items-center ${isSaving ? "bg-aquacare-primary/70" : "bg-aquacare-primary"}`}
             onPress={handleSave}
             disabled={isSaving}
           >
@@ -273,19 +273,19 @@ export default function ProfileScreen({ navigation }: Props) {
 
       <View className="px-5 pb-8">
         <TouchableOpacity className="bg-white flex-row items-center p-4 rounded-xl mb-3" onPress={() => navigation.navigate("FarmProfile")}>
-          <Ionicons name="analytics" size={20} color={MAVECAM_COLORS.GREEN_PRIMARY} />
+          <Ionicons name="analytics" size={20} color={AQUACARE_COLORS.GREEN_PRIMARY} />
           <Text className="text-base font-semibold text-gray-dark flex-1 ml-3">{t("farmManagement")}</Text>
-          <Ionicons name="chevron-forward" size={20} color={MAVECAM_COLORS.GRAY_LIGHT} />
+          <Ionicons name="chevron-forward" size={20} color={AQUACARE_COLORS.GRAY_LIGHT} />
         </TouchableOpacity>
 
         <TouchableOpacity className="bg-white flex-row items-center p-4 rounded-xl mb-3" onPress={() => navigation.navigate("Settings")}>
-          <Ionicons name="settings" size={20} color={MAVECAM_COLORS.GREEN_PRIMARY} />
+          <Ionicons name="settings" size={20} color={AQUACARE_COLORS.GREEN_PRIMARY} />
           <Text className="text-base font-semibold text-gray-dark flex-1 ml-3">{t("settings")}</Text>
-          <Ionicons name="chevron-forward" size={20} color={MAVECAM_COLORS.GRAY_LIGHT} />
+          <Ionicons name="chevron-forward" size={20} color={AQUACARE_COLORS.GRAY_LIGHT} />
         </TouchableOpacity>
 
         <TouchableOpacity className="bg-error flex-row items-center justify-center p-4 rounded-xl" onPress={handleLogout}>
-          <Ionicons name="log-out" size={20} color={MAVECAM_COLORS.WHITE} />
+          <Ionicons name="log-out" size={20} color={AQUACARE_COLORS.WHITE} />
           <Text className="text-white text-base font-semibold ml-2">{t("disconnect")}</Text>
         </TouchableOpacity>
       </View>
@@ -301,7 +301,7 @@ export default function ProfileScreen({ navigation }: Props) {
             <View className="flex-row items-center justify-between px-5 py-4 border-b border-slate-100">
               <Text className="text-lg font-bold text-gray-dark">{t("selectInterventionZone")}</Text>
               <TouchableOpacity onPress={() => setShowInterventionZoneModal(false)} className="p-1">
-                <Ionicons name="close" size={24} color={MAVECAM_COLORS.GRAY_DARK} />
+                <Ionicons name="close" size={24} color={AQUACARE_COLORS.GRAY_DARK} />
               </TouchableOpacity>
             </View>
 
@@ -325,7 +325,7 @@ export default function ProfileScreen({ navigation }: Props) {
                     {t(zone.labelKey)}
                   </Text>
                   {editData.intervention_zone === zone.value && (
-                    <Ionicons name="checkmark" size={20} color={MAVECAM_COLORS.GREEN_PRIMARY} />
+                    <Ionicons name="checkmark" size={20} color={AQUACARE_COLORS.GREEN_PRIMARY} />
                   )}
                 </TouchableOpacity>
               ))}
@@ -363,7 +363,7 @@ function InfoRow({
   return (
     <View className="flex-row justify-between items-center py-3 border-b border-slate-100">
       <View className="flex-row items-center flex-1 mr-3">
-        {icon && <Ionicons name={icon} size={20} color={MAVECAM_COLORS.GRAY_LIGHT} />}
+        {icon && <Ionicons name={icon} size={20} color={AQUACARE_COLORS.GRAY_LIGHT} />}
         <Text className={`text-sm text-gray-light ${icon ? "ml-3" : ""} flex-1`}>{label}</Text>
       </View>
       {editable ? (

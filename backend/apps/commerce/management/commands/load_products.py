@@ -24,7 +24,7 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        self.stdout.write("Loading MAVECAM product catalog...")
+        self.stdout.write("Loading AquaCare product catalog...")
 
         # Clear existing products if requested
         if options.get('clear'):

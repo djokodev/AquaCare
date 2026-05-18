@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -17,11 +17,14 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 
 import { RootStackParamList } from '@/navigation/MainNavigator';
-import { MAVECAM_COLORS } from '@/constants/colors';
+import { AQUACARE_COLORS } from '@/constants/colors';
 import { STORAGE_KEYS } from '@/constants/api';
 import { ProductionReport } from '@/types/aquaculture';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
 import { formatDate } from '@/utils';
+import logger from '@/utils/logger';
+import { parseApiError } from '@/utils/errorParser';
+import { formatAquacultureErrorWithAction } from '@/features/aquaculture/utils/aquacultureErrorPresenter';
 
 type ReportDetailScreenNavigationProp = StackNavigationProp<RootStackParamList, 'ReportDetail'>;
 type ReportDetailScreenRouteProp = RouteProp<RootStackParamList, 'ReportDetail'>;
@@ -68,16 +71,13 @@ export default function ReportDetailScreen({ navigation, route }: ReportDetailSc
       setError(null);
       const data = await aquacultureService.getReport(reportId);
       setReport(data);
-    } catch {
-      setError(t('reportLoadError'));
+    } catch (error: unknown) {
+      logger.error('Erreur chargement detail rapport:', error);
+      setError(formatAquacultureErrorWithAction(parseApiError(error), t));
     } finally {
       setLoading(false);
     }
   }, [reportId, t]);
-
-  useEffect(() => {
-    loadReport();
-  }, [loadReport]);
 
   useFocusEffect(
     useCallback(() => {
@@ -96,8 +96,9 @@ export default function ReportDetailScreen({ navigation, route }: ReportDetailSc
       setActionLoading(actionKey);
       const updated = await fn();
       setReport(updated);
-    } catch {
-      Alert.alert(t('error'), t('reportActionError'));
+    } catch (error: unknown) {
+      logger.error(`Erreur action rapport ${actionKey}:`, error);
+      Alert.alert(t('error'), formatAquacultureErrorWithAction(parseApiError(error), t));
     } finally {
       setActionLoading(null);
     }
@@ -114,8 +115,9 @@ export default function ReportDetailScreen({ navigation, route }: ReportDetailSc
       const updated = await aquacultureService.sendReportEmail(report.id);
       setReport(updated);
       Alert.alert(t('emailQueued'), t('emailQueuedMessage'));
-    } catch {
-      Alert.alert(t('error'), t('reportActionError'));
+    } catch (error: unknown) {
+      logger.error('Erreur envoi email rapport:', error);
+      Alert.alert(t('error'), formatAquacultureErrorWithAction(parseApiError(error), t));
     } finally {
       setActionLoading(null);
     }
@@ -207,17 +209,18 @@ export default function ReportDetailScreen({ navigation, route }: ReportDetailSc
       });
       setReport(updated);
       Alert.alert(t('success'), t('reportWhatsAppMarked'));
-    } catch {
-      Alert.alert(t('error'), t('reportWhatsAppShareError'));
+    } catch (error: unknown) {
+      logger.error('Erreur partage WhatsApp rapport:', error);
+      Alert.alert(t('error'), formatAquacultureErrorWithAction(parseApiError(error), t));
     } finally {
       setActionLoading(null);
     }
   };
 
   const renderHeader = () => (
-    <View className="bg-mavecam-primary flex-row items-center pt-14 pb-4 px-4">
+    <View className="bg-aquacare-primary flex-row items-center pt-14 pb-4 px-4">
       <TouchableOpacity className="mr-4" onPress={() => navigation.goBack()}>
-        <Ionicons name="arrow-back" size={24} color={MAVECAM_COLORS.WHITE} />
+        <Ionicons name="arrow-back" size={24} color={AQUACARE_COLORS.WHITE} />
       </TouchableOpacity>
       <Text className="text-xl font-bold text-white">{t('reportDetailTitle')}</Text>
     </View>
@@ -272,7 +275,7 @@ export default function ReportDetailScreen({ navigation, route }: ReportDetailSc
                 ? formatDate(report?.period_start ?? '')
                 : `${formatDate(report?.period_start ?? '')} - ${formatDate(report?.period_end ?? '')}`}
             </Text>
-            <Text className={`text-xs font-semibold w-[48%] text-right ${report?.status === 'validated' ? 'text-mavecam-primary' : report?.status === 'pending' ? 'text-warning' : 'text-gray-light'}`}>
+            <Text className={`text-xs font-semibold w-[48%] text-right ${report?.status === 'validated' ? 'text-aquacare-primary' : report?.status === 'pending' ? 'text-warning' : 'text-gray-light'}`}>
               {report?.status === 'validated' ? t('reportStatusValidated') : report?.status === 'pending' ? t('reportStatusPending') : t('reportStatusDraft')}
             </Text>
           </View>
@@ -317,11 +320,11 @@ export default function ReportDetailScreen({ navigation, route }: ReportDetailSc
             disabled={Boolean(actionLoading)}
           >
             {actionLoading === 'regenerate' ? (
-              <ActivityIndicator color={MAVECAM_COLORS.GREEN_PRIMARY} />
+              <ActivityIndicator color={AQUACARE_COLORS.GREEN_PRIMARY} />
             ) : (
               <>
-                <Ionicons name="refresh-outline" size={18} color={MAVECAM_COLORS.GREEN_PRIMARY} />
-                <Text className="text-sm font-semibold text-mavecam-primary ml-2">{t('regenerateReport')}</Text>
+                <Ionicons name="refresh-outline" size={18} color={AQUACARE_COLORS.GREEN_PRIMARY} />
+                <Text className="text-sm font-semibold text-aquacare-primary ml-2">{t('regenerateReport')}</Text>
               </>
             )}
           </TouchableOpacity>
@@ -330,19 +333,19 @@ export default function ReportDetailScreen({ navigation, route }: ReportDetailSc
             className={`rounded-lg p-3 mb-2 flex-row items-center justify-center ${
               report?.status === 'validated'
                 ? 'bg-gray-100 border border-gray-200'
-                : 'bg-mavecam-primary'
+                : 'bg-aquacare-primary'
             }`}
             onPress={() => report && runAction('validate', () => aquacultureService.validateReport(report.id))}
             disabled={Boolean(actionLoading) || report?.status === 'validated'}
           >
             {actionLoading === 'validate' ? (
-              <ActivityIndicator color={report?.status === 'validated' ? MAVECAM_COLORS.GRAY_LIGHT : MAVECAM_COLORS.WHITE} />
+              <ActivityIndicator color={report?.status === 'validated' ? AQUACARE_COLORS.GRAY_LIGHT : AQUACARE_COLORS.WHITE} />
             ) : (
               <>
                 <Ionicons
                   name={report?.status === 'validated' ? 'checkmark-circle' : 'checkmark-done-outline'}
                   size={18}
-                  color={report?.status === 'validated' ? MAVECAM_COLORS.GREEN_PRIMARY : MAVECAM_COLORS.WHITE}
+                  color={report?.status === 'validated' ? AQUACARE_COLORS.GREEN_PRIMARY : AQUACARE_COLORS.WHITE}
                 />
                 <Text className={`text-sm font-semibold ml-2 ${report?.status === 'validated' ? 'text-gray-400' : 'text-white'}`}>
                   {t('validateReport')}
@@ -357,10 +360,10 @@ export default function ReportDetailScreen({ navigation, route }: ReportDetailSc
             disabled={Boolean(actionLoading)}
           >
             {actionLoading === 'email' ? (
-              <ActivityIndicator color={MAVECAM_COLORS.WHITE} />
+              <ActivityIndicator color={AQUACARE_COLORS.WHITE} />
             ) : (
               <>
-                <Ionicons name="mail-outline" size={18} color={MAVECAM_COLORS.WHITE} />
+                <Ionicons name="mail-outline" size={18} color={AQUACARE_COLORS.WHITE} />
                 <Text className="text-sm font-semibold text-white ml-2">{t('sendByEmail')}</Text>
               </>
             )}
@@ -372,10 +375,10 @@ export default function ReportDetailScreen({ navigation, route }: ReportDetailSc
             disabled={Boolean(actionLoading)}
           >
             {actionLoading === 'whatsapp' ? (
-              <ActivityIndicator color={MAVECAM_COLORS.WHITE} />
+              <ActivityIndicator color={AQUACARE_COLORS.WHITE} />
             ) : (
               <>
-                <Ionicons name="logo-whatsapp" size={18} color={MAVECAM_COLORS.WHITE} />
+                <Ionicons name="logo-whatsapp" size={18} color={AQUACARE_COLORS.WHITE} />
                 <Text className="text-sm font-semibold text-white ml-2">{t('shareOnWhatsApp')}</Text>
               </>
             )}
@@ -400,7 +403,7 @@ export default function ReportDetailScreen({ navigation, route }: ReportDetailSc
       <View className="flex-1 bg-cream">
         {renderHeader()}
         <View className="flex-1 items-center justify-center">
-          <ActivityIndicator size="large" color={MAVECAM_COLORS.GREEN_PRIMARY} />
+          <ActivityIndicator size="large" color={AQUACARE_COLORS.GREEN_PRIMARY} />
           <Text className="mt-3 text-gray-dark">{t('loading')}</Text>
         </View>
       </View>
@@ -412,7 +415,7 @@ export default function ReportDetailScreen({ navigation, route }: ReportDetailSc
       <View className="flex-1 bg-cream">
         {renderHeader()}
         <View className="flex-1 items-center justify-center px-6">
-          <Ionicons name="alert-circle" size={46} color={MAVECAM_COLORS.ERROR} />
+          <Ionicons name="alert-circle" size={46} color={AQUACARE_COLORS.ERROR} />
           <Text className="text-base text-error mt-3 text-center">{error || t('reportLoadError')}</Text>
         </View>
       </View>

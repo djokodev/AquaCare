@@ -486,8 +486,8 @@ Groupes RBAC cibles:
 2. `aquacare_commerce`, catalogue et commandes.
 3. `aquacare_support`, chat et notifications.
 
-Compatibilite: les anciens groupes `mavecam_managers`, `mavecam_commerce` et
-`mavecam_support` restent acceptes comme aliases pendant la transition.
+Compatibilite: la transition legacy est terminee, seuls les groupes
+`aquacare_managers`, `aquacare_commerce` et `aquacare_support` sont supportes.
 
 Protections:
 
@@ -760,4 +760,4 @@ Pour comprendre rapidement une zone precise:
 | Rate limiting | `middleware.py`, `services/login_rate_limit_service.py`, `constants.py` |
 | Admin et RBAC | `admin.py`, `common/admin_policies.py` |
 | Carte ferme | `admin.py`, `admin_serializers.py`, `templates/admin/accounts/farm_map.html` |
-| Cleanup JWT | `tasks.py`, `mavecam_api/celery.py` |
+| Cleanup JWT | `tasks.py`, `aquacare_api/celery.py` |

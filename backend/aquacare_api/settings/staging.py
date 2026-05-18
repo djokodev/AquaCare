@@ -11,7 +11,7 @@ def _split_csv(value: str) -> list[str]:
 
 # =============================================================================
 # STAGING — Étend production.py avec overrides staging
-# Utilisé via: DJANGO_SETTINGS_MODULE=mavecam_api.settings.staging
+# Utilisé via: DJANGO_SETTINGS_MODULE=aquacare_api.settings.staging
 # =============================================================================
 
 # Pas de PgBouncer en staging → connexions directes PostgreSQL

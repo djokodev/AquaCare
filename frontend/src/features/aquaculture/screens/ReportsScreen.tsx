@@ -7,11 +7,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSelector } from 'react-redux';
 
 import { RootStackParamList } from '@/navigation/MainNavigator';
-import { MAVECAM_COLORS } from '@/constants/colors';
+import { AQUACARE_COLORS } from '@/constants/colors';
 import { ProductionReport, ReportType } from '@/types/aquaculture';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
+import { parseApiError } from '@/utils/errorParser';
+import { formatAquacultureErrorWithAction } from '@/features/aquaculture/utils/aquacultureErrorPresenter';
 import { formatDate, formatDateTime } from '@/utils';
 import { RootState } from '@/store/store';
+import logger from '@/utils/logger';
 
 type ReportsScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Reports'>;
 
@@ -49,8 +52,9 @@ export default function ReportsScreen({ navigation }: ReportsScreenProps) {
       );
       setReports(data);
       return data;
-    } catch {
-      setError(t('reportsLoadError'));
+    } catch (error: unknown) {
+      logger.error('Erreur chargement rapports:', error);
+      setError(formatAquacultureErrorWithAction(parseApiError(error), t));
       return [];
     } finally {
       setLoading(false);
@@ -70,12 +74,8 @@ export default function ReportsScreen({ navigation }: ReportsScreenProps) {
         stopPolling();
         setInfoMessage(null);
       }
-    }, 3000);
+    }, 10000);
   }, [loadReports, stopPolling]);
-
-  useEffect(() => {
-    loadReports().then(startPollingIfPending);
-  }, [loadReports, startPollingIfPending]);
 
   useEffect(() => {
     return () => stopPolling();
@@ -103,11 +103,6 @@ export default function ReportsScreen({ navigation }: ReportsScreenProps) {
     try {
       setGeneratingType(reportType);
       setInfoMessage(null);
-      const logs = await aquacultureService.getCycleLogs(currentCycle.id);
-      if (logs.length === 0) {
-        setError(t('noLogsForReportGeneration'));
-        return;
-      }
       await aquacultureService.generateReport({
         report_type: reportType,
         cycle_id: currentCycle.id,
@@ -115,8 +110,9 @@ export default function ReportsScreen({ navigation }: ReportsScreenProps) {
       setInfoMessage(t('reportGenerating'));
       const data = await loadReports();
       startPollingIfPending(data);
-    } catch {
-      setError(t('reportGenerateError'));
+    } catch (error: unknown) {
+      logger.error('Erreur generation rapport:', error);
+      setError(formatAquacultureErrorWithAction(parseApiError(error), t));
     } finally {
       setGeneratingType(null);
     }
@@ -135,8 +131,12 @@ export default function ReportsScreen({ navigation }: ReportsScreenProps) {
             try {
               await aquacultureService.deleteReport(report.id);
               setReports(prev => prev.filter(r => r.id !== report.id));
-            } catch {
-              Alert.alert(t('error'), t('reportDeleteError'));
+            } catch (error: unknown) {
+              logger.error('Erreur suppression rapport:', error);
+              Alert.alert(
+                t('error'),
+                formatAquacultureErrorWithAction(parseApiError(error), t)
+              );
             }
           },
         },
@@ -145,7 +145,7 @@ export default function ReportsScreen({ navigation }: ReportsScreenProps) {
   }, [t]);
 
   const getStatusStyle = (reportStatus: string) => {
-    if (reportStatus === 'validated') return 'text-mavecam-primary';
+    if (reportStatus === 'validated') return 'text-aquacare-primary';
     if (reportStatus === 'pending') return 'text-warning';
     return 'text-gray-light';
   };
@@ -168,9 +168,9 @@ export default function ReportsScreen({ navigation }: ReportsScreenProps) {
   );
 
   const renderHeader = () => (
-    <View className="bg-mavecam-primary flex-row items-center pt-14 pb-4 px-4">
+    <View className="bg-aquacare-primary flex-row items-center pt-14 pb-4 px-4">
       <TouchableOpacity className="mr-4" onPress={() => navigation.goBack()}>
-        <Ionicons name="arrow-back" size={24} color={MAVECAM_COLORS.WHITE} />
+        <Ionicons name="arrow-back" size={24} color={AQUACARE_COLORS.WHITE} />
       </TouchableOpacity>
       <Text className="text-xl font-bold text-white">{t('reportsTitle')}</Text>
     </View>
@@ -198,7 +198,7 @@ export default function ReportsScreen({ navigation }: ReportsScreenProps) {
               onPress={() => handleDeleteReport(report)}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <Ionicons name="trash-outline" size={16} color={MAVECAM_COLORS.ERROR} />
+              <Ionicons name="trash-outline" size={16} color={AQUACARE_COLORS.ERROR} />
             </TouchableOpacity>
           </View>
         </View>
@@ -236,9 +236,9 @@ export default function ReportsScreen({ navigation }: ReportsScreenProps) {
                 disabled={Boolean(generatingType)}
               >
                 {generatingType === reportType ? (
-                  <ActivityIndicator color={MAVECAM_COLORS.GREEN_PRIMARY} />
+                  <ActivityIndicator color={AQUACARE_COLORS.GREEN_PRIMARY} />
                 ) : (
-                  <Ionicons name="document-text-outline" size={22} color={MAVECAM_COLORS.GREEN_PRIMARY} />
+                  <Ionicons name="document-text-outline" size={22} color={AQUACARE_COLORS.GREEN_PRIMARY} />
                 )}
                 <Text className="text-xs font-semibold text-gray-dark mt-2 text-center">
                   {reportType === 'daily'
@@ -252,8 +252,8 @@ export default function ReportsScreen({ navigation }: ReportsScreenProps) {
           </View>
 
           {infoMessage && (
-            <View className="bg-green-50 border border-mavecam-primary rounded-lg p-3 mb-3">
-              <Text className="text-sm text-mavecam-primary">{infoMessage}</Text>
+            <View className="bg-green-50 border border-aquacare-primary rounded-lg p-3 mb-3">
+              <Text className="text-sm text-aquacare-primary">{infoMessage}</Text>
             </View>
           )}
 
@@ -271,7 +271,7 @@ export default function ReportsScreen({ navigation }: ReportsScreenProps) {
                 key={type}
                 className={`px-3 py-2 rounded-full border mr-2 ${
                   selectedType === type
-                    ? 'bg-mavecam-primary border-mavecam-primary'
+                    ? 'bg-aquacare-primary border-aquacare-primary'
                     : 'bg-white border-gray-200'
                 }`}
                 onPress={() => setSelectedType(type)}
@@ -296,7 +296,7 @@ export default function ReportsScreen({ navigation }: ReportsScreenProps) {
   const renderEmptyState = useCallback(
     () => (
       <View className="bg-white rounded-xl p-5 items-center mx-4">
-        <Ionicons name="documents-outline" size={44} color={MAVECAM_COLORS.GRAY_LIGHT} />
+        <Ionicons name="documents-outline" size={44} color={AQUACARE_COLORS.GRAY_LIGHT} />
         <Text className="text-base font-semibold text-gray-dark mt-3">{t('noReportsYet')}</Text>
         <Text className="text-sm text-gray-light text-center mt-1">{t('generateFirstReportHint')}</Text>
       </View>
@@ -309,7 +309,7 @@ export default function ReportsScreen({ navigation }: ReportsScreenProps) {
       <View className="flex-1 bg-cream">
         {renderHeader()}
         <View className="flex-1 items-center justify-center">
-          <ActivityIndicator size="large" color={MAVECAM_COLORS.GREEN_PRIMARY} />
+          <ActivityIndicator size="large" color={AQUACARE_COLORS.GREEN_PRIMARY} />
           <Text className="mt-3 text-gray-dark">{t('loading')}</Text>
         </View>
       </View>

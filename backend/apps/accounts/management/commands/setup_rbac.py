@@ -64,9 +64,6 @@ class Command(BaseCommand):
             RBACConstants.GROUP_MANAGERS,
             RBACConstants.GROUP_COMMERCE,
             RBACConstants.GROUP_SUPPORT,
-            RBACConstants.LEGACY_GROUP_MANAGERS,
-            RBACConstants.LEGACY_GROUP_COMMERCE,
-            RBACConstants.LEGACY_GROUP_SUPPORT,
         ]
 
         for name in group_names:

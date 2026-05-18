@@ -2,7 +2,7 @@
 Service de generation de PDF pour les commandes.
 
 Genere des bons de commande professionnels au format PDF
-pour transmission aux prestataires MAVECAM.
+pour transmission aux prestataires AquaCare.
 """
 import inspect
 import logging
@@ -103,7 +103,7 @@ def generate_order_pdf(order):
             'items': order.items.select_related('product').all(),
             'user': order.user,
             'farm': order.farm_profile,
-            'mavecam_color': '#059669',
+            'aquacare_color': '#059669',
             'generated_at': timezone.now(),
             'delivery_method_display': order.get_delivery_method_display(),
             'pickup_location_display': (

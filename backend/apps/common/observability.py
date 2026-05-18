@@ -144,6 +144,13 @@ def observability_exception_handler(exc: Exception, context: dict[str, Any]):
     response = exception_handler(exc, context)
     request = context.get("request")
     path = getattr(request, "path", "") if request else ""
+    if response is not None and isinstance(getattr(response, "data", None), dict):
+        response.data.setdefault("status_code", response.status_code)
+        if "code" not in response.data:
+            default_code = getattr(exc, "default_code", None)
+            if default_code:
+                response.data["code"] = default_code
+
     if not path.startswith("/api/accounts/"):
         return response
 

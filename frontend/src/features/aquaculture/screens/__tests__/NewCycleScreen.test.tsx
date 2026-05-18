@@ -6,7 +6,8 @@ import { aquacultureService } from '@/features/aquaculture/services/aquacultureS
 import { offlineService } from '@/services/offlineService';
 import { useDispatch } from 'react-redux';
 import { useAuth } from '@/hooks/useAuth';
-import { parseApiError, formatErrorForDisplay, hasFieldError, isNetworkError } from '@/utils/errorParser';
+import { parseApiError, hasFieldError, isNetworkError } from '@/utils/errorParser';
+import { formatAquacultureErrorWithAction } from '@/features/aquaculture/utils/aquacultureErrorPresenter';
 
 jest.mock('react-redux', () => ({
   useDispatch: jest.fn(),
@@ -24,18 +25,21 @@ jest.mock('@/features/aquaculture/services/aquacultureService', () => ({
 
 jest.mock('@/services/offlineService', () => ({
   offlineService: {
-    hasPendingSync: jest.fn(),
-    syncOfflineLogs: jest.fn(),
+    hasAnyPendingSync: jest.fn(),
+    syncAllOfflineData: jest.fn(),
     saveNewCycleOffline: jest.fn(),
   },
 }));
 
 jest.mock('@/utils/errorParser', () => ({
   parseApiError: jest.fn(),
-  formatErrorForDisplay: jest.fn(),
   logApiError: jest.fn(),
   hasFieldError: jest.fn(),
   isNetworkError: jest.fn().mockReturnValue(false),
+}));
+
+jest.mock('@/features/aquaculture/utils/aquacultureErrorPresenter', () => ({
+  formatAquacultureErrorWithAction: jest.fn(),
 }));
 
 jest.mock('@/utils/logger', () => ({
@@ -55,7 +59,7 @@ describe('features/aquaculture/screens/NewCycleScreen', () => {
   const mockOffline = offlineService as jest.Mocked<typeof offlineService>;
   const mockUseAuth = useAuth as jest.Mock;
   const mockParseApiError = parseApiError as jest.Mock;
-  const mockFormatErrorForDisplay = formatErrorForDisplay as jest.Mock;
+  const mockFormatErrorWithAction = formatAquacultureErrorWithAction as jest.Mock;
   const mockHasFieldError = hasFieldError as jest.Mock;
   const mockIsNetworkError = isNetworkError as jest.Mock;
   const navigation = {
@@ -70,19 +74,28 @@ describe('features/aquaculture/screens/NewCycleScreen', () => {
     mockUseAuth.mockReturnValue({
       farmProfile: { farm_name: 'Ferme Test' },
     });
-    mockOffline.hasPendingSync.mockResolvedValue(false);
-    mockOffline.syncOfflineLogs.mockResolvedValue({ success: 0, failed: 0 });
-    mockFormatErrorForDisplay.mockReturnValue('Erreur formatee');
+    mockOffline.hasAnyPendingSync.mockResolvedValue(false);
+    mockOffline.syncAllOfflineData.mockResolvedValue({
+      success: 0,
+      failed: 0,
+      details: {
+        cycleLogs: { success: 0, failed: 0 },
+        newCycles: { success: 0, failed: 0 },
+        sanitaryLogs: { success: 0, failed: 0 },
+      },
+    });
+    mockFormatErrorWithAction.mockReturnValue('Erreur formatee');
     mockHasFieldError.mockReturnValue(false);
   });
 
   const fillValidForm = (getByText: any, getByPlaceholderText: any, getAllByPlaceholderText: any) => {
+    const numericInputs = getAllByPlaceholderText('exampleValuePlaceholder');
     fireEvent.press(getByText('tilapia'));
     fireEvent.changeText(getByPlaceholderText('pondNamePlaceholder'), 'Bassin-1');
     fireEvent.changeText(getByPlaceholderText('cycleNamePlaceholder'), 'Cycle Test');
-    fireEvent.changeText(getAllByPlaceholderText('Ex: 100')[0], '120');
-    fireEvent.changeText(getByPlaceholderText('Ex: 1000'), '1500');
-    fireEvent.changeText(getByPlaceholderText('Ex: 10'), '12');
+    fireEvent.changeText(numericInputs[0], '120');
+    fireEvent.changeText(numericInputs[2], '1500');
+    fireEvent.changeText(numericInputs[3], '12');
   };
 
   it('cree un cycle en ligne avec les donnees converties', async () => {
@@ -168,7 +181,7 @@ describe('features/aquaculture/screens/NewCycleScreen', () => {
       details: [{ field: 'initial_count', messages: ['Trop eleve'] }],
       rawError: apiError,
     });
-    mockFormatErrorForDisplay.mockReturnValue('Erreur de validation');
+    mockFormatErrorWithAction.mockReturnValue('Erreur de validation');
 
     const { getByText, getByPlaceholderText, getAllByPlaceholderText } = render(
       <NewCycleScreen navigation={navigation} />
@@ -179,7 +192,7 @@ describe('features/aquaculture/screens/NewCycleScreen', () => {
 
     await waitFor(() => {
       expect(mockParseApiError).toHaveBeenCalledWith(apiError);
-      expect(mockFormatErrorForDisplay).toHaveBeenCalled();
+      expect(mockFormatErrorWithAction).toHaveBeenCalled();
       expect(alertSpy).toHaveBeenCalledWith(
         'error',
         'Erreur de validation',

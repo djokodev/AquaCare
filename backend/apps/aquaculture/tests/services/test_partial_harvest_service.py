@@ -15,6 +15,7 @@ from aquaculture.domain.exceptions import (
     CycleNotActiveError,
     InsufficientFishCountError,
     InvalidHarvestDataError,
+    OfflineSyncConflictError,
 )
 from aquaculture.models import PartialHarvest
 from aquaculture.services import ProductionCycleService
@@ -195,6 +196,57 @@ class TestPartialHarvestService:
         cycle.refresh_from_db()
         assert cycle.current_count == count_before
 
+    def test_partial_harvest_rejects_client_uuid_from_another_user(self):
+        """Un client_uuid d'un autre propriétaire ne doit jamais retourner l'existant."""
+        import uuid
+
+        cycle_owner = self._create_test_cycle()
+        cycle_other_owner = self._create_test_cycle()
+        client_uuid = uuid.uuid4()
+
+        ProductionCycleService.partial_harvest_cycle(
+            cycle=cycle_owner,
+            harvest_date=date.today(),
+            count_harvested=50,
+            average_weight_g=Decimal('300.00'),
+            client_uuid=client_uuid,
+        )
+
+        with pytest.raises(OfflineSyncConflictError):
+            ProductionCycleService.partial_harvest_cycle(
+                cycle=cycle_other_owner,
+                harvest_date=date.today(),
+                count_harvested=50,
+                average_weight_g=Decimal('300.00'),
+                client_uuid=client_uuid,
+            )
+
+    def test_partial_harvest_rejects_client_uuid_from_another_cycle(self):
+        """Un client_uuid déjà lié à un autre cycle du même propriétaire est rejeté."""
+        import uuid
+
+        farm_profile = FarmProfileFactory()
+        cycle_1 = self._create_test_cycle(farm_profile=farm_profile)
+        cycle_2 = self._create_test_cycle(farm_profile=farm_profile)
+        client_uuid = uuid.uuid4()
+
+        ProductionCycleService.partial_harvest_cycle(
+            cycle=cycle_1,
+            harvest_date=date.today(),
+            count_harvested=50,
+            average_weight_g=Decimal('300.00'),
+            client_uuid=client_uuid,
+        )
+
+        with pytest.raises(OfflineSyncConflictError):
+            ProductionCycleService.partial_harvest_cycle(
+                cycle=cycle_2,
+                harvest_date=date.today(),
+                count_harvested=50,
+                average_weight_g=Decimal('300.00'),
+                client_uuid=client_uuid,
+            )
+
     def test_partial_harvest_fails_with_date_before_start(self):
         """La date de récolte partielle ne peut être avant le début du cycle."""
         cycle = self._create_test_cycle()
@@ -224,9 +276,9 @@ class TestPartialHarvestService:
 
     # =================== HELPER ===================
 
-    def _create_test_cycle(self, species='clarias'):
+    def _create_test_cycle(self, species='clarias', farm_profile=None):
         """Helper : crée un cycle actif de test."""
-        farm_profile = FarmProfileFactory()
+        farm_profile = farm_profile or FarmProfileFactory()
         cycle_data = {
             'cycle_name': f'Test Cycle {species.capitalize()} Partial',
             'species': species,

@@ -14,11 +14,10 @@ from rest_framework_simplejwt.serializers import TokenRefreshSerializer, TokenVe
 from rest_framework_simplejwt.settings import api_settings
 from rest_framework_simplejwt.tokens import RefreshToken, UntypedToken
 
-from aquaculture.domain.farm_setup_rules import FarmSetupRules
-from aquaculture.services.farm_production_plan_service import FarmProductionPlanService
-
 from .domain.farm_profile_rules import build_farm_profile_invariant_errors
+from .domain.farm_setup_rules import FarmSetupRules
 from .models import FarmProfile, User
+from .services.farm_setup_service import FarmSetupService
 from .services.auth_application_service import (
     AmbiguousCredentialsError,
     AuthApplicationService,
@@ -227,7 +226,7 @@ class FarmProfileSerializer(serializers.ModelSerializer):
         )
 
     def _get_plan_data(self, obj: FarmProfile) -> dict[str, Any]:
-        return FarmProductionPlanService.get_plan_data(obj)
+        return FarmSetupService.get_plan_data(obj)
 
     @staticmethod
     def _format_decimal(value: Any) -> str | None:

@@ -13,7 +13,7 @@ Frontend: React Native + Expo 53 + Redux Toolkit + TypeScript
 
 ```
 backend/
-├── mavecam_api/
+├── aquacare_api/
 │   ├── settings/          # Config Django (base, dev, prod, test)
 │   └── urls.py             # Routes API
 │
@@ -68,7 +68,7 @@ frontend/src/
 │   └── MainNavigator.tsx   # Types dans RootStackParamList
 │
 ├── constants/
-│   ├── colors.ts           # MAVECAM #059669
+│   ├── colors.ts           # AquaCare #059669
 │   ├── aquaculture.ts      # Prix FCFA, FCR baseline
 │   └── cameroon.ts         # Regions/departements
 │

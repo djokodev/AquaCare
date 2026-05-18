@@ -21,7 +21,7 @@ import {
   fetchOrderStatistics,
 } from '@/features/commerce/store/commerceSlice';
 import { Order } from '@/types/commerce';
-import { MAVECAM_COLORS } from '@/constants/colors';
+import { AQUACARE_COLORS } from '@/constants/colors';
 import { RootStackParamList } from '@/navigation/MainNavigator';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'OrdersHistory'>;
@@ -57,7 +57,7 @@ export default function OrdersHistoryScreen() {
     if (status === 'received') {
       return {
         icon: 'checkmark-done-circle' as const,
-        color: MAVECAM_COLORS.SUCCESS,
+        color: AQUACARE_COLORS.SUCCESS,
         label: t('orderStatusReceived'),
       };
     }
@@ -65,14 +65,14 @@ export default function OrdersHistoryScreen() {
     if (status === 'delivered') {
       return {
         icon: 'cube-outline' as const,
-        color: MAVECAM_COLORS.WARNING,
+        color: AQUACARE_COLORS.WARNING,
         label: t('orderStatusDelivered'),
       };
     }
 
     return {
       icon: 'time-outline' as const,
-      color: MAVECAM_COLORS.GREEN_PRIMARY,
+      color: AQUACARE_COLORS.GREEN_PRIMARY,
       label: t('orderStatusConfirmed'),
     };
   };
@@ -130,7 +130,7 @@ export default function OrdersHistoryScreen() {
       >
         <View className="flex-row justify-between items-center mb-3">
           <View className="flex-row items-center flex-1">
-            <Ionicons name="receipt-outline" size={24} color={MAVECAM_COLORS.GREEN_PRIMARY} />
+            <Ionicons name="receipt-outline" size={24} color={AQUACARE_COLORS.GREEN_PRIMARY} />
             <View className="ml-3 flex-1">
               <Text className="text-base font-bold text-gray-dark">{order.order_number}</Text>
               <Text className="text-xs text-gray-light mt-1">
@@ -141,26 +141,26 @@ export default function OrdersHistoryScreen() {
           <Ionicons
             name={isExpanded ? 'chevron-up' : 'chevron-down'}
             size={24}
-            color={MAVECAM_COLORS.GRAY_LIGHT}
+            color={AQUACARE_COLORS.GRAY_LIGHT}
           />
         </View>
 
         <View className="flex-row justify-between items-center mb-3">
           <View className="flex-row items-center px-3 py-2 rounded-full bg-cream gap-2">
             <Ionicons name={statusConfig.icon} size={16} color={statusConfig.color} />
-            <Text className="text-xs font-semibold text-mavecam-primary">{statusConfig.label}</Text>
+            <Text className="text-xs font-semibold text-aquacare-primary">{statusConfig.label}</Text>
           </View>
-          <Text className="text-lg font-bold text-mavecam-primary">{total.toLocaleString()} FCFA</Text>
+          <Text className="text-lg font-bold text-aquacare-primary">{total.toLocaleString()} FCFA</Text>
         </View>
 
         {order.status === 'delivered' && (
           <TouchableOpacity
-            className={`mb-3 py-2 rounded-lg items-center ${isConfirming ? 'bg-gray-300' : 'bg-mavecam-primary'}`}
+            className={`mb-3 py-2 rounded-lg items-center ${isConfirming ? 'bg-gray-300' : 'bg-aquacare-primary'}`}
             disabled={isConfirming}
             onPress={() => handleConfirmReceipt(order)}
           >
             {isConfirming ? (
-              <ActivityIndicator size="small" color={MAVECAM_COLORS.WHITE} />
+              <ActivityIndicator size="small" color={AQUACARE_COLORS.WHITE} />
             ) : (
               <Text className="text-white text-sm font-semibold">{t('confirmReceiptAction')}</Text>
             )}
@@ -169,7 +169,7 @@ export default function OrdersHistoryScreen() {
 
         <View className="flex-row flex-wrap gap-3">
           <View className="flex-row items-center gap-2">
-            <Ionicons name="cube-outline" size={16} color={MAVECAM_COLORS.GRAY_LIGHT} />
+            <Ionicons name="cube-outline" size={16} color={AQUACARE_COLORS.GRAY_LIGHT} />
             <Text className="text-sm text-gray-light">
               {order.total_bags} {t(order.total_bags > 1 ? 'bags' : 'bag')}
             </Text>
@@ -178,7 +178,7 @@ export default function OrdersHistoryScreen() {
             <Ionicons
               name={order.delivery_method === 'home' ? 'home-outline' : 'storefront-outline'}
               size={16}
-              color={MAVECAM_COLORS.GRAY_LIGHT}
+              color={AQUACARE_COLORS.GRAY_LIGHT}
             />
             <Text className="text-sm text-gray-light">
               {t(order.delivery_method === 'home' ? 'homeDelivery' : 'pickupStore')}
@@ -186,8 +186,8 @@ export default function OrdersHistoryScreen() {
           </View>
           {order.is_free_delivery && (
             <View className="flex-row items-center bg-cream px-2 py-1 rounded-full gap-1.5">
-              <Ionicons name="gift-outline" size={16} color={MAVECAM_COLORS.SUCCESS} />
-              <Text className="text-xs font-semibold text-mavecam-primary">{t('free')}</Text>
+              <Ionicons name="gift-outline" size={16} color={AQUACARE_COLORS.SUCCESS} />
+              <Text className="text-xs font-semibold text-aquacare-primary">{t('free')}</Text>
             </View>
           )}
         </View>
@@ -214,7 +214,7 @@ export default function OrdersHistoryScreen() {
                   <Text className="text-xs text-gray-light mb-1">
                     {parseFloat(item.unit_price).toLocaleString()} FCFA
                   </Text>
-                  <Text className="text-sm font-semibold text-mavecam-primary">
+                  <Text className="text-sm font-semibold text-aquacare-primary">
                     {parseFloat(item.line_total).toLocaleString()} FCFA
                   </Text>
                 </View>
@@ -231,14 +231,14 @@ export default function OrdersHistoryScreen() {
               <View className="flex-row justify-between items-center">
                 <Text className="text-sm text-gray-dark">{t('deliveryFee')}</Text>
                 {deliveryFee === 0 ? (
-                  <Text className="text-sm font-semibold text-mavecam-primary">{t('free')}</Text>
+                  <Text className="text-sm font-semibold text-aquacare-primary">{t('free')}</Text>
                 ) : (
                   <Text className="text-sm font-semibold text-gray-dark">{deliveryFee.toLocaleString()} FCFA</Text>
                 )}
               </View>
               <View className="flex-row justify-between items-center mt-2 pt-2 border-t border-[#f1f5f9]">
                 <Text className="text-base font-bold text-gray-dark">{t('total')}</Text>
-                <Text className="text-lg font-bold text-mavecam-primary">{total.toLocaleString()} FCFA</Text>
+                <Text className="text-lg font-bold text-aquacare-primary">{total.toLocaleString()} FCFA</Text>
               </View>
             </View>
 
@@ -260,8 +260,8 @@ export default function OrdersHistoryScreen() {
                 <View className="h-px bg-[#f1f5f9] my-3" />
                 <Text className="text-sm font-semibold text-gray-dark mb-2">{t('pickupPoint')}</Text>
                 <View className="flex-row items-center bg-cream p-3 rounded-lg gap-2">
-                  <Ionicons name="location" size={20} color={MAVECAM_COLORS.GREEN_PRIMARY} />
-                  <Text className="text-sm font-semibold text-mavecam-primary">
+                  <Ionicons name="location" size={20} color={AQUACARE_COLORS.GREEN_PRIMARY} />
+                  <Text className="text-sm font-semibold text-aquacare-primary">
                     {t('pickupLocationPrefix')} {order.pickup_location === 'ndokoti' ? 'Ndokoti' : 'Ndogpasi'}
                   </Text>
                 </View>
@@ -284,23 +284,23 @@ export default function OrdersHistoryScreen() {
         <Text className="text-lg font-bold text-gray-dark mb-3">{t('orderStatistics')}</Text>
         <View className="flex-row flex-wrap gap-3">
           <View className="flex-1 min-w-[45%] bg-cream rounded-lg p-4 items-center">
-            <Ionicons name="receipt-outline" size={32} color={MAVECAM_COLORS.GREEN_PRIMARY} />
-            <Text className="text-xl font-bold text-mavecam-primary mt-2">{statistics.total_orders}</Text>
+            <Ionicons name="receipt-outline" size={32} color={AQUACARE_COLORS.GREEN_PRIMARY} />
+            <Text className="text-xl font-bold text-aquacare-primary mt-2">{statistics.total_orders}</Text>
             <Text className="text-xs text-gray-light mt-1 text-center">{t('totalOrders')}</Text>
           </View>
           <View className="flex-1 min-w-[45%] bg-cream rounded-lg p-4 items-center">
-            <Ionicons name="wallet-outline" size={32} color={MAVECAM_COLORS.GREEN_PRIMARY} />
-            <Text className="text-xl font-bold text-mavecam-primary mt-2">{totalSpent.toLocaleString()}</Text>
+            <Ionicons name="wallet-outline" size={32} color={AQUACARE_COLORS.GREEN_PRIMARY} />
+            <Text className="text-xl font-bold text-aquacare-primary mt-2">{totalSpent.toLocaleString()}</Text>
             <Text className="text-xs text-gray-light mt-1 text-center">{t('totalSpent')}</Text>
           </View>
           <View className="flex-1 min-w-[45%] bg-cream rounded-lg p-4 items-center">
-            <Ionicons name="cube-outline" size={32} color={MAVECAM_COLORS.GREEN_PRIMARY} />
-            <Text className="text-xl font-bold text-mavecam-primary mt-2">{statistics.total_bags_ordered}</Text>
+            <Ionicons name="cube-outline" size={32} color={AQUACARE_COLORS.GREEN_PRIMARY} />
+            <Text className="text-xl font-bold text-aquacare-primary mt-2">{statistics.total_bags_ordered}</Text>
             <Text className="text-xs text-gray-light mt-1 text-center">{t('totalBags')}</Text>
           </View>
           <View className="flex-1 min-w-[45%] bg-cream rounded-lg p-4 items-center">
-            <Ionicons name="trending-up-outline" size={32} color={MAVECAM_COLORS.GREEN_PRIMARY} />
-            <Text className="text-xl font-bold text-mavecam-primary mt-2">{avgOrderValue.toLocaleString()}</Text>
+            <Ionicons name="trending-up-outline" size={32} color={AQUACARE_COLORS.GREEN_PRIMARY} />
+            <Text className="text-xl font-bold text-aquacare-primary mt-2">{avgOrderValue.toLocaleString()}</Text>
             <Text className="text-xs text-gray-light mt-1 text-center">{t('averageOrder')}</Text>
           </View>
         </View>
@@ -310,14 +310,14 @@ export default function OrdersHistoryScreen() {
 
   const renderEmptyState = () => (
     <View className="py-16 items-center">
-      <Ionicons name="receipt-outline" size={100} color={MAVECAM_COLORS.GRAY_LIGHT} />
+      <Ionicons name="receipt-outline" size={100} color={AQUACARE_COLORS.GRAY_LIGHT} />
       <Text className="mt-5 text-2xl font-bold text-gray-dark">{t('noOrdersYet')}</Text>
       <Text className="mt-3 text-base text-gray-light text-center px-10">{t('noOrdersDescription')}</Text>
       <TouchableOpacity
-        className="mt-6 bg-mavecam-primary flex-row items-center px-6 py-3 rounded-lg gap-2"
+        className="mt-6 bg-aquacare-primary flex-row items-center px-6 py-3 rounded-lg gap-2"
         onPress={() => navigation.navigate('ProductCatalog')}
       >
-        <Ionicons name="albums-outline" size={20} color={MAVECAM_COLORS.WHITE} />
+        <Ionicons name="albums-outline" size={20} color={AQUACARE_COLORS.WHITE} />
         <Text className="text-white text-base font-semibold">{t('browseCatalog')}</Text>
       </TouchableOpacity>
     </View>
@@ -327,7 +327,7 @@ export default function OrdersHistoryScreen() {
     <View className="flex-1 bg-cream">
       <View className="bg-white px-5 pt-16 pb-5 flex-row items-center justify-between shadow">
         <TouchableOpacity onPress={() => navigation.goBack()} className="w-10">
-          <Ionicons name="arrow-back" size={24} color={MAVECAM_COLORS.GRAY_DARK} />
+          <Ionicons name="arrow-back" size={24} color={AQUACARE_COLORS.GRAY_DARK} />
         </TouchableOpacity>
         <View className="flex-1 items-center">
           <Text className="text-2xl font-bold text-gray-dark">{t('ordersHistory')}</Text>
@@ -340,15 +340,15 @@ export default function OrdersHistoryScreen() {
 
       {loading && !refreshing ? (
         <View className="flex-1 items-center justify-center">
-          <ActivityIndicator size="large" color={MAVECAM_COLORS.GREEN_PRIMARY} />
+          <ActivityIndicator size="large" color={AQUACARE_COLORS.GREEN_PRIMARY} />
           <Text className="mt-3 text-base text-gray-light">{t('loading')}</Text>
         </View>
       ) : error ? (
         <View className="flex-1 items-center justify-center px-10 py-10">
-          <Ionicons name="alert-circle-outline" size={48} color={MAVECAM_COLORS.ERROR} />
+          <Ionicons name="alert-circle-outline" size={48} color={AQUACARE_COLORS.ERROR} />
           <Text className="mt-3 text-base text-[#dc2626] text-center">{error}</Text>
           <TouchableOpacity
-            className="mt-5 bg-mavecam-primary px-6 py-3 rounded-lg"
+            className="mt-5 bg-aquacare-primary px-6 py-3 rounded-lg"
             onPress={() => {
               dispatch(fetchOrders());
               dispatch(fetchOrderStatistics());
@@ -369,8 +369,8 @@ export default function OrdersHistoryScreen() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={handleRefresh}
-              colors={[MAVECAM_COLORS.GREEN_PRIMARY]}
-              tintColor={MAVECAM_COLORS.GREEN_PRIMARY}
+              colors={[AQUACARE_COLORS.GREEN_PRIMARY]}
+              tintColor={AQUACARE_COLORS.GREEN_PRIMARY}
             />
           }
           showsVerticalScrollIndicator={false}

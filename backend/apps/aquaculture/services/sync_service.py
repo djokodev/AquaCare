@@ -1,5 +1,5 @@
 """
-Service de synchronisation offline pour MAVECAM AquaCare.
+Service de synchronisation offline pour AquaCare.
 
 Centralise toute la logique de synchronisation bidirectionnelle entre
 le mobile offline-first et le serveur backend :
@@ -20,11 +20,13 @@ from typing import Any
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
+from rest_framework.exceptions import APIException
 
 from ..models import CycleLog, FeedingPlan, ProductionCycle, SanitaryLog
 from .analytics_service import AnalyticsService
 from .base import BaseService
 from .cycle_service import ProductionCycleService
+from .sanitary_service import SanitaryService
 
 # ── Sync flag (threading.local) ──────────────────────────────────────────────
 # Permet aux signals post_save de CycleLog de détecter qu'un sync offline
@@ -138,6 +140,50 @@ class SyncService(BaseService):
         result['synced_ids'].append(synced_id)
 
     @staticmethod
+    def _total_processed(result: dict[str, Any]) -> int:
+        return int(result.get('created', 0)) + int(result.get('updated', 0))
+
+    @staticmethod
+    def _merge_sync_step(
+        sync_result: dict[str, Any],
+        *,
+        processed_key: str,
+        result: dict[str, Any],
+        include_updated_key: str | None = None,
+    ) -> None:
+        if include_updated_key:
+            sync_result['processed'][processed_key] = result.get('created', 0)
+            sync_result['processed'][include_updated_key] = result.get('updated', 0)
+        else:
+            sync_result['processed'][processed_key] = SyncService._total_processed(result)
+        sync_result['errors'].extend(result.get('errors', []))
+
+    @staticmethod
+    def _build_sanitary_log_payload(log_data: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
+        payload = {
+            key: value
+            for key, value in log_data.items()
+            if key not in {'id', 'cycle'}
+        }
+        missing_fields = [
+            field
+            for field in ('event_date', 'event_type', 'symptoms')
+            if not payload.get(field)
+        ]
+        return payload, missing_fields
+
+    @staticmethod
+    def _normalize_sanitary_log_payload(log_create_data: dict[str, Any]) -> dict[str, Any]:
+        log_create_data['created_offline'] = True
+        log_create_data['synced_at'] = timezone.now()
+        if 'event_date' in log_create_data:
+            log_create_data['event_date'] = SyncService._parse_sync_date_field(
+                log_create_data['event_date'],
+                field_name='event_date',
+            )
+        return log_create_data
+
+    @staticmethod
     def _parse_last_sync(last_sync: str | None) -> datetime | None:
         if not last_sync:
             return None
@@ -201,6 +247,19 @@ class SyncService(BaseService):
         """
         result = SyncService._build_sync_result()
         cycles_map = SyncService._build_user_cycles_map(user, logs_data)
+        incoming_client_uuids = {
+            str(client_uuid)
+            for client_uuid in (item.get('client_uuid') for item in logs_data)
+            if client_uuid
+        }
+        existing_logs_by_uuid = {}
+        if incoming_client_uuids:
+            existing_logs_by_uuid = {
+                str(log.client_uuid): log
+                for log in CycleLog.objects.filter(
+                    client_uuid__in=incoming_client_uuids
+                ).select_related('cycle__farm_profile__user')
+            }
 
         # Désactiver les signals post_save pendant le bulk sync pour éviter
         # 8× DB ops par log. On fait un batch recalcul unique après.
@@ -234,7 +293,7 @@ class SyncService(BaseService):
 
                     existing_log = None
                     if client_uuid:
-                        existing_log = CycleLog.objects.filter(client_uuid=client_uuid).first()
+                        existing_log = existing_logs_by_uuid.get(str(client_uuid))
                         if existing_log and existing_log.cycle.farm_profile.user_id != user.id:
                             SyncService._append_sync_error(
                                 result,
@@ -314,8 +373,13 @@ class SyncService(BaseService):
                     cycle.refresh_from_db()
                     ProductionCycleService.recalculate_all_metrics(cycle)
                     AnalyticsService.update_cycle_metrics_data(cycle)
-                except Exception:
-                    pass  # Ne pas bloquer le résultat de sync pour une erreur de recalcul
+                except Exception as exc:
+                    SyncService._append_sync_error(
+                        result,
+                        error_type='cycle_log_recalculation',
+                        cycle_id=cycle_id,
+                        error=f"Recalcul post-sync échoué: {exc}",
+                    )
 
         return result
 
@@ -328,9 +392,8 @@ class SyncService(BaseService):
         """
         Synchronise les logs sanitaires créés offline.
 
-        Note: SanitaryLog n'a pas de client_uuid (pas de déduplication),
-        donc on crée toujours de nouveaux logs. Les doublons éventuels
-        doivent être gérés côté mobile.
+        Les logs sanitaires utilisent client_uuid pour dédupliquer les retries
+        mobiles et éviter les doublons après reconnexion instable.
 
         Args:
             user: Utilisateur propriétaire des logs
@@ -346,6 +409,19 @@ class SyncService(BaseService):
         """
         result = SyncService._build_sync_result()
         sanitary_cycles_map = SyncService._build_user_cycles_map(user, logs_data)
+        incoming_client_uuids = {
+            str(client_uuid)
+            for client_uuid in (item.get('client_uuid') for item in logs_data)
+            if client_uuid
+        }
+        existing_sanitary_uuids = set()
+        if incoming_client_uuids:
+            existing_sanitary_uuids = set(
+                str(uuid_value)
+                for uuid_value in SanitaryLog.objects.filter(
+                    client_uuid__in=incoming_client_uuids
+                ).values_list('client_uuid', flat=True)
+            )
 
         for log_data in logs_data:
             try:
@@ -369,32 +445,50 @@ class SyncService(BaseService):
                     )
                     continue
 
-                log_create_data = {
-                    key: value
-                    for key, value in log_data.items()
-                    if key != 'id'
-                }
-                log_create_data['cycle'] = cycle
-                log_create_data['created_offline'] = True
-                if 'event_date' in log_create_data:
-                    log_create_data['event_date'] = SyncService._parse_sync_date_field(
-                        log_create_data['event_date'],
-                        field_name='event_date',
+                log_create_data, missing_fields = SyncService._build_sanitary_log_payload(log_data)
+                if missing_fields:
+                    SyncService._append_sync_error(
+                        result,
+                        error_type='sanitary_log',
+                        cycle_id=cycle_id,
+                        error=f"Champs requis manquants: {', '.join(missing_fields)}",
                     )
+                    continue
 
-                new_log = SanitaryLog.objects.create(**log_create_data)
+                log_create_data = SyncService._normalize_sanitary_log_payload(log_create_data)
+
+                raw_client_uuid = log_create_data.get('client_uuid')
+                was_existing = bool(raw_client_uuid and str(raw_client_uuid) in existing_sanitary_uuids)
+                new_log = SanitaryService.create_sanitary_log(
+                    cycle=cycle,
+                    event_date=log_create_data['event_date'],
+                    event_type=log_create_data['event_type'],
+                    symptoms=log_create_data['symptoms'],
+                    affected_count=log_create_data.get('affected_count'),
+                    treatment_applied=log_create_data.get('treatment_applied', ''),
+                    medication_used=log_create_data.get('medication_used', ''),
+                    dosage=log_create_data.get('dosage', ''),
+                    treatment_duration_days=log_create_data.get('treatment_duration_days'),
+                    notes=log_create_data.get('notes', ''),
+                    client_uuid=log_create_data.get('client_uuid'),
+                    created_offline=True,
+                    synced_at=log_create_data['synced_at'],
+                )
+                if raw_client_uuid:
+                    existing_sanitary_uuids.add(str(raw_client_uuid))
 
                 SyncService._record_sync_success(
                     result,
-                    key='created',
+                    key='updated' if was_existing else 'created',
                     synced_id=str(new_log.id),
                 )
 
-            except (ValidationError, ValueError, TypeError) as exc:
+            except (ValidationError, ValueError, TypeError, APIException) as exc:
+                detail = getattr(exc, 'detail', str(exc))
                 SyncService._append_sync_error(
                     result,
                     error_type='sanitary_log',
-                    error=str(exc),
+                    error=str(detail),
                 )
 
         return result
@@ -409,8 +503,8 @@ class SyncService(BaseService):
         Synchronise les nouveaux cycles créés offline.
 
         Stratégie :
-        - Les cycles ont des UUID générés côté client
-        - Pas de déduplication (UUID unique garanti)
+        - Les cycles ont un client_uuid stable généré côté mobile
+        - Déduplication stricte par client_uuid et propriétaire
         - Validation ownership automatique
 
         Args:
@@ -426,14 +520,51 @@ class SyncService(BaseService):
                 }
         """
         result = SyncService._build_sync_result()
+        incoming_client_uuids = {
+            str(client_uuid)
+            for client_uuid in (item.get('client_uuid') for item in cycles_data)
+            if client_uuid
+        }
+        existing_cycles_by_uuid = {}
+        if incoming_client_uuids:
+            existing_cycles_by_uuid = {
+                str(cycle.client_uuid): cycle
+                for cycle in ProductionCycle.objects.select_related('farm_profile__user').filter(
+                    client_uuid__in=incoming_client_uuids
+                )
+            }
 
         for cycle_data in cycles_data:
             try:
+                client_uuid = cycle_data.get('client_uuid')
                 cycle_payload = {
                     key: value
                     for key, value in cycle_data.items()
-                    if key not in {'farm_profile', 'id'}
+                    if key not in {'farm_profile', 'id', 'created_at', 'updated_at', 'synced_at'}
                 }
+                cycle_payload['created_offline'] = True
+                cycle_payload['synced_at'] = timezone.now()
+
+                existing_cycle = None
+                if client_uuid:
+                    existing_cycle = existing_cycles_by_uuid.get(str(client_uuid))
+                    if existing_cycle and existing_cycle.farm_profile.user_id != user.id:
+                        SyncService._append_sync_error(
+                            result,
+                            error_type='cycle',
+                            client_uuid=client_uuid,
+                            cycle_name=cycle_data.get('cycle_name'),
+                            error='Conflit client_uuid détecté avec un autre utilisateur',
+                        )
+                        continue
+
+                from ..serializers import ProductionCycleSerializer  # noqa: PLC0415
+
+                serializer = ProductionCycleSerializer(data=cycle_payload)
+                serializer.is_valid(raise_exception=True)
+                cycle_payload = dict(serializer.validated_data)
+                cycle_payload['created_offline'] = True
+                cycle_payload['synced_at'] = timezone.now()
 
                 new_cycle = ProductionCycleService.create_cycle(
                     farm_profile=user.farm_profile,
@@ -442,21 +573,33 @@ class SyncService(BaseService):
 
                 SyncService._record_sync_success(
                     result,
-                    key='created',
+                    key='updated' if existing_cycle else 'created',
                     synced_id=str(new_cycle.id),
                 )
+                if client_uuid:
+                    existing_cycles_by_uuid[str(client_uuid)] = new_cycle
 
             except ValidationError as exc:
                 SyncService._append_sync_error(
                     result,
                     error_type='cycle',
+                    client_uuid=cycle_data.get('client_uuid'),
                     cycle_name=cycle_data.get('cycle_name'),
                     error=str(exc),
+                )
+            except APIException as exc:
+                SyncService._append_sync_error(
+                    result,
+                    error_type='cycle',
+                    client_uuid=cycle_data.get('client_uuid'),
+                    cycle_name=cycle_data.get('cycle_name'),
+                    error=str(exc.detail),
                 )
             except Exception:
                 SyncService._append_sync_error(
                     result,
                     error_type='cycle',
+                    client_uuid=cycle_data.get('client_uuid'),
                     cycle_name=cycle_data.get('cycle_name'),
                     error='Erreur inattendue lors de la synchronisation du cycle',
                 )
@@ -500,7 +643,11 @@ class SyncService(BaseService):
         # Get updated cycles (changed since last_sync)
         cycles_query = ProductionCycle.objects.filter(
             farm_profile__user=user
-        ).select_related('farm_profile__user', 'metrics')
+        ).select_related(
+            'farm_profile__user',
+            'farm_profile__production_plan',
+            'metrics',
+        )
         if last_sync_dt:
             cycles_query = cycles_query.filter(updated_at__gt=last_sync_dt)
 
@@ -541,7 +688,6 @@ class SyncService(BaseService):
         }
 
     @staticmethod
-    @transaction.atomic
     def perform_full_sync(
         user,
         sync_data: dict[str, Any]
@@ -587,21 +733,30 @@ class SyncService(BaseService):
             new_cycles = sync_data.get('new_cycles', [])
             if new_cycles:
                 cycles_result = SyncService.sync_new_cycles(user, new_cycles)
-                sync_result['processed']['cycles'] = cycles_result['created']
-                sync_result['errors'].extend(cycles_result['errors'])
+                SyncService._merge_sync_step(
+                    sync_result,
+                    processed_key='cycles',
+                    result=cycles_result,
+                )
 
             cycle_logs = sync_data.get('cycle_logs', [])
             if cycle_logs:
                 logs_result = SyncService.sync_cycle_logs(user, cycle_logs)
-                sync_result['processed']['cycle_logs'] = logs_result['created']
-                sync_result['processed']['cycle_logs_updated'] = logs_result['updated']
-                sync_result['errors'].extend(logs_result['errors'])
+                SyncService._merge_sync_step(
+                    sync_result,
+                    processed_key='cycle_logs',
+                    include_updated_key='cycle_logs_updated',
+                    result=logs_result,
+                )
 
             sanitary_logs = sync_data.get('sanitary_logs', [])
             if sanitary_logs:
                 sanitary_result = SyncService.sync_sanitary_logs(user, sanitary_logs)
-                sync_result['processed']['sanitary_logs'] = sanitary_result['created']
-                sync_result['errors'].extend(sanitary_result['errors'])
+                SyncService._merge_sync_step(
+                    sync_result,
+                    processed_key='sanitary_logs',
+                    result=sanitary_result,
+                )
 
             last_sync = sync_data.get('last_sync')
             sync_result['server_updates'] = SyncService.get_server_updates(user, last_sync)

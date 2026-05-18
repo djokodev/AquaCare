@@ -157,7 +157,7 @@ class FeedingPlanService(BaseService):
             return existing_plan
 
         # 1. Chercher le guide DIBAQ pour l'espèce et le poids actuel
-        # On filtre explicitement sur source='DIBAQ' pour ignorer les anciennes entrées MAVECAM
+        # On filtre explicitement sur source='DIBAQ' pour ignorer les anciennes entrées AquaCare
         guide = NutritionalGuide.objects.filter(
             species=cycle.species,
             source='DIBAQ',

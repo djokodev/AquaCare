@@ -1,5 +1,5 @@
 """
-ViewSets Django REST Framework pour API commerce MAVECAM AquaCare.
+ViewSets Django REST Framework pour API commerce AquaCare.
 
 Architecture minimaliste : ViewSets délèguent toute logique métier aux Services.
 Responsabilités : authentification, permissions, sérialisation, routing HTTP.
@@ -45,6 +45,7 @@ from .services import (
     DeliveryFeePreviewCommand,
     FeedingSuggestionsQuery,
     OrderApplicationService,
+    ProductionCycleAccessError,
     RecommendedProductQuery,
 )
 from .throttles import (
@@ -105,7 +106,7 @@ logger = logging.getLogger(__name__)
 )
 class ProductViewSet(viewsets.ReadOnlyModelViewSet):
     """
-    API catalogue produits MAVECAM (lecture seule).
+    API catalogue produits AquaCare (lecture seule).
 
     Endpoints :
     - GET /api/commerce/products/ : Liste produits
@@ -195,12 +196,8 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
                 cycle_id,
             )
             return self._serialize_products(products)
-        except Exception as exc:
-            from aquaculture.models import ProductionCycle
-
-            if isinstance(exc, ProductionCycle.DoesNotExist):
-                return self._error_response('Cycle introuvable', status.HTTP_404_NOT_FOUND)
-            raise
+        except ProductionCycleAccessError:
+            return self._error_response('Cycle introuvable', status.HTTP_404_NOT_FOUND)
 
     @action(detail=False, methods=['get'])
     def recommended(self, request: Request) -> Response:
@@ -244,7 +241,7 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
         Génère suggestions intelligentes d'achat d'aliments.
 
         Analyse la consommation des cycles actifs et suggère les quantités optimales
-        de produits MAVECAM à commander.
+        de produits AquaCare à commander.
 
         Query params :
         - farm_profile_id: UUID du profil ferme (optionnel, filtre si fourni)
@@ -539,6 +536,7 @@ class OrderViewSet(
             ],
             "delivery_method": "home",
             "pickup_location": "",  // requis si pickup
+            "production_cycle_id": "uuid",  // optionnel (liaison cycle session)
             "client_uuid": "uuid",  // optionnel (sync offline)
             "created_offline": false
         }
@@ -553,6 +551,11 @@ class OrderViewSet(
                     items_data=OrderCreateSerializer._build_items_payload(validated_data['items']),
                     delivery_method=validated_data['delivery_method'],
                     pickup_location=validated_data.get('pickup_location'),
+                    production_cycle_id=(
+                        str(validated_data['production_cycle_id'])
+                        if validated_data.get('production_cycle_id') is not None
+                        else None
+                    ),
                     client_uuid=(
                         str(validated_data['client_uuid'])
                         if validated_data.get('client_uuid') is not None

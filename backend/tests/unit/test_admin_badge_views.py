@@ -46,7 +46,7 @@ def admin_client(staff_user):
 
 @pytest.fixture
 def support_user(db):
-    """Crée un utilisateur du groupe mavecam_support."""
+    """Crée un utilisateur du groupe aquacare_support."""
     user = User.objects.create_user(
         phone_number='+237690100003',
         password='testpass123',
@@ -56,7 +56,7 @@ def support_user(db):
         account_type='individual',
         age_group='26_35',
     )
-    group, _ = Group.objects.get_or_create(name='mavecam_support')
+    group, _ = Group.objects.get_or_create(name='aquacare_support')
     user.groups.add(group)
     return user
 
@@ -185,7 +185,7 @@ class TestBadgeCountsView:
         assert data['total'] == expected_total
 
     def test_support_user_sees_only_chat(self, support_user):
-        """Un utilisateur mavecam_support ne voit que le badge chat."""
+        """Un utilisateur aquacare_support ne voit que le badge chat."""
         c = Client()
         c.force_login(support_user)
         response = c.get('/admin/api/badge-counts/')

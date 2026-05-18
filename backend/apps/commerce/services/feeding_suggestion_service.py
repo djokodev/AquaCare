@@ -14,12 +14,13 @@ from datetime import timedelta
 from decimal import Decimal
 from typing import TypedDict
 
-from aquaculture.models import CycleLog, ProductionCycle
 from commerce.models import Product
 from django.utils import timezone
 
 from ..constants import TARGET_WEIGHT_CATFISH_DEFAULT, TARGET_WEIGHT_TILAPIA_DEFAULT
 from ..domain.growth_calculator import GrowthCalculator, PhaseDetector
+from .contracts import CycleLogReadModel, ProductionCycleReadModel
+from .feeding_context_gateway import FeedingContextGateway
 
 
 class SuggestedProduct(TypedDict):
@@ -132,18 +133,12 @@ class FeedingSuggestionService:
         Returns:
             Dict avec suggestions multi-granulométrie
         """
-        # Récupérer cycles actifs
-        cycles_query = ProductionCycle.objects.filter(
-            farm_profile__user__id=user_id,
-            status='active'
+        # Récupérer cycles actifs via gateway pour isoler les dépendances aquaculture
+        active_cycles = FeedingContextGateway.get_active_cycles(
+            user_id=user_id,
+            farm_profile_id=farm_profile_id,
+            cycle_id=cycle_id,
         )
-
-        if farm_profile_id:
-            cycles_query = cycles_query.filter(farm_profile__id=farm_profile_id)
-        if cycle_id:
-            cycles_query = cycles_query.filter(id=cycle_id)
-
-        active_cycles = list(cycles_query.select_related('farm_profile'))
 
         if cycle_id and not active_cycles:
             raise ValueError("Cycle de session introuvable ou inactif.")
@@ -193,7 +188,7 @@ class FeedingSuggestionService:
 
     @staticmethod
     def _analyze_cycle_with_phases(
-        cycle: ProductionCycle,
+        cycle: ProductionCycleReadModel,
     ) -> CycleSuggestion | CycleSuggestionNoData:
         """
         Analyse un cycle avec détection automatique de phase actuelle.
@@ -212,14 +207,10 @@ class FeedingSuggestionService:
         end_date = timezone.now()
         start_date = end_date - timedelta(days=FeedingSuggestionService.MAX_ANALYSIS_DAYS)
 
-        logs = list(
-            CycleLog.objects.filter(
-                cycle=cycle,
-                log_date__gte=start_date.date(),
-                log_date__lte=end_date.date(),
-                feed_quantity__isnull=False,
-                feed_quantity__gt=0,
-            ).order_by('log_date')
+        logs = FeedingContextGateway.get_recent_feed_logs(
+            cycle=cycle,
+            start_date=start_date.date(),
+            end_date=end_date.date(),
         )
         logs_count = len(logs)
 
@@ -346,8 +337,8 @@ class FeedingSuggestionService:
 
     @staticmethod
     def _calculate_current_average_weight(
-        cycle: ProductionCycle,
-        logs: list[CycleLog],
+        cycle: ProductionCycleReadModel,
+        logs: list[CycleLogReadModel],
     ) -> float | None:
         """
         Calcule le poids moyen actuel des poissons depuis les logs.

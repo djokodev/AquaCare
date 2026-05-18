@@ -1,6 +1,6 @@
 /**
  * Constantes aquaculture pour les calculs financiers
- * Valeurs validées par expert MAVECAM - Janvier 2026
+ * Valeurs validées par expert AquaCare - Janvier 2026
  *
  * @module constants/aquaculture
  */

@@ -31,7 +31,7 @@ import {
 import type { MediaType } from '../types/chat';
 
 /**
- * MAVECAM Design System Colors
+ * AquaCare Design System Colors
  */
 const COLORS = {
   GREEN_PRIMARY: '#059669',

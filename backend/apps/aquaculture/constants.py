@@ -7,8 +7,10 @@ SAMPLING_TOLERANCE = Decimal('0.10')  # 10%
 # Default feed price (FCFA/kg) used when FarmProfile has no custom price
 DEFAULT_FEED_PRICE_PER_KG = Decimal('1250')
 
-# Maximum initial stocking density (fish per m²)
-MAX_INITIAL_DENSITY_PER_M2 = 500
+# Maximum initial stocking density (offline-first shared rules)
+# Keep these values aligned with frontend `constants/aquaculture.ts`.
+MAX_STOCKING_DENSITY_POND_PER_M2 = 10
+MAX_STOCKING_DENSITY_TANK_PER_M3 = 300
 
 # Water temperature valid range for log entries (°C)
 LOG_TEMPERATURE_MIN = 15
@@ -46,7 +48,7 @@ GROWTH_STAGES = [
 NUTRITIONAL_GUIDE_SOURCES = [
     ('DIBAQ', 'DIBAQ'),
     ('ALLER_AQUA', 'Aller Aqua'),
-    ('MAVECAM', 'MAVECAM'),
+    ('AquaCare', 'AquaCare'),
 ]
 
 CYCLE_STATUS_CHOICES = [
@@ -146,6 +148,11 @@ ECONOMIC_DEFAULTS_BY_SPECIES = {
         'planned_cycle_duration_days': 120,
         'planned_selling_price_per_kg_fcfa': Decimal('2000'),
     },
+}
+
+DEFAULT_INITIAL_AVERAGE_WEIGHT_G_BY_SPECIES = {
+    'tilapia': Decimal('5'),
+    'clarias': Decimal('5'),
 }
 
 DEFAULT_EXPECTED_SURVIVAL_RATE_PCT = Decimal('85')

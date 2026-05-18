@@ -1,5 +1,5 @@
 """
-Serializers Django REST Framework pour le module commerce MAVECAM AquaCare.
+Serializers Django REST Framework pour le module commerce AquaCare.
 
 Architecture minimaliste : Serializers pour validation/transformation données,
 logique métier déléguée aux Services.
@@ -68,6 +68,7 @@ class OrderSerializer(serializers.ModelSerializer):
     items = OrderItemSerializer(many=True, read_only=True)
     user_name = serializers.CharField(source='user.full_name', read_only=True)
     farm_name = serializers.CharField(source='farm_profile.farm_name', read_only=True)
+    production_cycle_id = serializers.UUIDField(read_only=True, allow_null=True)
     total_bags = serializers.IntegerField(read_only=True)
     is_free_delivery = serializers.BooleanField(read_only=True)
 
@@ -76,6 +77,7 @@ class OrderSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'order_number', 'status',
             'user', 'user_name', 'farm_profile', 'farm_name',
+            'production_cycle_id',
             'delivery_method', 'pickup_location',
             'delivery_name', 'delivery_phone', 'delivery_region',
             'delivery_city', 'delivery_full_address',
@@ -166,6 +168,11 @@ class OrderCreateSerializer(serializers.Serializer):
         required=False,
         allow_blank=True,
         help_text="Point de retrait si delivery_method='pickup'"
+    )
+    production_cycle_id = serializers.UUIDField(
+        required=False,
+        allow_null=True,
+        help_text="UUID du cycle de production associe a la commande",
     )
     client_uuid = serializers.UUIDField(
         required=False,

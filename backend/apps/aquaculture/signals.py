@@ -1,5 +1,5 @@
 """
-Signaux Django pour le module aquaculture de MAVECAM AquaCare.
+Signaux Django pour le module aquaculture de AquaCare.
 
 Architecture événementielle légère : ce fichier sert uniquement de DÉCLENCHEUR.
 TOUTE la logique métier est déléguée aux services appropriés.
@@ -27,6 +27,19 @@ from .services.sync_service import is_sync_in_progress
 # =============================================================================
 # SIGNALS PRODUCTIONCY CLE
 # =============================================================================
+
+@receiver(pre_save, sender=ProductionCycle)
+def track_previous_cycle_status(sender, instance, **kwargs):
+    """
+    Memorise le statut precedent pour detecter une vraie transition vers `harvested`.
+    """
+    previous_status = None
+    if instance.pk:
+        previous_status = ProductionCycle.objects.filter(id=instance.pk).values_list(
+            'status', flat=True
+        ).first()
+    instance._previous_status = previous_status
+
 
 @receiver(pre_save, sender=ProductionCycle)
 def calculate_initial_biomass(sender, instance, **kwargs):
@@ -112,7 +125,9 @@ def check_cycle_completion(sender, instance, **kwargs):
 
     DÉLÉGATION : NotificationService pour notifications
     """
-    if instance.status == 'harvested' and instance.end_date:
+    previous_status = getattr(instance, '_previous_status', None)
+    just_harvested = previous_status != 'harvested'
+    if instance.status == 'harvested' and instance.end_date and just_harvested:
         # Notification de clôture du cycle
         NotificationService.create_notification(
             user=instance.farm_profile.user,

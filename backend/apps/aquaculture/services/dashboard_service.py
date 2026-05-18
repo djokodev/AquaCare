@@ -35,7 +35,12 @@ class DashboardService:
     CACHE_TTL_SECONDS = 60
 
     @staticmethod
-    def build_dashboard_data(user, cycle_id: str | None = None) -> dict[str, Any]:
+    def build_dashboard_data(
+        user,
+        cycle_id: str | None = None,
+        *,
+        lightweight: bool = False,
+    ) -> dict[str, Any]:
         """
         Construit les données complètes du dashboard.
 
@@ -44,6 +49,8 @@ class DashboardService:
         cache_key = f"dashboard:{user.id}"
         if cycle_id:
             cache_key = f"dashboard:{user.id}:{cycle_id}"
+        if lightweight:
+            cache_key = f"{cache_key}:lite"
         cached = cache.get(cache_key)
         if cached:
             return cached
@@ -51,12 +58,15 @@ class DashboardService:
         cycle_scope = None
         thirty_days_ago = date.today() - timedelta(days=30)
 
-        active_cycles = ProductionCycle.objects.filter(
+        active_cycles_query = ProductionCycle.objects.filter(
             farm_profile__user=user,
             status='active',
-        ).with_dashboard_logs(
-            thirty_days_ago
         )
+
+        if lightweight:
+            active_cycles = active_cycles_query.for_api()
+        else:
+            active_cycles = active_cycles_query.with_dashboard_logs(thirty_days_ago)
 
         if cycle_id:
             cycle_scope = active_cycles.filter(id=cycle_id).first()
@@ -65,16 +75,32 @@ class DashboardService:
             active_cycles = active_cycles.filter(id=cycle_scope.id)
 
         active_cycles_list = list(active_cycles)
-        cycle_contexts = DashboardService._build_cycle_contexts(active_cycles_list)
         fcr_values = [float(cycle.fcr) for cycle in active_cycles_list if cycle.fcr is not None]
         survival_values = [
             float(cycle.survival_rate) for cycle in active_cycles_list if cycle.survival_rate is not None
         ]
 
-        recent_logs = DashboardService._get_recent_logs(user, cycle_scope)
-        current_plans = DashboardService._get_current_plans(user, cycle_scope)
-        pending_notifications = DashboardService._get_pending_notifications(user)
-        active_issues = DashboardService._get_active_issues(user, cycle_scope)
+        if lightweight:
+            recent_logs = []
+            current_plans = []
+            pending_notifications = []
+            active_issues = []
+            growth_chart_data: list[dict[str, Any]] = []
+            mortality_chart_data: list[dict[str, Any]] = []
+            feed_consumption_chart_data: list[dict[str, Any]] = []
+            environmental_alerts: list[dict[str, Any]] = []
+            feeding_recommendations: dict[str, Any] = {}
+        else:
+            cycle_contexts = DashboardService._build_cycle_contexts(active_cycles_list)
+            recent_logs = DashboardService._get_recent_logs(user, cycle_scope)
+            current_plans = DashboardService._get_current_plans(user, cycle_scope)
+            pending_notifications = DashboardService._get_pending_notifications(user)
+            active_issues = DashboardService._get_active_issues(user, cycle_scope)
+            growth_chart_data = DashboardService._prepare_growth_chart_data(cycle_contexts)
+            mortality_chart_data = DashboardService._prepare_mortality_chart_data(cycle_contexts)
+            feed_consumption_chart_data = DashboardService._prepare_feed_chart_data(cycle_contexts)
+            environmental_alerts = DashboardService._build_environmental_alerts(cycle_contexts)
+            feeding_recommendations = DashboardService._get_feeding_recommendations(cycle_contexts)
 
         dashboard_data = {
             'active_cycles_count': len(active_cycles_list),
@@ -93,12 +119,12 @@ class DashboardService:
                 'active_issues': active_issues,
             },
 
-            'growth_chart_data': DashboardService._prepare_growth_chart_data(cycle_contexts),
-            'mortality_chart_data': DashboardService._prepare_mortality_chart_data(cycle_contexts),
-            'feed_consumption_chart_data': DashboardService._prepare_feed_chart_data(cycle_contexts),
+            'growth_chart_data': growth_chart_data,
+            'mortality_chart_data': mortality_chart_data,
+            'feed_consumption_chart_data': feed_consumption_chart_data,
 
-            'environmental_alerts': DashboardService._build_environmental_alerts(cycle_contexts),
-            'feeding_recommendations': DashboardService._get_feeding_recommendations(cycle_contexts),
+            'environmental_alerts': environmental_alerts,
+            'feeding_recommendations': feeding_recommendations,
         }
 
         cache.set(cache_key, dashboard_data, timeout=DashboardService.CACHE_TTL_SECONDS)

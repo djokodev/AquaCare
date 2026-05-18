@@ -23,12 +23,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useDispatch, useSelector } from 'react-redux';
 
-import { MAVECAM_COLORS } from '@/constants/colors';
+import { AQUACARE_COLORS } from '@/constants/colors';
 import { RootStackParamList } from '@/navigation/MainNavigator';
 import { AppDispatch, RootState } from '@/store/store';
 import { runAnnualSimulation } from '@/features/aquaculture/store/farmSetupSlice';
-import {  
+import {
   buildAnnualSimulationInput,
+  hasFarmSetupErrors,
+  validateFarmSetupForm,
   getFingerlingsCoherencePreview,
   getFingerlingsSuggestionPreview,
   getStockingDensityPreview,
@@ -102,6 +104,52 @@ export default function CreateFarmScreen({ navigation }: Props) {
     return getFingerlingsSuggestionPreview(form);
   }, [form.infraType, form.unitCount, form.unitVolume, form.unitSurface, form.annualTarget, form.survivalRate, form.harvestWeight, form.species]);
 
+  const getFieldLabel = (field: keyof FarmSetupFormState): string => {
+    const labelByField: Record<keyof FarmSetupFormState, string> = {
+      species: t('createFarmSpeciesLabel'),
+      infraType: t('createFarmInfraLabel'),
+      unitCount: t('createFarmUnitCountLabel'),
+      unitVolume: t('createFarmUnitVolumeLabel'),
+      unitSurface: t('createFarmUnitSurfaceLabel'),
+      annualTarget: t('createFarmAnnualTargetLabel'),
+      startDate: t('createFarmStartDateLabel'),
+      fingerlingsPrice: t('createFarmFingerlingsLabel'),
+      sellingPrice: t('createFarmSellingPriceLabel'),
+      otherCosts: t('createFarmOtherCostsLabel'),
+      fingerlingsCount: t('createFarmFingerlingsCountLabel'),
+      harvestWeight: t('createFarmHarvestWeightLabel'),
+      survivalRate: t('createFarmSurvivalRateLabel'),
+    };
+
+    return labelByField[field];
+  };
+
+  const getFirstValidationMessage = (): string | null => {
+    const validationErrors = validateFarmSetupForm(form);
+    if (!hasFarmSetupErrors(validationErrors)) {
+      return null;
+    }
+
+    const firstErrorEntry = (Object.keys(validationErrors) as (keyof FarmSetupFormState)[])
+      .find((field) => Boolean(validationErrors[field]));
+    if (!firstErrorEntry) {
+      return t('createFarmRequiredFieldsError');
+    }
+
+    const errorCode = validationErrors[firstErrorEntry];
+    if (!errorCode) {
+      return t('createFarmRequiredFieldsError');
+    }
+
+    const fieldLabel = getFieldLabel(firstErrorEntry);
+    const reason =
+      errorCode === 'required'
+        ? t('required')
+        : t(errorCode);
+
+    return `${fieldLabel} : ${reason}`;
+  };
+
   function setField(key: keyof FarmSetupFormState, value: string) {
     setForm(prev => {
       const next = { ...prev, [key]: value };
@@ -117,17 +165,9 @@ export default function CreateFarmScreen({ navigation }: Props) {
   }
 
   async function handleSimulate() {
-    // Validation des champs requis
-    if (!form.species || !form.infraType || !form.unitCount || !form.annualTarget) {
-      Alert.alert(t('error'), t('createFarmRequiredFieldsError'));
-      return;
-    }
-    if (form.infraType === 'etang' && !form.unitSurface) {
-      Alert.alert(t('error'), t('createFarmRequiredFieldsError'));
-      return;
-    }
-    if (form.infraType !== 'etang' && !form.unitVolume) {
-      Alert.alert(t('error'), t('createFarmRequiredFieldsError'));
+    const firstValidationMessage = getFirstValidationMessage();
+    if (firstValidationMessage) {
+      Alert.alert(t('error'), firstValidationMessage);
       return;
     }
 
@@ -137,7 +177,11 @@ export default function CreateFarmScreen({ navigation }: Props) {
     if (runAnnualSimulation.fulfilled.match(result)) {
       navigation.navigate('AnnualSimulation', { formData: form });
     } else {
-      Alert.alert(t('error'), t('simulationErrorRetry'));
+      const errorMessage =
+        typeof result.payload === 'string' && result.payload.trim()
+          ? result.payload
+          : t('simulationErrorRetry');
+      Alert.alert(t('error'), errorMessage);
     }
   }
 
@@ -186,7 +230,7 @@ export default function CreateFarmScreen({ navigation }: Props) {
         style={styles.input}
         keyboardType="numeric"
         placeholder={t('createFarmUnitCountPlaceholder')}
-        placeholderTextColor={MAVECAM_COLORS.GRAY_LIGHT}
+        placeholderTextColor={AQUACARE_COLORS.GRAY_LIGHT}
         value={form.unitCount}
         onChangeText={v => setField('unitCount', v)}
       />
@@ -198,7 +242,7 @@ export default function CreateFarmScreen({ navigation }: Props) {
             style={styles.input}
             keyboardType="numeric"
             placeholder={t('createFarmUnitSurfacePlaceholder')}
-            placeholderTextColor={MAVECAM_COLORS.GRAY_LIGHT}
+            placeholderTextColor={AQUACARE_COLORS.GRAY_LIGHT}
             value={form.unitSurface}
             onChangeText={v => setField('unitSurface', v)}
           />
@@ -210,7 +254,7 @@ export default function CreateFarmScreen({ navigation }: Props) {
             style={styles.input}
             keyboardType="numeric"
             placeholder={t('createFarmUnitVolumePlaceholder')}
-            placeholderTextColor={MAVECAM_COLORS.GRAY_LIGHT}
+            placeholderTextColor={AQUACARE_COLORS.GRAY_LIGHT}
             value={form.unitVolume}
             onChangeText={v => setField('unitVolume', v)}
           />
@@ -219,7 +263,7 @@ export default function CreateFarmScreen({ navigation }: Props) {
 
       {totalCapacity && (
         <View style={styles.capacityBadge}>
-          <Ionicons name="checkmark-circle" size={16} color={MAVECAM_COLORS.GREEN_PRIMARY} />
+          <Ionicons name="checkmark-circle" size={16} color={AQUACARE_COLORS.GREEN_PRIMARY} />
           <Text style={styles.capacityText}>
             {t('createFarmTotalCapacity')} : <Text style={styles.capacityValue}>{totalCapacity}</Text>
           </Text>
@@ -231,7 +275,7 @@ export default function CreateFarmScreen({ navigation }: Props) {
         style={styles.input}
         keyboardType="numeric"
         placeholder={t('createFarmAnnualTargetPlaceholder')}
-        placeholderTextColor={MAVECAM_COLORS.GRAY_LIGHT}
+        placeholderTextColor={AQUACARE_COLORS.GRAY_LIGHT}
         value={form.annualTarget}
         onChangeText={v => setField('annualTarget', v)}
       />
@@ -240,7 +284,7 @@ export default function CreateFarmScreen({ navigation }: Props) {
       <TextInput
         style={styles.input}
         placeholder={t('createFarmStartDatePlaceholder')}
-        placeholderTextColor={MAVECAM_COLORS.GRAY_LIGHT}
+        placeholderTextColor={AQUACARE_COLORS.GRAY_LIGHT}
         value={form.startDate}
         onChangeText={v => setField('startDate', v)}
       />
@@ -250,7 +294,7 @@ export default function CreateFarmScreen({ navigation }: Props) {
         style={styles.input}
         keyboardType="numeric"
         placeholder={t('createFarmFingerlingsPlaceholder')}
-        placeholderTextColor={MAVECAM_COLORS.GRAY_LIGHT}
+        placeholderTextColor={AQUACARE_COLORS.GRAY_LIGHT}
         value={form.fingerlingsPrice}
         onChangeText={v => setField('fingerlingsPrice', v)}
       />
@@ -283,7 +327,7 @@ export default function CreateFarmScreen({ navigation }: Props) {
         ]}
         keyboardType="numeric"
         placeholder={t('createFarmFingerlingsCountPlaceholder')}
-        placeholderTextColor={MAVECAM_COLORS.GRAY_LIGHT}
+        placeholderTextColor={AQUACARE_COLORS.GRAY_LIGHT}
         value={form.fingerlingsCount}
         onChangeText={v => setField('fingerlingsCount', v)}
       />
@@ -333,7 +377,7 @@ export default function CreateFarmScreen({ navigation }: Props) {
         style={styles.input}
         keyboardType="numeric"
         placeholder={t('createFarmSellingPricePlaceholder')}
-        placeholderTextColor={MAVECAM_COLORS.GRAY_LIGHT}
+        placeholderTextColor={AQUACARE_COLORS.GRAY_LIGHT}
         value={form.sellingPrice}
         onChangeText={v => setField('sellingPrice', v)}
       />
@@ -343,7 +387,7 @@ export default function CreateFarmScreen({ navigation }: Props) {
         style={styles.input}
         keyboardType="numeric"
         placeholder={t('createFarmOtherCostsPlaceholder')}
-        placeholderTextColor={MAVECAM_COLORS.GRAY_LIGHT}
+        placeholderTextColor={AQUACARE_COLORS.GRAY_LIGHT}
         value={form.otherCosts}
         onChangeText={v => setField('otherCosts', v)}
       />
@@ -353,7 +397,7 @@ export default function CreateFarmScreen({ navigation }: Props) {
         style={styles.input}
         keyboardType="numeric"
         placeholder={t('createFarmHarvestWeightPlaceholder')}
-        placeholderTextColor={MAVECAM_COLORS.GRAY_LIGHT}
+        placeholderTextColor={AQUACARE_COLORS.GRAY_LIGHT}
         value={form.harvestWeight}
         onChangeText={v => setField('harvestWeight', v)}
       />
@@ -363,7 +407,7 @@ export default function CreateFarmScreen({ navigation }: Props) {
         style={styles.input}
         keyboardType="numeric"
         placeholder={t('createFarmSurvivalRatePlaceholder')}
-        placeholderTextColor={MAVECAM_COLORS.GRAY_LIGHT}
+        placeholderTextColor={AQUACARE_COLORS.GRAY_LIGHT}
         value={form.survivalRate}
         onChangeText={v => setField('survivalRate', v)}
       />
@@ -376,7 +420,7 @@ export default function CreateFarmScreen({ navigation }: Props) {
         activeOpacity={0.8}
       >
         {simLoading ? (
-          <ActivityIndicator color={MAVECAM_COLORS.WHITE} />
+          <ActivityIndicator color={AQUACARE_COLORS.WHITE} />
         ) : (
           <Text style={styles.ctaBtnText}>{t('createFarmSimulateBtn')}</Text>
         )}
@@ -393,7 +437,7 @@ export default function CreateFarmScreen({ navigation }: Props) {
 function SectionTitle({ label, icon }: { label: string; icon: string }) {
   return (
     <View style={styles.sectionTitle}>
-      <Ionicons name={icon as any} size={18} color={MAVECAM_COLORS.GREEN_PRIMARY} />
+      <Ionicons name={icon as any} size={18} color={AQUACARE_COLORS.GREEN_PRIMARY} />
       <Text style={styles.sectionTitleText}>{label}</Text>
     </View>
   );
@@ -403,7 +447,7 @@ function FieldLabel({ label, required }: { label: string; required?: boolean }) 
   return (
     <Text style={styles.fieldLabel}>
       {label}
-      {required && <Text style={{ color: MAVECAM_COLORS.ERROR }}> *</Text>}
+      {required && <Text style={{ color: AQUACARE_COLORS.ERROR }}> *</Text>}
     </Text>
   );
 }
@@ -433,7 +477,7 @@ function Chip({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: MAVECAM_COLORS.CREAM,
+    backgroundColor: AQUACARE_COLORS.CREAM,
   },
   content: {
     padding: 16,
@@ -446,12 +490,12 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 22,
     fontWeight: '700',
-    color: MAVECAM_COLORS.GRAY_DARK,
+    color: AQUACARE_COLORS.GRAY_DARK,
     textAlign: 'center',
   },
   subtitle: {
     fontSize: 14,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
+    color: AQUACARE_COLORS.GRAY_LIGHT,
     textAlign: 'center',
     lineHeight: 20,
   },
@@ -468,12 +512,12 @@ const styles = StyleSheet.create({
   sectionTitleText: {
     fontSize: 15,
     fontWeight: '600',
-    color: MAVECAM_COLORS.GREEN_DARK,
+    color: AQUACARE_COLORS.GREEN_DARK,
   },
   fieldLabel: {
     fontSize: 14,
     fontWeight: '500',
-    color: MAVECAM_COLORS.GRAY_DARK,
+    color: AQUACARE_COLORS.GRAY_DARK,
     marginBottom: 6,
     marginTop: 12,
   },
@@ -492,16 +536,16 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   chipSelected: {
-    borderColor: MAVECAM_COLORS.GREEN_PRIMARY,
+    borderColor: AQUACARE_COLORS.GREEN_PRIMARY,
     backgroundColor: '#ecfdf5',
   },
   chipText: {
     fontSize: 13,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
+    color: AQUACARE_COLORS.GRAY_LIGHT,
     fontWeight: '500',
   },
   chipTextSelected: {
-    color: MAVECAM_COLORS.GREEN_PRIMARY,
+    color: AQUACARE_COLORS.GREEN_PRIMARY,
     fontWeight: '600',
   },
   input: {
@@ -512,10 +556,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: Platform.OS === 'ios' ? 14 : 10,
     fontSize: 15,
-    color: MAVECAM_COLORS.GRAY_DARK,
+    color: AQUACARE_COLORS.GRAY_DARK,
   },
   inputError: {
-    borderColor: MAVECAM_COLORS.ERROR,
+    borderColor: AQUACARE_COLORS.ERROR,
   },
   coherenceBadge: {
     marginTop: 6,
@@ -526,28 +570,28 @@ const styles = StyleSheet.create({
   },
   coherenceBadgeOk: {
     backgroundColor: '#ecfdf5',
-    borderLeftColor: MAVECAM_COLORS.GREEN_PRIMARY,
+    borderLeftColor: AQUACARE_COLORS.GREEN_PRIMARY,
   },
   coherenceBadgeWarn: {
     backgroundColor: '#fffbeb',
-    borderLeftColor: MAVECAM_COLORS.WARNING,
+    borderLeftColor: AQUACARE_COLORS.WARNING,
   },
   coherenceBadgeError: {
     backgroundColor: '#fef2f2',
-    borderLeftColor: MAVECAM_COLORS.ERROR,
+    borderLeftColor: AQUACARE_COLORS.ERROR,
   },
   coherenceText: {
     fontSize: 12,
     lineHeight: 17,
   },
   coherenceTextOk: {
-    color: MAVECAM_COLORS.GREEN_DARK,
+    color: AQUACARE_COLORS.GREEN_DARK,
   },
   coherenceTextWarn: {
     color: '#92400e',
   },
   coherenceTextError: {
-    color: MAVECAM_COLORS.ERROR,
+    color: AQUACARE_COLORS.ERROR,
     fontWeight: '600',
   },
   capacityBadge: {
@@ -562,20 +606,20 @@ const styles = StyleSheet.create({
   },
   capacityText: {
     fontSize: 13,
-    color: MAVECAM_COLORS.GRAY_DARK,
+    color: AQUACARE_COLORS.GRAY_DARK,
   },
   capacityValue: {
     fontWeight: '700',
-    color: MAVECAM_COLORS.GREEN_PRIMARY,
+    color: AQUACARE_COLORS.GREEN_PRIMARY,
   },
   suggestionHint: {
     fontSize: 12,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
+    color: AQUACARE_COLORS.GRAY_LIGHT,
     fontStyle: 'italic',
     marginBottom: 6,
   },
   ctaBtn: {
-    backgroundColor: MAVECAM_COLORS.GREEN_PRIMARY,
+    backgroundColor: AQUACARE_COLORS.GREEN_PRIMARY,
     borderRadius: 12,
     paddingVertical: 16,
     alignItems: 'center',

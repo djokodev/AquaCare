@@ -3,7 +3,7 @@ import { FlatList, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 
-import { MAVECAM_COLORS } from '@/constants/colors';
+import { AQUACARE_COLORS } from '@/constants/colors';
 import { ProductionCycle } from '@/types/aquaculture';
 
 interface CyclePickerProps {
@@ -42,7 +42,7 @@ function CyclePicker({ cycles, selectedCycleId, onSelectCycle }: CyclePickerProp
       return (
         <TouchableOpacity
           className={`bg-white rounded-xl p-4 mb-3 border ${
-            isSelected ? 'border-mavecam-primary bg-[#f0fdf4]' : 'border-gray-200'
+            isSelected ? 'border-aquacare-primary bg-[#f0fdf4]' : 'border-gray-200'
           }`}
           onPress={() => onSelectCycle(cycle.id)}
         >
@@ -51,7 +51,7 @@ function CyclePicker({ cycles, selectedCycleId, onSelectCycle }: CyclePickerProp
               <Text className="text-base font-bold text-gray-dark mb-1">{cycle.cycle_name}</Text>
 
               <View className="flex-row items-center mb-2">
-                <Ionicons name={speciesIcon} size={14} color={MAVECAM_COLORS.GREEN_PRIMARY} />
+                <Ionicons name={speciesIcon} size={14} color={AQUACARE_COLORS.GREEN_PRIMARY} />
                 <Text className="text-sm text-gray-light ml-1">
                   {speciesLabel} - {cycle.pond_identifier}
                 </Text>
@@ -59,17 +59,17 @@ function CyclePicker({ cycles, selectedCycleId, onSelectCycle }: CyclePickerProp
 
               <View className="flex-row flex-wrap gap-x-4 gap-y-1">
                 <View className="flex-row items-center">
-                  <Ionicons name="time-outline" size={12} color={MAVECAM_COLORS.GRAY_LIGHT} />
+                  <Ionicons name="time-outline" size={12} color={AQUACARE_COLORS.GRAY_LIGHT} />
                   <Text className="text-xs text-gray-light ml-1">
                     {daysActive} {t('days')}
                   </Text>
                 </View>
                 <View className="flex-row items-center">
-                  <Ionicons name="scale-outline" size={12} color={MAVECAM_COLORS.GRAY_LIGHT} />
+                  <Ionicons name="scale-outline" size={12} color={AQUACARE_COLORS.GRAY_LIGHT} />
                   <Text className="text-xs text-gray-light ml-1">{formatBiomass(cycle)} kg</Text>
                 </View>
                 <View className="flex-row items-center">
-                  <Ionicons name="trending-up-outline" size={12} color={MAVECAM_COLORS.GRAY_LIGHT} />
+                  <Ionicons name="trending-up-outline" size={12} color={AQUACARE_COLORS.GRAY_LIGHT} />
                   <Text className="text-xs text-gray-light ml-1">
                     {formatSurvivalRate(cycle)} {t('survivalRateShort', { defaultValue: 'survie' })}
                   </Text>
@@ -78,7 +78,7 @@ function CyclePicker({ cycles, selectedCycleId, onSelectCycle }: CyclePickerProp
             </View>
 
             {isSelected && (
-              <Ionicons name="checkmark-circle" size={24} color={MAVECAM_COLORS.GREEN_PRIMARY} />
+              <Ionicons name="checkmark-circle" size={24} color={AQUACARE_COLORS.GREEN_PRIMARY} />
             )}
           </View>
         </TouchableOpacity>

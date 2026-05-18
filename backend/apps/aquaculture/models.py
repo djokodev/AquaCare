@@ -1,5 +1,5 @@
 """
-Modèles de données pour le module aquaculture de MAVECAM AquaCare.
+Modèles de données pour le module aquaculture de AquaCare.
 
 Ce fichier contient tous les modèles Django pour la gestion de l'aquaculture,
 basés sur les spécifications techniques et les meilleures pratiques du secteur.
@@ -13,6 +13,7 @@ import uuid
 from datetime import date
 from decimal import Decimal
 
+from django.contrib.postgres.indexes import GinIndex
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.db.models import Prefetch
@@ -265,11 +266,20 @@ class ProductionCycle(models.Model):
         verbose_name_plural = _("Cycles de production")
         indexes = [
             models.Index(fields=['farm_profile', 'status']),
+            models.Index(fields=['farm_profile', 'updated_at'], name='aq_cycle_farm_updated_idx'),
             models.Index(fields=['start_date', 'end_date']),
             models.Index(fields=['species', 'status']),
+            models.Index(fields=['created_offline', 'synced_at'], name='aquaculture_created_7d7f63_idx'),
         ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    client_uuid = models.UUIDField(
+        unique=True,
+        null=True,
+        blank=True,
+        verbose_name=_("UUID client"),
+        help_text=_("UUID généré côté mobile pour déduplication")
+    )
     farm_profile = models.ForeignKey(
         'accounts.FarmProfile', 
         on_delete=models.CASCADE,
@@ -472,6 +482,15 @@ class ProductionCycle(models.Model):
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    created_offline = models.BooleanField(
+        default=False,
+        verbose_name=_("Créé hors ligne")
+    )
+    synced_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name=_("Synchronisé le")
+    )
     objects = ProductionCycleQuerySet.as_manager()
 
     def __str__(self):
@@ -524,6 +543,7 @@ class CycleLog(models.Model):
             models.Index(fields=['cycle', 'log_date']),
             models.Index(fields=['client_uuid']),
             models.Index(fields=['created_offline', 'synced_at']),
+            models.Index(fields=['cycle', 'created_offline', 'created_at'], name='aq_log_cycle_sync_created_idx'),
         ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -599,7 +619,7 @@ class CycleLog(models.Model):
         max_length=100, 
         blank=True,
         verbose_name=_("Type d'aliment"),
-        help_text=_("Référence produit MAVECAM")
+        help_text=_("Référence produit AquaCare")
     )
     feed_size_mm = models.DecimalField(
         max_digits=3,
@@ -701,6 +721,16 @@ class FeedingPlan(models.Model):
         ordering = ['cycle', 'week_number']
         verbose_name = _("Plan d'alimentation")
         verbose_name_plural = _("Plans d'alimentation")
+        indexes = [
+            models.Index(
+                fields=['cycle', 'is_active', 'start_date', 'end_date'],
+                name='aq_feed_cycle_active_dates_idx',
+            ),
+            models.Index(
+                fields=['cycle', 'created_at'],
+                name='aq_feed_cycle_created_idx',
+            ),
+        ]
 
     cycle = models.ForeignKey(
         ProductionCycle, 
@@ -817,9 +847,19 @@ class SanitaryLog(models.Model):
             models.Index(fields=['cycle', 'event_date']),
             models.Index(fields=['event_type', 'resolved']),
             models.Index(fields=['created_offline']),
+            models.Index(fields=['created_offline', 'synced_at'], name='aquaculture_san_sync_idx'),
+            models.Index(fields=['cycle', 'created_offline', 'created_at'], name='aq_san_cycle_sync_created_idx'),
         ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+
+    client_uuid = models.UUIDField(
+        unique=True,
+        null=True,
+        blank=True,
+        verbose_name=_("UUID client"),
+        help_text=_("UUID généré côté mobile pour déduplication")
+    )
 
     cycle = models.ForeignKey(
         ProductionCycle, 
@@ -899,7 +939,12 @@ class SanitaryLog(models.Model):
         default=False,
         verbose_name=_("Créé hors ligne")
     )
-    
+    synced_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name=_("Synchronisé le")
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     objects = SanitaryLogQuerySet.as_manager()
 
@@ -1082,8 +1127,8 @@ class NutritionalGuide(models.Model):
     # Source and temperature-dependent data
     source = models.CharField(
         max_length=50,
-        default='MAVECAM',
-        choices=[('DIBAQ', 'DIBAQ'), ('ALLER_AQUA', 'Aller Aqua'), ('MAVECAM', 'MAVECAM')],
+        default='AquaCare',
+        choices=[('DIBAQ', 'DIBAQ'), ('ALLER_AQUA', 'Aller Aqua'), ('AquaCare', 'AquaCare')],
         verbose_name=_("Source des données")
     )
     temperature_rates = models.JSONField(
@@ -1320,6 +1365,7 @@ class ProductionReport(models.Model):
         indexes = [
             models.Index(fields=['farm_profile', 'report_type', 'period_start'], name='rpt_farm_type_start_idx'),
             models.Index(fields=['status', 'generated_at'], name='rpt_status_generated_idx'),
+            GinIndex(fields=['payload'], name='rpt_payload_gin_idx'),
         ]
 
     def __str__(self):

@@ -12,7 +12,7 @@ import { useTranslation } from 'react-i18next';
 import type { Message, MessageSenderType } from '../types/chat';
 
 /**
- * MAVECAM Design System Colors
+ * AquaCare Design System Colors
  */
 const COLORS = {
   GREEN_PRIMARY: '#059669',

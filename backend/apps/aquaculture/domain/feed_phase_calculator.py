@@ -1,12 +1,12 @@
 """
 Calculateur de phases d'alimentation par espèce.
 
-Basé sur les guides MAVECAM :
+Basé sur les guides AquaCare :
 - Pré-grossissement : 10g → ~100g (alevins achetés par nos utilisateurs)
 - Grossissement     : ~100g → récolte (300-500g)
 - Alevinage         : hors scope (0→10g)
 
-Source : Guides nutritionnels MAVECAM Tilapia et Clarias.
+Source : Guides nutritionnels AquaCare Tilapia et Clarias.
 """
 from __future__ import annotations
 

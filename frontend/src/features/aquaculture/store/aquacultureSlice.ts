@@ -10,61 +10,18 @@ import {
   DailyLogForm,
   SanitaryLogForm,
   HarvestData,
-  SyncPayload,
+  SyncResponse,
   PartialHarvestData,
   PartialHarvest,
 } from '@/types/aquaculture';
 import { apiService } from '@/services/api';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
+import { offlineService } from '@/services/offlineService';
 import { logoutUser } from '@/features/auth/store/authSlice';
-
-interface ApiErrorPayload {
-  detail?: string;
-  message?: string;
-  error?: string;
-}
-
-interface ApiErrorShape {
-  response?: {
-    data?: ApiErrorPayload | string;
-  };
-  message?: string;
-}
-
-type PendingSyncAction =
-  | { type: 'cycleLogs'; data: Partial<CycleLog> }
-  | { type: 'sanitaryLogs'; data: Partial<SanitaryLog> }
-  | { type: 'newCycles'; data: Partial<ProductionCycle> };
+import { getApiErrorMessage } from '@/utils/errorParser';
 
 const extractErrorMessage = (error: unknown, fallback: string): string => {
-  if (!error || typeof error !== 'object') {
-    return fallback;
-  }
-
-  const candidate = error as ApiErrorShape;
-  const responseData = candidate.response?.data;
-
-  if (typeof responseData === 'string' && responseData.trim()) {
-    return responseData;
-  }
-
-  if (responseData && typeof responseData === 'object') {
-    if (responseData.detail) {
-      return responseData.detail;
-    }
-    if (responseData.message) {
-      return responseData.message;
-    }
-    if (responseData.error) {
-      return responseData.error;
-    }
-  }
-
-  if (candidate.message) {
-    return candidate.message;
-  }
-
-  return fallback;
+  return getApiErrorMessage(error, fallback);
 };
 
 // =================== ETAT INITIAL ===================
@@ -89,12 +46,6 @@ const initialState: AquacultureState = {
     sync: false,
   },
   error: null,
-  pendingSync: {
-    cycleLogs: [],
-    sanitaryLogs: [],
-    newCycles: [],
-  },
-  lastSyncTime: undefined,
 };
 
 // =================== ACTIONS ASYNC ===================
@@ -107,7 +58,7 @@ export const ABORTED_UNAUTHENTICATED = 'ABORTED_UNAUTHENTICATED';
 export const fetchDashboardData = createAsyncThunk(
   'aquaculture/fetchDashboardData',
   async (
-    options: { cycleId?: string; forceAllCycles?: boolean } | undefined,
+    options: { cycleId?: string; forceAllCycles?: boolean; lightweight?: boolean } | undefined,
     { getState, rejectWithValue }
   ) => {
     const state = getState() as {
@@ -122,7 +73,9 @@ export const fetchDashboardData = createAsyncThunk(
       const cycleIdToUse = options?.forceAllCycles
         ? undefined
         : options?.cycleId || sessionCycleId;
-      const data = await aquacultureService.getDashboardData(cycleIdToUse);
+      const data = await aquacultureService.getDashboardData(cycleIdToUse, {
+        lightweight: options?.lightweight === true,
+      });
       return data;
     } catch (error: unknown) {
       return rejectWithValue(extractErrorMessage(error, 'Erreur lors du chargement du dashboard'));
@@ -210,8 +163,8 @@ export const harvestCycle = createAsyncThunk(
   'aquaculture/harvestCycle',
   async ({ id, harvestData }: { id: string; harvestData: HarvestData }, { rejectWithValue }) => {
     try {
-      const cycle = await aquacultureService.harvestCycle(id, harvestData);
-      return cycle;
+      const response = await aquacultureService.harvestCycle(id, harvestData);
+      return response;
     } catch (error: unknown) {
       return rejectWithValue(extractErrorMessage(error, 'Erreur lors de la recolte du cycle'));
     }
@@ -346,20 +299,43 @@ export const resolveSanitaryIssue = createAsyncThunk(
 
 export const synchronizeData = createAsyncThunk(
   'aquaculture/synchronizeData',
-  async (_, { getState, rejectWithValue }) => {
+  async (_, { rejectWithValue }) => {
     try {
-      const state = getState() as { aquaculture: AquacultureState };
-      const { pendingSync, lastSyncTime } = state.aquaculture;
+      const syncResult = await offlineService.syncAllOfflineData();
+      const status: SyncResponse['status'] =
+        syncResult.failed === 0
+          ? 'success'
+          : syncResult.success > 0
+            ? 'partial_success'
+            : 'error';
 
-      const payload: SyncPayload = {
-        cycle_logs: pendingSync.cycleLogs,
-        sanitary_logs: pendingSync.sanitaryLogs,
-        new_cycles: pendingSync.newCycles,
-        last_sync: lastSyncTime,
-        device_id: 'mobile-app',
+      const response: SyncResponse = {
+        status,
+        timestamp: new Date().toISOString(),
+        processed: {
+          cycles: syncResult.details.newCycles.success,
+          cycle_logs: syncResult.details.cycleLogs.success,
+          sanitary_logs: syncResult.details.sanitaryLogs.success,
+        },
+        errors:
+          syncResult.failed > 0
+            ? [
+                {
+                  type: 'general',
+                  error: extractErrorMessage(
+                    null,
+                    'Synchronisation partielle, certains éléments seront réessayés automatiquement'
+                  ),
+                },
+              ]
+            : [],
+        server_updates: {
+          cycles: [],
+          cycle_logs: [],
+          feeding_plans: [],
+          sanitary_logs: [],
+        },
       };
-
-      const response = await aquacultureService.synchronize(payload);
       return response;
     } catch (error: unknown) {
       return rejectWithValue(extractErrorMessage(error, 'Erreur lors de la synchronisation'));
@@ -397,33 +373,6 @@ export const aquacultureSlice = createSlice({
         state.cycles.find((item) => item.id === cycleId);
 
       state.currentCycle = cycle;
-    },
-
-    addToPendingSync: (state, action: PayloadAction<PendingSyncAction>) => {
-      const payload = action.payload;
-      switch (payload.type) {
-        case 'cycleLogs':
-          state.pendingSync.cycleLogs.push(payload.data);
-          break;
-        case 'sanitaryLogs':
-          state.pendingSync.sanitaryLogs.push(payload.data);
-          break;
-        case 'newCycles':
-          state.pendingSync.newCycles.push(payload.data);
-          break;
-      }
-    },
-
-    clearPendingSync: (state) => {
-      state.pendingSync = {
-        cycleLogs: [],
-        sanitaryLogs: [],
-        newCycles: [],
-      };
-    },
-
-    updateLastSyncTime: (state, action: PayloadAction<string>) => {
-      state.lastSyncTime = action.payload;
     },
 
     resetAquacultureState: () => initialState,
@@ -505,7 +454,7 @@ export const aquacultureSlice = createSlice({
       })
 
       .addCase(harvestCycle.fulfilled, (state, action) => {
-        const harvestedCycle = action.payload;
+        const harvestedCycle = action.payload.cycle;
 
         const cycleIndex = state.cycles.findIndex((cycle) => cycle.id === harvestedCycle.id);
         if (cycleIndex !== -1) {
@@ -592,15 +541,6 @@ export const aquacultureSlice = createSlice({
       .addCase(synchronizeData.fulfilled, (state, action) => {
         state.loading.sync = false;
 
-        if (action.payload.status === 'success') {
-          state.pendingSync = {
-            cycleLogs: [],
-            sanitaryLogs: [],
-            newCycles: [],
-          };
-          state.lastSyncTime = action.payload.timestamp;
-        }
-
         const { server_updates } = action.payload;
         if (server_updates.cycles.length > 0) {
           server_updates.cycles.forEach((cycle) => {
@@ -679,9 +619,6 @@ export const {
   setCurrentCycle,
   clearCurrentCycle,
   setCurrentCycleById,
-  addToPendingSync,
-  clearPendingSync,
-  updateLastSyncTime,
   resetAquacultureState,
 } = aquacultureSlice.actions;
 

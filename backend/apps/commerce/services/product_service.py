@@ -1,5 +1,5 @@
 """
-Service de gestion des produits du catalogue MAVECAM AquaCare.
+Service de gestion des produits du catalogue AquaCare.
 
 Architecture Clean : Service stateless avec méthodes statiques.
 Gère recherche, filtrage et recommandations de produits alimentaires.
@@ -7,7 +7,7 @@ Gère recherche, filtrage et recommandations de produits alimentaires.
 from __future__ import annotations
 
 from decimal import Decimal
-from typing import TypedDict
+from typing import TYPE_CHECKING, TypedDict
 
 from django.db.models import Q, QuerySet
 
@@ -15,6 +15,9 @@ from ..domain.calculators import ProductRecommendationCalculator
 from ..domain.exceptions import ProductNotAvailableError, ProductNotFoundError
 from ..models import Product
 from .base import BaseCommerceService
+
+if TYPE_CHECKING:
+    from .contracts import ProductionCycleReadModel
 
 
 class ProductPriceRange(TypedDict):
@@ -25,7 +28,7 @@ class ProductPriceRange(TypedDict):
 
 class ProductService(BaseCommerceService):
     """
-    Service de gestion du catalogue produits MAVECAM.
+    Service de gestion du catalogue produits AquaCare.
 
     Responsabilités :
     - Recherche et filtrage produits (espèce, phase, marque)
@@ -255,7 +258,7 @@ class ProductService(BaseCommerceService):
         return product
 
     @staticmethod
-    def get_products_for_cycle(cycle: object) -> QuerySet[Product]:
+    def get_products_for_cycle(cycle: ProductionCycleReadModel) -> QuerySet[Product]:
         """
         Retourne produits adaptés pour un cycle de production donné.
 

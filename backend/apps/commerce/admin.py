@@ -1,10 +1,10 @@
 """
-Administration securisee du module commerce MAVECAM AquaCare.
+Administration securisee du module commerce AquaCare.
 Implemente le RBAC multi-niveau avec audit logging.
 
 Roles:
 - OWNER (is_superuser): Controle total
-- COMMERCE (mavecam_commerce): CRUD produits, view commandes, generer PDF
+- COMMERCE (aquacare_commerce): CRUD produits, view commandes, generer PDF
 - MANAGERS: Lecture seule pour contexte
 - SUPPORT: Pas d'acces
 """
@@ -74,7 +74,7 @@ class OrderItemInline(admin.TabularInline):
 @admin.register(Product)
 class ProductAdmin(CommerceSecuredAdmin):
     """
-    Administration securisee du catalogue produits MAVECAM.
+    Administration securisee du catalogue produits AquaCare.
     """
     list_display = [
         'name', 'brand_badge', 'species_badge', 'phase',
@@ -203,7 +203,7 @@ class ProductAdmin(CommerceSecuredAdmin):
 @admin.register(Order)
 class OrderAdmin(CommerceSecuredAdmin):
     """
-    Administration securisee des commandes MAVECAM.
+    Administration securisee des commandes AquaCare.
     """
     list_display = [
         'order_number', 'user_link', 'farm_link', 'status_badge',

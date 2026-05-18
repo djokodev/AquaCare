@@ -4,6 +4,7 @@ import {
   logApiError,
   hasFieldError,
   getFieldErrorMessage,
+  getApiErrorMessage,
 } from '../errorParser';
 import logger from '../logger';
 
@@ -41,6 +42,8 @@ describe('utils/errorParser', () => {
       response: {
         status: 400,
         data: {
+          code: 'invalid',
+          status_code: 400,
           initial_count: ['Trop élevé'],
           non_field_errors: 'Erreur générale',
         },
@@ -49,16 +52,45 @@ describe('utils/errorParser', () => {
 
     expect(parsed.status).toBe(400);
     expect(parsed.message).toBe('Erreur de validation des données');
+    expect(parsed.code).toBe('invalid');
     expect(parsed.details).toEqual([
       { field: 'initial_count', messages: ['Trop élevé'] },
       { field: 'non_field_errors', messages: ['Erreur générale'] },
     ]);
   });
 
+  it('parseApiError ignore les metadonnees code et status_code des reponses DRF', () => {
+    const parsed = parseApiError({
+      response: {
+        status: 409,
+        data: {
+          code: 'sync_conflict',
+          status_code: 409,
+        },
+      },
+    });
+
+    expect(parsed.code).toBe('sync_conflict');
+    expect(parsed.details).toEqual([]);
+  });
+
+  it('getApiErrorMessage extrait les formats DRF et legacy sans JSON brut', () => {
+    expect(getApiErrorMessage('Erreur déjà normalisée')).toBe('Erreur déjà normalisée');
+    expect(getApiErrorMessage({ response: { data: { detail: 'Cycle non trouvé' } } })).toBe('Cycle non trouvé');
+    expect(getApiErrorMessage({ response: { data: { error: 'Action impossible' } } })).toBe('Action impossible');
+    expect(getApiErrorMessage({ response: { status: 400, data: { initial_count: ['Trop élevé'] } } })).toBe(
+      'Erreur de validation des données\n\n• Nombre initial de poissons : Trop élevé'
+    );
+    expect(getApiErrorMessage({ response: { status: 400, data: { non_field_errors: ['Valeur incohérente'] } } })).toBe(
+      'Erreur de validation des données\n\n• Erreur générale : Valeur incohérente'
+    );
+  });
+
   it('parseApiError couvre les statuts 401/403/404/500+/default', () => {
     expect(parseApiError({ response: { status: 401, data: {} } }).message).toContain('Session expirée');
     expect(parseApiError({ response: { status: 403, data: {} } }).message).toContain('permissions');
     expect(parseApiError({ response: { status: 404, data: {} } }).message).toContain('Ressource non trouvée');
+    expect(parseApiError({ response: { status: 409, data: {} } }).message).toContain('Conflit de synchronisation');
     expect(parseApiError({ response: { status: 503, data: {} } }).message).toContain('Erreur serveur');
 
     const defaultError = parseApiError({ response: { status: 418, data: { detail: 'Teapot' } } });
@@ -119,7 +151,7 @@ describe('utils/errorParser', () => {
       'Création cycle'
     );
 
-    expect(mockLogger.log).toHaveBeenCalledWith(expect.stringContaining('API Error - Création cycle'));
+    expect(mockLogger.log).toHaveBeenCalledWith(expect.stringContaining('API Error: Création cycle'));
     expect(mockLogger.log).toHaveBeenCalledWith('Status:', 400);
     expect(mockLogger.log).toHaveBeenCalledWith('Validation Errors:');
   });

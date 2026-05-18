@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { ProductionCycle } from '@/types/aquaculture';
-import { MAVECAM_COLORS } from '@/constants/colors';
+import { AQUACARE_COLORS } from '@/constants/colors';
 
 interface CycleSelectorProps {
   cycles: ProductionCycle[];
@@ -21,7 +21,7 @@ export default function CycleSelector({ cycles, selectedCycleId, onSelectCycle }
         <TouchableOpacity
           key={cycle.id}
           className={`bg-white p-4 rounded-lg mb-2 border flex-row justify-between items-center ${
-            selectedCycleId === cycle.id ? 'border-mavecam-primary bg-[#f0fdf4]' : 'border-gray-200'
+            selectedCycleId === cycle.id ? 'border-aquacare-primary bg-[#f0fdf4]' : 'border-gray-200'
           }`}
           onPress={() => onSelectCycle(cycle.id)}
         >
@@ -34,7 +34,7 @@ export default function CycleSelector({ cycles, selectedCycleId, onSelectCycle }
             </Text>
           </View>
           {selectedCycleId === cycle.id && (
-            <Ionicons name="checkmark-circle" size={24} color={MAVECAM_COLORS.GREEN_PRIMARY} />
+            <Ionicons name="checkmark-circle" size={24} color={AQUACARE_COLORS.GREEN_PRIMARY} />
           )}
         </TouchableOpacity>
       ))}

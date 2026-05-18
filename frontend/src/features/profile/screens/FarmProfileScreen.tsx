@@ -5,7 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import type { RootStackParamList } from "@/navigation/MainNavigator";
 import type { StackNavigationProp } from "@react-navigation/stack";
-import { MAVECAM_COLORS } from "@/constants/colors";
+import { AQUACARE_COLORS } from "@/constants/colors";
 import { useAuth } from "@/hooks/useAuth";
 import { useFarmLocation } from "@/hooks/useFarmLocation";
 import { useSelector, useDispatch } from "react-redux";
@@ -102,7 +102,7 @@ export default function FarmProfileScreen() {
         <Text className="text-error text-center">{t("error")}: {getAccountErrorMessage(error, t)}</Text>
         <Text className="text-sm text-gray-light mt-2 text-center">{t("unableToLoadFarmProfile")}</Text>
         <TouchableOpacity
-          className="bg-mavecam-primary px-6 py-3 rounded-lg mt-5"
+          className="bg-aquacare-primary px-6 py-3 rounded-lg mt-5"
           onPress={() => loadProfile()}
           disabled={isLoading}
         >
@@ -115,11 +115,11 @@ export default function FarmProfileScreen() {
   if (!farmProfile) {
     return (
       <View className="flex-1 items-center justify-center bg-cream p-8">
-        <Ionicons name="business-outline" size={64} color={MAVECAM_COLORS.GRAY_LIGHT} />
+        <Ionicons name="business-outline" size={64} color={AQUACARE_COLORS.GRAY_LIGHT} />
         <Text className="text-lg font-bold text-gray-dark mt-4 text-center">{t("noFarmProfile")}</Text>
         <Text className="text-sm text-gray-light mt-2 text-center">{t("loadingFarmProfile")}</Text>
         <TouchableOpacity
-          className="bg-mavecam-primary px-6 py-3 rounded-lg mt-5"
+          className="bg-aquacare-primary px-6 py-3 rounded-lg mt-5"
           onPress={() => loadProfile()}
           disabled={isLoading}
         >
@@ -133,15 +133,15 @@ export default function FarmProfileScreen() {
 
   return (
     <ScrollView className="flex-1 bg-cream">
-      <View className="bg-mavecam-primary items-center pt-14 pb-6 px-5">
+      <View className="bg-aquacare-primary items-center pt-14 pb-6 px-5">
         <View className="w-16 h-16 rounded-full bg-green-dark items-center justify-center mb-3">
-          <Ionicons name="business" size={32} color={MAVECAM_COLORS.WHITE} />
+          <Ionicons name="business" size={32} color={AQUACARE_COLORS.WHITE} />
         </View>
         <Text className="text-2xl font-bold text-white mb-2 text-center">
           {formatFarmName(farmProfile.farm_name) || t("myFarm")}
         </Text>
         <View className="flex-row items-center px-3 py-2 rounded-full" style={{ backgroundColor: certification.color }}>
-          <Ionicons name={certification.icon} size={16} color={MAVECAM_COLORS.WHITE} />
+          <Ionicons name={certification.icon} size={16} color={AQUACARE_COLORS.WHITE} />
           <Text className="text-sm font-semibold text-white ml-2">{certification.text}</Text>
         </View>
       </View>
@@ -150,7 +150,7 @@ export default function FarmProfileScreen() {
         <View className="flex-row justify-between items-center mb-3">
           <Text className="text-lg font-bold text-gray-dark">{t("farmInfo")}</Text>
           <TouchableOpacity onPress={() => setIsEditing(!isEditing)} className="p-2">
-            <Ionicons name={isEditing ? "close" : "pencil"} size={20} color={MAVECAM_COLORS.GREEN_PRIMARY} />
+            <Ionicons name={isEditing ? "close" : "pencil"} size={20} color={AQUACARE_COLORS.GREEN_PRIMARY} />
           </TouchableOpacity>
         </View>
         <View className="bg-white rounded-xl p-4">
@@ -215,9 +215,9 @@ export default function FarmProfileScreen() {
           {farmProfile.latitude && farmProfile.longitude ? (
             <>
               <View className="flex-row items-start gap-3 mb-4">
-                <Ionicons name="checkmark-circle" size={20} color={MAVECAM_COLORS.GREEN_PRIMARY} />
+                <Ionicons name="checkmark-circle" size={20} color={AQUACARE_COLORS.GREEN_PRIMARY} />
                 <View className="flex-1">
-                  <Text className="text-sm font-medium text-mavecam-primary mb-1">
+                  <Text className="text-sm font-medium text-aquacare-primary mb-1">
                     {t('locationCaptureSuccess')}
                   </Text>
                   {farmProfile.location_address ? (
@@ -228,17 +228,17 @@ export default function FarmProfileScreen() {
                 </View>
               </View>
               <TouchableOpacity
-                className="py-3 rounded-lg border border-mavecam-primary items-center mb-3"
+                className="py-3 rounded-lg border border-aquacare-primary items-center mb-3"
                 onPress={handleOpenMap}
               >
-                <Text className="text-sm font-semibold text-mavecam-primary">{t('viewOnMap')}</Text>
+                <Text className="text-sm font-semibold text-aquacare-primary">{t('viewOnMap')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 className="flex-row items-center justify-center gap-2 py-3 rounded-lg border border-gray-200"
                 onPress={handleLocateFarm}
                 disabled={locationStatus === 'requesting' || isSaving}
               >
-                <Ionicons name="locate" size={16} color={MAVECAM_COLORS.GRAY_LIGHT} />
+                <Ionicons name="locate" size={16} color={AQUACARE_COLORS.GRAY_LIGHT} />
                 <Text className="text-sm text-gray-light">
                   {locationStatus === 'requesting' || isSaving ? t('locatingFarm') : t('updateLocation')}
                 </Text>
@@ -247,11 +247,11 @@ export default function FarmProfileScreen() {
           ) : (
             <>
               <View className="items-center py-2 mb-3">
-                <Ionicons name="location-outline" size={32} color={MAVECAM_COLORS.GRAY_LIGHT} />
+                <Ionicons name="location-outline" size={32} color={AQUACARE_COLORS.GRAY_LIGHT} />
                 <Text className="text-sm text-gray-light mt-2 text-center">{t('farmNoLocation')}</Text>
               </View>
               <TouchableOpacity
-                className="flex-row items-center justify-center gap-2 py-3 rounded-lg bg-mavecam-primary"
+                className="flex-row items-center justify-center gap-2 py-3 rounded-lg bg-aquacare-primary"
                 onPress={handleLocateFarm}
                 disabled={locationStatus === 'requesting' || isSaving}
               >
@@ -281,7 +281,7 @@ export default function FarmProfileScreen() {
               const cycleDuration = cycle.species === "clarias" ? 120 : 180;
 
               return (
-                <View key={cycle.id} className="bg-white rounded-xl p-4 border-l-4 border-l-mavecam-primary">
+                <View key={cycle.id} className="bg-white rounded-xl p-4 border-l-4 border-l-aquacare-primary">
                   <View className="flex-row items-center justify-between mb-3">
                     <Text className="text-base font-bold text-gray-dark flex-1" numberOfLines={1}>
                       {cycle.cycle_name}
@@ -307,7 +307,7 @@ export default function FarmProfileScreen() {
 
         <TouchableOpacity
           onPress={() => navigation.navigate("DailyLogHistory")}
-          className="bg-mavecam-primary mt-4 py-3 px-4 rounded-lg items-center"
+          className="bg-aquacare-primary mt-4 py-3 px-4 rounded-lg items-center"
         >
           <Text className="text-white text-base font-semibold">{t("viewDailyLogHistory")}</Text>
         </TouchableOpacity>
@@ -316,7 +316,7 @@ export default function FarmProfileScreen() {
       {isEditing && (
         <View className="px-5 pb-5">
           <TouchableOpacity
-            className={`py-4 rounded-lg items-center ${isSaving ? "bg-mavecam-primary/70" : "bg-mavecam-primary"}`}
+            className={`py-4 rounded-lg items-center ${isSaving ? "bg-aquacare-primary/70" : "bg-aquacare-primary"}`}
             onPress={handleSave}
             disabled={isSaving}
           >
@@ -358,7 +358,7 @@ function FarmInfoRow({
   return (
     <View className="flex-row justify-between items-center py-3 border-b border-slate-100">
       <View className="flex-row items-center flex-1 mr-3">
-        {icon && <Ionicons name={icon} size={20} color={MAVECAM_COLORS.GRAY_LIGHT} />}
+        {icon && <Ionicons name={icon} size={20} color={AQUACARE_COLORS.GRAY_LIGHT} />}
         <Text className={`text-sm text-gray-light ${icon ? "ml-3" : ""} flex-1`}>{label}</Text>
       </View>
       {editable ? (

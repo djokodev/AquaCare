@@ -12,7 +12,7 @@ import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
 import { PartialHarvest, ProductionCycle } from '@/types/aquaculture';
-import { MAVECAM_COLORS as COLORS } from '@/constants/colors';
+import { AQUACARE_COLORS as COLORS } from '@/constants/colors';
 
 interface PartialHarvestHistoryModalProps {
   visible: boolean;

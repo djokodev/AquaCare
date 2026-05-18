@@ -4,10 +4,9 @@ import LoadingScreen from '../LoadingScreen';
 
 describe('features/main/screens/LoadingScreen', () => {
   it('affiche le branding et le texte de chargement', () => {
-    const { getByText } = render(<LoadingScreen />);
+    const { getAllByText, getByText } = render(<LoadingScreen />);
 
-    expect(getByText('MAVECAM')).toBeTruthy();
-    expect(getByText('AquaCare')).toBeTruthy();
+    expect(getAllByText('AquaCare').length).toBeGreaterThanOrEqual(1);
     expect(getByText('loading')).toBeTruthy();
   });
 });

@@ -17,7 +17,7 @@ import {
   createOrder,
 } from '@/features/commerce/store/commerceSlice';
 import { CartItem, DeliveryMethod, PickupLocation } from '@/types/commerce';
-import { MAVECAM_COLORS } from '@/constants/colors';
+import { AQUACARE_COLORS } from '@/constants/colors';
 import {
   DELIVERY_METHODS,
   FREE_DELIVERY_THRESHOLD,
@@ -62,6 +62,7 @@ export default function CartScreen() {
 
   const { cart } = useSelector((state: RootState) => state.commerce);
   const { user, farmProfile } = useSelector((state: RootState) => state.auth);
+  const currentCycle = useSelector((state: RootState) => state.aquaculture.currentCycle);
   const { items: cartItems, delivery_method, pickup_location, deliveryPreview, previewLoading } = cart;
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -149,6 +150,7 @@ export default function CartScreen() {
                 items: cartItems.map((item) => ({ product_id: item.product.id, quantity: item.quantity })),
                 delivery_method,
                 pickup_location: delivery_method === 'pickup' ? pickup_location : undefined,
+                production_cycle_id: currentCycle?.id,
                 client_uuid: generateClientUuid(),
                 created_offline: false,
               };
@@ -196,7 +198,7 @@ export default function CartScreen() {
     return (
       <View className="bg-white rounded-xl p-4 mb-3">
         <View className="w-14 h-14 bg-cream rounded-lg items-center justify-center mb-3">
-          <Ionicons name="cube-outline" size={32} color={MAVECAM_COLORS.GREEN_PRIMARY} />
+          <Ionicons name="cube-outline" size={32} color={AQUACARE_COLORS.GREEN_PRIMARY} />
         </View>
 
         <View className="mb-3">
@@ -208,7 +210,7 @@ export default function CartScreen() {
             {product.pellet_size_mm}mm - {product.package_weight_kg}kg
             {product.protein_percentage && ` - ${product.protein_percentage}% ${t('protein')}`}
           </Text>
-          <Text className="text-sm text-mavecam-primary font-semibold">
+          <Text className="text-sm text-aquacare-primary font-semibold">
             {parseFloat(product.price_per_package).toLocaleString()} FCFA / {t('bag')}
           </Text>
         </View>
@@ -217,7 +219,7 @@ export default function CartScreen() {
           className="absolute top-4 right-4"
           onPress={() => handleRemoveItem(product.id, product.name)}
         >
-          <Ionicons name="trash-outline" size={20} color={MAVECAM_COLORS.ERROR} />
+          <Ionicons name="trash-outline" size={20} color={AQUACARE_COLORS.ERROR} />
         </TouchableOpacity>
 
         <View className="flex-row items-center justify-between mb-3">
@@ -229,7 +231,7 @@ export default function CartScreen() {
             <Ionicons
               name="remove-circle-outline"
               size={28}
-              color={quantity <= 1 ? MAVECAM_COLORS.GRAY_LIGHT : MAVECAM_COLORS.GREEN_PRIMARY}
+              color={quantity <= 1 ? AQUACARE_COLORS.GRAY_LIGHT : AQUACARE_COLORS.GREEN_PRIMARY}
             />
           </TouchableOpacity>
 
@@ -239,11 +241,11 @@ export default function CartScreen() {
             className="p-1"
             onPress={() => handleUpdateQuantity(product.id, quantity + 1)}
           >
-            <Ionicons name="add-circle-outline" size={28} color={MAVECAM_COLORS.GREEN_PRIMARY} />
+            <Ionicons name="add-circle-outline" size={28} color={AQUACARE_COLORS.GREEN_PRIMARY} />
           </TouchableOpacity>
         </View>
 
-        <Text className="text-lg font-bold text-mavecam-primary text-right">{lineTotal.toLocaleString()} FCFA</Text>
+        <Text className="text-lg font-bold text-aquacare-primary text-right">{lineTotal.toLocaleString()} FCFA</Text>
       </View>
     );
   }, [handleRemoveItem, handleUpdateQuantity, t]);
@@ -267,7 +269,7 @@ export default function CartScreen() {
             <TouchableOpacity
               key={method.value}
               className={`flex-row items-center p-4 rounded-lg border-2 mb-3 gap-3 ${
-                delivery_method === method.value ? 'border-mavecam-primary bg-cream' : 'border-gray-light'
+                delivery_method === method.value ? 'border-aquacare-primary bg-cream' : 'border-gray-light'
               }`}
               onPress={() => handleDeliveryMethodChange(method.value)}
             >
@@ -276,21 +278,21 @@ export default function CartScreen() {
                 size={24}
                 color={
                   delivery_method === method.value
-                    ? MAVECAM_COLORS.GREEN_PRIMARY
-                    : MAVECAM_COLORS.GRAY_LIGHT
+                    ? AQUACARE_COLORS.GREEN_PRIMARY
+                    : AQUACARE_COLORS.GRAY_LIGHT
                 }
               />
               <Text
                 className={`flex-1 text-base ${
                   delivery_method === method.value
-                    ? 'text-mavecam-primary font-semibold'
+                    ? 'text-aquacare-primary font-semibold'
                     : 'text-gray-dark'
                 }`}
               >
                 {t(method.labelKey)}
               </Text>
               {delivery_method === method.value && (
-                <Ionicons name="checkmark-circle" size={24} color={MAVECAM_COLORS.GREEN_PRIMARY} />
+                <Ionicons name="checkmark-circle" size={24} color={AQUACARE_COLORS.GREEN_PRIMARY} />
               )}
             </TouchableOpacity>
           ))}
@@ -311,7 +313,7 @@ export default function CartScreen() {
 
         {previewLoading ? (
           <View className="flex-row items-center justify-center p-5 gap-3">
-            <ActivityIndicator size="small" color={MAVECAM_COLORS.GREEN_PRIMARY} />
+            <ActivityIndicator size="small" color={AQUACARE_COLORS.GREEN_PRIMARY} />
             <Text className="text-sm text-gray-light">{t('calculatingFees')}</Text>
           </View>
         ) : deliveryPreview ? (
@@ -328,7 +330,7 @@ export default function CartScreen() {
             <View className="flex-row justify-between items-center mb-3">
               <Text className="text-base text-gray-dark">{t('deliveryFee')}</Text>
               {parseFloat(deliveryPreview.delivery_fee) === 0 ? (
-                <Text className="text-base font-semibold text-mavecam-primary">{t('free')}</Text>
+                <Text className="text-base font-semibold text-aquacare-primary">{t('free')}</Text>
               ) : (
                 <Text className="text-base font-semibold text-gray-dark">
                   {parseFloat(deliveryPreview.delivery_fee).toLocaleString()} FCFA
@@ -338,8 +340,8 @@ export default function CartScreen() {
 
             {deliveryPreview.free_delivery_threshold_reached && (
               <View className="flex-row items-center bg-cream p-3 rounded-lg gap-2 mb-3">
-                <Ionicons name="checkmark-circle" size={20} color={MAVECAM_COLORS.SUCCESS} />
-                <Text className="text-sm font-semibold text-mavecam-primary">
+                <Ionicons name="checkmark-circle" size={20} color={AQUACARE_COLORS.SUCCESS} />
+                <Text className="text-sm font-semibold text-aquacare-primary">
                   {t('freeDeliveryApplied')}
                 </Text>
               </View>
@@ -350,8 +352,8 @@ export default function CartScreen() {
               !deliveryPreview.free_delivery_threshold_reached &&
               deliveryPreview.total_bags < FREE_DELIVERY_THRESHOLD && (
                 <View className="flex-row items-center bg-[#e0f2fe] p-3 rounded-lg gap-2 mb-3">
-                  <Ionicons name="information-circle" size={20} color={MAVECAM_COLORS.INFO} />
-                  <Text className="flex-1 text-sm text-mavecam-primary">
+                  <Ionicons name="information-circle" size={20} color={AQUACARE_COLORS.INFO} />
+                  <Text className="flex-1 text-sm text-aquacare-primary">
                     {t('freeDeliveryEncouragement', {
                       remaining: FREE_DELIVERY_THRESHOLD - deliveryPreview.total_bags,
                     })}
@@ -363,13 +365,13 @@ export default function CartScreen() {
 
             <View className="flex-row justify-between items-center mb-2">
               <Text className="text-lg font-bold text-gray-dark">{t('total')}</Text>
-              <Text className="text-xl font-bold text-mavecam-primary">
+              <Text className="text-xl font-bold text-aquacare-primary">
                 {parseFloat(deliveryPreview.total).toLocaleString()} FCFA
               </Text>
             </View>
 
             <View className="flex-row items-center gap-2">
-              <Ionicons name="cube-outline" size={16} color={MAVECAM_COLORS.GRAY_LIGHT} />
+              <Ionicons name="cube-outline" size={16} color={AQUACARE_COLORS.GRAY_LIGHT} />
               <Text className="text-sm text-gray-light">
                 {deliveryPreview.total_bags} {t(deliveryPreview.total_bags > 1 ? 'bags' : 'bag')}
               </Text>
@@ -392,14 +394,14 @@ export default function CartScreen() {
     return (
       <View className="flex-1 bg-cream">
         <View className="flex-1 justify-center items-center px-10">
-          <Ionicons name="cart-outline" size={100} color={MAVECAM_COLORS.GRAY_LIGHT} />
+          <Ionicons name="cart-outline" size={100} color={AQUACARE_COLORS.GRAY_LIGHT} />
           <Text className="mt-5 text-2xl font-bold text-gray-dark">{t('emptyCart')}</Text>
           <Text className="mt-3 text-base text-gray-light text-center">{t('emptyCartDescription')}</Text>
           <TouchableOpacity
-            className="mt-6 bg-mavecam-primary flex-row items-center px-6 py-3 rounded-lg gap-2"
+            className="mt-6 bg-aquacare-primary flex-row items-center px-6 py-3 rounded-lg gap-2"
             onPress={handleBackToCatalog}
           >
-            <Ionicons name="albums-outline" size={20} color={MAVECAM_COLORS.WHITE} />
+            <Ionicons name="albums-outline" size={20} color={AQUACARE_COLORS.WHITE} />
             <Text className="text-white text-base font-semibold">{t('browseCatalog')}</Text>
           </TouchableOpacity>
         </View>
@@ -411,7 +413,7 @@ export default function CartScreen() {
     <View className="flex-1 bg-cream">
       <View className="bg-white px-5 pt-16 pb-5 flex-row items-center justify-between shadow">
         <TouchableOpacity onPress={() => navigation.goBack()} className="w-10">
-          <Ionicons name="arrow-back" size={24} color={MAVECAM_COLORS.GRAY_DARK} />
+          <Ionicons name="arrow-back" size={24} color={AQUACARE_COLORS.GRAY_DARK} />
         </TouchableOpacity>
         <View className="flex-1 items-center">
           <Text className="text-2xl font-bold text-gray-dark">{t('cart')}</Text>
@@ -420,7 +422,7 @@ export default function CartScreen() {
           </Text>
         </View>
         <TouchableOpacity onPress={handleClearCart}>
-          <Ionicons name="trash-outline" size={24} color={MAVECAM_COLORS.ERROR} />
+          <Ionicons name="trash-outline" size={24} color={AQUACARE_COLORS.ERROR} />
         </TouchableOpacity>
       </View>
 
@@ -437,15 +439,15 @@ export default function CartScreen() {
       <View className="bg-white p-4 shadow">
         <TouchableOpacity
           className={`flex-row items-center justify-center py-4 rounded-lg gap-3 ${
-            isSubmitting || !deliveryPreview ? 'bg-mavecam-primary/60' : 'bg-mavecam-primary'
+            isSubmitting || !deliveryPreview ? 'bg-aquacare-primary/60' : 'bg-aquacare-primary'
           }`}
           onPress={handleConfirmOrder}
           disabled={isSubmitting || !deliveryPreview}
         >
           {isSubmitting ? (
-            <ActivityIndicator size="small" color={MAVECAM_COLORS.WHITE} />
+            <ActivityIndicator size="small" color={AQUACARE_COLORS.WHITE} />
           ) : (
-            <Ionicons name="checkmark-circle-outline" size={24} color={MAVECAM_COLORS.WHITE} />
+            <Ionicons name="checkmark-circle-outline" size={24} color={AQUACARE_COLORS.WHITE} />
           )}
           <Text className="text-white text-lg font-bold">{t('confirmOrder')}</Text>
         </TouchableOpacity>

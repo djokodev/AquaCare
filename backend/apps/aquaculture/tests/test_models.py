@@ -359,7 +359,7 @@ class TestNutritionalGuide:
             expected_fcr=Decimal('1.0')
         )
         
-        assert str(guide) == "Tilapia - Croissance (50-150g) (MAVECAM)"
+        assert str(guide) == "Tilapia - Croissance (50-150g) (AquaCare)"
 
     def test_unique_species_stage(self):
         """Test contrainte unicité (species, min_weight, source)."""

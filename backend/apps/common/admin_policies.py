@@ -12,15 +12,7 @@ class RBACConstants:
     GROUP_COMMERCE = "aquacare_commerce"
     GROUP_SUPPORT = "aquacare_support"
 
-    LEGACY_GROUP_MANAGERS = "mavecam_managers"
-    LEGACY_GROUP_COMMERCE = "mavecam_commerce"
-    LEGACY_GROUP_SUPPORT = "mavecam_support"
-
-    LEGACY_GROUP_ALIASES = {
-        GROUP_MANAGERS: (LEGACY_GROUP_MANAGERS,),
-        GROUP_COMMERCE: (LEGACY_GROUP_COMMERCE,),
-        GROUP_SUPPORT: (LEGACY_GROUP_SUPPORT,),
-    }
+    LEGACY_GROUP_ALIASES: dict[str, tuple[str, ...]] = {}
 
     ROLE_APPS = {
         GROUP_MANAGERS: ["accounts", "aquaculture", "notifications"],

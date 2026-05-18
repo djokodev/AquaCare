@@ -6,15 +6,18 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState, AppDispatch } from '@/store/store';
 import { fetchDashboardData, setCurrentCycle } from '@/features/aquaculture/store/aquacultureSlice';
-import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
-import { offlineService } from '@/services/offlineService';
 import { ReactNativeUploadFile, SanitaryLogForm, SanitaryEventType } from '@/types/aquaculture';
 import { RootStackParamList } from '@/navigation/MainNavigator';
 import * as ImagePicker from 'expo-image-picker';
-import { MAVECAM_COLORS } from '@/constants/colors';
+import { AQUACARE_COLORS } from '@/constants/colors';
 import logger from '@/utils/logger';
-import { isNetworkError, getApiErrorMessage } from '@/utils/errorParser';
+import { getApiErrorMessage, parseApiError } from '@/utils/errorParser';
 import CycleSelector from '@/components/common/CycleSelector';
+import { formatAquacultureErrorWithAction } from '@/features/aquaculture/utils/aquacultureErrorPresenter';
+import {
+  createSanitaryLogWithOfflineFallback,
+  runSilentOfflineSync,
+} from '@/features/aquaculture/services/aquacultureWorkflowService';
 
 const SANITARY_EVENT_TYPES: Array<{
   value: SanitaryEventType;
@@ -95,7 +98,11 @@ export default function SanitaryLogScreen({ navigation }: SanitaryLogScreenProps
   };
 
   useEffect(() => {
-    dispatch(fetchDashboardData(undefined));
+    const bootstrap = async () => {
+      await runSilentOfflineSync();
+      dispatch(fetchDashboardData({ lightweight: true }));
+    };
+    bootstrap();
   }, [dispatch]);
 
   useEffect(() => {
@@ -241,26 +248,26 @@ export default function SanitaryLogScreen({ navigation }: SanitaryLogScreenProps
       }
 
       try {
-        await aquacultureService.createSanitaryLog(selectedCycle, sanitaryData);
-        dispatch(fetchDashboardData(undefined));
-
-        Alert.alert(t('success'), getSuccessMessage(formData.event_type), [
+        const creationResult = await createSanitaryLogWithOfflineFallback(selectedCycle, sanitaryData);
+        dispatch(fetchDashboardData({ lightweight: true }));
+        const successMessage = creationResult.mode === 'online'
+          ? getSuccessMessage(formData.event_type)
+          : `${getSuccessMessage(formData.event_type)}\n\n${t('offlineSaveMessage')}`;
+        Alert.alert(t('success'), successMessage, [
           { text: t('ok'), onPress: () => navigation.goBack() },
         ]);
       } catch (apiError: unknown) {
-        if (isNetworkError(apiError)) {
-          await offlineService.saveSanitaryLogOffline(selectedCycle, sanitaryData);
-
-          Alert.alert(t('success'), `${getSuccessMessage(formData.event_type)}\n\n${t('offlineSaveMessage')}`, [
-            { text: t('ok'), onPress: () => navigation.goBack() },
-          ]);
-        } else {
-          throw apiError;
-        }
+        throw apiError;
       }
     } catch (error: unknown) {
       logger.error('Error creating sanitary log:', error);
-      Alert.alert(t('error'), getApiErrorMessage(error, t('sanitaryRecordSaveError')));
+      const parsedError = parseApiError(error);
+      const fallbackMessage = getApiErrorMessage(error, t('sanitaryRecordSaveError'));
+      const actionableMessage =
+        parsedError.status > 0 || parsedError.details.length > 0
+          ? formatAquacultureErrorWithAction(parsedError, t)
+          : fallbackMessage;
+      Alert.alert(t('error'), actionableMessage);
     } finally {
       setSaving(false);
     }
@@ -269,10 +276,10 @@ export default function SanitaryLogScreen({ navigation }: SanitaryLogScreenProps
   if (sessionScopedCycles.length === 0) {
     return (
       <View className="flex-1 items-center justify-center bg-cream px-5">
-        <Ionicons name="medical-outline" size={64} color={MAVECAM_COLORS.GRAY_LIGHT} />
+        <Ionicons name="medical-outline" size={64} color={AQUACARE_COLORS.GRAY_LIGHT} />
         <Text className="text-lg font-bold text-gray-dark mt-4">{t('noActiveCycles')}</Text>
         <Text className="text-sm text-gray-light text-center mt-2 mb-6">{t('createCycleToStart')}</Text>
-        <TouchableOpacity className="bg-mavecam-primary px-5 py-3 rounded-lg" onPress={() => navigation.navigate('NewCycle')}>
+        <TouchableOpacity className="bg-aquacare-primary px-5 py-3 rounded-lg" onPress={() => navigation.navigate('NewCycle')}>
           <Text className="text-white text-base font-semibold">{t('createCycle')}</Text>
         </TouchableOpacity>
       </View>
@@ -281,9 +288,9 @@ export default function SanitaryLogScreen({ navigation }: SanitaryLogScreenProps
 
   return (
     <ScrollView className="flex-1 bg-cream">
-      <View className="bg-mavecam-primary flex-row items-center pt-14 pb-4 px-4">
+      <View className="bg-aquacare-primary flex-row items-center pt-14 pb-4 px-4">
         <TouchableOpacity className="mr-4" onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color={MAVECAM_COLORS.WHITE} />
+          <Ionicons name="arrow-back" size={24} color={AQUACARE_COLORS.WHITE} />
         </TouchableOpacity>
         <Text className="text-xl font-bold text-white">{t('sanitaryLogTitle')}</Text>
       </View>
@@ -311,14 +318,14 @@ export default function SanitaryLogScreen({ navigation }: SanitaryLogScreenProps
                 <View key={type.value} style={{ width: '31%', marginRight: '2%', marginBottom: 8 }}>
                   <TouchableOpacity
                     className={`p-3 rounded-lg border items-center ${
-                      isSelected ? 'bg-mavecam-primary border-mavecam-primary' : 'bg-white border-gray-200'
+                      isSelected ? 'bg-aquacare-primary border-aquacare-primary' : 'bg-white border-gray-200'
                     }`}
                     onPress={() => setFormData((prev) => ({ ...prev, event_type: type.value }))}
                   >
                     <Ionicons
                       name={type.icon}
                       size={32}
-                      color={isSelected ? MAVECAM_COLORS.WHITE : MAVECAM_COLORS.GRAY_LIGHT}
+                      color={isSelected ? AQUACARE_COLORS.WHITE : AQUACARE_COLORS.GRAY_LIGHT}
                     />
                     <Text className={`text-xs text-center mt-2 ${isSelected ? 'text-white' : 'text-gray-dark'}`}>
                       {t(type.labelKey)}
@@ -338,7 +345,7 @@ export default function SanitaryLogScreen({ navigation }: SanitaryLogScreenProps
               <Ionicons
                 name={shouldShowTreatmentFields ? 'medical' : 'information-circle'}
                 size={16}
-                color={shouldShowTreatmentFields ? MAVECAM_COLORS.GREEN_PRIMARY : MAVECAM_COLORS.BLUE}
+                color={shouldShowTreatmentFields ? AQUACARE_COLORS.GREEN_PRIMARY : AQUACARE_COLORS.BLUE}
               />
               <Text
                 className={`ml-2 text-sm flex-1 ${
@@ -444,32 +451,32 @@ export default function SanitaryLogScreen({ navigation }: SanitaryLogScreenProps
 
           {!formData.photo ? (
             <TouchableOpacity
-              className="bg-white border-2 border-dashed border-mavecam-primary rounded-lg p-5 items-center justify-center flex-row mb-4"
+              className="bg-white border-2 border-dashed border-aquacare-primary rounded-lg p-5 items-center justify-center flex-row mb-4"
               onPress={chooseImageSource}
             >
-              <Ionicons name="camera" size={24} color={MAVECAM_COLORS.GREEN_PRIMARY} style={{ marginRight: 8 }} />
-              <Text className="text-mavecam-primary text-base font-semibold">{t('addPhoto')}</Text>
+              <Ionicons name="camera" size={24} color={AQUACARE_COLORS.GREEN_PRIMARY} style={{ marginRight: 8 }} />
+              <Text className="text-aquacare-primary text-base font-semibold">{t('addPhoto')}</Text>
             </TouchableOpacity>
           ) : (
             <View className="relative mt-3">
               <Image source={{ uri: formData.photo }} className="w-full h-52 rounded-lg bg-cream" />
               <TouchableOpacity className="absolute top-2 right-2 bg-white rounded-full shadow p-1" onPress={removePhoto}>
-                <Ionicons name="close-circle" size={24} color={MAVECAM_COLORS.ERROR} />
+                <Ionicons name="close-circle" size={24} color={AQUACARE_COLORS.ERROR} />
               </TouchableOpacity>
             </View>
           )}
         </View>
 
         <TouchableOpacity
-          className={`bg-mavecam-primary flex-row items-center justify-center py-4 rounded-lg mt-2 ${saving ? 'opacity-60' : ''}`}
+          className={`bg-aquacare-primary flex-row items-center justify-center py-4 rounded-lg mt-2 ${saving ? 'opacity-60' : ''}`}
           onPress={handleSave}
           disabled={saving}
         >
           {saving ? (
-            <ActivityIndicator size="small" color={MAVECAM_COLORS.WHITE} />
+            <ActivityIndicator size="small" color={AQUACARE_COLORS.WHITE} />
           ) : (
             <>
-              <Ionicons name="checkmark" size={20} color={MAVECAM_COLORS.WHITE} style={{ marginRight: 8 }} />
+              <Ionicons name="checkmark" size={20} color={AQUACARE_COLORS.WHITE} style={{ marginRight: 8 }} />
               <Text className="text-white text-base font-semibold">{t('save')}</Text>
             </>
           )}

@@ -8,8 +8,8 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
-// Couleurs MAVECAM selon spÃ©cifications
-const MAVECAM_COLORS = {
+// Couleurs AquaCare selon spÃ©cifications
+const AQUACARE_COLORS = {
   GREEN_PRIMARY: '#059669',
   GREEN_LIGHT: '#10b981',
   GREEN_DARK: '#047857',
@@ -27,11 +27,11 @@ export default function LoadingScreen() {
       <View style={styles.content}>
         {/* Logo placeholder */}
         <View style={styles.logo}>
-          <Text style={styles.logoText}>MAVECAM</Text>
+          <Text style={styles.logoText}>AquaCare</Text>
           <Text style={styles.logoSubText}>AquaCare</Text>
         </View>
         
-        <ActivityIndicator size="large" color={MAVECAM_COLORS.GREEN_PRIMARY} style={styles.spinner} />
+        <ActivityIndicator size="large" color={AQUACARE_COLORS.GREEN_PRIMARY} style={styles.spinner} />
         <Text style={styles.loadingText}>{t('loading')}</Text>
       </View>
     </View>
@@ -41,7 +41,7 @@ export default function LoadingScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: MAVECAM_COLORS.WHITE,
+    backgroundColor: AQUACARE_COLORS.WHITE,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -56,13 +56,13 @@ const styles = StyleSheet.create({
   logoText: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: MAVECAM_COLORS.GREEN_PRIMARY,
+    color: AQUACARE_COLORS.GREEN_PRIMARY,
     letterSpacing: 2,
   },
   logoSubText: {
     fontSize: 18,
     fontWeight: '300',
-    color: MAVECAM_COLORS.GRAY_LIGHT,
+    color: AQUACARE_COLORS.GRAY_LIGHT,
     marginTop: 4,
   },
   spinner: {
@@ -70,7 +70,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 16,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
+    color: AQUACARE_COLORS.GRAY_LIGHT,
   },
 });
 

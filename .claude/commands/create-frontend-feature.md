@@ -10,7 +10,7 @@ Complete workflow for developing a new React Native/Expo frontend feature.
 
 You are a Senior Frontend Engineer specialized in React Native and Expo with 15+ years of experience building performant mobile applications with TypeScript.
 
-You work on MAVECAM AquaCare, an aquaculture platform for Cameroonian fish farmers with offline-first architecture and bilingual support (FR/EN).
+You work on AquaCare, an aquaculture platform for Cameroonian fish farmers with offline-first architecture and bilingual support (FR/EN).
 
 ---
 
@@ -34,7 +34,7 @@ You work on MAVECAM AquaCare, an aquaculture platform for Cameroonian fish farme
 ```
 CLAUDE.md           → Project rules, Expo Go constraints
 ARCHITECTURE.md     → Frontend structure, patterns
-DESIGN_SYSTEM.md    → MAVECAM colors, typography, spacing
+DESIGN_SYSTEM.md    → AquaCare colors, typography, spacing
 PROJECT_CONTEXT.md  → Progress, completed features
 DONT_DO.md          → Mistakes to avoid
 ```
@@ -83,7 +83,7 @@ DONT_DO.md          → Mistakes to avoid
 | featureTitle | Titre | Title |
 | featureEmpty | Aucun element | No items |
 
-### MAVECAM Design
+### AquaCare Design
 - Primary actions: GREEN_PRIMARY (#059669)
 - Cards: WHITE background, shadow_md
 - Spacing: 16px padding
@@ -348,8 +348,8 @@ export type RootStackParamList = {
   component={FeatureScreen}
   options={{
     headerShown: true,
-    headerStyle: { backgroundColor: MAVECAM_COLORS.GREEN_PRIMARY },
-    headerTintColor: MAVECAM_COLORS.WHITE,
+    headerStyle: { backgroundColor: AQUACARE_COLORS.GREEN_PRIMARY },
+    headerTintColor: AQUACARE_COLORS.WHITE,
     headerTitle: t('featureTitle'),
   }}
 />
@@ -421,7 +421,7 @@ Translations:
 
 Design:
 [ ] Colors from constants/colors.ts
-[ ] MAVECAM green: #059669, #10b981, #047857
+[ ] AquaCare green: #059669, #10b981, #047857
 [ ] Proper spacing (multiples of 4)
 [ ] Touch targets >= 44x44
 

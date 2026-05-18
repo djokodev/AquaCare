@@ -54,7 +54,11 @@ from .report_application_service import (
     WhatsAppShareCommand,
 )
 from .report_service import ReportService
-from .sanitary_application_service import ResolveSanitaryIssueCommand, SanitaryApplicationService
+from .sanitary_application_service import (
+    CreateSanitaryLogCommand,
+    ResolveSanitaryIssueCommand,
+    SanitaryApplicationService,
+)
 from .sanitary_service import SanitaryService
 from .sync_application_service import SyncApplicationService, SyncExecutionResult
 from .sync_service import SyncService
@@ -88,6 +92,7 @@ __all__ = [
     'ReportService',
     'SanitaryService',
     'SanitaryApplicationService',
+    'CreateSanitaryLogCommand',
     'ResolveSanitaryIssueCommand',
     'SyncService',
     'SyncApplicationService',

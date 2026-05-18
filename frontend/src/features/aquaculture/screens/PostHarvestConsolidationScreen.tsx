@@ -16,15 +16,13 @@ import { StackScreenProps } from '@react-navigation/stack';
 import { AppDispatch, RootState } from '@/store/store';
 import { createProductionCycle } from '@/features/aquaculture/store/aquacultureSlice';
 import { RootStackParamList } from '@/navigation/MainNavigator';
-import { MAVECAM_COLORS } from '@/constants/colors';
+import { AQUACARE_COLORS } from '@/constants/colors';
+import { parseApiError } from '@/utils/errorParser';
+import { formatAquacultureErrorWithAction } from '@/features/aquaculture/utils/aquacultureErrorPresenter';
 
 type Props = StackScreenProps<RootStackParamList, 'PostHarvestConsolidation'>;
 
-// Jours de repos inter-cycle validés DT
-const INTER_CYCLE_REST_DAYS: Record<string, number> = {
-  tilapia: 14,
-  clarias: 10,
-};
+const DEFAULT_INTER_CYCLE_REST_DAYS = 1;
 
 // Densités maximales (poissons/m² ou poissons/m³) pour calcul capacité infra
 const MAX_DENSITY_POND_PER_M2 = 10;
@@ -108,7 +106,7 @@ export default function PostHarvestConsolidationScreen({ route, navigation }: Pr
     return infraCapacityMax > 0 ? Math.min(needed, infraCapacityMax) : needed;
   }, [remainingKg, harvestWeightKg, actualSurvivalRate, infraCapacityMax]);
 
-  const restDays = INTER_CYCLE_REST_DAYS[species] ?? 14;
+  const restDays = DEFAULT_INTER_CYCLE_REST_DAYS;
   const defaultStartDate = harvestedCycle?.end_date
     ? addDays(harvestedCycle.end_date, restDays)
     : new Date().toISOString().split('T')[0];
@@ -125,7 +123,7 @@ export default function PostHarvestConsolidationScreen({ route, navigation }: Pr
   // ── Barre de progression ─────────────────────────────────────────────────────
   const progressPct = annualTargetKg > 0 ? Math.min(100, (actualProductionKg / annualTargetKg) * 100) : 0;
   const isOnTarget = actualProductionKg >= plannedPerCycleKg * 0.9;
-  const gapBadgeColor = isOnTarget ? MAVECAM_COLORS.SUCCESS : '#f59e0b';
+  const gapBadgeColor = isOnTarget ? AQUACARE_COLORS.SUCCESS : AQUACARE_COLORS.WARNING;
 
   // ── Lancer le cycle suivant ──────────────────────────────────────────────────
   const handleLaunch = useCallback(async () => {
@@ -140,7 +138,7 @@ export default function PostHarvestConsolidationScreen({ route, navigation }: Pr
     try {
       await dispatch(
         createProductionCycle({
-          cycle_name: `Cycle ${nextCycleNum} - ${species.charAt(0).toUpperCase() + species.slice(1)}`,
+          cycle_name: undefined,
           species: species as 'tilapia' | 'clarias',
           pond_identifier: harvestedCycle.pond_identifier,
           pond_surface_m2: surfaceM2 || undefined,
@@ -148,7 +146,7 @@ export default function PostHarvestConsolidationScreen({ route, navigation }: Pr
           infrastructure_type: harvestedCycle.infrastructure_type,
           start_date: startDate,
           initial_count: count,
-          initial_average_weight: 12,
+          initial_average_weight: undefined,
           target_harvest_weight_g: harvestedCycle.target_harvest_weight_g
             ? parseFloat(String(harvestedCycle.target_harvest_weight_g))
             : undefined,
@@ -168,11 +166,10 @@ export default function PostHarvestConsolidationScreen({ route, navigation }: Pr
       ).unwrap();
       navigation.navigate('MainTabs');
     } catch (err: unknown) {
-      const axiosErr = err as { response?: { data?: unknown } };
-      const detail = axiosErr?.response?.data
-        ? JSON.stringify(axiosErr.response.data)
-        : t('consolidationLaunchError');
-      Alert.alert(t('error'), detail);
+      Alert.alert(
+        t('error'),
+        formatAquacultureErrorWithAction(parseApiError(err), t)
+      );
     } finally {
       setLaunching(false);
     }
@@ -184,7 +181,7 @@ export default function PostHarvestConsolidationScreen({ route, navigation }: Pr
   if (!harvestedCycle) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator color={MAVECAM_COLORS.GREEN_PRIMARY} />
+        <ActivityIndicator color={AQUACARE_COLORS.GREEN_PRIMARY} />
       </View>
     );
   }
@@ -205,7 +202,7 @@ export default function PostHarvestConsolidationScreen({ route, navigation }: Pr
               {plannedPerCycleKg > 0 ? `${formatKg(plannedPerCycleKg)} kg` : '—'}
             </Text>
           </View>
-          <Ionicons name="arrow-forward" size={20} color={MAVECAM_COLORS.GRAY_LIGHT} />
+          <Ionicons name="arrow-forward" size={20} color={AQUACARE_COLORS.GRAY_LIGHT} />
           <View style={styles.comparisonItem}>
             <Text style={styles.comparisonLabel}>{t('consolidationActual')}</Text>
             <Text style={[styles.comparisonValueActual, { color: gapBadgeColor }]}>
@@ -217,7 +214,7 @@ export default function PostHarvestConsolidationScreen({ route, navigation }: Pr
         <View style={styles.metricsRow}>
           {harvestedCycle.survival_rate != null && (
             <View style={styles.metricChip}>
-              <Ionicons name="fish" size={16} color={MAVECAM_COLORS.GREEN_PRIMARY} />
+              <Ionicons name="fish" size={16} color={AQUACARE_COLORS.GREEN_PRIMARY} />
               <Text style={styles.metricChipText}>
                 {parseFloat(String(harvestedCycle.survival_rate)).toFixed(1)}% survie
               </Text>
@@ -225,7 +222,7 @@ export default function PostHarvestConsolidationScreen({ route, navigation }: Pr
           )}
           {harvestedCycle.fcr != null && (
             <View style={styles.metricChip}>
-              <Ionicons name="leaf" size={16} color={MAVECAM_COLORS.GREEN_PRIMARY} />
+              <Ionicons name="leaf" size={16} color={AQUACARE_COLORS.GREEN_PRIMARY} />
               <Text style={styles.metricChipText}>
                 FCR {parseFloat(String(harvestedCycle.fcr)).toFixed(2)}
               </Text>
@@ -247,7 +244,7 @@ export default function PostHarvestConsolidationScreen({ route, navigation }: Pr
         </Text>
 
         <View style={styles.remainingBadge}>
-          <Ionicons name="flag-outline" size={16} color={MAVECAM_COLORS.GREEN_DARK} />
+          <Ionicons name="flag-outline" size={16} color={AQUACARE_COLORS.GREEN_DARK} />
           <Text style={styles.remainingText}>
             {t('consolidationRemainingTarget', { kg: formatKg(remainingKg) })}
           </Text>
@@ -262,7 +259,7 @@ export default function PostHarvestConsolidationScreen({ route, navigation }: Pr
 
         {/* Repos inter-cycle */}
         <View style={styles.infoRow}>
-          <Ionicons name="time-outline" size={16} color={MAVECAM_COLORS.GRAY_LIGHT} />
+          <Ionicons name="time-outline" size={16} color={AQUACARE_COLORS.GRAY_LIGHT} />
           <Text style={styles.infoText}>
             {t('consolidationInterCycleRest', { days: restDays })}
           </Text>
@@ -301,7 +298,7 @@ export default function PostHarvestConsolidationScreen({ route, navigation }: Pr
             style={styles.textInput}
             value={startDate}
             onChangeText={setStartDate}
-            placeholder="YYYY-MM-DD"
+            placeholder={t('dateFormatPlaceholder')}
           />
         </View>
 
@@ -318,7 +315,7 @@ export default function PostHarvestConsolidationScreen({ route, navigation }: Pr
 
         {/* Infra en lecture seule */}
         <View style={styles.readonlyRow}>
-          <Text style={styles.readonlyLabel}>Infrastructure</Text>
+          <Text style={styles.readonlyLabel}>{t('infrastructureType')}</Text>
           <Text style={styles.readonlyValue}>
             {harvestedCycle.pond_identifier}
             {surfaceM2 > 0 ? ` · ${surfaceM2} m²` : ''}
@@ -335,13 +332,13 @@ export default function PostHarvestConsolidationScreen({ route, navigation }: Pr
         activeOpacity={0.8}
       >
         {launching ? (
-          <ActivityIndicator color={MAVECAM_COLORS.WHITE} />
+          <ActivityIndicator color={AQUACARE_COLORS.WHITE} />
         ) : (
           <>
             <Text style={styles.launchButtonText}>
               {t('consolidationStartNextCycle', { num: nextCycleNum })}
             </Text>
-            <Ionicons name="arrow-forward" size={20} color={MAVECAM_COLORS.WHITE} />
+            <Ionicons name="arrow-forward" size={20} color={AQUACARE_COLORS.WHITE} />
           </>
         )}
       </TouchableOpacity>
@@ -361,7 +358,7 @@ export default function PostHarvestConsolidationScreen({ route, navigation }: Pr
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: MAVECAM_COLORS.CREAM,
+    backgroundColor: AQUACARE_COLORS.CREAM,
   },
   content: {
     padding: 16,
@@ -383,7 +380,7 @@ const styles = StyleSheet.create({
     borderColor: '#a7f3d0',
   },
   progressCard: {
-    backgroundColor: MAVECAM_COLORS.WHITE,
+    backgroundColor: AQUACARE_COLORS.WHITE,
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
@@ -394,7 +391,7 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   formCard: {
-    backgroundColor: MAVECAM_COLORS.WHITE,
+    backgroundColor: AQUACARE_COLORS.WHITE,
     borderRadius: 12,
     padding: 16,
     marginBottom: 20,
@@ -408,7 +405,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: MAVECAM_COLORS.GRAY_DARK,
+    color: AQUACARE_COLORS.GRAY_DARK,
     marginBottom: 12,
   },
 
@@ -424,13 +421,13 @@ const styles = StyleSheet.create({
   },
   comparisonLabel: {
     fontSize: 12,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
+    color: AQUACARE_COLORS.GRAY_LIGHT,
     marginBottom: 4,
   },
   comparisonValueNeutral: {
     fontSize: 18,
     fontWeight: '700',
-    color: MAVECAM_COLORS.GRAY_DARK,
+    color: AQUACARE_COLORS.GRAY_DARK,
   },
   comparisonValueActual: {
     fontSize: 18,
@@ -446,7 +443,7 @@ const styles = StyleSheet.create({
   metricChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: MAVECAM_COLORS.WHITE,
+    backgroundColor: AQUACARE_COLORS.WHITE,
     borderRadius: 20,
     paddingHorizontal: 10,
     paddingVertical: 4,
@@ -456,7 +453,7 @@ const styles = StyleSheet.create({
   },
   metricChipText: {
     fontSize: 13,
-    color: MAVECAM_COLORS.GRAY_DARK,
+    color: AQUACARE_COLORS.GRAY_DARK,
     fontWeight: '500',
   },
 
@@ -470,12 +467,12 @@ const styles = StyleSheet.create({
   },
   progressFill: {
     height: '100%',
-    backgroundColor: MAVECAM_COLORS.GREEN_PRIMARY,
+    backgroundColor: AQUACARE_COLORS.GREEN_PRIMARY,
     borderRadius: 5,
   },
   progressLabel: {
     fontSize: 13,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
+    color: AQUACARE_COLORS.GRAY_LIGHT,
     marginBottom: 10,
   },
   remainingBadge: {
@@ -490,7 +487,7 @@ const styles = StyleSheet.create({
   remainingText: {
     fontSize: 14,
     fontWeight: '600',
-    color: MAVECAM_COLORS.GREEN_DARK,
+    color: AQUACARE_COLORS.GREEN_DARK,
   },
 
   // Info row
@@ -502,7 +499,7 @@ const styles = StyleSheet.create({
   },
   infoText: {
     fontSize: 13,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
+    color: AQUACARE_COLORS.GRAY_LIGHT,
     fontStyle: 'italic',
   },
 
@@ -513,12 +510,12 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: MAVECAM_COLORS.GRAY_DARK,
+    color: AQUACARE_COLORS.GRAY_DARK,
     marginBottom: 2,
   },
   inputHint: {
     fontSize: 12,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
+    color: AQUACARE_COLORS.GRAY_LIGHT,
     fontStyle: 'italic',
     marginBottom: 6,
   },
@@ -529,8 +526,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 16,
-    backgroundColor: MAVECAM_COLORS.WHITE,
-    color: MAVECAM_COLORS.GRAY_DARK,
+    backgroundColor: AQUACARE_COLORS.WHITE,
+    color: AQUACARE_COLORS.GRAY_DARK,
   },
   readonlyRow: {
     flexDirection: 'row',
@@ -538,23 +535,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 10,
     borderTopWidth: 1,
-    borderTopColor: MAVECAM_COLORS.CREAM,
+    borderTopColor: AQUACARE_COLORS.CREAM,
     marginTop: 4,
   },
   readonlyLabel: {
     fontSize: 13,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
+    color: AQUACARE_COLORS.GRAY_LIGHT,
   },
   readonlyValue: {
     fontSize: 13,
-    color: MAVECAM_COLORS.GRAY_DARK,
+    color: AQUACARE_COLORS.GRAY_DARK,
     fontWeight: '500',
   },
 
   // Buttons
   launchButton: {
     flexDirection: 'row',
-    backgroundColor: MAVECAM_COLORS.GREEN_PRIMARY,
+    backgroundColor: AQUACARE_COLORS.GREEN_PRIMARY,
     borderRadius: 12,
     paddingVertical: 16,
     alignItems: 'center',
@@ -568,7 +565,7 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   launchButtonText: {
-    color: MAVECAM_COLORS.WHITE,
+    color: AQUACARE_COLORS.WHITE,
     fontSize: 17,
     fontWeight: '700',
   },
@@ -581,7 +578,7 @@ const styles = StyleSheet.create({
   },
   skipButtonText: {
     fontSize: 14,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
+    color: AQUACARE_COLORS.GRAY_LIGHT,
     textDecorationLine: 'underline',
   },
 });

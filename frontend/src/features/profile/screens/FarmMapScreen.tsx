@@ -11,7 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
 
-import { MAVECAM_COLORS } from '@/constants/colors';
+import { AQUACARE_COLORS } from '@/constants/colors';
 import { useAuth } from '@/hooks/useAuth';
 import type { RootStackParamList } from '@/navigation/MainNavigator';
 
@@ -30,7 +30,7 @@ const FarmMapScreen: React.FC = () => {
     return (
       <View style={styles.container}>
         <View style={styles.emptyState}>
-          <Ionicons name="location-outline" size={56} color={MAVECAM_COLORS.GREEN_PRIMARY} />
+          <Ionicons name="location-outline" size={56} color={AQUACARE_COLORS.GREEN_PRIMARY} />
           <Text style={styles.emptyTitle}>{t('farmNoLocation')}</Text>
           <Text style={styles.emptySubtitle}>
             {t('farmNoLocationHint')}
@@ -67,13 +67,13 @@ const FarmMapScreen: React.FC = () => {
           coordinate={{ latitude, longitude }}
           title={farmProfile?.farm_name ?? t('myFarm')}
           description={farmProfile?.location_address ?? ''}
-          pinColor={MAVECAM_COLORS.GREEN_PRIMARY}
+          pinColor={AQUACARE_COLORS.GREEN_PRIMARY}
         />
       </MapView>
 
       <View style={styles.infoCard}>
         <View style={styles.infoRow}>
-          <Ionicons name="location" size={18} color={MAVECAM_COLORS.GREEN_PRIMARY} />
+          <Ionicons name="location" size={18} color={AQUACARE_COLORS.GREEN_PRIMARY} />
           <View style={styles.infoText}>
             <Text style={styles.farmName}>{farmProfile?.farm_name}</Text>
             {farmProfile?.location_address ? (
@@ -86,7 +86,7 @@ const FarmMapScreen: React.FC = () => {
         </View>
 
         <TouchableOpacity style={styles.infoBackButton} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={18} color={MAVECAM_COLORS.GREEN_PRIMARY} />
+          <Ionicons name="arrow-back" size={18} color={AQUACARE_COLORS.GREEN_PRIMARY} />
           <Text style={styles.infoBackButtonText}>{t('back')}</Text>
         </TouchableOpacity>
       </View>
@@ -97,7 +97,7 @@ const FarmMapScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: MAVECAM_COLORS.CREAM,
+    backgroundColor: AQUACARE_COLORS.CREAM,
   },
   map: {
     flex: 1,
@@ -107,7 +107,7 @@ const styles = StyleSheet.create({
     padding: 16,
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
-    shadowColor: MAVECAM_COLORS.GRAY_DARK,
+    shadowColor: AQUACARE_COLORS.GRAY_DARK,
     shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.08,
     shadowRadius: 8,
@@ -125,16 +125,16 @@ const styles = StyleSheet.create({
   farmName: {
     fontSize: 16,
     fontWeight: '600',
-    color: MAVECAM_COLORS.GRAY_DARK,
+    color: AQUACARE_COLORS.GRAY_DARK,
   },
   address: {
     fontSize: 13,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
+    color: AQUACARE_COLORS.GRAY_LIGHT,
     marginTop: 2,
   },
   coords: {
     fontSize: 12,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
+    color: AQUACARE_COLORS.GRAY_LIGHT,
     marginTop: 2,
     fontFamily: 'monospace',
   },
@@ -146,10 +146,10 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: MAVECAM_COLORS.GREEN_PRIMARY,
+    borderColor: AQUACARE_COLORS.GREEN_PRIMARY,
   },
   infoBackButtonText: {
-    color: MAVECAM_COLORS.GREEN_PRIMARY,
+    color: AQUACARE_COLORS.GREEN_PRIMARY,
     fontWeight: '600',
     fontSize: 15,
   },
@@ -163,12 +163,12 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: MAVECAM_COLORS.GRAY_DARK,
+    color: AQUACARE_COLORS.GRAY_DARK,
     textAlign: 'center',
   },
   emptySubtitle: {
     fontSize: 14,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
+    color: AQUACARE_COLORS.GRAY_LIGHT,
     textAlign: 'center',
   },
   backButton: {
@@ -177,7 +177,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   backButtonText: {
-    color: MAVECAM_COLORS.GREEN_PRIMARY,
+    color: AQUACARE_COLORS.GREEN_PRIMARY,
     fontSize: 14,
     fontWeight: '500',
   },

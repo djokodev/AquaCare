@@ -63,18 +63,18 @@ class TestStockingDensityValidation:
     """Tests de validation de densité de mise en charge."""
 
     def test_validate_stocking_density_valid(self):
-        """Test densité valide (20 poissons/m²)."""
-        validate_stocking_density(2000, Decimal('100'), species='clarias')
+        """Test densité valide étang (10 poissons/m²)."""
+        validate_stocking_density(1000, Decimal('100'), species='clarias')
 
     def test_validate_stocking_density_too_high(self):
-        """Test densité trop élevée (>50 poissons/m²)."""
+        """Test densité trop élevée étang (>10 poissons/m²)."""
         with pytest.raises(ValidationError, match="trop élevée"):
-            validate_stocking_density(6000, Decimal('100'), species='tilapia')
+            validate_stocking_density(1200, Decimal('100'), species='tilapia')
 
-    def test_validate_stocking_density_too_low(self):
-        """Test densité trop faible (<5 poissons/m²)."""
-        with pytest.raises(ValidationError, match="trop faible"):
-            validate_stocking_density(300, Decimal('100'), species='clarias')
+    def test_validate_stocking_density_volume_too_high(self):
+        """Test densité trop élevée bac/cage (>300 poissons/m³)."""
+        with pytest.raises(ValidationError, match="poissons/m³"):
+            validate_stocking_density(620, None, Decimal('2'), species='clarias')
 
 
 class TestWaterParametersValidation:

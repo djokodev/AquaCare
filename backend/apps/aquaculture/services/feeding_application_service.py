@@ -4,12 +4,18 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from django.utils.translation import gettext_lazy as _
+from rest_framework.exceptions import NotFound
+
 from ..models import FeedingPlan, ProductionCycle
 from .feeding_service import FeedingPlanService
 
 
-class FeedingCycleNotFoundError(ValueError):
+class FeedingCycleNotFoundError(NotFound):
     """Cycle de reference introuvable pour la generation de plans."""
+
+    default_detail = _("Cycle non trouvé")
+    default_code = "feeding_cycle_not_found"
 
 
 @dataclass(frozen=True)
@@ -35,7 +41,7 @@ class FeedingPlanApplicationService:
             farm_profile__user=user,
         ).first()
         if cycle is None:
-            raise FeedingCycleNotFoundError("Cycle non trouvé")
+            raise FeedingCycleNotFoundError()
 
         return FeedingPlanService.generate_weekly_plans(
             cycle=cycle,

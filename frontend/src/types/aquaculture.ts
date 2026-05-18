@@ -25,6 +25,7 @@ export type SanitaryEventType =
 
 export interface ProductionCycle {
   id: string;
+  client_uuid?: string;
   farm_profile: string;
   cycle_name: string;
   species: Species;
@@ -94,6 +95,8 @@ export interface ProductionCycle {
   partial_harvests?: PartialHarvest[];
 
   // Metadonnees
+  created_offline?: boolean;
+  synced_at?: string;
   created_at: string;
   updated_at: string;
 }
@@ -121,6 +124,11 @@ export interface PartialHarvestData {
   notes?: string;
   client_uuid?: string;
   created_offline?: boolean;
+}
+
+export interface CycleHarvestResponse {
+  message: string;
+  cycle: ProductionCycle;
 }
 
 export interface CycleLog {
@@ -202,6 +210,7 @@ export interface FeedingPlan {
 
 export interface SanitaryLog {
   id: string;
+  client_uuid?: string;
   cycle: string;
   event_date: string;
   event_type: SanitaryEventType;
@@ -227,6 +236,7 @@ export interface SanitaryLog {
   // Metadonnees
   created_at: string;
   created_offline: boolean;
+  synced_at?: string;
 }
 
 export interface NutritionalGuide {
@@ -343,7 +353,7 @@ export interface DashboardData {
 export interface SyncPayload {
   cycle_logs: Partial<CycleLog>[];
   sanitary_logs: Partial<SanitaryLog>[];
-  new_cycles: Partial<ProductionCycle>[];
+  new_cycles: CreateCycleForm[];
   last_sync?: string;
   device_id: string;
 }
@@ -378,7 +388,8 @@ export interface SyncResponse {
 // =================== FORMULAIRES ===================
 
 export interface CreateCycleForm {
-  cycle_name: string;
+  client_uuid?: string;
+  cycle_name?: string;
   species: Species;
   pond_identifier: string;
   pond_surface_m2?: number;
@@ -386,7 +397,7 @@ export interface CreateCycleForm {
   infrastructure_type?: string[];
   start_date: string;
   initial_count: number;
-  initial_average_weight: number;
+  initial_average_weight?: number;
   target_harvest_weight_g?: number;
   planned_cycle_duration_days?: number;
   planned_harvest_date?: string;
@@ -395,9 +406,17 @@ export interface CreateCycleForm {
   planned_selling_price_per_kg_fcfa?: number;
   fingerlings_cost_fcfa?: number;
   other_operational_costs_fcfa?: number;
+  created_offline?: boolean;
+}
+
+export interface ActiveSanitaryIssueGroup {
+  cycle_name: string;
+  cycle_id: string;
+  issues: SanitaryLog[];
 }
 
 export interface DailyLogForm {
+  client_uuid?: string;
   log_date: string;
   mortality_count?: number;
   mortality_reason?: string;
@@ -412,6 +431,7 @@ export interface DailyLogForm {
   ph_level?: number;
   ammonia_level?: number;
   observations?: string;
+  created_offline?: boolean;
 }
 
 export interface ReactNativeUploadFile {
@@ -421,6 +441,7 @@ export interface ReactNativeUploadFile {
 }
 
 export interface SanitaryLogForm {
+  client_uuid?: string;
   event_date: string;
   event_type: SanitaryEventType;
   symptoms: string;
@@ -431,6 +452,7 @@ export interface SanitaryLogForm {
   treatment_duration_days?: number;
   notes?: string; // Commentaires additionnels
   photo?: File | ReactNativeUploadFile | string; // File/objet RN pour upload, string pour URL existante
+  created_offline?: boolean;
 }
 
 export interface HarvestData {
@@ -554,12 +576,4 @@ export interface AquacultureState {
 
   // Erreurs
   error: string | null;
-
-  // Synchronisation offline
-  pendingSync: {
-    cycleLogs: Partial<CycleLog>[];
-    sanitaryLogs: Partial<SanitaryLog>[];
-    newCycles: Partial<ProductionCycle>[];
-  };
-  lastSyncTime?: string;
 }

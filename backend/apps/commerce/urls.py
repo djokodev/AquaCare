@@ -1,5 +1,5 @@
 """
-Configuration URLs pour le module commerce MAVECAM AquaCare.
+Configuration URLs pour le module commerce AquaCare.
 
 Routes API REST pour catalogue produits et gestion commandes.
 """

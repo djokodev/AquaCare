@@ -16,7 +16,8 @@ import { useDispatch } from 'react-redux';
 import { AppDispatch } from '@/store/store';
 import { createPartialHarvest } from '@/features/aquaculture/store/aquacultureSlice';
 import { ProductionCycle, PartialHarvestData } from '@/types/aquaculture';
-import { MAVECAM_COLORS as COLORS } from '@/constants/colors';
+import { AQUACARE_COLORS as COLORS } from '@/constants/colors';
+import { getApiErrorMessage } from '@/utils/errorParser';
 
 interface PartialHarvestModalProps {
   visible: boolean;
@@ -104,11 +105,10 @@ export default function PartialHarvestModal({ visible, onClose, cycle, onSuccess
       Alert.alert(
         t('success'),
         t('partialHarvestSuccess', { remaining: remainingFish }),
-        [{ text: 'OK', onPress: () => { onSuccess?.(); onClose(); } }]
+        [{ text: t('ok'), onPress: () => { onSuccess?.(); onClose(); } }]
       );
     } catch (error: unknown) {
-      const msg = typeof error === 'string' ? error : t('partialHarvestError');
-      Alert.alert(t('error'), msg);
+      Alert.alert(t('error'), getApiErrorMessage(error, t('partialHarvestError')));
     } finally {
       setLoading(false);
     }
@@ -143,7 +143,7 @@ export default function PartialHarvestModal({ visible, onClose, cycle, onSuccess
               style={styles.input}
               value={formData.harvest_date}
               onChangeText={(v) => handleChange('harvest_date', v)}
-              placeholder="YYYY-MM-DD"
+              placeholder={t('dateFormatPlaceholder')}
               placeholderTextColor={COLORS.GRAY_LIGHT}
             />
 
@@ -154,7 +154,7 @@ export default function PartialHarvestModal({ visible, onClose, cycle, onSuccess
               value={formData.count_harvested > 0 ? String(formData.count_harvested) : ''}
               onChangeText={(v) => handleChange('count_harvested', v)}
               keyboardType="numeric"
-              placeholder={`Max ${cycle.current_count}`}
+              placeholder={t('maxValuePlaceholder', { max: cycle.current_count })}
               placeholderTextColor={COLORS.GRAY_LIGHT}
             />
 
@@ -165,7 +165,7 @@ export default function PartialHarvestModal({ visible, onClose, cycle, onSuccess
               value={formData.average_weight_g > 0 ? String(formData.average_weight_g) : ''}
               onChangeText={(v) => handleChange('average_weight_g', v)}
               keyboardType="numeric"
-              placeholder="Ex: 350"
+              placeholder={t('exampleAverageWeightG')}
               placeholderTextColor={COLORS.GRAY_LIGHT}
             />
 
@@ -176,7 +176,7 @@ export default function PartialHarvestModal({ visible, onClose, cycle, onSuccess
               value={formData.sale_price_fcfa_per_kg ? String(formData.sale_price_fcfa_per_kg) : ''}
               onChangeText={(v) => handleChange('sale_price_fcfa_per_kg', v)}
               keyboardType="numeric"
-              placeholder="Ex: 1800"
+              placeholder={t('exampleSalePriceFcfa')}
               placeholderTextColor={COLORS.GRAY_LIGHT}
             />
 
@@ -283,7 +283,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#f0fdf4',
+    backgroundColor: COLORS.CREAM,
     padding: 10,
     borderRadius: 8,
     marginBottom: 16,
@@ -305,7 +305,7 @@ const styles = StyleSheet.create({
   },
   input: {
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: COLORS.GRAY_LIGHT,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
@@ -318,7 +318,7 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
   },
   recap: {
-    backgroundColor: '#f0fdf4',
+    backgroundColor: COLORS.CREAM,
     borderRadius: 12,
     padding: 14,
     marginTop: 16,

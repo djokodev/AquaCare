@@ -271,7 +271,7 @@
   manageFarm: 'Farm Management',
   viewStats: 'View Statistics',
   noFarmProfile: 'No farm profile',
-  farmCertified: 'MAVECAM Certified Farm',
+  farmCertified: 'AquaCare Certified Farm',
   certificationPending: 'Certification in progress',
   certificationSuspended: 'Certification suspended',
   certificationRejected: 'Certification rejected',
@@ -285,7 +285,7 @@
   companyInfo: 'Company Information',
   createdOn: 'Created on',
   updatedOn: 'Updated on',
-  certificationMavecam: 'MAVECAM Certification',
+  certificationAquacare: 'AquaCare Certification',
   performanceMetrics: 'Performance Metrics',
   accountVerified: 'Account verified',
   yes: 'Yes',
@@ -295,9 +295,9 @@
   farmManagement: 'Farm Management',
   
   // Certification descriptions
-  certifiedDescription: 'Congratulations! Your farm is MAVECAM certified. You benefit from all program advantages.',
-  pendingDescription: 'Your certification request is being reviewed by the MAVECAM team. We will contact you soon.',
-  suspendedDescription: 'Your certification has been temporarily suspended. Contact the MAVECAM team for more information.',
+  certifiedDescription: 'Congratulations! Your farm is AquaCare certified. You benefit from all program advantages.',
+  pendingDescription: 'Your certification request is being reviewed by the AquaCare team. We will contact you soon.',
+  suspendedDescription: 'Your certification has been temporarily suspended. Contact the AquaCare team for more information.',
   rejectedDescription: 'Your certification request was not accepted. You can contact us to learn about the required criteria.',
   
   // Validation Messages
@@ -455,6 +455,12 @@
   sampleCountTooLow: 'Insufficient sampled fish count (min {min}).',
   samplingPairRequired: 'Please fill sample count and total weight together.',
   feedingTimesInvalidIgnored: 'Some feeding times are invalid and were ignored.',
+  aquacultureErrorFixField: 'Fix the highlighted fields, then try again.',
+  aquacultureErrorCheckConnection: 'Check your internet connection, then try again.',
+  aquacultureErrorReconnect: 'Sign in again, then retry the action.',
+  aquacultureErrorSyncConflict: 'A synchronization conflict was detected. Run synchronization again.',
+  aquacultureErrorRetry: 'Please retry in a moment.',
+  aquacultureErrorSupport: 'You can contact support if the issue persists.',
   syncInProgress: 'Synchronizing...',
   syncSuccess: 'Synchronization successful',
   syncFailed: 'Synchronization failed',
@@ -466,6 +472,7 @@
   allCycles: 'All cycles',
   noLogsYet: 'No logs yet',
   startLoggingData: 'Start recording your daily data',
+  dailyLogLoadError: 'Unable to load daily log history, please try again.',
   viewDailyLogHistory: 'View daily logs history',
 
   // SanitaryLog Screen
@@ -522,6 +529,12 @@
   harvest: 'Harvest',
   harvestCycle: 'Harvest Cycle',
   harvestData: 'Harvest Data',
+  dateFormatPlaceholder: 'YYYY-MM-DD',
+  maxValuePlaceholder: 'Max {{max}}',
+  exampleValuePlaceholder: 'E.g.: {{value}}',
+  zeroValuePlaceholder: '0',
+  exampleAverageWeightG: 'E.g.: 350',
+  exampleSalePriceFcfa: 'E.g.: 1800',
   harvestDate: 'Harvest Date',
   harvestDateRequired: 'Harvest date is required',
   finalCount: 'Final Count',
@@ -611,7 +624,7 @@
   // Nutritional Guides
   nutritionalGuides: 'View nutritional guides',
   aboutGuides: 'About Guides',
-  nutritionalGuidesDescription: 'Consult optimal feeding recommendations according to species and growth stage of your fish. These guides are based on MAVECAM best practices.',
+  nutritionalGuidesDescription: 'Consult optimal feeding recommendations according to species and growth stage of your fish. These guides are based on AquaCare best practices.',
   tilapia: 'Tilapia',
   clarias: 'Clarias',
   searchInGuides: 'Search in guides...',
@@ -656,6 +669,7 @@
   maxDensity: 'Maximum density',
   yourDensity: 'Your density',
   fishPerM2: 'fish/m²',
+  fishPerM3: 'fish/m³',
   densitySuggestion: 'Reduce initial count or increase total production surface.',
   survival: 'Survival',
   finalBiomass: 'Final Biomass',
@@ -1108,7 +1122,7 @@
   buyerNetworkROINote: 'This revenue is achievable through our partner buyer network.',
   buyerNetworkCTA: 'Contact Buyer Network',
   buyerNetworkSellingPriceHint: 'Reference price — AquaCare partner buyer network',
-  buyerNetworkHarvestDesc: 'MaveCameroun and our partner network can purchase your production. Contact us via support.',
+  buyerNetworkHarvestDesc: 'AquaCare and our partner network can purchase your production. Contact us via support.',
 
   // Settings - Language change
   languageUpdatedTitle: 'Language Updated',

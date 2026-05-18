@@ -79,7 +79,7 @@ export default function RegisterScreen({ navigation }: Props) {
     >
       <ScrollView contentContainerStyle={{ padding: 20, paddingTop: 48 }}>
         <View className="items-center mb-8">
-          <Text className="text-3xl font-bold text-mavecam-primary mb-2">{t('register')}</Text>
+          <Text className="text-3xl font-bold text-aquacare-primary mb-2">{t('register')}</Text>
           <Text className="text-base text-gray-light text-center">{t('createAccount')}</Text>
         </View>
 
@@ -89,7 +89,7 @@ export default function RegisterScreen({ navigation }: Props) {
             <View className="flex-row bg-cream rounded-lg">
               <TouchableOpacity
                 className={`flex-1 py-3 items-center rounded-lg ${
-                  formData.account_type === 'individual' ? 'bg-mavecam-primary' : ''
+                  formData.account_type === 'individual' ? 'bg-aquacare-primary' : ''
                 }`}
                 onPress={() => updateField('account_type', 'individual')}
               >
@@ -103,7 +103,7 @@ export default function RegisterScreen({ navigation }: Props) {
               </TouchableOpacity>
               <TouchableOpacity
                 className={`flex-1 py-3 items-center rounded-lg ${
-                  formData.account_type === 'company' ? 'bg-mavecam-primary' : ''
+                  formData.account_type === 'company' ? 'bg-aquacare-primary' : ''
                 }`}
                 onPress={() => updateField('account_type', 'company')}
               >
@@ -269,7 +269,7 @@ export default function RegisterScreen({ navigation }: Props) {
           <AuthErrorBlock error={error} />
 
           <TouchableOpacity
-            className={`py-4 rounded-lg items-center mb-4 ${isLoading ? 'bg-mavecam-primary/70' : 'bg-mavecam-primary'}`}
+            className={`py-4 rounded-lg items-center mb-4 ${isLoading ? 'bg-aquacare-primary/70' : 'bg-aquacare-primary'}`}
             onPress={handleRegister}
             disabled={isLoading}
           >
@@ -281,7 +281,7 @@ export default function RegisterScreen({ navigation }: Props) {
           <View className="flex-row justify-center items-center">
             <Text className="text-sm text-gray-light">{t('haveAccount')}</Text>
             <TouchableOpacity onPress={() => navigation.navigate('Login')}>
-              <Text className="text-sm font-semibold text-mavecam-primary">{t('signIn')}</Text>
+              <Text className="text-sm font-semibold text-aquacare-primary">{t('signIn')}</Text>
             </TouchableOpacity>
           </View>
         </View>

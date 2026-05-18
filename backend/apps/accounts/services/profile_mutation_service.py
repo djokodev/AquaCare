@@ -4,13 +4,14 @@ from __future__ import annotations
 
 from typing import Any
 
-from aquaculture.services.farm_production_plan_service import FarmProductionPlanService
 from accounts.domain.farm_profile_rules import build_farm_profile_invariant_errors
 from accounts.models import FarmProfile, User
 from accounts.validators import build_user_account_invariant_errors
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.utils.translation import gettext_lazy as _
+
+from .farm_setup_service import FarmSetupService
 
 
 class AccountProfileMutationService:
@@ -113,7 +114,7 @@ class AccountProfileMutationService:
         plan_updates = {
             field: value
             for field, value in updates.items()
-            if field in FarmProductionPlanService.SETTINGS_FIELDS
+            if field in FarmSetupService.SETTINGS_FIELDS
         }
         if not safe_updates and not plan_updates:
             return farm_profile
@@ -125,5 +126,5 @@ class AccountProfileMutationService:
 
             farm_profile.save(update_fields=[*safe_updates.keys(), "updated_at"])
         if plan_updates:
-            FarmProductionPlanService.update_settings(farm_profile, plan_updates)
+            FarmSetupService.update_settings(farm_profile, plan_updates)
         return FarmProfile.objects.with_user().get(pk=farm_profile.pk)

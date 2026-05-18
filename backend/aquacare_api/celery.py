@@ -14,13 +14,13 @@ from typing import Final
 from celery import Celery
 from celery.schedules import crontab
 
-DEFAULT_DJANGO_SETTINGS_MODULE: Final[str] = 'mavecam_api.settings.development'
+DEFAULT_DJANGO_SETTINGS_MODULE: Final[str] = 'aquacare_api.settings.development'
 
 # Set default Django settings module
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', DEFAULT_DJANGO_SETTINGS_MODULE)
 
 # Create Celery app
-app = Celery('mavecam_api')
+app = Celery('aquacare_api')
 
 # Load configuration from Django settings (namespace='CELERY')
 app.config_from_object('django.conf:settings', namespace='CELERY')

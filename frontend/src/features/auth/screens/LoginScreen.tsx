@@ -88,7 +88,7 @@ export default function LoginScreen({ navigation }: Props) {
     >
       <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }} className="px-5">
         <View className="items-center mb-10">
-          <Text className="text-3xl font-bold text-mavecam-primary text-center">{t('welcomeMessage')}</Text>
+          <Text className="text-3xl font-bold text-aquacare-primary text-center">{t('welcomeMessage')}</Text>
         </View>
 
         <View className="bg-white p-5 rounded-2xl">
@@ -96,7 +96,7 @@ export default function LoginScreen({ navigation }: Props) {
 
           <View className="flex-row bg-cream rounded-lg mb-5">
             <TouchableOpacity
-              className={`flex-1 py-3 items-center rounded-lg ${!isPhoneMode ? 'bg-mavecam-primary' : ''}`}
+              className={`flex-1 py-3 items-center rounded-lg ${!isPhoneMode ? 'bg-aquacare-primary' : ''}`}
               onPress={() => !isPhoneMode || toggleMode()}
             >
               <Text className={`text-sm font-semibold ${!isPhoneMode ? 'text-white' : 'text-gray-light'}`}>
@@ -104,7 +104,7 @@ export default function LoginScreen({ navigation }: Props) {
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
-              className={`flex-1 py-3 items-center rounded-lg ${isPhoneMode ? 'bg-mavecam-primary' : ''}`}
+              className={`flex-1 py-3 items-center rounded-lg ${isPhoneMode ? 'bg-aquacare-primary' : ''}`}
               onPress={() => isPhoneMode || toggleMode()}
             >
               <Text className={`text-sm font-semibold ${isPhoneMode ? 'text-white' : 'text-gray-light'}`}>
@@ -156,7 +156,7 @@ export default function LoginScreen({ navigation }: Props) {
           <AuthErrorBlock error={error} />
 
           <TouchableOpacity
-            className={`py-4 rounded-lg items-center mb-4 ${isLoading ? 'bg-mavecam-primary/70' : 'bg-mavecam-primary'}`}
+            className={`py-4 rounded-lg items-center mb-4 ${isLoading ? 'bg-aquacare-primary/70' : 'bg-aquacare-primary'}`}
             onPress={handleLogin}
             disabled={isLoading}
           >
@@ -168,7 +168,7 @@ export default function LoginScreen({ navigation }: Props) {
           <View className="flex-row justify-center items-center">
             <Text className="text-sm text-gray-light">{t('noAccount')}</Text>
             <TouchableOpacity onPress={() => navigation.navigate('Register')}>
-              <Text className="text-sm font-semibold text-mavecam-primary">{t('signUp')}</Text>
+              <Text className="text-sm font-semibold text-aquacare-primary">{t('signUp')}</Text>
             </TouchableOpacity>
           </View>
         </View>

@@ -17,7 +17,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { AppDispatch, RootState } from '@/store/store';
 import { fetchFeedingSuggestions, addToCart } from '@/features/commerce/store/commerceSlice';
 import { CycleSuggestion, FeedingPhase, SuggestedProduct } from '@/types/commerce';
-import { MAVECAM_COLORS } from '@/constants/colors';
+import { AQUACARE_COLORS } from '@/constants/colors';
 import { RootStackParamList } from '@/navigation/MainNavigator';
 
 type NavigationProp = StackNavigationProp<RootStackParamList>;
@@ -117,10 +117,10 @@ export default function FeedingSuggestionsScreen() {
     const { confidence_score, cycles_with_data, total_cycles } = suggestionsData.analysis;
     const scoreColor =
       confidence_score >= 80
-        ? MAVECAM_COLORS.SUCCESS
+        ? AQUACARE_COLORS.SUCCESS
         : confidence_score >= 60
-        ? MAVECAM_COLORS.WARNING
-        : MAVECAM_COLORS.ERROR;
+        ? AQUACARE_COLORS.WARNING
+        : AQUACARE_COLORS.ERROR;
 
     return (
       <View className="bg-white rounded-xl p-4 mb-4">
@@ -166,14 +166,14 @@ export default function FeedingSuggestionsScreen() {
           </Text>
         </View>
         <View className="items-end justify-between">
-          <Text className="text-sm font-semibold text-mavecam-primary">
+          <Text className="text-sm font-semibold text-aquacare-primary">
             {totalPrice.toLocaleString()} FCFA
           </Text>
           <TouchableOpacity
-            className="bg-mavecam-primary w-8 h-8 rounded-full items-center justify-center"
+            className="bg-aquacare-primary w-8 h-8 rounded-full items-center justify-center"
             onPress={() => handleAddToCart(suggestedProduct.product_id, suggestedProduct.quantity_bags)}
           >
-            <Ionicons name="cart-outline" size={16} color={MAVECAM_COLORS.WHITE} />
+            <Ionicons name="cart-outline" size={16} color={AQUACARE_COLORS.WHITE} />
           </TouchableOpacity>
         </View>
       </View>
@@ -193,7 +193,7 @@ export default function FeedingSuggestionsScreen() {
         >
           <View className="flex-row items-center flex-1 gap-3">
             <View className="w-10 h-10 bg-white rounded-full items-center justify-center">
-              <Ionicons name="fast-food-outline" size={20} color={MAVECAM_COLORS.GREEN_PRIMARY} />
+              <Ionicons name="fast-food-outline" size={20} color={AQUACARE_COLORS.GREEN_PRIMARY} />
             </View>
             <View>
               <Text className="text-sm font-semibold text-gray-dark">{phase.phase_name}</Text>
@@ -203,28 +203,28 @@ export default function FeedingSuggestionsScreen() {
             </View>
           </View>
           <View className="items-end gap-1">
-            <Text className="text-sm font-semibold text-mavecam-primary">
+            <Text className="text-sm font-semibold text-aquacare-primary">
               {phase.total_price.toLocaleString()} FCFA
             </Text>
             <Ionicons
               name={isExpanded ? 'chevron-up' : 'chevron-down'}
               size={20}
-              color={MAVECAM_COLORS.GRAY_LIGHT}
+              color={AQUACARE_COLORS.GRAY_LIGHT}
             />
           </View>
         </TouchableOpacity>
 
         <View className="flex-row mt-3 gap-4">
           <View className="flex-row items-center gap-1">
-            <Ionicons name="calendar-outline" size={14} color={MAVECAM_COLORS.GRAY_LIGHT} />
+            <Ionicons name="calendar-outline" size={14} color={AQUACARE_COLORS.GRAY_LIGHT} />
             <Text className="text-xs text-gray-light">{phase.days_coverage} {t('days')}</Text>
           </View>
           <View className="flex-row items-center gap-1">
-            <Ionicons name="scale-outline" size={14} color={MAVECAM_COLORS.GRAY_LIGHT} />
+            <Ionicons name="scale-outline" size={14} color={AQUACARE_COLORS.GRAY_LIGHT} />
             <Text className="text-xs text-gray-light">{phase.estimated_need_kg}kg</Text>
           </View>
           <View className="flex-row items-center gap-1">
-            <Ionicons name="cube-outline" size={14} color={MAVECAM_COLORS.GRAY_LIGHT} />
+            <Ionicons name="cube-outline" size={14} color={AQUACARE_COLORS.GRAY_LIGHT} />
             <Text className="text-xs text-gray-light">{totalBags} {t('bags')}</Text>
           </View>
         </View>
@@ -250,10 +250,10 @@ export default function FeedingSuggestionsScreen() {
           activeOpacity={0.8}
         >
           <View className="flex-row items-center flex-1 gap-3">
-            <Ionicons name="water-outline" size={28} color={MAVECAM_COLORS.GREEN_PRIMARY} />
+            <Ionicons name="water-outline" size={28} color={AQUACARE_COLORS.GREEN_PRIMARY} />
             <View className="flex-1">
               <Text className="text-base font-bold text-gray-dark">{cycle.cycle_name}</Text>
-              <Text className="text-sm text-mavecam-primary">{t(cycle.species)}</Text>
+              <Text className="text-sm text-aquacare-primary">{t(cycle.species)}</Text>
               <Text className="text-xs text-gray-light mt-1">
                 {t('currentPhase')}: {cycle.current_phase} - {cycle.current_avg_weight_g}g - {cycle.days_remaining} {t('daysRemaining')}
               </Text>
@@ -262,7 +262,7 @@ export default function FeedingSuggestionsScreen() {
           <Ionicons
             name={isExpanded ? 'chevron-up' : 'chevron-down'}
             size={24}
-            color={MAVECAM_COLORS.GRAY_LIGHT}
+            color={AQUACARE_COLORS.GRAY_LIGHT}
           />
         </TouchableOpacity>
 
@@ -277,7 +277,7 @@ export default function FeedingSuggestionsScreen() {
           </View>
           <View className="flex-1 min-w-[45%] items-center">
             <Text className="text-xs text-gray-light">{t('totalCost')}</Text>
-            <Text className="text-sm font-bold text-mavecam-primary">
+            <Text className="text-sm font-bold text-aquacare-primary">
               {cycle.summary.total_price.toLocaleString()} FCFA
             </Text>
           </View>
@@ -288,10 +288,10 @@ export default function FeedingSuggestionsScreen() {
         </View>
 
         <TouchableOpacity
-          className="bg-mavecam-primary flex-row items-center justify-center py-3 rounded-lg mt-3 gap-2"
+          className="bg-aquacare-primary flex-row items-center justify-center py-3 rounded-lg mt-3 gap-2"
           onPress={() => handleAddCycleToCart(cycle)}
         >
-          <Ionicons name="cart" size={20} color={MAVECAM_COLORS.WHITE} />
+          <Ionicons name="cart" size={20} color={AQUACARE_COLORS.WHITE} />
           <Text className="text-white text-base font-semibold">{t('addAllToCart')}</Text>
         </TouchableOpacity>
 
@@ -310,8 +310,8 @@ export default function FeedingSuggestionsScreen() {
       suggestionCycles.length > 0 ? (
         <>
           <View className="flex-row bg-[#dbeafe] p-3 rounded-lg mb-4 gap-3">
-            <Ionicons name="information-circle" size={24} color={MAVECAM_COLORS.INFO} />
-            <Text className="flex-1 text-sm text-mavecam-primary">{t('suggestionsInfoBanner')}</Text>
+            <Ionicons name="information-circle" size={24} color={AQUACARE_COLORS.INFO} />
+            <Text className="flex-1 text-sm text-aquacare-primary">{t('suggestionsInfoBanner')}</Text>
           </View>
 
           {renderConfidenceScore()}
@@ -323,16 +323,16 @@ export default function FeedingSuggestionsScreen() {
   const renderEmptyState = useCallback(
     () => (
       <View className="py-16 items-center">
-        <Ionicons name="bulb-outline" size={100} color={MAVECAM_COLORS.GRAY_LIGHT} />
+        <Ionicons name="bulb-outline" size={100} color={AQUACARE_COLORS.GRAY_LIGHT} />
         <Text className="mt-5 text-2xl font-bold text-gray-dark">{t('noSuggestionsYet')}</Text>
         <Text className="mt-3 text-base text-gray-light text-center px-8">
           {t('noSuggestionsDescription')}
         </Text>
         <TouchableOpacity
-          className="mt-6 bg-mavecam-primary flex-row items-center px-6 py-3 rounded-lg gap-2"
+          className="mt-6 bg-aquacare-primary flex-row items-center px-6 py-3 rounded-lg gap-2"
           onPress={() => navigation.navigate('NewCycle')}
         >
-          <Ionicons name="add-circle-outline" size={20} color={MAVECAM_COLORS.WHITE} />
+          <Ionicons name="add-circle-outline" size={20} color={AQUACARE_COLORS.WHITE} />
           <Text className="text-white text-base font-semibold">{t('startNewCycle')}</Text>
         </TouchableOpacity>
       </View>
@@ -344,14 +344,14 @@ export default function FeedingSuggestionsScreen() {
     <View className="flex-1 bg-cream">
       <View className="bg-white px-5 pt-16 pb-5 flex-row items-center justify-between shadow">
         <TouchableOpacity onPress={() => navigation.goBack()} className="w-10">
-          <Ionicons name="arrow-back" size={24} color={MAVECAM_COLORS.GRAY_DARK} />
+          <Ionicons name="arrow-back" size={24} color={AQUACARE_COLORS.GRAY_DARK} />
         </TouchableOpacity>
         <View className="flex-1 items-center">
           <Text className="text-xl font-bold text-gray-dark">{t('feedingSuggestions')}</Text>
           <Text className="text-xs text-gray-light mt-1">{t('intelligentRecommendations')}</Text>
         </View>
         <TouchableOpacity onPress={() => navigation.navigate('Cart')} className="relative">
-          <Ionicons name="cart-outline" size={24} color={MAVECAM_COLORS.GREEN_PRIMARY} />
+          <Ionicons name="cart-outline" size={24} color={AQUACARE_COLORS.GREEN_PRIMARY} />
           {cartItemsCount > 0 && (
             <View className="absolute -top-2 -right-2 bg-[#dc2626] rounded-full min-w-[20px] h-5 items-center justify-center px-1">
               <Text className="text-white text-[10px] font-bold">
@@ -364,11 +364,11 @@ export default function FeedingSuggestionsScreen() {
 
       {!currentCycle?.id ? (
         <View className="flex-1 items-center justify-center px-8">
-          <Ionicons name="information-circle-outline" size={48} color={MAVECAM_COLORS.WARNING} />
+          <Ionicons name="information-circle-outline" size={48} color={AQUACARE_COLORS.WARNING} />
           <Text className="mt-3 text-base text-gray-dark text-center">{t('sessionCycleNotSelected')}</Text>
           <Text className="mt-2 text-sm text-gray-light text-center">{t('sessionCyclePickerDescription')}</Text>
           <TouchableOpacity
-            className="mt-5 bg-mavecam-primary px-6 py-3 rounded-lg"
+            className="mt-5 bg-aquacare-primary px-6 py-3 rounded-lg"
             onPress={() => navigation.navigate('CycleSessionEntry')}
           >
             <Text className="text-white text-base font-semibold">{t('sessionCycleConfirm')}</Text>
@@ -376,15 +376,15 @@ export default function FeedingSuggestionsScreen() {
         </View>
       ) : loading && !refreshing ? (
         <View className="flex-1 items-center justify-center">
-          <ActivityIndicator size="large" color={MAVECAM_COLORS.GREEN_PRIMARY} />
+          <ActivityIndicator size="large" color={AQUACARE_COLORS.GREEN_PRIMARY} />
           <Text className="mt-3 text-base text-gray-light">{t('analyzingCycles')}</Text>
         </View>
       ) : error ? (
         <View className="flex-1 items-center justify-center px-10 py-10">
-          <Ionicons name="alert-circle-outline" size={48} color={MAVECAM_COLORS.ERROR} />
+          <Ionicons name="alert-circle-outline" size={48} color={AQUACARE_COLORS.ERROR} />
           <Text className="mt-3 text-base text-[#dc2626] text-center">{error}</Text>
           <TouchableOpacity
-            className="mt-5 bg-mavecam-primary px-6 py-3 rounded-lg"
+            className="mt-5 bg-aquacare-primary px-6 py-3 rounded-lg"
             onPress={() =>
               farmProfile?.id &&
               currentCycle?.id &&
@@ -411,8 +411,8 @@ export default function FeedingSuggestionsScreen() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={handleRefresh}
-              colors={[MAVECAM_COLORS.GREEN_PRIMARY]}
-              tintColor={MAVECAM_COLORS.GREEN_PRIMARY}
+              colors={[AQUACARE_COLORS.GREEN_PRIMARY]}
+              tintColor={AQUACARE_COLORS.GREEN_PRIMARY}
             />
           }
           showsVerticalScrollIndicator={false}

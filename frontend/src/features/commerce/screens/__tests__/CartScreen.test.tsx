@@ -55,6 +55,9 @@ describe('CartScreen', () => {
         user: null,
         farmProfile: null,
       },
+      aquaculture: {
+        currentCycle: undefined,
+      },
     };
   });
 
@@ -87,6 +90,9 @@ describe('CartScreen', () => {
       auth: {
         user: { id: 'u1', region: 'Littoral' },
         farmProfile: { id: 'farm-1' },
+      },
+      aquaculture: {
+        currentCycle: undefined,
       },
     };
 
@@ -125,6 +131,9 @@ describe('CartScreen', () => {
       auth: {
         user: { id: 'u1', region: 'Littoral' },
         farmProfile: { id: 'farm-1' },
+      },
+      aquaculture: {
+        currentCycle: { id: 'cycle-1' },
       },
     };
 
@@ -166,6 +175,9 @@ describe('CartScreen', () => {
       auth: {
         user: { id: 'u1', region: 'Littoral' },
         farmProfile: { id: 'farm-1' },
+      },
+      aquaculture: {
+        currentCycle: undefined,
       },
     };
 

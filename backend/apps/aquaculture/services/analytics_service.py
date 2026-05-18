@@ -9,7 +9,7 @@ Architecture:
     - Calculs statistiques indépendants du framework Django
     - Réutilisable pour API, CLI, rapports PDF, etc.
 
-Author: MAVECAM AquaCare Team
+Author: AquaCare Team
 """
 from __future__ import annotations
 

@@ -4,8 +4,8 @@ Implemente le RBAC multi-niveau avec audit logging.
 
 Roles:
 - OWNER (is_superuser): Controle total
-- MANAGERS (mavecam_managers): Acces complet aquaculture
-- COMMERCE (mavecam_commerce): Lecture seule pour contexte
+- MANAGERS (aquacare_managers): Acces complet aquaculture
+- COMMERCE (aquacare_commerce): Lecture seule pour contexte
 - SUPPORT: Pas d'acces
 """
 import csv
@@ -107,7 +107,7 @@ class ProductionCycleAdmin(AquacultureSecuredAdmin):
     """
     Administration securisee des cycles de production.
 
-    Permet a l'equipe MAVECAM de :
+    Permet a l'equipe AquaCare de :
     - Surveiller les performances des eleveurs en temps reel
     - Identifier les cycles a problemes rapidement
     - Generer des rapports de performance

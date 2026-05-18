@@ -111,7 +111,7 @@ export const CYCLE_STATUS = {
 export type CycleStatus = typeof CYCLE_STATUS[keyof typeof CYCLE_STATUS];
 
 /**
- * Objectifs de performance MAVECAM (pour affichage).
+ * Objectifs de performance AquaCare (pour affichage).
  */
 export const PERFORMANCE_TARGETS = {
   fcr: {

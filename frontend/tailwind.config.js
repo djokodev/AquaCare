@@ -6,14 +6,14 @@ module.exports = {
   ],
   presets: [require('nativewind/preset')],
   safelist: [
-    // Couleurs custom MAVECAM - empêche tree-shaking des classes dynamiques
-    'bg-mavecam-primary',
-    'bg-mavecam-primary-light',
-    'bg-mavecam-primary-dark',
-    'border-mavecam-primary',
-    'border-mavecam-primary-light',
-    'border-mavecam-primary-dark',
-    'text-mavecam-primary',
+    // Couleurs custom AquaCare - empêche tree-shaking des classes dynamiques
+    'bg-aquacare-primary',
+    'bg-aquacare-primary-light',
+    'bg-aquacare-primary-dark',
+    'border-aquacare-primary',
+    'border-aquacare-primary-light',
+    'border-aquacare-primary-dark',
+    'text-aquacare-primary',
     'text-white',
     'text-gray-dark',
     'text-gray-light',
@@ -21,9 +21,9 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        'mavecam-primary': '#059669',
-        'mavecam-primary-light': '#10b981',
-        'mavecam-primary-dark': '#047857',
+        'aquacare-primary': '#059669',
+        'aquacare-primary-light': '#10b981',
+        'aquacare-primary-dark': '#047857',
         cream: '#f8fafc',
         'gray-light': '#64748b',
         'gray-dark': '#1e293b',

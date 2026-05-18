@@ -52,7 +52,7 @@ import type { Conversation, Message, MediaType } from '../types/chat';
 import { AUTO_REFRESH_INTERVAL_MS } from '../domain/constants';
 
 /**
- * MAVECAM Design System Colors
+ * AquaCare Design System Colors
  */
 const COLORS = {
   GREEN_PRIMARY: '#059669',

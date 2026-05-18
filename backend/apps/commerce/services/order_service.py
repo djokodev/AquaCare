@@ -1,5 +1,5 @@
 """
-Service de gestion des commandes MAVECAM AquaCare.
+Service de gestion des commandes AquaCare.
 
 Architecture Clean : Service stateless coordonnant les opérations commande.
 Gère création, validation, calculs automatiques et notifications.
@@ -22,6 +22,7 @@ from ..domain.validators import DeliveryMethod, OrderItemPayload, OrderValidator
 from ..models import Order, OrderItem
 from .base import BaseCommerceService
 from .product_service import ProductService
+from .production_cycle_gateway import ProductionCycleAccessError, ProductionCycleGateway
 
 if TYPE_CHECKING:
     from accounts.models import User
@@ -86,7 +87,7 @@ class CalculatedOrderAmounts:
 
 class OrderService(BaseCommerceService):
     """
-    Service de gestion des commandes MAVECAM.
+    Service de gestion des commandes AquaCare.
 
     Responsabilités :
     - Création commande avec validation complète
@@ -103,6 +104,7 @@ class OrderService(BaseCommerceService):
         items_data: list[OrderItemPayload],
         delivery_method: DeliveryMethod,
         pickup_location: str | None = None,
+        production_cycle_id: str | None = None,
         client_uuid: str | None = None,
         created_offline: bool = False,
     ) -> Order:
@@ -112,7 +114,7 @@ class OrderService(BaseCommerceService):
         Workflow :
         1. Validation données (items, livraison)
         2. Récupération produits et calcul sous-total
-        3. Calcul frais de livraison (règles MAVECAM)
+        3. Calcul frais de livraison (règles AquaCare)
         4. Snapshot adresse utilisateur
         5. Création Order + OrderItems
         6. Notification utilisateur
@@ -122,6 +124,7 @@ class OrderService(BaseCommerceService):
             items_data: Liste de dicts [{'product_id': UUID, 'quantity': int}, ...]
             delivery_method: 'home' ou 'pickup'
             pickup_location: 'ndokoti' ou 'ndogpasi' (si pickup)
+            production_cycle_id: UUID cycle aquaculture optionnel
             client_uuid: UUID client pour déduplication sync offline
             created_offline: True si commande créée en mode offline
 
@@ -169,12 +172,14 @@ class OrderService(BaseCommerceService):
             region=OrderService._normalize_region(user.region),
             prepared_items=prepared_items,
         )
+        production_cycle = OrderService._resolve_order_cycle(user, production_cycle_id)
 
         delivery_address_data = OrderService._build_delivery_address_snapshot(user)
         order = OrderService._create_order_with_retry(
             user=user,
             delivery_method=delivery_method,
             pickup_location=pickup_location or '',
+            production_cycle=production_cycle,
             client_uuid=client_uuid,
             created_offline=created_offline,
             delivery_address_data=delivery_address_data,
@@ -194,6 +199,19 @@ class OrderService(BaseCommerceService):
         })
 
         return Order.objects.with_details().get(pk=order.pk)
+
+    @staticmethod
+    def _resolve_order_cycle(user: User, production_cycle_id: str | None):
+        """Valide et retourne le cycle aquaculture si fourni."""
+        if not production_cycle_id:
+            return None
+        try:
+            return ProductionCycleGateway.get_user_cycle(
+                user_id=user.id,
+                cycle_id=production_cycle_id,
+            )
+        except ProductionCycleAccessError as exc:
+            raise InvalidOrderError("Cycle de production introuvable ou inaccessible") from exc
 
     @staticmethod
     def _get_existing_order_for_user(
@@ -329,6 +347,7 @@ class OrderService(BaseCommerceService):
         user: User,
         delivery_method: DeliveryMethod,
         pickup_location: str,
+        production_cycle: object | None,
         client_uuid: str | None,
         created_offline: bool,
         delivery_address_data: DeliveryAddressSnapshot,
@@ -350,6 +369,7 @@ class OrderService(BaseCommerceService):
                     status='confirmed',  # Statut initial : commandée
                     delivery_method=delivery_method,
                     pickup_location=pickup_location,
+                    production_cycle=production_cycle,
                     client_uuid=client_uuid,
                     created_offline=created_offline,
                     synced_at=None if created_offline else timezone.now(),

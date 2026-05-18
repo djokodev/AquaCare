@@ -6,8 +6,10 @@ Coverage cible : >50%
 from datetime import date, timedelta
 
 import pytest
-from aquaculture.models import CycleLog
+from aquaculture.models import CycleLog, SanitaryLog
 from aquaculture.services.sync_service import SyncService
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
 from tests.fixtures.factories import ProductionCycleFactory, UserFactory
@@ -65,6 +67,31 @@ class TestSyncServicePullData:
 
         assert 'cycle_logs' in updates
         assert isinstance(updates['cycle_logs'], list)
+
+    def test_get_server_updates_limits_queries_for_cycles_with_feed_cost(self):
+        """Le pull sync doit éviter les requêtes par cycle lors de la sérialisation coût aliment."""
+        from decimal import Decimal
+
+        from tests.fixtures.factories import FarmProfileFactory
+
+        user = UserFactory()
+        farm = FarmProfileFactory(user=user)
+
+        # Crée des cycles avec consommation d'aliment pour activer total_feed_cost serializer field
+        for idx in range(5):
+            ProductionCycleFactory(
+                farm_profile=farm,
+                start_date=date.today() - timedelta(days=20 + idx),
+                total_feed_consumed=Decimal('12.50'),
+            )
+
+        with CaptureQueriesContext(connection) as ctx:
+            updates = SyncService.get_server_updates(user)
+
+        assert 'cycles' in updates
+        # 4 requêtes principales attendues: cycles, logs, plans, sanitary logs
+        # + marge de sécurité pour variations ORM mineures
+        assert len(ctx.captured_queries) <= 5
 
 
 @pytest.mark.django_db
@@ -135,6 +162,67 @@ class TestSyncServicePushData:
 
         assert result2['created'] == 0
         assert result2['updated'] == 1
+
+    def test_sync_new_cycles_deduplicates_by_client_uuid(self):
+        """Deux retries du même nouveau cycle offline ne créent pas de doublon."""
+        import uuid
+
+        from tests.fixtures.factories import FarmProfileFactory
+
+        user = UserFactory()
+        FarmProfileFactory(user=user)
+        client_uuid = str(uuid.uuid4())
+        cycles_data = [
+            {
+                'client_uuid': client_uuid,
+                'cycle_name': 'Cycle offline retry',
+                'species': 'tilapia',
+                'pond_identifier': 'Bassin A',
+                'pond_surface_m2': '20.00',
+                'start_date': date.today().isoformat(),
+                'initial_count': 200,
+                'initial_average_weight': '10.00',
+            }
+        ]
+
+        result1 = SyncService.sync_new_cycles(user, cycles_data)
+        result2 = SyncService.sync_new_cycles(user, cycles_data)
+
+        assert result1['errors'] == []
+        assert result1['created'] == 1
+        assert result2['created'] == 0
+        assert result2['updated'] == 1
+
+    def test_sync_new_cycles_rejects_client_uuid_from_another_user(self):
+        """Un client_uuid de cycle appartenant à un autre utilisateur est rejeté."""
+        import uuid
+
+        from tests.fixtures.factories import FarmProfileFactory
+
+        user1 = UserFactory()
+        user2 = UserFactory()
+        farm1 = FarmProfileFactory(user=user1)
+        FarmProfileFactory(user=user2)
+        client_uuid = str(uuid.uuid4())
+
+        ProductionCycleFactory(farm_profile=farm1, client_uuid=client_uuid)
+
+        result = SyncService.sync_new_cycles(user2, [
+            {
+                'client_uuid': client_uuid,
+                'cycle_name': 'Cycle conflict',
+                'species': 'tilapia',
+                'pond_identifier': 'Bassin B',
+                'pond_surface_m2': '20.00',
+                'start_date': date.today().isoformat(),
+                'initial_count': 200,
+                'initial_average_weight': '10.00',
+            }
+        ])
+
+        assert result['created'] == 0
+        assert len(result['errors']) == 1
+        assert 'autre utilisateur' in result['errors'][0]['error']
 
 
 @pytest.mark.django_db
@@ -404,6 +492,7 @@ class TestSyncSanitaryLogs:
     def test_sync_sanitary_logs_basic_success(self):
         """Sync d'un log sanitaire valide crée un nouvel enregistrement."""
         from tests.fixtures.factories import FarmProfileFactory
+        import uuid
 
         user = UserFactory()
         farm = FarmProfileFactory(user=user)
@@ -415,6 +504,7 @@ class TestSyncSanitaryLogs:
         from aquaculture.models import SanitaryLog
         logs_data = [
             {
+                'client_uuid': str(uuid.uuid4()),
                 'cycle': str(cycle.id),
                 'event_date': date.today(),
                 'event_type': 'treatment',
@@ -427,6 +517,43 @@ class TestSyncSanitaryLogs:
         assert result['created'] == 1
         assert len(result['errors']) == 0
         assert SanitaryLog.objects.filter(cycle=cycle).count() == 1
+
+    def test_sync_sanitary_logs_deduplicates_by_client_uuid(self):
+        """Deux retries du même log sanitaire offline ne créent pas de doublon."""
+        from tests.fixtures.factories import FarmProfileFactory
+        import uuid
+
+        user = UserFactory()
+        farm = FarmProfileFactory(user=user)
+        cycle = ProductionCycleFactory(
+            farm_profile=farm,
+            start_date=date.today() - timedelta(days=10),
+        )
+        client_uuid = str(uuid.uuid4())
+
+        logs_data = [
+            {
+                'client_uuid': client_uuid,
+                'cycle': str(cycle.id),
+                'event_date': date.today(),
+                'event_type': 'treatment',
+                'symptoms': 'Traitement préventif observé sur plusieurs poissons.',
+            },
+            {
+                'client_uuid': client_uuid,
+                'cycle': str(cycle.id),
+                'event_date': date.today(),
+                'event_type': 'treatment',
+                'symptoms': 'Retry du traitement préventif depuis le mobile.',
+            },
+        ]
+
+        result = SyncService.sync_sanitary_logs(user, logs_data)
+
+        assert result['created'] == 1
+        assert result['updated'] == 1
+        assert len(result['errors']) == 0
+        assert SanitaryLog.objects.filter(client_uuid=client_uuid).count() == 1
 
     def test_sync_sanitary_logs_invalid_cycle_id_adds_error(self):
         """Un cycle_id invalide pour un log sanitaire est rejeté."""

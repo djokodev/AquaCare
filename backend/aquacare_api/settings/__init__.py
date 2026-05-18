@@ -2,7 +2,7 @@ import os
 
 
 def _resolve_settings_module() -> str:
-    return os.getenv('DJANGO_SETTINGS_MODULE', 'mavecam_api.settings.development')
+    return os.getenv('DJANGO_SETTINGS_MODULE', 'aquacare_api.settings.development')
 
 env = _resolve_settings_module()
 

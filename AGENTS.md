@@ -14,6 +14,10 @@ Dans les messages texte, utiliser **","** comme séparateur dans les listes inli
 
 **Instruction Codex :** Commence chaque session de développement en lisant `WORKFLOW.md` pour connaître la routine appropriée selon la tâche (feature backend/frontend, bug fix, package installation, review PR, pre-release).
 
+## Principe de Cohérence Technique
+
+Toujours suivre au minimum l'architecture, les conventions de code, les patterns métier, et le style d'implémentation déjà présents dans le projet. Avant d'introduire une nouvelle structure, un nouveau pattern, ou un refactoring, vérifier d'abord si un équivalent existe déjà dans la codebase et s'y aligner par défaut. En cas d'écart nécessaire, le justifier explicitement, limiter l'impact, et préserver la compatibilité avec l'existant.
+
 ## Project Overview
 
 AquaCare est une application de gestion aquacole bilingue (français/anglais) conçue pour le Cameroun, destinée aux pisciculteurs, avec des fonctionnalités mobiles fonctionnant hors ligne en priorité.
@@ -40,7 +44,7 @@ docker-compose exec api python manage.py setup_rbac
 docker-compose exec api python manage.py create_superuser_from_env
 
 # Linting (Ruff — also runs in CI on PRs)
-docker-compose exec api ruff check backend/manage.py backend/apps backend/mavecam_api backend/tests
+docker-compose exec api ruff check backend/manage.py backend/apps backend/aquacare_api backend/tests
 
 # Testing
 docker-compose exec api pytest                                  
@@ -142,7 +146,7 @@ Application MUST be 100% bilingual French/English. **NEVER hardcode text in comp
 **Verification:** Run `/i18n-validator` agent to check completeness.
 
 
-## MAVECAM Design System
+## AquaCare Design System
 
 **Colors (ONLY these - never invent new greens):**
 ```typescript
@@ -307,7 +311,7 @@ docker-compose exec api python manage.py setup_rbac
 
 ## Branding Note
 
-AquaCare is independent of MAVECAM. Do not use "MAVECAM" as owner/author in exports, PDFs, or UI. Use neutral "AquaCare" branding.
+AquaCare is independent of AquaCare. Do not use "AquaCare" as owner/author in exports, PDFs, or UI. Use neutral "AquaCare" branding.
 
 ## Mise en Place Automatique (Branch Setup)
 

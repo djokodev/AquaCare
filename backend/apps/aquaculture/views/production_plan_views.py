@@ -12,20 +12,22 @@ from rest_framework.exceptions import ValidationError as DRFValidationError
 from rest_framework.response import Response
 
 from accounts.models import FarmProfile
-from accounts.schemas import (
+from aquaculture.production_plan_schemas import (
     AUTH_REQUIRED_RESPONSE,
     NOT_FOUND_RESPONSE,
     THROTTLED_RESPONSE,
     VALIDATION_ERROR_RESPONSE,
 )
-from accounts.serializers import (
+from aquaculture.production_plan_serializers import (
     AnnualSimulationInputSerializer,
     AnnualSimulationResponseSerializer,
-    FarmProfileSerializer,
     FarmSetupSerializer,
+    ProductionPlanFarmProfileSerializer,
 )
-from accounts.services.profile_query_service import ProfileQueryService
-from accounts.throttles import AccountFarmSetupThrottle, AccountSimulationThrottle
+from aquaculture.throttles import (
+    AquacultureProductionPlanSetupThrottle,
+    AquacultureProductionPlanSimulationThrottle,
+)
 from aquaculture.services.annual_simulation_service import AnnualSimulationService
 from aquaculture.services.farm_production_plan_service import FarmProductionPlanService
 
@@ -55,12 +57,12 @@ class ProductionPlanSetupView(generics.UpdateAPIView):
 
     serializer_class = FarmSetupSerializer
     permission_classes = [permissions.IsAuthenticated]
-    throttle_classes = [AccountFarmSetupThrottle]
+    throttle_classes = [AquacultureProductionPlanSetupThrottle]
     http_method_names = ["patch", "post"]
 
     def get_object(self):
         try:
-            return ProfileQueryService.get_farm_profile(self.request.user.pk)
+            return FarmProfile.objects.with_user().get(user_id=self.request.user.pk)
         except FarmProfile.DoesNotExist:
             raise Http404
 
@@ -74,7 +76,7 @@ class ProductionPlanSetupView(generics.UpdateAPIView):
         request=FarmSetupSerializer,
         responses={
             200: OpenApiResponse(
-                response=FarmProfileSerializer,
+                response=ProductionPlanFarmProfileSerializer,
                 description="Profil ferme complet apres sauvegarde du setup.",
             ),
             400: VALIDATION_ERROR_RESPONSE,
@@ -105,7 +107,7 @@ class ProductionPlanSetupView(generics.UpdateAPIView):
             },
         )
         return Response(
-            FarmProfileSerializer(updated).data,
+            ProductionPlanFarmProfileSerializer(updated).data,
             status=status.HTTP_200_OK,
         )
 
@@ -119,7 +121,7 @@ class ProductionPlanSetupView(generics.UpdateAPIView):
         request=FarmSetupSerializer,
         responses={
             200: OpenApiResponse(
-                response=FarmProfileSerializer,
+                response=ProductionPlanFarmProfileSerializer,
                 description="Profil ferme complet apres completion du setup.",
             ),
             400: VALIDATION_ERROR_RESPONSE,
@@ -139,7 +141,7 @@ class ProductionPlanSimulationView(generics.GenericAPIView):
 
     serializer_class = AnnualSimulationInputSerializer
     permission_classes = [permissions.IsAuthenticated]
-    throttle_classes = [AccountSimulationThrottle]
+    throttle_classes = [AquacultureProductionPlanSimulationThrottle]
 
     @extend_schema(
         summary="Simulation annuelle de production aquacole",

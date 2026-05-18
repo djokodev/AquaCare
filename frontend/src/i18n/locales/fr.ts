@@ -271,7 +271,7 @@ export const fr = {
   manageFarm: 'Gestion de ferme',
   viewStats: 'Voir les statistiques',
   noFarmProfile: 'Aucun profil ferme',
-  farmCertified: 'Ferme Certifiée MAVECAM',
+  farmCertified: 'Ferme Certifiée AquaCare',
   certificationPending: 'Certification en cours',
   certificationSuspended: 'Certification suspendue',
   certificationRejected: 'Certification refusée',
@@ -285,7 +285,7 @@ export const fr = {
   companyInfo: 'Informations Entreprise',
   createdOn: 'Créé le',
   updatedOn: 'Mis à jour le',
-  certificationMavecam: 'Certification MAVECAM',
+  certificationAquacare: 'Certification AquaCare',
   performanceMetrics: 'Métriques de Performance',
   accountVerified: 'Compte vérifié',
   yes: 'Oui',
@@ -295,9 +295,9 @@ export const fr = {
   farmManagement: 'Gestion de la Ferme',
   
   // Certification descriptions
-  certifiedDescription: 'Félicitations ! Votre ferme est certifiée MAVECAM. Vous bénéficiez de tous les avantages du programme.',
-  pendingDescription: 'Votre demande de certification est en cours d\'examen par l\'équipe MAVECAM. Nous vous contacterons bientôt.',
-  suspendedDescription: 'Votre certification a été temporairement suspendue. Contactez l\'équipe MAVECAM pour plus d\'informations.',
+  certifiedDescription: 'Félicitations ! Votre ferme est certifiée AquaCare. Vous bénéficiez de tous les avantages du programme.',
+  pendingDescription: 'Votre demande de certification est en cours d\'examen par l\'équipe AquaCare. Nous vous contacterons bientôt.',
+  suspendedDescription: 'Votre certification a été temporairement suspendue. Contactez l\'équipe AquaCare pour plus d\'informations.',
   rejectedDescription: 'Votre demande de certification n\'a pas été acceptée. Vous pouvez nous contacter pour connaître les critères requis.',
   
   // Validation Messages
@@ -455,6 +455,12 @@ export const fr = {
   samplingPairRequired: 'Renseignez ensemble le nombre échantillonné et le poids total.',
   sampleCountRequiredWithWeight: 'Veuillez indiquer le nombre de poissons pesés avec le poids total.',
   feedingTimesInvalidIgnored: 'Certains horaires de nourrissage sont invalides et ont été ignorés.',
+  aquacultureErrorFixField: 'Corrigez les champs signalés puis réessayez.',
+  aquacultureErrorCheckConnection: 'Vérifiez votre connexion internet puis réessayez.',
+  aquacultureErrorReconnect: 'Reconnectez-vous puis relancez l\'action.',
+  aquacultureErrorSyncConflict: 'Un conflit de synchronisation est détecté. Relancez la synchronisation.',
+  aquacultureErrorRetry: 'Réessayez dans un instant.',
+  aquacultureErrorSupport: 'Vous pouvez contacter le support si le problème persiste.',
   syncInProgress: 'Synchronisation en cours...',
   syncSuccess: 'Synchronisation réussie',
   syncFailed: 'Erreur de synchronisation',
@@ -466,6 +472,7 @@ export const fr = {
   allCycles: 'Tous les cycles',
   noLogsYet: 'Aucune saisie encore',
   startLoggingData: 'Commencez à enregistrer vos données quotidiennes',
+  dailyLogLoadError: 'Impossible de charger l\'historique des saisies, réessayez.',
   viewDailyLogHistory: 'Voir l\'historique des saisies',
 
   // SanitaryLog Screen
@@ -527,7 +534,7 @@ export const fr = {
   // Nutritional Guides
   nutritionalGuides: 'Consulter les guides nutritionnels',
   aboutGuides: 'A propos des guides',
-  nutritionalGuidesDescription: 'Consultez les recommandations d\'alimentation optimales selon l\'espèce et le stade de croissance de vos poissons. Ces guides sont basés sur les meilleures pratiques MAVECAM.',
+  nutritionalGuidesDescription: 'Consultez les recommandations d\'alimentation optimales selon l\'espèce et le stade de croissance de vos poissons. Ces guides sont basés sur les meilleures pratiques AquaCare.',
   allSpecies: 'Toutes espèces',
   tilapia: 'Tilapia',
   clarias: 'Clarias',
@@ -573,7 +580,14 @@ export const fr = {
   maxDensity: 'Densité maximale',
   yourDensity: 'Votre densité',
   fishPerM2: 'poissons/m²',
+  fishPerM3: 'poissons/m³',
   densitySuggestion: 'Réduisez le nombre initial ou augmentez la surface totale de production.',
+  dateFormatPlaceholder: 'AAAA-MM-JJ',
+  maxValuePlaceholder: 'Max {{max}}',
+  exampleValuePlaceholder: 'Ex : {{value}}',
+  zeroValuePlaceholder: '0',
+  exampleAverageWeightG: 'Ex : 350',
+  exampleSalePriceFcfa: 'Ex : 1800',
   harvestDateRequired: 'La date de récolte est requise',
   finalCount: 'Nombre Final',
   finalCountRequired: 'Le nombre final de poissons est requis',
@@ -1108,7 +1122,7 @@ export const fr = {
   buyerNetworkROINote: 'Ce revenu est atteignable via notre réseau d\'acheteurs partenaires.',
   buyerNetworkCTA: 'Contacter le réseau',
   buyerNetworkSellingPriceHint: 'Prix de référence — réseau d\'acheteurs partenaires AquaCare',
-  buyerNetworkHarvestDesc: 'MaveCameroun et notre réseau de partenaires peuvent acquérir votre production. Contactez-nous via le support.',
+  buyerNetworkHarvestDesc: 'AquaCare et notre réseau de partenaires peuvent acquérir votre production. Contactez-nous via le support.',
 
   // Settings - Language change
   languageUpdatedTitle: 'Langue mise à jour',

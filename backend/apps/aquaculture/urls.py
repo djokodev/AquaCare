@@ -1,5 +1,5 @@
 """
-Configuration des URLs pour le module aquaculture de MAVECAM AquaCare.
+Configuration des URLs pour le module aquaculture de AquaCare.
 Définit les endpoints d'API REST pour la gestion de la pisciculture.
 """
 from django.urls import include, path
