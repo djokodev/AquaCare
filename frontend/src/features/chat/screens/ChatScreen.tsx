@@ -50,19 +50,12 @@ import { MessageBubble } from '../components/MessageBubble';
 import { MessageComposer } from '../components/MessageComposer';
 import type { Conversation, Message, MediaType } from '../types/chat';
 import { AUTO_REFRESH_INTERVAL_MS } from '../domain/constants';
+import { AQUACARE_COLORS } from '@/constants/colors';
+import { AQUACARE_TYPOGRAPHY } from '@/constants/typography';
 
 /**
  * AquaCare Design System Colors
  */
-const COLORS = {
-  GREEN_PRIMARY: '#059669',
-  WHITE: '#ffffff',
-  CREAM: '#f8fafc',
-  GRAY_LIGHT: '#64748b',
-  GRAY_DARK: '#1e293b',
-  ERROR: '#dc2626',
-};
-
 export function ChatScreen() {
   const { t } = useTranslation();
   const dispatch = useDispatch<AppDispatch>();
@@ -353,7 +346,7 @@ export function ChatScreen() {
     if (conversationLoading || messagesLoading) {
       return (
         <View style={styles.emptyContainer}>
-          <ActivityIndicator size="large" color={COLORS.GREEN_PRIMARY} />
+          <ActivityIndicator size="large" color={AQUACARE_COLORS.GREEN_PRIMARY} />
           <Text style={styles.emptyText}>{t('loading')}</Text>
         </View>
       );
@@ -392,7 +385,7 @@ export function ChatScreen() {
     if (syncingOffline && offlineQueueCount > 0) {
       return (
         <View style={styles.syncBanner}>
-          <ActivityIndicator size="small" color={COLORS.GREEN_PRIMARY} />
+          <ActivityIndicator size="small" color={AQUACARE_COLORS.GREEN_PRIMARY} />
           <Text style={styles.syncText}>
             {t('chatSyncingOffline', { count: offlineQueueCount })}
           </Text>
@@ -445,8 +438,8 @@ export function ChatScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            tintColor={COLORS.GREEN_PRIMARY}
-            colors={[COLORS.GREEN_PRIMARY]}
+            tintColor={AQUACARE_COLORS.GREEN_PRIMARY}
+            colors={[AQUACARE_COLORS.GREEN_PRIMARY]}
           />
         }
         onContentSizeChange={() => {
@@ -475,7 +468,7 @@ export function ChatScreen() {
           style={styles.scrollToBottomButton}
           accessibilityLabel={t('chatScrollToBottom')}
         >
-          <Ionicons name="arrow-down" size={20} color={COLORS.WHITE} />
+          <Ionicons name="arrow-down" size={20} color={AQUACARE_COLORS.WHITE} />
         </TouchableOpacity>
       )}
 
@@ -507,7 +500,7 @@ export function ChatScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.CREAM,
+    backgroundColor: AQUACARE_COLORS.CREAM,
   },
   previewOverlay: {
     flex: 1,
@@ -531,20 +524,19 @@ const styles = StyleSheet.create({
     paddingVertical: 64,
   },
   emptyText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.GRAY_DARK,
+    ...AQUACARE_TYPOGRAPHY.bodyStrong,
+    color: AQUACARE_COLORS.GRAY_DARK,
     textAlign: 'center',
     marginBottom: 8,
   },
   emptySubtext: {
-    fontSize: 14,
-    color: COLORS.GRAY_LIGHT,
+    ...AQUACARE_TYPOGRAPHY.small,
+    color: AQUACARE_COLORS.GRAY_LIGHT,
     textAlign: 'center',
   },
   errorText: {
-    fontSize: 14,
-    color: COLORS.ERROR,
+    ...AQUACARE_TYPOGRAPHY.small,
+    color: AQUACARE_COLORS.ERROR,
     textAlign: 'center',
     marginBottom: 8,
   },
@@ -555,12 +547,14 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingVertical: 8,
     paddingHorizontal: 16,
-    backgroundColor: COLORS.WHITE,
+    backgroundColor: AQUACARE_COLORS.WHITE,
     marginBottom: 8,
   },
   syncText: {
+    ...AQUACARE_TYPOGRAPHY.caption,
     fontSize: 13,
-    color: COLORS.GRAY_DARK,
+    lineHeight: 18,
+    color: AQUACARE_COLORS.GRAY_DARK,
     fontWeight: '500',
   },
   scrollToBottomButton: {
@@ -570,7 +564,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: COLORS.GREEN_PRIMARY,
+    backgroundColor: AQUACARE_COLORS.GREEN_PRIMARY,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',

@@ -200,7 +200,7 @@ export default function OrdersHistoryScreen() {
             {order.items.map((item, index) => (
               <View key={index} className="flex-row justify-between mb-3">
                 <View className="flex-1 mr-3">
-                  <Text className="text-[10px] text-gray-light font-semibold mb-1">
+                  <Text className="text-xs text-gray-light font-semibold mb-1">
                     {item.product_brand.toUpperCase()}
                   </Text>
                   <Text className="text-sm text-gray-dark mb-1" numberOfLines={2}>
@@ -379,4 +379,3 @@ export default function OrdersHistoryScreen() {
     </View>
   );
 }
-

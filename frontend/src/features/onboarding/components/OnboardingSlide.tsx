@@ -5,11 +5,12 @@
  */
 
 import React from 'react';
-import { View, Text, StyleSheet, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, Dimensions, TextStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { OnboardingSlideProps } from '../types/onboarding';
 import { AQUACARE_COLORS } from '@/constants/colors';
+import { AQUACARE_TYPOGRAPHY } from '@/constants/typography';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -23,7 +24,7 @@ export default function OnboardingSlide({ slide }: OnboardingSlideProps) {
   /**
    * Rend un texte avec "AquaCare" coloré en vert
    */
-  const renderTextWithAppName = (text: string, baseStyle: any) => {
+  const renderTextWithAppName = (text: string, baseStyle: TextStyle) => {
     const appName = 'AquaCare';
     const parts = text.split(appName);
 
@@ -305,18 +306,14 @@ const styles = StyleSheet.create({
   },
 
   title: {
-    fontSize: 26,
-    fontWeight: 'bold',
-    color: AQUACARE_COLORS.GRAY_DARK,
+    ...AQUACARE_TYPOGRAPHY.h2,
     textAlign: 'center',
     marginBottom: 24,
     paddingHorizontal: 8,
-    lineHeight: 34,
   },
 
   subtitle: {
-    fontSize: 16,
-    lineHeight: 24,
+    ...AQUACARE_TYPOGRAPHY.body,
     color: AQUACARE_COLORS.GRAY_LIGHT,
     textAlign: 'center',
     paddingHorizontal: 16,
@@ -343,8 +340,7 @@ const styles = StyleSheet.create({
 
   bulletText: {
     flex: 1,
-    fontSize: 16,
-    lineHeight: 22,
+    ...AQUACARE_TYPOGRAPHY.body,
     color: AQUACARE_COLORS.GRAY_DARK,
   },
 
@@ -374,9 +370,9 @@ const styles = StyleSheet.create({
   },
 
   stepNumberText: {
+    ...AQUACARE_TYPOGRAPHY.caption,
     color: AQUACARE_COLORS.WHITE,
-    fontSize: 14,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
 
   stepIconContainer: {
@@ -388,14 +384,13 @@ const styles = StyleSheet.create({
   },
 
   stepTitle: {
-    fontSize: 15,
-    fontWeight: '600',
+    ...AQUACARE_TYPOGRAPHY.smallStrong,
     color: AQUACARE_COLORS.GRAY_DARK,
     marginBottom: 2,
   },
 
   stepDesc: {
-    fontSize: 13,
+    ...AQUACARE_TYPOGRAPHY.caption,
     color: AQUACARE_COLORS.GRAY_LIGHT,
   },
 
@@ -412,13 +407,11 @@ const styles = StyleSheet.create({
   },
 
   socialProofTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
+    ...AQUACARE_TYPOGRAPHY.h3,
     color: AQUACARE_COLORS.GRAY_DARK,
     textAlign: 'center',
     marginBottom: 16,
     paddingHorizontal: 8,
-    lineHeight: 28,
   },
 
   // Testimonial styles
@@ -439,15 +432,13 @@ const styles = StyleSheet.create({
   },
 
   testimonialName: {
-    fontSize: 15,
-    fontWeight: '600',
+    ...AQUACARE_TYPOGRAPHY.smallStrong,
     color: AQUACARE_COLORS.GRAY_DARK,
     marginLeft: 10,
   },
 
   testimonialText: {
-    fontSize: 14,
-    lineHeight: 20,
+    ...AQUACARE_TYPOGRAPHY.small,
     color: AQUACARE_COLORS.GRAY_DARK,
     fontStyle: 'italic',
   },
@@ -465,7 +456,7 @@ const styles = StyleSheet.create({
   },
 
   statText: {
-    fontSize: 14,
+    ...AQUACARE_TYPOGRAPHY.small,
     color: AQUACARE_COLORS.GRAY_DARK,
     marginLeft: 10,
     fontWeight: '500',
@@ -489,31 +480,28 @@ const styles = StyleSheet.create({
   },
 
   mainStatText: {
-    fontSize: 32,
-    fontWeight: 'bold',
+    ...AQUACARE_TYPOGRAPHY.h1,
     color: AQUACARE_COLORS.GREEN_PRIMARY,
     textAlign: 'center',
     marginTop: 20,
   },
 
   mainStatTextBlack: {
-    fontSize: 28,
-    fontWeight: 'bold',
+    ...AQUACARE_TYPOGRAPHY.h2,
     color: AQUACARE_COLORS.GRAY_DARK,
     textAlign: 'center',
     marginTop: 20,
   },
 
   mainStatNumber: {
-    fontSize: 32,
-    fontWeight: 'bold',
+    ...AQUACARE_TYPOGRAPHY.h1,
     color: AQUACARE_COLORS.GREEN_PRIMARY,
   },
 
   // AquaCare highlighted in green
   appNameHighlight: {
     color: AQUACARE_COLORS.GREEN_PRIMARY,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
 
   // Guarantee section (Slide 1)
@@ -534,8 +522,7 @@ const styles = StyleSheet.create({
   },
 
   guaranteeText: {
-    fontSize: 14,
-    lineHeight: 22,
+    ...AQUACARE_TYPOGRAPHY.small,
     color: AQUACARE_COLORS.GRAY_DARK,
     textAlign: 'center',
   },

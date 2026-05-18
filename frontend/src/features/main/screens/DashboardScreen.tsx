@@ -467,7 +467,7 @@ export default function DashboardScreen({ navigation }: any) {
                 onPress={() => { setSelectedCycle(cycle); setPartialHarvestHistoryModalVisible(true); }}
               >
                 <Ionicons name="time-outline" size={14} color={AQUACARE_COLORS.GREEN_PRIMARY} />
-                <Text style={{ fontSize: 13, color: AQUACARE_COLORS.GREEN_PRIMARY }}>{t('partialHarvestHistory')}</Text>
+                <Text className="text-sm text-aquacare-primary">{t('partialHarvestHistory')}</Text>
               </TouchableOpacity>
             </View>
           ))}

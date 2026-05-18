@@ -111,21 +111,21 @@ export default function CycleHistoryScreen({ navigation }: CycleHistoryScreenPro
         <View className="flex-row justify-between pt-3 border-t border-cream">
           <View className="items-center flex-1">
             <Text className="text-sm font-bold text-gray-dark">{formatPercentage(cycle.survival_rate)}</Text>
-            <Text className="text-[10px] text-gray-light">{t('survival')}</Text>
+            <Text className="text-xs text-gray-light">{t('survival')}</Text>
           </View>
           <View className="items-center flex-1">
             <Text className="text-sm font-bold text-gray-dark">{cycle.fcr ? cycle.fcr.toFixed(2) : '0.00'}</Text>
-            <Text className="text-[10px] text-gray-light">FCR</Text>
+            <Text className="text-xs text-gray-light">FCR</Text>
           </View>
           <View className="items-center flex-1">
             <Text className="text-sm font-bold text-gray-dark">{formatNumber(cycle.final_biomass, 'kg')}</Text>
-            <Text className="text-[10px] text-gray-light">{t('finalBiomass')}</Text>
+            <Text className="text-xs text-gray-light">{t('finalBiomass')}</Text>
           </View>
           <View className="items-center flex-1">
             <Text className="text-sm font-bold text-gray-dark">
               {cycle.final_average_weight ? `${cycle.final_average_weight}g` : '0g'}
             </Text>
-            <Text className="text-[10px] text-gray-light">{t('finalWeight')}</Text>
+            <Text className="text-xs text-gray-light">{t('finalWeight')}</Text>
           </View>
         </View>
       </View>

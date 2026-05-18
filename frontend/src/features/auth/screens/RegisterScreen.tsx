@@ -79,7 +79,7 @@ export default function RegisterScreen({ navigation }: Props) {
     >
       <ScrollView contentContainerStyle={{ padding: 20, paddingTop: 48 }}>
         <View className="items-center mb-8">
-          <Text className="text-3xl font-bold text-aquacare-primary mb-2">{t('register')}</Text>
+          <Text className="text-2xl font-bold text-aquacare-primary mb-2">{t('register')}</Text>
           <Text className="text-base text-gray-light text-center">{t('createAccount')}</Text>
         </View>
 

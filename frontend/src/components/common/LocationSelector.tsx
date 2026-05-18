@@ -11,33 +11,18 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import logger from '@/utils/logger';
+import { AQUACARE_COLORS } from '@/constants/colors';
+import { AQUACARE_TYPOGRAPHY } from '@/constants/typography';
 
 import {
   CAMEROON_REGIONS,
-  getAllDepartments,
-  getAllArrondissements,
-  getAllCities,
-  getNeighborhoodsByArrondissement,
-  hasNeighborhoods,
   getDepartmentsByRegion,
   getArrondissementsByDepartment,
   getCitiesByArrondissement,
-  getRegionByCode,
+  getNeighborhoodsByArrondissement,
 } from '@/constants/cameroon';
 
-// Couleurs AquaCare selon spÃ©cifications
-const AQUACARE_COLORS = {
-  GREEN_PRIMARY: '#059669',
-  GREEN_LIGHT: '#10b981',
-  GREEN_DARK: '#047857',
-  WHITE: '#ffffff',
-  CREAM: '#f8fafc',
-  BLUE: '#2563eb',
-  GRAY_LIGHT: '#64748b',
-  GRAY_DARK: '#1e293b',
-  BORDER: '#d1d5db',
-  SUCCESS: '#10b981',
-};
+const BORDER_COLOR = '#d1d5db';
 
 interface LocationData {
   region?: string;
@@ -570,7 +555,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   infoLabel: {
-    fontSize: 14,
+    ...AQUACARE_TYPOGRAPHY.small,
     color: AQUACARE_COLORS.GRAY_LIGHT,
     marginLeft: 12,
     flex: 1,
@@ -579,7 +564,7 @@ const styles = StyleSheet.create({
     marginLeft: 0,
   },
   infoValue: {
-    fontSize: 14,
+    ...AQUACARE_TYPOGRAPHY.small,
     color: AQUACARE_COLORS.GRAY_DARK,
     fontWeight: '500',
     flex: 1,
@@ -594,7 +579,7 @@ const styles = StyleSheet.create({
     marginVertical: 4,
     borderRadius: 12,
     borderWidth: 2,
-    borderColor: AQUACARE_COLORS.BORDER,
+    borderColor: BORDER_COLOR,
     backgroundColor: AQUACARE_COLORS.WHITE,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
@@ -616,7 +601,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   selectorLabel: {
-    fontSize: 14,
+    ...AQUACARE_TYPOGRAPHY.small,
     color: AQUACARE_COLORS.GRAY_DARK,
     marginLeft: 12,
     fontWeight: '500',
@@ -631,7 +616,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   selectorText: {
-    fontSize: 14,
+    ...AQUACARE_TYPOGRAPHY.small,
     marginRight: 8,
     textAlign: 'right',
   },
@@ -667,8 +652,8 @@ const styles = StyleSheet.create({
     borderBottomColor: '#f1f5f9',
   },
   modalTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
+    ...AQUACARE_TYPOGRAPHY.h4,
+    fontWeight: '700',
     color: AQUACARE_COLORS.GRAY_DARK,
   },
   closeButton: {
@@ -696,7 +681,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#f0fdf4',
   },
   optionText: {
-    fontSize: 16,
+    ...AQUACARE_TYPOGRAPHY.body,
     color: AQUACARE_COLORS.GRAY_DARK,
     flex: 1,
   },
@@ -713,7 +698,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   emptyText: {
-    fontSize: 16,
+    ...AQUACARE_TYPOGRAPHY.body,
     color: AQUACARE_COLORS.GRAY_LIGHT,
     textAlign: 'center',
   },

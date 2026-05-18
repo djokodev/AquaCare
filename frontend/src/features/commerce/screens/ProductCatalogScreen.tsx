@@ -419,7 +419,7 @@ const cycleCardStyles = StyleSheet.create({
   },
   totalValue: {
     fontSize: 22,
-    fontWeight: '800',
+    fontWeight: '700',
     color: AQUACARE_COLORS.GREEN_PRIMARY,
   },
   progressBlock: {
@@ -495,5 +495,4 @@ const cycleCardStyles = StyleSheet.create({
     lineHeight: 18,
   },
 });
-
 

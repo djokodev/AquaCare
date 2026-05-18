@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { OnboardingButtonProps } from '../types/onboarding';
 import { AQUACARE_COLORS } from '@/constants/colors';
+import { AQUACARE_TYPOGRAPHY } from '@/constants/typography';
 
 /**
  * Bouton primaire AquaCare pour onboarding
@@ -70,9 +71,7 @@ const styles = StyleSheet.create({
   },
 
   buttonText: {
+    ...AQUACARE_TYPOGRAPHY.button,
     color: AQUACARE_COLORS.WHITE,
-    fontSize: 16,
-    fontWeight: '600',
-    letterSpacing: 0.5,
   },
 });

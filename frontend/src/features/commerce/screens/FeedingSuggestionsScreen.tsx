@@ -130,7 +130,7 @@ export default function FeedingSuggestionsScreen() {
         </View>
         <View className="flex-row gap-4">
           <View className="items-center px-4">
-            <Text className="text-3xl font-bold" style={{ color: scoreColor }}>
+            <Text className="text-2xl font-bold" style={{ color: scoreColor }}>
               {confidence_score}%
             </Text>
             <Text className="text-xs text-gray-light mt-1">{t('confidenceScore')}</Text>
@@ -157,7 +157,7 @@ export default function FeedingSuggestionsScreen() {
     return (
       <View key={suggestedProduct.product_id} className="flex-row justify-between bg-white p-3 rounded-lg mb-2">
         <View className="flex-1 mr-3">
-          <Text className="text-[10px] text-gray-light font-semibold mb-1">{suggestedProduct.brand.toUpperCase()}</Text>
+          <Text className="text-xs text-gray-light font-semibold mb-1">{suggestedProduct.brand.toUpperCase()}</Text>
           <Text className="text-sm text-gray-dark mb-1" numberOfLines={2}>
             {suggestedProduct.product_name}
           </Text>
@@ -354,7 +354,7 @@ export default function FeedingSuggestionsScreen() {
           <Ionicons name="cart-outline" size={24} color={AQUACARE_COLORS.GREEN_PRIMARY} />
           {cartItemsCount > 0 && (
             <View className="absolute -top-2 -right-2 bg-[#dc2626] rounded-full min-w-[20px] h-5 items-center justify-center px-1">
-              <Text className="text-white text-[10px] font-bold">
+              <Text className="text-white text-xs font-bold">
                 {cartItemsCount}
               </Text>
             </View>
@@ -421,4 +421,3 @@ export default function FeedingSuggestionsScreen() {
     </View>
   );
 }
-

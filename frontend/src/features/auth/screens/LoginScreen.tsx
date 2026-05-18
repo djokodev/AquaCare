@@ -88,11 +88,11 @@ export default function LoginScreen({ navigation }: Props) {
     >
       <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }} className="px-5">
         <View className="items-center mb-10">
-          <Text className="text-3xl font-bold text-aquacare-primary text-center">{t('welcomeMessage')}</Text>
+          <Text className="text-2xl font-bold text-aquacare-primary text-center">{t('welcomeMessage')}</Text>
         </View>
 
         <View className="bg-white p-5 rounded-2xl">
-          <Text className="text-2xl font-bold text-gray-dark mb-5 text-center">{t('login')}</Text>
+          <Text className="text-xl font-bold text-gray-dark mb-5 text-center">{t('login')}</Text>
 
           <View className="flex-row bg-cream rounded-lg mb-5">
             <TouchableOpacity

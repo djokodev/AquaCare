@@ -68,7 +68,7 @@ export default function DashboardHeader({
           <Text className="text-2xl font-bold text-white mb-1">
             {t('hello')}, {firstName}!
           </Text>
-          <Text className="text-base text-white/80">{t('welcomeBoard')}</Text>
+          <Text className="text-base text-white/90">{t('welcomeBoard')}</Text>
         </View>
 
         {/* Right Actions */}
@@ -95,7 +95,7 @@ export default function DashboardHeader({
                   paddingHorizontal: unreadCount > 9 ? 4 : 2,
                 }}
               >
-                <Text className="text-white text-[10px] font-bold">
+                <Text className="text-white text-xs font-semibold">
                   {unreadCount > 99 ? '99+' : unreadCount}
                 </Text>
               </View>

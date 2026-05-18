@@ -325,15 +325,15 @@ export default function CycleSimulatorScreen() {
 
         <View className="flex-row bg-cream rounded-lg p-3 mb-3 gap-4">
           <View className="flex-1 items-center">
-            <Text className="text-[11px] text-gray-light">{t('duration')}</Text>
+            <Text className="text-xs text-gray-light">{t('duration')}</Text>
             <Text className="text-sm font-semibold text-gray-dark">{phase.duration_days} {t('days')}</Text>
           </View>
           <View className="flex-1 items-center">
-            <Text className="text-[11px] text-gray-light">{t('consumption')}</Text>
+            <Text className="text-xs text-gray-light">{t('consumption')}</Text>
             <Text className="text-sm font-semibold text-gray-dark">{phase.total_consumption_kg}kg</Text>
           </View>
           <View className="flex-1 items-center">
-            <Text className="text-[11px] text-gray-light">{t('dailyAverage')}</Text>
+            <Text className="text-xs text-gray-light">{t('dailyAverage')}</Text>
             <Text className="text-sm font-semibold text-gray-dark">{phase.daily_avg_kg.toFixed(1)}kg/j</Text>
           </View>
         </View>

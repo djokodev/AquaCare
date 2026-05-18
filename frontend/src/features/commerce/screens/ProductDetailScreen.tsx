@@ -106,7 +106,7 @@ export default function ProductDetailScreen() {
         <View className="w-full h-24 bg-white rounded-lg items-center justify-center mb-2">
           <Ionicons name="cube-outline" size={32} color={AQUACARE_COLORS.GREEN_PRIMARY} />
         </View>
-        <Text className="text-[10px] text-gray-light font-semibold mb-1">
+        <Text className="text-xs text-gray-light font-semibold mb-1">
           {similarProduct.brand.toUpperCase()}
         </Text>
         <Text className="text-sm text-gray-dark font-semibold mb-2 min-h-[36px]" numberOfLines={2}>
@@ -153,7 +153,7 @@ export default function ProductDetailScreen() {
           <Ionicons name="cart-outline" size={24} color={AQUACARE_COLORS.GREEN_PRIMARY} />
           {cartItemsCount > 0 && (
             <View className="absolute -top-2 -right-2 bg-[#dc2626] rounded-full min-w-[20px] h-5 justify-center items-center px-1">
-              <Text className="text-white text-[10px] font-bold">{cartItemsCount}</Text>
+              <Text className="text-white text-xs font-bold">{cartItemsCount}</Text>
             </View>
           )}
         </TouchableOpacity>
@@ -189,7 +189,7 @@ export default function ProductDetailScreen() {
 
           <View className="pt-4 border-t border-[#f1f5f9]">
             <Text className="text-sm text-gray-light mb-1">{t('pricePerBag')}</Text>
-            <Text className="text-3xl font-bold text-aquacare-primary mb-1">
+            <Text className="text-2xl font-bold text-aquacare-primary mb-1">
               {pricePerPackage.toLocaleString()} FCFA
             </Text>
             <Text className="text-sm text-gray-light">
@@ -237,7 +237,7 @@ export default function ProductDetailScreen() {
               />
             </TouchableOpacity>
             <View className="items-center min-w-[80px]">
-              <Text className="text-3xl font-bold text-gray-dark">{quantity}</Text>
+              <Text className="text-2xl font-bold text-gray-dark">{quantity}</Text>
               <Text className="text-sm text-gray-light mt-1">
                 {t(quantity > 1 ? 'bags' : 'bag')}
               </Text>
@@ -283,5 +283,3 @@ export default function ProductDetailScreen() {
     </View>
   );
 }
-
-

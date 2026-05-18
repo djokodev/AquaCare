@@ -14,6 +14,7 @@ import {
 } from '@/features/aquaculture/store/aquacultureSlice';
 import { ProductionCycle } from '@/types/aquaculture';
 import { AQUACARE_COLORS } from '@/constants/colors';
+import { AQUACARE_TYPOGRAPHY } from '@/constants/typography';
 import CyclePicker from '../components/CyclePicker';
 
 // ── Welcome screen styles ────────────────────────────────────────────────────
@@ -38,24 +39,22 @@ const welcomeStyles = StyleSheet.create({
     marginBottom: 20,
   },
   title: {
-    fontSize: 26,
-    fontWeight: '800',
-    color: '#1e293b',
+    ...AQUACARE_TYPOGRAPHY.h2,
+    color: AQUACARE_COLORS.GRAY_DARK,
     textAlign: 'center',
     marginBottom: 4,
   },
   subtitle: {
-    fontSize: 15,
-    fontWeight: '600',
+    ...AQUACARE_TYPOGRAPHY.smallStrong,
     color: AQUACARE_COLORS.GREEN_PRIMARY,
     textAlign: 'center',
     marginBottom: 12,
   },
   body: {
-    fontSize: 14,
-    color: '#64748b',
+    ...AQUACARE_TYPOGRAPHY.small,
+    color: AQUACARE_COLORS.GRAY_LIGHT,
     textAlign: 'center',
-    lineHeight: 21,
+    lineHeight: 20,
   },
   featuresCard: {
     backgroundColor: '#fff',
@@ -83,9 +82,9 @@ const welcomeStyles = StyleSheet.create({
     justifyContent: 'center',
   },
   featureText: {
-    fontSize: 14,
+    ...AQUACARE_TYPOGRAPHY.small,
     fontWeight: '500',
-    color: '#334155',
+    color: AQUACARE_COLORS.GRAY_DARK,
   },
   ctaBtn: {
     backgroundColor: AQUACARE_COLORS.GREEN_PRIMARY,
@@ -102,10 +101,8 @@ const welcomeStyles = StyleSheet.create({
     elevation: 5,
   },
   ctaBtnText: {
-    color: '#fff',
-    fontSize: 17,
-    fontWeight: '700',
-    letterSpacing: 0.2,
+    ...AQUACARE_TYPOGRAPHY.button,
+    color: AQUACARE_COLORS.WHITE,
   },
 });
 

@@ -4,20 +4,10 @@ import {
   Text,
   ActivityIndicator,
   StyleSheet,
-  Image,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
-
-// Couleurs AquaCare selon spÃ©cifications
-const AQUACARE_COLORS = {
-  GREEN_PRIMARY: '#059669',
-  GREEN_LIGHT: '#10b981',
-  GREEN_DARK: '#047857',
-  WHITE: '#ffffff',
-  CREAM: '#f8fafc',
-  GRAY_LIGHT: '#64748b',
-  GRAY_DARK: '#1e293b',
-};
+import { AQUACARE_COLORS } from '@/constants/colors';
+import { AQUACARE_TYPOGRAPHY } from '@/constants/typography';
 
 export default function LoadingScreen() {
   const { t } = useTranslation();
@@ -54,14 +44,13 @@ const styles = StyleSheet.create({
     marginBottom: 40,
   },
   logoText: {
-    fontSize: 32,
-    fontWeight: 'bold',
+    ...AQUACARE_TYPOGRAPHY.h1,
     color: AQUACARE_COLORS.GREEN_PRIMARY,
-    letterSpacing: 2,
+    letterSpacing: 1,
   },
   logoSubText: {
-    fontSize: 18,
-    fontWeight: '300',
+    ...AQUACARE_TYPOGRAPHY.h4,
+    fontWeight: '500',
     color: AQUACARE_COLORS.GRAY_LIGHT,
     marginTop: 4,
   },
@@ -69,10 +58,9 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   loadingText: {
-    fontSize: 16,
+    ...AQUACARE_TYPOGRAPHY.body,
     color: AQUACARE_COLORS.GRAY_LIGHT,
   },
 });
-
 
 

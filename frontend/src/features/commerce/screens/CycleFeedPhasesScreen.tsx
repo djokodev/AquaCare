@@ -29,6 +29,7 @@ import { aquacultureService } from '@/features/aquaculture/services/aquacultureS
 import { FeedPhase, FeedPhaseProduct } from '@/types/aquaculture';
 import { Product, ProductBrand } from '@/types/commerce';
 import { AQUACARE_COLORS } from '@/constants/colors';
+import { AQUACARE_TYPOGRAPHY } from '@/constants/typography';
 import { RootStackParamList } from '@/navigation/MainNavigator';
 
 type Props = StackScreenProps<RootStackParamList, 'CycleFeedPhases'>;
@@ -288,8 +289,7 @@ const styles = StyleSheet.create({
   },
   headerBack: { width: 36 },
   headerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
+    ...AQUACARE_TYPOGRAPHY.h4,
     color: AQUACARE_COLORS.GRAY_DARK,
   },
   headerCart: { width: 36, alignItems: 'flex-end', position: 'relative' },
@@ -305,7 +305,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 3,
   },
-  cartBadgeText: { color: '#fff', fontSize: 10, fontWeight: 'bold' },
+  cartBadgeText: {
+    ...AQUACARE_TYPOGRAPHY.caption,
+    color: AQUACARE_COLORS.WHITE,
+    fontWeight: '700',
+  },
   infoBanner: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -317,9 +321,8 @@ const styles = StyleSheet.create({
   },
   infoText: {
     flex: 1,
-    fontSize: 12,
+    ...AQUACARE_TYPOGRAPHY.caption,
     color: '#065f46',
-    lineHeight: 17,
   },
   phaseCard: {
     backgroundColor: '#fff',
@@ -341,14 +344,14 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   phaseName: {
-    fontSize: 15,
+    ...AQUACARE_TYPOGRAPHY.smallStrong,
     fontWeight: '700',
     color: AQUACARE_COLORS.GRAY_DARK,
     flex: 1,
     marginRight: 8,
   },
   phaseSub: {
-    fontSize: 12,
+    ...AQUACARE_TYPOGRAPHY.caption,
     color: AQUACARE_COLORS.GRAY_LIGHT,
     marginBottom: 10,
   },
@@ -359,7 +362,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   phaseBadgeText: {
-    fontSize: 12,
+    ...AQUACARE_TYPOGRAPHY.caption,
     fontWeight: '700',
     color: AQUACARE_COLORS.GREEN_PRIMARY,
   },
@@ -372,17 +375,23 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   productName: {
+    ...AQUACARE_TYPOGRAPHY.caption,
     fontSize: 13,
+    lineHeight: 18,
     fontWeight: '600',
     color: AQUACARE_COLORS.GRAY_DARK,
   },
   productSub: {
-    fontSize: 11,
+    ...AQUACARE_TYPOGRAPHY.caption,
+    fontSize: 12,
+    lineHeight: 16,
     color: AQUACARE_COLORS.GRAY_LIGHT,
     marginTop: 1,
   },
   productRecommended: {
-    fontSize: 11,
+    ...AQUACARE_TYPOGRAPHY.caption,
+    fontSize: 12,
+    lineHeight: 16,
     color: AQUACARE_COLORS.GREEN_PRIMARY,
     marginTop: 2,
   },
@@ -404,7 +413,7 @@ const styles = StyleSheet.create({
   qtyValue: {
     width: 34,
     textAlign: 'center',
-    fontSize: 14,
+    ...AQUACARE_TYPOGRAPHY.smallStrong,
     fontWeight: '700',
     color: AQUACARE_COLORS.GRAY_DARK,
   },
@@ -418,9 +427,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   phaseOrderBtnText: {
-    color: '#fff',
-    fontSize: 13,
-    fontWeight: '600',
+    ...AQUACARE_TYPOGRAPHY.smallStrong,
+    color: AQUACARE_COLORS.WHITE,
   },
   stickyBar: {
     position: 'absolute',
@@ -447,8 +455,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   orderAllText: {
-    color: '#fff',
-    fontSize: 15,
+    ...AQUACARE_TYPOGRAPHY.bodyStrong,
+    color: AQUACARE_COLORS.WHITE,
     fontWeight: '700',
   },
 });

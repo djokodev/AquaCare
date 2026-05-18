@@ -25,6 +25,7 @@ import OnboardingButton from '../components/OnboardingButton';
 import OnboardingService from '../services/onboardingService';
 import { OnboardingSlideData } from '../types/onboarding';
 import { AQUACARE_COLORS } from '@/constants/colors';
+import { AQUACARE_TYPOGRAPHY } from '@/constants/typography';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -288,13 +289,12 @@ const styles = StyleSheet.create({
   },
 
   skipText: {
-    fontSize: 17,
+    ...AQUACARE_TYPOGRAPHY.bodyStrong,
     color: AQUACARE_COLORS.GREEN_PRIMARY,
-    fontWeight: '700',
   },
 
   pageIndicator: {
-    fontSize: 14,
+    ...AQUACARE_TYPOGRAPHY.small,
     color: AQUACARE_COLORS.GRAY_LIGHT,
     fontWeight: '500',
   },

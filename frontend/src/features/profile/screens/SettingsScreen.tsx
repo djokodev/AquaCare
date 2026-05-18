@@ -10,12 +10,14 @@ import { AQUACARE_COLORS } from "@/constants/colors";
 import logger from "@/utils/logger";
 import config from "@/config/environment";
 import Constants from "expo-constants";
+import OnboardingService from "@/features/onboarding/services/onboardingService";
 
 export default function SettingsScreen() {
   const { t, i18n } = useTranslation();
   const { user, updateProfile, logout, deleteAccount } = useAuth();
   const [isDeleting, setIsDeleting] = useState(false);
   const [isUpdatingLanguage, setIsUpdatingLanguage] = useState(false);
+  const [isResettingOnboarding, setIsResettingOnboarding] = useState(false);
   const [settings, setSettings] = useState({ language: i18n.language });
 
   useEffect(() => {
@@ -82,6 +84,34 @@ export default function SettingsScreen() {
               logger.error('Delete account error:', error);
               Alert.alert(t('deleteAccountError'));
               setIsDeleting(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleResetOnboarding = () => {
+    if (isResettingOnboarding) return;
+
+    Alert.alert(
+      t("onboardingResetConfirmTitle"),
+      t("onboardingResetConfirmMessage"),
+      [
+        { text: t("cancel"), style: "cancel" },
+        {
+          text: t("onboardingResetAction"),
+          style: "destructive",
+          onPress: async () => {
+            setIsResettingOnboarding(true);
+            try {
+              await OnboardingService.reset();
+              await logout();
+            } catch (error) {
+              logger.error("Onboarding reset error:", error);
+              Alert.alert(t("error"), t("onboardingResetError"));
+            } finally {
+              setIsResettingOnboarding(false);
             }
           },
         },
@@ -164,6 +194,21 @@ export default function SettingsScreen() {
             <Text className="text-xs text-gray-500 mt-0.5">{t("deleteAccountDesc")}</Text>
           </View>
         </TouchableOpacity>
+
+        {__DEV__ && (
+          <TouchableOpacity
+            className="bg-white flex-row items-center p-4 rounded-xl border border-gray-200 mt-3"
+            onPress={handleResetOnboarding}
+            disabled={isResettingOnboarding}
+            style={{ opacity: isResettingOnboarding ? 0.5 : 1 }}
+          >
+            <Ionicons name="refresh-circle-outline" size={20} color={AQUACARE_COLORS.GREEN_PRIMARY} />
+            <View className="ml-3 flex-1">
+              <Text className="text-base font-semibold text-aquacare-primary">{t("onboardingResetAction")}</Text>
+              <Text className="text-xs text-gray-500 mt-0.5">{t("onboardingResetHint")}</Text>
+            </View>
+          </TouchableOpacity>
+        )}
       </View>
 
       <View className="px-5 pb-6">

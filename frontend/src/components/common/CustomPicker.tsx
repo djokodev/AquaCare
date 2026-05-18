@@ -1,19 +1,10 @@
-﻿import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import React from 'react';
+import { View, Text, StyleSheet } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
-
-// Couleurs AquaCare selon spÃ©cifications
-const AQUACARE_COLORS = {
-  GREEN_PRIMARY: '#059669',
-  GREEN_LIGHT: '#10b981',
-  GREEN_DARK: '#047857',
-  WHITE: '#ffffff',
-  CREAM: '#f8fafc',
-  GRAY_LIGHT: '#64748b',
-  GRAY_DARK: '#1e293b',
-};
+import { AQUACARE_COLORS } from '@/constants/colors';
+import { AQUACARE_TYPOGRAPHY } from '@/constants/typography';
 
 export interface PickerOption {
   value: string;
@@ -40,7 +31,7 @@ export default function CustomPicker({
   onValueChange,
   placeholder = '',
   editable = true,
-  displayValue
+  displayValue,
 }: CustomPickerProps) {
   const { t } = useTranslation();
 
@@ -53,13 +44,12 @@ export default function CustomPicker({
   const getDisplayValue = () => {
     if (displayValue) return displayValue;
     if (!value) return placeholder || t('notProvided');
-    
-    const option = options.find(opt => opt.value === value);
+
+    const option = options.find((opt) => opt.value === value);
     return option?.label || value;
   };
 
   if (!editable) {
-    // Mode lecture seule - affiche juste la valeur
     return (
       <View style={styles.infoRow}>
         <View style={styles.infoRowLeft}>
@@ -77,7 +67,7 @@ export default function CustomPicker({
         <Ionicons name={icon} size={20} color={AQUACARE_COLORS.GRAY_LIGHT} />
         <Text style={styles.infoLabel}>{label}</Text>
       </View>
-      
+
       <View style={styles.pickerContainer}>
         <Picker
           selectedValue={value || ''}
@@ -86,9 +76,9 @@ export default function CustomPicker({
           mode="dropdown"
         >
           {placeholder && (
-            <Picker.Item 
-              label={placeholder} 
-              value="" 
+            <Picker.Item
+              label={placeholder}
+              value=""
               color={AQUACARE_COLORS.GRAY_LIGHT}
             />
           )}
@@ -107,9 +97,6 @@ export default function CustomPicker({
   );
 }
 
-/**
- * Composant pour les sÃ©lections en cascade (exemple: rÃ©gion â†’ dÃ©partement â†’ arrondissement)
- */
 interface CascadingPickerProps {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
@@ -126,7 +113,7 @@ export function CascadingPicker({
   icon,
   label,
   levels,
-  editable = true
+  editable = true,
 }: CascadingPickerProps) {
   if (!editable) {
     return (
@@ -136,7 +123,7 @@ export function CascadingPicker({
           <Text style={styles.infoLabel}>{label}</Text>
         </View>
         {levels.map((level, index) => {
-          const selected = level.options.find(o => o.value === level.value);
+          const selected = level.options.find((o) => o.value === level.value);
           return (
             <View key={index} style={styles.cascadingLevel}>
               <Text style={styles.readOnlyText}>{selected?.label || level.placeholder}</Text>
@@ -153,7 +140,7 @@ export function CascadingPicker({
         <Ionicons name={icon} size={20} color={AQUACARE_COLORS.GRAY_LIGHT} />
         <Text style={styles.infoLabel}>{label}</Text>
       </View>
-      
+
       {levels.map((level, index) => (
         <View key={index} style={styles.cascadingLevel}>
           <Picker
@@ -162,9 +149,9 @@ export function CascadingPicker({
             style={styles.picker}
             mode="dropdown"
           >
-            <Picker.Item 
-              label={level.placeholder} 
-              value="" 
+            <Picker.Item
+              label={level.placeholder}
+              value=""
               color={AQUACARE_COLORS.GRAY_LIGHT}
             />
             {level.options.map((option) => (
@@ -198,13 +185,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   infoLabel: {
-    fontSize: 14,
+    ...AQUACARE_TYPOGRAPHY.small,
     color: AQUACARE_COLORS.GRAY_LIGHT,
     marginLeft: 12,
     flex: 1,
   },
   infoValue: {
-    fontSize: 14,
+    ...AQUACARE_TYPOGRAPHY.small,
     color: AQUACARE_COLORS.GRAY_DARK,
     fontWeight: '500',
     flex: 1,
@@ -237,11 +224,9 @@ const styles = StyleSheet.create({
     backgroundColor: AQUACARE_COLORS.WHITE,
   },
   readOnlyText: {
-    fontSize: 14,
+    ...AQUACARE_TYPOGRAPHY.small,
     color: AQUACARE_COLORS.GRAY_DARK,
     paddingVertical: 10,
     paddingHorizontal: 12,
   },
 });
-
-

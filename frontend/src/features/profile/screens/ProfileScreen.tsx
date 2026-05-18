@@ -377,7 +377,12 @@ function InfoRow({
           textAlignVertical="center"
         />
       ) : (
-        <Text className={`text-sm text-gray-dark font-medium flex-1 text-right ${isEmail ? "" : ""}`} selectable={isEmail}>
+        <Text
+          className="text-sm text-gray-dark font-medium flex-1 min-w-0 text-right"
+          selectable={isEmail}
+          numberOfLines={1}
+          ellipsizeMode={isEmail ? "middle" : "tail"}
+        >
           {value}
         </Text>
       )}
