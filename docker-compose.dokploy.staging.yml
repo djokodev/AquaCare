@@ -37,10 +37,10 @@ services:
     command: >
       bash -c "
       chown -R aquacare:aquacare /app/media /app/staticfiles /app/logs 2>/dev/null || true &&
-      su -s /bin/bash aquacare -c '/usr/local/bin/gunicorn aquacare_api.wsgi:application --bind 0.0.0.0:8000 --workers 2 --timeout 60 --access-logfile - --error-logfile -'
+      su -s /bin/bash aquacare -c '/usr/local/bin/gunicorn mavecam_api.wsgi:application --bind 0.0.0.0:8000 --workers 2 --timeout 60 --access-logfile - --error-logfile -'
       "
     environment:
-      DJANGO_SETTINGS_MODULE: aquacare_api.settings.staging
+      DJANGO_SETTINGS_MODULE: mavecam_api.settings.staging
       DJANGO_ENVIRONMENT: staging
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
       DJANGO_DEBUG: "False"
@@ -85,10 +85,10 @@ services:
     command: >
       bash -c "
       while ! nc -z db 5432; do sleep 0.5; done &&
-      celery -A aquacare_api worker --loglevel=info --concurrency=2
+      celery -A mavecam_api worker --loglevel=info --concurrency=2
       "
     environment:
-      DJANGO_SETTINGS_MODULE: aquacare_api.settings.staging
+      DJANGO_SETTINGS_MODULE: mavecam_api.settings.staging
       DJANGO_ENVIRONMENT: staging
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
       DJANGO_DEBUG: "False"
@@ -129,10 +129,10 @@ services:
     command: >
       bash -c "
       while ! nc -z db 5432; do sleep 0.5; done &&
-      celery -A aquacare_api beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+      celery -A mavecam_api beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler
       "
     environment:
-      DJANGO_SETTINGS_MODULE: aquacare_api.settings.staging
+      DJANGO_SETTINGS_MODULE: mavecam_api.settings.staging
       DJANGO_ENVIRONMENT: staging
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
       DJANGO_DEBUG: "False"
