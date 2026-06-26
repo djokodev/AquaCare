@@ -2,12 +2,13 @@
 
 ## Backend
 
-- `cd backend`
-- `docker compose up -d`
-- `docker compose exec api python manage.py migrate`
-- `docker compose exec api pytest`
-- `docker compose exec api pytest apps/aquaculture/tests/`
-- `docker compose exec api ruff check backend/manage.py backend/apps backend/aquacare_api backend/tests`
+From the repository root:
+
+- `docker compose -f backend/docker-compose.yml up -d`
+- `docker compose -f backend/docker-compose.yml exec api python manage.py migrate`
+- `docker compose -f backend/docker-compose.yml exec api pytest`
+- `docker compose -f backend/docker-compose.yml exec api pytest backend/apps/aquaculture/tests/`
+- `ruff check backend/manage.py backend/apps backend/aquacare_api backend/tests`
 
 ## Frontend
 
