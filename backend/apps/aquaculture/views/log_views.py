@@ -3,12 +3,14 @@ Log Views pour le module aquaculture.
 """
 import logging
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils.translation import gettext_lazy as _
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiExample, OpenApiParameter, extend_schema, extend_schema_view
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import ValidationError as DRFValidationError
 from rest_framework.response import Response
 
 from ..constants import MAX_BULK_LOGS
@@ -154,6 +156,21 @@ class CycleLogViewSet(viewsets.ModelViewSet):
                 user=request.user,
                 validated_data=serializer.validated_data,
             )
+        except IntegrityError as exc:
+            logger.warning(
+                "Conflit concurrent detecte sur upsert cycle-log, user=%s, payload_cycle=%s, payload_date=%s",
+                request.user.id,
+                serializer.validated_data.get("cycle"),
+                serializer.validated_data.get("log_date"),
+            )
+            raise DRFValidationError(
+                {
+                    "detail": _(
+                        "Conflit de synchronisation detecte pendant l'enregistrement du journal."
+                        " Veuillez reessayer."
+                    )
+                }
+            ) from exc
         except UnauthorizedCycleAccessError as exc:
             return Response(
                 {"detail": str(exc)},
@@ -164,6 +181,24 @@ class CycleLogViewSet(viewsets.ModelViewSet):
         response_status = status.HTTP_201_CREATED if mutation_result.created else status.HTTP_200_OK
         headers = self.get_success_headers(output_serializer.data) if mutation_result.created else {}
         return Response(output_serializer.data, status=response_status, headers=headers)
+
+    def perform_update(self, serializer):
+        """
+        Met a jour un log via la couche applicative.
+
+        Ce hook s'applique a PUT/PATCH et garantit le recalcul des metriques
+        de cycle apres modification d'un log existant.
+        """
+        try:
+            updated_log = CycleLogApplicationService.update_log(
+                user=self.request.user,
+                log=serializer.instance,
+                validated_data=serializer.validated_data,
+            )
+        except UnauthorizedCycleAccessError as exc:
+            raise PermissionDenied(str(exc)) from exc
+
+        serializer.instance = updated_log
     
     @extend_schema(
         summary="Création en bulk de logs (sync offline)",
@@ -213,20 +248,14 @@ class CycleLogViewSet(viewsets.ModelViewSet):
         logs_data = request.data.get('logs', [])
 
         if not isinstance(logs_data, list):
-            return Response(
-                {'error': _("Le champ 'logs' doit être une liste.")},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            raise DRFValidationError({'logs': _("Le champ 'logs' doit être une liste.")})
 
         if len(logs_data) > MAX_BULK_LOGS:
-            return Response(
-                {
-                    'error': _(
-                        "Trop d'éléments dans 'logs' (maximum %(max)s par requête)."
-                    ) % {'max': MAX_BULK_LOGS}
-                },
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            raise DRFValidationError({
+                'logs': _(
+                    "Trop d'éléments dans 'logs' (maximum %(max)s par requête)."
+                ) % {'max': MAX_BULK_LOGS}
+            })
 
         serializer = self.get_serializer(data={'logs': logs_data})
         serializer.is_valid(raise_exception=True)

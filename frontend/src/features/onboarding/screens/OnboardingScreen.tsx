@@ -24,7 +24,8 @@ import SlideIndicators from '../components/SlideIndicators';
 import OnboardingButton from '../components/OnboardingButton';
 import OnboardingService from '../services/onboardingService';
 import { OnboardingSlideData } from '../types/onboarding';
-import { MAVECAM_COLORS } from '@/constants/colors';
+import { AQUACARE_COLORS } from '@/constants/colors';
+import { AQUACARE_TYPOGRAPHY } from '@/constants/typography';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -261,12 +262,12 @@ export default function OnboardingScreen({ onCompleted }: OnboardingScreenProps)
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: MAVECAM_COLORS.WHITE,
+    backgroundColor: AQUACARE_COLORS.WHITE,
   },
 
   container: {
     flex: 1,
-    backgroundColor: MAVECAM_COLORS.WHITE,
+    backgroundColor: AQUACARE_COLORS.WHITE,
   },
 
   header: {
@@ -288,14 +289,13 @@ const styles = StyleSheet.create({
   },
 
   skipText: {
-    fontSize: 17,
-    color: MAVECAM_COLORS.GREEN_PRIMARY,
-    fontWeight: '700',
+    ...AQUACARE_TYPOGRAPHY.bodyStrong,
+    color: AQUACARE_COLORS.GREEN_PRIMARY,
   },
 
   pageIndicator: {
-    fontSize: 14,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
+    ...AQUACARE_TYPOGRAPHY.small,
+    color: AQUACARE_COLORS.GRAY_LIGHT,
     fontWeight: '500',
   },
 
@@ -303,6 +303,6 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
     paddingTop: 20,
     alignItems: 'center',
-    backgroundColor: MAVECAM_COLORS.WHITE,
+    backgroundColor: AQUACARE_COLORS.WHITE,
   },
 });

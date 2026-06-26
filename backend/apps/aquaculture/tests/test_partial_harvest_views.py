@@ -11,6 +11,8 @@ from decimal import Decimal
 
 import pytest
 from aquaculture.models import PartialHarvest
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from rest_framework import status
 
@@ -74,7 +76,7 @@ class TestPartialHarvestEndpoint:
         response = auth_client.post(url, data, format='json')
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert 'error' in response.data
+        assert 'detail' in response.data
 
     def test_partial_harvest_fails_on_harvested_cycle(self, auth_client, production_cycle):
         """Erreur si le cycle est déjà récolté."""
@@ -146,7 +148,8 @@ class TestPartialHarvestsListEndpoint:
         response = auth_client.get(url)
 
         assert response.status_code == status.HTTP_200_OK
-        assert response.data == []
+        assert response.data['count'] == 0
+        assert response.data['results'] == []
 
     def test_list_partial_harvests_returns_history(self, auth_client, production_cycle):
         """Retourne toutes les récoltes partielles du cycle."""
@@ -171,13 +174,37 @@ class TestPartialHarvestsListEndpoint:
         response = auth_client.get(url)
 
         assert response.status_code == status.HTTP_200_OK
-        assert len(response.data) == 2
+        assert response.data['count'] == 2
+        assert len(response.data['results']) == 2
 
         # Vérifier les champs retournés
-        first = response.data[0]
+        first = response.data['results'][0]
         assert 'count_harvested' in first
         assert 'total_weight_kg' in first
         assert 'estimated_revenue_fcfa' in first
+
+    def test_list_partial_harvests_query_budget_is_stable(
+        self,
+        auth_client,
+        production_cycle,
+    ):
+        """Le listing paginé des récoltes partielles doit rester borné en requêtes SQL."""
+        for day_offset in range(5):
+            PartialHarvest.objects.create(
+                cycle=production_cycle,
+                harvest_date=date.today() - timedelta(days=day_offset),
+                count_harvested=20 + day_offset,
+                average_weight_g=Decimal('300.00'),
+                total_weight_kg=Decimal('6.000'),
+            )
+
+        url = reverse('aquaculture:production-cycle-partial-harvests', kwargs={'pk': production_cycle.id})
+        with CaptureQueriesContext(connection) as query_context:
+            response = auth_client.get(url)
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data['count'] == 5
+        assert len(query_context.captured_queries) <= 4
 
     def test_list_partial_harvests_unauthenticated(self, api_client, production_cycle):
         """Requête sans auth → 401."""

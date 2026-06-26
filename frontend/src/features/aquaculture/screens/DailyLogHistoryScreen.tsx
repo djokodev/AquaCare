@@ -8,7 +8,7 @@ import { RootState } from '@/store/store';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
 import { CycleLog } from '@/types/aquaculture';
 import { RootStackParamList } from '@/navigation/MainNavigator';
-import { MAVECAM_COLORS } from '@/constants/colors';
+import { AQUACARE_COLORS } from '@/constants/colors';
 import { formatDate } from '@/utils';
 import { estimateAverageWeight } from '@/domain/aquaculture/estimators';
 import logger from '@/utils/logger';
@@ -27,6 +27,7 @@ export default function DailyLogHistoryScreen({ navigation }: DailyLogHistoryScr
   const [logs, setLogs] = useState<CycleLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     loadLogs();
@@ -41,10 +42,12 @@ export default function DailyLogHistoryScreen({ navigation }: DailyLogHistoryScr
 
     try {
       setLoading(true);
+      setError(null);
       const logsData = await aquacultureService.getCycleLogs(currentCycle.id);
       setLogs(logsData);
     } catch (error) {
       logger.error('Erreur lors du chargement des logs:', error);
+      setError(t('dailyLogLoadError'));
     } finally {
       setLoading(false);
     }
@@ -71,7 +74,7 @@ export default function DailyLogHistoryScreen({ navigation }: DailyLogHistoryScr
     <View className="bg-white rounded-xl p-4 mb-3">
       <View className="flex-row justify-between items-center mb-3 pb-2 border-b border-slate-100">
         <Text className="text-base font-semibold text-gray-dark">{formatDate(log.log_date)}</Text>
-        <Text className="text-sm font-medium text-mavecam-primary">{getCycleName(log.cycle)}</Text>
+        <Text className="text-sm font-medium text-aquacare-primary">{getCycleName(log.cycle)}</Text>
       </View>
 
       <View className="mb-2">
@@ -121,7 +124,7 @@ export default function DailyLogHistoryScreen({ navigation }: DailyLogHistoryScr
         <Text className="text-sm font-medium text-gray-dark mb-1">
           {t('sessionActiveCycleLabel', { defaultValue: 'Cycle actif de la session' })}
         </Text>
-        <Text className="text-base font-bold text-mavecam-primary">
+        <Text className="text-base font-bold text-aquacare-primary">
           {currentCycle?.cycle_name || t('sessionCycleNotSelected')}
         </Text>
         {currentCycle && (
@@ -139,7 +142,7 @@ export default function DailyLogHistoryScreen({ navigation }: DailyLogHistoryScr
       if (!currentCycle) {
         return (
           <View className="flex-1 items-center justify-center py-24 px-6">
-            <Ionicons name="alert-circle-outline" size={64} color={MAVECAM_COLORS.WARNING} />
+            <Ionicons name="alert-circle-outline" size={64} color={AQUACARE_COLORS.WARNING} />
             <Text className="text-xl font-bold text-gray-dark mt-4 mb-2">{t('sessionCycleNotSelected')}</Text>
           </View>
         );
@@ -147,7 +150,7 @@ export default function DailyLogHistoryScreen({ navigation }: DailyLogHistoryScr
 
       return (
         <View className="flex-1 items-center justify-center py-24 px-6">
-          <Ionicons name="document-outline" size={64} color={MAVECAM_COLORS.GRAY_LIGHT} />
+          <Ionicons name="document-outline" size={64} color={AQUACARE_COLORS.GRAY_LIGHT} />
           <Text className="text-xl font-bold text-gray-dark mt-4 mb-2">{t('noLogsYet')}</Text>
           <Text className="text-sm text-gray-light text-center">{t('startLoggingData')}</Text>
         </View>
@@ -159,7 +162,7 @@ export default function DailyLogHistoryScreen({ navigation }: DailyLogHistoryScr
   if (loading) {
     return (
       <View className="flex-1 items-center justify-center bg-cream">
-        <ActivityIndicator size="large" color={MAVECAM_COLORS.GREEN_PRIMARY} />
+        <ActivityIndicator size="large" color={AQUACARE_COLORS.GREEN_PRIMARY} />
         <Text className="mt-3 text-gray-dark text-base">{t('loading')}</Text>
       </View>
     );
@@ -167,12 +170,18 @@ export default function DailyLogHistoryScreen({ navigation }: DailyLogHistoryScr
 
   return (
     <View className="flex-1 bg-cream">
-      <View className="bg-mavecam-primary flex-row items-center pt-14 pb-4 px-4">
+      <View className="bg-aquacare-primary flex-row items-center pt-14 pb-4 px-4">
         <TouchableOpacity className="mr-4" onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color={MAVECAM_COLORS.WHITE} />
+          <Ionicons name="arrow-back" size={24} color={AQUACARE_COLORS.WHITE} />
         </TouchableOpacity>
         <Text className="text-xl font-bold text-white">{t('dailyLogHistory')}</Text>
       </View>
+
+      {error && (
+        <View className="mx-4 mt-4 bg-white border border-error rounded-lg p-3">
+          <Text className="text-sm text-error">{error}</Text>
+        </View>
+      )}
 
       <FlatList
         data={currentCycle ? logs : []}

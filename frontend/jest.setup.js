@@ -60,10 +60,46 @@ global.console = {
   error: jest.fn(),
 };
 
-// Mock Worklets avant Reanimated pour éviter l'initialisation native en Jest
-jest.mock('react-native-worklets', () =>
-  require('react-native-worklets/lib/module/mock')
-);
+globalThis._WORKLET = false;
+globalThis.__RUNTIME_KIND = 2;
+
+const mockWorklets = {
+  __esModule: true,
+  RuntimeKind: {
+    ReactNative: 2,
+  },
+  WorkletsModule: {},
+  callMicrotasks: jest.fn(),
+  createSerializable: (value) => value,
+  createSynchronizable: (value) => value,
+  createWorkletRuntime: jest.fn(() => ({})),
+  executeOnUIRuntimeSync: (value) => value,
+  getRuntimeKind: jest.fn(() => 2),
+  getStaticFeatureFlag: jest.fn(() => false),
+  isSerializableRef: (value) => value,
+  isShareableRef: jest.fn(() => true),
+  isSynchronizable: jest.fn(() => false),
+  isWorkletFunction: (value) => typeof value === 'function' && Boolean(value.__workletHash),
+  makeShareable: (value) => value,
+  makeShareableCloneOnUIRecursive: (value) => value,
+  makeShareableCloneRecursive: (value) => value,
+  runOnJS: (fun) => (...args) => queueMicrotask(() => fun(...args)),
+  runOnRuntime: (value) => value,
+  runOnRuntimeAsync: async (_runtime, worklet, ...args) => worklet(...args),
+  runOnUI: (worklet) => (...args) => worklet(...args),
+  runOnUIAsync: async (worklet, ...args) => worklet(...args),
+  runOnUISync: (value) => value,
+  scheduleOnRN: (fun, ...args) => fun(...args),
+  scheduleOnRuntime: (callback) => callback(),
+  scheduleOnUI: (worklet, ...args) => worklet(...args),
+  serializableMappingCache: new Map(),
+  setDynamicFeatureFlag: jest.fn(),
+  shareableMappingCache: new Map(),
+};
+
+jest.mock('react-native-worklets', () => mockWorklets);
+jest.mock('react-native-worklets/src/index', () => mockWorklets);
+jest.mock('react-native-worklets/lib/module/index', () => mockWorklets);
 
 // Mock pour les animations React Native Reanimated
 jest.mock('react-native-reanimated', () => {

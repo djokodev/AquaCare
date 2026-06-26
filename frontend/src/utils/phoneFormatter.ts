@@ -1,5 +1,5 @@
-/** Regex de validation d'un numéro camerounais normalisé (+237 + 9 chiffres). */
-export const PHONE_REGEX = /^\+237[0-9]{9}$/;
+/** Regex de validation d'un numéro camerounais normalisé (+237 + 9 chiffres commençant par 6 ou 7). */
+export const PHONE_REGEX = /^\+237[67][0-9]{8}$/;
 
 /**
  * Formats a raw phone input string into a +237XXXXXXXXX Cameroon phone number.

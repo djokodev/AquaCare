@@ -1,12 +1,15 @@
 """
 Tests unitaires pour le modèle FarmProfile.
 
-Teste toutes les fonctionnalités liées au profil ferme MAVECAM.
+Teste toutes les fonctionnalités liées au profil ferme AquaCare.
 """
+from datetime import timedelta
+
 import pytest
 from accounts.models import FarmProfile
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
+from django.utils import timezone
 
 User = get_user_model()
 
@@ -216,9 +219,6 @@ class TestFarmProfileManager:
     
     def test_farm_profile_ordering(self):
         """Test ordre des profils ferme."""
-        import time
-
-        # Créer plusieurs fermes avec délai pour garantir l'ordre created_at
         users = []
         for i in range(3):
             user = User.objects.create_user(
@@ -229,9 +229,12 @@ class TestFarmProfileManager:
                 age_group='26_35'
             )
             users.append(user)
-            # Petit délai pour garantir que created_at est différent
-            if i < 2:  # Pas besoin d'attendre après le dernier
-                time.sleep(0.01)  # 10ms suffisent
+
+        base_time = timezone.now()
+        for index, user in enumerate(users):
+            FarmProfile.objects.filter(pk=user.farm_profile.pk).update(
+                created_at=base_time + timedelta(minutes=index)
+            )
 
         # Vérifier l'ordre (plus récent en premier)
         farms = FarmProfile.objects.all()

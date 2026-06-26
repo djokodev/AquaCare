@@ -1,5 +1,5 @@
 """
-Modèles de données pour le module commerce MAVECAM AquaCare.
+Modèles de données pour le module commerce AquaCare.
 
 Architecture offline-first avec support synchronisation mobile via UUID.
 Gestion catalogue produits alimentaires et commandes aquaculteurs.
@@ -46,7 +46,7 @@ class OrderQuerySet(models.QuerySet["Order"]):
 
 class Product(models.Model):
     """
-    Produit du catalogue MAVECAM (aliments pour poissons).
+    Produit du catalogue AquaCare (aliments pour poissons).
 
     Catalogue DIBAQ : Catfish et Tilapia (différentes tailles de granulés).
 
@@ -99,7 +99,7 @@ class Product(models.Model):
         help_text=_('Phase de croissance du poisson (optionnel si non-vérifié)')
     )
 
-    # Caractéristiques techniques (données catalogue MAVECAM)
+    # Caractéristiques techniques (données catalogue AquaCare)
     pellet_size_mm = models.DecimalField(
         _('Taille granulé (mm)'),
         max_digits=4,
@@ -174,7 +174,7 @@ class Product(models.Model):
         if self.lipid_percentage and (self.lipid_percentage < 1 or self.lipid_percentage > 20):
             errors['lipid_percentage'] = _("Le taux de lipides doit être entre 1% et 20%")
 
-        # Valider poids package (1, 20 ou 25 kg standard MAVECAM)
+        # Valider poids package (1, 20 ou 25 kg standard AquaCare)
         if self.package_weight_kg is not None and self.package_weight_kg <= 0:
             errors['package_weight_kg'] = _("Le poids du conditionnement doit être supérieur à 0")
         elif self.package_weight_kg and self.package_weight_kg not in [1, 20, 25]:
@@ -195,7 +195,7 @@ class Product(models.Model):
 
 class Order(models.Model):
     """
-    Commande de produits MAVECAM par un aquaculteur.
+    Commande de produits AquaCare par un aquaculteur.
 
     Workflow simplifié :
     - Statut initial 'confirmed' dès la création

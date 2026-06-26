@@ -133,7 +133,7 @@ describe('utils/interpreters', () => {
   });
 
   describe('getFCRColor', () => {
-    it('retourne vert MAVECAM pour "excellent"', () => {
+    it('retourne vert AquaCare pour "excellent"', () => {
       expect(getFCRColor('excellent')).toBe('#059669');
     });
 
@@ -155,7 +155,7 @@ describe('utils/interpreters', () => {
   });
 
   describe('getSurvivalRateColor', () => {
-    it('retourne vert MAVECAM pour "excellent"', () => {
+    it('retourne vert AquaCare pour "excellent"', () => {
       expect(getSurvivalRateColor('excellent')).toBe('#059669');
     });
 
@@ -211,7 +211,7 @@ describe('utils/interpreters', () => {
     it('retourne recommandation pour FCR eleve', () => {
       const result = getFCRRecommendation(2.5);
       expect(result).toContain('élevé');
-      expect(result).toContain('technicien MAVECAM');
+      expect(result).toContain('technicien AquaCare');
     });
 
     it('retourne message par défaut pour valeurs nulles', () => {
@@ -241,7 +241,7 @@ describe('utils/interpreters', () => {
     it('retourne recommandation pour taux faible', () => {
       const result = getSurvivalRateRecommendation(40);
       expect(result).toContain('faible');
-      expect(result).toContain('MAVECAM');
+      expect(result).toContain('AquaCare');
     });
 
     it('retourne message par défaut pour valeurs nulles', () => {

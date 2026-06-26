@@ -13,7 +13,14 @@ import {
   updateFarmProfile,
   clearError,
 } from '@/features/auth/store/authSlice';
-import { LoginRequest, RegisterRequest, User, FarmProfile } from '@/types/auth';
+import {
+  LoginRequest,
+  RegisterRequest,
+} from '@/features/auth/types/auth';
+import {
+  UpdateFarmProfilePayload,
+  UpdateUserProfilePayload,
+} from '@/features/profile/types/profile';
 
 // Module-level tracking: survives component remounts, prevents duplicate profile loads
 // across all instances of useAuth() (e.g., multiple screens mounted simultaneously).
@@ -98,15 +105,15 @@ export const useAuth = () => {
   }, [dispatch]);
 
   const updateProfile = useCallback(
-    (profileData: Partial<User>) => {
-      return dispatch(updateUserProfile(profileData));
+    (profileData: UpdateUserProfilePayload) => {
+      return dispatch(updateUserProfile(profileData)).unwrap();
     },
     [dispatch]
   );
 
   const updateFarm = useCallback(
-    (farmData: Partial<FarmProfile>) => {
-      return dispatch(updateFarmProfile(farmData));
+    (farmData: UpdateFarmProfilePayload) => {
+      return dispatch(updateFarmProfile(farmData)).unwrap();
     },
     [dispatch]
   );
@@ -150,5 +157,3 @@ export const useAuth = () => {
     isFarmCertified: authState.farmProfile?.is_certified || false,
   };
 };
-
-

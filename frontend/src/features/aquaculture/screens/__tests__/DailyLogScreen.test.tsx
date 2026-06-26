@@ -20,8 +20,8 @@ jest.mock('@/features/aquaculture/services/aquacultureService', () => ({
 
 jest.mock('@/services/offlineService', () => ({
   offlineService: {
-    hasPendingSync: jest.fn(),
-    syncOfflineLogs: jest.fn(),
+    hasAnyPendingSync: jest.fn(),
+    syncAllOfflineData: jest.fn(),
     saveCycleLogOffline: jest.fn(),
   },
 }));
@@ -77,8 +77,16 @@ describe('features/aquaculture/screens/DailyLogScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     (useDispatch as unknown as jest.Mock).mockReturnValue(mockDispatch);
-    mockOffline.hasPendingSync.mockResolvedValue(false);
-    mockOffline.syncOfflineLogs.mockResolvedValue({ success: 0, failed: 0 });
+    mockOffline.hasAnyPendingSync.mockResolvedValue(false);
+    mockOffline.syncAllOfflineData.mockResolvedValue({
+      success: 0,
+      failed: 0,
+      details: {
+        cycleLogs: { success: 0, failed: 0 },
+        newCycles: { success: 0, failed: 0 },
+        sanitaryLogs: { success: 0, failed: 0 },
+      },
+    });
   });
 
   it('affiche un etat vide sans cycle actif', () => {

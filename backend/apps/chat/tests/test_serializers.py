@@ -17,14 +17,14 @@ class TestMessageSerializer:
     def test_sender_user_hidden_for_non_staff_viewer(
         self,
         authenticated_user,
-        mavecam_admin,
+        aquacare_admin,
         request_factory: APIRequestFactory,
     ) -> None:
         conversation = ConversationService.get_or_create_conversation(authenticated_user)
         message = Message.objects.create(
             conversation=conversation,
             sender_type="admin",
-            sender_user=mavecam_admin,
+            sender_user=aquacare_admin,
             content="Réponse du support",
         )
         request = request_factory.get("/")
@@ -37,7 +37,7 @@ class TestMessageSerializer:
     def test_sender_user_visible_for_staff_viewer_even_when_missing(
         self,
         authenticated_user,
-        mavecam_admin,
+        aquacare_admin,
         request_factory: APIRequestFactory,
     ) -> None:
         conversation = ConversationService.get_or_create_conversation(authenticated_user)
@@ -47,7 +47,7 @@ class TestMessageSerializer:
             content="Message système",
         )
         request = request_factory.get("/")
-        request.user = mavecam_admin
+        request.user = aquacare_admin
 
         data = MessageSerializer(system_message, context={"request": request}).data
 

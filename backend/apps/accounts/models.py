@@ -3,6 +3,7 @@ import uuid
 from django.contrib.auth.models import AbstractUser
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.db.models import Q
 from django.utils.translation import gettext_lazy as _
 
 from .constants import (
@@ -13,11 +14,24 @@ from .constants import (
     LEGAL_STATUS_CHOICES,
     REGION_CHOICES,
 )
+from .domain.farm_profile_rules import build_farm_profile_invariant_errors
 from .managers import FarmProfileQuerySet, UserManager
-from .validators import normalize_phone_number, validate_cameroon_phone
+from .validators import (
+    build_user_account_invariant_errors,
+    normalize_login_value,
+    normalize_phone_number,
+    validate_cameroon_phone,
+)
 
 
 class User(AbstractUser):
+
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+        help_text=_('Identifiant unique UUID pour la synchronisation mobile')
+    )
 
     phone_number = models.CharField(
         _('Numéro de téléphone'),
@@ -41,6 +55,13 @@ class User(AbstractUser):
         blank=True,
         null=True,
         help_text=_('Nom de l\'entreprise pour les comptes de type "company"')
+    )
+    business_name_normalized = models.CharField(
+        _('Nom entreprise normalisé'),
+        max_length=200,
+        blank=True,
+        editable=False,
+        help_text=_('Valeur technique pour les recherches de connexion indexées')
     )
     
     is_verified = models.BooleanField(
@@ -143,6 +164,20 @@ class User(AbstractUser):
     
     # Désactiver le username (on utilise phone_number)
     username = None
+    first_name_normalized = models.CharField(
+        _('Prénom normalisé'),
+        max_length=150,
+        blank=True,
+        editable=False,
+        help_text=_('Valeur technique pour les recherches de connexion indexées')
+    )
+    last_name_normalized = models.CharField(
+        _('Nom normalisé'),
+        max_length=150,
+        blank=True,
+        editable=False,
+        help_text=_('Valeur technique pour les recherches de connexion indexées')
+    )
     
     # Définir phone_number comme identifiant principal
     USERNAME_FIELD = 'phone_number'
@@ -160,56 +195,19 @@ class User(AbstractUser):
             models.Index(fields=['region'], name='idx_user_region'),
             models.Index(fields=['account_type', 'business_name'], name='idx_user_company_login'),
             models.Index(fields=['account_type', 'first_name', 'last_name'], name='idx_user_person_login'),
+            models.Index(
+                fields=['account_type', 'business_name_normalized'],
+                name='idx_user_company_login_norm',
+            ),
+            models.Index(
+                fields=['account_type', 'first_name_normalized', 'last_name_normalized'],
+                name='idx_user_person_login_norm',
+            ),
         ]
     
     def clean(self):
-        """Validation métier du modèle User selon spécifications MAVECAM."""
-        errors = {}
-                
-        if self.account_type == 'company':
-            if not self.business_name:
-                errors['business_name'] = _('Le nom de l\'entreprise est requis pour les comptes entreprise.')
-            
-            if not self.legal_status:
-                errors['legal_status'] = _('Le statut juridique est requis pour les entreprises.')
-            
-            if not self.promoter_name:
-                errors['promoter_name'] = _('Le nom du promoteur est requis pour les entreprises.')
-            
-            if self.age_group:
-                errors['age_group'] = _('La classe d\'âge ne s\'applique qu\'aux personnes physiques.')
-        
-        elif self.account_type == 'individual':
-            if not self.first_name:
-                errors['first_name'] = _('Le prénom est requis pour les comptes individuels.')
-            
-            if not self.last_name:
-                errors['last_name'] = _('Le nom est requis pour les comptes individuels.')
-            
-            if not self.age_group:
-                errors['age_group'] = _('La classe d\'âge est requise pour les personnes physiques.')
-            
-            if self.business_name:
-                errors['business_name'] = _('Le nom d\'entreprise ne s\'applique qu\'aux comptes entreprise.')
-            
-            if self.legal_status:
-                errors['legal_status'] = _('Le statut juridique ne s\'applique qu\'aux entreprises.')
-            
-            if self.promoter_name:
-                errors['promoter_name'] = _('Le nom du promoteur ne s\'applique qu\'aux entreprises.')
-        
-        
-        if self.department and not self.region:
-            errors['region'] = _('La région est requise si le département est spécifié.')
-        
-        if self.district:
-            if not self.department:
-                errors['department'] = _('Le département est requis si l\'arrondissement est spécifié.')
-            if not self.region:
-                errors['region'] = _('La région est requise si l\'arrondissement est spécifié.')
-        
-        
-        # Si des erreurs ont été trouvées, les lever
+        """Validation métier du modèle User selon les règles AquaCare."""
+        errors = build_user_account_invariant_errors({}, self)
         if errors:
             raise ValidationError(errors)
 
@@ -223,7 +221,21 @@ class User(AbstractUser):
         """
         if self.phone_number:
             self.phone_number = normalize_phone_number(self.phone_number)
-        
+        self.business_name_normalized = normalize_login_value(self.business_name)
+        self.first_name_normalized = normalize_login_value(self.first_name)
+        self.last_name_normalized = normalize_login_value(self.last_name)
+
+        update_fields = kwargs.get('update_fields')
+        if update_fields is not None:
+            update_fields = set(update_fields)
+            if 'business_name' in update_fields:
+                update_fields.add('business_name_normalized')
+            if 'first_name' in update_fields:
+                update_fields.add('first_name_normalized')
+            if 'last_name' in update_fields:
+                update_fields.add('last_name_normalized')
+            kwargs['update_fields'] = list(update_fields)
+
         # Validation avant sauvegarde
         if validate:
             self.full_clean()
@@ -258,7 +270,7 @@ class User(AbstractUser):
     @property
     def login_name(self):
         """
-        Nom utilisé pour la connexion selon les spécifications MAVECAM.
+        Nom utilisé pour la connexion selon les règles AquaCare.
 
         - Pour les entreprises : business_name
         - Pour les personnes physiques : first_name last_name
@@ -363,116 +375,6 @@ class FarmProfile(models.Model):
         help_text=_('Production annuelle estimée en kilogrammes')
     )
 
-    # ── Élevage setup (rempli lors du flux "Créer mon élevage") ──────────────
-    INFRASTRUCTURE_CHOICES = [
-        ('etang', _('Étang')),
-        ('cage_flottante', _('Cage flottante')),
-        ('bac_hors_sol', _('Bac hors sol')),
-        ('bac_en_sol', _('Bac en sol')),
-    ]
-
-    SPECIES_SETUP_CHOICES = [
-        ('tilapia', _('Tilapia')),
-        ('clarias', _('Silure (Clarias)')),
-        ('autre', _('Autre espèce')),
-    ]
-
-    NUM_CYCLES_CHOICES = [
-        (2, _('2 cycles par an')),
-        (3, _('3 cycles par an')),
-    ]
-
-    annual_production_target_kg = models.DecimalField(
-        _('Production cible annuelle (kg)'),
-        max_digits=10,
-        decimal_places=2,
-        null=True,
-        blank=True,
-        help_text=_('Objectif de production annuelle en kg (utilisé pour la simulation)')
-    )
-
-    num_cycles_per_year = models.PositiveSmallIntegerField(
-        _('Nombre de cycles par an'),
-        null=True,
-        blank=True,
-        choices=NUM_CYCLES_CHOICES,
-        help_text=_('2 ou 3 cycles par an, selon le choix lors de la simulation')
-    )
-
-    setup_infrastructure_type = models.CharField(
-        _('Type d\'infrastructure'),
-        max_length=30,
-        blank=True,
-        choices=INFRASTRUCTURE_CHOICES,
-        help_text=_('Type principal d\'infrastructure d\'élevage')
-    )
-
-    setup_unit_count = models.PositiveIntegerField(
-        _('Nombre d\'unités (bacs/étangs)'),
-        null=True,
-        blank=True,
-        help_text=_('Nombre de bacs, étangs ou cages')
-    )
-
-    setup_unit_volume_m3 = models.DecimalField(
-        _('Volume par unité (m³)'),
-        max_digits=8,
-        decimal_places=2,
-        null=True,
-        blank=True,
-        help_text=_('Volume de chaque bac ou cage en m³')
-    )
-
-    setup_unit_surface_m2 = models.DecimalField(
-        _('Surface par unité (m²)'),
-        max_digits=8,
-        decimal_places=2,
-        null=True,
-        blank=True,
-        help_text=_('Surface de chaque étang en m²')
-    )
-
-    setup_species = models.CharField(
-        _('Espèce principale (setup)'),
-        max_length=20,
-        blank=True,
-        choices=SPECIES_SETUP_CHOICES,
-        help_text=_('Espèce choisie lors du flux de création d\'élevage')
-    )
-
-    fingerlings_cost_per_unit_fcfa = models.DecimalField(
-        _('Coût par alevin (FCFA)'),
-        max_digits=10,
-        decimal_places=2,
-        null=True,
-        blank=True,
-        help_text=_('Prix unitaire d\'un alevin en FCFA')
-    )
-
-    planned_selling_price_per_kg_fcfa = models.DecimalField(
-        _('Prix de vente estimé (FCFA/kg)'),
-        max_digits=10,
-        decimal_places=2,
-        null=True,
-        blank=True,
-        help_text=_('Prix de vente prévu du poisson en FCFA/kg')
-    )
-
-    farm_setup_completed = models.BooleanField(
-        _('Configuration élevage complétée'),
-        default=False,
-        help_text=_('True quand l\'utilisateur a terminé le flux "Créer mon élevage"')
-    )
-    # ─────────────────────────────────────────────────────────────────────────
-
-    default_feed_price_per_kg = models.DecimalField(
-        _('Prix aliment par défaut (FCFA/kg)'),
-        max_digits=8,
-        decimal_places=2,
-        default=1250,
-        help_text=_('Prix unitaire de l\'aliment en FCFA par kg (utilisé pour calcul coûts)')
-    )
-
     latitude = models.DecimalField(
         _('Latitude GPS'),
         max_digits=10,
@@ -524,6 +426,24 @@ class FarmProfile(models.Model):
         ordering = ['-created_at']
         indexes = [
             models.Index(fields=['certification_status'], name='idx_farm_certification'),
+            models.Index(
+                fields=['certification_status', '-created_at'],
+                name='idx_farm_map_cert_created',
+                condition=Q(
+                    latitude__isnull=False,
+                    longitude__isnull=False,
+                    is_deleted=False,
+                ),
+            ),
+            models.Index(
+                fields=['-created_at'],
+                name='idx_farm_map_geo_created',
+                condition=Q(
+                    latitude__isnull=False,
+                    longitude__isnull=False,
+                    is_deleted=False,
+                ),
+            ),
         ]
     
     def __str__(self):
@@ -534,16 +454,7 @@ class FarmProfile(models.Model):
         return self.certification_status == 'certified'
     
     def clean(self):
-        errors = {}
-
-        # Vérifier que le nom de ferme n'est pas vide
-        if not self.farm_name or not self.farm_name.strip():
-            errors['farm_name'] = _('Le nom de la ferme ne peut pas être vide.')
-        
-        # Vérifier la cohérence des données de production
-        if self.total_ponds == 0 and self.annual_production_kg and self.annual_production_kg > 0:
-            errors['total_ponds'] = _('Le nombre de bassins doit être supérieur à 0 si il y a une production.')
-        
+        errors = build_farm_profile_invariant_errors({}, self)
         if errors:
             raise ValidationError(errors)
     

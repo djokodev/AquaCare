@@ -1,5 +1,5 @@
 """
-Service de simulation de cycles aquacoles MAVECAM.
+Service de simulation de cycles aquacoles AquaCare.
 
 Permet aux aquaculteurs de planifier leur budget AVANT de démarrer un cycle.
 Calcule automatiquement : aliments nécessaires, coûts, phases, ROI estimé.

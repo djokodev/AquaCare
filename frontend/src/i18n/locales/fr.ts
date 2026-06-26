@@ -271,7 +271,7 @@ export const fr = {
   manageFarm: 'Gestion de ferme',
   viewStats: 'Voir les statistiques',
   noFarmProfile: 'Aucun profil ferme',
-  farmCertified: 'Ferme Certifiée MAVECAM',
+  farmCertified: 'Ferme Certifiée AquaCare',
   certificationPending: 'Certification en cours',
   certificationSuspended: 'Certification suspendue',
   certificationRejected: 'Certification refusée',
@@ -285,7 +285,7 @@ export const fr = {
   companyInfo: 'Informations Entreprise',
   createdOn: 'Créé le',
   updatedOn: 'Mis à jour le',
-  certificationMavecam: 'Certification MAVECAM',
+  certificationAquacare: 'Certification AquaCare',
   performanceMetrics: 'Métriques de Performance',
   accountVerified: 'Compte vérifié',
   yes: 'Oui',
@@ -295,9 +295,9 @@ export const fr = {
   farmManagement: 'Gestion de la Ferme',
   
   // Certification descriptions
-  certifiedDescription: 'Félicitations ! Votre ferme est certifiée MAVECAM. Vous bénéficiez de tous les avantages du programme.',
-  pendingDescription: 'Votre demande de certification est en cours d\'examen par l\'équipe MAVECAM. Nous vous contacterons bientôt.',
-  suspendedDescription: 'Votre certification a été temporairement suspendue. Contactez l\'équipe MAVECAM pour plus d\'informations.',
+  certifiedDescription: 'Félicitations ! Votre ferme est certifiée AquaCare. Vous bénéficiez de tous les avantages du programme.',
+  pendingDescription: 'Votre demande de certification est en cours d\'examen par l\'équipe AquaCare. Nous vous contacterons bientôt.',
+  suspendedDescription: 'Votre certification a été temporairement suspendue. Contactez l\'équipe AquaCare pour plus d\'informations.',
   rejectedDescription: 'Votre demande de certification n\'a pas été acceptée. Vous pouvez nous contacter pour connaître les critères requis.',
   
   // Validation Messages
@@ -327,6 +327,11 @@ export const fr = {
   deleteAccountSuccess: 'Compte supprimé',
   deleteAccountSuccessDesc: 'Votre compte a été supprimé.',
   deleteAccountError: 'Erreur lors de la suppression',
+  onboardingResetAction: 'Revoir l\'onboarding',
+  onboardingResetHint: 'Réinitialise l\'onboarding puis vous déconnecte pour le tester',
+  onboardingResetConfirmTitle: 'Revoir l\'onboarding ?',
+  onboardingResetConfirmMessage: 'Cette action réinitialise l\'onboarding et vous déconnecte immédiatement.',
+  onboardingResetError: 'Impossible de réinitialiser l\'onboarding',
   about: 'À propos',
   aboutTagline: 'De l\'alevinage à la vente, AquaCare vous accompagne.',
   aboutPoint1Title: 'Gestion quotidienne simplifiée',
@@ -374,7 +379,9 @@ export const fr = {
 
   // GPS / Géolocalisation
   farmLocation: 'Localisation GPS',
+  farmMapNavTitle: 'Carte de ma ferme',
   farmNoLocation: 'Aucune localisation enregistrée',
+  farmNoLocationHint: 'Ajoutez la localisation de votre ferme depuis votre profil.',
   locateFarm: 'Localiser ma ferme',
   locatingFarm: 'Localisation en cours...',
   viewOnMap: 'Voir sur la carte',
@@ -385,6 +392,7 @@ export const fr = {
   locationCaptureError: 'Impossible de récupérer la localisation. Réessayez.',
   openSettings: 'Ouvrir les réglages',
   updateLocation: 'Mettre à jour la localisation',
+  farmBackToProfile: 'Retour au profil',
   back: 'Retour',
 
   // Intervention Zones
@@ -452,6 +460,12 @@ export const fr = {
   samplingPairRequired: 'Renseignez ensemble le nombre échantillonné et le poids total.',
   sampleCountRequiredWithWeight: 'Veuillez indiquer le nombre de poissons pesés avec le poids total.',
   feedingTimesInvalidIgnored: 'Certains horaires de nourrissage sont invalides et ont été ignorés.',
+  aquacultureErrorFixField: 'Corrigez les champs signalés puis réessayez.',
+  aquacultureErrorCheckConnection: 'Vérifiez votre connexion internet puis réessayez.',
+  aquacultureErrorReconnect: 'Reconnectez-vous puis relancez l\'action.',
+  aquacultureErrorSyncConflict: 'Un conflit de synchronisation est détecté. Relancez la synchronisation.',
+  aquacultureErrorRetry: 'Réessayez dans un instant.',
+  aquacultureErrorSupport: 'Vous pouvez contacter le support si le problème persiste.',
   syncInProgress: 'Synchronisation en cours...',
   syncSuccess: 'Synchronisation réussie',
   syncFailed: 'Erreur de synchronisation',
@@ -463,6 +477,7 @@ export const fr = {
   allCycles: 'Tous les cycles',
   noLogsYet: 'Aucune saisie encore',
   startLoggingData: 'Commencez à enregistrer vos données quotidiennes',
+  dailyLogLoadError: 'Impossible de charger l\'historique des saisies, réessayez.',
   viewDailyLogHistory: 'Voir l\'historique des saisies',
 
   // SanitaryLog Screen
@@ -524,7 +539,7 @@ export const fr = {
   // Nutritional Guides
   nutritionalGuides: 'Consulter les guides nutritionnels',
   aboutGuides: 'A propos des guides',
-  nutritionalGuidesDescription: 'Consultez les recommandations d\'alimentation optimales selon l\'espèce et le stade de croissance de vos poissons. Ces guides sont basés sur les meilleures pratiques MAVECAM.',
+  nutritionalGuidesDescription: 'Consultez les recommandations d\'alimentation optimales selon l\'espèce et le stade de croissance de vos poissons. Ces guides sont basés sur les meilleures pratiques AquaCare.',
   allSpecies: 'Toutes espèces',
   tilapia: 'Tilapia',
   clarias: 'Clarias',
@@ -570,7 +585,14 @@ export const fr = {
   maxDensity: 'Densité maximale',
   yourDensity: 'Votre densité',
   fishPerM2: 'poissons/m²',
+  fishPerM3: 'poissons/m³',
   densitySuggestion: 'Réduisez le nombre initial ou augmentez la surface totale de production.',
+  dateFormatPlaceholder: 'AAAA-MM-JJ',
+  maxValuePlaceholder: 'Max {{max}}',
+  exampleValuePlaceholder: 'Ex : {{value}}',
+  zeroValuePlaceholder: '0',
+  exampleAverageWeightG: 'Ex : 350',
+  exampleSalePriceFcfa: 'Ex : 1800',
   harvestDateRequired: 'La date de récolte est requise',
   finalCount: 'Nombre Final',
   finalCountRequired: 'Le nombre final de poissons est requis',
@@ -774,6 +796,7 @@ export const fr = {
 
   // Statistics
   statistics: 'Voir mes statistiques',
+  statisticsNavTitle: 'Statistiques',
   statisticsTitle: 'Statistiques de Performance',
   statisticsSubtitle: 'Analyse détaillée de vos cycles',
   cycleAnalysis: 'Cycle à analyser',
@@ -1094,6 +1117,8 @@ export const fr = {
   AUTH_SERVER_ERROR: 'Erreur serveur. Veuillez réessayer plus tard.',
   AUTH_NETWORK_ERROR: 'Impossible de contacter le serveur. Vérifiez votre connexion.',
   AUTH_UNKNOWN_ERROR: 'Une erreur inattendue est survenue.',
+  UNKNOWN_ERROR: 'Une erreur inattendue est survenue.',
+  accountsErrorGeneric: 'Une erreur est survenue. Vérifiez votre connexion puis réessayez. Si le problème persiste, contactez le support.',
   sessionExpiredTitle: 'Session expirée',
   sessionExpiredMessage: 'Votre session a expiré. Veuillez vous reconnecter.',
 
@@ -1102,7 +1127,7 @@ export const fr = {
   buyerNetworkROINote: 'Ce revenu est atteignable via notre réseau d\'acheteurs partenaires.',
   buyerNetworkCTA: 'Contacter le réseau',
   buyerNetworkSellingPriceHint: 'Prix de référence — réseau d\'acheteurs partenaires AquaCare',
-  buyerNetworkHarvestDesc: 'MaveCameroun et notre réseau de partenaires peuvent acquérir votre production. Contactez-nous via le support.',
+  buyerNetworkHarvestDesc: 'AquaCare et notre réseau de partenaires peuvent acquérir votre production. Contactez-nous via le support.',
 
   // Settings - Language change
   languageUpdatedTitle: 'Langue mise à jour',
@@ -1143,6 +1168,7 @@ export const fr = {
   createFarmAnnualTargetLabel: 'Production cible (kg / an)',
   createFarmAnnualTargetPlaceholder: 'Ex : 1000',
   createFarmStartDateLabel: 'Date de démarrage prévue',
+  createFarmStartDatePlaceholder: 'AAAA-MM-JJ',
   createFarmFingerlingsLabel: 'Coût par alevin (FCFA)',
   createFarmFingerlingsPlaceholder: 'Ex : 50',
   createFarmSellingPriceLabel: 'Prix de vente estimé (FCFA / kg)',
@@ -1166,6 +1192,12 @@ export const fr = {
   createFarmSurvivalRatePlaceholder: 'Ex : 85',
   createFarmSimulateBtn: 'Voir ma simulation →',
   createFarmRequiredFieldsError: 'Veuillez renseigner tous les champs obligatoires.',
+  createFarmPositiveNumberError: 'Saisissez un nombre supérieur à 0.',
+  createFarmNonNegativeNumberError: 'Saisissez un nombre positif ou égal à 0.',
+  createFarmPositiveIntegerError: 'Saisissez un nombre entier supérieur à 0.',
+  createFarmInvalidDateError: 'Saisissez une date valide au format AAAA-MM-JJ.',
+  createFarmHarvestWeightRangeError: 'Le poids cible doit être compris entre 50 g et 5000 g.',
+  createFarmSurvivalRateRangeError: 'Le taux de survie doit être compris entre 1 % et 100 %.',
 
   // ── Simulation annuelle ───────────────────────────────────────────────────
   simulationNavTitle: 'Simulation',
@@ -1196,6 +1228,10 @@ export const fr = {
   simulationModifyBtn: '← Modifier mes données',
   simulationLoading: 'Calcul en cours...',
   simulationErrorRetry: 'Erreur de simulation. Réessayer',
+  simulationDefaultCycleName: 'Cycle {{species}} 1',
+  simulationDefaultPondIdentifier: 'Bassin principal',
+  speciesTilapia: 'Tilapia',
+  speciesClarias: 'Silure',
 
   // ── Section "Acheter mes aliments" ───────────────────────────────────────
   myFeedTitle: 'Acheter mes aliments',

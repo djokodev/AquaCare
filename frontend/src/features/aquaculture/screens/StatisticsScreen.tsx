@@ -6,9 +6,11 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
 import { ProductionCycle, CycleStatistics } from '@/types/aquaculture';
 import { RootStackParamList } from '@/navigation/MainNavigator';
-import { MAVECAM_COLORS } from '@/constants/colors';
+import { AQUACARE_COLORS } from '@/constants/colors';
 import { formatNumber, formatPercentage, formatCurrency } from '@/utils';
 import logger from '@/utils/logger';
+import { parseApiError } from '@/utils/errorParser';
+import { formatAquacultureErrorWithAction } from '@/features/aquaculture/utils/aquacultureErrorPresenter';
 
 type StatisticsScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Statistics'>;
 
@@ -23,6 +25,8 @@ export default function StatisticsScreen({ navigation }: StatisticsScreenProps) 
   const [refreshing, setRefreshing] = useState(false);
   const [harvestedCycles, setHarvestedCycles] = useState<ProductionCycle[]>([]);
   const [selectedCycleId, setSelectedCycleId] = useState<string | null>(null);
+  const [cycleStats, setCycleStats] = useState<CycleStatistics | null>(null);
+  const [statsLoading, setStatsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
@@ -32,11 +36,14 @@ export default function StatisticsScreen({ navigation }: StatisticsScreenProps) 
 
       const cycles = await aquacultureService.getHarvestedCycles();
       setHarvestedCycles(cycles);
-    } catch {
-      setError('statisticsLoadError');
+    } catch (error: unknown) {
+      logger.error('Erreur chargement statistiques:', error);
+      setError(formatAquacultureErrorWithAction(parseApiError(error), t));
     } finally {
       setLoading(false);
     }
+  // `t` is intentionally omitted to avoid refetch loops in some RN test/runtime contexts.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -48,46 +55,40 @@ export default function StatisticsScreen({ navigation }: StatisticsScreenProps) 
     [harvestedCycles, selectedCycleId]
   );
 
-  const cycleStats = useMemo<CycleStatistics | null>(() => {
-    if (!selectedCycle) {
-      return null;
+  useEffect(() => {
+    if (!selectedCycleId) {
+      setCycleStats(null);
+      return;
     }
 
-    try {
-      return {
-        cycle_id: selectedCycle.id,
-        days_active: Number(selectedCycle.days_active) || 0,
-        current_metrics: {
-          survival_rate: Number(selectedCycle.survival_rate) || 0,
-          biomass: Number(selectedCycle.final_biomass || selectedCycle.current_biomass) || 0,
-          average_weight:
-            Number(selectedCycle.final_average_weight || selectedCycle.current_average_weight) || 0,
-          fcr: Number(selectedCycle.fcr) || 0,
-          daily_growth_rate: Number(selectedCycle.daily_growth_rate) || 0,
-          specific_growth_rate: Number(selectedCycle.specific_growth_rate) || 0,
-        },
-        feed_metrics: {
-          total_consumed: Number(selectedCycle.total_feed_consumed) || 0,
-          average_daily: Number(selectedCycle.average_daily_feed) || 0,
-          cost_estimate: Number(selectedCycle.total_feed_cost) || 0,
-        },
-        mortality_analysis: {
-          total: Math.max(
-            0,
-            (Number(selectedCycle.initial_count) || 0) -
-              (Number(selectedCycle.final_count || selectedCycle.current_count) || 0)
-          ),
-          percentage: Math.max(0, 100 - (Number(selectedCycle.survival_rate) || 0)),
-          by_week: {},
-          main_causes: [],
-        },
-        growth_performance: [],
-      };
-    } catch (statsError: unknown) {
-      logger.error('Erreur chargement stats cycle:', statsError);
-      return null;
-    }
-  }, [selectedCycle]);
+    let mounted = true;
+    const loadCycleStats = async () => {
+      try {
+        setStatsLoading(true);
+        const stats = await aquacultureService.getCycleStatistics(selectedCycleId);
+        if (mounted) {
+          setCycleStats(stats);
+        }
+      } catch (statsError: unknown) {
+        logger.error('Erreur chargement stats cycle:', statsError);
+        if (mounted) {
+          setCycleStats(null);
+          setError(formatAquacultureErrorWithAction(parseApiError(statsError), t));
+        }
+      } finally {
+        if (mounted) {
+          setStatsLoading(false);
+        }
+      }
+    };
+
+    loadCycleStats();
+    return () => {
+      mounted = false;
+    };
+  // `t` is intentionally omitted to avoid repeated network calls when translator ref changes.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCycleId]);
 
   const handleCycleSelection = useCallback((cycleId: string) => {
     setSelectedCycleId(cycleId);
@@ -105,7 +106,7 @@ export default function StatisticsScreen({ navigation }: StatisticsScreenProps) 
       return (
         <TouchableOpacity
           className={`mr-3 p-3 min-w-[160px] rounded-lg border ${
-            isSelected ? 'bg-mavecam-primary border-mavecam-primary' : 'bg-cream border-gray-light'
+            isSelected ? 'bg-aquacare-primary border-aquacare-primary' : 'bg-cream border-gray-light'
           }`}
           onPress={() => handleCycleSelection(cycle.id)}
         >
@@ -116,7 +117,7 @@ export default function StatisticsScreen({ navigation }: StatisticsScreenProps) 
             {cycle.cycle_name}
           </Text>
           <Text className={`text-xs mt-1 ${isSelected ? 'text-white' : 'text-gray-light'}`}>
-            {t(cycle.species)} - {formatPercentage(cycle.survival_rate || 0)}
+            {t(cycle.species)}, {formatPercentage(cycle.survival_rate || 0)}
           </Text>
         </TouchableOpacity>
       );
@@ -125,9 +126,9 @@ export default function StatisticsScreen({ navigation }: StatisticsScreenProps) 
   );
 
   const renderHeader = () => (
-    <View className="bg-mavecam-primary flex-row items-center pt-14 pb-4 px-4">
+    <View className="bg-aquacare-primary flex-row items-center pt-14 pb-4 px-4">
       <TouchableOpacity className="mr-4" onPress={() => navigation.goBack()}>
-        <Ionicons name="arrow-back" size={24} color={MAVECAM_COLORS.WHITE} />
+        <Ionicons name="arrow-back" size={24} color={AQUACARE_COLORS.WHITE} />
       </TouchableOpacity>
       <Text className="text-xl font-bold text-white">{t('statistics')}</Text>
     </View>
@@ -138,7 +139,7 @@ export default function StatisticsScreen({ navigation }: StatisticsScreenProps) 
       <View className="flex-1 bg-cream">
         {renderHeader()}
         <View className="flex-1 items-center justify-center p-10">
-          <ActivityIndicator size="large" color={MAVECAM_COLORS.GREEN_PRIMARY} />
+          <ActivityIndicator size="large" color={AQUACARE_COLORS.GREEN_PRIMARY} />
           <Text className="text-base text-gray-light mt-3">{t('loading')}</Text>
         </View>
       </View>
@@ -150,9 +151,9 @@ export default function StatisticsScreen({ navigation }: StatisticsScreenProps) 
       <View className="flex-1 bg-cream">
         {renderHeader()}
         <View className="flex-1 items-center justify-center p-5">
-          <Ionicons name="alert-circle" size={48} color={MAVECAM_COLORS.ERROR} />
+          <Ionicons name="alert-circle" size={48} color={AQUACARE_COLORS.ERROR} />
           <Text className="text-lg text-error text-center mt-3">{error}</Text>
-          <TouchableOpacity className="bg-mavecam-primary px-5 py-3 rounded-lg mt-4" onPress={loadData}>
+          <TouchableOpacity className="bg-aquacare-primary px-5 py-3 rounded-lg mt-4" onPress={loadData}>
             <Text className="text-white text-base font-semibold">{t('retry')}</Text>
           </TouchableOpacity>
         </View>
@@ -165,7 +166,7 @@ export default function StatisticsScreen({ navigation }: StatisticsScreenProps) 
       <View className="flex-1 bg-cream">
         {renderHeader()}
         <View className="flex-1 items-center justify-center p-6">
-          <Ionicons name="bar-chart-outline" size={48} color={MAVECAM_COLORS.GRAY_LIGHT} />
+          <Ionicons name="bar-chart-outline" size={48} color={AQUACARE_COLORS.GRAY_LIGHT} />
           <Text className="text-lg font-semibold text-gray-dark mt-4 text-center">{t('noStatistics')}</Text>
           <Text className="text-sm text-gray-light mt-2 text-center">{t('harvestCycleToSeeStats')}</Text>
         </View>
@@ -196,25 +197,32 @@ export default function StatisticsScreen({ navigation }: StatisticsScreenProps) 
 
         {!selectedCycle && harvestedCycles.length > 0 && (
           <View className="bg-white mx-4 mb-4 p-6 rounded-xl border border-dashed border-gray-200 items-center">
-            <Ionicons name="analytics-outline" size={48} color={MAVECAM_COLORS.GRAY_LIGHT} />
+            <Ionicons name="analytics-outline" size={48} color={AQUACARE_COLORS.GRAY_LIGHT} />
             <Text className="text-lg font-semibold text-gray-dark mt-3 text-center">{t('selectCycleToAnalyze')}</Text>
             <Text className="text-sm text-gray-light mt-2 text-center">{t('selectCycleHint')}</Text>
           </View>
         )}
 
-        {selectedCycle && cycleStats && (
+        {selectedCycle && statsLoading && (
+          <View className="bg-white mx-4 mb-4 p-6 rounded-xl items-center">
+            <ActivityIndicator size="small" color={AQUACARE_COLORS.GREEN_PRIMARY} />
+            <Text className="text-sm text-gray-light mt-2">{t('loading')}</Text>
+          </View>
+        )}
+
+        {selectedCycle && cycleStats && !statsLoading && (
           <>
             <View className="bg-white mx-4 mb-4 p-4 rounded-xl">
               <Text className="text-lg font-bold text-gray-dark mb-4">{t('statistics')}</Text>
               <View className="flex-row flex-wrap justify-between">
                 <View className="w-[48%] bg-cream p-4 rounded-lg items-center mb-3">
-                  <Ionicons name="trending-up" size={22} color={MAVECAM_COLORS.SUCCESS} />
+                  <Ionicons name="trending-up" size={22} color={AQUACARE_COLORS.SUCCESS} />
                   <Text className="text-xl font-bold text-gray-dark mt-2">{formatNumber(cycleStats.current_metrics.fcr)}</Text>
                   <Text className="text-xs text-gray-light">FCR</Text>
                 </View>
 
                 <View className="w-[48%] bg-cream p-4 rounded-lg items-center mb-3">
-                  <Ionicons name="heart" size={22} color={MAVECAM_COLORS.ERROR} />
+                  <Ionicons name="heart" size={22} color={AQUACARE_COLORS.ERROR} />
                   <Text className="text-xl font-bold text-gray-dark mt-2">
                     {formatPercentage(cycleStats.current_metrics.survival_rate)}
                   </Text>
@@ -222,7 +230,7 @@ export default function StatisticsScreen({ navigation }: StatisticsScreenProps) 
                 </View>
 
                 <View className="w-[48%] bg-cream p-4 rounded-lg items-center mb-3">
-                  <Ionicons name="scale" size={22} color={MAVECAM_COLORS.INFO} />
+                  <Ionicons name="scale" size={22} color={AQUACARE_COLORS.INFO} />
                   <Text className="text-xl font-bold text-gray-dark mt-2">
                     {formatNumber(cycleStats.current_metrics.daily_growth_rate, 'g/j')}
                   </Text>
@@ -230,7 +238,7 @@ export default function StatisticsScreen({ navigation }: StatisticsScreenProps) 
                 </View>
 
                 <View className="w-[48%] bg-cream p-4 rounded-lg items-center mb-3">
-                  <Ionicons name="cash" size={22} color={MAVECAM_COLORS.WARNING} />
+                  <Ionicons name="cash" size={22} color={AQUACARE_COLORS.WARNING} />
                   <Text className="text-xl font-bold text-gray-dark mt-2">
                     {formatCurrency(cycleStats.feed_metrics.cost_estimate)}
                   </Text>

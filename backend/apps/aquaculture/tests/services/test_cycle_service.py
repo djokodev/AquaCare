@@ -54,7 +54,7 @@ class TestProductionCycleService:
         assert cycle.total_feed_consumed == Decimal('0')
 
     def test_create_cycle_validates_max_density_tilapia(self):
-        """Vérifie que la densité maximale pour tilapia est respectée."""
+        """Vérifie que la densité maximale en bassin est respectée."""
         farm_profile = FarmProfileFactory()
 
         cycle_data = {
@@ -64,7 +64,7 @@ class TestProductionCycleService:
             'pond_surface_m2': Decimal('100.00'),  # Petit bassin
             'pond_volume_m3': Decimal('120.00'),
             'start_date': date.today(),
-            'initial_count': 35000,  # 350 poissons/m² (> 300 max pour tilapia)
+            'initial_count': 35000,  # 350 poissons/m² (> 10 max en bassin)
             'initial_average_weight': Decimal('10.00'),
         }
 
@@ -73,10 +73,10 @@ class TestProductionCycleService:
 
         assert "Densité initiale trop élevée" in str(exc_info.value)
         assert "350" in str(exc_info.value)  # Densité calculée
-        assert "300" in str(exc_info.value)  # Max autorisé
+        assert "10" in str(exc_info.value)  # Max autorisé en bassin
 
     def test_create_cycle_validates_max_density_clarias(self):
-        """Vérifie que la densité maximale pour clarias est respectée."""
+        """Vérifie que la densité maximale en bassin est respectée."""
         farm_profile = FarmProfileFactory()
 
         cycle_data = {
@@ -85,7 +85,7 @@ class TestProductionCycleService:
             'pond_identifier': 'Bassin C',
             'pond_surface_m2': Decimal('100.00'),
             'start_date': date.today(),
-            'initial_count': 60000,  # 600 poissons/m² (> 500 max pour clarias)
+            'initial_count': 60000,  # 600 poissons/m² (> 10 max en bassin)
             'initial_average_weight': Decimal('8.00'),
         }
 
@@ -93,7 +93,7 @@ class TestProductionCycleService:
             ProductionCycleService.create_cycle(farm_profile, cycle_data)
 
         assert "Densité initiale trop élevée" in str(exc_info.value)
-        assert "500" in str(exc_info.value)  # Max autorisé clarias
+        assert "10" in str(exc_info.value)  # Max autorisé en bassin
 
     def test_create_cycle_validates_minimum_weight(self):
         """Vérifie que le poids minimum initial est respecté."""
@@ -309,7 +309,7 @@ class TestProductionCycleService:
             'pond_identifier': 'Bassin Valid',
             'pond_surface_m2': Decimal('1000.00'),
             'start_date': date.today(),
-            'initial_count': 250000,  # 250 poissons/m² (< 300 max)
+            'initial_count': 10000,  # 10 poissons/m² (max en bassin)
             'initial_average_weight': Decimal('12.00'),
         }
 

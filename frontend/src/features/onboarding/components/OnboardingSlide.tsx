@@ -5,11 +5,12 @@
  */
 
 import React from 'react';
-import { View, Text, StyleSheet, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, Dimensions, TextStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { OnboardingSlideProps } from '../types/onboarding';
-import { MAVECAM_COLORS } from '@/constants/colors';
+import { AQUACARE_COLORS } from '@/constants/colors';
+import { AQUACARE_TYPOGRAPHY } from '@/constants/typography';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -23,7 +24,7 @@ export default function OnboardingSlide({ slide }: OnboardingSlideProps) {
   /**
    * Rend un texte avec "AquaCare" coloré en vert
    */
-  const renderTextWithAppName = (text: string, baseStyle: any) => {
+  const renderTextWithAppName = (text: string, baseStyle: TextStyle) => {
     const appName = 'AquaCare';
     const parts = text.split(appName);
 
@@ -74,7 +75,7 @@ export default function OnboardingSlide({ slide }: OnboardingSlideProps) {
           <Ionicons
             name={slide.iconName as any}
             size={80}
-            color={MAVECAM_COLORS.ERROR}
+            color={AQUACARE_COLORS.ERROR}
           />
         </View>
       )}
@@ -98,7 +99,7 @@ export default function OnboardingSlide({ slide }: OnboardingSlideProps) {
             <Ionicons
               name={slide.iconName as any}
               size={80}
-              color={MAVECAM_COLORS.GREEN_PRIMARY}
+              color={AQUACARE_COLORS.GREEN_PRIMARY}
             />
           </View>
         )}
@@ -112,7 +113,7 @@ export default function OnboardingSlide({ slide }: OnboardingSlideProps) {
                 <Ionicons
                   name="checkmark-circle"
                   size={22}
-                  color={MAVECAM_COLORS.GREEN_PRIMARY}
+                  color={AQUACARE_COLORS.GREEN_PRIMARY}
                   style={styles.bulletIcon}
                 />
                 <Text style={styles.bulletText}>{t(item.textKey)}</Text>
@@ -146,7 +147,7 @@ export default function OnboardingSlide({ slide }: OnboardingSlideProps) {
                     <Ionicons
                       name={step.iconName as any}
                       size={32}
-                      color={MAVECAM_COLORS.GREEN_PRIMARY}
+                      color={AQUACARE_COLORS.GREEN_PRIMARY}
                     />
                   </View>
                   <View style={[
@@ -170,7 +171,7 @@ export default function OnboardingSlide({ slide }: OnboardingSlideProps) {
                     <Ionicons
                       name="arrow-down"
                       size={24}
-                      color={MAVECAM_COLORS.GRAY_LIGHT}
+                      color={AQUACARE_COLORS.GRAY_LIGHT}
                     />
                   </View>
                 )}
@@ -210,7 +211,7 @@ export default function OnboardingSlide({ slide }: OnboardingSlideProps) {
             <Ionicons
               name="people"
               size={80}
-              color={MAVECAM_COLORS.GREEN_PRIMARY}
+              color={AQUACARE_COLORS.GREEN_PRIMARY}
             />
             <Text style={styles.mainStatTextBlack}>
               <Text style={styles.mainStatNumber}>+200</Text>
@@ -226,7 +227,7 @@ export default function OnboardingSlide({ slide }: OnboardingSlideProps) {
               <Ionicons
                 name="person-circle"
                 size={36}
-                color={MAVECAM_COLORS.GREEN_PRIMARY}
+                color={AQUACARE_COLORS.GREEN_PRIMARY}
               />
               <Text style={styles.testimonialName}>{t(slide.testimonialNameKey!)}</Text>
             </View>
@@ -242,7 +243,7 @@ export default function OnboardingSlide({ slide }: OnboardingSlideProps) {
                 <Ionicons
                   name={stat.iconName as any}
                   size={22}
-                  color={MAVECAM_COLORS.GREEN_PRIMARY}
+                  color={AQUACARE_COLORS.GREEN_PRIMARY}
                 />
                 <Text style={styles.statText}>{t(stat.textKey)}</Text>
               </View>
@@ -263,7 +264,7 @@ export default function OnboardingSlide({ slide }: OnboardingSlideProps) {
         <Ionicons
           name="rocket"
           size={80}
-          color={MAVECAM_COLORS.GREEN_PRIMARY}
+          color={AQUACARE_COLORS.GREEN_PRIMARY}
         />
       </View>
 
@@ -289,7 +290,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 24,
-    backgroundColor: MAVECAM_COLORS.WHITE,
+    backgroundColor: AQUACARE_COLORS.WHITE,
   },
 
   contentContainer: {
@@ -305,19 +306,15 @@ const styles = StyleSheet.create({
   },
 
   title: {
-    fontSize: 26,
-    fontWeight: 'bold',
-    color: MAVECAM_COLORS.GRAY_DARK,
+    ...AQUACARE_TYPOGRAPHY.h2,
     textAlign: 'center',
     marginBottom: 24,
     paddingHorizontal: 8,
-    lineHeight: 34,
   },
 
   subtitle: {
-    fontSize: 16,
-    lineHeight: 24,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
+    ...AQUACARE_TYPOGRAPHY.body,
+    color: AQUACARE_COLORS.GRAY_LIGHT,
     textAlign: 'center',
     paddingHorizontal: 16,
     marginTop: 8,
@@ -343,9 +340,8 @@ const styles = StyleSheet.create({
 
   bulletText: {
     flex: 1,
-    fontSize: 16,
-    lineHeight: 22,
-    color: MAVECAM_COLORS.GRAY_DARK,
+    ...AQUACARE_TYPOGRAPHY.body,
+    color: AQUACARE_COLORS.GRAY_DARK,
   },
 
   // How steps styles
@@ -357,7 +353,7 @@ const styles = StyleSheet.create({
   stepItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: MAVECAM_COLORS.CREAM,
+    backgroundColor: AQUACARE_COLORS.CREAM,
     borderRadius: 12,
     padding: 16,
     marginBottom: 8,
@@ -367,16 +363,16 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: MAVECAM_COLORS.GREEN_PRIMARY,
+    backgroundColor: AQUACARE_COLORS.GREEN_PRIMARY,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
   },
 
   stepNumberText: {
-    color: MAVECAM_COLORS.WHITE,
-    fontSize: 14,
-    fontWeight: 'bold',
+    ...AQUACARE_TYPOGRAPHY.caption,
+    color: AQUACARE_COLORS.WHITE,
+    fontWeight: '700',
   },
 
   stepIconContainer: {
@@ -388,15 +384,14 @@ const styles = StyleSheet.create({
   },
 
   stepTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: MAVECAM_COLORS.GRAY_DARK,
+    ...AQUACARE_TYPOGRAPHY.smallStrong,
+    color: AQUACARE_COLORS.GRAY_DARK,
     marginBottom: 2,
   },
 
   stepDesc: {
-    fontSize: 13,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
+    ...AQUACARE_TYPOGRAPHY.caption,
+    color: AQUACARE_COLORS.GRAY_LIGHT,
   },
 
   arrowContainer: {
@@ -412,24 +407,22 @@ const styles = StyleSheet.create({
   },
 
   socialProofTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: MAVECAM_COLORS.GRAY_DARK,
+    ...AQUACARE_TYPOGRAPHY.h3,
+    color: AQUACARE_COLORS.GRAY_DARK,
     textAlign: 'center',
     marginBottom: 16,
     paddingHorizontal: 8,
-    lineHeight: 28,
   },
 
   // Testimonial styles
   testimonialCard: {
     width: '100%',
-    backgroundColor: MAVECAM_COLORS.CREAM,
+    backgroundColor: AQUACARE_COLORS.CREAM,
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
     borderLeftWidth: 4,
-    borderLeftColor: MAVECAM_COLORS.GREEN_PRIMARY,
+    borderLeftColor: AQUACARE_COLORS.GREEN_PRIMARY,
   },
 
   testimonialHeader: {
@@ -439,16 +432,14 @@ const styles = StyleSheet.create({
   },
 
   testimonialName: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: MAVECAM_COLORS.GRAY_DARK,
+    ...AQUACARE_TYPOGRAPHY.smallStrong,
+    color: AQUACARE_COLORS.GRAY_DARK,
     marginLeft: 10,
   },
 
   testimonialText: {
-    fontSize: 14,
-    lineHeight: 20,
-    color: MAVECAM_COLORS.GRAY_DARK,
+    ...AQUACARE_TYPOGRAPHY.small,
+    color: AQUACARE_COLORS.GRAY_DARK,
     fontStyle: 'italic',
   },
 
@@ -465,8 +456,8 @@ const styles = StyleSheet.create({
   },
 
   statText: {
-    fontSize: 14,
-    color: MAVECAM_COLORS.GRAY_DARK,
+    ...AQUACARE_TYPOGRAPHY.small,
+    color: AQUACARE_COLORS.GRAY_DARK,
     marginLeft: 10,
     fontWeight: '500',
   },
@@ -489,31 +480,28 @@ const styles = StyleSheet.create({
   },
 
   mainStatText: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: MAVECAM_COLORS.GREEN_PRIMARY,
+    ...AQUACARE_TYPOGRAPHY.h1,
+    color: AQUACARE_COLORS.GREEN_PRIMARY,
     textAlign: 'center',
     marginTop: 20,
   },
 
   mainStatTextBlack: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: MAVECAM_COLORS.GRAY_DARK,
+    ...AQUACARE_TYPOGRAPHY.h2,
+    color: AQUACARE_COLORS.GRAY_DARK,
     textAlign: 'center',
     marginTop: 20,
   },
 
   mainStatNumber: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: MAVECAM_COLORS.GREEN_PRIMARY,
+    ...AQUACARE_TYPOGRAPHY.h1,
+    color: AQUACARE_COLORS.GREEN_PRIMARY,
   },
 
   // AquaCare highlighted in green
   appNameHighlight: {
-    color: MAVECAM_COLORS.GREEN_PRIMARY,
-    fontWeight: 'bold',
+    color: AQUACARE_COLORS.GREEN_PRIMARY,
+    fontWeight: '700',
   },
 
   // Guarantee section (Slide 1)
@@ -521,10 +509,10 @@ const styles = StyleSheet.create({
     marginTop: 32,
     paddingHorizontal: 16,
     paddingVertical: 16,
-    backgroundColor: MAVECAM_COLORS.CREAM,
+    backgroundColor: AQUACARE_COLORS.CREAM,
     borderRadius: 12,
     borderLeftWidth: 4,
-    borderLeftColor: MAVECAM_COLORS.GREEN_PRIMARY,
+    borderLeftColor: AQUACARE_COLORS.GREEN_PRIMARY,
     width: '100%',
   },
 
@@ -534,9 +522,8 @@ const styles = StyleSheet.create({
   },
 
   guaranteeText: {
-    fontSize: 14,
-    lineHeight: 22,
-    color: MAVECAM_COLORS.GRAY_DARK,
+    ...AQUACARE_TYPOGRAPHY.small,
+    color: AQUACARE_COLORS.GRAY_DARK,
     textAlign: 'center',
   },
 });

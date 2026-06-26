@@ -135,9 +135,9 @@ class TestRBACConstants:
 
     def test_group_names_defined(self):
         """Verifie que les noms de groupes sont definis."""
-        assert RBACConstants.GROUP_MANAGERS == 'mavecam_managers'
-        assert RBACConstants.GROUP_COMMERCE == 'mavecam_commerce'
-        assert RBACConstants.GROUP_SUPPORT == 'mavecam_support'
+        assert RBACConstants.GROUP_MANAGERS == 'aquacare_managers'
+        assert RBACConstants.GROUP_COMMERCE == 'aquacare_commerce'
+        assert RBACConstants.GROUP_SUPPORT == 'aquacare_support'
 
     def test_role_apps_mapping(self):
         """Verifie le mapping role -> apps."""
@@ -166,7 +166,7 @@ class TestSetupRBACCommand:
         from django.core.management import call_command
 
         # Supprimer les groupes existants
-        Group.objects.filter(name__startswith='mavecam_').delete()
+        Group.objects.filter(name__startswith='aquacare_').delete()
 
         # Executer la commande
         out = StringIO()
@@ -186,7 +186,7 @@ class TestSetupRBACCommand:
         call_command('setup_rbac', stdout=out)
 
         # Toujours 3 groupes
-        count = Group.objects.filter(name__startswith='mavecam_').count()
+        count = Group.objects.filter(name__startswith='aquacare_').count()
         assert count == 3
 
     def test_command_reset_option(self):
@@ -208,7 +208,7 @@ class TestSetupRBACCommand:
         from django.core.management import call_command
 
         # Supprimer les groupes
-        Group.objects.filter(name__startswith='mavecam_').delete()
+        Group.objects.filter(name__startswith='aquacare_').delete()
 
         # Dry run
         out = StringIO()

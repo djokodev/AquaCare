@@ -54,7 +54,7 @@ docker-compose up -d
 
 # 2. Migrations + Data Loading (CRITICAL)
 docker-compose exec api python manage.py migrate
-docker-compose exec api python manage.py load_nutritional_data  # 8 guides MAVECAM
+docker-compose exec api python manage.py load_nutritional_data  # 8 guides AquaCare
 docker-compose exec api python manage.py load_products           # 22 produits
 docker-compose exec api python manage.py setup_rbac              # Rôles admin
 
@@ -445,7 +445,7 @@ git checkout -b feature/{nom-feature}
 
 # Workflow 6 phases :
 # Phase 1: Context Gathering
-#   - Lit DESIGN_SYSTEM.md, MAVECAM colors, spacing rules
+#   - Lit DESIGN_SYSTEM.md, AquaCare colors, spacing rules
 #   - Identifie composants existants réutilisables
 
 # Phase 2: Plan
@@ -463,7 +463,7 @@ git checkout -b feature/{nom-feature}
 #   - Composants dans src/features/{domain}/components/
 #   - Redux slice dans src/features/{domain}/store/
 #   - Ajoute navigation params
-#   - MAVECAM colors uniquement (GREEN_PRIMARY, GREEN_LIGHT, etc.)
+#   - AquaCare colors uniquement (GREEN_PRIMARY, GREEN_LIGHT, etc.)
 #   - Translations i18n (t('key'))
 
 # Phase 5: TypeScript Check
@@ -478,7 +478,7 @@ git checkout -b feature/{nom-feature}
 
 **Patterns automatiquement appliqués :**
 - i18n : `t('key')` pour tout texte UI
-- MAVECAM colors : `#059669`, `#10b981`, `#047857` (jamais hex custom)
+- AquaCare colors : `#059669`, `#10b981`, `#047857` (jamais hex custom)
 - Spacing : multiples de 4px (4, 8, 12, 16, 20, 24, 32)
 - Border radius : 12px (cards/buttons), 8px (inputs)
 - Touch targets : minimum 44x44px
@@ -625,7 +625,7 @@ if (product.id) {
 - [ ] Keys i18n cohérentes (camelCase, namespace par feature)
 
 #### Design System
-- [ ] MAVECAM colors uniquement (#059669, #10b981, #047857)
+- [ ] AquaCare colors uniquement (#059669, #10b981, #047857)
 - [ ] Pas de hex custom ou colors inventées
 - [ ] Spacing multiples de 4px
 - [ ] Border radius 12px (cards) ou 8px (inputs)
@@ -783,7 +783,7 @@ gh pr list  # Lister PRs ouvertes
 #   ✓ Security : Pas d'injection, XSS, hardcoded secrets
 #   ✓ Offline patterns : UUID PK, client_uuid
 #   ✓ Tests : Coverage >50% backend
-#   ✓ Design system : MAVECAM colors only
+#   ✓ Design system : AquaCare colors only
 # - Générer rapport avec issues par sévérité (Critical/High/Medium/Low)
 ```
 
@@ -1035,7 +1035,7 @@ docker-compose exec api python manage.py migrate
 docker-compose exec api python manage.py migrate {app_name} {migration_number}
 
 # CRITICAL : Charger fixtures après migrate
-docker-compose exec api python manage.py load_nutritional_data  # 8 guides MAVECAM
+docker-compose exec api python manage.py load_nutritional_data  # 8 guides AquaCare
 docker-compose exec api python manage.py load_products           # 22 produits catalogue
 docker-compose exec api python manage.py setup_rbac              # Rôles admin + permissions
 
@@ -1518,7 +1518,7 @@ npm test -- src/features/aquaculture/utils/calculations.test.ts
    <Text>{t('legalStatus')}</Text>
    ```
 
-7. ✅ **Toujours** MAVECAM colors uniquement
+7. ✅ **Toujours** AquaCare colors uniquement
    ```typescript
    // ❌ WRONG
    backgroundColor: '#28a745'  // Custom green
@@ -1981,7 +1981,7 @@ bundlesize
 |---------|---------|
 | `CLAUDE.md` | Guide complet pour Claude Code (architecture, commands, patterns) |
 | `ARCHITECTURE.md` | Patterns backend/frontend, services layer, domain calculators |
-| `DESIGN_SYSTEM.md` | MAVECAM colors, spacing, typography, components |
+| `DESIGN_SYSTEM.md` | AquaCare colors, spacing, typography, components |
 | `DONT_DO.md` | Antipatterns à éviter (git -uall, hardcoded text, etc.) |
 | `PROJECT_CONTEXT.md` | Changelog, historique features, roadmap |
 | `.claude/ADDICTION_STRATEGY.md` | Vision produit, retention hooks, gamification |

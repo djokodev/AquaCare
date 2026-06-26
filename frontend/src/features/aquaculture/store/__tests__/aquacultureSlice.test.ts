@@ -5,9 +5,6 @@ import aquacultureReducer, {
   setCurrentCycle,
   clearCurrentCycle,
   setCurrentCycleById,
-  addToPendingSync,
-  clearPendingSync,
-  updateLastSyncTime,
   resetAquacultureState,
   updateProductionCycle,
   deleteProductionCycle,
@@ -18,6 +15,7 @@ import aquacultureReducer, {
   synchronizeData,
 } from '../aquacultureSlice';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
+import { offlineService } from '@/services/offlineService';
 import { AquacultureState, ProductionCycle, SyncResponse } from '@/types/aquaculture';
 import { logoutUser } from '@/features/auth/store/authSlice';
 
@@ -39,12 +37,18 @@ jest.mock('@/features/aquaculture/services/aquacultureService', () => ({
     getSanitaryLogs: jest.fn(),
     createSanitaryLog: jest.fn(),
     resolveSanitaryIssue: jest.fn(),
-    synchronize: jest.fn(),
+  },
+}));
+
+jest.mock('@/services/offlineService', () => ({
+  offlineService: {
+    syncAllOfflineData: jest.fn(),
   },
 }));
 
 describe('features/aquaculture/store/aquacultureSlice', () => {
   const mockService = aquacultureService as jest.Mocked<typeof aquacultureService>;
+  const mockOfflineService = offlineService as jest.Mocked<typeof offlineService>;
 
   const activeCycle: ProductionCycle = {
     id: 'cycle-1',
@@ -89,6 +93,15 @@ describe('features/aquaculture/store/aquacultureSlice', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockOfflineService.syncAllOfflineData.mockResolvedValue({
+      success: 0,
+      failed: 0,
+      details: {
+        cycleLogs: { success: 0, failed: 0 },
+        newCycles: { success: 0, failed: 0 },
+        sanitaryLogs: { success: 0, failed: 0 },
+      },
+    });
   });
 
   it('clearError efface l\'erreur', () => {
@@ -121,29 +134,10 @@ describe('features/aquaculture/store/aquacultureSlice', () => {
     expect(cleared.currentCycle).toBeUndefined();
   });
 
-  it('updateLastSyncTime et resetAquacultureState restaurent un etat propre', () => {
-    let state = aquacultureReducer(undefined, updateLastSyncTime('2026-02-19T10:00:00Z'));
-    expect(state.lastSyncTime).toBe('2026-02-19T10:00:00Z');
-
-    state = aquacultureReducer(state, resetAquacultureState());
-    expect(state.lastSyncTime).toBeUndefined();
+  it('resetAquacultureState restaure un etat propre', () => {
+    const state = aquacultureReducer(undefined, resetAquacultureState());
     expect(state.cycles).toHaveLength(0);
     expect(state.error).toBeNull();
-  });
-
-  it('addToPendingSync ajoute les donnees selon le type', () => {
-    let state = aquacultureReducer(undefined, addToPendingSync({ type: 'cycleLogs', data: { id: 'log-1' } }));
-    state = aquacultureReducer(state, addToPendingSync({ type: 'sanitaryLogs', data: { id: 'san-1' } }));
-    state = aquacultureReducer(state, addToPendingSync({ type: 'newCycles', data: { id: 'new-cycle-1' } }));
-
-    expect(state.pendingSync.cycleLogs).toHaveLength(1);
-    expect(state.pendingSync.sanitaryLogs).toHaveLength(1);
-    expect(state.pendingSync.newCycles).toHaveLength(1);
-
-    const cleared = aquacultureReducer(state, clearPendingSync());
-    expect(cleared.pendingSync.cycleLogs).toHaveLength(0);
-    expect(cleared.pendingSync.sanitaryLogs).toHaveLength(0);
-    expect(cleared.pendingSync.newCycles).toHaveLength(0);
   });
 
   it('harvestCycle.fulfilled retire le cycle des actifs et met a jour le cycle courant', () => {
@@ -157,7 +151,10 @@ describe('features/aquaculture/store/aquacultureSlice', () => {
     const harvestedCycle: ProductionCycle = { ...activeCycle, status: 'harvested', end_date: '2026-05-01' };
 
     const action = harvestCycle.fulfilled(
-      harvestedCycle,
+      {
+        message: 'Cycle recolte avec succes',
+        cycle: harvestedCycle,
+      },
       'request-id',
       {
         id: 'cycle-1',
@@ -290,14 +287,9 @@ describe('features/aquaculture/store/aquacultureSlice', () => {
     expect(nextState.feedingPlans.some((plan) => plan.id === 'plan-2')).toBe(true);
   });
 
-  it('synchronizeData.fulfilled merge les updates serveur et nettoie pendingSync en succes', () => {
+  it('synchronizeData.fulfilled merge les updates serveur en succes', () => {
     const initialState: AquacultureState = {
       ...(aquacultureReducer(undefined, { type: '@@INIT' }) as AquacultureState),
-      pendingSync: {
-        cycleLogs: [{ id: 'local-log' }],
-        sanitaryLogs: [{ id: 'local-san' }],
-        newCycles: [{ id: 'local-cycle' }],
-      },
       cycles: [{ ...activeCycle, id: 'existing-cycle' }],
       cycleLogs: [{ id: 'existing-log', cycle: 'existing-cycle', log_date: '2026-01-01', created_offline: false, created_at: '2026-01-01T00:00:00Z' }],
       feedingPlans: [{
@@ -358,11 +350,6 @@ describe('features/aquaculture/store/aquacultureSlice', () => {
     const action = synchronizeData.fulfilled(response, 'request-id', undefined);
     const nextState = aquacultureReducer(initialState, action);
 
-    expect(nextState.pendingSync.cycleLogs).toHaveLength(0);
-    expect(nextState.pendingSync.sanitaryLogs).toHaveLength(0);
-    expect(nextState.pendingSync.newCycles).toHaveLength(0);
-    expect(nextState.lastSyncTime).toBe('2026-02-19T12:00:00Z');
-
     expect(nextState.cycles.some((cycle) => cycle.id === 'server-cycle')).toBe(true);
     expect(nextState.cycleLogs.some((log) => log.id === 'server-log')).toBe(true);
     expect(nextState.feedingPlans.some((plan) => plan.id === 'server-plan')).toBe(true);
@@ -408,7 +395,9 @@ describe('features/aquaculture/store/aquacultureSlice', () => {
 
     await store.dispatch(fetchDashboardData(undefined));
 
-    expect(mockService.getDashboardData).toHaveBeenCalledWith(activeCycle.id);
+    expect(mockService.getDashboardData).toHaveBeenCalledWith(activeCycle.id, {
+      lightweight: false,
+    });
   });
 
   it('fetchDashboardData forceAllCycles ignore le cycle de session', async () => {
@@ -419,7 +408,22 @@ describe('features/aquaculture/store/aquacultureSlice', () => {
 
     await store.dispatch(fetchDashboardData({ forceAllCycles: true }));
 
-    expect(mockService.getDashboardData).toHaveBeenCalledWith(undefined);
+    expect(mockService.getDashboardData).toHaveBeenCalledWith(undefined, {
+      lightweight: false,
+    });
+  });
+
+  it('fetchDashboardData propage le mode lightweight au service', async () => {
+    const store = createStore();
+    mockService.getDashboardData.mockResolvedValueOnce({
+      active_cycles: [],
+    } as any);
+
+    await store.dispatch(fetchDashboardData({ lightweight: true }));
+
+    expect(mockService.getDashboardData).toHaveBeenCalledWith(undefined, {
+      lightweight: true,
+    });
   });
 
   it('fetchDashboardData utilise la chaine brute de l\'API si disponible', async () => {
@@ -444,45 +448,30 @@ describe('features/aquaculture/store/aquacultureSlice', () => {
     expect(fallback.payload).toBe('Erreur lors du chargement du dashboard');
   });
 
-  it('synchronizeData envoie le payload attendu et met a jour le store', async () => {
-    const store = createStore({
-      pendingSync: {
-        cycleLogs: [{ id: 'pending-log' }],
-        sanitaryLogs: [{ id: 'pending-san' }],
-        newCycles: [{ id: 'pending-cycle' }],
+  it('synchronizeData utilise offlineService et met a jour le store', async () => {
+    const store = createStore();
+    mockOfflineService.syncAllOfflineData.mockResolvedValueOnce({
+      success: 3,
+      failed: 0,
+      details: {
+        cycleLogs: { success: 1, failed: 0 },
+        newCycles: { success: 1, failed: 0 },
+        sanitaryLogs: { success: 1, failed: 0 },
       },
-      lastSyncTime: '2026-02-18T00:00:00Z',
     });
-
-    const syncResponse: SyncResponse = {
-      status: 'success',
-      timestamp: '2026-02-19T18:00:00Z',
-      processed: { cycles: 1, cycle_logs: 1, sanitary_logs: 1 },
-      errors: [],
-      server_updates: { cycles: [], cycle_logs: [], feeding_plans: [] },
-    };
-
-    mockService.synchronize.mockResolvedValueOnce(syncResponse);
 
     const action = await store.dispatch(synchronizeData());
 
     expect(action.type).toBe('aquaculture/synchronizeData/fulfilled');
-    expect(mockService.synchronize).toHaveBeenCalledWith({
-      cycle_logs: [{ id: 'pending-log' }],
-      sanitary_logs: [{ id: 'pending-san' }],
-      new_cycles: [{ id: 'pending-cycle' }],
-      last_sync: '2026-02-18T00:00:00Z',
-      device_id: 'mobile-app',
-    });
+    expect(mockOfflineService.syncAllOfflineData).toHaveBeenCalled();
 
     const state = store.getState().aquaculture;
-    expect(state.lastSyncTime).toBe('2026-02-19T18:00:00Z');
-    expect(state.pendingSync.cycleLogs).toHaveLength(0);
+    expect(state.loading.sync).toBe(false);
   });
 
   it('synchronizeData.rejected remonte l\'erreur et coupe loading.sync', async () => {
     const store = createStore();
-    mockService.synchronize.mockRejectedValueOnce({ response: { data: { message: 'Sync impossible' } } });
+    mockOfflineService.syncAllOfflineData.mockRejectedValueOnce({ response: { data: { message: 'Sync impossible' } } });
 
     await store.dispatch(synchronizeData());
 

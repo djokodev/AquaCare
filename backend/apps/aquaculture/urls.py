@@ -1,5 +1,5 @@
 """
-Configuration des URLs pour le module aquaculture de MAVECAM AquaCare.
+Configuration des URLs pour le module aquaculture de AquaCare.
 Définit les endpoints d'API REST pour la gestion de la pisciculture.
 """
 from django.urls import include, path
@@ -11,6 +11,8 @@ from .views import (
     FeedingPlanViewSet,
     NutritionalGuideViewSet,
     ProductionCycleViewSet,
+    ProductionPlanSetupView,
+    ProductionPlanSimulationView,
     ProductionReportViewSet,
     SanitaryLogViewSet,
     SyncView,
@@ -34,6 +36,18 @@ urlpatterns = [
     
     # Synchronization endpoint for offline-first mobile app
     path('sync/', SyncView.as_view(), name='sync'),
+
+    # Production plan setup and annual simulation
+    path(
+        'production-plan/setup/',
+        ProductionPlanSetupView.as_view(),
+        name='production_plan_setup',
+    ),
+    path(
+        'production-plan/simulate/',
+        ProductionPlanSimulationView.as_view(),
+        name='production_plan_simulation',
+    ),
     
     # Include all ViewSet routes
     path('', include(router.urls)),

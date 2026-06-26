@@ -81,6 +81,6 @@ describe('OrdersHistoryScreen', () => {
     fireEvent.press(getByText('ORD-001'));
 
     expect(getByText('pickupLocationPrefix Ndokoti')).toBeTruthy();
-    expect(queryByText(/MAVECAM/i)).toBeNull();
+    expect(queryByText(/AquaCare/i)).toBeNull();
   });
 });

@@ -22,11 +22,17 @@ Utilisation dans views.py :
         return Response(...)
 """
 from .analytics_service import AnalyticsService
+from .annual_simulation_service import (
+    AQUACARE_FEE_PER_KG,
+    AnnualSimulationResult,
+    AnnualSimulationService,
+)
 from .base import BaseService
 from .cycle_application_service import HarvestCycleCommand, PartialHarvestCommand, ProductionCycleApplicationService
 from .cycle_service import ProductionCycleService
 from .dashboard_application_service import DashboardApplicationService, InvalidDashboardCycleScopeError
 from .dashboard_service import DashboardService
+from .farm_production_plan_service import FarmProductionPlanService
 from .feeding_application_service import (
     FeedingCycleNotFoundError,
     FeedingPlanApplicationService,
@@ -48,7 +54,11 @@ from .report_application_service import (
     WhatsAppShareCommand,
 )
 from .report_service import ReportService
-from .sanitary_application_service import ResolveSanitaryIssueCommand, SanitaryApplicationService
+from .sanitary_application_service import (
+    CreateSanitaryLogCommand,
+    ResolveSanitaryIssueCommand,
+    SanitaryApplicationService,
+)
 from .sanitary_service import SanitaryService
 from .sync_application_service import SyncApplicationService, SyncExecutionResult
 from .sync_service import SyncService
@@ -64,10 +74,14 @@ __all__ = [
     'CycleLogMutationResult',
     'UnauthorizedCycleAccessError',
     'FeedingPlanService',
+    'FarmProductionPlanService',
     'FeedingPlanApplicationService',
     'FeedingCycleNotFoundError',
     'GenerateFeedingPlansCommand',
     'AnalyticsService',
+    'AnnualSimulationService',
+    'AnnualSimulationResult',
+    'AQUACARE_FEE_PER_KG',
     'DashboardApplicationService',
     'InvalidDashboardCycleScopeError',
     'GenerateReportCommand',
@@ -78,6 +92,7 @@ __all__ = [
     'ReportService',
     'SanitaryService',
     'SanitaryApplicationService',
+    'CreateSanitaryLogCommand',
     'ResolveSanitaryIssueCommand',
     'SyncService',
     'SyncApplicationService',

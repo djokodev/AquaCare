@@ -4,22 +4,7 @@ import { createStackNavigator } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 
-// Couleurs MAVECAM selon spÃ©cifications
-const MAVECAM_COLORS = {
-  GREEN_PRIMARY: '#059669',
-  GREEN_LIGHT: '#10b981',
-  GREEN_DARK: '#047857',
-  WHITE: '#ffffff',
-  CREAM: '#f8fafc',
-  BLUE: '#2563eb',
-  SUCCESS: '#059669',
-  WARNING: '#f59e0b',
-  ERROR: '#dc2626',
-  INFO: '#0ea5e9',
-  GRAY_LIGHT: '#64748b',
-  GRAY_DARK: '#1e293b',
-};
-
+import { AQUACARE_COLORS } from '@/constants/colors';
 import { useNotificationsPolling } from '@/features/notifications/hooks/useNotificationsPolling';
 import DashboardScreen from '@/features/main/screens/DashboardScreen';
 import FarmMapScreen from '@/features/profile/screens/FarmMapScreen';
@@ -30,6 +15,7 @@ import SettingsScreen from '@/features/profile/screens/SettingsScreen';
 // Aquaculture Screens
 import AnnualSimulationScreen from '@/features/aquaculture/screens/AnnualSimulationScreen';
 import CreateFarmScreen from '@/features/aquaculture/screens/CreateFarmScreen';
+import type { FarmSetupFormState } from '@/features/aquaculture/utils/farmSetupForm';
 import PostHarvestConsolidationScreen from '@/features/aquaculture/screens/PostHarvestConsolidationScreen';
 import CycleHistoryScreen from '@/features/aquaculture/screens/CycleHistoryScreen';
 import CycleSessionEntryScreen from '@/features/aquaculture/screens/CycleSessionEntryScreen';
@@ -100,7 +86,7 @@ export type RootStackParamList = {
   FarmMap: undefined;
   // Farm creation flow
   CreateFarm: undefined;
-  AnnualSimulation: { formData: Record<string, string> };
+  AnnualSimulation: { formData: FarmSetupFormState };
   // Post-harvest consolidation
   PostHarvestConsolidation: { harvestedCycleId: string };
   // Feed phase ordering
@@ -123,8 +109,8 @@ function ProfileNavigator() {
   return (
     <ProfileStack.Navigator
       screenOptions={{
-        headerStyle: { backgroundColor: MAVECAM_COLORS.GREEN_PRIMARY },
-        headerTintColor: MAVECAM_COLORS.WHITE,
+        headerStyle: { backgroundColor: AQUACARE_COLORS.GREEN_PRIMARY },
+        headerTintColor: AQUACARE_COLORS.WHITE,
         headerTitleStyle: { fontWeight: 'bold' },
       }}
     >
@@ -168,8 +154,8 @@ function MainTabNavigator() {
 
           return <Ionicons name={iconName} size={size} color={color} />;
         },
-        tabBarActiveTintColor: MAVECAM_COLORS.GREEN_PRIMARY,
-        tabBarInactiveTintColor: MAVECAM_COLORS.GRAY_LIGHT,
+        tabBarActiveTintColor: AQUACARE_COLORS.GREEN_PRIMARY,
+        tabBarInactiveTintColor: AQUACARE_COLORS.GRAY_LIGHT,
         headerShown: false,
       })}
     >
@@ -186,8 +172,8 @@ function MainTabNavigator() {
         options={{
           tabBarLabel: t('chatTitle'),
           headerShown: true,
-          headerStyle: { backgroundColor: MAVECAM_COLORS.GREEN_PRIMARY },
-          headerTintColor: MAVECAM_COLORS.WHITE,
+          headerStyle: { backgroundColor: AQUACARE_COLORS.GREEN_PRIMARY },
+          headerTintColor: AQUACARE_COLORS.WHITE,
           headerTitleStyle: { fontWeight: 'bold' },
           headerTitle: t('chatTitle'),
         }}
@@ -260,10 +246,10 @@ export default function MainNavigator() {
         component={StatisticsScreen}
         options={{
           headerShown: false, // Header personnalisÃ© dans le composant
-          headerStyle: { backgroundColor: MAVECAM_COLORS.GREEN_PRIMARY },
-          headerTintColor: MAVECAM_COLORS.WHITE,
+          headerStyle: { backgroundColor: AQUACARE_COLORS.GREEN_PRIMARY },
+          headerTintColor: AQUACARE_COLORS.WHITE,
           headerTitleStyle: { fontWeight: 'bold' },
-          headerTitle: 'Statistiques'
+          headerTitle: t('statisticsNavTitle')
         }}
       />
       <RootStack.Screen
@@ -309,8 +295,8 @@ export default function MainNavigator() {
         component={ChatScreen}
         options={{
           headerShown: true,
-          headerStyle: { backgroundColor: MAVECAM_COLORS.GREEN_PRIMARY },
-          headerTintColor: MAVECAM_COLORS.WHITE,
+          headerStyle: { backgroundColor: AQUACARE_COLORS.GREEN_PRIMARY },
+          headerTintColor: AQUACARE_COLORS.WHITE,
           headerTitleStyle: { fontWeight: 'bold' },
           title: t('chatTitle'),
         }}
@@ -321,11 +307,11 @@ export default function MainNavigator() {
         component={FarmMapScreen}
         options={{
           headerShown: true,
-          headerStyle: { backgroundColor: MAVECAM_COLORS.GREEN_PRIMARY },
-          headerTintColor: MAVECAM_COLORS.WHITE,
+          headerStyle: { backgroundColor: AQUACARE_COLORS.GREEN_PRIMARY },
+          headerTintColor: AQUACARE_COLORS.WHITE,
           headerTitleStyle: { fontWeight: 'bold' },
-          title: 'Carte de ma ferme',
-          headerBackTitle: 'Profil',
+          title: t('farmMapNavTitle'),
+          headerBackTitle: t('profile'),
         }}
       />
       {/* Farm creation flow */}
@@ -334,8 +320,8 @@ export default function MainNavigator() {
         component={CreateFarmScreen}
         options={{
           headerShown: true,
-          headerStyle: { backgroundColor: MAVECAM_COLORS.GREEN_PRIMARY },
-          headerTintColor: MAVECAM_COLORS.WHITE,
+          headerStyle: { backgroundColor: AQUACARE_COLORS.GREEN_PRIMARY },
+          headerTintColor: AQUACARE_COLORS.WHITE,
           headerTitleStyle: { fontWeight: 'bold' },
           title: t('createFarmTitle'),
           headerLeft: () => null,
@@ -346,8 +332,8 @@ export default function MainNavigator() {
         component={AnnualSimulationScreen}
         options={{
           headerShown: true,
-          headerStyle: { backgroundColor: MAVECAM_COLORS.GREEN_PRIMARY },
-          headerTintColor: MAVECAM_COLORS.WHITE,
+          headerStyle: { backgroundColor: AQUACARE_COLORS.GREEN_PRIMARY },
+          headerTintColor: AQUACARE_COLORS.WHITE,
           headerTitleStyle: { fontWeight: 'bold' },
           title: t('simulationNavTitle'),
         }}
@@ -357,8 +343,8 @@ export default function MainNavigator() {
         component={PostHarvestConsolidationScreen}
         options={{
           headerShown: true,
-          headerStyle: { backgroundColor: MAVECAM_COLORS.GREEN_PRIMARY },
-          headerTintColor: MAVECAM_COLORS.WHITE,
+          headerStyle: { backgroundColor: AQUACARE_COLORS.GREEN_PRIMARY },
+          headerTintColor: AQUACARE_COLORS.WHITE,
           headerTitleStyle: { fontWeight: 'bold' },
           title: t('consolidationTitle'),
           headerLeft: () => null,

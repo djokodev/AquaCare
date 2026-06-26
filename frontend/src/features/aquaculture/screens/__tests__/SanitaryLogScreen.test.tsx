@@ -20,6 +20,8 @@ jest.mock('@/features/aquaculture/services/aquacultureService', () => ({
 
 jest.mock('@/services/offlineService', () => ({
   offlineService: {
+    hasAnyPendingSync: jest.fn(),
+    syncAllOfflineData: jest.fn(),
     saveSanitaryLogOffline: jest.fn(),
   },
 }));
@@ -68,6 +70,16 @@ describe('features/aquaculture/screens/SanitaryLogScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     (useDispatch as unknown as jest.Mock).mockReturnValue(mockDispatch);
+    mockOffline.hasAnyPendingSync.mockResolvedValue(false);
+    mockOffline.syncAllOfflineData.mockResolvedValue({
+      success: 0,
+      failed: 0,
+      details: {
+        cycleLogs: { success: 0, failed: 0 },
+        newCycles: { success: 0, failed: 0 },
+        sanitaryLogs: { success: 0, failed: 0 },
+      },
+    });
   });
 
   const setSelectorState = (cycles: ProductionCycle[], currentCycle?: ProductionCycle) => {
@@ -215,7 +227,7 @@ describe('features/aquaculture/screens/SanitaryLogScreen', () => {
     await waitFor(() => {
       expect(alertSpy).toHaveBeenCalledWith(
         'error',
-        expect.stringContaining('symptoms')
+        expect.stringContaining('Champ requis')
       );
     });
 

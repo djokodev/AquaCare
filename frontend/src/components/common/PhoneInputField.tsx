@@ -40,7 +40,7 @@ export default function PhoneInputField({
       >
         <View className="h-10 justify-center mr-2">
           <Text
-            className="text-base font-semibold text-mavecam-primary"
+            className="text-base font-semibold text-aquacare-primary"
             style={{ lineHeight: 20, marginVertical: 0, paddingVertical: 0 }}
           >
             +237
@@ -68,7 +68,7 @@ export default function PhoneInputField({
         />
       </View>
       {hint && !error ? <Text className="text-xs text-gray-light mt-1">{hint}</Text> : null}
-      {error ? <Text className="text-sm text-error mt-1">{error}</Text> : null}
+      {error ? <Text className="text-sm text-error mt-1">{t(error)}</Text> : null}
     </View>
   );
 }

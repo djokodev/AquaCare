@@ -271,7 +271,7 @@
   manageFarm: 'Farm Management',
   viewStats: 'View Statistics',
   noFarmProfile: 'No farm profile',
-  farmCertified: 'MAVECAM Certified Farm',
+  farmCertified: 'AquaCare Certified Farm',
   certificationPending: 'Certification in progress',
   certificationSuspended: 'Certification suspended',
   certificationRejected: 'Certification rejected',
@@ -285,7 +285,7 @@
   companyInfo: 'Company Information',
   createdOn: 'Created on',
   updatedOn: 'Updated on',
-  certificationMavecam: 'MAVECAM Certification',
+  certificationAquacare: 'AquaCare Certification',
   performanceMetrics: 'Performance Metrics',
   accountVerified: 'Account verified',
   yes: 'Yes',
@@ -295,9 +295,9 @@
   farmManagement: 'Farm Management',
   
   // Certification descriptions
-  certifiedDescription: 'Congratulations! Your farm is MAVECAM certified. You benefit from all program advantages.',
-  pendingDescription: 'Your certification request is being reviewed by the MAVECAM team. We will contact you soon.',
-  suspendedDescription: 'Your certification has been temporarily suspended. Contact the MAVECAM team for more information.',
+  certifiedDescription: 'Congratulations! Your farm is AquaCare certified. You benefit from all program advantages.',
+  pendingDescription: 'Your certification request is being reviewed by the AquaCare team. We will contact you soon.',
+  suspendedDescription: 'Your certification has been temporarily suspended. Contact the AquaCare team for more information.',
   rejectedDescription: 'Your certification request was not accepted. You can contact us to learn about the required criteria.',
   
   // Validation Messages
@@ -327,6 +327,11 @@
   deleteAccountSuccess: 'Account deleted',
   deleteAccountSuccessDesc: 'Your account has been deleted.',
   deleteAccountError: 'Error deleting account',
+  onboardingResetAction: 'Replay onboarding',
+  onboardingResetHint: 'Resets onboarding and signs you out to test it',
+  onboardingResetConfirmTitle: 'Replay onboarding?',
+  onboardingResetConfirmMessage: 'This will reset onboarding and sign you out immediately.',
+  onboardingResetError: 'Unable to reset onboarding',
   about: 'About',
   aboutTagline: 'From fingerlings to market, AquaCare guides you every step.',
   aboutPoint1Title: 'Simplified daily management',
@@ -374,7 +379,9 @@
 
   // GPS / Geolocation
   farmLocation: 'GPS Location',
+  farmMapNavTitle: 'My farm map',
   farmNoLocation: 'No location recorded',
+  farmNoLocationHint: 'Add your farm location from your profile.',
   locateFarm: 'Locate my farm',
   locatingFarm: 'Locating...',
   viewOnMap: 'View on map',
@@ -385,6 +392,7 @@
   locationCaptureError: 'Unable to retrieve location. Please try again.',
   openSettings: 'Open Settings',
   updateLocation: 'Update farm location',
+  farmBackToProfile: 'Back to profile',
   back: 'Back',
 
   // Intervention Zones
@@ -452,6 +460,12 @@
   sampleCountTooLow: 'Insufficient sampled fish count (min {min}).',
   samplingPairRequired: 'Please fill sample count and total weight together.',
   feedingTimesInvalidIgnored: 'Some feeding times are invalid and were ignored.',
+  aquacultureErrorFixField: 'Fix the highlighted fields, then try again.',
+  aquacultureErrorCheckConnection: 'Check your internet connection, then try again.',
+  aquacultureErrorReconnect: 'Sign in again, then retry the action.',
+  aquacultureErrorSyncConflict: 'A synchronization conflict was detected. Run synchronization again.',
+  aquacultureErrorRetry: 'Please retry in a moment.',
+  aquacultureErrorSupport: 'You can contact support if the issue persists.',
   syncInProgress: 'Synchronizing...',
   syncSuccess: 'Synchronization successful',
   syncFailed: 'Synchronization failed',
@@ -463,6 +477,7 @@
   allCycles: 'All cycles',
   noLogsYet: 'No logs yet',
   startLoggingData: 'Start recording your daily data',
+  dailyLogLoadError: 'Unable to load daily log history, please try again.',
   viewDailyLogHistory: 'View daily logs history',
 
   // SanitaryLog Screen
@@ -519,6 +534,12 @@
   harvest: 'Harvest',
   harvestCycle: 'Harvest Cycle',
   harvestData: 'Harvest Data',
+  dateFormatPlaceholder: 'YYYY-MM-DD',
+  maxValuePlaceholder: 'Max {{max}}',
+  exampleValuePlaceholder: 'E.g.: {{value}}',
+  zeroValuePlaceholder: '0',
+  exampleAverageWeightG: 'E.g.: 350',
+  exampleSalePriceFcfa: 'E.g.: 1800',
   harvestDate: 'Harvest Date',
   harvestDateRequired: 'Harvest date is required',
   finalCount: 'Final Count',
@@ -608,7 +629,7 @@
   // Nutritional Guides
   nutritionalGuides: 'View nutritional guides',
   aboutGuides: 'About Guides',
-  nutritionalGuidesDescription: 'Consult optimal feeding recommendations according to species and growth stage of your fish. These guides are based on MAVECAM best practices.',
+  nutritionalGuidesDescription: 'Consult optimal feeding recommendations according to species and growth stage of your fish. These guides are based on AquaCare best practices.',
   tilapia: 'Tilapia',
   clarias: 'Clarias',
   searchInGuides: 'Search in guides...',
@@ -653,6 +674,7 @@
   maxDensity: 'Maximum density',
   yourDensity: 'Your density',
   fishPerM2: 'fish/m²',
+  fishPerM3: 'fish/m³',
   densitySuggestion: 'Reduce initial count or increase total production surface.',
   survival: 'Survival',
   finalBiomass: 'Final Biomass',
@@ -774,6 +796,7 @@
 
   // Statistics
   statistics: 'View my statistics',
+  statisticsNavTitle: 'Statistics',
   statisticsTitle: 'Performance Statistics',
   statisticsSubtitle: 'Detailed analysis of your cycles',
   cycleAnalysis: 'Cycle to analyze',
@@ -1094,6 +1117,8 @@
   AUTH_SERVER_ERROR: 'Server error. Please try again later.',
   AUTH_NETWORK_ERROR: 'Cannot reach the server. Check your internet connection.',
   AUTH_UNKNOWN_ERROR: 'An unexpected error occurred.',
+  UNKNOWN_ERROR: 'An unexpected error occurred.',
+  accountsErrorGeneric: 'Something went wrong. Check your connection and try again. If the issue continues, contact support.',
   sessionExpiredTitle: 'Session expired',
   sessionExpiredMessage: 'Your session has expired. Please log in again.',
 
@@ -1102,7 +1127,7 @@
   buyerNetworkROINote: 'This revenue is achievable through our partner buyer network.',
   buyerNetworkCTA: 'Contact Buyer Network',
   buyerNetworkSellingPriceHint: 'Reference price — AquaCare partner buyer network',
-  buyerNetworkHarvestDesc: 'MaveCameroun and our partner network can purchase your production. Contact us via support.',
+  buyerNetworkHarvestDesc: 'AquaCare and our partner network can purchase your production. Contact us via support.',
 
   // Settings - Language change
   languageUpdatedTitle: 'Language Updated',
@@ -1143,6 +1168,7 @@
   createFarmAnnualTargetLabel: 'Production target (kg / year)',
   createFarmAnnualTargetPlaceholder: 'E.g. 1000',
   createFarmStartDateLabel: 'Planned start date',
+  createFarmStartDatePlaceholder: 'YYYY-MM-DD',
   createFarmFingerlingsLabel: 'Cost per fingerling (FCFA)',
   createFarmFingerlingsPlaceholder: 'E.g. 50',
   createFarmSellingPriceLabel: 'Estimated selling price (FCFA / kg)',
@@ -1166,6 +1192,12 @@
   createFarmSurvivalRatePlaceholder: 'E.g. 85',
   createFarmSimulateBtn: 'See my simulation →',
   createFarmRequiredFieldsError: 'Please fill in all required fields.',
+  createFarmPositiveNumberError: 'Enter a number greater than 0.',
+  createFarmNonNegativeNumberError: 'Enter a number greater than or equal to 0.',
+  createFarmPositiveIntegerError: 'Enter a whole number greater than 0.',
+  createFarmInvalidDateError: 'Enter a valid date in YYYY-MM-DD format.',
+  createFarmHarvestWeightRangeError: 'Target weight must be between 50 g and 5000 g.',
+  createFarmSurvivalRateRangeError: 'Survival rate must be between 1% and 100%.',
 
   // ── Annual simulation ─────────────────────────────────────────────────────
   simulationNavTitle: 'Simulation',
@@ -1196,6 +1228,10 @@
   simulationModifyBtn: '← Edit my data',
   simulationLoading: 'Calculating...',
   simulationErrorRetry: 'Simulation error. Retry',
+  simulationDefaultCycleName: '{{species}} cycle 1',
+  simulationDefaultPondIdentifier: 'Main pond',
+  speciesTilapia: 'Tilapia',
+  speciesClarias: 'Catfish',
 
   // ── "Buy my feed" section ─────────────────────────────────────────────────
   myFeedTitle: 'Buy my feed',

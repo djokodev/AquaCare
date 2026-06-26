@@ -12,6 +12,7 @@
     "target": "esnext",
     "ignoreDeprecations": "6.0",
     "baseUrl": ".",
+    "types": ["jest", "node"],
     "paths": {
       "@/*": [
         "./src/*"

@@ -5,8 +5,12 @@ Ces tests vérifient la validation et la sérialisation des données
 échangées entre l'API et l'app mobile React Native.
 """
 import pytest
+from accounts.admin_serializers import FarmMapSerializer
 from accounts.serializers import (
     AccountDeletionSerializer,
+    AnnualSimulationInputSerializer,
+    FarmProfileSerializer,
+    FarmSetupSerializer,
     LoginSerializer,
     LogoutSerializer,
     UserProfileSerializer,
@@ -109,6 +113,26 @@ class TestUserRegistrationSerializer:
         serializer = UserRegistrationSerializer(data=data)
         assert not serializer.is_valid()
         assert 'phone_number' in serializer.errors
+
+    def test_blank_names_with_spaces_are_rejected(self):
+        """
+        Test que les champs obligatoires remplis d'espaces sont rejetés.
+        """
+        data = {
+            'phone_number': '+237692345679',
+            'first_name': '   ',
+            'last_name': '   ',
+            'account_type': 'individual',
+            'age_group': '26_35',
+            'password': 'motdepasse123',
+            'password_confirm': 'motdepasse123',
+        }
+
+        serializer = UserRegistrationSerializer(data=data)
+
+        assert not serializer.is_valid()
+        assert 'first_name' in serializer.errors
+        assert 'last_name' in serializer.errors
 
 
 @pytest.mark.django_db
@@ -295,13 +319,13 @@ class TestLoginSerializer:
         serializer = LoginSerializer(data=data)
         assert not serializer.is_valid()
         assert 'non_field_errors' in serializer.errors
-        assert 'incorrect' in str(serializer.errors)
+        assert 'Identifiants invalides' in str(serializer.errors)
     
     def test_inactive_user_login(self, user_factory):
         """
         Test qu'un utilisateur désactivé ne peut pas se connecter.
         
-        Métier : Comptes suspendus par MAVECAM ne peuvent accéder.
+        Métier : Comptes suspendus par AquaCare ne peuvent accéder.
         """
         user = user_factory(
             first_name='Jean',
@@ -322,7 +346,7 @@ class TestLoginSerializer:
         assert not serializer.is_valid()
         # L'utilisateur inactif est rejeté au niveau de l'authentification
         assert 'non_field_errors' in serializer.errors
-        assert ('incorrect' in str(serializer.errors) or 'désactivé' in str(serializer.errors))
+        assert 'Identifiants invalides' in str(serializer.errors)
     
     def test_missing_credentials(self):
         """
@@ -364,3 +388,113 @@ class TestActionSerializers:
         assert not serializer.is_valid()
         assert 'non_field_errors' in serializer.errors
         assert 'mot de passe est requis' in str(serializer.errors)
+
+
+@pytest.mark.django_db
+class TestFarmProfileSerializer:
+    def test_serializer_requires_complete_gps_pair(self, user_factory):
+        farm = user_factory().farm_profile
+        serializer = FarmProfileSerializer(
+            farm,
+            data={"latitude": "3.8680"},
+            partial=True,
+        )
+
+        assert not serializer.is_valid()
+        assert "longitude" in serializer.errors
+
+    def test_serializer_rejects_non_positive_default_feed_price(self, user_factory):
+        farm = user_factory().farm_profile
+        serializer = FarmProfileSerializer(
+            farm,
+            data={"default_feed_price_per_kg": "0.00"},
+            partial=True,
+        )
+
+        assert not serializer.is_valid()
+        assert "default_feed_price_per_kg" in serializer.errors
+
+
+@pytest.mark.django_db
+class TestFarmSetupSerializer:
+    def test_etang_requires_surface(self, user_factory):
+        farm = user_factory().farm_profile
+        serializer = FarmSetupSerializer(
+            farm,
+            data={
+                "setup_species": "tilapia",
+                "setup_infrastructure_type": "etang",
+                "setup_unit_count": 2,
+                "annual_production_target_kg": "500.00",
+                "num_cycles_per_year": 2,
+            },
+            partial=True,
+        )
+
+        assert not serializer.is_valid()
+        assert "setup_unit_surface_m2" in serializer.errors
+
+    def test_bac_accepts_volume_without_surface(self, user_factory):
+        farm = user_factory().farm_profile
+        serializer = FarmSetupSerializer(
+            farm,
+            data={
+                "setup_species": "clarias",
+                "setup_infrastructure_type": "bac_en_sol",
+                "setup_unit_count": 4,
+                "setup_unit_volume_m3": "10.00",
+                "annual_production_target_kg": "800.00",
+                "num_cycles_per_year": 3,
+            },
+            partial=True,
+        )
+
+        assert serializer.is_valid(), serializer.errors
+
+
+class TestAnnualSimulationInputSerializer:
+    def test_valid_payload_normalizes_num_cycles_to_int(self):
+        serializer = AnnualSimulationInputSerializer(
+            data={
+                "species": "tilapia",
+                "annual_production_target_kg": "1000.00",
+                "num_cycles": "2",
+            }
+        )
+
+        assert serializer.is_valid(), serializer.errors
+        assert serializer.validated_data["num_cycles"] == 2
+
+    def test_invalid_species_and_num_cycles_are_rejected(self):
+        serializer = AnnualSimulationInputSerializer(
+            data={
+                "species": "carpe",
+                "annual_production_target_kg": "1000.00",
+                "num_cycles": 4,
+            }
+        )
+
+        assert not serializer.is_valid()
+        assert "species" in serializer.errors
+        assert "num_cycles" in serializer.errors
+
+
+@pytest.mark.django_db
+class TestFarmMapSerializer:
+    def test_owner_fields_are_serialized_for_admin_map(self, user_factory):
+        user = user_factory(
+            first_name="Map",
+            last_name="Owner",
+            phone_number="+237699123123",
+        )
+        farm = user.farm_profile
+        farm.latitude = "3.8680000"
+        farm.longitude = "11.5174000"
+        farm.save()
+
+        data = FarmMapSerializer(farm).data
+
+        assert data["owner_name"] == "Map Owner"
+        assert data["owner_phone"] == "+237699123123"
+        assert data["latitude"] == "3.8680000"
+        assert data["longitude"] == "11.5174000"

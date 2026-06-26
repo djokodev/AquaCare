@@ -253,7 +253,7 @@ class Command(BaseCommand):
         """
         species_filter = options.get('species')
 
-        # Nettoyer les anciennes entrées MAVECAM (source par défaut avant cette refonte)
+        # Nettoyer les anciennes entrées AquaCare (source par défaut avant cette refonte)
         old_entries = NutritionalGuide.objects.exclude(source='DIBAQ')
         if species_filter:
             old_entries = old_entries.filter(species=species_filter)

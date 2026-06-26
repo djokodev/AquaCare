@@ -10,6 +10,8 @@ from django.db.models import Sum
 from django.http import JsonResponse
 from django.urls import path
 
+from .admin_policies import RBACConstants
+
 logger = logging.getLogger(__name__)
 
 
@@ -80,11 +82,11 @@ def badge_counts_view(request):
     # Filtrage RBAC : chaque groupe ne voit que sa section
     if not request.user.is_superuser:
         user_groups = set(request.user.groups.values_list('name', flat=True))
-        if 'mavecam_support' in user_groups:
+        if user_groups.intersection(RBACConstants.group_names_for(RBACConstants.GROUP_SUPPORT)):
             cycle_logs = sanitary_logs = orders = production_reports = dispatch_logs = 0
-        if 'mavecam_commerce' in user_groups:
+        if user_groups.intersection(RBACConstants.group_names_for(RBACConstants.GROUP_COMMERCE)):
             chat = sanitary_logs = production_reports = dispatch_logs = 0
-        if 'mavecam_managers' in user_groups:
+        if user_groups.intersection(RBACConstants.group_names_for(RBACConstants.GROUP_MANAGERS)):
             chat = 0
 
     total = chat + cycle_logs + sanitary_logs + orders + production_reports + dispatch_logs

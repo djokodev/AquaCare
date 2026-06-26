@@ -4,11 +4,15 @@ import { useTranslation } from 'react-i18next';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { AuthStackParamList } from '@/navigation/AuthNavigator';
 import { useAuth } from '@/hooks/useAuth';
-import { LoginRequest } from '@/types/auth';
+import { LoginRequest } from '@/features/auth/types/auth';
 import logger from '@/utils/logger';
-import { PHONE_REGEX } from '@/utils/phoneFormatter';
 import PhoneInputField from '@/components/common/PhoneInputField';
 import AuthErrorBlock from '@/components/common/AuthErrorBlock';
+import {
+  hasValidationErrors,
+  validateLoginForm,
+  type LoginValidationErrors,
+} from '@/features/auth/domain/accountValidation';
 
 type LoginScreenNavigationProp = StackNavigationProp<AuthStackParamList, 'Login'>;
 
@@ -26,31 +30,12 @@ export default function LoginScreen({ navigation }: Props) {
     password: '',
   });
   const [isPhoneMode, setIsPhoneMode] = useState(false);
-  const [errors, setErrors] = useState<{ [key: string]: string }>({});
+  const [errors, setErrors] = useState<LoginValidationErrors>({});
 
   const validateForm = (): boolean => {
-    const newErrors: { [key: string]: string } = {};
-
-    if (!isPhoneMode) {
-      if (!formData.loginName.trim()) {
-        newErrors.loginName = t('required');
-      }
-    } else {
-      if (!formData.phoneNumber.trim()) {
-        newErrors.phoneNumber = t('required');
-      } else if (!PHONE_REGEX.test(formData.phoneNumber.trim())) {
-        newErrors.phoneNumber = t('invalidPhone');
-      }
-    }
-
-    if (!formData.password.trim()) {
-      newErrors.password = t('required');
-    } else if (formData.password.length < 8) {
-      newErrors.password = t('passwordTooShort');
-    }
-
+    const newErrors = validateLoginForm(formData, isPhoneMode);
     setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    return !hasValidationErrors(newErrors);
   };
 
   const handleLogin = async () => {
@@ -94,7 +79,7 @@ export default function LoginScreen({ navigation }: Props) {
   };
 
   const renderError = (field: keyof typeof errors) =>
-    errors[field] ? <Text className="text-sm text-error mt-1">{errors[field]}</Text> : null;
+    errors[field] ? <Text className="text-sm text-error mt-1">{t(errors[field])}</Text> : null;
 
   return (
     <KeyboardAvoidingView
@@ -103,15 +88,15 @@ export default function LoginScreen({ navigation }: Props) {
     >
       <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }} className="px-5">
         <View className="items-center mb-10">
-          <Text className="text-3xl font-bold text-mavecam-primary text-center">{t('welcomeMessage')}</Text>
+          <Text className="text-2xl font-bold text-aquacare-primary text-center">{t('welcomeMessage')}</Text>
         </View>
 
         <View className="bg-white p-5 rounded-2xl">
-          <Text className="text-2xl font-bold text-gray-dark mb-5 text-center">{t('login')}</Text>
+          <Text className="text-xl font-bold text-gray-dark mb-5 text-center">{t('login')}</Text>
 
           <View className="flex-row bg-cream rounded-lg mb-5">
             <TouchableOpacity
-              className={`flex-1 py-3 items-center rounded-lg ${!isPhoneMode ? 'bg-mavecam-primary' : ''}`}
+              className={`flex-1 py-3 items-center rounded-lg ${!isPhoneMode ? 'bg-aquacare-primary' : ''}`}
               onPress={() => !isPhoneMode || toggleMode()}
             >
               <Text className={`text-sm font-semibold ${!isPhoneMode ? 'text-white' : 'text-gray-light'}`}>
@@ -119,7 +104,7 @@ export default function LoginScreen({ navigation }: Props) {
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
-              className={`flex-1 py-3 items-center rounded-lg ${isPhoneMode ? 'bg-mavecam-primary' : ''}`}
+              className={`flex-1 py-3 items-center rounded-lg ${isPhoneMode ? 'bg-aquacare-primary' : ''}`}
               onPress={() => isPhoneMode || toggleMode()}
             >
               <Text className={`text-sm font-semibold ${isPhoneMode ? 'text-white' : 'text-gray-light'}`}>
@@ -171,7 +156,7 @@ export default function LoginScreen({ navigation }: Props) {
           <AuthErrorBlock error={error} />
 
           <TouchableOpacity
-            className={`py-4 rounded-lg items-center mb-4 ${isLoading ? 'bg-mavecam-primary/70' : 'bg-mavecam-primary'}`}
+            className={`py-4 rounded-lg items-center mb-4 ${isLoading ? 'bg-aquacare-primary/70' : 'bg-aquacare-primary'}`}
             onPress={handleLogin}
             disabled={isLoading}
           >
@@ -183,7 +168,7 @@ export default function LoginScreen({ navigation }: Props) {
           <View className="flex-row justify-center items-center">
             <Text className="text-sm text-gray-light">{t('noAccount')}</Text>
             <TouchableOpacity onPress={() => navigation.navigate('Register')}>
-              <Text className="text-sm font-semibold text-mavecam-primary">{t('signUp')}</Text>
+              <Text className="text-sm font-semibold text-aquacare-primary">{t('signUp')}</Text>
             </TouchableOpacity>
           </View>
         </View>

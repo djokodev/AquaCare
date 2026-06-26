@@ -2,7 +2,7 @@ import { aquacultureService } from '../aquacultureService';
 import { apiService } from '@/services/api';
 import { API_CONFIG } from '@/constants/api';
 import logger from '@/utils/logger';
-import { CycleLog, ProductionCycle, SanitaryLogForm } from '@/types/aquaculture';
+import { CycleHarvestResponse, CycleLog, ProductionCycle, SanitaryLogForm } from '@/types/aquaculture';
 
 jest.mock('@/services/api', () => ({
   apiService: {
@@ -94,9 +94,36 @@ describe('features/aquaculture/services/aquacultureService', () => {
 
     await aquacultureService.getDashboardData();
     await aquacultureService.getDashboardData('cycle-session-1');
+    await aquacultureService.getDashboardData('cycle-session-1', { lightweight: true });
 
     expect(mockApi.get).toHaveBeenNthCalledWith(1, '/aquaculture/dashboard/');
     expect(mockApi.get).toHaveBeenNthCalledWith(2, '/aquaculture/dashboard/?cycle_id=cycle-session-1');
+    expect(mockApi.get).toHaveBeenNthCalledWith(
+      3,
+      '/aquaculture/dashboard/?cycle_id=cycle-session-1&lightweight=true'
+    );
+  });
+
+  it('dedoublonne les requetes dashboard concurrentes pour le meme scope et meme mode', async () => {
+    const payload = { active_cycles: [], active_cycles_count: 0 };
+    mockApi.get.mockReturnValueOnce(Promise.resolve({ data: payload }) as never);
+
+    const firstPromise = aquacultureService.getDashboardData('cycle-session-42');
+    const secondPromise = aquacultureService.getDashboardData('cycle-session-42');
+
+    expect(mockApi.get).toHaveBeenCalledTimes(1);
+    await expect(firstPromise).resolves.toEqual(payload);
+    await expect(secondPromise).resolves.toEqual(payload);
+  });
+
+  it('ne dedoublonne pas entre mode full et lightweight', async () => {
+    const payload = { active_cycles: [], active_cycles_count: 0 };
+    mockApi.get.mockResolvedValue({ data: payload } as never);
+
+    await aquacultureService.getDashboardData('cycle-session-42');
+    await aquacultureService.getDashboardData('cycle-session-42', { lightweight: true });
+
+    expect(mockApi.get).toHaveBeenCalledTimes(2);
   });
 
   it('utilise PATCH pour la mise a jour partielle d un cycle', async () => {
@@ -130,6 +157,27 @@ describe('features/aquaculture/services/aquacultureService', () => {
 
     expect(result).toEqual([plan]);
     expect(mockApi.get).toHaveBeenCalledWith('/aquaculture/feeding-plans/?cycle=cycle-1');
+  });
+
+  it('retourne la vraie forme API de recolte avec message et cycle', async () => {
+    const harvestResponse: CycleHarvestResponse = {
+      message: 'Cycle recolte avec succes',
+      cycle: { ...cycle, status: 'harvested', end_date: '2026-05-01' },
+    };
+    mockApi.post.mockResolvedValueOnce({ data: harvestResponse } as never);
+
+    const result = await aquacultureService.harvestCycle('cycle-1', {
+      harvest_date: '2026-05-01',
+      final_count: 850,
+      final_average_weight: 250,
+    });
+
+    expect(result).toEqual(harvestResponse);
+    expect(mockApi.post).toHaveBeenCalledWith('/aquaculture/cycles/cycle-1/harvest/', {
+      harvest_date: '2026-05-01',
+      final_count: 850,
+      final_average_weight: 250,
+    });
   });
 
   it('retourne les rapports depuis une reponse paginee avec filtres', async () => {
@@ -187,6 +235,23 @@ describe('features/aquaculture/services/aquacultureService', () => {
     expect(url).toBe(`${API_CONFIG.baseURL}/aquaculture/reports/report-42/download/`);
   });
 
+  it('retourne les recoltes partielles depuis une reponse paginee', async () => {
+    const partialHarvest = {
+      id: 'ph-1',
+      harvest_date: '2026-02-10',
+      count_harvested: 40,
+      average_weight_g: 320,
+      total_weight_kg: 12.8,
+      created_at: '2026-02-10T08:00:00Z',
+    };
+    mockApi.get.mockResolvedValueOnce({ data: { count: 1, results: [partialHarvest] } } as never);
+
+    const result = await aquacultureService.getPartialHarvests('cycle-1');
+
+    expect(result).toEqual([partialHarvest]);
+    expect(mockApi.get).toHaveBeenCalledWith('/aquaculture/cycles/cycle-1/partial-harvests/');
+  });
+
   it('compose correctement l\'URL des cycle logs avec ou sans cycleId', async () => {
     mockApi.get.mockResolvedValue({ data: [] } as never);
 
@@ -220,6 +285,25 @@ describe('features/aquaculture/services/aquacultureService', () => {
     );
   });
 
+  it('preserve le client_uuid fourni pour un retry de cycle log offline', async () => {
+    mockApi.post.mockResolvedValueOnce({ data: { id: 'log-retry' } } as never);
+
+    await aquacultureService.createCycleLog('cycle-1', {
+      log_date: '2026-01-10',
+      mortality_count: 2,
+      client_uuid: 'retry-uuid-1',
+      created_offline: true,
+    });
+
+    expect(mockApi.post).toHaveBeenCalledWith(
+      '/aquaculture/cycle-logs/',
+      expect.objectContaining({
+        client_uuid: 'retry-uuid-1',
+        created_offline: true,
+      })
+    );
+  });
+
   it('construit correctement un FormData pour un sanitary log avec photo RN', async () => {
     mockApi.post.mockResolvedValueOnce({ data: { id: 'san-1' } } as never);
 
@@ -248,8 +332,27 @@ describe('features/aquaculture/services/aquacultureService', () => {
 
     const mockFormData = formDataArg as unknown as MockFormData;
     expect(mockFormData.append).toHaveBeenCalledWith('cycle', 'cycle-1');
+    expect(mockFormData.append).toHaveBeenCalledWith('client_uuid', expect.any(String));
+    expect(mockFormData.append).toHaveBeenCalledWith('created_offline', 'false');
     expect(mockFormData.append).toHaveBeenCalledWith('event_type', 'disease');
     expect(mockFormData.append).toHaveBeenCalledWith('photo', payload.photo);
+  });
+
+  it('preserve les metadonnees offline dans le FormData sanitaire', async () => {
+    mockApi.post.mockResolvedValueOnce({ data: { id: 'san-offline' } } as never);
+
+    await aquacultureService.createSanitaryLog('cycle-1', {
+      event_date: '2026-01-10',
+      event_type: 'treatment',
+      symptoms: 'Poissons observes avec lesions legeres',
+      client_uuid: 'sanitary-retry-uuid',
+      created_offline: true,
+    });
+
+    const [, formDataArg] = mockApi.post.mock.calls[0];
+    const mockFormData = formDataArg as unknown as MockFormData;
+    expect(mockFormData.append).toHaveBeenCalledWith('client_uuid', 'sanitary-retry-uuid');
+    expect(mockFormData.append).toHaveBeenCalledWith('created_offline', 'true');
   });
 
   it('preserve les accents et convertit les champs numeriques en texte dans le FormData', async () => {
@@ -349,6 +452,14 @@ describe('features/aquaculture/services/aquacultureService', () => {
     expect(aquacultureService.canSynchronize([{ client_uuid: '' }, { client_uuid: 'uuid-2' }])).toBe(false);
     expect(aquacultureService.canSynchronize([{ client_uuid: 123 }])).toBe(false);
     expect(aquacultureService.canSynchronize([])).toBe(false);
+  });
+
+  it('propage les erreurs des phases aliments au lieu de retourner une liste vide', async () => {
+    const error = new Error('feed phases failed');
+    mockApi.get.mockRejectedValueOnce(error);
+
+    await expect(aquacultureService.getCycleFeedPhases('cycle-1')).rejects.toThrow('feed phases failed');
+    expect(mockLogger.error).toHaveBeenCalledWith('Erreur lors du chargement des phases aliments:', error);
   });
 
   it('rethrow les erreurs API et les log', async () => {

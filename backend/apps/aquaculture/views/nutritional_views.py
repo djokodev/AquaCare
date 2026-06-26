@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
         summary="Lister les guides nutritionnels",
         description="""
         Retourne la liste des guides nutritionnels pour toutes les espèces.
-        Données de référence MAVECAM pour optimiser l'alimentation selon le poids des poissons.
+        Données de référence AquaCare pour optimiser l'alimentation selon le poids des poissons.
         """,
         parameters=[
             OpenApiParameter(
@@ -55,7 +55,7 @@ logger = logging.getLogger(__name__)
                             'feeding_rate_percentage': 4.5,
                             'protein_requirement': 42.0,
                             'meals_per_day': 3,
-                            'recommended_products': ['MAVECAM Superior 2-3mm']
+                            'recommended_products': ['AquaCare Superior 2-3mm']
                         }
                     ]
                 }
@@ -69,7 +69,7 @@ logger = logging.getLogger(__name__)
 )
 class NutritionalGuideViewSet(viewsets.ReadOnlyModelViewSet):
     """
-    Guides nutritionnels MAVECAM (données de référence).
+    Guides nutritionnels AquaCare (données de référence).
 
     Fournit les recommandations d'alimentation optimales selon l'espèce,
     le poids des poissons et le stade de croissance.

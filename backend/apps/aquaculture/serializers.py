@@ -1,5 +1,5 @@
 """
-Sérialiseurs DRF pour le module aquaculture de MAVECAM AquaCare.
+Sérialiseurs DRF pour le module aquaculture de AquaCare.
 
 Ce fichier contient tous les sérialiseurs Django REST Framework pour l'API aquaculture.
 Gère la validation des données, la sérialisation/désérialisation et la communication API
@@ -29,13 +29,13 @@ from .constants import (
     DEFAULT_EXPECTED_SURVIVAL_RATE_PCT,
     DEFAULT_FEED_PRICE_PER_KG,
     DEFAULT_FINGERLINGS_COST_FCFA,
+    DEFAULT_INITIAL_AVERAGE_WEIGHT_G_BY_SPECIES,
     DEFAULT_OTHER_OPERATIONAL_COSTS_FCFA,
     ECONOMIC_DEFAULTS_BY_SPECIES,
     FEEDING_WEEK_DURATION_DAYS,
     LOG_TEMPERATURE_MAX,
     LOG_TEMPERATURE_MIN,
     MAX_GENERATION_WEEKS,
-    MAX_INITIAL_DENSITY_PER_M2,
     SPECIES_CHOICES,
 )
 from .domain.calculators import AquacultureCalculator
@@ -51,6 +51,8 @@ from .models import (
     ReportDispatchLog,
     SanitaryLog,
 )
+from .services.cycle_service import ProductionCycleService
+from .services.farm_production_plan_service import FarmProductionPlanService
 
 
 class ProductionCycleSerializer(serializers.ModelSerializer):
@@ -87,7 +89,7 @@ class ProductionCycleSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProductionCycle
         fields = [
-            'id', 'farm_profile', 'cycle_name', 'species', 'species_display',
+            'id', 'client_uuid', 'farm_profile', 'cycle_name', 'species', 'species_display',
             'pond_identifier', 'pond_surface_m2', 'pond_volume_m3', 'infrastructure_type',
             'start_date', 'initial_count', 'initial_average_weight', 'initial_biomass',
             'target_harvest_weight_g', 'planned_cycle_duration_days', 'planned_harvest_date', 'planned_feed_bags',
@@ -103,13 +105,18 @@ class ProductionCycleSerializer(serializers.ModelSerializer):
             'total_feed_cost',
             # Phase alimentation courante
             'feed_phase',
-            'created_at', 'updated_at'
+            'created_offline', 'synced_at', 'created_at', 'updated_at'
         ]
         read_only_fields = [
             'id', 'farm_profile', 'initial_biomass', 'current_count', 'current_average_weight',
             'current_biomass', 'total_feed_consumed', 'survival_rate', 'fcr',
-            'created_at', 'updated_at'
+            'synced_at', 'created_at', 'updated_at'
         ]
+        extra_kwargs = {
+            'client_uuid': {'validators': []},
+            'cycle_name': {'required': False},
+            'initial_average_weight': {'required': False},
+        }
 
     def get_days_active(self, obj):
         """Calcule les jours depuis le début du cycle."""
@@ -188,10 +195,8 @@ class ProductionCycleSerializer(serializers.ModelSerializer):
         if not obj.total_feed_consumed or obj.total_feed_consumed <= 0:
             return None
 
-        # Récupère prix depuis FarmProfile ou défaut
-        price_per_kg = DEFAULT_FEED_PRICE_PER_KG  # Défaut FCFA/kg
-        if hasattr(obj.farm_profile, 'default_feed_price_per_kg') and obj.farm_profile.default_feed_price_per_kg:
-            price_per_kg = obj.farm_profile.default_feed_price_per_kg
+        plan_data = FarmProductionPlanService.get_plan_data(obj.farm_profile)
+        price_per_kg = plan_data["default_feed_price_per_kg"] or DEFAULT_FEED_PRICE_PER_KG
 
         # Calcul via domain calculator
         total_cost = AquacultureCalculator.calculate_feed_cost(
@@ -203,6 +208,19 @@ class ProductionCycleSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         species = attrs.get('species') or getattr(self.instance, 'species', None)
         defaults = ECONOMIC_DEFAULTS_BY_SPECIES.get(species or 'tilapia', ECONOMIC_DEFAULTS_BY_SPECIES['tilapia'])
+
+        start_date_value = attrs.get('start_date') or getattr(self.instance, 'start_date', None)
+        if attrs.get('cycle_name') is None and not getattr(self.instance, 'cycle_name', None) and start_date_value:
+            attrs['cycle_name'] = f"Cycle {(species or 'tilapia').capitalize()} {start_date_value.isoformat()}"
+
+        if (
+            attrs.get('initial_average_weight') is None
+            and getattr(self.instance, 'initial_average_weight', None) is None
+        ):
+            attrs['initial_average_weight'] = DEFAULT_INITIAL_AVERAGE_WEIGHT_G_BY_SPECIES.get(
+                species or 'tilapia',
+                DEFAULT_INITIAL_AVERAGE_WEIGHT_G_BY_SPECIES['tilapia'],
+            )
 
         # Set economic defaults when omitted
         if attrs.get('target_harvest_weight_g') is None and not getattr(self.instance, 'target_harvest_weight_g', None):
@@ -285,13 +303,31 @@ class ProductionCycleSerializer(serializers.ModelSerializer):
                     'pond_surface_m2': _("Veuillez renseigner au moins la surface OU le volume du bassin")
                 })
 
-        # Validate pond capacity (density check)
-        if attrs.get('pond_surface_m2') and attrs.get('initial_count'):
-            density_per_m2 = attrs['initial_count'] / float(attrs['pond_surface_m2'])
-            if density_per_m2 > MAX_INITIAL_DENSITY_PER_M2:
-                raise serializers.ValidationError({
-                    'initial_count': _("Densité initiale trop élevée (max 500 poissons/m²)")
-                })
+        # Validate pond/tank capacity (density check)
+        initial_count = attrs.get('initial_count') or getattr(self.instance, 'initial_count', None)
+        pond_surface = attrs.get('pond_surface_m2') or getattr(self.instance, 'pond_surface_m2', None)
+        pond_volume = attrs.get('pond_volume_m3') or getattr(self.instance, 'pond_volume_m3', None)
+        infrastructure_types = attrs.get('infrastructure_type') or getattr(self.instance, 'infrastructure_type', None)
+
+        if initial_count:
+            if ProductionCycleService._is_pond_infrastructure(infrastructure_types) and pond_surface:
+                density_per_m2 = initial_count / float(pond_surface)
+                max_density = ProductionCycleService.MAX_STOCKING_DENSITY_POND_PER_M2
+                if density_per_m2 > max_density:
+                    raise serializers.ValidationError({
+                        'initial_count': _(
+                            "Densité initiale trop élevée (max %(max_density)s poissons/m²)"
+                        ) % {'max_density': max_density}
+                    })
+            elif pond_volume:
+                density_per_m3 = initial_count / float(pond_volume)
+                max_density = ProductionCycleService.MAX_STOCKING_DENSITY_TANK_PER_M3
+                if density_per_m3 > max_density:
+                    raise serializers.ValidationError({
+                        'initial_count': _(
+                            "Densité initiale trop élevée (max %(max_density)s poissons/m³)"
+                        ) % {'max_density': max_density}
+                    })
 
         start_date_value = attrs.get('start_date') or getattr(self.instance, 'start_date', None)
         planned_duration = (
@@ -504,14 +540,17 @@ class SanitaryLogSerializer(serializers.ModelSerializer):
     class Meta:
         model = SanitaryLog
         fields = [
-            'id', 'cycle', 'cycle_name', 'event_date', 'event_type',
+            'id', 'client_uuid', 'cycle', 'cycle_name', 'event_date', 'event_type',
             'event_type_display', 'symptoms', 'affected_count',
             'treatment_applied', 'medication_used', 'dosage',
             'treatment_duration_days', 'photo', 'photo_url',
             'resolved', 'resolution_date', 'notes', 'created_offline',
-            'days_since_event', 'created_at'
+            'synced_at', 'days_since_event', 'created_at'
         ]
-        read_only_fields = ['id', 'created_at']
+        read_only_fields = ['id', 'synced_at', 'created_at']
+        extra_kwargs = {
+            'client_uuid': {'validators': []},
+        }
 
     def get_photo_url(self, obj):
         """Retourne l'URL complète de la photo si disponible."""
@@ -798,6 +837,7 @@ class DashboardQuerySerializer(serializers.Serializer):
     """Validation des query params du dashboard aquaculture."""
 
     cycle_id = serializers.UUIDField(required=False)
+    lightweight = serializers.BooleanField(required=False, default=False)
 
 
 class ReportDispatchLogSerializer(serializers.ModelSerializer):

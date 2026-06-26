@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 from decimal import Decimal
-from typing import TYPE_CHECKING, TypedDict
+from typing import TYPE_CHECKING, Any, TypedDict
 
 from django.db import transaction
 from django.utils.translation import gettext_lazy as _
@@ -29,8 +29,11 @@ from django.utils.translation import gettext_lazy as _
 from ..constants import (
     DEFAULT_EXPECTED_SURVIVAL_RATE_PCT,
     DEFAULT_FINGERLINGS_COST_FCFA,
+    DEFAULT_INITIAL_AVERAGE_WEIGHT_G_BY_SPECIES,
     DEFAULT_OTHER_OPERATIONAL_COSTS_FCFA,
     ECONOMIC_DEFAULTS_BY_SPECIES,
+    MAX_STOCKING_DENSITY_POND_PER_M2,
+    MAX_STOCKING_DENSITY_TANK_PER_M3,
 )
 from ..domain.calculators import AquacultureCalculator
 from ..domain.exceptions import (
@@ -41,6 +44,7 @@ from ..domain.exceptions import (
     InvalidDateRangeError,
     InvalidDensityError,
     InvalidHarvestDataError,
+    OfflineSyncConflictError,
 )
 from ..models import CycleLog, PartialHarvest, ProductionCycle
 from .base import BaseService
@@ -50,6 +54,7 @@ if TYPE_CHECKING:
 
 
 class CycleCreatePayload(TypedDict, total=False):
+    client_uuid: Any
     cycle_name: str
     species: str
     pond_identifier: str
@@ -66,6 +71,8 @@ class CycleCreatePayload(TypedDict, total=False):
     planned_selling_price_per_kg_fcfa: Decimal
     fingerlings_cost_fcfa: Decimal
     other_operational_costs_fcfa: Decimal
+    created_offline: bool
+    synced_at: Any
 
 
 class ProductionCycleService(BaseService):
@@ -79,11 +86,9 @@ class ProductionCycleService(BaseService):
     - update_current_metrics() : Mise à jour après nouveau log
     """
 
-    # Densités maximales par espèce (poissons/m²)
-    MAX_DENSITY_BY_SPECIES = {
-        'tilapia': 300,
-        'clarias': 500,
-    }
+    # Densités maximales par infrastructure.
+    MAX_STOCKING_DENSITY_POND_PER_M2 = MAX_STOCKING_DENSITY_POND_PER_M2
+    MAX_STOCKING_DENSITY_TANK_PER_M3 = MAX_STOCKING_DENSITY_TANK_PER_M3
 
     # Poids minimum attendu par espèce (grammes)
     MIN_WEIGHT_BY_SPECIES = {
@@ -125,6 +130,18 @@ class ProductionCycleService(BaseService):
             "create_cycle",
             {"farm_profile": farm_profile.id, "cycle_name": cycle_data.get('cycle_name')}
         )
+
+        client_uuid = cycle_data.get('client_uuid')
+        if client_uuid:
+            existing_cycle = ProductionCycle.objects.select_related('farm_profile__user').filter(
+                client_uuid=client_uuid
+            ).first()
+            if existing_cycle:
+                if existing_cycle.farm_profile.user_id != farm_profile.user_id:
+                    raise OfflineSyncConflictError(
+                        _("Conflit de synchronisation : ce client_uuid appartient à un autre utilisateur.")
+                    )
+                return existing_cycle
 
         # Normaliser et compléter les paramètres économiques.
         ProductionCycleService._apply_economic_defaults(cycle_data)
@@ -445,23 +462,38 @@ class ProductionCycleService(BaseService):
             "partial_harvest_cycle",
             {"cycle_id": str(cycle.id), "count_harvested": count_harvested}
         )
+        locked_cycle = ProductionCycle.objects.select_for_update().select_related(
+            'farm_profile__user'
+        ).get(id=cycle.id)
 
         # 1. Validation état
-        if cycle.status != 'active':
+        if locked_cycle.status != 'active':
             raise CycleNotActiveError(
                 _("Seuls les cycles actifs peuvent faire l'objet d'une récolte partielle "
-                  "(statut actuel: %(status)s)") % {'status': cycle.get_status_display()}
+                  "(statut actuel: %(status)s)") % {'status': locked_cycle.get_status_display()}
             )
 
         # 2. Déduplication offline
         if client_uuid:
-            existing = PartialHarvest.objects.filter(client_uuid=client_uuid).first()
+            existing = PartialHarvest.objects.select_related('cycle__farm_profile__user').filter(
+                client_uuid=client_uuid
+            ).first()
             if existing:
+                if existing.cycle.farm_profile.user_id != locked_cycle.farm_profile.user_id:
+                    raise OfflineSyncConflictError(
+                        _("Conflit de synchronisation : ce client_uuid appartient à un autre utilisateur.")
+                    )
+                if existing.cycle_id != locked_cycle.id:
+                    raise OfflineSyncConflictError(
+                        _("Conflit de synchronisation : ce client_uuid est déjà lié à un autre cycle.")
+                    )
+                cycle.current_count = locked_cycle.current_count
+                cycle.current_biomass = locked_cycle.current_biomass
                 return existing.cycle, existing
 
         # 3. Validation règles métier
         ProductionCycleService._validate_partial_harvest_rules(
-            cycle, harvest_date, count_harvested, average_weight_g
+            locked_cycle, harvest_date, count_harvested, average_weight_g
         )
 
         # 4. Calcul poids total
@@ -469,7 +501,7 @@ class ProductionCycleService(BaseService):
 
         # 5. Création de l'enregistrement PartialHarvest
         partial_harvest = PartialHarvest.objects.create(
-            cycle=cycle,
+            cycle=locked_cycle,
             harvest_date=harvest_date,
             count_harvested=count_harvested,
             average_weight_g=average_weight_g,
@@ -481,23 +513,25 @@ class ProductionCycleService(BaseService):
         )
 
         # 6. Mise à jour du cycle (decrement count + recalcul biomasse)
-        cycle.current_count -= count_harvested
-        cycle.current_biomass = AquacultureCalculator.calculate_biomass(
-            cycle.current_count, cycle.current_average_weight
+        locked_cycle.current_count -= count_harvested
+        locked_cycle.current_biomass = AquacultureCalculator.calculate_biomass(
+            locked_cycle.current_count, locked_cycle.current_average_weight
         )
-        cycle.save(update_fields=['current_count', 'current_biomass', 'updated_at'])
+        locked_cycle.save(update_fields=['current_count', 'current_biomass', 'updated_at'])
 
         ProductionCycleService.log_operation(
             "partial_harvest_recorded",
             {
                 "cycle_id": str(cycle.id),
                 "partial_harvest_id": str(partial_harvest.id),
-                "remaining_count": cycle.current_count,
+                "remaining_count": locked_cycle.current_count,
             },
             level='info'
         )
 
-        return cycle, partial_harvest
+        cycle.current_count = locked_cycle.current_count
+        cycle.current_biomass = locked_cycle.current_biomass
+        return locked_cycle, partial_harvest
 
     # =================== MÉTHODES PRIVÉES (VALIDATION) ===================
 
@@ -523,16 +557,35 @@ class ProductionCycleService(BaseService):
         fingerlings_cost = cycle_data.get('fingerlings_cost_fcfa')
         other_costs = cycle_data.get('other_operational_costs_fcfa')
 
-        # Validation densité maximale
-        if species and pond_surface and initial_count:
-            density = initial_count / float(pond_surface)
-            max_allowed = ProductionCycleService.MAX_DENSITY_BY_SPECIES.get(species, 400)
+        # Validation densité maximale (règle unifiée par infrastructure).
+        # Source de vérité: backend/constants.py.
+        if initial_count:
+            infrastructure_types = cycle_data.get('infrastructure_type') or []
+            is_pond = ProductionCycleService._is_pond_infrastructure(infrastructure_types)
+            pond_volume = cycle_data.get('pond_volume_m3')
 
-            if density > max_allowed:
-                raise InvalidDensityError(
-                    _(f"Densité initiale trop élevée ({density:.0f} poissons/m²). "
-                      f"Maximum recommandé : {max_allowed} poissons/m² pour {species}")
-                )
+            if is_pond and pond_surface:
+                density = initial_count / float(pond_surface)
+                max_allowed = ProductionCycleService.MAX_STOCKING_DENSITY_POND_PER_M2
+                if density > max_allowed:
+                    raise InvalidDensityError(
+                        _(
+                            "Densité initiale trop élevée (%(density).0f poissons/m²). "
+                            "Maximum recommandé : %(max_allowed)s poissons/m²."
+                        )
+                        % {'density': density, 'max_allowed': max_allowed}
+                    )
+            elif pond_volume:
+                density = initial_count / float(pond_volume)
+                max_allowed = ProductionCycleService.MAX_STOCKING_DENSITY_TANK_PER_M3
+                if density > max_allowed:
+                    raise InvalidDensityError(
+                        _(
+                            "Densité initiale trop élevée (%(density).0f poissons/m³). "
+                            "Maximum recommandé : %(max_allowed)s poissons/m³."
+                        )
+                        % {'density': density, 'max_allowed': max_allowed}
+                    )
 
         # Validation poids initial minimum
         if species and initial_weight:
@@ -599,6 +652,18 @@ class ProductionCycleService(BaseService):
     def _apply_economic_defaults(cycle_data: CycleCreatePayload) -> None:
         species = cycle_data.get('species') or 'tilapia'
         defaults = ECONOMIC_DEFAULTS_BY_SPECIES.get(species, ECONOMIC_DEFAULTS_BY_SPECIES['tilapia'])
+        start_date_value = cycle_data.get('start_date')
+        if isinstance(start_date_value, str):
+            start_date_value = date.fromisoformat(start_date_value)
+
+        if cycle_data.get('cycle_name') is None and start_date_value:
+            cycle_data['cycle_name'] = f"Cycle {species.capitalize()} {start_date_value.isoformat()}"
+
+        if cycle_data.get('initial_average_weight') is None:
+            cycle_data['initial_average_weight'] = DEFAULT_INITIAL_AVERAGE_WEIGHT_G_BY_SPECIES.get(
+                species,
+                DEFAULT_INITIAL_AVERAGE_WEIGHT_G_BY_SPECIES['tilapia'],
+            )
 
         if cycle_data.get('target_harvest_weight_g') is None:
             cycle_data['target_harvest_weight_g'] = defaults['target_harvest_weight_g']
@@ -763,3 +828,19 @@ class ProductionCycleService(BaseService):
             )
 
         # Notification de félicitations (géré par le signal check_cycle_completion)
+
+    @staticmethod
+    def _is_pond_infrastructure(infrastructure_types: Any) -> bool:
+        """
+        Détermine si l'infrastructure principale est de type étang.
+
+        Fallback :
+        - aucune info => étang (comportement historique surface/m²)
+        """
+        if not infrastructure_types:
+            return True
+        if isinstance(infrastructure_types, str):
+            return infrastructure_types == 'etang'
+        if isinstance(infrastructure_types, (list, tuple)):
+            return 'etang' in infrastructure_types
+        return True

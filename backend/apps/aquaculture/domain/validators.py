@@ -4,7 +4,12 @@ from decimal import Decimal
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
 
-from ..constants import OPTIMAL_PARAMETERS, SAMPLING_TOLERANCE
+from ..constants import (
+    MAX_STOCKING_DENSITY_POND_PER_M2,
+    MAX_STOCKING_DENSITY_TANK_PER_M3,
+    OPTIMAL_PARAMETERS,
+    SAMPLING_TOLERANCE,
+)
 
 
 def validate_cycle_duration(start_date: date, end_date: date, species: str):
@@ -75,18 +80,28 @@ def validate_stocking_density(
     if pond_surface_m2:
         surface_density = initial_count / float(pond_surface_m2)
 
-        # Recommended: 20-50 fish/m² for initial stocking
-        if surface_density > 50:
+        if surface_density > MAX_STOCKING_DENSITY_POND_PER_M2:
             raise ValidationError(
-                _("Densité de mise en charge trop élevée: %(density).1f poissons/m² (maximum recommandé: 50)") % {
-                    'density': surface_density
+                _(
+                    "Densité de mise en charge trop élevée: %(density).1f poissons/m² "
+                    "(maximum recommandé: %(max_density)s)"
+                ) % {
+                    'density': surface_density,
+                    'max_density': MAX_STOCKING_DENSITY_POND_PER_M2,
                 }
             )
 
-        if surface_density < 5:
+    # Volume density check (fish per m³) - used for tanks/cages
+    if pond_volume_m3:
+        volume_density = initial_count / float(pond_volume_m3)
+        if volume_density > MAX_STOCKING_DENSITY_TANK_PER_M3:
             raise ValidationError(
-                _("Densité de mise en charge trop faible: %(density).1f poissons/m² (minimum recommandé: 5)") % {
-                    'density': surface_density
+                _(
+                    "Densité de mise en charge trop élevée: %(density).1f poissons/m³ "
+                    "(maximum recommandé: %(max_density)s)"
+                ) % {
+                    'density': volume_density,
+                    'max_density': MAX_STOCKING_DENSITY_TANK_PER_M3,
                 }
             )
 

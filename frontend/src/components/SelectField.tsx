@@ -10,7 +10,7 @@ import {
   SafeAreaView,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { MAVECAM_COLORS } from '@/constants/colors';
+import { AQUACARE_COLORS } from '@/constants/colors';
 
 export interface SelectOption {
   value: string;
@@ -136,11 +136,11 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 16,
     fontWeight: '500',
-    color: MAVECAM_COLORS.GRAY_DARK,
+    color: AQUACARE_COLORS.GRAY_DARK,
     marginBottom: 8,
   },
   required: {
-    color: MAVECAM_COLORS.ERROR,
+    color: AQUACARE_COLORS.ERROR,
   },
   selectButton: {
     flexDirection: 'row',
@@ -150,31 +150,31 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 12,
-    backgroundColor: MAVECAM_COLORS.WHITE,
+    backgroundColor: AQUACARE_COLORS.WHITE,
     minHeight: 48,
   },
   selectButtonNormal: {
     borderColor: '#d1d5db', // border-gray-300
   },
   selectButtonError: {
-    borderColor: MAVECAM_COLORS.ERROR,
+    borderColor: AQUACARE_COLORS.ERROR,
   },
   selectText: {
     fontSize: 16,
-    color: MAVECAM_COLORS.GRAY_DARK,
+    color: AQUACARE_COLORS.GRAY_DARK,
     flex: 1,
   },
   placeholderText: {
-    color: MAVECAM_COLORS.GRAY_LIGHT,
+    color: AQUACARE_COLORS.GRAY_LIGHT,
   },
   arrow: {
     fontSize: 12,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
+    color: AQUACARE_COLORS.GRAY_LIGHT,
     marginLeft: 8,
   },
   errorText: {
     fontSize: 14,
-    color: MAVECAM_COLORS.ERROR,
+    color: AQUACARE_COLORS.ERROR,
     marginTop: 4,
   },
   modalOverlay: {
@@ -183,7 +183,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalContainer: {
-    backgroundColor: MAVECAM_COLORS.WHITE,
+    backgroundColor: AQUACARE_COLORS.WHITE,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     maxHeight: '80%',
@@ -210,7 +210,7 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: MAVECAM_COLORS.GRAY_DARK,
+    color: AQUACARE_COLORS.GRAY_DARK,
   },
   cancelButton: {
     paddingVertical: 6,
@@ -218,7 +218,7 @@ const styles = StyleSheet.create({
   },
   cancelButtonText: {
     fontSize: 16,
-    color: MAVECAM_COLORS.GREEN_PRIMARY,
+    color: AQUACARE_COLORS.GREEN_PRIMARY,
     fontWeight: '600',
   },
   optionItem: {
@@ -227,23 +227,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 16,
     paddingHorizontal: 20,
-    backgroundColor: MAVECAM_COLORS.WHITE,
+    backgroundColor: AQUACARE_COLORS.WHITE,
   },
   optionItemSelected: {
-    backgroundColor: '#ecfdf5', // mavecam-green-50
+    backgroundColor: '#ecfdf5', // aquacare-green-50
   },
   optionText: {
     fontSize: 16,
-    color: MAVECAM_COLORS.GRAY_DARK,
+    color: AQUACARE_COLORS.GRAY_DARK,
     flex: 1,
   },
   optionTextSelected: {
-    color: MAVECAM_COLORS.GREEN_PRIMARY,
+    color: AQUACARE_COLORS.GREEN_PRIMARY,
     fontWeight: '600',
   },
   checkmark: {
     fontSize: 18,
-    color: MAVECAM_COLORS.GREEN_PRIMARY,
+    color: AQUACARE_COLORS.GREEN_PRIMARY,
     fontWeight: 'bold',
     marginLeft: 8,
   },

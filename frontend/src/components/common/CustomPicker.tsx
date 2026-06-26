@@ -1,19 +1,10 @@
-﻿import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import React from 'react';
+import { View, Text, StyleSheet } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
-
-// Couleurs MAVECAM selon spÃ©cifications
-const MAVECAM_COLORS = {
-  GREEN_PRIMARY: '#059669',
-  GREEN_LIGHT: '#10b981',
-  GREEN_DARK: '#047857',
-  WHITE: '#ffffff',
-  CREAM: '#f8fafc',
-  GRAY_LIGHT: '#64748b',
-  GRAY_DARK: '#1e293b',
-};
+import { AQUACARE_COLORS } from '@/constants/colors';
+import { AQUACARE_TYPOGRAPHY } from '@/constants/typography';
 
 export interface PickerOption {
   value: string;
@@ -40,7 +31,7 @@ export default function CustomPicker({
   onValueChange,
   placeholder = '',
   editable = true,
-  displayValue
+  displayValue,
 }: CustomPickerProps) {
   const { t } = useTranslation();
 
@@ -53,17 +44,16 @@ export default function CustomPicker({
   const getDisplayValue = () => {
     if (displayValue) return displayValue;
     if (!value) return placeholder || t('notProvided');
-    
-    const option = options.find(opt => opt.value === value);
+
+    const option = options.find((opt) => opt.value === value);
     return option?.label || value;
   };
 
   if (!editable) {
-    // Mode lecture seule - affiche juste la valeur
     return (
       <View style={styles.infoRow}>
         <View style={styles.infoRowLeft}>
-          <Ionicons name={icon} size={20} color={MAVECAM_COLORS.GRAY_LIGHT} />
+          <Ionicons name={icon} size={20} color={AQUACARE_COLORS.GRAY_LIGHT} />
           <Text style={styles.infoLabel}>{label}</Text>
         </View>
         <Text style={styles.infoValue}>{getDisplayValue()}</Text>
@@ -74,10 +64,10 @@ export default function CustomPicker({
   return (
     <View style={styles.infoRow}>
       <View style={styles.infoRowLeft}>
-        <Ionicons name={icon} size={20} color={MAVECAM_COLORS.GRAY_LIGHT} />
+        <Ionicons name={icon} size={20} color={AQUACARE_COLORS.GRAY_LIGHT} />
         <Text style={styles.infoLabel}>{label}</Text>
       </View>
-      
+
       <View style={styles.pickerContainer}>
         <Picker
           selectedValue={value || ''}
@@ -86,10 +76,10 @@ export default function CustomPicker({
           mode="dropdown"
         >
           {placeholder && (
-            <Picker.Item 
-              label={placeholder} 
-              value="" 
-              color={MAVECAM_COLORS.GRAY_LIGHT}
+            <Picker.Item
+              label={placeholder}
+              value=""
+              color={AQUACARE_COLORS.GRAY_LIGHT}
             />
           )}
           {options.map((option) => (
@@ -98,7 +88,7 @@ export default function CustomPicker({
               label={option.label}
               value={option.value}
               enabled={!option.disabled}
-              color={option.disabled ? MAVECAM_COLORS.GRAY_LIGHT : MAVECAM_COLORS.GRAY_DARK}
+              color={option.disabled ? AQUACARE_COLORS.GRAY_LIGHT : AQUACARE_COLORS.GRAY_DARK}
             />
           ))}
         </Picker>
@@ -107,9 +97,6 @@ export default function CustomPicker({
   );
 }
 
-/**
- * Composant pour les sÃ©lections en cascade (exemple: rÃ©gion â†’ dÃ©partement â†’ arrondissement)
- */
 interface CascadingPickerProps {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
@@ -126,17 +113,17 @@ export function CascadingPicker({
   icon,
   label,
   levels,
-  editable = true
+  editable = true,
 }: CascadingPickerProps) {
   if (!editable) {
     return (
       <View style={styles.cascadingContainer}>
         <View style={styles.cascadingHeader}>
-          <Ionicons name={icon} size={20} color={MAVECAM_COLORS.GRAY_LIGHT} />
+          <Ionicons name={icon} size={20} color={AQUACARE_COLORS.GRAY_LIGHT} />
           <Text style={styles.infoLabel}>{label}</Text>
         </View>
         {levels.map((level, index) => {
-          const selected = level.options.find(o => o.value === level.value);
+          const selected = level.options.find((o) => o.value === level.value);
           return (
             <View key={index} style={styles.cascadingLevel}>
               <Text style={styles.readOnlyText}>{selected?.label || level.placeholder}</Text>
@@ -150,10 +137,10 @@ export function CascadingPicker({
   return (
     <View style={styles.cascadingContainer}>
       <View style={styles.cascadingHeader}>
-        <Ionicons name={icon} size={20} color={MAVECAM_COLORS.GRAY_LIGHT} />
+        <Ionicons name={icon} size={20} color={AQUACARE_COLORS.GRAY_LIGHT} />
         <Text style={styles.infoLabel}>{label}</Text>
       </View>
-      
+
       {levels.map((level, index) => (
         <View key={index} style={styles.cascadingLevel}>
           <Picker
@@ -162,10 +149,10 @@ export function CascadingPicker({
             style={styles.picker}
             mode="dropdown"
           >
-            <Picker.Item 
-              label={level.placeholder} 
-              value="" 
-              color={MAVECAM_COLORS.GRAY_LIGHT}
+            <Picker.Item
+              label={level.placeholder}
+              value=""
+              color={AQUACARE_COLORS.GRAY_LIGHT}
             />
             {level.options.map((option) => (
               <Picker.Item
@@ -173,7 +160,7 @@ export function CascadingPicker({
                 label={option.label}
                 value={option.value}
                 enabled={!option.disabled}
-                color={option.disabled ? MAVECAM_COLORS.GRAY_LIGHT : MAVECAM_COLORS.GRAY_DARK}
+                color={option.disabled ? AQUACARE_COLORS.GRAY_LIGHT : AQUACARE_COLORS.GRAY_DARK}
               />
             ))}
           </Picker>
@@ -198,14 +185,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   infoLabel: {
-    fontSize: 14,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
+    ...AQUACARE_TYPOGRAPHY.small,
+    color: AQUACARE_COLORS.GRAY_LIGHT,
     marginLeft: 12,
     flex: 1,
   },
   infoValue: {
-    fontSize: 14,
-    color: MAVECAM_COLORS.GRAY_DARK,
+    ...AQUACARE_TYPOGRAPHY.small,
+    color: AQUACARE_COLORS.GRAY_DARK,
     fontWeight: '500',
     flex: 1,
     textAlign: 'right',
@@ -215,7 +202,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#d1d5db',
     borderRadius: 6,
-    backgroundColor: MAVECAM_COLORS.WHITE,
+    backgroundColor: AQUACARE_COLORS.WHITE,
   },
   picker: {
     height: 40,
@@ -234,14 +221,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#d1d5db',
     borderRadius: 6,
-    backgroundColor: MAVECAM_COLORS.WHITE,
+    backgroundColor: AQUACARE_COLORS.WHITE,
   },
   readOnlyText: {
-    fontSize: 14,
-    color: MAVECAM_COLORS.GRAY_DARK,
+    ...AQUACARE_TYPOGRAPHY.small,
+    color: AQUACARE_COLORS.GRAY_DARK,
     paddingVertical: 10,
     paddingHorizontal: 12,
   },
 });
-
-

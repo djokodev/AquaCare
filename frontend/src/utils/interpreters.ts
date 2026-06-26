@@ -12,7 +12,7 @@ export type SurvivalRateInterpretation = 'excellent' | 'bon' | 'moyen' | 'faible
 export type PerformanceLevel = 'excellent' | 'bon' | 'moyen' | 'faible';
 
 /**
- * Interprete un FCR selon standards MAVECAM.
+ * Interprete un FCR selon standards AquaCare.
  *
  * @param fcr - FCR calcule par backend
  * @returns Interpretation textuelle
@@ -64,7 +64,7 @@ export const interpretSurvivalRate = (
  * @param species - Espece ('tilapia' ou 'clarias')
  * @returns true si densite optimale
  *
- * Plages optimales MAVECAM:
+ * Plages optimales AquaCare:
  * - Tilapia: 100-300 kg/m3
  * - Clarias: 200-500 kg/m3
  */
@@ -110,7 +110,7 @@ export const getFCRColor = (
   interpretation: FCRInterpretation | null
 ): string => {
   const colors = {
-    excellent: '#059669', // Vert MAVECAM
+    excellent: '#059669', // Vert AquaCare
     bon: '#10b981', // Vert clair
     acceptable: '#f59e0b', // Orange
     'necessite amelioration': '#dc2626', // Rouge
@@ -129,7 +129,7 @@ export const getSurvivalRateColor = (
   interpretation: SurvivalRateInterpretation | null
 ): string => {
   const colors = {
-    excellent: '#059669', // Vert MAVECAM
+    excellent: '#059669', // Vert AquaCare
     bon: '#10b981', // Vert clair
     moyen: '#f59e0b', // Orange
     faible: '#dc2626', // Rouge
@@ -148,7 +148,7 @@ export const getPerformanceLevelColor = (
   level: PerformanceLevel | null
 ): string => {
   const colors = {
-    excellent: '#059669', // Vert MAVECAM
+    excellent: '#059669', // Vert AquaCare
     bon: '#10b981', // Vert clair
     moyen: '#f59e0b', // Orange
     faible: '#dc2626', // Rouge
@@ -172,7 +172,7 @@ export const getFCRRecommendation = (
     excellent: 'FCR optimal ! Continuez cette gestion.',
     bon: 'FCR satisfaisant. Maintenir ce niveau.',
     acceptable: 'FCR acceptable. Optimisation possible.',
-    'necessite amelioration': 'FCR élevé. Consultez un technicien MAVECAM.',
+    'necessite amelioration': 'FCR élevé. Consultez un technicien AquaCare.',
   };
 
   return interpretation ? recommendations[interpretation] : 'Données insuffisantes';
@@ -193,7 +193,7 @@ export const getSurvivalRateRecommendation = (
     excellent: 'Taux de survie excellent ! Bonnes pratiques.',
     bon: 'Taux de survie satisfaisant.',
     moyen: 'Taux de survie moyen. Surveillance recommandée.',
-    faible: 'Taux de survie faible. Contactez MAVECAM.',
+    faible: 'Taux de survie faible. Contactez AquaCare.',
   };
 
   return interpretation ? recommendations[interpretation] : 'Données insuffisantes';

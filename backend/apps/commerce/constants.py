@@ -1,5 +1,5 @@
 """
-Constantes métier pour le module commerce MAVECAM AquaCare.
+Constantes métier pour le module commerce AquaCare.
 """
 from django.utils.translation import gettext_lazy as _
 
@@ -42,7 +42,7 @@ DELIVERY_METHOD_CHOICES = [
     ('pickup', _('Retrait en magasin')),
 ]
 
-# Points de retrait MAVECAM
+# Points de retrait AquaCare
 PICKUP_LOCATION_CHOICES = [
     ('ndokoti', _('Marché Ndokoti')),
     ('ndogpasi', _('Marché Ndogpasi')),
@@ -55,10 +55,10 @@ DELIVERY_FEE_FREE_THRESHOLD_BAGS = 20  # Sacs minimum pour livraison gratuite à
 
 # ===== CONSTANTES SIMULATION CYCLE =====
 
-# Taux de survie standard MAVECAM
+# Taux de survie standard AquaCare
 SURVIVAL_RATE_DEFAULT = 0.95  # 95% survie avec accompagnement AquaCare
 
-# FCR (Feed Conversion Ratio) cible MAVECAM
+# FCR (Feed Conversion Ratio) cible AquaCare
 FCR_TARGET_TILAPIA = 1.8  # kg aliment / kg gain de poids
 FCR_TARGET_CATFISH = 1.9
 

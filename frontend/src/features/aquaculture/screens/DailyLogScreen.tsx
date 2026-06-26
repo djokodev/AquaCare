@@ -6,16 +6,19 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState, AppDispatch } from '@/store/store';
 import { fetchDashboardData, setCurrentCycle } from '@/features/aquaculture/store/aquacultureSlice';
-import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
-import { offlineService } from '@/services/offlineService';
 import { DailyLogForm } from '@/types/aquaculture';
 import { RootStackParamList } from '@/navigation/MainNavigator';
-import { MAVECAM_COLORS } from '@/constants/colors';
+import { AQUACARE_COLORS } from '@/constants/colors';
 import { estimateAverageWeight } from '@/domain/aquaculture/estimators';
 import { calculateStockValue, calculateEstimatedBiomass } from '@/constants/aquaculture';
 import SuccessRewardModal from '@/components/modals/SuccessRewardModal';
 import CycleSelector from '@/components/common/CycleSelector';
-import { getApiErrorMessage, isNetworkError } from '@/utils/errorParser';
+import { getApiErrorMessage, parseApiError } from '@/utils/errorParser';
+import { formatAquacultureErrorWithAction } from '@/features/aquaculture/utils/aquacultureErrorPresenter';
+import {
+  createCycleLogWithOfflineFallback,
+  runSilentOfflineSync,
+} from '@/features/aquaculture/services/aquacultureWorkflowService';
 
 interface DailyLogData {
   cycle_id: string;
@@ -78,24 +81,12 @@ export default function DailyLogScreen({ navigation }: DailyLogScreenProps) {
   });
 
   useEffect(() => {
-    dispatch(fetchDashboardData(undefined));
-    tryOfflineSync();
+    const bootstrap = async () => {
+      await runSilentOfflineSync();
+      dispatch(fetchDashboardData({ lightweight: true }));
+    };
+    bootstrap();
   }, [dispatch]);
-
-  const tryOfflineSync = async () => {
-    try {
-      const hasPending = await offlineService.hasPendingSync();
-      if (hasPending) {
-        const result = await offlineService.syncOfflineLogs();
-
-        if (result.success > 0) {
-          dispatch(fetchDashboardData(undefined));
-        }
-      }
-    } catch {
-      // Synchronisation silencieuse
-    }
-  };
 
   useEffect(() => {
     if (sessionScopedCycles.length === 0) {
@@ -109,9 +100,6 @@ export default function DailyLogScreen({ navigation }: DailyLogScreenProps) {
       setFormData((prev) => ({ ...prev, cycle_id: preferredCycle.id }));
     }
   }, [sessionScopedCycles, selectedCycle]);
-
-  const getErrorMessage = (error: unknown): string =>
-    getApiErrorMessage(error, t('recordSaveError'));
 
   const parseOptionalNumber = (value: string): number | undefined => {
     if (!value.trim()) {
@@ -203,8 +191,8 @@ export default function DailyLogScreen({ navigation }: DailyLogScreenProps) {
       };
 
       try {
-        await aquacultureService.createCycleLog(selectedCycle, logData);
-        dispatch(fetchDashboardData(undefined));
+        const creationResult = await createCycleLogWithOfflineFallback(selectedCycle, logData);
+        dispatch(fetchDashboardData({ lightweight: true }));
 
         const currentCycle = sessionScopedCycles.find((cycle) => cycle.id === selectedCycle);
         if (sampleCount && sampleWeight && currentCycle) {
@@ -222,37 +210,20 @@ export default function DailyLogScreen({ navigation }: DailyLogScreenProps) {
           });
           setRewardModalVisible(true);
         } else {
-          Alert.alert(t('success'), t('recordSaved'), [{ text: t('ok'), onPress: () => navigation.goBack() }]);
+          const successKey = creationResult.mode === 'online' ? 'recordSaved' : 'recordSavedOffline';
+          Alert.alert(t('success'), t(successKey), [{ text: t('ok'), onPress: () => navigation.goBack() }]);
         }
       } catch (apiError: unknown) {
-        if (isNetworkError(apiError)) {
-          await offlineService.saveCycleLogOffline(selectedCycle, logData);
-
-          const currentCycle = sessionScopedCycles.find((cycle) => cycle.id === selectedCycle);
-          if (sampleCount && sampleWeight && currentCycle) {
-            const avgWeight = sampleWeight / sampleCount;
-            const mortality = mortalityCount || 0;
-            const remainingFish = (currentCycle.current_count || 0) - mortality;
-            const biomass = calculateEstimatedBiomass(remainingFish, avgWeight);
-            const value = calculateStockValue(biomass);
-
-            setRewardData({
-              averageWeight: avgWeight,
-              fishCount: remainingFish,
-              estimatedBiomass: biomass,
-              stockValue: value,
-            });
-            setRewardModalVisible(true);
-          } else {
-            Alert.alert(t('success'), t('recordSavedOffline'), [{ text: t('ok'), onPress: () => navigation.goBack() }]);
-          }
-        } else {
-          throw apiError;
-        }
+        throw apiError;
       }
     } catch (error: unknown) {
-      const errorMessage = getErrorMessage(error);
-      Alert.alert(t('error'), errorMessage);
+      const parsedError = parseApiError(error);
+      const fallbackMessage = getApiErrorMessage(error, t('recordSaveError'));
+      const actionableMessage =
+        parsedError.status > 0 || parsedError.details.length > 0
+          ? formatAquacultureErrorWithAction(parsedError, t)
+          : fallbackMessage;
+      Alert.alert(t('error'), actionableMessage);
     } finally {
       setSaving(false);
     }
@@ -266,10 +237,10 @@ export default function DailyLogScreen({ navigation }: DailyLogScreenProps) {
   if (sessionScopedCycles.length === 0) {
     return (
       <View className="flex-1 items-center justify-center bg-cream px-5">
-        <Ionicons name="fish-outline" size={64} color={MAVECAM_COLORS.GRAY_LIGHT} />
+        <Ionicons name="fish-outline" size={64} color={AQUACARE_COLORS.GRAY_LIGHT} />
         <Text className="text-lg font-bold text-gray-dark mt-4">{t('noActiveCycles')}</Text>
         <Text className="text-sm text-gray-light text-center mt-2 mb-6">{t('createCycleToStart')}</Text>
-        <TouchableOpacity className="bg-mavecam-primary px-5 py-3 rounded-lg" onPress={() => navigation.navigate('NewCycle')}>
+        <TouchableOpacity className="bg-aquacare-primary px-5 py-3 rounded-lg" onPress={() => navigation.navigate('NewCycle')}>
           <Text className="text-white text-base font-semibold">{t('createCycle')}</Text>
         </TouchableOpacity>
       </View>
@@ -278,9 +249,9 @@ export default function DailyLogScreen({ navigation }: DailyLogScreenProps) {
 
   return (
     <ScrollView className="flex-1 bg-cream">
-      <View className="bg-mavecam-primary flex-row items-center pt-14 pb-4 px-4">
+      <View className="bg-aquacare-primary flex-row items-center pt-14 pb-4 px-4">
         <TouchableOpacity className="mr-4" onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color={MAVECAM_COLORS.WHITE} />
+          <Ionicons name="arrow-back" size={24} color={AQUACARE_COLORS.WHITE} />
         </TouchableOpacity>
         <Text className="text-xl font-bold text-white">{t('dailyLogTitle')}</Text>
       </View>
@@ -467,7 +438,7 @@ export default function DailyLogScreen({ navigation }: DailyLogScreenProps) {
               <View className="bg-white p-4 rounded-lg border border-green-200">
                 <View className="flex-row justify-between mb-2">
                   <Text className="text-sm text-gray-light">{t('averageWeight')} :</Text>
-                  <Text className="text-sm font-semibold text-mavecam-primary">{avgWeight.toFixed(1)} g</Text>
+                  <Text className="text-sm font-semibold text-aquacare-primary">{avgWeight.toFixed(1)} g</Text>
                 </View>
               </View>
             </View>
@@ -475,15 +446,15 @@ export default function DailyLogScreen({ navigation }: DailyLogScreenProps) {
         })()}
 
         <TouchableOpacity
-          className={`bg-mavecam-primary flex-row items-center justify-center py-4 rounded-lg mt-4 gap-2 ${saving ? 'opacity-60' : ''}`}
+          className={`bg-aquacare-primary flex-row items-center justify-center py-4 rounded-lg mt-4 gap-2 ${saving ? 'opacity-60' : ''}`}
           onPress={handleSave}
           disabled={saving}
         >
           {saving ? (
-            <ActivityIndicator size="small" color={MAVECAM_COLORS.WHITE} />
+            <ActivityIndicator size="small" color={AQUACARE_COLORS.WHITE} />
           ) : (
             <>
-              <Ionicons name="checkmark" size={20} color={MAVECAM_COLORS.WHITE} />
+              <Ionicons name="checkmark" size={20} color={AQUACARE_COLORS.WHITE} />
               <Text className="text-white text-base font-semibold">{t('save')}</Text>
             </>
           )}

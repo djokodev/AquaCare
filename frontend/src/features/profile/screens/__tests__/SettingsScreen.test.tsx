@@ -93,11 +93,11 @@ describe('features/profile/screens/SettingsScreen', () => {
 
     fireEvent.press(getByText('disconnect'));
 
-    const logoutAlertCall = (Alert.alert as jest.Mock).mock.calls.find((call) => call[0] === 'Déconnexion');
+    const logoutAlertCall = (Alert.alert as jest.Mock).mock.calls.find((call) => call[0] === 'logoutConfirm');
     expect(logoutAlertCall).toBeTruthy();
 
     const actions = logoutAlertCall?.[2] as Array<{ text: string; onPress?: () => void }>;
-    const confirmAction = actions.find((a) => a.text === 'Déconnexion');
+    const confirmAction = actions.find((a) => a.text === 'logoutConfirm');
     expect(confirmAction?.onPress).toBeTruthy();
 
     confirmAction?.onPress?.();

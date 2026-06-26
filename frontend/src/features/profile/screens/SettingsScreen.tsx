@@ -6,15 +6,18 @@ import * as SecureStore from "expo-secure-store";
 
 import { useAuth } from "@/hooks/useAuth";
 import { STORAGE_KEYS } from "@/constants/api";
-import { MAVECAM_COLORS } from "@/constants/colors";
+import { AQUACARE_COLORS } from "@/constants/colors";
 import logger from "@/utils/logger";
 import config from "@/config/environment";
 import Constants from "expo-constants";
+import OnboardingService from "@/features/onboarding/services/onboardingService";
 
 export default function SettingsScreen() {
   const { t, i18n } = useTranslation();
   const { user, updateProfile, logout, deleteAccount } = useAuth();
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isUpdatingLanguage, setIsUpdatingLanguage] = useState(false);
+  const [isResettingOnboarding, setIsResettingOnboarding] = useState(false);
   const [settings, setSettings] = useState({ language: i18n.language });
 
   useEffect(() => {
@@ -28,11 +31,15 @@ export default function SettingsScreen() {
   }, [i18n, settings.language]);
 
   const handleLanguageChange = async (newLanguage: "fr" | "en") => {
+    if (isUpdatingLanguage || settings.language === newLanguage) return;
+
+    const previousLanguage = settings.language as "fr" | "en";
+    setIsUpdatingLanguage(true);
     try {
       setSettings((prev) => ({ ...prev, language: newLanguage }));
       await i18n.changeLanguage(newLanguage);
       await SecureStore.setItemAsync(STORAGE_KEYS.LANGUAGE, newLanguage);
-      updateProfile({ language_preference: newLanguage }).catch((err) => logger.warn("Profile lang update:", err));
+      await updateProfile({ language_preference: newLanguage });
       Alert.alert(
         t('languageUpdatedTitle'),
         newLanguage === "fr" ? t('languageUpdatedToFrench') : t('languageUpdatedToEnglish'),
@@ -40,14 +47,22 @@ export default function SettingsScreen() {
     } catch (error) {
       logger.error("Erreur changement langue:", error);
       Alert.alert(t('error'), t('languageChangeError'));
-      setSettings((prev) => ({ ...prev, language: i18n.language }));
+      setSettings((prev) => ({ ...prev, language: previousLanguage }));
+      try {
+        await i18n.changeLanguage(previousLanguage);
+        await SecureStore.setItemAsync(STORAGE_KEYS.LANGUAGE, previousLanguage);
+      } catch (rollbackError) {
+        logger.warn("Erreur rollback langue:", rollbackError);
+      }
+    } finally {
+      setIsUpdatingLanguage(false);
     }
   };
 
   const handleLogout = () => {
-    Alert.alert("Déconnexion", "Êtes-vous sûr de vouloir vous déconnecter ?", [
-      { text: "Annuler", style: "cancel" },
-      { text: "Déconnexion", style: "destructive", onPress: () => logout() },
+    Alert.alert(t("logoutConfirm"), t("logoutMessage"), [
+      { text: t("cancel"), style: "cancel" },
+      { text: t("logoutConfirm"), style: "destructive", onPress: () => logout() },
     ]);
   };
 
@@ -76,9 +91,37 @@ export default function SettingsScreen() {
     );
   };
 
+  const handleResetOnboarding = () => {
+    if (isResettingOnboarding) return;
+
+    Alert.alert(
+      t("onboardingResetConfirmTitle"),
+      t("onboardingResetConfirmMessage"),
+      [
+        { text: t("cancel"), style: "cancel" },
+        {
+          text: t("onboardingResetAction"),
+          style: "destructive",
+          onPress: async () => {
+            setIsResettingOnboarding(true);
+            try {
+              await OnboardingService.reset();
+              await logout();
+            } catch (error) {
+              logger.error("Onboarding reset error:", error);
+              Alert.alert(t("error"), t("onboardingResetError"));
+            } finally {
+              setIsResettingOnboarding(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   return (
     <ScrollView className="flex-1 bg-cream">
-      <View className="bg-mavecam-primary items-center pt-14 pb-6 px-5">
+      <View className="bg-aquacare-primary items-center pt-14 pb-6 px-5">
         <Text className="text-xl font-bold text-white mb-1">{user?.display_name}</Text>
         <Text className="text-sm text-white/80">{user?.phone_number}</Text>
       </View>
@@ -89,19 +132,21 @@ export default function SettingsScreen() {
           <TouchableOpacity
             key={lang.code}
             className={`bg-white flex-row items-center justify-between p-4 rounded-lg mb-2 border ${
-              settings.language === lang.code ? "border-mavecam-primary bg-[#f0fdf4]" : "border-gray-200"
+              settings.language === lang.code ? "border-aquacare-primary bg-[#f0fdf4]" : "border-gray-200"
             }`}
             onPress={() => handleLanguageChange(lang.code as "fr" | "en")}
+            disabled={isUpdatingLanguage}
+            style={{ opacity: isUpdatingLanguage ? 0.6 : 1 }}
           >
             <Text
               className={`text-base font-semibold ${
-                settings.language === lang.code ? "text-mavecam-primary" : "text-gray-dark"
+                settings.language === lang.code ? "text-aquacare-primary" : "text-gray-dark"
               }`}
             >
               {lang.label}
             </Text>
             {settings.language === lang.code && (
-              <Ionicons name="checkmark" size={20} color={MAVECAM_COLORS.GREEN_PRIMARY} />
+              <Ionicons name="checkmark" size={20} color={AQUACARE_COLORS.GREEN_PRIMARY} />
             )}
           </TouchableOpacity>
         ))}            
@@ -143,17 +188,32 @@ export default function SettingsScreen() {
           disabled={isDeleting}
           style={{ opacity: isDeleting ? 0.5 : 1 }}
         >
-          <Ionicons name="trash-outline" size={20} color={MAVECAM_COLORS.ERROR} />
+          <Ionicons name="trash-outline" size={20} color={AQUACARE_COLORS.ERROR} />
           <View className="ml-3 flex-1">
             <Text className="text-base font-semibold text-error">{t("deleteAccount")}</Text>
             <Text className="text-xs text-gray-500 mt-0.5">{t("deleteAccountDesc")}</Text>
           </View>
         </TouchableOpacity>
+
+        {__DEV__ && (
+          <TouchableOpacity
+            className="bg-white flex-row items-center p-4 rounded-xl border border-gray-200 mt-3"
+            onPress={handleResetOnboarding}
+            disabled={isResettingOnboarding}
+            style={{ opacity: isResettingOnboarding ? 0.5 : 1 }}
+          >
+            <Ionicons name="refresh-circle-outline" size={20} color={AQUACARE_COLORS.GREEN_PRIMARY} />
+            <View className="ml-3 flex-1">
+              <Text className="text-base font-semibold text-aquacare-primary">{t("onboardingResetAction")}</Text>
+              <Text className="text-xs text-gray-500 mt-0.5">{t("onboardingResetHint")}</Text>
+            </View>
+          </TouchableOpacity>
+        )}
       </View>
 
       <View className="px-5 pb-6">
         <TouchableOpacity className="bg-error flex-row items-center justify-center p-4 rounded-lg" onPress={handleLogout}>
-          <Ionicons name="log-out" size={20} color={MAVECAM_COLORS.WHITE} />
+          <Ionicons name="log-out" size={20} color={AQUACARE_COLORS.WHITE} />
           <Text className="text-white text-base font-semibold ml-2">{t("disconnect")}</Text>
         </TouchableOpacity>
       </View>

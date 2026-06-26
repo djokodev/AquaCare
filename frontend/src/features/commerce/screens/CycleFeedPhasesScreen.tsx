@@ -28,7 +28,8 @@ import { addToCart } from '@/features/commerce/store/commerceSlice';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
 import { FeedPhase, FeedPhaseProduct } from '@/types/aquaculture';
 import { Product, ProductBrand } from '@/types/commerce';
-import { MAVECAM_COLORS } from '@/constants/colors';
+import { AQUACARE_COLORS } from '@/constants/colors';
+import { AQUACARE_TYPOGRAPHY } from '@/constants/typography';
 import { RootStackParamList } from '@/navigation/MainNavigator';
 
 type Props = StackScreenProps<RootStackParamList, 'CycleFeedPhases'>;
@@ -188,14 +189,14 @@ export default function CycleFeedPhasesScreen({ navigation, route }: Props) {
             style={styles.qtyBtn}
             onPress={() => handleQuantityChange(p.product_id, -1)}
           >
-            <Ionicons name="remove" size={14} color={MAVECAM_COLORS.GREEN_PRIMARY} />
+            <Ionicons name="remove" size={14} color={AQUACARE_COLORS.GREEN_PRIMARY} />
           </TouchableOpacity>
           <Text style={styles.qtyValue}>{qty}</Text>
           <TouchableOpacity
             style={styles.qtyBtn}
             onPress={() => handleQuantityChange(p.product_id, 1)}
           >
-            <Ionicons name="add" size={14} color={MAVECAM_COLORS.GREEN_PRIMARY} />
+            <Ionicons name="add" size={14} color={AQUACARE_COLORS.GREEN_PRIMARY} />
           </TouchableOpacity>
         </View>
       </View>
@@ -203,17 +204,17 @@ export default function CycleFeedPhasesScreen({ navigation, route }: Props) {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: MAVECAM_COLORS.CREAM }}>
+    <View style={{ flex: 1, backgroundColor: AQUACARE_COLORS.CREAM }}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerBack}>
-          <Ionicons name="arrow-back" size={24} color={MAVECAM_COLORS.GRAY_DARK} />
+          <Ionicons name="arrow-back" size={24} color={AQUACARE_COLORS.GRAY_DARK} />
         </TouchableOpacity>
         <View style={{ flex: 1, alignItems: 'center' }}>
           <Text style={styles.headerTitle}>{t('feedPhasesTitle')}</Text>
         </View>
         <TouchableOpacity style={styles.headerCart} onPress={() => navigation.navigate('Cart')}>
-          <Ionicons name="cart-outline" size={26} color={MAVECAM_COLORS.GREEN_PRIMARY} />
+          <Ionicons name="cart-outline" size={26} color={AQUACARE_COLORS.GREEN_PRIMARY} />
           {cartItemsCount > 0 && (
             <View style={styles.cartBadge}>
               <Text style={styles.cartBadgeText}>{cartItemsCount}</Text>
@@ -224,13 +225,13 @@ export default function CycleFeedPhasesScreen({ navigation, route }: Props) {
 
       {loading ? (
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-          <ActivityIndicator size="large" color={MAVECAM_COLORS.GREEN_PRIMARY} />
-          <Text style={{ marginTop: 10, color: MAVECAM_COLORS.GRAY_LIGHT }}>{t('loading')}</Text>
+          <ActivityIndicator size="large" color={AQUACARE_COLORS.GREEN_PRIMARY} />
+          <Text style={{ marginTop: 10, color: AQUACARE_COLORS.GRAY_LIGHT }}>{t('loading')}</Text>
         </View>
       ) : error ? (
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-          <Ionicons name="alert-circle-outline" size={48} color={MAVECAM_COLORS.ERROR} />
-          <Text style={{ marginTop: 10, color: MAVECAM_COLORS.ERROR, textAlign: 'center' }}>
+          <Ionicons name="alert-circle-outline" size={48} color={AQUACARE_COLORS.ERROR} />
+          <Text style={{ marginTop: 10, color: AQUACARE_COLORS.ERROR, textAlign: 'center' }}>
             {error}
           </Text>
           <TouchableOpacity style={[styles.phaseOrderBtn, { marginTop: 16, alignSelf: 'center', paddingHorizontal: 24 }]} onPress={loadPhases}>
@@ -239,8 +240,8 @@ export default function CycleFeedPhasesScreen({ navigation, route }: Props) {
         </View>
       ) : phases.length === 0 ? (
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-          <Ionicons name="restaurant-outline" size={64} color={MAVECAM_COLORS.GRAY_LIGHT} />
-          <Text style={{ marginTop: 12, fontSize: 16, color: MAVECAM_COLORS.GRAY_DARK, textAlign: 'center' }}>
+          <Ionicons name="restaurant-outline" size={64} color={AQUACARE_COLORS.GRAY_LIGHT} />
+          <Text style={{ marginTop: 12, fontSize: 16, color: AQUACARE_COLORS.GRAY_DARK, textAlign: 'center' }}>
             {t('feedPhasesEmpty')}
           </Text>
         </View>
@@ -252,7 +253,7 @@ export default function CycleFeedPhasesScreen({ navigation, route }: Props) {
           >
             {/* Info banner */}
             <View style={styles.infoBanner}>
-              <Ionicons name="information-circle-outline" size={16} color={MAVECAM_COLORS.GREEN_PRIMARY} />
+              <Ionicons name="information-circle-outline" size={16} color={AQUACARE_COLORS.GREEN_PRIMARY} />
               <Text style={styles.infoText}>{t('feedPhasesSubtitle')}</Text>
             </View>
 
@@ -288,9 +289,8 @@ const styles = StyleSheet.create({
   },
   headerBack: { width: 36 },
   headerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: MAVECAM_COLORS.GRAY_DARK,
+    ...AQUACARE_TYPOGRAPHY.h4,
+    color: AQUACARE_COLORS.GRAY_DARK,
   },
   headerCart: { width: 36, alignItems: 'flex-end', position: 'relative' },
   cartBadge: {
@@ -305,7 +305,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 3,
   },
-  cartBadgeText: { color: '#fff', fontSize: 10, fontWeight: 'bold' },
+  cartBadgeText: {
+    ...AQUACARE_TYPOGRAPHY.caption,
+    color: AQUACARE_COLORS.WHITE,
+    fontWeight: '700',
+  },
   infoBanner: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -317,9 +321,8 @@ const styles = StyleSheet.create({
   },
   infoText: {
     flex: 1,
-    fontSize: 12,
+    ...AQUACARE_TYPOGRAPHY.caption,
     color: '#065f46',
-    lineHeight: 17,
   },
   phaseCard: {
     backgroundColor: '#fff',
@@ -327,7 +330,7 @@ const styles = StyleSheet.create({
     padding: 14,
     marginBottom: 12,
     borderLeftWidth: 4,
-    borderLeftColor: MAVECAM_COLORS.GREEN_PRIMARY,
+    borderLeftColor: AQUACARE_COLORS.GREEN_PRIMARY,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.06,
@@ -341,15 +344,15 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   phaseName: {
-    fontSize: 15,
+    ...AQUACARE_TYPOGRAPHY.smallStrong,
     fontWeight: '700',
-    color: MAVECAM_COLORS.GRAY_DARK,
+    color: AQUACARE_COLORS.GRAY_DARK,
     flex: 1,
     marginRight: 8,
   },
   phaseSub: {
-    fontSize: 12,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
+    ...AQUACARE_TYPOGRAPHY.caption,
+    color: AQUACARE_COLORS.GRAY_LIGHT,
     marginBottom: 10,
   },
   phaseBadge: {
@@ -359,9 +362,9 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   phaseBadgeText: {
-    fontSize: 12,
+    ...AQUACARE_TYPOGRAPHY.caption,
     fontWeight: '700',
-    color: MAVECAM_COLORS.GREEN_PRIMARY,
+    color: AQUACARE_COLORS.GREEN_PRIMARY,
   },
   productRow: {
     flexDirection: 'row',
@@ -372,18 +375,24 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   productName: {
+    ...AQUACARE_TYPOGRAPHY.caption,
     fontSize: 13,
+    lineHeight: 18,
     fontWeight: '600',
-    color: MAVECAM_COLORS.GRAY_DARK,
+    color: AQUACARE_COLORS.GRAY_DARK,
   },
   productSub: {
-    fontSize: 11,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
+    ...AQUACARE_TYPOGRAPHY.caption,
+    fontSize: 12,
+    lineHeight: 16,
+    color: AQUACARE_COLORS.GRAY_LIGHT,
     marginTop: 1,
   },
   productRecommended: {
-    fontSize: 11,
-    color: MAVECAM_COLORS.GREEN_PRIMARY,
+    ...AQUACARE_TYPOGRAPHY.caption,
+    fontSize: 12,
+    lineHeight: 16,
+    color: AQUACARE_COLORS.GREEN_PRIMARY,
     marginTop: 2,
   },
   qtyControl: {
@@ -404,13 +413,13 @@ const styles = StyleSheet.create({
   qtyValue: {
     width: 34,
     textAlign: 'center',
-    fontSize: 14,
+    ...AQUACARE_TYPOGRAPHY.smallStrong,
     fontWeight: '700',
-    color: MAVECAM_COLORS.GRAY_DARK,
+    color: AQUACARE_COLORS.GRAY_DARK,
   },
   phaseOrderBtn: {
     marginTop: 12,
-    backgroundColor: MAVECAM_COLORS.GREEN_PRIMARY,
+    backgroundColor: AQUACARE_COLORS.GREEN_PRIMARY,
     borderRadius: 8,
     paddingVertical: 10,
     flexDirection: 'row',
@@ -418,9 +427,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   phaseOrderBtnText: {
-    color: '#fff',
-    fontSize: 13,
-    fontWeight: '600',
+    ...AQUACARE_TYPOGRAPHY.smallStrong,
+    color: AQUACARE_COLORS.WHITE,
   },
   stickyBar: {
     position: 'absolute',
@@ -439,7 +447,7 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   orderAllBtn: {
-    backgroundColor: MAVECAM_COLORS.GREEN_DARK,
+    backgroundColor: AQUACARE_COLORS.GREEN_DARK,
     borderRadius: 10,
     paddingVertical: 14,
     flexDirection: 'row',
@@ -447,8 +455,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   orderAllText: {
-    color: '#fff',
-    fontSize: 15,
+    ...AQUACARE_TYPOGRAPHY.bodyStrong,
+    color: AQUACARE_COLORS.WHITE,
     fontWeight: '700',
   },
 });

@@ -34,7 +34,7 @@ import DashboardHeader from '../components/DashboardHeader';
 import QuickActionsPreview from '../components/QuickActionsPreview';
 import QuickActionsSheet from '../components/QuickActionsSheet';
 import { ProductionCycle } from '@/types/aquaculture';
-import { MAVECAM_COLORS } from '@/constants/colors';
+import { AQUACARE_COLORS } from '@/constants/colors';
 import { formatNumber, formatPercentage, formatCurrency } from '@/utils';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -272,10 +272,10 @@ export default function DashboardScreen({ navigation }: any) {
         />
 
         <View className="flex-1 items-center justify-center px-5 py-10">
-          <Ionicons name="alert-circle" size={48} color={MAVECAM_COLORS.ERROR} />
+          <Ionicons name="alert-circle" size={48} color={AQUACARE_COLORS.ERROR} />
           <Text className="text-base text-[#dc2626] text-center mt-3 mb-5">{error}</Text>
           <TouchableOpacity
-            className="bg-mavecam-primary px-6 py-3 rounded-lg"
+            className="bg-aquacare-primary px-6 py-3 rounded-lg"
             onPress={onRefresh}
           >
             <Text className="text-white text-base font-semibold">{t('retry', { defaultValue: 'Réessayer' })}</Text>
@@ -315,7 +315,7 @@ export default function DashboardScreen({ navigation }: any) {
       <View className="px-5 py-5">
         {loading.dashboard && !dashboardData ? (
           <View className="items-center justify-center py-10">
-            <ActivityIndicator size="large" color={MAVECAM_COLORS.GREEN_PRIMARY} />
+            <ActivityIndicator size="large" color={AQUACARE_COLORS.GREEN_PRIMARY} />
             <Text className="text-base text-gray-light mt-3">
               {t('loadingData', { defaultValue: 'Chargement des données...' })}
             </Text>
@@ -324,7 +324,7 @@ export default function DashboardScreen({ navigation }: any) {
           <View className="flex-row flex-wrap justify-between">
             <MetricCard
               icon="cash-outline"
-              color={MAVECAM_COLORS.GREEN_PRIMARY}
+              color={AQUACARE_COLORS.GREEN_PRIMARY}
               value={formatCurrency(dashboardBusinessMetrics.estimatedMarketValueFcfa)}
               label={t('dashboardEstimatedMarketValue')}
               index={0}
@@ -333,7 +333,7 @@ export default function DashboardScreen({ navigation }: any) {
 
             <MetricCard
               icon="restaurant-outline"
-              color={MAVECAM_COLORS.GREEN_LIGHT}
+              color={AQUACARE_COLORS.GREEN_LIGHT}
               value={formatCurrency(dashboardBusinessMetrics.feedCostConsumedFcfa)}
               label={t('dashboardFeedCostConsumed')}
               index={1}
@@ -342,7 +342,7 @@ export default function DashboardScreen({ navigation }: any) {
 
             <MetricCard
               icon="time-outline"
-              color={MAVECAM_COLORS.GREEN_DARK}
+              color={AQUACARE_COLORS.GREEN_DARK}
               value={
                 dashboardBusinessMetrics.timeRemainingDays === null
                   ? '-'
@@ -355,7 +355,7 @@ export default function DashboardScreen({ navigation }: any) {
 
             <MetricCard
               icon="calculator-outline"
-              color={MAVECAM_COLORS.SUCCESS}
+              color={AQUACARE_COLORS.SUCCESS}
               value={formatCurrency(dashboardBusinessMetrics.directProductionCostFcfa)}
               label={t('dashboardDirectProductionCost')}
               index={3}
@@ -368,10 +368,10 @@ export default function DashboardScreen({ navigation }: any) {
       {activeCycles.length > 1 && (
         <View className="px-5 pb-1 items-end">
           <TouchableOpacity
-            className="px-3 py-2 rounded-lg border border-mavecam-primary bg-white"
+            className="px-3 py-2 rounded-lg border border-aquacare-primary bg-white"
             onPress={openCycleSwitchModal}
           >
-            <Text className="text-sm font-semibold text-mavecam-primary">
+            <Text className="text-sm font-semibold text-aquacare-primary">
               {t('changeSessionCycle', { defaultValue: 'Changer de cycle' })}
             </Text>
           </TouchableOpacity>
@@ -391,10 +391,10 @@ export default function DashboardScreen({ navigation }: any) {
                 </Text>
               </View>
               <TouchableOpacity
-                className="px-3 py-2 rounded-lg border border-mavecam-primary"
+                className="px-3 py-2 rounded-lg border border-aquacare-primary"
                 onPress={() => navigation.navigate('OrdersHistory')}
               >
-                <Text className="text-sm font-semibold text-mavecam-primary">{t('ordersHistory')}</Text>
+                <Text className="text-sm font-semibold text-aquacare-primary">{t('ordersHistory')}</Text>
               </TouchableOpacity>
             </View>
 
@@ -411,12 +411,12 @@ export default function DashboardScreen({ navigation }: any) {
                       </Text>
                     </View>
                     <TouchableOpacity
-                      className={`px-3 py-2 rounded-lg ${isConfirming ? 'bg-gray-300' : 'bg-mavecam-primary'}`}
+                      className={`px-3 py-2 rounded-lg ${isConfirming ? 'bg-gray-300' : 'bg-aquacare-primary'}`}
                       disabled={isConfirming}
                       onPress={() => handleConfirmOrderReceipt(order.id, order.order_number)}
                     >
                       {isConfirming ? (
-                        <ActivityIndicator size="small" color={MAVECAM_COLORS.WHITE} />
+                        <ActivityIndicator size="small" color={AQUACARE_COLORS.WHITE} />
                       ) : (
                         <Text className="text-white text-xs font-semibold">{t('confirmReceiptAction')}</Text>
                       )}
@@ -456,7 +456,7 @@ export default function DashboardScreen({ navigation }: any) {
                 </View>
 
                 <TouchableOpacity
-                  className="bg-mavecam-primary flex-row items-center py-2 px-3 rounded-lg"
+                  className="bg-aquacare-primary flex-row items-center py-2 px-3 rounded-lg"
                   onPress={() => openHarvestChoice(cycle)}
                 >
                   <Text className="text-white text-sm font-semibold ml-1">{t('harvest')}</Text>
@@ -466,8 +466,8 @@ export default function DashboardScreen({ navigation }: any) {
                 style={{ marginTop: 10, flexDirection: 'row', alignItems: 'center', gap: 4 }}
                 onPress={() => { setSelectedCycle(cycle); setPartialHarvestHistoryModalVisible(true); }}
               >
-                <Ionicons name="time-outline" size={14} color={MAVECAM_COLORS.GREEN_PRIMARY} />
-                <Text style={{ fontSize: 13, color: MAVECAM_COLORS.GREEN_PRIMARY }}>{t('partialHarvestHistory')}</Text>
+                <Ionicons name="time-outline" size={14} color={AQUACARE_COLORS.GREEN_PRIMARY} />
+                <Text className="text-sm text-aquacare-primary">{t('partialHarvestHistory')}</Text>
               </TouchableOpacity>
             </View>
           ))}
@@ -537,7 +537,7 @@ export default function DashboardScreen({ navigation }: any) {
               )}
               <TouchableOpacity
                 className={`px-4 py-2 rounded-lg ${
-                  pendingCycleId ? 'bg-mavecam-primary' : 'bg-gray-300'
+                  pendingCycleId ? 'bg-aquacare-primary' : 'bg-gray-300'
                 }`}
                 disabled={!pendingCycleId}
                 onPress={confirmCycleSwitch}

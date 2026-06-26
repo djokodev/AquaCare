@@ -1,0 +1,70 @@
+export interface User {
+  id: string;
+  phone_number: string;
+  email?: string;
+  first_name?: string;
+  last_name?: string;
+  business_name?: string;
+  account_type: 'individual' | 'company';
+  age_group?: string;
+  activity_type?: string;
+  region?: string;
+  department?: string;
+  district?: string;
+  city?: string;
+  neighborhood?: string;
+  legal_status?: string;
+  promoter_name?: string;
+  intervention_zone?: string;
+  language_preference: 'fr' | 'en';
+  is_verified: boolean;
+  is_active: boolean;
+  date_joined: string;
+  full_name?: string;
+  login_name?: string;
+  display_name: string;
+  is_individual: boolean;
+  is_company: boolean;
+}
+
+export interface LoginRequest {
+  login_name?: string;
+  phone_number?: string;
+  password: string;
+}
+
+export interface RegisterRequest {
+  phone_number: string;
+  email?: string;
+  first_name?: string;
+  last_name?: string;
+  business_name?: string;
+  account_type: 'individual' | 'company';
+  age_group?: string;
+  activity_type?: string;
+  region?: string;
+  department?: string;
+  district?: string;
+  city?: string;
+  neighborhood?: string;
+  legal_status?: string;
+  promoter_name?: string;
+  intervention_zone?: string;
+  language_preference: 'fr' | 'en';
+  password: string;
+  password_confirm: string;
+}
+
+export interface AuthResponse {
+  user: User;
+  tokens: {
+    access: string;
+    refresh: string;
+  };
+  message: string;
+}
+
+export interface ApiError {
+  message: string;
+  details?: Record<string, string[]>;
+}

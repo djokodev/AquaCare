@@ -1,6 +1,6 @@
 /**
  * Composant bouton réutilisable pour l'onboarding
- * Respecte la charte graphique MAVECAM
+ * Respecte la charte graphique AquaCare
  * @module features/onboarding/components
  */
 
@@ -11,10 +11,11 @@ import {
   StyleSheet,
 } from 'react-native';
 import { OnboardingButtonProps } from '../types/onboarding';
-import { MAVECAM_COLORS } from '@/constants/colors';
+import { AQUACARE_COLORS } from '@/constants/colors';
+import { AQUACARE_TYPOGRAPHY } from '@/constants/typography';
 
 /**
- * Bouton primaire MAVECAM pour onboarding
+ * Bouton primaire AquaCare pour onboarding
  * Gère états normal, pressé, désactivé
  */
 export default function OnboardingButton({
@@ -43,7 +44,7 @@ export default function OnboardingButton({
 
 const styles = StyleSheet.create({
   button: {
-    backgroundColor: MAVECAM_COLORS.GREEN_PRIMARY,
+    backgroundColor: AQUACARE_COLORS.GREEN_PRIMARY,
     paddingVertical: 16,
     paddingHorizontal: 48,
     borderRadius: 12,
@@ -70,9 +71,7 @@ const styles = StyleSheet.create({
   },
 
   buttonText: {
-    color: MAVECAM_COLORS.WHITE,
-    fontSize: 16,
-    fontWeight: '600',
-    letterSpacing: 0.5,
+    ...AQUACARE_TYPOGRAPHY.button,
+    color: AQUACARE_COLORS.WHITE,
   },
 });

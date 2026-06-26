@@ -69,7 +69,7 @@ def _build_email_context(notification: Notification) -> EmailTemplateContext:
         "metadata": notification.metadata,
         "notification_type": notification.get_notification_type_display(),
         "created_at": notification.created_at,
-        "site_url": settings.FRONTEND_URL if hasattr(settings, "FRONTEND_URL") else "https://aquacare.mavecam.com",
+        "site_url": settings.FRONTEND_URL if hasattr(settings, "FRONTEND_URL") else "https://aquacare.tech",
     }
 
 

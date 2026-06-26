@@ -17,7 +17,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { AppDispatch, RootState } from '@/store/store';
 import { fetchCycleSimulation, resetSimulation, addToCart, fetchProducts } from '@/features/commerce/store/commerceSlice';
 import { CycleSimulationParams } from '@/types/commerce';
-import { MAVECAM_COLORS } from '@/constants/colors';
+import { AQUACARE_COLORS } from '@/constants/colors';
 import { CYCLE_SIMULATION_DEFAULTS } from '@/domain/commerce/constants';
 import { RootStackParamList } from '@/navigation/MainNavigator';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
@@ -313,7 +313,7 @@ export default function CycleSimulatorScreen() {
       <View key={index} className="bg-white rounded-xl p-4 mb-3">
         <View className="flex-row items-center mb-3 gap-3">
           <View className="w-10 h-10 bg-cream rounded-full items-center justify-center">
-            <Ionicons name="fast-food" size={20} color={MAVECAM_COLORS.GREEN_PRIMARY} />
+            <Ionicons name="fast-food" size={20} color={AQUACARE_COLORS.GREEN_PRIMARY} />
           </View>
           <View className="flex-1">
             <Text className="text-sm font-bold text-gray-dark">{getPhaseLabel(phase.phase_name)}</Text>
@@ -325,15 +325,15 @@ export default function CycleSimulatorScreen() {
 
         <View className="flex-row bg-cream rounded-lg p-3 mb-3 gap-4">
           <View className="flex-1 items-center">
-            <Text className="text-[11px] text-gray-light">{t('duration')}</Text>
+            <Text className="text-xs text-gray-light">{t('duration')}</Text>
             <Text className="text-sm font-semibold text-gray-dark">{phase.duration_days} {t('days')}</Text>
           </View>
           <View className="flex-1 items-center">
-            <Text className="text-[11px] text-gray-light">{t('consumption')}</Text>
+            <Text className="text-xs text-gray-light">{t('consumption')}</Text>
             <Text className="text-sm font-semibold text-gray-dark">{phase.total_consumption_kg}kg</Text>
           </View>
           <View className="flex-1 items-center">
-            <Text className="text-[11px] text-gray-light">{t('dailyAverage')}</Text>
+            <Text className="text-xs text-gray-light">{t('dailyAverage')}</Text>
             <Text className="text-sm font-semibold text-gray-dark">{phase.daily_avg_kg.toFixed(1)}kg/j</Text>
           </View>
         </View>
@@ -342,7 +342,7 @@ export default function CycleSimulatorScreen() {
           <Text className="text-sm font-semibold text-gray-dark">
             {totalBags} {t(totalBags > 1 ? 'bags' : 'bag')}
           </Text>
-          <Text className="text-base font-bold text-mavecam-primary">
+          <Text className="text-base font-bold text-aquacare-primary">
             {Number(phase.total_price).toLocaleString()} FCFA
           </Text>
         </View>
@@ -361,10 +361,10 @@ export default function CycleSimulatorScreen() {
         </View>
 
         <TouchableOpacity
-          className="bg-cream border border-mavecam-primary rounded-lg py-2 items-center"
+          className="bg-cream border border-aquacare-primary rounded-lg py-2 items-center"
           onPress={() => handleAddPhaseToCart(phase)}
         >
-          <Text className="text-mavecam-primary font-semibold text-sm">{t('addPhaseToCart')}</Text>
+          <Text className="text-aquacare-primary font-semibold text-sm">{t('addPhaseToCart')}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -374,7 +374,7 @@ export default function CycleSimulatorScreen() {
     <View className="flex-1 bg-cream">
       <View className="bg-white px-5 pt-16 pb-5 flex-row items-center shadow">
         <TouchableOpacity onPress={() => navigation.goBack()} className="w-10">
-          <Ionicons name="arrow-back" size={24} color={MAVECAM_COLORS.GRAY_DARK} />
+          <Ionicons name="arrow-back" size={24} color={AQUACARE_COLORS.GRAY_DARK} />
         </TouchableOpacity>
         <View className="flex-1 items-center">
           <Text className="text-xl font-bold text-gray-dark">{t('cycleSimulator')}</Text>
@@ -392,14 +392,14 @@ export default function CycleSimulatorScreen() {
             <View className="flex-row gap-3">
               <TouchableOpacity
                 className={`flex-1 flex-row items-center justify-center py-3 rounded-lg border-2 gap-2 ${
-                  species === 'tilapia' ? 'bg-mavecam-primary border-mavecam-primary' : 'border-gray-light'
+                  species === 'tilapia' ? 'bg-aquacare-primary border-aquacare-primary' : 'border-gray-light'
                 }`}
                 onPress={() => handleSpeciesChange('tilapia')}
               >
                 <Ionicons
                   name="fish"
                   size={20}
-                  color={species === 'tilapia' ? MAVECAM_COLORS.WHITE : MAVECAM_COLORS.GRAY_DARK}
+                  color={species === 'tilapia' ? AQUACARE_COLORS.WHITE : AQUACARE_COLORS.GRAY_DARK}
                 />
                 <Text className={`text-sm font-semibold ${species === 'tilapia' ? 'text-white' : 'text-gray-dark'}`}>
                   {t('tilapia')}
@@ -407,14 +407,14 @@ export default function CycleSimulatorScreen() {
               </TouchableOpacity>
               <TouchableOpacity
                 className={`flex-1 flex-row items-center justify-center py-3 rounded-lg border-2 gap-2 ${
-                  species === 'catfish' ? 'bg-mavecam-primary border-mavecam-primary' : 'border-gray-light'
+                  species === 'catfish' ? 'bg-aquacare-primary border-aquacare-primary' : 'border-gray-light'
                 }`}
                 onPress={() => handleSpeciesChange('catfish')}
               >
                 <Ionicons
                   name="fish"
                   size={20}
-                  color={species === 'catfish' ? MAVECAM_COLORS.WHITE : MAVECAM_COLORS.GRAY_DARK}
+                  color={species === 'catfish' ? AQUACARE_COLORS.WHITE : AQUACARE_COLORS.GRAY_DARK}
                 />
                 <Text className={`text-sm font-semibold ${species === 'catfish' ? 'text-white' : 'text-gray-dark'}`}>
                   {t('catfish')}
@@ -515,15 +515,15 @@ export default function CycleSimulatorScreen() {
           <View className="flex-row gap-3">
             <TouchableOpacity
               className={`flex-1 flex-row items-center justify-center py-3 rounded-lg gap-2 ${
-                loading ? 'bg-mavecam-primary/60' : 'bg-mavecam-primary'
+                loading ? 'bg-aquacare-primary/60' : 'bg-aquacare-primary'
               }`}
               onPress={handleLaunchSimulation}
               disabled={loading}
             >
               {loading ? (
-                <ActivityIndicator size="small" color={MAVECAM_COLORS.WHITE} />
+                <ActivityIndicator size="small" color={AQUACARE_COLORS.WHITE} />
               ) : (
-                <Ionicons name="analytics" size={20} color={MAVECAM_COLORS.WHITE} />
+                <Ionicons name="analytics" size={20} color={AQUACARE_COLORS.WHITE} />
               )}
               <Text className="text-white text-base font-semibold">{t('simulate')}</Text>
             </TouchableOpacity>
@@ -532,21 +532,21 @@ export default function CycleSimulatorScreen() {
                 className="bg-cream px-4 rounded-lg items-center justify-center"
                 onPress={handleReset}
               >
-                <Ionicons name="refresh" size={20} color={MAVECAM_COLORS.GRAY_DARK} />
+                <Ionicons name="refresh" size={20} color={AQUACARE_COLORS.GRAY_DARK} />
               </TouchableOpacity>
             )}
           </View>
 
           {effectiveCycleId && (
             <TouchableOpacity
-              className={`mt-3 rounded-lg py-3 items-center ${savingCycleParams ? 'bg-gray-200' : 'bg-cream border border-mavecam-primary'}`}
+              className={`mt-3 rounded-lg py-3 items-center ${savingCycleParams ? 'bg-gray-200' : 'bg-cream border border-aquacare-primary'}`}
               onPress={handleUpdateCycleParameters}
               disabled={savingCycleParams}
             >
               {savingCycleParams ? (
-                <ActivityIndicator size="small" color={MAVECAM_COLORS.GREEN_PRIMARY} />
+                <ActivityIndicator size="small" color={AQUACARE_COLORS.GREEN_PRIMARY} />
               ) : (
-                <Text className="text-mavecam-primary font-semibold">{t('updateCycleParameters')}</Text>
+                <Text className="text-aquacare-primary font-semibold">{t('updateCycleParameters')}</Text>
               )}
             </TouchableOpacity>
           )}
@@ -554,8 +554,8 @@ export default function CycleSimulatorScreen() {
 
         {error && (
           <View className="bg-white px-4 py-4 mb-2 items-center gap-3">
-            <Ionicons name="alert-circle-outline" size={32} color={MAVECAM_COLORS.ERROR} />
-            <Text className="text-sm text-center" style={{ color: MAVECAM_COLORS.ERROR }}>{error}</Text>
+            <Ionicons name="alert-circle-outline" size={32} color={AQUACARE_COLORS.ERROR} />
+            <Text className="text-sm text-center" style={{ color: AQUACARE_COLORS.ERROR }}>{error}</Text>
           </View>
         )}
 
@@ -565,29 +565,29 @@ export default function CycleSimulatorScreen() {
 
             <View className="flex-row flex-wrap gap-3 mb-4">
               <View className="flex-1 min-w-[45%] bg-white rounded-xl p-4 items-center">
-                <Ionicons name="scale-outline" size={24} color={MAVECAM_COLORS.GREEN_PRIMARY} />
-                <Text className="text-lg font-bold text-mavecam-primary mt-2">
+                <Ionicons name="scale-outline" size={24} color={AQUACARE_COLORS.GREEN_PRIMARY} />
+                <Text className="text-lg font-bold text-aquacare-primary mt-2">
                   {simulationResult.summary.total_feed_kg.toLocaleString()}kg
                 </Text>
                 <Text className="text-xs text-gray-light mt-1 text-center">{t('totalFeed')}</Text>
               </View>
               <View className="flex-1 min-w-[45%] bg-white rounded-xl p-4 items-center">
-                <Ionicons name="wallet-outline" size={24} color={MAVECAM_COLORS.GREEN_PRIMARY} />
-                <Text className="text-lg font-bold text-mavecam-primary mt-2">
+                <Ionicons name="wallet-outline" size={24} color={AQUACARE_COLORS.GREEN_PRIMARY} />
+                <Text className="text-lg font-bold text-aquacare-primary mt-2">
                   {simulationResult.summary.total_cost_fcfa.toLocaleString()}
                 </Text>
                 <Text className="text-xs text-gray-light mt-1 text-center">{t('totalCosts')}</Text>
               </View>
               <View className="flex-1 min-w-[45%] bg-white rounded-xl p-4 items-center">
-                <Ionicons name="trending-up-outline" size={24} color={MAVECAM_COLORS.GREEN_PRIMARY} />
-                <Text className="text-lg font-bold text-mavecam-primary mt-2">
+                <Ionicons name="trending-up-outline" size={24} color={AQUACARE_COLORS.GREEN_PRIMARY} />
+                <Text className="text-lg font-bold text-aquacare-primary mt-2">
                   {simulationResult.summary.estimated_fcr.toFixed(1)}
                 </Text>
                 <Text className="text-xs text-gray-light mt-1 text-center">{t('estimatedFCR')}</Text>
               </View>
               <View className="flex-1 min-w-[45%] bg-white rounded-xl p-4 items-center">
-                <Ionicons name="heart-outline" size={24} color={MAVECAM_COLORS.GREEN_PRIMARY} />
-                <Text className="text-lg font-bold text-mavecam-primary mt-2">
+                <Ionicons name="heart-outline" size={24} color={AQUACARE_COLORS.GREEN_PRIMARY} />
+                <Text className="text-lg font-bold text-aquacare-primary mt-2">
                   {(simulationResult.summary.survival_rate * 100).toFixed(0)}%
                 </Text>
                 <Text className="text-xs text-gray-light mt-1 text-center">{t('survivalRate')}</Text>
@@ -634,8 +634,8 @@ export default function CycleSimulatorScreen() {
                     style={{
                       color:
                         simulationResult.summary.roi_percentage > 0
-                          ? MAVECAM_COLORS.SUCCESS
-                          : MAVECAM_COLORS.ERROR,
+                          ? AQUACARE_COLORS.SUCCESS
+                          : AQUACARE_COLORS.ERROR,
                     }}
                   >
                     {simulationResult.summary.roi_percentage > 0 ? '+' : ''}
@@ -645,13 +645,13 @@ export default function CycleSimulatorScreen() {
               </View>
             </View>
 
-            <View className="bg-white rounded-xl p-4 mb-4 flex-row items-start gap-3 border border-mavecam-primary/30">
-              <Ionicons name="storefront-outline" size={24} color={MAVECAM_COLORS.GREEN_PRIMARY} style={{ marginTop: 2 }} />
+            <View className="bg-white rounded-xl p-4 mb-4 flex-row items-start gap-3 border border-aquacare-primary/30">
+              <Ionicons name="storefront-outline" size={24} color={AQUACARE_COLORS.GREEN_PRIMARY} style={{ marginTop: 2 }} />
               <View className="flex-1">
                 <Text className="text-sm font-bold text-gray-dark mb-1">{t('buyerNetworkTitle')}</Text>
                 <Text className="text-xs text-gray-light mb-3">{t('buyerNetworkROINote')}</Text>
                 <TouchableOpacity
-                  className="bg-mavecam-primary rounded-lg py-2 items-center"
+                  className="bg-aquacare-primary rounded-lg py-2 items-center"
                   onPress={() => navigation.navigate('Chat')}
                 >
                   <Text className="text-white text-xs font-semibold">{t('buyerNetworkCTA')}</Text>
@@ -660,17 +660,17 @@ export default function CycleSimulatorScreen() {
             </View>
 
             <View className="flex-row items-center mb-3 mt-2 gap-2">
-              <Ionicons name="cart-outline" size={20} color={MAVECAM_COLORS.GREEN_PRIMARY} />
+              <Ionicons name="cart-outline" size={20} color={AQUACARE_COLORS.GREEN_PRIMARY} />
               <Text className="text-base font-bold text-gray-dark">{t('buyFeedSection')}</Text>
             </View>
             <Text className="text-xs text-gray-light mb-3">{t('feedingPhases')}</Text>
             {displayPhases.map((phase, index) => renderPhaseCard(phase, index))}
 
             <TouchableOpacity
-              className="bg-mavecam-primary flex-row items-center justify-center py-4 rounded-lg gap-2 mt-3"
+              className="bg-aquacare-primary flex-row items-center justify-center py-4 rounded-lg gap-2 mt-3"
               onPress={handleAddAllToCart}
             >
-              <Ionicons name="cart" size={20} color={MAVECAM_COLORS.WHITE} />
+              <Ionicons name="cart" size={20} color={AQUACARE_COLORS.WHITE} />
               <Text className="text-white text-base font-semibold">{t('addAllToCart')}</Text>
             </TouchableOpacity>
           </View>
@@ -680,7 +680,7 @@ export default function CycleSimulatorScreen() {
       {loading && (
         <View className="absolute inset-0 bg-black/10 items-center justify-center">
           <View className="bg-white px-4 py-3 rounded-lg flex-row items-center gap-3">
-            <ActivityIndicator size="small" color={MAVECAM_COLORS.GREEN_PRIMARY} />
+            <ActivityIndicator size="small" color={AQUACARE_COLORS.GREEN_PRIMARY} />
             <Text className="text-base text-gray-dark">{t('loading')}</Text>
           </View>
         </View>

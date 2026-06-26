@@ -1,14 +1,14 @@
-# French translations for MAVECAM AquaCare API
-# Copyright (C) 2025 MAVECAM
+# French translations for AquaCare API
+# Copyright (C) 2025 AquaCare
 # This file is distributed under the same license as the PACKAGE package.
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: MAVECAM AquaCare 1.0\n"
+"Project-Id-Version: AquaCare 1.0\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2025-08-19 14:00+0000\n"
 "PO-Revision-Date: 2025-08-19 14:00+0000\n"
-"Last-Translator: MAVECAM Team\n"
+"Last-Translator: AquaCare Team\n"
 "Language: fr\n"
 "Language-Team: French\n"
 "MIME-Version: 1.0\n"

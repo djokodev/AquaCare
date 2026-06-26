@@ -141,7 +141,7 @@ Installation: npx expo install react-native-maps
 **Checks Applied:**
 - TypeScript correctness
 - Translation completeness
-- MAVECAM design compliance
+- AquaCare design compliance
 - Security best practices
 - Offline-first patterns
 - Test coverage

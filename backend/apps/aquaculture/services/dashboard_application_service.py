@@ -19,9 +19,10 @@ class DashboardApplicationService:
         *,
         user,
         cycle_id: str | None = None,
+        lightweight: bool = False,
     ) -> dict[str, Any]:
         """Construit le payload du dashboard pret a etre serialise."""
-        data = DashboardService.build_dashboard_data(user, cycle_id)
+        data = DashboardService.build_dashboard_data(user, cycle_id, lightweight=lightweight)
         if data is None:
             raise InvalidDashboardCycleScopeError("Cycle de session introuvable ou inactif.")
 

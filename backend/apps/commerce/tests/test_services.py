@@ -408,6 +408,67 @@ class TestOrderService:
                 created_offline=True,
             )
 
+    def test_create_order_with_production_cycle_link(self, test_user, test_farm, test_product):
+        cycle = ProductionCycle.objects.create(
+            farm_profile=test_farm,
+            cycle_name="Cycle Commande",
+            species="tilapia",
+            pond_identifier="Pond CO1",
+            pond_surface_m2=Decimal("120.0"),
+            start_date=timezone.now().date(),
+            initial_count=1000,
+            initial_average_weight=Decimal("5.0"),
+            initial_biomass=Decimal("5.0"),
+            current_count=950,
+            current_average_weight=Decimal("50.0"),
+            current_biomass=Decimal("47.5"),
+            status="active",
+        )
+        order = OrderService.create_order(
+            user=test_user,
+            items_data=[{"product_id": str(test_product.id), "quantity": 1}],
+            delivery_method="home",
+            production_cycle_id=str(cycle.id),
+        )
+
+        assert order.production_cycle_id == cycle.id
+
+    def test_create_order_rejects_foreign_production_cycle(self, test_user, test_farm, test_product):
+        other_user = User.objects.create_user(
+            phone_number="+237111222335",
+            password="testpass123",
+            first_name="Other",
+            last_name="Cycle",
+            age_group="26_35",
+        )
+        other_farm, _ = FarmProfile.objects.get_or_create(
+            user=other_user,
+            defaults={"farm_name": "Other Farm"},
+        )
+        foreign_cycle = ProductionCycle.objects.create(
+            farm_profile=other_farm,
+            cycle_name="Cycle Etranger",
+            species="tilapia",
+            pond_identifier="Pond CO2",
+            pond_surface_m2=Decimal("120.0"),
+            start_date=timezone.now().date(),
+            initial_count=1000,
+            initial_average_weight=Decimal("5.0"),
+            initial_biomass=Decimal("5.0"),
+            current_count=950,
+            current_average_weight=Decimal("50.0"),
+            current_biomass=Decimal("47.5"),
+            status="active",
+        )
+
+        with pytest.raises(InvalidOrderError):
+            OrderService.create_order(
+                user=test_user,
+                items_data=[{"product_id": str(test_product.id), "quantity": 1}],
+                delivery_method="home",
+                production_cycle_id=str(foreign_cycle.id),
+            )
+
     def test_confirm_order_receipt_success(self, test_user, test_farm, test_product):
         order = OrderService.create_order(
             user=test_user,
@@ -479,6 +540,34 @@ class TestOrderApplicationService:
 
         assert order.user == test_user
         assert order.items.count() == 1
+
+    def test_create_order_use_case_with_cycle_link(self, test_user, test_farm, test_product):
+        cycle = ProductionCycle.objects.create(
+            farm_profile=test_farm,
+            cycle_name="Cycle Use Case",
+            species="tilapia",
+            pond_identifier="Pond UC1",
+            pond_surface_m2=Decimal("100.0"),
+            start_date=timezone.now().date(),
+            initial_count=900,
+            initial_average_weight=Decimal("5.0"),
+            initial_biomass=Decimal("4.5"),
+            current_count=850,
+            current_average_weight=Decimal("45.0"),
+            current_biomass=Decimal("38.25"),
+            status="active",
+        )
+
+        order = OrderApplicationService.create_order(
+            user=test_user,
+            command=CreateOrderCommand(
+                items_data=[{"product_id": str(test_product.id), "quantity": 1}],
+                delivery_method="home",
+                production_cycle_id=str(cycle.id),
+            ),
+        )
+
+        assert order.production_cycle_id == cycle.id
 
     def test_preview_delivery_fee_use_case(self, test_user, test_product):
         preview = OrderApplicationService.preview_delivery_fee(

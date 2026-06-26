@@ -15,6 +15,7 @@ from ..domain.exceptions import (
     CycleNotActiveError,
     InsufficientFishCountError,
     InvalidHarvestDataError,
+    FeedingPlanGenerationError,
 )
 from ..models import ProductionCycle
 from ..serializers import (
@@ -216,30 +217,24 @@ class ProductionCycleViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        try:
-            harvested_cycle = ProductionCycleApplicationService.harvest_cycle(
-                cycle=cycle,
-                command=HarvestCycleCommand(
-                    harvest_date=serializer.validated_data['harvest_date'],
-                    final_count=serializer.validated_data['final_count'],
-                    final_average_weight=serializer.validated_data['final_average_weight'],
-                    harvest_notes=serializer.validated_data.get('harvest_notes', ''),
-                ),
-            )
+        harvested_cycle = ProductionCycleApplicationService.harvest_cycle(
+            cycle=cycle,
+            command=HarvestCycleCommand(
+                harvest_date=serializer.validated_data['harvest_date'],
+                final_count=serializer.validated_data['final_count'],
+                final_average_weight=serializer.validated_data['final_average_weight'],
+                harvest_notes=serializer.validated_data.get('harvest_notes', ''),
+            ),
+        )
 
-            response_serializer = CycleHarvestResponseSerializer(
-                {
-                    'message': _('Cycle récolté avec succès'),
-                    'cycle': harvested_cycle,
-                },
-                context={'request': request},
-            )
-            return Response(response_serializer.data, status=status.HTTP_200_OK)
-        except (CycleAlreadyHarvestedError, InvalidHarvestDataError) as e:
-            return Response(
-                {'error': str(e)},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        response_serializer = CycleHarvestResponseSerializer(
+            {
+                'message': _('Cycle récolté avec succès'),
+                'cycle': harvested_cycle,
+            },
+            context={'request': request},
+        )
+        return Response(response_serializer.data, status=status.HTTP_200_OK)
     
     @extend_schema(
         summary="Statistiques détaillées d'un cycle",
@@ -378,26 +373,13 @@ class ProductionCycleViewSet(viewsets.ModelViewSet):
         """
         cycle = self.get_object()
 
-        if not cycle.initial_count or not cycle.target_harvest_weight_g:
-            return Response({'feeding_phases': []})
-
         try:
-            from commerce.services.cycle_simulation_service import CycleSimulationService  # noqa: PLC0415
-            survival_rate = float(cycle.expected_survival_rate_pct or 95) / 100
-            sim = CycleSimulationService.simulate_cycle(
-                species=cycle.species,
-                initial_fish_count=cycle.initial_count,
-                target_weight_g=float(cycle.target_harvest_weight_g),
-                cycle_duration_days=cycle.planned_cycle_duration_days or 180,
-                survival_rate=survival_rate,
-                selling_price_per_kg_fcfa=float(cycle.planned_selling_price_per_kg_fcfa or 2800),
-                fingerlings_cost_fcfa=float(cycle.fingerlings_cost_fcfa or 0),
-                other_costs_fcfa=float(cycle.other_operational_costs_fcfa or 0),
-            )
-            return Response({'feeding_phases': sim['feeding_phases']})
-        except Exception:
+            return Response(CycleFeedService.get_feed_phases(cycle))
+        except Exception as exc:
             logger.exception('Erreur calcul feed_phases pour cycle %s', pk)
-            return Response({'feeding_phases': []})
+            raise FeedingPlanGenerationError(
+                _("Impossible de calculer les phases d'alimentation pour ce cycle.")
+            ) from exc
 
     @extend_schema(
         summary="Statut des aliments pour un cycle",
@@ -449,32 +431,28 @@ class ProductionCycleViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        try:
-            updated_cycle, partial = ProductionCycleApplicationService.partial_harvest_cycle(
-                cycle=cycle,
-                command=PartialHarvestCommand(
-                    harvest_date=serializer.validated_data['harvest_date'],
-                    count_harvested=serializer.validated_data['count_harvested'],
-                    average_weight_g=serializer.validated_data['average_weight_g'],
-                    sale_price_fcfa_per_kg=serializer.validated_data.get('sale_price_fcfa_per_kg'),
-                    notes=serializer.validated_data.get('notes', ''),
-                    client_uuid=serializer.validated_data.get('client_uuid'),
-                    created_offline=serializer.validated_data.get('created_offline', False),
-                ),
-            )
+        updated_cycle, partial = ProductionCycleApplicationService.partial_harvest_cycle(
+            cycle=cycle,
+            command=PartialHarvestCommand(
+                harvest_date=serializer.validated_data['harvest_date'],
+                count_harvested=serializer.validated_data['count_harvested'],
+                average_weight_g=serializer.validated_data['average_weight_g'],
+                sale_price_fcfa_per_kg=serializer.validated_data.get('sale_price_fcfa_per_kg'),
+                notes=serializer.validated_data.get('notes', ''),
+                client_uuid=serializer.validated_data.get('client_uuid'),
+                created_offline=serializer.validated_data.get('created_offline', False),
+            ),
+        )
 
-            response_serializer = PartialHarvestResponseSerializer(
-                {
-                    'message': _('Récolte partielle enregistrée avec succès'),
-                    'cycle': updated_cycle,
-                    'partial_harvest': partial,
-                },
-                context={'request': request},
-            )
-            return Response(response_serializer.data, status=status.HTTP_200_OK)
-
-        except (CycleNotActiveError, InsufficientFishCountError, InvalidHarvestDataError) as e:
-            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        response_serializer = PartialHarvestResponseSerializer(
+            {
+                'message': _('Récolte partielle enregistrée avec succès'),
+                'cycle': updated_cycle,
+                'partial_harvest': partial,
+            },
+            context={'request': request},
+        )
+        return Response(response_serializer.data, status=status.HTTP_200_OK)
 
     @extend_schema(
         summary="Historique des récoltes partielles d'un cycle",
@@ -489,6 +467,11 @@ class ProductionCycleViewSet(viewsets.ModelViewSet):
         Liste toutes les récoltes partielles du cycle, du plus récent au plus ancien.
         """
         cycle = self.get_object()
-        partial_harvests = cycle.partial_harvests.all()
-        serializer = PartialHarvestReadSerializer(partial_harvests, many=True)
+        partial_harvests_qs = cycle.partial_harvests.all()
+        page = self.paginate_queryset(partial_harvests_qs)
+        if page is not None:
+            serializer = PartialHarvestReadSerializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = PartialHarvestReadSerializer(partial_harvests_qs, many=True)
         return Response(serializer.data)

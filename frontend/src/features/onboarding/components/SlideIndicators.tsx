@@ -13,7 +13,7 @@ import Animated, {
   Easing,
 } from 'react-native-reanimated';
 import { SlideIndicatorsProps } from '../types/onboarding';
-import { MAVECAM_COLORS } from '@/constants/colors';
+import { AQUACARE_COLORS } from '@/constants/colors';
 
 /**
  * Composant dot individuel animé
@@ -37,7 +37,7 @@ function AnimatedDot({ isActive }: { isActive: boolean }) {
     <Animated.View
       style={[
         styles.dot,
-        { backgroundColor: isActive ? MAVECAM_COLORS.GREEN_PRIMARY : MAVECAM_COLORS.GRAY_LIGHT },
+        { backgroundColor: isActive ? AQUACARE_COLORS.GREEN_PRIMARY : AQUACARE_COLORS.GRAY_LIGHT },
         animatedStyle,
       ]}
     />

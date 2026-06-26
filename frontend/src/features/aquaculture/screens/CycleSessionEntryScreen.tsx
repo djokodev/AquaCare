@@ -13,7 +13,8 @@ import {
   setCurrentCycle,
 } from '@/features/aquaculture/store/aquacultureSlice';
 import { ProductionCycle } from '@/types/aquaculture';
-import { MAVECAM_COLORS } from '@/constants/colors';
+import { AQUACARE_COLORS } from '@/constants/colors';
+import { AQUACARE_TYPOGRAPHY } from '@/constants/typography';
 import CyclePicker from '../components/CyclePicker';
 
 // ── Welcome screen styles ────────────────────────────────────────────────────
@@ -38,24 +39,22 @@ const welcomeStyles = StyleSheet.create({
     marginBottom: 20,
   },
   title: {
-    fontSize: 26,
-    fontWeight: '800',
-    color: '#1e293b',
+    ...AQUACARE_TYPOGRAPHY.h2,
+    color: AQUACARE_COLORS.GRAY_DARK,
     textAlign: 'center',
     marginBottom: 4,
   },
   subtitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: MAVECAM_COLORS.GREEN_PRIMARY,
+    ...AQUACARE_TYPOGRAPHY.smallStrong,
+    color: AQUACARE_COLORS.GREEN_PRIMARY,
     textAlign: 'center',
     marginBottom: 12,
   },
   body: {
-    fontSize: 14,
-    color: '#64748b',
+    ...AQUACARE_TYPOGRAPHY.small,
+    color: AQUACARE_COLORS.GRAY_LIGHT,
     textAlign: 'center',
-    lineHeight: 21,
+    lineHeight: 20,
   },
   featuresCard: {
     backgroundColor: '#fff',
@@ -83,29 +82,27 @@ const welcomeStyles = StyleSheet.create({
     justifyContent: 'center',
   },
   featureText: {
-    fontSize: 14,
+    ...AQUACARE_TYPOGRAPHY.small,
     fontWeight: '500',
-    color: '#334155',
+    color: AQUACARE_COLORS.GRAY_DARK,
   },
   ctaBtn: {
-    backgroundColor: MAVECAM_COLORS.GREEN_PRIMARY,
+    backgroundColor: AQUACARE_COLORS.GREEN_PRIMARY,
     borderRadius: 14,
     paddingVertical: 17,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 10,
-    shadowColor: MAVECAM_COLORS.GREEN_PRIMARY,
+    shadowColor: AQUACARE_COLORS.GREEN_PRIMARY,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.35,
     shadowRadius: 8,
     elevation: 5,
   },
   ctaBtnText: {
-    color: '#fff',
-    fontSize: 17,
-    fontWeight: '700',
-    letterSpacing: 0.2,
+    ...AQUACARE_TYPOGRAPHY.button,
+    color: AQUACARE_COLORS.WHITE,
   },
 });
 
@@ -159,7 +156,7 @@ export default function CycleSessionEntryScreen({ navigation }: Props) {
     setLoading(true);
     setError(null);
 
-    const result = await dispatch(fetchDashboardData({ forceAllCycles: true }));
+    const result = await dispatch(fetchDashboardData({ forceAllCycles: true, lightweight: true }));
 
     if (!isMounted.current) return;
 
@@ -192,7 +189,7 @@ export default function CycleSessionEntryScreen({ navigation }: Props) {
   if (loading) {
     return (
       <View className="flex-1 bg-cream items-center justify-center px-6">
-        <ActivityIndicator size="large" color={MAVECAM_COLORS.GREEN_PRIMARY} />
+        <ActivityIndicator size="large" color={AQUACARE_COLORS.GREEN_PRIMARY} />
         <Text className="text-base text-gray-light mt-3">{t('sessionCycleLoading')}</Text>
       </View>
     );
@@ -201,9 +198,9 @@ export default function CycleSessionEntryScreen({ navigation }: Props) {
   if (error) {
     return (
       <View className="flex-1 bg-cream items-center justify-center px-6">
-        <Ionicons name="alert-circle-outline" size={48} color={MAVECAM_COLORS.ERROR} />
+        <Ionicons name="alert-circle-outline" size={48} color={AQUACARE_COLORS.ERROR} />
         <Text className="text-base text-error text-center mt-3 mb-5">{error}</Text>
-        <TouchableOpacity className="bg-mavecam-primary px-6 py-3 rounded-lg" onPress={loadCycles}>
+        <TouchableOpacity className="bg-aquacare-primary px-6 py-3 rounded-lg" onPress={loadCycles}>
           <Text className="text-white font-semibold text-base">{t('retry')}</Text>
         </TouchableOpacity>
       </View>
@@ -229,7 +226,7 @@ export default function CycleSessionEntryScreen({ navigation }: Props) {
   // 2+ cycles — show picker
   return (
     <View className="flex-1 bg-cream">
-      <View className="bg-mavecam-primary px-5 pt-16 pb-6">
+      <View className="bg-aquacare-primary px-5 pt-16 pb-6">
         <Text className="text-2xl font-bold text-white mb-2">{t('sessionCycleTitle')}</Text>
         <Text className="text-sm text-white/90">{t('sessionCycleDescription')}</Text>
       </View>
@@ -245,7 +242,7 @@ export default function CycleSessionEntryScreen({ navigation }: Props) {
       <View className="px-4 py-4 border-t border-gray-200 bg-white">
         <TouchableOpacity
           className={`rounded-lg py-3 items-center ${
-            selectedCycleId ? 'bg-mavecam-primary' : 'bg-gray-300'
+            selectedCycleId ? 'bg-aquacare-primary' : 'bg-gray-300'
           }`}
           onPress={handleConfirm}
           disabled={!selectedCycleId}

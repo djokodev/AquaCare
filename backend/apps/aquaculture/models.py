@@ -1,5 +1,5 @@
 """
-Modèles de données pour le module aquaculture de MAVECAM AquaCare.
+Modèles de données pour le module aquaculture de AquaCare.
 
 Ce fichier contient tous les modèles Django pour la gestion de l'aquaculture,
 basés sur les spécifications techniques et les meilleures pratiques du secteur.
@@ -13,19 +13,26 @@ import uuid
 from datetime import date
 from decimal import Decimal
 
+from django.contrib.postgres.indexes import GinIndex
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.db.models import Prefetch
 from django.utils.translation import gettext_lazy as _
 
-from .constants import CYCLE_STATUS_CHOICES, GROWTH_STAGES, SANITARY_EVENT_TYPES, SPECIES_CHOICES
+from .constants import (
+    CYCLE_STATUS_CHOICES,
+    DEFAULT_FEED_PRICE_PER_KG,
+    GROWTH_STAGES,
+    SANITARY_EVENT_TYPES,
+    SPECIES_CHOICES,
+)
 
 
 class ProductionCycleQuerySet(models.QuerySet):
     """QuerySet optimisé pour les cycles de production."""
 
     def for_api(self):
-        return self.select_related('farm_profile', 'metrics')
+        return self.select_related('farm_profile', 'farm_profile__production_plan', 'metrics')
 
     def for_statistics(self):
         return self.for_api().prefetch_related(
@@ -113,6 +120,136 @@ class ProductionReportQuerySet(models.QuerySet):
         )
 
 
+class FarmProductionPlan(models.Model):
+    """
+    Parametres de production rattaches a une ferme.
+
+    Le profil ferme reste dans accounts pour l'identite, la certification et la
+    localisation. Les choix d'elevage et les hypotheses economiques vivent ici,
+    dans le bounded context aquaculture.
+    """
+
+    INFRASTRUCTURE_CHOICES = [
+        ('etang', _('Étang')),
+        ('cage_flottante', _('Cage flottante')),
+        ('bac_hors_sol', _('Bac hors sol')),
+        ('bac_en_sol', _('Bac en sol')),
+    ]
+
+    SETUP_SPECIES_CHOICES = [
+        *SPECIES_CHOICES,
+        ('autre', _('Autre espèce')),
+    ]
+
+    NUM_CYCLES_CHOICES = [
+        (2, _('2 cycles par an')),
+        (3, _('3 cycles par an')),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    farm_profile = models.OneToOneField(
+        'accounts.FarmProfile',
+        on_delete=models.CASCADE,
+        related_name='production_plan',
+        verbose_name=_('Profil de ferme'),
+        help_text=_('Ferme propriétaire de ces paramètres de production'),
+    )
+    annual_production_target_kg = models.DecimalField(
+        _('Production cible annuelle (kg)'),
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text=_('Objectif de production annuelle en kg'),
+    )
+    num_cycles_per_year = models.PositiveSmallIntegerField(
+        _('Nombre de cycles par an'),
+        null=True,
+        blank=True,
+        choices=NUM_CYCLES_CHOICES,
+        help_text=_('2 ou 3 cycles par an'),
+    )
+    setup_infrastructure_type = models.CharField(
+        _('Type d\'infrastructure'),
+        max_length=30,
+        blank=True,
+        choices=INFRASTRUCTURE_CHOICES,
+        help_text=_('Type principal d\'infrastructure d\'élevage'),
+    )
+    setup_unit_count = models.PositiveIntegerField(
+        _('Nombre d\'unités (bacs/étangs)'),
+        null=True,
+        blank=True,
+        help_text=_('Nombre de bacs, étangs ou cages'),
+    )
+    setup_unit_volume_m3 = models.DecimalField(
+        _('Volume par unité (m³)'),
+        max_digits=8,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text=_('Volume de chaque bac ou cage en m³'),
+    )
+    setup_unit_surface_m2 = models.DecimalField(
+        _('Surface par unité (m²)'),
+        max_digits=8,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text=_('Surface de chaque étang en m²'),
+    )
+    setup_species = models.CharField(
+        _('Espèce principale (setup)'),
+        max_length=20,
+        blank=True,
+        choices=SETUP_SPECIES_CHOICES,
+        help_text=_('Espèce choisie lors du flux de création d\'élevage'),
+    )
+    fingerlings_cost_per_unit_fcfa = models.DecimalField(
+        _('Coût par alevin (FCFA)'),
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text=_('Prix unitaire d\'un alevin en FCFA'),
+    )
+    planned_selling_price_per_kg_fcfa = models.DecimalField(
+        _('Prix de vente estimé (FCFA/kg)'),
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text=_('Prix de vente prévu du poisson en FCFA/kg'),
+    )
+    setup_completed = models.BooleanField(
+        _('Configuration élevage complétée'),
+        default=False,
+        help_text=_('True quand l\'utilisateur a terminé le flux Créer mon élevage'),
+    )
+    default_feed_price_per_kg = models.DecimalField(
+        _('Prix aliment par défaut (FCFA/kg)'),
+        max_digits=8,
+        decimal_places=2,
+        default=DEFAULT_FEED_PRICE_PER_KG,
+        help_text=_('Prix unitaire de l\'aliment en FCFA par kg'),
+    )
+    created_at = models.DateTimeField(_('Date de création'), auto_now_add=True)
+    updated_at = models.DateTimeField(_('Dernière modification'), auto_now=True)
+
+    class Meta:
+        app_label = 'aquaculture'
+        db_table = 'aquaculture_farm_production_plan'
+        verbose_name = _('Plan de production ferme')
+        verbose_name_plural = _('Plans de production ferme')
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['setup_completed'], name='idx_farm_plan_completed'),
+        ]
+
+    def __str__(self):
+        return f"Plan production - {self.farm_profile_id}"
+
+
 class ProductionCycle(models.Model):
     """
     Modèle représentant un cycle complet de production aquacole (60-180 jours).
@@ -129,11 +266,20 @@ class ProductionCycle(models.Model):
         verbose_name_plural = _("Cycles de production")
         indexes = [
             models.Index(fields=['farm_profile', 'status']),
+            models.Index(fields=['farm_profile', 'updated_at'], name='aq_cycle_farm_updated_idx'),
             models.Index(fields=['start_date', 'end_date']),
             models.Index(fields=['species', 'status']),
+            models.Index(fields=['created_offline', 'synced_at'], name='aquaculture_created_7d7f63_idx'),
         ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    client_uuid = models.UUIDField(
+        unique=True,
+        null=True,
+        blank=True,
+        verbose_name=_("UUID client"),
+        help_text=_("UUID généré côté mobile pour déduplication")
+    )
     farm_profile = models.ForeignKey(
         'accounts.FarmProfile', 
         on_delete=models.CASCADE,
@@ -336,6 +482,15 @@ class ProductionCycle(models.Model):
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    created_offline = models.BooleanField(
+        default=False,
+        verbose_name=_("Créé hors ligne")
+    )
+    synced_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name=_("Synchronisé le")
+    )
     objects = ProductionCycleQuerySet.as_manager()
 
     def __str__(self):
@@ -388,6 +543,7 @@ class CycleLog(models.Model):
             models.Index(fields=['cycle', 'log_date']),
             models.Index(fields=['client_uuid']),
             models.Index(fields=['created_offline', 'synced_at']),
+            models.Index(fields=['cycle', 'created_offline', 'created_at'], name='aq_log_cycle_sync_created_idx'),
         ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -463,7 +619,7 @@ class CycleLog(models.Model):
         max_length=100, 
         blank=True,
         verbose_name=_("Type d'aliment"),
-        help_text=_("Référence produit MAVECAM")
+        help_text=_("Référence produit AquaCare")
     )
     feed_size_mm = models.DecimalField(
         max_digits=3,
@@ -565,6 +721,16 @@ class FeedingPlan(models.Model):
         ordering = ['cycle', 'week_number']
         verbose_name = _("Plan d'alimentation")
         verbose_name_plural = _("Plans d'alimentation")
+        indexes = [
+            models.Index(
+                fields=['cycle', 'is_active', 'start_date', 'end_date'],
+                name='aq_feed_cycle_active_dates_idx',
+            ),
+            models.Index(
+                fields=['cycle', 'created_at'],
+                name='aq_feed_cycle_created_idx',
+            ),
+        ]
 
     cycle = models.ForeignKey(
         ProductionCycle, 
@@ -681,9 +847,19 @@ class SanitaryLog(models.Model):
             models.Index(fields=['cycle', 'event_date']),
             models.Index(fields=['event_type', 'resolved']),
             models.Index(fields=['created_offline']),
+            models.Index(fields=['created_offline', 'synced_at'], name='aquaculture_san_sync_idx'),
+            models.Index(fields=['cycle', 'created_offline', 'created_at'], name='aq_san_cycle_sync_created_idx'),
         ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+
+    client_uuid = models.UUIDField(
+        unique=True,
+        null=True,
+        blank=True,
+        verbose_name=_("UUID client"),
+        help_text=_("UUID généré côté mobile pour déduplication")
+    )
 
     cycle = models.ForeignKey(
         ProductionCycle, 
@@ -763,7 +939,12 @@ class SanitaryLog(models.Model):
         default=False,
         verbose_name=_("Créé hors ligne")
     )
-    
+    synced_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name=_("Synchronisé le")
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     objects = SanitaryLogQuerySet.as_manager()
 
@@ -946,8 +1127,8 @@ class NutritionalGuide(models.Model):
     # Source and temperature-dependent data
     source = models.CharField(
         max_length=50,
-        default='MAVECAM',
-        choices=[('DIBAQ', 'DIBAQ'), ('ALLER_AQUA', 'Aller Aqua'), ('MAVECAM', 'MAVECAM')],
+        default='AquaCare',
+        choices=[('DIBAQ', 'DIBAQ'), ('ALLER_AQUA', 'Aller Aqua'), ('AquaCare', 'AquaCare')],
         verbose_name=_("Source des données")
     )
     temperature_rates = models.JSONField(
@@ -1184,6 +1365,7 @@ class ProductionReport(models.Model):
         indexes = [
             models.Index(fields=['farm_profile', 'report_type', 'period_start'], name='rpt_farm_type_start_idx'),
             models.Index(fields=['status', 'generated_at'], name='rpt_status_generated_idx'),
+            GinIndex(fields=['payload'], name='rpt_payload_gin_idx'),
         ]
 
     def __str__(self):

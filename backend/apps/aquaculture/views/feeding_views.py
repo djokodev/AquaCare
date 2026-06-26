@@ -1,7 +1,6 @@
 """
 Feeding Views pour le module aquaculture.
 """
-from django.utils.translation import gettext_lazy as _
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiExample, OpenApiParameter, extend_schema, extend_schema_view
 from rest_framework import permissions, status, viewsets
@@ -11,7 +10,6 @@ from rest_framework.response import Response
 from ..models import FeedingPlan
 from ..serializers import FeedingPlanGenerationRequestSerializer, FeedingPlanSerializer
 from ..services import (
-    FeedingCycleNotFoundError,
     FeedingPlanApplicationService,
     GenerateFeedingPlansCommand,
 )
@@ -26,10 +24,16 @@ from ..services import (
         """,
         parameters=[
             OpenApiParameter(
-                name='cycle_id',
+                name='cycle',
                 type=OpenApiTypes.UUID,
                 location=OpenApiParameter.QUERY,
                 description='Filtrer par cycle de production'
+            ),
+            OpenApiParameter(
+                name='cycle_id',
+                type=OpenApiTypes.UUID,
+                location=OpenApiParameter.QUERY,
+                description='Alias rétrocompatible de cycle'
             ),
             OpenApiParameter(
                 name='week_number',
@@ -51,7 +55,7 @@ from ..services import (
                             'daily_feed_amount': '5.70',
                             'feeding_rate': '4.50',
                             'meals_per_day': 2,
-                            'recommended_feed_type': 'MAVECAM Superior 2-3mm'
+                            'recommended_feed_type': 'AquaCare Superior 2-3mm'
                         }
                     ]
                 }
@@ -75,7 +79,7 @@ from ..services import (
                     'biomass': 127.00,
                     'feeding_rate': 4.5,
                     'meals_per_day': 2,
-                    'recommended_feed_type': 'MAVECAM Superior 2-3mm'
+                    'recommended_feed_type': 'AquaCare Superior 2-3mm'
                 }
             )
         ]
@@ -104,7 +108,7 @@ class FeedingPlanViewSet(viewsets.ModelViewSet):
         ).order_by('cycle', 'week_number')
 
         # Filtrer par cycle si spécifié dans les paramètres URL
-        cycle_id = self.request.query_params.get('cycle')
+        cycle_id = self.request.query_params.get('cycle') or self.request.query_params.get('cycle_id')
         if cycle_id:
             queryset = queryset.filter(cycle_id=cycle_id)
 
@@ -132,19 +136,13 @@ class FeedingPlanViewSet(viewsets.ModelViewSet):
         """
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        try:
-            plans = FeedingPlanApplicationService.generate_feeding_plans(
-                user=request.user,
-                command=GenerateFeedingPlansCommand(
-                    cycle_id=serializer.validated_data['cycle_id'],
-                    weeks_ahead=serializer.validated_data['weeks_ahead'],
-                ),
-            )
-        except FeedingCycleNotFoundError as exc:
-            return Response(
-                {'error': str(exc) or _('Cycle non trouvé')},
-                status=status.HTTP_404_NOT_FOUND
-            )
+        plans = FeedingPlanApplicationService.generate_feeding_plans(
+            user=request.user,
+            command=GenerateFeedingPlansCommand(
+                cycle_id=serializer.validated_data['cycle_id'],
+                weeks_ahead=serializer.validated_data['weeks_ahead'],
+            ),
+        )
 
         response_serializer = FeedingPlanSerializer(plans, many=True, context={'request': request})
         return Response(response_serializer.data, status=status.HTTP_201_CREATED)

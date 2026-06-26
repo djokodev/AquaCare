@@ -16,15 +16,15 @@ import {
 } from '@/features/notifications/store/notificationSlice';
 import { Notification } from '@/types/notifications';
 import { RootStackParamList } from '@/navigation/MainNavigator';
-import { MAVECAM_COLORS } from '@/constants/colors';
+import { AQUACARE_COLORS } from '@/constants/colors';
 
 const NOTIFICATION_COLORS = {
-  feeding_reminder: MAVECAM_COLORS.INFO,
-  sampling_reminder: MAVECAM_COLORS.WARNING,
-  treatment_reminder: MAVECAM_COLORS.ERROR,
-  cycle_milestone: MAVECAM_COLORS.SUCCESS,
-  alert: MAVECAM_COLORS.ERROR,
-  new_message: MAVECAM_COLORS.SUCCESS,
+  feeding_reminder: AQUACARE_COLORS.INFO,
+  sampling_reminder: AQUACARE_COLORS.WARNING,
+  treatment_reminder: AQUACARE_COLORS.ERROR,
+  cycle_milestone: AQUACARE_COLORS.SUCCESS,
+  alert: AQUACARE_COLORS.ERROR,
+  new_message: AQUACARE_COLORS.SUCCESS,
 };
 
 type NotificationsScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Notifications'>;
@@ -146,7 +146,7 @@ export default function NotificationsScreen({ navigation }: NotificationsScreenP
   };
 
   const getNotificationColor = (type: string) => {
-    return NOTIFICATION_COLORS[type as keyof typeof NOTIFICATION_COLORS] || MAVECAM_COLORS.INFO;
+    return NOTIFICATION_COLORS[type as keyof typeof NOTIFICATION_COLORS] || AQUACARE_COLORS.INFO;
   };
 
   const handleMarkAsRead = async (notification: Notification) => {
@@ -239,7 +239,7 @@ export default function NotificationsScreen({ navigation }: NotificationsScreenP
 
       return (
         <View
-          className={`bg-white rounded-xl p-4 mb-3 ${!notification.is_read ? 'border-l-4 border-l-mavecam-primary bg-[#f0fdf4]' : ''}`}
+          className={`bg-white rounded-xl p-4 mb-3 ${!notification.is_read ? 'border-l-4 border-l-aquacare-primary bg-[#f0fdf4]' : ''}`}
         >
           <View className="flex-row">
             <View className="w-12 h-12 rounded-full items-center justify-center mr-3" style={{ backgroundColor: `${color}20` }}>
@@ -248,7 +248,7 @@ export default function NotificationsScreen({ navigation }: NotificationsScreenP
 
             <View className="flex-1">
               <View className="flex-row items-center mb-1">
-                <Text className={`text-base font-semibold flex-1 ${!notification.is_read ? 'text-mavecam-primary' : 'text-gray-dark'}`}>
+                <Text className={`text-base font-semibold flex-1 ${!notification.is_read ? 'text-aquacare-primary' : 'text-gray-dark'}`}>
                   {notification.title}
                 </Text>
               </View>
@@ -278,7 +278,7 @@ export default function NotificationsScreen({ navigation }: NotificationsScreenP
               className="px-3 py-2 rounded-md bg-error/10 flex-row items-center"
               onPress={() => handleDeleteNotification(notification)}
             >
-              <Ionicons name="trash-outline" size={16} color={MAVECAM_COLORS.ERROR} />
+              <Ionicons name="trash-outline" size={16} color={AQUACARE_COLORS.ERROR} />
               <Text className="ml-2 text-xs font-semibold text-error">{t('deleteNotification')}</Text>
             </TouchableOpacity>
           </View>
@@ -293,7 +293,7 @@ export default function NotificationsScreen({ navigation }: NotificationsScreenP
       <>
         <View className="bg-white mx-4 mt-4 mb-4 p-4 rounded-xl flex-row justify-around">
           <View className="items-center">
-            <Text className="text-2xl font-bold text-mavecam-primary">{totalNotifications}</Text>
+            <Text className="text-2xl font-bold text-aquacare-primary">{totalNotifications}</Text>
             <Text className="text-xs text-gray-light text-center">{t('totalNotifications')}</Text>
           </View>
           <View className="items-center">
@@ -309,7 +309,7 @@ export default function NotificationsScreen({ navigation }: NotificationsScreenP
               <TouchableOpacity
                 key={filter}
                 className={`px-4 py-2 rounded-full border ${
-                  selectedFilter === filter ? 'bg-mavecam-primary border-mavecam-primary' : 'bg-cream border-gray-light'
+                  selectedFilter === filter ? 'bg-aquacare-primary border-aquacare-primary' : 'bg-cream border-gray-light'
                 }`}
                 onPress={() => setSelectedFilter(filter)}
               >
@@ -336,7 +336,7 @@ export default function NotificationsScreen({ navigation }: NotificationsScreenP
       if (loading) {
         return (
           <View className="items-center py-10">
-            <ActivityIndicator size="large" color={MAVECAM_COLORS.GREEN_PRIMARY} />
+            <ActivityIndicator size="large" color={AQUACARE_COLORS.GREEN_PRIMARY} />
             <Text className="text-sm text-gray-light mt-3">{t('loading')}</Text>
           </View>
         );
@@ -344,7 +344,7 @@ export default function NotificationsScreen({ navigation }: NotificationsScreenP
 
       return (
         <View className="items-center py-10 px-4">
-          <Ionicons name="notifications-outline" size={64} color={MAVECAM_COLORS.GRAY_LIGHT} />
+          <Ionicons name="notifications-outline" size={64} color={AQUACARE_COLORS.GRAY_LIGHT} />
           <Text className="text-lg font-bold text-gray-dark mt-3">
             {selectedFilter === 'unread'
               ? t('noUnreadNotifications')
@@ -360,9 +360,9 @@ export default function NotificationsScreen({ navigation }: NotificationsScreenP
   );
 
   const renderHeader = () => (
-    <View className="bg-mavecam-primary flex-row items-center pt-14 pb-4 px-4">
+    <View className="bg-aquacare-primary flex-row items-center pt-14 pb-4 px-4">
       <TouchableOpacity className="mr-4" onPress={() => navigation.goBack()}>
-        <Ionicons name="arrow-back" size={24} color={MAVECAM_COLORS.WHITE} />
+        <Ionicons name="arrow-back" size={24} color={AQUACARE_COLORS.WHITE} />
       </TouchableOpacity>
       <View className="flex-1 flex-row items-center">
         <Text className="text-xl font-bold text-white mr-2">{t('notifications')}</Text>
@@ -375,12 +375,12 @@ export default function NotificationsScreen({ navigation }: NotificationsScreenP
       <View className="flex-row items-center gap-2">
         {unreadCount > 0 && (
           <TouchableOpacity className="p-2 bg-white/20 rounded-md" onPress={handleMarkAllAsRead}>
-            <Ionicons name="checkmark-done" size={20} color={MAVECAM_COLORS.WHITE} />
+            <Ionicons name="checkmark-done" size={20} color={AQUACARE_COLORS.WHITE} />
           </TouchableOpacity>
         )}
         {readNotificationsCount > 0 && (
           <TouchableOpacity className="p-2 bg-white/20 rounded-md" onPress={handleDeleteAllRead}>
-            <Ionicons name="trash" size={20} color={MAVECAM_COLORS.WHITE} />
+            <Ionicons name="trash" size={20} color={AQUACARE_COLORS.WHITE} />
           </TouchableOpacity>
         )}
       </View>
@@ -392,9 +392,9 @@ export default function NotificationsScreen({ navigation }: NotificationsScreenP
       <View className="flex-1 bg-cream">
         {renderHeader()}
         <View className="flex-1 items-center justify-center p-6">
-          <Ionicons name="alert-circle" size={48} color={MAVECAM_COLORS.ERROR} />
+          <Ionicons name="alert-circle" size={48} color={AQUACARE_COLORS.ERROR} />
           <Text className="text-lg text-error text-center mt-3">{error ? t(error) : ''}</Text>
-          <TouchableOpacity className="mt-4 bg-mavecam-primary px-5 py-3 rounded-lg" onPress={() => dispatch(fetchNotifications())}>
+          <TouchableOpacity className="mt-4 bg-aquacare-primary px-5 py-3 rounded-lg" onPress={() => dispatch(fetchNotifications())}>
             <Text className="text-white text-base font-semibold">{t('retry')}</Text>
           </TouchableOpacity>
         </View>

@@ -5,6 +5,31 @@ Basées sur la recherche officielle des divisions administratives
 et statuts juridiques du Cameroun en 2024.
 """
 
+ACCOUNT_RATE_LIMIT_WINDOW_SECONDS = 60
+ACCOUNT_RATE_LIMIT_RETRY_AFTER_SECONDS = 60
+ACCOUNT_LOGIN_IP_LIMIT = 5
+ACCOUNT_LOGIN_USER_LIMIT = 3
+ACCOUNT_REGISTER_IP_LIMIT = 10
+
+ACCOUNT_LOGIN_THROTTLE_RATE = "5/minute"
+ACCOUNT_LOGIN_GLOBAL_THROTTLE_RATE = "10/second"
+ACCOUNT_REGISTER_THROTTLE_RATE = "10/minute"
+ACCOUNT_SENSITIVE_ACTION_THROTTLE_RATE = "20/hour"
+ACCOUNT_TOKEN_THROTTLE_RATE = "30/minute"
+ACCOUNT_FARM_SETUP_THROTTLE_RATE = "30/hour"
+ACCOUNT_SIMULATION_THROTTLE_RATE = "60/hour"
+
+ACCOUNT_ENDPOINT_RATE_LIMITS = {
+    '/api/accounts/login/': {
+        'ip_limit': ACCOUNT_LOGIN_IP_LIMIT,
+        'window_seconds': ACCOUNT_RATE_LIMIT_WINDOW_SECONDS,
+    },
+    '/api/accounts/register/': {
+        'ip_limit': ACCOUNT_REGISTER_IP_LIMIT,
+        'window_seconds': ACCOUNT_RATE_LIMIT_WINDOW_SECONDS,
+    },
+}
+
 # Types de compte
 ACCOUNT_TYPE_CHOICES = [
     ('individual', 'Personne physique'),

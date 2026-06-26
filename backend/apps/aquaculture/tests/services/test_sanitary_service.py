@@ -4,6 +4,7 @@ Tests unitaires pour SanitaryService.
 Coverage cible : >50%
 """
 from datetime import date
+from uuid import uuid4
 
 import pytest
 from aquaculture.models import SanitaryLog
@@ -52,6 +53,31 @@ class TestSanitaryServiceCreateLog:
             notification_type='alert'
         )
         assert notifications.exists()
+
+    def test_create_sanitary_log_deduplicates_by_client_uuid(self):
+        """Un retry offline avec le même client_uuid retourne le log existant."""
+        cycle = ProductionCycleFactory()
+        client_uuid = uuid4()
+
+        first_log = SanitaryService.create_sanitary_log(
+            cycle=cycle,
+            event_date=date.today(),
+            event_type='disease',
+            symptoms='Symptômes observés avec nage erratique persistante',
+            client_uuid=client_uuid,
+            created_offline=True,
+        )
+        second_log = SanitaryService.create_sanitary_log(
+            cycle=cycle,
+            event_date=date.today(),
+            event_type='disease',
+            symptoms='Retry mobile du même événement sanitaire',
+            client_uuid=client_uuid,
+            created_offline=True,
+        )
+
+        assert second_log.id == first_log.id
+        assert SanitaryLog.objects.filter(client_uuid=client_uuid).count() == 1
 
 
 @pytest.mark.django_db

@@ -11,14 +11,17 @@ from rest_framework.decorators import action
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 
-from ..domain.exceptions import InvalidSanitaryDataException, SanitaryLogNotFoundException
 from ..models import SanitaryLog
 from ..serializers import (
     ActiveSanitaryIssueGroupSerializer,
     SanitaryLogSerializer,
     SanitaryResolutionSerializer,
 )
-from ..services import ResolveSanitaryIssueCommand, SanitaryApplicationService
+from ..services import (
+    CreateSanitaryLogCommand,
+    ResolveSanitaryIssueCommand,
+    SanitaryApplicationService,
+)
 from ..throttles import AquacultureSanitaryActionThrottle
 
 logger = logging.getLogger(__name__)
@@ -43,7 +46,7 @@ logger = logging.getLogger(__name__)
                 type=OpenApiTypes.STR,
                 location=OpenApiParameter.QUERY,
                 description='Type d\'événement sanitaire',
-                enum=['disease', 'treatment', 'vaccination', 'routine_check']
+                enum=['disease', 'treatment', 'vaccination', 'abnormal_mortality', 'water_quality', 'other']
             ),
             OpenApiParameter(
                 name='resolved',
@@ -116,6 +119,38 @@ class SanitaryLogViewSet(viewsets.ModelViewSet):
         return SanitaryLog.objects.for_api().filter(
             cycle__farm_profile__user=self.request.user
         ).order_by('-event_date')
+
+    def create(self, request, *args, **kwargs):
+        """
+        Crée un log sanitaire via le service métier.
+
+        Le endpoint reste idempotent pour les retries offline portant le même
+        client_uuid, afin d'éviter les doublons après reconnexion instable.
+        """
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        validated_data = serializer.validated_data
+        mutation_result = SanitaryApplicationService.create_log(
+            command=CreateSanitaryLogCommand(
+                cycle=validated_data['cycle'],
+                event_date=validated_data['event_date'],
+                event_type=validated_data['event_type'],
+                symptoms=validated_data['symptoms'],
+                affected_count=validated_data.get('affected_count'),
+                treatment_applied=validated_data.get('treatment_applied', ''),
+                medication_used=validated_data.get('medication_used', ''),
+                dosage=validated_data.get('dosage', ''),
+                treatment_duration_days=validated_data.get('treatment_duration_days'),
+                photo=validated_data.get('photo'),
+                notes=validated_data.get('notes', ''),
+                client_uuid=validated_data.get('client_uuid'),
+                created_offline=validated_data.get('created_offline', False),
+            ),
+        )
+
+        response_serializer = self.get_serializer(mutation_result.log)
+        response_status = status.HTTP_201_CREATED if mutation_result.created else status.HTTP_200_OK
+        return Response(response_serializer.data, status=response_status)
     
     @extend_schema(
         summary="Résoudre un problème sanitaire",
@@ -149,27 +184,17 @@ class SanitaryLogViewSet(viewsets.ModelViewSet):
         # Extract resolution data from request
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        try:
-            resolved_log = SanitaryApplicationService.resolve_issue(
-                sanitary_log=log,
-                command=ResolveSanitaryIssueCommand(
-                    resolution_date=serializer.validated_data.get('resolution_date'),
-                    resolution_notes=serializer.validated_data.get('resolution_notes', ''),
-                ),
-            )
+        resolved_log = SanitaryApplicationService.resolve_issue(
+            user=request.user,
+            sanitary_log=log,
+            command=ResolveSanitaryIssueCommand(
+                resolution_date=serializer.validated_data.get('resolution_date'),
+                resolution_notes=serializer.validated_data.get('resolution_notes', ''),
+            ),
+        )
 
-            response_serializer = SanitaryLogSerializer(resolved_log, context={'request': request})
-            return Response(response_serializer.data, status=status.HTTP_200_OK)
-        except SanitaryLogNotFoundException as exc:
-            return Response(
-                {'error': str(exc)},
-                status=status.HTTP_404_NOT_FOUND
-            )
-        except InvalidSanitaryDataException as exc:
-            return Response(
-                {'error': str(exc)},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        response_serializer = SanitaryLogSerializer(resolved_log, context={'request': request})
+        return Response(response_serializer.data, status=status.HTTP_200_OK)
 
     @extend_schema(
         summary="Problèmes sanitaires actifs",

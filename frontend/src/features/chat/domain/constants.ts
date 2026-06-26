@@ -67,7 +67,7 @@ export const AUTO_REFRESH_INTERVAL_MS = 30000;
 export const ACKNOWLEDGMENT_MESSAGE_PATTERN = /reçu|received/i;
 
 /**
- * Message bubble colors (MAVECAM design system)
+ * Message bubble colors (AquaCare design system)
  */
 export const MESSAGE_COLORS = {
   user: '#059669', // GREEN_PRIMARY - user messages

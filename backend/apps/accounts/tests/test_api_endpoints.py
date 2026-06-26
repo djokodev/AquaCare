@@ -3,15 +3,17 @@ Tests unitaires complets pour tous les endpoints API accounts.
 
 Teste le comportement exact de chaque endpoint avec différents scénarios.
 """
+import uuid
 
 import pytest
 from accounts.models import FarmProfile
+from accounts.services.auth_application_service import AuthApplicationService
 from django.contrib.auth import get_user_model
-from django.core.cache import cache
+from django.core.cache import cache, caches
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
-from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.tokens import RefreshToken, UntypedToken
 
 User = get_user_model()
 
@@ -66,6 +68,7 @@ class TestRegistrationEndpoint:
         assert 'access' in tokens
         assert 'refresh' in tokens
         assert len(tokens['access']) > 100  # JWT token length
+        assert UntypedToken(tokens['access'])['language_preference'] == 'fr'
         
         # Vérifier que l'utilisateur est créé en DB
         user = User.objects.get(phone_number="+237690123456")
@@ -120,7 +123,7 @@ class TestRegistrationEndpoint:
             "age_group": "26_35",
         }
 
-        with django_assert_num_queries(4):
+        with django_assert_num_queries(11):
             response = self.client.post(self.url, data, format='json')
 
         assert response.status_code == status.HTTP_201_CREATED
@@ -151,20 +154,15 @@ class TestRegistrationEndpoint:
         
         response = self.client.post(self.url, data, format='json')
         
-        # Peut être 400 (validation serializer) ou 500 (validation model)
-        assert response.status_code in [status.HTTP_400_BAD_REQUEST, status.HTTP_500_INTERNAL_SERVER_ERROR]
-        if response.status_code == status.HTTP_400_BAD_REQUEST:
-            # L'erreur peut être dans phone_number ou non_field_errors selon l'implémentation
-            phone_error = "phone_number" in response.data and (
-                "existe déjà" in str(response.data["phone_number"])
-                or "unique" in str(response.data["phone_number"])
-            )
-            non_field_error = "non_field_errors" in response.data and (
-                "existe déjà" in str(response.data["non_field_errors"])
-                or "unique" in str(response.data["non_field_errors"])
-            )
-            error_found = phone_error or non_field_error
-            assert error_found, f"Expected duplicate phone error but got: {response.data}"
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        phone_error = "phone_number" in response.data and (
+            "Impossible de créer ce compte" in str(response.data["phone_number"])
+        )
+        non_field_error = "non_field_errors" in response.data and (
+            "Impossible de créer ce compte" in str(response.data["non_field_errors"])
+        )
+        error_found = phone_error or non_field_error
+        assert error_found, f"Expected duplicate phone error but got: {response.data}"
     
     def test_register_password_mismatch_fails(self):
         """Test échec avec mots de passe différents."""
@@ -197,11 +195,8 @@ class TestRegistrationEndpoint:
         
         response = self.client.post(self.url, data, format='json')
         
-        # Peut être 400 (validation serializer) ou 500 (validation model) 
-        assert response.status_code in [status.HTTP_400_BAD_REQUEST, status.HTTP_500_INTERNAL_SERVER_ERROR]
-        # La validation se fait au niveau du modèle lors du save()
-        if response.status_code == status.HTTP_400_BAD_REQUEST:
-            assert ("age_group" in str(response.data) or "requis" in str(response.data))
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "age_group" in response.data
     
     def test_register_company_missing_legal_status_fails(self):
         """Test échec entreprise sans legal_status."""
@@ -219,10 +214,8 @@ class TestRegistrationEndpoint:
         
         response = self.client.post(self.url, data, format='json')
         
-        # Peut être 400 (validation serializer) ou 500 (validation model)
-        assert response.status_code in [status.HTTP_400_BAD_REQUEST, status.HTTP_500_INTERNAL_SERVER_ERROR]
-        if response.status_code == status.HTTP_400_BAD_REQUEST:
-            assert ("legal_status" in str(response.data) or "requis" in str(response.data))
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "legal_status" in response.data
 
 
 @pytest.mark.django_db
@@ -231,17 +224,24 @@ class TestLoginEndpoint:
     Tests pour POST /api/accounts/login/
     """
     
-    def setup_method(self):
+    def setup_method(self, method):
         """Configuration pour chaque test."""
         cache.clear()
         self.client = APIClient()
         self.url = reverse('accounts:login')
+        suffix = uuid.uuid4().hex[:8]
+        ip_octet = int(suffix[:2], 16)
+        self.client.defaults['REMOTE_ADDR'] = f"10.10.{ip_octet}.10"
+        self.individual_first_name = "Jean"
+        self.individual_last_name = f"Farmer{suffix}"
+        self.individual_login_name = f"{self.individual_first_name} {self.individual_last_name}"
+        self.company_login_name = f"AquaFarm {suffix} SARL"
 
         # Créer des utilisateurs de test
         self.individual_user = User.objects.create_user(
             phone_number="+237690444444",
-            first_name="Jean",
-            last_name="Farmer",
+            first_name=self.individual_first_name,
+            last_name=self.individual_last_name,
             password="motdepasse123",
             age_group="26_35"
         )
@@ -250,7 +250,7 @@ class TestLoginEndpoint:
             phone_number="+237690555555",
             first_name="Marie",
             last_name="Boss",
-            business_name="AquaFarm SARL",
+            business_name=self.company_login_name,
             password="motdepasse456",
             account_type="company",
             legal_status="sarl",
@@ -260,7 +260,7 @@ class TestLoginEndpoint:
     def test_login_individual_by_name_success(self):
         """Test connexion individu par nom complet."""
         data = {
-            "login_name": "Jean Farmer",
+            "login_name": self.individual_login_name,
             "password": "motdepasse123"
         }
         
@@ -272,14 +272,14 @@ class TestLoginEndpoint:
         assert response.data['message'] == "Connexion réussie"
         
         user_data = response.data['user']
-        assert user_data['first_name'] == "Jean"
-        assert user_data['last_name'] == "Farmer"
+        assert user_data['first_name'] == self.individual_first_name
+        assert user_data['last_name'] == self.individual_last_name
         assert user_data['account_type'] == "individual"
     
     def test_login_company_by_business_name_success(self):
         """Test connexion entreprise par nom commercial."""
         data = {
-            "login_name": "AquaFarm SARL",
+            "login_name": self.company_login_name,
             "password": "motdepasse456"
         }
         
@@ -288,13 +288,13 @@ class TestLoginEndpoint:
         assert response.status_code == status.HTTP_200_OK
         
         user_data = response.data['user']
-        assert user_data['business_name'] == "AquaFarm SARL"
+        assert user_data['business_name'] == self.company_login_name
         assert user_data['account_type'] == "company"
 
     def test_login_by_name_uses_single_query(self, django_assert_num_queries):
         """La connexion par login_name doit rester sur un seul acces ORM."""
         data = {
-            "login_name": "Jean Farmer",
+            "login_name": self.individual_login_name,
             "password": "motdepasse123",
         }
 
@@ -306,14 +306,14 @@ class TestLoginEndpoint:
     def test_login_wrong_credentials_fails(self):
         """Test échec avec identifiants incorrects."""
         data = {
-            "login_name": "Jean Farmer",
+            "login_name": self.individual_login_name,
             "password": "mauvais_mot_de_passe"
         }
         
         response = self.client.post(self.url, data, format='json')
         
         assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert "incorrect" in str(response.data)
+        assert "Identifiants invalides" in str(response.data)
     
     def test_login_nonexistent_user_fails(self):
         """Test échec avec utilisateur inexistant."""
@@ -333,15 +333,36 @@ class TestLoginEndpoint:
         self.individual_user.save()
         
         data = {
-            "login_name": "Jean Farmer",
+            "login_name": self.individual_login_name,
             "password": "motdepasse123"
         }
         
         response = self.client.post(self.url, data, format='json')
         
         assert response.status_code == status.HTTP_400_BAD_REQUEST
-        # L'utilisateur inactif peut être traité comme identifiants incorrects ou compte désactivé
-        assert ("désactivé" in str(response.data) or "incorrect" in str(response.data))
+        assert "Identifiants invalides" in str(response.data)
+
+    def test_login_ambiguous_name_guides_user_to_phone_login(self):
+        """Un login_name ambigu doit donner une erreur actionnable, pas une 500."""
+        User.objects.create_user(
+            phone_number="+237690444445",
+            first_name=self.individual_first_name,
+            last_name=self.individual_last_name,
+            password="motdepasse123",
+            age_group="26_35",
+        )
+
+        response = self.client.post(
+            self.url,
+            {
+                "login_name": self.individual_login_name,
+                "password": "motdepasse123",
+            },
+            format='json',
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "Identifiants invalides" in str(response.data)
 
 
 @pytest.mark.django_db
@@ -371,6 +392,15 @@ class TestLogoutEndpoint:
         assert response.status_code == status.HTTP_200_OK
         assert response.data["message"] == "Déconnexion réussie"
 
+    def test_logout_keeps_query_budget(self, django_assert_num_queries):
+        """La deconnexion ne doit faire que le travail JWT blacklist requis."""
+        refresh_token = str(RefreshToken.for_user(self.user))
+
+        with django_assert_num_queries(7):
+            response = self.client.post(self.url, {"refresh": refresh_token}, format='json')
+
+        assert response.status_code == status.HTTP_200_OK
+
     def test_logout_missing_refresh_fails(self):
         """Le contrat DRF doit exiger le refresh token."""
         response = self.client.post(self.url, {}, format='json')
@@ -381,6 +411,37 @@ class TestLogoutEndpoint:
     def test_logout_invalid_refresh_fails(self):
         """Les tokens invalides doivent retourner une erreur metier claire."""
         response = self.client.post(self.url, {"refresh": "invalid_token"}, format='json')
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.data["error"] == "Token invalide"
+
+    def test_logout_can_be_retried_with_same_refresh_token(self):
+        """Un retry mobile apres logout reussi doit rester idempotent."""
+        refresh_token = str(RefreshToken.for_user(self.user))
+
+        first_response = self.client.post(self.url, {"refresh": refresh_token}, format='json')
+        second_response = self.client.post(self.url, {"refresh": refresh_token}, format='json')
+
+        assert first_response.status_code == status.HTTP_200_OK
+        assert second_response.status_code == status.HTTP_200_OK
+        assert second_response.data["message"] == "Déconnexion réussie"
+
+    def test_logout_rejects_refresh_token_from_another_user(self):
+        """Un utilisateur ne doit pas invalider le refresh token d'un autre compte."""
+        other_user = User.objects.create_user(
+            phone_number="+237690565657",
+            first_name="Other",
+            last_name="User",
+            password="motdepasse123",
+            age_group="26_35",
+        )
+        other_refresh_token = str(RefreshToken.for_user(other_user))
+
+        response = self.client.post(
+            self.url,
+            {"refresh": other_refresh_token},
+            format='json',
+        )
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert response.data["error"] == "Token invalide"
@@ -426,6 +487,15 @@ class TestTokenRefreshEndpoint:
         # Avec rotation activée, nouveau refresh token
         assert 'refresh' in response.data
         assert len(response.data['access']) > 100
+
+    def test_token_refresh_keeps_query_budget(self, django_assert_num_queries):
+        """Le refresh JWT mobile garde un budget stable avec blacklist active."""
+        data = {"refresh": self.refresh_token}
+
+        with django_assert_num_queries(15):
+            response = self.client.post(self.url, data, format='json')
+
+        assert response.status_code == status.HTTP_200_OK
     
     def test_token_refresh_invalid_token_fails(self):
         """Test échec avec token invalide."""
@@ -435,6 +505,81 @@ class TestTokenRefreshEndpoint:
         
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
         assert 'token_not_valid' in response.data.get('code', '')
+
+    def test_token_refresh_rejects_inactive_user(self):
+        """Un refresh token d'un compte désactivé ne doit pas être renouvelé."""
+        self.user.is_active = False
+        self.user.save(update_fields=["is_active"])
+
+        response = self.client.post(
+            self.url,
+            {"refresh": self.refresh_token},
+            format='json',
+        )
+
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+        assert response.data.get("code") == "token_not_valid"
+
+
+@pytest.mark.django_db
+class TestTokenVerifyEndpoint:
+    """
+    Tests pour POST /api/accounts/token/verify/
+    """
+
+    def setup_method(self):
+        self.client = APIClient()
+        self.url = reverse('accounts:token_verify')
+        self.user = User.objects.create_user(
+            phone_number="+237690666667",
+            first_name="Verify",
+            last_name="User",
+            password="test123",
+            age_group="26_35",
+        )
+
+    def test_token_verify_success(self):
+        """Un access token valide doit être accepté."""
+        access_token = str(RefreshToken.for_user(self.user).access_token)
+
+        response = self.client.post(self.url, {"token": access_token}, format='json')
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data == {}
+
+    def test_token_verify_keeps_query_budget(self, django_assert_num_queries):
+        """La verification token ne doit lire que l'etat actif du compte."""
+        access_token = str(RefreshToken.for_user(self.user).access_token)
+
+        with django_assert_num_queries(2):
+            response = self.client.post(self.url, {"token": access_token}, format='json')
+
+        assert response.status_code == status.HTTP_200_OK
+
+    def test_token_verify_invalid_token_fails(self):
+        """Un token invalide doit être rejeté."""
+        response = self.client.post(self.url, {"token": "invalid_token"}, format='json')
+
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+        assert response.data.get("code") == "token_not_valid"
+
+    def test_token_verify_missing_token_fails(self):
+        """Le champ token est obligatoire."""
+        response = self.client.post(self.url, {}, format='json')
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "token" in response.data
+
+    def test_token_verify_rejects_inactive_user(self):
+        """Un access token d'un compte désactivé ne doit pas être vérifié."""
+        access_token = str(RefreshToken.for_user(self.user).access_token)
+        self.user.is_active = False
+        self.user.save(update_fields=["is_active"])
+
+        response = self.client.post(self.url, {"token": access_token}, format='json')
+
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+        assert response.data.get("code") == "token_not_valid"
 
 
 @pytest.mark.django_db
@@ -469,7 +614,7 @@ class TestProfileEndpoint:
         assert response.status_code == status.HTTP_200_OK
         
         # Vérifier structure complète avec propriétés et farm_profile
-        assert response.data['id'] == self.user.id
+        assert response.data['id'] == str(self.user.id)
         assert response.data['phone_number'] == "+237690777777"
         assert response.data['first_name'] == "Profile"
         assert response.data['full_name'] == "Profile User"
@@ -490,6 +635,16 @@ class TestProfileEndpoint:
         self.client.force_authenticate(user=self.user)
 
         with django_assert_num_queries(1):
+            response = self.client.get(self.url)
+
+        assert response.status_code == status.HTTP_200_OK
+
+    def test_get_profile_with_bearer_token_keeps_query_budget(self, django_assert_num_queries):
+        """Le vrai chemin JWT mobile ne doit pas doubler les lectures utilisateur."""
+        tokens = AuthApplicationService.build_auth_tokens(self.user)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {tokens.access}")
+
+        with django_assert_num_queries(2):
             response = self.client.get(self.url)
 
         assert response.status_code == status.HTTP_200_OK
@@ -525,17 +680,33 @@ class TestProfileEndpoint:
         self.user.refresh_from_db()
         assert self.user.email == "nouveau@example.com"
         assert self.user.activity_type == "mixte"
+
+    def test_patch_profile_keeps_query_budget(self, django_assert_num_queries):
+        """La mutation profil doit rester bornee malgre le verrou et la relecture."""
+        self.client.force_authenticate(user=self.user)
+
+        with django_assert_num_queries(7):
+            response = self.client.patch(
+                self.url,
+                {"email": "budget-profile@example.com"},
+                format='json',
+            )
+
+        assert response.status_code == status.HTTP_200_OK
     
     def test_patch_profile_readonly_fields_ignored(self):
         """Test que les champs read-only sont ignorés."""
         self.client.force_authenticate(user=self.user)
         
         original_phone = self.user.phone_number
+        original_account_type = self.user.account_type
         
         data = {
             "phone_number": "+237699999999",  # Read-only
             "date_joined": "2020-01-01T00:00:00Z",  # Read-only
             "is_verified": True,  # Read-only
+            "account_type": "company",  # Read-only
+            "is_active": False,  # Read-only
             "first_name": "NewName"  # Modifiable
         }
         
@@ -546,9 +717,28 @@ class TestProfileEndpoint:
         # Les champs read-only ne changent pas
         assert response.data['phone_number'] == original_phone
         assert response.data['is_verified'] is False
+        assert response.data['account_type'] == original_account_type
+        assert response.data['is_active'] is True
         
         # Les champs modifiables changent
         assert response.data['first_name'] == "NewName"
+
+        self.user.refresh_from_db()
+        assert self.user.account_type == original_account_type
+        assert self.user.is_active is True
+
+    def test_patch_profile_rejects_inconsistent_individual_company_fields(self):
+        """Un profil individuel ne doit pas accepter les champs entreprise."""
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.patch(
+            self.url,
+            {"business_name": "Entreprise pirate"},
+            format='json',
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "business_name" in response.data
 
 
 @pytest.mark.django_db
@@ -595,6 +785,16 @@ class TestFarmProfileEndpoint:
             response = self.client.get(self.url)
 
         assert response.status_code == status.HTTP_200_OK
+
+    def test_get_farm_profile_with_bearer_token_keeps_query_budget(self, django_assert_num_queries):
+        """Le vrai chemin JWT mobile garde un budget stable sur la ferme."""
+        tokens = AuthApplicationService.build_auth_tokens(self.user)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {tokens.access}")
+
+        with django_assert_num_queries(2):
+            response = self.client.get(self.url)
+
+        assert response.status_code == status.HTTP_200_OK
     
     def test_patch_farm_profile_success(self):
         """Test modification ferme réussie."""
@@ -623,6 +823,22 @@ class TestFarmProfileEndpoint:
         self.user.farm_profile.refresh_from_db()
         assert self.user.farm_profile.farm_name == "Belle Ferme Aquacole"
         assert self.user.farm_profile.total_ponds == 5
+
+    def test_patch_farm_profile_keeps_query_budget(self, django_assert_num_queries):
+        """La mutation ferme doit rester bornee avec relecture du plan de production."""
+        self.client.force_authenticate(user=self.user)
+
+        with django_assert_num_queries(8):
+            response = self.client.patch(
+                self.url,
+                {
+                    "farm_name": "Ferme Budget SQL",
+                    "total_ponds": 2,
+                },
+                format='json',
+            )
+
+        assert response.status_code == status.HTTP_200_OK
     
     def test_patch_farm_certification_status_readonly(self):
         """Test que certification_status est read-only."""
@@ -641,6 +857,77 @@ class TestFarmProfileEndpoint:
         assert response.data['certification_status'] == "pending"
         # farm_name change
         assert response.data['farm_name'] == "New Name"
+
+    def test_patch_farm_setup_fields_are_readonly(self):
+        """Le endpoint ferme ne doit pas contourner le flux /farm/setup/."""
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.patch(
+            self.url,
+            {
+                "farm_setup_completed": True,
+                "setup_species": "tilapia",
+                "setup_infrastructure_type": "etang",
+                "setup_unit_count": 9,
+                "annual_production_target_kg": "900.00",
+            },
+            format='json',
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["farm_setup_completed"] is False
+
+        self.user.farm_profile.refresh_from_db()
+        self.user.farm_profile.production_plan.refresh_from_db()
+        assert self.user.farm_profile.production_plan.setup_completed is False
+        assert self.user.farm_profile.production_plan.setup_species == ""
+        assert self.user.farm_profile.production_plan.setup_unit_count is None
+
+    def test_patch_farm_rejects_negative_business_values(self):
+        """Les valeurs économiques ou surfaces négatives doivent être rejetées."""
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.patch(
+            self.url,
+            {
+                "total_area_m2": "-1.00",
+                "default_feed_price_per_kg": "-100.00",
+            },
+            format='json',
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "total_area_m2" in response.data
+        assert "default_feed_price_per_kg" in response.data
+
+    def test_patch_farm_requires_complete_gps_pair(self):
+        """Latitude et longitude doivent être renseignées ensemble."""
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.patch(
+            self.url,
+            {"latitude": "3.8680"},
+            format='json',
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "longitude" in response.data
+
+    def test_patch_farm_rejects_production_without_ponds_as_400(self):
+        """L'invariant modèle doit rester une erreur mobile 400, jamais une 500."""
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.patch(
+            self.url,
+            {
+                "total_ponds": 0,
+                "annual_production_kg": 100,
+            },
+            format='json',
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "total_ponds" in response.data
     
     def test_get_farm_profile_unauthenticated_fails(self):
         """Test échec consultation sans authentification."""
@@ -689,10 +976,24 @@ class TestRateLimiting:
     Note : Ces tests sont complexes car le middleware utilise la mémoire.
     En production, utiliser Redis pour des tests plus fiables.
     """
+
+    @pytest.fixture(autouse=True)
+    def isolated_cache(self, settings):
+        """Isole ces tests du cache Redis partage entre workers pytest."""
+        settings.CACHES = {
+            "default": {
+                "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+                "LOCATION": f"accounts-rate-limit-tests-{uuid.uuid4()}",
+            }
+        }
+        caches.close_all()
+        cache.clear()
+        yield
+        cache.clear()
+        caches.close_all()
     
     def setup_method(self):
         """Configuration pour chaque test."""
-        cache.clear()
         self.client = APIClient()
         self.url = reverse('accounts:login')
 
@@ -715,23 +1016,59 @@ class TestRateLimiting:
         """Le rate limiting doit aussi couvrir les connexions par phone_number."""
         unique_ip = '10.200.200.201'
 
-        for _ in range(3):
+        responses = []
+        for _ in range(10):
             response = self.client.post(
                 self.url,
                 {"phone_number": "+237699000999", "password": "faux"},
                 format='json',
                 REMOTE_ADDR=unique_ip,
             )
-            assert response.status_code == status.HTTP_400_BAD_REQUEST
+            responses.append(response.status_code)
+            if response.status_code == status.HTTP_429_TOO_MANY_REQUESTS:
+                break
+
+        assert status.HTTP_400_BAD_REQUEST in responses
+        assert responses[-1] == status.HTTP_429_TOO_MANY_REQUESTS
+
+    def test_successful_registration_is_not_recorded_as_failed_attempt(self):
+        """Une inscription 201 ne doit pas remplir le compteur d'échecs IP."""
+        register_url = reverse('accounts:register')
+        unique_ip = '10.200.200.202'
+
+        for index in range(3):
+            response = self.client.post(
+                register_url,
+                {
+                    "phone_number": f"+23769900100{index}",
+                    "first_name": f"Register{index}",
+                    "last_name": "Success",
+                    "password": "motdepasse123",
+                    "password_confirm": "motdepasse123",
+                    "account_type": "individual",
+                    "age_group": "26_35",
+                },
+                format='json',
+                REMOTE_ADDR=unique_ip,
+            )
+            assert response.status_code == status.HTTP_201_CREATED
 
         response = self.client.post(
-            self.url,
-            {"phone_number": "+237699000999", "password": "faux"},
+            register_url,
+            {
+                "phone_number": "+237699001010",
+                "first_name": "RegisterFinal",
+                "last_name": "Success",
+                "password": "motdepasse123",
+                "password_confirm": "motdepasse123",
+                "account_type": "individual",
+                "age_group": "26_35",
+            },
             format='json',
             REMOTE_ADDR=unique_ip,
         )
 
-        assert response.status_code == status.HTTP_429_TOO_MANY_REQUESTS
+        assert response.status_code == status.HTTP_201_CREATED
 
 
 @pytest.mark.django_db
@@ -763,6 +1100,13 @@ class TestAccountDeletionEndpoint:
         self.user.refresh_from_db()
         assert self.user.is_active is False
 
+    def test_delete_account_keeps_query_budget(self, django_assert_max_num_queries):
+        """La suppression est rare, mais son nettoyage doit rester plafonne."""
+        with django_assert_max_num_queries(16):
+            response = self.client.post(self.url, {'confirm': True}, format='json')
+
+        assert response.status_code == status.HTTP_200_OK
+
     def test_delete_account_requires_confirmation(self):
         """POST confirm=false → 400."""
         response = self.client.post(self.url, {'confirm': False}, format='json')
@@ -792,6 +1136,23 @@ class TestAccountDeletionEndpoint:
         farm = FarmProfile.objects.filter(user=self.user).first()
         if farm:
             assert farm.is_deleted is True
+
+    def test_delete_account_can_be_retried_without_mutating_anonymized_identity(self):
+        """Un retry mobile après succès doit rester idempotent."""
+        first_response = self.client.post(self.url, {'confirm': True}, format='json')
+        assert first_response.status_code == status.HTTP_200_OK
+        self.user.refresh_from_db()
+        self.user.farm_profile.refresh_from_db()
+        first_phone = self.user.phone_number
+        first_farm_name = self.user.farm_profile.farm_name
+
+        second_response = self.client.post(self.url, {'confirm': True}, format='json')
+
+        assert second_response.status_code == status.HTTP_200_OK
+        self.user.refresh_from_db()
+        self.user.farm_profile.refresh_from_db()
+        assert self.user.phone_number == first_phone
+        assert self.user.farm_profile.farm_name == first_farm_name
 
 
 @pytest.mark.django_db
@@ -830,6 +1191,22 @@ class TestFarmSetupView:
         assert response.status_code == status.HTTP_200_OK
         assert response.data['farm_setup_completed'] is True
 
+    def test_setup_etang_keeps_query_budget(self, django_assert_num_queries):
+        """Le setup initial doit rester borne avec verrou du plan de production."""
+        data = {
+            'setup_species': 'tilapia',
+            'setup_infrastructure_type': 'etang',
+            'setup_unit_count': 3,
+            'setup_unit_surface_m2': '200.00',
+            'annual_production_target_kg': '600.00',
+            'num_cycles_per_year': 2,
+        }
+
+        with django_assert_num_queries(7):
+            response = self.client.post(self.url, data, format='json')
+
+        assert response.status_code == status.HTTP_200_OK
+
     def test_setup_bac_uses_volume(self):
         """Infrastructure bac_hors_sol avec volume → 200."""
         data = {
@@ -845,7 +1222,8 @@ class TestFarmSetupView:
         assert response.status_code == status.HTTP_200_OK
         farm = self.user.farm_profile
         farm.refresh_from_db()
-        assert farm.farm_setup_completed is True
+        farm.production_plan.refresh_from_db()
+        assert farm.production_plan.setup_completed is True
 
     def test_setup_etang_without_surface_fails(self):
         """Étang sans superficie → 400 (champ obligatoire pour ce type)."""
@@ -888,6 +1266,65 @@ class TestFarmSetupView:
         response = self.client.post(self.url, data, format='json')
 
         assert response.status_code == status.HTTP_200_OK
+
+    def test_setup_rejects_non_positive_dimensions_and_prices(self):
+        """Le setup refuse dimensions nulles et prix non positifs."""
+        data = {
+            'setup_species': 'tilapia',
+            'setup_infrastructure_type': 'etang',
+            'setup_unit_count': 2,
+            'setup_unit_surface_m2': '0.00',
+            'annual_production_target_kg': '500.00',
+            'num_cycles_per_year': 2,
+            'planned_selling_price_per_kg_fcfa': '0.00',
+            'fingerlings_cost_per_unit_fcfa': '-1.00',
+        }
+
+        response = self.client.post(self.url, data, format='json')
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert 'setup_unit_surface_m2' in response.data
+        assert 'planned_selling_price_per_kg_fcfa' in response.data
+        assert 'fingerlings_cost_per_unit_fcfa' in response.data
+
+    def test_setup_partial_without_required_fields_fails(self):
+        """Un PATCH partiel ne doit pas marquer une ferme incomplète comme configurée."""
+        response = self.client.patch(
+            self.url,
+            {'planned_selling_price_per_kg_fcfa': '1800.00'},
+            format='json',
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        farm = self.user.farm_profile
+        farm.refresh_from_db()
+        farm.production_plan.refresh_from_db()
+        assert farm.production_plan.setup_completed is False
+
+    def test_setup_partial_after_complete_setup_succeeds(self):
+        """Un PATCH partiel reste possible après une configuration complète."""
+        initial_response = self.client.post(
+            self.url,
+            {
+                'setup_species': 'tilapia',
+                'setup_infrastructure_type': 'etang',
+                'setup_unit_count': 3,
+                'setup_unit_surface_m2': '200.00',
+                'annual_production_target_kg': '600.00',
+                'num_cycles_per_year': 2,
+            },
+            format='json',
+        )
+        assert initial_response.status_code == status.HTTP_200_OK
+
+        response = self.client.patch(
+            self.url,
+            {'planned_selling_price_per_kg_fcfa': '1800.00'},
+            format='json',
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data['planned_selling_price_per_kg_fcfa'] == '1800.00'
 
     def test_setup_requires_auth(self):
         """POST sans token → 401."""
@@ -940,6 +1377,35 @@ class TestAnnualSimulationView:
         # Champs par cycle
         assert 'production_per_cycle_kg' in result
         assert 'feed_bags_per_cycle' in result
+
+    def test_simulate_tilapia_keeps_query_budget(self, django_assert_num_queries):
+        """La simulation est un calcul pur quand l'utilisateur est deja authentifie."""
+        data = {
+            'species': 'tilapia',
+            'annual_production_target_kg': '1000',
+            'num_cycles': 2,
+        }
+
+        with django_assert_num_queries(12):
+            response = self.client.post(self.url, data, format='json')
+
+        assert response.status_code == status.HTTP_200_OK
+
+    def test_simulate_tilapia_with_bearer_token_keeps_query_budget(self, django_assert_num_queries):
+        """Le vrai chemin JWT mobile ne doit ajouter qu'une lecture d'utilisateur."""
+        tokens = AuthApplicationService.build_auth_tokens(self.user)
+        self.client.force_authenticate(user=None)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {tokens.access}")
+        data = {
+            'species': 'tilapia',
+            'annual_production_target_kg': '1000',
+            'num_cycles': 2,
+        }
+
+        with django_assert_num_queries(13):
+            response = self.client.post(self.url, data, format='json')
+
+        assert response.status_code == status.HTTP_200_OK
 
     def test_simulate_aquacare_fee_is_20_fcfa_per_kg(self):
         """Le frais AquaCare doit être exactement 20 FCFA × kg produit."""

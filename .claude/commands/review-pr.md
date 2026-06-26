@@ -114,7 +114,7 @@ Translations:
 
 Design:
 [ ] Colors from constants/colors.ts
-[ ] MAVECAM palette only (#059669, etc.)
+[ ] AquaCare palette only (#059669, etc.)
 [ ] Proper spacing (multiples of 4)
 [ ] Touch targets >= 44x44
 
@@ -247,7 +247,7 @@ Create PR review:
 ### Frontend
 - Hardcoded strings (no t())
 - Missing translation key
-- Wrong color (not MAVECAM)
+- Wrong color (not AquaCare)
 - console.log() present
 - No error/loading states
 - Type 'any' used

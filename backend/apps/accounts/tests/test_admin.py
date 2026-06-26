@@ -1,13 +1,14 @@
 """
 Tests unitaires pour l'interface d'administration Django.
 
-Teste les fonctionnalités administratives MAVECAM.
+Teste les fonctionnalités administratives AquaCare.
 """
 from unittest.mock import Mock, patch
 
 import pytest
 from accounts.admin import FarmProfileAdmin, UserAdmin
 from accounts.models import FarmProfile
+from common.admin_mixins import RBACConstants
 from django.contrib.admin.sites import AdminSite
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
@@ -48,7 +49,7 @@ class TestUserAdmin:
 
     def test_get_search_fields_includes_phone_for_manager(self):
         """Le telephone reste searchable pour les managers."""
-        manager_group, _ = Group.objects.get_or_create(name='mavecam_managers')
+        manager_group, _ = Group.objects.get_or_create(name=RBACConstants.GROUP_MANAGERS)
         manager_user = User.objects.create_user(
             phone_number='+237699111111',
             first_name='Manager',
@@ -130,7 +131,7 @@ class TestUserAdmin:
         user = User.objects.create_superuser(
             phone_number='+237699000000',
             first_name='Admin',
-            last_name='MAVECAM',
+            last_name='AquaCare',
             password='admin123'
         )
         
@@ -289,7 +290,7 @@ class TestUserAdmin:
     #
     #     # Vérifier les headers de réponse CSV
     #     assert response['Content-Type'] == 'text/csv'
-    #     assert 'utilisateurs_mavecam.csv' in response['Content-Disposition']
+    #     assert 'utilisateurs_aquacare.csv' in response['Content-Disposition']
     #
     #     # Vérifier le contenu CSV
     #     content = response.content.decode('utf-8')

@@ -21,6 +21,8 @@ import {
   ReactNativeUploadFile,
   PartialHarvest,
   PartialHarvestData,
+  CycleHarvestResponse,
+  ActiveSanitaryIssueGroup,
 } from '@/types/aquaculture';
 
 interface PaginatedResponse<T> {
@@ -57,27 +59,59 @@ const isReactNativeUploadFile = (photo: unknown): photo is ReactNativeUploadFile
 };
 
 /**
- * Service API pour le module aquaculture MAVECAM AquaCare
+ * Service API pour le module aquaculture AquaCare
  *
  * Gere toutes les interactions avec le backend Django aquaculture.
  */
 class AquacultureService {
   private readonly baseUrl = '/aquaculture';
+  private readonly inFlightDashboardRequests = new Map<string, Promise<DashboardData>>();
 
   // =================== DASHBOARD ===================
 
-  async getDashboardData(cycleId?: string): Promise<DashboardData> {
-    try {
-      const params = cycleId ? `?cycle_id=${cycleId}` : '';
-      const response = await apiService.get<DashboardData>(`${this.baseUrl}/dashboard/${params}`);
-      return response.data;
-    } catch (error) {
-      // 401 deja gere par l'interceptor axios (refresh + auto-logout) — eviter de
-      // declencher la LogBox d'Expo pendant la transition logout.
-      if (!isUnauthorizedError(error)) {
-        logger.error('Erreur lors de la recuperation du dashboard:', error);
+  async getDashboardData(
+    cycleId?: string,
+    options?: { lightweight?: boolean }
+  ): Promise<DashboardData> {
+    const lightweight = options?.lightweight === true;
+    const requestKey = `${cycleId || '__all_cycles__'}:${lightweight ? 'lite' : 'full'}`;
+    const inFlightRequest = this.inFlightDashboardRequests.get(requestKey);
+    if (inFlightRequest) {
+      return inFlightRequest;
+    }
+
+    const requestPromise = (async () => {
+      try {
+        const query = new URLSearchParams();
+        if (cycleId) {
+          query.append('cycle_id', cycleId);
+        }
+        if (lightweight) {
+          query.append('lightweight', 'true');
+        }
+        const queryString = query.toString();
+        const params = queryString ? `?${queryString}` : '';
+        const response = await apiService.get<DashboardData>(`${this.baseUrl}/dashboard/${params}`);
+        return response.data;
+      } catch (error) {
+        // 401 deja gere par l'interceptor axios (refresh + auto-logout) — eviter de
+        // declencher la LogBox d'Expo pendant la transition logout.
+        if (!isUnauthorizedError(error)) {
+          logger.error('Erreur lors de la recuperation du dashboard:', error);
+        }
+        throw error;
+      } finally {
+        this.inFlightDashboardRequests.delete(requestKey);
       }
-      throw error;
+    })();
+
+    this.inFlightDashboardRequests.set(requestKey, requestPromise);
+
+    try {
+      return await requestPromise;
+    } finally {
+      // Garantit un nettoyage même si un caller abandonne la promesse.
+      this.inFlightDashboardRequests.delete(requestKey);
     }
   }
 
@@ -221,7 +255,11 @@ class AquacultureService {
 
   async createProductionCycle(cycleData: CreateCycleForm): Promise<ProductionCycle> {
     try {
-      const response = await apiService.post<ProductionCycle>(`${this.baseUrl}/cycles/`, cycleData);
+      const payload: CreateCycleForm = {
+        ...cycleData,
+        client_uuid: cycleData.client_uuid ?? this.generateClientUUID(),
+      };
+      const response = await apiService.post<ProductionCycle>(`${this.baseUrl}/cycles/`, payload);
       return response.data;
     } catch (error) {
       logger.error('Erreur lors de la creation du cycle:', error);
@@ -265,9 +303,9 @@ class AquacultureService {
       final_count: number;
       final_average_weight: number;
     }
-  ): Promise<ProductionCycle> {
+  ): Promise<CycleHarvestResponse> {
     try {
-      const response = await apiService.post<ProductionCycle>(
+      const response = await apiService.post<CycleHarvestResponse>(
         `${this.baseUrl}/cycles/${id}/harvest/`,
         harvestData
       );
@@ -283,9 +321,13 @@ class AquacultureService {
     data: PartialHarvestData
   ): Promise<{ cycle: ProductionCycle; partial_harvest: PartialHarvest; message: string }> {
     try {
+      const payload: PartialHarvestData = {
+        ...data,
+        client_uuid: data.client_uuid ?? this.generateClientUUID(),
+      };
       const response = await apiService.post<{ cycle: ProductionCycle; partial_harvest: PartialHarvest; message: string }>(
         `${this.baseUrl}/cycles/${id}/partial-harvest/`,
-        data
+        payload
       );
       return response.data;
     } catch (error) {
@@ -295,10 +337,10 @@ class AquacultureService {
 
   async getPartialHarvests(id: string): Promise<PartialHarvest[]> {
     try {
-      const response = await apiService.get<PartialHarvest[]>(
+      const response = await apiService.get<ListResponse<PartialHarvest>>(
         `${this.baseUrl}/cycles/${id}/partial-harvests/`
       );
-      return response.data;
+      return extractResults(response.data);
     } catch (error) {
       logger.error(`Erreur lors de la récupération des récoltes partielles du cycle ${id}:`, error);
       throw error;
@@ -353,7 +395,7 @@ class AquacultureService {
       const payload = {
         cycle: cycleId,
         ...logData,
-        client_uuid: this.generateClientUUID(),
+        client_uuid: logData.client_uuid ?? this.generateClientUUID(),
       };
 
       const response = await apiService.post<CycleLog>(`${this.baseUrl}/cycle-logs/`, payload);
@@ -411,11 +453,14 @@ class AquacultureService {
 
   async createSanitaryLog(cycleId: string, logData: SanitaryLogForm): Promise<SanitaryLog> {
     try {
+      const clientUuid = logData.client_uuid ?? this.generateClientUUID();
       const formData = new FormData();
       formData.append('cycle', cycleId);
       formData.append('event_date', logData.event_date);
       formData.append('event_type', logData.event_type);
       formData.append('symptoms', logData.symptoms);
+      formData.append('client_uuid', clientUuid);
+      formData.append('created_offline', logData.created_offline ? 'true' : 'false');
 
       if (logData.affected_count !== undefined) {
         formData.append('affected_count', logData.affected_count.toString());
@@ -468,9 +513,9 @@ class AquacultureService {
     }
   }
 
-  async getActiveSanitaryIssues(): Promise<Record<string, { cycle: string; issues: SanitaryLog[] }>> {
+  async getActiveSanitaryIssues(): Promise<ActiveSanitaryIssueGroup[]> {
     try {
-      const response = await apiService.get<Record<string, { cycle: string; issues: SanitaryLog[] }>>(
+      const response = await apiService.get<ActiveSanitaryIssueGroup[]>(
         `${this.baseUrl}/sanitary-logs/active_issues/`
       );
       return response.data;
@@ -522,7 +567,7 @@ class AquacultureService {
       return response.data;
     } catch (error) {
       logger.error('Erreur lors du chargement des phases aliments:', error);
-      return { feeding_phases: [] };
+      throw error;
     }
   }
 

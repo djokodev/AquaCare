@@ -41,12 +41,12 @@ class TestConversationListAPI:
         assert len(response.data['results']) == 1
         assert response.data['results'][0]['id'] == str(user_conv.id)
 
-    def test_list_conversations_admin_sees_all(self, api_client, mavecam_admin, user_factory):
+    def test_list_conversations_admin_sees_all(self, api_client, aquacare_admin, user_factory):
         """Test that admin users see all conversations."""
         from rest_framework_simplejwt.tokens import RefreshToken
 
         # Authenticate as admin
-        refresh = RefreshToken.for_user(mavecam_admin)
+        refresh = RefreshToken.for_user(aquacare_admin)
         api_client.credentials(HTTP_AUTHORIZATION=f'Bearer {refresh.access_token}')
 
         # Create multiple conversations
@@ -105,13 +105,13 @@ class TestConversationDetailAPI:
 class TestMessagesAPI:
     """Tests for messages endpoint."""
 
-    def test_get_messages_success(self, auth_client, authenticated_user, mavecam_admin):
+    def test_get_messages_success(self, auth_client, authenticated_user, aquacare_admin):
         """Test getting messages for a conversation."""
         conversation = ConversationService.get_or_create_conversation(authenticated_user)
 
         # Create some messages
         MessageService.send_user_message(authenticated_user, "Message 1", None, 'none', None, False)
-        MessageService.send_admin_message(conversation, mavecam_admin, "Response 1")
+        MessageService.send_admin_message(conversation, aquacare_admin, "Response 1")
         MessageService.send_user_message(authenticated_user, "Message 2", None, 'none', None, False)
 
         url = reverse('conversation-messages', kwargs={'pk': conversation.id})
@@ -252,11 +252,11 @@ class TestSendMessageAPI:
         assert response.data['media_url'] is not None
 
     def test_send_message_hides_admin_identifier_from_regular_user(
-        self, auth_client, authenticated_user, mavecam_admin
+        self, auth_client, authenticated_user, aquacare_admin
     ):
         """User responses must not expose internal admin sender identifiers."""
         conversation = ConversationService.get_or_create_conversation(authenticated_user)
-        MessageService.send_admin_message(conversation, mavecam_admin, "Réponse support")
+        MessageService.send_admin_message(conversation, aquacare_admin, "Réponse support")
 
         url = reverse('conversation-messages', kwargs={'pk': conversation.id})
         response = auth_client.get(url)
@@ -346,13 +346,13 @@ class TestSendMessageAPI:
 class TestMarkReadAPI:
     """Tests for marking messages as read."""
 
-    def test_mark_messages_as_read_success(self, auth_client, authenticated_user, mavecam_admin):
+    def test_mark_messages_as_read_success(self, auth_client, authenticated_user, aquacare_admin):
         """Test marking messages as read successfully."""
         conversation = ConversationService.get_or_create_conversation(authenticated_user)
 
         # Admin sends messages
-        MessageService.send_admin_message(conversation, mavecam_admin, "Message 1")
-        MessageService.send_admin_message(conversation, mavecam_admin, "Message 2")
+        MessageService.send_admin_message(conversation, aquacare_admin, "Message 1")
+        MessageService.send_admin_message(conversation, aquacare_admin, "Message 2")
 
         conversation.refresh_from_db()
         assert conversation.unread_count_user > 0
@@ -418,7 +418,7 @@ class TestSignalIntegration:
         # Only one acknowledgment for the first user message
         assert system_count == 1
 
-    def test_admin_message_creates_notification(self, authenticated_user, mavecam_admin):
+    def test_admin_message_creates_notification(self, authenticated_user, aquacare_admin):
         """Test that admin message triggers notification creation."""
         from notifications.models import Notification
 
@@ -427,7 +427,7 @@ class TestSignalIntegration:
         # Send admin message
         MessageService.send_admin_message(
             conversation=conversation,
-            admin_user=mavecam_admin,
+            admin_user=aquacare_admin,
             content="Réponse de l'équipe support"
         )
 
@@ -585,7 +585,7 @@ class TestMediaValidation:
 class TestUnreadCountConcurrency:
     """Tests for unread count consistency using F() expressions."""
 
-    def test_unread_count_increments_correctly(self, authenticated_user, mavecam_admin):
+    def test_unread_count_increments_correctly(self, authenticated_user, aquacare_admin):
         """Test that multiple unread count increments are applied correctly."""
         from chat.services import ConversationService
 
@@ -600,7 +600,7 @@ class TestUnreadCountConcurrency:
         conversation.refresh_from_db()
         assert conversation.unread_count_user == 3
 
-    def test_unread_count_reset_is_atomic(self, authenticated_user, mavecam_admin):
+    def test_unread_count_reset_is_atomic(self, authenticated_user, aquacare_admin):
         """Test that resetting unread count is atomic and sets value to 0."""
         from chat.services import ConversationService
 
@@ -622,7 +622,7 @@ class TestUnreadCountConcurrency:
 class TestIsolationSecurity:
     """Tests verifying user isolation for mark_read and message listing."""
 
-    def test_mark_read_isolation(self, auth_client, user_factory, mavecam_admin):
+    def test_mark_read_isolation(self, auth_client, user_factory, aquacare_admin):
         """Test that userA cannot mark messages as read in userB's conversation."""
         other_user = user_factory()
         other_conversation = ConversationService.get_or_create_conversation(other_user)
@@ -630,7 +630,7 @@ class TestIsolationSecurity:
         # Admin sends a message to other_user's conversation
         MessageService.send_admin_message(
             other_conversation,
-            mavecam_admin,
+            aquacare_admin,
             "Message for other user"
         )
 
@@ -655,7 +655,7 @@ class TestIsolationSecurity:
 class TestBulkNotificationTask:
     """Tests for the Celery bulk notification task."""
 
-    def test_notify_admin_task_uses_bulk_create(self, authenticated_user, mavecam_admin):
+    def test_notify_admin_task_uses_bulk_create(self, authenticated_user, aquacare_admin):
         """Test that notify_admins_new_user_message_task creates N notifications in 1 bulk_create."""
         from chat.tasks import notify_admins_new_user_message_task
         from notifications.models import Notification

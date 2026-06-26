@@ -6,36 +6,31 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { useDispatch } from 'react-redux';
 
 import { useAuth } from '@/hooks/useAuth';
-import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
-import { offlineService } from '@/services/offlineService';
-import { CreateCycleForm } from '@/types/aquaculture';
 import { AppDispatch } from '@/store/store';
 import { fetchDashboardData } from '@/features/aquaculture/store/aquacultureSlice';
-import { MAVECAM_COLORS } from '@/constants/colors';
+import { AQUACARE_COLORS } from '@/constants/colors';
 import { estimateBiomass, estimateDensityWithUnit } from '@/domain/aquaculture/estimators';
-import { parseApiError, formatErrorForDisplay, logApiError, hasFieldError, isNetworkError } from '@/utils/errorParser';
+import { parseApiError, logApiError, hasFieldError } from '@/utils/errorParser';
 import { RootStackParamList } from '@/navigation/MainNavigator';
-import logger from '@/utils/logger';
+import {
+  NewCycleData,
+  ECONOMIC_DEFAULTS,
+  MAX_DENSITY_BY_INFRA,
+  parseFormNumber,
+  validateNewCycleData,
+  buildCyclePayload,
+  buildSimulatorPrefill,
+} from '@/features/aquaculture/utils/newCycleForm';
+import { formatAquacultureErrorWithAction } from '@/features/aquaculture/utils/aquacultureErrorPresenter';
+import {
+  createProductionCycleWithOfflineFallback,
+  runSilentOfflineSync,
+} from '@/features/aquaculture/services/aquacultureWorkflowService';
 
 const SPECIES_OPTIONS = [
   { value: 'clarias', labelKey: 'clarias', durationDays: 120 },
   { value: 'tilapia', labelKey: 'tilapia', durationDays: 180 },
 ] as const;
-
-const ECONOMIC_DEFAULTS = {
-  tilapia: {
-    target_harvest_weight_g: 350,
-    planned_cycle_duration_days: 180,
-    expected_survival_rate_pct: 95,
-    planned_selling_price_per_kg_fcfa: 2800,
-  },
-  clarias: {
-    target_harvest_weight_g: 400,
-    planned_cycle_duration_days: 120,
-    expected_survival_rate_pct: 95,
-    planned_selling_price_per_kg_fcfa: 2000,
-  },
-} as const;
 
 type NewCycleScreenNavigationProp = StackNavigationProp<RootStackParamList, 'NewCycle'>;
 
@@ -48,24 +43,6 @@ const INFRASTRUCTURE_OPTIONS = [
   { value: 'cage_flottante', labelKey: 'cageFlottante' },
   { value: 'bac_hors_sol', labelKey: 'bacHorsSol' },
 ] as const;
-
-interface NewCycleData {
-  cycle_name: string;
-  species: 'clarias' | 'tilapia' | '';
-  pond_identifier: string;
-  pond_surface_m2: string;
-  pond_volume_m3: string;
-  infrastructure_type: string[];
-  initial_count: string;
-  initial_average_weight: string;
-  start_date: string;
-  target_harvest_weight_g: string;
-  planned_cycle_duration_days: string;
-  expected_survival_rate_pct: string;
-  planned_selling_price_per_kg_fcfa: string;
-  fingerlings_cost_fcfa: string;
-  other_operational_costs_fcfa: string;
-}
 
 export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
   const { t } = useTranslation();
@@ -93,11 +70,6 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
 
   const getSelectedSpecies = () => SPECIES_OPTIONS.find((option) => option.value === formData.species);
 
-  const parseNumber = (value: string): number => {
-    const parsed = Number.parseFloat(value);
-    return Number.isFinite(parsed) ? parsed : 0;
-  };
-
   const applyEconomicDefaults = (species: 'clarias' | 'tilapia') => {
     const defaults = ECONOMIC_DEFAULTS[species];
     setFormData((prev) => ({
@@ -122,15 +94,15 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
   };
 
   const estimateInitialBiomass = () => {
-    const count = parseNumber(formData.initial_count);
-    const weight = parseNumber(formData.initial_average_weight);
+    const count = parseFormNumber(formData.initial_count);
+    const weight = parseFormNumber(formData.initial_average_weight);
     return estimateBiomass(count, weight).toFixed(2);
   };
 
   const estimateDensityValue = () => {
-    const biomass = parseNumber(estimateInitialBiomass());
-    const volume = parseNumber(formData.pond_volume_m3) || undefined;
-    const surface = parseNumber(formData.pond_surface_m2) || undefined;
+    const biomass = parseFormNumber(estimateInitialBiomass());
+    const volume = parseFormNumber(formData.pond_volume_m3) || undefined;
+    const surface = parseFormNumber(formData.pond_surface_m2) || undefined;
 
     const { value, unit } = estimateDensityWithUnit(biomass, volume, surface);
     return { value: value.toFixed(2), unit };
@@ -155,112 +127,29 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formData.species, formData.pond_identifier]);
 
-  const validateForm = () => {
-    const required = [
-      'cycle_name',
-      'species',
-      'pond_identifier',
-      'initial_count',
-      'initial_average_weight',
-      'target_harvest_weight_g',
-      'planned_cycle_duration_days',
-      'expected_survival_rate_pct',
-      'planned_selling_price_per_kg_fcfa',
-    ] as const;
-
-    for (const field of required) {
-      if (!(formData[field] as string).trim()) {
-        return false;
-      }
-    }
-
-    const initialCount = parseNumber(formData.initial_count);
-    const initialWeight = parseNumber(formData.initial_average_weight);
-    const targetWeight = parseNumber(formData.target_harvest_weight_g);
-    const durationDays = Number.parseInt(formData.planned_cycle_duration_days, 10);
-    const survivalPct = parseNumber(formData.expected_survival_rate_pct);
-    const sellingPrice = parseNumber(formData.planned_selling_price_per_kg_fcfa);
-    const fingerlingsCost = parseNumber(formData.fingerlings_cost_fcfa || '0');
-    const otherCosts = parseNumber(formData.other_operational_costs_fcfa || '0');
-
-    if (initialCount <= 0 || initialWeight <= 0) return false;
-    if (targetWeight <= initialWeight) return false;
-    if (!Number.isFinite(durationDays) || durationDays < 30 || durationDays > 365) return false;
-    if (survivalPct < 0 || survivalPct > 100) return false;
-    if (sellingPrice <= 0) return false;
-    if (fingerlingsCost < 0 || otherCosts < 0) return false;
-
-    const hasSurface = formData.pond_surface_m2.trim() !== '' && parseNumber(formData.pond_surface_m2) > 0;
-    const hasVolume = formData.pond_volume_m3.trim() !== '' && parseNumber(formData.pond_volume_m3) > 0;
-    if (!hasSurface && !hasVolume) return false;
-
-    return true;
-  };
-
-  const tryOfflineSync = async () => {
-    try {
-      const hasPending = await offlineService.hasPendingSync();
-      if (!hasPending) {
-        return;
-      }
-
-      const result = await offlineService.syncOfflineLogs();
-      if (result.success > 0) {
-        dispatch(fetchDashboardData(undefined));
-      }
-    } catch (error) {
-      logger.error('Erreur synchronisation silencieuse:', error);
-    }
-  };
-
   useEffect(() => {
-    dispatch(fetchDashboardData(undefined));
-    tryOfflineSync();
+    const bootstrap = async () => {
+      await runSilentOfflineSync();
+      dispatch(fetchDashboardData({ lightweight: true }));
+    };
+    bootstrap();
   }, [dispatch]);
-
-  const buildCyclePayload = (): CreateCycleForm => ({
-    cycle_name: formData.cycle_name,
-    species: formData.species as 'clarias' | 'tilapia',
-    pond_identifier: formData.pond_identifier,
-    pond_surface_m2: formData.pond_surface_m2 ? parseNumber(formData.pond_surface_m2) : undefined,
-    pond_volume_m3: formData.pond_volume_m3 ? parseNumber(formData.pond_volume_m3) : undefined,
-    infrastructure_type: formData.infrastructure_type.length > 0 ? formData.infrastructure_type : undefined,
-    start_date: formData.start_date,
-    initial_count: Number.parseInt(formData.initial_count, 10),
-    initial_average_weight: parseNumber(formData.initial_average_weight),
-    target_harvest_weight_g: parseNumber(formData.target_harvest_weight_g),
-    planned_cycle_duration_days: Number.parseInt(formData.planned_cycle_duration_days, 10),
-    expected_survival_rate_pct: parseNumber(formData.expected_survival_rate_pct),
-    planned_selling_price_per_kg_fcfa: parseNumber(formData.planned_selling_price_per_kg_fcfa),
-    fingerlings_cost_fcfa: parseNumber(formData.fingerlings_cost_fcfa || '0'),
-    other_operational_costs_fcfa: parseNumber(formData.other_operational_costs_fcfa || '0'),
-  });
-
-  const buildSimulatorPrefill = (cycleData: CreateCycleForm) => ({
-    species: cycleData.species === 'clarias' ? ('catfish' as const) : ('tilapia' as const),
-    initial_fish_count: cycleData.initial_count,
-    initial_weight_g: cycleData.initial_average_weight,
-    target_weight_g: cycleData.target_harvest_weight_g || 300,
-    cycle_duration_days: cycleData.planned_cycle_duration_days || 120,
-    survival_rate: (cycleData.expected_survival_rate_pct || 85) / 100,
-    selling_price_per_kg_fcfa: cycleData.planned_selling_price_per_kg_fcfa || 1800,
-    fingerlings_cost_fcfa: cycleData.fingerlings_cost_fcfa || 0,
-    other_costs_fcfa: cycleData.other_operational_costs_fcfa || 0,
-  });
+  const isFormValid = validateNewCycleData(formData);
 
   const handleSave = async () => {
-    if (!validateForm()) {
+    if (!validateNewCycleData(formData)) {
       Alert.alert(t('error'), t('fillRequiredFields'));
       return;
     }
 
     setSaving(true);
-    const cycleData = buildCyclePayload();
+    const cycleData = buildCyclePayload(formData);
 
     try {
-      try {
-        const createdCycle = await aquacultureService.createProductionCycle(cycleData);
-        dispatch(fetchDashboardData(undefined));
+      const creationResult = await createProductionCycleWithOfflineFallback(cycleData);
+      if (creationResult.mode === 'online') {
+        const createdCycle = creationResult.data;
+        dispatch(fetchDashboardData({ lightweight: true }));
 
         const prefill = buildSimulatorPrefill(cycleData);
         Alert.alert(t('success'), t('cycleCreatedSuccess'), [
@@ -273,28 +162,39 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
               }),
           },
         ]);
-      } catch (apiError: unknown) {
-        if (isNetworkError(apiError)) {
-          await offlineService.saveNewCycleOffline(cycleData);
-          Alert.alert(t('success'), t('cycleCreatedOfflineSimulationInfo'), [
-            { text: t('ok'), onPress: () => navigation.goBack() },
-          ]);
-          return;
-        }
-        throw apiError;
+      } else {
+        Alert.alert(t('success'), t('cycleCreatedOfflineSimulationInfo'), [
+          { text: t('ok'), onPress: () => navigation.goBack() },
+        ]);
+        return;
       }
     } catch (error: unknown) {
       const parsedError = parseApiError(error);
       logApiError(error, 'Creation cycle de production');
 
-      Alert.alert(t('error'), formatErrorForDisplay(parsedError), [{ text: t('ok'), style: 'cancel' }]);
+      Alert.alert(t('error'), formatAquacultureErrorWithAction(parsedError, t), [{ text: t('ok'), style: 'cancel' }]);
 
       if (hasFieldError(parsedError, 'initial_count') && formData.initial_count && formData.pond_surface_m2) {
-        const density = Math.round(parseNumber(formData.initial_count) / parseNumber(formData.pond_surface_m2));
+        const surface = parseFormNumber(formData.pond_surface_m2);
+        const volume = parseFormNumber(formData.pond_volume_m3);
+        const count = parseFormNumber(formData.initial_count);
+        const usePondDensity =
+          formData.infrastructure_type.length === 0 ||
+          formData.infrastructure_type.includes('etang');
+
+        const density = usePondDensity && surface > 0
+          ? Math.round(count / surface)
+          : volume > 0
+            ? Math.round(count / volume)
+            : Math.round(count / Math.max(surface, 1));
+        const maxDensity = usePondDensity
+          ? MAX_DENSITY_BY_INFRA.pondPerM2
+          : MAX_DENSITY_BY_INFRA.tankPerM3;
+        const unit = usePondDensity ? t('fishPerM2') : t('fishPerM3');
         setTimeout(() => {
           Alert.alert(
             t('help'),
-            `${t('densityTooHigh')}\n\n${t('maxDensity')}: 500 ${t('fishPerM2')}\n${t('yourDensity')}: ${density} ${t('fishPerM2')}\n\n${t('densitySuggestion')}`,
+            `${t('densityTooHigh')}\n\n${t('maxDensity')}: ${maxDensity} ${unit}\n${t('yourDensity')}: ${density} ${unit}\n\n${t('densitySuggestion')}`,
             [{ text: t('understood'), style: 'default' }]
           );
         }, 500);
@@ -306,16 +206,16 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
 
   return (
     <ScrollView className="flex-1 bg-cream">
-      <View className="bg-mavecam-primary flex-row items-center pt-14 pb-4 px-4">
+      <View className="bg-aquacare-primary flex-row items-center pt-14 pb-4 px-4">
         <TouchableOpacity className="mr-4" onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color={MAVECAM_COLORS.WHITE} />
+          <Ionicons name="arrow-back" size={24} color={AQUACARE_COLORS.WHITE} />
         </TouchableOpacity>
         <Text className="text-xl font-bold text-white">{t('newCycleTitle')}</Text>
       </View>
 
       <View className="p-4">
         <View className="bg-white p-4 rounded-lg flex-row items-center mb-6 gap-3 border border-gray-200">
-          <Ionicons name="business" size={20} color={MAVECAM_COLORS.GREEN_PRIMARY} />
+          <Ionicons name="business" size={20} color={AQUACARE_COLORS.GREEN_PRIMARY} />
           <Text className="text-base font-semibold text-gray-dark">{farmProfile?.farm_name || t('farmNotDefined')}</Text>
         </View>
 
@@ -329,7 +229,7 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
                 key={species.value}
                 className={`p-4 rounded-lg border flex-row items-center justify-between ${
                   formData.species === species.value
-                    ? 'bg-mavecam-primary border-mavecam-primary'
+                    ? 'bg-aquacare-primary border-aquacare-primary'
                     : 'bg-white border-gray-200'
                 }`}
                 onPress={() => applyEconomicDefaults(species.value)}
@@ -351,7 +251,7 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
                   </Text>
                 </View>
                 {formData.species === species.value && (
-                  <Ionicons name="checkmark-circle" size={20} color={MAVECAM_COLORS.WHITE} />
+                  <Ionicons name="checkmark-circle" size={20} color={AQUACARE_COLORS.WHITE} />
                 )}
               </TouchableOpacity>
             ))}
@@ -383,12 +283,12 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
                   <TouchableOpacity
                     key={option.value}
                     className={`flex-row items-center px-4 py-2 rounded-full border ${
-                      selected ? 'bg-mavecam-primary border-mavecam-primary' : 'bg-white border-gray-200'
+                      selected ? 'bg-aquacare-primary border-aquacare-primary' : 'bg-white border-gray-200'
                     }`}
                     onPress={() => toggleInfrastructure(option.value)}
                   >
                     {selected && (
-                      <Ionicons name="checkmark" size={14} color={MAVECAM_COLORS.WHITE} style={{ marginRight: 4 }} />
+                      <Ionicons name="checkmark" size={14} color={AQUACARE_COLORS.WHITE} style={{ marginRight: 4 }} />
                     )}
                     <Text className={`text-sm font-medium ${selected ? 'text-white' : 'text-gray-dark'}`}>
                       {t(option.labelKey)}
@@ -399,9 +299,9 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
             </View>
           </View>
 
-          <View className="flex-row items-center bg-[#e0f2fe] p-3 rounded-lg mb-4 gap-2">
-            <Ionicons name="information-circle" size={18} color={MAVECAM_COLORS.INFO} />
-            <Text className="flex-1 text-sm text-mavecam-primary">{t('pondDimensionsInfo')}</Text>
+          <View className="flex-row items-center bg-white border border-gray-200 p-3 rounded-lg mb-4 gap-2">
+            <Ionicons name="information-circle" size={18} color={AQUACARE_COLORS.INFO} />
+            <Text className="flex-1 text-sm text-aquacare-primary">{t('pondDimensionsInfo')}</Text>
           </View>
 
           <View className="flex-row gap-3">
@@ -411,7 +311,7 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
                 className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
                 value={formData.pond_surface_m2}
                 onChangeText={(value) => setFormData((prev) => ({ ...prev, pond_surface_m2: value }))}
-                placeholder="Ex: 100"
+                placeholder={t('exampleValuePlaceholder', { value: 100 })}
                 keyboardType="numeric"
               />
             </View>
@@ -422,7 +322,7 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
                 className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
                 value={formData.pond_volume_m3}
                 onChangeText={(value) => setFormData((prev) => ({ ...prev, pond_volume_m3: value }))}
-                placeholder="Ex: 150"
+                placeholder={t('exampleValuePlaceholder', { value: 150 })}
                 keyboardType="numeric"
               />
             </View>
@@ -441,7 +341,7 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
                 className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
                 value={formData.initial_count}
                 onChangeText={(value) => setFormData((prev) => ({ ...prev, initial_count: value }))}
-                placeholder="Ex: 1000"
+                placeholder={t('exampleValuePlaceholder', { value: 1000 })}
                 keyboardType="numeric"
               />
             </View>
@@ -454,7 +354,7 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
                 className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
                 value={formData.initial_average_weight}
                 onChangeText={(value) => setFormData((prev) => ({ ...prev, initial_average_weight: value }))}
-                placeholder="Ex: 10"
+                placeholder={t('exampleValuePlaceholder', { value: 10 })}
                 keyboardType="numeric"
               />
             </View>
@@ -468,7 +368,7 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
               className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
               value={formData.start_date}
               onChangeText={(value) => setFormData((prev) => ({ ...prev, start_date: value }))}
-              placeholder="YYYY-MM-DD"
+              placeholder={t('dateFormatPlaceholder')}
             />
           </View>
 
@@ -495,7 +395,9 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
                 className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
                 value={formData.target_harvest_weight_g}
                 onChangeText={(value) => setFormData((prev) => ({ ...prev, target_harvest_weight_g: value }))}
-                placeholder={formData.species === 'clarias' ? '400' : '300'}
+                placeholder={t('exampleValuePlaceholder', {
+                  value: formData.species === 'clarias' ? 400 : 300,
+                })}
                 keyboardType="numeric"
               />
             </View>
@@ -508,7 +410,9 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
                 className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
                 value={formData.planned_cycle_duration_days}
                 onChangeText={(value) => setFormData((prev) => ({ ...prev, planned_cycle_duration_days: value }))}
-                placeholder={formData.species === 'clarias' ? '150' : '120'}
+                placeholder={t('exampleValuePlaceholder', {
+                  value: formData.species === 'clarias' ? 150 : 120,
+                })}
                 keyboardType="numeric"
               />
             </View>
@@ -523,7 +427,7 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
                 className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
                 value={formData.expected_survival_rate_pct}
                 onChangeText={(value) => setFormData((prev) => ({ ...prev, expected_survival_rate_pct: value }))}
-                placeholder="85"
+                placeholder={t('exampleValuePlaceholder', { value: 85 })}
                 keyboardType="numeric"
               />
             </View>
@@ -536,10 +440,12 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
                 className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
                 value={formData.planned_selling_price_per_kg_fcfa}
                 onChangeText={(value) => setFormData((prev) => ({ ...prev, planned_selling_price_per_kg_fcfa: value }))}
-                placeholder={formData.species === 'clarias' ? '2000' : '1800'}
+                placeholder={t('exampleValuePlaceholder', {
+                  value: formData.species === 'clarias' ? 2000 : 1800,
+                })}
                 keyboardType="numeric"
               />
-              <Text style={{ fontSize: 11, color: MAVECAM_COLORS.GREEN_PRIMARY, marginTop: 4 }}>
+              <Text style={{ fontSize: 11, color: AQUACARE_COLORS.GREEN_PRIMARY, marginTop: 4 }}>
                 {t('buyerNetworkSellingPriceHint')}
               </Text>
             </View>
@@ -552,7 +458,7 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
                 className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
                 value={formData.fingerlings_cost_fcfa}
                 onChangeText={(value) => setFormData((prev) => ({ ...prev, fingerlings_cost_fcfa: value }))}
-                placeholder="0"
+                placeholder={t('zeroValuePlaceholder')}
                 keyboardType="numeric"
               />
             </View>
@@ -563,7 +469,7 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
                 className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
                 value={formData.other_operational_costs_fcfa}
                 onChangeText={(value) => setFormData((prev) => ({ ...prev, other_operational_costs_fcfa: value }))}
-                placeholder="0"
+                placeholder={t('zeroValuePlaceholder')}
                 keyboardType="numeric"
               />
             </View>
@@ -582,13 +488,13 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
                 <View className="bg-white p-4 rounded-lg border border-green-200">
                   <View className="flex-row justify-between mb-2">
                     <Text className="text-sm text-gray-light">{t('initialBiomass')} :</Text>
-                    <Text className="text-sm font-semibold text-mavecam-primary">{estimateInitialBiomass()} kg</Text>
+                    <Text className="text-sm font-semibold text-aquacare-primary">{estimateInitialBiomass()} kg</Text>
                   </View>
 
                   {(formData.pond_surface_m2 || formData.pond_volume_m3) && (
                     <View className="flex-row justify-between mb-2">
                       <Text className="text-sm text-gray-light">{t('initialDensity')} :</Text>
-                      <Text className="text-sm font-semibold text-mavecam-primary">
+                      <Text className="text-sm font-semibold text-aquacare-primary">
                         {density.value} {density.unit}
                       </Text>
                     </View>
@@ -597,7 +503,7 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
                   {expectedDuration && (
                     <View className="flex-row justify-between">
                       <Text className="text-sm text-gray-light">{t('expectedDuration')} :</Text>
-                      <Text className="text-sm font-semibold text-mavecam-primary">
+                      <Text className="text-sm font-semibold text-aquacare-primary">
                         {expectedDuration} {t('days')}
                       </Text>
                     </View>
@@ -609,17 +515,17 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
         ) : null}
 
         <TouchableOpacity
-          className={`bg-mavecam-primary flex-row items-center justify-center py-4 rounded-lg mt-4 gap-2 ${
-            !validateForm() || saving ? 'opacity-60' : ''
+          className={`bg-aquacare-primary flex-row items-center justify-center py-4 rounded-lg mt-4 gap-2 ${
+            !isFormValid || saving ? 'opacity-60' : ''
           }`}
           onPress={handleSave}
-          disabled={!validateForm() || saving}
+          disabled={!isFormValid || saving}
         >
           {saving ? (
-            <ActivityIndicator size="small" color={MAVECAM_COLORS.WHITE} />
+            <ActivityIndicator size="small" color={AQUACARE_COLORS.WHITE} />
           ) : (
             <>
-              <Ionicons name="checkmark" size={20} color={MAVECAM_COLORS.WHITE} />
+              <Ionicons name="checkmark" size={20} color={AQUACARE_COLORS.WHITE} />
               <Text className="text-white text-base font-semibold">{t('createCycle')}</Text>
             </>
           )}

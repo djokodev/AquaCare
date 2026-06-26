@@ -1,5 +1,5 @@
 """
-Service de gestion du journal sanitaire pour MAVECAM AquaCare.
+Service de gestion du journal sanitaire pour AquaCare.
 
 Centralise toute la logique métier liée aux événements sanitaires :
 - Création et résolution de problèmes sanitaires
@@ -10,6 +10,7 @@ Centralise toute la logique métier liée aux événements sanitaires :
 
 Architecture: Service Layer Pattern avec responsabilité unique.
 """
+from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Any
 
@@ -18,12 +19,25 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from notifications.services import NotificationService
 
-from ..domain.exceptions import CycleNotFoundException, InvalidSanitaryDataException, SanitaryLogNotFoundException
+from ..domain.exceptions import (
+    CycleNotFoundException,
+    InvalidSanitaryDataException,
+    OfflineSyncConflictError,
+    SanitaryLogNotFoundException,
+)
 from ..models import ProductionCycle, SanitaryLog
 
 # Notification model moved to apps/notifications/models.py
 # Will be migrated to use NotificationService in Phase 1B
 from .base import BaseService
+
+
+@dataclass(frozen=True)
+class SanitaryLogMutationResult:
+    """Résultat de mutation pour création sanitaire idempotente."""
+
+    log: SanitaryLog
+    created: bool
 
 
 class SanitaryService(BaseService):
@@ -53,46 +67,42 @@ class SanitaryService(BaseService):
     WARNING_AFFECTED_THRESHOLD = 0.02   # 2% de l'effectif
 
     @staticmethod
-    @transaction.atomic
-    def create_sanitary_log(
+    def _get_existing_log_from_client_uuid(
+        *,
+        cycle: ProductionCycle,
+        client_uuid: str | None,
+    ) -> SanitaryLog | None:
+        if not client_uuid:
+            return None
+
+        existing_log = SanitaryLog.objects.select_related('cycle__farm_profile__user').filter(
+            client_uuid=client_uuid,
+        ).first()
+        if not existing_log:
+            return None
+
+        existing_user_id = existing_log.cycle.farm_profile.user_id
+        current_user_id = cycle.farm_profile.user_id
+        if existing_user_id != current_user_id:
+            raise OfflineSyncConflictError(
+                _("Conflit de synchronisation : ce client_uuid appartient à un autre utilisateur.")
+            )
+        if existing_log.cycle_id != cycle.id:
+            raise OfflineSyncConflictError(
+                _("Conflit de synchronisation : ce client_uuid est déjà lié à un autre cycle.")
+            )
+        return existing_log
+
+    @staticmethod
+    def _validate_create_sanitary_log_inputs(
+        *,
         cycle: ProductionCycle,
         event_date: date,
         event_type: str,
         symptoms: str,
-        affected_count: int | None = None,
-        treatment_applied: str = '',
-        medication_used: str = '',
-        dosage: str = '',
-        treatment_duration_days: int | None = None,
-        photo = None,
-        notes: str = '',
-        **kwargs
-    ) -> SanitaryLog:
-        """
-        Crée un log sanitaire avec validation métier complète.
-
-        Args:
-            cycle: Cycle de production concerné
-            event_date: Date de l'événement sanitaire
-            event_type: Type d'événement (disease, treatment, vaccination, etc.)
-            symptoms: Description détaillée des symptômes observés
-            affected_count: Nombre de poissons affectés (optionnel)
-            treatment_applied: Description du traitement appliqué
-            medication_used: Nom du médicament utilisé
-            dosage: Dosage du médicament
-            treatment_duration_days: Durée du traitement en jours
-            photo: Photo de l'événement (optionnel)
-            notes: Notes additionnelles
-            **kwargs: Autres champs (created_offline, client_uuid, etc.)
-
-        Returns:
-            SanitaryLog: Log sanitaire créé
-
-        Raises:
-            InvalidSanitaryDataException: Si les données sont invalides
-            CycleNotFoundException: Si le cycle n'existe pas
-        """
-        # Validation métier
+        affected_count: int | None,
+        treatment_duration_days: int | None,
+    ) -> None:
         if not cycle:
             raise CycleNotFoundException("Le cycle de production est requis")
 
@@ -114,7 +124,6 @@ class SanitaryService(BaseService):
                 f"La date de l'événement doit être après le début du cycle ({cycle.start_date})"
             )
 
-        # Validation du nombre affecté
         if affected_count is not None:
             if affected_count < 0:
                 raise InvalidSanitaryDataException(
@@ -125,11 +134,67 @@ class SanitaryService(BaseService):
                     f"Le nombre affecté ({affected_count}) dépasse l'effectif actuel ({cycle.current_count})"
                 )
 
-        # Validation de la durée du traitement
         if treatment_duration_days is not None and treatment_duration_days < 0:
             raise InvalidSanitaryDataException(
                 "La durée du traitement doit être positive"
             )
+
+    @staticmethod
+    @transaction.atomic
+    def create_or_get_sanitary_log(
+        cycle: ProductionCycle,
+        event_date: date,
+        event_type: str,
+        symptoms: str,
+        affected_count: int | None = None,
+        treatment_applied: str = '',
+        medication_used: str = '',
+        dosage: str = '',
+        treatment_duration_days: int | None = None,
+        photo = None,
+        notes: str = '',
+        **kwargs
+    ) -> SanitaryLogMutationResult:
+        """
+        Crée un log sanitaire avec validation métier complète.
+
+        Args:
+            cycle: Cycle de production concerné
+            event_date: Date de l'événement sanitaire
+            event_type: Type d'événement (disease, treatment, vaccination, etc.)
+            symptoms: Description détaillée des symptômes observés
+            affected_count: Nombre de poissons affectés (optionnel)
+            treatment_applied: Description du traitement appliqué
+            medication_used: Nom du médicament utilisé
+            dosage: Dosage du médicament
+            treatment_duration_days: Durée du traitement en jours
+            photo: Photo de l'événement (optionnel)
+            notes: Notes additionnelles
+            **kwargs: Autres champs (created_offline, client_uuid, etc.)
+
+        Returns:
+            SanitaryLogMutationResult: Log sanitaire et indicateur de création
+
+        Raises:
+            InvalidSanitaryDataException: Si les données sont invalides
+            CycleNotFoundException: Si le cycle n'existe pas
+        """
+        client_uuid = kwargs.get('client_uuid')
+        existing_log = SanitaryService._get_existing_log_from_client_uuid(
+            cycle=cycle,
+            client_uuid=client_uuid,
+        )
+        if existing_log:
+            return SanitaryLogMutationResult(log=existing_log, created=False)
+
+        SanitaryService._validate_create_sanitary_log_inputs(
+            cycle=cycle,
+            event_date=event_date,
+            event_type=event_type,
+            symptoms=symptoms,
+            affected_count=affected_count,
+            treatment_duration_days=treatment_duration_days,
+        )
 
         # Création du log sanitaire
         sanitary_log = SanitaryLog.objects.create(
@@ -157,12 +222,50 @@ class SanitaryService(BaseService):
             if affected_rate >= SanitaryService.CRITICAL_AFFECTED_THRESHOLD:
                 SanitaryService._create_critical_alert(sanitary_log, affected_rate)
 
-        return sanitary_log
+        return SanitaryLogMutationResult(log=sanitary_log, created=True)
+
+    @staticmethod
+    def create_sanitary_log(
+        cycle: ProductionCycle,
+        event_date: date,
+        event_type: str,
+        symptoms: str,
+        affected_count: int | None = None,
+        treatment_applied: str = '',
+        medication_used: str = '',
+        dosage: str = '',
+        treatment_duration_days: int | None = None,
+        photo = None,
+        notes: str = '',
+        **kwargs
+    ) -> SanitaryLog:
+        """
+        Backward-compatible wrapper qui retourne uniquement le log.
+
+        Les nouveaux appels HTTP doivent préférer create_or_get_sanitary_log()
+        pour connaître explicitement si la création est nouvelle ou idempotente.
+        """
+        mutation_result = SanitaryService.create_or_get_sanitary_log(
+            cycle=cycle,
+            event_date=event_date,
+            event_type=event_type,
+            symptoms=symptoms,
+            affected_count=affected_count,
+            treatment_applied=treatment_applied,
+            medication_used=medication_used,
+            dosage=dosage,
+            treatment_duration_days=treatment_duration_days,
+            photo=photo,
+            notes=notes,
+            **kwargs,
+        )
+        return mutation_result.log
 
     @staticmethod
     @transaction.atomic
     def resolve_sanitary_issue(
         sanitary_log_id: str,
+        user=None,
         resolution_date: date | None = None,
         resolution_notes: str = ''
     ) -> SanitaryLog:
@@ -182,9 +285,12 @@ class SanitaryService(BaseService):
             InvalidSanitaryDataException: Si déjà résolu ou date invalide
         """
         try:
-            sanitary_log = SanitaryLog.objects.select_related('cycle__farm_profile__user').get(
+            sanitary_lookup = SanitaryLog.objects.select_related('cycle__farm_profile__user').filter(
                 id=sanitary_log_id
             )
+            if user is not None:
+                sanitary_lookup = sanitary_lookup.filter(cycle__farm_profile__user=user)
+            sanitary_log = sanitary_lookup.get()
         except SanitaryLog.DoesNotExist:
             raise SanitaryLogNotFoundException(
                 f"Log sanitaire {sanitary_log_id} introuvable"

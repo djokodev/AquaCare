@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -16,20 +16,8 @@ import { useDispatch, useSelector } from 'react-redux';
 import { AppDispatch, RootState } from '@/store/store';
 import { harvestCycle } from '@/features/aquaculture/store/aquacultureSlice';
 import { ProductionCycle, HarvestData } from '@/types/aquaculture';
-
-// Couleurs MAVECAM selon spécifications
-const MAVECAM_COLORS = {
-  GREEN_PRIMARY: '#059669',
-  GREEN_LIGHT: '#10b981',
-  GREEN_DARK: '#047857',
-  WHITE: '#ffffff',
-  CREAM: '#f8fafc',
-  SUCCESS: '#059669',
-  WARNING: '#f59e0b',
-  ERROR: '#dc2626',
-  GRAY_LIGHT: '#64748b',
-  GRAY_DARK: '#1e293b',
-};
+import { AQUACARE_COLORS } from '@/constants/colors';
+import { getApiErrorMessage } from '@/utils/errorParser';
 
 interface HarvestModalProps {
   visible: boolean;
@@ -55,7 +43,7 @@ export default function HarvestModal({ visible, onClose, cycle, onSuccess, onCon
   const hasMoreCycles = onNextCycle != null && (harvestedThisYear + 1) < numCyclesPerYear;
   const [loading, setLoading] = useState(false);
 
-  // Ã‰tat du formulaire
+  // Etat du formulaire
   const [formData, setFormData] = useState<HarvestData>({
     harvest_date: new Date().toISOString().split('T')[0],
     final_count: cycle?.current_count || 0,
@@ -66,10 +54,10 @@ export default function HarvestModal({ visible, onClose, cycle, onSuccess, onCon
 
   // Optimistic UI: preview total weight locally; backend overwrites with authoritative value.
   React.useEffect(() => {
-    const totalWeight = formData.final_count * formData.final_average_weight;
+    const totalWeight = (formData.final_count * formData.final_average_weight) / 1000;
     setFormData(prev => ({
       ...prev,
-      total_harvested_weight: Math.round(totalWeight * 100) / 100, // Arrondir à 2 décimales
+      total_harvested_weight: Math.round(totalWeight * 100) / 100,
     }));
   }, [formData.final_count, formData.final_average_weight]);
 
@@ -82,17 +70,17 @@ export default function HarvestModal({ visible, onClose, cycle, onSuccess, onCon
 
   const validateForm = (): boolean => {
     if (!formData.harvest_date) {
-      Alert.alert('Erreur', t('harvestDateRequired'));
+      Alert.alert(t('error'), t('harvestDateRequired'));
       return false;
     }
 
     if (formData.final_count <= 0) {
-      Alert.alert('Erreur', t('finalCountRequired'));
+      Alert.alert(t('error'), t('finalCountRequired'));
       return false;
     }
 
     if (formData.final_average_weight <= 0) {
-      Alert.alert('Erreur', t('finalWeightRequired'));
+      Alert.alert(t('error'), t('finalWeightRequired'));
       return false;
     }
 
@@ -131,7 +119,7 @@ export default function HarvestModal({ visible, onClose, cycle, onSuccess, onCon
             },
           }] : []),
           {
-            text: 'OK',
+            text: t('ok'),
             onPress: () => {
               onSuccess?.();
               onClose();
@@ -139,10 +127,10 @@ export default function HarvestModal({ visible, onClose, cycle, onSuccess, onCon
           },
         ]
       );
-    } catch (error: any) {
+    } catch (error: unknown) {
       Alert.alert(
         t('error'),
-        error || t('harvestError')
+        getApiErrorMessage(error, t('harvestError'))
       );
     } finally {
       setLoading(false);
@@ -196,7 +184,7 @@ export default function HarvestModal({ visible, onClose, cycle, onSuccess, onCon
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>{t('harvestCycle')}</Text>
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-              <Ionicons name="close" size={24} color={MAVECAM_COLORS.GRAY_DARK} />
+              <Ionicons name="close" size={24} color={AQUACARE_COLORS.GRAY_DARK} />
             </TouchableOpacity>
           </View>
 
@@ -210,11 +198,11 @@ export default function HarvestModal({ visible, onClose, cycle, onSuccess, onCon
               </Text>
               <Text style={styles.cycleInfo}>
                 <Text style={styles.infoLabel}>{t('species')}: </Text>
-                {cycle.species === 'clarias' ? 'Silure africain (Clarias)' : 'Tilapia'}
+                {cycle.species === 'clarias' ? t('clariasSpeciesFull') : t('tilapia')}
               </Text>
               <Text style={styles.cycleInfo}>
                 <Text style={styles.infoLabel}>{t('duration')}: </Text>
-                {Math.floor((new Date().getTime() - new Date(cycle.start_date).getTime()) / (1000 * 60 * 60 * 24))} jours
+                {Math.floor((new Date().getTime() - new Date(cycle.start_date).getTime()) / (1000 * 60 * 60 * 24))} {t('days')}
               </Text>
             </View>
 
@@ -229,7 +217,7 @@ export default function HarvestModal({ visible, onClose, cycle, onSuccess, onCon
                   style={styles.textInput}
                   value={formData.harvest_date}
                   onChangeText={(value) => handleInputChange('harvest_date', value)}
-                  placeholder="YYYY-MM-DD"
+                  placeholder={t('dateFormatPlaceholder')}
                 />
               </View>
 
@@ -313,7 +301,7 @@ export default function HarvestModal({ visible, onClose, cycle, onSuccess, onCon
               disabled={loading}
             >
               {loading ? (
-                <ActivityIndicator color={MAVECAM_COLORS.WHITE} />
+                <ActivityIndicator color={AQUACARE_COLORS.WHITE} />
               ) : (
                 <Text style={styles.harvestButtonText}>{t('confirmHarvest')}</Text>
               )}
@@ -333,7 +321,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modalContainer: {
-    backgroundColor: MAVECAM_COLORS.WHITE,
+    backgroundColor: AQUACARE_COLORS.WHITE,
     borderRadius: 16,
     width: '90%',
     maxHeight: '90%',
@@ -344,12 +332,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 20,
     borderBottomWidth: 1,
-    borderBottomColor: MAVECAM_COLORS.CREAM,
+    borderBottomColor: AQUACARE_COLORS.CREAM,
   },
   modalTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: MAVECAM_COLORS.GRAY_DARK,
+    color: AQUACARE_COLORS.GRAY_DARK,
   },
   closeButton: {
     padding: 4,
@@ -359,17 +347,17 @@ const styles = StyleSheet.create({
   },
   cycleInfoContainer: {
     padding: 20,
-    backgroundColor: MAVECAM_COLORS.CREAM,
+    backgroundColor: AQUACARE_COLORS.CREAM,
   },
   sectionTitle: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: MAVECAM_COLORS.GRAY_DARK,
+    color: AQUACARE_COLORS.GRAY_DARK,
     marginBottom: 12,
   },
   cycleInfo: {
     fontSize: 14,
-    color: MAVECAM_COLORS.GRAY_DARK,
+    color: AQUACARE_COLORS.GRAY_DARK,
     marginBottom: 4,
   },
   infoLabel: {
@@ -384,16 +372,16 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: MAVECAM_COLORS.GRAY_DARK,
+    color: AQUACARE_COLORS.GRAY_DARK,
     marginBottom: 8,
   },
   textInput: {
     borderWidth: 1,
-    borderColor: MAVECAM_COLORS.GRAY_LIGHT,
+    borderColor: AQUACARE_COLORS.GRAY_LIGHT,
     borderRadius: 8,
     padding: 12,
     fontSize: 16,
-    backgroundColor: MAVECAM_COLORS.WHITE,
+    backgroundColor: AQUACARE_COLORS.WHITE,
   },
   notesInput: {
     height: 80,
@@ -403,7 +391,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: MAVECAM_COLORS.CREAM,
+    backgroundColor: AQUACARE_COLORS.CREAM,
     padding: 12,
     borderRadius: 8,
     marginBottom: 16,
@@ -411,17 +399,17 @@ const styles = StyleSheet.create({
   calculatedLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: MAVECAM_COLORS.GRAY_DARK,
+    color: AQUACARE_COLORS.GRAY_DARK,
   },
   calculatedValue: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: MAVECAM_COLORS.GREEN_PRIMARY,
+    color: AQUACARE_COLORS.GREEN_PRIMARY,
   },
   performanceContainer: {
     padding: 20,
     borderTopWidth: 1,
-    borderTopColor: MAVECAM_COLORS.CREAM,
+    borderTopColor: AQUACARE_COLORS.CREAM,
   },
   metricsGrid: {
     flexDirection: 'row',
@@ -429,7 +417,7 @@ const styles = StyleSheet.create({
   },
   metricCard: {
     alignItems: 'center',
-    backgroundColor: MAVECAM_COLORS.CREAM,
+    backgroundColor: AQUACARE_COLORS.CREAM,
     padding: 16,
     borderRadius: 8,
     minWidth: 100,
@@ -437,19 +425,19 @@ const styles = StyleSheet.create({
   metricValue: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: MAVECAM_COLORS.GREEN_PRIMARY,
+    color: AQUACARE_COLORS.GREEN_PRIMARY,
     marginBottom: 4,
   },
   metricLabel: {
     fontSize: 12,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
+    color: AQUACARE_COLORS.GRAY_LIGHT,
     textAlign: 'center',
   },
   modalActions: {
     flexDirection: 'row',
     padding: 20,
     borderTopWidth: 1,
-    borderTopColor: MAVECAM_COLORS.CREAM,
+    borderTopColor: AQUACARE_COLORS.CREAM,
   },
   cancelButton: {
     flex: 1,
@@ -458,16 +446,16 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginRight: 8,
     borderWidth: 1,
-    borderColor: MAVECAM_COLORS.GRAY_LIGHT,
+    borderColor: AQUACARE_COLORS.GRAY_LIGHT,
   },
   cancelButtonText: {
-    color: MAVECAM_COLORS.GRAY_DARK,
+    color: AQUACARE_COLORS.GRAY_DARK,
     fontSize: 16,
     fontWeight: '600',
   },
   harvestButton: {
     flex: 2,
-    backgroundColor: MAVECAM_COLORS.GREEN_PRIMARY,
+    backgroundColor: AQUACARE_COLORS.GREEN_PRIMARY,
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 12,
@@ -475,7 +463,7 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   harvestButtonText: {
-    color: MAVECAM_COLORS.WHITE,
+    color: AQUACARE_COLORS.WHITE,
     fontSize: 16,
     fontWeight: '600',
   },
@@ -483,6 +471,3 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
 });
-
-
-

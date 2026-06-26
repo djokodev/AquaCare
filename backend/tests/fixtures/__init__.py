@@ -1,5 +1,5 @@
-# Données de test MAVECAM
+# Données de test AquaCare
 
-from .factories import CompanyUserFactory, MavecamAdminFactory, UserFactory
+from .factories import AquacareAdminFactory, CompanyUserFactory, UserFactory
 
-__all__ = ["UserFactory", "MavecamAdminFactory", "CompanyUserFactory"]
+__all__ = ["UserFactory", "AquacareAdminFactory", "CompanyUserFactory"]

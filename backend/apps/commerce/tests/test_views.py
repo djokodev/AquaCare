@@ -261,6 +261,66 @@ class TestOrderViewSet:
         assert response.status_code == status.HTTP_201_CREATED
         assert "order_number" in response.data
 
+    def test_create_order_with_production_cycle_link(self, authenticated_client, test_farm, test_product):
+        cycle = ProductionCycle.objects.create(
+            farm_profile=test_farm,
+            cycle_name="Cycle Vue",
+            species="tilapia",
+            pond_identifier="Pond V1",
+            pond_surface_m2=Decimal("120.0"),
+            start_date=date.today(),
+            initial_count=1200,
+            initial_average_weight=Decimal("5.0"),
+            initial_biomass=Decimal("6.0"),
+            current_count=1200,
+            current_average_weight=Decimal("5.0"),
+            current_biomass=Decimal("6.0"),
+            status="active",
+        )
+
+        response = authenticated_client.post("/api/commerce/orders/", {
+            "items": [{"product_id": str(test_product.id), "quantity": 1}],
+            "delivery_method": "home",
+            "production_cycle_id": str(cycle.id),
+        }, format="json")
+
+        assert response.status_code == status.HTTP_201_CREATED
+        assert response.data["production_cycle_id"] == str(cycle.id)
+
+    def test_create_order_rejects_foreign_production_cycle(self, authenticated_client, test_farm, test_product):
+        user_b = User.objects.create_user(
+            phone_number="+237909808707",
+            password="testpass123",
+            first_name="User",
+            last_name="CycleB",
+            age_group="26_35",
+        )
+        farm_b, _ = FarmProfile.objects.get_or_create(user=user_b, defaults={"farm_name": "Farm Cycle B"})
+        cycle_b = ProductionCycle.objects.create(
+            farm_profile=farm_b,
+            cycle_name="Cycle B",
+            species="tilapia",
+            pond_identifier="Pond B1",
+            pond_surface_m2=Decimal("120.0"),
+            start_date=date.today(),
+            initial_count=1200,
+            initial_average_weight=Decimal("5.0"),
+            initial_biomass=Decimal("6.0"),
+            current_count=1200,
+            current_average_weight=Decimal("5.0"),
+            current_biomass=Decimal("6.0"),
+            status="active",
+        )
+
+        response = authenticated_client.post("/api/commerce/orders/", {
+            "items": [{"product_id": str(test_product.id), "quantity": 1}],
+            "delivery_method": "home",
+            "production_cycle_id": str(cycle_b.id),
+        }, format="json")
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.data["message"] == "Cycle de production introuvable ou inaccessible"
+
     def test_list_user_orders(self, authenticated_client, test_farm, test_product):
         authenticated_client.post("/api/commerce/orders/", {
             "items": [{"product_id": str(test_product.id), "quantity": 1}],

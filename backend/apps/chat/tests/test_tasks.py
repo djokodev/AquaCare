@@ -27,11 +27,11 @@ class TestNotifyAdminsNewUserMessageTask:
 
         retry_mock.assert_called_once()
 
-    def test_returns_early_for_non_user_message(self, authenticated_user, mavecam_admin) -> None:
+    def test_returns_early_for_non_user_message(self, authenticated_user, aquacare_admin) -> None:
         conversation = ConversationService.get_or_create_conversation(authenticated_user)
         admin_message = MessageService.send_admin_message(
             conversation=conversation,
-            admin_user=mavecam_admin,
+            admin_user=aquacare_admin,
             content="Réponse support",
         )
 
@@ -44,7 +44,7 @@ class TestNotifyAdminsNewUserMessageTask:
     def test_creates_admin_notifications_for_user_message(
         self,
         authenticated_user,
-        mavecam_admin,
+        aquacare_admin,
         user_factory,
         settings,
     ) -> None:
@@ -70,7 +70,7 @@ class TestNotifyAdminsNewUserMessageTask:
         notifications = Notification.objects.filter(notification_type="new_message").order_by("user_id")
         assert notifications.count() == 2
         assert {notification.user_id for notification in notifications} == {
-            mavecam_admin.id,
+            aquacare_admin.id,
             second_admin.id,
         }
         assert all(notification.metadata["sender_type"] == "user" for notification in notifications)
@@ -122,11 +122,11 @@ class TestNotifyUserAdminMessageTask:
 
         create_notification_mock.assert_not_called()
 
-    def test_notifies_user_for_admin_message(self, authenticated_user, mavecam_admin) -> None:
+    def test_notifies_user_for_admin_message(self, authenticated_user, aquacare_admin) -> None:
         conversation = ConversationService.get_or_create_conversation(authenticated_user)
         admin_message = MessageService.send_admin_message(
             conversation=conversation,
-            admin_user=mavecam_admin,
+            admin_user=aquacare_admin,
             content="Le support vous répond",
         )
 

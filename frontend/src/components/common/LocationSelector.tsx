@@ -11,33 +11,18 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import logger from '@/utils/logger';
+import { AQUACARE_COLORS } from '@/constants/colors';
+import { AQUACARE_TYPOGRAPHY } from '@/constants/typography';
 
 import {
   CAMEROON_REGIONS,
-  getAllDepartments,
-  getAllArrondissements,
-  getAllCities,
-  getNeighborhoodsByArrondissement,
-  hasNeighborhoods,
   getDepartmentsByRegion,
   getArrondissementsByDepartment,
   getCitiesByArrondissement,
-  getRegionByCode,
+  getNeighborhoodsByArrondissement,
 } from '@/constants/cameroon';
 
-// Couleurs MAVECAM selon spÃ©cifications
-const MAVECAM_COLORS = {
-  GREEN_PRIMARY: '#059669',
-  GREEN_LIGHT: '#10b981',
-  GREEN_DARK: '#047857',
-  WHITE: '#ffffff',
-  CREAM: '#f8fafc',
-  BLUE: '#2563eb',
-  GRAY_LIGHT: '#64748b',
-  GRAY_DARK: '#1e293b',
-  BORDER: '#d1d5db',
-  SUCCESS: '#10b981',
-};
+const BORDER_COLOR = '#d1d5db';
 
 interface LocationData {
   region?: string;
@@ -393,7 +378,7 @@ function LocationDisplayRow({ icon, label, value }: LocationDisplayRowProps) {
   return (
     <View style={styles.infoRow}>
       <View style={styles.infoRowLeft}>
-        {icon && <Ionicons name={icon} size={20} color={MAVECAM_COLORS.GRAY_LIGHT} />}
+        {icon && <Ionicons name={icon} size={20} color={AQUACARE_COLORS.GRAY_LIGHT} />}
         <Text style={[styles.infoLabel, !icon && styles.infoLabelNoIcon]}>{label}</Text>
       </View>
       <Text style={styles.infoValue}>{value}</Text>
@@ -447,7 +432,7 @@ function LocationSelectorRow({
         {icon && <Ionicons 
           name={icon} 
           size={20} 
-          color={disabled ? MAVECAM_COLORS.GRAY_LIGHT : MAVECAM_COLORS.GREEN_PRIMARY} 
+          color={disabled ? AQUACARE_COLORS.GRAY_LIGHT : AQUACARE_COLORS.GREEN_PRIMARY} 
         />}
         <Text style={[styles.selectorLabel, !icon && styles.selectorLabelNoIcon]}>{label}</Text>
       </View>
@@ -458,7 +443,7 @@ function LocationSelectorRow({
           <Ionicons 
             name="chevron-down" 
             size={16} 
-            color={MAVECAM_COLORS.GRAY_LIGHT} 
+            color={AQUACARE_COLORS.GRAY_LIGHT} 
           />
         )}
       </View>
@@ -500,7 +485,7 @@ function PickerModal({
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>{title}</Text>
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-              <Ionicons name="close" size={24} color={MAVECAM_COLORS.GRAY_DARK} />
+              <Ionicons name="close" size={24} color={AQUACARE_COLORS.GRAY_DARK} />
             </TouchableOpacity>
           </View>
           
@@ -538,7 +523,7 @@ function PickerModal({
                         <Ionicons 
                           name="checkmark" 
                           size={20} 
-                          color={MAVECAM_COLORS.GREEN_PRIMARY} 
+                          color={AQUACARE_COLORS.GREEN_PRIMARY} 
                         />
                       )}
                     </TouchableOpacity>
@@ -570,8 +555,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   infoLabel: {
-    fontSize: 14,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
+    ...AQUACARE_TYPOGRAPHY.small,
+    color: AQUACARE_COLORS.GRAY_LIGHT,
     marginLeft: 12,
     flex: 1,
   },
@@ -579,8 +564,8 @@ const styles = StyleSheet.create({
     marginLeft: 0,
   },
   infoValue: {
-    fontSize: 14,
-    color: MAVECAM_COLORS.GRAY_DARK,
+    ...AQUACARE_TYPOGRAPHY.small,
+    color: AQUACARE_COLORS.GRAY_DARK,
     fontWeight: '500',
     flex: 1,
     textAlign: 'right',
@@ -594,8 +579,8 @@ const styles = StyleSheet.create({
     marginVertical: 4,
     borderRadius: 12,
     borderWidth: 2,
-    borderColor: MAVECAM_COLORS.BORDER,
-    backgroundColor: MAVECAM_COLORS.WHITE,
+    borderColor: BORDER_COLOR,
+    backgroundColor: AQUACARE_COLORS.WHITE,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
@@ -603,7 +588,7 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   selectedSelector: {
-    borderColor: MAVECAM_COLORS.GREEN_PRIMARY,
+    borderColor: AQUACARE_COLORS.GREEN_PRIMARY,
     backgroundColor: '#f0fdf4',
   },
   disabledSelector: {
@@ -616,8 +601,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   selectorLabel: {
-    fontSize: 14,
-    color: MAVECAM_COLORS.GRAY_DARK,
+    ...AQUACARE_TYPOGRAPHY.small,
+    color: AQUACARE_COLORS.GRAY_DARK,
     marginLeft: 12,
     fontWeight: '500',
   },
@@ -631,20 +616,20 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   selectorText: {
-    fontSize: 14,
+    ...AQUACARE_TYPOGRAPHY.small,
     marginRight: 8,
     textAlign: 'right',
   },
   selectedText: {
-    color: MAVECAM_COLORS.GREEN_DARK,
+    color: AQUACARE_COLORS.GREEN_DARK,
     fontWeight: '600',
   },
   placeholderText: {
-    color: MAVECAM_COLORS.GRAY_LIGHT,
+    color: AQUACARE_COLORS.GRAY_LIGHT,
     fontStyle: 'italic',
   },
   disabledText: {
-    color: MAVECAM_COLORS.GRAY_LIGHT,
+    color: AQUACARE_COLORS.GRAY_LIGHT,
   },
   modalOverlay: {
     flex: 1,
@@ -652,7 +637,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: MAVECAM_COLORS.WHITE,
+    backgroundColor: AQUACARE_COLORS.WHITE,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     maxHeight: '80%',
@@ -667,9 +652,9 @@ const styles = StyleSheet.create({
     borderBottomColor: '#f1f5f9',
   },
   modalTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: MAVECAM_COLORS.GRAY_DARK,
+    ...AQUACARE_TYPOGRAPHY.h4,
+    fontWeight: '700',
+    color: AQUACARE_COLORS.GRAY_DARK,
   },
   closeButton: {
     padding: 4,
@@ -690,22 +675,22 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#f8fafc',
     minHeight: 50,
-    backgroundColor: MAVECAM_COLORS.WHITE,
+    backgroundColor: AQUACARE_COLORS.WHITE,
   },
   selectedOption: {
     backgroundColor: '#f0fdf4',
   },
   optionText: {
-    fontSize: 16,
-    color: MAVECAM_COLORS.GRAY_DARK,
+    ...AQUACARE_TYPOGRAPHY.body,
+    color: AQUACARE_COLORS.GRAY_DARK,
     flex: 1,
   },
   selectedOptionText: {
-    color: MAVECAM_COLORS.GREEN_DARK,
+    color: AQUACARE_COLORS.GREEN_DARK,
     fontWeight: '600',
   },
   disabledOptionText: {
-    color: MAVECAM_COLORS.GRAY_LIGHT,
+    color: AQUACARE_COLORS.GRAY_LIGHT,
   },
   emptyState: {
     padding: 40,
@@ -713,8 +698,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   emptyText: {
-    fontSize: 16,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
+    ...AQUACARE_TYPOGRAPHY.body,
+    color: AQUACARE_COLORS.GRAY_LIGHT,
     textAlign: 'center',
   },
 });

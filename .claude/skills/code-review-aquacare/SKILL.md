@@ -23,7 +23,7 @@ description: Apply AquaCare code review standards when reviewing code, suggestin
 - [ ] Using `t('key')` pattern everywhere
 - [ ] Keys are camelCase
 
-### MAVECAM Colors
+### AquaCare Colors
 
 Only these colors allowed:
 

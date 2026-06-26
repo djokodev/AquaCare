@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
-import { MAVECAM_COLORS } from '@/constants/colors';
+import { AQUACARE_COLORS } from '@/constants/colors';
 
 /**
  * Props pour le composant DashboardHeader
@@ -61,14 +61,14 @@ export default function DashboardHeader({
   const firstName = displayName.split(' ')[0];
 
   return (
-    <View className="bg-mavecam-primary px-5 pt-16 pb-5">
+    <View className="bg-aquacare-primary px-5 pt-16 pb-5">
       {/* Greeting Row */}
       <View className="flex-row justify-between items-start">
         <View className="flex-1 mr-4">
           <Text className="text-2xl font-bold text-white mb-1">
             {t('hello')}, {firstName}!
           </Text>
-          <Text className="text-base text-white/80">{t('welcomeBoard')}</Text>
+          <Text className="text-base text-white/90">{t('welcomeBoard')}</Text>
         </View>
 
         {/* Right Actions */}
@@ -85,7 +85,7 @@ export default function DashboardHeader({
             }
             accessibilityRole="button"
           >
-            <Ionicons name="notifications-outline" size={24} color={MAVECAM_COLORS.WHITE} />
+            <Ionicons name="notifications-outline" size={24} color={AQUACARE_COLORS.WHITE} />
             {unreadCount > 0 && (
               <View
                 className="absolute -top-1 -right-1 bg-error rounded-full items-center justify-center"
@@ -95,7 +95,7 @@ export default function DashboardHeader({
                   paddingHorizontal: unreadCount > 9 ? 4 : 2,
                 }}
               >
-                <Text className="text-white text-[10px] font-bold">
+                <Text className="text-white text-xs font-semibold">
                   {unreadCount > 99 ? '99+' : unreadCount}
                 </Text>
               </View>
@@ -109,7 +109,7 @@ export default function DashboardHeader({
             accessibilityLabel={t('settingsButton')}
             accessibilityRole="button"
           >
-            <Ionicons name="settings-outline" size={24} color={MAVECAM_COLORS.WHITE} />
+            <Ionicons name="settings-outline" size={24} color={AQUACARE_COLORS.WHITE} />
           </TouchableOpacity>
         </View>
       </View>

@@ -88,6 +88,8 @@
   </label>
   <button onclick="loadFarms()">Filtrer</button>
   <button onclick="resetFilters()">Réinitialiser</button>
+  <button id="prev-page" onclick="loadFarms(currentPage - 1)" disabled>Précédent</button>
+  <button id="next-page" onclick="loadFarms(currentPage + 1)" disabled>Suivant</button>
 </div>
 
 <div class="map-stats" id="map-stats">Chargement des fermes...</div>
@@ -123,6 +125,20 @@
     });
   }
 
+  function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, char => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#x27;',
+    }[char]));
+  }
+
+  function knownCertificationStatus(value) {
+    return Object.prototype.hasOwnProperty.call(CERT_COLORS, value) ? value : 'pending';
+  }
+
   const map = L.map('farm-map').setView([4.5, 12.5], 6);
 
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -131,14 +147,21 @@
   }).addTo(map);
 
   let markersLayer = L.layerGroup().addTo(map);
+  let currentPage = 1;
+  let hasNextPage = false;
+  let hasPreviousPage = false;
 
-  function loadFarms() {
+  function loadFarms(page = 1) {
+    if (page < 1) return;
+    if (page > currentPage && !hasNextPage) return;
+    if (page < currentPage && !hasPreviousPage) return;
+
     const region = document.getElementById('filter-region').value;
     const status = document.getElementById('filter-status').value;
 
-    let url = '/api/accounts/farms/map/?format=json';
-    if (region) url += `&region=${region}`;
-    if (status) url += `&certification_status=${status}`;
+    let url = `../map-data/?page=${page}`;
+    if (region) url += `&region=${encodeURIComponent(region)}`;
+    if (status) url += `&certification_status=${encodeURIComponent(status)}`;
 
     function getCsrfToken() {
       return document.cookie.split(';')
@@ -161,36 +184,48 @@
         markersLayer.clearLayers();
 
         const farms = Array.isArray(data) ? data : (data.results || []);
+        currentPage = page;
+        hasNextPage = Boolean(data.next);
+        hasPreviousPage = Boolean(data.previous);
+        document.getElementById('prev-page').disabled = !hasPreviousPage;
+        document.getElementById('next-page').disabled = !hasNextPage;
+        const totalCount = typeof data.count === 'number' ? `${data.count} au total, ` : '';
         document.getElementById('map-stats').textContent =
-          `${farms.length} ferme${farms.length > 1 ? 's' : ''} affichée${farms.length > 1 ? 's' : ''}`;
+          `${totalCount}page ${currentPage}, ${farms.length} ferme${farms.length > 1 ? 's' : ''} affichée${farms.length > 1 ? 's' : ''}`;
 
         farms.forEach(farm => {
           const lat = parseFloat(farm.latitude);
           const lng = parseFloat(farm.longitude);
           if (isNaN(lat) || isNaN(lng)) return;
 
-          const color = CERT_COLORS[farm.certification_status] || '#417690';
-          const label = CERT_LABELS[farm.certification_status] || farm.certification_status;
+          const status = knownCertificationStatus(farm.certification_status);
+          const color = CERT_COLORS[status];
+          const label = CERT_LABELS[status];
 
           const marker = L.marker([lat, lng], { icon: makeDot(color) });
 
           const phone = farm.owner_phone || '';
+          const escapedPhone = escapeHtml(phone);
+          const phoneHref = phone.replace(/[^\d+]/g, '');
           const phoneLink = phone
-            ? `<a href="tel:${phone}">${phone}</a>`
+            ? `<a href="tel:${escapeHtml(phoneHref)}">${escapedPhone}</a>`
             : '—';
 
           const adminUrl = `/admin/accounts/farmprofile/${farm.id}/change/`;
           const mapsUrl = `https://maps.google.com/?q=${lat},${lng}`;
           const mapsShareUrl = `https://maps.google.com/?q=${lat},${lng}&ll=${lat},${lng}&z=15`;
+          const locationHtml = farm.location_address
+            ? `<p>📍 ${escapeHtml(farm.location_address)}</p>`
+            : '';
 
           marker.bindPopup(`
-            <h4>🐟 ${farm.farm_name}</h4>
-            <p>👤 ${farm.owner_name}</p>
+            <h4>🐟 ${escapeHtml(farm.farm_name)}</h4>
+            <p>👤 ${escapeHtml(farm.owner_name)}</p>
             <p>📞 ${phoneLink}</p>
             <p>
-              <span class="cert-badge cert-${farm.certification_status}">${label}</span>
+              <span class="cert-badge cert-${status}">${escapeHtml(label)}</span>
             </p>
-            ${farm.location_address ? `<p>📍 ${farm.location_address}</p>` : ''}
+            ${locationHtml}
             <p style="font-size:11px;color:#888;">${lat.toFixed(6)}, ${lng.toFixed(6)}</p>
             <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
               <a href="${mapsUrl}" target="_blank" style="background:#4285F4;color:white;padding:4px 8px;border-radius:4px;text-decoration:none;font-size:11px;">🗺️ Google Maps</a>
@@ -209,16 +244,18 @@
       })
       .catch(err => {
         document.getElementById('map-stats').textContent = 'Erreur de chargement : ' + err.message;
-        console.error(err);
       });
   }
 
   function resetFilters() {
     document.getElementById('filter-region').value = '';
     document.getElementById('filter-status').value = '';
-    loadFarms();
+    currentPage = 1;
+    hasNextPage = false;
+    hasPreviousPage = false;
+    loadFarms(1);
   }
 
-  loadFarms();
+  loadFarms(1);
 </script>
 {% endblock %}

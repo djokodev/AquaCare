@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
-import { MAVECAM_COLORS } from '@/constants/colors';
+import { AQUACARE_COLORS } from '@/constants/colors';
 
 /**
  * Props pour le composant QuickActionsSheet
@@ -88,7 +88,7 @@ export default function QuickActionsSheet({
       id: 'newCycle',
       labelKey: 'newCycle',
       icon: 'add-circle',
-      iconColor: MAVECAM_COLORS.GREEN_PRIMARY,
+      iconColor: AQUACARE_COLORS.GREEN_PRIMARY,
       route: 'NewCycle',
       category: 'aquaculture',
     },
@@ -96,7 +96,7 @@ export default function QuickActionsSheet({
       id: 'dailyLog',
       labelKey: 'dailyLog',
       icon: 'create',
-      iconColor: MAVECAM_COLORS.GREEN_LIGHT,
+      iconColor: AQUACARE_COLORS.GREEN_LIGHT,
       route: 'DailyLog',
       category: 'aquaculture',
     },
@@ -104,7 +104,7 @@ export default function QuickActionsSheet({
       id: 'sanitaryLog',
       labelKey: 'sanitaryLog',
       icon: 'warning-outline',
-      iconColor: MAVECAM_COLORS.ERROR,
+      iconColor: AQUACARE_COLORS.ERROR,
       route: 'SanitaryLog',
       category: 'aquaculture',
     },
@@ -112,7 +112,7 @@ export default function QuickActionsSheet({
       id: 'notifications',
       labelKey: 'notifications',
       icon: 'notifications-outline',
-      iconColor: MAVECAM_COLORS.WARNING,
+      iconColor: AQUACARE_COLORS.WARNING,
       route: 'Notifications',
       category: 'aquaculture',
       badge: unreadCount, // Badge dynamique
@@ -121,7 +121,7 @@ export default function QuickActionsSheet({
       id: 'feedingPlan',
       labelKey: 'feedingPlan',
       icon: 'restaurant-outline',
-      iconColor: MAVECAM_COLORS.INFO,
+      iconColor: AQUACARE_COLORS.INFO,
       route: 'FeedingPlan',
       category: 'aquaculture',
     },
@@ -129,7 +129,7 @@ export default function QuickActionsSheet({
       id: 'reports',
       labelKey: 'reports',
       icon: 'document-text-outline',
-      iconColor: MAVECAM_COLORS.BLUE,
+      iconColor: AQUACARE_COLORS.BLUE,
       route: 'Reports',
       category: 'aquaculture',
     },
@@ -143,7 +143,7 @@ export default function QuickActionsSheet({
       id: 'productCatalog',
       labelKey: 'productCatalog',
       icon: 'storefront-outline',
-      iconColor: MAVECAM_COLORS.GREEN_PRIMARY,
+      iconColor: AQUACARE_COLORS.GREEN_PRIMARY,
       route: 'ProductCatalog',
       category: 'commerce',
     },
@@ -151,7 +151,7 @@ export default function QuickActionsSheet({
       id: 'cart',
       labelKey: 'cart',
       icon: 'cart-outline',
-      iconColor: MAVECAM_COLORS.WARNING,
+      iconColor: AQUACARE_COLORS.WARNING,
       route: 'Cart',
       category: 'commerce',
     },
@@ -159,7 +159,7 @@ export default function QuickActionsSheet({
       id: 'ordersHistory',
       labelKey: 'ordersHistory',
       icon: 'receipt-outline',
-      iconColor: MAVECAM_COLORS.INFO,
+      iconColor: AQUACARE_COLORS.INFO,
       route: 'OrdersHistory',
       category: 'commerce',
     },
@@ -173,7 +173,7 @@ export default function QuickActionsSheet({
       id: 'cycleSimulator',
       labelKey: 'cycleSimulator',
       icon: 'analytics-outline',
-      iconColor: MAVECAM_COLORS.GREEN_DARK,
+      iconColor: AQUACARE_COLORS.GREEN_DARK,
       route: 'CycleSimulator',
       category: 'planning',
     },
@@ -222,7 +222,7 @@ export default function QuickActionsSheet({
       )}
 
       {/* Chevron de navigation */}
-      <Ionicons name="chevron-forward" size={20} color={MAVECAM_COLORS.GRAY_LIGHT} />
+      <Ionicons name="chevron-forward" size={20} color={AQUACARE_COLORS.GRAY_LIGHT} />
     </TouchableOpacity>
   );
 
@@ -244,7 +244,7 @@ export default function QuickActionsSheet({
               accessibilityLabel={t('close')}
               accessibilityRole="button"
             >
-              <Ionicons name="close" size={24} color={MAVECAM_COLORS.GRAY_DARK} />
+              <Ionicons name="close" size={24} color={AQUACARE_COLORS.GRAY_DARK} />
             </TouchableOpacity>
           </View>
 
@@ -291,7 +291,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalContainer: {
-    backgroundColor: MAVECAM_COLORS.CREAM,
+    backgroundColor: AQUACARE_COLORS.CREAM,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     maxHeight: '85%',

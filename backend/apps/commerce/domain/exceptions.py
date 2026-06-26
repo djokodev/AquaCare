@@ -1,5 +1,5 @@
 """
-Exceptions métier pour le module commerce MAVECAM AquaCare.
+Exceptions métier pour le module commerce AquaCare.
 
 Architecture Clean : Les exceptions du domain représentent des violations
 de règles métier et sont indépendantes de l'infrastructure Django.

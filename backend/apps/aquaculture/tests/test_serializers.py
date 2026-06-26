@@ -1,5 +1,5 @@
 """
-Tests unitaires pour les sérialiseurs aquacoles MAVECAM.
+Tests unitaires pour les sérialiseurs aquacoles AquaCare.
 
 Teste la validation des données, sérialisation/désérialisation et logique métier
 des sérialiseurs pour l'API aquaculture.
@@ -127,7 +127,8 @@ class TestProductionCycleSerializer:
             'pond_identifier': 'Bassin E',
             'pond_surface_m2': Decimal('80.00'),
             'start_date': date.today(),
-            'initial_count': 1200,
+            # Keep test fixture aligned with current pond-density cap (10 fish/m²)
+            'initial_count': 800,
             'initial_average_weight': Decimal('12.00')
         }
 
@@ -366,7 +367,7 @@ class TestFeedingPlanSerializer:
             'feeding_rate': Decimal('7.00'),
             'meals_per_day': 3,
             'feed_per_meal': Decimal('0.55'),
-            'recommended_feed_type': 'MAVECAM Starter 1.8mm',
+            'recommended_feed_type': 'AquaCare Starter 1.8mm',
             'feed_size_mm': Decimal('1.8'),
             'protein_percentage': 42,
             'start_date': date.today(),
@@ -392,7 +393,7 @@ class TestFeedingPlanSerializer:
             'feeding_rate': Decimal('8.00'),
             'meals_per_day': 4,
             'feed_per_meal': Decimal('0.30'),
-            'recommended_feed_type': 'MAVECAM Starter 1.0mm',
+            'recommended_feed_type': 'AquaCare Starter 1.0mm',
             'feed_size_mm': Decimal('1.0'),
             'protein_percentage': 45,
             'start_date': date.today(),
@@ -417,7 +418,7 @@ class TestFeedingPlanSerializer:
             feeding_rate=Decimal('5.00'),
             meals_per_day=3,
             feed_per_meal=Decimal('0.60'),
-            recommended_feed_type='MAVECAM Superior 2-3mm',
+            recommended_feed_type='AquaCare Superior 2-3mm',
             feed_size_mm=Decimal('2.5'),
             protein_percentage=38,
             start_date=date.today(),
@@ -439,7 +440,11 @@ class TestSanitaryLogSerializer:
 
     def test_valid_sanitary_log_creation(self, production_cycle):
         """Test création log sanitaire valide."""
+        import uuid
+
+        client_uuid = uuid.uuid4()
         data = {
+            'client_uuid': client_uuid,
             'cycle': production_cycle.id,
             'event_date': date.today(),
             'event_type': 'disease',
@@ -454,6 +459,7 @@ class TestSanitaryLogSerializer:
         
         log = serializer.save()
         assert log.event_type == 'disease'
+        assert log.client_uuid == client_uuid
         assert log.affected_count == 50
         assert not log.resolved  # Par défaut
 
@@ -525,7 +531,7 @@ class TestNutritionalGuideSerializer:
             protein_requirement=42,
             meals_per_day=3,
             feed_size_mm=Decimal('1.8'),
-            recommended_products=['MAVECAM Starter 1.8mm'],
+            recommended_products=['AquaCare Starter 1.8mm'],
             expected_fcr=Decimal('0.95'),
             feeding_notes='Phase transition critique'
         )

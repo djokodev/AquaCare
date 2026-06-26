@@ -27,7 +27,7 @@ import { AppDispatch, RootState } from '@/store/store';
 import { fetchProducts, applyFilters, addToCart } from '@/features/commerce/store/commerceSlice';
 import { fetchCycleFeedStatus } from '@/features/aquaculture/store/aquacultureSlice';
 import { Product, ProductSpecies } from '@/types/commerce';
-import { MAVECAM_COLORS } from '@/constants/colors';
+import { AQUACARE_COLORS } from '@/constants/colors';
 import { PRODUCT_SPECIES } from '@/domain/commerce/constants';
 import { RootStackParamList } from '@/navigation/MainNavigator';
 
@@ -122,7 +122,7 @@ export default function ProductCatalogScreen() {
       activeOpacity={0.7}
     >
       <View className="w-20 h-20 bg-cream rounded-lg items-center justify-center mr-3">
-        <Ionicons name="cube-outline" size={40} color={MAVECAM_COLORS.GREEN_PRIMARY} />
+        <Ionicons name="cube-outline" size={40} color={AQUACARE_COLORS.GREEN_PRIMARY} />
       </View>
 
       <View className="flex-1">
@@ -143,16 +143,16 @@ export default function ProductCatalogScreen() {
         <View className="flex-row justify-between items-center">
           <View>
             <Text className="text-xs text-gray-light">{item.package_weight_kg}kg</Text>
-            <Text className="text-lg font-bold text-mavecam-primary">
+            <Text className="text-lg font-bold text-aquacare-primary">
               {parseFloat(item.price_per_package).toLocaleString()} FCFA
             </Text>
           </View>
 
           <TouchableOpacity
-            className="bg-mavecam-primary w-10 h-10 rounded-full items-center justify-center"
+            className="bg-aquacare-primary w-10 h-10 rounded-full items-center justify-center"
             onPress={() => handleQuickAddToCart(item)}
           >
-            <Ionicons name="cart-outline" size={20} color={MAVECAM_COLORS.WHITE} />
+            <Ionicons name="cart-outline" size={20} color={AQUACARE_COLORS.WHITE} />
           </TouchableOpacity>
         </View>
       </View>
@@ -161,13 +161,13 @@ export default function ProductCatalogScreen() {
 
   const renderEmptyState = () => (
     <View className="py-16 items-center">
-      <Ionicons name="cube-outline" size={80} color={MAVECAM_COLORS.GRAY_LIGHT} />
+      <Ionicons name="cube-outline" size={80} color={AQUACARE_COLORS.GRAY_LIGHT} />
       <Text className="mt-5 text-xl font-bold text-gray-dark">{t('noProductsFound')}</Text>
       <Text className="mt-2 text-sm text-gray-light text-center px-6">
         {t('tryDifferentFilters')}
       </Text>
       <TouchableOpacity
-        className="mt-6 bg-mavecam-primary px-6 py-3 rounded-lg"
+        className="mt-6 bg-aquacare-primary px-6 py-3 rounded-lg"
         onPress={handleResetFilters}
       >
         <Text className="text-white text-base font-semibold">{t('resetFilters')}</Text>
@@ -180,7 +180,7 @@ export default function ProductCatalogScreen() {
       {/* Header */}
       <View className="bg-white px-5 pt-16 pb-5 flex-row justify-between items-center shadow">
         <TouchableOpacity onPress={() => navigation.goBack()} className="w-10">
-          <Ionicons name="arrow-back" size={24} color={MAVECAM_COLORS.GRAY_DARK} />
+          <Ionicons name="arrow-back" size={24} color={AQUACARE_COLORS.GRAY_DARK} />
         </TouchableOpacity>
 
         <View className="flex-1 items-center">
@@ -191,7 +191,7 @@ export default function ProductCatalogScreen() {
         </View>
 
         <TouchableOpacity className="relative w-10 items-end" onPress={handleCartPress}>
-          <Ionicons name="cart-outline" size={28} color={MAVECAM_COLORS.GREEN_PRIMARY} />
+          <Ionicons name="cart-outline" size={28} color={AQUACARE_COLORS.GREEN_PRIMARY} />
           {cartItemsCount > 0 && (
             <View className="absolute -top-2 -right-2 bg-[#dc2626] rounded-full min-w-[24px] h-6 justify-center items-center px-1.5">
               <Text className="text-white text-xs font-bold">{cartItemsCount}</Text>
@@ -206,7 +206,7 @@ export default function ProductCatalogScreen() {
           <Text style={cycleCardStyles.cardTitle}>{t('myFeedCycleHeader')}</Text>
 
           {feedLoading ? (
-            <ActivityIndicator size="small" color={MAVECAM_COLORS.GREEN_PRIMARY} style={{ marginVertical: 8 }} />
+            <ActivityIndicator size="small" color={AQUACARE_COLORS.GREEN_PRIMARY} style={{ marginVertical: 8 }} />
           ) : feedStatus ? (
             <>
               {/* Total + barre de progression */}
@@ -263,7 +263,7 @@ export default function ProductCatalogScreen() {
         </View>
       ) : (
         <View style={cycleCardStyles.noCycleCard}>
-          <Ionicons name="information-circle-outline" size={20} color={MAVECAM_COLORS.GRAY_LIGHT} />
+          <Ionicons name="information-circle-outline" size={20} color={AQUACARE_COLORS.GRAY_LIGHT} />
           <Text style={cycleCardStyles.noCycleText}>{t('myFeedNoCycle')}</Text>
         </View>
       )}
@@ -271,7 +271,7 @@ export default function ProductCatalogScreen() {
       {/* Filtres produits (espèce uniquement, plus de filtre marque) */}
       <View className="bg-white px-4 py-4 mb-2">
         <View className="flex-row items-center bg-cream rounded-lg px-3 mb-3">
-          <Ionicons name="search-outline" size={20} color={MAVECAM_COLORS.GRAY_LIGHT} />
+          <Ionicons name="search-outline" size={20} color={AQUACARE_COLORS.GRAY_LIGHT} />
           <TextInput
             className="flex-1 py-3 pl-2 text-base text-gray-dark"
             placeholder={t('searchProducts')}
@@ -289,7 +289,7 @@ export default function ProductCatalogScreen() {
                 key={species.value}
                 className={`px-4 py-2 rounded-full border ${
                   selectedSpecies === species.value
-                    ? 'bg-mavecam-primary border-mavecam-primary'
+                    ? 'bg-aquacare-primary border-aquacare-primary'
                     : 'bg-cream border-gray-light'
                 }`}
                 onPress={() =>
@@ -319,15 +319,15 @@ export default function ProductCatalogScreen() {
 
       {loading && !refreshing ? (
         <View className="flex-1 items-center justify-center">
-          <ActivityIndicator size="large" color={MAVECAM_COLORS.GREEN_PRIMARY} />
+          <ActivityIndicator size="large" color={AQUACARE_COLORS.GREEN_PRIMARY} />
           <Text className="mt-3 text-base text-gray-light">{t('loading')}</Text>
         </View>
       ) : error ? (
         <View className="flex-1 items-center justify-center px-10 py-10">
-          <Ionicons name="alert-circle-outline" size={48} color={MAVECAM_COLORS.ERROR} />
+          <Ionicons name="alert-circle-outline" size={48} color={AQUACARE_COLORS.ERROR} />
           <Text className="mt-3 text-base text-[#dc2626] text-center">{error}</Text>
           <TouchableOpacity
-            className="mt-5 bg-mavecam-primary px-6 py-3 rounded-lg"
+            className="mt-5 bg-aquacare-primary px-6 py-3 rounded-lg"
             onPress={() => dispatch(fetchProducts(filters))}
           >
             <Text className="text-white text-base font-semibold">{t('retry')}</Text>
@@ -344,8 +344,8 @@ export default function ProductCatalogScreen() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={handleRefresh}
-              colors={[MAVECAM_COLORS.GREEN_PRIMARY]}
-              tintColor={MAVECAM_COLORS.GREEN_PRIMARY}
+              colors={[AQUACARE_COLORS.GREEN_PRIMARY]}
+              tintColor={AQUACARE_COLORS.GREEN_PRIMARY}
             />
           }
           showsVerticalScrollIndicator={false}
@@ -393,7 +393,7 @@ const cycleCardStyles = StyleSheet.create({
     borderRadius: 12,
     padding: 14,
     borderLeftWidth: 4,
-    borderLeftColor: MAVECAM_COLORS.GREEN_PRIMARY,
+    borderLeftColor: AQUACARE_COLORS.GREEN_PRIMARY,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.06,
@@ -403,7 +403,7 @@ const cycleCardStyles = StyleSheet.create({
   cardTitle: {
     fontSize: 14,
     fontWeight: '700',
-    color: MAVECAM_COLORS.GRAY_DARK,
+    color: AQUACARE_COLORS.GRAY_DARK,
     marginBottom: 10,
   },
   totalRow: {
@@ -414,13 +414,13 @@ const cycleCardStyles = StyleSheet.create({
   },
   totalLabel: {
     fontSize: 12,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
+    color: AQUACARE_COLORS.GRAY_LIGHT,
     marginBottom: 2,
   },
   totalValue: {
     fontSize: 22,
-    fontWeight: '800',
-    color: MAVECAM_COLORS.GREEN_PRIMARY,
+    fontWeight: '700',
+    color: AQUACARE_COLORS.GREEN_PRIMARY,
   },
   progressBlock: {
     flex: 1,
@@ -428,7 +428,7 @@ const cycleCardStyles = StyleSheet.create({
   },
   progressLabel: {
     fontSize: 11,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
+    color: AQUACARE_COLORS.GRAY_LIGHT,
     marginTop: 3,
     textAlign: 'right',
   },
@@ -439,15 +439,15 @@ const cycleCardStyles = StyleSheet.create({
   },
   rowLabel: {
     fontSize: 13,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
+    color: AQUACARE_COLORS.GRAY_LIGHT,
   },
   rowValue: {
     fontSize: 13,
     fontWeight: '600',
-    color: MAVECAM_COLORS.GRAY_DARK,
+    color: AQUACARE_COLORS.GRAY_DARK,
   },
   rowValueHighlight: {
-    color: MAVECAM_COLORS.GREEN_PRIMARY,
+    color: AQUACARE_COLORS.GREEN_PRIMARY,
     fontSize: 14,
   },
   progressTrack: {
@@ -458,11 +458,11 @@ const cycleCardStyles = StyleSheet.create({
   },
   progressFill: {
     height: '100%',
-    backgroundColor: MAVECAM_COLORS.GREEN_PRIMARY,
+    backgroundColor: AQUACARE_COLORS.GREEN_PRIMARY,
     borderRadius: 3,
   },
   orderBtn: {
-    backgroundColor: MAVECAM_COLORS.GREEN_PRIMARY,
+    backgroundColor: AQUACARE_COLORS.GREEN_PRIMARY,
     borderRadius: 8,
     paddingVertical: 11,
     flexDirection: 'row',
@@ -471,7 +471,7 @@ const cycleCardStyles = StyleSheet.create({
     marginTop: 12,
   },
   orderBtnSecondary: {
-    backgroundColor: MAVECAM_COLORS.GREEN_DARK,
+    backgroundColor: AQUACARE_COLORS.GREEN_DARK,
   },
   orderBtnText: {
     color: '#fff',
@@ -490,10 +490,9 @@ const cycleCardStyles = StyleSheet.create({
   },
   noCycleText: {
     fontSize: 13,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
+    color: AQUACARE_COLORS.GRAY_LIGHT,
     flex: 1,
     lineHeight: 18,
   },
 });
-
 

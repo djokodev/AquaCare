@@ -6,5 +6,5 @@ import os
 import django
 
 # Configure Django settings avant de charger les modeles
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'mavecam_api.settings.test')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'aquacare_api.settings.test')
 django.setup()

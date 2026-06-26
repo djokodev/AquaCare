@@ -78,6 +78,7 @@ export interface Order {
   user_name: string;
   farm_profile: string;
   farm_name: string;
+  production_cycle_id?: string;
   delivery_method: DeliveryMethod;
   pickup_location?: PickupLocation;
   delivery_name: string;
@@ -105,6 +106,7 @@ export interface CreateOrderPayload {
   }>;
   delivery_method: DeliveryMethod;
   pickup_location?: PickupLocation;
+  production_cycle_id?: string;
   client_uuid?: string;
   created_offline?: boolean;
 }

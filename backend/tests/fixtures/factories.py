@@ -2,7 +2,7 @@
 Factories pour générer des données de test cohérentes.
 
 Factory Boy permet de créer facilement des objets de test
-avec des données réalistes pour simuler les vrais utilisateurs MAVECAM.
+avec des données réalistes pour simuler les vrais utilisateurs AquaCare.
 """
 from datetime import date
 from decimal import Decimal
@@ -18,7 +18,7 @@ class UserFactory(DjangoModelFactory):
     """
     Factory pour créer des utilisateurs pisciculteurs de test.
     
-    Genere des donnees realistes pour simuler les vrais clients MAVECAM.
+    Genere des donnees realistes pour simuler les vrais clients AquaCare.
     """
 
     class Meta:
@@ -47,17 +47,17 @@ class UserFactory(DjangoModelFactory):
         return obj
 
 
-class MavecamAdminFactory(UserFactory):
+class AquacareAdminFactory(UserFactory):
     """
-    Factory pour créer des administrateurs MAVECAM.
+    Factory pour créer des administrateurs AquaCare.
     
-    Simule les comptes du personnel MAVECAM qui gerent les certifications.
+    Simule les comptes du personnel AquaCare qui gerent les certifications.
     """
 
     phone_number = factory.Sequence(lambda n: f"+23767000000{n:01d}")
-    email = factory.LazyAttribute(lambda obj: f"admin{obj.phone_number[-1]}@mavecam.com")
+    email = factory.LazyAttribute(lambda obj: f"admin{obj.phone_number[-1]}@aquacare.tech")
     first_name = "Admin"
-    last_name = "MAVECAM"
+    last_name = "AquaCare"
     account_type = 'individual'
     age_group = '26_35'
     is_verified = True
@@ -125,6 +125,6 @@ class ProductionCycleFactory(DjangoModelFactory):
 # user = UserFactory(phone_number='+237691234567')  # Avec téléphone spécifique
 # company = CompanyUserFactory()  # Utilisateur entreprise
 # users = UserFactory.create_batch(5)  # 5 utilisateurs d'un coup
-# admin = MavecamAdminFactory()  # Administrateur MAVECAM
+# admin = AquacareAdminFactory()  # Administrateur AquaCare
 # farm_profile = FarmProfileFactory()  # Profil de ferme
 # cycle = ProductionCycleFactory()  # Cycle de production

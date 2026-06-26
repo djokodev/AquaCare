@@ -27,6 +27,15 @@ from ..services import DashboardApplicationService, InvalidDashboardCycleScopeEr
             location=OpenApiParameter.QUERY,
             description="Limiter le dashboard au cycle actif de session (UUID).",
         ),
+        OpenApiParameter(
+            name='lightweight',
+            type=OpenApiTypes.BOOL,
+            location=OpenApiParameter.QUERY,
+            description=(
+                "Retourne un dashboard léger pour les écrans de sélection/saisie mobile, "
+                "sans séries chart ni agrégats détaillés."
+            ),
+        ),
     ],
     responses={
         200: DashboardSerializer,
@@ -56,6 +65,7 @@ class DashboardView(generics.GenericAPIView):
             data = DashboardApplicationService.build_dashboard_payload(
                 user=request.user,
                 cycle_id=query_serializer.validated_data.get('cycle_id'),
+                lightweight=query_serializer.validated_data.get('lightweight', False),
             )
         except InvalidDashboardCycleScopeError as exc:
             return Response(

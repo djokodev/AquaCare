@@ -2,7 +2,7 @@
 Calculateurs de croissance et consommation pour cycles aquacoles.
 
 Architecture Clean : Logique mathématique pure sans dépendances Django.
-Formules basées sur les standards MAVECAM pour tilapia et catfish.
+Formules basées sur les standards AquaCare pour tilapia et catfish.
 """
 from __future__ import annotations
 
@@ -126,7 +126,7 @@ class FeedingCalculator:
     """
     Calculateur de consommation d'aliments.
 
-    Basé sur le pourcentage de biomasse selon les standards MAVECAM.
+    Basé sur le pourcentage de biomasse selon les standards AquaCare.
     """
 
     # Taux d'alimentation selon poids (% de la biomasse)
@@ -240,7 +240,7 @@ class PhaseDetector:
     """
     Détecteur de phases d'élevage et granulométrie adaptée.
 
-    Basé sur le poids moyen et les règles MAVECAM.
+    Basé sur le poids moyen et les règles AquaCare.
     """
 
     # Règles de granulométrie par espèce et poids
@@ -360,7 +360,7 @@ class ROICalculator:
         'catfish': 2000
     }
 
-    # FCR cible MAVECAM
+    # FCR cible AquaCare
     FCR_TARGET = {
         'tilapia': 1.8,
         'catfish': 1.9

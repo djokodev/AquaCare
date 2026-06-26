@@ -16,7 +16,8 @@ import authSliceReducer, {
   updateUserProfile,
   updateFarmProfile,
 } from '@/features/auth/store/authSlice';
-import { User, FarmProfile } from '@/types/auth';
+import type { User } from '@/features/auth/types/auth';
+import type { FarmProfile } from '@/features/profile/types/profile';
 
 // Mock des services
 jest.mock('@/features/auth/services/authService');
@@ -28,7 +29,6 @@ describe('store/slices/authSlice', () => {
     isAuthenticated: false,
     isLoading: false,
     error: null,
-    annualSimulation: { result: null, loading: false, error: null },
   };
 
   const mockUser: User = {

@@ -33,6 +33,7 @@ from ..models import (
     ReportDispatchLog,
 )
 from .base import BaseService
+from .farm_production_plan_service import FarmProductionPlanService
 
 logger = logging.getLogger(__name__)
 
@@ -591,8 +592,9 @@ class ReportService(BaseService):
             global_log_count += len(logs)
             global_sanitary_count += len(sanitary_logs)
 
+            plan_data = FarmProductionPlanService.get_plan_data(farm_profile)
             feed_price_per_kg = (
-                ReportService._to_float(getattr(farm_profile, 'default_feed_price_per_kg', None))
+                ReportService._to_float(plan_data["default_feed_price_per_kg"])
                 or ReportService._to_float(DEFAULT_FEED_PRICE_PER_KG)
                 or 0.0
             )
