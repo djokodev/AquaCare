@@ -1,9 +1,7 @@
-name: Deploy
+name: Deploy (manual fallback)
 
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch:
 
 # Permissions pour GITHUB_TOKEN (nécessaire pour push sur GHCR)
 permissions:

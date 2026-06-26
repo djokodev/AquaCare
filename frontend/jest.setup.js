@@ -60,6 +60,11 @@ global.console = {
   error: jest.fn(),
 };
 
+// Mock Worklets avant Reanimated pour éviter l'initialisation native en Jest
+jest.mock('react-native-worklets', () =>
+  require('react-native-worklets/lib/module/mock')
+);
+
 // Mock pour les animations React Native Reanimated
 jest.mock('react-native-reanimated', () => {
   const Reanimated = require('react-native-reanimated/mock');

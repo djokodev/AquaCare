@@ -1,9 +1,7 @@
-name: Deploy Staging
+name: Deploy Staging (manual fallback)
 
 on:
-  push:
-    branches:
-      - develop
+  workflow_dispatch:
 
 permissions:
   contents: read
