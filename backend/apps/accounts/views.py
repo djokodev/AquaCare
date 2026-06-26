@@ -11,6 +11,14 @@ from rest_framework_simplejwt.views import TokenRefreshView, TokenVerifyView
 
 from .models import FarmProfile, User
 from .permissions import IsOwnerOrReadOnly
+from .schemas import (
+    AUTH_REQUIRED_RESPONSE,
+    FORBIDDEN_RESPONSE,
+    NOT_FOUND_RESPONSE,
+    THROTTLED_RESPONSE,
+    TOKEN_ERROR_RESPONSE,
+    VALIDATION_ERROR_RESPONSE,
+)
 from .serializers import (
     AccountDeletionSerializer,
     AccountsTokenRefreshSerializer,
@@ -26,14 +34,6 @@ from .serializers import (
     MessageResponseSerializer,
     UserProfileSerializer,
     UserRegistrationSerializer,
-)
-from .schemas import (
-    AUTH_REQUIRED_RESPONSE,
-    FORBIDDEN_RESPONSE,
-    NOT_FOUND_RESPONSE,
-    THROTTLED_RESPONSE,
-    TOKEN_ERROR_RESPONSE,
-    VALIDATION_ERROR_RESPONSE,
 )
 from .services.account_deletion_service import AccountDeletionService
 from .services.annual_simulation_service import AnnualSimulationService

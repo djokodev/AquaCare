@@ -4,12 +4,12 @@ import json
 from io import StringIO
 
 import pytest
-from aquaculture.services.farm_production_plan_service import FarmProductionPlanService
 from accounts.models import User
+from aquaculture.services.farm_production_plan_service import FarmProductionPlanService
 from common.admin_mixins import RBACConstants
+from django.contrib.auth.models import Group
 from django.core.management import call_command
 from django.core.management.base import CommandError
-from django.contrib.auth.models import Group
 
 
 @pytest.mark.django_db

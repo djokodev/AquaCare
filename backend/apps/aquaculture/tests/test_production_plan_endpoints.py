@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 import pytest
+from accounts.models import User
+from aquaculture.services.farm_production_plan_service import FarmProductionPlanService
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
-
-from accounts.models import User
-from aquaculture.services.farm_production_plan_service import FarmProductionPlanService
 
 
 @pytest.mark.django_db

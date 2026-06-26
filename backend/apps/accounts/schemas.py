@@ -9,7 +9,6 @@ from .serializers import (
     ValidationErrorResponseSerializer,
 )
 
-
 VALIDATION_ERROR_RESPONSE = OpenApiResponse(
     response=ValidationErrorResponseSerializer,
     description=(

@@ -22,7 +22,6 @@ from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-
 BENCHMARK_EMAIL_DOMAIN = "aquaculture-benchmark.aquacare.local"
 DEFAULT_PASSWORD = "BenchmarkPass123"
 
@@ -378,7 +377,9 @@ class Command(BaseCommand):
             return []
 
         operations_for_run = (
-            [scenario] if scenario != "mixed" else ["dashboard", "cycles", "logs", "sanitary", "reports", "sync", "login"]
+            [scenario]
+            if scenario != "mixed"
+            else ["dashboard", "cycles", "logs", "sanitary", "reports", "sync", "login"]
         )
         needs_auth_tokens = any(operation != "login" for operation in operations_for_run)
         token_cache: dict[object, str] = (
@@ -660,11 +661,11 @@ class Command(BaseCommand):
 
         for operation, summary in operations.items():
             self.stdout.write(
-                (
+                
                     f"{operation}: count={summary['count']} "
                     f"success={summary['success']} errors={summary['errors']} "
                     f"avg_ms={summary['avg_ms']} p95_ms={summary['p95_ms']} "
                     f"p99_ms={summary['p99_ms']} max_ms={summary['max_ms']} "
                     f"statuses={summary['status_counts']}"
-                )
+                
             )

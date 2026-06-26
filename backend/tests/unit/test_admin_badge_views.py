@@ -2,7 +2,7 @@
 Tests pour les badges de notification de l'admin AquaCare.
 """
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 from django.contrib.auth import get_user_model
@@ -74,7 +74,7 @@ class TestAdminViewState:
         from common.models import AdminViewState
 
         last_seen = AdminViewState.get_last_seen(staff_user, AdminViewState.SECTION_CYCLE_LOGS)
-        expected_baseline = datetime(2024, 1, 1, tzinfo=timezone.utc)
+        expected_baseline = datetime(2024, 1, 1, tzinfo=UTC)
         assert last_seen == expected_baseline
 
     def test_get_last_seen_returns_existing_value_on_second_call(self, staff_user):
@@ -84,11 +84,11 @@ class TestAdminViewState:
         AdminViewState.get_last_seen(staff_user, AdminViewState.SECTION_CYCLE_LOGS)
         AdminViewState.mark_seen(staff_user, AdminViewState.SECTION_CYCLE_LOGS)
         AdminViewState.objects.filter(user=staff_user, section=AdminViewState.SECTION_CYCLE_LOGS).update(
-            last_seen_at=datetime(2025, 6, 1, tzinfo=timezone.utc)
+            last_seen_at=datetime(2025, 6, 1, tzinfo=UTC)
         )
 
         last_seen = AdminViewState.get_last_seen(staff_user, AdminViewState.SECTION_CYCLE_LOGS)
-        assert last_seen == datetime(2025, 6, 1, tzinfo=timezone.utc)
+        assert last_seen == datetime(2025, 6, 1, tzinfo=UTC)
 
     def test_mark_seen_creates_row_on_first_call(self, staff_user):
         """mark_seen crée une ligne à la première utilisation."""
@@ -111,18 +111,18 @@ class TestAdminViewState:
         AdminViewState.objects.create(
             user=staff_user,
             section=AdminViewState.SECTION_SANITARY_LOGS,
-            last_seen_at=datetime(2024, 1, 1, tzinfo=timezone.utc),
+            last_seen_at=datetime(2024, 1, 1, tzinfo=UTC),
         )
 
         AdminViewState.mark_seen(staff_user, AdminViewState.SECTION_SANITARY_LOGS)
         obj = AdminViewState.objects.get(user=staff_user, section=AdminViewState.SECTION_SANITARY_LOGS)
 
-        assert obj.last_seen_at > datetime(2024, 1, 1, tzinfo=timezone.utc)
+        assert obj.last_seen_at > datetime(2024, 1, 1, tzinfo=UTC)
 
     def test_unique_together_user_section(self, staff_user):
         """Impossible d'avoir deux lignes pour le même user+section."""
-        from django.db import IntegrityError
         from common.models import AdminViewState
+        from django.db import IntegrityError
 
         AdminViewState.objects.create(
             user=staff_user,

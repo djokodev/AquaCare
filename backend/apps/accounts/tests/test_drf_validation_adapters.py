@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 import pytest
+from accounts.models import User
+from accounts.services.farm_setup_service import FarmSetupService
+from accounts.services.profile_mutation_service import AccountProfileMutationService
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
-
-from accounts.models import User
-from accounts.services.farm_setup_service import FarmSetupService
-from accounts.services.profile_mutation_service import AccountProfileMutationService
 
 
 @pytest.fixture

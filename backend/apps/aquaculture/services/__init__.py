@@ -32,13 +32,13 @@ from .cycle_application_service import HarvestCycleCommand, PartialHarvestComman
 from .cycle_service import ProductionCycleService
 from .dashboard_application_service import DashboardApplicationService, InvalidDashboardCycleScopeError
 from .dashboard_service import DashboardService
+from .farm_production_plan_service import FarmProductionPlanService
 from .feeding_application_service import (
     FeedingCycleNotFoundError,
     FeedingPlanApplicationService,
     GenerateFeedingPlansCommand,
 )
 from .feeding_service import FeedingPlanService
-from .farm_production_plan_service import FarmProductionPlanService
 from .log_application_service import (
     CycleLogApplicationService,
     CycleLogMutationResult,

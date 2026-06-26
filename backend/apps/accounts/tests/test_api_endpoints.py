@@ -123,7 +123,7 @@ class TestRegistrationEndpoint:
             "age_group": "26_35",
         }
 
-        with django_assert_num_queries(8):
+        with django_assert_num_queries(11):
             response = self.client.post(self.url, data, format='json')
 
         assert response.status_code == status.HTTP_201_CREATED

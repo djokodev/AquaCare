@@ -39,8 +39,6 @@ from .constants import (
     SPECIES_CHOICES,
 )
 from .domain.calculators import AquacultureCalculator
-from .services.farm_production_plan_service import FarmProductionPlanService
-from .services.cycle_service import ProductionCycleService
 from .domain.feed_phase_calculator import get_feed_phase
 from .models import (
     CycleLog,
@@ -53,6 +51,8 @@ from .models import (
     ReportDispatchLog,
     SanitaryLog,
 )
+from .services.cycle_service import ProductionCycleService
+from .services.farm_production_plan_service import FarmProductionPlanService
 
 
 class ProductionCycleSerializer(serializers.ModelSerializer):

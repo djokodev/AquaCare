@@ -18,8 +18,8 @@ from aquaculture.models import (
     ReportDispatchLog,
     SanitaryLog,
 )
-from django.db import connection
 from django.core.cache import cache
+from django.db import connection
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
@@ -1420,6 +1420,7 @@ class TestCycleFeedStatus:
     def test_feed_status_with_orders(self, auth_client, authenticated_user, farm_profile, production_cycle):
         """Commandes liées au cycle → bags_ordered comptés et bags_remaining réduit."""
         from decimal import Decimal
+
         from commerce.models import Order, OrderItem, Product
 
         FeedingPlan.objects.filter(cycle=production_cycle).delete()

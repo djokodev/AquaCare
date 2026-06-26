@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from django.core.cache import cache
-
 from accounts.throttles import (
     AccountFarmSetupThrottle,
     AccountLoginGlobalThrottle,
@@ -11,6 +9,7 @@ from accounts.throttles import (
     AccountTokenThrottle,
     SensitiveAccountActionThrottle,
 )
+from django.core.cache import cache
 
 
 class TestAccountThrottles:

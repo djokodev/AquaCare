@@ -1,19 +1,18 @@
 {
-  "extends": "expo/tsconfig.base",
   "compilerOptions": {
     "allowJs": true,
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
     "isolatedModules": true,
     "jsx": "react-native",
-    "lib": [
-      "es6"
-    ],
     "moduleResolution": "bundler",
     "noEmit": true,
     "strict": true,
     "skipLibCheck": true,
     "target": "esnext",
+    "ignoreDeprecations": "6.0",
+    "baseUrl": ".",
+    "types": ["jest", "node"],
     "paths": {
       "@/*": [
         "./src/*"
@@ -42,17 +41,11 @@
     },
     "resolveJsonModule": true
   },
-  "include": [
-    "App.tsx",
-    "nativewind-env.d.ts",
-    "nativewind.d.ts",
-    "src/**/*.ts",
-    "src/**/*.tsx"
-  ],
   "exclude": [
     "node_modules",
     "babel.config.js",
     "metro.config.js",
     "jest.config.js"
-  ]
+  ],
+  "extends": "expo/tsconfig.base"
 }

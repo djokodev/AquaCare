@@ -4,7 +4,8 @@ from decimal import Decimal
 from typing import Any
 
 from django.contrib.auth.password_validation import validate_password
-from django.core.exceptions import ObjectDoesNotExist, ValidationError as DjangoValidationError
+from django.core.exceptions import ObjectDoesNotExist
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.validators import EmailValidator
 from django.db import IntegrityError
 from django.utils.translation import gettext as _
@@ -17,12 +18,12 @@ from rest_framework_simplejwt.tokens import RefreshToken, UntypedToken
 from .domain.farm_profile_rules import build_farm_profile_invariant_errors
 from .domain.farm_setup_rules import FarmSetupRules
 from .models import FarmProfile, User
-from .services.farm_setup_service import FarmSetupService
 from .services.auth_application_service import (
     AmbiguousCredentialsError,
     AuthApplicationService,
     InvalidCredentialsError,
 )
+from .services.farm_setup_service import FarmSetupService
 from .services.registration_service import AccountRegistrationService
 from .validators import PhoneNumberValidator, build_user_account_invariant_errors
 

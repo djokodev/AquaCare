@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 from django.contrib.auth import get_user_model
 from django.test import Client
+from django.urls import Resolver404, resolve
 from rest_framework.test import APIClient
 
 User = get_user_model()
@@ -139,11 +140,8 @@ class TestFarmMapView:
 
     def test_farm_map_is_not_exposed_as_mobile_api(self):
         """La carte des fermes n'est pas exposée sous /api/accounts/."""
-        client = APIClient()
-
-        response = client.get(FARM_MAP_API_URL)
-
-        assert response.status_code == 404
+        with pytest.raises(Resolver404):
+            resolve(FARM_MAP_API_URL)
 
     def _results(self, response):
         """Extrait la liste des résultats (supporte la pagination DRF)."""

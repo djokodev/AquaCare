@@ -10,9 +10,9 @@ from django.db.models.signals import post_save
 # re-registering the plugin (avoids duplicate plugin errors with xdist).
 from tests.conftest import (  # noqa: F401
     api_client,
+    aquacare_admin,
     auth_client,
     authenticated_user,
-    aquacare_admin,
     user_factory,
 )
 

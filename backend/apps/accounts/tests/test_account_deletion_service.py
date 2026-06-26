@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import pytest
-from aquaculture.services.farm_production_plan_service import FarmProductionPlanService
 from accounts.services.account_deletion_service import AccountDeletionService
+from aquaculture.services.farm_production_plan_service import FarmProductionPlanService
 from notifications.models import PushToken
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 from rest_framework_simplejwt.tokens import RefreshToken

@@ -10,8 +10,8 @@ Centralise toute la logique métier liée aux événements sanitaires :
 
 Architecture: Service Layer Pattern avec responsabilité unique.
 """
-from datetime import date, timedelta
 from dataclasses import dataclass
+from datetime import date, timedelta
 from typing import Any
 
 from django.db import transaction

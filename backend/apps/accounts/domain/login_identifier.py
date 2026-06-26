@@ -18,7 +18,7 @@ class LoginIdentifier:
         *,
         login_name: str | None = None,
         phone_number: str | None = None,
-    ) -> "LoginIdentifier":
+    ) -> LoginIdentifier:
         normalized_login_name = login_name.strip() if login_name else None
         normalized_phone = phone_number.strip() if phone_number else None
         return cls(

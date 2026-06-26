@@ -68,8 +68,8 @@ class TestAquacultureOpenAPIContracts:
     def test_production_plan_setup_documents_full_farm_profile_response(self, openapi_schema):
         path = openapi_schema["paths"]["/api/aquaculture/production-plan/setup/"]
 
-        assert _schema_ref(path["post"], 200).endswith("/FarmProfile")
-        assert _schema_ref(path["patch"], 200).endswith("/FarmProfile")
+        assert _schema_ref(path["post"], 200).endswith("/ProductionPlanFarmProfile")
+        assert _schema_ref(path["patch"], 200).endswith("/ProductionPlanFarmProfile")
         assert "400" in path["post"]["responses"]
         assert "401" in path["post"]["responses"]
         assert "429" in path["post"]["responses"]

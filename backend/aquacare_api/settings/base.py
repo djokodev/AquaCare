@@ -307,11 +307,10 @@ FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024
 _SENTRY_DSN = _env_str('SENTRY_DSN')
 if _SENTRY_DSN:
     import sentry_sdk
+    from common.observability import get_request_id
     from sentry_sdk.integrations.celery import CeleryIntegration
     from sentry_sdk.integrations.django import DjangoIntegration
     from sentry_sdk.integrations.logging import LoggingIntegration
-
-    from common.observability import get_request_id
 
     def _sentry_before_send(event, hint):
         request_id = get_request_id()

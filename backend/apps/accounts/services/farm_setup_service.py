@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
 from collections.abc import Mapping
+from typing import TYPE_CHECKING, Any
 
 from accounts.models import FarmProfile
 
@@ -17,7 +17,7 @@ class FarmSetupService:
     SETTINGS_FIELDS = frozenset({"default_feed_price_per_kg"})
 
     @staticmethod
-    def _service() -> type["FarmProductionPlanService"]:
+    def _service() -> type[FarmProductionPlanService]:
         from aquaculture.services.farm_production_plan_service import FarmProductionPlanService
 
         return FarmProductionPlanService

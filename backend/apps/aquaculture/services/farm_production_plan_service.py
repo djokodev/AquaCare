@@ -6,13 +6,12 @@ from decimal import Decimal
 from typing import Any
 
 from accounts.models import FarmProfile
-from django.core.exceptions import ValidationError
-from django.db import transaction
-from django.utils.translation import gettext_lazy as _
-
 from aquaculture.constants import DEFAULT_FEED_PRICE_PER_KG
 from aquaculture.domain.farm_setup_rules import FarmSetupRules
 from aquaculture.models import FarmProductionPlan
+from django.core.exceptions import ValidationError
+from django.db import transaction
+from django.utils.translation import gettext_lazy as _
 
 
 class FarmProductionPlanService:

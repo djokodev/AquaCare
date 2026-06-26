@@ -3,8 +3,8 @@ from __future__ import annotations
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
-from aquaculture.models import FarmProductionPlan
 from accounts.models import FarmProfile, User
+from aquaculture.models import FarmProductionPlan
 from django.core.management.base import BaseCommand, CommandError
 from django.db.models import Q
 from django.db.models.functions import Trim

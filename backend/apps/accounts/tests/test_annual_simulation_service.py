@@ -14,7 +14,6 @@ en vérifiant les calculs à la source, indépendamment du transport HTTP.
 from datetime import date
 
 import pytest
-
 from accounts.services.annual_simulation_service import (
     AQUACARE_FEE_PER_KG,
     AnnualSimulationService,

@@ -491,8 +491,9 @@ class TestSyncSanitaryLogs:
 
     def test_sync_sanitary_logs_basic_success(self):
         """Sync d'un log sanitaire valide crée un nouvel enregistrement."""
-        from tests.fixtures.factories import FarmProfileFactory
         import uuid
+
+        from tests.fixtures.factories import FarmProfileFactory
 
         user = UserFactory()
         farm = FarmProfileFactory(user=user)
@@ -520,8 +521,9 @@ class TestSyncSanitaryLogs:
 
     def test_sync_sanitary_logs_deduplicates_by_client_uuid(self):
         """Deux retries du même log sanitaire offline ne créent pas de doublon."""
-        from tests.fixtures.factories import FarmProfileFactory
         import uuid
+
+        from tests.fixtures.factories import FarmProfileFactory
 
         user = UserFactory()
         farm = FarmProfileFactory(user=user)
