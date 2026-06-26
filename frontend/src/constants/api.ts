@@ -7,7 +7,7 @@
  *   â†’ Backend Docker local (172.20.10.2:8000)
  *
  * PRODUCTION (eas build) :
- *   â†’ API en ligne (77.237.241.223)
+ *   â†’ API en ligne
  *
  * Pas besoin de toucher au fichier .env !
  */
@@ -57,4 +57,3 @@ export const STORAGE_KEYS = {
   LANGUAGE: 'aquacare_language',
   PUSH_DEVICE_ID: 'aquacare_push_device_id',
 };
-

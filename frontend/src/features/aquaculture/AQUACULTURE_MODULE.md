@@ -242,4 +242,4 @@ Dossiers principaux:
 
 La logique metier definitive backend est documentee dans:
 
-1. [backend aquaculture README](/Users/jeotech/Desktop/projects/AquaCare/backend/apps/aquaculture/README.md)
+1. [backend aquaculture README](../../../../backend/apps/aquaculture/README.md)
