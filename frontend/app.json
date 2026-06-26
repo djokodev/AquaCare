@@ -38,7 +38,9 @@
           "organization": "aquacare",
           "project": "frontend-aquacare"
         }
-      ]
+      ],
+      "expo-sharing",
+      "expo-status-bar"
     ],
     "extra": {
       "eas": {
