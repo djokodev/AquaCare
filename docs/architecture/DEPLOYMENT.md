@@ -14,7 +14,7 @@
 
 ## Runtime files
 
-- `backend/docker-compose.yml`, local development stack.
+- Local development may use a local-only `backend/docker-compose.yml` file when present.
 - `backend/docker-compose.staging.yml`, staging stack.
 - `backend/docker-compose.prod.yml`, production stack.
 

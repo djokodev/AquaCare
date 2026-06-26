@@ -4,10 +4,15 @@
 
 From the repository root:
 
+If a local-only `backend/docker-compose.yml` exists in your environment:
+
 - `docker compose -f backend/docker-compose.yml up -d`
 - `docker compose -f backend/docker-compose.yml exec api python manage.py migrate`
 - `docker compose -f backend/docker-compose.yml exec api pytest`
 - `docker compose -f backend/docker-compose.yml exec api pytest backend/apps/aquaculture/tests/`
+
+For CI-aligned host validation from the repository root:
+
 - `ruff check backend/manage.py backend/apps backend/aquacare_api backend/tests`
 
 ## Frontend
