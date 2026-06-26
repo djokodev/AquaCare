@@ -14,10 +14,9 @@ from __future__ import annotations
 import math
 from typing import TypedDict
 
-from django.db.models import Sum
-
 from aquaculture.models import FeedingPlan, ProductionCycle
 from commerce.models import OrderItem
+from django.db.models import Sum
 
 BAG_WEIGHT_KG = 25  # Poids standard d'un sac DIBAQ (kg)
 DAYS_PER_WEEK = 7

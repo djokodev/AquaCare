@@ -5,14 +5,12 @@
     "esModuleInterop": true,
     "isolatedModules": true,
     "jsx": "react-native",
-    "lib": [
-      "es6"
-    ],
     "moduleResolution": "bundler",
     "noEmit": true,
     "strict": true,
     "skipLibCheck": true,
     "target": "esnext",
+    "ignoreDeprecations": "6.0",
     "baseUrl": ".",
     "paths": {
       "@/*": [

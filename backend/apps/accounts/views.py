@@ -479,7 +479,11 @@ class FarmMapView(generics.ListAPIView):
         description="Retourne toutes les fermes ayant des coordonnées GPS. Réservé aux admins.",
         parameters=[
             OpenApiParameter('region', str, description='Filtre par région administrative (ex: centre, littoral)'),
-            OpenApiParameter('certification_status', str, description='Filtre par statut de certification (certified, pending, suspended, rejected)'),
+            OpenApiParameter(
+                'certification_status',
+                str,
+                description='Filtre par statut de certification (certified, pending, suspended, rejected)',
+            ),
         ],
         responses={200: FarmMapSerializer(many=True)},
     )

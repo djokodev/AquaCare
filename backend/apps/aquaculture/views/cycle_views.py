@@ -13,11 +13,10 @@ from rest_framework.response import Response
 from ..domain.exceptions import (
     CycleAlreadyHarvestedError,
     CycleNotActiveError,
-    InvalidHarvestDataError,
     InsufficientFishCountError,
+    InvalidHarvestDataError,
 )
 from ..models import ProductionCycle
-from ..services.cycle_feed_service import CycleFeedService
 from ..serializers import (
     CycleComparisonSerializer,
     CycleHarvestResponseSerializer,
@@ -33,6 +32,7 @@ from ..services import (
     PartialHarvestCommand,
     ProductionCycleApplicationService,
 )
+from ..services.cycle_feed_service import CycleFeedService
 
 logger = logging.getLogger(__name__)
 
