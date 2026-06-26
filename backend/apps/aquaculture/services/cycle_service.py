@@ -37,10 +37,10 @@ from ..domain.exceptions import (
     BusinessRuleViolation,
     CycleAlreadyHarvestedError,
     CycleNotActiveError,
+    InsufficientFishCountError,
     InvalidDateRangeError,
     InvalidDensityError,
     InvalidHarvestDataError,
-    InsufficientFishCountError,
 )
 from ..models import CycleLog, PartialHarvest, ProductionCycle
 from .base import BaseService

@@ -3,7 +3,7 @@ name: Pull Request Tests
 on:
   pull_request:
     branches:
-      - main
+      - develop
 
 # Permissions minimales pour tests uniquement
 permissions:

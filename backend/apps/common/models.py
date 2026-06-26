@@ -3,7 +3,7 @@ Modèles communs pour l'administration AquaCare.
 """
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from django.conf import settings
 from django.db import models
@@ -33,7 +33,7 @@ class AdminViewState(models.Model):
 
     # Baseline : tout ce qui existe avant cette date sera visible en "nouveau"
     # à la première connexion d'un admin (pour établir un point de départ)
-    _BASELINE = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    _BASELINE = datetime(2024, 1, 1, tzinfo=UTC)
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(

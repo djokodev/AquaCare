@@ -16,7 +16,6 @@ from decimal import Decimal
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.db.models import Prefetch
-from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from .constants import CYCLE_STATUS_CHOICES, GROWTH_STAGES, SANITARY_EVENT_TYPES, SPECIES_CHOICES
