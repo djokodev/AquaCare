@@ -1,0 +1,178 @@
+name: aquacare_dokploy_staging
+
+services:
+  db:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - aquacare_dokploy_staging_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 128mb --maxmemory-policy allkeys-lru
+    volumes:
+      - aquacare_dokploy_staging_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: .
+    restart: unless-stopped
+    user: root
+    command: >
+      bash -c "
+      chown -R aquacare:aquacare /app/media /app/staticfiles /app/logs 2>/dev/null || true &&
+      su -s /bin/bash aquacare -c '/usr/local/bin/gunicorn aquacare_api.wsgi:application --bind 0.0.0.0:8000 --workers 2 --timeout 60 --access-logfile - --error-logfile -'
+      "
+    environment:
+      DJANGO_SETTINGS_MODULE: aquacare_api.settings.staging
+      DJANGO_ENVIRONMENT: staging
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
+      DJANGO_DEBUG: "False"
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_HOST: db
+      POSTGRES_PORT: "5432"
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      REDIS_CACHE_URL: redis://redis:6379/1
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      SENTRY_RELEASE: ${SENTRY_RELEASE:-staging}
+      DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:-staging@aquacare.tech}
+      EMAIL_BACKEND: ${EMAIL_BACKEND:-django.core.mail.backends.smtp.EmailBackend}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      DJANGO_SUPERUSER_PHONE: ${DJANGO_SUPERUSER_PHONE:-}
+      DJANGO_SUPERUSER_PASSWORD: ${DJANGO_SUPERUSER_PASSWORD:-}
+      DJANGO_SUPERUSER_FIRST_NAME: ${DJANGO_SUPERUSER_FIRST_NAME:-Admin}
+      DJANGO_SUPERUSER_LAST_NAME: ${DJANGO_SUPERUSER_LAST_NAME:-AquaCare}
+      COMPOSE_PROJECT_NAME: aquacare_dokploy_staging
+    volumes:
+      - aquacare_dokploy_staging_media_data:/app/media
+      - aquacare_dokploy_staging_static_data:/app/staticfiles
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    expose:
+      - "8000"
+
+  celery_worker:
+    build: .
+    restart: unless-stopped
+    entrypoint: []
+    command: >
+      bash -c "
+      while ! nc -z db 5432; do sleep 0.5; done &&
+      celery -A aquacare_api worker --loglevel=info --concurrency=2
+      "
+    environment:
+      DJANGO_SETTINGS_MODULE: aquacare_api.settings.staging
+      DJANGO_ENVIRONMENT: staging
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
+      DJANGO_DEBUG: "False"
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_HOST: db
+      POSTGRES_PORT: "5432"
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      REDIS_CACHE_URL: redis://redis:6379/1
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      SENTRY_RELEASE: ${SENTRY_RELEASE:-staging}
+      DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:-staging@aquacare.tech}
+      EMAIL_BACKEND: ${EMAIL_BACKEND:-django.core.mail.backends.smtp.EmailBackend}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      DJANGO_SUPERUSER_PHONE: ${DJANGO_SUPERUSER_PHONE:-}
+      DJANGO_SUPERUSER_PASSWORD: ${DJANGO_SUPERUSER_PASSWORD:-}
+      DJANGO_SUPERUSER_FIRST_NAME: ${DJANGO_SUPERUSER_FIRST_NAME:-Admin}
+      DJANGO_SUPERUSER_LAST_NAME: ${DJANGO_SUPERUSER_LAST_NAME:-AquaCare}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - aquacare_dokploy_staging_media_data:/app/media
+
+  celery_beat:
+    build: .
+    restart: unless-stopped
+    entrypoint: []
+    command: >
+      bash -c "
+      while ! nc -z db 5432; do sleep 0.5; done &&
+      celery -A aquacare_api beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+      "
+    environment:
+      DJANGO_SETTINGS_MODULE: aquacare_api.settings.staging
+      DJANGO_ENVIRONMENT: staging
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
+      DJANGO_DEBUG: "False"
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_HOST: db
+      POSTGRES_PORT: "5432"
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      REDIS_CACHE_URL: redis://redis:6379/1
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      SENTRY_RELEASE: ${SENTRY_RELEASE:-staging}
+      DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:-staging@aquacare.tech}
+      EMAIL_BACKEND: ${EMAIL_BACKEND:-django.core.mail.backends.smtp.EmailBackend}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      DJANGO_SUPERUSER_PHONE: ${DJANGO_SUPERUSER_PHONE:-}
+      DJANGO_SUPERUSER_PASSWORD: ${DJANGO_SUPERUSER_PASSWORD:-}
+      DJANGO_SUPERUSER_FIRST_NAME: ${DJANGO_SUPERUSER_FIRST_NAME:-Admin}
+      DJANGO_SUPERUSER_LAST_NAME: ${DJANGO_SUPERUSER_LAST_NAME:-AquaCare}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  nginx:
+    build: ./nginx
+    restart: unless-stopped
+    volumes:
+      - aquacare_dokploy_staging_static_data:/app/staticfiles:ro
+      - aquacare_dokploy_staging_media_data:/app/media:ro
+    depends_on:
+      - api
+    expose:
+      - "80"
+
+volumes:
+  aquacare_dokploy_staging_postgres_data:
+    name: aquacare_dokploy_staging_postgres_data
+  aquacare_dokploy_staging_redis_data:
+    name: aquacare_dokploy_staging_redis_data
+  aquacare_dokploy_staging_media_data:
+    name: aquacare_dokploy_staging_media_data
+  aquacare_dokploy_staging_static_data:
+    name: aquacare_dokploy_staging_static_data
