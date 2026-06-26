@@ -338,7 +338,7 @@ Cycle:
 
 Le detail frontend est documente dans:
 
-1. [frontend aquaculture module doc](/Users/jeotech/Desktop/projects/AquaCare/frontend/src/features/aquaculture/AQUACULTURE_MODULE.md)
+1. [frontend aquaculture module doc](../../../frontend/src/features/aquaculture/AQUACULTURE_MODULE.md)
 
 Regle de coherence:
 

@@ -4,7 +4,7 @@
  * Ces couleurs sont utilisÃ©es dans toute l'application pour assurer
  * une cohÃ©rence visuelle et respecter l'identitÃ© de marque AquaCare.
  *
- * @see CLAUDE.md section "CHARTE GRAPHIQUE AquaCare"
+ * @see docs/design/DESIGN_SYSTEM.md
  */
 
 export const AQUACARE_COLORS = {
@@ -39,7 +39,6 @@ export type AquacareColorKey = keyof typeof AQUACARE_COLORS;
  * Type TypeScript pour les valeurs de couleur AquaCare.
  */
 export type AquacareColor = typeof AQUACARE_COLORS[AquacareColorKey];
-
 
 
 
