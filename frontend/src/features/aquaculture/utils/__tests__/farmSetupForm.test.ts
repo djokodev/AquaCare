@@ -99,6 +99,25 @@ describe('farmSetupForm', () => {
     expect(suggestion?.value).toBe(4500);
   });
 
+  it('bloque explicitement le cas 9000 alevins pour 15 m3', () => {
+    const form = {
+      ...baseForm,
+      unitCount: '5',
+      unitVolume: '3',
+      infraType: 'bac_hors_sol',
+      fingerlingsCount: '9000',
+    } satisfies FarmSetupFormState;
+
+    const preview = getStockingDensityPreview(form);
+    const errors = validateFarmSetupForm(form);
+    const suggestion = getFingerlingsSuggestionPreview(form);
+
+    expect(preview?.density).toBeCloseTo(600, 1);
+    expect(preview?.isOk).toBe(false);
+    expect(errors.fingerlingsCount).toBe('createFarmStockingDensityError');
+    expect(suggestion?.value).toBe(4500);
+  });
+
   it('construit un payload de simulation compatible cycle-first', () => {
     const input = buildAnnualSimulationInput({
       ...baseForm,

@@ -358,12 +358,18 @@ export default function CreateFarmScreen({ navigation }: Props) {
           fingerlingsCoherence.level === 'error' && styles.coherenceTextError,
         ]}>
             {t('createFarmFingerlingsMaxProduction', { max: fingerlingsCoherence.maxCycle.toLocaleString('fr-FR') })}
-          {', '}
-          {fingerlingsCoherence.level === 'ok'
+            {', '}
+            {fingerlingsCoherence.level === 'ok'
               ? t('createFarmFingerlingsCoherenceOk', { count: fingerlingsCoherence.count })
               : fingerlingsCoherence.level === 'warn'
-              ? t('createFarmFingerlingsCoherenceWarn', { count: fingerlingsCoherence.count })
-              : t('createFarmFingerlingsCoherenceError', { count: fingerlingsCoherence.count })
+              ? t('createFarmFingerlingsCoherenceWarn', {
+                  count: fingerlingsCoherence.count,
+                  max: fingerlingsCoherence.maxCycle,
+                })
+              : t('createFarmFingerlingsCoherenceError', {
+                  count: fingerlingsCoherence.count,
+                  max: fingerlingsCoherence.maxCycle,
+                })
             }
           </Text>
         </View>
