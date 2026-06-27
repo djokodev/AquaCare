@@ -451,6 +451,51 @@ class TestFarmSetupSerializer:
 
         assert serializer.is_valid(), serializer.errors
 
+    @pytest.mark.parametrize("num_cycles_per_year", [1, 2, 3])
+    def test_num_cycles_per_year_accepts_supported_values(
+        self,
+        user_factory,
+        num_cycles_per_year,
+    ):
+        farm = user_factory().farm_profile
+        serializer = FarmSetupSerializer(
+            farm,
+            data={
+                "setup_species": "clarias",
+                "setup_infrastructure_type": "bac_en_sol",
+                "setup_unit_count": 4,
+                "setup_unit_volume_m3": "10.00",
+                "annual_production_target_kg": "800.00",
+                "num_cycles_per_year": num_cycles_per_year,
+            },
+            partial=True,
+        )
+
+        assert serializer.is_valid(), serializer.errors
+
+    @pytest.mark.parametrize("num_cycles_per_year", [0, 4])
+    def test_num_cycles_per_year_rejects_out_of_range_values(
+        self,
+        user_factory,
+        num_cycles_per_year,
+    ):
+        farm = user_factory().farm_profile
+        serializer = FarmSetupSerializer(
+            farm,
+            data={
+                "setup_species": "clarias",
+                "setup_infrastructure_type": "bac_en_sol",
+                "setup_unit_count": 4,
+                "setup_unit_volume_m3": "10.00",
+                "annual_production_target_kg": "800.00",
+                "num_cycles_per_year": num_cycles_per_year,
+            },
+            partial=True,
+        )
+
+        assert not serializer.is_valid()
+        assert "num_cycles_per_year" in serializer.errors
+
 
 class TestAnnualSimulationInputSerializer:
     def test_valid_payload_normalizes_num_cycles_to_int(self):
@@ -465,17 +510,42 @@ class TestAnnualSimulationInputSerializer:
         assert serializer.is_valid(), serializer.errors
         assert serializer.validated_data["num_cycles"] == 2
 
-    def test_invalid_species_and_num_cycles_are_rejected(self):
+    @pytest.mark.parametrize("num_cycles", [1, 2, 3])
+    def test_supported_num_cycles_are_accepted(self, num_cycles):
+        serializer = AnnualSimulationInputSerializer(
+            data={
+                "species": "tilapia",
+                "annual_production_target_kg": "1000.00",
+                "num_cycles": num_cycles,
+            }
+        )
+
+        assert serializer.is_valid(), serializer.errors
+        assert serializer.validated_data["num_cycles"] == num_cycles
+
+    def test_invalid_species_is_rejected(self):
         serializer = AnnualSimulationInputSerializer(
             data={
                 "species": "carpe",
                 "annual_production_target_kg": "1000.00",
-                "num_cycles": 4,
+                "num_cycles": 2,
             }
         )
 
         assert not serializer.is_valid()
         assert "species" in serializer.errors
+
+    @pytest.mark.parametrize("num_cycles", [0, 4])
+    def test_invalid_num_cycles_are_rejected(self, num_cycles):
+        serializer = AnnualSimulationInputSerializer(
+            data={
+                "species": "tilapia",
+                "annual_production_target_kg": "1000.00",
+                "num_cycles": num_cycles,
+            }
+        )
+
+        assert not serializer.is_valid()
         assert "num_cycles" in serializer.errors
 
 

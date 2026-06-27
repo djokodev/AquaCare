@@ -178,7 +178,9 @@ class TestRevenueCalculation:
             other_costs_fcfa_per_year=50_000,
         )
         assert result_no_costs['annual_other_costs_fcfa'] == pytest.approx(70_000)
+        assert result_no_costs['cycle_other_costs_fcfa'] == pytest.approx(35_000)
         assert result_with_costs['annual_other_costs_fcfa'] == pytest.approx(50_000)
+        assert result_with_costs['cycle_other_costs_fcfa'] == pytest.approx(25_000)
         assert result_with_costs['annual_total_cost_fcfa'] < result_no_costs['annual_total_cost_fcfa']
 
 

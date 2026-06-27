@@ -176,7 +176,13 @@ class AnnualSimulationService:
             initial_fish_count * resolved_inputs.fingerlings_cost_unit
         )
         cycle_revenue = cycle_production_kg * resolved_inputs.selling_price
-        cycle_other_costs = round(cycle_revenue * OTHER_COSTS_RATE, 2)
+        annual_revenue = cycle_revenue * effective_num_cycles
+        cycle_other_costs, annual_other_costs = AnnualSimulationService._resolve_other_costs_breakdown(
+            cycle_revenue=cycle_revenue,
+            annual_revenue=annual_revenue,
+            num_cycles=effective_num_cycles,
+            annual_other_costs_fcfa_per_year=other_costs_fcfa_per_year,
+        )
         cycle_aquacare_fee = round(float(AQUACARE_FEE_PER_KG) * cycle_production_kg, 2)
         cycle_sim = AnnualSimulationService._simulate_reference_cycle(
             resolved_inputs=resolved_inputs,
@@ -221,7 +227,7 @@ class AnnualSimulationService:
             selling_price=resolved_inputs.selling_price,
             feed_cost_per_cycle=feed_cost_per_cycle,
             fingerlings_cost_per_cycle=fingerlings_cost_per_cycle,
-            other_costs_fcfa_per_year=other_costs_fcfa_per_year,
+            annual_other_costs_fcfa=annual_other_costs,
         )
         annual_projection_production_kg = round(cycle_production_kg * cycles_per_year_derived, 2)
         annual_projection_revenue_fcfa = round(cycle_revenue * cycles_per_year_derived, 2)
@@ -263,6 +269,23 @@ class AnnualSimulationService:
             return max(1, int(num_cycles))
         except (TypeError, ValueError):
             return 1
+
+    @staticmethod
+    def _resolve_other_costs_breakdown(
+        cycle_revenue: float,
+        annual_revenue: float,
+        num_cycles: int,
+        annual_other_costs_fcfa_per_year: float,
+    ) -> tuple[float, float]:
+        """Harmonise le legacy annual-first et les métriques cycle-first."""
+        if annual_other_costs_fcfa_per_year > 0:
+            annual_other_costs = float(annual_other_costs_fcfa_per_year)
+            cycle_other_costs = annual_other_costs / num_cycles
+        else:
+            annual_other_costs = annual_revenue * OTHER_COSTS_RATE
+            cycle_other_costs = cycle_revenue * OTHER_COSTS_RATE
+
+        return round(cycle_other_costs, 2), round(annual_other_costs, 2)
 
     @staticmethod
     def _calculate_cycles_per_year(
@@ -361,16 +384,13 @@ class AnnualSimulationService:
         selling_price: float,
         feed_cost_per_cycle: float,
         fingerlings_cost_per_cycle: float,
-        other_costs_fcfa_per_year: float,
+        annual_other_costs_fcfa: float,
     ) -> dict[str, float]:
         """Agrège les coûts et revenus annuels."""
         annual_feed_cost = feed_cost_per_cycle * num_cycles
         annual_fingerlings_cost = fingerlings_cost_per_cycle * num_cycles
         annual_revenue = selling_price * annual_production_target_kg
-        if other_costs_fcfa_per_year > 0:
-            annual_other_costs = float(other_costs_fcfa_per_year)
-        else:
-            annual_other_costs = float(annual_revenue * OTHER_COSTS_RATE)
+        annual_other_costs = float(annual_other_costs_fcfa)
         aquacare_fee = float(AQUACARE_FEE_PER_KG * Decimal(str(annual_production_target_kg)))
         annual_total_cost = (
             annual_feed_cost

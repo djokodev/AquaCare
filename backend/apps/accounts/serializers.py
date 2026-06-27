@@ -340,6 +340,7 @@ class FarmSetupSerializer(serializers.Serializer):
     )
     num_cycles_per_year = serializers.IntegerField(
         min_value=1,
+        max_value=3,
         required=False,
         allow_null=True,
     )
@@ -432,6 +433,7 @@ class AnnualSimulationInputSerializer(serializers.Serializer):
     )
     num_cycles = serializers.IntegerField(
         min_value=1,
+        max_value=3,
         help_text="Nombre de cycles par an, minimum 1"
     )
     start_date = serializers.DateField(

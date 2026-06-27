@@ -1447,6 +1447,8 @@ class TestAnnualSimulationView:
         assert response.status_code == status.HTTP_200_OK
         # 1000 kg × 2000 FCFA = 2 000 000 FCFA de revenu
         assert response.data['annual_revenue_fcfa'] == 2_000_000
+        assert response.data['annual_other_costs_fcfa'] == 50_000
+        assert response.data['cycle_other_costs_fcfa'] == 25_000
 
     def test_simulate_missing_required_fields_fails(self):
         """Champs requis manquants (species absent) → 400."""
