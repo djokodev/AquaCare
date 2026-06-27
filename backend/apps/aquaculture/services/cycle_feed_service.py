@@ -15,6 +15,7 @@ import logging
 import math
 from typing import Any, TypedDict
 
+from aquaculture.constants import DEFAULT_EXPECTED_SURVIVAL_RATE_PCT
 from aquaculture.models import FeedingPlan, ProductionCycle
 from commerce.models import OrderItem
 from django.db.models import Sum
@@ -105,7 +106,7 @@ class CycleFeedService:
 
         from commerce.services.cycle_simulation_service import CycleSimulationService  # noqa: PLC0415
 
-        survival_rate = float(cycle.expected_survival_rate_pct or 85) / 100
+        survival_rate = float(cycle.expected_survival_rate_pct or DEFAULT_EXPECTED_SURVIVAL_RATE_PCT) / 100
         sim = CycleSimulationService.simulate_cycle(
             species=cycle.species,
             initial_fish_count=cycle.initial_count,
@@ -158,7 +159,7 @@ class CycleFeedService:
 
         try:
             from commerce.services.cycle_simulation_service import CycleSimulationService  # noqa: PLC0415
-            survival_rate = float(cycle.expected_survival_rate_pct or 85) / 100
+            survival_rate = float(cycle.expected_survival_rate_pct or DEFAULT_EXPECTED_SURVIVAL_RATE_PCT) / 100
             cycle_sim = CycleSimulationService.simulate_cycle(
                 species=cycle.species,
                 initial_fish_count=cycle.initial_count,

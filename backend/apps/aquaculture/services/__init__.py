@@ -24,6 +24,8 @@ Utilisation dans views.py :
 from .analytics_service import AnalyticsService
 from .annual_simulation_service import (
     AQUACARE_FEE_PER_KG,
+    DEFAULT_OTHER_COSTS_RATE_PCT,
+    TECHNICAL_PAUSE_BETWEEN_CYCLES_DAYS,
     AnnualSimulationResult,
     AnnualSimulationService,
 )
@@ -82,6 +84,8 @@ __all__ = [
     'AnnualSimulationService',
     'AnnualSimulationResult',
     'AQUACARE_FEE_PER_KG',
+    'DEFAULT_OTHER_COSTS_RATE_PCT',
+    'TECHNICAL_PAUSE_BETWEEN_CYCLES_DAYS',
     'DashboardApplicationService',
     'InvalidDashboardCycleScopeError',
     'GenerateReportCommand',

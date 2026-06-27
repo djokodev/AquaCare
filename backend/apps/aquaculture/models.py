@@ -142,6 +142,7 @@ class FarmProductionPlan(models.Model):
     ]
 
     NUM_CYCLES_CHOICES = [
+        (1, _('1 cycle par an')),
         (2, _('2 cycles par an')),
         (3, _('3 cycles par an')),
     ]
@@ -167,7 +168,7 @@ class FarmProductionPlan(models.Model):
         null=True,
         blank=True,
         choices=NUM_CYCLES_CHOICES,
-        help_text=_('2 ou 3 cycles par an'),
+        help_text=_('Nombre de cycles par an, minimum 1'),
     )
     setup_infrastructure_type = models.CharField(
         _('Type d\'infrastructure'),
