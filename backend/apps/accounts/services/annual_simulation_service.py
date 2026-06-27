@@ -7,9 +7,11 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from aquaculture.services.annual_simulation_service import (
         AQUACARE_FEE_PER_KG,
+        DEFAULT_OTHER_COSTS_RATE_PCT,
         DEFAULT_SURVIVAL_RATE,
         INITIAL_WEIGHT_G,
         SPECIES_DEFAULTS,
+        TECHNICAL_PAUSE_BETWEEN_CYCLES_DAYS,
         AnnualSimulationResult,
         AnnualSimulationService,
         CycleBreakdown,
@@ -20,6 +22,8 @@ __all__ = [
     "AQUACARE_FEE_PER_KG",
     "DEFAULT_SURVIVAL_RATE",
     "INITIAL_WEIGHT_G",
+    "DEFAULT_OTHER_COSTS_RATE_PCT",
+    "TECHNICAL_PAUSE_BETWEEN_CYCLES_DAYS",
     "SPECIES_DEFAULTS",
     "AnnualSimulationResult",
     "AnnualSimulationService",

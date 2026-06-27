@@ -135,7 +135,19 @@ PERFORMANCE_THRESHOLDS = {
     'fcr_poor': 2.5,
 }
 
-# ===== PARAMÈTRES ÉCONOMIQUES CYCLE =====
+# ===== PARAMÈTRES ÉCONOMIQUES ET SIMULATION =====
+
+# Default survival rate validated by AquaCare experts for initial setup/simulation.
+DEFAULT_EXPECTED_SURVIVAL_RATE_PCT = Decimal('95')
+
+# Technical pause between two production cycles (cleaning, resting, restart).
+TECHNICAL_PAUSE_BETWEEN_CYCLES_DAYS = 14
+
+# AquaCare service fee used in production simulations and projections.
+AQUACARE_FEE_PER_KG = Decimal('20')
+
+# Other operating charges are now modeled as a percentage of estimated revenue.
+DEFAULT_OTHER_COSTS_RATE_PCT = Decimal('5')
 
 ECONOMIC_DEFAULTS_BY_SPECIES = {
     'tilapia': {
@@ -155,6 +167,5 @@ DEFAULT_INITIAL_AVERAGE_WEIGHT_G_BY_SPECIES = {
     'clarias': Decimal('5'),
 }
 
-DEFAULT_EXPECTED_SURVIVAL_RATE_PCT = Decimal('85')
 DEFAULT_FINGERLINGS_COST_FCFA = Decimal('0')
 DEFAULT_OTHER_OPERATIONAL_COSTS_FCFA = Decimal('0')

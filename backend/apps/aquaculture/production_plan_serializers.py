@@ -161,8 +161,9 @@ class FarmSetupSerializer(serializers.Serializer):
         required=False,
         allow_null=True,
     )
-    num_cycles_per_year = serializers.ChoiceField(
-        choices=[2, 3],
+    num_cycles_per_year = serializers.IntegerField(
+        min_value=1,
+        max_value=3,
         required=False,
         allow_null=True,
     )
@@ -238,9 +239,10 @@ class AnnualSimulationInputSerializer(serializers.Serializer):
         min_value=Decimal('1'),
         help_text='Production annuelle cible en kg',
     )
-    num_cycles = serializers.ChoiceField(
-        choices=[2, 3],
-        help_text='Nombre de cycles par an : 2 ou 3',
+    num_cycles = serializers.IntegerField(
+        min_value=1,
+        max_value=3,
+        help_text='Nombre de cycles par an, minimum 1',
     )
     start_date = serializers.DateField(
         required=False,
@@ -287,7 +289,7 @@ class AnnualSimulationInputSerializer(serializers.Serializer):
         allow_null=True,
         min_value=Decimal('1'),
         max_value=Decimal('100'),
-        help_text='Taux de survie attendu (%, ex: 85)',
+        help_text='Taux de survie attendu (%, ex: 95)',
     )
     total_fingerlings_count = serializers.IntegerField(
         required=False,
@@ -320,6 +322,9 @@ class AnnualSimulationResponseSerializer(serializers.Serializer):
     species = serializers.ChoiceField(choices=['tilapia', 'clarias'], read_only=True)
     num_cycles = serializers.IntegerField(read_only=True)
     annual_production_target_kg = serializers.FloatField(read_only=True)
+    cycles_per_year_derived = serializers.IntegerField(read_only=True)
+    technical_pause_days = serializers.IntegerField(read_only=True)
+    other_costs_rate_pct = serializers.FloatField(read_only=True)
     annual_revenue_fcfa = serializers.FloatField(read_only=True)
     annual_feed_cost_fcfa = serializers.FloatField(read_only=True)
     annual_fingerlings_cost_fcfa = serializers.FloatField(read_only=True)
@@ -328,6 +333,19 @@ class AnnualSimulationResponseSerializer(serializers.Serializer):
     aquacare_fee_fcfa = serializers.FloatField(read_only=True)
     annual_net_profit_fcfa = serializers.FloatField(read_only=True)
     annual_roi_pct = serializers.FloatField(read_only=True)
+    cycle_production_kg = serializers.FloatField(read_only=True)
+    cycle_revenue_fcfa = serializers.FloatField(read_only=True)
+    cycle_feed_cost_fcfa = serializers.FloatField(read_only=True)
+    cycle_fingerlings_cost_fcfa = serializers.FloatField(read_only=True)
+    cycle_other_costs_fcfa = serializers.FloatField(read_only=True)
+    cycle_aquacare_fee_fcfa = serializers.FloatField(read_only=True)
+    cycle_total_cost_fcfa = serializers.FloatField(read_only=True)
+    cycle_net_profit_fcfa = serializers.FloatField(read_only=True)
+    cycle_roi_pct = serializers.FloatField(read_only=True)
+    annual_projection_production_kg = serializers.FloatField(read_only=True)
+    annual_projection_revenue_fcfa = serializers.FloatField(read_only=True)
+    annual_projection_net_profit_fcfa = serializers.FloatField(read_only=True)
+    annual_projection_aquacare_fee_fcfa = serializers.FloatField(read_only=True)
     production_per_cycle_kg = serializers.FloatField(read_only=True)
     cycle_duration_days = serializers.IntegerField(read_only=True)
     feed_bags_per_cycle = serializers.IntegerField(read_only=True)

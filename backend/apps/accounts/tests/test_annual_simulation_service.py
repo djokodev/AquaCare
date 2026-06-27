@@ -28,6 +28,9 @@ class TestAnnualSimulationServiceStructure:
         'species',
         'num_cycles',
         'annual_production_target_kg',
+        'cycles_per_year_derived',
+        'technical_pause_days',
+        'other_costs_rate_pct',
         'annual_revenue_fcfa',
         'annual_feed_cost_fcfa',
         'annual_fingerlings_cost_fcfa',
@@ -36,6 +39,19 @@ class TestAnnualSimulationServiceStructure:
         'aquacare_fee_fcfa',
         'annual_net_profit_fcfa',
         'annual_roi_pct',
+        'cycle_production_kg',
+        'cycle_revenue_fcfa',
+        'cycle_feed_cost_fcfa',
+        'cycle_fingerlings_cost_fcfa',
+        'cycle_other_costs_fcfa',
+        'cycle_aquacare_fee_fcfa',
+        'cycle_total_cost_fcfa',
+        'cycle_net_profit_fcfa',
+        'cycle_roi_pct',
+        'annual_projection_production_kg',
+        'annual_projection_revenue_fcfa',
+        'annual_projection_net_profit_fcfa',
+        'annual_projection_aquacare_fee_fcfa',
         'production_per_cycle_kg',
         'cycle_duration_days',
         'feed_bags_per_cycle',
@@ -51,6 +67,18 @@ class TestAnnualSimulationServiceStructure:
             num_cycles=2,
         )
         assert self.REQUIRED_KEYS.issubset(result.keys())
+
+    def test_cycle_first_defaults_are_exposed(self):
+        """La simulation doit exposer les nouveaux champs cycle-first."""
+        result = AnnualSimulationService.simulate(
+            species='clarias',
+            annual_production_target_kg=1000,
+            num_cycles=2,
+        )
+
+        assert result['technical_pause_days'] == 14
+        assert result['other_costs_rate_pct'] == 5.0
+        assert result['cycles_per_year_derived'] == 2
 
     @pytest.mark.parametrize('num_cycles', [2, 3])
     def test_cycles_breakdown_length_matches_num_cycles(self, num_cycles):
@@ -136,7 +164,7 @@ class TestRevenueCalculation:
         assert result['annual_revenue_fcfa'] == pytest.approx(2_000_000)
 
     def test_other_costs_included_in_total(self):
-        """Les autres charges annuelles doivent apparaître dans le total."""
+        """L'override legacy des autres charges reste respecté."""
         result_no_costs = AnnualSimulationService.simulate(
             species='tilapia',
             annual_production_target_kg=500,
@@ -149,8 +177,11 @@ class TestRevenueCalculation:
             num_cycles=2,
             other_costs_fcfa_per_year=50_000,
         )
+        assert result_no_costs['annual_other_costs_fcfa'] == pytest.approx(70_000)
+        assert result_no_costs['cycle_other_costs_fcfa'] == pytest.approx(35_000)
         assert result_with_costs['annual_other_costs_fcfa'] == pytest.approx(50_000)
-        assert result_with_costs['annual_total_cost_fcfa'] > result_no_costs['annual_total_cost_fcfa']
+        assert result_with_costs['cycle_other_costs_fcfa'] == pytest.approx(25_000)
+        assert result_with_costs['annual_total_cost_fcfa'] < result_no_costs['annual_total_cost_fcfa']
 
 
 @pytest.mark.django_db

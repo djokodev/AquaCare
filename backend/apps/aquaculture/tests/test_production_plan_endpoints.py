@@ -119,8 +119,23 @@ class TestProductionPlanSimulationEndpoint:
 
         assert response.status_code == status.HTTP_200_OK
         assert response.data["annual_production_target_kg"] == 1000
+        assert response.data["cycles_per_year_derived"] == 1
+        assert response.data["technical_pause_days"] == 14
+        assert response.data["other_costs_rate_pct"] == 5.0
+        assert response.data["cycle_production_kg"] == 500.0
+        assert response.data["cycle_revenue_fcfa"] == 1_400_000.0
+        assert response.data["cycle_other_costs_fcfa"] == 70_000.0
+        assert response.data["cycle_aquacare_fee_fcfa"] == 10_000.0
+        assert response.data["annual_projection_production_kg"] == 500.0
+        assert response.data["annual_projection_revenue_fcfa"] == 1_400_000.0
+        assert response.data["annual_projection_aquacare_fee_fcfa"] == 10_000.0
+        assert response.data["annual_other_costs_fcfa"] == 140_000.0
+        assert "annual_revenue_fcfa" in response.data
+        assert "annual_net_profit_fcfa" in response.data
         assert response.data["aquacare_fee_fcfa"] == 20_000
         assert "cycles_breakdown" in response.data
+        assert "cycle_total_cost_fcfa" in response.data
+        assert "cycle_net_profit_fcfa" in response.data
 
     def test_simulate_missing_required_fields_fails(self):
         response = self.client.post(
