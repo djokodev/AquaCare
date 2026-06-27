@@ -5,7 +5,7 @@ export interface FarmSetupData {
   setup_unit_volume_m3?: number;
   setup_unit_surface_m2?: number;
   annual_production_target_kg: number;
-  num_cycles_per_year: 2 | 3;
+  num_cycles_per_year: 1 | 2 | 3;
   fingerlings_cost_per_unit_fcfa?: number;
   planned_selling_price_per_kg_fcfa?: number;
 }
@@ -13,7 +13,7 @@ export interface FarmSetupData {
 export interface AnnualSimulationInput {
   species: 'tilapia' | 'clarias';
   annual_production_target_kg: number;
-  num_cycles: 2 | 3;
+  num_cycles: 1 | 2 | 3;
   start_date?: string;
   selling_price_per_kg_fcfa?: number;
   fingerlings_cost_per_unit_fcfa?: number;
@@ -39,6 +39,9 @@ export interface AnnualSimulationResult {
   species: string;
   num_cycles: number;
   annual_production_target_kg: number;
+  cycles_per_year_derived: number;
+  technical_pause_days: number;
+  other_costs_rate_pct: number;
   annual_revenue_fcfa: number;
   annual_feed_cost_fcfa: number;
   annual_fingerlings_cost_fcfa: number;
@@ -47,6 +50,19 @@ export interface AnnualSimulationResult {
   aquacare_fee_fcfa: number;
   annual_net_profit_fcfa: number;
   annual_roi_pct: number;
+  cycle_production_kg: number;
+  cycle_revenue_fcfa: number;
+  cycle_feed_cost_fcfa: number;
+  cycle_fingerlings_cost_fcfa: number;
+  cycle_other_costs_fcfa: number;
+  cycle_aquacare_fee_fcfa: number;
+  cycle_total_cost_fcfa: number;
+  cycle_net_profit_fcfa: number;
+  cycle_roi_pct: number;
+  annual_projection_production_kg: number;
+  annual_projection_revenue_fcfa: number;
+  annual_projection_net_profit_fcfa: number;
+  annual_projection_aquacare_fee_fcfa: number;
   production_per_cycle_kg: number;
   cycle_duration_days: number;
   feed_bags_per_cycle: number;

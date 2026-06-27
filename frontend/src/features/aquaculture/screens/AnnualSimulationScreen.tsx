@@ -1,11 +1,10 @@
 /**
- * AnnualSimulationScreen — Écran de simulation annuelle de production
+ * AnnualSimulationScreen — Écran de simulation cycle-first
  *
- * Affiche la rentabilité prévisionnelle calculée par le backend à partir
- * des données du formulaire CreateFarmScreen. L'utilisateur choisit le nombre
- * de cycles (2 ou 3), puis lance son premier cycle de production.
+ * L'écran conserve son nom technique pour éviter une migration navigation plus
+ * large, mais le contenu utilisateur met désormais le cycle à lancer au centre.
  */
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -37,6 +36,8 @@ import {
   getHarvestCapacityPerCycle,
   getSimulationSpecies,
   getSpeciesHarvestWeightDefault,
+  getStockingDensityPreview,
+  getTotalCapacityPreview,
 } from '@/features/aquaculture/utils/farmSetupForm';
 import { parseApiError } from '@/utils/errorParser';
 import { formatAquacultureErrorWithAction } from '@/features/aquaculture/utils/aquacultureErrorPresenter';
@@ -50,11 +51,19 @@ interface Props {
 }
 
 function formatFCFA(amount: number): string {
-  return new Intl.NumberFormat('fr-FR').format(Math.round(amount)) + ' FCFA';
+  return `${new Intl.NumberFormat('fr-FR').format(Math.round(amount))} FCFA`;
 }
 
-function formatKg(kg: number): string {
-  return new Intl.NumberFormat('fr-FR').format(Math.round(kg)) + ' kg';
+function formatKg(amount: number): string {
+  return `${new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 1 }).format(amount)} kg`;
+}
+
+function formatKgValue(amount: number): string {
+  return new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 1 }).format(amount);
+}
+
+function formatPercent(amount: number): string {
+  return `${amount > 0 ? '+' : ''}${amount.toFixed(1)} %`;
 }
 
 export default function AnnualSimulationScreen({ navigation, route }: Props) {
@@ -65,41 +74,62 @@ export default function AnnualSimulationScreen({ navigation, route }: Props) {
   const { result: simulationResult, loading: simLoading } = useSelector(
     (s: RootState) => s.farmSetup.annualSimulation
   );
-  const selectedCycles = 2 as const;
   const [launching, setLaunching] = useState(false);
   const [currentResult, setCurrentResult] = useState<AnnualSimulationResult | null>(
     simulationResult
   );
 
-  // Charger la simulation initiale
   useEffect(() => {
-    recalculate(selectedCycles);
+    recalculate();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function recalculate(numCycles: 2 | 3) {
-    const res = await dispatch(runAnnualSimulation(buildAnnualSimulationInput(formData, numCycles)));
+  async function recalculate() {
+    const res = await dispatch(runAnnualSimulation(buildAnnualSimulationInput(formData)));
     if (runAnnualSimulation.fulfilled.match(res)) {
       setCurrentResult(res.payload);
     }
   }
+
+  const stockingDensityCheck = useMemo(() => getStockingDensityPreview(formData), [formData]);
+  const totalCapacity = useMemo(() => getTotalCapacityPreview(formData), [formData]);
+  const harvestCapacityPerCycle = useMemo(() => getHarvestCapacityPerCycle(formData), [formData]);
+  const harvestWeightDefault = getSpeciesHarvestWeightDefault(formData.species);
+  const speciesLabel = t(
+    formData.species === 'clarias' ? 'speciesClarias' : 'speciesTilapia'
+  );
+  const survivalRateLabel = formData.survivalRate || '95';
+  const fingerlingsCountLabel = formData.fingerlingsCount || '0';
+
+  const cycleProductionKg =
+    currentResult?.cycle_production_kg ?? currentResult?.production_per_cycle_kg ?? 0;
+  const cycleRevenue = currentResult?.cycle_revenue_fcfa ?? 0;
+  const cycleFeedCost = currentResult?.cycle_feed_cost_fcfa ?? 0;
+  const cycleFingerlingsCost = currentResult?.cycle_fingerlings_cost_fcfa ?? 0;
+  const cycleOtherCosts = currentResult?.cycle_other_costs_fcfa ?? 0;
+  const cycleAquacareFee = currentResult?.cycle_aquacare_fee_fcfa ?? currentResult?.aquacare_fee_fcfa ?? 0;
+  const cycleTotalCost = currentResult?.cycle_total_cost_fcfa ?? 0;
+  const cycleNetProfit = currentResult?.cycle_net_profit_fcfa ?? currentResult?.annual_net_profit_fcfa ?? 0;
+  const cycleRoi = currentResult?.cycle_roi_pct ?? currentResult?.annual_roi_pct ?? 0;
 
   async function handleLaunchFirstCycle() {
     if (!currentResult) return;
     setLaunching(true);
 
     try {
-      // 1. Sauvegarder la configuration farm
-      const farmProfile = await dispatch(completeFarmSetup(buildFarmSetupPayload(formData, selectedCycles))).unwrap();
+      const farmProfile = await dispatch(
+        completeFarmSetup(buildFarmSetupPayload(formData))
+      ).unwrap();
       dispatch(setFarmProfile(farmProfile));
 
-      // 2. Créer le premier cycle à partir des données de simulation
       const firstCycle = currentResult.cycles_breakdown[0];
       if (!firstCycle) {
         throw new Error('AUTH_UNKNOWN_ERROR');
       }
+
       const speciesForCycle = getSimulationSpecies(formData.species);
-      const harvestWeightDefault = getSpeciesHarvestWeightDefault(formData.species);
+      const fingerlingsCost = currentResult.cycle_fingerlings_cost_fcfa ?? firstCycle.fingerlings_cost_fcfa;
+      const otherCosts = currentResult.cycle_other_costs_fcfa ?? 0;
 
       await dispatch(
         createProductionCycle({
@@ -121,15 +151,12 @@ export default function AnnualSimulationScreen({ navigation, route }: Props) {
           planned_selling_price_per_kg_fcfa: formData.sellingPrice
             ? parseFloat(formData.sellingPrice)
             : undefined,
-          fingerlings_cost_fcfa: firstCycle.fingerlings_cost_fcfa,
-          other_operational_costs_fcfa: formData.otherCosts
-            ? parseFloat(formData.otherCosts) / selectedCycles
-            : 0,
+          fingerlings_cost_fcfa: fingerlingsCost,
+          other_operational_costs_fcfa: otherCosts,
           planned_feed_bags: firstCycle.feed_bags_total || currentResult.feed_bags_per_cycle || undefined,
         })
       ).unwrap();
 
-      // 3. Aller sur le dashboard
       navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
     } catch (err: unknown) {
       Alert.alert(t('error'), formatAquacultureErrorWithAction(parseApiError(err), t));
@@ -151,121 +178,151 @@ export default function AnnualSimulationScreen({ navigation, route }: Props) {
     return (
       <View style={styles.centered}>
         <Text style={styles.errorText}>{t('simulationErrorRetry')}</Text>
-        <TouchableOpacity onPress={() => recalculate(selectedCycles)}>
+        <TouchableOpacity onPress={recalculate}>
           <Text style={styles.retryLink}>{t('retry')}</Text>
         </TouchableOpacity>
       </View>
     );
   }
 
-  const productionPerCycle = currentResult.production_per_cycle_kg;
-  const cycleDuration = currentResult.cycle_duration_days;
-
-  // Capacité physique maximale par cycle (null = pas de données infra)
-  const capacityWarning = getHarvestCapacityPerCycle(formData);
+  const technicalPauseDays = currentResult.technical_pause_days;
+  const cyclesPerYear = currentResult.cycles_per_year_derived;
+  const annualProjectionProduction = currentResult.annual_projection_production_kg;
+  const annualProjectionRevenue = currentResult.annual_projection_revenue_fcfa;
+  const annualProjectionNetProfit = currentResult.annual_projection_net_profit_fcfa;
+  const annualProjectionAquacareFee = currentResult.annual_projection_aquacare_fee_fcfa;
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      {/* Header */}
       <View style={styles.header}>
         <Ionicons name="analytics-outline" size={32} color={AQUACARE_COLORS.GREEN_PRIMARY} />
         <Text style={styles.title}>{t('simulationTitle')}</Text>
         <Text style={styles.subtitle}>{t('simulationSubtitle')}</Text>
       </View>
 
-      {/* Carte résumé annuel */}
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>{t('simulationAnnualSummary')}</Text>
+        <Text style={styles.cardTitle}>{t('simulationCycleSummaryTitle')}</Text>
+        <MetricRow label={t('simulationCycleProduction')} value={formatKg(cycleProductionKg)} highlight />
+        <MetricRow label={t('simulationCycleRevenue')} value={formatFCFA(cycleRevenue)} />
         <MetricRow
-          label={t('simulationProductionTarget')}
-          value={formatKg(currentResult.annual_production_target_kg)}
-          highlight
-        />
-        <MetricRow
-          label={t('simulationRevenue')}
-          value={formatFCFA(currentResult.annual_revenue_fcfa)}
-        />
-        <MetricRow
-          label={t('simulationFeedCost')}
-          value={`- ${formatFCFA(currentResult.annual_feed_cost_fcfa)}`}
+          label={t('simulationCycleFeedCost')}
+          value={`- ${formatFCFA(cycleFeedCost)}`}
           negative
         />
-        {currentResult.annual_fingerlings_cost_fcfa > 0 && (
-          <MetricRow
-            label={t('simulationFingerlingsCost')}
-            value={`- ${formatFCFA(currentResult.annual_fingerlings_cost_fcfa)}`}
-            negative
-          />
-        )}
-        {currentResult.annual_other_costs_fcfa > 0 && (
-          <MetricRow
-            label={t('simulationOtherCosts')}
-            value={`- ${formatFCFA(currentResult.annual_other_costs_fcfa)}`}
-            negative
-          />
-        )}
+        <MetricRow
+          label={t('simulationCycleFingerlingsCost')}
+          value={`- ${formatFCFA(cycleFingerlingsCost)}`}
+          negative
+        />
+        <MetricRow
+          label={t('simulationCycleOtherCosts')}
+          value={`- ${formatFCFA(cycleOtherCosts)}`}
+          negative
+        />
+        <MetricRow
+          label={t('simulationCycleAquacareFee')}
+          value={`- ${formatFCFA(cycleAquacareFee)}`}
+          negative
+        />
         <View style={styles.separator} />
         <MetricRow
-          label={t('simulationNetProfit')}
-          value={formatFCFA(currentResult.annual_net_profit_fcfa)}
+          label={t('simulationCycleTotalCost')}
+          value={formatFCFA(cycleTotalCost)}
+        />
+        <MetricRow
+          label={t('simulationCycleNetProfit')}
+          value={formatFCFA(cycleNetProfit)}
           highlight
           large
         />
         <MetricRow
-          label={t('simulationROI')}
-          value={`${currentResult.annual_roi_pct > 0 ? '+' : ''}${currentResult.annual_roi_pct.toFixed(1)} %`}
+          label={t('simulationCycleROI')}
+          value={formatPercent(cycleRoi)}
           highlight
         />
       </View>
 
-      {/* Carte frais AquaCare */}
-      <View style={[styles.card, styles.aquacareCard]}>
-        <Text style={styles.cardTitle}>{t('simulationAquacareFeeTitle')}</Text>
-        <Text style={styles.aquacareFeeText}>
-          {t('simulationAquacareFeePhrase')}
-          <Text style={styles.aquacareFeeRate}>{t('simulationAquacareFeeRate')}</Text>
-          {t('simulationAquacareFeePhrase2')}
-          <Text style={styles.aquacareFeeAmount}>{formatFCFA(currentResult.aquacare_fee_fcfa)}</Text>
-          {' '}{t('simulationAquacareFeePhrase3')}
-        </Text>
-      </View>
-
-      {/* Rythme de production — 2 cycles fixes */}
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>{t('simulationRythmTitle')}</Text>
-        <View style={styles.cycleFixedBadge}>
-          <Text style={styles.cycleFixedText}>
-            {t('simulationCycles2Fixed', {
-              kg: Math.round(currentResult.annual_production_target_kg / 2),
-            })}
-          </Text>
-        </View>
-        {capacityWarning !== null &&
-          currentResult.annual_production_target_kg / 2 > capacityWarning && (
-          <Text style={styles.cycleWarningText}>
-            {t('simulationCapacityWarning', { max: Math.round(capacityWarning) })}
-          </Text>
-        )}
-      </View>
-
-      {/* Détail par cycle */}
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>{t('simulationCycleDetail')}</Text>
+        <Text style={styles.cardTitle}>{t('simulationCycleTechnicalTitle')}</Text>
+        <MetricRow label={t('simulationSpecies')} value={speciesLabel} />
+        <MetricRow label={t('simulationFingerlingsCount')} value={fingerlingsCountLabel} />
+        <MetricRow
+          label={t('simulationTotalCapacity')}
+          value={totalCapacity ?? '—'}
+        />
+        <MetricRow
+          label={t('simulationCurrentDensity')}
+          value={
+            stockingDensityCheck
+              ? `${stockingDensityCheck.density.toLocaleString('fr-FR', { maximumFractionDigits: 1 })}/${stockingDensityCheck.unit}`
+              : '—'
+          }
+        />
+        <MetricRow
+          label={t('simulationMaxDensity')}
+          value={
+            stockingDensityCheck
+              ? `${stockingDensityCheck.max}/${stockingDensityCheck.unit}`
+              : '—'
+          }
+        />
+        <MetricRow
+          label={t('simulationSurvivalRate')}
+          value={`${survivalRateLabel} %`}
+        />
+        <MetricRow
+          label={t('simulationTargetWeight')}
+          value={`${formData.harvestWeight || harvestWeightDefault} g`}
+        />
+        <MetricRow
+          label={t('simulationCycleDuration')}
+          value={t('simulationDays', { days: currentResult.cycle_duration_days })}
+        />
         <MetricRow
           label={t('simulationFeedBags')}
           value={t('myFeedSacks', { count: currentResult.feed_bags_per_cycle })}
         />
-        <MetricRow
-          label={t('simulationFeedCostPerCycle')}
-          value={formatFCFA(currentResult.annual_feed_cost_fcfa / selectedCycles)}
-        />
-        <MetricRow
-          label={t('simulationDuration')}
-          value={t('simulationDays', { days: cycleDuration })}
-        />
+        {harvestCapacityPerCycle !== null && (
+          <Text style={styles.hintText}>
+            {t('simulationHarvestCapacityHint', {
+              kg: formatKgValue(harvestCapacityPerCycle),
+            })}
+          </Text>
+        )}
       </View>
 
-      {/* Boutons */}
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>{t('simulationAnnualProjectionTitle')}</Text>
+        <MetricRow
+          label={t('simulationCyclesPerYear')}
+          value={cyclesPerYear.toString()}
+        />
+        <MetricRow
+          label={t('simulationTechnicalPause')}
+          value={t('simulationDays', { days: technicalPauseDays })}
+        />
+        <MetricRow
+          label={t('simulationAnnualProjectionProduction')}
+          value={formatKg(annualProjectionProduction)}
+        />
+        <MetricRow
+          label={t('simulationAnnualProjectionRevenue')}
+          value={formatFCFA(annualProjectionRevenue)}
+        />
+        <MetricRow
+          label={t('simulationAnnualProjectionNetProfit')}
+          value={formatFCFA(annualProjectionNetProfit)}
+          highlight
+        />
+        <MetricRow
+          label={t('simulationAnnualProjectionAquacareFee')}
+          value={formatFCFA(annualProjectionAquacareFee)}
+        />
+        <Text style={styles.hintText}>
+          {t('simulationOtherCostsRateNote', { rate: currentResult.other_costs_rate_pct })}
+        </Text>
+      </View>
+
       <TouchableOpacity
         style={styles.modifyBtn}
         onPress={() => navigation.goBack()}
@@ -291,8 +348,6 @@ export default function AnnualSimulationScreen({ navigation, route }: Props) {
     </ScrollView>
   );
 }
-
-// ── Sub-components ───────────────────────────────────────────────────────────
 
 function MetricRow({
   label,
@@ -330,6 +385,7 @@ const metricStyles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: 6,
+    gap: 12,
   },
   label: {
     fontSize: 13,
@@ -355,8 +411,6 @@ const metricStyles = StyleSheet.create({
     fontWeight: '700',
   },
 });
-
-// ── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   container: {
@@ -425,42 +479,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#e2e8f0',
     marginVertical: 8,
   },
-  aquacareCard: {
-    borderLeftWidth: 4,
-    borderLeftColor: AQUACARE_COLORS.GREEN_PRIMARY,
-  },
-  aquacareFeeText: {
-    fontSize: 14,
-    color: AQUACARE_COLORS.GRAY_DARK,
-    lineHeight: 22,
-  },
-  aquacareFeeRate: {
-    fontSize: 15,
-    color: AQUACARE_COLORS.GREEN_PRIMARY,
-    fontWeight: '700',
-  },
-  aquacareFeeAmount: {
-    fontSize: 15,
-    color: AQUACARE_COLORS.GREEN_PRIMARY,
-    fontWeight: '700',
-  },
-  cycleWarningText: {
+  hintText: {
+    marginTop: 8,
     fontSize: 12,
-    color: AQUACARE_COLORS.WARNING,
-    marginTop: 2,
-  },
-  cycleFixedBadge: {
-    backgroundColor: '#ecfdf5',
-    borderRadius: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderLeftWidth: 3,
-    borderLeftColor: AQUACARE_COLORS.GREEN_PRIMARY,
-  },
-  cycleFixedText: {
-    fontSize: 14,
-    color: AQUACARE_COLORS.GREEN_DARK,
-    fontWeight: '600',
+    lineHeight: 18,
+    color: AQUACARE_COLORS.GRAY_LIGHT,
   },
   modifyBtn: {
     paddingVertical: 14,
