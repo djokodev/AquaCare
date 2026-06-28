@@ -292,6 +292,22 @@ export default function AnnualSimulationScreen({ navigation, route }: Props) {
       </View>
 
       <View style={styles.card}>
+        <Text style={styles.cardTitle}>{t('simulationCalculationAssumptionsTitle')}</Text>
+        <AssumptionRow
+          icon="leaf-outline"
+          text={t('simulationFeedCostAssumption')}
+        />
+        <AssumptionRow
+          icon="pricetag-outline"
+          text={t('simulationOtherCostsRateNote', { rate: currentResult.other_costs_rate_pct })}
+        />
+        <AssumptionRow
+          icon="layers-outline"
+          text={t('simulationFeedBagsAssumption')}
+        />
+      </View>
+
+      <View style={styles.card}>
         <Text style={styles.cardTitle}>{t('simulationAnnualProjectionTitle')}</Text>
         <MetricRow
           label={t('simulationCyclesPerYear')}
@@ -318,9 +334,6 @@ export default function AnnualSimulationScreen({ navigation, route }: Props) {
           label={t('simulationAnnualProjectionAquacareFee')}
           value={formatFCFA(annualProjectionAquacareFee)}
         />
-        <Text style={styles.hintText}>
-          {t('simulationOtherCostsRateNote', { rate: currentResult.other_costs_rate_pct })}
-        </Text>
       </View>
 
       <TouchableOpacity
@@ -375,6 +388,15 @@ function MetricRow({
       >
         {value}
       </Text>
+    </View>
+  );
+}
+
+function AssumptionRow({ icon, text }: { icon: React.ComponentProps<typeof Ionicons>['name']; text: string }) {
+  return (
+    <View style={styles.assumptionRow}>
+      <Ionicons name={icon} size={16} color={AQUACARE_COLORS.GREEN_PRIMARY} />
+      <Text style={styles.assumptionText}>{text}</Text>
     </View>
   );
 }
@@ -484,6 +506,18 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 18,
     color: AQUACARE_COLORS.GRAY_LIGHT,
+  },
+  assumptionRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    paddingVertical: 6,
+  },
+  assumptionText: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 18,
+    color: AQUACARE_COLORS.GRAY_DARK,
   },
   modifyBtn: {
     paddingVertical: 14,
