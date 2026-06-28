@@ -26,6 +26,7 @@ import { AppDispatch, RootState } from '@/store/store';
 import {
   runCycleSimulation,
 } from '@/features/aquaculture/store/farmSetupSlice';
+import { addCreatedProductionCycle } from '@/features/aquaculture/store/aquacultureSlice';
 import { setFarmProfile } from '@/features/auth/store/authSlice';
 import type { CycleSimulationResult } from '@/features/aquaculture/types/farmSetup';
 import {
@@ -170,6 +171,7 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
         simulationResult: currentResult,
         defaultPondIdentifier: t('simulationDefaultPondIdentifier'),
       });
+      dispatch(addCreatedProductionCycle(launchResult.productionCycle));
       dispatch(setFarmProfile(launchResult.farmProfile));
       navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
     } catch (err: unknown) {

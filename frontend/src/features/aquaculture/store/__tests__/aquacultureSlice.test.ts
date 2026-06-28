@@ -1,6 +1,7 @@
 import { configureStore } from '@reduxjs/toolkit';
 import aquacultureReducer, {
   ABORTED_UNAUTHENTICATED,
+  addCreatedProductionCycle,
   clearError,
   setCurrentCycle,
   clearCurrentCycle,
@@ -132,6 +133,25 @@ describe('features/aquaculture/store/aquacultureSlice', () => {
 
     const cleared = aquacultureReducer(selected, clearCurrentCycle());
     expect(cleared.currentCycle).toBeUndefined();
+  });
+
+  it('addCreatedProductionCycle ajoute le cycle en tete des listes locales', () => {
+    const newCycle: ProductionCycle = {
+      ...activeCycle,
+      id: 'cycle-new',
+      cycle_name: 'Cycle B',
+    };
+
+    const initialState: AquacultureState = {
+      ...(aquacultureReducer(undefined, { type: '@@INIT' }) as AquacultureState),
+      cycles: [activeCycle],
+      activeCycles: [activeCycle],
+    };
+
+    const nextState = aquacultureReducer(initialState, addCreatedProductionCycle(newCycle));
+
+    expect(nextState.cycles[0].id).toBe('cycle-new');
+    expect(nextState.activeCycles[0].id).toBe('cycle-new');
   });
 
   it('resetAquacultureState restaure un etat propre', () => {

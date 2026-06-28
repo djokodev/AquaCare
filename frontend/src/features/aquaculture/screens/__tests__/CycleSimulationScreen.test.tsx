@@ -5,7 +5,9 @@ import { useDispatch, useSelector } from 'react-redux';
 
 import CycleSimulationScreen from '../CycleSimulationScreen';
 import { FirstCycleLaunchError, launchFirstCycle } from '@/features/aquaculture/services/firstCycleLaunchService';
+import { addCreatedProductionCycle } from '@/features/aquaculture/store/aquacultureSlice';
 import { runCycleSimulation } from '@/features/aquaculture/store/farmSetupSlice';
+import type { ProductionCycle } from '@/types/aquaculture';
 
 jest.mock('react-redux', () => ({
   useDispatch: jest.fn(),
@@ -27,6 +29,7 @@ jest.mock('@/features/aquaculture/services/firstCycleLaunchService', () => ({
 describe('features/aquaculture/screens/CycleSimulationScreen', () => {
   const mockDispatch = jest.fn();
   const mockLaunchFirstCycle = launchFirstCycle as unknown as jest.Mock;
+  const createdProductionCycle = { id: 'cycle-1' } as unknown as ProductionCycle;
   const navigation = {
     goBack: jest.fn(),
     reset: jest.fn(),
@@ -112,7 +115,7 @@ describe('features/aquaculture/screens/CycleSimulationScreen', () => {
     );
     mockLaunchFirstCycle.mockResolvedValue({
       farmProfile: { id: 'farm-profile-1' },
-      productionCycle: { id: 'cycle-1' },
+      productionCycle: createdProductionCycle,
       productionUnitIdByLocalId: {},
     });
   });
@@ -174,6 +177,9 @@ describe('features/aquaculture/screens/CycleSimulationScreen', () => {
             ],
           }),
         })
+      );
+      expect(mockDispatch).toHaveBeenCalledWith(
+        addCreatedProductionCycle(createdProductionCycle)
       );
       expect(navigation.reset).toHaveBeenCalledWith({
         index: 0,
