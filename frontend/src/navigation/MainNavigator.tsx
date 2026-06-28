@@ -15,6 +15,8 @@ import SettingsScreen from '@/features/profile/screens/SettingsScreen';
 // Aquaculture Screens
 import CycleSimulationScreen from '@/features/aquaculture/screens/CycleSimulationScreen';
 import CreateFarmScreen from '@/features/aquaculture/screens/CreateFarmScreen';
+import ProductionUnitOverviewScreen from '@/features/aquaculture/screens/ProductionUnitOverviewScreen';
+import ProductionUnitsHubScreen from '@/features/aquaculture/screens/ProductionUnitsHubScreen';
 import type { FarmSetupFormState } from '@/features/aquaculture/utils/farmSetupForm';
 import PostHarvestConsolidationScreen from '@/features/aquaculture/screens/PostHarvestConsolidationScreen';
 import CycleHistoryScreen from '@/features/aquaculture/screens/CycleHistoryScreen';
@@ -91,6 +93,12 @@ export type RootStackParamList = {
   PostHarvestConsolidation: { harvestedCycleId: string };
   // Feed phase ordering
   CycleFeedPhases: { cycleId: string };
+  ProductionUnitsHub: { cycleId: string };
+  ProductionUnitOverview: {
+    cycleId: string;
+    allocationId: string;
+    productionUnitId: string;
+  };
 };
 
 export type ProfileStackParamList = {
@@ -288,6 +296,28 @@ export default function MainNavigator() {
       <RootStack.Screen
         name="CycleFeedPhases"
         component={CycleFeedPhasesScreen}
+      />
+      <RootStack.Screen
+        name="ProductionUnitsHub"
+        component={ProductionUnitsHubScreen}
+        options={{
+          headerShown: true,
+          headerStyle: { backgroundColor: AQUACARE_COLORS.GREEN_PRIMARY },
+          headerTintColor: AQUACARE_COLORS.WHITE,
+          headerTitleStyle: { fontWeight: 'bold' },
+          title: t('productionUnitsHubTitle'),
+        }}
+      />
+      <RootStack.Screen
+        name="ProductionUnitOverview"
+        component={ProductionUnitOverviewScreen}
+        options={{
+          headerShown: true,
+          headerStyle: { backgroundColor: AQUACARE_COLORS.GREEN_PRIMARY },
+          headerTintColor: AQUACARE_COLORS.WHITE,
+          headerTitleStyle: { fontWeight: 'bold' },
+          title: t('productionUnitOverviewNavTitle'),
+        }}
       />
       {/* Chat/Support Screens */}
       <RootStack.Screen

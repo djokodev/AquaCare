@@ -82,7 +82,7 @@ describe('features/aquaculture/screens/CycleSimulationScreen', () => {
     ],
   };
 
-  const buildRoute = (formDataOverrides: Record<string, unknown>) =>
+  const buildRoute = (formDataOverrides: Record<string, unknown> = {}) =>
     ({
       params: {
         formData: {
@@ -120,7 +120,7 @@ describe('features/aquaculture/screens/CycleSimulationScreen', () => {
     });
   });
 
-  it('delegue la persistance du premier cycle au helper dedie et reset la navigation', async () => {
+  it('redirige vers le hub des unites en production quand le cycle cree contient des unites', async () => {
     let functionCallCount = 0;
     mockDispatch.mockImplementation((action: unknown) => {
       if (typeof action === 'function') {
@@ -140,6 +140,27 @@ describe('features/aquaculture/screens/CycleSimulationScreen', () => {
       }
 
       return action;
+    });
+
+    mockLaunchFirstCycle.mockResolvedValue({
+      farmProfile: { id: 'farm-profile-1' },
+      productionCycle: createdProductionCycle,
+      productionUnitIdByLocalId: {
+        'unit-pond': 'production-unit-1',
+      },
+      productionUnits: [
+        {
+          id: 'production-unit-1',
+          farm_profile: 'farm-profile-1',
+          name: 'Étang principal',
+          unit_type: 'pond',
+          surface_m2: 120,
+          volume_m3: null,
+          status: 'active',
+          created_at: '2026-01-01T00:00:00Z',
+          updated_at: '2026-01-01T00:00:00Z',
+        },
+      ],
     });
 
     const route = buildRoute({
@@ -181,12 +202,59 @@ describe('features/aquaculture/screens/CycleSimulationScreen', () => {
       expect(mockDispatch).toHaveBeenCalledWith(
         addCreatedProductionCycle(createdProductionCycle)
       );
+      expect(mockDispatch).toHaveBeenCalledWith(
+        expect.objectContaining({
+          payload: { id: 'farm-profile-1' },
+        })
+      );
+      expect(navigation.reset).toHaveBeenCalledWith({
+        index: 1,
+        routes: [
+          { name: 'MainTabs' },
+          {
+            name: 'ProductionUnitsHub',
+            params: { cycleId: createdProductionCycle.id },
+          },
+        ],
+      });
+    });
+  }, 10000);
+
+  it('conserve la navigation legacy quand aucune unite de production n est persistee', async () => {
+    mockDispatch.mockImplementation((action: unknown) => {
+      if (typeof action === 'function') {
+        return {
+          type: runCycleSimulation.fulfilled.type,
+          payload: currentResult,
+        };
+      }
+
+      return action;
+    });
+
+    mockLaunchFirstCycle.mockResolvedValue({
+      farmProfile: { id: 'farm-profile-1' },
+      productionCycle: createdProductionCycle,
+      productionUnitIdByLocalId: {},
+      productionUnits: [],
+    });
+
+    const route = buildRoute();
+    const { getByText } = render(<CycleSimulationScreen navigation={navigation} route={route} />);
+
+    await waitFor(() => {
+      expect(getByText('simulationLaunchBtn')).toBeTruthy();
+    });
+
+    fireEvent.press(getByText('simulationLaunchBtn'));
+
+    await waitFor(() => {
       expect(navigation.reset).toHaveBeenCalledWith({
         index: 0,
         routes: [{ name: 'MainTabs' }],
       });
     });
-  }, 10000);
+  });
 
   it('affiche un message lisible si la persistance du cycle echoue', async () => {
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined as never);

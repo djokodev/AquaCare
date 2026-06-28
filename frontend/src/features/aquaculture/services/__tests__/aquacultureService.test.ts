@@ -248,6 +248,24 @@ describe('features/aquaculture/services/aquacultureService', () => {
     });
   });
 
+  it('charge les allocations de cycle avec le filtre cycle_id', async () => {
+    const allocation = {
+      id: 'allocation-1',
+      cycle: 'cycle-1',
+      production_unit: 'unit-1',
+      initial_fish_count: 900,
+      current_fish_count: 900,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    };
+    mockApi.get.mockResolvedValueOnce({ data: { results: [allocation] } } as never);
+
+    const result = await aquacultureService.getCycleUnitAllocations('cycle-1');
+
+    expect(result).toEqual([allocation]);
+    expect(mockApi.get).toHaveBeenCalledWith('/aquaculture/cycle-unit-allocations/?cycle_id=cycle-1');
+  });
+
   it('retourne les rapports depuis une reponse paginee avec filtres', async () => {
     const report = { id: 'report-1', report_type: 'daily' };
     mockApi.get.mockResolvedValueOnce({ data: { results: [report] } } as never);

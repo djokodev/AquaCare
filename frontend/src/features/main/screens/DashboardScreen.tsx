@@ -113,6 +113,7 @@ export default function DashboardScreen({ navigation }: any) {
   const currentCycleInList = currentCycle
     ? activeCycles.find((cycle) => cycle.id === currentCycle.id)
     : undefined;
+  const primaryActiveCycle = currentCycleInList || activeCycles[0] || null;
   const dashboardBusinessMetrics = useMemo(
     () => calculateDashboardBusinessMetrics(activeCycles, currentCycleInList),
     [activeCycles, currentCycleInList]
@@ -197,6 +198,14 @@ export default function DashboardScreen({ navigation }: any) {
 
   const handleSettingsPress = () => {
     navigation.navigate('ProfileStack', { screen: 'Settings' });
+  };
+
+  const handleProductionUnitsPress = () => {
+    if (!primaryActiveCycle) {
+      return;
+    }
+
+    navigation.navigate('ProductionUnitsHub', { cycleId: primaryActiveCycle.id });
   };
 
   const handleConfirmOrderReceipt = (orderId: string, orderNumber: string) => {
@@ -471,6 +480,27 @@ export default function DashboardScreen({ navigation }: any) {
               </TouchableOpacity>
             </View>
           ))}
+
+          {primaryActiveCycle && (
+            <TouchableOpacity
+              className="mt-2 bg-white rounded-xl p-4 border border-aquacare-primary flex-row items-center justify-between"
+              onPress={handleProductionUnitsPress}
+            >
+              <View className="flex-1 mr-3">
+                <Text className="text-base font-bold text-gray-dark">
+                  {t('productionUnitsDashboardCta')}
+                </Text>
+                <Text className="text-xs text-gray-light mt-1">
+                  {t('productionUnitsHubSubtitle')}
+                </Text>
+              </View>
+              <Ionicons
+                name="chevron-forward"
+                size={20}
+                color={AQUACARE_COLORS.GREEN_PRIMARY}
+              />
+            </TouchableOpacity>
+          )}
         </View>
       )}
 
