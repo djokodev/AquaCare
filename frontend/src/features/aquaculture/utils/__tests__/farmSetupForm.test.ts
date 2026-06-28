@@ -2,9 +2,11 @@ import {
   buildAnnualSimulationInput,
   getCompatibilityCyclesPerYear,
   getCycleProductionEstimate,
+  getFingerlingsCapacityStatusPreview,
   getFingerlingsSuggestionPreview,
   getStockingDensityPreview,
   hasFarmSetupErrors,
+  sanitizePositiveIntegerInput,
   validateFarmSetupForm,
   type FarmSetupFormState,
 } from '@/features/aquaculture/utils/farmSetupForm';
@@ -53,6 +55,17 @@ describe('farmSetupForm', () => {
     expect(hasFarmSetupErrors(errors)).toBe(true);
   });
 
+  it('refuse les valeurs nulles pour les entiers obligatoires', () => {
+    const errors = validateFarmSetupForm({
+      ...baseForm,
+      unitCount: '0',
+      fingerlingsCount: '0',
+    });
+
+    expect(errors.unitCount).toBe('createFarmPositiveIntegerError');
+    expect(errors.fingerlingsCount).toBe('createFarmPositiveIntegerError');
+  });
+
   it('exige le volume pour les infrastructures hors etang', () => {
     const errors = validateFarmSetupForm({
       ...baseForm,
@@ -88,6 +101,17 @@ describe('farmSetupForm', () => {
     expect(preview?.density).toBeCloseTo(300, 1);
     expect(preview?.isOk).toBe(true);
 
+    const status = getFingerlingsCapacityStatusPreview({
+      ...baseForm,
+      unitCount: '5',
+      unitVolume: '3',
+      infraType: 'bac_hors_sol',
+      fingerlingsCount: '4500',
+    });
+
+    expect(status?.level).toBe('ok');
+    expect(status?.key).toBe('createFarmCapacityReached');
+
     const suggestion = getFingerlingsSuggestionPreview({
       ...baseForm,
       unitCount: '5',
@@ -97,6 +121,19 @@ describe('farmSetupForm', () => {
     });
 
     expect(suggestion?.value).toBe(4500);
+  });
+
+  it('signale une sous-utilisation tres forte comme warning', () => {
+    const status = getFingerlingsCapacityStatusPreview({
+      ...baseForm,
+      unitCount: '5',
+      unitVolume: '3',
+      infraType: 'bac_hors_sol',
+      fingerlingsCount: '4',
+    });
+
+    expect(status?.level).toBe('warn');
+    expect(status?.key).toBe('createFarmCapacityHighlyUnderused');
   });
 
   it('bloque explicitement le cas 9000 alevins pour 15 m3', () => {
@@ -111,11 +148,21 @@ describe('farmSetupForm', () => {
     const preview = getStockingDensityPreview(form);
     const errors = validateFarmSetupForm(form);
     const suggestion = getFingerlingsSuggestionPreview(form);
+    const status = getFingerlingsCapacityStatusPreview(form);
 
     expect(preview?.density).toBeCloseTo(600, 1);
     expect(preview?.isOk).toBe(false);
     expect(errors.fingerlingsCount).toBe('createFarmStockingDensityError');
     expect(suggestion?.value).toBe(4500);
+    expect(status?.level).toBe('error');
+    expect(status?.key).toBe('createFarmCapacityOver');
+  });
+
+  it('filtre les caracteres non numeriques dans la saisie entiere', () => {
+    expect(sanitizePositiveIntegerInput('abc')).toBe('');
+    expect(sanitizePositiveIntegerInput('45abc00')).toBe('4500');
+    expect(sanitizePositiveIntegerInput('000')).toBe('0');
+    expect(sanitizePositiveIntegerInput('')).toBe('');
   });
 
   it('construit un payload de simulation compatible cycle-first', () => {

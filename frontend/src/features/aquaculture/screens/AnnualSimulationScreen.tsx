@@ -196,8 +196,7 @@ export default function AnnualSimulationScreen({ navigation, route }: Props) {
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <View style={styles.header}>
         <Ionicons name="analytics-outline" size={32} color={AQUACARE_COLORS.GREEN_PRIMARY} />
-        <Text style={styles.title}>{t('simulationTitle')}</Text>
-        <Text style={styles.subtitle}>{t('simulationSubtitle')}</Text>
+        <Text style={styles.title}>{t('simulationSubtitle')}</Text>
       </View>
 
       <View style={styles.card}>
@@ -318,10 +317,11 @@ export default function AnnualSimulationScreen({ navigation, route }: Props) {
           label={t('simulationAnnualProjectionAquacareFee')}
           value={formatFCFA(annualProjectionAquacareFee)}
         />
-        <Text style={styles.hintText}>
-          {t('simulationOtherCostsRateNote', { rate: currentResult.other_costs_rate_pct })}
-        </Text>
       </View>
+
+      <Text style={styles.hintText}>
+        {t('simulationOtherCostsInfo')}
+      </Text>
 
       <TouchableOpacity
         style={styles.modifyBtn}
