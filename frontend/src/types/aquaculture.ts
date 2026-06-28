@@ -371,12 +371,18 @@ export interface ProductionUnitDashboard {
 
 export interface CycleDashboardSummary {
   total_allocations: number;
+  total_initial_fish_count?: number;
   total_estimated_current_fish_count: number;
   total_mortality_count: number;
+  mortality_rate_pct?: string | number;
   total_feed_consumed_kg: string | number;
   estimated_current_biomass_kg: string | number;
+  units_with_today_log_count?: number;
   units_with_sanitary_issue_count: number;
+  units_with_active_sanitary_issue_count?: number;
   units_missing_today_log_count: number;
+  last_daily_log_date?: string | null;
+  last_sanitary_event_date?: string | null;
   has_allocations: boolean;
   data_source: 'unit_allocations' | 'legacy_cycle';
 }

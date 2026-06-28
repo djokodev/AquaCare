@@ -1182,12 +1182,18 @@ class CycleDashboardSummarySerializer(serializers.Serializer):
     """Indicateurs agrégés du dashboard global d'un cycle."""
 
     total_allocations = serializers.IntegerField()
+    total_initial_fish_count = serializers.IntegerField()
     total_estimated_current_fish_count = serializers.IntegerField()
     total_mortality_count = serializers.IntegerField()
+    mortality_rate_pct = serializers.DecimalField(max_digits=6, decimal_places=2)
     total_feed_consumed_kg = serializers.DecimalField(max_digits=12, decimal_places=2)
     estimated_current_biomass_kg = serializers.DecimalField(max_digits=12, decimal_places=2)
+    units_with_today_log_count = serializers.IntegerField()
     units_with_sanitary_issue_count = serializers.IntegerField()
+    units_with_active_sanitary_issue_count = serializers.IntegerField()
     units_missing_today_log_count = serializers.IntegerField()
+    last_daily_log_date = serializers.DateField(required=False, allow_null=True)
+    last_sanitary_event_date = serializers.DateField(required=False, allow_null=True)
     has_allocations = serializers.BooleanField()
     data_source = serializers.CharField()
 
