@@ -14,9 +14,10 @@ import {
 import { useTranslation } from 'react-i18next';
 
 import { AQUACARE_COLORS } from '@/constants/colors';
+import DashboardMetricCard from '@/features/main/components/MetricCard';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
 import { RootStackParamList } from '@/navigation/MainNavigator';
-import type { ProductionUnitDashboard, CycleLog, SanitaryLog } from '@/types/aquaculture';
+import type { CycleLog, ProductionUnitDashboard, SanitaryLog } from '@/types/aquaculture';
 import { formatDate } from '@/utils';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'ProductionUnitOverview'>;
@@ -27,7 +28,6 @@ interface Props {
   route: RouteType;
 }
 
-type MetricTone = 'default' | 'success' | 'warning' | 'danger';
 type ActivityKind = 'daily' | 'sanitary';
 
 interface ActivityItem {
@@ -38,6 +38,15 @@ interface ActivityItem {
   icon: keyof typeof Ionicons.glyphMap;
   iconColor: string;
   dateSort: string;
+}
+
+interface UnitActionItem {
+  id: string;
+  label: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  iconColor: string;
+  backgroundColor: string;
+  onPress: () => void;
 }
 
 const getProductionUnitTypeLabelKey = (unitType?: string | null): string => {
@@ -71,40 +80,7 @@ const coerceNumber = (value: string | number | null | undefined): number | null 
   return Number.isFinite(coerced) ? coerced : null;
 };
 
-function MetricCard({
-  label,
-  value,
-  subtitle,
-  tone = 'default',
-}: {
-  label: string;
-  value: string;
-  subtitle?: string;
-  tone?: MetricTone;
-}) {
-  const toneStyle =
-    tone === 'success'
-      ? styles.metricCardSuccess
-      : tone === 'warning'
-        ? styles.metricCardWarning
-        : tone === 'danger'
-          ? styles.metricCardDanger
-          : styles.metricCardDefault;
-
-  return (
-    <View style={[styles.metricCard, toneStyle]}>
-      <Text style={styles.metricLabel}>{label}</Text>
-      <Text style={styles.metricValue}>{value}</Text>
-      {subtitle ? <Text style={styles.metricSubtitle}>{subtitle}</Text> : null}
-    </View>
-  );
-}
-
-function ActivityCard({
-  item,
-}: {
-  item: ActivityItem;
-}) {
+function ActivityCard({ item }: { item: ActivityItem }) {
   return (
     <View style={styles.activityCard}>
       <View style={[styles.activityIcon, { backgroundColor: `${item.iconColor}15` }]}>
@@ -132,7 +108,7 @@ function StatusPill({
       <Ionicons
         name={icon}
         size={14}
-        color={active ? AQUACARE_COLORS.GREEN_PRIMARY : AQUACARE_COLORS.GRAY_LIGHT}
+        color={active ? AQUACARE_COLORS.WHITE : 'rgba(255,255,255,0.82)'}
       />
       <Text style={[styles.statusPillText, active ? styles.statusPillTextActive : styles.statusPillTextNeutral]}>
         {label}
@@ -141,10 +117,23 @@ function StatusPill({
   );
 }
 
+function ActionRow({ item }: { item: UnitActionItem }) {
+  return (
+    <TouchableOpacity style={styles.actionRow} onPress={item.onPress} activeOpacity={0.75}>
+      <View style={[styles.actionIcon, { backgroundColor: item.backgroundColor }]}>
+        <Ionicons name={item.icon} size={20} color={item.iconColor} />
+      </View>
+      <Text style={styles.actionLabel}>{item.label}</Text>
+      <Ionicons name="chevron-forward" size={20} color={AQUACARE_COLORS.GRAY_LIGHT} />
+    </TouchableOpacity>
+  );
+}
+
 export default function ProductionUnitOverviewScreen({ navigation, route }: Props) {
   const { t, i18n } = useTranslation();
   const { cycleId, allocationId, productionUnitId } = route.params;
   const locale = i18n.language?.startsWith('fr') ? 'fr-FR' : 'en-US';
+
   const [dashboard, setDashboard] = useState<ProductionUnitDashboard | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -264,6 +253,91 @@ export default function ProductionUnitOverviewScreen({ navigation, route }: Prop
     });
   }, [allocationId, cycleId, navigation, productionUnitId, unitName]);
 
+  const unitActions = useMemo<UnitActionItem[]>(
+    () => [
+      {
+        id: 'daily-log',
+        label: t('productionUnitDailyLogAction'),
+        icon: 'document-text-outline',
+        iconColor: AQUACARE_COLORS.GREEN_PRIMARY,
+        backgroundColor: `${AQUACARE_COLORS.GREEN_PRIMARY}15`,
+        onPress: navigateToDailyLog,
+      },
+      {
+        id: 'sanitary-log',
+        label: t('productionUnitSanitaryLogAction'),
+        icon: 'medical-outline',
+        iconColor: AQUACARE_COLORS.ERROR,
+        backgroundColor: `${AQUACARE_COLORS.ERROR}15`,
+        onPress: navigateToSanitaryLog,
+      },
+      {
+        id: 'history',
+        label: t('productionUnitLogHistoryAction'),
+        icon: 'time-outline',
+        iconColor: AQUACARE_COLORS.GREEN_DARK,
+        backgroundColor: `${AQUACARE_COLORS.GREEN_DARK}15`,
+        onPress: navigateToHistory,
+      },
+    ],
+    [navigateToDailyLog, navigateToHistory, navigateToSanitaryLog, t]
+  );
+
+  const hasTodayLog = Boolean(summary?.has_today_daily_log);
+  const hasHealthIssue = Boolean(summary?.has_unresolved_sanitary_issue);
+  const latestAverageWeight = coerceNumber(summary?.latest_average_weight_g);
+  const totalFeedConsumed = coerceNumber(summary?.total_feed_consumed_kg);
+  const estimatedBiomass = coerceNumber(summary?.estimated_current_biomass_kg);
+  const mortalityRate = coerceNumber(summary?.mortality_rate_pct);
+  const daysSinceLastLog = summary?.days_since_last_log;
+
+  const metricCards = useMemo(
+    () => [
+      {
+        label: t('productionUnitEstimatedFish'),
+        value: summary ? formatCount(summary.estimated_current_fish_count, locale) : '-',
+        subtitle:
+          daysSinceLastLog !== null && daysSinceLastLog !== undefined
+            ? t('daysCount', { count: daysSinceLastLog })
+            : undefined,
+        icon: 'fish-outline' as const,
+        color: AQUACARE_COLORS.GREEN_PRIMARY,
+        animationType: 'pulse' as const,
+      },
+      {
+        label: t('productionUnitCumulativeMortality'),
+        value: summary ? formatCount(summary.total_mortality_count, locale) : '-',
+        subtitle: mortalityRate !== null ? formatPercentage(mortalityRate, locale) : undefined,
+        icon: 'remove-circle-outline' as const,
+        color: AQUACARE_COLORS.WARNING,
+        animationType: 'wave' as const,
+      },
+      {
+        label: t('productionUnitConsumedFeed'),
+        value: totalFeedConsumed !== null ? formatKg(totalFeedConsumed, locale) : '-',
+        subtitle:
+          latestAverageWeight !== null
+            ? `${t('averageWeight')}: ${new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(latestAverageWeight)} g`
+            : undefined,
+        icon: 'restaurant-outline' as const,
+        color: AQUACARE_COLORS.GREEN_LIGHT,
+        animationType: 'bounce' as const,
+      },
+      {
+        label: t('productionUnitEstimatedBiomass'),
+        value: estimatedBiomass !== null ? formatKg(estimatedBiomass, locale) : '-',
+        subtitle:
+          summary?.last_daily_log_date !== null && summary?.last_daily_log_date !== undefined
+            ? `${t('productionUnitLastTracking')}: ${formatDate(summary.last_daily_log_date)}`
+            : undefined,
+        icon: 'water-outline' as const,
+        color: AQUACARE_COLORS.GREEN_DARK,
+        animationType: 'rotate' as const,
+      },
+    ],
+    [daysSinceLastLog, estimatedBiomass, latestAverageWeight, locale, mortalityRate, summary, t, totalFeedConsumed]
+  );
+
   if (loading && !dashboard) {
     return (
       <View style={styles.centered}>
@@ -310,76 +384,72 @@ export default function ProductionUnitOverviewScreen({ navigation, route }: Prop
       }
     >
       <View style={styles.hero}>
-        <View style={styles.heroIcon}>
-          <Ionicons name="analytics-outline" size={24} color={AQUACARE_COLORS.GREEN_PRIMARY} />
+        <View style={styles.heroTopRow}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}
+            accessibilityRole="button"
+            accessibilityLabel={t('back')}
+          >
+            <Ionicons name="arrow-back" size={22} color={AQUACARE_COLORS.WHITE} />
+          </TouchableOpacity>
+
+          <View style={styles.heroIcon}>
+            <Ionicons name="layers-outline" size={22} color={AQUACARE_COLORS.WHITE} />
+          </View>
         </View>
+
         <Text style={styles.eyebrow}>{t('productionUnitDashboardTitle')}</Text>
         <Text style={styles.title}>{unitName}</Text>
-        <Text style={styles.subtitle}>
-          {dimension ? `${unitTypeLabel} · ${dimension}` : unitTypeLabel}
-        </Text>
+        <Text style={styles.subtitle}>{dimension ? `${unitTypeLabel} · ${dimension}` : unitTypeLabel}</Text>
         <Text style={styles.cycleLine}>{cycleName}</Text>
         <Text style={styles.description}>{t('productionUnitDashboardDescription')}</Text>
+
+        <View style={styles.statusRow}>
+          <StatusPill
+            label={hasTodayLog ? t('productionUnitTodayLogDone') : t('productionUnitTodayLogMissing')}
+            active={hasTodayLog}
+            icon={hasTodayLog ? 'checkmark-circle-outline' : 'time-outline'}
+          />
+          <StatusPill
+            label={hasHealthIssue ? t('productionUnitActiveHealthIssue') : t('productionUnitNoHealthIssue')}
+            active={!hasHealthIssue}
+            icon={hasHealthIssue ? 'warning-outline' : 'shield-checkmark-outline'}
+          />
+        </View>
       </View>
 
-      <View style={styles.statusRow}>
-        <StatusPill
-          label={summary.has_today_daily_log ? t('productionUnitTodayLogDone') : t('productionUnitTodayLogMissing')}
-          active={summary.has_today_daily_log}
-          icon={summary.has_today_daily_log ? 'checkmark-circle-outline' : 'time-outline'}
-        />
-        <StatusPill
-          label={
-            summary.has_unresolved_sanitary_issue
-              ? t('productionUnitActiveHealthIssue')
-              : t('productionUnitNoHealthIssue')
-          }
-          active={!summary.has_unresolved_sanitary_issue}
-          icon={summary.has_unresolved_sanitary_issue ? 'warning-outline' : 'shield-checkmark-outline'}
-        />
+      <View style={styles.metricsSection}>
+        <View style={styles.grid}>
+          {metricCards.map((card, index) => (
+            <DashboardMetricCard
+              key={card.label}
+              icon={card.icon}
+              color={card.color}
+              value={card.value}
+              label={card.label}
+              index={index}
+              animationType={card.animationType}
+              subtitle={card.subtitle}
+            />
+          ))}
+        </View>
       </View>
 
-      <View style={styles.grid}>
-        <MetricCard
-          label={t('productionUnitEstimatedFish')}
-          value={formatCount(summary.estimated_current_fish_count, locale)}
-          tone="success"
-        />
-        <MetricCard
-          label={t('productionUnitCumulativeMortality')}
-          value={formatCount(summary.total_mortality_count, locale)}
-          subtitle={formatPercentage(coerceNumber(summary.mortality_rate_pct) ?? 0, locale)}
-          tone="warning"
-        />
-        <MetricCard
-          label={t('productionUnitConsumedFeed')}
-          value={formatKg(coerceNumber(summary.total_feed_consumed_kg) ?? 0, locale)}
-          tone="default"
-        />
-        <MetricCard
-          label={t('productionUnitEstimatedBiomass')}
-          value={formatKg(coerceNumber(summary.estimated_current_biomass_kg) ?? 0, locale)}
-          tone="default"
-        />
-        <MetricCard
-          label={t('productionUnitLastTracking')}
-          value={summary.last_daily_log_date ? formatDate(summary.last_daily_log_date) : t('productionUnitNoRecentActivity')}
-          subtitle={
-            summary.days_since_last_log !== null && summary.days_since_last_log !== undefined
-              ? t('daysCount', { count: summary.days_since_last_log })
-              : undefined
-          }
-          tone="default"
-        />
-        <MetricCard
-          label={t('productionUnitHealthStatus')}
-          value={
-            summary.has_unresolved_sanitary_issue
-              ? t('productionUnitActiveHealthIssue')
-              : t('productionUnitNoHealthIssue')
-          }
-          tone={summary.has_unresolved_sanitary_issue ? 'danger' : 'success'}
-        />
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>{t('productionUnitTrackingSectionTitle')}</Text>
+        <Text style={styles.sectionDescription}>{t('productionUnitTrackingSectionDescription')}</Text>
+
+        <View style={styles.actionsCard}>
+          {unitActions.map((item, index) => (
+            <View
+              key={item.id}
+              style={index < unitActions.length - 1 ? styles.actionRowWrapper : undefined}
+            >
+              <ActionRow item={item} />
+            </View>
+          ))}
+        </View>
       </View>
 
       <View style={styles.section}>
@@ -393,26 +463,6 @@ export default function ProductionUnitOverviewScreen({ navigation, route }: Prop
         ) : (
           <Text style={styles.emptyActivityText}>{t('productionUnitNoRecentActivity')}</Text>
         )}
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>{t('productionUnitTrackingSectionTitle')}</Text>
-        <Text style={styles.sectionDescription}>{t('productionUnitTrackingSectionDescription')}</Text>
-
-        <TouchableOpacity style={styles.actionButton} onPress={navigateToDailyLog}>
-          <Ionicons name="document-text-outline" size={18} color={AQUACARE_COLORS.WHITE} />
-          <Text style={styles.actionButtonText}>{t('productionUnitDailyLogAction')}</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.actionButtonSecondary} onPress={navigateToSanitaryLog}>
-          <Ionicons name="medical-outline" size={18} color={AQUACARE_COLORS.GREEN_PRIMARY} />
-          <Text style={styles.actionButtonSecondaryText}>{t('productionUnitSanitaryLogAction')}</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.actionButtonGhost} onPress={navigateToHistory}>
-          <Ionicons name="time-outline" size={18} color={AQUACARE_COLORS.GREEN_PRIMARY} />
-          <Text style={styles.actionButtonGhostText}>{t('productionUnitLogHistoryAction')}</Text>
-        </TouchableOpacity>
       </View>
 
       {errorMessage ? <Text style={styles.inlineError}>{errorMessage}</Text> : null}
@@ -450,28 +500,55 @@ const styles = StyleSheet.create({
     color: AQUACARE_COLORS.ERROR,
     textAlign: 'center',
   },
+  retryButton: {
+    marginTop: 18,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 14,
+    backgroundColor: AQUACARE_COLORS.GREEN_PRIMARY,
+  },
+  retryButtonText: {
+    color: AQUACARE_COLORS.WHITE,
+    fontWeight: '700',
+  },
   hero: {
     marginBottom: 18,
+    padding: 20,
+    borderRadius: 24,
+    backgroundColor: AQUACARE_COLORS.GREEN_PRIMARY,
   },
-  heroIcon: {
-    width: 52,
-    height: 52,
-    borderRadius: 16,
+  heroTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: AQUACARE_COLORS.GREEN_LIGHT,
-    marginBottom: 14,
+    backgroundColor: 'rgba(255,255,255,0.16)',
+  },
+  heroIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.16)',
   },
   title: {
     fontSize: 28,
     fontWeight: '800',
-    color: AQUACARE_COLORS.GREEN_DARK,
+    color: AQUACARE_COLORS.WHITE,
     lineHeight: 34,
   },
   eyebrow: {
     fontSize: 12,
     fontWeight: '800',
-    color: AQUACARE_COLORS.GREEN_PRIMARY,
+    color: 'rgba(255,255,255,0.9)',
     textTransform: 'uppercase',
     letterSpacing: 0.8,
     marginBottom: 8,
@@ -479,24 +556,24 @@ const styles = StyleSheet.create({
   subtitle: {
     marginTop: 6,
     fontSize: 15,
-    color: AQUACARE_COLORS.GRAY_DARK,
+    color: 'rgba(255,255,255,0.9)',
   },
   cycleLine: {
     marginTop: 8,
     fontSize: 14,
     fontWeight: '700',
-    color: AQUACARE_COLORS.GREEN_PRIMARY,
+    color: AQUACARE_COLORS.WHITE,
   },
   description: {
     marginTop: 10,
     fontSize: 14,
     lineHeight: 20,
-    color: AQUACARE_COLORS.GRAY_DARK,
+    color: 'rgba(255,255,255,0.9)',
   },
   statusRow: {
     flexDirection: 'row',
     gap: 10,
-    marginBottom: 16,
+    marginTop: 16,
     flexWrap: 'wrap',
   },
   statusPill: {
@@ -506,93 +583,80 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     paddingHorizontal: 12,
     paddingVertical: 10,
+    flexShrink: 1,
   },
   statusPillActive: {
-    backgroundColor: '#F1F8F1',
+    backgroundColor: 'rgba(255,255,255,0.16)',
     borderWidth: 1,
-    borderColor: '#D4E7D5',
+    borderColor: 'rgba(255,255,255,0.2)',
   },
   statusPillNeutral: {
-    backgroundColor: '#F5F6F5',
+    backgroundColor: 'rgba(255,255,255,0.1)',
     borderWidth: 1,
-    borderColor: '#E2E8E3',
+    borderColor: 'rgba(255,255,255,0.14)',
   },
   statusPillText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
   },
   statusPillTextActive: {
-    color: AQUACARE_COLORS.GREEN_DARK,
+    color: AQUACARE_COLORS.WHITE,
   },
   statusPillTextNeutral: {
-    color: AQUACARE_COLORS.GRAY_DARK,
+    color: 'rgba(255,255,255,0.82)',
+  },
+  metricsSection: {
+    marginBottom: 4,
   },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    gap: 12,
-  },
-  metricCard: {
-    width: '48%',
-    minHeight: 112,
-    borderRadius: 18,
-    padding: 14,
-    borderWidth: 1,
-  },
-  metricCardDefault: {
-    backgroundColor: AQUACARE_COLORS.WHITE,
-    borderColor: '#E5E7EB',
-  },
-  metricCardSuccess: {
-    backgroundColor: '#F3FBF4',
-    borderColor: '#D8EEDB',
-  },
-  metricCardWarning: {
-    backgroundColor: '#FFF9F0',
-    borderColor: '#F2D7A7',
-  },
-  metricCardDanger: {
-    backgroundColor: '#FFF5F5',
-    borderColor: '#F3C2C2',
-  },
-  metricLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: AQUACARE_COLORS.GRAY_LIGHT,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  metricValue: {
-    marginTop: 10,
-    fontSize: 24,
-    fontWeight: '800',
-    color: AQUACARE_COLORS.GREEN_DARK,
-    lineHeight: 30,
-  },
-  metricSubtitle: {
-    marginTop: 6,
-    fontSize: 13,
-    color: AQUACARE_COLORS.GRAY_DARK,
   },
   section: {
-    marginTop: 18,
-    backgroundColor: AQUACARE_COLORS.WHITE,
-    borderRadius: 18,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
+    marginTop: 16,
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: '800',
     color: AQUACARE_COLORS.GREEN_DARK,
+    marginBottom: 6,
   },
   sectionDescription: {
-    marginTop: 6,
-    marginBottom: 14,
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: 13,
+    lineHeight: 18,
+    color: AQUACARE_COLORS.GRAY_DARK,
+    marginBottom: 12,
+  },
+  actionsCard: {
+    backgroundColor: AQUACARE_COLORS.WHITE,
+    borderRadius: 20,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  actionRowWrapper: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  actionIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionLabel: {
+    flex: 1,
+    marginLeft: 12,
+    fontSize: 16,
+    fontWeight: '600',
     color: AQUACARE_COLORS.GRAY_DARK,
   },
   activityList: {
@@ -601,22 +665,22 @@ const styles = StyleSheet.create({
   activityCard: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 12,
-    borderRadius: 16,
+    backgroundColor: AQUACARE_COLORS.WHITE,
+    borderRadius: 18,
     padding: 14,
-    backgroundColor: '#FAFBFA',
     borderWidth: 1,
     borderColor: '#E5E7EB',
   },
   activityIcon: {
     width: 36,
     height: 36,
-    borderRadius: 12,
+    borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center',
   },
   activityContent: {
     flex: 1,
+    marginLeft: 12,
   },
   activityTitle: {
     fontSize: 14,
@@ -634,71 +698,9 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     color: AQUACARE_COLORS.GRAY_DARK,
   },
-  actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    backgroundColor: AQUACARE_COLORS.GREEN_PRIMARY,
-    borderRadius: 14,
-    paddingVertical: 13,
-    paddingHorizontal: 16,
-    marginBottom: 10,
-  },
-  actionButtonText: {
-    color: AQUACARE_COLORS.WHITE,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  actionButtonSecondary: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    backgroundColor: '#F2F8F2',
-    borderRadius: 14,
-    paddingVertical: 13,
-    paddingHorizontal: 16,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: '#CFE8D0',
-  },
-  actionButtonSecondaryText: {
-    color: AQUACARE_COLORS.GREEN_PRIMARY,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  actionButtonGhost: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    backgroundColor: AQUACARE_COLORS.WHITE,
-    borderRadius: 14,
-    paddingVertical: 13,
-    paddingHorizontal: 16,
-    borderWidth: 1,
-    borderColor: '#D9E8DA',
-  },
-  actionButtonGhostText: {
-    color: AQUACARE_COLORS.GREEN_PRIMARY,
-    fontSize: 14,
-    fontWeight: '700',
-  },
   inlineError: {
     marginTop: 12,
     fontSize: 13,
     color: AQUACARE_COLORS.ERROR,
-  },
-  retryButton: {
-    marginTop: 18,
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    borderRadius: 14,
-    backgroundColor: AQUACARE_COLORS.GREEN_PRIMARY,
-  },
-  retryButtonText: {
-    color: AQUACARE_COLORS.WHITE,
-    fontWeight: '700',
   },
 });

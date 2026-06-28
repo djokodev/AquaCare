@@ -92,8 +92,7 @@ describe('features/aquaculture/screens/ProductionUnitOverviewScreen', () => {
       expect(getByText('productionUnitCumulativeMortality')).toBeTruthy();
       expect(getByText('productionUnitConsumedFeed')).toBeTruthy();
       expect(getByText('productionUnitEstimatedBiomass')).toBeTruthy();
-      expect(getByText('productionUnitLastTracking')).toBeTruthy();
-      expect(getByText('productionUnitHealthStatus')).toBeTruthy();
+      expect(getByText('productionUnitTrackingSectionTitle')).toBeTruthy();
       expect(getByText('productionUnitTodayLogDone')).toBeTruthy();
       expect(getAllByText('productionUnitActiveHealthIssue').length).toBeGreaterThan(0);
       expect(getByText('productionUnitRecentActivity')).toBeTruthy();
