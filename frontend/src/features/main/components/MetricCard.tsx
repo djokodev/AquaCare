@@ -17,6 +17,7 @@ export interface MetricCardProps {
   label: string;
   index: number;
   animationType?: 'bounce' | 'wave' | 'rotate' | 'pulse';
+  subtitle?: string;
 }
 
 const MetricCard: React.FC<MetricCardProps> = ({
@@ -26,6 +27,7 @@ const MetricCard: React.FC<MetricCardProps> = ({
   label,
   index,
   animationType = 'pulse',
+  subtitle,
 }) => {
   const opacity = useSharedValue(0);
   const translateY = useSharedValue(20);
@@ -120,6 +122,7 @@ const MetricCard: React.FC<MetricCardProps> = ({
         {value}
       </Text>
       <Text className="text-sm text-gray-light text-center mt-1">{label}</Text>
+      {subtitle ? <Text className="text-xs text-gray-light text-center mt-1">{subtitle}</Text> : null}
     </Animated.View>
   );
 };

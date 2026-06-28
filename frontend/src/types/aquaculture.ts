@@ -224,6 +224,7 @@ export interface SanitaryLog {
   production_unit_display_dimension?: string | null;
   event_date: string;
   event_type: SanitaryEventType;
+  event_type_display?: string;
 
   // Description detaillee
   symptoms: string;
@@ -344,6 +345,28 @@ export interface CycleUnitAllocationCreatePayload {
   initial_biomass_kg?: number;
   current_biomass_kg?: number;
   expected_survival_rate_pct?: number;
+}
+
+export interface ProductionUnitDashboardSummary {
+  estimated_current_fish_count: number;
+  total_mortality_count: number;
+  mortality_rate_pct: string | number;
+  total_feed_consumed_kg: string | number;
+  latest_average_weight_g: string | number | null;
+  estimated_current_biomass_kg: string | number | null;
+  last_daily_log_date: string | null;
+  days_since_last_log: number | null;
+  has_today_daily_log: boolean;
+  active_sanitary_issues_count: number;
+  last_sanitary_event_date: string | null;
+  has_unresolved_sanitary_issue: boolean;
+}
+
+export interface ProductionUnitDashboard {
+  allocation: CycleUnitAllocation;
+  summary: ProductionUnitDashboardSummary;
+  recent_daily_logs: CycleLog[];
+  recent_sanitary_logs: SanitaryLog[];
 }
 
 export interface CycleUnitAllocationDraft {

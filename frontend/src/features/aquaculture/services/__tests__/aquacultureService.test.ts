@@ -266,6 +266,38 @@ describe('features/aquaculture/services/aquacultureService', () => {
     expect(mockApi.get).toHaveBeenCalledWith('/aquaculture/cycle-unit-allocations/?cycle_id=cycle-1');
   });
 
+  it('charge le dashboard d une allocation via le bon endpoint', async () => {
+    const dashboard = {
+      allocation: {
+        id: 'allocation-1',
+        cycle: 'cycle-1',
+        production_unit: 'unit-1',
+      },
+      summary: {
+        estimated_current_fish_count: 892,
+        total_mortality_count: 8,
+        mortality_rate_pct: '0.89',
+        total_feed_consumed_kg: '6.50',
+        latest_average_weight_g: '20.00',
+        estimated_current_biomass_kg: '17.84',
+        last_daily_log_date: '2026-06-28',
+        days_since_last_log: 0,
+        has_today_daily_log: true,
+        active_sanitary_issues_count: 1,
+        last_sanitary_event_date: '2026-06-27',
+        has_unresolved_sanitary_issue: true,
+      },
+      recent_daily_logs: [],
+      recent_sanitary_logs: [],
+    };
+    mockApi.get.mockResolvedValueOnce({ data: dashboard } as never);
+
+    const result = await aquacultureService.getProductionUnitDashboard('allocation-1');
+
+    expect(result).toEqual(dashboard);
+    expect(mockApi.get).toHaveBeenCalledWith('/aquaculture/cycle-unit-allocations/allocation-1/dashboard/');
+  });
+
   it('retourne les rapports depuis une reponse paginee avec filtres', async () => {
     const report = { id: 'report-1', report_type: 'daily' };
     mockApi.get.mockResolvedValueOnce({ data: { results: [report] } } as never);

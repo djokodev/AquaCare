@@ -1,11 +1,19 @@
 """
 ViewSets DRF pour les unités de production et leurs allocations de cycle.
 """
+from drf_spectacular.utils import extend_schema
 from rest_framework import permissions, viewsets
+from rest_framework.decorators import action
+from rest_framework.response import Response
 
 from ..domain.production_units import normalize_production_unit_type
 from ..models import CycleUnitAllocation, ProductionUnit
-from ..serializers import CycleUnitAllocationSerializer, ProductionUnitSerializer
+from ..serializers import (
+    CycleUnitAllocationSerializer,
+    ProductionUnitDashboardSerializer,
+    ProductionUnitSerializer,
+)
+from ..services import ProductionUnitDashboardService
 
 
 class ProductionUnitViewSet(viewsets.ModelViewSet):
@@ -52,3 +60,14 @@ class CycleUnitAllocationViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(cycle_id=cycle_id)
 
         return queryset
+
+    @extend_schema(
+        summary="Dashboard opérationnel d'une allocation de cycle",
+        responses=ProductionUnitDashboardSerializer,
+    )
+    @action(detail=True, methods=['get'], url_path='dashboard')
+    def dashboard(self, request, pk=None):
+        allocation = self.get_object()
+        payload = ProductionUnitDashboardService.build_dashboard_payload(allocation)
+        serializer = ProductionUnitDashboardSerializer(payload, context={'request': request})
+        return Response(serializer.data)

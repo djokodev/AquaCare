@@ -25,6 +25,7 @@ import {
   ActiveSanitaryIssueGroup,
   ProductionUnit,
   CycleUnitAllocation,
+  ProductionUnitDashboard,
   ProductionUnitCreatePayload,
   CycleUnitAllocationCreatePayload,
 } from '@/types/aquaculture';
@@ -307,6 +308,20 @@ class AquacultureService {
       return extractResults(response.data);
     } catch (error) {
       logger.error(`Erreur lors de la recuperation des allocations du cycle ${cycleId}:`, error);
+      throw error;
+    }
+  }
+
+  async getProductionUnitDashboard(allocationId: string): Promise<ProductionUnitDashboard> {
+    try {
+      const response = await apiService.get<ProductionUnitDashboard>(
+        `${this.baseUrl}/cycle-unit-allocations/${allocationId}/dashboard/`
+      );
+      return response.data;
+    } catch (error) {
+      if (!isUnauthorizedError(error)) {
+        logger.error(`Erreur lors de la recuperation du dashboard de l'allocation ${allocationId}:`, error);
+      }
       throw error;
     }
   }
