@@ -44,7 +44,7 @@ export default function PostHarvestConsolidationScreen({ route, navigation }: Pr
   const { harvestedCycleId } = route.params;
 
   const farmProfile = useSelector((s: RootState) => s.auth.farmProfile);
-  const annualSimulation = useSelector((s: RootState) => s.farmSetup.annualSimulation.result);
+  const cycleSimulation = useSelector((s: RootState) => s.farmSetup.cycleSimulation.result);
   const cycles = useSelector((s: RootState) => s.aquaculture.cycles);
 
   const harvestedCycle = useMemo(
@@ -53,15 +53,15 @@ export default function PostHarvestConsolidationScreen({ route, navigation }: Pr
   );
 
   // ── Données de base ──────────────────────────────────────────────────────────
-  const species = (harvestedCycle?.species ?? annualSimulation?.species ?? 'tilapia') as string;
+  const species = (harvestedCycle?.species ?? cycleSimulation?.species ?? 'tilapia') as string;
   const actualProductionKg = harvestedCycle?.final_biomass
     ? parseFloat(String(harvestedCycle.final_biomass))
     : harvestedCycle?.current_biomass
     ? parseFloat(String(harvestedCycle.current_biomass))
     : 0;
-  const plannedPerCycleKg = annualSimulation?.production_per_cycle_kg ?? 0;
+  const plannedPerCycleKg = cycleSimulation?.production_per_cycle_kg ?? 0;
   const annualTargetKg =
-    annualSimulation?.annual_production_target_kg ??
+    cycleSimulation?.annual_production_target_kg ??
     farmProfile?.annual_production_target_kg ??
     0;
   const remainingKg = Math.max(0, annualTargetKg - actualProductionKg);

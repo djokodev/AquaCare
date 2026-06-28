@@ -1,5 +1,5 @@
 import {
-  buildAnnualSimulationInput,
+  buildCycleSimulationInput,
   getCompatibilityCyclesPerYear,
   getCycleProductionEstimate,
   getFingerlingsCapacityStatusPreview,
@@ -166,7 +166,7 @@ describe('farmSetupForm', () => {
   });
 
   it('construit un payload de simulation compatible cycle-first', () => {
-    const input = buildAnnualSimulationInput({
+    const input = buildCycleSimulationInput({
       ...baseForm,
       species: 'clarias',
       infraType: 'bac_hors_sol',

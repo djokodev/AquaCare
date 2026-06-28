@@ -3,7 +3,7 @@ import { apiService } from '@/services/api';
 
 import { farmSetupService } from '../farmSetupService';
 import type {
-  AnnualSimulationInput,
+  CycleSimulationInput,
   FarmSetupData,
 } from '@/features/aquaculture/types/farmSetup';
 
@@ -57,8 +57,8 @@ describe('farmSetupService', () => {
     expect(result.farm_setup_completed).toBe(true);
   });
 
-  it('lance la simulation annuelle sur le endpoint canonique aquaculture', async () => {
-    const params: AnnualSimulationInput = {
+  it('lance la simulation cycle-first sur le endpoint canonique aquaculture', async () => {
+    const params: CycleSimulationInput = {
       species: 'tilapia',
       annual_production_target_kg: 500,
       num_cycles: 1,
@@ -99,7 +99,7 @@ describe('farmSetupService', () => {
     };
     mockApiService.post.mockResolvedValueOnce({ data: simulation } as any);
 
-    const result = await farmSetupService.simulateAnnualProduction(params);
+    const result = await farmSetupService.simulateCycle(params);
 
     expect(mockApiService.post).toHaveBeenCalledWith(
       API_ENDPOINTS.AQUACULTURE.PRODUCTION_PLAN_SIMULATE,

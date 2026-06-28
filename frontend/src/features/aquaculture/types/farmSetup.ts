@@ -10,7 +10,7 @@ export interface FarmSetupData {
   planned_selling_price_per_kg_fcfa?: number;
 }
 
-export interface AnnualSimulationInput {
+export interface CycleSimulationInput {
   species: 'tilapia' | 'clarias';
   annual_production_target_kg: number;
   num_cycles: 1 | 2 | 3;
@@ -35,7 +35,7 @@ export interface CycleBreakdown {
   initial_fish_count: number;
 }
 
-export interface AnnualSimulationResult {
+export interface CycleSimulationResult {
   species: string;
   num_cycles: number;
   annual_production_target_kg: number;

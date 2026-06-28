@@ -9,7 +9,7 @@ Cette doc permet de reprendre rapidement le module mobile sans relire tous les e
 Le module frontend `aquaculture` couvre l'experience mobile de production piscicole:
 
 1. Entree session cycle actif.
-2. Flux "Creer mon elevage", simulation annuelle, lancement premier cycle.
+2. Flux "Creer mon elevage", simulation cycle-first, lancement premier cycle.
 3. Saisie journaliere production, sanitaire, suivi croissance.
 4. Consultation statistiques, historique, plans d'alimentation.
 5. Rapports de production, validation humaine, partage email/WhatsApp.
@@ -79,7 +79,7 @@ But:
 Ecrans:
 
 1. `CreateFarmScreen`
-2. `AnnualSimulationScreen`
+2. `CycleSimulationScreen`
 
 Flux:
 
