@@ -4,6 +4,7 @@ import {
   getProductionUnitCapacity,
   getProductionUnitDensityUnit,
   getProductionUnitDisplayDimension,
+  getProductionUnitsDensityPreview,
   getProductionUnitsCompatibilitySummary,
   getTotalProductionUnitsCapacity,
   normalizeProductionUnitType,
@@ -114,6 +115,90 @@ describe('productionUnits', () => {
         surface_m2: 120,
       })
     ).toBe('120.00 m²');
+  });
+
+  it('calcule une densite unique pour des bacs homogènes', () => {
+    const preview = getProductionUnitsDensityPreview({
+      productionUnits: [
+        createProductionUnitDraft({
+          name: 'Bac 1',
+          unit_type: 'tank',
+          volume_m3: '3',
+        }),
+        createProductionUnitDraft({
+          name: 'Bac 2',
+          unit_type: 'tank',
+          volume_m3: '3',
+        }),
+        createProductionUnitDraft({
+          name: 'Bac 3',
+          unit_type: 'tank',
+          volume_m3: '3',
+        }),
+        createProductionUnitDraft({
+          name: 'Bac 4',
+          unit_type: 'tank',
+          volume_m3: '3',
+        }),
+      ],
+      fingerlingsCount: '3600',
+    });
+
+    expect(preview).toEqual({
+      kind: 'single',
+      currentDensity: 300,
+      maxDensity: 300,
+      unit: 'm3',
+      isAtMax: true,
+    });
+  });
+
+  it('calcule une densite unique pour des etangs homogènes', () => {
+    const preview = getProductionUnitsDensityPreview({
+      productionUnits: [
+        createProductionUnitDraft({
+          name: 'Étang 1',
+          unit_type: 'pond',
+          surface_m2: '100',
+        }),
+        createProductionUnitDraft({
+          name: 'Étang 2',
+          unit_type: 'pond',
+          surface_m2: '20',
+        }),
+      ],
+      fingerlingsCount: '960',
+    });
+
+    expect(preview).toEqual({
+      kind: 'single',
+      currentDensity: 8,
+      maxDensity: 10,
+      unit: 'm2',
+      isAtMax: false,
+    });
+  });
+
+  it('signale un setup mixte bac et etang comme non repartissable globalement', () => {
+    const preview = getProductionUnitsDensityPreview({
+      productionUnits: [
+        createProductionUnitDraft({
+          name: 'Bac 1',
+          unit_type: 'tank',
+          volume_m3: '3',
+        }),
+        createProductionUnitDraft({
+          name: 'Étang principal',
+          unit_type: 'pond',
+          surface_m2: '120',
+        }),
+      ],
+      fingerlingsCount: '2100',
+    });
+
+    expect(preview).toEqual({
+      kind: 'mixed',
+    });
   });
 
   it('signale une unité sans nom', () => {

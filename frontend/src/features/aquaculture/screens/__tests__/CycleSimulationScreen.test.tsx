@@ -70,6 +70,29 @@ describe('features/aquaculture/screens/CycleSimulationScreen', () => {
     ],
   };
 
+  const buildRoute = (formDataOverrides: Record<string, unknown>) =>
+    ({
+      params: {
+        formData: {
+          species: 'tilapia',
+          infraType: '',
+          unitCount: '',
+          unitVolume: '',
+          unitSurface: '',
+          annualTarget: '',
+          startDate: '2026-05-14',
+          fingerlingsPrice: '50',
+          sellingPrice: '2800',
+          otherCosts: '0',
+          fingerlingsCount: '1200',
+          harvestWeight: '350',
+          survivalRate: '95',
+          productionUnits: [],
+          ...formDataOverrides,
+        },
+      },
+    } as any);
+
   beforeEach(() => {
     jest.clearAllMocks();
     (useDispatch as unknown as jest.Mock).mockReturnValue(mockDispatch);
@@ -104,34 +127,19 @@ describe('features/aquaculture/screens/CycleSimulationScreen', () => {
       return action;
     });
 
-    const route = {
-      params: {
-        formData: {
-          species: 'tilapia',
-          infraType: '',
-          unitCount: '',
-          unitVolume: '',
-          unitSurface: '120',
-          annualTarget: '',
-          startDate: '2026-05-14',
-          fingerlingsPrice: '50',
-          sellingPrice: '2800',
-          otherCosts: '0',
-          fingerlingsCount: '1200',
-          harvestWeight: '350',
-          survivalRate: '95',
-          productionUnits: [
-            {
-              local_id: 'unit-pond',
-              name: 'Étang principal',
-              unit_type: 'pond',
-              surface_m2: '120',
-              volume_m3: '',
-            },
-          ],
+    const route = buildRoute({
+      unitSurface: '120',
+      fingerlingsCount: '1200',
+      productionUnits: [
+        {
+          local_id: 'unit-pond',
+          name: 'Étang principal',
+          unit_type: 'pond',
+          surface_m2: '120',
+          volume_m3: '',
         },
-      },
-    } as any;
+      ],
+    });
 
     const { getByText } = render(<CycleSimulationScreen navigation={navigation} route={route} />);
 
@@ -152,6 +160,104 @@ describe('features/aquaculture/screens/CycleSimulationScreen', () => {
         index: 0,
         routes: [{ name: 'MainTabs' }],
       });
+    });
+  });
+
+  it('affiche une densite unique quand les bacs sont a capacite max', async () => {
+    mockDispatch.mockImplementation((action: unknown) => {
+      if (typeof action === 'function') {
+        return {
+          type: runCycleSimulation.fulfilled.type,
+          payload: currentResult,
+        };
+      }
+
+      return action;
+    });
+
+    const route = buildRoute({
+      fingerlingsCount: '3600',
+      productionUnits: [
+        {
+          local_id: 'unit-1',
+          name: 'Bac 1',
+          unit_type: 'tank',
+          volume_m3: '3',
+        },
+        {
+          local_id: 'unit-2',
+          name: 'Bac 2',
+          unit_type: 'tank',
+          volume_m3: '3',
+        },
+        {
+          local_id: 'unit-3',
+          name: 'Bac 3',
+          unit_type: 'tank',
+          volume_m3: '3',
+        },
+        {
+          local_id: 'unit-4',
+          name: 'Bac 4',
+          unit_type: 'tank',
+          volume_m3: '3',
+        },
+      ],
+    });
+
+    const { getByText, queryByText } = render(
+      <CycleSimulationScreen navigation={navigation} route={route} />
+    );
+
+    await waitFor(() => {
+      expect(getByText('simulationDensity')).toBeTruthy();
+      expect(getByText('300 productionUnitDensityFingerlingsPerCubicMeter')).toBeTruthy();
+      expect(queryByText('simulationCurrentDensity')).toBeNull();
+      expect(queryByText('simulationMaxDensity')).toBeNull();
+    });
+  });
+
+  it('affiche une densite a repartitionner pour un setup mixte', async () => {
+    mockDispatch.mockImplementation((action: unknown) => {
+      if (typeof action === 'function') {
+        return {
+          type: runCycleSimulation.fulfilled.type,
+          payload: currentResult,
+        };
+      }
+
+      return action;
+    });
+
+    const route = buildRoute({
+      fingerlingsCount: '2100',
+      productionUnits: [
+        {
+          local_id: 'unit-1',
+          name: 'Bac 1',
+          unit_type: 'tank',
+          volume_m3: '3',
+        },
+        {
+          local_id: 'unit-2',
+          name: 'Étang principal',
+          unit_type: 'pond',
+          surface_m2: '120',
+          volume_m3: '',
+        },
+      ],
+    });
+
+    const { getByText, queryByText } = render(
+      <CycleSimulationScreen navigation={navigation} route={route} />
+    );
+
+    await waitFor(() => {
+      expect(getByText('simulationDensity')).toBeTruthy();
+      expect(getByText('simulationDensityToBeAllocated')).toBeTruthy();
+      expect(getByText('simulationDensityByUnitNote')).toBeTruthy();
+      expect(queryByText('simulationCurrentDensity')).toBeNull();
+      expect(queryByText('simulationMaxDensity')).toBeNull();
     });
   });
 });

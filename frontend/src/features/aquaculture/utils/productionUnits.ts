@@ -34,6 +34,24 @@ export type ProductionUnitDraftErrors = Partial<
   Record<'name' | 'unit_type' | 'volume_m3' | 'surface_m2', string>
 >;
 
+export type ProductionUnitDensityUnit = 'm3' | 'm2';
+
+export interface ProductionUnitsDensityPreviewSingle {
+  kind: 'single';
+  currentDensity: number;
+  maxDensity: number;
+  unit: ProductionUnitDensityUnit;
+  isAtMax: boolean;
+}
+
+export interface ProductionUnitsDensityPreviewMixed {
+  kind: 'mixed';
+}
+
+export type ProductionUnitsDensityPreview =
+  | ProductionUnitsDensityPreviewSingle
+  | ProductionUnitsDensityPreviewMixed;
+
 const toTrimmedString = (value?: string | null): string => (value ?? '').trim();
 
 const toPositiveNumber = (value?: string | number | null): number | null => {
@@ -47,6 +65,11 @@ const toPositiveNumber = (value?: string | number | null): number | null => {
   }
 
   return parsed;
+};
+
+const DENSITY_MAX_BY_UNIT: Record<ProductionUnitDensityUnit, number> = {
+  m3: STOCKING_DENSITY_TANK_PER_M3,
+  m2: STOCKING_DENSITY_POND_PER_M2,
 };
 
 export const normalizeProductionUnitType = (
@@ -167,6 +190,67 @@ export const getProductionUnitDisplayDimension = (
   }
 
   return null;
+};
+
+export const getProductionUnitsDensityPreview = (params: {
+  productionUnits: ProductionUnitDraft[];
+  fingerlingsCount?: number | string | null;
+}): ProductionUnitsDensityPreview | null => {
+  const { productionUnits, fingerlingsCount } = params;
+  if (!productionUnits.length) {
+    return null;
+  }
+
+  const normalizedTypes = productionUnits
+    .map((unit) => normalizeProductionUnitType(unit.unit_type))
+    .filter((unitType): unitType is ProductionUnitType => unitType !== null);
+
+  if (normalizedTypes.length !== productionUnits.length) {
+    return null;
+  }
+
+  const hasPond = normalizedTypes.includes('pond');
+  const hasVolumeUnit = normalizedTypes.some((unitType) => unitType === 'tank' || unitType === 'cage');
+
+  if (hasPond && hasVolumeUnit) {
+    return {
+      kind: 'mixed',
+    };
+  }
+
+  const densityUnit: ProductionUnitDensityUnit = hasPond ? 'm2' : 'm3';
+  const densityFootprint = productionUnits.reduce((total, unit) => {
+    const dimension = densityUnit === 'm2' ? toPositiveNumber(unit.surface_m2) : toPositiveNumber(unit.volume_m3);
+    if (dimension === null || dimension <= 0) {
+      return Number.NaN;
+    }
+
+    return total + dimension;
+  }, 0);
+
+  if (!Number.isFinite(densityFootprint) || densityFootprint <= 0) {
+    return null;
+  }
+
+  const count = toPositiveNumber(fingerlingsCount);
+  if (count === null || count <= 0) {
+    return null;
+  }
+
+  const currentDensity = count / densityFootprint;
+  const maxDensity = DENSITY_MAX_BY_UNIT[densityUnit];
+  const totalCapacity = getTotalProductionUnitsCapacity(productionUnits);
+  const isAtMax =
+    (totalCapacity !== null && count === totalCapacity) ||
+    Math.abs(currentDensity - maxDensity) < 1e-9;
+
+  return {
+    kind: 'single',
+    currentDensity,
+    maxDensity,
+    unit: densityUnit,
+    isAtMax,
+  };
 };
 
 export const getProductionUnitDisplayName = (
