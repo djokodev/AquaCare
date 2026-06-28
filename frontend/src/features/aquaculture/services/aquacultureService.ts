@@ -299,6 +299,18 @@ class AquacultureService {
     }
   }
 
+  async getCycleUnitAllocations(cycleId: string): Promise<CycleUnitAllocation[]> {
+    try {
+      const response = await apiService.get<ListResponse<CycleUnitAllocation>>(
+        `${this.baseUrl}/cycle-unit-allocations/?cycle_id=${cycleId}`
+      );
+      return extractResults(response.data);
+    } catch (error) {
+      logger.error(`Erreur lors de la recuperation des allocations du cycle ${cycleId}:`, error);
+      throw error;
+    }
+  }
+
   async updateProductionCycle(id: string, cycleData: Partial<ProductionCycle>): Promise<ProductionCycle> {
     try {
       const response = await apiService.put<ProductionCycle>(`${this.baseUrl}/cycles/${id}/`, cycleData);

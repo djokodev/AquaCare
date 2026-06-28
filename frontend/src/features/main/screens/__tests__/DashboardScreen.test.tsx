@@ -145,4 +145,16 @@ describe('features/main/screens/DashboardScreen', () => {
       expect(mockDispatch).toHaveBeenCalledWith(setCurrentCycle(cycleB));
     });
   });
+
+  it('affiche un CTA vers les unites en production pour le cycle actif', async () => {
+    const { getByText } = render(<DashboardScreen navigation={navigation} />);
+
+    expect(getByText('productionUnitsDashboardCta')).toBeTruthy();
+
+    fireEvent.press(getByText('productionUnitsDashboardCta'));
+
+    expect(navigation.navigate).toHaveBeenCalledWith('ProductionUnitsHub', {
+      cycleId: cycleA.id,
+    });
+  });
 });
