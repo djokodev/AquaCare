@@ -8,8 +8,8 @@ from .dashboard_views import DashboardView
 from .feeding_views import FeedingPlanViewSet
 from .log_views import CycleLogViewSet
 from .nutritional_views import NutritionalGuideViewSet
-from .production_unit_views import CycleUnitAllocationViewSet, ProductionUnitViewSet
 from .production_plan_views import ProductionPlanSetupView, ProductionPlanSimulationView
+from .production_unit_views import CycleUnitAllocationViewSet, ProductionUnitViewSet
 from .report_views import ProductionReportViewSet
 from .sanitary_views import SanitaryLogViewSet
 from .sync_views import SyncView

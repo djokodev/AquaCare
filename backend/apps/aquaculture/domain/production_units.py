@@ -19,9 +19,9 @@ PRODUCTION_UNIT_TYPE_ALIASES = {
 }
 
 
-def normalize_production_unit_type(unit_type: str | None) -> str | None:
+def normalize_production_unit_type(unit_type: object | None) -> str | None:
     """Normalise les alias legacy des unités de production vers les valeurs canoniques."""
-    if unit_type is None:
+    if unit_type is None or not isinstance(unit_type, str):
         return None
 
     normalized = unit_type.strip().lower()

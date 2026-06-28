@@ -12,13 +12,6 @@ Architecture Domain-Driven Design (DDD) :
 
 from .calculators import AquacultureCalculator
 from .exceptions import *  # noqa
-from .value_objects import (
-    FCR,
-    Biomass,
-    GrowthRate,
-    SurvivalRate,
-    WaterQuality,
-)
 from .production_units import (
     get_production_unit_capacity,
     get_production_unit_density_unit,
@@ -26,6 +19,13 @@ from .production_units import (
     normalize_production_unit_type,
     validate_cycle_unit_allocation_counts,
     validate_production_unit_dimensions,
+)
+from .value_objects import (
+    FCR,
+    Biomass,
+    GrowthRate,
+    SurvivalRate,
+    WaterQuality,
 )
 
 __all__ = [

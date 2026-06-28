@@ -48,14 +48,14 @@ from .domain.production_units import (
 )
 from .models import (
     CycleLog,
-    CycleUnitAllocation,
     CycleMetrics,
+    CycleUnitAllocation,
     FeedingPlan,
     NutritionalGuide,
     PartialHarvest,
     ProductionCycle,
-    ProductionUnit,
     ProductionReport,
+    ProductionUnit,
     ReportDispatchLog,
     SanitaryLog,
 )
@@ -145,7 +145,10 @@ class CycleUnitAllocationSerializer(serializers.ModelSerializer):
     cycle_name = serializers.CharField(source='cycle.cycle_name', read_only=True)
     production_unit_name = serializers.CharField(source='production_unit.name', read_only=True)
     production_unit_type = serializers.CharField(source='production_unit.unit_type', read_only=True)
-    production_unit_display_dimension = serializers.CharField(source='production_unit.display_dimension', read_only=True)
+    production_unit_display_dimension = serializers.CharField(
+        source='production_unit.display_dimension',
+        read_only=True,
+    )
     production_unit_capacity_density_unit = serializers.CharField(
         source='production_unit.capacity_density_unit',
         read_only=True,

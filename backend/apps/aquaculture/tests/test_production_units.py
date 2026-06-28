@@ -259,3 +259,77 @@ class TestProductionUnitViews:
         assert response.status_code == status.HTTP_201_CREATED
         assert str(response.data['cycle']) == str(production_cycle.id)
         assert str(response.data['production_unit']) == str(unit.id)
+
+    def test_create_cycle_unit_allocation_rejects_foreign_cycle(
+        self,
+        auth_client,
+        farm_profile,
+        user_factory,
+    ):
+        other_user = user_factory(phone_number='+237690666666', email='foreign-cycle@test.com')
+        foreign_cycle = ProductionCycle.objects.create(
+            farm_profile=other_user.farm_profile,
+            cycle_name='Cycle externe',
+            species='tilapia',
+            pond_identifier='Bassin externe',
+            pond_surface_m2=Decimal('100.00'),
+            start_date=date.today(),
+            initial_count=1000,
+            initial_average_weight=Decimal('10.00'),
+            initial_biomass=Decimal('10.00'),
+            current_count=1000,
+            current_average_weight=Decimal('10.00'),
+            current_biomass=Decimal('10.00'),
+        )
+        unit = ProductionUnit.objects.create(
+            farm_profile=farm_profile,
+            name='Bac local',
+            unit_type='tank',
+            volume_m3=Decimal('4.00'),
+        )
+
+        response = auth_client.post(
+            reverse('aquaculture:cycle-unit-allocation-list'),
+            {
+                'cycle': str(foreign_cycle.id),
+                'production_unit': str(unit.id),
+                'initial_fish_count': 400,
+                'current_fish_count': 390,
+                'initial_biomass_kg': '4.00',
+                'current_biomass_kg': '3.90',
+            },
+            format='json',
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert 'cycle' in response.data
+
+    def test_create_cycle_unit_allocation_rejects_foreign_unit(
+        self,
+        auth_client,
+        production_cycle,
+        user_factory,
+    ):
+        other_user = user_factory(phone_number='+237690555555', email='foreign-unit@test.com')
+        foreign_unit = ProductionUnit.objects.create(
+            farm_profile=other_user.farm_profile,
+            name='Bac externe',
+            unit_type='tank',
+            volume_m3=Decimal('4.00'),
+        )
+
+        response = auth_client.post(
+            reverse('aquaculture:cycle-unit-allocation-list'),
+            {
+                'cycle': str(production_cycle.id),
+                'production_unit': str(foreign_unit.id),
+                'initial_fish_count': 400,
+                'current_fish_count': 390,
+                'initial_biomass_kg': '4.00',
+                'current_biomass_kg': '3.90',
+            },
+            format='json',
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert 'production_unit' in response.data

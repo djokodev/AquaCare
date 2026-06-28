@@ -28,13 +28,13 @@ from django.utils.translation import gettext_lazy as _
 
 from .models import (
     CycleLog,
-    CycleUnitAllocation,
     CycleMetrics,
+    CycleUnitAllocation,
     FeedingPlan,
     NutritionalGuide,
     ProductionCycle,
-    ProductionUnit,
     ProductionReport,
+    ProductionUnit,
     ReportDispatchLog,
     SanitaryLog,
 )
@@ -117,9 +117,17 @@ class ProductionCycleAdmin(AquacultureSecuredAdmin):
     - Marquer les cycles comme termines
     """
     list_display = [
-        'id_short', 'cycle_name', 'farm_display', 'species_display', 'status_display',
-        'start_date', 'days_active', 'current_biomass_display',
-        'survival_rate_display', 'fcr_display', 'performance_indicator'
+        'id_short',
+        'cycle_name',
+        'farm_display',
+        'species_display',
+        'status_display',
+        'start_date',
+        'days_active',
+        'current_biomass_display',
+        'survival_rate_display',
+        'fcr_display',
+        'performance_indicator',
     ]
     list_filter = [
         'status', 'species', 'start_date',

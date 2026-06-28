@@ -7,15 +7,15 @@ from rest_framework.routers import DefaultRouter
 
 from .views import (
     CycleLogViewSet,
+    CycleUnitAllocationViewSet,
     DashboardView,
     FeedingPlanViewSet,
     NutritionalGuideViewSet,
     ProductionCycleViewSet,
-    ProductionUnitViewSet,
-    CycleUnitAllocationViewSet,
     ProductionPlanSetupView,
     ProductionPlanSimulationView,
     ProductionReportViewSet,
+    ProductionUnitViewSet,
     SanitaryLogViewSet,
     SyncView,
 )
