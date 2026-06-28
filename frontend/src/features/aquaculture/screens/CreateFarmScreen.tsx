@@ -43,15 +43,22 @@ import {
 import {
   createIdenticalProductionUnitDrafts,
   createProductionUnitDraft,
+  getProductionUnitAllocationStatus,
   getProductionUnitCapacity,
   getProductionUnitDisplayDimension,
   getProductionUnitsCompatibilitySummary,
   getTotalProductionUnitsCapacity,
   normalizeProductionUnitType,
+  suggestProductionUnitFishAllocations,
   validateProductionUnitDraft,
+  validateProductionUnitFishAllocations,
   type ProductionUnitDraftErrors,
 } from '@/features/aquaculture/utils/productionUnits';
-import type { ProductionUnitDraft, ProductionUnitType } from '@/features/aquaculture/types/productionUnits';
+import type {
+  ProductionUnitDraft,
+  ProductionUnitFishAllocationDraft,
+  ProductionUnitType,
+} from '@/features/aquaculture/types/productionUnits';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'CreateFarm'>;
 
@@ -126,6 +133,24 @@ const getUnitTypeLabelKey = (
   return 'productionUnitTypeTank';
 };
 
+const getAllocationDensityLabelKey = (
+  densityUnit: 'm2' | 'm3' | null
+): 'productionUnitDensityFingerlingsPerSquareMeter' | 'productionUnitDensityFingerlingsPerCubicMeter' =>
+  densityUnit === 'm2'
+    ? 'productionUnitDensityFingerlingsPerSquareMeter'
+    : 'productionUnitDensityFingerlingsPerCubicMeter';
+
+const areProductionUnitAllocationsEqual = (
+  left: ProductionUnitFishAllocationDraft[],
+  right: ProductionUnitFishAllocationDraft[]
+): boolean =>
+  left.length === right.length &&
+  left.every(
+    (allocation, index) =>
+      allocation.production_unit_local_id === right[index]?.production_unit_local_id &&
+      allocation.fish_count === right[index]?.fish_count
+  );
+
 export default function CreateFarmScreen({ navigation }: Props) {
   const { t, i18n } = useTranslation();
   const dispatch = useDispatch<AppDispatch>();
@@ -135,6 +160,8 @@ export default function CreateFarmScreen({ navigation }: Props) {
   );
   const numberLocale = i18n.language?.startsWith('fr') ? 'fr-FR' : 'en-US';
   const formatNumber = (value: number): string => new Intl.NumberFormat(numberLocale).format(value);
+  const formatKgEstimate = (value: number): string =>
+    new Intl.NumberFormat(numberLocale, { maximumFractionDigits: 1 }).format(value);
 
   const [form, setForm] = useState<FarmSetupFormState>({
     species: '',
@@ -151,6 +178,7 @@ export default function CreateFarmScreen({ navigation }: Props) {
     harvestWeight: '',
     survivalRate: '95',
     productionUnits: [],
+    productionUnitAllocations: [],
   });
   const [singleUnitDraft, setSingleUnitDraft] = useState<UnitDraftState>(getDefaultSingleDraft());
   const [bulkUnitDraft, setBulkUnitDraft] = useState<BulkUnitDraftState>(getDefaultBulkDraft());
@@ -158,6 +186,7 @@ export default function CreateFarmScreen({ navigation }: Props) {
   const [bulkUnitErrors, setBulkUnitErrors] = useState<BulkUnitDraftErrors>({});
   const [editingUnitId, setEditingUnitId] = useState<string | null>(null);
   const [singleFormOffsetY, setSingleFormOffsetY] = useState(0);
+  const [allocationMode, setAllocationMode] = useState<'auto' | 'manual'>('auto');
 
   useEffect(() => {
     const summary = getProductionUnitsCompatibilitySummary(form.productionUnits);
@@ -232,9 +261,55 @@ export default function CreateFarmScreen({ navigation }: Props) {
     return getTotalProductionUnitsCapacity(form.productionUnits);
   }, [form.productionUnits]);
 
+  const recommendedAllocations = useMemo(() => {
+    return suggestProductionUnitFishAllocations({
+      productionUnits: form.productionUnits,
+      totalFishCount: form.fingerlingsCount,
+    });
+  }, [form.fingerlingsCount, form.productionUnits]);
+
+  const allocationValidation = useMemo(() => {
+    return validateProductionUnitFishAllocations({
+      productionUnits: form.productionUnits,
+      allocations: form.productionUnitAllocations,
+      totalFishCount: form.fingerlingsCount,
+      survivalRatePct: form.survivalRate,
+      targetWeightG: form.harvestWeight,
+    });
+  }, [
+    form.fingerlingsCount,
+    form.harvestWeight,
+    form.productionUnitAllocations,
+    form.productionUnits,
+    form.survivalRate,
+  ]);
+
+  const allocationByUnitId = useMemo(
+    () => new Map(form.productionUnitAllocations.map((allocation) => [allocation.production_unit_local_id, allocation.fish_count] as const)),
+    [form.productionUnitAllocations]
+  );
+
+  useEffect(() => {
+    if (allocationMode === 'manual') {
+      return;
+    }
+
+    const nextAllocations = recommendedAllocations ?? [];
+    setForm((prev) => {
+      if (areProductionUnitAllocationsEqual(prev.productionUnitAllocations, nextAllocations)) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        productionUnitAllocations: nextAllocations,
+      };
+    });
+  }, [allocationMode, recommendedAllocations]);
+
   const fingerlingsCountPlaceholder = fingerlingsSuggestion
     ? t('createFarmFingerlingsCountPlaceholderMax', {
-        max: formatNumber(fingerlingsSuggestion.value),
+      max: formatNumber(fingerlingsSuggestion.value),
       })
     : t('createFarmFingerlingsCountPlaceholder');
 
@@ -254,6 +329,7 @@ export default function CreateFarmScreen({ navigation }: Props) {
       harvestWeight: t('createFarmHarvestWeightLabel'),
       survivalRate: t('createFarmSurvivalRateLabel'),
       productionUnits: t('createFarmProductionUnitsSectionTitle'),
+      productionUnitAllocations: t('createFarmProductionUnitAllocationSectionTitle'),
     };
 
     return labelByField[field];
@@ -493,6 +569,58 @@ export default function CreateFarmScreen({ navigation }: Props) {
     }
   };
 
+  const handleAllocationChange = (unitId: string, fishCount: string) => {
+    setAllocationMode('manual');
+    setForm((prev) => {
+      const nextAllocations = prev.productionUnitAllocations.some(
+        (allocation) => allocation.production_unit_local_id === unitId
+      )
+        ? prev.productionUnitAllocations.map((allocation) =>
+            allocation.production_unit_local_id === unitId
+              ? { ...allocation, fish_count: fishCount }
+              : allocation
+          )
+        : [...prev.productionUnitAllocations, { production_unit_local_id: unitId, fish_count: fishCount }];
+
+      return {
+        ...prev,
+        productionUnitAllocations: nextAllocations,
+      };
+    });
+  };
+
+  const resetRecommendedAllocations = () => {
+    setAllocationMode('auto');
+    setForm((prev) => ({
+      ...prev,
+      productionUnitAllocations: recommendedAllocations ?? [],
+    }));
+  };
+
+  const getAllocationValidationMessage = (): string | null => {
+    if (!allocationValidation) {
+      return null;
+    }
+
+    if (allocationValidation.global_error) {
+      return t(allocationValidation.global_error);
+    }
+
+    const firstErrorUnit = form.productionUnits.find(
+      (unit) => allocationValidation.unit_errors[unit.local_id]
+    );
+    if (!firstErrorUnit) {
+      return null;
+    }
+
+    const errorKey = allocationValidation.unit_errors[firstErrorUnit.local_id];
+    if (!errorKey) {
+      return null;
+    }
+
+    return `${firstErrorUnit.name} : ${t(errorKey)}`;
+  };
+
   const handleSingleDraftTypeChange = (unitType: ProductionUnitType) => {
     setSingleUnitDraft((prev) => ({
       ...prev,
@@ -517,6 +645,12 @@ export default function CreateFarmScreen({ navigation }: Props) {
     const firstValidationMessage = getFirstValidationMessage();
     if (firstValidationMessage) {
       Alert.alert(t('error'), firstValidationMessage);
+      return;
+    }
+
+    const allocationValidationMessage = getAllocationValidationMessage();
+    if (allocationValidationMessage) {
+      Alert.alert(t('error'), allocationValidationMessage);
       return;
     }
 
@@ -872,6 +1006,113 @@ export default function CreateFarmScreen({ navigation }: Props) {
               : t('createFarmCapacityConsistent')}
           </Text>
         </View>
+      )}
+
+      {form.productionUnits.length > 0 && (
+        <>
+          <SectionTitle
+            label={t('createFarmProductionUnitAllocationSectionTitle')}
+            icon="layers-outline"
+          />
+          <Text style={styles.sectionDescription}>
+            {t('createFarmProductionUnitAllocationSectionDescription')}
+          </Text>
+
+          {allocationValidation?.global_error && (
+            <View style={styles.allocationNoticeBadge}>
+              <Ionicons name="alert-circle-outline" size={16} color={AQUACARE_COLORS.ERROR} />
+              <Text style={styles.allocationNoticeText}>
+                {t(allocationValidation.global_error)}
+              </Text>
+            </View>
+          )}
+
+          {recommendedAllocations !== null && (
+            <TouchableOpacity
+              style={styles.secondaryMiniBtn}
+              onPress={resetRecommendedAllocations}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.secondaryMiniBtnText}>
+                {t('createFarmProductionUnitAllocationResetBtn')}
+              </Text>
+            </TouchableOpacity>
+          )}
+
+          <View style={styles.allocationUnitsList}>
+            {form.productionUnits.map((unit, index) => {
+              const allocationValue = allocationByUnitId.get(unit.local_id) ?? '';
+              const status =
+                allocationValidation?.unit_statuses[index] ??
+                getProductionUnitAllocationStatus({
+                  unit,
+                  productionUnitLocalId: unit.local_id,
+                  allocation: allocationValue,
+                  survivalRatePct: form.survivalRate,
+                  targetWeightG: form.harvestWeight,
+                });
+              const allocationError = allocationValidation?.unit_errors[unit.local_id] ?? null;
+              const allocationDensityLabel = status.density_unit
+                ? t(getAllocationDensityLabelKey(status.density_unit))
+                : null;
+
+              return (
+                <View key={unit.local_id} style={styles.allocationUnitCard}>
+                  <View style={styles.unitCardHeader}>
+                    <View style={styles.unitCardHeaderText}>
+                      <Text style={styles.unitCardTitle}>{unit.name}</Text>
+                      <Text style={styles.unitCardMeta}>
+                        {t(getUnitTypeLabelKey(unit.unit_type))}{" "}
+                        {getProductionUnitDisplayDimension(unit)
+                          ? `• ${getProductionUnitDisplayDimension(unit)}`
+                          : ''}
+                      </Text>
+                      <Text style={styles.unitCardMeta}>
+                        {t('createFarmProductionUnitRecommendedCapacityLabel')} :{' '}
+                        {status.recommended_capacity !== null
+                          ? `${formatNumber(Math.round(status.recommended_capacity))} ${t('productionUnitFingerlingsUnit')}`
+                          : '—'}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <FieldLabel
+                    label={t('createFarmProductionUnitAssignedFishLabel')}
+                    required
+                  />
+                  <TextInput
+                    style={[styles.input, allocationError && styles.inputError]}
+                    keyboardType="numeric"
+                    placeholder={t('createFarmProductionUnitAssignedFishPlaceholder')}
+                    placeholderTextColor={AQUACARE_COLORS.GRAY_LIGHT}
+                    value={allocationValue}
+                    onChangeText={(value) =>
+                      handleAllocationChange(unit.local_id, sanitizePositiveIntegerInput(value))
+                    }
+                  />
+                  {allocationError && (
+                    <Text style={styles.inlineError}>{t(allocationError)}</Text>
+                  )}
+
+                  <View style={styles.allocationMetrics}>
+                    <Text style={styles.allocationMetric}>
+                      {t('createFarmProductionUnitDensityLabel')} :{' '}
+                      {status.density !== null && allocationDensityLabel
+                        ? `${formatNumber(status.density)} ${allocationDensityLabel}`
+                        : '—'}
+                    </Text>
+                    <Text style={styles.allocationMetric}>
+                      {t('createFarmProductionUnitEstimatedProductionLabel')} :{' '}
+                      {status.estimated_production_kg !== null
+                        ? `${formatKgEstimate(status.estimated_production_kg)} kg`
+                        : '—'}
+                    </Text>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        </>
       )}
 
       <FieldLabel label={t('createFarmCycleProductionLabel')} />
@@ -1274,6 +1515,44 @@ const styles = StyleSheet.create({
   capacityValue: {
     fontWeight: '700',
     color: AQUACARE_COLORS.GREEN_PRIMARY,
+  },
+  allocationNoticeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: '#fef2f2',
+    borderLeftWidth: 3,
+    borderLeftColor: AQUACARE_COLORS.ERROR,
+  },
+  allocationNoticeText: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 18,
+    color: '#991b1b',
+  },
+  allocationUnitsList: {
+    gap: 12,
+    marginTop: 12,
+  },
+  allocationUnitCard: {
+    borderRadius: 16,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#dbe4ee',
+    padding: 14,
+  },
+  allocationMetrics: {
+    gap: 4,
+    marginTop: 10,
+  },
+  allocationMetric: {
+    fontSize: 12,
+    lineHeight: 17,
+    color: AQUACARE_COLORS.GRAY_LIGHT,
   },
   readonlyInput: {
     backgroundColor: '#f8fafc',

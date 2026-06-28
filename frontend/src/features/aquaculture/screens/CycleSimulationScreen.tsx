@@ -43,6 +43,7 @@ import {
   getProductionUnitsCompatibilitySummary,
   getProductionUnitsDensityPreview,
   normalizeProductionUnitType,
+  validateProductionUnitFishAllocations,
 } from '@/features/aquaculture/utils/productionUnits';
 import { parseApiError } from '@/utils/errorParser';
 import { formatAquacultureErrorWithAction } from '@/features/aquaculture/utils/aquacultureErrorPresenter';
@@ -98,6 +99,34 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
       }),
     [formData.fingerlingsCount, formData.productionUnits]
   );
+  const productionUnitAllocationsPreview = useMemo(
+    () =>
+      validateProductionUnitFishAllocations({
+        productionUnits: formData.productionUnits ?? [],
+        allocations: formData.productionUnitAllocations ?? [],
+        totalFishCount: formData.fingerlingsCount,
+        survivalRatePct: formData.survivalRate,
+        targetWeightG: formData.harvestWeight,
+      }),
+    [
+      formData.fingerlingsCount,
+      formData.harvestWeight,
+      formData.productionUnitAllocations,
+      formData.productionUnits,
+      formData.survivalRate,
+    ]
+  );
+  const productionUnitAllocationById = useMemo(
+    () =>
+      new Map(
+        (formData.productionUnitAllocations ?? []).map((allocation) => [
+          allocation.production_unit_local_id,
+          allocation.fish_count,
+        ] as const)
+      ),
+    [formData.productionUnitAllocations]
+  );
+  const hasProductionUnitAllocations = (formData.productionUnitAllocations ?? []).length > 0;
 
   useEffect(() => {
     recalculate();
@@ -330,9 +359,15 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
           <>
             <MetricRow
               label={t('simulationDensity')}
-              value={t('simulationDensityToBeAllocated')}
+              value={
+                hasProductionUnitAllocations
+                  ? t('simulationDensitySeeUnitDetails')
+                  : t('simulationDensityToBeAllocated')
+              }
             />
-            <Text style={styles.hintText}>{t('simulationDensityByUnitNote')}</Text>
+            {!hasProductionUnitAllocations ? (
+              <Text style={styles.hintText}>{t('simulationDensityByUnitNote')}</Text>
+            ) : null}
           </>
         ) : legacyStockingDensityCheck ? (
           <>
@@ -374,6 +409,53 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
           </Text>
         )}
       </View>
+
+      {formData.productionUnitAllocations?.length ? (
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>{t('simulationAllocationByUnitTitle')}</Text>
+          <Text style={styles.hintText}>{t('simulationAllocationByUnitDescription')}</Text>
+          {productionUnitAllocationsPreview?.global_error && (
+            <Text style={styles.allocationErrorText}>
+              {t(productionUnitAllocationsPreview.global_error)}
+            </Text>
+          )}
+          <View style={styles.allocationSummaryList}>
+            {formData.productionUnits.map((unit, index) => {
+              const status = productionUnitAllocationsPreview?.unit_statuses[index];
+              const rawAllocation = productionUnitAllocationById.get(unit.local_id);
+              const parsedAllocation =
+                status?.fish_count ?? (rawAllocation && rawAllocation.trim() ? Number(rawAllocation) : null);
+              const densityLabel =
+                status?.density !== null && status?.density !== undefined && status.density_unit
+                  ? `${formatDensity(status.density)} ${t(
+                      status.density_unit === 'm2'
+                        ? 'productionUnitDensityFingerlingsPerSquareMeter'
+                        : 'productionUnitDensityFingerlingsPerCubicMeter'
+                    )}`
+                  : null;
+              const allocationLabel =
+                parsedAllocation !== null && Number.isFinite(parsedAllocation)
+                  ? `${parsedAllocation} ${t('productionUnitFingerlingsUnit')}`
+                  : `— ${t('productionUnitFingerlingsUnit')}`;
+              const productionLabel =
+                status?.estimated_production_kg !== null && status?.estimated_production_kg !== undefined
+                  ? ` · ${formatKgValue(status.estimated_production_kg)} kg`
+                  : '';
+
+              return (
+                <View key={unit.local_id} style={styles.allocationSummaryRow}>
+                  <Text style={styles.allocationSummaryLabel}>{unit.name}</Text>
+                  <Text style={styles.allocationSummaryValue}>
+                    {allocationLabel}
+                    {densityLabel ? ` · ${densityLabel}` : ''}
+                    {productionLabel}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
+        </View>
+      ) : null}
 
       <View style={styles.card}>
         <Text style={styles.cardTitle}>{t('simulationAnnualProjectionTitle')}</Text>
@@ -569,6 +651,34 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 18,
     color: AQUACARE_COLORS.GRAY_LIGHT,
+  },
+  allocationErrorText: {
+    marginTop: 8,
+    fontSize: 12,
+    lineHeight: 18,
+    color: AQUACARE_COLORS.ERROR,
+    fontWeight: '600',
+  },
+  allocationSummaryList: {
+    gap: 10,
+    marginTop: 12,
+  },
+  allocationSummaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  allocationSummaryLabel: {
+    flex: 1,
+    fontSize: 13,
+    color: AQUACARE_COLORS.GRAY_DARK,
+    fontWeight: '600',
+  },
+  allocationSummaryValue: {
+    flex: 1,
+    fontSize: 13,
+    color: AQUACARE_COLORS.GRAY_LIGHT,
+    textAlign: 'right',
   },
   modifyBtn: {
     paddingVertical: 14,

@@ -88,6 +88,7 @@ describe('features/aquaculture/screens/CycleSimulationScreen', () => {
           harvestWeight: '350',
           survivalRate: '95',
           productionUnits: [],
+          productionUnitAllocations: [],
           ...formDataOverrides,
         },
       },
@@ -161,7 +162,7 @@ describe('features/aquaculture/screens/CycleSimulationScreen', () => {
         routes: [{ name: 'MainTabs' }],
       });
     });
-  });
+  }, 10000);
 
   it('affiche une densite unique quand les bacs sont a capacite max', async () => {
     mockDispatch.mockImplementation((action: unknown) => {
@@ -265,6 +266,57 @@ describe('features/aquaculture/screens/CycleSimulationScreen', () => {
       expect(queryByText('simulationCurrentDensity')).toBeNull();
       expect(queryByText('simulationMaxDensity')).toBeNull();
       expect(queryByText('—')).toBeNull();
+    });
+  });
+
+  it('affiche un resume de repartition par unite quand les allocations sont presentes', async () => {
+    mockDispatch.mockImplementation((action: unknown) => {
+      if (typeof action === 'function') {
+        return {
+          type: runCycleSimulation.fulfilled.type,
+          payload: currentResult,
+        };
+      }
+
+      return action;
+    });
+
+    const route = buildRoute({
+      fingerlingsCount: '2100',
+      productionUnits: [
+        {
+          local_id: 'unit-1',
+          name: 'Bac 1',
+          unit_type: 'tank',
+          volume_m3: '3',
+        },
+        {
+          local_id: 'unit-2',
+          name: 'Étang principal',
+          unit_type: 'pond',
+          surface_m2: '120',
+        },
+      ],
+      productionUnitAllocations: [
+        { production_unit_local_id: 'unit-1', fish_count: '900' },
+        { production_unit_local_id: 'unit-2', fish_count: '1200' },
+      ],
+    });
+
+    const { getByText, getByText: getText, queryByText } = render(
+      <CycleSimulationScreen navigation={navigation} route={route} />
+    );
+
+    await waitFor(() => {
+      expect(getByText('simulationAllocationByUnitTitle')).toBeTruthy();
+      expect(getByText('simulationDensitySeeUnitDetails')).toBeTruthy();
+      expect(queryByText('simulationDensityByUnitNote')).toBeNull();
+      expect(getText('Bac 1')).toBeTruthy();
+      expect(getText('Étang principal')).toBeTruthy();
+      expect(getText(/300 productionUnitDensityFingerlingsPerCubicMeter/)).toBeTruthy();
+      expect(getText(/10 productionUnitDensityFingerlingsPerSquareMeter/)).toBeTruthy();
+      expect(getText(/299,3 kg/)).toBeTruthy();
+      expect(getText(/399 kg/)).toBeTruthy();
     });
   });
 });

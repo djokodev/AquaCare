@@ -12,7 +12,10 @@ import {
   getTotalProductionUnitsCapacity,
   normalizeProductionUnitType,
 } from '@/features/aquaculture/utils/productionUnits';
-import type { ProductionUnitDraft } from '@/features/aquaculture/types/productionUnits';
+import type {
+  ProductionUnitDraft,
+  ProductionUnitFishAllocationDraft,
+} from '@/features/aquaculture/types/productionUnits';
 import type {
   CycleSimulationInput,
   FarmSetupData,
@@ -36,6 +39,7 @@ export interface FarmSetupFormState {
   harvestWeight: string;
   survivalRate: string;
   productionUnits: ProductionUnitDraft[];
+  productionUnitAllocations: ProductionUnitFishAllocationDraft[];
 }
 
 export type FarmSetupFormErrors = Partial<Record<keyof FarmSetupFormState, string>>;

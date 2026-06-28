@@ -1,6 +1,7 @@
 import {
   createIdenticalProductionUnitDrafts,
   createProductionUnitDraft,
+  getProductionUnitAllocationProductionEstimate,
   getProductionUnitCapacity,
   getProductionUnitDensityUnit,
   getProductionUnitDisplayDimension,
@@ -8,7 +9,9 @@ import {
   getProductionUnitsCompatibilitySummary,
   getTotalProductionUnitsCapacity,
   normalizeProductionUnitType,
+  suggestProductionUnitFishAllocations,
   validateProductionUnitDraft,
+  validateProductionUnitFishAllocations,
 } from '@/features/aquaculture/utils/productionUnits';
 
 describe('productionUnits', () => {
@@ -278,5 +281,242 @@ describe('productionUnits', () => {
     ).toMatchObject({
       volume_m3: 'createProductionUnitPositiveNumberError',
     });
+  });
+
+  it('repartit trois bacs identiques de facon deterministic', () => {
+    const units = [
+      createProductionUnitDraft({
+        name: 'Bac 1',
+        unit_type: 'tank',
+        volume_m3: '3',
+      }),
+      createProductionUnitDraft({
+        name: 'Bac 2',
+        unit_type: 'tank',
+        volume_m3: '3',
+      }),
+      createProductionUnitDraft({
+        name: 'Bac 3',
+        unit_type: 'tank',
+        volume_m3: '3',
+      }),
+    ];
+
+    expect(
+      suggestProductionUnitFishAllocations({
+        productionUnits: units,
+        totalFishCount: '2700',
+      })
+    ).toEqual([
+      expect.objectContaining({ production_unit_local_id: units[0].local_id, fish_count: '900' }),
+      expect.objectContaining({ production_unit_local_id: units[1].local_id, fish_count: '900' }),
+      expect.objectContaining({ production_unit_local_id: units[2].local_id, fish_count: '900' }),
+    ]);
+  });
+
+  it('repartit un bac et un etang a leur capacite maximale', () => {
+    const units = [
+      createProductionUnitDraft({
+        name: 'Bac 1',
+        unit_type: 'tank',
+        volume_m3: '3',
+      }),
+      createProductionUnitDraft({
+        name: 'Étang 1',
+        unit_type: 'pond',
+        surface_m2: '120',
+      }),
+    ];
+
+    expect(
+      suggestProductionUnitFishAllocations({
+        productionUnits: units,
+        totalFishCount: '2100',
+      })
+    ).toEqual([
+      expect.objectContaining({ production_unit_local_id: units[0].local_id, fish_count: '900' }),
+      expect.objectContaining({ production_unit_local_id: units[1].local_id, fish_count: '1200' }),
+    ]);
+  });
+
+  it('repartit un total sous capacite de facon proportionnelle', () => {
+    const units = [
+      createProductionUnitDraft({
+        name: 'Bac 1',
+        unit_type: 'tank',
+        volume_m3: '3',
+      }),
+      createProductionUnitDraft({
+        name: 'Étang 1',
+        unit_type: 'pond',
+        surface_m2: '120',
+      }),
+    ];
+
+    const suggestion = suggestProductionUnitFishAllocations({
+      productionUnits: units,
+      totalFishCount: '1000',
+    });
+
+    expect(suggestion).toEqual([
+      expect.objectContaining({ production_unit_local_id: units[0].local_id, fish_count: '429' }),
+      expect.objectContaining({ production_unit_local_id: units[1].local_id, fish_count: '571' }),
+    ]);
+    expect(suggestion?.reduce((total, allocation) => total + Number(allocation.fish_count), 0)).toBe(1000);
+    expect(
+      suggestion?.every((allocation, index) => {
+        const capacity = getProductionUnitCapacity(units[index]);
+        return capacity !== null ? Number(allocation.fish_count) <= capacity : false;
+      })
+    ).toBe(true);
+  });
+
+  it('repartit un bac et une cage a pleine capacite', () => {
+    const units = [
+      createProductionUnitDraft({
+        name: 'Bac 1',
+        unit_type: 'tank',
+        volume_m3: '3',
+      }),
+      createProductionUnitDraft({
+        name: 'Cage 1',
+        unit_type: 'cage',
+        volume_m3: '5',
+      }),
+    ];
+
+    expect(
+      suggestProductionUnitFishAllocations({
+        productionUnits: units,
+        totalFishCount: '2400',
+      })
+    ).toEqual([
+      expect.objectContaining({ production_unit_local_id: units[0].local_id, fish_count: '900' }),
+      expect.objectContaining({ production_unit_local_id: units[1].local_id, fish_count: '1500' }),
+    ]);
+  });
+
+  it('repartit un bac, une cage et un etang avec l ordre deterministe', () => {
+    const units = [
+      createProductionUnitDraft({
+        name: 'Bac 1',
+        unit_type: 'tank',
+        volume_m3: '3',
+      }),
+      createProductionUnitDraft({
+        name: 'Cage 1',
+        unit_type: 'cage',
+        volume_m3: '5',
+      }),
+      createProductionUnitDraft({
+        name: 'Étang 1',
+        unit_type: 'pond',
+        surface_m2: '120',
+      }),
+    ];
+
+    expect(
+      suggestProductionUnitFishAllocations({
+        productionUnits: units,
+        totalFishCount: '3600',
+      })
+    ).toEqual([
+      expect.objectContaining({ production_unit_local_id: units[0].local_id, fish_count: '900' }),
+      expect.objectContaining({ production_unit_local_id: units[1].local_id, fish_count: '1500' }),
+      expect.objectContaining({ production_unit_local_id: units[2].local_id, fish_count: '1200' }),
+    ]);
+  });
+
+  it('retourne null si le total demande depasse la capacite totale', () => {
+    const units = [
+      createProductionUnitDraft({
+        name: 'Bac 1',
+        unit_type: 'tank',
+        volume_m3: '3',
+      }),
+      createProductionUnitDraft({
+        name: 'Étang 1',
+        unit_type: 'pond',
+        surface_m2: '120',
+      }),
+    ];
+
+    expect(
+      suggestProductionUnitFishAllocations({
+        productionUnits: units,
+        totalFishCount: '2101',
+      })
+    ).toBeNull();
+  });
+
+  it('bloque une allocation qui depasse la capacite recommandee de l unite', () => {
+    const unit = createProductionUnitDraft({
+      name: 'Bac 1',
+      unit_type: 'tank',
+      volume_m3: '3',
+    });
+
+    const validation = validateProductionUnitFishAllocations({
+      productionUnits: [unit],
+      allocations: [
+        {
+          production_unit_local_id: unit.local_id,
+          fish_count: '901',
+        },
+      ],
+      totalFishCount: '901',
+      survivalRatePct: '95',
+      targetWeightG: '350',
+    });
+
+    expect(validation?.unit_errors).toMatchObject({
+      [unit.local_id]: 'createFarmProductionUnitRecommendedCapacityExceededError',
+    });
+    expect(validation?.global_error).toBe('createFarmProductionUnitTotalCapacityExceededError');
+  });
+
+  it('bloque une repartition dont la somme ne correspond pas au total demande', () => {
+    const units = [
+      createProductionUnitDraft({
+        name: 'Bac 1',
+        unit_type: 'tank',
+        volume_m3: '3',
+      }),
+      createProductionUnitDraft({
+        name: 'Bac 2',
+        unit_type: 'tank',
+        volume_m3: '3',
+      }),
+      createProductionUnitDraft({
+        name: 'Bac 3',
+        unit_type: 'tank',
+        volume_m3: '3',
+      }),
+    ];
+
+    const validation = validateProductionUnitFishAllocations({
+      productionUnits: units,
+      allocations: [
+        { production_unit_local_id: units[0].local_id, fish_count: '900' },
+        { production_unit_local_id: units[1].local_id, fish_count: '900' },
+        { production_unit_local_id: units[2].local_id, fish_count: '800' },
+      ],
+      totalFishCount: '2700',
+      survivalRatePct: '95',
+      targetWeightG: '350',
+    });
+
+    expect(validation?.total_allocated_fish).toBe(2600);
+    expect(validation?.global_error).toBe('createFarmProductionUnitAllocationSumError');
+  });
+
+  it('estime correctement la production par unite', () => {
+    expect(
+      getProductionUnitAllocationProductionEstimate({
+        allocation: '900',
+        survivalRatePct: '95',
+        targetWeightG: '350',
+      })
+    ).toBe(299.25);
   });
 });
