@@ -40,6 +40,8 @@ PR #60 persists production units and cycle-unit allocations during first cycle l
 
 PR #61 adds the production-units hub after cycle launch. When a cycle is launched with persisted production units, the user is redirected to a “My production units” screen showing the cycle-unit allocations. Unit-level tracking actions remain planned for a later PR.
 
+PR #62 adds unit-scoped tracking foundations. Daily logs, and sanitary logs when supported by the existing architecture, can now be linked to a `CycleUnitAllocation`, allowing actions created from a production unit to remain attached to that unit while preserving the legacy global-cycle logging flow.
+
 ## Limites Du Module
 
 Le frontend orchestre UX et saisie utilisateur.

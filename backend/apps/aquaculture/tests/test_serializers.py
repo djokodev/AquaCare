@@ -8,7 +8,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 import pytest
-from aquaculture.models import CycleLog, NutritionalGuide
+from aquaculture.models import CycleLog, CycleUnitAllocation, NutritionalGuide, ProductionCycle, ProductionUnit, SanitaryLog
 from aquaculture.serializers import (
     CycleLogSerializer,
     CycleLogSyncSerializer,
@@ -213,6 +213,81 @@ class TestCycleLogSerializer:
         serializer = CycleLogSerializer(data=data)
         assert not serializer.is_valid()
         assert 'log_date' in serializer.errors
+
+    def test_valid_log_with_cycle_unit_allocation(self, production_cycle, farm_profile):
+        """Test création log valide rattaché à une allocation d'unité."""
+        unit = ProductionUnit.objects.create(
+            farm_profile=farm_profile,
+            name='Bac 1',
+            unit_type='tank',
+            volume_m3=Decimal('3.00'),
+        )
+        allocation = CycleUnitAllocation.objects.create(
+            cycle=production_cycle,
+            production_unit=unit,
+            initial_fish_count=500,
+            current_fish_count=500,
+            initial_biomass_kg=Decimal('5.00'),
+            current_biomass_kg=Decimal('5.00'),
+        )
+
+        data = {
+            'cycle': production_cycle.id,
+            'cycle_unit_allocation': allocation.id,
+            'log_date': date.today(),
+            'mortality_count': 5,
+            'feed_quantity': Decimal('2.50'),
+            'water_temperature': Decimal('28.0'),
+            'observations': 'Poissons actifs, bonne appétence',
+        }
+
+        serializer = CycleLogSerializer(data=data)
+        assert serializer.is_valid(), serializer.errors
+
+        log = serializer.save()
+        assert log.cycle_unit_allocation_id == allocation.id
+
+    def test_cycle_unit_allocation_must_match_cycle(self, production_cycle, farm_profile):
+        """Test refus quand l'allocation ne correspond pas au cycle du log."""
+        other_cycle = ProductionCycle.objects.create(
+            farm_profile=farm_profile,
+            cycle_name='Cycle autre',
+            species='tilapia',
+            pond_identifier='Bassin autre',
+            pond_surface_m2=Decimal('120.00'),
+            start_date=production_cycle.start_date,
+            initial_count=1000,
+            initial_average_weight=Decimal('10.00'),
+            initial_biomass=Decimal('10.00'),
+            current_count=1000,
+            current_average_weight=Decimal('10.00'),
+            current_biomass=Decimal('10.00'),
+        )
+        unit = ProductionUnit.objects.create(
+            farm_profile=farm_profile,
+            name='Bac 2',
+            unit_type='tank',
+            volume_m3=Decimal('4.00'),
+        )
+        allocation = CycleUnitAllocation.objects.create(
+            cycle=other_cycle,
+            production_unit=unit,
+            initial_fish_count=400,
+            current_fish_count=400,
+            initial_biomass_kg=Decimal('4.00'),
+            current_biomass_kg=Decimal('4.00'),
+        )
+
+        data = {
+            'cycle': production_cycle.id,
+            'cycle_unit_allocation': allocation.id,
+            'log_date': date.today(),
+            'mortality_count': 2,
+        }
+
+        serializer = CycleLogSerializer(data=data)
+        assert not serializer.is_valid()
+        assert 'cycle_unit_allocation' in serializer.errors
 
     def test_sampling_data_validation(self, production_cycle):
         """Test validation données échantillonnage."""
@@ -462,6 +537,81 @@ class TestSanitaryLogSerializer:
         assert log.client_uuid == client_uuid
         assert log.affected_count == 50
         assert not log.resolved  # Par défaut
+
+    def test_valid_sanitary_log_with_cycle_unit_allocation(self, production_cycle, farm_profile):
+        """Test création log sanitaire valide rattaché à une allocation."""
+        unit = ProductionUnit.objects.create(
+            farm_profile=farm_profile,
+            name='Bac sanitaire',
+            unit_type='tank',
+            volume_m3=Decimal('3.00'),
+        )
+        allocation = CycleUnitAllocation.objects.create(
+            cycle=production_cycle,
+            production_unit=unit,
+            initial_fish_count=500,
+            current_fish_count=500,
+            initial_biomass_kg=Decimal('5.00'),
+            current_biomass_kg=Decimal('5.00'),
+        )
+
+        data = {
+            'cycle': production_cycle.id,
+            'cycle_unit_allocation': allocation.id,
+            'event_date': date.today(),
+            'event_type': 'disease',
+            'symptoms': "Nage erratique et perte d'appétit",
+            'affected_count': 20,
+        }
+
+        serializer = SanitaryLogSerializer(data=data)
+        assert serializer.is_valid(), serializer.errors
+
+        log = serializer.save()
+        assert log.cycle_unit_allocation_id == allocation.id
+
+    def test_sanitary_cycle_unit_allocation_must_match_cycle(self, production_cycle, farm_profile):
+        """Test refus quand l'allocation sanitaire ne correspond pas au cycle."""
+        other_cycle = ProductionCycle.objects.create(
+            farm_profile=farm_profile,
+            cycle_name='Cycle sanitaire autre',
+            species='tilapia',
+            pond_identifier='Bassin sanitaire autre',
+            pond_surface_m2=Decimal('120.00'),
+            start_date=production_cycle.start_date,
+            initial_count=1000,
+            initial_average_weight=Decimal('10.00'),
+            initial_biomass=Decimal('10.00'),
+            current_count=1000,
+            current_average_weight=Decimal('10.00'),
+            current_biomass=Decimal('10.00'),
+        )
+        unit = ProductionUnit.objects.create(
+            farm_profile=farm_profile,
+            name='Bac sanitaire 2',
+            unit_type='tank',
+            volume_m3=Decimal('4.00'),
+        )
+        allocation = CycleUnitAllocation.objects.create(
+            cycle=other_cycle,
+            production_unit=unit,
+            initial_fish_count=400,
+            current_fish_count=400,
+            initial_biomass_kg=Decimal('4.00'),
+            current_biomass_kg=Decimal('4.00'),
+        )
+
+        data = {
+            'cycle': production_cycle.id,
+            'cycle_unit_allocation': allocation.id,
+            'event_date': date.today(),
+            'event_type': 'disease',
+            'symptoms': "Nage erratique et perte d'appétit",
+        }
+
+        serializer = SanitaryLogSerializer(data=data)
+        assert not serializer.is_valid()
+        assert 'cycle_unit_allocation' in serializer.errors
 
     def test_auto_resolution_date(self, production_cycle):
         """Test date résolution automatique."""

@@ -806,6 +806,15 @@ class CycleLog(models.Model):
         verbose_name=_("Cycle de production")
     )
 
+    cycle_unit_allocation = models.ForeignKey(
+        'aquaculture.CycleUnitAllocation',
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name='daily_logs',
+        verbose_name=_("Allocation de cycle par unité"),
+    )
+
     log_date = models.DateField(verbose_name=_("Date du log"))
 
     log_time = models.TimeField(auto_now_add=True, verbose_name=_("Heure de saisie"))
@@ -1109,6 +1118,15 @@ class SanitaryLog(models.Model):
         on_delete=models.CASCADE, 
         related_name='sanitary_logs',
         verbose_name=_("Cycle de production")
+    )
+
+    cycle_unit_allocation = models.ForeignKey(
+        'aquaculture.CycleUnitAllocation',
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name='sanitary_logs',
+        verbose_name=_("Allocation de cycle par unité"),
     )
     
     event_date = models.DateField(verbose_name=_("Date de l'événement"))

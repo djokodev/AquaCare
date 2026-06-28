@@ -68,6 +68,7 @@ class CycleLogApplicationService:
                 if key not in {"cycle", "created_offline"}
             },
             created_offline=bool(validated_data.get("created_offline", False)),
+            user=user,
         )
         return CycleLogMutationResult(log=new_log, created=True)
 
@@ -88,7 +89,11 @@ class CycleLogApplicationService:
             raise UnauthorizedCycleAccessError("Cycle non autorise.")
 
         previous_cycle = log.cycle
-        updated_log = CycleLogService.update_log(log=log, update_data=validated_data)
+        updated_log = CycleLogService.update_log(
+            log=log,
+            update_data=validated_data,
+            user=user,
+        )
         new_cycle = updated_log.cycle
 
         # Recalculer les cycles impactes (changement de cycle possible sur PUT/PATCH).

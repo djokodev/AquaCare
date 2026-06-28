@@ -33,6 +33,13 @@ describe('features/aquaculture/screens/DailyLogHistoryScreen', () => {
     goBack: jest.fn(),
     navigate: jest.fn(),
   } as any;
+  const route = {
+    params: {
+      cycleId: 'cycle-1',
+      cycleUnitAllocationId: 'allocation-1',
+      productionUnitName: 'Bac 1',
+    },
+  } as any;
 
   const activeCycle: ProductionCycle = {
     id: 'cycle-1',
@@ -97,6 +104,23 @@ describe('features/aquaculture/screens/DailyLogHistoryScreen', () => {
       expect(mockService.getCycleLogs).toHaveBeenCalledWith('cycle-1');
       expect(getByText(/observations/i)).toBeTruthy();
       expect(getByText('RAS')).toBeTruthy();
+    });
+  });
+
+  it('filtre les logs par allocation quand le contexte unité est fourni', async () => {
+    setSelectorCycles([activeCycle], activeCycle);
+    mockService.getCycleLogs.mockResolvedValueOnce([]);
+
+    const { getByText } = render(
+      <DailyLogHistoryScreen navigation={navigation} route={route} />
+    );
+
+    await waitFor(() => {
+      expect(mockService.getCycleLogs).toHaveBeenCalledWith('cycle-1', {
+        cycleUnitAllocationId: 'allocation-1',
+      });
+      expect(getByText('productionUnitLogHistoryContextTitle')).toBeTruthy();
+      expect(getByText('Bac 1')).toBeTruthy();
     });
   });
 

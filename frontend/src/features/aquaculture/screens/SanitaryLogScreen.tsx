@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, TextInput, Alert, ActivityIndicator, Image } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
+import { RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState, AppDispatch } from '@/store/store';
@@ -33,9 +34,11 @@ const SANITARY_EVENT_TYPES: Array<{
 ];
 
 type SanitaryLogScreenNavigationProp = StackNavigationProp<RootStackParamList, 'SanitaryLog'>;
+type SanitaryLogScreenRouteProp = RouteProp<RootStackParamList, 'SanitaryLog'>;
 
 interface SanitaryLogScreenProps {
   navigation: SanitaryLogScreenNavigationProp;
+  route?: SanitaryLogScreenRouteProp;
 }
 
 interface SanitaryLogData {
@@ -52,18 +55,24 @@ interface SanitaryLogData {
 }
 
 
-export default function SanitaryLogScreen({ navigation }: SanitaryLogScreenProps) {
+export default function SanitaryLogScreen({ navigation, route }: SanitaryLogScreenProps) {
   const { t } = useTranslation();
   const dispatch = useDispatch<AppDispatch>();
   const { dashboardData, currentCycle } = useSelector((state: RootState) => state.aquaculture);
   const activeCycles = dashboardData?.active_cycles || [];
-  const sessionScopedCycles = currentCycle?.id
-    ? activeCycles.filter((cycle) => cycle.id === currentCycle.id)
+  const routeParams = route?.params;
+  const routeCycleId = routeParams?.cycleId;
+  const unitAllocationId = routeParams?.cycleUnitAllocationId;
+  const unitName = routeParams?.productionUnitName || t('productionUnitsUnknownUnit');
+  const sessionScopedCycles = routeCycleId
+    ? activeCycles.filter((cycle) => cycle.id === routeCycleId)
+    : currentCycle?.id
+      ? activeCycles.filter((cycle) => cycle.id === currentCycle.id)
     : activeCycles;
 
-  const [selectedCycle, setSelectedCycle] = useState<string>('');
+  const [selectedCycle, setSelectedCycle] = useState<string>(routeCycleId || '');
   const [formData, setFormData] = useState<SanitaryLogData>({
-    cycle_id: '',
+    cycle_id: routeCycleId || '',
     event_type: '',
     symptoms: '',
     treatment_applied: '',
@@ -110,13 +119,15 @@ export default function SanitaryLogScreen({ navigation }: SanitaryLogScreenProps
       return;
     }
 
-    const preferredCycle = sessionScopedCycles[0];
+    const preferredCycle = routeCycleId
+      ? sessionScopedCycles.find((cycle) => cycle.id === routeCycleId) || sessionScopedCycles[0]
+      : sessionScopedCycles[0];
 
     if (selectedCycle !== preferredCycle.id) {
       setSelectedCycle(preferredCycle.id);
       setFormData((prev) => ({ ...prev, cycle_id: preferredCycle.id }));
     }
-  }, [sessionScopedCycles, selectedCycle]);
+  }, [routeCycleId, sessionScopedCycles, selectedCycle]);
 
   useEffect(() => {
     if (!shouldShowTreatmentFields) {
@@ -226,6 +237,7 @@ export default function SanitaryLogScreen({ navigation }: SanitaryLogScreenProps
     try {
       const sanitaryData: SanitaryLogForm = {
         event_date: new Date().toISOString().split('T')[0],
+        ...(unitAllocationId ? { cycle_unit_allocation: unitAllocationId } : {}),
         event_type: formData.event_type as SanitaryEventType,
         symptoms: formData.symptoms,
         affected_count: formData.affected_count ? parseInt(formData.affected_count, 10) : undefined,
@@ -296,6 +308,19 @@ export default function SanitaryLogScreen({ navigation }: SanitaryLogScreenProps
       </View>
 
       <View className="p-4">
+        {unitAllocationId ? (
+          <View className="mb-6 rounded-2xl border border-green-200 bg-white p-4">
+            <View className="flex-row items-center mb-2">
+              <Ionicons name="medical-outline" size={18} color={AQUACARE_COLORS.GREEN_PRIMARY} />
+              <Text className="ml-2 text-base font-bold text-gray-dark">
+                {t('productionUnitSanitaryLogContextTitle')}
+              </Text>
+            </View>
+            <Text className="text-sm font-semibold text-aquacare-primary mb-1">{unitName}</Text>
+            <Text className="text-sm text-gray-light">{t('productionUnitSanitaryLogContextDescription')}</Text>
+          </View>
+        ) : null}
+
         <CycleSelector
           cycles={sessionScopedCycles}
           selectedCycleId={selectedCycle}

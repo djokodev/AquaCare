@@ -134,6 +134,11 @@ export interface CycleHarvestResponse {
 export interface CycleLog {
   id: string;
   cycle: string; // UUID du cycle
+  cycle_unit_allocation?: string | null;
+  production_unit?: string | null;
+  production_unit_name?: string | null;
+  production_unit_type?: ProductionUnitType | null;
+  production_unit_display_dimension?: string | null;
   log_date: string;
   log_time?: string;
   client_uuid?: string; // Pour synchronisation offline
@@ -212,6 +217,11 @@ export interface SanitaryLog {
   id: string;
   client_uuid?: string;
   cycle: string;
+  cycle_unit_allocation?: string | null;
+  production_unit?: string | null;
+  production_unit_name?: string | null;
+  production_unit_type?: ProductionUnitType | null;
+  production_unit_display_dimension?: string | null;
   event_date: string;
   event_type: SanitaryEventType;
 
@@ -519,6 +529,7 @@ export interface ActiveSanitaryIssueGroup {
 
 export interface DailyLogForm {
   client_uuid?: string;
+  cycle_unit_allocation?: string;
   log_date: string;
   mortality_count?: number;
   mortality_reason?: string;
@@ -544,6 +555,7 @@ export interface ReactNativeUploadFile {
 
 export interface SanitaryLogForm {
   client_uuid?: string;
+  cycle_unit_allocation?: string;
   event_date: string;
   event_type: SanitaryEventType;
   symptoms: string;

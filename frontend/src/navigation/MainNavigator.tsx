@@ -52,9 +52,29 @@ export type MainTabParamList = {
 export type RootStackParamList = {
   CycleSessionEntry: undefined;
   MainTabs: undefined;
-  DailyLog: undefined;
-  DailyLogHistory: undefined;
-  SanitaryLog: undefined;
+  DailyLog:
+    | {
+        cycleId?: string;
+        cycleUnitAllocationId?: string;
+        productionUnitId?: string;
+        productionUnitName?: string;
+      }
+    | undefined;
+  DailyLogHistory:
+    | {
+        cycleId?: string;
+        cycleUnitAllocationId?: string;
+        productionUnitName?: string;
+      }
+    | undefined;
+  SanitaryLog:
+    | {
+        cycleId?: string;
+        cycleUnitAllocationId?: string;
+        productionUnitId?: string;
+        productionUnitName?: string;
+      }
+    | undefined;
   NewCycle: undefined;
   CycleHistory: undefined;
   Notifications: undefined;

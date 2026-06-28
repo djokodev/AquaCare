@@ -23,6 +23,7 @@ from django.utils import timezone
 from rest_framework.exceptions import APIException
 
 from ..models import CycleLog, FeedingPlan, ProductionCycle, SanitaryLog
+from ..domain.validators import validate_cycle_unit_allocation_context
 from .analytics_service import AnalyticsService
 from .base import BaseService
 from .cycle_service import ProductionCycleService
@@ -291,6 +292,12 @@ class SyncService(BaseService):
                         )
                         continue
 
+                    validate_cycle_unit_allocation_context(
+                        cycle=cycle,
+                        cycle_unit_allocation=log_data.get('cycle_unit_allocation'),
+                        user=user,
+                    )
+
                     existing_log = None
                     if client_uuid:
                         existing_log = existing_logs_by_uuid.get(str(client_uuid))
@@ -456,11 +463,17 @@ class SyncService(BaseService):
                     continue
 
                 log_create_data = SyncService._normalize_sanitary_log_payload(log_create_data)
+                validate_cycle_unit_allocation_context(
+                    cycle=cycle,
+                    cycle_unit_allocation=log_create_data.get('cycle_unit_allocation'),
+                    user=user,
+                )
 
                 raw_client_uuid = log_create_data.get('client_uuid')
                 was_existing = bool(raw_client_uuid and str(raw_client_uuid) in existing_sanitary_uuids)
                 new_log = SanitaryService.create_sanitary_log(
                     cycle=cycle,
+                    user=user,
                     event_date=log_create_data['event_date'],
                     event_type=log_create_data['event_type'],
                     symptoms=log_create_data['symptoms'],

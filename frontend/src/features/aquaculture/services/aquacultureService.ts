@@ -423,9 +423,19 @@ class AquacultureService {
 
   // =================== DAILY LOGS ===================
 
-  async getCycleLogs(cycleId?: string): Promise<CycleLog[]> {
+  async getCycleLogs(
+    cycleId?: string,
+    options?: { cycleUnitAllocationId?: string }
+  ): Promise<CycleLog[]> {
     try {
-      const params = cycleId ? `?cycle_id=${cycleId}` : '';
+      const query = new URLSearchParams();
+      if (cycleId) {
+        query.append('cycle_id', cycleId);
+      }
+      if (options?.cycleUnitAllocationId) {
+        query.append('cycle_unit_allocation', options.cycleUnitAllocationId);
+      }
+      const params = query.toString() ? `?${query.toString()}` : '';
       const response = await apiService.get<ListResponse<CycleLog>>(`${this.baseUrl}/cycle-logs/${params}`);
       return extractResults(response.data);
     } catch (error) {
@@ -484,9 +494,19 @@ class AquacultureService {
 
   // =================== SANITARY LOGS ===================
 
-  async getSanitaryLogs(cycleId?: string): Promise<SanitaryLog[]> {
+  async getSanitaryLogs(
+    cycleId?: string,
+    options?: { cycleUnitAllocationId?: string }
+  ): Promise<SanitaryLog[]> {
     try {
-      const params = cycleId ? `?cycle_id=${cycleId}` : '';
+      const query = new URLSearchParams();
+      if (cycleId) {
+        query.append('cycle_id', cycleId);
+      }
+      if (options?.cycleUnitAllocationId) {
+        query.append('cycle_unit_allocation', options.cycleUnitAllocationId);
+      }
+      const params = query.toString() ? `?${query.toString()}` : '';
       const response = await apiService.get<ListResponse<SanitaryLog>>(`${this.baseUrl}/sanitary-logs/${params}`);
       return extractResults(response.data);
     } catch (error) {
@@ -505,6 +525,9 @@ class AquacultureService {
       formData.append('symptoms', logData.symptoms);
       formData.append('client_uuid', clientUuid);
       formData.append('created_offline', logData.created_offline ? 'true' : 'false');
+      if (logData.cycle_unit_allocation) {
+        formData.append('cycle_unit_allocation', logData.cycle_unit_allocation);
+      }
 
       if (logData.affected_count !== undefined) {
         formData.append('affected_count', logData.affected_count.toString());

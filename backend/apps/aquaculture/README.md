@@ -213,6 +213,7 @@ Comportement:
 
 1. `create` est un upsert metier sur `(cycle, log_date)`.
 2. En sync bulk, recalculs unitaires evites via flag thread-local puis recalcul batch.
+3. Les logs peuvent aussi etre rattaches a une `CycleUnitAllocation` pour le suivi par unite, tout en conservant le flux legacy sans unite.
 
 ### 4. Sanitaire
 
@@ -226,6 +227,7 @@ Comportement:
 
 1. Creation idempotente par `client_uuid`.
 2. Resolution trace date et notes.
+3. Le log sanitaire peut egalement etre rattache a une `CycleUnitAllocation` quand le contexte unitaire est disponible.
 
 ### 5. Recolte Finale Et Recolte Partielle
 

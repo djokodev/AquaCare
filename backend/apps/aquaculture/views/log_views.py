@@ -35,17 +35,23 @@ logger = logging.getLogger(__name__)
         Retourne la liste des logs quotidiens des cycles de production.
         Supporte le filtrage par cycle, date et type d'activité.
         """,
-        parameters=[
-            OpenApiParameter(
-                name='cycle_id',
-                type=OpenApiTypes.UUID,
-                location=OpenApiParameter.QUERY,
-                description='UUID du cycle pour filtrer les logs'
-            ),
-            OpenApiParameter(
-                name='log_date_after',
-                type=OpenApiTypes.DATE,
-                location=OpenApiParameter.QUERY,
+            parameters=[
+                OpenApiParameter(
+                    name='cycle_id',
+                    type=OpenApiTypes.UUID,
+                    location=OpenApiParameter.QUERY,
+                    description='UUID du cycle pour filtrer les logs'
+                ),
+                OpenApiParameter(
+                    name='cycle_unit_allocation',
+                    type=OpenApiTypes.UUID,
+                    location=OpenApiParameter.QUERY,
+                    description="UUID de l'allocation d'unité de production",
+                ),
+                OpenApiParameter(
+                    name='log_date_after',
+                    type=OpenApiTypes.DATE,
+                    location=OpenApiParameter.QUERY,
                 description='Logs après cette date (YYYY-MM-DD)'
             ),
             OpenApiParameter(
@@ -137,7 +143,11 @@ class CycleLogViewSet(viewsets.ModelViewSet):
         cycle_id = self.request.query_params.get('cycle_id')
         if cycle_id:
             queryset = queryset.filter(cycle_id=cycle_id)
-        
+
+        cycle_unit_allocation_id = self.request.query_params.get('cycle_unit_allocation')
+        if cycle_unit_allocation_id:
+            queryset = queryset.filter(cycle_unit_allocation_id=cycle_unit_allocation_id)
+
         return queryset
     
     def create(self, request, *args, **kwargs):

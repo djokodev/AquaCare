@@ -552,18 +552,41 @@ class CycleLogSerializer(serializers.ModelSerializer):
     """
     # Calculated fields
     calculated_average_weight = serializers.SerializerMethodField()
+    production_unit = serializers.SerializerMethodField()
+    production_unit_name = serializers.SerializerMethodField()
+    production_unit_type = serializers.SerializerMethodField()
+    production_unit_display_dimension = serializers.SerializerMethodField()
+    cycle_unit_allocation = serializers.PrimaryKeyRelatedField(
+        queryset=CycleUnitAllocation.objects.select_related(
+            'cycle__farm_profile__user',
+            'production_unit__farm_profile',
+        ),
+        required=False,
+        allow_null=True,
+    )
     
     class Meta:
         model = CycleLog
         fields = [
-            'id', 'client_uuid', 'cycle', 'log_date', 'log_time',
+            'id', 'client_uuid', 'cycle', 'cycle_unit_allocation', 'production_unit',
+            'production_unit_name', 'production_unit_type', 'production_unit_display_dimension',
+            'log_date', 'log_time',
             'mortality_count', 'mortality_reason', 'sample_count',
             'sample_total_weight', 'average_weight', 'calculated_average_weight',
             'feed_quantity', 'feed_type', 'feed_size_mm', 'feeding_times',
             'water_temperature', 'dissolved_oxygen', 'ph_level', 'ammonia_level',
             'observations', 'created_offline', 'synced_at', 'created_at'
         ]
-        read_only_fields = ['id', 'log_time', 'synced_at', 'created_at']
+        read_only_fields = [
+            'id',
+            'log_time',
+            'production_unit',
+            'production_unit_name',
+            'production_unit_type',
+            'production_unit_display_dimension',
+            'synced_at',
+            'created_at',
+        ]
         # On gère l'upsert (cycle/log_date) au niveau de la vue, donc on retire
         # la validation unique automatique pour éviter un 400 avant la mise à jour.
         validators = []
@@ -574,9 +597,32 @@ class CycleLogSerializer(serializers.ModelSerializer):
             return float(obj.sample_total_weight / obj.sample_count)
         return None
 
+    def get_production_unit(self, obj):
+        allocation = getattr(obj, 'cycle_unit_allocation', None)
+        return str(allocation.production_unit_id) if allocation else None
+
+    def get_production_unit_name(self, obj):
+        allocation = getattr(obj, 'cycle_unit_allocation', None)
+        if allocation and allocation.production_unit:
+            return allocation.production_unit.name
+        return None
+
+    def get_production_unit_type(self, obj):
+        allocation = getattr(obj, 'cycle_unit_allocation', None)
+        if allocation and allocation.production_unit:
+            return allocation.production_unit.unit_type
+        return None
+
+    def get_production_unit_display_dimension(self, obj):
+        allocation = getattr(obj, 'cycle_unit_allocation', None)
+        if allocation and allocation.production_unit and allocation.production_unit.display_dimension:
+            return str(allocation.production_unit.display_dimension)
+        return None
+
     def validate(self, attrs):
         """Valide la cohérence des données de log et les règles métier."""
         from aquaculture.domain.validators import (
+            validate_cycle_unit_allocation_context,
             validate_cycle_log_date,
             validate_sampling_data,
         )
@@ -584,6 +630,8 @@ class CycleLogSerializer(serializers.ModelSerializer):
 
         cycle = attrs.get('cycle')
         log_date = attrs.get('log_date')
+        request = self.context.get('request')
+        request_user = getattr(request, 'user', None)
 
         # Validate log date within cycle period (shared domain validator)
         if cycle and log_date:
@@ -591,6 +639,20 @@ class CycleLogSerializer(serializers.ModelSerializer):
                 validate_cycle_log_date(log_date, cycle.start_date, cycle.end_date)
             except DjangoValidationError as e:
                 raise serializers.ValidationError({'log_date': e.message})
+
+        cycle_unit_allocation = attrs.get('cycle_unit_allocation') or getattr(
+            self.instance,
+            'cycle_unit_allocation',
+            None,
+        )
+        try:
+            validate_cycle_unit_allocation_context(
+                cycle=cycle or getattr(self.instance, 'cycle', None),
+                cycle_unit_allocation=cycle_unit_allocation,
+                user=request_user if getattr(request_user, 'is_authenticated', False) else None,
+            )
+        except DjangoValidationError as e:
+            raise serializers.ValidationError(e.message_dict or e.messages)
 
         # Validate sampling data consistency (shared domain validator)
         if attrs.get('sample_count') and attrs.get('sample_total_weight'):
@@ -721,18 +783,40 @@ class SanitaryLogSerializer(serializers.ModelSerializer):
     event_type_display = serializers.CharField(source='get_event_type_display', read_only=True)
     photo_url = serializers.SerializerMethodField()
     days_since_event = serializers.SerializerMethodField()
+    production_unit = serializers.SerializerMethodField()
+    production_unit_name = serializers.SerializerMethodField()
+    production_unit_type = serializers.SerializerMethodField()
+    production_unit_display_dimension = serializers.SerializerMethodField()
+    cycle_unit_allocation = serializers.PrimaryKeyRelatedField(
+        queryset=CycleUnitAllocation.objects.select_related(
+            'cycle__farm_profile__user',
+            'production_unit__farm_profile',
+        ),
+        required=False,
+        allow_null=True,
+    )
 
     class Meta:
         model = SanitaryLog
         fields = [
-            'id', 'client_uuid', 'cycle', 'cycle_name', 'event_date', 'event_type',
+            'id', 'client_uuid', 'cycle', 'cycle_name', 'cycle_unit_allocation',
+            'production_unit', 'production_unit_name', 'production_unit_type',
+            'production_unit_display_dimension', 'event_date', 'event_type',
             'event_type_display', 'symptoms', 'affected_count',
             'treatment_applied', 'medication_used', 'dosage',
             'treatment_duration_days', 'photo', 'photo_url',
             'resolved', 'resolution_date', 'notes', 'created_offline',
             'synced_at', 'days_since_event', 'created_at'
         ]
-        read_only_fields = ['id', 'synced_at', 'created_at']
+        read_only_fields = [
+            'id',
+            'synced_at',
+            'created_at',
+            'production_unit',
+            'production_unit_name',
+            'production_unit_type',
+            'production_unit_display_dimension',
+        ]
         extra_kwargs = {
             'client_uuid': {'validators': []},
         }
@@ -748,6 +832,28 @@ class SanitaryLogSerializer(serializers.ModelSerializer):
     def get_days_since_event(self, obj):
         """Calcule les jours depuis que l'événement s'est produit."""
         return (date.today() - obj.event_date).days
+
+    def get_production_unit(self, obj):
+        allocation = getattr(obj, 'cycle_unit_allocation', None)
+        return str(allocation.production_unit_id) if allocation else None
+
+    def get_production_unit_name(self, obj):
+        allocation = getattr(obj, 'cycle_unit_allocation', None)
+        if allocation and allocation.production_unit:
+            return allocation.production_unit.name
+        return None
+
+    def get_production_unit_type(self, obj):
+        allocation = getattr(obj, 'cycle_unit_allocation', None)
+        if allocation and allocation.production_unit:
+            return allocation.production_unit.unit_type
+        return None
+
+    def get_production_unit_display_dimension(self, obj):
+        allocation = getattr(obj, 'cycle_unit_allocation', None)
+        if allocation and allocation.production_unit and allocation.production_unit.display_dimension:
+            return str(allocation.production_unit.display_dimension)
+        return None
 
     def validate_photo(self, value):
         """Valide le type et la taille de la photo uploadée."""
@@ -769,16 +875,34 @@ class SanitaryLogSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         """Valide les données du log sanitaire."""
+        from django.core.exceptions import ValidationError as DjangoValidationError
+
         cycle = attrs.get('cycle') or getattr(self.instance, 'cycle', None)
         event_date = attrs.get('event_date') or getattr(self.instance, 'event_date', None)
         request = self.context.get('request')
         request_user = getattr(request, 'user', None)
+        cycle_unit_allocation = attrs.get('cycle_unit_allocation') or getattr(
+            self.instance,
+            'cycle_unit_allocation',
+            None,
+        )
 
         if cycle and request_user and getattr(request_user, 'is_authenticated', False):
             if cycle.farm_profile.user_id != request_user.id:
                 raise serializers.ValidationError({
                     'cycle': _("Cycle non autorisé")
                 })
+
+        from aquaculture.domain.validators import validate_cycle_unit_allocation_context
+
+        try:
+            validate_cycle_unit_allocation_context(
+                cycle=cycle,
+                cycle_unit_allocation=cycle_unit_allocation,
+                user=request_user if getattr(request_user, 'is_authenticated', False) else None,
+            )
+        except DjangoValidationError as e:
+            raise serializers.ValidationError(e.message_dict or e.messages)
 
         if cycle and event_date:
             if event_date < cycle.start_date:
