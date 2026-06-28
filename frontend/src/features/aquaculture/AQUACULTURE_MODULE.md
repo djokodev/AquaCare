@@ -15,6 +15,15 @@ Le module frontend `aquaculture` couvre l'experience mobile de production piscic
 5. Rapports de production, validation humaine, partage email/WhatsApp.
 6. Mode offline avec file locale et synchronisation differee.
 
+## Production Units
+
+Cette base de code prépare l'evolution vers des unites de production reelles:
+
+1. Une unite de production represente un bac, un etang ou une cage physique.
+2. Le cycle reste global et pourra etre repartit entre plusieurs unites dans une prochaine PR.
+3. Le dashboard existant reste inchangé dans cette PR.
+4. Les prochaines etapes brancheront le setup par unites, l'allocation intelligente et la vue globale du cycle.
+
 ## Limites Du Module
 
 Le frontend orchestre UX et saisie utilisateur.

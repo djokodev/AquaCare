@@ -14,6 +14,7 @@ from datetime import date
 from decimal import Decimal
 
 from django.contrib.postgres.indexes import GinIndex
+from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.db.models import Prefetch
@@ -25,6 +26,14 @@ from .constants import (
     GROWTH_STAGES,
     SANITARY_EVENT_TYPES,
     SPECIES_CHOICES,
+)
+from .domain.production_units import (
+    get_production_unit_capacity,
+    get_production_unit_density_unit,
+    get_production_unit_dimension_display,
+    normalize_production_unit_type,
+    validate_cycle_unit_allocation_counts,
+    validate_production_unit_dimensions,
 )
 
 
@@ -103,6 +112,25 @@ class SanitaryLogQuerySet(models.QuerySet):
 
     def for_api(self):
         return self.select_related('cycle')
+
+
+class ProductionUnitQuerySet(models.QuerySet):
+    """QuerySet optimisé pour les unités de production."""
+
+    def for_api(self):
+        return self.select_related('farm_profile')
+
+
+class CycleUnitAllocationQuerySet(models.QuerySet):
+    """QuerySet optimisé pour les allocations de cycle par unité."""
+
+    def for_api(self):
+        return self.select_related(
+            'cycle',
+            'cycle__farm_profile',
+            'production_unit',
+            'production_unit__farm_profile',
+        )
 
 
 class ProductionReportQuerySet(models.QuerySet):
@@ -248,6 +276,221 @@ class FarmProductionPlan(models.Model):
 
     def __str__(self):
         return f"Plan production - {self.farm_profile_id}"
+
+
+class ProductionUnit(models.Model):
+    """Unité de production réelle sur une ferme aquacole."""
+
+    UNIT_TYPE_CHOICES = [
+        ('tank', _('Bac')),
+        ('pond', _('Étang')),
+        ('cage', _('Cage')),
+    ]
+
+    STATUS_CHOICES = [
+        ('active', _('Actif')),
+        ('inactive', _('Inactif')),
+        ('archived', _('Archivé')),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    farm_profile = models.ForeignKey(
+        'accounts.FarmProfile',
+        on_delete=models.CASCADE,
+        related_name='production_units',
+        verbose_name=_('Profil de ferme'),
+    )
+    name = models.CharField(
+        max_length=120,
+        verbose_name=_("Nom de l'unité"),
+        help_text=_("Ex: Bac 1, Étang principal, Cage A"),
+    )
+    unit_type = models.CharField(
+        max_length=20,
+        choices=UNIT_TYPE_CHOICES,
+        verbose_name=_("Type d'unité"),
+    )
+    volume_m3 = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal('0.01'))],
+        verbose_name=_("Volume (m³)"),
+    )
+    surface_m2 = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal('0.01'))],
+        verbose_name=_("Surface (m²)"),
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='active',
+        verbose_name=_("Statut"),
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    objects = ProductionUnitQuerySet.as_manager()
+
+    class Meta:
+        app_label = 'aquaculture'
+        db_table = 'aquaculture_production_unit'
+        ordering = ['name']
+        verbose_name = _("Unité de production")
+        verbose_name_plural = _("Unités de production")
+        indexes = [
+            models.Index(fields=['farm_profile', 'status']),
+            models.Index(fields=['farm_profile', 'unit_type']),
+        ]
+
+    def __str__(self):
+        return f"{self.name} - {self.get_unit_type_display()}"
+
+    @property
+    def recommended_capacity(self):
+        capacity = get_production_unit_capacity(
+            self.unit_type,
+            volume_m3=self.volume_m3,
+            surface_m2=self.surface_m2,
+        )
+        if capacity is None:
+            return None
+        return int(capacity)
+
+    @property
+    def capacity_density_unit(self):
+        return get_production_unit_density_unit(self.unit_type)
+
+    @property
+    def display_dimension(self):
+        return get_production_unit_dimension_display(
+            self.unit_type,
+            volume_m3=self.volume_m3,
+            surface_m2=self.surface_m2,
+        )
+
+    def clean(self):
+        self.unit_type = normalize_production_unit_type(self.unit_type) or self.unit_type
+        validate_production_unit_dimensions(
+            self.unit_type,
+            volume_m3=self.volume_m3,
+            surface_m2=self.surface_m2,
+        )
+
+    def save(self, *args, **kwargs):
+        self.unit_type = normalize_production_unit_type(self.unit_type) or self.unit_type
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+
+class CycleUnitAllocation(models.Model):
+    """Allocation d'un cycle de production à une unité réelle."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    cycle = models.ForeignKey(
+        'ProductionCycle',
+        on_delete=models.CASCADE,
+        related_name='unit_allocations',
+        verbose_name=_('Cycle de production'),
+    )
+    production_unit = models.ForeignKey(
+        ProductionUnit,
+        on_delete=models.CASCADE,
+        related_name='cycle_allocations',
+        verbose_name=_('Unité de production'),
+    )
+    initial_fish_count = models.PositiveIntegerField(
+        default=0,
+        validators=[MinValueValidator(0)],
+        verbose_name=_("Effectif initial"),
+    )
+    current_fish_count = models.PositiveIntegerField(
+        default=0,
+        validators=[MinValueValidator(0)],
+        verbose_name=_("Effectif actuel"),
+    )
+    initial_biomass_kg = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal('0'),
+        validators=[MinValueValidator(Decimal('0'))],
+        verbose_name=_("Biomasse initiale (kg)"),
+    )
+    current_biomass_kg = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal('0'),
+        validators=[MinValueValidator(Decimal('0'))],
+        verbose_name=_("Biomasse actuelle (kg)"),
+    )
+    expected_survival_rate_pct = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal('0')), MaxValueValidator(Decimal('100'))],
+        verbose_name=_("Taux de survie prévisionnel (%)"),
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    objects = CycleUnitAllocationQuerySet.as_manager()
+
+    class Meta:
+        app_label = 'aquaculture'
+        db_table = 'aquaculture_cycle_unit_allocation'
+        ordering = ['cycle', 'production_unit__name']
+        verbose_name = _("Allocation de cycle par unité")
+        verbose_name_plural = _("Allocations de cycle par unité")
+        constraints = [
+            models.UniqueConstraint(
+                fields=['cycle', 'production_unit'],
+                name='uniq_cycle_production_unit_allocation',
+            )
+        ]
+        indexes = [
+            models.Index(fields=['cycle']),
+            models.Index(fields=['production_unit']),
+        ]
+
+    def __str__(self):
+        return f"{self.cycle.cycle_name} - {self.production_unit.name}"
+
+    @property
+    def survival_rate_pct(self):
+        if self.initial_fish_count <= 0:
+            return None
+        return (Decimal(self.current_fish_count) / Decimal(self.initial_fish_count) * Decimal('100')).quantize(
+            Decimal('0.01')
+        )
+
+    def clean(self):
+        validate_cycle_unit_allocation_counts(
+            initial_fish_count=self.initial_fish_count,
+            current_fish_count=self.current_fish_count,
+            initial_biomass_kg=self.initial_biomass_kg,
+            current_biomass_kg=self.current_biomass_kg,
+            expected_survival_rate_pct=self.expected_survival_rate_pct,
+        )
+
+        if self.cycle_id and self.production_unit_id:
+            cycle_farm_profile_id = getattr(self.cycle, 'farm_profile_id', None)
+            production_unit_farm_profile_id = getattr(self.production_unit, 'farm_profile_id', None)
+            if cycle_farm_profile_id and production_unit_farm_profile_id and (
+                cycle_farm_profile_id != production_unit_farm_profile_id
+            ):
+                raise ValidationError({
+                    'production_unit': _(
+                        "L'unité de production doit appartenir à la même ferme que le cycle"
+                    )
+                })
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
 
 
 class ProductionCycle(models.Model):

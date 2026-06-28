@@ -239,6 +239,58 @@ export interface SanitaryLog {
   synced_at?: string;
 }
 
+export type ProductionUnitType = 'tank' | 'pond' | 'cage';
+export type ProductionUnitStatus = 'active' | 'inactive' | 'archived';
+
+export interface ProductionUnit {
+  id: string;
+  farm_profile: string;
+  name: string;
+  unit_type: ProductionUnitType;
+  volume_m3?: number | null;
+  surface_m2?: number | null;
+  status?: ProductionUnitStatus;
+  unit_type_display?: string;
+  recommended_capacity?: number | null;
+  capacity_density_unit?: string | null;
+  display_dimension?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProductionUnitDraft {
+  local_id: string;
+  name: string;
+  unit_type: ProductionUnitType;
+  volume_m3?: string;
+  surface_m2?: string;
+}
+
+export interface CycleUnitAllocation {
+  id: string;
+  cycle: string;
+  production_unit: string;
+  initial_fish_count: number;
+  current_fish_count: number;
+  initial_biomass_kg?: number | null;
+  current_biomass_kg?: number | null;
+  expected_survival_rate_pct?: number | null;
+  cycle_name?: string;
+  production_unit_name?: string;
+  production_unit_type?: ProductionUnitType;
+  production_unit_display_dimension?: string | null;
+  production_unit_capacity_density_unit?: string | null;
+  production_unit_recommended_capacity?: number | null;
+  survival_rate_pct?: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CycleUnitAllocationDraft {
+  production_unit_local_id: string;
+  initial_fish_count: number;
+}
+
 export interface NutritionalGuide {
   id: string;
   species: Species;

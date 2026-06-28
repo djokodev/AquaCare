@@ -20,6 +20,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from typing import Any, cast
 
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.utils.translation import gettext_lazy as _
 from notifications.serializers import NotificationSerializer as GlobalNotificationSerializer
 from rest_framework import serializers
@@ -40,19 +41,200 @@ from .constants import (
 )
 from .domain.calculators import AquacultureCalculator
 from .domain.feed_phase_calculator import get_feed_phase
+from .domain.production_units import (
+    normalize_production_unit_type,
+    validate_cycle_unit_allocation_counts,
+    validate_production_unit_dimensions,
+)
 from .models import (
     CycleLog,
+    CycleUnitAllocation,
     CycleMetrics,
     FeedingPlan,
     NutritionalGuide,
     PartialHarvest,
     ProductionCycle,
+    ProductionUnit,
     ProductionReport,
     ReportDispatchLog,
     SanitaryLog,
 )
 from .services.cycle_service import ProductionCycleService
 from .services.farm_production_plan_service import FarmProductionPlanService
+
+
+class ProductionUnitTypeField(serializers.ChoiceField):
+    """Champ de type d'unité qui accepte les alias legacy AquaCare."""
+
+    def to_internal_value(self, data):
+        normalized = normalize_production_unit_type(data)
+        if normalized is None:
+            self.fail('invalid_choice', input=data)
+        return super().to_internal_value(normalized)
+
+
+class ProductionUnitSerializer(serializers.ModelSerializer):
+    """Sérialiseur des unités de production réelles."""
+
+    unit_type = ProductionUnitTypeField(choices=[choice[0] for choice in ProductionUnit.UNIT_TYPE_CHOICES])
+    farm_name = serializers.CharField(source='farm_profile.farm_name', read_only=True)
+    unit_type_display = serializers.CharField(source='get_unit_type_display', read_only=True)
+    recommended_capacity = serializers.SerializerMethodField()
+    capacity_density_unit = serializers.SerializerMethodField()
+    display_dimension = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ProductionUnit
+        fields = [
+            'id',
+            'farm_profile',
+            'farm_name',
+            'name',
+            'unit_type',
+            'unit_type_display',
+            'volume_m3',
+            'surface_m2',
+            'display_dimension',
+            'capacity_density_unit',
+            'recommended_capacity',
+            'status',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = [
+            'id',
+            'farm_profile',
+            'farm_name',
+            'unit_type_display',
+            'display_dimension',
+            'capacity_density_unit',
+            'recommended_capacity',
+            'created_at',
+            'updated_at',
+        ]
+
+    def get_recommended_capacity(self, obj):
+        return obj.recommended_capacity
+
+    def get_capacity_density_unit(self, obj):
+        return str(obj.capacity_density_unit) if obj.capacity_density_unit else None
+
+    def get_display_dimension(self, obj):
+        return str(obj.display_dimension) if obj.display_dimension else None
+
+    def validate(self, attrs):
+        unit_type = attrs.get('unit_type') or getattr(self.instance, 'unit_type', None)
+        volume_m3 = attrs.get('volume_m3') if 'volume_m3' in attrs else getattr(self.instance, 'volume_m3', None)
+        surface_m2 = attrs.get('surface_m2') if 'surface_m2' in attrs else getattr(self.instance, 'surface_m2', None)
+
+        try:
+            validate_production_unit_dimensions(
+                unit_type,
+                volume_m3=volume_m3,
+                surface_m2=surface_m2,
+            )
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(exc.message_dict or exc.messages)
+
+        return attrs
+
+
+class CycleUnitAllocationSerializer(serializers.ModelSerializer):
+    """Sérialiseur des allocations de cycle par unité de production."""
+
+    cycle_name = serializers.CharField(source='cycle.cycle_name', read_only=True)
+    production_unit_name = serializers.CharField(source='production_unit.name', read_only=True)
+    production_unit_type = serializers.CharField(source='production_unit.unit_type', read_only=True)
+    production_unit_display_dimension = serializers.CharField(source='production_unit.display_dimension', read_only=True)
+    production_unit_capacity_density_unit = serializers.CharField(
+        source='production_unit.capacity_density_unit',
+        read_only=True,
+    )
+    production_unit_recommended_capacity = serializers.IntegerField(
+        source='production_unit.recommended_capacity',
+        read_only=True,
+    )
+    survival_rate_pct = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CycleUnitAllocation
+        fields = [
+            'id',
+            'cycle',
+            'cycle_name',
+            'production_unit',
+            'production_unit_name',
+            'production_unit_type',
+            'production_unit_display_dimension',
+            'production_unit_capacity_density_unit',
+            'production_unit_recommended_capacity',
+            'initial_fish_count',
+            'current_fish_count',
+            'initial_biomass_kg',
+            'current_biomass_kg',
+            'expected_survival_rate_pct',
+            'survival_rate_pct',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = [
+            'id',
+            'cycle_name',
+            'production_unit_name',
+            'production_unit_type',
+            'production_unit_display_dimension',
+            'production_unit_capacity_density_unit',
+            'production_unit_recommended_capacity',
+            'survival_rate_pct',
+            'created_at',
+            'updated_at',
+        ]
+
+    def get_survival_rate_pct(self, obj):
+        return float(obj.survival_rate_pct) if obj.survival_rate_pct is not None else None
+
+    def validate(self, attrs):
+        cycle = attrs.get('cycle') or getattr(self.instance, 'cycle', None)
+        production_unit = attrs.get('production_unit') or getattr(self.instance, 'production_unit', None)
+        request = self.context.get('request')
+        user = getattr(request, 'user', None)
+
+        if cycle and user and cycle.farm_profile.user_id != user.id:
+            raise serializers.ValidationError({
+                'cycle': _("Ce cycle n'appartient pas à votre ferme"),
+            })
+
+        if production_unit and user and production_unit.farm_profile.user_id != user.id:
+            raise serializers.ValidationError({
+                'production_unit': _("Cette unité n'appartient pas à votre ferme"),
+            })
+
+        if cycle and production_unit and cycle.farm_profile_id != production_unit.farm_profile_id:
+            raise serializers.ValidationError({
+                'production_unit': _("L'unité doit appartenir à la même ferme que le cycle"),
+            })
+
+        initial_fish_count = attrs.get('initial_fish_count', getattr(self.instance, 'initial_fish_count', 0))
+        current_fish_count = attrs.get('current_fish_count', getattr(self.instance, 'current_fish_count', 0))
+        initial_biomass_kg = attrs.get('initial_biomass_kg', getattr(self.instance, 'initial_biomass_kg', Decimal('0')))
+        current_biomass_kg = attrs.get('current_biomass_kg', getattr(self.instance, 'current_biomass_kg', Decimal('0')))
+        expected_survival_rate_pct = attrs.get(
+            'expected_survival_rate_pct',
+            getattr(self.instance, 'expected_survival_rate_pct', None),
+        )
+
+        try:
+            validate_cycle_unit_allocation_counts(
+                initial_fish_count=initial_fish_count,
+                current_fish_count=current_fish_count,
+                initial_biomass_kg=initial_biomass_kg,
+                current_biomass_kg=current_biomass_kg,
+                expected_survival_rate_pct=expected_survival_rate_pct,
+            )
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(exc.message_dict or exc.messages)
+
+        return attrs
 
 
 class ProductionCycleSerializer(serializers.ModelSerializer):

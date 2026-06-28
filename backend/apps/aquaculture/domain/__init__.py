@@ -19,6 +19,14 @@ from .value_objects import (
     SurvivalRate,
     WaterQuality,
 )
+from .production_units import (
+    get_production_unit_capacity,
+    get_production_unit_density_unit,
+    get_production_unit_dimension_display,
+    normalize_production_unit_type,
+    validate_cycle_unit_allocation_counts,
+    validate_production_unit_dimensions,
+)
 
 __all__ = [
     'AquacultureCalculator',
@@ -27,4 +35,10 @@ __all__ = [
     'SurvivalRate',
     'WaterQuality',
     'GrowthRate',
+    'get_production_unit_capacity',
+    'get_production_unit_density_unit',
+    'get_production_unit_dimension_display',
+    'normalize_production_unit_type',
+    'validate_cycle_unit_allocation_counts',
+    'validate_production_unit_dimensions',
 ]
