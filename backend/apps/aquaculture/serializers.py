@@ -1142,6 +1142,42 @@ class DashboardSerializer(serializers.Serializer):
     feeding_recommendations = serializers.DictField()
 
 
+class ProductionUnitDashboardSummarySerializer(serializers.Serializer):
+    """Indicateurs opérationnels d'une allocation de cycle par unité."""
+
+    estimated_current_fish_count = serializers.IntegerField()
+    total_mortality_count = serializers.IntegerField()
+    mortality_rate_pct = serializers.DecimalField(max_digits=6, decimal_places=2)
+    total_feed_consumed_kg = serializers.DecimalField(max_digits=12, decimal_places=2)
+    latest_average_weight_g = serializers.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        required=False,
+        allow_null=True,
+    )
+    estimated_current_biomass_kg = serializers.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        required=False,
+        allow_null=True,
+    )
+    last_daily_log_date = serializers.DateField(required=False, allow_null=True)
+    days_since_last_log = serializers.IntegerField(required=False, allow_null=True)
+    has_today_daily_log = serializers.BooleanField()
+    active_sanitary_issues_count = serializers.IntegerField()
+    last_sanitary_event_date = serializers.DateField(required=False, allow_null=True)
+    has_unresolved_sanitary_issue = serializers.BooleanField()
+
+
+class ProductionUnitDashboardSerializer(serializers.Serializer):
+    """Payload du mini-dashboard d'une allocation de cycle par unité."""
+
+    allocation = CycleUnitAllocationSerializer()
+    summary = ProductionUnitDashboardSummarySerializer()
+    recent_daily_logs = CycleLogSerializer(many=True)
+    recent_sanitary_logs = SanitaryLogSerializer(many=True)
+
+
 class DashboardQuerySerializer(serializers.Serializer):
     """Validation des query params du dashboard aquaculture."""
 

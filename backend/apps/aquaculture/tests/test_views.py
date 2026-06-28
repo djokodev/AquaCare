@@ -37,6 +37,25 @@ def authenticated_client(api_client, authenticated_user):
     return api_client
 
 
+def create_cycle_unit_allocation(cycle, *, name='Bac 1', unit_type='tank', volume_m3='3.00', surface_m2=None):
+    """Crée une unité de production et son allocation pour les tests."""
+    unit = ProductionUnit.objects.create(
+        farm_profile=cycle.farm_profile,
+        name=name,
+        unit_type=unit_type,
+        volume_m3=Decimal(volume_m3) if volume_m3 is not None else None,
+        surface_m2=Decimal(surface_m2) if surface_m2 is not None else None,
+    )
+    return CycleUnitAllocation.objects.create(
+        cycle=cycle,
+        production_unit=unit,
+        initial_fish_count=900,
+        current_fish_count=900,
+        initial_biomass_kg=Decimal('9.00'),
+        current_biomass_kg=Decimal('9.00'),
+    )
+
+
 @pytest.mark.django_db
 class TestProductionCycleViewSet:
     """Tests pour le ViewSet ProductionCycle."""
@@ -283,6 +302,184 @@ class TestProductionCycleViewSet:
         assert 'historical_averages' in response.data
         assert 'performance_ranking' in response.data
         assert 'improvement_suggestions' in response.data
+
+
+@pytest.mark.django_db
+class TestCycleUnitAllocationDashboardViewSet:
+    """Tests pour le dashboard opérationnel d'une allocation de cycle."""
+
+    def test_dashboard_with_logs(self, auth_client, production_cycle):
+        allocation = create_cycle_unit_allocation(production_cycle, name='Bac 1', volume_m3='3.00')
+
+        CycleLog.objects.create(
+            cycle=production_cycle,
+            cycle_unit_allocation=allocation,
+            log_date=date.today() - timedelta(days=1),
+            mortality_count=3,
+            feed_quantity=Decimal('2.50'),
+            average_weight=Decimal('18.00'),
+        )
+        CycleLog.objects.create(
+            cycle=production_cycle,
+            cycle_unit_allocation=allocation,
+            log_date=date.today(),
+            mortality_count=5,
+            feed_quantity=Decimal('4.00'),
+            average_weight=Decimal('20.00'),
+        )
+        SanitaryLog.objects.create(
+            cycle=production_cycle,
+            cycle_unit_allocation=allocation,
+            event_date=date.today() - timedelta(days=1),
+            event_type='disease',
+            symptoms='Points blancs observés',
+            resolved=False,
+        )
+
+        response = auth_client.get(
+            reverse('aquaculture:cycle-unit-allocation-dashboard', kwargs={'pk': allocation.id})
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data['allocation']['id'] == str(allocation.id)
+        assert response.data['allocation']['production_unit_name'] == 'Bac 1'
+        assert response.data['summary']['estimated_current_fish_count'] == 892
+        assert response.data['summary']['total_mortality_count'] == 8
+        assert Decimal(str(response.data['summary']['mortality_rate_pct'])) == Decimal('0.89')
+        assert Decimal(str(response.data['summary']['total_feed_consumed_kg'])) == Decimal('6.50')
+        assert Decimal(str(response.data['summary']['latest_average_weight_g'])) == Decimal('20.00')
+        assert Decimal(str(response.data['summary']['estimated_current_biomass_kg'])) == Decimal('17.84')
+        assert response.data['summary']['last_daily_log_date'] == date.today().isoformat()
+        assert response.data['summary']['days_since_last_log'] == 0
+        assert response.data['summary']['has_today_daily_log'] is True
+        assert response.data['summary']['active_sanitary_issues_count'] == 1
+        assert response.data['summary']['last_sanitary_event_date'] == (date.today() - timedelta(days=1)).isoformat()
+        assert response.data['summary']['has_unresolved_sanitary_issue'] is True
+        assert len(response.data['recent_daily_logs']) == 2
+        assert len(response.data['recent_sanitary_logs']) == 1
+        assert all(
+            str(log['cycle_unit_allocation']) == str(allocation.id)
+            for log in response.data['recent_daily_logs']
+        )
+        assert all(
+            str(log['cycle_unit_allocation']) == str(allocation.id)
+            for log in response.data['recent_sanitary_logs']
+        )
+
+    def test_dashboard_keeps_units_isolated(self, auth_client, production_cycle):
+        allocation_a = create_cycle_unit_allocation(production_cycle, name='Bac 1', volume_m3='3.00')
+        allocation_b = create_cycle_unit_allocation(production_cycle, name='Bac 2', volume_m3='4.00')
+
+        CycleLog.objects.create(
+            cycle=production_cycle,
+            cycle_unit_allocation=allocation_a,
+            log_date=date.today(),
+            mortality_count=2,
+            feed_quantity=Decimal('1.50'),
+            average_weight=Decimal('16.00'),
+        )
+        CycleLog.objects.create(
+            cycle=production_cycle,
+            cycle_unit_allocation=allocation_b,
+            log_date=date.today(),
+            mortality_count=9,
+            feed_quantity=Decimal('9.50'),
+            average_weight=Decimal('25.00'),
+        )
+
+        response = auth_client.get(
+            reverse('aquaculture:cycle-unit-allocation-dashboard', kwargs={'pk': allocation_a.id})
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data['summary']['estimated_current_fish_count'] == 898
+        assert response.data['summary']['total_mortality_count'] == 2
+        assert Decimal(str(response.data['summary']['total_feed_consumed_kg'])) == Decimal('1.50')
+        assert Decimal(str(response.data['summary']['latest_average_weight_g'])) == Decimal('16.00')
+        assert Decimal(str(response.data['summary']['estimated_current_biomass_kg'])) == Decimal('14.37')
+        assert len(response.data['recent_daily_logs']) == 1
+        assert str(response.data['recent_daily_logs'][0]['cycle_unit_allocation']) == str(allocation_a.id)
+
+    def test_dashboard_ignores_global_logs(self, auth_client, production_cycle):
+        allocation = create_cycle_unit_allocation(production_cycle, name='Bac 1', volume_m3='3.00')
+
+        CycleLog.objects.create(
+            cycle=production_cycle,
+            log_date=date.today(),
+            mortality_count=12,
+            feed_quantity=Decimal('12.00'),
+            average_weight=Decimal('24.00'),
+        )
+        CycleLog.objects.create(
+            cycle=production_cycle,
+            cycle_unit_allocation=allocation,
+            log_date=date.today(),
+            mortality_count=1,
+            feed_quantity=Decimal('1.00'),
+            average_weight=Decimal('15.00'),
+        )
+
+        response = auth_client.get(
+            reverse('aquaculture:cycle-unit-allocation-dashboard', kwargs={'pk': allocation.id})
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data['summary']['estimated_current_fish_count'] == 899
+        assert response.data['summary']['total_mortality_count'] == 1
+        assert Decimal(str(response.data['summary']['total_feed_consumed_kg'])) == Decimal('1.00')
+        assert len(response.data['recent_daily_logs']) == 1
+        assert response.data['recent_daily_logs'][0]['mortality_count'] == 1
+
+    def test_dashboard_for_other_user_allocation_returns_404(self, auth_client, user_factory):
+        other_user = user_factory(
+            phone_number='+237690555555',
+            email='other-owner@test.com',
+        )
+        other_farm = other_user.farm_profile
+        other_cycle = ProductionCycle.objects.create(
+            farm_profile=other_farm,
+            cycle_name='Cycle externe',
+            species='tilapia',
+            pond_identifier='Bassin externe',
+            pond_surface_m2=Decimal('80'),
+            start_date=date.today(),
+            initial_count=800,
+            initial_average_weight=Decimal('10'),
+            initial_biomass=Decimal('8'),
+            current_count=800,
+            current_average_weight=Decimal('10'),
+            current_biomass=Decimal('8'),
+        )
+        foreign_allocation = create_cycle_unit_allocation(other_cycle, name='Bac externe', volume_m3='4.00')
+
+        response = auth_client.get(
+            reverse('aquaculture:cycle-unit-allocation-dashboard', kwargs={'pk': foreign_allocation.id})
+        )
+
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_dashboard_without_logs_returns_clean_fallback(self, auth_client, production_cycle):
+        allocation = create_cycle_unit_allocation(production_cycle, name='Bac vide', volume_m3='3.00')
+
+        response = auth_client.get(
+            reverse('aquaculture:cycle-unit-allocation-dashboard', kwargs={'pk': allocation.id})
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data['summary']['estimated_current_fish_count'] == 900
+        assert response.data['summary']['total_mortality_count'] == 0
+        assert Decimal(str(response.data['summary']['mortality_rate_pct'])) == Decimal('0.00')
+        assert Decimal(str(response.data['summary']['total_feed_consumed_kg'])) == Decimal('0.00')
+        assert response.data['summary']['latest_average_weight_g'] is None
+        assert Decimal(str(response.data['summary']['estimated_current_biomass_kg'])) == Decimal('9.00')
+        assert response.data['summary']['last_daily_log_date'] is None
+        assert response.data['summary']['days_since_last_log'] is None
+        assert response.data['summary']['has_today_daily_log'] is False
+        assert response.data['summary']['active_sanitary_issues_count'] == 0
+        assert response.data['summary']['last_sanitary_event_date'] is None
+        assert response.data['summary']['has_unresolved_sanitary_issue'] is False
+        assert response.data['recent_daily_logs'] == []
+        assert response.data['recent_sanitary_logs'] == []
 
 
 @pytest.mark.django_db

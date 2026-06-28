@@ -102,6 +102,8 @@ Role:
 2. Preparrer la repartition future du cycle sans casser le flow cycle-first actuel.
 3. Fournir une base stable pour les allocations, les transferts et le contexte par unite dans les prochaines PRs.
 
+PR #63 ajoute aussi un dashboard opérationnel par allocation pour calculer les indicateurs de suivi à partir des logs unit-scoped.
+
 ### ProductionCycle
 
 Modele central: `aquaculture.models.ProductionCycle`

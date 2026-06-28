@@ -47,6 +47,7 @@ from .log_application_service import (
     UnauthorizedCycleAccessError,
 )
 from .log_service import CycleLogService
+from .production_unit_dashboard_service import ProductionUnitDashboardService
 from .report_application_service import (
     GenerateReportCommand,
     InvalidReportCycleScopeError,
@@ -103,4 +104,5 @@ __all__ = [
     'SyncExecutionResult',
     'WhatsAppShareCommand',
     'DashboardService',
+    'ProductionUnitDashboardService',
 ]

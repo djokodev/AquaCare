@@ -42,6 +42,8 @@ PR #61 adds the production-units hub after cycle launch. When a cycle is launche
 
 PR #62 adds unit-scoped tracking foundations. Daily logs, and sanitary logs when supported by the existing architecture, can now be linked to a `CycleUnitAllocation`, allowing actions created from a production unit to remain attached to that unit while preserving the legacy global-cycle logging flow.
 
+PR #63 adds an operational dashboard for each production unit. The unit overview now displays unit-specific indicators computed from daily and sanitary logs linked to the corresponding `CycleUnitAllocation`, while preserving the global cycle dashboard for future aggregation work.
+
 ## Limites Du Module
 
 Le frontend orchestre UX et saisie utilisateur.
