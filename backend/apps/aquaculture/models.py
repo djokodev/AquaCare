@@ -17,7 +17,7 @@ from django.contrib.postgres.indexes import GinIndex
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
-from django.db.models import Prefetch
+from django.db.models import Prefetch, Q
 from django.utils.translation import gettext_lazy as _
 
 from .constants import (
@@ -778,10 +778,21 @@ class CycleLog(models.Model):
     """
     class Meta:
         app_label = 'aquaculture'
-        unique_together = ['cycle', 'log_date']
         ordering = ['-log_date']
         verbose_name = _("Journal quotidien")
         verbose_name_plural = _("Journaux quotidiens")
+        constraints = [
+            models.UniqueConstraint(
+                fields=['cycle', 'log_date'],
+                condition=Q(cycle_unit_allocation__isnull=True),
+                name='uniq_cycle_log_global_per_day',
+            ),
+            models.UniqueConstraint(
+                fields=['cycle', 'cycle_unit_allocation', 'log_date'],
+                condition=Q(cycle_unit_allocation__isnull=False),
+                name='uniq_cycle_unit_log_per_day',
+            ),
+        ]
         indexes = [
             models.Index(fields=['cycle', 'log_date']),
             models.Index(fields=['client_uuid']),

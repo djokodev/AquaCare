@@ -59,6 +59,30 @@ class CycleLogPayload(TypedDict, total=False):
     created_offline: bool
 
 
+def _normalize_cycle_unit_allocation_ref(cycle_unit_allocation: Any) -> str | None:
+    if cycle_unit_allocation is None:
+        return None
+    return str(getattr(cycle_unit_allocation, 'id', cycle_unit_allocation))
+
+
+def _build_cycle_log_scope_kwargs(
+    *,
+    cycle: ProductionCycle,
+    log_date: date,
+    cycle_unit_allocation: Any,
+) -> dict[str, Any]:
+    scope_kwargs: dict[str, Any] = {
+        'cycle': cycle,
+        'log_date': log_date,
+    }
+    allocation_ref = _normalize_cycle_unit_allocation_ref(cycle_unit_allocation)
+    if allocation_ref is None:
+        scope_kwargs['cycle_unit_allocation__isnull'] = True
+    else:
+        scope_kwargs['cycle_unit_allocation'] = allocation_ref
+    return scope_kwargs
+
+
 class BulkLogError(TypedDict):
     index: int
     error: str
@@ -140,8 +164,11 @@ class CycleLogService(BaseService):
         # 3. Vérification doublon date (sauf si client_uuid fourni)
         if not log_data.get('client_uuid'):
             existing_log = CycleLog.objects.filter(
-                cycle=cycle,
-                log_date=log_data['log_date']
+                **_build_cycle_log_scope_kwargs(
+                    cycle=cycle,
+                    log_date=log_data['log_date'],
+                    cycle_unit_allocation=log_data.get('cycle_unit_allocation'),
+                )
             ).first()
 
             if existing_log:
@@ -234,8 +261,8 @@ class CycleLogService(BaseService):
 
         # Collect new logs to bulk_create (bypass signals)
         new_logs_to_create: list[CycleLog] = []
-        # Track (cycle_id, log_date) to prevent in-batch unique constraint violations
-        batch_date_keys: set = set()
+        # Track (cycle_id, log_date, allocation) to prevent in-batch unique violations
+        batch_date_keys: set[tuple[str, date, str | None]] = set()
         now = timezone.now()
 
         for idx, log_data in enumerate(logs_data):
@@ -328,7 +355,11 @@ class CycleLogService(BaseService):
                 log_date_val = clean_log_data.get('log_date')
                 if log_date_val:
                     existing_date_log = CycleLog.objects.filter(
-                        cycle=cycle, log_date=log_date_val
+                        **_build_cycle_log_scope_kwargs(
+                            cycle=cycle,
+                            log_date=log_date_val,
+                            cycle_unit_allocation=clean_log_data.get('cycle_unit_allocation'),
+                        )
                     ).first()
                     if existing_date_log:
                         # Update existing log instead of creating a duplicate
@@ -351,8 +382,12 @@ class CycleLogService(BaseService):
                             clean_log_data['sample_total_weight'] / clean_log_data['sample_count']
                         ))
 
-                # Prevent in-batch (cycle, log_date) duplicates
-                date_key = (str(cycle.id), str(log_date_val)) if log_date_val else None
+                # Prevent in-batch (cycle, log_date, allocation) duplicates
+                date_key = (
+                    str(cycle.id),
+                    log_date_val,
+                    _normalize_cycle_unit_allocation_ref(clean_log_data.get('cycle_unit_allocation')),
+                ) if log_date_val else None
                 if date_key and date_key in batch_date_keys:
                     result['errors'].append({
                         'index': idx,

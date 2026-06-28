@@ -44,9 +44,17 @@ class CycleLogApplicationService:
         # et eviter les races autour de l'upsert mobile.
         cycle = ProductionCycle.objects.select_for_update().get(id=cycle.id)
         log_date = validated_data["log_date"]
+        cycle_unit_allocation = validated_data.get("cycle_unit_allocation")
+        existing_log_filter = {
+            "cycle": cycle,
+            "log_date": log_date,
+        }
+        if cycle_unit_allocation is None:
+            existing_log_filter["cycle_unit_allocation__isnull"] = True
+        else:
+            existing_log_filter["cycle_unit_allocation"] = cycle_unit_allocation
         existing_log = CycleLog.objects.select_for_update().filter(
-            cycle=cycle,
-            log_date=log_date,
+            **existing_log_filter,
         ).first()
 
         if existing_log:

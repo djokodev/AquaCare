@@ -4,15 +4,33 @@ Tests unitaires pour SyncService.
 Coverage cible : >50%
 """
 from datetime import date, timedelta
+from decimal import Decimal
 
 import pytest
-from aquaculture.models import CycleLog, SanitaryLog
+from aquaculture.models import CycleLog, CycleUnitAllocation, ProductionUnit, SanitaryLog
 from aquaculture.services.sync_service import SyncService
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
 from tests.fixtures.factories import ProductionCycleFactory, UserFactory
+
+
+def create_cycle_unit_allocation(cycle, name='Bac 1'):
+    unit = ProductionUnit.objects.create(
+        farm_profile=cycle.farm_profile,
+        name=name,
+        unit_type='tank',
+        volume_m3=Decimal('3.00'),
+    )
+    return CycleUnitAllocation.objects.create(
+        cycle=cycle,
+        production_unit=unit,
+        initial_fish_count=500,
+        current_fish_count=500,
+        initial_biomass_kg=Decimal('5.00'),
+        current_biomass_kg=Decimal('5.00'),
+    )
 
 
 @pytest.mark.django_db
@@ -424,6 +442,44 @@ class TestSyncCycleLogsEdgeCases:
         assert len(result['errors']) == 1
         assert 'autre cycle' in result['errors'][0]['error']
 
+    def test_sync_cycle_logs_allows_same_day_logs_for_different_units(self):
+        """Le sync doit conserver deux logs unitaires distincts le même jour."""
+        import uuid
+
+        from tests.fixtures.factories import FarmProfileFactory
+
+        user = UserFactory()
+        farm = FarmProfileFactory(user=user)
+        cycle = ProductionCycleFactory(
+            farm_profile=farm,
+            start_date=date.today() - timedelta(days=10),
+        )
+        allocation_1 = create_cycle_unit_allocation(cycle, 'Bac 1')
+        allocation_2 = create_cycle_unit_allocation(cycle, 'Bac 2')
+
+        logs_data = [
+            {
+                'client_uuid': str(uuid.uuid4()),
+                'cycle': str(cycle.id),
+                'cycle_unit_allocation': str(allocation_1.id),
+                'log_date': date.today(),
+                'mortality_count': 2,
+            },
+            {
+                'client_uuid': str(uuid.uuid4()),
+                'cycle': str(cycle.id),
+                'cycle_unit_allocation': str(allocation_2.id),
+                'log_date': date.today(),
+                'mortality_count': 3,
+            },
+        ]
+
+        result = SyncService.sync_cycle_logs(user, logs_data)
+
+        assert result['created'] == 2
+        assert len(result['errors']) == 0
+        assert CycleLog.objects.filter(cycle=cycle, log_date=date.today()).count() == 2
+
     def test_invalid_date_format_adds_error(self):
         """Un log avec date au mauvais format est rejeté proprement."""
         import uuid
@@ -622,3 +678,35 @@ class TestSyncSanitaryLogs:
 
         assert result['created'] == 1
         assert len(result['errors']) == 1
+
+    def test_sync_sanitary_logs_keeps_cycle_unit_allocation(self):
+        """Le sync sanitaire doit persister l'allocation d'unité."""
+        import uuid
+
+        from tests.fixtures.factories import FarmProfileFactory
+
+        user = UserFactory()
+        farm = FarmProfileFactory(user=user)
+        cycle = ProductionCycleFactory(
+            farm_profile=farm,
+            start_date=date.today() - timedelta(days=10),
+        )
+        allocation = create_cycle_unit_allocation(cycle, 'Bac 1')
+
+        logs_data = [
+            {
+                'client_uuid': str(uuid.uuid4()),
+                'cycle': str(cycle.id),
+                'cycle_unit_allocation': str(allocation.id),
+                'event_date': date.today(),
+                'event_type': 'treatment',
+                'symptoms': 'Observation de comportement atypique chez plusieurs spécimens.',
+            }
+        ]
+
+        result = SyncService.sync_sanitary_logs(user, logs_data)
+
+        assert result['created'] == 1
+        assert len(result['errors']) == 0
+        created_log = SanitaryLog.objects.get(cycle=cycle)
+        assert created_log.cycle_unit_allocation_id == allocation.id

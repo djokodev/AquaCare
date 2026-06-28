@@ -23,7 +23,7 @@ from django.utils import timezone
 from rest_framework.exceptions import APIException
 
 from ..domain.validators import validate_cycle_unit_allocation_context
-from ..models import CycleLog, FeedingPlan, ProductionCycle, SanitaryLog
+from ..models import CycleLog, CycleUnitAllocation, FeedingPlan, ProductionCycle, SanitaryLog
 from .analytics_service import AnalyticsService
 from .base import BaseService
 from .cycle_service import ProductionCycleService
@@ -185,6 +185,29 @@ class SyncService(BaseService):
         return log_create_data
 
     @staticmethod
+    def _resolve_cycle_unit_allocation(
+        cycle_unit_allocation: Any,
+    ) -> CycleUnitAllocation | None:
+        if cycle_unit_allocation is None:
+            return None
+
+        if isinstance(cycle_unit_allocation, CycleUnitAllocation):
+            return cycle_unit_allocation
+
+        allocation_id = getattr(cycle_unit_allocation, 'id', cycle_unit_allocation)
+        allocation = CycleUnitAllocation.objects.select_related(
+            'cycle__farm_profile__user',
+            'production_unit__farm_profile',
+        ).filter(id=allocation_id).first()
+        if allocation is None:
+            raise ValidationError({
+                'cycle_unit_allocation': (
+                    "L'allocation de cycle par unité est introuvable"
+                )
+            })
+        return allocation
+
+    @staticmethod
     def _parse_last_sync(last_sync: str | None) -> datetime | None:
         if not last_sync:
             return None
@@ -322,6 +345,8 @@ class SyncService(BaseService):
 
                         for key, value in log_data.items():
                             if key not in ['id', 'created_at', 'client_uuid', 'cycle']:
+                                if key == 'cycle_unit_allocation':
+                                    value = SyncService._resolve_cycle_unit_allocation(value)
                                 setattr(existing_log, key, value)
 
                         existing_log.synced_at = timezone.now()
@@ -352,6 +377,13 @@ class SyncService(BaseService):
                                     error=str(exc),
                                 )
                                 continue
+
+                        if 'cycle_unit_allocation' in log_create_data:
+                            log_create_data['cycle_unit_allocation'] = (
+                                SyncService._resolve_cycle_unit_allocation(
+                                    log_create_data['cycle_unit_allocation'],
+                                )
+                            )
 
                         new_log = CycleLog.objects.create(**log_create_data)
                         affected_cycle_ids.add(str(cycle.id))
@@ -463,6 +495,10 @@ class SyncService(BaseService):
                     continue
 
                 log_create_data = SyncService._normalize_sanitary_log_payload(log_create_data)
+                if 'cycle_unit_allocation' in log_create_data:
+                    log_create_data['cycle_unit_allocation'] = SyncService._resolve_cycle_unit_allocation(
+                        log_create_data['cycle_unit_allocation'],
+                    )
                 validate_cycle_unit_allocation_context(
                     cycle=cycle,
                     cycle_unit_allocation=log_create_data.get('cycle_unit_allocation'),
@@ -474,6 +510,7 @@ class SyncService(BaseService):
                 new_log = SanitaryService.create_sanitary_log(
                     cycle=cycle,
                     user=user,
+                    cycle_unit_allocation=log_create_data.get('cycle_unit_allocation'),
                     event_date=log_create_data['event_date'],
                     event_type=log_create_data['event_type'],
                     symptoms=log_create_data['symptoms'],
