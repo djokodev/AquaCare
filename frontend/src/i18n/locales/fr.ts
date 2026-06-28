@@ -1167,6 +1167,7 @@ export const fr = {
   createFarmUnitNameLabel: "Nom de l’unité",
   createFarmUnitNamePlaceholder: 'Ex : Bac 1',
   createFarmUnitTypeLabel: "Type d’unité",
+  createFarmNoUnitTypeSelected: 'Aucun type sélectionné',
   createFarmUnitBaseNameLabel: 'Nom de base optionnel',
   createFarmUnitBaseNamePlaceholder: 'Ex : Bac',
   createFarmRecommendedCapacityLabel: 'Capacité totale recommandée',

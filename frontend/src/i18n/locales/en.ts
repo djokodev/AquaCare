@@ -1167,6 +1167,7 @@
   createFarmUnitNameLabel: 'Unit name',
   createFarmUnitNamePlaceholder: 'E.g. Tank 1',
   createFarmUnitTypeLabel: 'Unit type',
+  createFarmNoUnitTypeSelected: 'No unit type selected',
   createFarmUnitBaseNameLabel: 'Optional base name',
   createFarmUnitBaseNamePlaceholder: 'E.g. Tank',
   createFarmRecommendedCapacityLabel: 'Recommended total capacity',

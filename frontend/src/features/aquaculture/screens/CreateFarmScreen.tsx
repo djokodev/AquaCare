@@ -4,7 +4,7 @@
  * Le setup est désormais piloté par les unités de production, tout en gardant
  * une couche de compatibilité legacy pour la simulation actuelle.
  */
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -44,7 +44,6 @@ import {
   createIdenticalProductionUnitDrafts,
   createProductionUnitDraft,
   getProductionUnitCapacity,
-  getProductionUnitDensityUnit,
   getProductionUnitDisplayDimension,
   getProductionUnitsCompatibilitySummary,
   getTotalProductionUnitsCapacity,
@@ -89,29 +88,31 @@ const PRODUCTION_UNIT_TYPE_OPTIONS: Array<{
 
 interface UnitDraftState {
   name: string;
-  unit_type: ProductionUnitType;
+  unit_type: ProductionUnitType | null;
   volume_m3: string;
   surface_m2: string;
 }
 
 interface BulkUnitDraftState {
-  unit_type: ProductionUnitType;
+  unit_type: ProductionUnitType | null;
   count: string;
   base_name: string;
   volume_m3: string;
   surface_m2: string;
 }
 
+type BulkUnitDraftErrors = Partial<Record<'count', string>> & ProductionUnitDraftErrors;
+
 const getDefaultSingleDraft = (): UnitDraftState => ({
   name: '',
-  unit_type: 'tank',
+  unit_type: null,
   volume_m3: '',
   surface_m2: '',
 });
 
 const getDefaultBulkDraft = (): BulkUnitDraftState => ({
-  unit_type: 'tank',
-  count: '3',
+  unit_type: null,
+  count: '',
   base_name: '',
   volume_m3: '',
   surface_m2: '',
@@ -128,6 +129,7 @@ const getUnitTypeLabelKey = (
 export default function CreateFarmScreen({ navigation }: Props) {
   const { t, i18n } = useTranslation();
   const dispatch = useDispatch<AppDispatch>();
+  const scrollViewRef = useRef<React.ElementRef<typeof ScrollView> | null>(null);
   const { loading: simLoading } = useSelector(
     (s: RootState) => s.farmSetup.cycleSimulation
   );
@@ -153,8 +155,9 @@ export default function CreateFarmScreen({ navigation }: Props) {
   const [singleUnitDraft, setSingleUnitDraft] = useState<UnitDraftState>(getDefaultSingleDraft());
   const [bulkUnitDraft, setBulkUnitDraft] = useState<BulkUnitDraftState>(getDefaultBulkDraft());
   const [singleUnitErrors, setSingleUnitErrors] = useState<ProductionUnitDraftErrors>({});
-  const [bulkUnitErrors, setBulkUnitErrors] = useState<Partial<Record<'count', string>> & ProductionUnitDraftErrors>({});
+  const [bulkUnitErrors, setBulkUnitErrors] = useState<BulkUnitDraftErrors>({});
   const [editingUnitId, setEditingUnitId] = useState<string | null>(null);
+  const [singleFormOffsetY, setSingleFormOffsetY] = useState(0);
 
   useEffect(() => {
     const summary = getProductionUnitsCompatibilitySummary(form.productionUnits);
@@ -256,6 +259,93 @@ export default function CreateFarmScreen({ navigation }: Props) {
     return labelByField[field];
   };
 
+  const clearSingleUnitFieldErrors = () => {
+    setSingleUnitErrors((prev) => {
+      const next = { ...prev };
+      delete next.unit_type;
+      delete next.volume_m3;
+      delete next.surface_m2;
+      return next;
+    });
+  };
+
+  const clearBulkUnitFieldErrors = () => {
+    setBulkUnitErrors((prev) => {
+      const next = { ...prev };
+      delete next.unit_type;
+      delete next.volume_m3;
+      delete next.surface_m2;
+      return next;
+    });
+  };
+
+  const scrollToSingleUnitForm = () => {
+    if (!singleFormOffsetY) {
+      return;
+    }
+
+    const scroll = () => {
+      scrollViewRef.current?.scrollTo({
+        y: Math.max(0, singleFormOffsetY - 12),
+        animated: true,
+      });
+    };
+
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(scroll);
+      return;
+    }
+
+    scroll();
+  };
+
+  const validateSingleUnitDraft = (
+    draft: UnitDraftState
+  ): ProductionUnitDraftErrors => {
+    if (!draft.unit_type) {
+      return {
+        ...(draft.name.trim() ? {} : { name: 'required' }),
+        unit_type: 'createFarmNoUnitTypeSelected',
+      };
+    }
+
+    return validateProductionUnitDraft({
+      local_id: editingUnitId ?? 'draft-unit',
+      name: draft.name.trim(),
+      unit_type: draft.unit_type,
+      volume_m3: draft.unit_type === 'pond' ? '' : draft.volume_m3.trim(),
+      surface_m2: draft.unit_type === 'pond' ? draft.surface_m2.trim() : '',
+    });
+  };
+
+  const validateBulkUnitDraft = (): BulkUnitDraftErrors => {
+    const count = Number.parseInt(bulkUnitDraft.count.trim(), 10);
+    const countError = !bulkUnitDraft.count.trim() || !Number.isInteger(count) || count <= 0
+      ? 'createFarmPositiveIntegerError'
+      : undefined;
+
+    if (!bulkUnitDraft.unit_type) {
+      return {
+        count: countError,
+        unit_type: 'createFarmNoUnitTypeSelected',
+      };
+    }
+
+    const validationErrors = validateProductionUnitDraft({
+      local_id: 'draft-bulk-unit',
+      name: bulkUnitDraft.base_name.trim() || 'bulk',
+      unit_type: bulkUnitDraft.unit_type,
+      volume_m3: bulkUnitDraft.unit_type === 'pond' ? '' : bulkUnitDraft.volume_m3.trim(),
+      surface_m2: bulkUnitDraft.unit_type === 'pond' ? bulkUnitDraft.surface_m2.trim() : '',
+    });
+    delete validationErrors.name;
+
+    return {
+      ...validationErrors,
+      count: countError,
+    };
+  };
+
   const getFirstValidationMessage = (): string | null => {
     if (form.productionUnits.length === 0) {
       return t('createFarmAtLeastOneUnitError');
@@ -330,22 +420,21 @@ export default function CreateFarmScreen({ navigation }: Props) {
     }));
   };
 
-  const buildDraftFromState = (draft: UnitDraftState): ProductionUnitDraft => ({
-    local_id: editingUnitId ?? `draft-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    name: draft.name.trim(),
-    unit_type: draft.unit_type,
-    volume_m3: draft.unit_type === 'pond' ? '' : draft.volume_m3.trim(),
-    surface_m2: draft.unit_type === 'pond' ? draft.surface_m2.trim() : '',
-  });
-
   const handleSaveSingleUnit = () => {
-    const nextDraft = buildDraftFromState(singleUnitDraft);
-    const validationErrors = validateProductionUnitDraft(nextDraft);
+    const validationErrors = validateSingleUnitDraft(singleUnitDraft);
     setSingleUnitErrors(validationErrors);
 
     if (Object.values(validationErrors).some(Boolean)) {
       return;
     }
+
+    const nextDraft = createProductionUnitDraft({
+      local_id: editingUnitId ?? `draft-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      name: singleUnitDraft.name.trim(),
+      unit_type: singleUnitDraft.unit_type ?? 'tank',
+      volume_m3: singleUnitDraft.unit_type === 'pond' ? '' : singleUnitDraft.volume_m3.trim(),
+      surface_m2: singleUnitDraft.unit_type === 'pond' ? singleUnitDraft.surface_m2.trim() : '',
+    });
 
     const normalizedUnits = editingUnitId
       ? form.productionUnits.map((unit) => (unit.local_id === editingUnitId ? nextDraft : unit))
@@ -356,33 +445,23 @@ export default function CreateFarmScreen({ navigation }: Props) {
   };
 
   const handleSaveBulkUnits = () => {
-    const count = Number.parseInt(bulkUnitDraft.count.trim(), 10);
-    const countError = !bulkUnitDraft.count.trim() || !Number.isInteger(count) || count <= 0
-      ? 'createFarmPositiveIntegerError'
-      : undefined;
+    const validationErrors = validateBulkUnitDraft();
+    setBulkUnitErrors(validationErrors);
 
-    const baseDraft = createProductionUnitDraft({
-      name: bulkUnitDraft.base_name.trim() || 'bulk',
-      unit_type: bulkUnitDraft.unit_type,
-      volume_m3: bulkUnitDraft.unit_type === 'pond' ? '' : bulkUnitDraft.volume_m3.trim(),
-      surface_m2: bulkUnitDraft.unit_type === 'pond' ? bulkUnitDraft.surface_m2.trim() : '',
-    });
-    const validationErrors = validateProductionUnitDraft(baseDraft);
-    delete validationErrors.name;
-
-    setBulkUnitErrors({
-      ...validationErrors,
-      count: countError,
-    });
-
-    if (countError || Object.values(validationErrors).some(Boolean)) {
+    if (Object.values(validationErrors).some(Boolean)) {
       return;
     }
 
-    const nextIndex = getUnitsOfTypeCount(bulkUnitDraft.unit_type) + 1;
-    const prefix = bulkUnitDraft.base_name.trim() || t(getUnitTypeLabelKey(bulkUnitDraft.unit_type));
+    const unitType = bulkUnitDraft.unit_type;
+    if (!unitType) {
+      return;
+    }
+
+    const count = Number.parseInt(bulkUnitDraft.count.trim(), 10);
+    const nextIndex = getUnitsOfTypeCount(unitType) + 1;
+    const prefix = bulkUnitDraft.base_name.trim() || t(getUnitTypeLabelKey(unitType));
     const bulkUnits = createIdenticalProductionUnitDrafts({
-      unitType: bulkUnitDraft.unit_type,
+      unitType,
       count,
       namePrefix: prefix,
       volumeM3: bulkUnitDraft.volume_m3.trim(),
@@ -403,6 +482,7 @@ export default function CreateFarmScreen({ navigation }: Props) {
       surface_m2: unit.surface_m2 ?? '',
     });
     setSingleUnitErrors({});
+    scrollToSingleUnitForm();
   };
 
   const handleDeleteUnit = (unitId: string) => {
@@ -416,19 +496,21 @@ export default function CreateFarmScreen({ navigation }: Props) {
   const handleSingleDraftTypeChange = (unitType: ProductionUnitType) => {
     setSingleUnitDraft((prev) => ({
       ...prev,
-      unit_type: unitType,
-      volume_m3: unitType === 'pond' ? '' : prev.volume_m3,
-      surface_m2: unitType === 'pond' ? prev.surface_m2 : '',
+      unit_type: prev.unit_type === unitType ? null : unitType,
+      volume_m3: prev.unit_type === unitType ? '' : unitType === 'pond' ? '' : prev.volume_m3,
+      surface_m2: prev.unit_type === unitType ? '' : unitType === 'pond' ? prev.surface_m2 : '',
     }));
+    clearSingleUnitFieldErrors();
   };
 
   const handleBulkDraftTypeChange = (unitType: ProductionUnitType) => {
     setBulkUnitDraft((prev) => ({
       ...prev,
-      unit_type: unitType,
-      volume_m3: unitType === 'pond' ? '' : prev.volume_m3,
-      surface_m2: unitType === 'pond' ? prev.surface_m2 : '',
+      unit_type: prev.unit_type === unitType ? null : unitType,
+      volume_m3: prev.unit_type === unitType ? '' : unitType === 'pond' ? '' : prev.volume_m3,
+      surface_m2: prev.unit_type === unitType ? '' : unitType === 'pond' ? prev.surface_m2 : '',
     }));
+    clearBulkUnitFieldErrors();
   };
 
   async function handleSimulate() {
@@ -452,10 +534,8 @@ export default function CreateFarmScreen({ navigation }: Props) {
     }
   }
 
-  const singleDraftUsesSurface =
-    getProductionUnitDensityUnit({ unit_type: singleUnitDraft.unit_type }) === 'poissons/m²';
-  const bulkDraftUsesSurface =
-    getProductionUnitDensityUnit({ unit_type: bulkUnitDraft.unit_type }) === 'poissons/m²';
+  const singleDraftUsesSurface = singleUnitDraft.unit_type === 'pond';
+  const bulkDraftUsesSurface = bulkUnitDraft.unit_type === 'pond';
 
   return (
     <KeyboardAvoidingView
@@ -463,6 +543,7 @@ export default function CreateFarmScreen({ navigation }: Props) {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
     <ScrollView
+      ref={scrollViewRef}
       style={styles.container}
       contentContainerStyle={styles.content}
       keyboardShouldPersistTaps="handled"
@@ -489,7 +570,10 @@ export default function CreateFarmScreen({ navigation }: Props) {
         </View>
       )}
 
-      <View style={styles.formCard}>
+      <View
+        style={styles.formCard}
+        onLayout={(event) => setSingleFormOffsetY(event.nativeEvent.layout.y)}
+      >
         <Text style={styles.formCardTitle}>
           {editingUnitId ? t('createFarmEditUnitTitle') : t('createFarmAddUnitTitle')}
         </Text>
@@ -516,53 +600,58 @@ export default function CreateFarmScreen({ navigation }: Props) {
             />
           ))}
         </View>
+        {singleUnitErrors.unit_type ? (
+          <Text style={styles.inlineError}>{t(singleUnitErrors.unit_type)}</Text>
+        ) : !singleUnitDraft.unit_type ? (
+          <Text style={styles.unitTypeHint}>{t('createFarmNoUnitTypeSelected')}</Text>
+        ) : null}
 
-        {singleDraftUsesSurface ? (
-          <>
-            <FieldLabel label={t('createFarmUnitSurfaceLabel')} required />
-            <TextInput
-              style={[styles.input, singleUnitErrors.surface_m2 && styles.inputError]}
-              keyboardType="numeric"
-              placeholder={t('createFarmUnitSurfacePlaceholder')}
-              placeholderTextColor={AQUACARE_COLORS.GRAY_LIGHT}
-              value={singleUnitDraft.surface_m2}
-              onChangeText={(value) =>
-                setSingleUnitDraft((prev) => ({ ...prev, surface_m2: value }))
-              }
-            />
-            {singleUnitErrors.surface_m2 && (
-              <Text style={styles.inlineError}>{t(singleUnitErrors.surface_m2)}</Text>
-            )}
-          </>
-        ) : (
-          <>
-            <FieldLabel label={t('createFarmUnitVolumeLabel')} required />
-            <TextInput
-              style={[styles.input, singleUnitErrors.volume_m3 && styles.inputError]}
-              keyboardType="numeric"
-              placeholder={t('createFarmUnitVolumePlaceholder')}
-              placeholderTextColor={AQUACARE_COLORS.GRAY_LIGHT}
-              value={singleUnitDraft.volume_m3}
-              onChangeText={(value) =>
-                setSingleUnitDraft((prev) => ({ ...prev, volume_m3: value }))
-              }
-            />
-            {singleUnitErrors.volume_m3 && (
-              <Text style={styles.inlineError}>{t(singleUnitErrors.volume_m3)}</Text>
-            )}
-          </>
-        )}
+        {singleUnitDraft.unit_type ? (
+          singleDraftUsesSurface ? (
+            <>
+              <FieldLabel label={t('createFarmUnitSurfaceLabel')} required />
+              <TextInput
+                style={[styles.input, singleUnitErrors.surface_m2 && styles.inputError]}
+                keyboardType="numeric"
+                placeholder={t('createFarmUnitSurfacePlaceholder')}
+                placeholderTextColor={AQUACARE_COLORS.GRAY_LIGHT}
+                value={singleUnitDraft.surface_m2}
+                onChangeText={(value) =>
+                  setSingleUnitDraft((prev) => ({ ...prev, surface_m2: value }))
+                }
+              />
+              {singleUnitErrors.surface_m2 && (
+                <Text style={styles.inlineError}>{t(singleUnitErrors.surface_m2)}</Text>
+              )}
+            </>
+          ) : (
+            <>
+              <FieldLabel label={t('createFarmUnitVolumeLabel')} required />
+              <TextInput
+                style={[styles.input, singleUnitErrors.volume_m3 && styles.inputError]}
+                keyboardType="numeric"
+                placeholder={t('createFarmUnitVolumePlaceholder')}
+                placeholderTextColor={AQUACARE_COLORS.GRAY_LIGHT}
+                value={singleUnitDraft.volume_m3}
+                onChangeText={(value) =>
+                  setSingleUnitDraft((prev) => ({ ...prev, volume_m3: value }))
+                }
+              />
+              {singleUnitErrors.volume_m3 && (
+                <Text style={styles.inlineError}>{t(singleUnitErrors.volume_m3)}</Text>
+              )}
+            </>
+          )
+        ) : null}
 
         <TouchableOpacity style={styles.primaryMiniBtn} onPress={handleSaveSingleUnit} activeOpacity={0.8}>
           <Text style={styles.primaryMiniBtnText}>
             {editingUnitId ? t('createFarmSaveUnitBtn') : `+ ${t('createFarmAddUnitBtn')}`}
           </Text>
         </TouchableOpacity>
-        {editingUnitId && (
-          <TouchableOpacity style={styles.linkBtn} onPress={resetSingleUnitDraft} activeOpacity={0.8}>
-            <Text style={styles.linkBtnText}>{t('cancel')}</Text>
-          </TouchableOpacity>
-        )}
+        <TouchableOpacity style={styles.linkBtn} onPress={resetSingleUnitDraft} activeOpacity={0.8}>
+          <Text style={styles.linkBtnText}>{t('cancel')}</Text>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.formCard}>
@@ -580,6 +669,11 @@ export default function CreateFarmScreen({ navigation }: Props) {
             />
           ))}
         </View>
+        {bulkUnitErrors.unit_type ? (
+          <Text style={styles.inlineError}>{t(bulkUnitErrors.unit_type)}</Text>
+        ) : !bulkUnitDraft.unit_type ? (
+          <Text style={styles.unitTypeHint}>{t('createFarmNoUnitTypeSelected')}</Text>
+        ) : null}
 
         <FieldLabel label={t('createFarmBulkUnitCountLabel')} required />
         <TextInput
@@ -603,50 +697,55 @@ export default function CreateFarmScreen({ navigation }: Props) {
           onChangeText={(value) => setBulkUnitDraft((prev) => ({ ...prev, base_name: value }))}
         />
 
-        {bulkDraftUsesSurface ? (
-          <>
-            <FieldLabel label={t('createFarmUnitSurfaceLabel')} required />
-            <TextInput
-              style={[styles.input, bulkUnitErrors.surface_m2 && styles.inputError]}
-              keyboardType="numeric"
-              placeholder={t('createFarmUnitSurfacePlaceholder')}
-              placeholderTextColor={AQUACARE_COLORS.GRAY_LIGHT}
-              value={bulkUnitDraft.surface_m2}
-              onChangeText={(value) =>
-                setBulkUnitDraft((prev) => ({ ...prev, surface_m2: value }))
-              }
-            />
-            {bulkUnitErrors.surface_m2 && (
-              <Text style={styles.inlineError}>{t(bulkUnitErrors.surface_m2)}</Text>
-            )}
-          </>
-        ) : (
-          <>
-            <FieldLabel label={t('createFarmUnitVolumeLabel')} required />
-            <TextInput
-              style={[styles.input, bulkUnitErrors.volume_m3 && styles.inputError]}
-              keyboardType="numeric"
-              placeholder={t('createFarmUnitVolumePlaceholder')}
-              placeholderTextColor={AQUACARE_COLORS.GRAY_LIGHT}
-              value={bulkUnitDraft.volume_m3}
-              onChangeText={(value) =>
-                setBulkUnitDraft((prev) => ({ ...prev, volume_m3: value }))
-              }
-            />
-            {bulkUnitErrors.volume_m3 && (
-              <Text style={styles.inlineError}>{t(bulkUnitErrors.volume_m3)}</Text>
-            )}
-          </>
-        )}
+        {bulkUnitDraft.unit_type ? (
+          bulkDraftUsesSurface ? (
+            <>
+              <FieldLabel label={t('createFarmUnitSurfaceLabel')} required />
+              <TextInput
+                style={[styles.input, bulkUnitErrors.surface_m2 && styles.inputError]}
+                keyboardType="numeric"
+                placeholder={t('createFarmUnitSurfacePlaceholder')}
+                placeholderTextColor={AQUACARE_COLORS.GRAY_LIGHT}
+                value={bulkUnitDraft.surface_m2}
+                onChangeText={(value) =>
+                  setBulkUnitDraft((prev) => ({ ...prev, surface_m2: value }))
+                }
+              />
+              {bulkUnitErrors.surface_m2 && (
+                <Text style={styles.inlineError}>{t(bulkUnitErrors.surface_m2)}</Text>
+              )}
+            </>
+          ) : (
+            <>
+              <FieldLabel label={t('createFarmUnitVolumeLabel')} required />
+              <TextInput
+                style={[styles.input, bulkUnitErrors.volume_m3 && styles.inputError]}
+                keyboardType="numeric"
+                placeholder={t('createFarmUnitVolumePlaceholder')}
+                placeholderTextColor={AQUACARE_COLORS.GRAY_LIGHT}
+                value={bulkUnitDraft.volume_m3}
+                onChangeText={(value) =>
+                  setBulkUnitDraft((prev) => ({ ...prev, volume_m3: value }))
+                }
+              />
+              {bulkUnitErrors.volume_m3 && (
+                <Text style={styles.inlineError}>{t(bulkUnitErrors.volume_m3)}</Text>
+              )}
+            </>
+          )
+        ) : null}
 
         <TouchableOpacity style={styles.secondaryMiniBtn} onPress={handleSaveBulkUnits} activeOpacity={0.8}>
           <Text style={styles.secondaryMiniBtnText}>+ {t('createFarmAddUnitsIdenticalBtn')}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.linkBtn} onPress={resetBulkUnitDraft} activeOpacity={0.8}>
+          <Text style={styles.linkBtnText}>{t('cancel')}</Text>
         </TouchableOpacity>
       </View>
 
       <View style={styles.unitsList}>
         {form.productionUnits.length > 0 ? (
-          form.productionUnits.map((unit, index) => {
+          form.productionUnits.map((unit) => {
             const displayDimension = getProductionUnitDisplayDimension(unit);
             const capacity = getProductionUnitCapacity(unit);
 
@@ -667,7 +766,6 @@ export default function CreateFarmScreen({ navigation }: Props) {
                       </Text>
                     )}
                   </View>
-                  <Text style={styles.unitIndex}>{index + 1}</Text>
                 </View>
 
                 <View style={styles.unitCardActions}>
@@ -1030,7 +1128,7 @@ const styles = StyleSheet.create({
   },
   unitCardHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
     gap: 12,
   },
   unitCardHeaderText: {
@@ -1047,16 +1145,11 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     color: AQUACARE_COLORS.GRAY_LIGHT,
   },
-  unitIndex: {
-    minWidth: 28,
-    height: 28,
-    borderRadius: 14,
-    textAlign: 'center',
-    textAlignVertical: 'center',
-    backgroundColor: '#ecfdf5',
-    color: AQUACARE_COLORS.GREEN_PRIMARY,
-    fontWeight: '700',
-    paddingTop: Platform.OS === 'android' ? 4 : 0,
+  unitTypeHint: {
+    marginTop: 8,
+    fontSize: 12,
+    lineHeight: 16,
+    color: AQUACARE_COLORS.GRAY_LIGHT,
   },
   unitCardActions: {
     flexDirection: 'row',
