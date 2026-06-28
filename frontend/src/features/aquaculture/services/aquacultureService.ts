@@ -8,6 +8,7 @@ import {
   FeedPhase,
   SanitaryLog,
   DashboardData,
+  CycleDashboard,
   ProductionReport,
   ReportType,
   SyncPayload,
@@ -71,6 +72,7 @@ const isReactNativeUploadFile = (photo: unknown): photo is ReactNativeUploadFile
 class AquacultureService {
   private readonly baseUrl = '/aquaculture';
   private readonly inFlightDashboardRequests = new Map<string, Promise<DashboardData>>();
+  private readonly inFlightCycleDashboardRequests = new Map<string, Promise<CycleDashboard>>();
 
   // =================== DASHBOARD ===================
 
@@ -117,6 +119,38 @@ class AquacultureService {
     } finally {
       // Garantit un nettoyage même si un caller abandonne la promesse.
       this.inFlightDashboardRequests.delete(requestKey);
+    }
+  }
+
+  async getCycleDashboard(cycleId: string): Promise<CycleDashboard> {
+    const requestKey = cycleId;
+    const inFlightRequest = this.inFlightCycleDashboardRequests.get(requestKey);
+    if (inFlightRequest) {
+      return inFlightRequest;
+    }
+
+    const requestPromise = (async () => {
+      try {
+        const response = await apiService.get<CycleDashboard>(
+          `${this.baseUrl}/cycles/${cycleId}/dashboard/`
+        );
+        return response.data;
+      } catch (error) {
+        if (!isUnauthorizedError(error)) {
+          logger.error(`Erreur lors de la recuperation du dashboard du cycle ${cycleId}:`, error);
+        }
+        throw error;
+      } finally {
+        this.inFlightCycleDashboardRequests.delete(requestKey);
+      }
+    })();
+
+    this.inFlightCycleDashboardRequests.set(requestKey, requestPromise);
+
+    try {
+      return await requestPromise;
+    } finally {
+      this.inFlightCycleDashboardRequests.delete(requestKey);
     }
   }
 

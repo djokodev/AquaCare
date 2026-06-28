@@ -70,6 +70,7 @@ POST   /api/aquaculture/cycles/            - Create new cycle
 GET    /api/aquaculture/cycles/{id}/       - Get cycle details
 PUT    /api/aquaculture/cycles/{id}/       - Update cycle
 DELETE /api/aquaculture/cycles/{id}/       - Delete cycle
+GET    /api/aquaculture/cycles/{id}/dashboard/ - Global dashboard aggregated from production units
 POST   /api/aquaculture/cycles/{id}/harvest/ - Complete cycle (harvest)
 GET    /api/aquaculture/cycles/{id}/statistics/ - Detailed cycle statistics
 GET    /api/aquaculture/cycles/{id}/comparison/ - Compare with previous cycles

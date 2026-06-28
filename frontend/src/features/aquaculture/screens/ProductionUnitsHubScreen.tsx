@@ -14,9 +14,10 @@ import {
 import { useTranslation } from 'react-i18next';
 
 import { AQUACARE_COLORS } from '@/constants/colors';
+import DashboardMetricCard from '@/features/main/components/MetricCard';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
 import { RootStackParamList } from '@/navigation/MainNavigator';
-import type { CycleUnitAllocation } from '@/types/aquaculture';
+import type { CycleDashboard, CycleUnitAllocation } from '@/types/aquaculture';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'ProductionUnitsHub'>;
 type RouteType = RouteProp<RootStackParamList, 'ProductionUnitsHub'>;
@@ -43,10 +44,19 @@ const formatCount = (value: number, locale: string): string =>
   new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }).format(value);
 
 const formatKg = (value: number, locale: string): string =>
-  new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(value);
+  `${new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(value)} kg`;
 
 const formatPercentage = (value: number, locale: string): string =>
   `${new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(value)} %`;
+
+const toNumber = (value: string | number | null | undefined): number => {
+  if (value === null || value === undefined) {
+    return 0;
+  }
+
+  const parsed = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
 
 function StatRow({
   label,
@@ -128,15 +138,31 @@ export default function ProductionUnitsHubScreen({ navigation, route }: Props) {
   const { t, i18n } = useTranslation();
   const { cycleId } = route.params;
   const locale = i18n.language?.startsWith('fr') ? 'fr-FR' : 'en-US';
-  const [allocations, setAllocations] = useState<CycleUnitAllocation[]>([]);
+  const [dashboard, setDashboard] = useState<CycleDashboard | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [errorKey, setErrorKey] = useState<string | null>(null);
   const errorMessage = errorKey ? t(errorKey) : null;
 
-  const cycleName = useMemo(() => allocations.find((allocation) => allocation.cycle_name)?.cycle_name, [allocations]);
+  const allocations = dashboard?.allocations ?? [];
+  const summary = dashboard?.summary ?? null;
+  const cycleName = dashboard?.cycle.cycle_name || t('productionUnitsUnknownUnit');
+  const sanitaryIssueUnitNames = useMemo(
+    () =>
+      allocations
+        .filter((allocation) => allocation.summary.has_unresolved_sanitary_issue)
+        .map((allocation) => allocation.allocation.production_unit_name?.trim() || t('productionUnitsUnknownUnit')),
+    [allocations, t]
+  );
+  const missingTodayLogUnitNames = useMemo(
+    () =>
+      allocations
+        .filter((allocation) => !allocation.summary.has_today_daily_log)
+        .map((allocation) => allocation.allocation.production_unit_name?.trim() || t('productionUnitsUnknownUnit')),
+    [allocations, t]
+  );
 
-  const loadAllocations = useCallback(
+  const loadDashboard = useCallback(
     async (mode: 'initial' | 'refresh' = 'initial') => {
       if (mode === 'refresh') {
         setRefreshing(true);
@@ -145,12 +171,14 @@ export default function ProductionUnitsHubScreen({ navigation, route }: Props) {
       }
 
       try {
-        const result = await aquacultureService.getCycleUnitAllocations(cycleId);
-        setAllocations(result);
+        const result = await aquacultureService.getCycleDashboard(cycleId);
+        setDashboard(result);
         setErrorKey(null);
       } catch {
-        setAllocations([]);
-        setErrorKey('productionUnitsLoadError');
+        if (mode === 'initial') {
+          setDashboard(null);
+        }
+        setErrorKey('cycleDashboardLoadError');
       } finally {
         if (mode === 'refresh') {
           setRefreshing(false);
@@ -163,12 +191,12 @@ export default function ProductionUnitsHubScreen({ navigation, route }: Props) {
   );
 
   useEffect(() => {
-    void loadAllocations();
-  }, [loadAllocations]);
+    void loadDashboard();
+  }, [loadDashboard]);
 
   const handleRefresh = useCallback(() => {
-    void loadAllocations('refresh');
-  }, [loadAllocations]);
+    void loadDashboard('refresh');
+  }, [loadDashboard]);
 
   const handleOpenUnit = useCallback(
     (allocation: CycleUnitAllocation) => {
@@ -181,16 +209,16 @@ export default function ProductionUnitsHubScreen({ navigation, route }: Props) {
     [cycleId, navigation]
   );
 
-  if (loading && allocations.length === 0) {
+  if (loading && !dashboard) {
     return (
       <View style={styles.centered}>
         <ActivityIndicator size="large" color={AQUACARE_COLORS.GREEN_PRIMARY} />
-        <Text style={styles.loadingText}>{t('productionUnitsLoading')}</Text>
+        <Text style={styles.loadingText}>{t('cycleDashboardLoading')}</Text>
       </View>
     );
   }
 
-  if (errorMessage && allocations.length === 0) {
+  if (errorMessage && !dashboard) {
     return (
       <View style={styles.centered}>
         <Ionicons name="alert-circle-outline" size={48} color={AQUACARE_COLORS.ERROR} />
@@ -198,16 +226,6 @@ export default function ProductionUnitsHubScreen({ navigation, route }: Props) {
         <TouchableOpacity style={styles.retryButton} onPress={handleRefresh}>
           <Text style={styles.retryButtonText}>{t('retry')}</Text>
         </TouchableOpacity>
-      </View>
-    );
-  }
-
-  if (allocations.length === 0) {
-    return (
-      <View style={styles.centered}>
-        <Ionicons name="layers-outline" size={48} color={AQUACARE_COLORS.GREEN_PRIMARY} />
-        <Text style={styles.emptyTitle}>{t('productionUnitsEmptyTitle')}</Text>
-        <Text style={styles.emptyDescription}>{t('productionUnitsEmptyDescription')}</Text>
       </View>
     );
   }
@@ -228,10 +246,10 @@ export default function ProductionUnitsHubScreen({ navigation, route }: Props) {
       <View style={styles.hero}>
         <View style={styles.heroBadge}>
           <Ionicons name="grid-outline" size={16} color={AQUACARE_COLORS.GREEN_PRIMARY} />
-          <Text style={styles.heroBadgeText}>{t('productionUnitsActiveCycleLabel')}</Text>
+          <Text style={styles.heroBadgeText}>{t('cycleDashboardActiveCycleLabel')}</Text>
         </View>
-        <Text style={styles.title}>{t('productionUnitsHubTitle')}</Text>
-        <Text style={styles.subtitle}>{t('productionUnitsHubSubtitle')}</Text>
+        <Text style={styles.title}>{t('cycleDashboardTitle')}</Text>
+        <Text style={styles.subtitle}>{t('cycleDashboardSubtitle')}</Text>
         {cycleName ? <Text style={styles.cycleName}>{cycleName}</Text> : null}
       </View>
 
@@ -242,16 +260,111 @@ export default function ProductionUnitsHubScreen({ navigation, route }: Props) {
         </View>
       ) : null}
 
+      {summary ? (
+        <>
+          <View style={styles.metricGrid}>
+            <DashboardMetricCard
+              icon="fish-outline"
+              color={AQUACARE_COLORS.GREEN_PRIMARY}
+              value={formatCount(summary.total_estimated_current_fish_count, locale)}
+              label={t('cycleDashboardEstimatedFishCount')}
+              index={0}
+              animationType="pulse"
+            />
+            <DashboardMetricCard
+              icon="remove-circle-outline"
+              color={AQUACARE_COLORS.ERROR}
+              value={formatCount(summary.total_mortality_count, locale)}
+              label={t('cycleDashboardTotalMortalityCount')}
+              index={1}
+              animationType="wave"
+            />
+            <DashboardMetricCard
+              icon="restaurant-outline"
+              color={AQUACARE_COLORS.GREEN_LIGHT}
+              value={formatKg(toNumber(summary.total_feed_consumed_kg), locale)}
+              label={t('cycleDashboardFeedConsumed')}
+              index={2}
+              animationType="bounce"
+            />
+            <DashboardMetricCard
+              icon="water-outline"
+              color={AQUACARE_COLORS.GREEN_DARK}
+              value={formatKg(toNumber(summary.estimated_current_biomass_kg), locale)}
+              label={t('cycleDashboardEstimatedBiomass')}
+              index={3}
+              animationType="rotate"
+            />
+          </View>
+
+          <View style={styles.summaryStrip}>
+            <View style={styles.summaryChip}>
+              <Ionicons name="layers-outline" size={14} color={AQUACARE_COLORS.GREEN_PRIMARY} />
+              <Text style={styles.summaryChipText}>
+                {t('cycleDashboardUnitsCount', { count: summary.total_allocations })}
+              </Text>
+            </View>
+            <View style={styles.summaryChip}>
+              <Ionicons name="medkit-outline" size={14} color={AQUACARE_COLORS.ERROR} />
+              <Text style={styles.summaryChipText}>
+                {t('cycleDashboardSanitaryIssueUnits', { count: summary.units_with_sanitary_issue_count })}
+              </Text>
+            </View>
+            <View style={styles.summaryChip}>
+              <Ionicons name="alert-circle-outline" size={14} color={AQUACARE_COLORS.WARNING} />
+              <Text style={styles.summaryChipText}>
+                {t('cycleDashboardMissingTodayLogs', { count: summary.units_missing_today_log_count })}
+              </Text>
+            </View>
+          </View>
+
+          {summary.has_allocations ? null : (
+            <View style={styles.legacyNotice}>
+              <Ionicons name="information-circle-outline" size={18} color={AQUACARE_COLORS.GREEN_PRIMARY} />
+              <Text style={styles.legacyNoticeText}>{t('cycleDashboardLegacyNotice')}</Text>
+            </View>
+          )}
+
+          {(sanitaryIssueUnitNames.length > 0 || missingTodayLogUnitNames.length > 0) ? (
+            <View style={styles.alertPanel}>
+              <Text style={styles.alertPanelTitle}>{t('cycleDashboardAttentionTitle')}</Text>
+              {sanitaryIssueUnitNames.length > 0 ? (
+                <Text style={styles.alertPanelText}>
+                  {t('cycleDashboardSanitaryIssueUnits', { count: sanitaryIssueUnitNames.length })}
+                  {': '}
+                  {sanitaryIssueUnitNames.join(', ')}
+                </Text>
+              ) : null}
+              {missingTodayLogUnitNames.length > 0 ? (
+                <Text style={styles.alertPanelText}>
+                  {t('cycleDashboardMissingTodayLogs', { count: missingTodayLogUnitNames.length })}
+                  {': '}
+                  {missingTodayLogUnitNames.join(', ')}
+                </Text>
+              ) : null}
+            </View>
+          ) : null}
+        </>
+      ) : null}
+
       <View style={styles.cards}>
-        {allocations.map((allocation) => (
-          <UnitCard
-            key={allocation.id}
-            allocation={allocation}
-            locale={locale}
-            t={t}
-            onOpen={() => handleOpenUnit(allocation)}
-          />
-        ))}
+        {allocations.length > 0 ? (
+          allocations.map((allocation) => (
+            <UnitCard
+              key={allocation.allocation.id}
+              allocation={allocation.allocation}
+              locale={locale}
+              t={t}
+              onOpen={() => handleOpenUnit(allocation.allocation)}
+            />
+          ))
+        ) : (
+          <View style={styles.emptyStateCard}>
+            <Ionicons name="layers-outline" size={48} color={AQUACARE_COLORS.GREEN_PRIMARY} />
+            <Text style={styles.emptyTitle}>{t('cycleDashboardNoUnitsTitle')}</Text>
+            <Text style={styles.emptyDescription}>{t('cycleDashboardNoUnitsDescription')}</Text>
+          </View>
+        )}
       </View>
     </ScrollView>
   );
@@ -366,8 +479,83 @@ const styles = StyleSheet.create({
     color: AQUACARE_COLORS.ERROR,
     lineHeight: 18,
   },
+  metricGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  summaryStrip: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginBottom: 14,
+  },
+  summaryChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: AQUACARE_COLORS.WHITE,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  summaryChipText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: AQUACARE_COLORS.GRAY_DARK,
+  },
+  alertPanel: {
+    borderRadius: 16,
+    padding: 14,
+    backgroundColor: '#FFF7ED',
+    borderWidth: 1,
+    borderColor: '#FDBA74',
+    marginBottom: 14,
+  },
+  alertPanelTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#9A3412',
+    marginBottom: 8,
+  },
+  alertPanelText: {
+    fontSize: 13,
+    color: '#9A3412',
+    lineHeight: 19,
+    marginTop: 4,
+  },
+  legacyNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    marginBottom: 14,
+  },
+  legacyNoticeText: {
+    flex: 1,
+    fontSize: 13,
+    color: AQUACARE_COLORS.GRAY_DARK,
+    lineHeight: 18,
+  },
   cards: {
     gap: 14,
+  },
+  emptyStateCard: {
+    backgroundColor: AQUACARE_COLORS.WHITE,
+    borderRadius: 18,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   card: {
     backgroundColor: AQUACARE_COLORS.WHITE,

@@ -36,6 +36,35 @@ class ProductionUnitDashboardService:
             .order_by('-event_date', '-created_at')
         )
 
+        return ProductionUnitDashboardService.build_dashboard_payload_from_logs(
+            allocation=allocation,
+            daily_logs=daily_logs,
+            sanitary_logs=sanitary_logs,
+        )
+
+    @staticmethod
+    def build_dashboard_payload_from_logs(
+        *,
+        allocation: CycleUnitAllocation,
+        daily_logs: list[CycleLog],
+        sanitary_logs: list[SanitaryLog],
+    ) -> dict[str, Any]:
+        """Construit le payload à partir de listes de logs déjà chargées."""
+        summary = ProductionUnitDashboardService._build_summary(allocation, daily_logs, sanitary_logs)
+
+        return {
+            'allocation': allocation,
+            'summary': summary,
+            'recent_daily_logs': daily_logs[: ProductionUnitDashboardService.RECENT_LOGS_LIMIT],
+            'recent_sanitary_logs': sanitary_logs[: ProductionUnitDashboardService.RECENT_SANITARY_LIMIT],
+        }
+
+    @staticmethod
+    def _build_summary(
+        allocation: CycleUnitAllocation,
+        daily_logs: list[CycleLog],
+        sanitary_logs: list[SanitaryLog],
+    ) -> dict[str, Any]:
         total_mortality_count = sum((log.mortality_count or 0) for log in daily_logs)
         estimated_current_fish_count = max(allocation.initial_fish_count - total_mortality_count, 0)
 
@@ -81,21 +110,16 @@ class ProductionUnitDashboardService:
         last_sanitary_event_date = sanitary_logs[0].event_date if sanitary_logs else None
 
         return {
-            'allocation': allocation,
-            'summary': {
-                'estimated_current_fish_count': estimated_current_fish_count,
-                'total_mortality_count': total_mortality_count,
-                'mortality_rate_pct': mortality_rate_pct,
-                'total_feed_consumed_kg': total_feed_consumed_kg,
-                'latest_average_weight_g': latest_average_weight_g,
-                'estimated_current_biomass_kg': estimated_current_biomass_kg,
-                'last_daily_log_date': last_daily_log_date,
-                'days_since_last_log': days_since_last_log,
-                'has_today_daily_log': has_today_daily_log,
-                'active_sanitary_issues_count': active_sanitary_issues_count,
-                'last_sanitary_event_date': last_sanitary_event_date,
-                'has_unresolved_sanitary_issue': active_sanitary_issues_count > 0,
-            },
-            'recent_daily_logs': daily_logs[: ProductionUnitDashboardService.RECENT_LOGS_LIMIT],
-            'recent_sanitary_logs': sanitary_logs[: ProductionUnitDashboardService.RECENT_SANITARY_LIMIT],
+            'estimated_current_fish_count': estimated_current_fish_count,
+            'total_mortality_count': total_mortality_count,
+            'mortality_rate_pct': mortality_rate_pct,
+            'total_feed_consumed_kg': total_feed_consumed_kg,
+            'latest_average_weight_g': latest_average_weight_g,
+            'estimated_current_biomass_kg': estimated_current_biomass_kg,
+            'last_daily_log_date': last_daily_log_date,
+            'days_since_last_log': days_since_last_log,
+            'has_today_daily_log': has_today_daily_log,
+            'active_sanitary_issues_count': active_sanitary_issues_count,
+            'last_sanitary_event_date': last_sanitary_event_date,
+            'has_unresolved_sanitary_issue': active_sanitary_issues_count > 0,
         }

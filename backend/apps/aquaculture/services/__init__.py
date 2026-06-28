@@ -31,6 +31,7 @@ from .annual_simulation_service import (
 )
 from .base import BaseService
 from .cycle_application_service import HarvestCycleCommand, PartialHarvestCommand, ProductionCycleApplicationService
+from .cycle_dashboard_service import CycleDashboardService
 from .cycle_service import ProductionCycleService
 from .dashboard_application_service import DashboardApplicationService, InvalidDashboardCycleScopeError
 from .dashboard_service import DashboardService
@@ -89,6 +90,7 @@ __all__ = [
     'TECHNICAL_PAUSE_BETWEEN_CYCLES_DAYS',
     'DashboardApplicationService',
     'InvalidDashboardCycleScopeError',
+    'CycleDashboardService',
     'GenerateReportCommand',
     'InvalidReportCycleScopeError',
     'MissingReportEmailError',

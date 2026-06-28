@@ -369,6 +369,24 @@ export interface ProductionUnitDashboard {
   recent_sanitary_logs: SanitaryLog[];
 }
 
+export interface CycleDashboardSummary {
+  total_allocations: number;
+  total_estimated_current_fish_count: number;
+  total_mortality_count: number;
+  total_feed_consumed_kg: string | number;
+  estimated_current_biomass_kg: string | number;
+  units_with_sanitary_issue_count: number;
+  units_missing_today_log_count: number;
+  has_allocations: boolean;
+  data_source: 'unit_allocations' | 'legacy_cycle';
+}
+
+export interface CycleDashboard {
+  cycle: ProductionCycle;
+  summary: CycleDashboardSummary;
+  allocations: ProductionUnitDashboard[];
+}
+
 export interface CycleUnitAllocationDraft {
   production_unit_local_id: string;
   initial_fish_count: number;

@@ -1178,6 +1178,28 @@ class ProductionUnitDashboardSerializer(serializers.Serializer):
     recent_sanitary_logs = SanitaryLogSerializer(many=True)
 
 
+class CycleDashboardSummarySerializer(serializers.Serializer):
+    """Indicateurs agrégés du dashboard global d'un cycle."""
+
+    total_allocations = serializers.IntegerField()
+    total_estimated_current_fish_count = serializers.IntegerField()
+    total_mortality_count = serializers.IntegerField()
+    total_feed_consumed_kg = serializers.DecimalField(max_digits=12, decimal_places=2)
+    estimated_current_biomass_kg = serializers.DecimalField(max_digits=12, decimal_places=2)
+    units_with_sanitary_issue_count = serializers.IntegerField()
+    units_missing_today_log_count = serializers.IntegerField()
+    has_allocations = serializers.BooleanField()
+    data_source = serializers.CharField()
+
+
+class CycleDashboardSerializer(serializers.Serializer):
+    """Payload du dashboard global d'un cycle de production."""
+
+    cycle = ProductionCycleSerializer()
+    summary = CycleDashboardSummarySerializer()
+    allocations = ProductionUnitDashboardSerializer(many=True)
+
+
 class DashboardQuerySerializer(serializers.Serializer):
     """Validation des query params du dashboard aquaculture."""
 
