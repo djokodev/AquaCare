@@ -326,7 +326,7 @@ export default function MainNavigator() {
           headerStyle: { backgroundColor: AQUACARE_COLORS.GREEN_PRIMARY },
           headerTintColor: AQUACARE_COLORS.WHITE,
           headerTitleStyle: { fontWeight: 'bold' },
-          title: t('productionUnitsHubTitle'),
+          title: t('cycleDashboardTitle'),
         }}
       />
       <RootStack.Screen

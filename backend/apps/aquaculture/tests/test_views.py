@@ -266,6 +266,272 @@ class TestProductionCycleViewSet:
 
         assert response.status_code == status.HTTP_200_OK
 
+    def test_cycle_dashboard_aggregates_unit_allocations(self, auth_client, production_cycle):
+        """Le dashboard cycle doit agréger les métriques des unités de production."""
+        allocation_a = create_cycle_unit_allocation(production_cycle, name='Bac 1', volume_m3='3.00')
+        allocation_b = create_cycle_unit_allocation(production_cycle, name='Bac 2', volume_m3='4.00')
+
+        CycleLog.objects.create(
+            cycle=production_cycle,
+            cycle_unit_allocation=allocation_a,
+            log_date=date.today() - timedelta(days=1),
+            mortality_count=3,
+            feed_quantity=Decimal('2.50'),
+            average_weight=Decimal('18.00'),
+        )
+        CycleLog.objects.create(
+            cycle=production_cycle,
+            cycle_unit_allocation=allocation_a,
+            log_date=date.today(),
+            mortality_count=5,
+            feed_quantity=Decimal('4.00'),
+            average_weight=Decimal('20.00'),
+        )
+        SanitaryLog.objects.create(
+            cycle=production_cycle,
+            cycle_unit_allocation=allocation_a,
+            event_date=date.today() - timedelta(days=1),
+            event_type='disease',
+            symptoms='Points blancs observés',
+            resolved=False,
+        )
+
+        CycleLog.objects.create(
+            cycle=production_cycle,
+            cycle_unit_allocation=allocation_b,
+            log_date=date.today() - timedelta(days=1),
+            mortality_count=7,
+            feed_quantity=Decimal('6.00'),
+            average_weight=Decimal('22.00'),
+        )
+        SanitaryLog.objects.create(
+            cycle=production_cycle,
+            cycle_unit_allocation=allocation_b,
+            event_date=date.today() - timedelta(days=2),
+            event_type='treatment',
+            symptoms='Traitement préventif',
+            resolved=True,
+        )
+
+        response = auth_client.get(
+            reverse('aquaculture:production-cycle-dashboard', kwargs={'pk': production_cycle.id})
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data['cycle']['id'] == str(production_cycle.id)
+        assert response.data['summary']['has_allocations'] is True
+        assert response.data['summary']['data_source'] == 'unit_allocations'
+        assert response.data['summary']['total_allocations'] == 2
+        assert response.data['summary']['total_initial_fish_count'] == 1800
+        assert response.data['summary']['total_estimated_current_fish_count'] == 1785
+        assert response.data['summary']['total_mortality_count'] == 15
+        assert Decimal(str(response.data['summary']['mortality_rate_pct'])) == Decimal('0.83')
+        assert Decimal(str(response.data['summary']['total_feed_consumed_kg'])) == Decimal('12.50')
+        assert Decimal(str(response.data['summary']['estimated_current_biomass_kg'])) == Decimal('37.49')
+        assert response.data['summary']['units_with_today_log_count'] == 1
+        assert response.data['summary']['units_with_sanitary_issue_count'] == 1
+        assert response.data['summary']['units_with_active_sanitary_issue_count'] == 1
+        assert response.data['summary']['units_missing_today_log_count'] == 1
+        assert response.data['summary']['last_daily_log_date'] == date.today().isoformat()
+        assert response.data['summary']['last_sanitary_event_date'] == (date.today() - timedelta(days=1)).isoformat()
+        assert len(response.data['allocations']) == 2
+        assert response.data['allocations'][0]['allocation']['production_unit_name'] in {'Bac 1', 'Bac 2'}
+
+    def test_cycle_dashboard_ignores_global_logs_with_units(self, auth_client, production_cycle):
+        """Le dashboard cycle ne doit pas additionner les logs legacy quand des unités existent."""
+        allocation_a = create_cycle_unit_allocation(production_cycle, name='Bac 1', volume_m3='3.00')
+        allocation_b = create_cycle_unit_allocation(production_cycle, name='Bac 2', volume_m3='4.00')
+
+        CycleLog.objects.create(
+            cycle=production_cycle,
+            log_date=date.today(),
+            mortality_count=10,
+            feed_quantity=Decimal('20.00'),
+            average_weight=Decimal('24.00'),
+        )
+        CycleLog.objects.create(
+            cycle=production_cycle,
+            cycle_unit_allocation=allocation_a,
+            log_date=date.today(),
+            mortality_count=2,
+            feed_quantity=Decimal('5.00'),
+            average_weight=Decimal('20.00'),
+        )
+        CycleLog.objects.create(
+            cycle=production_cycle,
+            cycle_unit_allocation=allocation_b,
+            log_date=date.today(),
+            mortality_count=3,
+            feed_quantity=Decimal('8.00'),
+            average_weight=Decimal('22.00'),
+        )
+        SanitaryLog.objects.create(
+            cycle=production_cycle,
+            event_date=date.today(),
+            event_type='disease',
+            symptoms='Log legacy hors allocation',
+            resolved=False,
+        )
+
+        response = auth_client.get(
+            reverse('aquaculture:production-cycle-dashboard', kwargs={'pk': production_cycle.id})
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data['summary']['total_initial_fish_count'] == 1800
+        assert response.data['summary']['total_estimated_current_fish_count'] == 1795
+        assert response.data['summary']['total_mortality_count'] == 5
+        assert Decimal(str(response.data['summary']['mortality_rate_pct'])) == Decimal('0.28')
+        assert Decimal(str(response.data['summary']['total_feed_consumed_kg'])) == Decimal('13.00')
+        assert response.data['summary']['units_with_today_log_count'] == 2
+        assert response.data['summary']['units_missing_today_log_count'] == 0
+        assert response.data['summary']['units_with_active_sanitary_issue_count'] == 0
+        assert response.data['summary']['last_daily_log_date'] == date.today().isoformat()
+        assert response.data['summary']['last_sanitary_event_date'] is None
+
+    def test_cycle_dashboard_falls_back_to_legacy_cycle_data(self, auth_client, production_cycle):
+        """Le dashboard cycle doit rester lisible pour les cycles sans unités liées."""
+        CycleLog.objects.create(
+            cycle=production_cycle,
+            log_date=date.today(),
+            mortality_count=4,
+            feed_quantity=Decimal('3.25'),
+            average_weight=Decimal('25.00'),
+        )
+        SanitaryLog.objects.create(
+            cycle=production_cycle,
+            event_date=date.today() - timedelta(days=1),
+            event_type='water_quality',
+            symptoms='Oxygène faible',
+            resolved=False,
+        )
+
+        response = auth_client.get(
+            reverse('aquaculture:production-cycle-dashboard', kwargs={'pk': production_cycle.id})
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data['summary']['has_allocations'] is False
+        assert response.data['summary']['data_source'] == 'legacy_cycle'
+        assert response.data['summary']['total_allocations'] == 0
+        assert response.data['summary']['total_estimated_current_fish_count'] == production_cycle.current_count
+        assert response.data['summary']['total_mortality_count'] == 4
+        assert Decimal(str(response.data['summary']['total_feed_consumed_kg'])) == Decimal('3.25')
+        assert Decimal(str(response.data['summary']['estimated_current_biomass_kg'])) == Decimal(
+            str(production_cycle.current_biomass)
+        )
+        assert response.data['summary']['units_with_sanitary_issue_count'] == 1
+        assert response.data['summary']['units_with_active_sanitary_issue_count'] == 1
+        assert response.data['summary']['units_missing_today_log_count'] == 0
+        assert response.data['summary']['units_with_today_log_count'] == 0
+        assert response.data['summary']['last_daily_log_date'] == date.today().isoformat()
+        assert response.data['summary']['last_sanitary_event_date'] == (date.today() - timedelta(days=1)).isoformat()
+        assert response.data['allocations'] == []
+
+    def test_cycle_dashboard_with_allocations_without_logs(self, auth_client, production_cycle):
+        """Le dashboard cycle doit rester cohérent si les unités n'ont encore aucun log."""
+        allocation_a = create_cycle_unit_allocation(production_cycle, name='Bac 1', volume_m3='3.00')
+        allocation_b = create_cycle_unit_allocation(production_cycle, name='Bac 2', volume_m3='4.00')
+
+        response = auth_client.get(
+            reverse('aquaculture:production-cycle-dashboard', kwargs={'pk': production_cycle.id})
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data['summary']['total_initial_fish_count'] == 1800
+        assert response.data['summary']['total_estimated_current_fish_count'] == 1800
+        assert response.data['summary']['total_mortality_count'] == 0
+        assert Decimal(str(response.data['summary']['mortality_rate_pct'])) == Decimal('0.00')
+        assert Decimal(str(response.data['summary']['total_feed_consumed_kg'])) == Decimal('0.00')
+        assert Decimal(str(response.data['summary']['estimated_current_biomass_kg'])) == Decimal('18.00')
+        assert response.data['summary']['units_with_today_log_count'] == 0
+        assert response.data['summary']['units_missing_today_log_count'] == 2
+        assert response.data['summary']['units_with_active_sanitary_issue_count'] == 0
+        assert response.data['summary']['last_daily_log_date'] is None
+        assert response.data['summary']['last_sanitary_event_date'] is None
+        assert len(response.data['allocations']) == 2
+        assert {item['allocation']['id'] for item in response.data['allocations']} == {
+            str(allocation_a.id),
+            str(allocation_b.id),
+        }
+
+    def test_cycle_dashboard_isolated_by_cycle(self, auth_client, production_cycle):
+        """Le dashboard d'un cycle ne doit jamais agréger un autre cycle."""
+        allocation = create_cycle_unit_allocation(production_cycle, name='Bac 1', volume_m3='3.00')
+        CycleLog.objects.create(
+            cycle=production_cycle,
+            cycle_unit_allocation=allocation,
+            log_date=date.today(),
+            mortality_count=2,
+            feed_quantity=Decimal('5.00'),
+            average_weight=Decimal('20.00'),
+        )
+
+        other_cycle = ProductionCycle.objects.create(
+            farm_profile=production_cycle.farm_profile,
+            cycle_name='Cycle concurrent',
+            species=production_cycle.species,
+            pond_identifier='Bassin concurrent',
+            pond_surface_m2=Decimal('120'),
+            start_date=date.today() - timedelta(days=10),
+            initial_count=1200,
+            initial_average_weight=Decimal('10'),
+            initial_biomass=Decimal('12.00'),
+            current_count=1200,
+            current_average_weight=Decimal('10'),
+            current_biomass=Decimal('12.00'),
+            status='active',
+        )
+        other_allocation = create_cycle_unit_allocation(other_cycle, name='Bac concurrent', volume_m3='4.00')
+        CycleLog.objects.create(
+            cycle=other_cycle,
+            cycle_unit_allocation=other_allocation,
+            log_date=date.today(),
+            mortality_count=99,
+            feed_quantity=Decimal('99.00'),
+            average_weight=Decimal('99.00'),
+        )
+
+        response = auth_client.get(
+            reverse('aquaculture:production-cycle-dashboard', kwargs={'pk': production_cycle.id})
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data['summary']['total_initial_fish_count'] == 900
+        assert response.data['summary']['total_estimated_current_fish_count'] == 898
+        assert response.data['summary']['total_mortality_count'] == 2
+        assert Decimal(str(response.data['summary']['total_feed_consumed_kg'])) == Decimal('5.00')
+        assert len(response.data['allocations']) == 1
+        assert response.data['allocations'][0]['allocation']['production_unit_name'] == 'Bac 1'
+
+    def test_cycle_dashboard_for_other_user_returns_404(self, auth_client, user_factory):
+        """Un utilisateur ne doit pas accéder au dashboard d'un cycle d'une autre ferme."""
+        other_user = user_factory(
+            phone_number='+237690123456',
+            email='other-cycle-owner@test.com',
+        )
+        other_cycle = ProductionCycle.objects.create(
+            farm_profile=other_user.farm_profile,
+            cycle_name='Cycle externe',
+            species='tilapia',
+            pond_identifier='Bassin externe',
+            pond_surface_m2=Decimal('100'),
+            start_date=date.today(),
+            initial_count=1000,
+            initial_average_weight=Decimal('10'),
+            initial_biomass=Decimal('10'),
+            current_count=1000,
+            current_average_weight=Decimal('10'),
+            current_biomass=Decimal('10'),
+            status='active',
+        )
+
+        response = auth_client.get(
+            reverse('aquaculture:production-cycle-dashboard', kwargs={'pk': other_cycle.id})
+        )
+
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
     def test_cycle_comparison(self, auth_client, production_cycle):
         """Test endpoint comparaison cycles."""
         # Créer un cycle terminé pour comparaison

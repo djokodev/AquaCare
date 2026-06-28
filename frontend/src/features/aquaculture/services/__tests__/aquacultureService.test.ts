@@ -109,6 +109,30 @@ describe('features/aquaculture/services/aquacultureService', () => {
     );
   });
 
+  it('compose correctement l URL du dashboard global d un cycle', async () => {
+    const dashboard = {
+      cycle: { id: 'cycle-1', cycle_name: 'Cycle A' },
+      summary: {
+        total_allocations: 1,
+        total_estimated_current_fish_count: 900,
+        total_mortality_count: 10,
+        total_feed_consumed_kg: '12.50',
+        estimated_current_biomass_kg: '18.75',
+        units_with_sanitary_issue_count: 1,
+        units_missing_today_log_count: 0,
+        has_allocations: true,
+        data_source: 'unit_allocations',
+      },
+      allocations: [],
+    };
+    mockApi.get.mockResolvedValueOnce({ data: dashboard } as never);
+
+    const result = await aquacultureService.getCycleDashboard('cycle-1');
+
+    expect(result).toEqual(dashboard);
+    expect(mockApi.get).toHaveBeenCalledWith('/aquaculture/cycles/cycle-1/dashboard/');
+  });
+
   it('dedoublonne les requetes dashboard concurrentes pour le meme scope et meme mode', async () => {
     const payload = { active_cycles: [], active_cycles_count: 0 };
     mockApi.get.mockReturnValueOnce(Promise.resolve({ data: payload }) as never);
@@ -129,6 +153,32 @@ describe('features/aquaculture/services/aquacultureService', () => {
     await aquacultureService.getDashboardData('cycle-session-42', { lightweight: true });
 
     expect(mockApi.get).toHaveBeenCalledTimes(2);
+  });
+
+  it('dedoublonne les requetes dashboard de cycle concurrentes', async () => {
+    const payload = {
+      cycle: { id: 'cycle-42', cycle_name: 'Cycle 42' },
+      summary: {
+        total_allocations: 0,
+        total_estimated_current_fish_count: 0,
+        total_mortality_count: 0,
+        total_feed_consumed_kg: '0.00',
+        estimated_current_biomass_kg: '0.00',
+        units_with_sanitary_issue_count: 0,
+        units_missing_today_log_count: 0,
+        has_allocations: false,
+        data_source: 'legacy_cycle',
+      },
+      allocations: [],
+    };
+    mockApi.get.mockReturnValueOnce(Promise.resolve({ data: payload }) as never);
+
+    const firstPromise = aquacultureService.getCycleDashboard('cycle-42');
+    const secondPromise = aquacultureService.getCycleDashboard('cycle-42');
+
+    expect(mockApi.get).toHaveBeenCalledTimes(1);
+    await expect(firstPromise).resolves.toEqual(payload);
+    await expect(secondPromise).resolves.toEqual(payload);
   });
 
   it('utilise PATCH pour la mise a jour partielle d un cycle', async () => {

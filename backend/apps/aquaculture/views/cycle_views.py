@@ -19,6 +19,7 @@ from ..domain.exceptions import FeedingPlanGenerationError
 from ..models import ProductionCycle
 from ..serializers import (
     CycleComparisonSerializer,
+    CycleDashboardSerializer,
     CycleHarvestResponseSerializer,
     CycleStatisticsSerializer,
     HarvestSerializer,
@@ -28,6 +29,7 @@ from ..serializers import (
     ProductionCycleSerializer,
 )
 from ..services import (
+    CycleDashboardService,
     HarvestCycleCommand,
     PartialHarvestCommand,
     ProductionCycleApplicationService,
@@ -285,6 +287,26 @@ class ProductionCycleViewSet(viewsets.ModelViewSet):
         statistics = ProductionCycleApplicationService.get_cycle_statistics(cycle)
 
         serializer = CycleStatisticsSerializer(statistics)
+        return Response(serializer.data)
+
+    @extend_schema(
+        summary="Dashboard global d'un cycle de production",
+        description="""
+        Retourne les indicateurs agrégés du cycle à partir de ses unités de production.
+        Si le cycle n'a pas encore d'unités liées, la réponse conserve le comportement legacy.
+        """,
+        responses={200: CycleDashboardSerializer},
+    )
+    @action(detail=True, methods=['get'])
+    def dashboard(self, request, pk=None):
+        """
+        Retourne le dashboard global du cycle courant.
+
+        La logique d'agrégation reste dans le service métier pour garder la vue fine.
+        """
+        cycle = self.get_object()
+        payload = CycleDashboardService.build_dashboard_payload(cycle)
+        serializer = CycleDashboardSerializer(payload, context={'request': request})
         return Response(serializer.data)
     
     @extend_schema(

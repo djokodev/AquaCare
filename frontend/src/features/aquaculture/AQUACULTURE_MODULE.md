@@ -44,6 +44,8 @@ PR #62 adds unit-scoped tracking foundations. Daily logs, and sanitary logs when
 
 PR #63 adds an operational dashboard for each production unit. The unit overview now displays unit-specific indicators computed from daily and sanitary logs linked to the corresponding `CycleUnitAllocation`, while preserving the global cycle dashboard for future aggregation work.
 
+PR #64 adds the global cycle aggregation layer. The cycle-level dashboard now aggregates fish count, mortality, feed, biomass, sanitary issue counts, and missing daily entries from every linked production unit, while still falling back to legacy cycle logs when a cycle has no units yet.
+
 ## Limites Du Module
 
 Le frontend orchestre UX et saisie utilisateur.
@@ -157,6 +159,7 @@ Service unique: `features/aquaculture/services/aquacultureService.ts`
 | Use case | Endpoint |
 | --- | --- |
 | Dashboard | `GET /aquaculture/dashboard/` |
+| Cycle dashboard | `GET /aquaculture/cycles/{id}/dashboard/` |
 | Cycles CRUD | `/aquaculture/cycles/` |
 | Recolte finale | `POST /aquaculture/cycles/{id}/harvest/` |
 | Recolte partielle | `POST /aquaculture/cycles/{id}/partial-harvest/` |
