@@ -153,6 +153,32 @@ describe('productionUnits', () => {
     });
   });
 
+  it('calcule une densite unique pour un mix bac et cage homogène en m3', () => {
+    const preview = getProductionUnitsDensityPreview({
+      productionUnits: [
+        createProductionUnitDraft({
+          name: 'Bac 1',
+          unit_type: 'tank',
+          volume_m3: '3',
+        }),
+        createProductionUnitDraft({
+          name: 'Cage 1',
+          unit_type: 'cage',
+          volume_m3: '5',
+        }),
+      ],
+      fingerlingsCount: '2400',
+    });
+
+    expect(preview).toEqual({
+      kind: 'single',
+      currentDensity: 300,
+      maxDensity: 300,
+      unit: 'm3',
+      isAtMax: true,
+    });
+  });
+
   it('calcule une densite unique pour des etangs homogènes', () => {
     const preview = getProductionUnitsDensityPreview({
       productionUnits: [
@@ -179,13 +205,18 @@ describe('productionUnits', () => {
     });
   });
 
-  it('signale un setup mixte bac et etang comme non repartissable globalement', () => {
+  it('signale un setup mixte bac, cage et etang comme non repartissable globalement', () => {
     const preview = getProductionUnitsDensityPreview({
       productionUnits: [
         createProductionUnitDraft({
           name: 'Bac 1',
           unit_type: 'tank',
           volume_m3: '3',
+        }),
+        createProductionUnitDraft({
+          name: 'Cage 1',
+          unit_type: 'cage',
+          volume_m3: '5',
         }),
         createProductionUnitDraft({
           name: 'Étang principal',

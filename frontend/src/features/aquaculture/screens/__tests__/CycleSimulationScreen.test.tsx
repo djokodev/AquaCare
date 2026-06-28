@@ -217,7 +217,7 @@ describe('features/aquaculture/screens/CycleSimulationScreen', () => {
     });
   });
 
-  it('affiche une densite a repartitionner pour un setup mixte', async () => {
+  it('affiche une densite a repartitionner pour un setup mixte bac cage et etang', async () => {
     mockDispatch.mockImplementation((action: unknown) => {
       if (typeof action === 'function') {
         return {
@@ -230,7 +230,7 @@ describe('features/aquaculture/screens/CycleSimulationScreen', () => {
     });
 
     const route = buildRoute({
-      fingerlingsCount: '2100',
+      fingerlingsCount: '3600',
       productionUnits: [
         {
           local_id: 'unit-1',
@@ -240,6 +240,12 @@ describe('features/aquaculture/screens/CycleSimulationScreen', () => {
         },
         {
           local_id: 'unit-2',
+          name: 'Cage 1',
+          unit_type: 'cage',
+          volume_m3: '5',
+        },
+        {
+          local_id: 'unit-3',
           name: 'Étang principal',
           unit_type: 'pond',
           surface_m2: '120',
@@ -258,6 +264,7 @@ describe('features/aquaculture/screens/CycleSimulationScreen', () => {
       expect(getByText('simulationDensityByUnitNote')).toBeTruthy();
       expect(queryByText('simulationCurrentDensity')).toBeNull();
       expect(queryByText('simulationMaxDensity')).toBeNull();
+      expect(queryByText('—')).toBeNull();
     });
   });
 });
