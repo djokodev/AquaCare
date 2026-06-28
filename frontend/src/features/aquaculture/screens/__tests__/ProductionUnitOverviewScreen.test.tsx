@@ -125,6 +125,53 @@ describe('features/aquaculture/screens/ProductionUnitOverviewScreen', () => {
     });
   });
 
+  it('affiche un loading initial avant le dashboard unitaire', async () => {
+    let resolveDashboard: (value: unknown) => void = () => undefined;
+    mockGetProductionUnitDashboard.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveDashboard = resolve;
+      }) as never
+    );
+
+    const { getByText } = render(
+      <ProductionUnitOverviewScreen navigation={navigation} route={route} />
+    );
+
+    expect(getByText('productionUnitDashboardLoading')).toBeTruthy();
+
+    resolveDashboard({
+      allocation: {
+        id: 'allocation-1',
+        cycle: 'cycle-1',
+        cycle_name: 'Cycle Silure',
+        production_unit: 'unit-1',
+        production_unit_name: 'Bac 1',
+        production_unit_type: 'tank',
+        production_unit_display_dimension: '3 m³',
+      },
+      summary: {
+        estimated_current_fish_count: 900,
+        total_mortality_count: 0,
+        mortality_rate_pct: '0.00',
+        total_feed_consumed_kg: '0.00',
+        latest_average_weight_g: null,
+        estimated_current_biomass_kg: '9.00',
+        last_daily_log_date: null,
+        days_since_last_log: null,
+        has_today_daily_log: false,
+        active_sanitary_issues_count: 0,
+        last_sanitary_event_date: null,
+        has_unresolved_sanitary_issue: false,
+      },
+      recent_daily_logs: [],
+      recent_sanitary_logs: [],
+    });
+
+    await waitFor(() => {
+      expect(getByText('productionUnitDashboardTitle')).toBeTruthy();
+    });
+  });
+
   it('affiche un message d erreur et permet de relancer le chargement', async () => {
     mockGetProductionUnitDashboard.mockRejectedValue(new Error('network error'));
 

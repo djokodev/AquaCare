@@ -17,34 +17,53 @@ Le module frontend `aquaculture` couvre l'experience mobile de production piscic
 
 ## Production Units
 
-Cette base de code prépare l'evolution vers des unites de production reelles:
+Cette base de code couvre maintenant le flux complet des unites de production:
 
 1. Une unite de production represente un bac, un etang ou une cage physique.
-2. Le cycle reste global et pourra etre repartit entre plusieurs unites dans une prochaine PR.
-3. Le dashboard existant reste inchangé dans cette PR.
-4. Les prochaines etapes brancheront le setup par unites, l'allocation intelligente et la vue globale du cycle.
+2. Le setup "Creer mon elevage" permet de declarer plusieurs unites, dont des duplications rapides d'un meme gabarit.
+3. La simulation de cycle calcule la repartition des poissons par unite.
+4. Le lancement du cycle persiste les unites et leurs allocations.
+5. Le hub "Mes unites en production" ouvre la synthese globale du cycle puis le detail de chaque unite.
+6. Le dashboard unitaire reste scope a une seule `CycleUnitAllocation`.
+7. Les saisies journaliere et sanitaire restent unit-scoped quand elles sont lancees depuis une unite.
+8. Le dashboard global du cycle agrege les unites liees et conserve la compatibilite legacy pour les cycles sans unites.
 
-### Setup base sur les unites
+## Production units end-to-end flow
 
-Le flow "Creer mon elevage" utilise maintenant les unites de production comme source de verite cote UI:
+Le parcours cible est desormais le suivant:
 
-1. L'utilisateur peut ajouter une unite personnalisee.
-2. L'utilisateur peut aussi creer rapidement plusieurs unites identiques.
-3. La capacite totale recommandee est calculee a partir de toutes les unites du formulaire.
-4. La simulation actuelle reste compatible avec les champs legacy homogenes pour le moment.
-5. La repartition intelligente par unite est maintenant proposee cote frontend dans le setup, puis reprise dans la simulation.
+1. Setup des unites de production dans le formulaire d'eleveage.
+2. Repartition des poissons sur la base des capacites recommandees.
+3. Persistance des unites et allocations au lancement du cycle.
+4. Arrivee sur le hub "Mes unites en production".
+5. Ouverture d'une unite et consultation du dashboard unitaire.
+6. Creation d'une saisie du jour ou d'un suivi sanitaire pour cette unite.
+7. Retour au dashboard global du cycle pour verifier l'agregation.
+8. Fallback legacy conserve pour les cycles qui n'ont pas encore d'unites.
 
-PR #59 adds frontend smart fish allocation by production unit. Allocations are suggested from recommended unit capacities and remain local to the setup/simulation flow. Backend persistence of cycle-unit allocations is planned for a later PR.
+La logique produit reste alignee avec le backend:
 
-PR #60 persists production units and cycle-unit allocations during first cycle launch. The setup still computes allocations on the frontend, then saves production units and their fish allocations to the backend after the production cycle is created. Unit-scoped dashboards remain planned for a later PR.
+1. Les valeurs finales viennent des reponses API.
+2. Les ecrans unitaires recoivent `cycleId`, `cycleUnitAllocationId`, `productionUnitId`, `productionUnitName`.
+3. Le cycle global ne double compte pas les logs legacy quand des unites existent.
+4. Les etats loading, empty et erreur restent visibles sur les ecrans critiques.
 
-PR #61 adds the production-units hub after cycle launch. When a cycle is launched with persisted production units, the user is redirected to a “My production units” screen showing the cycle-unit allocations. Unit-level tracking actions remain planned for a later PR.
+## Manual QA checklist — Production units flow
 
-PR #62 adds unit-scoped tracking foundations. Daily logs, and sanitary logs when supported by the existing architecture, can now be linked to a `CycleUnitAllocation`, allowing actions created from a production unit to remain attached to that unit while preserving the legacy global-cycle logging flow.
-
-PR #63 adds an operational dashboard for each production unit. The unit overview now displays unit-specific indicators computed from daily and sanitary logs linked to the corresponding `CycleUnitAllocation`, while preserving the global cycle dashboard for future aggregation work.
-
-PR #64 adds the global cycle aggregation layer. The cycle-level dashboard now aggregates fish count, mortality, feed, biomass, sanitary issue counts, and missing daily entries from every linked production unit, while still falling back to legacy cycle logs when a cycle has no units yet.
+1. Creer une ferme avec Bac 1, Bac 2 et Etang 1.
+2. Repartir les poissons.
+3. Lancer le cycle.
+4. Verifier l'arrivee sur Mes unites en production.
+5. Verifier la synthese globale du cycle.
+6. Ouvrir Bac 1.
+7. Enregistrer une saisie du jour sur Bac 1.
+8. Ouvrir Bac 2.
+9. Enregistrer une saisie du jour sur Bac 2.
+10. Ouvrir Etang 1.
+11. Ajouter un suivi sanitaire.
+12. Revenir au hub.
+13. Verifier que la synthese globale additionne les unites.
+14. Verifier qu'un cycle legacy sans unites fonctionne encore.
 
 ## Limites Du Module
 
