@@ -2,7 +2,12 @@ import { aquacultureService } from '../aquacultureService';
 import { apiService } from '@/services/api';
 import { API_CONFIG } from '@/constants/api';
 import logger from '@/utils/logger';
-import { CycleHarvestResponse, CycleLog, ProductionCycle, SanitaryLogForm } from '@/types/aquaculture';
+import {
+  CycleHarvestResponse,
+  CycleLog,
+  ProductionCycle,
+  SanitaryLogForm,
+} from '@/types/aquaculture';
 
 jest.mock('@/services/api', () => ({
   apiService: {
@@ -177,6 +182,69 @@ describe('features/aquaculture/services/aquacultureService', () => {
       harvest_date: '2026-05-01',
       final_count: 850,
       final_average_weight: 250,
+    });
+  });
+
+  it('cree une unite de production avec le bon payload', async () => {
+    const createdUnit = {
+      id: 'unit-1',
+      farm_profile: 'farm-1',
+      name: 'Bac 1',
+      unit_type: 'tank',
+      volume_m3: 3,
+      surface_m2: null,
+      status: 'active',
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    };
+    mockApi.post.mockResolvedValueOnce({ data: createdUnit } as never);
+
+    const result = await aquacultureService.createProductionUnit({
+      name: 'Bac 1',
+      unit_type: 'tank',
+      volume_m3: 3,
+      status: 'active',
+    });
+
+    expect(result).toEqual(createdUnit);
+    expect(mockApi.post).toHaveBeenCalledWith('/aquaculture/production-units/', {
+      name: 'Bac 1',
+      unit_type: 'tank',
+      volume_m3: 3,
+      status: 'active',
+    });
+  });
+
+  it('cree une allocation de cycle avec le bon payload', async () => {
+    const createdAllocation = {
+      id: 'allocation-1',
+      cycle: 'cycle-1',
+      production_unit: 'unit-1',
+      initial_fish_count: 900,
+      current_fish_count: 900,
+      initial_biomass_kg: 0,
+      current_biomass_kg: 0,
+      expected_survival_rate_pct: 95,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    };
+    mockApi.post.mockResolvedValueOnce({ data: createdAllocation } as never);
+
+    const result = await aquacultureService.createCycleUnitAllocation({
+      cycle: 'cycle-1',
+      production_unit: 'unit-1',
+      initial_fish_count: 900,
+      current_fish_count: 900,
+      expected_survival_rate_pct: 95,
+    });
+
+    expect(result).toEqual(createdAllocation);
+    expect(mockApi.post).toHaveBeenCalledWith('/aquaculture/cycle-unit-allocations/', {
+      cycle: 'cycle-1',
+      production_unit: 'unit-1',
+      initial_fish_count: 900,
+      current_fish_count: 900,
+      expected_survival_rate_pct: 95,
     });
   });
 

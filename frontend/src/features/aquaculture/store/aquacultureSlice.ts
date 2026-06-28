@@ -353,6 +353,13 @@ export const aquacultureSlice = createSlice({
       state.error = null;
     },
 
+    addCreatedProductionCycle: (state, action: PayloadAction<ProductionCycle>) => {
+      state.cycles.unshift(action.payload);
+      if (action.payload.status === 'active') {
+        state.activeCycles.unshift(action.payload);
+      }
+    },
+
     setCurrentCycle: (state, action: PayloadAction<ProductionCycle | undefined>) => {
       state.currentCycle = action.payload;
     },
@@ -616,6 +623,7 @@ export const aquacultureSlice = createSlice({
 
 export const {
   clearError,
+  addCreatedProductionCycle,
   setCurrentCycle,
   clearCurrentCycle,
   setCurrentCycleById,

@@ -36,6 +36,8 @@ Le flow "Creer mon elevage" utilise maintenant les unites de production comme so
 
 PR #59 adds frontend smart fish allocation by production unit. Allocations are suggested from recommended unit capacities and remain local to the setup/simulation flow. Backend persistence of cycle-unit allocations is planned for a later PR.
 
+PR #60 persists production units and cycle-unit allocations during first cycle launch. The setup still computes allocations on the frontend, then saves production units and their fish allocations to the backend after the production cycle is created. Unit-scoped dashboards remain planned for a later PR.
+
 ## Limites Du Module
 
 Le frontend orchestre UX et saisie utilisateur.

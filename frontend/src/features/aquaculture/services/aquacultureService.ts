@@ -23,6 +23,10 @@ import {
   PartialHarvestData,
   CycleHarvestResponse,
   ActiveSanitaryIssueGroup,
+  ProductionUnit,
+  CycleUnitAllocation,
+  ProductionUnitCreatePayload,
+  CycleUnitAllocationCreatePayload,
 } from '@/types/aquaculture';
 
 interface PaginatedResponse<T> {
@@ -263,6 +267,34 @@ class AquacultureService {
       return response.data;
     } catch (error) {
       logger.error('Erreur lors de la creation du cycle:', error);
+      throw error;
+    }
+  }
+
+  async createProductionUnit(unitData: ProductionUnitCreatePayload): Promise<ProductionUnit> {
+    try {
+      const response = await apiService.post<ProductionUnit>(
+        `${this.baseUrl}/production-units/`,
+        unitData
+      );
+      return response.data;
+    } catch (error) {
+      logger.error('Erreur lors de la creation de l\'unite de production:', error);
+      throw error;
+    }
+  }
+
+  async createCycleUnitAllocation(
+    allocationData: CycleUnitAllocationCreatePayload
+  ): Promise<CycleUnitAllocation> {
+    try {
+      const response = await apiService.post<CycleUnitAllocation>(
+        `${this.baseUrl}/cycle-unit-allocations/`,
+        allocationData
+      );
+      return response.data;
+    } catch (error) {
+      logger.error("Erreur lors de la creation de l'allocation de cycle:", error);
       throw error;
     }
   }
