@@ -7,6 +7,12 @@ import {
   STOCKING_DENSITY_TANK_PER_M3,
 } from '@/constants/aquaculture';
 import { CYCLE_SIMULATION_DEFAULTS } from '@/domain/commerce/constants';
+import {
+  getProductionUnitsCompatibilitySummary,
+  getTotalProductionUnitsCapacity,
+  normalizeProductionUnitType,
+} from '@/features/aquaculture/utils/productionUnits';
+import type { ProductionUnitDraft } from '@/features/aquaculture/types/productionUnits';
 import type {
   CycleSimulationInput,
   FarmSetupData,
@@ -29,6 +35,7 @@ export interface FarmSetupFormState {
   fingerlingsCount: string;
   harvestWeight: string;
   survivalRate: string;
+  productionUnits: ProductionUnitDraft[];
 }
 
 export type FarmSetupFormErrors = Partial<Record<keyof FarmSetupFormState, string>>;
@@ -130,6 +137,10 @@ export const getCycleProductionEstimate = (form: FarmSetupFormState): number | n
 };
 
 const getInfrastructureCapacityCount = (form: FarmSetupFormState): number | null => {
+  if (form.productionUnits.length > 0) {
+    return getTotalProductionUnitsCapacity(form.productionUnits);
+  }
+
   const units = toFloat(form.unitCount);
   if (!form.infraType || !units) return null;
 
@@ -145,6 +156,28 @@ const getInfrastructureCapacityCount = (form: FarmSetupFormState): number | null
 };
 
 const getInfrastructureFootprint = (form: FarmSetupFormState): number | null => {
+  if (form.productionUnits.length > 0) {
+    const summary = getProductionUnitsCompatibilitySummary(form.productionUnits);
+    if (!summary || summary.is_mixed || !summary.primary_unit) {
+      return null;
+    }
+
+    const unitType = normalizeProductionUnitType(summary.primary_unit.unit_type);
+    if (unitType === 'pond') {
+      const totalSurface = form.productionUnits.reduce((total, unit) => {
+        const dimension = unit.surface_m2 ? Number(unit.surface_m2) : 0;
+        return total + dimension;
+      }, 0);
+      return totalSurface || null;
+    }
+
+    const totalVolume = form.productionUnits.reduce((total, unit) => {
+      const dimension = unit.volume_m3 ? Number(unit.volume_m3) : 0;
+      return total + dimension;
+    }, 0);
+    return totalVolume || null;
+  }
+
   const units = toFloat(form.unitCount);
   if (!form.infraType || !units) return null;
 
@@ -165,7 +198,9 @@ export const getStockingDensityPreview = (
   const count = toInt(form.fingerlingsCount);
   const footprint = getInfrastructureFootprint(form);
   const capacityCount = getInfrastructureCapacityCount(form);
-  if (!count || !form.infraType || !footprint || !capacityCount) return null;
+  if (!count || (!form.productionUnits.length && !form.infraType) || !footprint || !capacityCount) {
+    return null;
+  }
 
   if (form.infraType === 'etang') {
     const density = count / footprint;
@@ -256,6 +291,11 @@ export const getFingerlingsCapacityStatusPreview = (
 };
 
 export const getTotalCapacityPreview = (form: FarmSetupFormState): string | null => {
+  if (form.productionUnits.length > 0) {
+    const capacity = getTotalProductionUnitsCapacity(form.productionUnits);
+    return capacity !== null ? `${Math.round(capacity)}` : null;
+  }
+
   const count = toFloat(form.unitCount);
   if (form.infraType === 'etang') {
     const surface = toFloat(form.unitSurface);
@@ -269,6 +309,14 @@ export const getTotalCapacityPreview = (form: FarmSetupFormState): string | null
 export const getFingerlingsSuggestionPreview = (
   form: FarmSetupFormState
 ): FingerlingsSuggestionPreview | null => {
+  if (form.productionUnits.length > 0) {
+    const maxAllowed = getTotalProductionUnitsCapacity(form.productionUnits);
+    if (!maxAllowed) return null;
+    return {
+      value: Math.round(maxAllowed),
+    };
+  }
+
   const maxAllowed = getInfrastructureCapacityCount(form);
   if (!maxAllowed) return null;
 
@@ -296,29 +344,33 @@ export const validateFarmSetupForm = (
   const errors: FarmSetupFormErrors = {};
   const unitCount = parseStrictInteger(form.unitCount);
   const fingerlingsCount = parseStrictInteger(form.fingerlingsCount);
+  const hasProductionUnits = form.productionUnits.length > 0;
 
   if (!form.species) errors.species = 'required';
-  if (!form.infraType) errors.infraType = 'required';
 
-  if (!form.unitCount.trim()) {
-    errors.unitCount = 'required';
-  } else if (unitCount === null || unitCount <= 0) {
-    errors.unitCount = 'createFarmPositiveIntegerError';
-  }
+  if (!hasProductionUnits) {
+    if (!form.infraType) errors.infraType = 'required';
 
-  if (form.infraType === 'etang') {
-    const unitSurface = parseStrictNumber(form.unitSurface);
-    if (!form.unitSurface.trim()) {
-      errors.unitSurface = 'required';
-    } else if (unitSurface === null || unitSurface <= 0) {
-      errors.unitSurface = 'createFarmPositiveNumberError';
+    if (!form.unitCount.trim()) {
+      errors.unitCount = 'required';
+    } else if (unitCount === null || unitCount <= 0) {
+      errors.unitCount = 'createFarmPositiveIntegerError';
     }
-  } else if (form.infraType) {
-    const unitVolume = parseStrictNumber(form.unitVolume);
-    if (!form.unitVolume.trim()) {
-      errors.unitVolume = 'required';
-    } else if (unitVolume === null || unitVolume <= 0) {
-      errors.unitVolume = 'createFarmPositiveNumberError';
+
+    if (form.infraType === 'etang') {
+      const unitSurface = parseStrictNumber(form.unitSurface);
+      if (!form.unitSurface.trim()) {
+        errors.unitSurface = 'required';
+      } else if (unitSurface === null || unitSurface <= 0) {
+        errors.unitSurface = 'createFarmPositiveNumberError';
+      }
+    } else if (form.infraType) {
+      const unitVolume = parseStrictNumber(form.unitVolume);
+      if (!form.unitVolume.trim()) {
+        errors.unitVolume = 'required';
+      } else if (unitVolume === null || unitVolume <= 0) {
+        errors.unitVolume = 'createFarmPositiveNumberError';
+      }
     }
   }
 
@@ -416,10 +468,36 @@ export const buildFarmSetupPayload = (
   numCycles?: 1 | 2 | 3
 ): FarmSetupData => ({
   setup_species: (form.species as FarmSetupData['setup_species']) || 'tilapia',
-  setup_infrastructure_type: form.infraType as FarmSetupData['setup_infrastructure_type'],
-  setup_unit_count: toInt(form.unitCount) || 1,
-  setup_unit_volume_m3: form.unitVolume ? toFloat(form.unitVolume) : undefined,
-  setup_unit_surface_m2: form.unitSurface ? toFloat(form.unitSurface) : undefined,
+  setup_infrastructure_type: (() => {
+    const summary = getProductionUnitsCompatibilitySummary(form.productionUnits);
+    if (summary) {
+      return summary.legacy_infrastructure_type as FarmSetupData['setup_infrastructure_type'];
+    }
+    return form.infraType as FarmSetupData['setup_infrastructure_type'];
+  })(),
+  setup_unit_count: (() => {
+    const summary = getProductionUnitsCompatibilitySummary(form.productionUnits);
+    if (summary) {
+      return summary.legacy_unit_count;
+    }
+    return toInt(form.unitCount) || 1;
+  })(),
+  setup_unit_volume_m3: (() => {
+    const summary = getProductionUnitsCompatibilitySummary(form.productionUnits);
+    if (summary?.primary_unit && normalizeProductionUnitType(summary.primary_unit.unit_type) !== 'pond') {
+      const value = summary.primary_unit.volume_m3 ? Number(summary.primary_unit.volume_m3) : null;
+      return value ?? undefined;
+    }
+    return form.unitVolume ? toFloat(form.unitVolume) : undefined;
+  })(),
+  setup_unit_surface_m2: (() => {
+    const summary = getProductionUnitsCompatibilitySummary(form.productionUnits);
+    if (summary?.primary_unit && normalizeProductionUnitType(summary.primary_unit.unit_type) === 'pond') {
+      const value = summary.primary_unit.surface_m2 ? Number(summary.primary_unit.surface_m2) : null;
+      return value ?? undefined;
+    }
+    return form.unitSurface ? toFloat(form.unitSurface) : undefined;
+  })(),
   annual_production_target_kg: (() => {
     const cycleProductionKg = getCycleProductionEstimate(form) ?? 0;
     const compatibilityCycles = numCycles ?? getCompatibilityCyclesPerYear(form);

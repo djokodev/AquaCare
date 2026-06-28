@@ -266,6 +266,14 @@ export interface ProductionUnitDraft {
   surface_m2?: string;
 }
 
+export interface ProductionUnitCompatibilitySummary {
+  legacy_infrastructure_type: 'etang' | 'cage_flottante' | 'bac_hors_sol';
+  legacy_unit_count: number;
+  total_capacity: number | null;
+  is_mixed: boolean;
+  primary_unit: ProductionUnitDraft | null;
+}
+
 export interface CycleUnitAllocation {
   id: string;
   cycle: string;

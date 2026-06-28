@@ -39,6 +39,11 @@ import {
   getStockingDensityPreview,
   getTotalCapacityPreview,
 } from '@/features/aquaculture/utils/farmSetupForm';
+import {
+  getProductionUnitsCompatibilitySummary,
+  getProductionUnitsDensityPreview,
+  normalizeProductionUnitType,
+} from '@/features/aquaculture/utils/productionUnits';
 import { parseApiError } from '@/utils/errorParser';
 import { formatAquacultureErrorWithAction } from '@/features/aquaculture/utils/aquacultureErrorPresenter';
 
@@ -67,9 +72,12 @@ function formatPercent(amount: number): string {
 }
 
 export default function CycleSimulationScreen({ navigation, route }: Props) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const dispatch = useDispatch<AppDispatch>();
   const formData = route.params.formData;
+  const densityLocale = i18n.language?.startsWith('fr') ? 'fr-FR' : 'en-US';
+  const formatDensity = (value: number): string =>
+    new Intl.NumberFormat(densityLocale, { maximumFractionDigits: 2 }).format(value);
 
   const { result: cycleSimulationResult, loading: simLoading } = useSelector(
     (s: RootState) => s.farmSetup.cycleSimulation
@@ -77,6 +85,18 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
   const [launching, setLaunching] = useState(false);
   const [currentResult, setCurrentResult] = useState<CycleSimulationResult | null>(
     cycleSimulationResult
+  );
+  const productionUnitSummary = useMemo(
+    () => getProductionUnitsCompatibilitySummary(formData.productionUnits ?? []),
+    [formData.productionUnits]
+  );
+  const productionUnitsDensityPreview = useMemo(
+    () =>
+      getProductionUnitsDensityPreview({
+        productionUnits: formData.productionUnits ?? [],
+        fingerlingsCount: formData.fingerlingsCount,
+      }),
+    [formData.fingerlingsCount, formData.productionUnits]
   );
 
   useEffect(() => {
@@ -91,7 +111,7 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
     }
   }
 
-  const stockingDensityCheck = useMemo(() => getStockingDensityPreview(formData), [formData]);
+  const legacyStockingDensityCheck = useMemo(() => getStockingDensityPreview(formData), [formData]);
   const totalCapacity = useMemo(() => getTotalCapacityPreview(formData), [formData]);
   const harvestCapacityPerCycle = useMemo(() => getHarvestCapacityPerCycle(formData), [formData]);
   const harvestWeightDefault = getSpeciesHarvestWeightDefault(formData.species);
@@ -111,6 +131,11 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
   const cycleTotalCost = currentResult?.cycle_total_cost_fcfa ?? 0;
   const cycleNetProfit = currentResult?.cycle_net_profit_fcfa ?? currentResult?.annual_net_profit_fcfa ?? 0;
   const cycleRoi = currentResult?.cycle_roi_pct ?? currentResult?.annual_roi_pct ?? 0;
+  const totalCapacityLabel = formData.productionUnits?.length
+    ? totalCapacity
+      ? `${totalCapacity} ${t('productionUnitFingerlingsUnit')}`
+      : '—'
+    : totalCapacity ?? '—';
 
   async function handleLaunchFirstCycle() {
     if (!currentResult) return;
@@ -127,6 +152,28 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
         throw new Error('AUTH_UNKNOWN_ERROR');
       }
 
+      // Compatibility bridge: the setup UI is now production-unit based,
+      // while the current simulation and cycle creation flow still expect
+      // legacy homogeneous fields. PR #59 will make the simulation unit-aware.
+      const legacyUnit = productionUnitSummary?.primary_unit;
+      const legacyUnitType = legacyUnit ? normalizeProductionUnitType(legacyUnit.unit_type) : null;
+      const hasProductionUnitSummary = Boolean(productionUnitSummary);
+      const legacyPondSurface =
+        legacyUnitType === 'pond'
+          ? legacyUnit?.surface_m2
+            ? parseFloat(legacyUnit.surface_m2)
+            : undefined
+          : undefined;
+      const legacyPondVolume =
+        hasProductionUnitSummary
+          ? legacyUnitType && legacyUnitType !== 'pond'
+            ? legacyUnit?.volume_m3
+              ? parseFloat(legacyUnit.volume_m3)
+              : undefined
+            : undefined
+          : formData.unitVolume
+            ? parseFloat(formData.unitVolume)
+            : undefined;
       const speciesForCycle = getSimulationSpecies(formData.species);
       const fingerlingsCost = currentResult.cycle_fingerlings_cost_fcfa ?? firstCycle.fingerlings_cost_fcfa;
       const otherCosts = currentResult.cycle_other_costs_fcfa ?? 0;
@@ -135,9 +182,9 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
         createProductionCycle({
           species: speciesForCycle,
           cycle_name: undefined,
-          pond_identifier: t('simulationDefaultPondIdentifier'),
-          pond_surface_m2: formData.unitSurface ? parseFloat(formData.unitSurface) : undefined,
-          pond_volume_m3: formData.unitVolume ? parseFloat(formData.unitVolume) : undefined,
+          pond_identifier: legacyUnit?.name?.trim() || t('simulationDefaultPondIdentifier'),
+          pond_surface_m2: hasProductionUnitSummary ? legacyPondSurface : formData.unitSurface ? parseFloat(formData.unitSurface) : undefined,
+          pond_volume_m3: legacyPondVolume,
           initial_count: firstCycle.initial_fish_count,
           initial_average_weight: undefined,
           start_date: firstCycle.start_date_estimate,
@@ -247,24 +294,62 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
         <MetricRow label={t('simulationFingerlingsCount')} value={fingerlingsCountLabel} />
         <MetricRow
           label={t('simulationTotalCapacity')}
-          value={totalCapacity ?? '—'}
+          value={totalCapacityLabel}
         />
-        <MetricRow
-          label={t('simulationCurrentDensity')}
-          value={
-            stockingDensityCheck
-              ? `${stockingDensityCheck.density.toLocaleString('fr-FR', { maximumFractionDigits: 1 })}/${stockingDensityCheck.unit}`
-              : '—'
-          }
-        />
-        <MetricRow
-          label={t('simulationMaxDensity')}
-          value={
-            stockingDensityCheck
-              ? `${stockingDensityCheck.max}/${stockingDensityCheck.unit}`
-              : '—'
-          }
-        />
+        {productionUnitsDensityPreview?.kind === 'single' ? (
+          productionUnitsDensityPreview.isAtMax ? (
+            <MetricRow
+              label={t('simulationDensity')}
+              value={`${formatDensity(productionUnitsDensityPreview.maxDensity)} ${t(
+                productionUnitsDensityPreview.unit === 'm2'
+                  ? 'productionUnitDensityFingerlingsPerSquareMeter'
+                  : 'productionUnitDensityFingerlingsPerCubicMeter'
+              )}`}
+            />
+          ) : (
+            <>
+              <MetricRow
+                label={t('simulationCurrentDensity')}
+                value={`${formatDensity(productionUnitsDensityPreview.currentDensity)} ${t(
+                  productionUnitsDensityPreview.unit === 'm2'
+                    ? 'productionUnitDensityFingerlingsPerSquareMeter'
+                    : 'productionUnitDensityFingerlingsPerCubicMeter'
+                )}`}
+              />
+              <MetricRow
+                label={t('simulationMaxDensity')}
+                value={`${formatDensity(productionUnitsDensityPreview.maxDensity)} ${t(
+                  productionUnitsDensityPreview.unit === 'm2'
+                    ? 'productionUnitDensityFingerlingsPerSquareMeter'
+                    : 'productionUnitDensityFingerlingsPerCubicMeter'
+                )}`}
+              />
+            </>
+          )
+        ) : productionUnitsDensityPreview?.kind === 'mixed' ? (
+          <>
+            <MetricRow
+              label={t('simulationDensity')}
+              value={t('simulationDensityToBeAllocated')}
+            />
+            <Text style={styles.hintText}>{t('simulationDensityByUnitNote')}</Text>
+          </>
+        ) : legacyStockingDensityCheck ? (
+          <>
+            <MetricRow
+              label={t('simulationCurrentDensity')}
+              value={
+                `${legacyStockingDensityCheck.density.toLocaleString(densityLocale, { maximumFractionDigits: 1 })}/${legacyStockingDensityCheck.unit}`
+              }
+            />
+            <MetricRow
+              label={t('simulationMaxDensity')}
+              value={
+                `${legacyStockingDensityCheck.max}/${legacyStockingDensityCheck.unit}`
+              }
+            />
+          </>
+        ) : null}
         <MetricRow
           label={t('simulationSurvivalRate')}
           value={`${survivalRateLabel} %`}

@@ -1,4 +1,5 @@
 export type {
+  ProductionUnitCompatibilitySummary,
   CycleUnitAllocation,
   CycleUnitAllocationDraft,
   ProductionUnit,

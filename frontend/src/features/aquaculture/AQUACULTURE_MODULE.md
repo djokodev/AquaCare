@@ -24,6 +24,16 @@ Cette base de code prépare l'evolution vers des unites de production reelles:
 3. Le dashboard existant reste inchangé dans cette PR.
 4. Les prochaines etapes brancheront le setup par unites, l'allocation intelligente et la vue globale du cycle.
 
+### Setup base sur les unites
+
+Le flow "Creer mon elevage" utilise maintenant les unites de production comme source de verite cote UI:
+
+1. L'utilisateur peut ajouter une unite personnalisee.
+2. L'utilisateur peut aussi creer rapidement plusieurs unites identiques.
+3. La capacite totale recommandee est calculee a partir de toutes les unites du formulaire.
+4. La simulation actuelle reste compatible avec les champs legacy homogenes pour le moment.
+5. La repartition intelligente par unite sera introduite dans la prochaine PR.
+
 ## Limites Du Module
 
 Le frontend orchestre UX et saisie utilisateur.

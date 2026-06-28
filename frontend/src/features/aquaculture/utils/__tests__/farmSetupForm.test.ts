@@ -1,10 +1,12 @@
 import {
   buildCycleSimulationInput,
+  buildFarmSetupPayload,
   getCompatibilityCyclesPerYear,
   getCycleProductionEstimate,
   getFingerlingsCapacityStatusPreview,
   getFingerlingsSuggestionPreview,
   getStockingDensityPreview,
+  getTotalCapacityPreview,
   hasFarmSetupErrors,
   sanitizePositiveIntegerInput,
   validateFarmSetupForm,
@@ -25,6 +27,7 @@ const baseForm: FarmSetupFormState = {
   fingerlingsCount: '4500',
   harvestWeight: '350',
   survivalRate: '95',
+  productionUnits: [],
 };
 
 describe('farmSetupForm', () => {
@@ -75,6 +78,69 @@ describe('farmSetupForm', () => {
     });
 
     expect(errors.unitVolume).toBe('required');
+  });
+
+  it('utilise les unités de production comme source de capacité', () => {
+    const form = {
+      ...baseForm,
+      infraType: '',
+      unitCount: '',
+      unitVolume: '',
+      unitSurface: '',
+      productionUnits: [
+        {
+          local_id: 'unit-1',
+          name: 'Bac 1',
+          unit_type: 'tank' as const,
+          volume_m3: '3',
+        },
+        {
+          local_id: 'unit-2',
+          name: 'Bac 2',
+          unit_type: 'tank' as const,
+          volume_m3: '3',
+        },
+        {
+          local_id: 'unit-3',
+          name: 'Étang principal',
+          unit_type: 'pond' as const,
+          surface_m2: '120',
+        },
+      ],
+      fingerlingsCount: '3000',
+    } satisfies FarmSetupFormState;
+
+    expect(getFingerlingsSuggestionPreview(form)?.value).toBe(3000);
+    expect(getTotalCapacityPreview(form)).toBe('3000');
+    expect(validateFarmSetupForm(form)).toMatchObject({});
+  });
+
+  it('bloque les alevins au-dessus de la capacite totale des unites', () => {
+    const form = {
+      ...baseForm,
+      infraType: '',
+      unitCount: '',
+      unitVolume: '',
+      unitSurface: '',
+      productionUnits: [
+        {
+          local_id: 'unit-1',
+          name: 'Bac 1',
+          unit_type: 'tank' as const,
+          volume_m3: '3',
+        },
+        {
+          local_id: 'unit-2',
+          name: 'Étang principal',
+          unit_type: 'pond' as const,
+          surface_m2: '120',
+        },
+      ],
+      fingerlingsCount: '2101',
+    } satisfies FarmSetupFormState;
+
+    expect(validateFarmSetupForm(form).fingerlingsCount).toBe('createFarmStockingDensityError');
+    expect(getFingerlingsSuggestionPreview(form)?.value).toBe(2100);
   });
 
   it('bloque une densite superieure a la capacite du cycle', () => {
@@ -202,6 +268,58 @@ describe('farmSetupForm', () => {
       start_date: '2026-05-14',
       expected_survival_rate_pct: 95,
       total_fingerlings_count: 4500 * compatibilityCycles,
+    });
+  });
+
+  it('construit un payload legacy sans melanger surface et volume pour un etang', () => {
+    const payload = buildFarmSetupPayload({
+      ...baseForm,
+      species: 'tilapia',
+      infraType: '',
+      unitCount: '',
+      unitVolume: '',
+      unitSurface: '',
+      productionUnits: [
+        {
+          local_id: 'unit-pond',
+          name: 'Étang principal',
+          unit_type: 'pond',
+          surface_m2: '120',
+        },
+      ],
+    });
+
+    expect(payload).toMatchObject({
+      setup_infrastructure_type: 'etang',
+      setup_unit_count: 1,
+      setup_unit_volume_m3: undefined,
+      setup_unit_surface_m2: 120,
+    });
+  });
+
+  it('construit un payload legacy volume-only pour un bac', () => {
+    const payload = buildFarmSetupPayload({
+      ...baseForm,
+      species: 'tilapia',
+      infraType: '',
+      unitCount: '',
+      unitVolume: '',
+      unitSurface: '',
+      productionUnits: [
+        {
+          local_id: 'unit-tank',
+          name: 'Bac principal',
+          unit_type: 'tank',
+          volume_m3: '3',
+        },
+      ],
+    });
+
+    expect(payload).toMatchObject({
+      setup_infrastructure_type: 'bac_hors_sol',
+      setup_unit_count: 1,
+      setup_unit_volume_m3: 3,
+      setup_unit_surface_m2: undefined,
     });
   });
 });
