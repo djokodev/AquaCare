@@ -145,6 +145,23 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
       // legacy homogeneous fields. PR #59 will make the simulation unit-aware.
       const legacyUnit = productionUnitSummary?.primary_unit;
       const legacyUnitType = legacyUnit ? normalizeProductionUnitType(legacyUnit.unit_type) : null;
+      const hasProductionUnitSummary = Boolean(productionUnitSummary);
+      const legacyPondSurface =
+        legacyUnitType === 'pond'
+          ? legacyUnit?.surface_m2
+            ? parseFloat(legacyUnit.surface_m2)
+            : undefined
+          : undefined;
+      const legacyPondVolume =
+        hasProductionUnitSummary
+          ? legacyUnitType && legacyUnitType !== 'pond'
+            ? legacyUnit?.volume_m3
+              ? parseFloat(legacyUnit.volume_m3)
+              : undefined
+            : undefined
+          : formData.unitVolume
+            ? parseFloat(formData.unitVolume)
+            : undefined;
       const speciesForCycle = getSimulationSpecies(formData.species);
       const fingerlingsCost = currentResult.cycle_fingerlings_cost_fcfa ?? firstCycle.fingerlings_cost_fcfa;
       const otherCosts = currentResult.cycle_other_costs_fcfa ?? 0;
@@ -154,22 +171,8 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
           species: speciesForCycle,
           cycle_name: undefined,
           pond_identifier: legacyUnit?.name?.trim() || t('simulationDefaultPondIdentifier'),
-          pond_surface_m2:
-            legacyUnitType === 'pond'
-              ? legacyUnit?.surface_m2
-                ? parseFloat(legacyUnit.surface_m2)
-                : undefined
-              : formData.unitSurface
-                ? parseFloat(formData.unitSurface)
-                : undefined,
-          pond_volume_m3:
-            legacyUnitType && legacyUnitType !== 'pond'
-              ? legacyUnit?.volume_m3
-                ? parseFloat(legacyUnit.volume_m3)
-                : undefined
-              : formData.unitVolume
-                ? parseFloat(formData.unitVolume)
-                : undefined,
+          pond_surface_m2: hasProductionUnitSummary ? legacyPondSurface : formData.unitSurface ? parseFloat(formData.unitSurface) : undefined,
+          pond_volume_m3: legacyPondVolume,
           initial_count: firstCycle.initial_fish_count,
           initial_average_weight: undefined,
           start_date: firstCycle.start_date_estimate,

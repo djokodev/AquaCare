@@ -1,5 +1,6 @@
 import {
   buildCycleSimulationInput,
+  buildFarmSetupPayload,
   getCompatibilityCyclesPerYear,
   getCycleProductionEstimate,
   getFingerlingsCapacityStatusPreview,
@@ -267,6 +268,58 @@ describe('farmSetupForm', () => {
       start_date: '2026-05-14',
       expected_survival_rate_pct: 95,
       total_fingerlings_count: 4500 * compatibilityCycles,
+    });
+  });
+
+  it('construit un payload legacy sans melanger surface et volume pour un etang', () => {
+    const payload = buildFarmSetupPayload({
+      ...baseForm,
+      species: 'tilapia',
+      infraType: '',
+      unitCount: '',
+      unitVolume: '',
+      unitSurface: '',
+      productionUnits: [
+        {
+          local_id: 'unit-pond',
+          name: 'Étang principal',
+          unit_type: 'pond',
+          surface_m2: '120',
+        },
+      ],
+    });
+
+    expect(payload).toMatchObject({
+      setup_infrastructure_type: 'etang',
+      setup_unit_count: 1,
+      setup_unit_volume_m3: undefined,
+      setup_unit_surface_m2: 120,
+    });
+  });
+
+  it('construit un payload legacy volume-only pour un bac', () => {
+    const payload = buildFarmSetupPayload({
+      ...baseForm,
+      species: 'tilapia',
+      infraType: '',
+      unitCount: '',
+      unitVolume: '',
+      unitSurface: '',
+      productionUnits: [
+        {
+          local_id: 'unit-tank',
+          name: 'Bac principal',
+          unit_type: 'tank',
+          volume_m3: '3',
+        },
+      ],
+    });
+
+    expect(payload).toMatchObject({
+      setup_infrastructure_type: 'bac_hors_sol',
+      setup_unit_count: 1,
+      setup_unit_volume_m3: 3,
+      setup_unit_surface_m2: undefined,
     });
   });
 });

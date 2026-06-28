@@ -89,4 +89,60 @@ describe('features/aquaculture/screens/CreateFarmScreen', () => {
     expect(alertSpy).not.toHaveBeenCalled();
     alertSpy.mockRestore();
   });
+
+  it('garde la surface pour un etang sans la convertir en volume', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    mockDispatch.mockImplementation((action: unknown) => {
+      if (typeof action === 'function') {
+        return {
+          type: runCycleSimulation.fulfilled.type,
+          payload: {},
+        };
+      }
+      return action;
+    });
+
+    const { getByText, getByPlaceholderText, getAllByText } = render(
+      <CreateFarmScreen navigation={navigation} />
+    );
+
+    fireEvent.press(getByText('createFarmSpeciesTilapia'));
+    fireEvent.press(getAllByText('productionUnitTypePond')[0]);
+    fireEvent.changeText(getByPlaceholderText('createFarmUnitNamePlaceholder'), 'Étang principal');
+    fireEvent.changeText(getByPlaceholderText('createFarmUnitSurfacePlaceholder'), '120');
+    fireEvent.press(getByText('+ createFarmAddUnitBtn'));
+
+    await waitFor(() => {
+      expect(getByText('Étang principal')).toBeTruthy();
+    });
+
+    fireEvent.changeText(
+      getByPlaceholderText('createFarmFingerlingsCountPlaceholderMax'),
+      '1200'
+    );
+    fireEvent.press(getByText('createFarmSimulateBtn'));
+
+    await waitFor(() => {
+      expect(navigation.navigate).toHaveBeenCalledWith(
+        'CycleSimulation',
+        expect.objectContaining({
+          formData: expect.objectContaining({
+            unitSurface: '120',
+            unitVolume: '',
+            productionUnits: [
+              expect.objectContaining({
+                name: 'Étang principal',
+                unit_type: 'pond',
+                surface_m2: '120',
+                volume_m3: '',
+              }),
+            ],
+          }),
+        })
+      );
+    });
+
+    expect(alertSpy).not.toHaveBeenCalled();
+    alertSpy.mockRestore();
+  });
 });

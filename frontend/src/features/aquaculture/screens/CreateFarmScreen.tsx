@@ -178,15 +178,9 @@ export default function CreateFarmScreen({ navigation }: Props) {
         };
       }
 
-      const nextUnitVolume =
-        normalizeProductionUnitType(summary.primary_unit?.unit_type ?? null) === 'pond'
-          ? summary.primary_unit?.surface_m2?.trim() ?? ''
-          : summary.primary_unit?.volume_m3?.trim() ?? '';
-
-      const nextUnitSurface =
-        normalizeProductionUnitType(summary.primary_unit?.unit_type ?? null) === 'pond'
-          ? summary.primary_unit?.surface_m2?.trim() ?? ''
-          : '';
+      const isPond = normalizeProductionUnitType(summary.primary_unit?.unit_type ?? null) === 'pond';
+      const nextUnitVolume = isPond ? '' : summary.primary_unit?.volume_m3?.trim() ?? '';
+      const nextUnitSurface = isPond ? summary.primary_unit?.surface_m2?.trim() ?? '' : '';
 
       const nextLegacyValues = {
         infraType: summary.legacy_infrastructure_type,
