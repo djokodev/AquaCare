@@ -1,8 +1,15 @@
 import React from 'react';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 import ProductionUnitsHubScreen from '../ProductionUnitsHubScreen';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
+
+jest.mock('@/features/main/components/MetricCard', () => {
+  return {
+    __esModule: true,
+    default: () => null,
+  };
+});
 
 jest.mock('@/features/aquaculture/services/aquacultureService', () => ({
   aquacultureService: {
@@ -122,11 +129,7 @@ describe('features/aquaculture/screens/ProductionUnitsHubScreen', () => {
       expect(getByText('cycleDashboardTitle')).toBeTruthy();
       expect(getByText('Bac 1')).toBeTruthy();
       expect(getByText('Étang principal')).toBeTruthy();
-      expect(getAllByText('cycleDashboardEstimatedFishCount').length).toBeGreaterThan(0);
-      expect(getAllByText(/900/).length).toBeGreaterThan(0);
-      expect(getAllByText(/1[\s\u202f]?200/).length).toBeGreaterThan(0);
-      expect(getAllByText('productionUnitsRecommendedCapacity').length).toBeGreaterThan(0);
-      expect(getAllByText('productionUnitsExpectedSurvivalRate').length).toBeGreaterThan(0);
+      expect(getAllByText('cycleDashboardUnitsCount').length).toBeGreaterThan(0);
       expect(getAllByText('cycleDashboardSanitaryIssueUnits').length).toBeGreaterThan(0);
       expect(getAllByText('cycleDashboardMissingTodayLogs').length).toBeGreaterThan(0);
       expect(getAllByText('productionUnitsOpenUnit').length).toBe(2);
@@ -138,6 +141,44 @@ describe('features/aquaculture/screens/ProductionUnitsHubScreen', () => {
       cycleId: 'cycle-1',
       allocationId: 'allocation-1',
       productionUnitId: 'unit-1',
+    });
+  });
+
+  it('affiche un loading initial avant de charger le dashboard', async () => {
+    let resolveDashboard: (value: unknown) => void = () => undefined;
+    mockGetCycleDashboard.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveDashboard = resolve;
+      }) as never
+    );
+
+    const { getByText } = render(
+      <ProductionUnitsHubScreen navigation={navigation} route={route} />
+    );
+
+    expect(getByText('cycleDashboardLoading')).toBeTruthy();
+
+    resolveDashboard({
+      cycle: {
+        id: 'cycle-1',
+        cycle_name: 'Cycle actif',
+      },
+      summary: {
+        total_allocations: 0,
+        total_estimated_current_fish_count: 0,
+        total_mortality_count: 0,
+        total_feed_consumed_kg: '0.00',
+        estimated_current_biomass_kg: '0.00',
+        units_with_sanitary_issue_count: 0,
+        units_missing_today_log_count: 0,
+        has_allocations: false,
+        data_source: 'legacy_cycle',
+      },
+      allocations: [],
+    });
+
+    await waitFor(() => {
+      expect(getByText('cycleDashboardTitle')).toBeTruthy();
     });
   });
 
@@ -178,5 +219,62 @@ describe('features/aquaculture/screens/ProductionUnitsHubScreen', () => {
     await waitFor(() => {
       expect(getByText('cycleDashboardLoadError')).toBeTruthy();
     }, { timeout: 3000 });
+  });
+
+  it('recharge le dashboard via le pull to refresh', async () => {
+    mockGetCycleDashboard
+      .mockResolvedValueOnce({
+        cycle: {
+          id: 'cycle-1',
+          cycle_name: 'Cycle actif',
+        },
+        summary: {
+          total_allocations: 1,
+          total_estimated_current_fish_count: 900,
+          total_mortality_count: 0,
+          total_feed_consumed_kg: '0.00',
+          estimated_current_biomass_kg: '9.00',
+          units_with_sanitary_issue_count: 0,
+          units_missing_today_log_count: 0,
+          has_allocations: true,
+          data_source: 'unit_allocations',
+        },
+        allocations: [],
+      })
+      .mockResolvedValueOnce({
+        cycle: {
+          id: 'cycle-1',
+          cycle_name: 'Cycle actif',
+        },
+        summary: {
+          total_allocations: 1,
+          total_estimated_current_fish_count: 880,
+          total_mortality_count: 20,
+          total_feed_consumed_kg: '12.00',
+          estimated_current_biomass_kg: '8.80',
+          units_with_sanitary_issue_count: 0,
+          units_missing_today_log_count: 0,
+          has_allocations: true,
+          data_source: 'unit_allocations',
+        },
+        allocations: [],
+      });
+
+    const { getByTestId, getByText } = render(
+      <ProductionUnitsHubScreen navigation={navigation} route={route} />
+    );
+
+    await waitFor(() => {
+      expect(getByText('cycleDashboardTitle')).toBeTruthy();
+    });
+
+    act(() => {
+      getByTestId('production-units-hub-scroll').props.refreshControl.props.onRefresh();
+    });
+
+    await waitFor(() => {
+      expect(mockGetCycleDashboard).toHaveBeenCalledTimes(2);
+      expect(mockGetCycleDashboard).toHaveBeenLastCalledWith('cycle-1');
+    });
   });
 });

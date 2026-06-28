@@ -232,6 +232,7 @@ export default function ProductionUnitsHubScreen({ navigation, route }: Props) {
 
   return (
     <ScrollView
+      testID="production-units-hub-scroll"
       style={styles.container}
       contentContainerStyle={styles.content}
       refreshControl={

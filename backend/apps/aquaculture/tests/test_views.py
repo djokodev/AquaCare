@@ -532,6 +532,54 @@ class TestProductionCycleViewSet:
 
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
+    def test_cycle_dashboard_does_not_mutate_unit_state(self, auth_client, production_cycle):
+        """Le dashboard global ne doit modifier ni le cycle ni ses allocations."""
+        allocation = create_cycle_unit_allocation(production_cycle, name='Bac 1', volume_m3='3.00')
+
+        CycleLog.objects.create(
+            cycle=production_cycle,
+            cycle_unit_allocation=allocation,
+            log_date=date.today(),
+            mortality_count=2,
+            feed_quantity=Decimal('5.00'),
+            average_weight=Decimal('20.00'),
+        )
+        SanitaryLog.objects.create(
+            cycle=production_cycle,
+            cycle_unit_allocation=allocation,
+            event_date=date.today(),
+            event_type='disease',
+            symptoms='Points blancs observés',
+            resolved=False,
+        )
+
+        cycle_snapshot = {
+            'current_count': production_cycle.current_count,
+            'current_biomass': production_cycle.current_biomass,
+            'log_count': CycleLog.objects.filter(cycle=production_cycle).count(),
+            'sanitary_count': SanitaryLog.objects.filter(cycle=production_cycle).count(),
+        }
+        allocation_snapshot = {
+            'current_fish_count': allocation.current_fish_count,
+            'current_biomass_kg': allocation.current_biomass_kg,
+        }
+
+        response = auth_client.get(
+            reverse('aquaculture:production-cycle-dashboard', kwargs={'pk': production_cycle.id})
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+
+        production_cycle.refresh_from_db()
+        allocation.refresh_from_db()
+
+        assert production_cycle.current_count == cycle_snapshot['current_count']
+        assert production_cycle.current_biomass == cycle_snapshot['current_biomass']
+        assert CycleLog.objects.filter(cycle=production_cycle).count() == cycle_snapshot['log_count']
+        assert SanitaryLog.objects.filter(cycle=production_cycle).count() == cycle_snapshot['sanitary_count']
+        assert allocation.current_fish_count == allocation_snapshot['current_fish_count']
+        assert allocation.current_biomass_kg == allocation_snapshot['current_biomass_kg']
+
     def test_cycle_comparison(self, auth_client, production_cycle):
         """Test endpoint comparaison cycles."""
         # Créer un cycle terminé pour comparaison
@@ -746,6 +794,62 @@ class TestCycleUnitAllocationDashboardViewSet:
         assert response.data['summary']['has_unresolved_sanitary_issue'] is False
         assert response.data['recent_daily_logs'] == []
         assert response.data['recent_sanitary_logs'] == []
+
+    def test_dashboard_does_not_mutate_unit_state(self, auth_client, production_cycle):
+        allocation = create_cycle_unit_allocation(production_cycle, name='Bac stable', volume_m3='3.00')
+
+        CycleLog.objects.create(
+            cycle=production_cycle,
+            cycle_unit_allocation=allocation,
+            log_date=date.today(),
+            mortality_count=4,
+            feed_quantity=Decimal('3.50'),
+            average_weight=Decimal('18.00'),
+        )
+        SanitaryLog.objects.create(
+            cycle=production_cycle,
+            cycle_unit_allocation=allocation,
+            event_date=date.today(),
+            event_type='treatment',
+            symptoms='Traitement préventif',
+            resolved=False,
+        )
+
+        allocation_snapshot = {
+            'current_fish_count': allocation.current_fish_count,
+            'current_biomass_kg': allocation.current_biomass_kg,
+            'log_count': CycleLog.objects.filter(cycle=production_cycle, cycle_unit_allocation=allocation).count(),
+        }
+        allocation_snapshot['sanitary_count'] = SanitaryLog.objects.filter(
+            cycle=production_cycle,
+            cycle_unit_allocation=allocation,
+        ).count()
+        cycle_snapshot = {
+            'current_count': production_cycle.current_count,
+            'current_biomass': production_cycle.current_biomass,
+        }
+
+        response = auth_client.get(
+            reverse('aquaculture:cycle-unit-allocation-dashboard', kwargs={'pk': allocation.id})
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+
+        production_cycle.refresh_from_db()
+        allocation.refresh_from_db()
+
+        assert production_cycle.current_count == cycle_snapshot['current_count']
+        assert production_cycle.current_biomass == cycle_snapshot['current_biomass']
+        assert allocation.current_fish_count == allocation_snapshot['current_fish_count']
+        assert allocation.current_biomass_kg == allocation_snapshot['current_biomass_kg']
+        assert CycleLog.objects.filter(
+            cycle=production_cycle,
+            cycle_unit_allocation=allocation,
+        ).count() == allocation_snapshot['log_count']
+        assert SanitaryLog.objects.filter(
+            cycle=production_cycle,
+            cycle_unit_allocation=allocation,
+        ).count() == allocation_snapshot['sanitary_count']
 
 
 @pytest.mark.django_db
