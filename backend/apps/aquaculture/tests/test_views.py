@@ -11,10 +11,12 @@ from unittest.mock import patch
 import pytest
 from aquaculture.models import (
     CycleLog,
+    CycleUnitAllocation,
     FeedingPlan,
     NutritionalGuide,
     ProductionCycle,
     ProductionReport,
+    ProductionUnit,
     ReportDispatchLog,
     SanitaryLog,
 )
@@ -301,10 +303,162 @@ class TestCycleLogViewSet:
         }
         
         response = auth_client.post(url, data, format='json')
-        
+
         assert response.status_code == status.HTTP_201_CREATED
         assert response.data['mortality_count'] == 3
         assert float(response.data['feed_quantity']) == 2.5
+
+    def test_create_cycle_log_without_allocation_keeps_legacy_flow(self, auth_client, production_cycle):
+        """Le payload legacy sans allocation reste accepté."""
+        url = reverse('aquaculture:cycle-log-list')
+        data = {
+            'cycle': str(production_cycle.id),
+            'log_date': date.today().isoformat(),
+            'mortality_count': 1,
+        }
+
+        response = auth_client.post(url, data, format='json')
+
+        assert response.status_code == status.HTTP_201_CREATED
+        assert response.data.get('cycle_unit_allocation') in (None, '')
+
+    def test_create_cycle_log_with_allocation(self, auth_client, production_cycle, farm_profile):
+        """Test création log quotidien rattaché à une allocation."""
+        unit = ProductionUnit.objects.create(
+            farm_profile=farm_profile,
+            name='Bac 1',
+            unit_type='tank',
+            volume_m3=Decimal('3.00'),
+        )
+        allocation = CycleUnitAllocation.objects.create(
+            cycle=production_cycle,
+            production_unit=unit,
+            initial_fish_count=900,
+            current_fish_count=900,
+            initial_biomass_kg=Decimal('9.00'),
+            current_biomass_kg=Decimal('9.00'),
+        )
+
+        url = reverse('aquaculture:cycle-log-list')
+        data = {
+            'cycle': str(production_cycle.id),
+            'cycle_unit_allocation': str(allocation.id),
+            'log_date': date.today().isoformat(),
+            'mortality_count': 3,
+            'feed_quantity': '2.5',
+            'water_temperature': '29.0',
+            'ph_level': '7.1',
+            'observations': 'Bon comportement général',
+        }
+
+        response = auth_client.post(url, data, format='json')
+
+        assert response.status_code == status.HTTP_201_CREATED
+        assert str(response.data['cycle_unit_allocation']) == str(allocation.id)
+        assert response.data['production_unit_name'] == 'Bac 1'
+        assert response.data['production_unit_type'] == 'tank'
+
+    def test_create_cycle_log_rejects_allocation_from_other_cycle(
+        self,
+        auth_client,
+        production_cycle,
+        farm_profile,
+    ):
+        """Une allocation liée à un autre cycle doit être refusée."""
+        other_cycle = ProductionCycle.objects.create(
+            farm_profile=farm_profile,
+            cycle_name='Cycle autre',
+            species='tilapia',
+            pond_identifier='Bassin X',
+            pond_surface_m2=Decimal('80'),
+            start_date=date.today(),
+            initial_count=800,
+            initial_average_weight=Decimal('10'),
+            initial_biomass=Decimal('8'),
+            current_count=800,
+            current_average_weight=Decimal('10'),
+            current_biomass=Decimal('8'),
+        )
+        unit = ProductionUnit.objects.create(
+            farm_profile=farm_profile,
+            name='Bac 2',
+            unit_type='tank',
+            volume_m3=Decimal('4.00'),
+        )
+        allocation = CycleUnitAllocation.objects.create(
+            cycle=other_cycle,
+            production_unit=unit,
+            initial_fish_count=400,
+            current_fish_count=400,
+            initial_biomass_kg=Decimal('4.00'),
+            current_biomass_kg=Decimal('4.00'),
+        )
+
+        response = auth_client.post(
+            reverse('aquaculture:cycle-log-list'),
+            {
+                'cycle': str(production_cycle.id),
+                'cycle_unit_allocation': str(allocation.id),
+                'log_date': date.today().isoformat(),
+                'mortality_count': 1,
+            },
+            format='json',
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert 'cycle_unit_allocation' in response.data
+
+    def test_create_cycle_log_rejects_allocation_from_other_user(
+        self,
+        auth_client,
+        production_cycle,
+        user_factory,
+    ):
+        """Une allocation appartenant à un autre utilisateur doit être refusée."""
+        other_user = user_factory(phone_number='+237690444444', email='foreign-allocation@test.com')
+        other_farm = other_user.farm_profile
+        other_cycle = ProductionCycle.objects.create(
+            farm_profile=other_farm,
+            cycle_name='Cycle externe',
+            species='clarias',
+            pond_identifier='Bassin externe',
+            pond_surface_m2=Decimal('90'),
+            start_date=date.today(),
+            initial_count=900,
+            initial_average_weight=Decimal('10'),
+            initial_biomass=Decimal('9'),
+            current_count=900,
+            current_average_weight=Decimal('10'),
+            current_biomass=Decimal('9'),
+        )
+        foreign_unit = ProductionUnit.objects.create(
+            farm_profile=other_farm,
+            name='Bac externe',
+            unit_type='tank',
+            volume_m3=Decimal('5.00'),
+        )
+        allocation = CycleUnitAllocation.objects.create(
+            cycle=other_cycle,
+            production_unit=foreign_unit,
+            initial_fish_count=450,
+            current_fish_count=450,
+            initial_biomass_kg=Decimal('4.50'),
+            current_biomass_kg=Decimal('4.50'),
+        )
+
+        response = auth_client.post(
+            reverse('aquaculture:cycle-log-list'),
+            {
+                'cycle': str(production_cycle.id),
+                'cycle_unit_allocation': str(allocation.id),
+                'log_date': date.today().isoformat(),
+                'mortality_count': 1,
+            },
+            format='json',
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert 'cycle_unit_allocation' in response.data
 
     def test_create_cycle_log_with_environment_and_feeding_times(self, auth_client, production_cycle):
         """Le endpoint accepte les champs environnementaux et feeding_times."""
@@ -413,6 +567,59 @@ class TestCycleLogViewSet:
         # Comparer UUID avec UUID, pas avec string
         returned_cycle_id = response.data['results'][0]['cycle']
         assert str(returned_cycle_id) == str(production_cycle.id)
+
+    def test_filter_logs_by_allocation(self, auth_client, production_cycle, farm_profile):
+        """Test filtrage logs par allocation."""
+        unit_a = ProductionUnit.objects.create(
+            farm_profile=farm_profile,
+            name='Bac A',
+            unit_type='tank',
+            volume_m3=Decimal('3.00'),
+        )
+        unit_b = ProductionUnit.objects.create(
+            farm_profile=farm_profile,
+            name='Bac B',
+            unit_type='tank',
+            volume_m3=Decimal('4.00'),
+        )
+        allocation_a = CycleUnitAllocation.objects.create(
+            cycle=production_cycle,
+            production_unit=unit_a,
+            initial_fish_count=500,
+            current_fish_count=500,
+            initial_biomass_kg=Decimal('5.00'),
+            current_biomass_kg=Decimal('5.00'),
+        )
+        allocation_b = CycleUnitAllocation.objects.create(
+            cycle=production_cycle,
+            production_unit=unit_b,
+            initial_fish_count=400,
+            current_fish_count=390,
+            initial_biomass_kg=Decimal('4.00'),
+            current_biomass_kg=Decimal('3.90'),
+        )
+
+        CycleLog.objects.create(
+            cycle=production_cycle,
+            cycle_unit_allocation=allocation_a,
+            log_date=date.today() - timedelta(days=2),
+            mortality_count=1,
+        )
+        CycleLog.objects.create(
+            cycle=production_cycle,
+            cycle_unit_allocation=allocation_b,
+            log_date=date.today() - timedelta(days=1),
+            mortality_count=2,
+        )
+
+        response = auth_client.get(
+            reverse('aquaculture:cycle-log-list'),
+            {'cycle_unit_allocation': str(allocation_a.id)},
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert len(response.data['results']) == 1
+        assert str(response.data['results'][0]['cycle_unit_allocation']) == str(allocation_a.id)
 
     def test_partial_update_cycle_log_uses_application_service(self, auth_client, production_cycle):
         """PATCH log doit passer par la couche applicative."""
@@ -525,6 +732,147 @@ class TestSanitaryLogViewSet:
         assert response.data['event_type'] == 'disease'
         assert response.data['affected_count'] == 25
         assert not response.data['resolved']
+
+    def test_create_sanitary_log_with_allocation(self, auth_client, production_cycle, farm_profile):
+        """Test création log sanitaire rattaché à une allocation."""
+        unit = ProductionUnit.objects.create(
+            farm_profile=farm_profile,
+            name='Bac sanitaire',
+            unit_type='tank',
+            volume_m3=Decimal('3.00'),
+        )
+        allocation = CycleUnitAllocation.objects.create(
+            cycle=production_cycle,
+            production_unit=unit,
+            initial_fish_count=500,
+            current_fish_count=500,
+            initial_biomass_kg=Decimal('5.00'),
+            current_biomass_kg=Decimal('5.00'),
+        )
+
+        url = reverse('aquaculture:sanitary-log-list')
+        data = {
+            'cycle': str(production_cycle.id),
+            'cycle_unit_allocation': str(allocation.id),
+            'event_date': date.today().isoformat(),
+            'event_type': 'disease',
+            'symptoms': 'Nage erratique observée',
+            'affected_count': 25,
+            'treatment_applied': 'Changement eau partiel',
+        }
+
+        response = auth_client.post(url, data, format='json')
+
+        assert response.status_code == status.HTTP_201_CREATED
+        assert str(response.data['cycle_unit_allocation']) == str(allocation.id)
+        assert response.data['production_unit_name'] == 'Bac sanitaire'
+        assert response.data['production_unit_type'] == 'tank'
+
+    def test_create_sanitary_log_rejects_allocation_from_other_cycle(
+        self,
+        auth_client,
+        production_cycle,
+        farm_profile,
+    ):
+        """Une allocation sanitaire d'un autre cycle doit être refusée."""
+        other_cycle = ProductionCycle.objects.create(
+            farm_profile=farm_profile,
+            cycle_name='Cycle sanitaire externe',
+            species='tilapia',
+            pond_identifier='Bassin sanitaire externe',
+            pond_surface_m2=Decimal('70'),
+            start_date=date.today(),
+            initial_count=700,
+            initial_average_weight=Decimal('10'),
+            initial_biomass=Decimal('7'),
+            current_count=700,
+            current_average_weight=Decimal('10'),
+            current_biomass=Decimal('7'),
+        )
+        unit = ProductionUnit.objects.create(
+            farm_profile=farm_profile,
+            name='Bac sanitaire externe',
+            unit_type='tank',
+            volume_m3=Decimal('4.00'),
+        )
+        allocation = CycleUnitAllocation.objects.create(
+            cycle=other_cycle,
+            production_unit=unit,
+            initial_fish_count=350,
+            current_fish_count=350,
+            initial_biomass_kg=Decimal('3.50'),
+            current_biomass_kg=Decimal('3.50'),
+        )
+
+        response = auth_client.post(
+            reverse('aquaculture:sanitary-log-list'),
+            {
+                'cycle': str(production_cycle.id),
+                'cycle_unit_allocation': str(allocation.id),
+                'event_date': date.today().isoformat(),
+                'event_type': 'disease',
+                'symptoms': 'Observation sanitaire',
+            },
+            format='json',
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert 'cycle_unit_allocation' in response.data
+
+    def test_filter_sanitary_logs_by_allocation(self, auth_client, production_cycle, farm_profile):
+        """Test filtrage des logs sanitaires par allocation."""
+        unit_a = ProductionUnit.objects.create(
+            farm_profile=farm_profile,
+            name='Bac sanitaire A',
+            unit_type='tank',
+            volume_m3=Decimal('3.00'),
+        )
+        unit_b = ProductionUnit.objects.create(
+            farm_profile=farm_profile,
+            name='Bac sanitaire B',
+            unit_type='tank',
+            volume_m3=Decimal('4.00'),
+        )
+        allocation_a = CycleUnitAllocation.objects.create(
+            cycle=production_cycle,
+            production_unit=unit_a,
+            initial_fish_count=500,
+            current_fish_count=500,
+            initial_biomass_kg=Decimal('5.00'),
+            current_biomass_kg=Decimal('5.00'),
+        )
+        allocation_b = CycleUnitAllocation.objects.create(
+            cycle=production_cycle,
+            production_unit=unit_b,
+            initial_fish_count=420,
+            current_fish_count=420,
+            initial_biomass_kg=Decimal('4.20'),
+            current_biomass_kg=Decimal('4.20'),
+        )
+
+        SanitaryLog.objects.create(
+            cycle=production_cycle,
+            cycle_unit_allocation=allocation_a,
+            event_date=date.today() - timedelta(days=1),
+            event_type='disease',
+            symptoms='Incident A',
+        )
+        SanitaryLog.objects.create(
+            cycle=production_cycle,
+            cycle_unit_allocation=allocation_b,
+            event_date=date.today(),
+            event_type='disease',
+            symptoms='Incident B',
+        )
+
+        response = auth_client.get(
+            reverse('aquaculture:sanitary-log-list'),
+            {'cycle_unit_allocation': str(allocation_a.id)},
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert len(response.data['results']) == 1
+        assert str(response.data['results'][0]['cycle_unit_allocation']) == str(allocation_a.id)
 
     def test_create_sanitary_log_is_idempotent_with_client_uuid(self, auth_client, production_cycle):
         """Un retry online avec le même client_uuid retourne le log existant."""

@@ -35,6 +35,7 @@ class CreateSanitaryLogCommand:
     notes: str = ""
     client_uuid: str | None = None
     created_offline: bool = False
+    cycle_unit_allocation: Any = None
 
 
 class SanitaryApplicationService:
@@ -43,11 +44,14 @@ class SanitaryApplicationService:
     @staticmethod
     def create_log(
         *,
+        user,
         command: CreateSanitaryLogCommand,
     ) -> SanitaryLogMutationResult:
         """Cree un incident sanitaire via la couche applicative."""
         return SanitaryService.create_or_get_sanitary_log(
+            user=user,
             cycle=command.cycle,
+            cycle_unit_allocation=command.cycle_unit_allocation,
             event_date=command.event_date,
             event_type=command.event_type,
             symptoms=command.symptoms,

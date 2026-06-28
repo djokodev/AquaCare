@@ -40,6 +40,14 @@ describe('features/aquaculture/screens/DailyLogScreen', () => {
     goBack: jest.fn(),
     navigate: jest.fn(),
   } as any;
+  const route = {
+    params: {
+      cycleId: 'cycle-1',
+      cycleUnitAllocationId: 'allocation-1',
+      productionUnitId: 'unit-1',
+      productionUnitName: 'Bac 1',
+    },
+  } as any;
 
   const activeCycle: ProductionCycle = {
     id: 'cycle-1',
@@ -186,6 +194,31 @@ describe('features/aquaculture/screens/DailyLogScreen', () => {
       'recordSaved',
       expect.any(Array)
     );
+    alertSpy.mockRestore();
+  });
+
+  it('affiche le contexte d unité et envoie cycle_unit_allocation', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    setSelectorCycles([activeCycle]);
+    mockService.createCycleLog.mockResolvedValueOnce({ id: 'log-unit' } as any);
+
+    const { getByText } = render(<DailyLogScreen navigation={navigation} route={route} />);
+
+    expect(getByText('productionUnitLogContextTitle')).toBeTruthy();
+    expect(getByText('Bac 1')).toBeTruthy();
+
+    fireEvent.press(getByText('save'));
+
+    await waitFor(() => {
+      expect(mockService.createCycleLog).toHaveBeenCalledWith(
+        'cycle-1',
+        expect.objectContaining({
+          cycle_unit_allocation: 'allocation-1',
+          log_date: expect.any(String),
+        })
+      );
+    });
+
     alertSpy.mockRestore();
   });
 

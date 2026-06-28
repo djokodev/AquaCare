@@ -46,6 +46,14 @@ describe('features/aquaculture/screens/SanitaryLogScreen', () => {
     goBack: jest.fn(),
     navigate: jest.fn(),
   } as any;
+  const route = {
+    params: {
+      cycleId: 'cycle-1',
+      cycleUnitAllocationId: 'allocation-1',
+      productionUnitId: 'unit-1',
+      productionUnitName: 'Bac 1',
+    },
+  } as any;
 
   const activeCycle: ProductionCycle = {
     id: 'cycle-1',
@@ -174,6 +182,36 @@ describe('features/aquaculture/screens/SanitaryLogScreen', () => {
       'sanitarySuccessOther',
       expect.any(Array)
     );
+    alertSpy.mockRestore();
+  });
+
+  it('affiche le contexte d unité et envoie cycle_unit_allocation', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    setSelectorState([activeCycle]);
+    mockService.createSanitaryLog.mockResolvedValueOnce({ id: 'san-unit' } as any);
+
+    const { getByText, getByPlaceholderText } = render(
+      <SanitaryLogScreen navigation={navigation} route={route} />
+    );
+
+    expect(getByText('productionUnitSanitaryLogContextTitle')).toBeTruthy();
+    expect(getByText('Bac 1')).toBeTruthy();
+
+    fireEvent.press(getByText('sanitaryEventOther'));
+    fireEvent.changeText(getByPlaceholderText('symptomsPlaceholder'), 'Observation');
+    fireEvent.press(getByText('save'));
+
+    await waitFor(() => {
+      expect(mockService.createSanitaryLog).toHaveBeenCalledWith(
+        'cycle-1',
+        expect.objectContaining({
+          cycle_unit_allocation: 'allocation-1',
+          event_type: 'other',
+          symptoms: 'Observation',
+        })
+      );
+    });
+
     alertSpy.mockRestore();
   });
 

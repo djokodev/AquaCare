@@ -1317,6 +1317,18 @@ export const fr = {
   productionUnitOverviewNotFoundDescription: "Cette unité n'est pas disponible pour ce cycle.",
   productionUnitOverviewComingSoon:
     'Les actions de suivi par unité seront ajoutées dans une prochaine mise à jour.',
+  productionUnitTrackingSectionTitle: 'Suivi de l’unité',
+  productionUnitTrackingSectionDescription:
+    'Enregistrez les actions et observations propres à cette unité.',
+  productionUnitDailyLogAction: 'Enregistrer la saisie du jour',
+  productionUnitSanitaryLogAction: 'Ajouter un suivi sanitaire',
+  productionUnitLogHistoryAction: 'Voir l’historique',
+  productionUnitLogContextTitle: 'Suivi de l’unité',
+  productionUnitLogContextDescription: 'Ce suivi sera associé à cette unité de production.',
+  productionUnitSanitaryLogContextTitle: 'Suivi sanitaire de l’unité',
+  productionUnitSanitaryLogContextDescription:
+    'Ce suivi sanitaire sera associé à cette unité de production.',
+  productionUnitLogHistoryContextTitle: 'Historique de l’unité',
   productionUnitsDashboardCta: 'Mes unités en production',
   productionUnitsInitialFishCount: 'Poissons au départ',
   productionUnitsCurrentFishCount: 'Poissons actuellement',

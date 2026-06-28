@@ -8,7 +8,7 @@ from unittest.mock import patch
 from uuid import uuid4
 
 import pytest
-from aquaculture.models import CycleLog, ProductionCycle
+from aquaculture.models import CycleLog, CycleUnitAllocation, ProductionCycle, ProductionUnit
 from aquaculture.services import (
     CycleLogApplicationService,
     DashboardApplicationService,
@@ -19,6 +19,23 @@ from aquaculture.services import (
     SyncApplicationService,
 )
 from django.utils import timezone
+
+
+def create_cycle_unit_allocation(cycle, name='Bac 1'):
+    unit = ProductionUnit.objects.create(
+        farm_profile=cycle.farm_profile,
+        name=name,
+        unit_type='tank',
+        volume_m3=Decimal("3.00"),
+    )
+    return CycleUnitAllocation.objects.create(
+        cycle=cycle,
+        production_unit=unit,
+        initial_fish_count=500,
+        current_fish_count=500,
+        initial_biomass_kg=Decimal("5.00"),
+        current_biomass_kg=Decimal("5.00"),
+    )
 
 
 @pytest.mark.django_db
@@ -37,6 +54,60 @@ class TestCycleLogApplicationService:
                 "log_date": date.today(),
                 "mortality_count": 5,
                 "feed_quantity": Decimal("2.5"),
+            },
+        )
+
+        existing_log.refresh_from_db()
+        assert result.created is False
+        assert result.log.id == existing_log.id
+        assert existing_log.mortality_count == 5
+
+    def test_create_or_update_log_creates_unit_log_next_to_global_log(
+        self,
+        authenticated_user,
+        production_cycle,
+    ):
+        CycleLog.objects.create(
+            cycle=production_cycle,
+            log_date=date.today(),
+            mortality_count=2,
+        )
+        allocation = create_cycle_unit_allocation(production_cycle, 'Bac 1')
+
+        result = CycleLogApplicationService.create_or_update_log(
+            user=authenticated_user,
+            validated_data={
+                "cycle": production_cycle,
+                "log_date": date.today(),
+                "cycle_unit_allocation": allocation,
+                "mortality_count": 7,
+            },
+        )
+
+        assert result.created is True
+        assert result.log.cycle_unit_allocation_id == allocation.id
+        assert CycleLog.objects.filter(cycle=production_cycle, log_date=date.today()).count() == 2
+
+    def test_create_or_update_log_updates_existing_unit_scoped_log(
+        self,
+        authenticated_user,
+        production_cycle,
+    ):
+        allocation = create_cycle_unit_allocation(production_cycle, 'Bac 1')
+        existing_log = CycleLog.objects.create(
+            cycle=production_cycle,
+            cycle_unit_allocation=allocation,
+            log_date=date.today(),
+            mortality_count=2,
+        )
+
+        result = CycleLogApplicationService.create_or_update_log(
+            user=authenticated_user,
+            validated_data={
+                "cycle": production_cycle,
+                "log_date": date.today(),
+                "cycle_unit_allocation": allocation,
+                "mortality_count": 5,
             },
         )
 

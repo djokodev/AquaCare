@@ -477,3 +477,50 @@ def validate_weight_progression(
         if daily_gain < Decimal('0.1') and days_elapsed > 7:
             # This is a warning rather than an error
             pass  # Could add warning logic here
+
+
+def validate_cycle_unit_allocation_context(
+    *,
+    cycle,
+    cycle_unit_allocation=None,
+    user=None,
+):
+    """Valide qu'une allocation appartient bien au cycle et au propriétaire attendus."""
+    if not cycle_unit_allocation:
+        return
+
+    allocation = cycle_unit_allocation
+    if not hasattr(cycle_unit_allocation, 'cycle_id'):
+        from ..models import CycleUnitAllocation
+
+        allocation = CycleUnitAllocation.objects.select_related(
+            'cycle__farm_profile__user',
+            'production_unit__farm_profile',
+        ).filter(id=cycle_unit_allocation).first()
+        if allocation is None:
+            raise ValidationError({
+                'cycle_unit_allocation': _(
+                    "L'allocation de cycle par unité est introuvable"
+                )
+            })
+
+    allocation_cycle_id = getattr(allocation, 'cycle_id', None)
+    if cycle and allocation_cycle_id and str(allocation_cycle_id) != str(cycle.id):
+        raise ValidationError({
+            'cycle_unit_allocation': _(
+                "L'allocation doit appartenir au même cycle que le log"
+            )
+        })
+
+    allocation_cycle = getattr(allocation, 'cycle', None)
+    allocation_user_id = getattr(
+        getattr(allocation_cycle, 'farm_profile', None),
+        'user_id',
+        None,
+    )
+    if user is not None and allocation_user_id is not None and allocation_user_id != user.id:
+        raise ValidationError({
+            'cycle_unit_allocation': _(
+                "L'allocation ne vous appartient pas"
+            )
+        })

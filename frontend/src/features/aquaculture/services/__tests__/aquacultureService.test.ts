@@ -343,9 +343,14 @@ describe('features/aquaculture/services/aquacultureService', () => {
 
     await aquacultureService.getCycleLogs();
     await aquacultureService.getCycleLogs('cycle-1');
+    await aquacultureService.getCycleLogs('cycle-1', { cycleUnitAllocationId: 'allocation-1' });
 
     expect(mockApi.get).toHaveBeenNthCalledWith(1, '/aquaculture/cycle-logs/');
     expect(mockApi.get).toHaveBeenNthCalledWith(2, '/aquaculture/cycle-logs/?cycle_id=cycle-1');
+    expect(mockApi.get).toHaveBeenNthCalledWith(
+      3,
+      '/aquaculture/cycle-logs/?cycle_id=cycle-1&cycle_unit_allocation=allocation-1'
+    );
   });
 
   it('ajoute cycle et client_uuid lors de la creation d\'un cycle log', async () => {
@@ -366,6 +371,25 @@ describe('features/aquaculture/services/aquacultureService', () => {
       expect.objectContaining({
         cycle: 'cycle-1',
         mortality_count: 2,
+        client_uuid: expect.any(String),
+      })
+    );
+  });
+
+  it('ajoute cycle_unit_allocation lors de la creation d\'un cycle log unitaire', async () => {
+    mockApi.post.mockResolvedValueOnce({ data: { id: 'log-unit' } } as never);
+
+    await aquacultureService.createCycleLog('cycle-1', {
+      log_date: '2026-01-10',
+      mortality_count: 2,
+      cycle_unit_allocation: 'allocation-1',
+    });
+
+    expect(mockApi.post).toHaveBeenCalledWith(
+      '/aquaculture/cycle-logs/',
+      expect.objectContaining({
+        cycle: 'cycle-1',
+        cycle_unit_allocation: 'allocation-1',
         client_uuid: expect.any(String),
       })
     );
@@ -424,6 +448,21 @@ describe('features/aquaculture/services/aquacultureService', () => {
     expect(mockFormData.append).toHaveBeenCalledWith('photo', payload.photo);
   });
 
+  it('ajoute cycle_unit_allocation dans le FormData sanitaire', async () => {
+    mockApi.post.mockResolvedValueOnce({ data: { id: 'san-unit' } } as never);
+
+    await aquacultureService.createSanitaryLog('cycle-1', {
+      event_date: '2026-01-10',
+      event_type: 'treatment',
+      symptoms: 'Poissons observes avec lesions legeres',
+      cycle_unit_allocation: 'allocation-1',
+    });
+
+    const [, formDataArg] = mockApi.post.mock.calls[0];
+    const mockFormData = formDataArg as unknown as MockFormData;
+    expect(mockFormData.append).toHaveBeenCalledWith('cycle_unit_allocation', 'allocation-1');
+  });
+
   it('preserve les metadonnees offline dans le FormData sanitaire', async () => {
     mockApi.post.mockResolvedValueOnce({ data: { id: 'san-offline' } } as never);
 
@@ -439,6 +478,18 @@ describe('features/aquaculture/services/aquacultureService', () => {
     const mockFormData = formDataArg as unknown as MockFormData;
     expect(mockFormData.append).toHaveBeenCalledWith('client_uuid', 'sanitary-retry-uuid');
     expect(mockFormData.append).toHaveBeenCalledWith('created_offline', 'true');
+  });
+
+  it('compose correctement l\'URL des logs sanitaires avec filtre allocation', async () => {
+    mockApi.get.mockResolvedValueOnce({ data: [] } as never);
+
+    await aquacultureService.getSanitaryLogs('cycle-1', {
+      cycleUnitAllocationId: 'allocation-1',
+    });
+
+    expect(mockApi.get).toHaveBeenCalledWith(
+      '/aquaculture/sanitary-logs/?cycle_id=cycle-1&cycle_unit_allocation=allocation-1'
+    );
   });
 
   it('preserve les accents et convertit les champs numeriques en texte dans le FormData', async () => {

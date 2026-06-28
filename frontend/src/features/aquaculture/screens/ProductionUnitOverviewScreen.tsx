@@ -63,7 +63,7 @@ function DetailRow({
   );
 }
 
-export default function ProductionUnitOverviewScreen({ route }: Props) {
+export default function ProductionUnitOverviewScreen({ navigation, route }: Props) {
   const { t, i18n } = useTranslation();
   const { cycleId, allocationId, productionUnitId } = route.params;
   const locale = i18n.language?.startsWith('fr') ? 'fr-FR' : 'en-US';
@@ -155,6 +155,33 @@ export default function ProductionUnitOverviewScreen({ route }: Props) {
   const dimension = selectedAllocation.production_unit_display_dimension?.trim();
   const survivalRate =
     selectedAllocation.survival_rate_pct ?? selectedAllocation.expected_survival_rate_pct;
+  const productionUnitName = selectedAllocation.production_unit_name || t('productionUnitsUnknownUnit');
+
+  const navigateToDailyLog = () => {
+    navigation.navigate('DailyLog', {
+      cycleId,
+      cycleUnitAllocationId: allocationId,
+      productionUnitId,
+      productionUnitName,
+    });
+  };
+
+  const navigateToSanitaryLog = () => {
+    navigation.navigate('SanitaryLog', {
+      cycleId,
+      cycleUnitAllocationId: allocationId,
+      productionUnitId,
+      productionUnitName,
+    });
+  };
+
+  const navigateToHistory = () => {
+    navigation.navigate('DailyLogHistory', {
+      cycleId,
+      cycleUnitAllocationId: allocationId,
+      productionUnitName,
+    });
+  };
 
   return (
     <ScrollView
@@ -213,9 +240,26 @@ export default function ProductionUnitOverviewScreen({ route }: Props) {
         ) : null}
       </View>
 
-      <View style={styles.notice}>
-        <Ionicons name="information-circle-outline" size={18} color={AQUACARE_COLORS.GREEN_PRIMARY} />
-        <Text style={styles.noticeText}>{t('productionUnitOverviewComingSoon')}</Text>
+      <View style={styles.trackingSection}>
+        <Text style={styles.trackingSectionTitle}>{t('productionUnitTrackingSectionTitle')}</Text>
+        <Text style={styles.trackingSectionDescription}>
+          {t('productionUnitTrackingSectionDescription')}
+        </Text>
+
+        <TouchableOpacity style={styles.actionButton} onPress={navigateToDailyLog}>
+          <Ionicons name="document-text-outline" size={18} color={AQUACARE_COLORS.WHITE} />
+          <Text style={styles.actionButtonText}>{t('productionUnitDailyLogAction')}</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.actionButtonSecondary} onPress={navigateToSanitaryLog}>
+          <Ionicons name="medical-outline" size={18} color={AQUACARE_COLORS.GREEN_PRIMARY} />
+          <Text style={styles.actionButtonSecondaryText}>{t('productionUnitSanitaryLogAction')}</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.actionButtonGhost} onPress={navigateToHistory}>
+          <Ionicons name="time-outline" size={18} color={AQUACARE_COLORS.GREEN_PRIMARY} />
+          <Text style={styles.actionButtonGhostText}>{t('productionUnitLogHistoryAction')}</Text>
+        </TouchableOpacity>
       </View>
 
       {errorMessage ? <Text style={styles.inlineError}>{errorMessage}</Text> : null}
@@ -303,6 +347,77 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E5E7EB',
     gap: 10,
+  },
+  trackingSection: {
+    marginTop: 16,
+    backgroundColor: AQUACARE_COLORS.WHITE,
+    borderRadius: 18,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  trackingSectionTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: AQUACARE_COLORS.GREEN_DARK,
+  },
+  trackingSectionDescription: {
+    marginTop: 6,
+    marginBottom: 14,
+    fontSize: 14,
+    lineHeight: 20,
+    color: AQUACARE_COLORS.GRAY_DARK,
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    backgroundColor: AQUACARE_COLORS.GREEN_PRIMARY,
+    borderRadius: 14,
+    paddingVertical: 13,
+    paddingHorizontal: 16,
+    marginBottom: 10,
+  },
+  actionButtonText: {
+    color: AQUACARE_COLORS.WHITE,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  actionButtonSecondary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    backgroundColor: '#F2F8F2',
+    borderRadius: 14,
+    paddingVertical: 13,
+    paddingHorizontal: 16,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#CFE8D0',
+  },
+  actionButtonSecondaryText: {
+    color: AQUACARE_COLORS.GREEN_PRIMARY,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  actionButtonGhost: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    backgroundColor: AQUACARE_COLORS.WHITE,
+    borderRadius: 14,
+    paddingVertical: 13,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: '#D9E8DA',
+  },
+  actionButtonGhostText: {
+    color: AQUACARE_COLORS.GREEN_PRIMARY,
+    fontSize: 14,
+    fontWeight: '700',
   },
   detailRow: {
     flexDirection: 'row',

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, RefreshControl } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
+import { RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useSelector } from 'react-redux';
 import { RootState } from '@/store/store';
@@ -14,15 +15,24 @@ import { estimateAverageWeight } from '@/domain/aquaculture/estimators';
 import logger from '@/utils/logger';
 
 type DailyLogHistoryScreenNavigationProp = StackNavigationProp<RootStackParamList, 'DailyLogHistory'>;
+type DailyLogHistoryScreenRouteProp = RouteProp<RootStackParamList, 'DailyLogHistory'>;
 
 interface DailyLogHistoryScreenProps {
   navigation: DailyLogHistoryScreenNavigationProp;
+  route?: DailyLogHistoryScreenRouteProp;
 }
 
-export default function DailyLogHistoryScreen({ navigation }: DailyLogHistoryScreenProps) {
+export default function DailyLogHistoryScreen({ navigation, route }: DailyLogHistoryScreenProps) {
   const { t } = useTranslation();
   const { dashboardData, currentCycle } = useSelector((state: RootState) => state.aquaculture);
   const activeCycles = dashboardData?.active_cycles || [];
+  const routeParams = route?.params;
+  const effectiveCycleId = routeParams?.cycleId || currentCycle?.id;
+  const cycleUnitAllocationId = routeParams?.cycleUnitAllocationId;
+  const productionUnitName = routeParams?.productionUnitName || t('productionUnitsUnknownUnit');
+  const selectedCycle = effectiveCycleId
+    ? activeCycles.find((cycle) => cycle.id === effectiveCycleId) || currentCycle || null
+    : currentCycle || null;
 
   const [logs, setLogs] = useState<CycleLog[]>([]);
   const [loading, setLoading] = useState(true);
@@ -31,30 +41,32 @@ export default function DailyLogHistoryScreen({ navigation }: DailyLogHistoryScr
 
   useEffect(() => {
     loadLogs();
-  }, [currentCycle?.id]);
+  }, [effectiveCycleId, cycleUnitAllocationId]);
 
   const loadLogs = async () => {
-    if (!currentCycle?.id) {
+    if (!effectiveCycleId) {
       setLogs([]);
       setLoading(false);
       return;
     }
 
-    try {
-      setLoading(true);
-      setError(null);
-      const logsData = await aquacultureService.getCycleLogs(currentCycle.id);
-      setLogs(logsData);
-    } catch (error) {
-      logger.error('Erreur lors du chargement des logs:', error);
-      setError(t('dailyLogLoadError'));
+      try {
+        setLoading(true);
+        setError(null);
+      const logsData = cycleUnitAllocationId
+        ? await aquacultureService.getCycleLogs(effectiveCycleId, { cycleUnitAllocationId })
+        : await aquacultureService.getCycleLogs(effectiveCycleId);
+        setLogs(logsData);
+      } catch (error) {
+        logger.error('Erreur lors du chargement des logs:', error);
+        setError(t('dailyLogLoadError'));
     } finally {
       setLoading(false);
     }
   };
 
   const onRefresh = async () => {
-    if (!currentCycle?.id) {
+    if (!effectiveCycleId) {
       return;
     }
     setRefreshing(true);
@@ -125,21 +137,27 @@ export default function DailyLogHistoryScreen({ navigation }: DailyLogHistoryScr
           {t('sessionActiveCycleLabel', { defaultValue: 'Cycle actif de la session' })}
         </Text>
         <Text className="text-base font-bold text-aquacare-primary">
-          {currentCycle?.cycle_name || t('sessionCycleNotSelected')}
+          {selectedCycle?.cycle_name || t('sessionCycleNotSelected')}
         </Text>
-        {currentCycle && (
+        {selectedCycle ? (
           <Text className="text-xs text-gray-light mt-1">
-            {t('pond')} {currentCycle.pond_identifier}
+            {t('pond')} {selectedCycle.pond_identifier}
           </Text>
-        )}
+        ) : null}
+        {cycleUnitAllocationId ? (
+          <View className="mt-3 rounded-xl border border-green-100 bg-green-50 p-3">
+            <Text className="text-sm font-semibold text-green-800">{t('productionUnitLogHistoryContextTitle')}</Text>
+            <Text className="text-sm text-green-700 mt-1">{productionUnitName}</Text>
+          </View>
+        ) : null}
       </View>
     ),
-    [currentCycle, t]
+    [activeCycles, cycleUnitAllocationId, productionUnitName, selectedCycle, t]
   );
 
   const renderEmptyState = useCallback(
     () => {
-      if (!currentCycle) {
+      if (!effectiveCycleId) {
         return (
           <View className="flex-1 items-center justify-center py-24 px-6">
             <Ionicons name="alert-circle-outline" size={64} color={AQUACARE_COLORS.WARNING} />
@@ -156,7 +174,7 @@ export default function DailyLogHistoryScreen({ navigation }: DailyLogHistoryScr
         </View>
       );
     },
-    [currentCycle, t]
+    [effectiveCycleId, t]
   );
 
   if (loading) {
@@ -184,7 +202,7 @@ export default function DailyLogHistoryScreen({ navigation }: DailyLogHistoryScr
       )}
 
       <FlatList
-        data={currentCycle ? logs : []}
+        data={effectiveCycleId ? logs : []}
         keyExtractor={(item) => item.id}
         renderItem={renderLogCard}
         ListHeaderComponent={renderListHeader}

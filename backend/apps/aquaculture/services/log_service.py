@@ -15,9 +15,10 @@ from __future__ import annotations
 import uuid as _uuid
 from datetime import date
 from decimal import Decimal
-from typing import TYPE_CHECKING, TypedDict
+from typing import TYPE_CHECKING, Any, TypedDict
 from uuid import UUID
 
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
@@ -38,6 +39,7 @@ if TYPE_CHECKING:
 
 class CycleLogPayload(TypedDict, total=False):
     cycle: ProductionCycle | str | UUID
+    cycle_unit_allocation: Any
     client_uuid: str | UUID
     log_date: date | str
     mortality_count: int
@@ -55,6 +57,30 @@ class CycleLogPayload(TypedDict, total=False):
     ammonia_level: Decimal
     observations: str
     created_offline: bool
+
+
+def _normalize_cycle_unit_allocation_ref(cycle_unit_allocation: Any) -> str | None:
+    if cycle_unit_allocation is None:
+        return None
+    return str(getattr(cycle_unit_allocation, 'id', cycle_unit_allocation))
+
+
+def _build_cycle_log_scope_kwargs(
+    *,
+    cycle: ProductionCycle,
+    log_date: date,
+    cycle_unit_allocation: Any,
+) -> dict[str, Any]:
+    scope_kwargs: dict[str, Any] = {
+        'cycle': cycle,
+        'log_date': log_date,
+    }
+    allocation_ref = _normalize_cycle_unit_allocation_ref(cycle_unit_allocation)
+    if allocation_ref is None:
+        scope_kwargs['cycle_unit_allocation__isnull'] = True
+    else:
+        scope_kwargs['cycle_unit_allocation'] = allocation_ref
+    return scope_kwargs
 
 
 class BulkLogError(TypedDict):
@@ -95,6 +121,7 @@ class CycleLogService(BaseService):
         cycle: ProductionCycle,
         log_data: CycleLogPayload,
         created_offline: bool = False,
+        user: User | None = None,
     ) -> CycleLog:
         """
         Crée un nouveau log quotidien avec validation métier complète.
@@ -125,7 +152,7 @@ class CycleLogService(BaseService):
         )
 
         # 1. Validation règles métier
-        CycleLogService._validate_log_business_rules(cycle, log_data)
+        CycleLogService._validate_log_business_rules(cycle, log_data, user=user)
 
         # 2. Auto-calcul poids moyen si échantillon fourni
         if log_data.get('sample_count') and log_data.get('sample_total_weight'):
@@ -137,8 +164,11 @@ class CycleLogService(BaseService):
         # 3. Vérification doublon date (sauf si client_uuid fourni)
         if not log_data.get('client_uuid'):
             existing_log = CycleLog.objects.filter(
-                cycle=cycle,
-                log_date=log_data['log_date']
+                **_build_cycle_log_scope_kwargs(
+                    cycle=cycle,
+                    log_date=log_data['log_date'],
+                    cycle_unit_allocation=log_data.get('cycle_unit_allocation'),
+                )
             ).first()
 
             if existing_log:
@@ -231,8 +261,8 @@ class CycleLogService(BaseService):
 
         # Collect new logs to bulk_create (bypass signals)
         new_logs_to_create: list[CycleLog] = []
-        # Track (cycle_id, log_date) to prevent in-batch unique constraint violations
-        batch_date_keys: set = set()
+        # Track (cycle_id, log_date, allocation) to prevent in-batch unique violations
+        batch_date_keys: set[tuple[str, date, str | None]] = set()
         now = timezone.now()
 
         for idx, log_data in enumerate(logs_data):
@@ -255,6 +285,13 @@ class CycleLogService(BaseService):
                         'error': 'Cycle non trouvé ou accès non autorisé',
                     })
                     continue
+
+                from aquaculture.domain.validators import validate_cycle_unit_allocation_context
+                validate_cycle_unit_allocation_context(
+                    cycle=cycle,
+                    cycle_unit_allocation=log_data.get('cycle_unit_allocation'),
+                    user=user,
+                )
 
                 # Déduplication par client_uuid
                 client_uuid = log_data.get('client_uuid')
@@ -312,13 +349,17 @@ class CycleLogService(BaseService):
                 clean_log_data = {k: v for k, v in log_data.items() if k not in ['cycle', 'id']}
                 created_offline = clean_log_data.pop('created_offline', True)
 
-                CycleLogService._validate_log_business_rules(cycle, clean_log_data)
+                CycleLogService._validate_log_business_rules(cycle, clean_log_data, user=user)
 
                 # Check for existing log with same (cycle, log_date)
                 log_date_val = clean_log_data.get('log_date')
                 if log_date_val:
                     existing_date_log = CycleLog.objects.filter(
-                        cycle=cycle, log_date=log_date_val
+                        **_build_cycle_log_scope_kwargs(
+                            cycle=cycle,
+                            log_date=log_date_val,
+                            cycle_unit_allocation=clean_log_data.get('cycle_unit_allocation'),
+                        )
                     ).first()
                     if existing_date_log:
                         # Update existing log instead of creating a duplicate
@@ -341,8 +382,12 @@ class CycleLogService(BaseService):
                             clean_log_data['sample_total_weight'] / clean_log_data['sample_count']
                         ))
 
-                # Prevent in-batch (cycle, log_date) duplicates
-                date_key = (str(cycle.id), str(log_date_val)) if log_date_val else None
+                # Prevent in-batch (cycle, log_date, allocation) duplicates
+                date_key = (
+                    str(cycle.id),
+                    log_date_val,
+                    _normalize_cycle_unit_allocation_ref(clean_log_data.get('cycle_unit_allocation')),
+                ) if log_date_val else None
                 if date_key and date_key in batch_date_keys:
                     result['errors'].append({
                         'index': idx,
@@ -363,8 +408,15 @@ class CycleLogService(BaseService):
                 if client_uuid:
                     batch_uuid_map[str(client_uuid)] = log
 
-            except (BusinessRuleViolation, InvalidDateRangeError, InsufficientFishCountError,
-                    OfflineSyncConflictError, ValueError, TypeError) as e:
+            except (
+                BusinessRuleViolation,
+                InvalidDateRangeError,
+                InsufficientFishCountError,
+                OfflineSyncConflictError,
+                DjangoValidationError,
+                ValueError,
+                TypeError,
+            ) as e:
                 result['errors'].append({
                     'index': idx,
                     'error': str(e),
@@ -391,7 +443,11 @@ class CycleLogService(BaseService):
 
     @staticmethod
     @transaction.atomic
-    def update_log(log: CycleLog, update_data: CycleLogPayload) -> CycleLog:
+    def update_log(
+        log: CycleLog,
+        update_data: CycleLogPayload,
+        user: User | None = None,
+    ) -> CycleLog:
         """
         Met à jour un log existant.
 
@@ -408,6 +464,20 @@ class CycleLogService(BaseService):
         CycleLogService.log_operation(
             "update_log",
             {"log_id": str(log.id)}
+        )
+
+        from aquaculture.domain.validators import validate_cycle_unit_allocation_context
+
+        cycle = update_data.get('cycle') or log.cycle
+        cycle_unit_allocation = update_data.get('cycle_unit_allocation') or getattr(
+            log,
+            'cycle_unit_allocation',
+            None,
+        )
+        validate_cycle_unit_allocation_context(
+            cycle=cycle,
+            cycle_unit_allocation=cycle_unit_allocation,
+            user=user,
         )
 
         # Validation des nouvelles données si mortalité modifiée
@@ -482,12 +552,16 @@ class CycleLogService(BaseService):
         cycle = ProductionCycle.objects.get(id=cycle_id, farm_profile__user=user)
 
         log_data['client_uuid'] = client_uuid
-        return CycleLogService.create_log(cycle, log_data, created_offline=True)
+        return CycleLogService.create_log(cycle, log_data, created_offline=True, user=user)
 
     # =================== MÉTHODES PRIVÉES (VALIDATION) ===================
 
     @staticmethod
-    def _validate_log_business_rules(cycle: ProductionCycle, log_data: CycleLogPayload) -> None:
+    def _validate_log_business_rules(
+        cycle: ProductionCycle,
+        log_data: CycleLogPayload,
+        user: User | None = None,
+    ) -> None:
         """
         Valide les règles métier pour la création d'un log.
 
@@ -501,6 +575,13 @@ class CycleLogService(BaseService):
         sample_count = log_data.get('sample_count')
         sample_total_weight = log_data.get('sample_total_weight')
         average_weight = log_data.get('average_weight')
+        from aquaculture.domain.validators import validate_cycle_unit_allocation_context
+
+        validate_cycle_unit_allocation_context(
+            cycle=cycle,
+            cycle_unit_allocation=log_data.get('cycle_unit_allocation'),
+            user=user,
+        )
 
         # Validation date dans période cycle
         if log_date:

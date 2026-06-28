@@ -34,16 +34,22 @@ logger = logging.getLogger(__name__)
         Retourne l'historique des événements sanitaires avec photos.
         Supporte le filtrage par cycle, type d'événement et statut de résolution.
         """,
-        parameters=[
-            OpenApiParameter(
-                name='cycle_id',
-                type=OpenApiTypes.UUID,
-                location=OpenApiParameter.QUERY,
-                description='Filtrer par cycle de production'
-            ),
-            OpenApiParameter(
-                name='event_type',
-                type=OpenApiTypes.STR,
+            parameters=[
+                OpenApiParameter(
+                    name='cycle_id',
+                    type=OpenApiTypes.UUID,
+                    location=OpenApiParameter.QUERY,
+                    description='Filtrer par cycle de production'
+                ),
+                OpenApiParameter(
+                    name='cycle_unit_allocation',
+                    type=OpenApiTypes.UUID,
+                    location=OpenApiParameter.QUERY,
+                    description="Filtrer par allocation d'unité de production",
+                ),
+                OpenApiParameter(
+                    name='event_type',
+                    type=OpenApiTypes.STR,
                 location=OpenApiParameter.QUERY,
                 description='Type d\'événement sanitaire',
                 enum=['disease', 'treatment', 'vaccination', 'abnormal_mortality', 'water_quality', 'other']
@@ -116,9 +122,19 @@ class SanitaryLogViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         """Retourne les logs sanitaires pour les cycles de l'utilisateur."""
-        return SanitaryLog.objects.for_api().filter(
+        queryset = SanitaryLog.objects.for_api().filter(
             cycle__farm_profile__user=self.request.user
         ).order_by('-event_date')
+
+        allocation_id = self.request.query_params.get('cycle_unit_allocation')
+        if allocation_id:
+            queryset = queryset.filter(cycle_unit_allocation_id=allocation_id)
+
+        cycle_id = self.request.query_params.get('cycle_id')
+        if cycle_id:
+            queryset = queryset.filter(cycle_id=cycle_id)
+
+        return queryset
 
     def create(self, request, *args, **kwargs):
         """
@@ -131,8 +147,10 @@ class SanitaryLogViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         validated_data = serializer.validated_data
         mutation_result = SanitaryApplicationService.create_log(
+            user=request.user,
             command=CreateSanitaryLogCommand(
                 cycle=validated_data['cycle'],
+                cycle_unit_allocation=validated_data.get('cycle_unit_allocation'),
                 event_date=validated_data['event_date'],
                 event_type=validated_data['event_type'],
                 symptoms=validated_data['symptoms'],

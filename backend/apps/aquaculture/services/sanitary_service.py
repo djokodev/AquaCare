@@ -153,6 +153,7 @@ class SanitaryService(BaseService):
         treatment_duration_days: int | None = None,
         photo = None,
         notes: str = '',
+        user=None,
         **kwargs
     ) -> SanitaryLogMutationResult:
         """
@@ -179,6 +180,8 @@ class SanitaryService(BaseService):
             InvalidSanitaryDataException: Si les données sont invalides
             CycleNotFoundException: Si le cycle n'existe pas
         """
+        from aquaculture.domain.validators import validate_cycle_unit_allocation_context
+
         client_uuid = kwargs.get('client_uuid')
         existing_log = SanitaryService._get_existing_log_from_client_uuid(
             cycle=cycle,
@@ -194,6 +197,11 @@ class SanitaryService(BaseService):
             symptoms=symptoms,
             affected_count=affected_count,
             treatment_duration_days=treatment_duration_days,
+        )
+        validate_cycle_unit_allocation_context(
+            cycle=cycle,
+            cycle_unit_allocation=kwargs.get('cycle_unit_allocation'),
+            user=user,
         )
 
         # Création du log sanitaire
@@ -237,6 +245,7 @@ class SanitaryService(BaseService):
         treatment_duration_days: int | None = None,
         photo = None,
         notes: str = '',
+        user=None,
         **kwargs
     ) -> SanitaryLog:
         """
@@ -247,6 +256,7 @@ class SanitaryService(BaseService):
         """
         mutation_result = SanitaryService.create_or_get_sanitary_log(
             cycle=cycle,
+            user=user,
             event_date=event_date,
             event_type=event_type,
             symptoms=symptoms,
