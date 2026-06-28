@@ -88,6 +88,7 @@ describe('features/aquaculture/screens/CycleSimulationScreen', () => {
           harvestWeight: '350',
           survivalRate: '95',
           productionUnits: [],
+          productionUnitAllocations: [],
           ...formDataOverrides,
         },
       },
@@ -265,6 +266,58 @@ describe('features/aquaculture/screens/CycleSimulationScreen', () => {
       expect(queryByText('simulationCurrentDensity')).toBeNull();
       expect(queryByText('simulationMaxDensity')).toBeNull();
       expect(queryByText('—')).toBeNull();
+    });
+  });
+
+  it('affiche un resume de repartition par unite quand les allocations sont presentes', async () => {
+    mockDispatch.mockImplementation((action: unknown) => {
+      if (typeof action === 'function') {
+        return {
+          type: runCycleSimulation.fulfilled.type,
+          payload: currentResult,
+        };
+      }
+
+      return action;
+    });
+
+    const route = buildRoute({
+      fingerlingsCount: '2700',
+      productionUnits: [
+        {
+          local_id: 'unit-1',
+          name: 'Bac 1',
+          unit_type: 'tank',
+          volume_m3: '3',
+        },
+        {
+          local_id: 'unit-2',
+          name: 'Bac 2',
+          unit_type: 'tank',
+          volume_m3: '3',
+        },
+        {
+          local_id: 'unit-3',
+          name: 'Bac 3',
+          unit_type: 'tank',
+          volume_m3: '3',
+        },
+      ],
+      productionUnitAllocations: [
+        { production_unit_local_id: 'unit-1', fish_count: '900' },
+        { production_unit_local_id: 'unit-2', fish_count: '900' },
+        { production_unit_local_id: 'unit-3', fish_count: '900' },
+      ],
+    });
+
+    const { getByText, getAllByText } = render(
+      <CycleSimulationScreen navigation={navigation} route={route} />
+    );
+
+    await waitFor(() => {
+      expect(getByText('simulationAllocationByUnitTitle')).toBeTruthy();
+      expect(getByText('Bac 1')).toBeTruthy();
+      expect(getAllByText('900 productionUnitFingerlingsUnit · 299,3 kg')).toHaveLength(3);
     });
   });
 });

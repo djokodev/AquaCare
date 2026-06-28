@@ -32,7 +32,9 @@ Le flow "Creer mon elevage" utilise maintenant les unites de production comme so
 2. L'utilisateur peut aussi creer rapidement plusieurs unites identiques.
 3. La capacite totale recommandee est calculee a partir de toutes les unites du formulaire.
 4. La simulation actuelle reste compatible avec les champs legacy homogenes pour le moment.
-5. La repartition intelligente par unite sera introduite dans la prochaine PR.
+5. La repartition intelligente par unite est maintenant proposee cote frontend dans le setup, puis reprise dans la simulation.
+
+PR #59 adds frontend smart fish allocation by production unit. Allocations are suggested from recommended unit capacities and remain local to the setup/simulation flow. Backend persistence of cycle-unit allocations is planned for a later PR.
 
 ## Limites Du Module
 

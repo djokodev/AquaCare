@@ -28,6 +28,7 @@ const baseForm: FarmSetupFormState = {
   harvestWeight: '350',
   survivalRate: '95',
   productionUnits: [],
+  productionUnitAllocations: [],
 };
 
 describe('farmSetupForm', () => {
@@ -107,6 +108,7 @@ describe('farmSetupForm', () => {
           surface_m2: '120',
         },
       ],
+      productionUnitAllocations: [],
       fingerlingsCount: '3000',
     } satisfies FarmSetupFormState;
 
@@ -136,6 +138,7 @@ describe('farmSetupForm', () => {
           surface_m2: '120',
         },
       ],
+      productionUnitAllocations: [],
       fingerlingsCount: '2101',
     } satisfies FarmSetupFormState;
 
@@ -287,6 +290,7 @@ describe('farmSetupForm', () => {
           surface_m2: '120',
         },
       ],
+      productionUnitAllocations: [],
     });
 
     expect(payload).toMatchObject({
@@ -313,6 +317,7 @@ describe('farmSetupForm', () => {
           volume_m3: '3',
         },
       ],
+      productionUnitAllocations: [],
     });
 
     expect(payload).toMatchObject({

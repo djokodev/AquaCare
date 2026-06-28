@@ -3,8 +3,11 @@ import {
   STOCKING_DENSITY_TANK_PER_M3,
 } from '@/constants/aquaculture';
 import type {
+  ProductionUnitAllocationStatus,
   ProductionUnitCompatibilitySummary,
   ProductionUnitDraft,
+  ProductionUnitFishAllocationDraft,
+  ProductionUnitFishAllocationValidationResult,
   ProductionUnitType,
 } from '@/features/aquaculture/types/productionUnits';
 
@@ -65,6 +68,24 @@ const toPositiveNumber = (value?: string | number | null): number | null => {
   }
 
   return parsed;
+};
+
+const toPositiveInteger = (value?: string | number | null): number | null => {
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
+
+  if (typeof value === 'number') {
+    return Number.isSafeInteger(value) ? value : null;
+  }
+
+  const trimmed = value.trim();
+  if (!/^\d+$/.test(trimmed)) {
+    return null;
+  }
+
+  const parsed = Number(trimmed);
+  return Number.isSafeInteger(parsed) ? parsed : null;
 };
 
 const DENSITY_MAX_BY_UNIT: Record<ProductionUnitDensityUnit, number> = {
@@ -271,6 +292,229 @@ export const getTotalProductionUnitsCapacity = (
 
   const safeCapacities = capacities.filter((capacity): capacity is number => capacity !== null);
   return safeCapacities.reduce((total, capacity) => total + capacity, 0);
+};
+
+export const getProductionUnitAllocationProductionEstimate = (params: {
+  allocation?: string | number | null;
+  survivalRatePct?: string | number | null;
+  targetWeightG?: string | number | null;
+}): number | null => {
+  const allocation = toPositiveInteger(params.allocation);
+  if (allocation === null) {
+    return null;
+  }
+
+  const survivalRate = toPositiveNumber(params.survivalRatePct);
+  const targetWeightG = toPositiveNumber(params.targetWeightG);
+  if (survivalRate === null || targetWeightG === null) {
+    return null;
+  }
+
+  return Number(((allocation * (survivalRate / 100) * targetWeightG) / 1000).toFixed(2));
+};
+
+export const getProductionUnitAllocationStatus = (params: {
+  unit: ProductionUnitDimensionSource;
+  productionUnitLocalId?: string;
+  allocation?: string | number | null;
+  survivalRatePct?: string | number | null;
+  targetWeightG?: string | number | null;
+}): ProductionUnitAllocationStatus => {
+  const capacity = getProductionUnitCapacity(params.unit);
+  const fishCount = toPositiveInteger(params.allocation);
+  const allocationFootprint =
+    normalizeProductionUnitType(params.unit.unit_type) === 'pond'
+      ? toPositiveNumber(params.unit.surface_m2)
+      : toPositiveNumber(params.unit.volume_m3);
+  const density =
+    fishCount !== null && allocationFootprint && allocationFootprint > 0
+      ? Number((fishCount / allocationFootprint).toFixed(2))
+      : null;
+  const densityUnit = (
+    normalizeProductionUnitType(params.unit.unit_type) === 'pond' ? 'm2' : 'm3'
+  ) as ProductionUnitAllocationStatus['density_unit'];
+  const isOverCapacity =
+    capacity !== null && fishCount !== null ? fishCount > capacity : false;
+
+  return {
+    production_unit_local_id: params.productionUnitLocalId ?? '',
+    fish_count: fishCount,
+    recommended_capacity: capacity,
+    density,
+    density_unit: capacity === null ? null : densityUnit,
+    estimated_production_kg: getProductionUnitAllocationProductionEstimate({
+      allocation: params.allocation,
+      survivalRatePct: params.survivalRatePct,
+      targetWeightG: params.targetWeightG,
+    }),
+    is_over_capacity: isOverCapacity,
+  };
+};
+
+export const suggestProductionUnitFishAllocations = (params: {
+  productionUnits: ProductionUnitDraft[];
+  totalFishCount?: string | number | null;
+}): ProductionUnitFishAllocationDraft[] | null => {
+  const totalFish = toPositiveInteger(params.totalFishCount);
+  if (!params.productionUnits.length || totalFish === null || totalFish <= 0) {
+    return null;
+  }
+
+  const capacities = params.productionUnits.map(getProductionUnitCapacity);
+  if (capacities.some((capacity) => capacity === null || capacity <= 0)) {
+    return null;
+  }
+
+  const safeCapacities = capacities.filter((capacity): capacity is number => capacity !== null);
+  const totalCapacity = safeCapacities.reduce((total, capacity) => total + capacity, 0);
+  if (totalCapacity <= 0 || totalFish > totalCapacity) {
+    return null;
+  }
+
+  const rawAllocations = safeCapacities.map((capacity) => (totalFish * capacity) / totalCapacity);
+  const allocations = rawAllocations.map((allocation) => Math.floor(allocation));
+  let remainder = totalFish - allocations.reduce((total, allocation) => total + allocation, 0);
+
+  const rankedRemainders = rawAllocations
+    .map((allocation, index) => ({
+      index,
+      decimal: allocation - Math.floor(allocation),
+    }))
+    .sort((left, right) => {
+      if (right.decimal !== left.decimal) {
+        return right.decimal - left.decimal;
+      }
+      return left.index - right.index;
+    });
+
+  for (const candidate of rankedRemainders) {
+    if (remainder <= 0) {
+      break;
+    }
+
+    if (allocations[candidate.index] + 1 <= safeCapacities[candidate.index]) {
+      allocations[candidate.index] += 1;
+      remainder -= 1;
+    }
+  }
+
+  if (remainder > 0) {
+    return null;
+  }
+
+  return params.productionUnits.map((unit, index) => ({
+    production_unit_local_id: unit.local_id,
+    fish_count: String(allocations[index] ?? 0),
+  }));
+};
+
+export const validateProductionUnitFishAllocations = (params: {
+  productionUnits: ProductionUnitDraft[];
+  allocations: ProductionUnitFishAllocationDraft[];
+  totalFishCount?: string | number | null;
+  survivalRatePct?: string | number | null;
+  targetWeightG?: string | number | null;
+}): ProductionUnitFishAllocationValidationResult | null => {
+  if (!params.productionUnits.length) {
+    return null;
+  }
+
+  const totalFishCount = toPositiveInteger(params.totalFishCount);
+  if (totalFishCount === null || totalFishCount <= 0) {
+    return null;
+  }
+
+  const capacities = params.productionUnits.map(getProductionUnitCapacity);
+  if (capacities.some((capacity) => capacity === null || capacity <= 0)) {
+    return {
+      total_fish_count: totalFishCount,
+      total_capacity: null,
+      total_allocated_fish: 0,
+      global_error: 'createFarmProductionUnitCapacityUnavailableError',
+      unit_errors: {},
+      unit_statuses: params.productionUnits.map((unit) => getProductionUnitAllocationStatus({
+        unit,
+        productionUnitLocalId: unit.local_id,
+        allocation: params.allocations.find(
+          (allocation) => allocation.production_unit_local_id === unit.local_id
+        )?.fish_count,
+        survivalRatePct: params.survivalRatePct,
+        targetWeightG: params.targetWeightG,
+      })),
+    };
+  }
+
+  const safeCapacities = capacities.filter((capacity): capacity is number => capacity !== null);
+  const totalCapacity = safeCapacities.reduce((total, capacity) => total + capacity, 0);
+
+  const allocationByUnitId = new Map(
+    params.allocations.map((allocation) => [allocation.production_unit_local_id, allocation.fish_count] as const)
+  );
+
+  const unitErrors: Record<string, string> = {};
+  const unitStatuses = params.productionUnits.map((unit, index) => {
+    const fishCount = allocationByUnitId.get(unit.local_id);
+    const capacity = safeCapacities[index] ?? null;
+    const parsedFishCount = toPositiveInteger(fishCount);
+    const densityFootprint =
+      normalizeProductionUnitType(unit.unit_type) === 'pond'
+        ? toPositiveNumber(unit.surface_m2)
+        : toPositiveNumber(unit.volume_m3);
+    const density =
+      parsedFishCount !== null && densityFootprint && densityFootprint > 0
+        ? Number((parsedFishCount / densityFootprint).toFixed(2))
+        : null;
+    const estimatedProductionKg = getProductionUnitAllocationProductionEstimate({
+      allocation: fishCount,
+      survivalRatePct: params.survivalRatePct,
+      targetWeightG: params.targetWeightG,
+    });
+    const densityUnit = (
+      normalizeProductionUnitType(unit.unit_type) === 'pond' ? 'm2' : 'm3'
+    ) as ProductionUnitAllocationStatus['density_unit'];
+    const isOverCapacity = capacity !== null && parsedFishCount !== null
+      ? parsedFishCount > capacity
+      : false;
+
+    if (fishCount === undefined || fishCount === '') {
+      unitErrors[unit.local_id] = 'createFarmProductionUnitAllocationRequiredError';
+    } else if (parsedFishCount === null || parsedFishCount < 0) {
+      unitErrors[unit.local_id] = 'createFarmProductionUnitAllocationRequiredError';
+    } else if (isOverCapacity) {
+      unitErrors[unit.local_id] = 'createFarmProductionUnitRecommendedCapacityExceededError';
+    }
+
+    return {
+      production_unit_local_id: unit.local_id,
+      fish_count: parsedFishCount,
+      recommended_capacity: capacity,
+      density,
+      density_unit: densityUnit,
+      estimated_production_kg: estimatedProductionKg,
+      is_over_capacity: isOverCapacity,
+    };
+  });
+
+  const totalAllocatedFish = unitStatuses.reduce(
+    (total, status) => total + (status.fish_count ?? 0),
+    0
+  );
+
+  let globalError: string | null = null;
+  if (totalFishCount > totalCapacity) {
+    globalError = 'createFarmProductionUnitTotalCapacityExceededError';
+  } else if (totalAllocatedFish !== totalFishCount) {
+    globalError = 'createFarmProductionUnitAllocationSumError';
+  }
+
+  return {
+    total_fish_count: totalFishCount,
+    total_capacity: totalCapacity,
+    total_allocated_fish: totalAllocatedFish,
+    global_error: globalError,
+    unit_errors: unitErrors,
+    unit_statuses: unitStatuses,
+  };
 };
 
 export const getProductionUnitsCompatibilitySummary = (

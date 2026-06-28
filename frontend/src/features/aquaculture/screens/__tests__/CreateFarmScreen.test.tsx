@@ -88,7 +88,7 @@ describe('features/aquaculture/screens/CreateFarmScreen', () => {
     fireEvent.changeText(getByPlaceholderText('createFarmUnitVolumePlaceholder'), '3');
     fireEvent.press(getByText('+ createFarmAddUnitBtn'));
 
-    expect(getByText('Bac 1')).toBeTruthy();
+    expect(getAllByText('Bac 1').length).toBeGreaterThan(0);
 
     fireEvent.changeText(
       getByPlaceholderText('createFarmFingerlingsCountPlaceholderMax'),
@@ -121,7 +121,7 @@ describe('features/aquaculture/screens/CreateFarmScreen', () => {
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     mockSimulationSuccess();
 
-    const { getByText, getByPlaceholderText, getAllByText } = render(
+    const { getAllByText, getByPlaceholderText, getByText } = render(
       <CreateFarmScreen navigation={navigation} />
     );
 
@@ -132,7 +132,7 @@ describe('features/aquaculture/screens/CreateFarmScreen', () => {
     fireEvent.press(getByText('+ createFarmAddUnitBtn'));
 
     await waitFor(() => {
-      expect(getByText('Étang principal')).toBeTruthy();
+      expect(getAllByText('Étang principal').length).toBeGreaterThan(0);
     });
 
     fireEvent.changeText(
@@ -235,6 +235,171 @@ describe('features/aquaculture/screens/CreateFarmScreen', () => {
 
     expect(alertSpy).not.toHaveBeenCalled();
     alertSpy.mockRestore();
+  });
+
+  it('affiche la section de repartition et pre-remplit trois bacs a 900', async () => {
+    mockSimulationSuccess();
+
+    const { getAllByDisplayValue, getByPlaceholderText, getByText, getAllByText } = render(
+      <CreateFarmScreen navigation={navigation} />
+    );
+
+    fireEvent.press(getByText('createFarmSpeciesTilapia'));
+    fireEvent.press(getAllByText('productionUnitTypeTank')[1]);
+    fireEvent.changeText(getByPlaceholderText('createFarmBulkUnitCountPlaceholder'), '3');
+    fireEvent.changeText(getByPlaceholderText('createFarmUnitVolumePlaceholder'), '3');
+    fireEvent.changeText(getByPlaceholderText('createFarmUnitBaseNamePlaceholder'), 'Bac');
+    fireEvent.press(getByText('+ createFarmAddUnitsIdenticalBtn'));
+
+    fireEvent.changeText(
+      getByPlaceholderText('createFarmFingerlingsCountPlaceholderMax'),
+      '2700'
+    );
+
+    await waitFor(() => {
+      expect(getByText('createFarmProductionUnitAllocationSectionTitle')).toBeTruthy();
+      expect(getAllByDisplayValue('900')).toHaveLength(3);
+    });
+  });
+
+  it('pre-remplit un bac et un etang selon leur capacite', async () => {
+    mockSimulationSuccess();
+
+    const { getAllByDisplayValue, getByPlaceholderText, getByText, getAllByText } = render(
+      <CreateFarmScreen navigation={navigation} />
+    );
+
+    fireEvent.press(getByText('createFarmSpeciesTilapia'));
+    fireEvent.press(getAllByText('productionUnitTypeTank')[0]);
+    fireEvent.changeText(getByPlaceholderText('createFarmUnitNamePlaceholder'), 'Bac 1');
+    fireEvent.changeText(getByPlaceholderText('createFarmUnitVolumePlaceholder'), '3');
+    fireEvent.press(getByText('+ createFarmAddUnitBtn'));
+
+    fireEvent.press(getAllByText('productionUnitTypePond')[0]);
+    fireEvent.changeText(getByPlaceholderText('createFarmUnitNamePlaceholder'), 'Étang principal');
+    fireEvent.changeText(getByPlaceholderText('createFarmUnitSurfacePlaceholder'), '120');
+    fireEvent.press(getByText('+ createFarmAddUnitBtn'));
+
+    fireEvent.changeText(
+      getByPlaceholderText('createFarmFingerlingsCountPlaceholderMax'),
+      '2100'
+    );
+
+    await waitFor(() => {
+      expect(getAllByDisplayValue('900')).toHaveLength(1);
+      expect(getAllByDisplayValue('1200')).toHaveLength(1);
+    });
+  });
+
+  it('bloque la simulation quand une allocation depasse la capacite de son unite', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    mockSimulationSuccess();
+
+    const { getAllByDisplayValue, getByPlaceholderText, getByText, getAllByText } = render(
+      <CreateFarmScreen navigation={navigation} />
+    );
+
+    fireEvent.press(getByText('createFarmSpeciesTilapia'));
+    fireEvent.press(getAllByText('productionUnitTypeTank')[0]);
+    fireEvent.changeText(getByPlaceholderText('createFarmUnitNamePlaceholder'), 'Bac 1');
+    fireEvent.changeText(getByPlaceholderText('createFarmUnitVolumePlaceholder'), '3');
+    fireEvent.press(getByText('+ createFarmAddUnitBtn'));
+
+    fireEvent.press(getAllByText('productionUnitTypePond')[0]);
+    fireEvent.changeText(getByPlaceholderText('createFarmUnitNamePlaceholder'), 'Étang principal');
+    fireEvent.changeText(getByPlaceholderText('createFarmUnitSurfacePlaceholder'), '120');
+    fireEvent.press(getByText('+ createFarmAddUnitBtn'));
+
+    fireEvent.changeText(
+      getByPlaceholderText('createFarmFingerlingsCountPlaceholderMax'),
+      '2100'
+    );
+
+    await waitFor(() => {
+      expect(getAllByDisplayValue('900')).toHaveLength(1);
+      expect(getAllByDisplayValue('1200')).toHaveLength(1);
+    });
+
+    fireEvent.changeText(getAllByDisplayValue('900')[0], '901');
+    fireEvent.changeText(getAllByDisplayValue('1200')[0], '1199');
+    fireEvent.press(getByText('createFarmSimulateBtn'));
+
+    await waitFor(() => {
+      expect(alertSpy).toHaveBeenCalledWith(
+        'error',
+        'Bac 1 : createFarmProductionUnitRecommendedCapacityExceededError'
+      );
+      expect(navigation.navigate).not.toHaveBeenCalledWith('CycleSimulation', expect.anything());
+    });
+
+    alertSpy.mockRestore();
+  });
+
+  it('bloque la simulation quand la somme repartie ne correspond pas au total', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    mockSimulationSuccess();
+
+    const { getAllByDisplayValue, getByPlaceholderText, getByText, getAllByText } = render(
+      <CreateFarmScreen navigation={navigation} />
+    );
+
+    fireEvent.press(getByText('createFarmSpeciesTilapia'));
+    fireEvent.press(getAllByText('productionUnitTypeTank')[1]);
+    fireEvent.changeText(getByPlaceholderText('createFarmBulkUnitCountPlaceholder'), '3');
+    fireEvent.changeText(getByPlaceholderText('createFarmUnitVolumePlaceholder'), '3');
+    fireEvent.changeText(getByPlaceholderText('createFarmUnitBaseNamePlaceholder'), 'Bac');
+    fireEvent.press(getByText('+ createFarmAddUnitsIdenticalBtn'));
+
+    fireEvent.changeText(
+      getByPlaceholderText('createFarmFingerlingsCountPlaceholderMax'),
+      '2700'
+    );
+
+    await waitFor(() => {
+      expect(getAllByDisplayValue('900')).toHaveLength(3);
+    });
+
+    fireEvent.changeText(getAllByDisplayValue('900')[0], '800');
+    fireEvent.press(getByText('createFarmSimulateBtn'));
+
+    await waitFor(() => {
+      expect(alertSpy).toHaveBeenCalledWith(
+        'error',
+        'createFarmProductionUnitAllocationSumError'
+      );
+      expect(navigation.navigate).not.toHaveBeenCalledWith('CycleSimulation', expect.anything());
+    });
+
+    alertSpy.mockRestore();
+  });
+
+  it('restaure la repartition recommandee apres reset', async () => {
+    mockSimulationSuccess();
+
+    const { getAllByDisplayValue, getByPlaceholderText, getByText, getAllByText } =
+      render(<CreateFarmScreen navigation={navigation} />);
+
+    fireEvent.press(getAllByText('productionUnitTypeTank')[1]);
+    fireEvent.changeText(getByPlaceholderText('createFarmBulkUnitCountPlaceholder'), '3');
+    fireEvent.changeText(getByPlaceholderText('createFarmUnitVolumePlaceholder'), '3');
+    fireEvent.changeText(getByPlaceholderText('createFarmUnitBaseNamePlaceholder'), 'Bac');
+    fireEvent.press(getByText('+ createFarmAddUnitsIdenticalBtn'));
+
+    fireEvent.changeText(
+      getByPlaceholderText('createFarmFingerlingsCountPlaceholderMax'),
+      '2700'
+    );
+
+    await waitFor(() => {
+      expect(getAllByDisplayValue('900')).toHaveLength(3);
+    });
+
+    fireEvent.changeText(getAllByDisplayValue('900')[0], '800');
+    fireEvent.press(getByText('createFarmProductionUnitAllocationResetBtn'));
+
+    await waitFor(() => {
+      expect(getAllByDisplayValue('900')).toHaveLength(3);
+    });
   });
 
   it('passe en mode edition et pre-remplit les champs', async () => {

@@ -266,6 +266,30 @@ export interface ProductionUnitDraft {
   surface_m2?: string;
 }
 
+export interface ProductionUnitFishAllocationDraft {
+  production_unit_local_id: string;
+  fish_count: string;
+}
+
+export interface ProductionUnitAllocationStatus {
+  production_unit_local_id: string;
+  fish_count: number | null;
+  recommended_capacity: number | null;
+  density: number | null;
+  density_unit: 'm3' | 'm2' | null;
+  estimated_production_kg: number | null;
+  is_over_capacity: boolean;
+}
+
+export interface ProductionUnitFishAllocationValidationResult {
+  total_fish_count: number | null;
+  total_capacity: number | null;
+  total_allocated_fish: number;
+  global_error: string | null;
+  unit_errors: Record<string, string>;
+  unit_statuses: ProductionUnitAllocationStatus[];
+}
+
 export interface ProductionUnitCompatibilitySummary {
   legacy_infrastructure_type: 'etang' | 'cage_flottante' | 'bac_hors_sol';
   legacy_unit_count: number;
