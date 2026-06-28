@@ -1,20 +1,20 @@
 import farmSetupReducer, {
-  clearAnnualSimulation,
+  clearCycleSimulation,
   completeFarmSetup,
-  runAnnualSimulation,
+  runCycleSimulation,
 } from '@/features/aquaculture/store/farmSetupSlice';
-import type { AnnualSimulationResult } from '@/features/aquaculture/types/farmSetup';
+import type { CycleSimulationResult } from '@/features/aquaculture/types/farmSetup';
 
 describe('features/aquaculture/store/farmSetupSlice', () => {
   const initialState = {
-    annualSimulation: {
+    cycleSimulation: {
       result: null,
       loading: false,
       error: null,
     },
   };
 
-  const simulationResult: AnnualSimulationResult = {
+  const simulationResult: CycleSimulationResult = {
     species: 'tilapia',
     num_cycles: 1,
     annual_production_target_kg: 500,
@@ -49,44 +49,44 @@ describe('features/aquaculture/store/farmSetupSlice', () => {
     cycles_breakdown: [],
   };
 
-  it('clearAnnualSimulation nettoie la simulation courante', () => {
+  it('clearCycleSimulation nettoie la simulation courante', () => {
     const state = {
-      annualSimulation: {
+      cycleSimulation: {
         result: simulationResult,
         loading: true,
         error: 'Erreur',
       },
     };
 
-    expect(farmSetupReducer(state, clearAnnualSimulation())).toEqual(initialState);
+    expect(farmSetupReducer(state, clearCycleSimulation())).toEqual(initialState);
   });
 
-  it('gere runAnnualSimulation pending', () => {
-    const state = farmSetupReducer(initialState, { type: runAnnualSimulation.pending.type });
+  it('gere runCycleSimulation pending', () => {
+    const state = farmSetupReducer(initialState, { type: runCycleSimulation.pending.type });
 
-    expect(state.annualSimulation.loading).toBe(true);
-    expect(state.annualSimulation.error).toBeNull();
+    expect(state.cycleSimulation.loading).toBe(true);
+    expect(state.cycleSimulation.error).toBeNull();
   });
 
-  it('gere runAnnualSimulation fulfilled', () => {
+  it('gere runCycleSimulation fulfilled', () => {
     const state = farmSetupReducer(initialState, {
-      type: runAnnualSimulation.fulfilled.type,
+      type: runCycleSimulation.fulfilled.type,
       payload: simulationResult,
     });
 
-    expect(state.annualSimulation.loading).toBe(false);
-    expect(state.annualSimulation.result).toEqual(simulationResult);
-    expect(state.annualSimulation.error).toBeNull();
+    expect(state.cycleSimulation.loading).toBe(false);
+    expect(state.cycleSimulation.result).toEqual(simulationResult);
+    expect(state.cycleSimulation.error).toBeNull();
   });
 
-  it('gere runAnnualSimulation rejected', () => {
+  it('gere runCycleSimulation rejected', () => {
     const state = farmSetupReducer(initialState, {
-      type: runAnnualSimulation.rejected.type,
+      type: runCycleSimulation.rejected.type,
       payload: 'Erreur simulation',
     });
 
-    expect(state.annualSimulation.loading).toBe(false);
-    expect(state.annualSimulation.error).toBe('Erreur simulation');
+    expect(state.cycleSimulation.loading).toBe(false);
+    expect(state.cycleSimulation.error).toBe('Erreur simulation');
   });
 
   it('ne stocke pas directement completeFarmSetup dans ce slice', () => {

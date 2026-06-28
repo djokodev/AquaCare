@@ -3,8 +3,8 @@ import { normalizeFarmProfile } from '@/features/profile/services/farmProfileMap
 import { apiService } from '@/services/api';
 import type { FarmProfile, FarmProfileApiResponse } from '@/features/profile/types/profile';
 import type {
-  AnnualSimulationInput,
-  AnnualSimulationResult,
+  CycleSimulationInput,
+  CycleSimulationResult,
   FarmSetupData,
 } from '@/features/aquaculture/types/farmSetup';
 
@@ -17,10 +17,8 @@ class FarmSetupService {
     return normalizeFarmProfile(response.data);
   }
 
-  async simulateAnnualProduction(
-    params: AnnualSimulationInput
-  ): Promise<AnnualSimulationResult> {
-    const response = await apiService.post<AnnualSimulationResult>(
+  async simulateCycle(params: CycleSimulationInput): Promise<CycleSimulationResult> {
+    const response = await apiService.post<CycleSimulationResult>(
       API_ENDPOINTS.AQUACULTURE.PRODUCTION_PLAN_SIMULATE,
       params
     );

@@ -1,8 +1,8 @@
 /**
- * AnnualSimulationScreen — Écran de simulation cycle-first
+ * CycleSimulationScreen — Écran de simulation cycle-first
  *
- * L'écran conserve son nom technique pour éviter une migration navigation plus
- * large, mais le contenu utilisateur met désormais le cycle à lancer au centre.
+ * Le contenu utilisateur met désormais le cycle à lancer au centre, tout en
+ * conservant les champs API legacy nécessaires à la compatibilité.
  */
 import React, { useEffect, useMemo, useState } from 'react';
 import {
@@ -24,14 +24,14 @@ import { AQUACARE_COLORS } from '@/constants/colors';
 import { RootStackParamList } from '@/navigation/MainNavigator';
 import { AppDispatch, RootState } from '@/store/store';
 import {
-  runAnnualSimulation,
+  runCycleSimulation,
   completeFarmSetup,
 } from '@/features/aquaculture/store/farmSetupSlice';
 import { createProductionCycle } from '@/features/aquaculture/store/aquacultureSlice';
 import { setFarmProfile } from '@/features/auth/store/authSlice';
-import type { AnnualSimulationResult } from '@/features/aquaculture/types/farmSetup';
+import type { CycleSimulationResult } from '@/features/aquaculture/types/farmSetup';
 import {
-  buildAnnualSimulationInput,
+  buildCycleSimulationInput,
   buildFarmSetupPayload,
   getHarvestCapacityPerCycle,
   getSimulationSpecies,
@@ -42,8 +42,8 @@ import {
 import { parseApiError } from '@/utils/errorParser';
 import { formatAquacultureErrorWithAction } from '@/features/aquaculture/utils/aquacultureErrorPresenter';
 
-type NavigationProp = StackNavigationProp<RootStackParamList, 'AnnualSimulation'>;
-type RouteType = RouteProp<RootStackParamList, 'AnnualSimulation'>;
+type NavigationProp = StackNavigationProp<RootStackParamList, 'CycleSimulation'>;
+type RouteType = RouteProp<RootStackParamList, 'CycleSimulation'>;
 
 interface Props {
   navigation: NavigationProp;
@@ -66,17 +66,17 @@ function formatPercent(amount: number): string {
   return `${amount > 0 ? '+' : ''}${amount.toFixed(1)} %`;
 }
 
-export default function AnnualSimulationScreen({ navigation, route }: Props) {
+export default function CycleSimulationScreen({ navigation, route }: Props) {
   const { t } = useTranslation();
   const dispatch = useDispatch<AppDispatch>();
   const formData = route.params.formData;
 
-  const { result: simulationResult, loading: simLoading } = useSelector(
-    (s: RootState) => s.farmSetup.annualSimulation
+  const { result: cycleSimulationResult, loading: simLoading } = useSelector(
+    (s: RootState) => s.farmSetup.cycleSimulation
   );
   const [launching, setLaunching] = useState(false);
-  const [currentResult, setCurrentResult] = useState<AnnualSimulationResult | null>(
-    simulationResult
+  const [currentResult, setCurrentResult] = useState<CycleSimulationResult | null>(
+    cycleSimulationResult
   );
 
   useEffect(() => {
@@ -85,8 +85,8 @@ export default function AnnualSimulationScreen({ navigation, route }: Props) {
   }, []);
 
   async function recalculate() {
-    const res = await dispatch(runAnnualSimulation(buildAnnualSimulationInput(formData)));
-    if (runAnnualSimulation.fulfilled.match(res)) {
+    const res = await dispatch(runCycleSimulation(buildCycleSimulationInput(formData)));
+    if (runCycleSimulation.fulfilled.match(res)) {
       setCurrentResult(res.payload);
     }
   }

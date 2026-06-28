@@ -3,21 +3,21 @@ import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
 import { farmSetupService } from '@/features/aquaculture/services/farmSetupService';
 import { getApiErrorMessage } from '@/utils/errorParser';
 import type {
-  AnnualSimulationInput,
-  AnnualSimulationResult,
+  CycleSimulationInput,
+  CycleSimulationResult,
   FarmSetupData,
 } from '@/features/aquaculture/types/farmSetup';
 
 interface FarmSetupState {
-  annualSimulation: {
-    result: AnnualSimulationResult | null;
+  cycleSimulation: {
+    result: CycleSimulationResult | null;
     loading: boolean;
     error: string | null;
   };
 }
 
 const initialState: FarmSetupState = {
-  annualSimulation: {
+  cycleSimulation: {
     result: null,
     loading: false,
     error: null,
@@ -35,11 +35,11 @@ export const completeFarmSetup = createAsyncThunk(
   }
 );
 
-export const runAnnualSimulation = createAsyncThunk(
-  'farmSetup/runAnnualSimulation',
-  async (params: AnnualSimulationInput, { rejectWithValue }) => {
+export const runCycleSimulation = createAsyncThunk(
+  'farmSetup/runCycleSimulation',
+  async (params: CycleSimulationInput, { rejectWithValue }) => {
     try {
-      return await farmSetupService.simulateAnnualProduction(params);
+      return await farmSetupService.simulateCycle(params);
     } catch (error: unknown) {
       return rejectWithValue(getApiErrorMessage(error, 'UNKNOWN_ERROR'));
     }
@@ -50,29 +50,29 @@ export const farmSetupSlice = createSlice({
   name: 'farmSetup',
   initialState,
   reducers: {
-    clearAnnualSimulation: (state) => {
-      state.annualSimulation.result = null;
-      state.annualSimulation.error = null;
-      state.annualSimulation.loading = false;
+    clearCycleSimulation: (state) => {
+      state.cycleSimulation.result = null;
+      state.cycleSimulation.error = null;
+      state.cycleSimulation.loading = false;
     },
   },
   extraReducers: (builder) => {
     builder
-      .addCase(runAnnualSimulation.pending, (state) => {
-        state.annualSimulation.loading = true;
-        state.annualSimulation.error = null;
+      .addCase(runCycleSimulation.pending, (state) => {
+        state.cycleSimulation.loading = true;
+        state.cycleSimulation.error = null;
       })
-      .addCase(runAnnualSimulation.fulfilled, (state, action) => {
-        state.annualSimulation.loading = false;
-        state.annualSimulation.result = action.payload;
-        state.annualSimulation.error = null;
+      .addCase(runCycleSimulation.fulfilled, (state, action) => {
+        state.cycleSimulation.loading = false;
+        state.cycleSimulation.result = action.payload;
+        state.cycleSimulation.error = null;
       })
-      .addCase(runAnnualSimulation.rejected, (state, action) => {
-        state.annualSimulation.loading = false;
-        state.annualSimulation.error = action.payload as string;
+      .addCase(runCycleSimulation.rejected, (state, action) => {
+        state.cycleSimulation.loading = false;
+        state.cycleSimulation.error = action.payload as string;
       });
   },
 });
 
-export const { clearAnnualSimulation } = farmSetupSlice.actions;
+export const { clearCycleSimulation } = farmSetupSlice.actions;
 export default farmSetupSlice.reducer;

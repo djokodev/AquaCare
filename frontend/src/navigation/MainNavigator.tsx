@@ -13,7 +13,7 @@ import ProfileScreen from '@/features/profile/screens/ProfileScreen';
 import SettingsScreen from '@/features/profile/screens/SettingsScreen';
 
 // Aquaculture Screens
-import AnnualSimulationScreen from '@/features/aquaculture/screens/AnnualSimulationScreen';
+import CycleSimulationScreen from '@/features/aquaculture/screens/CycleSimulationScreen';
 import CreateFarmScreen from '@/features/aquaculture/screens/CreateFarmScreen';
 import type { FarmSetupFormState } from '@/features/aquaculture/utils/farmSetupForm';
 import PostHarvestConsolidationScreen from '@/features/aquaculture/screens/PostHarvestConsolidationScreen';
@@ -86,7 +86,7 @@ export type RootStackParamList = {
   FarmMap: undefined;
   // Farm creation flow
   CreateFarm: undefined;
-  AnnualSimulation: { formData: FarmSetupFormState };
+  CycleSimulation: { formData: FarmSetupFormState };
   // Post-harvest consolidation
   PostHarvestConsolidation: { harvestedCycleId: string };
   // Feed phase ordering
@@ -328,8 +328,8 @@ export default function MainNavigator() {
         }}
       />
       <RootStack.Screen
-        name="AnnualSimulation"
-        component={AnnualSimulationScreen}
+        name="CycleSimulation"
+        component={CycleSimulationScreen}
         options={{
           headerShown: true,
           headerStyle: { backgroundColor: AQUACARE_COLORS.GREEN_PRIMARY },

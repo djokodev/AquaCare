@@ -26,9 +26,9 @@ import { useDispatch, useSelector } from 'react-redux';
 import { AQUACARE_COLORS } from '@/constants/colors';
 import { RootStackParamList } from '@/navigation/MainNavigator';
 import { AppDispatch, RootState } from '@/store/store';
-import { runAnnualSimulation } from '@/features/aquaculture/store/farmSetupSlice';
+import { runCycleSimulation } from '@/features/aquaculture/store/farmSetupSlice';
 import {
-  buildAnnualSimulationInput,
+  buildCycleSimulationInput,
   getCycleProductionEstimate,
   hasFarmSetupErrors,
   validateFarmSetupForm,
@@ -72,7 +72,7 @@ export default function CreateFarmScreen({ navigation }: Props) {
   const { t, i18n } = useTranslation();
   const dispatch = useDispatch<AppDispatch>();
   const { loading: simLoading } = useSelector(
-    (s: RootState) => s.farmSetup.annualSimulation
+    (s: RootState) => s.farmSetup.cycleSimulation
   );
   const numberLocale = i18n.language?.startsWith('fr') ? 'fr-FR' : 'en-US';
   const formatNumber = (value: number): string => new Intl.NumberFormat(numberLocale).format(value);
@@ -197,11 +197,11 @@ export default function CreateFarmScreen({ navigation }: Props) {
       return;
     }
 
-    const params = buildAnnualSimulationInput(form);
+    const params = buildCycleSimulationInput(form);
 
-    const result = await dispatch(runAnnualSimulation(params));
-    if (runAnnualSimulation.fulfilled.match(result)) {
-      navigation.navigate('AnnualSimulation', { formData: form });
+    const result = await dispatch(runCycleSimulation(params));
+    if (runCycleSimulation.fulfilled.match(result)) {
+      navigation.navigate('CycleSimulation', { formData: form });
     } else {
       const errorMessage =
         typeof result.payload === 'string' && result.payload.trim()

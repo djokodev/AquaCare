@@ -8,7 +8,7 @@ import {
 } from '@/constants/aquaculture';
 import { CYCLE_SIMULATION_DEFAULTS } from '@/domain/commerce/constants';
 import type {
-  AnnualSimulationInput,
+  CycleSimulationInput,
   FarmSetupData,
 } from '@/features/aquaculture/types/farmSetup';
 
@@ -385,11 +385,13 @@ export const validateFarmSetupForm = (
 export const hasFarmSetupErrors = (errors: FarmSetupFormErrors): boolean =>
   Object.values(errors).some(Boolean);
 
-export const buildAnnualSimulationInput = (
+export const buildCycleSimulationInput = (
   form: FarmSetupFormState,
   numCycles?: 1 | 2 | 3
-): AnnualSimulationInput => ({
+): CycleSimulationInput => ({
   species: getSimulationSpecies(form.species),
+  // API compatibility: backend still accepts legacy annual-first field names,
+  // while the mobile setup now computes and displays cycle-first values.
   annual_production_target_kg: (() => {
     const cycleProductionKg = getCycleProductionEstimate(form) ?? 0;
     const compatibilityCycles = numCycles ?? getCompatibilityCyclesPerYear(form);
