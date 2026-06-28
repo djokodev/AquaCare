@@ -32,9 +32,12 @@ import {
   getCycleProductionEstimate,
   hasFarmSetupErrors,
   validateFarmSetupForm,
+  getFingerlingsCapacityStatusPreview,
   getFingerlingsCoherencePreview,
+  getFingerlingsSuggestionPreview,
   getStockingDensityPreview,
   getTotalCapacityPreview,
+  sanitizePositiveIntegerInput,
   todayISO,
   type FarmSetupFormState,
   type FarmSetupInfraType,
@@ -107,26 +110,18 @@ export default function CreateFarmScreen({ navigation }: Props) {
   }, [form.fingerlingsCount, form.survivalRate, form.harvestWeight, form.species]);
 
   const fingerlingsCapacityStatus = useMemo(() => {
-    if (!fingerlingsCoherence) {
-      return null;
-    }
+    return getFingerlingsCapacityStatusPreview(form);
+  }, [form.fingerlingsCount, form.infraType, form.unitCount, form.unitSurface, form.unitVolume]);
 
-    const ratio = fingerlingsCoherence.count / fingerlingsCoherence.maxCycle;
-    if (ratio < 0.7) {
-      return { key: 'createFarmCapacityUnderused', params: {} };
-    }
-    if (ratio < 0.9) {
-      return { key: 'createFarmCapacityConsistent', params: {} };
-    }
-    if (ratio <= 1) {
-      return { key: 'createFarmCapacityNearMax', params: {} };
-    }
+  const fingerlingsSuggestion = useMemo(() => {
+    return getFingerlingsSuggestionPreview(form);
+  }, [form.infraType, form.unitCount, form.unitVolume, form.unitSurface]);
 
-    return {
-      key: 'createFarmCapacityOver',
-      params: { max: formatNumber(fingerlingsCoherence.maxCycle) },
-    };
-  }, [fingerlingsCoherence, formatNumber]);
+  const fingerlingsCountPlaceholder = fingerlingsSuggestion
+    ? t('createFarmFingerlingsCountPlaceholderMax', {
+        max: formatNumber(fingerlingsSuggestion.value),
+      })
+    : t('createFarmFingerlingsCountPlaceholder');
 
   const getFieldLabel = (field: keyof FarmSetupFormState): string => {
     const labelByField: Record<keyof FarmSetupFormState, string> = {
@@ -263,7 +258,7 @@ export default function CreateFarmScreen({ navigation }: Props) {
         placeholder={t('createFarmUnitCountPlaceholder')}
         placeholderTextColor={AQUACARE_COLORS.GRAY_LIGHT}
         value={form.unitCount}
-        onChangeText={v => setField('unitCount', v)}
+        onChangeText={v => setField('unitCount', sanitizePositiveIntegerInput(v))}
       />
 
       {form.infraType === 'etang' ? (
@@ -318,10 +313,10 @@ export default function CreateFarmScreen({ navigation }: Props) {
           fingerlingsCoherence?.level === 'error' && styles.inputError,
         ]}
         keyboardType="numeric"
-        placeholder={t('createFarmFingerlingsCountPlaceholder')}
+        placeholder={fingerlingsCountPlaceholder}
         placeholderTextColor={AQUACARE_COLORS.GRAY_LIGHT}
         value={form.fingerlingsCount}
-        onChangeText={v => setField('fingerlingsCount', v)}
+        onChangeText={v => setField('fingerlingsCount', sanitizePositiveIntegerInput(v))}
       />
       {stockingDensityCheck && (
         <View style={[
@@ -349,20 +344,24 @@ export default function CreateFarmScreen({ navigation }: Props) {
       {fingerlingsCoherence && (
         <View style={[
           styles.coherenceBadge,
-          fingerlingsCoherence.level === 'ok' && styles.coherenceBadgeOk,
-          fingerlingsCoherence.level === 'warn' && styles.coherenceBadgeWarn,
-          fingerlingsCoherence.level === 'error' && styles.coherenceBadgeError,
+          fingerlingsCapacityStatus?.level === 'ok' && styles.coherenceBadgeOk,
+          fingerlingsCapacityStatus?.level === 'warn' && styles.coherenceBadgeWarn,
+          fingerlingsCapacityStatus?.level === 'error' && styles.coherenceBadgeError,
         ]}>
           <Text style={[
             styles.coherenceText,
-            fingerlingsCoherence.level === 'ok' && styles.coherenceTextOk,
-            fingerlingsCoherence.level === 'warn' && styles.coherenceTextWarn,
-            fingerlingsCoherence.level === 'error' && styles.coherenceTextError,
+            fingerlingsCapacityStatus?.level === 'ok' && styles.coherenceTextOk,
+            fingerlingsCapacityStatus?.level === 'warn' && styles.coherenceTextWarn,
+            fingerlingsCapacityStatus?.level === 'error' && styles.coherenceTextError,
           ]}>
-            {t(
-              fingerlingsCapacityStatus?.key ?? 'createFarmCapacityConsistent',
-              fingerlingsCapacityStatus?.params ?? {}
-            )}
+            {fingerlingsCapacityStatus
+              ? t(
+                  fingerlingsCapacityStatus.key,
+                  fingerlingsCapacityStatus.key === 'createFarmCapacityOver'
+                    ? { max: formatNumber(fingerlingsCapacityStatus.maxCycle) }
+                    : {}
+                )
+              : t('createFarmCapacityConsistent')}
           </Text>
         </View>
       )}

@@ -46,11 +46,31 @@ export interface FingerlingsCoherencePreview {
   level: 'ok' | 'warn' | 'error';
 }
 
+export interface FingerlingsCapacityStatusPreview {
+  level: 'ok' | 'warn' | 'error';
+  key:
+    | 'createFarmCapacityHighlyUnderused'
+    | 'createFarmCapacityUnderused'
+    | 'createFarmCapacityConsistent'
+    | 'createFarmCapacityReached'
+    | 'createFarmCapacityOver';
+  maxCycle: number;
+}
+
 export interface FingerlingsSuggestionPreview {
   value: number;
 }
 
 export const DEFAULT_CYCLE_SURVIVAL_RATE_PCT = DEFAULT_EXPECTED_SURVIVAL_RATE_PCT;
+
+export const sanitizePositiveIntegerInput = (value: string): string => {
+  const digitsOnly = value.replace(/\D+/g, '');
+  if (!digitsOnly) {
+    return '';
+  }
+
+  return digitsOnly.replace(/^0+(?=\d)/, '');
+};
 
 const toFloat = (value: string): number => parseFloat(value) || 0;
 const toInt = (value: string): number => parseInt(value, 10) || 0;
@@ -186,6 +206,52 @@ export const getFingerlingsCoherencePreview = (
     count,
     maxCycle,
     level,
+  };
+};
+
+export const getFingerlingsCapacityStatusPreview = (
+  form: FarmSetupFormState
+): FingerlingsCapacityStatusPreview | null => {
+  const coherence = getFingerlingsCoherencePreview(form);
+  if (!coherence) return null;
+
+  const ratio = coherence.count / coherence.maxCycle;
+  if (ratio > 1) {
+    return {
+      level: 'error',
+      key: 'createFarmCapacityOver',
+      maxCycle: coherence.maxCycle,
+    };
+  }
+
+  if (ratio === 1) {
+    return {
+      level: 'ok',
+      key: 'createFarmCapacityReached',
+      maxCycle: coherence.maxCycle,
+    };
+  }
+
+  if (ratio >= 0.8) {
+    return {
+      level: 'ok',
+      key: 'createFarmCapacityConsistent',
+      maxCycle: coherence.maxCycle,
+    };
+  }
+
+  if (ratio >= 0.5) {
+    return {
+      level: 'warn',
+      key: 'createFarmCapacityUnderused',
+      maxCycle: coherence.maxCycle,
+    };
+  }
+
+  return {
+    level: 'warn',
+    key: 'createFarmCapacityHighlyUnderused',
+    maxCycle: coherence.maxCycle,
   };
 };
 
