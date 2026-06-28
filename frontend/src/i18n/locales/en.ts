@@ -1294,6 +1294,10 @@
   simulationModifyBtn: '← Edit my data',
   simulationLoading: 'Calculating...',
   simulationErrorRetry: 'Simulation error. Retry',
+  simulationUnableToSaveCycleProductionUnits: 'Unable to save the cycle production units.',
+  simulationUnableToSaveCycleUnitAllocations: 'Unable to save the cycle allocations.',
+  simulationProductionUnitAllocationInvalidError:
+    'Each production unit must have a valid allocation before launch.',
   simulationDefaultCycleName: '{{species}} cycle 1',
   simulationDefaultPondIdentifier: 'Main pond',
   productionUnitDensityFingerlingsPerCubicMeter: 'fingerlings/m³',

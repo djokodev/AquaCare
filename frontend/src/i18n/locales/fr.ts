@@ -1294,6 +1294,10 @@ export const fr = {
   simulationModifyBtn: '← Modifier mes données',
   simulationLoading: 'Calcul en cours...',
   simulationErrorRetry: 'Erreur de simulation. Réessayer',
+  simulationUnableToSaveCycleProductionUnits: "Impossible d'enregistrer les unités de production du cycle.",
+  simulationUnableToSaveCycleUnitAllocations: "Impossible d'enregistrer les allocations du cycle.",
+  simulationProductionUnitAllocationInvalidError:
+    'Chaque unité de production doit avoir une allocation valide avant le lancement.',
   simulationDefaultCycleName: 'Cycle {{species}} 1',
   simulationDefaultPondIdentifier: 'Bassin principal',
   productionUnitDensityFingerlingsPerCubicMeter: 'alevins/m³',

@@ -258,6 +258,14 @@ export interface ProductionUnit {
   updated_at: string;
 }
 
+export interface ProductionUnitCreatePayload {
+  name: string;
+  unit_type: ProductionUnitType;
+  volume_m3?: number;
+  surface_m2?: number;
+  status?: ProductionUnitStatus;
+}
+
 export interface ProductionUnitDraft {
   local_id: string;
   name: string;
@@ -316,6 +324,16 @@ export interface CycleUnitAllocation {
   survival_rate_pct?: number | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface CycleUnitAllocationCreatePayload {
+  cycle: string;
+  production_unit: string;
+  initial_fish_count: number;
+  current_fish_count?: number;
+  initial_biomass_kg?: number;
+  current_biomass_kg?: number;
+  expected_survival_rate_pct?: number;
 }
 
 export interface CycleUnitAllocationDraft {

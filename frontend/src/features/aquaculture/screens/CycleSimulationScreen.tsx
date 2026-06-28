@@ -25,26 +25,24 @@ import { RootStackParamList } from '@/navigation/MainNavigator';
 import { AppDispatch, RootState } from '@/store/store';
 import {
   runCycleSimulation,
-  completeFarmSetup,
 } from '@/features/aquaculture/store/farmSetupSlice';
-import { createProductionCycle } from '@/features/aquaculture/store/aquacultureSlice';
 import { setFarmProfile } from '@/features/auth/store/authSlice';
 import type { CycleSimulationResult } from '@/features/aquaculture/types/farmSetup';
 import {
   buildCycleSimulationInput,
-  buildFarmSetupPayload,
   getHarvestCapacityPerCycle,
-  getSimulationSpecies,
   getSpeciesHarvestWeightDefault,
   getStockingDensityPreview,
   getTotalCapacityPreview,
 } from '@/features/aquaculture/utils/farmSetupForm';
 import {
-  getProductionUnitsCompatibilitySummary,
   getProductionUnitsDensityPreview,
-  normalizeProductionUnitType,
   validateProductionUnitFishAllocations,
 } from '@/features/aquaculture/utils/productionUnits';
+import {
+  FirstCycleLaunchError,
+  launchFirstCycle,
+} from '@/features/aquaculture/services/firstCycleLaunchService';
 import { parseApiError } from '@/utils/errorParser';
 import { formatAquacultureErrorWithAction } from '@/features/aquaculture/utils/aquacultureErrorPresenter';
 
@@ -86,10 +84,6 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
   const [launching, setLaunching] = useState(false);
   const [currentResult, setCurrentResult] = useState<CycleSimulationResult | null>(
     cycleSimulationResult
-  );
-  const productionUnitSummary = useMemo(
-    () => getProductionUnitsCompatibilitySummary(formData.productionUnits ?? []),
-    [formData.productionUnits]
   );
   const productionUnitsDensityPreview = useMemo(
     () =>
@@ -171,70 +165,19 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
     setLaunching(true);
 
     try {
-      const farmProfile = await dispatch(
-        completeFarmSetup(buildFarmSetupPayload(formData))
-      ).unwrap();
-      dispatch(setFarmProfile(farmProfile));
-
-      const firstCycle = currentResult.cycles_breakdown[0];
-      if (!firstCycle) {
-        throw new Error('AUTH_UNKNOWN_ERROR');
-      }
-
-      // Compatibility bridge: the setup UI is now production-unit based,
-      // while the current simulation and cycle creation flow still expect
-      // legacy homogeneous fields. PR #59 will make the simulation unit-aware.
-      const legacyUnit = productionUnitSummary?.primary_unit;
-      const legacyUnitType = legacyUnit ? normalizeProductionUnitType(legacyUnit.unit_type) : null;
-      const hasProductionUnitSummary = Boolean(productionUnitSummary);
-      const legacyPondSurface =
-        legacyUnitType === 'pond'
-          ? legacyUnit?.surface_m2
-            ? parseFloat(legacyUnit.surface_m2)
-            : undefined
-          : undefined;
-      const legacyPondVolume =
-        hasProductionUnitSummary
-          ? legacyUnitType && legacyUnitType !== 'pond'
-            ? legacyUnit?.volume_m3
-              ? parseFloat(legacyUnit.volume_m3)
-              : undefined
-            : undefined
-          : formData.unitVolume
-            ? parseFloat(formData.unitVolume)
-            : undefined;
-      const speciesForCycle = getSimulationSpecies(formData.species);
-      const fingerlingsCost = currentResult.cycle_fingerlings_cost_fcfa ?? firstCycle.fingerlings_cost_fcfa;
-      const otherCosts = currentResult.cycle_other_costs_fcfa ?? 0;
-
-      await dispatch(
-        createProductionCycle({
-          species: speciesForCycle,
-          cycle_name: undefined,
-          pond_identifier: legacyUnit?.name?.trim() || t('simulationDefaultPondIdentifier'),
-          pond_surface_m2: hasProductionUnitSummary ? legacyPondSurface : formData.unitSurface ? parseFloat(formData.unitSurface) : undefined,
-          pond_volume_m3: legacyPondVolume,
-          initial_count: firstCycle.initial_fish_count,
-          initial_average_weight: undefined,
-          start_date: firstCycle.start_date_estimate,
-          target_harvest_weight_g: formData.harvestWeight
-            ? parseFloat(formData.harvestWeight)
-            : harvestWeightDefault,
-          planned_cycle_duration_days: firstCycle.duration_days,
-          expected_survival_rate_pct: formData.survivalRate
-            ? parseFloat(formData.survivalRate)
-            : undefined,
-          planned_selling_price_per_kg_fcfa: formData.sellingPrice
-            ? parseFloat(formData.sellingPrice)
-            : undefined,
-          fingerlings_cost_fcfa: fingerlingsCost,
-          other_operational_costs_fcfa: otherCosts,
-          planned_feed_bags: firstCycle.feed_bags_total || currentResult.feed_bags_per_cycle || undefined,
-        })
-      ).unwrap();
-
+      const launchResult = await launchFirstCycle({
+        formData,
+        simulationResult: currentResult,
+        defaultPondIdentifier: t('simulationDefaultPondIdentifier'),
+      });
+      dispatch(setFarmProfile(launchResult.farmProfile));
       navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
     } catch (err: unknown) {
+      if (err instanceof FirstCycleLaunchError) {
+        Alert.alert(t('error'), t(err.translationKey));
+        return;
+      }
+
       Alert.alert(t('error'), formatAquacultureErrorWithAction(parseApiError(err), t));
     } finally {
       setLaunching(false);

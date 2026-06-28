@@ -1,9 +1,10 @@
 import React from 'react';
+import { Alert } from 'react-native';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import { useDispatch, useSelector } from 'react-redux';
 
 import CycleSimulationScreen from '../CycleSimulationScreen';
-import { createProductionCycle } from '@/features/aquaculture/store/aquacultureSlice';
+import { FirstCycleLaunchError, launchFirstCycle } from '@/features/aquaculture/services/firstCycleLaunchService';
 import { runCycleSimulation } from '@/features/aquaculture/store/farmSetupSlice';
 
 jest.mock('react-redux', () => ({
@@ -11,13 +12,21 @@ jest.mock('react-redux', () => ({
   useSelector: jest.fn(),
 }));
 
-jest.mock('@/features/aquaculture/store/aquacultureSlice', () => ({
-  createProductionCycle: jest.fn(),
+jest.mock('@/features/aquaculture/services/firstCycleLaunchService', () => ({
+  launchFirstCycle: jest.fn(),
+  FirstCycleLaunchError: class FirstCycleLaunchError extends Error {
+    translationKey: string;
+
+    constructor(translationKey: string) {
+      super(translationKey);
+      this.translationKey = translationKey;
+    }
+  },
 }));
 
 describe('features/aquaculture/screens/CycleSimulationScreen', () => {
   const mockDispatch = jest.fn();
-  const mockCreateProductionCycle = createProductionCycle as unknown as jest.Mock;
+  const mockLaunchFirstCycle = launchFirstCycle as unknown as jest.Mock;
   const navigation = {
     goBack: jest.fn(),
     reset: jest.fn(),
@@ -101,12 +110,14 @@ describe('features/aquaculture/screens/CycleSimulationScreen', () => {
       (selector: (state: any) => unknown) =>
         selector({ farmSetup: { cycleSimulation: { result: null, loading: false } } })
     );
-    mockCreateProductionCycle.mockReturnValue({
-      unwrap: jest.fn().mockResolvedValue({ id: 'cycle-1' }),
+    mockLaunchFirstCycle.mockResolvedValue({
+      farmProfile: { id: 'farm-profile-1' },
+      productionCycle: { id: 'cycle-1' },
+      productionUnitIdByLocalId: {},
     });
   });
 
-  it('n envoie jamais de volume pour un etang pilote par surface', async () => {
+  it('delegue la persistance du premier cycle au helper dedie et reset la navigation', async () => {
     let functionCallCount = 0;
     mockDispatch.mockImplementation((action: unknown) => {
       if (typeof action === 'function') {
@@ -151,10 +162,17 @@ describe('features/aquaculture/screens/CycleSimulationScreen', () => {
     fireEvent.press(getByText('simulationLaunchBtn'));
 
     await waitFor(() => {
-      expect(mockCreateProductionCycle).toHaveBeenCalledWith(
+      expect(mockLaunchFirstCycle).toHaveBeenCalledWith(
         expect.objectContaining({
-          pond_surface_m2: 120,
-          pond_volume_m3: undefined,
+          defaultPondIdentifier: 'simulationDefaultPondIdentifier',
+          formData: expect.objectContaining({
+            productionUnits: [
+              expect.objectContaining({
+                unit_type: 'pond',
+                surface_m2: '120',
+              }),
+            ],
+          }),
         })
       );
       expect(navigation.reset).toHaveBeenCalledWith({
@@ -163,6 +181,59 @@ describe('features/aquaculture/screens/CycleSimulationScreen', () => {
       });
     });
   }, 10000);
+
+  it('affiche un message lisible si la persistance du cycle echoue', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined as never);
+    mockLaunchFirstCycle.mockRejectedValueOnce(
+      new FirstCycleLaunchError('simulationUnableToSaveCycleProductionUnits')
+    );
+
+    mockDispatch.mockImplementation((action: unknown) => {
+      if (typeof action === 'function') {
+        return {
+          type: runCycleSimulation.fulfilled.type,
+          payload: currentResult,
+        };
+      }
+
+      return action;
+    });
+
+    const route = buildRoute({
+      unitSurface: '120',
+      fingerlingsCount: '1200',
+      productionUnits: [
+        {
+          local_id: 'unit-pond',
+          name: 'Étang principal',
+          unit_type: 'pond',
+          surface_m2: '120',
+          volume_m3: '',
+        },
+      ],
+      productionUnitAllocations: [
+        {
+          production_unit_local_id: 'unit-pond',
+          fish_count: '1200',
+        },
+      ],
+    });
+
+    const { getByText } = render(<CycleSimulationScreen navigation={navigation} route={route} />);
+
+    await waitFor(() => {
+      expect(getByText('simulationLaunchBtn')).toBeTruthy();
+    });
+
+    fireEvent.press(getByText('simulationLaunchBtn'));
+
+    await waitFor(() => {
+      expect(alertSpy).toHaveBeenCalledWith('error', 'simulationUnableToSaveCycleProductionUnits');
+      expect(navigation.reset).not.toHaveBeenCalled();
+    });
+
+    alertSpy.mockRestore();
+  });
 
   it('affiche une densite unique quand les bacs sont a capacite max', async () => {
     mockDispatch.mockImplementation((action: unknown) => {
