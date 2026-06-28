@@ -1,11 +1,12 @@
 import {
+  DEFAULT_EXPECTED_SURVIVAL_RATE_PCT,
+  TECHNICAL_PAUSE_BETWEEN_CYCLES_DAYS,
   HARVEST_DENSITY_POND_KG_PER_M2,
   HARVEST_DENSITY_TANK_KG_PER_M3,
-  RECOMMENDED_STOCKING_DENSITY_POND_PER_M2,
-  RECOMMENDED_STOCKING_DENSITY_TANK_PER_M3,
   STOCKING_DENSITY_POND_PER_M2,
   STOCKING_DENSITY_TANK_PER_M3,
 } from '@/constants/aquaculture';
+import { CYCLE_SIMULATION_DEFAULTS } from '@/domain/commerce/constants';
 import type {
   AnnualSimulationInput,
   FarmSetupData,
@@ -40,18 +41,16 @@ export interface StockingDensityPreview {
 }
 
 export interface FingerlingsCoherencePreview {
-  maxAnnual: number;
+  count: number;
+  maxCycle: number;
   level: 'ok' | 'warn' | 'error';
-  target: number;
 }
 
 export interface FingerlingsSuggestionPreview {
   value: number;
-  target: number | null;
-  achievable: boolean;
 }
 
-const DEFAULT_NUM_CYCLES = 2;
+export const DEFAULT_CYCLE_SURVIVAL_RATE_PCT = DEFAULT_EXPECTED_SURVIVAL_RATE_PCT;
 
 const toFloat = (value: string): number => parseFloat(value) || 0;
 const toInt = (value: string): number => parseInt(value, 10) || 0;
@@ -87,35 +86,83 @@ export const getSimulationSpecies = (species: FarmSetupFormState['species']): 't
 export const getSpeciesHarvestWeightDefault = (species: FarmSetupFormState['species']): number =>
   species === 'clarias' ? 400 : 350;
 
-export const getStockingDensityPreview = (
+export const getCompatibilityCyclesPerYear = (
   form: FarmSetupFormState
-): StockingDensityPreview | null => {
-  const count = toInt(form.fingerlingsCount);
-  const units = toFloat(form.unitCount);
-  if (!count || !form.infraType || !units) return null;
+): 1 | 2 | 3 => {
+  const speciesKey = form.species === 'clarias' ? 'catfish' : 'tilapia';
+  const cycleDurationDays = CYCLE_SIMULATION_DEFAULTS[speciesKey].cycle_duration_days;
+  const periodDays = cycleDurationDays + TECHNICAL_PAUSE_BETWEEN_CYCLES_DAYS;
+  const derived = periodDays > 0 ? Math.floor(365 / periodDays) : 1;
+  return Math.min(3, Math.max(1, derived)) as 1 | 2 | 3;
+};
 
-  const fingerlingsPerCycle = count / DEFAULT_NUM_CYCLES;
+export const getCycleProductionEstimate = (form: FarmSetupFormState): number | null => {
+  const count = toInt(form.fingerlingsCount);
+  if (!count) return null;
+
+  const survivalRate = toFloat(form.survivalRate || String(DEFAULT_CYCLE_SURVIVAL_RATE_PCT)) / 100;
+  const harvestWeightG = toFloat(
+    form.harvestWeight || String(getSpeciesHarvestWeightDefault(form.species))
+  );
+  if (!survivalRate || !harvestWeightG) return null;
+
+  return (count * survivalRate * harvestWeightG) / 1000;
+};
+
+const getInfrastructureCapacityCount = (form: FarmSetupFormState): number | null => {
+  const units = toFloat(form.unitCount);
+  if (!form.infraType || !units) return null;
 
   if (form.infraType === 'etang') {
     const surface = toFloat(form.unitSurface);
     if (!surface) return null;
-    const density = Math.round(fingerlingsPerCycle / (units * surface));
-    return {
-      density,
-      max: STOCKING_DENSITY_POND_PER_M2,
-      unit: 'm²',
-      isOk: density <= STOCKING_DENSITY_POND_PER_M2,
-    };
+    return units * surface * STOCKING_DENSITY_POND_PER_M2;
   }
 
   const volume = toFloat(form.unitVolume);
   if (!volume) return null;
-  const density = Math.round(fingerlingsPerCycle / (units * volume));
+  return units * volume * STOCKING_DENSITY_TANK_PER_M3;
+};
+
+const getInfrastructureFootprint = (form: FarmSetupFormState): number | null => {
+  const units = toFloat(form.unitCount);
+  if (!form.infraType || !units) return null;
+
+  if (form.infraType === 'etang') {
+    const surface = toFloat(form.unitSurface);
+    if (!surface) return null;
+    return units * surface;
+  }
+
+  const volume = toFloat(form.unitVolume);
+  if (!volume) return null;
+  return units * volume;
+};
+
+export const getStockingDensityPreview = (
+  form: FarmSetupFormState
+): StockingDensityPreview | null => {
+  const count = toInt(form.fingerlingsCount);
+  const footprint = getInfrastructureFootprint(form);
+  const capacityCount = getInfrastructureCapacityCount(form);
+  if (!count || !form.infraType || !footprint || !capacityCount) return null;
+
+  if (form.infraType === 'etang') {
+    const density = count / footprint;
+    return {
+      density,
+      max: STOCKING_DENSITY_POND_PER_M2,
+      unit: 'm²',
+      isOk: count <= capacityCount,
+    };
+  }
+
+  const density = count / footprint;
   return {
     density,
     max: STOCKING_DENSITY_TANK_PER_M3,
     unit: 'm³',
-    isOk: density <= STOCKING_DENSITY_TANK_PER_M3,
+    isOk: count <= capacityCount,
   };
 };
 
@@ -123,20 +170,22 @@ export const getFingerlingsCoherencePreview = (
   form: FarmSetupFormState
 ): FingerlingsCoherencePreview | null => {
   const count = toInt(form.fingerlingsCount);
-  const target = toFloat(form.annualTarget);
-  if (!count || !target) return null;
-
-  const survivalRate = toFloat(form.survivalRate || '85') / 100;
-  const harvestWeightG = toFloat(
-    form.harvestWeight || String(getSpeciesHarvestWeightDefault(form.species))
-  );
-  const maxAnnual = Math.round((count * survivalRate * harvestWeightG) / 1000);
-  const ratio = maxAnnual / target;
+  const maxCycle = getInfrastructureCapacityCount(form);
+  if (!count || !maxCycle) return null;
+  const ratio = count / maxCycle;
+  const level =
+    ratio > 1
+      ? 'error'
+      : ratio < 0.9
+        ? 'ok'
+        : ratio < 1
+          ? 'warn'
+          : 'ok';
 
   return {
-    maxAnnual,
-    level: ratio >= 0.9 ? 'ok' : ratio >= 0.75 ? 'warn' : 'error',
-    target: Math.round(target),
+    count,
+    maxCycle,
+    level,
   };
 };
 
@@ -154,45 +203,12 @@ export const getTotalCapacityPreview = (form: FarmSetupFormState): string | null
 export const getFingerlingsSuggestionPreview = (
   form: FarmSetupFormState
 ): FingerlingsSuggestionPreview | null => {
-  const units = toFloat(form.unitCount);
-  if (!form.infraType || !units) return null;
+  const maxAllowed = getInfrastructureCapacityCount(form);
+  if (!maxAllowed) return null;
 
-  const survivalRate = toFloat(form.survivalRate || '95') / 100;
-  const harvestWeightKg =
-    toFloat(form.harvestWeight || String(getSpeciesHarvestWeightDefault(form.species))) / 1000;
-
-  let capacitySuggested = 0;
-  let maxAllowed = 0;
-
-  if (form.infraType === 'etang') {
-    const surface = toFloat(form.unitSurface);
-    if (!surface) return null;
-    capacitySuggested = Math.round(
-      units * surface * RECOMMENDED_STOCKING_DENSITY_POND_PER_M2 * DEFAULT_NUM_CYCLES
-    );
-    maxAllowed = Math.round(units * surface * STOCKING_DENSITY_POND_PER_M2 * DEFAULT_NUM_CYCLES);
-  } else {
-    const volume = toFloat(form.unitVolume);
-    if (!volume) return null;
-    capacitySuggested = Math.round(
-      units * volume * RECOMMENDED_STOCKING_DENSITY_TANK_PER_M3 * DEFAULT_NUM_CYCLES
-    );
-    maxAllowed = Math.round(units * volume * STOCKING_DENSITY_TANK_PER_M3 * DEFAULT_NUM_CYCLES);
-  }
-
-  if (!capacitySuggested) return null;
-
-  const annualTarget = toFloat(form.annualTarget);
-  if (annualTarget > 0 && survivalRate > 0 && harvestWeightKg > 0) {
-    const needed = Math.ceil(annualTarget / harvestWeightKg / survivalRate);
-    return {
-      value: Math.min(needed, maxAllowed),
-      target: Math.round(annualTarget),
-      achievable: needed <= maxAllowed,
-    };
-  }
-
-  return { value: capacitySuggested, target: null, achievable: true };
+  return {
+    value: Math.round(maxAllowed),
+  };
 };
 
 export const getHarvestCapacityPerCycle = (form: FarmSetupFormState): number | null => {
@@ -213,7 +229,7 @@ export const validateFarmSetupForm = (
 ): FarmSetupFormErrors => {
   const errors: FarmSetupFormErrors = {};
   const unitCount = parseStrictInteger(form.unitCount);
-  const annualTarget = parseStrictNumber(form.annualTarget);
+  const fingerlingsCount = parseStrictInteger(form.fingerlingsCount);
 
   if (!form.species) errors.species = 'required';
   if (!form.infraType) errors.infraType = 'required';
@@ -222,12 +238,6 @@ export const validateFarmSetupForm = (
     errors.unitCount = 'required';
   } else if (unitCount === null || unitCount <= 0) {
     errors.unitCount = 'createFarmPositiveIntegerError';
-  }
-
-  if (!form.annualTarget.trim()) {
-    errors.annualTarget = 'required';
-  } else if (annualTarget === null || annualTarget <= 0) {
-    errors.annualTarget = 'createFarmPositiveNumberError';
   }
 
   if (form.infraType === 'etang') {
@@ -243,6 +253,17 @@ export const validateFarmSetupForm = (
       errors.unitVolume = 'required';
     } else if (unitVolume === null || unitVolume <= 0) {
       errors.unitVolume = 'createFarmPositiveNumberError';
+    }
+  }
+
+  if (!form.fingerlingsCount.trim()) {
+    errors.fingerlingsCount = 'required';
+  } else if (fingerlingsCount === null || fingerlingsCount <= 0) {
+    errors.fingerlingsCount = 'createFarmPositiveIntegerError';
+  } else {
+    const capacityCount = getInfrastructureCapacityCount(form);
+    if (capacityCount !== null && fingerlingsCount > capacityCount) {
+      errors.fingerlingsCount = 'createFarmStockingDensityError';
     }
   }
 
@@ -300,31 +321,45 @@ export const hasFarmSetupErrors = (errors: FarmSetupFormErrors): boolean =>
 
 export const buildAnnualSimulationInput = (
   form: FarmSetupFormState,
-  numCycles: 2 | 3
+  numCycles?: 1 | 2 | 3
 ): AnnualSimulationInput => ({
   species: getSimulationSpecies(form.species),
-  annual_production_target_kg: toFloat(form.annualTarget),
-  num_cycles: numCycles,
+  annual_production_target_kg: (() => {
+    const cycleProductionKg = getCycleProductionEstimate(form) ?? 0;
+    const compatibilityCycles = numCycles ?? getCompatibilityCyclesPerYear(form);
+    return roundToTwoDecimals(cycleProductionKg * compatibilityCycles);
+  })(),
+  num_cycles: numCycles ?? getCompatibilityCyclesPerYear(form),
   start_date: form.startDate || todayISO(),
   selling_price_per_kg_fcfa: form.sellingPrice ? toFloat(form.sellingPrice) : undefined,
   fingerlings_cost_per_unit_fcfa: form.fingerlingsPrice ? toFloat(form.fingerlingsPrice) : undefined,
-  other_costs_fcfa_per_year: form.otherCosts ? toFloat(form.otherCosts) : 0,
+  other_costs_fcfa_per_year: form.otherCosts ? toFloat(form.otherCosts) : undefined,
   target_harvest_weight_g: form.harvestWeight ? toFloat(form.harvestWeight) : undefined,
-  expected_survival_rate_pct: form.survivalRate ? toFloat(form.survivalRate) : undefined,
-  total_fingerlings_count: form.fingerlingsCount ? toInt(form.fingerlingsCount) : undefined,
+  expected_survival_rate_pct: form.survivalRate
+    ? toFloat(form.survivalRate)
+    : DEFAULT_CYCLE_SURVIVAL_RATE_PCT,
+  total_fingerlings_count: form.fingerlingsCount
+    ? toInt(form.fingerlingsCount) * (numCycles ?? getCompatibilityCyclesPerYear(form))
+    : undefined,
 });
 
 export const buildFarmSetupPayload = (
   form: FarmSetupFormState,
-  numCycles: 2 | 3
+  numCycles?: 1 | 2 | 3
 ): FarmSetupData => ({
   setup_species: (form.species as FarmSetupData['setup_species']) || 'tilapia',
   setup_infrastructure_type: form.infraType as FarmSetupData['setup_infrastructure_type'],
   setup_unit_count: toInt(form.unitCount) || 1,
   setup_unit_volume_m3: form.unitVolume ? toFloat(form.unitVolume) : undefined,
   setup_unit_surface_m2: form.unitSurface ? toFloat(form.unitSurface) : undefined,
-  annual_production_target_kg: toFloat(form.annualTarget),
-  num_cycles_per_year: numCycles,
+  annual_production_target_kg: (() => {
+    const cycleProductionKg = getCycleProductionEstimate(form) ?? 0;
+    const compatibilityCycles = numCycles ?? getCompatibilityCyclesPerYear(form);
+    return roundToTwoDecimals(cycleProductionKg * compatibilityCycles);
+  })(),
+  num_cycles_per_year: numCycles ?? getCompatibilityCyclesPerYear(form),
   fingerlings_cost_per_unit_fcfa: form.fingerlingsPrice ? toFloat(form.fingerlingsPrice) : undefined,
   planned_selling_price_per_kg_fcfa: form.sellingPrice ? toFloat(form.sellingPrice) : undefined,
 });
+
+const roundToTwoDecimals = (value: number): number => Math.round(value * 100) / 100;

@@ -1,5 +1,9 @@
 import {
   buildAnnualSimulationInput,
+  getCompatibilityCyclesPerYear,
+  getCycleProductionEstimate,
+  getFingerlingsSuggestionPreview,
+  getStockingDensityPreview,
   hasFarmSetupErrors,
   validateFarmSetupForm,
   type FarmSetupFormState,
@@ -7,22 +11,22 @@ import {
 
 const baseForm: FarmSetupFormState = {
   species: 'tilapia',
-  infraType: 'etang',
-  unitCount: '2',
-  unitVolume: '',
-  unitSurface: '100',
-  annualTarget: '1000',
+  infraType: 'bac_hors_sol',
+  unitCount: '5',
+  unitVolume: '3',
+  unitSurface: '',
+  annualTarget: '',
   startDate: '2026-05-14',
   fingerlingsPrice: '50',
   sellingPrice: '2800',
   otherCosts: '0',
-  fingerlingsCount: '3000',
+  fingerlingsCount: '4500',
   harvestWeight: '350',
   survivalRate: '95',
 };
 
 describe('farmSetupForm', () => {
-  it('valide un formulaire etang complet', () => {
+  it('valide un formulaire cycle-first complet', () => {
     const errors = validateFarmSetupForm(baseForm);
 
     expect(errors).toEqual({});
@@ -33,16 +37,16 @@ describe('farmSetupForm', () => {
     const errors = validateFarmSetupForm({
       ...baseForm,
       unitCount: '1.5',
-      unitSurface: '-10',
-      annualTarget: 'abc',
+      unitVolume: '-10',
+      fingerlingsCount: 'abc',
       harvestWeight: '10',
       survivalRate: '101',
     });
 
     expect(errors).toMatchObject({
       unitCount: 'createFarmPositiveIntegerError',
-      unitSurface: 'createFarmPositiveNumberError',
-      annualTarget: 'createFarmPositiveNumberError',
+      unitVolume: 'createFarmPositiveNumberError',
+      fingerlingsCount: 'createFarmPositiveIntegerError',
       harvestWeight: 'createFarmHarvestWeightRangeError',
       survivalRate: 'createFarmSurvivalRateRangeError',
     });
@@ -60,15 +64,97 @@ describe('farmSetupForm', () => {
     expect(errors.unitVolume).toBe('required');
   });
 
-  it('construit un payload de simulation apres validation', () => {
-    const input = buildAnnualSimulationInput(baseForm, 2);
+  it('bloque une densite superieure a la capacite du cycle', () => {
+    const errors = validateFarmSetupForm({
+      ...baseForm,
+      unitCount: '5',
+      unitVolume: '3',
+      infraType: 'bac_hors_sol',
+      fingerlingsCount: '4501',
+    });
+
+    expect(errors.fingerlingsCount).toBe('createFarmStockingDensityError');
+  });
+
+  it('calcule la densite et la suggestion sur le cycle courant', () => {
+    const preview = getStockingDensityPreview({
+      ...baseForm,
+      unitCount: '5',
+      unitVolume: '3',
+      infraType: 'bac_hors_sol',
+      fingerlingsCount: '4500',
+    });
+
+    expect(preview?.density).toBeCloseTo(300, 1);
+    expect(preview?.isOk).toBe(true);
+
+    const suggestion = getFingerlingsSuggestionPreview({
+      ...baseForm,
+      unitCount: '5',
+      unitVolume: '3',
+      infraType: 'bac_hors_sol',
+      fingerlingsCount: '',
+    });
+
+    expect(suggestion?.value).toBe(4500);
+  });
+
+  it('bloque explicitement le cas 9000 alevins pour 15 m3', () => {
+    const form = {
+      ...baseForm,
+      unitCount: '5',
+      unitVolume: '3',
+      infraType: 'bac_hors_sol',
+      fingerlingsCount: '9000',
+    } satisfies FarmSetupFormState;
+
+    const preview = getStockingDensityPreview(form);
+    const errors = validateFarmSetupForm(form);
+    const suggestion = getFingerlingsSuggestionPreview(form);
+
+    expect(preview?.density).toBeCloseTo(600, 1);
+    expect(preview?.isOk).toBe(false);
+    expect(errors.fingerlingsCount).toBe('createFarmStockingDensityError');
+    expect(suggestion?.value).toBe(4500);
+  });
+
+  it('construit un payload de simulation compatible cycle-first', () => {
+    const input = buildAnnualSimulationInput({
+      ...baseForm,
+      species: 'clarias',
+      infraType: 'bac_hors_sol',
+      unitCount: '5',
+      unitVolume: '3',
+      unitSurface: '',
+      fingerlingsCount: '4500',
+    });
+
+    const cycleProduction = getCycleProductionEstimate({
+      ...baseForm,
+      species: 'clarias',
+      infraType: 'bac_hors_sol',
+      unitCount: '5',
+      unitVolume: '3',
+      unitSurface: '',
+      fingerlingsCount: '4500',
+    });
+    const compatibilityCycles = getCompatibilityCyclesPerYear({
+      ...baseForm,
+      species: 'clarias',
+      infraType: 'bac_hors_sol',
+      unitCount: '5',
+      unitVolume: '3',
+      unitSurface: '',
+      fingerlingsCount: '4500',
+    });
 
     expect(input).toMatchObject({
-      species: 'tilapia',
-      annual_production_target_kg: 1000,
-      num_cycles: 2,
+      species: 'clarias',
+      annual_production_target_kg: cycleProduction ? Number(cycleProduction.toFixed(2)) * compatibilityCycles : 0,
+      num_cycles: compatibilityCycles,
       start_date: '2026-05-14',
       expected_survival_rate_pct: 95,
+      total_fingerlings_count: 4500 * compatibilityCycles,
     });
   });
 });

@@ -11,6 +11,11 @@ export const HARVEST_DENSITY_TANK_KG_PER_M3 = 150;  // kg/m³ à la récolte (ba
 export const STOCKING_DENSITY_POND_PER_M2 = 10;     // alevins/m² au départ (étangs) — maximum
 export const HARVEST_DENSITY_POND_KG_PER_M2 = 10;   // kg/m² à la récolte (étangs)
 
+// Defaults métier cycle-first alignés avec le backend
+export const DEFAULT_EXPECTED_SURVIVAL_RATE_PCT = 95;
+export const TECHNICAL_PAUSE_BETWEEN_CYCLES_DAYS = 14;
+export const DEFAULT_OTHER_COSTS_RATE_PCT = 5;
+
 // Densités recommandées (semi-intensif) — utilisées pour les suggestions automatiques
 export const RECOMMENDED_STOCKING_DENSITY_POND_PER_M2 = 3;   // 3 poissons/m² (étangs)
 export const RECOMMENDED_STOCKING_DENSITY_TANK_PER_M3 = 100;  // 100 poissons/m³ (bacs/cages)

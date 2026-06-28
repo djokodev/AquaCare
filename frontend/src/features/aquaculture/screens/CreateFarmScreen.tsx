@@ -1,7 +1,7 @@
 /**
  * CreateFarmScreen — Flux "Créer mon élevage"
  *
- * Formulaire annuel affiché après les slides d'onboarding (première connexion)
+ * Formulaire cycle-first affiché après les slides d'onboarding (première connexion)
  * ou quand un utilisateur n'a pas encore de cycle actif.
  * Collecte les données d'exploitation pour lancer la simulation de rentabilité.
  */
@@ -29,6 +29,7 @@ import { AppDispatch, RootState } from '@/store/store';
 import { runAnnualSimulation } from '@/features/aquaculture/store/farmSetupSlice';
 import {
   buildAnnualSimulationInput,
+  getCycleProductionEstimate,
   hasFarmSetupErrors,
   validateFarmSetupForm,
   getFingerlingsCoherencePreview,
@@ -94,7 +95,7 @@ export default function CreateFarmScreen({ navigation }: Props) {
 
   const fingerlingsCoherence = useMemo(() => {
     return getFingerlingsCoherencePreview(form);
-  }, [form.fingerlingsCount, form.annualTarget, form.survivalRate, form.harvestWeight, form.species]);
+  }, [form.fingerlingsCount, form.infraType, form.unitCount, form.unitSurface, form.unitVolume]);
 
   const totalCapacity = useMemo(() => {
     return getTotalCapacityPreview(form);
@@ -102,7 +103,11 @@ export default function CreateFarmScreen({ navigation }: Props) {
 
   const fingerlingsSuggestion = useMemo(() => {
     return getFingerlingsSuggestionPreview(form);
-  }, [form.infraType, form.unitCount, form.unitVolume, form.unitSurface, form.annualTarget, form.survivalRate, form.harvestWeight, form.species]);
+  }, [form.infraType, form.unitCount, form.unitVolume, form.unitSurface]);
+
+  const cycleProductionEstimate = useMemo(() => {
+    return getCycleProductionEstimate(form);
+  }, [form.fingerlingsCount, form.survivalRate, form.harvestWeight, form.species]);
 
   const getFieldLabel = (field: keyof FarmSetupFormState): string => {
     const labelByField: Record<keyof FarmSetupFormState, string> = {
@@ -111,7 +116,7 @@ export default function CreateFarmScreen({ navigation }: Props) {
       unitCount: t('createFarmUnitCountLabel'),
       unitVolume: t('createFarmUnitVolumeLabel'),
       unitSurface: t('createFarmUnitSurfaceLabel'),
-      annualTarget: t('createFarmAnnualTargetLabel'),
+      annualTarget: t('createFarmCycleProductionLabel'),
       startDate: t('createFarmStartDateLabel'),
       fingerlingsPrice: t('createFarmFingerlingsLabel'),
       sellingPrice: t('createFarmSellingPriceLabel'),
@@ -171,7 +176,7 @@ export default function CreateFarmScreen({ navigation }: Props) {
       return;
     }
 
-    const params = buildAnnualSimulationInput(form, 2);
+    const params = buildAnnualSimulationInput(form);
 
     const result = await dispatch(runAnnualSimulation(params));
     if (runAnnualSimulation.fulfilled.match(result)) {
@@ -270,15 +275,18 @@ export default function CreateFarmScreen({ navigation }: Props) {
         </View>
       )}
 
-      <FieldLabel label={t('createFarmAnnualTargetLabel')} required />
-      <TextInput
-        style={styles.input}
-        keyboardType="numeric"
-        placeholder={t('createFarmAnnualTargetPlaceholder')}
-        placeholderTextColor={AQUACARE_COLORS.GRAY_LIGHT}
-        value={form.annualTarget}
-        onChangeText={v => setField('annualTarget', v)}
-      />
+      <View style={styles.estimateCard}>
+        <View style={styles.estimateHeader}>
+          <Ionicons name="analytics-outline" size={18} color={AQUACARE_COLORS.GREEN_PRIMARY} />
+          <Text style={styles.estimateTitle}>{t('createFarmCycleProductionLabel')}</Text>
+        </View>
+        <Text style={styles.estimateValue}>
+          {cycleProductionEstimate !== null
+            ? `${new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 1 }).format(cycleProductionEstimate)} kg / cycle`
+            : t('createFarmCycleProductionPending')}
+        </Text>
+        <Text style={styles.estimateHint}>{t('createFarmCycleProductionHelper')}</Text>
+      </View>
 
       <FieldLabel label={t('createFarmStartDateLabel')} />
       <TextInput
@@ -299,24 +307,13 @@ export default function CreateFarmScreen({ navigation }: Props) {
         onChangeText={v => setField('fingerlingsPrice', v)}
       />
 
-      <FieldLabel label={t('createFarmFingerlingsCountLabel')} />
+      <FieldLabel label={t('createFarmFingerlingsCountLabel')} required />
       {fingerlingsSuggestion && (
         <TouchableOpacity onPress={() => setField('fingerlingsCount', String(fingerlingsSuggestion.value))} activeOpacity={0.6}>
           <Text style={styles.suggestionHint}>
-            {fingerlingsSuggestion.target !== null && !fingerlingsSuggestion.achievable
-              ? t('createFarmFingerlingsCountSuggestionCapped', {
-                  total: fingerlingsSuggestion.value.toLocaleString('fr-FR'),
-                  target: fingerlingsSuggestion.target.toLocaleString('fr-FR'),
-                })
-              : fingerlingsSuggestion.target !== null
-              ? t('createFarmFingerlingsCountSuggestionTarget', {
-                  total: fingerlingsSuggestion.value.toLocaleString('fr-FR'),
-                  target: fingerlingsSuggestion.target.toLocaleString('fr-FR'),
-                })
-              : t('createFarmFingerlingsCountSuggestion', {
-                  total: fingerlingsSuggestion.value.toLocaleString('fr-FR'),
-                })
-            }
+            {t('createFarmFingerlingsCountSuggestion', {
+              max: fingerlingsSuggestion.value.toLocaleString('fr-FR'),
+            })}
           </Text>
         </TouchableOpacity>
       )}
@@ -337,12 +334,12 @@ export default function CreateFarmScreen({ navigation }: Props) {
           stockingDensityCheck.isOk ? styles.coherenceBadgeOk : styles.coherenceBadgeError,
         ]}>
           <Text style={[
-            styles.coherenceText,
-            stockingDensityCheck.isOk ? styles.coherenceTextOk : styles.coherenceTextError,
-          ]}>
-            {stockingDensityCheck.isOk
-              ? t('createFarmStockingDensityOk', { density: stockingDensityCheck.density, unit: stockingDensityCheck.unit, max: stockingDensityCheck.max })
-              : t('createFarmStockingDensityWarn', { density: stockingDensityCheck.density, unit: stockingDensityCheck.unit, max: stockingDensityCheck.max })
+          styles.coherenceText,
+          stockingDensityCheck.isOk ? styles.coherenceTextOk : styles.coherenceTextError,
+        ]}>
+          {stockingDensityCheck.isOk
+              ? t('createFarmStockingDensityOk', { density: stockingDensityCheck.density.toLocaleString('fr-FR', { maximumFractionDigits: 1 }), unit: stockingDensityCheck.unit, max: stockingDensityCheck.max })
+              : t('createFarmStockingDensityWarn', { density: stockingDensityCheck.density.toLocaleString('fr-FR', { maximumFractionDigits: 1 }), unit: stockingDensityCheck.unit, max: stockingDensityCheck.max })
             }
           </Text>
         </View>
@@ -355,18 +352,24 @@ export default function CreateFarmScreen({ navigation }: Props) {
           fingerlingsCoherence.level === 'error' && styles.coherenceBadgeError,
         ]}>
           <Text style={[
-            styles.coherenceText,
-            fingerlingsCoherence.level === 'ok' && styles.coherenceTextOk,
-            fingerlingsCoherence.level === 'warn' && styles.coherenceTextWarn,
-            fingerlingsCoherence.level === 'error' && styles.coherenceTextError,
-          ]}>
-            {t('createFarmFingerlingsMaxProduction', { max: fingerlingsCoherence.maxAnnual.toLocaleString('fr-FR') })}
+          styles.coherenceText,
+          fingerlingsCoherence.level === 'ok' && styles.coherenceTextOk,
+          fingerlingsCoherence.level === 'warn' && styles.coherenceTextWarn,
+          fingerlingsCoherence.level === 'error' && styles.coherenceTextError,
+        ]}>
+            {t('createFarmFingerlingsMaxProduction', { max: fingerlingsCoherence.maxCycle.toLocaleString('fr-FR') })}
             {', '}
             {fingerlingsCoherence.level === 'ok'
-              ? t('createFarmFingerlingsCoherenceOk', { target: fingerlingsCoherence.target.toLocaleString('fr-FR') })
+              ? t('createFarmFingerlingsCoherenceOk', { count: fingerlingsCoherence.count })
               : fingerlingsCoherence.level === 'warn'
-              ? t('createFarmFingerlingsCoherenceWarn', { target: fingerlingsCoherence.target.toLocaleString('fr-FR') })
-              : t('createFarmFingerlingsCoherenceError', { target: fingerlingsCoherence.target.toLocaleString('fr-FR') })
+              ? t('createFarmFingerlingsCoherenceWarn', {
+                  count: fingerlingsCoherence.count,
+                  max: fingerlingsCoherence.maxCycle,
+                })
+              : t('createFarmFingerlingsCoherenceError', {
+                  count: fingerlingsCoherence.count,
+                  max: fingerlingsCoherence.maxCycle,
+                })
             }
           </Text>
         </View>
@@ -380,16 +383,6 @@ export default function CreateFarmScreen({ navigation }: Props) {
         placeholderTextColor={AQUACARE_COLORS.GRAY_LIGHT}
         value={form.sellingPrice}
         onChangeText={v => setField('sellingPrice', v)}
-      />
-
-      <FieldLabel label={t('createFarmOtherCostsLabel')} />
-      <TextInput
-        style={styles.input}
-        keyboardType="numeric"
-        placeholder={t('createFarmOtherCostsPlaceholder')}
-        placeholderTextColor={AQUACARE_COLORS.GRAY_LIGHT}
-        value={form.otherCosts}
-        onChangeText={v => setField('otherCosts', v)}
       />
 
       <FieldLabel label={t('createFarmHarvestWeightLabel')} />
@@ -611,6 +604,40 @@ const styles = StyleSheet.create({
   capacityValue: {
     fontWeight: '700',
     color: AQUACARE_COLORS.GREEN_PRIMARY,
+  },
+  estimateCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 12,
+    marginBottom: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  estimateHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  estimateTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: AQUACARE_COLORS.GRAY_DARK,
+  },
+  estimateValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: AQUACARE_COLORS.GREEN_DARK,
+  },
+  estimateHint: {
+    marginTop: 6,
+    fontSize: 12,
+    color: AQUACARE_COLORS.GRAY_LIGHT,
+    lineHeight: 17,
   },
   suggestionHint: {
     fontSize: 12,
