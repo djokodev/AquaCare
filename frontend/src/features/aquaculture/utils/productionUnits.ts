@@ -3,7 +3,7 @@ import {
   STOCKING_DENSITY_TANK_PER_M3,
 } from '@/constants/aquaculture';
 import type {
-  ProductionUnit,
+  ProductionUnitCompatibilitySummary,
   ProductionUnitDraft,
   ProductionUnitType,
 } from '@/features/aquaculture/types/productionUnits';
@@ -13,6 +13,21 @@ const LEGACY_UNIT_TYPE_ALIASES: Record<string, ProductionUnitType> = {
   cage_flottante: 'cage',
   bac_hors_sol: 'tank',
   bac_en_sol: 'tank',
+};
+
+const LEGACY_UNIT_TYPE_BY_PRODUCTION_UNIT_TYPE: Record<
+  ProductionUnitType,
+  ProductionUnitCompatibilitySummary['legacy_infrastructure_type']
+> = {
+  tank: 'bac_hors_sol',
+  pond: 'etang',
+  cage: 'cage_flottante',
+};
+
+type ProductionUnitDimensionSource = {
+  unit_type: string;
+  volume_m3?: string | number | null;
+  surface_m2?: string | number | null;
 };
 
 export type ProductionUnitDraftErrors = Partial<
@@ -49,28 +64,77 @@ export const normalizeProductionUnitType = (
   return LEGACY_UNIT_TYPE_ALIASES[normalized] ?? null;
 };
 
-export const getProductionUnitCapacity = (unit: Pick<ProductionUnit, 'unit_type' | 'volume_m3' | 'surface_m2'>): number | null => {
+const toProductionUnitString = (value?: string | null): string => (value ?? '').trim();
+
+const createLocalId = (prefix: string): string =>
+  `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
+export const createProductionUnitDraft = (
+  overrides: Partial<ProductionUnitDraft> = {}
+): ProductionUnitDraft => ({
+  local_id: overrides.local_id ?? createLocalId('production-unit'),
+  name: overrides.name ?? '',
+  unit_type: overrides.unit_type ?? 'tank',
+  volume_m3: overrides.volume_m3 ?? '',
+  surface_m2: overrides.surface_m2 ?? '',
+});
+
+export const createIdenticalProductionUnitDrafts = (params: {
+  unitType: ProductionUnitType;
+  count: number;
+  namePrefix?: string;
+  volumeM3?: string;
+  surfaceM2?: string;
+  startIndex?: number;
+}): ProductionUnitDraft[] => {
+  const {
+    unitType,
+    count,
+    namePrefix,
+    volumeM3,
+    surfaceM2,
+    startIndex = 1,
+  } = params;
+
+  if (count <= 0) {
+    return [];
+  }
+
+  return Array.from({ length: count }, (_, index) => {
+    const itemIndex = startIndex + index;
+    return createProductionUnitDraft({
+      name: namePrefix ? `${namePrefix} ${itemIndex}` : '',
+      unit_type: unitType,
+      volume_m3: unitType === 'pond' ? '' : volumeM3 ?? '',
+      surface_m2: unitType === 'pond' ? surfaceM2 ?? '' : '',
+    });
+  });
+};
+
+export const getProductionUnitCapacity = (unit: ProductionUnitDimensionSource): number | null => {
   const unitType = normalizeProductionUnitType(unit.unit_type);
   if (!unitType) {
     return null;
   }
 
   if (unitType === 'pond') {
-    if (!unit.surface_m2 || unit.surface_m2 <= 0) {
+    const surface = toPositiveNumber(unit.surface_m2);
+    if (surface === null || surface <= 0) {
       return null;
     }
-    return Number((unit.surface_m2 * STOCKING_DENSITY_POND_PER_M2).toFixed(2));
+    return Number((surface * STOCKING_DENSITY_POND_PER_M2).toFixed(2));
   }
 
-  if (!unit.volume_m3 || unit.volume_m3 <= 0) {
+  const volume = toPositiveNumber(unit.volume_m3);
+  if (volume === null || volume <= 0) {
     return null;
   }
 
-  return Number((unit.volume_m3 * STOCKING_DENSITY_TANK_PER_M3).toFixed(2));
+  return Number((volume * STOCKING_DENSITY_TANK_PER_M3).toFixed(2));
 };
 
 export const getProductionUnitDensityUnit = (
-  unit: Pick<ProductionUnit, 'unit_type'>
+  unit: Pick<ProductionUnitDimensionSource, 'unit_type'>
 ): string | null => {
   const unitType = normalizeProductionUnitType(unit.unit_type);
   if (unitType === 'pond') {
@@ -83,28 +147,34 @@ export const getProductionUnitDensityUnit = (
 };
 
 export const getProductionUnitDisplayDimension = (
-  unit: Pick<ProductionUnit, 'unit_type' | 'volume_m3' | 'surface_m2'>
+  unit: ProductionUnitDimensionSource
 ): string | null => {
   const unitType = normalizeProductionUnitType(unit.unit_type);
   if (unitType === 'pond') {
-    if (!unit.surface_m2 || unit.surface_m2 <= 0) {
+    const surface = toPositiveNumber(unit.surface_m2);
+    if (surface === null || surface <= 0) {
       return null;
     }
-    return `${unit.surface_m2.toFixed(2)} m²`;
+    return `${surface.toFixed(2)} m²`;
   }
 
   if (unitType === 'tank' || unitType === 'cage') {
-    if (!unit.volume_m3 || unit.volume_m3 <= 0) {
+    const volume = toPositiveNumber(unit.volume_m3);
+    if (volume === null || volume <= 0) {
       return null;
     }
-    return `${unit.volume_m3.toFixed(2)} m³`;
+    return `${volume.toFixed(2)} m³`;
   }
 
   return null;
 };
 
+export const getProductionUnitDisplayName = (
+  unit: Pick<ProductionUnitDraft, 'name'>
+): string => toProductionUnitString(unit.name);
+
 export const getTotalProductionUnitsCapacity = (
-  units: Array<Pick<ProductionUnit, 'unit_type' | 'volume_m3' | 'surface_m2'>>
+  units: ProductionUnitDimensionSource[]
 ): number | null => {
   if (!units.length) {
     return null;
@@ -117,6 +187,32 @@ export const getTotalProductionUnitsCapacity = (
 
   const safeCapacities = capacities.filter((capacity): capacity is number => capacity !== null);
   return safeCapacities.reduce((total, capacity) => total + capacity, 0);
+};
+
+export const getProductionUnitsCompatibilitySummary = (
+  units: ProductionUnitDraft[]
+): ProductionUnitCompatibilitySummary | null => {
+  if (!units.length) {
+    return null;
+  }
+
+  const normalizedFirstType = normalizeProductionUnitType(units[0].unit_type);
+  if (!normalizedFirstType) {
+    return null;
+  }
+
+  const totalCapacity = getTotalProductionUnitsCapacity(units);
+  const isMixed = units.some(
+    (unit) => normalizeProductionUnitType(unit.unit_type) !== normalizedFirstType
+  );
+
+  return {
+    legacy_infrastructure_type: LEGACY_UNIT_TYPE_BY_PRODUCTION_UNIT_TYPE[normalizedFirstType],
+    legacy_unit_count: units.length,
+    total_capacity: totalCapacity,
+    is_mixed: isMixed,
+    primary_unit: units[0],
+  };
 };
 
 export const validateProductionUnitDraft = (draft: ProductionUnitDraft): ProductionUnitDraftErrors => {

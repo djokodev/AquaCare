@@ -1,7 +1,10 @@
 import {
+  createIdenticalProductionUnitDrafts,
+  createProductionUnitDraft,
   getProductionUnitCapacity,
   getProductionUnitDensityUnit,
   getProductionUnitDisplayDimension,
+  getProductionUnitsCompatibilitySummary,
   getTotalProductionUnitsCapacity,
   normalizeProductionUnitType,
   validateProductionUnitDraft,
@@ -44,6 +47,44 @@ describe('productionUnits', () => {
         { unit_type: 'cage', volume_m3: 2, surface_m2: null },
       ])
     ).toBe(2700);
+  });
+
+  it('cree plusieurs unités identiques avec des noms séquentiels', () => {
+    const drafts = createIdenticalProductionUnitDrafts({
+      unitType: 'tank',
+      count: 3,
+      namePrefix: 'Bac',
+      volumeM3: '3',
+    });
+
+    expect(drafts).toEqual([
+      expect.objectContaining({ name: 'Bac 1', unit_type: 'tank', volume_m3: '3' }),
+      expect.objectContaining({ name: 'Bac 2', unit_type: 'tank', volume_m3: '3' }),
+      expect.objectContaining({ name: 'Bac 3', unit_type: 'tank', volume_m3: '3' }),
+    ]);
+    expect(getTotalProductionUnitsCapacity(drafts)).toBe(2700);
+  });
+
+  it('normalise la compatibilité legacy pour un mix bac et etang', () => {
+    const summary = getProductionUnitsCompatibilitySummary([
+      createProductionUnitDraft({
+        name: 'Bac 1',
+        unit_type: 'tank',
+        volume_m3: '3',
+      }),
+      createProductionUnitDraft({
+        name: 'Étang principal',
+        unit_type: 'pond',
+        surface_m2: '120',
+      }),
+    ]);
+
+    expect(summary).toMatchObject({
+      legacy_infrastructure_type: 'bac_hors_sol',
+      legacy_unit_count: 2,
+      total_capacity: 2100,
+      is_mixed: true,
+    });
   });
 
   it('normalise les alias legacy des types d unités', () => {

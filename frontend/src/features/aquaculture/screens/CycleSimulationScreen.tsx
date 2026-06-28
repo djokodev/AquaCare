@@ -39,6 +39,10 @@ import {
   getStockingDensityPreview,
   getTotalCapacityPreview,
 } from '@/features/aquaculture/utils/farmSetupForm';
+import {
+  getProductionUnitsCompatibilitySummary,
+  normalizeProductionUnitType,
+} from '@/features/aquaculture/utils/productionUnits';
 import { parseApiError } from '@/utils/errorParser';
 import { formatAquacultureErrorWithAction } from '@/features/aquaculture/utils/aquacultureErrorPresenter';
 
@@ -78,6 +82,10 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
   const [currentResult, setCurrentResult] = useState<CycleSimulationResult | null>(
     cycleSimulationResult
   );
+  const productionUnitSummary = useMemo(
+    () => getProductionUnitsCompatibilitySummary(formData.productionUnits ?? []),
+    [formData.productionUnits]
+  );
 
   useEffect(() => {
     recalculate();
@@ -111,6 +119,11 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
   const cycleTotalCost = currentResult?.cycle_total_cost_fcfa ?? 0;
   const cycleNetProfit = currentResult?.cycle_net_profit_fcfa ?? currentResult?.annual_net_profit_fcfa ?? 0;
   const cycleRoi = currentResult?.cycle_roi_pct ?? currentResult?.annual_roi_pct ?? 0;
+  const totalCapacityLabel = formData.productionUnits?.length
+    ? totalCapacity
+      ? `${totalCapacity} ${t('productionUnitFingerlingsUnit')}`
+      : '—'
+    : totalCapacity ?? '—';
 
   async function handleLaunchFirstCycle() {
     if (!currentResult) return;
@@ -127,6 +140,11 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
         throw new Error('AUTH_UNKNOWN_ERROR');
       }
 
+      // Compatibility bridge: the setup UI is now production-unit based,
+      // while the current simulation and cycle creation flow still expect
+      // legacy homogeneous fields. PR #59 will make the simulation unit-aware.
+      const legacyUnit = productionUnitSummary?.primary_unit;
+      const legacyUnitType = legacyUnit ? normalizeProductionUnitType(legacyUnit.unit_type) : null;
       const speciesForCycle = getSimulationSpecies(formData.species);
       const fingerlingsCost = currentResult.cycle_fingerlings_cost_fcfa ?? firstCycle.fingerlings_cost_fcfa;
       const otherCosts = currentResult.cycle_other_costs_fcfa ?? 0;
@@ -135,9 +153,23 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
         createProductionCycle({
           species: speciesForCycle,
           cycle_name: undefined,
-          pond_identifier: t('simulationDefaultPondIdentifier'),
-          pond_surface_m2: formData.unitSurface ? parseFloat(formData.unitSurface) : undefined,
-          pond_volume_m3: formData.unitVolume ? parseFloat(formData.unitVolume) : undefined,
+          pond_identifier: legacyUnit?.name?.trim() || t('simulationDefaultPondIdentifier'),
+          pond_surface_m2:
+            legacyUnitType === 'pond'
+              ? legacyUnit?.surface_m2
+                ? parseFloat(legacyUnit.surface_m2)
+                : undefined
+              : formData.unitSurface
+                ? parseFloat(formData.unitSurface)
+                : undefined,
+          pond_volume_m3:
+            legacyUnitType && legacyUnitType !== 'pond'
+              ? legacyUnit?.volume_m3
+                ? parseFloat(legacyUnit.volume_m3)
+                : undefined
+              : formData.unitVolume
+                ? parseFloat(formData.unitVolume)
+                : undefined,
           initial_count: firstCycle.initial_fish_count,
           initial_average_weight: undefined,
           start_date: firstCycle.start_date_estimate,
@@ -247,7 +279,7 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
         <MetricRow label={t('simulationFingerlingsCount')} value={fingerlingsCountLabel} />
         <MetricRow
           label={t('simulationTotalCapacity')}
-          value={totalCapacity ?? '—'}
+          value={totalCapacityLabel}
         />
         <MetricRow
           label={t('simulationCurrentDensity')}
