@@ -622,8 +622,8 @@ class CycleLogSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         """Valide la cohérence des données de log et les règles métier."""
         from aquaculture.domain.validators import (
-            validate_cycle_unit_allocation_context,
             validate_cycle_log_date,
+            validate_cycle_unit_allocation_context,
             validate_sampling_data,
         )
         from django.core.exceptions import ValidationError as DjangoValidationError

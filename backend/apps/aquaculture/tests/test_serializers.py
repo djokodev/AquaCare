@@ -8,7 +8,14 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 import pytest
-from aquaculture.models import CycleLog, CycleUnitAllocation, NutritionalGuide, ProductionCycle, ProductionUnit, SanitaryLog
+from aquaculture.models import (
+    CycleLog,
+    CycleUnitAllocation,
+    NutritionalGuide,
+    ProductionCycle,
+    ProductionUnit,
+    SanitaryLog,
+)
 from aquaculture.serializers import (
     CycleLogSerializer,
     CycleLogSyncSerializer,
@@ -645,8 +652,6 @@ class TestSanitaryLogSerializer:
 
     def test_computed_fields(self, production_cycle):
         """Test champs calculés du sérialiseur."""
-        from aquaculture.models import SanitaryLog
-        
         log = SanitaryLog.objects.create(
             cycle=production_cycle,
             event_date=date.today() - timedelta(days=5),

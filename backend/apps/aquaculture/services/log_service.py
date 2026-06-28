@@ -15,7 +15,7 @@ from __future__ import annotations
 import uuid as _uuid
 from datetime import date
 from decimal import Decimal
-from typing import TYPE_CHECKING, TypedDict
+from typing import TYPE_CHECKING, Any, TypedDict
 from uuid import UUID
 
 from django.core.exceptions import ValidationError as DjangoValidationError

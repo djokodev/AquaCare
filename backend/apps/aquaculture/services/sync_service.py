@@ -22,8 +22,8 @@ from django.db import transaction
 from django.utils import timezone
 from rest_framework.exceptions import APIException
 
-from ..models import CycleLog, FeedingPlan, ProductionCycle, SanitaryLog
 from ..domain.validators import validate_cycle_unit_allocation_context
+from ..models import CycleLog, FeedingPlan, ProductionCycle, SanitaryLog
 from .analytics_service import AnalyticsService
 from .base import BaseService
 from .cycle_service import ProductionCycleService

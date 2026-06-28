@@ -10,8 +10,8 @@ from unittest.mock import patch
 
 import pytest
 from aquaculture.models import (
-    CycleUnitAllocation,
     CycleLog,
+    CycleUnitAllocation,
     FeedingPlan,
     NutritionalGuide,
     ProductionCycle,
