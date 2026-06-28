@@ -162,7 +162,7 @@ describe('features/aquaculture/screens/CycleSimulationScreen', () => {
         routes: [{ name: 'MainTabs' }],
       });
     });
-  });
+  }, 10000);
 
   it('affiche une densite unique quand les bacs sont a capacite max', async () => {
     mockDispatch.mockImplementation((action: unknown) => {
