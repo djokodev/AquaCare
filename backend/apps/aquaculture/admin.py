@@ -29,10 +29,12 @@ from django.utils.translation import gettext_lazy as _
 from .models import (
     CycleLog,
     CycleMetrics,
+    CycleUnitAllocation,
     FeedingPlan,
     NutritionalGuide,
     ProductionCycle,
     ProductionReport,
+    ProductionUnit,
     ReportDispatchLog,
     SanitaryLog,
 )
@@ -115,9 +117,17 @@ class ProductionCycleAdmin(AquacultureSecuredAdmin):
     - Marquer les cycles comme termines
     """
     list_display = [
-        'id_short', 'cycle_name', 'farm_display', 'species_display', 'status_display',
-        'start_date', 'days_active', 'current_biomass_display',
-        'survival_rate_display', 'fcr_display', 'performance_indicator'
+        'id_short',
+        'cycle_name',
+        'farm_display',
+        'species_display',
+        'status_display',
+        'start_date',
+        'days_active',
+        'current_biomass_display',
+        'survival_rate_display',
+        'fcr_display',
+        'performance_indicator',
     ]
     list_filter = [
         'status', 'species', 'start_date',
@@ -299,6 +309,111 @@ class ProductionCycleAdmin(AquacultureSecuredAdmin):
         """Display short ID for easy reference."""
         return str(obj.id)[:8] + "..."
     id_short.short_description = _('ID')
+
+
+@admin.register(ProductionUnit)
+class ProductionUnitAdmin(AquacultureSecuredAdmin):
+    """Administration des unités de production réelles."""
+
+    list_display = [
+        'name',
+        'farm_display',
+        'unit_type_display',
+        'dimension_display',
+        'recommended_capacity_display',
+        'status_display',
+        'created_at',
+    ]
+    list_filter = ['unit_type', 'status', 'farm_profile__user__region']
+    search_fields = ['name', 'farm_profile__farm_name', 'farm_profile__user__phone_number']
+    readonly_fields = ['id', 'created_at', 'updated_at']
+
+    fieldsets = (
+        (_('Informations de base'), {
+            'fields': ('farm_profile', 'name', 'unit_type', 'status')
+        }),
+        (_('Dimensions'), {
+            'fields': ('volume_m3', 'surface_m2')
+        }),
+        (_('Métadonnées'), {
+            'fields': ('id', 'created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('farm_profile', 'farm_profile__user')
+
+    def farm_display(self, obj):
+        url = reverse('admin:accounts_farmprofile_change', args=[obj.farm_profile.id])
+        return format_html('<a href="{}">{}</a>', url, obj.farm_profile.farm_name)
+    farm_display.short_description = _('Ferme')
+
+    def unit_type_display(self, obj):
+        return obj.get_unit_type_display()
+    unit_type_display.short_description = _('Type')
+
+    def dimension_display(self, obj):
+        return obj.display_dimension or '-'
+    dimension_display.short_description = _('Dimension')
+
+    def recommended_capacity_display(self, obj):
+        return obj.recommended_capacity or '-'
+    recommended_capacity_display.short_description = _('Capacité conseillée')
+
+    def status_display(self, obj):
+        return obj.get_status_display()
+    status_display.short_description = _('Statut')
+
+
+@admin.register(CycleUnitAllocation)
+class CycleUnitAllocationAdmin(AquacultureSecuredAdmin):
+    """Administration des allocations de cycle par unité."""
+
+    list_display = [
+        'cycle_display',
+        'production_unit_display',
+        'initial_fish_count',
+        'current_fish_count',
+        'survival_rate_display',
+        'created_at',
+    ]
+    list_filter = ['cycle__status', 'production_unit__unit_type']
+    search_fields = ['cycle__cycle_name', 'production_unit__name']
+    readonly_fields = ['id', 'created_at', 'updated_at']
+
+    fieldsets = (
+        (_('Allocation'), {
+            'fields': ('cycle', 'production_unit', 'initial_fish_count', 'current_fish_count')
+        }),
+        (_('Biomasse'), {
+            'fields': ('initial_biomass_kg', 'current_biomass_kg', 'expected_survival_rate_pct')
+        }),
+        (_('Métadonnées'), {
+            'fields': ('id', 'created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related(
+            'cycle',
+            'cycle__farm_profile',
+            'production_unit',
+            'production_unit__farm_profile',
+        )
+
+    def cycle_display(self, obj):
+        return obj.cycle.cycle_name
+    cycle_display.short_description = _('Cycle')
+
+    def production_unit_display(self, obj):
+        return obj.production_unit.name
+    production_unit_display.short_description = _('Unité')
+
+    def survival_rate_display(self, obj):
+        return obj.survival_rate_pct or '-'
+    survival_rate_display.short_description = _('Survie')
 
     # --- Actions securisees ---
 

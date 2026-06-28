@@ -7,6 +7,7 @@ from rest_framework.routers import DefaultRouter
 
 from .views import (
     CycleLogViewSet,
+    CycleUnitAllocationViewSet,
     DashboardView,
     FeedingPlanViewSet,
     NutritionalGuideViewSet,
@@ -14,6 +15,7 @@ from .views import (
     ProductionPlanSetupView,
     ProductionPlanSimulationView,
     ProductionReportViewSet,
+    ProductionUnitViewSet,
     SanitaryLogViewSet,
     SyncView,
 )
@@ -27,6 +29,8 @@ router.register(r'cycle-logs', CycleLogViewSet, basename='cycle-log')
 router.register(r'feeding-plans', FeedingPlanViewSet, basename='feeding-plan')
 router.register(r'sanitary-logs', SanitaryLogViewSet, basename='sanitary-log')
 router.register(r'nutritional-guides', NutritionalGuideViewSet, basename='nutritional-guide')
+router.register(r'production-units', ProductionUnitViewSet, basename='production-unit')
+router.register(r'cycle-unit-allocations', CycleUnitAllocationViewSet, basename='cycle-unit-allocation')
 router.register(r'reports', ProductionReportViewSet, basename='production-report')
 # router.register(r'notifications', NotificationViewSet, basename='notification')  # Moved to /api/notifications/
 
@@ -99,6 +103,20 @@ NUTRITIONAL GUIDES (Read-only reference data):
 GET    /api/aquaculture/nutritional-guides/ - List all guides
 GET    /api/aquaculture/nutritional-guides/{id}/ - Get guide details
 GET    /api/aquaculture/nutritional-guides/for_species/?species=clarias - Guides for species
+
+PRODUCTION UNITS:
+GET    /api/aquaculture/production-units/ - List farm units
+POST   /api/aquaculture/production-units/ - Create a production unit
+GET    /api/aquaculture/production-units/{id}/ - Get production unit details
+PUT    /api/aquaculture/production-units/{id}/ - Update production unit
+DELETE /api/aquaculture/production-units/{id}/ - Delete production unit
+
+CYCLE UNIT ALLOCATIONS:
+GET    /api/aquaculture/cycle-unit-allocations/ - List allocations
+POST   /api/aquaculture/cycle-unit-allocations/ - Create allocation
+GET    /api/aquaculture/cycle-unit-allocations/{id}/ - Get allocation details
+PUT    /api/aquaculture/cycle-unit-allocations/{id}/ - Update allocation
+DELETE /api/aquaculture/cycle-unit-allocations/{id}/ - Delete allocation
 
 NOTIFICATIONS:
 GET    /api/aquaculture/notifications/     - List user notifications

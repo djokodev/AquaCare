@@ -82,6 +82,26 @@ Points critiques:
 2. `setup_completed` pilote le flux "Creer mon elevage".
 3. `default_feed_price_per_kg` sert aux calculs de cout aliment backend.
 
+### ProductionUnit
+
+Modele: `aquaculture.models.ProductionUnit`
+
+Role:
+
+1. Representer une infrastructure reelle de ferme, comme un bac, un etang ou une cage.
+2. Porter la dimension principale exploitable pour le calcul de capacite.
+3. Normaliser les anciens types legacy vers les valeurs canoniques du domaine.
+
+### CycleUnitAllocation
+
+Modele: `aquaculture.models.CycleUnitAllocation`
+
+Role:
+
+1. Relier un cycle global a une unite de production specifique.
+2. Preparrer la repartition future du cycle sans casser le flow cycle-first actuel.
+3. Fournir une base stable pour les allocations, les transferts et le contexte par unite dans les prochaines PRs.
+
 ### ProductionCycle
 
 Modele central: `aquaculture.models.ProductionCycle`
