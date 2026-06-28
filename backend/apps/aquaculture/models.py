@@ -399,7 +399,7 @@ class CycleUnitAllocation(models.Model):
     )
     production_unit = models.ForeignKey(
         ProductionUnit,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         related_name='cycle_allocations',
         verbose_name=_('Unité de production'),
     )

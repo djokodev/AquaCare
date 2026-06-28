@@ -7,6 +7,7 @@ import pytest
 from aquaculture.models import CycleUnitAllocation, ProductionCycle, ProductionUnit
 from aquaculture.serializers import CycleUnitAllocationSerializer, ProductionUnitSerializer
 from django.core.exceptions import ValidationError
+from django.db.models.deletion import ProtectedError
 from django.urls import reverse
 from rest_framework import status
 
@@ -57,6 +58,39 @@ class TestProductionUnitModel:
 
         with pytest.raises(ValidationError):
             unit.save()
+
+    def test_unit_delete_is_protected_by_cycle_allocations(self, farm_profile):
+        cycle = ProductionCycle.objects.create(
+            farm_profile=farm_profile,
+            cycle_name='Cycle protégé',
+            species='tilapia',
+            pond_identifier='Bassin 4',
+            pond_surface_m2=Decimal('100.00'),
+            start_date=date.today(),
+            initial_count=1000,
+            initial_average_weight=Decimal('10.00'),
+            initial_biomass=Decimal('10.00'),
+            current_count=1000,
+            current_average_weight=Decimal('10.00'),
+            current_biomass=Decimal('10.00'),
+        )
+        unit = ProductionUnit.objects.create(
+            farm_profile=farm_profile,
+            name='Bac protégé',
+            unit_type='tank',
+            volume_m3=Decimal('3.00'),
+        )
+        CycleUnitAllocation.objects.create(
+            cycle=cycle,
+            production_unit=unit,
+            initial_fish_count=500,
+            current_fish_count=500,
+            initial_biomass_kg=Decimal('5.00'),
+            current_biomass_kg=Decimal('5.00'),
+        )
+
+        with pytest.raises(ProtectedError):
+            unit.delete()
 
 
 @pytest.mark.django_db
@@ -259,6 +293,48 @@ class TestProductionUnitViews:
         assert response.status_code == status.HTTP_201_CREATED
         assert str(response.data['cycle']) == str(production_cycle.id)
         assert str(response.data['production_unit']) == str(unit.id)
+
+    def test_delete_production_unit_archives_unit_and_preserves_allocations(
+        self,
+        auth_client,
+        production_cycle,
+        farm_profile,
+    ):
+        unit = ProductionUnit.objects.create(
+            farm_profile=farm_profile,
+            name='Bac à archiver',
+            unit_type='tank',
+            volume_m3=Decimal('4.00'),
+        )
+        allocation = CycleUnitAllocation.objects.create(
+            cycle=production_cycle,
+            production_unit=unit,
+            initial_fish_count=400,
+            current_fish_count=390,
+            initial_biomass_kg=Decimal('4.00'),
+            current_biomass_kg=Decimal('3.90'),
+        )
+
+        response = auth_client.delete(reverse('aquaculture:production-unit-detail', args=[unit.id]))
+
+        assert response.status_code == status.HTTP_204_NO_CONTENT
+        unit.refresh_from_db()
+        assert unit.status == 'archived'
+        assert ProductionUnit.objects.filter(id=unit.id).exists()
+        assert CycleUnitAllocation.objects.filter(id=allocation.id).exists()
+
+        list_response = auth_client.get(reverse('aquaculture:production-unit-list'))
+        assert list_response.status_code == status.HTTP_200_OK
+        assert list_response.data['results'] == []
+
+        archived_response = auth_client.get(
+            reverse('aquaculture:production-unit-list'),
+            {'status': 'archived'},
+        )
+
+        assert archived_response.status_code == status.HTTP_200_OK
+        assert len(archived_response.data['results']) == 1
+        assert archived_response.data['results'][0]['id'] == str(unit.id)
 
     def test_create_cycle_unit_allocation_rejects_foreign_cycle(
         self,

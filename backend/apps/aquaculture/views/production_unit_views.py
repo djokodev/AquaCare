@@ -20,6 +20,8 @@ class ProductionUnitViewSet(viewsets.ModelViewSet):
         status_filter = self.request.query_params.get('status')
         if status_filter:
             queryset = queryset.filter(status=status_filter)
+        else:
+            queryset = queryset.exclude(status='archived')
 
         unit_type_filter = self.request.query_params.get('unit_type')
         if unit_type_filter:
@@ -30,6 +32,10 @@ class ProductionUnitViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(farm_profile=self.request.user.farm_profile)
+
+    def perform_destroy(self, instance):
+        instance.status = 'archived'
+        instance.save(update_fields=['status', 'updated_at'])
 
 
 class CycleUnitAllocationViewSet(viewsets.ModelViewSet):
