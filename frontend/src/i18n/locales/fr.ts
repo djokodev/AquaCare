@@ -1273,6 +1273,7 @@ export const fr = {
   simulationMaxDensity: 'Densité maximale',
   simulationDensityToBeAllocated: 'À répartir par unité',
   simulationDensityByUnitNote: 'La densité par unité sera précisée après la répartition intelligente.',
+  simulationDensitySeeUnitDetails: 'Voir détail par unité',
   simulationAllocationByUnitTitle: 'Répartition par unité',
   simulationAllocationByUnitDescription: 'Résumé de la répartition proposée pour chaque unité.',
   simulationSurvivalRate: 'Survie estimée',

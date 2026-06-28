@@ -126,6 +126,7 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
       ),
     [formData.productionUnitAllocations]
   );
+  const hasProductionUnitAllocations = (formData.productionUnitAllocations ?? []).length > 0;
 
   useEffect(() => {
     recalculate();
@@ -358,9 +359,15 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
           <>
             <MetricRow
               label={t('simulationDensity')}
-              value={t('simulationDensityToBeAllocated')}
+              value={
+                hasProductionUnitAllocations
+                  ? t('simulationDensitySeeUnitDetails')
+                  : t('simulationDensityToBeAllocated')
+              }
             />
-            <Text style={styles.hintText}>{t('simulationDensityByUnitNote')}</Text>
+            {!hasProductionUnitAllocations ? (
+              <Text style={styles.hintText}>{t('simulationDensityByUnitNote')}</Text>
+            ) : null}
           </>
         ) : legacyStockingDensityCheck ? (
           <>
@@ -418,6 +425,14 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
               const rawAllocation = productionUnitAllocationById.get(unit.local_id);
               const parsedAllocation =
                 status?.fish_count ?? (rawAllocation && rawAllocation.trim() ? Number(rawAllocation) : null);
+              const densityLabel =
+                status?.density !== null && status?.density !== undefined && status.density_unit
+                  ? `${formatDensity(status.density)} ${t(
+                      status.density_unit === 'm2'
+                        ? 'productionUnitDensityFingerlingsPerSquareMeter'
+                        : 'productionUnitDensityFingerlingsPerCubicMeter'
+                    )}`
+                  : null;
               const allocationLabel =
                 parsedAllocation !== null && Number.isFinite(parsedAllocation)
                   ? `${parsedAllocation} ${t('productionUnitFingerlingsUnit')}`
@@ -432,6 +447,7 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
                   <Text style={styles.allocationSummaryLabel}>{unit.name}</Text>
                   <Text style={styles.allocationSummaryValue}>
                     {allocationLabel}
+                    {densityLabel ? ` · ${densityLabel}` : ''}
                     {productionLabel}
                   </Text>
                 </View>

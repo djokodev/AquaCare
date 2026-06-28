@@ -1273,6 +1273,7 @@
   simulationMaxDensity: 'Maximum density',
   simulationDensityToBeAllocated: 'To be allocated by unit',
   simulationDensityByUnitNote: 'Density by unit will be refined after smart allocation.',
+  simulationDensitySeeUnitDetails: 'See unit details',
   simulationAllocationByUnitTitle: 'Allocation by unit',
   simulationAllocationByUnitDescription: 'Summary of the allocation suggested for each unit.',
   simulationSurvivalRate: 'Estimated survival',

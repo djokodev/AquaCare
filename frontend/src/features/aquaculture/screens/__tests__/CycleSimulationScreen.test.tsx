@@ -282,7 +282,7 @@ describe('features/aquaculture/screens/CycleSimulationScreen', () => {
     });
 
     const route = buildRoute({
-      fingerlingsCount: '2700',
+      fingerlingsCount: '2100',
       productionUnits: [
         {
           local_id: 'unit-1',
@@ -292,32 +292,31 @@ describe('features/aquaculture/screens/CycleSimulationScreen', () => {
         },
         {
           local_id: 'unit-2',
-          name: 'Bac 2',
-          unit_type: 'tank',
-          volume_m3: '3',
-        },
-        {
-          local_id: 'unit-3',
-          name: 'Bac 3',
-          unit_type: 'tank',
-          volume_m3: '3',
+          name: 'Étang principal',
+          unit_type: 'pond',
+          surface_m2: '120',
         },
       ],
       productionUnitAllocations: [
         { production_unit_local_id: 'unit-1', fish_count: '900' },
-        { production_unit_local_id: 'unit-2', fish_count: '900' },
-        { production_unit_local_id: 'unit-3', fish_count: '900' },
+        { production_unit_local_id: 'unit-2', fish_count: '1200' },
       ],
     });
 
-    const { getByText, getAllByText } = render(
+    const { getByText, getByText: getText, queryByText } = render(
       <CycleSimulationScreen navigation={navigation} route={route} />
     );
 
     await waitFor(() => {
       expect(getByText('simulationAllocationByUnitTitle')).toBeTruthy();
-      expect(getByText('Bac 1')).toBeTruthy();
-      expect(getAllByText('900 productionUnitFingerlingsUnit · 299,3 kg')).toHaveLength(3);
+      expect(getByText('simulationDensitySeeUnitDetails')).toBeTruthy();
+      expect(queryByText('simulationDensityByUnitNote')).toBeNull();
+      expect(getText('Bac 1')).toBeTruthy();
+      expect(getText('Étang principal')).toBeTruthy();
+      expect(getText(/300 productionUnitDensityFingerlingsPerCubicMeter/)).toBeTruthy();
+      expect(getText(/10 productionUnitDensityFingerlingsPerSquareMeter/)).toBeTruthy();
+      expect(getText(/299,3 kg/)).toBeTruthy();
+      expect(getText(/399 kg/)).toBeTruthy();
     });
   });
 });
