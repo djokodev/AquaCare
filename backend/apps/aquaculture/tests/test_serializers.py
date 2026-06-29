@@ -106,10 +106,31 @@ class TestProductionCycleSerializer:
             'initial_count': 10000,  # 1000 poissons/m² = trop dense
             'initial_average_weight': Decimal('15.00')
         }
-        
+
         serializer = ProductionCycleSerializer(data=data)
         assert not serializer.is_valid()
         assert 'initial_count' in serializer.errors
+
+    def test_mixed_infrastructure_types_skip_density_validation(self, farm_profile):
+        """Test validation cycle avec unités mixtes pilotées par allocations."""
+        data = {
+            'farm_profile': farm_profile.id,
+            'cycle_name': 'Test Cycle Multi Unites',
+            'species': 'tilapia',
+            'pond_identifier': 'Bassin Multi',
+            'pond_surface_m2': Decimal('120.00'),
+            'pond_volume_m3': Decimal('3.00'),
+            'infrastructure_type': ['tank', 'pond'],
+            'start_date': date.today(),
+            'initial_count': 3600,
+            'initial_average_weight': Decimal('10.00'),
+        }
+
+        serializer = ProductionCycleSerializer(data=data)
+        assert serializer.is_valid(), serializer.errors
+
+        cycle = serializer.save(farm_profile=farm_profile)
+        assert cycle.initial_count == 3600
 
     def test_computed_fields(self, production_cycle):
         """Test champs calculés du sérialiseur."""

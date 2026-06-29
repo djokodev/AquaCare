@@ -19,6 +19,7 @@ import type {
   ProductionUnitDraft,
   ProductionUnitFishAllocationDraft,
   ProductionCycle,
+  ProductionUnitType,
 } from '@/types/aquaculture';
 import type { ProductionUnit } from '@/types/aquaculture';
 
@@ -118,6 +119,50 @@ const buildCycleUnitAllocationPayload = (params: {
   return payload;
 };
 
+const getNormalizedInfrastructureTypes = (
+  units: ProductionUnitDraft[]
+): ProductionUnitType[] | undefined => {
+  const normalizedTypes = units
+    .map((unit) => normalizeProductionUnitType(unit.unit_type))
+    .filter((unitType): unitType is ProductionUnitType => unitType !== null);
+
+  if (!normalizedTypes.length) {
+    return undefined;
+  }
+
+  return Array.from(new Set(normalizedTypes));
+};
+
+const buildLegacyCycleFootprint = (
+  units: ProductionUnitDraft[]
+): Partial<Pick<ProductionCycle, 'pond_surface_m2' | 'pond_volume_m3'>> => {
+  const normalizedTypes = getNormalizedInfrastructureTypes(units);
+  const primaryType = normalizedTypes?.[0];
+  if (!primaryType) {
+    return {};
+  }
+
+  const matchingUnits = units.filter(
+    (unit) => normalizeProductionUnitType(unit.unit_type) === primaryType
+  );
+
+  if (primaryType === 'pond') {
+    const totalSurface = matchingUnits.reduce((total, unit) => {
+      const surface = toFiniteNumber(unit.surface_m2);
+      return surface === undefined ? total : total + surface;
+    }, 0);
+
+    return totalSurface > 0 ? { pond_surface_m2: totalSurface } : {};
+  }
+
+  const totalVolume = matchingUnits.reduce((total, unit) => {
+    const volume = toFiniteNumber(unit.volume_m3);
+    return volume === undefined ? total : total + volume;
+  }, 0);
+
+  return totalVolume > 0 ? { pond_volume_m3: totalVolume } : {};
+};
+
 const validateProductionUnits = (units: ProductionUnitDraft[]): void => {
   const firstInvalidUnit = units.find((unit) => {
     const errors = validateProductionUnitDraft(unit);
@@ -204,6 +249,12 @@ export const launchFirstCycle = async (
   const fingerlingsCost =
     simulationResult.cycle_fingerlings_cost_fcfa ?? firstCycle.fingerlings_cost_fcfa;
   const otherCosts = simulationResult.cycle_other_costs_fcfa ?? 0;
+  const infrastructureTypes = getNormalizedInfrastructureTypes(productionUnits) ?? (
+    formData.infraType ? [formData.infraType] : undefined
+  );
+  const legacyCycleFootprint = productionUnits.length > 0
+    ? buildLegacyCycleFootprint(productionUnits)
+    : {};
 
   const productionCycle = await aquacultureService.createProductionCycle({
     species: speciesForCycle,
@@ -223,6 +274,13 @@ export const launchFirstCycle = async (
     fingerlings_cost_fcfa: fingerlingsCost,
     other_operational_costs_fcfa: otherCosts,
     planned_feed_bags: firstCycle.feed_bags_total || simulationResult.feed_bags_per_cycle || undefined,
+    infrastructure_type: infrastructureTypes,
+    ...(productionUnits.length > 0
+      ? legacyCycleFootprint
+      : {
+          pond_surface_m2: toFiniteNumber(formData.unitSurface),
+          pond_volume_m3: legacyPondVolume,
+        }),
   });
 
   if (productionUnits.length === 0) {

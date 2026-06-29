@@ -46,6 +46,7 @@ from ..domain.exceptions import (
     InvalidHarvestDataError,
     OfflineSyncConflictError,
 )
+from ..domain.production_units import normalize_production_unit_type
 from ..models import CycleLog, PartialHarvest, ProductionCycle
 from .base import BaseService
 
@@ -556,12 +557,20 @@ class ProductionCycleService(BaseService):
         selling_price = cycle_data.get('planned_selling_price_per_kg_fcfa')
         fingerlings_cost = cycle_data.get('fingerlings_cost_fcfa')
         other_costs = cycle_data.get('other_operational_costs_fcfa')
+        infrastructure_types = cycle_data.get('infrastructure_type') or []
+        normalized_infrastructure_types = ProductionCycleService._normalize_infrastructure_types(
+            infrastructure_types
+        )
 
         # Validation densité maximale (règle unifiée par infrastructure).
         # Source de vérité: backend/constants.py.
-        if initial_count:
-            infrastructure_types = cycle_data.get('infrastructure_type') or []
-            is_pond = ProductionCycleService._is_pond_infrastructure(infrastructure_types)
+        # Si le cycle est lancé avec plusieurs types d'infrastructure,
+        # la densité globale n'a plus de sens et la validation se fait
+        # au niveau des allocations par unité.
+        if initial_count and len(normalized_infrastructure_types) <= 1:
+            is_pond = ProductionCycleService._is_pond_infrastructure(
+                normalized_infrastructure_types or infrastructure_types
+            )
             pond_volume = cycle_data.get('pond_volume_m3')
 
             if is_pond and pond_surface:
@@ -839,8 +848,32 @@ class ProductionCycleService(BaseService):
         """
         if not infrastructure_types:
             return True
+        normalized_types = ProductionCycleService._normalize_infrastructure_types(infrastructure_types)
+        if normalized_types:
+            return normalized_types[0] == 'pond'
         if isinstance(infrastructure_types, str):
-            return infrastructure_types == 'etang'
+            return normalize_production_unit_type(infrastructure_types) == 'pond'
         if isinstance(infrastructure_types, (list, tuple)):
-            return 'etang' in infrastructure_types
+            return any(normalize_production_unit_type(item) == 'pond' for item in infrastructure_types)
         return True
+
+    @staticmethod
+    def _normalize_infrastructure_types(infrastructure_types: Any) -> list[str]:
+        """Normalise les types d'infrastructure en types production unit uniques."""
+        if not infrastructure_types:
+            return []
+
+        if isinstance(infrastructure_types, str):
+            candidates = [infrastructure_types]
+        elif isinstance(infrastructure_types, (list, tuple, set)):
+            candidates = list(infrastructure_types)
+        else:
+            return []
+
+        normalized: list[str] = []
+        for candidate in candidates:
+            normalized_type = normalize_production_unit_type(candidate)
+            if normalized_type and normalized_type not in normalized:
+                normalized.append(normalized_type)
+
+        return normalized

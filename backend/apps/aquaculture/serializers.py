@@ -493,9 +493,14 @@ class ProductionCycleSerializer(serializers.ModelSerializer):
         pond_surface = attrs.get('pond_surface_m2') or getattr(self.instance, 'pond_surface_m2', None)
         pond_volume = attrs.get('pond_volume_m3') or getattr(self.instance, 'pond_volume_m3', None)
         infrastructure_types = attrs.get('infrastructure_type') or getattr(self.instance, 'infrastructure_type', None)
+        normalized_infrastructure_types = ProductionCycleService._normalize_infrastructure_types(
+            infrastructure_types
+        )
 
-        if initial_count:
-            if ProductionCycleService._is_pond_infrastructure(infrastructure_types) and pond_surface:
+        if initial_count and len(normalized_infrastructure_types) <= 1:
+            if ProductionCycleService._is_pond_infrastructure(
+                normalized_infrastructure_types or infrastructure_types
+            ) and pond_surface:
                 density_per_m2 = initial_count / float(pond_surface)
                 max_density = ProductionCycleService.MAX_STOCKING_DENSITY_POND_PER_M2
                 if density_per_m2 > max_density:
