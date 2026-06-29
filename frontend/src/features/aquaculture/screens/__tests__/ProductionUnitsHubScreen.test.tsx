@@ -4,13 +4,6 @@ import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import ProductionUnitsHubScreen from '../ProductionUnitsHubScreen';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
 
-jest.mock('@/features/main/components/MetricCard', () => {
-  return {
-    __esModule: true,
-    default: () => null,
-  };
-});
-
 jest.mock('@/features/aquaculture/services/aquacultureService', () => ({
   aquacultureService: {
     getCycleDashboard: jest.fn(),
@@ -126,12 +119,12 @@ describe('features/aquaculture/screens/ProductionUnitsHubScreen', () => {
     );
 
     await waitFor(() => {
-      expect(getByText('cycleDashboardTitle')).toBeTruthy();
+      expect(getByText('productionUnitsHubTitle')).toBeTruthy();
+      expect(getByText('productionUnitsHubSubtitle')).toBeTruthy();
+      expect(getByText('Cycle actif')).toBeTruthy();
       expect(getByText('Bac 1')).toBeTruthy();
       expect(getByText('Étang principal')).toBeTruthy();
-      expect(getAllByText('cycleDashboardUnitsCount').length).toBeGreaterThan(0);
-      expect(getAllByText('cycleDashboardSanitaryIssueUnits').length).toBeGreaterThan(0);
-      expect(getAllByText('cycleDashboardMissingTodayLogs').length).toBeGreaterThan(0);
+      expect(getAllByText('productionUnitsCurrentFishCount').length).toBe(2);
       expect(getAllByText('productionUnitsOpenUnit').length).toBe(2);
     });
 
@@ -141,6 +134,7 @@ describe('features/aquaculture/screens/ProductionUnitsHubScreen', () => {
       cycleId: 'cycle-1',
       allocationId: 'allocation-1',
       productionUnitId: 'unit-1',
+      productionUnitName: 'Bac 1',
     });
   });
 
@@ -156,7 +150,7 @@ describe('features/aquaculture/screens/ProductionUnitsHubScreen', () => {
       <ProductionUnitsHubScreen navigation={navigation} route={route} />
     );
 
-    expect(getByText('cycleDashboardLoading')).toBeTruthy();
+    expect(getByText('productionUnitsLoading')).toBeTruthy();
 
     resolveDashboard({
       cycle: {
@@ -178,7 +172,7 @@ describe('features/aquaculture/screens/ProductionUnitsHubScreen', () => {
     });
 
     await waitFor(() => {
-      expect(getByText('cycleDashboardTitle')).toBeTruthy();
+      expect(getByText('productionUnitsHubTitle')).toBeTruthy();
     });
   });
 
@@ -205,9 +199,8 @@ describe('features/aquaculture/screens/ProductionUnitsHubScreen', () => {
     const { getByText } = render(<ProductionUnitsHubScreen navigation={navigation} route={route} />);
 
     await waitFor(() => {
-      expect(getByText('cycleDashboardNoUnitsTitle')).toBeTruthy();
-      expect(getByText('cycleDashboardNoUnitsDescription')).toBeTruthy();
-      expect(getByText('cycleDashboardLegacyNotice')).toBeTruthy();
+      expect(getByText('productionUnitsEmptyTitle')).toBeTruthy();
+      expect(getByText('productionUnitsEmptyDescription')).toBeTruthy();
     });
   });
 
@@ -217,7 +210,7 @@ describe('features/aquaculture/screens/ProductionUnitsHubScreen', () => {
     const { getByText } = render(<ProductionUnitsHubScreen navigation={navigation} route={route} />);
 
     await waitFor(() => {
-      expect(getByText('cycleDashboardLoadError')).toBeTruthy();
+      expect(getByText('productionUnitsLoadError')).toBeTruthy();
     }, { timeout: 3000 });
   });
 
@@ -265,7 +258,7 @@ describe('features/aquaculture/screens/ProductionUnitsHubScreen', () => {
     );
 
     await waitFor(() => {
-      expect(getByText('cycleDashboardTitle')).toBeTruthy();
+      expect(getByText('productionUnitsHubTitle')).toBeTruthy();
     });
 
     act(() => {

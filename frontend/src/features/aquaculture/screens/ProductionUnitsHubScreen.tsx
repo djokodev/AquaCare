@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   RefreshControl,
@@ -14,7 +14,6 @@ import {
 import { useTranslation } from 'react-i18next';
 
 import { AQUACARE_COLORS } from '@/constants/colors';
-import DashboardMetricCard from '@/features/main/components/MetricCard';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
 import { RootStackParamList } from '@/navigation/MainNavigator';
 import type { CycleDashboard, CycleUnitAllocation } from '@/types/aquaculture';
@@ -43,36 +42,6 @@ const getProductionUnitTypeLabelKey = (unitType?: string | null): string => {
 const formatCount = (value: number, locale: string): string =>
   new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }).format(value);
 
-const formatKg = (value: number, locale: string): string =>
-  `${new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(value)} kg`;
-
-const formatPercentage = (value: number, locale: string): string =>
-  `${new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(value)} %`;
-
-const toNumber = (value: string | number | null | undefined): number => {
-  if (value === null || value === undefined) {
-    return 0;
-  }
-
-  const parsed = typeof value === 'number' ? value : Number(value);
-  return Number.isFinite(parsed) ? parsed : 0;
-};
-
-function StatRow({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
-  return (
-    <View style={styles.statRow}>
-      <Text style={styles.statLabel}>{label}</Text>
-      <Text style={styles.statValue}>{value}</Text>
-    </View>
-  );
-}
-
 function UnitCard({
   allocation,
   locale,
@@ -82,13 +51,12 @@ function UnitCard({
   allocation: CycleUnitAllocation;
   locale: string;
   onOpen: () => void;
-  t: (key: string) => string;
+  t: (key: string, options?: Record<string, unknown>) => string;
 }) {
   const unitTypeLabel = t(getProductionUnitTypeLabelKey(allocation.production_unit_type));
   const dimension = allocation.production_unit_display_dimension?.trim();
   const title = allocation.production_unit_name?.trim() || t('productionUnitsUnknownUnit');
   const typeLine = dimension ? `${unitTypeLabel} · ${dimension}` : unitTypeLabel;
-  const survivalRate = allocation.survival_rate_pct ?? allocation.expected_survival_rate_pct;
 
   return (
     <View style={styles.card}>
@@ -102,28 +70,9 @@ function UnitCard({
         </View>
       </View>
 
-      <View style={styles.statList}>
-        <StatRow
-          label={t('productionUnitsInitialFishCount')}
-          value={formatCount(allocation.initial_fish_count, locale)}
-        />
-        <StatRow
-          label={t('productionUnitsCurrentFishCount')}
-          value={formatCount(allocation.current_fish_count, locale)}
-        />
-        {allocation.production_unit_recommended_capacity !== null &&
-        allocation.production_unit_recommended_capacity !== undefined ? (
-          <StatRow
-            label={t('productionUnitsRecommendedCapacity')}
-            value={formatCount(allocation.production_unit_recommended_capacity, locale)}
-          />
-        ) : null}
-        {survivalRate !== null && survivalRate !== undefined ? (
-          <StatRow
-            label={t('productionUnitsExpectedSurvivalRate')}
-            value={formatPercentage(survivalRate, locale)}
-          />
-        ) : null}
+      <View style={styles.statRow}>
+        <Text style={styles.statLabel}>{t('productionUnitsCurrentFishCount')}</Text>
+        <Text style={styles.statValue}>{formatCount(allocation.current_fish_count, locale)}</Text>
       </View>
 
       <TouchableOpacity style={styles.openButton} onPress={onOpen}>
@@ -142,25 +91,11 @@ export default function ProductionUnitsHubScreen({ navigation, route }: Props) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [errorKey, setErrorKey] = useState<string | null>(null);
-  const errorMessage = errorKey ? t(errorKey) : null;
 
+  const errorMessage = errorKey ? t(errorKey) : null;
   const allocations = dashboard?.allocations ?? [];
-  const summary = dashboard?.summary ?? null;
   const cycleName = dashboard?.cycle.cycle_name || t('productionUnitsUnknownUnit');
-  const sanitaryIssueUnitNames = useMemo(
-    () =>
-      allocations
-        .filter((allocation) => allocation.summary.has_unresolved_sanitary_issue)
-        .map((allocation) => allocation.allocation.production_unit_name?.trim() || t('productionUnitsUnknownUnit')),
-    [allocations, t]
-  );
-  const missingTodayLogUnitNames = useMemo(
-    () =>
-      allocations
-        .filter((allocation) => !allocation.summary.has_today_daily_log)
-        .map((allocation) => allocation.allocation.production_unit_name?.trim() || t('productionUnitsUnknownUnit')),
-    [allocations, t]
-  );
+  const totalAllocations = dashboard?.summary?.total_allocations ?? allocations.length;
 
   const loadDashboard = useCallback(
     async (mode: 'initial' | 'refresh' = 'initial') => {
@@ -178,7 +113,7 @@ export default function ProductionUnitsHubScreen({ navigation, route }: Props) {
         if (mode === 'initial') {
           setDashboard(null);
         }
-        setErrorKey('cycleDashboardLoadError');
+        setErrorKey('productionUnitsLoadError');
       } finally {
         if (mode === 'refresh') {
           setRefreshing(false);
@@ -204,16 +139,17 @@ export default function ProductionUnitsHubScreen({ navigation, route }: Props) {
         cycleId,
         allocationId: allocation.id,
         productionUnitId: allocation.production_unit,
+        productionUnitName: allocation.production_unit_name?.trim() || t('productionUnitsUnknownUnit'),
       });
     },
-    [cycleId, navigation]
+    [cycleId, navigation, t]
   );
 
   if (loading && !dashboard) {
     return (
       <View style={styles.centered}>
         <ActivityIndicator size="large" color={AQUACARE_COLORS.GREEN_PRIMARY} />
-        <Text style={styles.loadingText}>{t('cycleDashboardLoading')}</Text>
+        <Text style={styles.loadingText}>{t('productionUnitsLoading')}</Text>
       </View>
     );
   }
@@ -247,11 +183,14 @@ export default function ProductionUnitsHubScreen({ navigation, route }: Props) {
       <View style={styles.hero}>
         <View style={styles.heroBadge}>
           <Ionicons name="grid-outline" size={16} color={AQUACARE_COLORS.GREEN_PRIMARY} />
-          <Text style={styles.heroBadgeText}>{t('cycleDashboardActiveCycleLabel')}</Text>
+          <Text style={styles.heroBadgeText}>{t('productionUnitsActiveCycleLabel')}</Text>
         </View>
-        <Text style={styles.title}>{t('cycleDashboardTitle')}</Text>
-        <Text style={styles.subtitle}>{t('cycleDashboardSubtitle')}</Text>
-        {cycleName ? <Text style={styles.cycleName}>{cycleName}</Text> : null}
+        <Text style={styles.title}>{t('productionUnitsHubTitle')}</Text>
+        <Text style={styles.subtitle}>{t('productionUnitsHubSubtitle')}</Text>
+        <Text style={styles.cycleName}>{cycleName}</Text>
+        <Text style={styles.summaryText}>
+          {t('productionUnitsCount', { count: totalAllocations })}
+        </Text>
       </View>
 
       {errorMessage ? (
@@ -259,93 +198,6 @@ export default function ProductionUnitsHubScreen({ navigation, route }: Props) {
           <Ionicons name="warning-outline" size={18} color={AQUACARE_COLORS.ERROR} />
           <Text style={styles.inlineErrorText}>{errorMessage}</Text>
         </View>
-      ) : null}
-
-      {summary ? (
-        <>
-          <View style={styles.metricGrid}>
-            <DashboardMetricCard
-              icon="fish-outline"
-              color={AQUACARE_COLORS.GREEN_PRIMARY}
-              value={formatCount(summary.total_estimated_current_fish_count, locale)}
-              label={t('cycleDashboardEstimatedFishCount')}
-              index={0}
-              animationType="pulse"
-            />
-            <DashboardMetricCard
-              icon="remove-circle-outline"
-              color={AQUACARE_COLORS.ERROR}
-              value={formatCount(summary.total_mortality_count, locale)}
-              label={t('cycleDashboardTotalMortalityCount')}
-              index={1}
-              animationType="wave"
-            />
-            <DashboardMetricCard
-              icon="restaurant-outline"
-              color={AQUACARE_COLORS.GREEN_LIGHT}
-              value={formatKg(toNumber(summary.total_feed_consumed_kg), locale)}
-              label={t('cycleDashboardFeedConsumed')}
-              index={2}
-              animationType="bounce"
-            />
-            <DashboardMetricCard
-              icon="water-outline"
-              color={AQUACARE_COLORS.GREEN_DARK}
-              value={formatKg(toNumber(summary.estimated_current_biomass_kg), locale)}
-              label={t('cycleDashboardEstimatedBiomass')}
-              index={3}
-              animationType="rotate"
-            />
-          </View>
-
-          <View style={styles.summaryStrip}>
-            <View style={styles.summaryChip}>
-              <Ionicons name="layers-outline" size={14} color={AQUACARE_COLORS.GREEN_PRIMARY} />
-              <Text style={styles.summaryChipText}>
-                {t('cycleDashboardUnitsCount', { count: summary.total_allocations })}
-              </Text>
-            </View>
-            <View style={styles.summaryChip}>
-              <Ionicons name="medkit-outline" size={14} color={AQUACARE_COLORS.ERROR} />
-              <Text style={styles.summaryChipText}>
-                {t('cycleDashboardSanitaryIssueUnits', { count: summary.units_with_sanitary_issue_count })}
-              </Text>
-            </View>
-            <View style={styles.summaryChip}>
-              <Ionicons name="alert-circle-outline" size={14} color={AQUACARE_COLORS.WARNING} />
-              <Text style={styles.summaryChipText}>
-                {t('cycleDashboardMissingTodayLogs', { count: summary.units_missing_today_log_count })}
-              </Text>
-            </View>
-          </View>
-
-          {summary.has_allocations ? null : (
-            <View style={styles.legacyNotice}>
-              <Ionicons name="information-circle-outline" size={18} color={AQUACARE_COLORS.GREEN_PRIMARY} />
-              <Text style={styles.legacyNoticeText}>{t('cycleDashboardLegacyNotice')}</Text>
-            </View>
-          )}
-
-          {(sanitaryIssueUnitNames.length > 0 || missingTodayLogUnitNames.length > 0) ? (
-            <View style={styles.alertPanel}>
-              <Text style={styles.alertPanelTitle}>{t('cycleDashboardAttentionTitle')}</Text>
-              {sanitaryIssueUnitNames.length > 0 ? (
-                <Text style={styles.alertPanelText}>
-                  {t('cycleDashboardSanitaryIssueUnits', { count: sanitaryIssueUnitNames.length })}
-                  {': '}
-                  {sanitaryIssueUnitNames.join(', ')}
-                </Text>
-              ) : null}
-              {missingTodayLogUnitNames.length > 0 ? (
-                <Text style={styles.alertPanelText}>
-                  {t('cycleDashboardMissingTodayLogs', { count: missingTodayLogUnitNames.length })}
-                  {': '}
-                  {missingTodayLogUnitNames.join(', ')}
-                </Text>
-              ) : null}
-            </View>
-          ) : null}
-        </>
       ) : null}
 
       <View style={styles.cards}>
@@ -362,8 +214,8 @@ export default function ProductionUnitsHubScreen({ navigation, route }: Props) {
         ) : (
           <View style={styles.emptyStateCard}>
             <Ionicons name="layers-outline" size={48} color={AQUACARE_COLORS.GREEN_PRIMARY} />
-            <Text style={styles.emptyTitle}>{t('cycleDashboardNoUnitsTitle')}</Text>
-            <Text style={styles.emptyDescription}>{t('cycleDashboardNoUnitsDescription')}</Text>
+            <Text style={styles.emptyTitle}>{t('productionUnitsEmptyTitle')}</Text>
+            <Text style={styles.emptyDescription}>{t('productionUnitsEmptyDescription')}</Text>
           </View>
         )}
       </View>
@@ -397,23 +249,9 @@ const styles = StyleSheet.create({
   errorText: {
     marginTop: 14,
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
     color: AQUACARE_COLORS.ERROR,
     textAlign: 'center',
-  },
-  emptyTitle: {
-    marginTop: 14,
-    fontSize: 18,
-    fontWeight: '700',
-    color: AQUACARE_COLORS.GRAY_DARK,
-    textAlign: 'center',
-  },
-  emptyDescription: {
-    marginTop: 8,
-    fontSize: 14,
-    color: AQUACARE_COLORS.GRAY_LIGHT,
-    textAlign: 'center',
-    lineHeight: 20,
   },
   retryButton: {
     marginTop: 18,
@@ -464,6 +302,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: AQUACARE_COLORS.GREEN_PRIMARY,
   },
+  summaryText: {
+    marginTop: 8,
+    fontSize: 13,
+    fontWeight: '700',
+    color: AQUACARE_COLORS.GRAY_DARK,
+  },
   inlineError: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -480,102 +324,45 @@ const styles = StyleSheet.create({
     color: AQUACARE_COLORS.ERROR,
     lineHeight: 18,
   },
-  metricGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  summaryStrip: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    marginBottom: 14,
-  },
-  summaryChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: AQUACARE_COLORS.WHITE,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  summaryChipText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: AQUACARE_COLORS.GRAY_DARK,
-  },
-  alertPanel: {
-    borderRadius: 16,
-    padding: 14,
-    backgroundColor: '#FFF7ED',
-    borderWidth: 1,
-    borderColor: '#FDBA74',
-    marginBottom: 14,
-  },
-  alertPanelTitle: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#9A3412',
-    marginBottom: 8,
-  },
-  alertPanelText: {
-    fontSize: 13,
-    color: '#9A3412',
-    lineHeight: 19,
-    marginTop: 4,
-  },
-  legacyNotice: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    borderRadius: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    backgroundColor: '#EFF6FF',
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
-    marginBottom: 14,
-  },
-  legacyNoticeText: {
-    flex: 1,
-    fontSize: 13,
-    color: AQUACARE_COLORS.GRAY_DARK,
-    lineHeight: 18,
-  },
   cards: {
-    gap: 14,
+    gap: 12,
   },
   emptyStateCard: {
     backgroundColor: AQUACARE_COLORS.WHITE,
-    borderRadius: 18,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderRadius: 20,
+    padding: 24,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  emptyTitle: {
+    marginTop: 14,
+    fontSize: 18,
+    fontWeight: '700',
+    color: AQUACARE_COLORS.GRAY_DARK,
+    textAlign: 'center',
+  },
+  emptyDescription: {
+    marginTop: 8,
+    fontSize: 14,
+    color: AQUACARE_COLORS.GRAY_LIGHT,
+    textAlign: 'center',
+    lineHeight: 20,
   },
   card: {
     backgroundColor: AQUACARE_COLORS.WHITE,
-    borderRadius: 18,
+    borderRadius: 20,
     padding: 16,
     borderWidth: 1,
     borderColor: '#E5E7EB',
-    shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
+    gap: 14,
   },
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
     gap: 12,
-    marginBottom: 12,
   },
   cardHeaderText: {
     flex: 1,
@@ -583,41 +370,37 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: 18,
     fontWeight: '800',
-    color: AQUACARE_COLORS.GREEN_DARK,
+    color: AQUACARE_COLORS.GRAY_DARK,
   },
   cardSubtitle: {
     marginTop: 4,
     fontSize: 13,
     color: AQUACARE_COLORS.GRAY_LIGHT,
+    lineHeight: 18,
   },
   cardIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 36,
+    height: 36,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: AQUACARE_COLORS.GREEN_LIGHT,
-  },
-  statList: {
-    gap: 10,
-    marginBottom: 14,
+    backgroundColor: `${AQUACARE_COLORS.GREEN_PRIMARY}15`,
   },
   statRow: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 12,
+    alignItems: 'center',
+    paddingVertical: 6,
   },
   statLabel: {
-    flex: 1,
-    fontSize: 13,
-    color: AQUACARE_COLORS.GRAY_LIGHT,
+    fontSize: 14,
+    color: AQUACARE_COLORS.GRAY_DARK,
+    fontWeight: '600',
   },
   statValue: {
-    fontSize: 13,
-    fontWeight: '700',
+    fontSize: 16,
     color: AQUACARE_COLORS.GREEN_DARK,
-    textAlign: 'right',
+    fontWeight: '800',
   },
   openButton: {
     flexDirection: 'row',
@@ -625,13 +408,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     borderRadius: 14,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
     backgroundColor: AQUACARE_COLORS.GREEN_PRIMARY,
+    paddingVertical: 12,
   },
   openButtonText: {
     color: AQUACARE_COLORS.WHITE,
-    fontWeight: '800',
     fontSize: 14,
+    fontWeight: '700',
   },
 });

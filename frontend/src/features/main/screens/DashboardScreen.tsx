@@ -114,6 +114,9 @@ export default function DashboardScreen({ navigation }: any) {
     ? activeCycles.find((cycle) => cycle.id === currentCycle.id)
     : undefined;
   const primaryActiveCycle = currentCycleInList || activeCycles[0] || null;
+  const primaryCycleHasProductionUnits = Boolean(
+    primaryActiveCycle?.infrastructure_type && primaryActiveCycle.infrastructure_type.length > 0
+  );
   const dashboardBusinessMetrics = useMemo(
     () => calculateDashboardBusinessMetrics(activeCycles, currentCycleInList),
     [activeCycles, currentCycleInList]
@@ -123,6 +126,7 @@ export default function DashboardScreen({ navigation }: any) {
     () =>
       activeCycles.map((cycle) => ({
         ...cycle,
+        unitCount: Array.isArray(cycle.infrastructure_type) ? cycle.infrastructure_type.length : 0,
         cycleAgeDays: Math.floor(
           (Date.now() - new Date(cycle.start_date).getTime()) / (1000 * 60 * 60 * 24)
         ),
@@ -130,6 +134,77 @@ export default function DashboardScreen({ navigation }: any) {
       })),
     [activeCycles]
   );
+  const dashboardMetricCards = useMemo(() => {
+    if (primaryCycleHasProductionUnits) {
+      return [
+        {
+          icon: 'cash-outline' as const,
+          color: AQUACARE_COLORS.GREEN_PRIMARY,
+          value: formatCurrency(dashboardBusinessMetrics.estimatedMarketValueFcfa),
+          label: t('dashboardEstimatedMarketValue'),
+          animationType: 'pulse' as const,
+        },
+        {
+          icon: 'calculator-outline' as const,
+          color: AQUACARE_COLORS.SUCCESS,
+          value: formatCurrency(dashboardBusinessMetrics.directProductionCostFcfa),
+          label: t('dashboardDirectProductionCost'),
+          animationType: 'bounce' as const,
+        },
+        {
+          icon: 'fish-outline' as const,
+          color: AQUACARE_COLORS.GREEN_LIGHT,
+          value: formatNumber(dashboardData?.total_fish_count ?? 0, undefined, 0),
+          label: t('dashboardEstimatedCurrentFish'),
+          animationType: 'wave' as const,
+        },
+        {
+          icon: 'time-outline' as const,
+          color: AQUACARE_COLORS.GREEN_DARK,
+          value:
+            dashboardBusinessMetrics.timeRemainingDays === null
+              ? '-'
+              : formatNumber(dashboardBusinessMetrics.timeRemainingDays, t('days'), 0),
+          label: t('dashboardTimeRemainingCycle'),
+          animationType: 'bounce' as const,
+        },
+      ];
+    }
+
+    return [
+      {
+        icon: 'cash-outline' as const,
+        color: AQUACARE_COLORS.GREEN_PRIMARY,
+        value: formatCurrency(dashboardBusinessMetrics.estimatedMarketValueFcfa),
+        label: t('dashboardEstimatedMarketValue'),
+        animationType: 'pulse' as const,
+      },
+      {
+        icon: 'restaurant-outline' as const,
+        color: AQUACARE_COLORS.GREEN_LIGHT,
+        value: formatCurrency(dashboardBusinessMetrics.feedCostConsumedFcfa),
+        label: t('dashboardFeedCostConsumed'),
+        animationType: 'wave' as const,
+      },
+      {
+        icon: 'time-outline' as const,
+        color: AQUACARE_COLORS.GREEN_DARK,
+        value:
+          dashboardBusinessMetrics.timeRemainingDays === null
+            ? '-'
+            : formatNumber(dashboardBusinessMetrics.timeRemainingDays, t('days'), 0),
+        label: t('dashboardTimeRemainingCycle'),
+        animationType: 'bounce' as const,
+      },
+      {
+        icon: 'calculator-outline' as const,
+        color: AQUACARE_COLORS.SUCCESS,
+        value: formatCurrency(dashboardBusinessMetrics.directProductionCostFcfa),
+        label: t('dashboardDirectProductionCost'),
+        animationType: 'bounce' as const,
+      },
+    ];
+  }, [dashboardBusinessMetrics, dashboardData?.total_fish_count, primaryCycleHasProductionUnits, t]);
 
   useEffect(() => {
     if (activeCycles.length === 0) {
@@ -331,45 +406,17 @@ export default function DashboardScreen({ navigation }: any) {
           </View>
         ) : (
           <View className="flex-row flex-wrap justify-between">
-            <MetricCard
-              icon="cash-outline"
-              color={AQUACARE_COLORS.GREEN_PRIMARY}
-              value={formatCurrency(dashboardBusinessMetrics.estimatedMarketValueFcfa)}
-              label={t('dashboardEstimatedMarketValue')}
-              index={0}
-              animationType="pulse"
-            />
-
-            <MetricCard
-              icon="restaurant-outline"
-              color={AQUACARE_COLORS.GREEN_LIGHT}
-              value={formatCurrency(dashboardBusinessMetrics.feedCostConsumedFcfa)}
-              label={t('dashboardFeedCostConsumed')}
-              index={1}
-              animationType="wave"
-            />
-
-            <MetricCard
-              icon="time-outline"
-              color={AQUACARE_COLORS.GREEN_DARK}
-              value={
-                dashboardBusinessMetrics.timeRemainingDays === null
-                  ? '-'
-                  : formatNumber(dashboardBusinessMetrics.timeRemainingDays, t('days'), 0)
-              }
-              label={t('dashboardTimeRemainingCycle')}
-              index={2}
-              animationType="bounce"
-            />
-
-            <MetricCard
-              icon="calculator-outline"
-              color={AQUACARE_COLORS.SUCCESS}
-              value={formatCurrency(dashboardBusinessMetrics.directProductionCostFcfa)}
-              label={t('dashboardDirectProductionCost')}
-              index={3}
-              animationType="bounce"
-            />
+            {dashboardMetricCards.map((card, index) => (
+              <MetricCard
+                key={card.label}
+                icon={card.icon}
+                color={card.color}
+                value={card.value}
+                label={card.label}
+                index={index}
+                animationType={card.animationType}
+              />
+            ))}
           </View>
         )}
       </View>
@@ -438,12 +485,15 @@ export default function DashboardScreen({ navigation }: any) {
         </View>
       )}
 
-      <QuickActionsPreview
-        onOpenSheet={() => setActionsSheetVisible(true)}
-        hasActiveCycles={activeCycles.length > 0}
-        unreadCount={unreadCount}
-        navigation={navigation}
-      />
+      {!primaryCycleHasProductionUnits ? (
+        <QuickActionsPreview
+          onOpenSheet={() => setActionsSheetVisible(true)}
+          hasActiveCycles={activeCycles.length > 0}
+          unreadCount={unreadCount}
+          navigation={navigation}
+          scope="cycle"
+        />
+      ) : null}
 
       {activeCycles.length > 0 && (
         <View className="px-5 py-5">
@@ -457,27 +507,34 @@ export default function DashboardScreen({ navigation }: any) {
                 <View className="flex-1 mr-3">
                   <Text className="text-base font-bold text-gray-dark mb-1">{cycle.cycle_name}</Text>
                   <Text className="text-sm text-gray-light mb-1">
-                    {cycle.species === 'clarias' ? t('catfish') : t('tilapia')} - {cycle.pond_identifier}
+                    {cycle.species === 'clarias' ? t('catfish') : t('tilapia')}
+                    {cycle.unitCount > 0
+                      ? ` · ${t('productionUnitsCount', { count: cycle.unitCount })}`
+                      : ` - ${cycle.pond_identifier}`}
                   </Text>
                   <Text className="text-xs text-gray-light">
                     {t('daysCount', { count: cycle.cycleAgeDays })} - {formatCurrency(cycle.estimatedMarketValueFcfa)} - {formatPercentage(cycle.survival_rate || 0)} {t('survivalRateShort')}
                   </Text>
                 </View>
 
-                <TouchableOpacity
-                  className="bg-aquacare-primary flex-row items-center py-2 px-3 rounded-lg"
-                  onPress={() => openHarvestChoice(cycle)}
-                >
-                  <Text className="text-white text-sm font-semibold ml-1">{t('harvest')}</Text>
-                </TouchableOpacity>
+                {cycle.unitCount > 0 ? null : (
+                  <TouchableOpacity
+                    className="bg-aquacare-primary flex-row items-center py-2 px-3 rounded-lg"
+                    onPress={() => openHarvestChoice(cycle)}
+                  >
+                    <Text className="text-white text-sm font-semibold ml-1">{t('harvest')}</Text>
+                  </TouchableOpacity>
+                )}
               </View>
-              <TouchableOpacity
-                style={{ marginTop: 10, flexDirection: 'row', alignItems: 'center', gap: 4 }}
-                onPress={() => { setSelectedCycle(cycle); setPartialHarvestHistoryModalVisible(true); }}
-              >
-                <Ionicons name="time-outline" size={14} color={AQUACARE_COLORS.GREEN_PRIMARY} />
-                <Text className="text-sm text-aquacare-primary">{t('partialHarvestHistory')}</Text>
-              </TouchableOpacity>
+              {cycle.unitCount > 0 ? null : (
+                <TouchableOpacity
+                  style={{ marginTop: 10, flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                  onPress={() => { setSelectedCycle(cycle); setPartialHarvestHistoryModalVisible(true); }}
+                >
+                  <Ionicons name="time-outline" size={14} color={AQUACARE_COLORS.GREEN_PRIMARY} />
+                  <Text className="text-sm text-aquacare-primary">{t('partialHarvestHistory')}</Text>
+                </TouchableOpacity>
+              )}
             </View>
           ))}
 
@@ -526,12 +583,15 @@ export default function DashboardScreen({ navigation }: any) {
         cycle={selectedCycle}
       />
 
-      <QuickActionsSheet
-        visible={actionsSheetVisible}
-        onClose={() => setActionsSheetVisible(false)}
-        unreadCount={unreadCount}
-        navigation={navigation}
-      />
+      {!primaryCycleHasProductionUnits ? (
+        <QuickActionsSheet
+          visible={actionsSheetVisible}
+          onClose={() => setActionsSheetVisible(false)}
+          unreadCount={unreadCount}
+          navigation={navigation}
+          scope="cycle"
+        />
+      ) : null}
 
       <Modal
         visible={cycleSwitchModalVisible}

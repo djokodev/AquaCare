@@ -6,7 +6,6 @@ import {
   Modal,
   ScrollView,
   StyleSheet,
-  SafeAreaView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
@@ -36,6 +35,21 @@ interface QuickActionsSheetProps {
    * Navigation object pour naviguer vers les screens
    */
   navigation: any;
+
+  /**
+   * Définit si le sheet est affiché pour un cycle global ou pour une unité.
+   */
+  scope?: 'cycle' | 'unit';
+
+  /**
+   * Contexte unitaire pour les actions scoppées.
+   */
+  productionUnitContext?: {
+    cycleId: string;
+    cycleUnitAllocationId: string;
+    productionUnitId: string;
+    productionUnitName: string;
+  };
 }
 
 /**
@@ -49,6 +63,7 @@ interface ActionItem {
   route: string;
   category: 'aquaculture' | 'commerce' | 'planning';
   badge?: number; // Nombre affiché dans le badge (ex: notifications)
+  params?: Record<string, unknown>;
 }
 
 /**
@@ -77,63 +92,132 @@ export default function QuickActionsSheet({
   onClose,
   unreadCount,
   navigation,
+  scope = 'cycle',
+  productionUnitContext,
 }: QuickActionsSheetProps) {
   const { t } = useTranslation();
 
   /**
    * Configuration des actions Aquaculture
    */
-  const aquacultureActions = useMemo((): ActionItem[] => [
-    {
-      id: 'newCycle',
-      labelKey: 'newCycle',
-      icon: 'add-circle',
-      iconColor: AQUACARE_COLORS.GREEN_PRIMARY,
-      route: 'NewCycle',
-      category: 'aquaculture',
-    },
-    {
-      id: 'dailyLog',
-      labelKey: 'dailyLog',
-      icon: 'create',
-      iconColor: AQUACARE_COLORS.GREEN_LIGHT,
-      route: 'DailyLog',
-      category: 'aquaculture',
-    },
-    {
-      id: 'sanitaryLog',
-      labelKey: 'sanitaryLog',
-      icon: 'warning-outline',
-      iconColor: AQUACARE_COLORS.ERROR,
-      route: 'SanitaryLog',
-      category: 'aquaculture',
-    },
-    {
-      id: 'notifications',
-      labelKey: 'notifications',
-      icon: 'notifications-outline',
-      iconColor: AQUACARE_COLORS.WARNING,
-      route: 'Notifications',
-      category: 'aquaculture',
-      badge: unreadCount, // Badge dynamique
-    },
-    {
-      id: 'feedingPlan',
-      labelKey: 'feedingPlan',
-      icon: 'restaurant-outline',
-      iconColor: AQUACARE_COLORS.INFO,
-      route: 'FeedingPlan',
-      category: 'aquaculture',
-    },
-    {
-      id: 'reports',
-      labelKey: 'reports',
-      icon: 'document-text-outline',
-      iconColor: AQUACARE_COLORS.BLUE,
-      route: 'Reports',
-      category: 'aquaculture',
-    },
-  ], [unreadCount]);
+  const aquacultureActions = useMemo((): ActionItem[] => {
+    if (scope === 'unit' && productionUnitContext) {
+      return [
+        {
+          id: 'newCycle',
+          labelKey: 'newCycle',
+          icon: 'add-circle',
+          iconColor: AQUACARE_COLORS.GREEN_PRIMARY,
+          route: 'NewCycle',
+          category: 'aquaculture',
+        },
+        {
+          id: 'dailyLog',
+          labelKey: 'productionUnitDailyLogAction',
+          icon: 'create',
+          iconColor: AQUACARE_COLORS.GREEN_LIGHT,
+          route: 'DailyLog',
+          category: 'aquaculture',
+          params: productionUnitContext,
+        },
+        {
+          id: 'sanitaryLog',
+          labelKey: 'productionUnitSanitaryLogAction',
+          icon: 'warning-outline',
+          iconColor: AQUACARE_COLORS.ERROR,
+          route: 'SanitaryLog',
+          category: 'aquaculture',
+          params: productionUnitContext,
+        },
+        {
+          id: 'history',
+          labelKey: 'productionUnitLogHistoryAction',
+          icon: 'time-outline',
+          iconColor: AQUACARE_COLORS.GREEN_DARK,
+          route: 'DailyLogHistory',
+          category: 'aquaculture',
+          params: productionUnitContext,
+        },
+        {
+          id: 'notifications',
+          labelKey: 'notifications',
+          icon: 'notifications-outline',
+          iconColor: AQUACARE_COLORS.WARNING,
+          route: 'Notifications',
+          category: 'aquaculture',
+          badge: unreadCount,
+        },
+        {
+          id: 'feedingPlan',
+          labelKey: 'feedingPlan',
+          icon: 'restaurant-outline',
+          iconColor: AQUACARE_COLORS.INFO,
+          route: 'FeedingPlan',
+          category: 'aquaculture',
+        },
+        {
+          id: 'reports',
+          labelKey: 'reports',
+          icon: 'document-text-outline',
+          iconColor: AQUACARE_COLORS.BLUE,
+          route: 'Reports',
+          category: 'aquaculture',
+        },
+      ];
+    }
+
+    return [
+      {
+        id: 'newCycle',
+        labelKey: 'newCycle',
+        icon: 'add-circle',
+        iconColor: AQUACARE_COLORS.GREEN_PRIMARY,
+        route: 'NewCycle',
+        category: 'aquaculture',
+      },
+      {
+        id: 'dailyLog',
+        labelKey: 'dailyLog',
+        icon: 'create',
+        iconColor: AQUACARE_COLORS.GREEN_LIGHT,
+        route: 'DailyLog',
+        category: 'aquaculture',
+      },
+      {
+        id: 'sanitaryLog',
+        labelKey: 'sanitaryLog',
+        icon: 'warning-outline',
+        iconColor: AQUACARE_COLORS.ERROR,
+        route: 'SanitaryLog',
+        category: 'aquaculture',
+      },
+      {
+        id: 'notifications',
+        labelKey: 'notifications',
+        icon: 'notifications-outline',
+        iconColor: AQUACARE_COLORS.WARNING,
+        route: 'Notifications',
+        category: 'aquaculture',
+        badge: unreadCount, // Badge dynamique
+      },
+      {
+        id: 'feedingPlan',
+        labelKey: 'feedingPlan',
+        icon: 'restaurant-outline',
+        iconColor: AQUACARE_COLORS.INFO,
+        route: 'FeedingPlan',
+        category: 'aquaculture',
+      },
+      {
+        id: 'reports',
+        labelKey: 'reports',
+        icon: 'document-text-outline',
+        iconColor: AQUACARE_COLORS.BLUE,
+        route: 'Reports',
+        category: 'aquaculture',
+      },
+    ];
+  }, [productionUnitContext, scope, unreadCount]);
 
   /**
    * Configuration des actions Commerce
@@ -183,11 +267,11 @@ export default function QuickActionsSheet({
    * Gère le clic sur une action
    * Ferme le sheet puis navigue après un petit délai pour une animation fluide
    */
-  const handleActionPress = (route: string) => {
+  const handleActionPress = (route: string, params?: Record<string, unknown>) => {
     onClose(); // Fermer d'abord le sheet
     // Délai pour animation fluide
     setTimeout(() => {
-      navigation.navigate(route);
+      navigation.navigate(route, params);
     }, 300);
   };
 
@@ -198,7 +282,7 @@ export default function QuickActionsSheet({
     <TouchableOpacity
       key={action.id}
       className="flex-row items-center p-4 bg-white mb-2 rounded-xl shadow-sm"
-      onPress={() => handleActionPress(action.route)}
+      onPress={() => handleActionPress(action.route, action.params)}
       activeOpacity={0.7}
     >
       {/* Icône dans un cercle coloré */}

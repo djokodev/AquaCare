@@ -88,19 +88,22 @@ describe('features/aquaculture/screens/ProductionUnitOverviewScreen', () => {
 
     await waitFor(() => {
       expect(getByText('productionUnitDashboardTitle')).toBeTruthy();
-      expect(getByText('productionUnitEstimatedFish')).toBeTruthy();
+      expect(getByText('currentFish')).toBeTruthy();
       expect(getByText('productionUnitCumulativeMortality')).toBeTruthy();
       expect(getByText('productionUnitConsumedFeed')).toBeTruthy();
       expect(getByText('productionUnitEstimatedBiomass')).toBeTruthy();
-      expect(getByText('productionUnitTrackingSectionTitle')).toBeTruthy();
       expect(getByText('productionUnitTodayLogDone')).toBeTruthy();
       expect(getAllByText('productionUnitActiveHealthIssue').length).toBeGreaterThan(0);
       expect(getByText('productionUnitRecentActivity')).toBeTruthy();
       expect(getByText('Bac 1')).toBeTruthy();
       expect(getByText('Cycle Silure')).toBeTruthy();
+      expect(getByText('dailyLog')).toBeTruthy();
+      expect(getByText('productCatalog')).toBeTruthy();
+      expect(getByText('notifications')).toBeTruthy();
+      expect(getByText('viewAllActions')).toBeTruthy();
     });
 
-    fireEvent.press(getByText('productionUnitDailyLogAction'));
+    fireEvent.press(getByText('dailyLog'));
     expect(navigation.navigate).toHaveBeenCalledWith('DailyLog', {
       cycleId: 'cycle-1',
       cycleUnitAllocationId: 'allocation-1',
@@ -108,20 +111,22 @@ describe('features/aquaculture/screens/ProductionUnitOverviewScreen', () => {
       productionUnitName: 'Bac 1',
     });
 
-    fireEvent.press(getByText('productionUnitSanitaryLogAction'));
-    expect(navigation.navigate).toHaveBeenCalledWith('SanitaryLog', {
-      cycleId: 'cycle-1',
-      cycleUnitAllocationId: 'allocation-1',
-      productionUnitId: 'unit-1',
-      productionUnitName: 'Bac 1',
+    fireEvent.press(getByText('viewAllActions'));
+
+    await waitFor(() => {
+      expect(getByText('productionUnitSanitaryLogAction')).toBeTruthy();
+      expect(getByText('productionUnitLogHistoryAction')).toBeTruthy();
     });
 
-    fireEvent.press(getByText('productionUnitLogHistoryAction'));
-    expect(navigation.navigate).toHaveBeenCalledWith('DailyLogHistory', {
-      cycleId: 'cycle-1',
-      cycleUnitAllocationId: 'allocation-1',
-      productionUnitId: 'unit-1',
-      productionUnitName: 'Bac 1',
+    fireEvent.press(getByText('productionUnitSanitaryLogAction'));
+
+    await waitFor(() => {
+      expect(navigation.navigate).toHaveBeenCalledWith('SanitaryLog', {
+        cycleId: 'cycle-1',
+        cycleUnitAllocationId: 'allocation-1',
+        productionUnitId: 'unit-1',
+        productionUnitName: 'Bac 1',
+      });
     });
   });
 

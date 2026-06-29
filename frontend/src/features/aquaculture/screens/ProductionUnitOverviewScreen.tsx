@@ -14,6 +14,8 @@ import {
 import { useTranslation } from 'react-i18next';
 
 import { AQUACARE_COLORS } from '@/constants/colors';
+import QuickActionsPreview from '@/features/main/components/QuickActionsPreview';
+import QuickActionsSheet from '@/features/main/components/QuickActionsSheet';
 import DashboardMetricCard from '@/features/main/components/MetricCard';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
 import { RootStackParamList } from '@/navigation/MainNavigator';
@@ -38,15 +40,6 @@ interface ActivityItem {
   icon: keyof typeof Ionicons.glyphMap;
   iconColor: string;
   dateSort: string;
-}
-
-interface UnitActionItem {
-  id: string;
-  label: string;
-  icon: keyof typeof Ionicons.glyphMap;
-  iconColor: string;
-  backgroundColor: string;
-  onPress: () => void;
 }
 
 const getProductionUnitTypeLabelKey = (unitType?: string | null): string => {
@@ -117,22 +110,11 @@ function StatusPill({
   );
 }
 
-function ActionRow({ item }: { item: UnitActionItem }) {
-  return (
-    <TouchableOpacity style={styles.actionRow} onPress={item.onPress} activeOpacity={0.75}>
-      <View style={[styles.actionIcon, { backgroundColor: item.backgroundColor }]}>
-        <Ionicons name={item.icon} size={20} color={item.iconColor} />
-      </View>
-      <Text style={styles.actionLabel}>{item.label}</Text>
-      <Ionicons name="chevron-forward" size={20} color={AQUACARE_COLORS.GRAY_LIGHT} />
-    </TouchableOpacity>
-  );
-}
-
 export default function ProductionUnitOverviewScreen({ navigation, route }: Props) {
   const { t, i18n } = useTranslation();
-  const { cycleId, allocationId, productionUnitId } = route.params;
+  const { cycleId, allocationId, productionUnitId, productionUnitName } = route.params;
   const locale = i18n.language?.startsWith('fr') ? 'fr-FR' : 'en-US';
+  const [actionsSheetVisible, setActionsSheetVisible] = useState(false);
 
   const [dashboard, setDashboard] = useState<ProductionUnitDashboard | null>(null);
   const [loading, setLoading] = useState(true);
@@ -174,10 +156,16 @@ export default function ProductionUnitOverviewScreen({ navigation, route }: Prop
 
   const allocation = dashboard?.allocation ?? null;
   const summary = dashboard?.summary ?? null;
-  const unitName = allocation?.production_unit_name || t('productionUnitsUnknownUnit');
+  const unitName = productionUnitName || allocation?.production_unit_name || t('productionUnitsUnknownUnit');
   const unitTypeLabel = t(getProductionUnitTypeLabelKey(allocation?.production_unit_type));
   const dimension = allocation?.production_unit_display_dimension?.trim();
   const cycleName = allocation?.cycle_name || t('productionUnitsUnknownUnit');
+  const unitContext = {
+    cycleId,
+    cycleUnitAllocationId: allocationId,
+    productionUnitId,
+    productionUnitName: unitName,
+  };
 
   const recentActivity = useMemo<ActivityItem[]>(() => {
     if (!dashboard) {
@@ -226,63 +214,6 @@ export default function ProductionUnitOverviewScreen({ navigation, route }: Prop
     return [...dailyItems, ...sanitaryItems].sort((left, right) => right.dateSort.localeCompare(left.dateSort));
   }, [dashboard, locale, t]);
 
-  const navigateToDailyLog = useCallback(() => {
-    navigation.navigate('DailyLog', {
-      cycleId,
-      cycleUnitAllocationId: allocationId,
-      productionUnitId,
-      productionUnitName: unitName,
-    });
-  }, [allocationId, cycleId, navigation, productionUnitId, unitName]);
-
-  const navigateToSanitaryLog = useCallback(() => {
-    navigation.navigate('SanitaryLog', {
-      cycleId,
-      cycleUnitAllocationId: allocationId,
-      productionUnitId,
-      productionUnitName: unitName,
-    });
-  }, [allocationId, cycleId, navigation, productionUnitId, unitName]);
-
-  const navigateToHistory = useCallback(() => {
-    navigation.navigate('DailyLogHistory', {
-      cycleId,
-      cycleUnitAllocationId: allocationId,
-      productionUnitId,
-      productionUnitName: unitName,
-    });
-  }, [allocationId, cycleId, navigation, productionUnitId, unitName]);
-
-  const unitActions = useMemo<UnitActionItem[]>(
-    () => [
-      {
-        id: 'daily-log',
-        label: t('productionUnitDailyLogAction'),
-        icon: 'document-text-outline',
-        iconColor: AQUACARE_COLORS.GREEN_PRIMARY,
-        backgroundColor: `${AQUACARE_COLORS.GREEN_PRIMARY}15`,
-        onPress: navigateToDailyLog,
-      },
-      {
-        id: 'sanitary-log',
-        label: t('productionUnitSanitaryLogAction'),
-        icon: 'medical-outline',
-        iconColor: AQUACARE_COLORS.ERROR,
-        backgroundColor: `${AQUACARE_COLORS.ERROR}15`,
-        onPress: navigateToSanitaryLog,
-      },
-      {
-        id: 'history',
-        label: t('productionUnitLogHistoryAction'),
-        icon: 'time-outline',
-        iconColor: AQUACARE_COLORS.GREEN_DARK,
-        backgroundColor: `${AQUACARE_COLORS.GREEN_DARK}15`,
-        onPress: navigateToHistory,
-      },
-    ],
-    [navigateToDailyLog, navigateToHistory, navigateToSanitaryLog, t]
-  );
-
   const hasTodayLog = Boolean(summary?.has_today_daily_log);
   const hasHealthIssue = Boolean(summary?.has_unresolved_sanitary_issue);
   const latestAverageWeight = coerceNumber(summary?.latest_average_weight_g);
@@ -294,7 +225,7 @@ export default function ProductionUnitOverviewScreen({ navigation, route }: Prop
   const metricCards = useMemo(
     () => [
       {
-        label: t('productionUnitEstimatedFish'),
+        label: t('currentFish'),
         value: summary ? formatCount(summary.estimated_current_fish_count, locale) : '-',
         subtitle:
           daysSinceLastLog !== null && daysSinceLastLog !== undefined
@@ -436,21 +367,23 @@ export default function ProductionUnitOverviewScreen({ navigation, route }: Prop
         </View>
       </View>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>{t('productionUnitTrackingSectionTitle')}</Text>
-        <Text style={styles.sectionDescription}>{t('productionUnitTrackingSectionDescription')}</Text>
+      <QuickActionsPreview
+        onOpenSheet={() => setActionsSheetVisible(true)}
+        hasActiveCycles={true}
+        unreadCount={0}
+        navigation={navigation}
+        scope="unit"
+        productionUnitContext={unitContext}
+      />
 
-        <View style={styles.actionsCard}>
-          {unitActions.map((item, index) => (
-            <View
-              key={item.id}
-              style={index < unitActions.length - 1 ? styles.actionRowWrapper : undefined}
-            >
-              <ActionRow item={item} />
-            </View>
-          ))}
-        </View>
-      </View>
+      <QuickActionsSheet
+        visible={actionsSheetVisible}
+        onClose={() => setActionsSheetVisible(false)}
+        unreadCount={0}
+        navigation={navigation}
+        scope="unit"
+        productionUnitContext={unitContext}
+      />
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>{t('productionUnitRecentActivity')}</Text>

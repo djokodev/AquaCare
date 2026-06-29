@@ -34,16 +34,6 @@ jest.mock('@/features/main/components/DashboardHeader', () => ({
   default: () => null,
 }));
 
-jest.mock('@/features/main/components/QuickActionsPreview', () => ({
-  __esModule: true,
-  default: () => null,
-}));
-
-jest.mock('@/features/main/components/QuickActionsSheet', () => ({
-  __esModule: true,
-  default: () => null,
-}));
-
 jest.mock('@/components/modals/HarvestModal', () => ({
   __esModule: true,
   default: () => null,
@@ -83,6 +73,14 @@ describe('features/main/screens/DashboardScreen', () => {
     id: 'cycle-b',
     cycle_name: 'Cycle B',
     pond_identifier: 'P2',
+  };
+
+  const cycleWithUnits: ProductionCycle = {
+    ...cycleA,
+    id: 'cycle-unit',
+    cycle_name: 'Cycle Unit',
+    pond_identifier: 'Bac 1',
+    infrastructure_type: ['tank', 'tank', 'pond'],
   };
 
   beforeEach(() => {
@@ -155,6 +153,60 @@ describe('features/main/screens/DashboardScreen', () => {
 
     expect(navigation.navigate).toHaveBeenCalledWith('ProductionUnitsHub', {
       cycleId: cycleA.id,
+    });
+  });
+
+  it('masque les actions operationnelles pour un cycle avec unites', async () => {
+    mockUseSelector.mockImplementation((selector: (state: any) => unknown) =>
+      selector({
+        aquaculture: {
+          dashboardData: {
+            active_cycles_count: 1,
+            total_biomass: 450,
+            total_fish_count: 2700,
+            average_fcr: 1.8,
+            average_survival_rate: 88,
+            active_cycles: [cycleWithUnits],
+            recent_logs: [],
+            current_feeding_plans: [],
+            pending_notifications: [],
+          },
+          loading: {
+            dashboard: false,
+            cycles: false,
+            logs: false,
+            sync: false,
+          },
+          error: null,
+          currentCycle: cycleWithUnits,
+        },
+        notifications: {
+          unreadCount: 0,
+        },
+        commerce: {
+          orders: {
+            items: [],
+            statistics: null,
+            loading: false,
+            error: null,
+          },
+        },
+      })
+    );
+
+    const { getByText, queryByText } = render(<DashboardScreen navigation={navigation} />);
+
+    await waitFor(() => {
+      expect(getByText('dashboardEstimatedMarketValue')).toBeTruthy();
+      expect(getByText('dashboardDirectProductionCost')).toBeTruthy();
+      expect(getByText('dashboardEstimatedCurrentFish')).toBeTruthy();
+      expect(getByText('dashboardTimeRemainingCycle')).toBeTruthy();
+      expect(getByText('productionUnitsDashboardCta')).toBeTruthy();
+      expect(queryByText('viewAllActions')).toBeNull();
+      expect(queryByText('dailyLog')).toBeNull();
+      expect(queryByText('sanitaryLog')).toBeNull();
+      expect(queryByText('harvest')).toBeNull();
+      expect(queryByText('Bac 1')).toBeNull();
     });
   });
 });

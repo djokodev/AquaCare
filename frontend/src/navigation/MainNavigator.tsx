@@ -119,6 +119,7 @@ export type RootStackParamList = {
     cycleId: string;
     allocationId: string;
     productionUnitId: string;
+    productionUnitName?: string;
   };
 };
 
@@ -326,7 +327,7 @@ export default function MainNavigator() {
           headerStyle: { backgroundColor: AQUACARE_COLORS.GREEN_PRIMARY },
           headerTintColor: AQUACARE_COLORS.WHITE,
           headerTitleStyle: { fontWeight: 'bold' },
-          title: t('cycleDashboardTitle'),
+          title: t('productionUnitsHubTitle'),
         }}
       />
       <RootStack.Screen
