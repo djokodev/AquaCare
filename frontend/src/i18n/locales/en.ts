@@ -1340,6 +1340,7 @@
   productionUnitDashboardLoading: 'Loading unit dashboard...',
   productionUnitEstimatedFish: 'Estimated fish',
   productionUnitCumulativeMortality: 'Cumulative mortality',
+  productionUnitMortalityRateLabel: 'Mortality rate: {{rate}}',
   productionUnitConsumedFeed: 'Feed consumed',
   productionUnitEstimatedBiomass: 'Estimated biomass',
   productionUnitLastTracking: 'Last tracking',

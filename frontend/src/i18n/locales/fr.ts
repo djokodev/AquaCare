@@ -1340,6 +1340,7 @@ export const fr = {
   productionUnitDashboardLoading: 'Chargement du dashboard de l’unité...',
   productionUnitEstimatedFish: 'Poissons estimés',
   productionUnitCumulativeMortality: 'Mortalité cumulée',
+  productionUnitMortalityRateLabel: 'Taux de mortalité: {{rate}}',
   productionUnitConsumedFeed: 'Aliment consommé',
   productionUnitEstimatedBiomass: 'Biomasse estimée',
   productionUnitLastTracking: 'Dernier suivi',

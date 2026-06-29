@@ -163,7 +163,7 @@ describe('features/aquaculture/screens/ProductionUnitsHubScreen', () => {
     );
 
     await waitFor(() => {
-      expect(getByText('productionUnitsHubTitle')).toBeTruthy();
+      expect(queryByText('productionUnitsHubTitle')).toBeNull();
       expect(getByText('productionUnitsHubSubtitle')).toBeTruthy();
       expect(getByText('3 unités')).toBeTruthy();
       expect(getByText('Bac 1')).toBeTruthy();
@@ -192,7 +192,7 @@ describe('features/aquaculture/screens/ProductionUnitsHubScreen', () => {
       }) as never
     );
 
-    const { getByText } = render(
+    const { getByText, queryByText } = render(
       <ProductionUnitsHubScreen navigation={navigation} route={route} />
     );
 
@@ -218,7 +218,9 @@ describe('features/aquaculture/screens/ProductionUnitsHubScreen', () => {
     });
 
     await waitFor(() => {
-      expect(getByText('productionUnitsHubTitle')).toBeTruthy();
+      expect(getByText('productionUnitsHubSubtitle')).toBeTruthy();
+      expect(getByText('0 unités')).toBeTruthy();
+      expect(queryByText('productionUnitsHubTitle')).toBeNull();
     });
   });
 
@@ -304,7 +306,8 @@ describe('features/aquaculture/screens/ProductionUnitsHubScreen', () => {
     );
 
     await waitFor(() => {
-      expect(getByText('productionUnitsHubTitle')).toBeTruthy();
+      expect(getByText('productionUnitsHubSubtitle')).toBeTruthy();
+      expect(getByText('1 unités')).toBeTruthy();
     });
 
     act(() => {

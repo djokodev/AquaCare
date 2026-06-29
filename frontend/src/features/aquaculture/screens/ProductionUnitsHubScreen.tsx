@@ -184,7 +184,6 @@ export default function ProductionUnitsHubScreen({ navigation, route }: Props) {
           <Ionicons name="grid-outline" size={16} color={AQUACARE_COLORS.WHITE} />
           <Text style={styles.heroBadgeText}>{t('productionUnitsActiveCycleLabel')}</Text>
         </View>
-        <Text style={styles.title}>{t('productionUnitsHubTitle')}</Text>
         <Text style={styles.subtitle}>{t('productionUnitsHubSubtitle')}</Text>
         <Text style={styles.summaryText}>
           {t('productionUnitsCount', { count: totalAllocations })}
@@ -281,12 +280,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     letterSpacing: 0.2,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: AQUACARE_COLORS.GREEN_DARK,
-    lineHeight: 34,
   },
   subtitle: {
     marginTop: 8,

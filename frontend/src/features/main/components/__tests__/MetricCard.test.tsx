@@ -21,7 +21,6 @@ describe('features/main/components/MetricCard', () => {
         color={AQUACARE_COLORS.GREEN_PRIMARY}
         value="3600"
         label="Total poissons"
-        index={0}
       />
     );
 
@@ -37,8 +36,6 @@ describe('features/main/components/MetricCard', () => {
         color={AQUACARE_COLORS.GREEN_PRIMARY}
         value="88%"
         label="Survie"
-        index={1}
-        animationType="rotate"
       />
     );
 

@@ -179,21 +179,18 @@ export default function DashboardScreen({ navigation }: any) {
           color: AQUACARE_COLORS.GREEN_PRIMARY,
           value: formatCurrency(dashboardBusinessMetrics.estimatedMarketValueFcfa),
           label: t('dashboardEstimatedMarketValue'),
-          animationType: 'pulse' as const,
         },
         {
           icon: 'calculator-outline' as const,
           color: AQUACARE_COLORS.SUCCESS,
           value: formatCurrency(dashboardBusinessMetrics.directProductionCostFcfa),
           label: t('dashboardDirectProductionCost'),
-          animationType: 'bounce' as const,
         },
         {
           icon: 'fish-outline' as const,
           color: AQUACARE_COLORS.GREEN_LIGHT,
           value: formatNumber(dashboardData?.total_fish_count ?? 0, undefined, 0),
           label: t('dashboardEstimatedCurrentFish'),
-          animationType: 'wave' as const,
         },
         {
           icon: 'time-outline' as const,
@@ -203,44 +200,39 @@ export default function DashboardScreen({ navigation }: any) {
               ? '-'
               : formatNumber(dashboardBusinessMetrics.timeRemainingDays, t('days'), 0),
           label: t('dashboardTimeRemainingCycle'),
-          animationType: 'bounce' as const,
         },
       ];
     }
 
     return [
-      {
-        icon: 'cash-outline' as const,
-        color: AQUACARE_COLORS.GREEN_PRIMARY,
-        value: formatCurrency(dashboardBusinessMetrics.estimatedMarketValueFcfa),
-        label: t('dashboardEstimatedMarketValue'),
-        animationType: 'pulse' as const,
-      },
-      {
-        icon: 'restaurant-outline' as const,
-        color: AQUACARE_COLORS.GREEN_LIGHT,
-        value: formatCurrency(dashboardBusinessMetrics.feedCostConsumedFcfa),
-        label: t('dashboardFeedCostConsumed'),
-        animationType: 'wave' as const,
-      },
-      {
-        icon: 'time-outline' as const,
-        color: AQUACARE_COLORS.GREEN_DARK,
-        value:
-          dashboardBusinessMetrics.timeRemainingDays === null
-            ? '-'
-            : formatNumber(dashboardBusinessMetrics.timeRemainingDays, t('days'), 0),
-        label: t('dashboardTimeRemainingCycle'),
-        animationType: 'bounce' as const,
-      },
-      {
-        icon: 'calculator-outline' as const,
-        color: AQUACARE_COLORS.SUCCESS,
-        value: formatCurrency(dashboardBusinessMetrics.directProductionCostFcfa),
-        label: t('dashboardDirectProductionCost'),
-        animationType: 'bounce' as const,
-      },
-    ];
+        {
+          icon: 'cash-outline' as const,
+          color: AQUACARE_COLORS.GREEN_PRIMARY,
+          value: formatCurrency(dashboardBusinessMetrics.estimatedMarketValueFcfa),
+          label: t('dashboardEstimatedMarketValue'),
+        },
+        {
+          icon: 'restaurant-outline' as const,
+          color: AQUACARE_COLORS.GREEN_LIGHT,
+          value: formatCurrency(dashboardBusinessMetrics.feedCostConsumedFcfa),
+          label: t('dashboardFeedCostConsumed'),
+        },
+        {
+          icon: 'time-outline' as const,
+          color: AQUACARE_COLORS.GREEN_DARK,
+          value:
+            dashboardBusinessMetrics.timeRemainingDays === null
+              ? '-'
+              : formatNumber(dashboardBusinessMetrics.timeRemainingDays, t('days'), 0),
+          label: t('dashboardTimeRemainingCycle'),
+        },
+        {
+          icon: 'calculator-outline' as const,
+          color: AQUACARE_COLORS.SUCCESS,
+          value: formatCurrency(dashboardBusinessMetrics.directProductionCostFcfa),
+          label: t('dashboardDirectProductionCost'),
+        },
+      ];
   }, [dashboardBusinessMetrics, dashboardData?.total_fish_count, primaryCycleHasProductionUnits, t]);
 
   useEffect(() => {
@@ -446,15 +438,13 @@ export default function DashboardScreen({ navigation }: any) {
           </View>
         ) : (
           <View className="flex-row flex-wrap justify-between">
-            {dashboardMetricCards.map((card, index) => (
+            {dashboardMetricCards.map((card) => (
               <MetricCard
                 key={card.label}
                 icon={card.icon}
                 color={card.color}
                 value={card.value}
                 label={card.label}
-                index={index}
-                animationType={card.animationType}
               />
             ))}
           </View>

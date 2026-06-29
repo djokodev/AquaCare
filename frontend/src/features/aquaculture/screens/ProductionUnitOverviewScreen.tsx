@@ -125,7 +125,9 @@ export default function ProductionUnitOverviewScreen({ navigation, route }: Prop
         value: summary ? formatCount(summary.total_mortality_count, locale) : '-',
         subtitle:
           summary?.mortality_rate_pct !== null && summary?.mortality_rate_pct !== undefined
-            ? formatPercentage(coerceNumber(summary.mortality_rate_pct) ?? 0, locale)
+            ? t('productionUnitMortalityRateLabel', {
+                rate: formatPercentage(coerceNumber(summary.mortality_rate_pct) ?? 0, locale),
+              })
             : undefined,
         icon: 'remove-circle-outline' as const,
         color: AQUACARE_COLORS.WARNING,
@@ -209,14 +211,13 @@ export default function ProductionUnitOverviewScreen({ navigation, route }: Prop
     >
       <View style={styles.metricsSection}>
         <View style={styles.grid}>
-          {metricCards.map((card, index) => (
+          {metricCards.map((card) => (
             <DashboardMetricCard
               key={card.label}
               icon={card.icon}
               color={card.color}
               value={card.value}
               label={card.label}
-              index={index}
               subtitle={card.subtitle}
             />
           ))}

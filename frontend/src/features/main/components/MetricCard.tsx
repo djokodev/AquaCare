@@ -7,8 +7,6 @@ export interface MetricCardProps {
   color: string;
   value: string | number;
   label: string;
-  index: number;
-  animationType?: 'bounce' | 'wave' | 'rotate' | 'pulse';
   subtitle?: string;
 }
 
@@ -17,8 +15,6 @@ const MetricCard: React.FC<MetricCardProps> = ({
   color,
   value,
   label,
-  index,
-  animationType = 'pulse',
   subtitle,
 }) => {
   return (
@@ -27,10 +23,8 @@ const MetricCard: React.FC<MetricCardProps> = ({
         <Ionicons name={icon} size={32} color={color} />
       </View>
       <Text
-        className="text-2xl font-bold text-gray-dark mt-2 text-center w-full"
-        numberOfLines={1}
-        adjustsFontSizeToFit
-        minimumFontScale={0.65}
+        className="text-2xl font-bold text-gray-dark mt-2 text-center w-full leading-7"
+        numberOfLines={2}
       >
         {value}
       </Text>
