@@ -37,6 +37,7 @@ jest.mock('react-i18next', () => ({
 jest.mock('@/features/aquaculture/services/aquacultureService', () => ({
   aquacultureService: {
     getCycleDashboard: jest.fn(),
+    getCycleStore: jest.fn(),
   },
 }));
 
@@ -72,6 +73,7 @@ describe('features/main/screens/DashboardScreen', () => {
   const mockUseSelector = useSelector as unknown as jest.Mock;
   const mockOffline = offlineService as jest.Mocked<typeof offlineService>;
   const mockGetCycleDashboard = aquacultureService.getCycleDashboard as jest.Mock;
+  const mockGetCycleStore = aquacultureService.getCycleStore as jest.Mock;
   const navigation = {
     navigate: jest.fn(),
   } as any;
@@ -122,6 +124,35 @@ describe('features/main/screens/DashboardScreen', () => {
         total_allocations: 3,
       },
     });
+    mockGetCycleStore.mockResolvedValue({
+      cycle_id: 'cycle-a',
+      summary: {
+        manual_feed_kg: '50.00',
+        received_order_feed_kg: '20.00',
+        total_feed_added_kg: '70.00',
+        feed_consumed_kg: '10.00',
+        estimated_feed_remaining_kg: '60.00',
+        feed_expenses_fcfa: '105000.00',
+        pending_orders_count: 1,
+        pending_order_amount_fcfa: '30000.00',
+        pending_order_feed_kg: '20.00',
+        stock_tracking_started_at: '2026-06-01',
+      },
+      status: 'ok',
+      pending_orders: [
+        {
+          id: 'order-1',
+          order_number: 'ORD-001',
+          status: 'confirmed',
+          delivery_method: 'pickup',
+          total_bags: 1,
+          total_fcfa: '30000.00',
+          estimated_feed_kg: '20.00',
+          created_at: '2026-06-10T08:00:00.000Z',
+        },
+      ],
+      stock_tracking_started_at: '2026-06-01',
+    });
 
     mockUseSelector.mockImplementation((selector: (state: any) => unknown) =>
       selector({
@@ -169,6 +200,13 @@ describe('features/main/screens/DashboardScreen', () => {
     expect(getByText('dashboardFeedCostConsumed')).toBeTruthy();
     expect(getByText('dashboardTimeRemainingCycle')).toBeTruthy();
     expect(getByText('dashboardDirectProductionCost')).toBeTruthy();
+    await waitFor(() => {
+      expect(getByText('storeTitle')).toBeTruthy();
+      expect(getByText('storeFeedRemaining')).toBeTruthy();
+    });
+
+    fireEvent.press(getByText('storeOpen'));
+    expect(navigation.navigate).toHaveBeenCalledWith('Store', { cycleId: cycleA.id });
 
     fireEvent.press(getByText('changeSessionCycle'));
     fireEvent.press(getAllByText('Cycle B').pop() as any);
@@ -238,10 +276,11 @@ describe('features/main/screens/DashboardScreen', () => {
       expect(getByText('dashboardEstimatedCurrentFish')).toBeTruthy();
       expect(getByText('dashboardTimeRemainingCycle')).toBeTruthy();
       expect(getByText('productionUnitsDashboardCta')).toBeTruthy();
+      expect(getByText('storeTitle')).toBeTruthy();
       expect(getByText(/3 unités/)).toBeTruthy();
       expect(queryByText('viewAllActions')).toBeNull();
       expect(queryByText('dailyLog')).toBeNull();
-      expect(queryByText('sanitaryLog')).toBeNull();
+      expect(queryByText('productCatalog')).toBeNull();
       expect(queryByText('harvest')).toBeNull();
       expect(queryByText('Bac 1')).toBeNull();
     });

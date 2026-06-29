@@ -13,6 +13,7 @@ from drf_spectacular.utils import (
 )
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 
 from ..domain.exceptions import FeedingPlanGenerationError
@@ -22,6 +23,8 @@ from ..serializers import (
     CycleDashboardSerializer,
     CycleHarvestResponseSerializer,
     CycleStatisticsSerializer,
+    CycleStoreManualStockSerializer,
+    CycleStoreSerializer,
     HarvestSerializer,
     PartialHarvestReadSerializer,
     PartialHarvestResponseSerializer,
@@ -30,6 +33,8 @@ from ..serializers import (
 )
 from ..services import (
     CycleDashboardService,
+    CycleStoreApplicationService,
+    DeclareManualStockCommand,
     HarvestCycleCommand,
     PartialHarvestCommand,
     ProductionCycleApplicationService,
@@ -308,6 +313,73 @@ class ProductionCycleViewSet(viewsets.ModelViewSet):
         payload = CycleDashboardService.build_dashboard_payload(cycle)
         serializer = CycleDashboardSerializer(payload, context={'request': request})
         return Response(serializer.data)
+
+    @extend_schema(
+        summary="Magasin d'un cycle de production",
+        description="""
+        Retourne le stock d'aliments du cycle, les commandes reçues importées automatiquement,
+        et les commandes en attente qui ne sont pas encore comptabilisées dans le stock.
+        """,
+        responses={200: CycleStoreSerializer},
+    )
+    @action(detail=True, methods=['get'], url_path='store')
+    def store(self, request, pk=None):
+        """Retourne le résumé du Magasin pour un cycle."""
+        cycle = self.get_object()
+        payload = CycleStoreApplicationService.get_store(cycle)
+        serializer = CycleStoreSerializer(payload, context={'request': request})
+        return Response(serializer.data)
+
+    @extend_schema(
+        summary="Déclarer un stock manuel pour le Magasin",
+        description="""
+        Enregistre une entrée de stock déclarée manuellement pour le cycle.
+        Le champ client_uuid reste utilisable pour dédupliquer les soumissions offline.
+        """,
+        request=CycleStoreManualStockSerializer,
+        responses={200: CycleStoreSerializer},
+        examples=[
+            OpenApiExample(
+                "Déclaration manuelle",
+                value={
+                    'label': 'Aliment starter 25kg',
+                    'quantity_kg': '50.00',
+                    'total_cost_fcfa': '75000.00',
+                    'entry_date': '2026-06-29',
+                    'note': 'Premier stock du cycle',
+                    'client_uuid': '11111111-1111-4111-8111-111111111111',
+                    'created_offline': True,
+                },
+            )
+        ],
+    )
+    @action(detail=True, methods=['post'], url_path='store/manual-stock')
+    def store_manual_stock(self, request, pk=None):
+        """Enregistre une déclaration manuelle de stock pour un cycle."""
+        cycle = self.get_object()
+        serializer = CycleStoreManualStockSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            CycleStoreApplicationService.declare_manual_stock(
+                user=request.user,
+                cycle=cycle,
+                command=DeclareManualStockCommand(
+                    label=serializer.validated_data['label'],
+                    quantity_kg=serializer.validated_data['quantity_kg'],
+                    total_cost_fcfa=serializer.validated_data['total_cost_fcfa'],
+                    entry_date=serializer.validated_data['entry_date'],
+                    note=serializer.validated_data.get('note', ''),
+                    client_uuid=serializer.validated_data.get('client_uuid'),
+                    created_offline=serializer.validated_data.get('created_offline', False),
+                ),
+            )
+        except PermissionError as exc:
+            raise PermissionDenied(str(exc)) from exc
+
+        payload = CycleStoreApplicationService.get_store(cycle)
+        response_serializer = CycleStoreSerializer(payload, context={'request': request})
+        return Response(response_serializer.data, status=status.HTTP_200_OK)
     
     @extend_schema(
         summary="Comparaison avec cycles précédents",

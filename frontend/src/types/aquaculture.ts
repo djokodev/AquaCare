@@ -704,6 +704,50 @@ export interface CycleFeedStatus {
   bags_remaining_to_order: number;
 }
 
+export type CycleStoreStatus = 'not_started' | 'low' | 'check_stock' | 'ok';
+
+export interface CycleStorePendingOrder {
+  id: string;
+  order_number: string;
+  status: string;
+  delivery_method: string;
+  total_bags: number;
+  total_fcfa: string;
+  estimated_feed_kg: string;
+  created_at: string;
+}
+
+export interface CycleStoreSummary {
+  manual_feed_kg: string;
+  received_order_feed_kg: string;
+  total_feed_added_kg: string;
+  feed_consumed_kg: string;
+  estimated_feed_remaining_kg: string;
+  feed_expenses_fcfa: string;
+  pending_orders_count: number;
+  pending_order_amount_fcfa: string;
+  pending_order_feed_kg: string;
+  stock_tracking_started_at: string | null;
+}
+
+export interface CycleStore {
+  cycle_id: string;
+  summary: CycleStoreSummary;
+  status: CycleStoreStatus;
+  pending_orders: CycleStorePendingOrder[];
+  stock_tracking_started_at: string | null;
+}
+
+export interface CycleStoreManualStockPayload {
+  label: string;
+  quantity_kg: string;
+  total_cost_fcfa: string;
+  entry_date: string;
+  note?: string;
+  client_uuid?: string;
+  created_offline?: boolean;
+}
+
 // =================== ETATS REDUX ===================
 
 export interface AquacultureState {

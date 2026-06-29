@@ -133,6 +133,19 @@ class CycleUnitAllocationQuerySet(models.QuerySet):
         )
 
 
+class CycleFeedStockEntryQuerySet(models.QuerySet):
+    """QuerySet optimisé pour les entrées du magasin du cycle."""
+
+    def for_api(self):
+        return self.select_related(
+            'cycle',
+            'product',
+            'order',
+            'order_item',
+            'order_item__product',
+        )
+
+
 class ProductionReportQuerySet(models.QuerySet):
     """QuerySet optimisé pour les rapports de production."""
 
@@ -491,6 +504,114 @@ class CycleUnitAllocation(models.Model):
     def save(self, *args, **kwargs):
         self.full_clean()
         return super().save(*args, **kwargs)
+
+
+class CycleFeedStockEntry(models.Model):
+    """Entrée du magasin rattachée à un cycle de production."""
+
+    SOURCE_MANUAL = 'manual'
+    SOURCE_ORDER = 'order'
+    SOURCE_CHOICES = [
+        (SOURCE_MANUAL, _('Manuel')),
+        (SOURCE_ORDER, _('Commande')),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    client_uuid = models.UUIDField(
+        unique=True,
+        null=True,
+        blank=True,
+        verbose_name=_("UUID client"),
+        help_text=_("UUID généré côté mobile pour déduplication"),
+    )
+    cycle = models.ForeignKey(
+        'ProductionCycle',
+        on_delete=models.CASCADE,
+        related_name='feed_stock_entries',
+        verbose_name=_("Cycle de production"),
+    )
+    source = models.CharField(
+        max_length=20,
+        choices=SOURCE_CHOICES,
+        verbose_name=_("Source"),
+    )
+    label = models.CharField(
+        max_length=200,
+        verbose_name=_("Nom de l'aliment"),
+    )
+    quantity_kg = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal('0.01'))],
+        verbose_name=_("Quantité (kg)"),
+    )
+    total_cost_fcfa = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal('0'),
+        validators=[MinValueValidator(Decimal('0'))],
+        verbose_name=_("Montant total (FCFA)"),
+    )
+    entry_date = models.DateField(
+        verbose_name=_("Date d'entrée"),
+    )
+    note = models.TextField(
+        blank=True,
+        verbose_name=_("Note"),
+    )
+    product = models.ForeignKey(
+        'commerce.Product',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='cycle_feed_stock_entries',
+        verbose_name=_("Produit"),
+    )
+    order = models.ForeignKey(
+        'commerce.Order',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='feed_stock_entries',
+        verbose_name=_("Commande"),
+    )
+    order_item = models.OneToOneField(
+        'commerce.OrderItem',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='feed_stock_entry',
+        verbose_name=_("Article de commande"),
+    )
+    created_offline = models.BooleanField(
+        default=False,
+        verbose_name=_("Créé hors ligne"),
+    )
+    synced_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name=_("Synchronisé le"),
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    objects = CycleFeedStockEntryQuerySet.as_manager()
+
+    class Meta:
+        app_label = 'aquaculture'
+        db_table = 'aquaculture_cycle_feed_stock_entry'
+        ordering = ['-entry_date', '-created_at']
+        verbose_name = _("Entrée de stock du cycle")
+        verbose_name_plural = _("Entrées de stock du cycle")
+        indexes = [
+            models.Index(fields=['cycle', 'entry_date'], name='aq_feed_stock_cycle_date_idx'),
+            models.Index(fields=['cycle', 'source'], name='aq_feed_stock_cycle_source_idx'),
+            models.Index(fields=['client_uuid']),
+            models.Index(fields=['created_offline', 'synced_at'], name='aq_feed_stock_sync_idx'),
+        ]
+
+    def __str__(self):
+        return f"{self.cycle.cycle_name} - {self.label} ({self.quantity_kg} kg)"
 
 
 class ProductionCycle(models.Model):

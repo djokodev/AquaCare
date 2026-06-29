@@ -8,7 +8,7 @@ from uuid import uuid4
 
 import pytest
 from accounts.models import FarmProfile, User
-from aquaculture.models import CycleLog, ProductionCycle
+from aquaculture.models import CycleFeedStockEntry, CycleLog, ProductionCycle
 from commerce.domain.exceptions import InvalidOrderError, ProductNotAvailableError, ProductNotFoundError
 from commerce.models import Product
 from commerce.services import (
@@ -481,6 +481,42 @@ class TestOrderService:
         updated = OrderService.confirm_order_receipt(order, test_user)
 
         assert updated.status == "received"
+
+    def test_confirm_order_receipt_imports_cycle_feed_stock(self, test_user, test_farm, test_product):
+        cycle = ProductionCycle.objects.create(
+            farm_profile=test_farm,
+            cycle_name="Cycle Magasin",
+            species="tilapia",
+            pond_identifier="Pond CO3",
+            pond_surface_m2=Decimal("120.0"),
+            start_date=timezone.now().date(),
+            initial_count=1000,
+            initial_average_weight=Decimal("5.0"),
+            initial_biomass=Decimal("5.0"),
+            current_count=950,
+            current_average_weight=Decimal("50.0"),
+            current_biomass=Decimal("47.5"),
+            status="active",
+        )
+        order = OrderService.create_order(
+            user=test_user,
+            items_data=[{"product_id": str(test_product.id), "quantity": 1}],
+            delivery_method="home",
+            production_cycle_id=str(cycle.id),
+        )
+        order.status = "delivered"
+        order.save(update_fields=["status", "updated_at"])
+
+        updated = OrderService.confirm_order_receipt(order, test_user)
+
+        assert updated.status == "received"
+        assert cycle.feed_stock_entries.count() == 1
+
+        entry = cycle.feed_stock_entries.get()
+        assert entry.source == CycleFeedStockEntry.SOURCE_ORDER
+        assert entry.quantity_kg == Decimal("20.00")
+        assert entry.order_id == order.id
+        assert entry.order_item_id == order.items.first().id
 
     def test_confirm_order_receipt_rejects_non_delivered(self, test_user, test_farm, test_product):
         order = OrderService.create_order(

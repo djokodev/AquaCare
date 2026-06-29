@@ -28,6 +28,16 @@ Cette base de code couvre maintenant le flux complet des unites de production:
 7. Les saisies journaliere et sanitaire restent unit-scoped quand elles sont lancees depuis une unite.
 8. Le dashboard global du cycle agrege les unites liees et conserve la compatibilite legacy pour les cycles sans unites.
 
+## Magasin De Cycle
+
+Le Magasin de cycle est la source de verite frontend pour les stocks d'aliments rattaches a un cycle:
+
+1. Une declaration manuelle cree une entree de stock et peut utiliser `client_uuid` pour la deduplication offline.
+2. Une commande passe au statut `received` est importee automatiquement dans le Magasin.
+3. Les commandes en attente restent affichees separement et ne comptent pas dans le stock.
+4. Le dashboard du cycle expose un resume du Magasin sous "Mes unites de production".
+5. L'ecran `StoreScreen` permet de consulter le stock, les commandes en attente et de declarer un stock manuel.
+
 ## Production units end-to-end flow
 
 Le parcours cible est desormais le suivant:
@@ -197,6 +207,7 @@ Service unique: `features/aquaculture/services/aquacultureService.ts`
 | Sanitaire | `/aquaculture/sanitary-logs/` |
 | Feeding plans | `/aquaculture/feeding-plans/`, `/generate/` |
 | Guides nutritionnels | `/aquaculture/nutritional-guides/` |
+| Magasin cycle | `/aquaculture/cycles/{id}/store/`, `/aquaculture/cycles/{id}/store/manual-stock/` |
 | Sync offline | `POST /aquaculture/sync/` |
 | Rapports | `/aquaculture/reports/*` |
 | Setup/simulation | `/aquaculture/production-plan/setup/`, `/simulate/` |

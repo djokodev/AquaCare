@@ -33,6 +33,7 @@ from .base import BaseService
 from .cycle_application_service import HarvestCycleCommand, PartialHarvestCommand, ProductionCycleApplicationService
 from .cycle_dashboard_service import CycleDashboardService
 from .cycle_service import ProductionCycleService
+from .cycle_store_application_service import CycleStoreApplicationService, DeclareManualStockCommand
 from .dashboard_application_service import DashboardApplicationService, InvalidDashboardCycleScopeError
 from .dashboard_service import DashboardService
 from .farm_production_plan_service import FarmProductionPlanService
@@ -77,6 +78,8 @@ __all__ = [
     'CycleLogApplicationService',
     'CycleLogMutationResult',
     'UnauthorizedCycleAccessError',
+    'CycleStoreApplicationService',
+    'DeclareManualStockCommand',
     'FeedingPlanService',
     'FarmProductionPlanService',
     'FeedingPlanApplicationService',

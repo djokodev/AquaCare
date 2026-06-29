@@ -94,7 +94,7 @@ describe('features/aquaculture/screens/ProductionUnitOverviewScreen', () => {
       expect(getByText('productionUnitConsumedFeed')).toBeTruthy();
       expect(getByText('productionUnitEstimatedBiomass')).toBeTruthy();
       expect(getByText('dailyLog')).toBeTruthy();
-      expect(getByText('productCatalog')).toBeTruthy();
+      expect(getByText('sanitaryLog')).toBeTruthy();
       expect(getByText('notifications')).toBeTruthy();
       expect(getByText('viewAllActions')).toBeTruthy();
       expect(queryByText('Bac 1')).toBeNull();

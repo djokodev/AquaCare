@@ -74,6 +74,8 @@ GET    /api/aquaculture/cycles/{id}/dashboard/ - Global dashboard aggregated fro
 POST   /api/aquaculture/cycles/{id}/harvest/ - Complete cycle (harvest)
 GET    /api/aquaculture/cycles/{id}/statistics/ - Detailed cycle statistics
 GET    /api/aquaculture/cycles/{id}/comparison/ - Compare with previous cycles
+GET    /api/aquaculture/cycles/{id}/store/ - Cycle feed store summary
+POST   /api/aquaculture/cycles/{id}/store/manual-stock/ - Declare manual feed stock
 
 DAILY LOGS:
 GET    /api/aquaculture/cycle-logs/        - List logs (filterable by cycle_id)

@@ -12,6 +12,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING, TypedDict
 
+from aquaculture.services.cycle_store_application_service import CycleStoreApplicationService
 from django.db import IntegrityError, transaction
 from django.db.models import Count, QuerySet, Sum
 from django.utils import timezone
@@ -446,6 +447,7 @@ class OrderService(BaseCommerceService):
 
         order.status = 'received'
         order.save(update_fields=['status', 'updated_at'])
+        CycleStoreApplicationService.import_received_order(order)
 
         return Order.objects.with_details().get(pk=order.pk)
 

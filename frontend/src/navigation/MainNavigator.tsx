@@ -30,6 +30,7 @@ import ReportDetailScreen from '@/features/aquaculture/screens/ReportDetailScree
 import ReportsScreen from '@/features/aquaculture/screens/ReportsScreen';
 import SanitaryLogScreen from '@/features/aquaculture/screens/SanitaryLogScreen';
 import StatisticsScreen from '@/features/aquaculture/screens/StatisticsScreen';
+import StoreScreen from '@/features/aquaculture/screens/StoreScreen';
 
 // Commerce Screens
 import CartScreen from '@/features/commerce/screens/CartScreen';
@@ -88,6 +89,7 @@ export type RootStackParamList = {
   ProductDetail: { productId: string };
   Cart: undefined;
   OrdersHistory: undefined;
+  Store: { cycleId?: string } | undefined;
   FeedingSuggestions: undefined;
   CycleSimulator: {
     cycleId?: string;
@@ -289,6 +291,10 @@ export default function MainNavigator() {
       <RootStack.Screen
         name="ReportDetail"
         component={ReportDetailScreen}
+      />
+      <RootStack.Screen
+        name="Store"
+        component={StoreScreen}
       />
       {/* Commerce Screens */}
       <RootStack.Screen

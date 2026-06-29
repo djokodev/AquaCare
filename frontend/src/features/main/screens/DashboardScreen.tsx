@@ -33,7 +33,7 @@ import CyclePicker from '@/features/aquaculture/components/CyclePicker';
 import DashboardHeader from '../components/DashboardHeader';
 import QuickActionsPreview from '../components/QuickActionsPreview';
 import QuickActionsSheet from '../components/QuickActionsSheet';
-import { ProductionCycle } from '@/types/aquaculture';
+import { CycleStore, ProductionCycle } from '@/types/aquaculture';
 import { AQUACARE_COLORS } from '@/constants/colors';
 import { formatNumber, formatPercentage, formatCurrency } from '@/utils';
 import { useAuth } from '@/hooks/useAuth';
@@ -59,6 +59,9 @@ export default function DashboardScreen({ navigation }: any) {
   const [pendingCycleId, setPendingCycleId] = useState<string | null>(null);
   const [confirmingOrderId, setConfirmingOrderId] = useState<string | null>(null);
   const [currentCycleUnitCount, setCurrentCycleUnitCount] = useState<number | null>(null);
+  const [cycleStore, setCycleStore] = useState<CycleStore | null>(null);
+  const [cycleStoreLoading, setCycleStoreLoading] = useState(false);
+  const [cycleStoreError, setCycleStoreError] = useState<string | null>(null);
 
   const { dashboardData, loading, error, currentCycle } = useSelector(
     (state: RootState) => state.aquaculture
@@ -100,12 +103,6 @@ export default function DashboardScreen({ navigation }: any) {
     }
   };
 
-  const onRefresh = useCallback(() => {
-    dispatch(fetchDashboardData(undefined));
-    dispatch(fetchNotifications());
-    dispatch(fetchOrders());
-  }, [dispatch]);
-
   const pendingDeliveryConfirmations = useMemo(
     () => ordersList.filter((order) => order.status === 'delivered'),
     [ordersList]
@@ -124,6 +121,28 @@ export default function DashboardScreen({ navigation }: any) {
     [activeCycles, currentCycleInList]
   );
   const requiresCycleSelection = activeCycles.length > 1 && !currentCycleInList;
+
+  const loadCurrentCycleStore = useCallback(async () => {
+    if (!primaryActiveCycle?.id) {
+      setCycleStore(null);
+      setCycleStoreError(null);
+      setCycleStoreLoading(false);
+      return;
+    }
+
+    setCycleStoreLoading(true);
+    setCycleStoreError(null);
+
+    try {
+      const storePayload = await aquacultureService.getCycleStore(primaryActiveCycle.id);
+      setCycleStore(storePayload);
+    } catch {
+      setCycleStore(null);
+      setCycleStoreError(t('storeLoadError', { defaultValue: 'Impossible de charger le Magasin' }));
+    } finally {
+      setCycleStoreLoading(false);
+    }
+  }, [primaryActiveCycle?.id, t]);
 
   useEffect(() => {
     let cancelled = false;
@@ -153,6 +172,17 @@ export default function DashboardScreen({ navigation }: any) {
       cancelled = true;
     };
   }, [primaryActiveCycle?.id, primaryCycleHasProductionUnits]);
+
+  useEffect(() => {
+    void loadCurrentCycleStore();
+  }, [loadCurrentCycleStore]);
+
+  const onRefresh = useCallback(() => {
+    dispatch(fetchDashboardData(undefined));
+    dispatch(fetchNotifications());
+    dispatch(fetchOrders());
+    void loadCurrentCycleStore();
+  }, [dispatch, loadCurrentCycleStore]);
 
   const cycleCards = useMemo(
     () =>
@@ -310,6 +340,14 @@ export default function DashboardScreen({ navigation }: any) {
     }
 
     navigation.navigate('ProductionUnitsHub', { cycleId: primaryActiveCycle.id });
+  };
+
+  const handleStorePress = () => {
+    if (!primaryActiveCycle) {
+      return;
+    }
+
+    navigation.navigate('Store', { cycleId: primaryActiveCycle.id });
   };
 
   const handleConfirmOrderReceipt = (orderId: string, orderNumber: string) => {
@@ -569,24 +607,152 @@ export default function DashboardScreen({ navigation }: any) {
           ))}
 
           {primaryActiveCycle && (
-            <TouchableOpacity
-              className="mt-2 bg-white rounded-xl p-4 border border-aquacare-primary flex-row items-center justify-between"
-              onPress={handleProductionUnitsPress}
-            >
-              <View className="flex-1 mr-3">
-                <Text className="text-base font-bold text-gray-dark">
-                  {t('productionUnitsDashboardCta')}
-                </Text>
-                <Text className="text-xs text-gray-light mt-1">
-                  {t('productionUnitsHubSubtitle')}
-                </Text>
+            <>
+              <TouchableOpacity
+                className="mt-2 bg-white rounded-xl p-4 border border-aquacare-primary flex-row items-center justify-between"
+                onPress={handleProductionUnitsPress}
+              >
+                <View className="flex-1 mr-3">
+                  <Text className="text-base font-bold text-gray-dark">
+                    {t('productionUnitsDashboardCta')}
+                  </Text>
+                  <Text className="text-xs text-gray-light mt-1">
+                    {t('productionUnitsHubSubtitle')}
+                  </Text>
+                </View>
+                <Ionicons
+                  name="chevron-forward"
+                  size={20}
+                  color={AQUACARE_COLORS.GREEN_PRIMARY}
+                />
+              </TouchableOpacity>
+
+              <View className="mt-3 bg-white rounded-xl p-4 border border-[#dbe3d9]">
+                <View className="flex-row items-start justify-between gap-3">
+                  <View className="flex-1">
+                    <Text className="text-base font-bold text-gray-dark">
+                      {t('storeTitle')}
+                    </Text>
+                    <Text className="text-xs text-gray-light mt-1">
+                      {t('storeDescription')}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    className="px-3 py-2 rounded-lg bg-aquacare-primary"
+                    onPress={handleStorePress}
+                  >
+                    <Text className="text-white text-xs font-semibold">
+                      {t('storeOpen')}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                {cycleStoreLoading ? (
+                  <View className="items-center justify-center py-6">
+                    <ActivityIndicator size="small" color={AQUACARE_COLORS.GREEN_PRIMARY} />
+                    <Text className="text-xs text-gray-light mt-2">{t('loading')}</Text>
+                  </View>
+                ) : cycleStoreError ? (
+                  <View className="mt-4 rounded-lg bg-[#fef2f2] p-3">
+                    <Text className="text-sm text-[#991b1b]">{cycleStoreError}</Text>
+                  </View>
+                ) : cycleStore ? (
+                  <View className="mt-4">
+                    <View className="flex-row flex-wrap justify-between">
+                      <View className="w-[48%] bg-cream rounded-xl p-3 mb-3">
+                        <Text className="text-xs text-gray-light">{t('storeFeedRemaining')}</Text>
+                        <Text className="text-lg font-bold text-aquacare-primary mt-1">
+                          {formatNumber(
+                            Number.parseFloat(cycleStore.summary.estimated_feed_remaining_kg || '0'),
+                            t('kg'),
+                            2
+                          )}
+                        </Text>
+                      </View>
+                      <View className="w-[48%] bg-cream rounded-xl p-3 mb-3">
+                        <Text className="text-xs text-gray-light">{t('storeFeedConsumed')}</Text>
+                        <Text className="text-lg font-bold text-aquacare-primary mt-1">
+                          {formatNumber(
+                            Number.parseFloat(cycleStore.summary.feed_consumed_kg || '0'),
+                            t('kg'),
+                            2
+                          )}
+                        </Text>
+                      </View>
+                      <View className="w-[48%] bg-cream rounded-xl p-3 mb-3">
+                        <Text className="text-xs text-gray-light">{t('storeFeedExpenses')}</Text>
+                        <Text className="text-lg font-bold text-aquacare-primary mt-1">
+                          {formatCurrency(Number.parseFloat(cycleStore.summary.feed_expenses_fcfa || '0'))}
+                        </Text>
+                      </View>
+                      <View className="w-[48%] bg-cream rounded-xl p-3 mb-3">
+                        <Text className="text-xs text-gray-light">{t('storePendingOrders')}</Text>
+                        <Text className="text-lg font-bold text-aquacare-primary mt-1">
+                          {formatNumber(cycleStore.summary.pending_orders_count, undefined, 0)}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View className="rounded-xl border border-[#e5efe4] bg-[#f8fbf8] p-3">
+                      <View className="flex-row items-center justify-between">
+                        <Text className="text-sm font-semibold text-gray-dark">
+                          {t('storeStatusTitle')}
+                        </Text>
+                        <View className="rounded-full bg-white px-3 py-1 border border-[#e5efe4]">
+                          <Text className="text-xs font-semibold text-aquacare-primary">
+                            {cycleStore.status === 'ok'
+                              ? t('storeStatusOk')
+                              : cycleStore.status === 'low'
+                                ? t('storeStatusLow')
+                                : cycleStore.status === 'check_stock'
+                                  ? t('storeStatusCheckStock')
+                                  : t('storeStatusNotStarted')}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {cycleStore.pending_orders.length > 0 ? (
+                        <View className="mt-3 gap-2">
+                          {cycleStore.pending_orders.slice(0, 2).map((order) => (
+                            <View
+                              key={order.id}
+                              className="flex-row items-center justify-between rounded-lg bg-white px-3 py-2 border border-[#edf4ea]"
+                            >
+                              <View className="flex-1 mr-3">
+                                <Text className="text-sm font-semibold text-gray-dark">
+                                  {order.order_number}
+                                </Text>
+                                <Text className="text-xs text-gray-light mt-0.5">
+                                  {formatNumber(Number.parseFloat(order.estimated_feed_kg || '0'), t('kg'), 2)}
+                                </Text>
+                              </View>
+                              <Text className="text-sm font-semibold text-aquacare-primary">
+                                {formatCurrency(Number.parseFloat(order.total_fcfa || '0'))}
+                              </Text>
+                            </View>
+                          ))}
+                        </View>
+                      ) : cycleStore.status === 'not_started' ? (
+                        <View className="mt-3 rounded-lg bg-white p-3 border border-[#edf4ea]">
+                          <Text className="text-sm font-semibold text-gray-dark">
+                            {t('storeEmptyTitle')}
+                          </Text>
+                          <Text className="text-xs text-gray-light mt-1">
+                            {t('storeEmptyDescription')}
+                          </Text>
+                        </View>
+                      ) : null}
+                    </View>
+                  </View>
+                ) : (
+                  <View className="mt-4 rounded-lg bg-[#f8fafc] p-3">
+                    <Text className="text-sm text-gray-light">
+                      {t('storeEmptyDescription')}
+                    </Text>
+                  </View>
+                )}
               </View>
-              <Ionicons
-                name="chevron-forward"
-                size={20}
-                color={AQUACARE_COLORS.GREEN_PRIMARY}
-              />
-            </TouchableOpacity>
+            </>
           )}
         </View>
       )}
