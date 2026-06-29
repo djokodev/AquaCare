@@ -48,6 +48,13 @@ La logique produit reste alignee avec le backend:
 3. Le cycle global ne double compte pas les logs legacy quand des unites existent.
 4. Les etats loading, empty et erreur restent visibles sur les ecrans critiques.
 
+## Cycle overview vs unit operations
+
+1. Le dashboard global du cycle est une vue de synthese.
+2. Les actions operationnelles sont declenchees depuis une unite de production.
+3. Le hub "Mes unites de production" liste les unites du cycle.
+4. Le dashboard d'une unite porte les actions et les donnees scopees a cette unite.
+
 ## Manual QA checklist — Production units flow
 
 1. Creer une ferme avec Bac 1, Bac 2 et Etang 1.

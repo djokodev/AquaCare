@@ -29,6 +29,21 @@ interface QuickActionsPreviewProps {
    * Navigation object pour naviguer directement depuis l'aperçu
    */
   navigation: any;
+
+  /**
+   * Définit si l'aperçu est affiché pour un cycle global ou une unité.
+   */
+  scope?: 'cycle' | 'unit';
+
+  /**
+   * Contexte unitaire pour les actions scoppées.
+   */
+  productionUnitContext?: {
+    cycleId: string;
+    cycleUnitAllocationId: string;
+    productionUnitId: string;
+    productionUnitName: string;
+  };
 }
 
 /**
@@ -39,6 +54,7 @@ interface SuggestedAction {
   color: string;
   label: string;
   route: string;
+  params?: Record<string, unknown>;
 }
 
 /**
@@ -67,6 +83,8 @@ export default function QuickActionsPreview({
   hasActiveCycles,
   unreadCount,
   navigation,
+  scope = 'cycle',
+  productionUnitContext,
 }: QuickActionsPreviewProps) {
   const { t } = useTranslation();
 
@@ -75,6 +93,30 @@ export default function QuickActionsPreview({
    * Retourne les 3 actions les plus pertinentes selon le contexte utilisateur
    */
   const suggestedActions = useMemo((): SuggestedAction[] => {
+    if (scope === 'unit' && productionUnitContext) {
+      return [
+        {
+          icon: 'create',
+          color: AQUACARE_COLORS.GREEN_LIGHT,
+          label: t('dailyLog'),
+          route: 'DailyLog',
+          params: productionUnitContext,
+        },
+        {
+          icon: 'storefront-outline',
+          color: AQUACARE_COLORS.GREEN_PRIMARY,
+          label: t('productCatalog'),
+          route: 'ProductCatalog',
+        },
+        {
+          icon: 'notifications-outline',
+          color: AQUACARE_COLORS.WARNING,
+          label: t('notifications'),
+          route: 'Notifications',
+        },
+      ];
+    }
+
     const actions: SuggestedAction[] = [];
 
     // Suggestion 1 : Basée sur l'état des cycles
@@ -122,7 +164,7 @@ export default function QuickActionsPreview({
     }
 
     return actions.slice(0, 3); // Toujours max 3 suggestions
-  }, [hasActiveCycles, unreadCount, t]);
+  }, [hasActiveCycles, unreadCount, t, scope, productionUnitContext]);
 
   return (
     <View className="px-5 py-5">
@@ -134,7 +176,7 @@ export default function QuickActionsPreview({
             className={`flex-row items-center p-4 ${
               index < suggestedActions.length - 1 ? 'border-b border-gray-100' : ''
             }`}
-            onPress={() => navigation.navigate(action.route)}
+            onPress={() => navigation.navigate(action.route, action.params)}
             activeOpacity={0.7}
           >
             <View
