@@ -6,10 +6,38 @@ import DashboardScreen from '../DashboardScreen';
 import { ProductionCycle } from '@/types/aquaculture';
 import { setCurrentCycle } from '@/features/aquaculture/store/aquacultureSlice';
 import { offlineService } from '@/services/offlineService';
+import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
 
 jest.mock('react-redux', () => ({
   useDispatch: jest.fn(),
   useSelector: jest.fn(),
+}));
+
+jest.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (key: string, options?: Record<string, unknown>) => {
+      if (key === 'cycleDashboardTitle') {
+        return 'Dashboard du cycle';
+      }
+      if (key === 'productionUnitsCount') {
+        return `${options?.count} unités`;
+      }
+      return key;
+    },
+    i18n: {
+      language: 'fr',
+    },
+  }),
+  initReactI18next: {
+    type: '3rdParty',
+    init: jest.fn(),
+  },
+}));
+
+jest.mock('@/features/aquaculture/services/aquacultureService', () => ({
+  aquacultureService: {
+    getCycleDashboard: jest.fn(),
+  },
 }));
 
 jest.mock('@react-navigation/native', () => ({
@@ -43,6 +71,7 @@ describe('features/main/screens/DashboardScreen', () => {
   const mockDispatch = jest.fn();
   const mockUseSelector = useSelector as unknown as jest.Mock;
   const mockOffline = offlineService as jest.Mocked<typeof offlineService>;
+  const mockGetCycleDashboard = aquacultureService.getCycleDashboard as jest.Mock;
   const navigation = {
     navigate: jest.fn(),
   } as any;
@@ -80,7 +109,7 @@ describe('features/main/screens/DashboardScreen', () => {
     id: 'cycle-unit',
     cycle_name: 'Cycle Unit',
     pond_identifier: 'Bac 1',
-    infrastructure_type: ['tank', 'tank', 'pond'],
+    infrastructure_type: ['tank', 'pond'],
   };
 
   beforeEach(() => {
@@ -88,6 +117,11 @@ describe('features/main/screens/DashboardScreen', () => {
     (useDispatch as unknown as jest.Mock).mockReturnValue(mockDispatch);
     mockOffline.hasAnyPendingSync.mockResolvedValue(false);
     mockOffline.syncAllOfflineData.mockResolvedValue({ success: 0, failed: 0, details: {} as any });
+    mockGetCycleDashboard.mockResolvedValue({
+      summary: {
+        total_allocations: 3,
+      },
+    });
 
     mockUseSelector.mockImplementation((selector: (state: any) => unknown) =>
       selector({
@@ -130,6 +164,7 @@ describe('features/main/screens/DashboardScreen', () => {
   it('permet de changer le cycle de session depuis le dashboard', async () => {
     const { getByText, getAllByText } = render(<DashboardScreen navigation={navigation} />);
 
+    expect(getByText('Dashboard du cycle')).toBeTruthy();
     expect(getByText('dashboardEstimatedMarketValue')).toBeTruthy();
     expect(getByText('dashboardFeedCostConsumed')).toBeTruthy();
     expect(getByText('dashboardTimeRemainingCycle')).toBeTruthy();
@@ -197,16 +232,20 @@ describe('features/main/screens/DashboardScreen', () => {
     const { getByText, queryByText } = render(<DashboardScreen navigation={navigation} />);
 
     await waitFor(() => {
+      expect(getByText('Dashboard du cycle')).toBeTruthy();
       expect(getByText('dashboardEstimatedMarketValue')).toBeTruthy();
       expect(getByText('dashboardDirectProductionCost')).toBeTruthy();
       expect(getByText('dashboardEstimatedCurrentFish')).toBeTruthy();
       expect(getByText('dashboardTimeRemainingCycle')).toBeTruthy();
       expect(getByText('productionUnitsDashboardCta')).toBeTruthy();
+      expect(getByText(/3 unités/)).toBeTruthy();
       expect(queryByText('viewAllActions')).toBeNull();
       expect(queryByText('dailyLog')).toBeNull();
       expect(queryByText('sanitaryLog')).toBeNull();
       expect(queryByText('harvest')).toBeNull();
       expect(queryByText('Bac 1')).toBeNull();
     });
+
+    expect(mockGetCycleDashboard).toHaveBeenCalledWith('cycle-unit');
   });
 });

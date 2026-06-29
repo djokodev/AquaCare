@@ -55,6 +55,10 @@ La logique produit reste alignee avec le backend:
 3. Le hub "Mes unites de production" liste les unites du cycle.
 4. Le dashboard d'une unite porte les actions et les donnees scopees a cette unite.
 
+The unit dashboard now starts directly with unit metrics and actions.
+The previous unit hero section was removed to keep the operational screen lightweight.
+Metric cards use static icons.
+
 ## Manual QA checklist — Production units flow
 
 1. Creer une ferme avec Bac 1, Bac 2 et Etang 1.

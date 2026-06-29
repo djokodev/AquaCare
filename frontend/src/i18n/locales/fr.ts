@@ -1312,7 +1312,7 @@ export const fr = {
   productionUnitsEmptyTitle: 'Aucune unité trouvée',
   productionUnitsEmptyDescription: 'Les unités de production de ce cycle apparaîtront ici.',
   productionUnitsLoadError: 'Impossible de charger les unités de production.',
-  cycleDashboardTitle: 'Dashboard global du cycle',
+  cycleDashboardTitle: 'Dashboard du cycle',
   cycleDashboardSubtitle: 'Les chiffres ci-dessous sont agrégés depuis les unités de production liées à ce cycle.',
   cycleDashboardLoading: 'Chargement du dashboard du cycle...',
   cycleDashboardActiveCycleLabel: 'Cycle agrégé',

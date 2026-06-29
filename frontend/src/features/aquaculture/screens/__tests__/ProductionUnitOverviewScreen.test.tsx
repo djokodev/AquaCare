@@ -14,6 +14,7 @@ describe('features/aquaculture/screens/ProductionUnitOverviewScreen', () => {
   const mockGetProductionUnitDashboard = aquacultureService.getProductionUnitDashboard as jest.Mock;
   const navigation = {
     navigate: jest.fn(),
+    setOptions: jest.fn(),
   } as any;
 
   const route = {
@@ -82,25 +83,27 @@ describe('features/aquaculture/screens/ProductionUnitOverviewScreen', () => {
       ],
     });
 
-    const { getByText, getAllByText } = render(
+    const { getByText, queryByText } = render(
       <ProductionUnitOverviewScreen navigation={navigation} route={route} />
     );
 
     await waitFor(() => {
-      expect(getByText('productionUnitDashboardTitle')).toBeTruthy();
+      expect(navigation.setOptions).toHaveBeenCalledWith({ title: 'Bac 1' });
       expect(getByText('currentFish')).toBeTruthy();
       expect(getByText('productionUnitCumulativeMortality')).toBeTruthy();
       expect(getByText('productionUnitConsumedFeed')).toBeTruthy();
       expect(getByText('productionUnitEstimatedBiomass')).toBeTruthy();
-      expect(getByText('productionUnitTodayLogDone')).toBeTruthy();
-      expect(getAllByText('productionUnitActiveHealthIssue').length).toBeGreaterThan(0);
-      expect(getByText('productionUnitRecentActivity')).toBeTruthy();
-      expect(getByText('Bac 1')).toBeTruthy();
-      expect(getByText('Cycle Silure')).toBeTruthy();
       expect(getByText('dailyLog')).toBeTruthy();
       expect(getByText('productCatalog')).toBeTruthy();
       expect(getByText('notifications')).toBeTruthy();
       expect(getByText('viewAllActions')).toBeTruthy();
+      expect(queryByText('Bac 1')).toBeNull();
+      expect(queryByText('Cycle Silure')).toBeNull();
+      expect(queryByText('productionUnitDashboardTitle')).toBeNull();
+      expect(queryByText('productionUnitDashboardDescription')).toBeNull();
+      expect(queryByText('productionUnitTodayLogDone')).toBeNull();
+      expect(queryByText('productionUnitActiveHealthIssue')).toBeNull();
+      expect(queryByText('productionUnitRecentActivity')).toBeNull();
     });
 
     fireEvent.press(getByText('dailyLog'));
@@ -138,7 +141,7 @@ describe('features/aquaculture/screens/ProductionUnitOverviewScreen', () => {
       }) as never
     );
 
-    const { getByText } = render(
+    const { getByText, queryByText } = render(
       <ProductionUnitOverviewScreen navigation={navigation} route={route} />
     );
 
@@ -173,7 +176,9 @@ describe('features/aquaculture/screens/ProductionUnitOverviewScreen', () => {
     });
 
     await waitFor(() => {
-      expect(getByText('productionUnitDashboardTitle')).toBeTruthy();
+      expect(navigation.setOptions).toHaveBeenCalledWith({ title: 'Bac 1' });
+      expect(getByText('currentFish')).toBeTruthy();
+      expect(queryByText('productionUnitDashboardTitle')).toBeNull();
     });
   });
 

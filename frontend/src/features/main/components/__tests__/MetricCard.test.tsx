@@ -1,5 +1,5 @@
 import React from 'react';
-import { act, render } from '@testing-library/react-native';
+import { render } from '@testing-library/react-native';
 
 import { AQUACARE_COLORS } from '@/constants/colors';
 import MetricCard from '../MetricCard';
@@ -14,7 +14,7 @@ describe('features/main/components/MetricCard', () => {
     jest.useRealTimers();
   });
 
-  it('renders without crashing with the default animation', () => {
+  it('renders without timers with the default props', () => {
     const { getByText } = render(
       <MetricCard
         icon="analytics-outline"
@@ -27,13 +27,10 @@ describe('features/main/components/MetricCard', () => {
 
     expect(getByText('3600')).toBeTruthy();
     expect(getByText('Total poissons')).toBeTruthy();
-
-    act(() => {
-      jest.runOnlyPendingTimers();
-    });
+    expect(jest.getTimerCount()).toBe(0);
   });
 
-  it('renders without crashing with the rotate animation', () => {
+  it('renders without timers when an animation type is provided', () => {
     const { getByText } = render(
       <MetricCard
         icon="refresh-outline"
@@ -47,9 +44,6 @@ describe('features/main/components/MetricCard', () => {
 
     expect(getByText('88%')).toBeTruthy();
     expect(getByText('Survie')).toBeTruthy();
-
-    act(() => {
-      jest.runOnlyPendingTimers();
-    });
+    expect(jest.getTimerCount()).toBe(0);
   });
 });

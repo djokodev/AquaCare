@@ -37,6 +37,7 @@ import { ProductionCycle } from '@/types/aquaculture';
 import { AQUACARE_COLORS } from '@/constants/colors';
 import { formatNumber, formatPercentage, formatCurrency } from '@/utils';
 import { useAuth } from '@/hooks/useAuth';
+import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
 
 import MetricCard from '../components/MetricCard';
 import {
@@ -57,6 +58,7 @@ export default function DashboardScreen({ navigation }: any) {
   const [cycleSwitchModalVisible, setCycleSwitchModalVisible] = useState(false);
   const [pendingCycleId, setPendingCycleId] = useState<string | null>(null);
   const [confirmingOrderId, setConfirmingOrderId] = useState<string | null>(null);
+  const [currentCycleUnitCount, setCurrentCycleUnitCount] = useState<number | null>(null);
 
   const { dashboardData, loading, error, currentCycle } = useSelector(
     (state: RootState) => state.aquaculture
@@ -122,17 +124,52 @@ export default function DashboardScreen({ navigation }: any) {
     [activeCycles, currentCycleInList]
   );
   const requiresCycleSelection = activeCycles.length > 1 && !currentCycleInList;
+
+  useEffect(() => {
+    let cancelled = false;
+    setCurrentCycleUnitCount(null);
+
+    const loadCurrentCycleUnitCount = async () => {
+      if (!primaryActiveCycle || !primaryCycleHasProductionUnits) {
+        return;
+      }
+
+      try {
+        const cycleDashboard = await aquacultureService.getCycleDashboard(primaryActiveCycle.id);
+
+        if (!cancelled) {
+          setCurrentCycleUnitCount(cycleDashboard.summary.total_allocations);
+        }
+      } catch {
+        if (!cancelled) {
+          setCurrentCycleUnitCount(null);
+        }
+      }
+    };
+
+    void loadCurrentCycleUnitCount();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [primaryActiveCycle?.id, primaryCycleHasProductionUnits]);
+
   const cycleCards = useMemo(
     () =>
       activeCycles.map((cycle) => ({
         ...cycle,
-        unitCount: Array.isArray(cycle.infrastructure_type) ? cycle.infrastructure_type.length : 0,
+        unitCount:
+          cycle.id === primaryActiveCycle?.id && currentCycleUnitCount !== null
+            ? currentCycleUnitCount
+            : Array.isArray(cycle.infrastructure_type)
+              ? cycle.infrastructure_type.length
+              : 0,
         cycleAgeDays: Math.floor(
           (Date.now() - new Date(cycle.start_date).getTime()) / (1000 * 60 * 60 * 24)
         ),
         estimatedMarketValueFcfa: calculateCycleEstimatedMarketValue(cycle),
       })),
-    [activeCycles]
+    [activeCycles, currentCycleUnitCount, primaryActiveCycle?.id]
   );
   const dashboardMetricCards = useMemo(() => {
     if (primaryCycleHasProductionUnits) {
@@ -397,6 +434,9 @@ export default function DashboardScreen({ navigation }: any) {
       >
 
       <View className="px-5 py-5">
+        <Text className="mb-3 text-xl font-bold text-gray-dark">
+          {t('cycleDashboardTitle')}
+        </Text>
         {loading.dashboard && !dashboardData ? (
           <View className="items-center justify-center py-10">
             <ActivityIndicator size="large" color={AQUACARE_COLORS.GREEN_PRIMARY} />

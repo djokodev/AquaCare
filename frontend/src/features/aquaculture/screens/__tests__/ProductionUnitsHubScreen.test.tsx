@@ -4,6 +4,16 @@ import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import ProductionUnitsHubScreen from '../ProductionUnitsHubScreen';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
 
+jest.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (key: string, options?: Record<string, unknown>) =>
+      key === 'productionUnitsCount' ? `${options?.count} unités` : key,
+    i18n: {
+      language: 'fr',
+    },
+  }),
+}));
+
 jest.mock('@/features/aquaculture/services/aquacultureService', () => ({
   aquacultureService: {
     getCycleDashboard: jest.fn(),
@@ -30,13 +40,13 @@ describe('features/aquaculture/screens/ProductionUnitsHubScreen', () => {
     mockGetCycleDashboard.mockResolvedValue({
       cycle: {
         id: 'cycle-1',
-        cycle_name: 'Cycle actif',
+        cycle_name: 'Cycle Clarias 2026-06-29',
       },
       summary: {
-        total_allocations: 2,
-        total_estimated_current_fish_count: 1770,
+        total_allocations: 3,
+        total_estimated_current_fish_count: 2760,
         total_mortality_count: 30,
-        total_feed_consumed_kg: '12.50',
+        total_feed_consumed_kg: '18.50',
         estimated_current_biomass_kg: '430.50',
         units_with_sanitary_issue_count: 1,
         units_missing_today_log_count: 1,
@@ -111,21 +121,57 @@ describe('features/aquaculture/screens/ProductionUnitsHubScreen', () => {
           recent_daily_logs: [],
           recent_sanitary_logs: [],
         },
+        {
+          allocation: {
+            id: 'allocation-3',
+            cycle: 'cycle-1',
+            cycle_name: 'Cycle Clarias 2026-06-29',
+            production_unit: 'unit-3',
+            production_unit_name: 'Étang 1',
+            production_unit_type: 'pond',
+            production_unit_display_dimension: '120 m²',
+            production_unit_recommended_capacity: 800,
+            initial_fish_count: 800,
+            current_fish_count: 780,
+            current_biomass_kg: 220.1,
+            survival_rate_pct: 97,
+            created_at: '2026-01-01T00:00:00Z',
+            updated_at: '2026-01-01T00:00:00Z',
+          },
+          summary: {
+            estimated_current_fish_count: 780,
+            total_mortality_count: 20,
+            mortality_rate_pct: '2.50',
+            total_feed_consumed_kg: '6.00',
+            latest_average_weight_g: '28.00',
+            estimated_current_biomass_kg: '218.40',
+            last_daily_log_date: '2026-06-25',
+            days_since_last_log: 3,
+            has_today_daily_log: true,
+            active_sanitary_issues_count: 0,
+            last_sanitary_event_date: '2026-06-25',
+            has_unresolved_sanitary_issue: false,
+          },
+          recent_daily_logs: [],
+          recent_sanitary_logs: [],
+        },
       ],
     });
 
-    const { getByText, getAllByText } = render(
+    const { getByText, getAllByText, queryByText } = render(
       <ProductionUnitsHubScreen navigation={navigation} route={route} />
     );
 
     await waitFor(() => {
       expect(getByText('productionUnitsHubTitle')).toBeTruthy();
       expect(getByText('productionUnitsHubSubtitle')).toBeTruthy();
-      expect(getByText('Cycle actif')).toBeTruthy();
+      expect(getByText('3 unités')).toBeTruthy();
       expect(getByText('Bac 1')).toBeTruthy();
       expect(getByText('Étang principal')).toBeTruthy();
-      expect(getAllByText('productionUnitsCurrentFishCount').length).toBe(2);
-      expect(getAllByText('productionUnitsOpenUnit').length).toBe(2);
+      expect(getByText('Étang 1')).toBeTruthy();
+      expect(queryByText('Cycle Clarias 2026-06-29')).toBeNull();
+      expect(getAllByText('productionUnitsCurrentFishCount').length).toBe(3);
+      expect(getAllByText('productionUnitsOpenUnit').length).toBe(3);
     });
 
     fireEvent.press(getAllByText('productionUnitsOpenUnit')[0]);
