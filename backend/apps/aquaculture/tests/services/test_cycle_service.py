@@ -376,6 +376,27 @@ class TestProductionCycleService:
         assert cycle is not None
         assert cycle.status == 'active'
 
+    def test_create_cycle_skips_density_validation_for_mixed_infrastructure_types(self):
+        """Vérifie qu'un cycle multi-unités ne dépend pas d'une densité globale legacy."""
+        farm_profile = FarmProfileFactory()
+
+        cycle_data = {
+            'cycle_name': 'Test Mixed Infrastructure',
+            'species': 'tilapia',
+            'pond_identifier': 'Cycle multi-unités',
+            'pond_surface_m2': Decimal('120.00'),
+            'pond_volume_m3': Decimal('3.00'),
+            'infrastructure_type': ['tank', 'pond'],
+            'start_date': date.today(),
+            'initial_count': 3600,
+            'initial_average_weight': Decimal('10.00'),
+        }
+
+        cycle = ProductionCycleService.create_cycle(farm_profile, cycle_data)
+
+        assert cycle.initial_count == 3600
+        assert cycle.status == 'active'
+
     # =================== HELPERS ===================
 
     def _create_test_cycle(self):

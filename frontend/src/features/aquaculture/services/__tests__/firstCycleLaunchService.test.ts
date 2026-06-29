@@ -165,6 +165,13 @@ describe('features/aquaculture/services/firstCycleLaunchService', () => {
       defaultPondIdentifier: 'Bassin principal',
     });
 
+    expect(mockAquaculture.createProductionCycle).toHaveBeenCalledWith(
+      expect.objectContaining({
+        pond_identifier: 'Bac 1',
+        pond_volume_m3: 3,
+        infrastructure_type: ['tank', 'pond'],
+      })
+    );
     expect(mockAquaculture.createProductionUnit).toHaveBeenNthCalledWith(1, {
       name: 'Bac 1',
       unit_type: 'tank',
@@ -200,6 +207,49 @@ describe('features/aquaculture/services/firstCycleLaunchService', () => {
       'unit-1': 'unit-backend-1',
       'unit-2': 'unit-backend-2',
     });
+  });
+
+  it('agrege l empreinte du cycle quand toutes les unites partagent le meme type', async () => {
+    await launchFirstCycle({
+      formData: {
+        ...baseFormData,
+        productionUnits: [
+          {
+            local_id: 'unit-1',
+            name: 'Bac 1',
+            unit_type: 'tank',
+            volume_m3: '3',
+            surface_m2: '',
+          },
+          {
+            local_id: 'unit-2',
+            name: 'Bac 2',
+            unit_type: 'tank',
+            volume_m3: '5',
+            surface_m2: '',
+          },
+        ],
+        productionUnitAllocations: [
+          {
+            production_unit_local_id: 'unit-1',
+            fish_count: '900',
+          },
+          {
+            production_unit_local_id: 'unit-2',
+            fish_count: '1200',
+          },
+        ],
+      },
+      simulationResult: baseCurrentResult,
+      defaultPondIdentifier: 'Bassin principal',
+    });
+
+    expect(mockAquaculture.createProductionCycle).toHaveBeenCalledWith(
+      expect.objectContaining({
+        pond_volume_m3: 8,
+        infrastructure_type: ['tank'],
+      })
+    );
   });
 
   it('bloque le lancement si une allocation est manquante', async () => {
