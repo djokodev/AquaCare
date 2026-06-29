@@ -6,6 +6,8 @@ import Animated, {
   withTiming,
   withDelay,
   withSpring,
+  withRepeat,
+  withSequence,
   Easing,
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
@@ -51,38 +53,36 @@ const MetricCard: React.FC<MetricCardProps> = ({
   const iconAnimation = useSharedValue(0);
 
   React.useEffect(() => {
-    const startAnimation = () => {
-      'worklet';
-      if (animationType === 'bounce') {
-        iconAnimation.value = withTiming(1, { duration: 800, easing: Easing.inOut(Easing.ease) }, (finished) => {
-          if (finished) {
-            iconAnimation.value = withTiming(0, { duration: 800, easing: Easing.inOut(Easing.ease) }, startAnimation);
-          }
-        });
-      } else if (animationType === 'wave') {
-        iconAnimation.value = withTiming(1, { duration: 2000, easing: Easing.inOut(Easing.sin) }, (finished) => {
-          if (finished) {
-            iconAnimation.value = withTiming(0, { duration: 2000, easing: Easing.inOut(Easing.sin) }, startAnimation);
-          }
-        });
-      } else if (animationType === 'rotate') {
-        iconAnimation.value = withTiming(1, { duration: 3000, easing: Easing.linear }, (finished) => {
-          if (finished) {
-            iconAnimation.value = 0;
-            startAnimation();
-          }
-        });
-      } else {
-        iconAnimation.value = withTiming(1, { duration: 1200, easing: Easing.inOut(Easing.ease) }, (finished) => {
-          if (finished) {
-            iconAnimation.value = withTiming(0, { duration: 1200, easing: Easing.inOut(Easing.ease) }, startAnimation);
-          }
-        });
+    const createAnimationLoop = () => {
+      if (animationType === 'rotate') {
+        return withRepeat(
+          withTiming(1, { duration: 3000, easing: Easing.linear }),
+          -1,
+          false
+        );
       }
+
+      const duration = animationType === 'wave' ? 2000 : animationType === 'bounce' ? 800 : 1200;
+      const easing =
+        animationType === 'wave'
+          ? Easing.inOut(Easing.sin)
+          : animationType === 'bounce'
+            ? Easing.inOut(Easing.ease)
+            : Easing.inOut(Easing.ease);
+
+      return withRepeat(
+        withSequence(
+          withTiming(1, { duration, easing }),
+          withTiming(0, { duration, easing })
+        ),
+        -1,
+        false
+      );
     };
 
+    iconAnimation.value = 0;
     const timeout = setTimeout(() => {
-      startAnimation();
+      iconAnimation.value = createAnimationLoop();
     }, index * 100);
 
     return () => clearTimeout(timeout);
