@@ -94,7 +94,6 @@ export default function ProductionUnitsHubScreen({ navigation, route }: Props) {
 
   const errorMessage = errorKey ? t(errorKey) : null;
   const allocations = dashboard?.allocations ?? [];
-  const cycleName = dashboard?.cycle.cycle_name || t('productionUnitsUnknownUnit');
   const totalAllocations = dashboard?.summary?.total_allocations ?? allocations.length;
 
   const loadDashboard = useCallback(
@@ -182,12 +181,10 @@ export default function ProductionUnitsHubScreen({ navigation, route }: Props) {
     >
       <View style={styles.hero}>
         <View style={styles.heroBadge}>
-          <Ionicons name="grid-outline" size={16} color={AQUACARE_COLORS.GREEN_PRIMARY} />
+          <Ionicons name="grid-outline" size={16} color={AQUACARE_COLORS.WHITE} />
           <Text style={styles.heroBadgeText}>{t('productionUnitsActiveCycleLabel')}</Text>
         </View>
-        <Text style={styles.title}>{t('productionUnitsHubTitle')}</Text>
         <Text style={styles.subtitle}>{t('productionUnitsHubSubtitle')}</Text>
-        <Text style={styles.cycleName}>{cycleName}</Text>
         <Text style={styles.summaryText}>
           {t('productionUnitsCount', { count: totalAllocations })}
         </Text>
@@ -275,32 +272,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 999,
-    backgroundColor: AQUACARE_COLORS.GREEN_LIGHT,
+    backgroundColor: AQUACARE_COLORS.GREEN_PRIMARY,
     marginBottom: 12,
   },
   heroBadgeText: {
-    color: AQUACARE_COLORS.GREEN_PRIMARY,
+    color: AQUACARE_COLORS.WHITE,
     fontSize: 12,
     fontWeight: '700',
     letterSpacing: 0.2,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: AQUACARE_COLORS.GREEN_DARK,
-    lineHeight: 34,
   },
   subtitle: {
     marginTop: 8,
     fontSize: 15,
     color: AQUACARE_COLORS.GRAY_DARK,
     lineHeight: 22,
-  },
-  cycleName: {
-    marginTop: 8,
-    fontSize: 14,
-    fontWeight: '700',
-    color: AQUACARE_COLORS.GREEN_PRIMARY,
   },
   summaryText: {
     marginTop: 8,
