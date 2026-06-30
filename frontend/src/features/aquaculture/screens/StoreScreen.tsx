@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -82,9 +82,9 @@ export default function StoreScreen() {
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<RouteProp<RootStackParamList, 'Store'>>();
   const currentCycle = useSelector((state: RootState) => state.aquaculture.currentCycle);
+  const cycleFeedStatus = useSelector((state: RootState) => state.aquaculture.cycleFeedStatus.data);
 
   const cycleId = route.params?.cycleId || currentCycle?.id || null;
-  const cycleName = currentCycle?.cycle_name || t('storeTitle');
 
   const [store, setStore] = useState<CycleStore | null>(null);
   const [loading, setLoading] = useState(false);
@@ -129,23 +129,6 @@ export default function StoreScreen() {
     }, [loadStore])
   );
 
-  const statusLabel = useMemo(() => {
-    if (!store) {
-      return t('storeStatusNotStarted');
-    }
-
-    switch (store.status) {
-      case 'ok':
-        return t('storeStatusOk');
-      case 'low':
-        return t('storeStatusLow');
-      case 'check_stock':
-        return t('storeStatusCheckStock');
-      default:
-        return t('storeStatusNotStarted');
-    }
-  }, [store, t]);
-
   const handleRefresh = async () => {
     setRefreshing(true);
     await loadStore();
@@ -163,6 +146,14 @@ export default function StoreScreen() {
   const handleOpenProducts = () => navigation.navigate('ProductCatalog', storeNavigationParams);
   const handleOpenCart = () => navigation.navigate('Cart', storeNavigationParams);
   const handleOpenOrders = () => navigation.navigate('OrdersHistory', storeNavigationParams);
+  const handleOrderCycleNeed = () => {
+    if (!cycleId) {
+      Alert.alert(t('error'), t('storeNoCycleSelected'));
+      return;
+    }
+
+    navigation.navigate('CycleFeedPhases', { cycleId });
+  };
 
   const handleSubmitManualStock = async () => {
     if (!cycleId) {
@@ -196,15 +187,16 @@ export default function StoreScreen() {
     }
   };
 
-  const renderSummaryCard = (labelKey: string, value: string, icon: keyof typeof Ionicons.glyphMap) => (
+  const renderSummaryCard = (labelKey: string, value: string) => (
     <View className="w-[48%] bg-cream rounded-xl p-3 mb-3">
-      <View className="flex-row items-center justify-between mb-2">
-        <Text className="text-xs text-gray-light flex-1 mr-2">{t(labelKey)}</Text>
-        <Ionicons name={icon} size={18} color={AQUACARE_COLORS.GREEN_PRIMARY} />
-      </View>
-      <Text className="text-lg font-bold text-aquacare-primary">{value}</Text>
+      <Text className="text-xs text-gray-light">{t(labelKey)}</Text>
+      <Text className="text-lg font-bold text-gray-dark mt-2">{value}</Text>
     </View>
   );
+
+  const remainingToOrderValue = cycleFeedStatus
+    ? formatNumber(cycleFeedStatus.bags_remaining_to_order, t('bags'), 0)
+    : formatNumber(toNumber(store?.summary.estimated_feed_remaining_kg), t('kg'), 2);
 
   return (
     <View className="flex-1 bg-cream">
@@ -214,9 +206,6 @@ export default function StoreScreen() {
         </TouchableOpacity>
         <View className="flex-1 items-center px-3">
           <Text className="text-2xl font-bold text-gray-dark">{t('storeTitle')}</Text>
-          <Text className="text-sm text-gray-light mt-1" numberOfLines={1}>
-            {cycleName}
-          </Text>
         </View>
         <TouchableOpacity onPress={handleRefresh} className="w-10 items-end">
           <Ionicons name="refresh-outline" size={24} color={AQUACARE_COLORS.GREEN_PRIMARY} />
@@ -247,51 +236,34 @@ export default function StoreScreen() {
           contentContainerStyle={{ padding: 16, paddingBottom: 24 }}
           showsVerticalScrollIndicator={false}
         >
-          <View className="bg-white rounded-2xl p-4 border border-[#dbe3d9] mb-4">
-            <View className="flex-row items-start justify-between gap-3">
-              <View className="flex-1">
-                <Text className="text-base font-bold text-gray-dark">{t('storeDescription')}</Text>
-                <Text className="text-xs text-gray-light mt-1">{t('storeScreenSubtitle')}</Text>
-              </View>
-              <View className="rounded-full bg-cream px-3 py-1">
-                <Text className="text-xs font-semibold text-aquacare-primary">{statusLabel}</Text>
-              </View>
-            </View>
-
-            {store?.summary.stock_tracking_started_at ? (
-              <Text className="text-xs text-gray-light mt-3">
-                {t('storeTrackingSince')}{' '}
-                {new Date(store.summary.stock_tracking_started_at).toLocaleDateString(
-                  i18n.language?.startsWith('fr') ? 'fr-FR' : 'en-US'
-                )}
-              </Text>
-            ) : null}
-
-            {store ? (
-              <View className="flex-row flex-wrap justify-between mt-4">
+          {store ? (
+            <>
+              <View className="flex-row flex-wrap justify-between">
                 {renderSummaryCard(
                   'storeFeedRemaining',
-                  formatNumber(toNumber(store.summary.estimated_feed_remaining_kg), t('kg'), 2),
-                  'water-outline'
+                  formatNumber(toNumber(store.summary.estimated_feed_remaining_kg), t('kg'), 2)
                 )}
                 {renderSummaryCard(
                   'storeFeedConsumed',
-                  formatNumber(toNumber(store.summary.feed_consumed_kg), t('kg'), 2),
-                  'restaurant-outline'
+                  formatNumber(toNumber(store.summary.feed_consumed_kg), t('kg'), 2)
                 )}
                 {renderSummaryCard(
                   'storeFeedExpenses',
-                  formatCurrency(toNumber(store.summary.feed_expenses_fcfa)),
-                  'cash-outline'
+                  formatCurrency(toNumber(store.summary.feed_expenses_fcfa))
                 )}
-                {renderSummaryCard(
-                  'storePendingOrders',
-                  formatNumber(store.summary.pending_orders_count, undefined, 0),
-                  'time-outline'
-                )}
+                {renderSummaryCard('storeNeedRemaining', remainingToOrderValue)}
               </View>
-            ) : null}
-          </View>
+
+              {store?.summary.stock_tracking_started_at ? (
+                <Text className="text-xs text-gray-light mb-4">
+                  {t('storeTrackingSince')}{' '}
+                  {new Date(store.summary.stock_tracking_started_at).toLocaleDateString(
+                    i18n.language?.startsWith('fr') ? 'fr-FR' : 'en-US'
+                  )}
+                </Text>
+              ) : null}
+            </>
+          ) : null}
 
           <View className="bg-white rounded-2xl p-4 border border-[#dbe3d9] mb-4">
             <View className="flex-row items-center justify-between mb-3">
@@ -350,45 +322,36 @@ export default function StoreScreen() {
               onPress={openManualModal}
             >
               <Text className="text-white text-sm font-semibold">{t('storeManualSubmit')}</Text>
-              <Ionicons name="add-circle-outline" size={20} color={AQUACARE_COLORS.WHITE} />
             </TouchableOpacity>
 
-            <View className="flex-row flex-wrap justify-between">
+            <View className="gap-3">
               <TouchableOpacity
-                className="w-[48%] rounded-xl bg-cream px-4 py-4 mb-3 items-center"
+                className="flex-row items-center justify-between rounded-xl border border-[#dbe3d9] bg-cream px-4 py-4"
                 onPress={handleOpenProducts}
               >
-                <Ionicons name="storefront-outline" size={22} color={AQUACARE_COLORS.GREEN_PRIMARY} />
-                <Text className="text-sm font-semibold text-aquacare-primary mt-2 text-center">
-                  {t('storeViewProducts')}
-                </Text>
+                <Text className="text-sm font-semibold text-gray-dark">{t('storeViewProducts')}</Text>
+                <Ionicons name="chevron-forward" size={20} color={AQUACARE_COLORS.GREEN_PRIMARY} />
               </TouchableOpacity>
               <TouchableOpacity
-                className="w-[48%] rounded-xl bg-cream px-4 py-4 mb-3 items-center"
+                className="flex-row items-center justify-between rounded-xl border border-[#dbe3d9] bg-cream px-4 py-4"
                 onPress={handleOpenCart}
               >
-                <Ionicons name="cart-outline" size={22} color={AQUACARE_COLORS.GREEN_PRIMARY} />
-                <Text className="text-sm font-semibold text-aquacare-primary mt-2 text-center">
-                  {t('storeViewCart')}
-                </Text>
+                <Text className="text-sm font-semibold text-gray-dark">{t('storeViewCart')}</Text>
+                <Ionicons name="chevron-forward" size={20} color={AQUACARE_COLORS.GREEN_PRIMARY} />
               </TouchableOpacity>
               <TouchableOpacity
-                className="w-[48%] rounded-xl bg-cream px-4 py-4 items-center"
+                className="flex-row items-center justify-between rounded-xl border border-[#dbe3d9] bg-cream px-4 py-4"
                 onPress={handleOpenOrders}
               >
-                <Ionicons name="receipt-outline" size={22} color={AQUACARE_COLORS.GREEN_PRIMARY} />
-                <Text className="text-sm font-semibold text-aquacare-primary mt-2 text-center">
-                  {t('storeViewOrders')}
-                </Text>
+                <Text className="text-sm font-semibold text-gray-dark">{t('storeViewOrders')}</Text>
+                <Ionicons name="chevron-forward" size={20} color={AQUACARE_COLORS.GREEN_PRIMARY} />
               </TouchableOpacity>
               <TouchableOpacity
-                className="w-[48%] rounded-xl bg-cream px-4 py-4 items-center"
-                onPress={handleRefresh}
+                className="flex-row items-center justify-between rounded-xl border border-[#dbe3d9] bg-cream px-4 py-4"
+                onPress={handleOrderCycleNeed}
               >
-                <Ionicons name="refresh-outline" size={22} color={AQUACARE_COLORS.GREEN_PRIMARY} />
-                <Text className="text-sm font-semibold text-aquacare-primary mt-2 text-center">
-                  {t('storeRefresh')}
-                </Text>
+                <Text className="text-sm font-semibold text-gray-dark">{t('storeOrderCycleNeed')}</Text>
+                <Ionicons name="chevron-forward" size={20} color={AQUACARE_COLORS.GREEN_PRIMARY} />
               </TouchableOpacity>
             </View>
           </View>

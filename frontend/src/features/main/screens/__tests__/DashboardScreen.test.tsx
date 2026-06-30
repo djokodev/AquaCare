@@ -173,6 +173,7 @@ describe('features/main/screens/DashboardScreen', () => {
     await waitFor(() => {
       expect(getByText('storeTitle')).toBeTruthy();
       expect(getByText('storeDescription')).toBeTruthy();
+      expect(getByText('storeDashboardSubtitle')).toBeTruthy();
     });
 
     fireEvent.press(getByText('storeTitle'));
@@ -248,6 +249,7 @@ describe('features/main/screens/DashboardScreen', () => {
       expect(getByText('productionUnitsDashboardCta')).toBeTruthy();
       expect(getByText('storeTitle')).toBeTruthy();
       expect(getByText('storeDescription')).toBeTruthy();
+      expect(getByText('storeDashboardSubtitle')).toBeTruthy();
       expect(queryByText('viewAllActions')).toBeNull();
       expect(queryByText('dailyLog')).toBeNull();
       expect(queryByText('productCatalog')).toBeNull();

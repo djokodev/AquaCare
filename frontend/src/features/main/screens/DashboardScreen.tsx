@@ -608,8 +608,11 @@ export default function DashboardScreen({ navigation }: any) {
                   <Text className="text-base font-bold text-gray-dark">
                     {t('storeTitle')}
                   </Text>
-                  <Text className="text-xs text-gray-light mt-1">
+                  <Text className="text-sm font-semibold text-gray-dark mt-1">
                     {t('storeDescription')}
+                  </Text>
+                  <Text className="text-xs text-gray-light mt-1">
+                    {t('storeDashboardSubtitle')}
                   </Text>
                 </View>
                 <Ionicons

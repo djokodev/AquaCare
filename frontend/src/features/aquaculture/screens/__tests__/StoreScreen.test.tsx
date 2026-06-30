@@ -55,6 +55,24 @@ describe('StoreScreen', () => {
           id: 'cycle-1',
           cycle_name: 'Cycle Magasin',
         },
+        cycleFeedStatus: {
+          data: {
+            cycle_id: 'cycle-1',
+            total_bags_needed: 12,
+            total_feed_needed_kg: 600,
+            total_bags_ordered: 4,
+            total_feed_ordered_kg: 200,
+            total_bags_consumed: 2,
+            total_feed_consumed_kg: 100,
+            bags_remaining_to_order: 8,
+            bags_consumed_equivalent: 2,
+            feed_remaining_kg: 400,
+            estimated_feed_remaining_kg: 400,
+            feed_phase: null,
+          },
+          loading: false,
+          error: null,
+        },
       },
     };
     mockGetCycleStore.mockResolvedValue({
@@ -112,6 +130,8 @@ describe('StoreScreen', () => {
     await waitFor(() => {
       expect(getByText('storeTitle')).toBeTruthy();
       expect(getByText('storeFeedRemaining')).toBeTruthy();
+      expect(getByText('8 bags')).toBeTruthy();
+      expect(getByText('storeNeedRemaining')).toBeTruthy();
       expect(getByText('ORD-001')).toBeTruthy();
     });
 
@@ -131,6 +151,11 @@ describe('StoreScreen', () => {
     expect(mockNavigate).toHaveBeenCalledWith('OrdersHistory', {
       cycleId: 'cycle-1',
       source: 'store',
+    });
+
+    fireEvent.press(getByText('storeOrderCycleNeed'));
+    expect(mockNavigate).toHaveBeenCalledWith('CycleFeedPhases', {
+      cycleId: 'cycle-1',
     });
 
     fireEvent.press(getByText('storeManualSubmit'));
