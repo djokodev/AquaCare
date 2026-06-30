@@ -202,15 +202,18 @@ export default function ProductionUnitOverviewScreen({ navigation, route }: Prop
       }
     >
       <View style={styles.metricsSection}>
-        <View style={styles.grid}>
-          {metricCards.map((card) => (
-            <DashboardMetricCard
-              key={card.label}
-              value={card.value}
-              label={card.label}
-              subtitle={card.subtitle}
-            />
-          ))}
+        <View style={styles.metricsCard}>
+          <Text style={styles.metricsTitle}>{t('productionUnitDashboardTitle')}</Text>
+          <View style={styles.grid}>
+            {metricCards.map((card) => (
+              <DashboardMetricCard
+                key={card.label}
+                value={card.value}
+                label={card.label}
+                subtitle={card.subtitle}
+              />
+            ))}
+          </View>
         </View>
       </View>
 
@@ -281,9 +284,21 @@ const styles = StyleSheet.create({
   metricsSection: {
     marginBottom: 16,
   },
+  metricsCard: {
+    backgroundColor: AQUACARE_COLORS.WHITE,
+    borderRadius: 12,
+    padding: 16,
+  },
+  metricsTitle: {
+    marginBottom: 12,
+    fontSize: 18,
+    fontWeight: '700',
+    color: AQUACARE_COLORS.GRAY_DARK,
+  },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    gap: 12,
     justifyContent: 'space-between',
   },
   inlineError: {
