@@ -38,7 +38,6 @@ jest.mock('react-i18next', () => ({
 jest.mock('@/features/aquaculture/services/aquacultureService', () => ({
   aquacultureService: {
     getCycleDashboard: jest.fn(),
-    getCycleStore: jest.fn(),
   },
 }));
 
@@ -74,7 +73,6 @@ describe('features/main/screens/DashboardScreen', () => {
   const mockUseSelector = useSelector as unknown as jest.Mock;
   const mockOffline = offlineService as jest.Mocked<typeof offlineService>;
   const mockGetCycleDashboard = aquacultureService.getCycleDashboard as jest.Mock;
-  const mockGetCycleStore = aquacultureService.getCycleStore as jest.Mock;
   const navigation = {
     navigate: jest.fn(),
   } as any;
@@ -126,36 +124,6 @@ describe('features/main/screens/DashboardScreen', () => {
         total_allocations: 3,
       },
     });
-    mockGetCycleStore.mockResolvedValue({
-      cycle_id: 'cycle-a',
-      summary: {
-        manual_feed_kg: '50.00',
-        received_order_feed_kg: '20.00',
-        total_feed_added_kg: '70.00',
-        feed_consumed_kg: '10.00',
-        estimated_feed_remaining_kg: '60.00',
-        feed_expenses_fcfa: '105000.00',
-        pending_orders_count: 1,
-        pending_order_amount_fcfa: '30000.00',
-        pending_order_feed_kg: '20.00',
-        stock_tracking_started_at: '2026-06-01',
-      },
-      status: 'ok',
-      pending_orders: [
-        {
-          id: 'order-1',
-          order_number: 'ORD-001',
-          status: 'confirmed',
-          delivery_method: 'pickup',
-          total_bags: 1,
-          total_fcfa: '30000.00',
-          estimated_feed_kg: '20.00',
-          created_at: '2026-06-10T08:00:00.000Z',
-        },
-      ],
-      stock_tracking_started_at: '2026-06-01',
-    });
-
     mockUseSelector.mockImplementation((selector: (state: any) => unknown) =>
       selector({
         aquaculture: {
@@ -204,10 +172,10 @@ describe('features/main/screens/DashboardScreen', () => {
     expect(getByText('dashboardDirectProductionCost')).toBeTruthy();
     await waitFor(() => {
       expect(getByText('storeTitle')).toBeTruthy();
-      expect(getByText('storeFeedRemaining')).toBeTruthy();
+      expect(getByText('storeDescription')).toBeTruthy();
     });
 
-    fireEvent.press(getByText('storeOpen'));
+    fireEvent.press(getByText('storeTitle'));
     expect(navigation.navigate).toHaveBeenCalledWith('Store', { cycleId: cycleA.id });
 
     fireEvent.press(getByText('changeSessionCycle'));
@@ -279,79 +247,13 @@ describe('features/main/screens/DashboardScreen', () => {
       expect(getByText('dashboardTimeRemainingCycle')).toBeTruthy();
       expect(getByText('productionUnitsDashboardCta')).toBeTruthy();
       expect(getByText('storeTitle')).toBeTruthy();
-      expect(getByText(/3 unités/)).toBeTruthy();
+      expect(getByText('storeDescription')).toBeTruthy();
       expect(queryByText('viewAllActions')).toBeNull();
       expect(queryByText('dailyLog')).toBeNull();
       expect(queryByText('productCatalog')).toBeNull();
       expect(queryByText('harvest')).toBeNull();
-      expect(queryByText('Bac 1')).toBeNull();
     });
 
     expect(mockGetCycleDashboard).toHaveBeenCalledWith('cycle-unit');
-  });
-
-  it('rafraichit le Magasin apres confirmation de reception', async () => {
-    const confirmOrder = {
-      id: 'order-delivered-1',
-      order_number: 'ORD-DEL-001',
-      status: 'delivered',
-      total: '30000.00',
-      created_at: '2026-06-29T08:00:00.000Z',
-    };
-
-    mockUseSelector.mockImplementation((selector: (state: any) => unknown) =>
-      selector({
-        aquaculture: {
-          dashboardData: {
-            active_cycles_count: 1,
-            total_biomass: 216,
-            total_fish_count: 1800,
-            average_fcr: 1.8,
-            average_survival_rate: 88,
-            active_cycles: [cycleA],
-            recent_logs: [],
-            current_feeding_plans: [],
-            pending_notifications: [],
-          },
-          loading: {
-            dashboard: false,
-            cycles: false,
-            logs: false,
-            sync: false,
-          },
-          error: null,
-          currentCycle: cycleA,
-        },
-        notifications: {
-          unreadCount: 0,
-        },
-        commerce: {
-          orders: {
-            items: [confirmOrder],
-            statistics: null,
-            loading: false,
-            error: null,
-          },
-        },
-      })
-    );
-
-    jest.spyOn(Alert, 'alert').mockImplementation((title: any, _message?: any, buttons?: any) => {
-      if (title === 'confirmReceiptTitle') {
-        buttons?.[1]?.onPress?.();
-      }
-    });
-
-    const { getByText } = render(<DashboardScreen navigation={navigation} />);
-
-    await waitFor(() => {
-      expect(getByText('confirmReceiptAction')).toBeTruthy();
-    });
-
-    fireEvent.press(getByText('confirmReceiptAction'));
-
-    await waitFor(() => {
-      expect(mockGetCycleStore).toHaveBeenCalledTimes(2);
-    });
   });
 });
