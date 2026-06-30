@@ -196,6 +196,13 @@ Flux:
 3. Telechargement PDF, envoi email, marquage partage WhatsApp.
 4. Gestion explicite des `409` PDF non pret.
 
+Reports rule:
+
+1. Les rapports existants sont maintenant scope-aware.
+2. Un rapport d'unite explique une seule unite de production.
+3. Un rapport de cycle agrege tous les faits des unites du cycle.
+4. Les rapports ne creent pas de faits, ils resument les logs deja enregistres par les unites.
+
 ## API Consommee
 
 Service unique: `features/aquaculture/services/aquacultureService.ts`
