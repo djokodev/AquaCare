@@ -11,6 +11,7 @@ import {
   Text,
   FlatList,
   TouchableOpacity,
+  Image,
   TextInput,
   ActivityIndicator,
   RefreshControl,
@@ -30,6 +31,7 @@ import { PRODUCT_SPECIES } from '@/domain/commerce/constants';
 import { RootStackParamList } from '@/navigation/MainNavigator';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'ProductCatalog'>;
+const dibaqLogo = require('../../../../assets/products/DIBAQ.png');
 
 export default function ProductCatalogScreen() {
   const { t } = useTranslation();
@@ -108,8 +110,8 @@ export default function ProductCatalogScreen() {
       onPress={() => handleProductPress(item)}
       activeOpacity={0.7}
     >
-      <View className="w-20 h-20 bg-cream rounded-lg items-center justify-center mr-3">
-        <Ionicons name="cube-outline" size={40} color={AQUACARE_COLORS.GREEN_PRIMARY} />
+      <View className="w-20 h-20 bg-cream rounded-lg items-center justify-center mr-3 overflow-hidden">
+        <Image source={dibaqLogo} className="w-16 h-16" resizeMode="contain" />
       </View>
 
       <View className="flex-1">
