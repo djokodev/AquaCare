@@ -364,6 +364,103 @@ class ProductionCycleAdmin(AquacultureSecuredAdmin):
         return str(obj.id)[:8] + "..."
     id_short.short_description = _('ID')
 
+    # --- Actions securisees ---
+
+    @admin.action(description=_("Exporter selection en CSV"))
+    def export_cycles_csv(self, request, queryset):
+        """Export selected cycles to CSV. Managers only."""
+        if not request.user.is_superuser:
+            if not request.user.groups.filter(name=RBACConstants.GROUP_MANAGERS).exists():
+                messages.error(request, _("Vous n'avez pas la permission d'exporter."))
+                return
+
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="cycles_production.csv"'
+
+        writer = csv.writer(response)
+        writer.writerow([
+            'Ferme', 'Cycle', 'Espece', 'Statut',
+            'Date debut', 'Date fin', 'Duree (jours)',
+            'Nombre initial', 'Nombre final', 'Taux survie (%)',
+            'Poids initial (g)', 'Poids final (g)',
+            'Aliment consomme (kg)', 'FCR', 'Biomasse finale (kg)'
+        ])
+
+        for cycle in queryset.select_related('farm_profile__user'):
+            duration = cycle.days_active()
+
+            writer.writerow([
+                cycle.farm_profile.farm_name,
+                cycle.cycle_name,
+                cycle.get_species_display(),
+                cycle.get_status_display(),
+                cycle.start_date,
+                cycle.end_date or '-',
+                duration,
+                cycle.initial_count,
+                cycle.final_count or cycle.current_count,
+                f"{cycle.survival_rate:.1f}" if cycle.survival_rate is not None else '-',
+                cycle.initial_average_weight,
+                cycle.final_average_weight or cycle.current_average_weight,
+                cycle.total_feed_consumed,
+                f"{cycle.fcr:.2f}" if cycle.fcr is not None else '-',
+                cycle.final_biomass or cycle.current_biomass
+            ])
+
+        # Audit
+        self.log_action(
+            request, queryset.first(), CHANGE,
+            message=f"Export CSV de {queryset.count()} cycles"
+        )
+
+        return response
+
+    @admin.action(description=_("Generer rapport performance"))
+    def generate_performance_report(self, request, queryset):
+        """Generate performance report for selected cycles."""
+        if not request.user.is_superuser:
+            if not request.user.groups.filter(name=RBACConstants.GROUP_MANAGERS).exists():
+                messages.error(request, _("Vous n'avez pas la permission de generer des rapports."))
+                return
+
+        stats = queryset.aggregate(
+            avg_survival=Avg('survival_rate'),
+            avg_fcr=Avg('fcr'),
+            total_biomass=Sum('current_biomass'),
+            cycle_count=Count('id')
+        )
+
+        avg_survival = stats['avg_survival'] or 0
+        avg_fcr = stats['avg_fcr'] or 0
+        total_biomass = stats['total_biomass'] or 0
+
+        messages.success(
+            request,
+            f"Rapport: {stats['cycle_count']} cycles, "
+            f"Survie moyenne: {avg_survival:.1f}%, "
+            f"FCR moyen: {avg_fcr:.2f}, "
+            f"Biomasse totale: {total_biomass:.1f} kg"
+        )
+
+    @admin.action(description=_("Marquer comme termine"))
+    def mark_as_completed(self, request, queryset):
+        """Mark selected active cycles as completed."""
+        if not request.user.is_superuser:
+            if not request.user.groups.filter(name=RBACConstants.GROUP_MANAGERS).exists():
+                messages.error(request, _("Vous n'avez pas la permission de terminer des cycles."))
+                return
+
+        updated = queryset.filter(status='active').update(
+            status='harvested',
+            end_date=date.today()
+        )
+
+        # Audit
+        for cycle in queryset.filter(status='harvested'):
+            self.log_action(request, cycle, CHANGE, message="Cycle marque comme termine")
+
+        messages.success(request, _('{} cycle(s) marque(s) comme termine(s).').format(updated))
+
 
 @admin.register(ProductionUnit)
 class ProductionUnitAdmin(AquacultureSecuredAdmin):
@@ -501,103 +598,6 @@ class CycleUnitAllocationAdmin(AquacultureSecuredAdmin):
     def survival_rate_display(self, obj):
         return obj.survival_rate_pct or '-'
     survival_rate_display.short_description = _('Survie')
-
-    # --- Actions securisees ---
-
-    @admin.action(description=_("Exporter selection en CSV"))
-    def export_cycles_csv(self, request, queryset):
-        """Export selected cycles to CSV. Managers only."""
-        if not request.user.is_superuser:
-            if not request.user.groups.filter(name=RBACConstants.GROUP_MANAGERS).exists():
-                messages.error(request, _("Vous n'avez pas la permission d'exporter."))
-                return
-
-        response = HttpResponse(content_type='text/csv')
-        response['Content-Disposition'] = 'attachment; filename="cycles_production.csv"'
-
-        writer = csv.writer(response)
-        writer.writerow([
-            'Ferme', 'Cycle', 'Espece', 'Statut',
-            'Date debut', 'Date fin', 'Duree (jours)',
-            'Nombre initial', 'Nombre final', 'Taux survie (%)',
-            'Poids initial (g)', 'Poids final (g)',
-            'Aliment consomme (kg)', 'FCR', 'Biomasse finale (kg)'
-        ])
-
-        for cycle in queryset.select_related('farm_profile__user'):
-            duration = cycle.days_active()
-
-            writer.writerow([
-                cycle.farm_profile.farm_name,
-                cycle.cycle_name,
-                cycle.get_species_display(),
-                cycle.get_status_display(),
-                cycle.start_date,
-                cycle.end_date or '-',
-                duration,
-                cycle.initial_count,
-                cycle.final_count or cycle.current_count,
-                f"{cycle.survival_rate:.1f}" if cycle.survival_rate is not None else '-',
-                cycle.initial_average_weight,
-                cycle.final_average_weight or cycle.current_average_weight,
-                cycle.total_feed_consumed,
-                f"{cycle.fcr:.2f}" if cycle.fcr is not None else '-',
-                cycle.final_biomass or cycle.current_biomass
-            ])
-
-        # Audit
-        self.log_action(
-            request, queryset.first(), CHANGE,
-            message=f"Export CSV de {queryset.count()} cycles"
-        )
-
-        return response
-
-    @admin.action(description=_("Generer rapport performance"))
-    def generate_performance_report(self, request, queryset):
-        """Generate performance report for selected cycles."""
-        if not request.user.is_superuser:
-            if not request.user.groups.filter(name=RBACConstants.GROUP_MANAGERS).exists():
-                messages.error(request, _("Vous n'avez pas la permission de generer des rapports."))
-                return
-
-        stats = queryset.aggregate(
-            avg_survival=Avg('survival_rate'),
-            avg_fcr=Avg('fcr'),
-            total_biomass=Sum('current_biomass'),
-            cycle_count=Count('id')
-        )
-
-        avg_survival = stats['avg_survival'] or 0
-        avg_fcr = stats['avg_fcr'] or 0
-        total_biomass = stats['total_biomass'] or 0
-
-        messages.success(
-            request,
-            f"Rapport: {stats['cycle_count']} cycles, "
-            f"Survie moyenne: {avg_survival:.1f}%, "
-            f"FCR moyen: {avg_fcr:.2f}, "
-            f"Biomasse totale: {total_biomass:.1f} kg"
-        )
-
-    @admin.action(description=_("Marquer comme termine"))
-    def mark_as_completed(self, request, queryset):
-        """Mark selected active cycles as completed."""
-        if not request.user.is_superuser:
-            if not request.user.groups.filter(name=RBACConstants.GROUP_MANAGERS).exists():
-                messages.error(request, _("Vous n'avez pas la permission de terminer des cycles."))
-                return
-
-        updated = queryset.filter(status='active').update(
-            status='harvested',
-            end_date=date.today()
-        )
-
-        # Audit
-        for cycle in queryset.filter(status='harvested'):
-            self.log_action(request, cycle, CHANGE, message="Cycle marque comme termine")
-
-        messages.success(request, _('{} cycle(s) marque(s) comme termine(s).').format(updated))
 
 
 @admin.register(CycleLog)

@@ -1357,6 +1357,8 @@ export const fr = {
   productionUnitRecentActivity: 'Activité récente',
   productionUnitNoRecentActivity: 'Aucune activité récente pour cette unité.',
   productionUnitDashboardLoadError: 'Impossible de charger le dashboard de cette unité.',
+  productionUnitContextIncompleteError:
+    'Le contexte de cette unité est incomplet. Retournez au cycle et ouvrez une allocation valide.',
   productionUnitTrackingSectionTitle: 'Suivi de l’unité',
   productionUnitTrackingSectionDescription:
     'Enregistrez les actions et observations propres à cette unité.',

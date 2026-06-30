@@ -57,6 +57,15 @@ interface SuggestedAction {
   params?: Record<string, unknown>;
 }
 
+const hasValidProductionUnitContext = (
+  productionUnitContext: QuickActionsPreviewProps['productionUnitContext']
+): boolean =>
+  Boolean(
+    productionUnitContext?.cycleId &&
+      productionUnitContext?.cycleUnitAllocationId &&
+      productionUnitContext?.productionUnitId
+  );
+
 /**
  * Composant QuickActionsPreview
  *
@@ -92,8 +101,10 @@ export default function QuickActionsPreview({
    * Retourne les 3 actions les plus pertinentes selon le contexte utilisateur
    */
   const suggestedActions = useMemo((): SuggestedAction[] => {
+    const isValidUnitContext = hasValidProductionUnitContext(productionUnitContext);
+
     if (scope === 'unit') {
-      if (!productionUnitContext) {
+      if (!isValidUnitContext) {
         return [];
       }
 

@@ -21,6 +21,13 @@ describe('features/main/components/QuickActionsSheet', () => {
     productionUnitName: 'Bac 1',
   };
 
+  const incompleteProductionUnitContext = {
+    cycleId: 'cycle-1',
+    cycleUnitAllocationId: '',
+    productionUnitId: 'unit-1',
+    productionUnitName: 'Bac 1',
+  } as any;
+
   beforeEach(() => {
     jest.clearAllMocks();
   });
@@ -48,5 +55,22 @@ describe('features/main/components/QuickActionsSheet', () => {
     expect(queryByText('productCatalog')).toBeNull();
     expect(queryByText('cart')).toBeNull();
     expect(queryByText('ordersHistory')).toBeNull();
+  });
+
+  it('refuse un contexte unitaire incomplet', () => {
+    const { getByText, queryByText } = render(
+      <QuickActionsSheet
+        visible
+        onClose={jest.fn()}
+        unreadCount={4}
+        navigation={navigation}
+        scope="unit"
+        productionUnitContext={incompleteProductionUnitContext}
+      />
+    );
+
+    expect(queryByText('productionUnitDailyLogAction')).toBeNull();
+    expect(queryByText('productionUnitSanitaryLogAction')).toBeNull();
+    expect(queryByText('productionUnitLogHistoryAction')).toBeNull();
   });
 });

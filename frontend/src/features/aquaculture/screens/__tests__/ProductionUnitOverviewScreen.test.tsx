@@ -25,6 +25,13 @@ describe('features/aquaculture/screens/ProductionUnitOverviewScreen', () => {
     },
   } as any;
 
+  const routeWithoutAllocation = {
+    params: {
+      cycleId: 'cycle-1',
+      productionUnitId: 'unit-1',
+    },
+  } as any;
+
   beforeEach(() => {
     jest.clearAllMocks();
   });
@@ -203,5 +210,19 @@ describe('features/aquaculture/screens/ProductionUnitOverviewScreen', () => {
 
     fireEvent.press(getByText('retry'));
     expect(mockGetProductionUnitDashboard).toHaveBeenCalledTimes(2);
+  });
+
+  it('n appelle pas le dashboard si le contexte unitaire est incomplet', async () => {
+    const { getByText, queryByText } = render(
+      <ProductionUnitOverviewScreen navigation={navigation} route={routeWithoutAllocation} />
+    );
+
+    await waitFor(() => {
+      expect(getByText('productionUnitContextIncompleteError')).toBeTruthy();
+      expect(queryByText('retry')).toBeNull();
+      expect(queryByText('viewAllActions')).toBeNull();
+    });
+
+    expect(mockGetProductionUnitDashboard).not.toHaveBeenCalled();
   });
 });
