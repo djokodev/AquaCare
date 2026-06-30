@@ -190,12 +190,10 @@ export default function ProductDetailScreen() {
           <Text className="text-2xl font-bold text-gray-dark mb-4">{product.name}</Text>
 
           <View className="flex-row flex-wrap gap-2 mb-5">
-            <View className="flex-row items-center bg-cream px-3 py-2 rounded-xl gap-2">
-              <Ionicons name="fish" size={16} color={AQUACARE_COLORS.GREEN_PRIMARY} />
+            <View className="bg-cream px-3 py-2 rounded-xl">
               <Text className="text-sm text-gray-dark font-semibold">{t(product.species)}</Text>
             </View>
-            <View className="flex-row items-center bg-cream px-3 py-2 rounded-xl gap-2">
-              <Ionicons name="resize" size={16} color={AQUACARE_COLORS.GREEN_PRIMARY} />
+            <View className="bg-cream px-3 py-2 rounded-xl">
               <Text className="text-sm text-gray-dark font-semibold">{product.pellet_size_mm}mm</Text>
             </View>
             {product.phase && (
