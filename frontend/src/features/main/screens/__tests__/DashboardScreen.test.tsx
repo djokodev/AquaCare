@@ -1,4 +1,5 @@
 import React from 'react';
+import { Alert } from 'react-native';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import { useDispatch, useSelector } from 'react-redux';
 
@@ -116,6 +117,7 @@ describe('features/main/screens/DashboardScreen', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockDispatch.mockImplementation(() => ({ unwrap: jest.fn().mockResolvedValue({}) }));
     (useDispatch as unknown as jest.Mock).mockReturnValue(mockDispatch);
     mockOffline.hasAnyPendingSync.mockResolvedValue(false);
     mockOffline.syncAllOfflineData.mockResolvedValue({ success: 0, failed: 0, details: {} as any });
@@ -286,5 +288,70 @@ describe('features/main/screens/DashboardScreen', () => {
     });
 
     expect(mockGetCycleDashboard).toHaveBeenCalledWith('cycle-unit');
+  });
+
+  it('rafraichit le Magasin apres confirmation de reception', async () => {
+    const confirmOrder = {
+      id: 'order-delivered-1',
+      order_number: 'ORD-DEL-001',
+      status: 'delivered',
+      total: '30000.00',
+      created_at: '2026-06-29T08:00:00.000Z',
+    };
+
+    mockUseSelector.mockImplementation((selector: (state: any) => unknown) =>
+      selector({
+        aquaculture: {
+          dashboardData: {
+            active_cycles_count: 1,
+            total_biomass: 216,
+            total_fish_count: 1800,
+            average_fcr: 1.8,
+            average_survival_rate: 88,
+            active_cycles: [cycleA],
+            recent_logs: [],
+            current_feeding_plans: [],
+            pending_notifications: [],
+          },
+          loading: {
+            dashboard: false,
+            cycles: false,
+            logs: false,
+            sync: false,
+          },
+          error: null,
+          currentCycle: cycleA,
+        },
+        notifications: {
+          unreadCount: 0,
+        },
+        commerce: {
+          orders: {
+            items: [confirmOrder],
+            statistics: null,
+            loading: false,
+            error: null,
+          },
+        },
+      })
+    );
+
+    jest.spyOn(Alert, 'alert').mockImplementation((title: any, _message?: any, buttons?: any) => {
+      if (title === 'confirmReceiptTitle') {
+        buttons?.[1]?.onPress?.();
+      }
+    });
+
+    const { getByText } = render(<DashboardScreen navigation={navigation} />);
+
+    await waitFor(() => {
+      expect(getByText('confirmReceiptAction')).toBeTruthy();
+    });
+
+    fireEvent.press(getByText('confirmReceiptAction'));
+
+    await waitFor(() => {
+      expect(mockGetCycleStore).toHaveBeenCalledTimes(2);
+    });
   });
 });

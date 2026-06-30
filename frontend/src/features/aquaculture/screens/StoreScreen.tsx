@@ -97,6 +97,7 @@ export default function StoreScreen() {
   const [totalCostFcfa, setTotalCostFcfa] = useState('');
   const [entryDate, setEntryDate] = useState(todayIsoDate());
   const [note, setNote] = useState('');
+  const storeNavigationParams = cycleId ? { cycleId, source: 'store' as const } : undefined;
 
   const loadStore = useCallback(async () => {
     if (!cycleId) {
@@ -159,9 +160,9 @@ export default function StoreScreen() {
     setManualModalVisible(true);
   };
 
-  const handleOpenProducts = () => navigation.navigate('ProductCatalog');
-  const handleOpenCart = () => navigation.navigate('Cart');
-  const handleOpenOrders = () => navigation.navigate('OrdersHistory');
+  const handleOpenProducts = () => navigation.navigate('ProductCatalog', storeNavigationParams);
+  const handleOpenCart = () => navigation.navigate('Cart', storeNavigationParams);
+  const handleOpenOrders = () => navigation.navigate('OrdersHistory', storeNavigationParams);
 
   const handleSubmitManualStock = async () => {
     if (!cycleId) {

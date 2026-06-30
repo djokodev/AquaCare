@@ -49,6 +49,7 @@ export default function DashboardScreen({ navigation }: any) {
   const { t } = useTranslation();
   const { displayName } = useAuth();
   const dispatch = useDispatch<AppDispatch>();
+  const storeLoadError = t('storeLoadError', { defaultValue: 'Impossible de charger le Magasin' });
 
   const [harvestModalVisible, setHarvestModalVisible] = useState(false);
   const [partialHarvestModalVisible, setPartialHarvestModalVisible] = useState(false);
@@ -138,11 +139,11 @@ export default function DashboardScreen({ navigation }: any) {
       setCycleStore(storePayload);
     } catch {
       setCycleStore(null);
-      setCycleStoreError(t('storeLoadError', { defaultValue: 'Impossible de charger le Magasin' }));
+      setCycleStoreError(storeLoadError);
     } finally {
       setCycleStoreLoading(false);
     }
-  }, [primaryActiveCycle?.id, t]);
+  }, [primaryActiveCycle?.id, storeLoadError]);
 
   useEffect(() => {
     let cancelled = false;
@@ -362,7 +363,11 @@ export default function DashboardScreen({ navigation }: any) {
             try {
               setConfirmingOrderId(orderId);
               await dispatch(confirmOrderReceipt(orderId)).unwrap();
-              await Promise.all([dispatch(fetchOrders()), dispatch(fetchOrderStatistics())]);
+              await Promise.all([
+                dispatch(fetchOrders()),
+                dispatch(fetchOrderStatistics()),
+                loadCurrentCycleStore(),
+              ]);
               Alert.alert(t('success'), t('confirmReceiptSuccess'));
             } catch {
               Alert.alert(t('error'), t('confirmReceiptError'));

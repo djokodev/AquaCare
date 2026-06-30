@@ -248,6 +248,7 @@ export default function QuickActionsSheet({
       category: 'commerce',
     },
   ], []);
+  const showCommerceSection = scope !== 'unit';
 
   /**
    * Configuration des actions Planification
@@ -346,13 +347,14 @@ export default function QuickActionsSheet({
               {aquacultureActions.map(renderActionItem)}
             </View>
 
-            {/* Commerce Section */}
-            <View className="mb-4">
-              <Text className="text-lg font-bold text-gray-dark mb-3">
-                {t('categoryCommerce')}
-              </Text>
-              {commerceActions.map(renderActionItem)}
-            </View>
+            {showCommerceSection ? (
+              <View className="mb-4">
+                <Text className="text-lg font-bold text-gray-dark mb-3">
+                  {t('categoryCommerce')}
+                </Text>
+                {commerceActions.map(renderActionItem)}
+              </View>
+            ) : null}
 
             {/* Planification Section */}
             <View className="mb-2">

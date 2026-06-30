@@ -119,6 +119,10 @@ describe('features/aquaculture/screens/ProductionUnitOverviewScreen', () => {
     await waitFor(() => {
       expect(getByText('productionUnitSanitaryLogAction')).toBeTruthy();
       expect(getByText('productionUnitLogHistoryAction')).toBeTruthy();
+      expect(queryByText('categoryCommerce')).toBeNull();
+      expect(queryByText('productCatalog')).toBeNull();
+      expect(queryByText('cart')).toBeNull();
+      expect(queryByText('ordersHistory')).toBeNull();
     });
 
     fireEvent.press(getByText('productionUnitSanitaryLogAction'));

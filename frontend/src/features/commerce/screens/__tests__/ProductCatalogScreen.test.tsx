@@ -8,11 +8,15 @@ const mockNavigate = jest.fn();
 const mockGoBack = jest.fn();
 const mockDispatch = jest.fn();
 let mockState: any;
+let mockRouteParams: any;
 
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({
     navigate: mockNavigate,
     goBack: mockGoBack,
+  }),
+  useRoute: () => ({
+    params: mockRouteParams,
   }),
 }));
 
@@ -43,6 +47,10 @@ describe('ProductCatalogScreen', () => {
     jest.clearAllMocks();
     jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
     mockDispatch.mockResolvedValue(undefined);
+    mockRouteParams = {
+      cycleId: 'cycle-store',
+      source: 'store',
+    };
     mockState = {
       commerce: {
         products: {
@@ -70,7 +78,11 @@ describe('ProductCatalogScreen', () => {
 
     fireEvent.press(getByText('Feed Starter'));
 
-    expect(mockNavigate).toHaveBeenCalledWith('ProductDetail', { productId: 'prod-1' });
+    expect(mockNavigate).toHaveBeenCalledWith('ProductDetail', {
+      productId: 'prod-1',
+      cycleId: 'cycle-store',
+      source: 'store',
+    });
   });
 
   it('affiche l etat vide et reset les filtres', () => {
@@ -90,5 +102,16 @@ describe('ProductCatalogScreen', () => {
     fireEvent.press(getByText('retry'));
 
     expect(mockDispatch).toHaveBeenCalled();
+  });
+
+  it('conserve le contexte Magasin quand on ouvre le panier depuis le catalogue', () => {
+    const { getByLabelText } = render(<ProductCatalogScreen />);
+
+    fireEvent.press(getByLabelText('cart'));
+
+    expect(mockNavigate).toHaveBeenCalledWith('Cart', {
+      cycleId: 'cycle-store',
+      source: 'store',
+    });
   });
 });

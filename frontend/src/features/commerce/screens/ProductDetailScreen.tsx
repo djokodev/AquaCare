@@ -14,26 +14,35 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { StackNavigationProp } from '@react-navigation/stack';
 import { useDispatch, useSelector } from 'react-redux';
 
 import { AppDispatch, RootState } from '@/store/store';
 import { fetchProductDetail, addToCart } from '@/features/commerce/store/commerceSlice';
 import { Product } from '@/types/commerce';
 import { AQUACARE_COLORS } from '@/constants/colors';
+import { RootStackParamList } from '@/navigation/MainNavigator';
 
 type RouteParams = {
   ProductDetail: {
     productId: string;
+    cycleId?: string;
+    source?: 'store';
   };
 };
 
+type NavigationProp = StackNavigationProp<RootStackParamList, 'ProductDetail'>;
+
 export default function ProductDetailScreen() {
   const { t } = useTranslation();
-  const navigation = useNavigation();
+  const navigation = useNavigation<NavigationProp>();
   const route = useRoute<RouteProp<RouteParams, 'ProductDetail'>>();
   const dispatch = useDispatch<AppDispatch>();
 
   const { productId } = route.params;
+  const cartNavigationParams = route.params.cycleId
+    ? { cycleId: route.params.cycleId, source: 'store' as const }
+    : undefined;
 
   const { products, cart } = useSelector((state: RootState) => state.commerce);
   const { items: allProducts } = products;
@@ -73,7 +82,7 @@ export default function ProductDetailScreen() {
       [
         {
           text: t('viewCart'),
-          onPress: () => navigation.navigate('Cart' as never),
+          onPress: () => navigation.navigate('Cart', cartNavigationParams),
         },
         { text: t('continueShopping') },
       ]
@@ -149,7 +158,7 @@ export default function ProductDetailScreen() {
           <Ionicons name="arrow-back" size={24} color={AQUACARE_COLORS.GRAY_DARK} />
         </TouchableOpacity>
         <Text className="text-lg font-bold text-gray-dark">{t('productDetails')}</Text>
-        <TouchableOpacity onPress={() => navigation.navigate('Cart' as never)} className="relative">
+        <TouchableOpacity onPress={() => navigation.navigate('Cart', cartNavigationParams)} className="relative" accessibilityLabel={t('cart')}>
           <Ionicons name="cart-outline" size={24} color={AQUACARE_COLORS.GREEN_PRIMARY} />
           {cartItemsCount > 0 && (
             <View className="absolute -top-2 -right-2 bg-[#dc2626] rounded-full min-w-[20px] h-5 justify-center items-center px-1">

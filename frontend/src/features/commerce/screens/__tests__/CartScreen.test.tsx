@@ -7,11 +7,15 @@ const mockNavigate = jest.fn();
 const mockGoBack = jest.fn();
 const mockDispatch = jest.fn();
 let mockState: any;
+let mockRouteParams: any;
 
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({
     navigate: mockNavigate,
     goBack: mockGoBack,
+  }),
+  useRoute: () => ({
+    params: mockRouteParams,
   }),
 }));
 
@@ -19,6 +23,23 @@ jest.mock('react-redux', () => ({
   useDispatch: () => mockDispatch,
   useSelector: (selector: any) => selector(mockState),
 }));
+
+jest.mock('@/features/commerce/store/commerceSlice', () => ({
+  __esModule: true,
+  updateCartQuantity: jest.fn((payload: unknown) => ({ type: 'updateCartQuantity', payload })),
+  removeFromCart: jest.fn((payload: unknown) => ({ type: 'removeFromCart', payload })),
+  clearCart: jest.fn(() => ({ type: 'clearCart' })),
+  setDeliveryMethod: jest.fn((payload: unknown) => ({ type: 'setDeliveryMethod', payload })),
+  setPickupLocation: jest.fn((payload: unknown) => ({ type: 'setPickupLocation', payload })),
+  fetchDeliveryFeePreview: jest.fn((payload: unknown) => ({ type: 'fetchDeliveryFeePreview', payload })),
+  createOrder: jest.fn((payload: unknown) => ({ type: 'createOrder', payload })),
+}));
+
+const { createOrder: mockCreateOrder } = jest.requireMock(
+  '@/features/commerce/store/commerceSlice'
+) as {
+  createOrder: jest.Mock;
+};
 
 describe('CartScreen', () => {
   const product = {
@@ -40,7 +61,14 @@ describe('CartScreen', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    mockDispatch.mockImplementation(() => ({ unwrap: jest.fn().mockResolvedValue({ id: 'order-1' }) }));
+    mockDispatch.mockImplementation((action: unknown) => {
+      if (action && typeof action === 'object' && (action as { type?: string }).type === 'createOrder') {
+        return { unwrap: jest.fn().mockResolvedValue({ id: 'order-1' }) };
+      }
+
+      return { unwrap: jest.fn().mockResolvedValue({}) };
+    });
+    mockRouteParams = undefined;
     mockState = {
       commerce: {
         cart: {
@@ -66,7 +94,7 @@ describe('CartScreen', () => {
 
     fireEvent.press(getByText('browseCatalog'));
 
-    expect(mockNavigate).toHaveBeenCalledWith('ProductCatalog');
+    expect(mockNavigate).toHaveBeenCalledWith('ProductCatalog', undefined);
   });
 
   it('affiche une erreur si pickup sans point de retrait', () => {
@@ -137,14 +165,27 @@ describe('CartScreen', () => {
       },
     };
 
+    mockRouteParams = {
+      cycleId: 'cycle-store',
+      source: 'store',
+    };
+
     const { getByText } = render(<CartScreen />);
     fireEvent.press(getByText('confirmOrder'));
 
     await waitFor(() => {
-      expect(mockNavigate).toHaveBeenCalledWith('OrdersHistory');
+      expect(mockNavigate).toHaveBeenCalledWith('OrdersHistory', {
+        cycleId: 'cycle-store',
+        source: 'store',
+      });
     });
 
     expect(alertSpy).toHaveBeenCalled();
+    expect(mockCreateOrder).toHaveBeenCalledWith(
+      expect.objectContaining({
+        production_cycle_id: 'cycle-store',
+      })
+    );
   });
 
   it('normalise les erreurs API lors de la creation commande', async () => {

@@ -19,7 +19,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
-import { useNavigation } from '@react-navigation/native';
+import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useDispatch, useSelector } from 'react-redux';
 
@@ -36,6 +36,7 @@ type NavigationProp = StackNavigationProp<RootStackParamList, 'ProductCatalog'>;
 export default function ProductCatalogScreen() {
   const { t } = useTranslation();
   const navigation = useNavigation<NavigationProp>();
+  const route = useRoute<RouteProp<RootStackParamList, 'ProductCatalog'>>();
   const dispatch = useDispatch<AppDispatch>();
 
   const { products, cart } = useSelector((state: RootState) => state.commerce);
@@ -43,6 +44,10 @@ export default function ProductCatalogScreen() {
   const cartItemsCount = cart.items.reduce((sum, item) => sum + item.quantity, 0);
 
   const currentCycle = useSelector((s: RootState) => s.aquaculture.currentCycle);
+  const cycleContextId = route.params?.cycleId || currentCycle?.id || null;
+  const storeNavigationParams = route.params?.cycleId
+    ? { cycleId: route.params.cycleId, source: 'store' as const }
+    : undefined;
   const { data: feedStatus, loading: feedLoading } = useSelector(
     (s: RootState) => s.aquaculture.cycleFeedStatus
   );
@@ -63,10 +68,10 @@ export default function ProductCatalogScreen() {
 
   // Charger le statut aliments pour le cycle actif
   useEffect(() => {
-    if (currentCycle?.id) {
-      dispatch(fetchCycleFeedStatus(currentCycle.id));
+    if (cycleContextId) {
+      dispatch(fetchCycleFeedStatus(cycleContextId));
     }
-  }, [currentCycle?.id]);
+  }, [cycleContextId]);
 
   const handleApplySearch = () => {
     const newFilters = {
@@ -92,7 +97,7 @@ export default function ProductCatalogScreen() {
       ...(selectedSpecies ? { species: selectedSpecies } : {}),
     };
     await dispatch(fetchProducts(dibaqFilters));
-    if (currentCycle?.id) await dispatch(fetchCycleFeedStatus(currentCycle.id));
+    if (cycleContextId) await dispatch(fetchCycleFeedStatus(cycleContextId));
     setRefreshing(false);
   };
 
@@ -102,16 +107,19 @@ export default function ProductCatalogScreen() {
   };
 
   const handleProductPress = (product: Product) => {
-    navigation.navigate('ProductDetail', { productId: product.id });
+    navigation.navigate(
+      'ProductDetail',
+      storeNavigationParams ? { productId: product.id, ...storeNavigationParams } : { productId: product.id }
+    );
   };
 
   const handleCartPress = () => {
-    navigation.navigate('Cart');
+    navigation.navigate('Cart', storeNavigationParams);
   };
 
   const handleOrderRemaining = () => {
-    if (currentCycle?.id) {
-      navigation.navigate('CycleFeedPhases', { cycleId: currentCycle.id });
+    if (cycleContextId) {
+      navigation.navigate('CycleFeedPhases', { cycleId: cycleContextId });
     }
   };
 
@@ -190,7 +198,11 @@ export default function ProductCatalogScreen() {
           </Text>
         </View>
 
-        <TouchableOpacity className="relative w-10 items-end" onPress={handleCartPress}>
+        <TouchableOpacity
+          className="relative w-10 items-end"
+          onPress={handleCartPress}
+          accessibilityLabel={t('cart')}
+        >
           <Ionicons name="cart-outline" size={28} color={AQUACARE_COLORS.GREEN_PRIMARY} />
           {cartItemsCount > 0 && (
             <View className="absolute -top-2 -right-2 bg-[#dc2626] rounded-full min-w-[24px] h-6 justify-center items-center px-1.5">
@@ -201,7 +213,7 @@ export default function ProductCatalogScreen() {
       </View>
 
       {/* Bannière suivi aliments cycle actif */}
-      {currentCycle ? (
+      {cycleContextId ? (
         <View style={cycleCardStyles.card}>
           <Text style={cycleCardStyles.cardTitle}>{t('myFeedCycleHeader')}</Text>
 
@@ -495,4 +507,3 @@ const cycleCardStyles = StyleSheet.create({
     lineHeight: 18,
   },
 });
-

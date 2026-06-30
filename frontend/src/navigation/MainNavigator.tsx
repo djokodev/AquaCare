@@ -85,10 +85,31 @@ export type RootStackParamList = {
   Reports: undefined;
   ReportDetail: { reportId: string };
   // Commerce Screens
-  ProductCatalog: undefined;
-  ProductDetail: { productId: string };
-  Cart: undefined;
-  OrdersHistory: undefined;
+  ProductCatalog:
+    | {
+        cycleId?: string;
+        source?: 'store';
+      }
+    | undefined;
+  ProductDetail:
+    | {
+        productId: string;
+        cycleId?: string;
+        source?: 'store';
+      }
+    | undefined;
+  Cart:
+    | {
+        cycleId?: string;
+        source?: 'store';
+      }
+    | undefined;
+  OrdersHistory:
+    | {
+        cycleId?: string;
+        source?: 'store';
+      }
+    | undefined;
   Store: { cycleId?: string } | undefined;
   FeedingSuggestions: undefined;
   CycleSimulator: {

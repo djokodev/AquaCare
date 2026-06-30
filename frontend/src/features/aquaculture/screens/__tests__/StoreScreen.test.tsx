@@ -116,13 +116,22 @@ describe('StoreScreen', () => {
     });
 
     fireEvent.press(getByText('storeViewProducts'));
-    expect(mockNavigate).toHaveBeenCalledWith('ProductCatalog');
+    expect(mockNavigate).toHaveBeenCalledWith('ProductCatalog', {
+      cycleId: 'cycle-1',
+      source: 'store',
+    });
 
     fireEvent.press(getByText('storeViewCart'));
-    expect(mockNavigate).toHaveBeenCalledWith('Cart');
+    expect(mockNavigate).toHaveBeenCalledWith('Cart', {
+      cycleId: 'cycle-1',
+      source: 'store',
+    });
 
     fireEvent.press(getByText('storeViewOrders'));
-    expect(mockNavigate).toHaveBeenCalledWith('OrdersHistory');
+    expect(mockNavigate).toHaveBeenCalledWith('OrdersHistory', {
+      cycleId: 'cycle-1',
+      source: 'store',
+    });
 
     fireEvent.press(getByText('storeManualSubmit'));
 

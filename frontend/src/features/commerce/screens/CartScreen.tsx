@@ -26,8 +26,10 @@ import {
 import SelectField from '@/components/SelectField';
 import logger from '@/utils/logger';
 import { RootStackParamList } from '@/navigation/MainNavigator';
+import { RouteProp, useRoute } from '@react-navigation/native';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'Cart'>;
+type RoutePropType = RouteProp<RootStackParamList, 'Cart'>;
 
 interface AxiosApiError {
   response?: { data?: { message?: string; error?: string; detail?: string } };
@@ -48,6 +50,7 @@ const extractErrorMessage = (error: unknown, fallback: string): string => {
 export default function CartScreen() {
   const { t } = useTranslation();
   const navigation = useNavigation<NavigationProp>();
+  const route = useRoute<RoutePropType>();
   const dispatch = useDispatch<AppDispatch>();
   const generateClientUuid = (): string => {
     if (typeof globalThis.crypto?.randomUUID === 'function') {
@@ -63,6 +66,9 @@ export default function CartScreen() {
   const { cart } = useSelector((state: RootState) => state.commerce);
   const { user, farmProfile } = useSelector((state: RootState) => state.auth);
   const currentCycle = useSelector((state: RootState) => state.aquaculture.currentCycle);
+  const routeCycleId = route.params?.cycleId;
+  const storeNavigationParams = routeCycleId ? { cycleId: routeCycleId, source: 'store' as const } : undefined;
+  const storeCycleId = routeCycleId || currentCycle?.id;
   const { items: cartItems, delivery_method, pickup_location, deliveryPreview, previewLoading } = cart;
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -150,7 +156,7 @@ export default function CartScreen() {
                 items: cartItems.map((item) => ({ product_id: item.product.id, quantity: item.quantity })),
                 delivery_method,
                 pickup_location: delivery_method === 'pickup' ? pickup_location : undefined,
-                production_cycle_id: currentCycle?.id,
+                ...(storeCycleId ? { production_cycle_id: storeCycleId } : {}),
                 client_uuid: generateClientUuid(),
                 created_offline: false,
               };
@@ -163,14 +169,14 @@ export default function CartScreen() {
                   text: t('viewOrder'),
                   onPress: () => {
                     dispatch(clearCart());
-                    navigation.navigate('OrdersHistory');
+                    navigation.navigate('OrdersHistory', storeNavigationParams);
                   },
                 },
                 {
                   text: t('ok'),
                   onPress: () => {
                     dispatch(clearCart());
-                    navigation.navigate('ProductCatalog');
+                    navigation.navigate('ProductCatalog', storeNavigationParams);
                   },
                 },
               ]);
@@ -188,8 +194,8 @@ export default function CartScreen() {
   };
 
   const handleBackToCatalog = useCallback(() => {
-    navigation.navigate('ProductCatalog');
-  }, [navigation]);
+    navigation.navigate('ProductCatalog', storeNavigationParams);
+  }, [navigation, storeNavigationParams]);
 
   const renderCartItem = useCallback(({ item }: { item: CartItem }) => {
     const { product, quantity } = item;
