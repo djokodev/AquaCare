@@ -818,6 +818,24 @@ class ReportService(BaseService):
             mortality_rate_pct = 0.0
             if total_initial > 0:
                 mortality_rate_pct = round((total_mortality / total_initial) * 100, 2)
+            cycle_metrics = getattr(cycle, 'metrics', None)
+            feeding_plans = list(
+                cycle.feeding_plans.filter(
+                    start_date__lte=period_end,
+                    end_date__gte=period_start,
+                ).order_by('week_number')
+            )
+            avg_weights = [float(log.average_weight) for log in cycle_logs if log.average_weight is not None]
+            planned_price = ReportService._to_float(cycle.planned_selling_price_per_kg_fcfa)
+            effective_selling_price = planned_price or ReportService._default_selling_price_for_species(cycle.species)
+            feed_price_per_kg = (
+                ReportService._to_float(FarmProductionPlanService.get_plan_data(farm_profile)["default_feed_price_per_kg"])
+                or ReportService._to_float(DEFAULT_FEED_PRICE_PER_KG)
+                or 0.0
+            )
+            feed_cost_consumed_fcfa = round(total_feed * feed_price_per_kg, 2)
+            current_biomass_val = ReportService._to_float(cycle.current_biomass) or 0.0
+            projected_revenue = effective_selling_price * current_biomass_val
             return {
                 'report_meta': {
                     'report_type': report_type,
@@ -870,7 +888,114 @@ class ReportService(BaseService):
                     'total_mortality': total_mortality,
                     'comparison_units_count': 0,
                 },
-                'cycles': [],
+                'cycles': [
+                    {
+                        'cycle': {
+                            'id': str(cycle.id),
+                            'cycle_name': cycle.cycle_name,
+                            'species': cycle.species,
+                            'species_display': cycle.get_species_display(),
+                            'status': cycle.status,
+                            'status_display': cycle.get_status_display(),
+                            'pond_identifier': cycle.pond_identifier,
+                            'start_date': cycle.start_date.isoformat(),
+                            'days_active': cycle.days_active(),
+                        },
+                        'unit': None,
+                        'economic_plan': {
+                            'planned_selling_price_per_kg_fcfa': effective_selling_price,
+                            'fingerlings_cost_fcfa': ReportService._to_float(cycle.fingerlings_cost_fcfa),
+                            'other_operational_costs_fcfa': ReportService._to_float(cycle.other_operational_costs_fcfa),
+                            'projected_revenue_fcfa': round(projected_revenue, 0) if effective_selling_price else None,
+                            'projected_roi_pct': None,
+                        },
+                        'dashboard_metrics': {
+                            'estimated_market_value_fcfa': round(projected_revenue, 0),
+                            'feed_cost_consumed_fcfa': round(feed_cost_consumed_fcfa, 0),
+                            'time_remaining_days': ReportService._calculate_cycle_days_remaining(cycle),
+                            'direct_production_cost_fcfa': round(feed_cost_consumed_fcfa, 0),
+                        },
+                        'current_metrics': {
+                            'current_count': cycle.current_count,
+                            'current_average_weight': ReportService._to_float(cycle.current_average_weight),
+                            'current_biomass': ReportService._to_float(cycle.current_biomass),
+                            'total_feed_consumed': ReportService._to_float(cycle.total_feed_consumed),
+                            'survival_rate': ReportService._to_float(cycle.survival_rate),
+                            'fcr': ReportService._to_float(cycle.fcr),
+                            'daily_growth_rate': ReportService._to_float(
+                                getattr(cycle_metrics, 'daily_growth_rate', None)
+                            ),
+                            'specific_growth_rate': ReportService._to_float(
+                                getattr(cycle_metrics, 'specific_growth_rate', None)
+                            ),
+                            'average_daily_feed': ReportService._to_float(
+                                getattr(cycle_metrics, 'average_daily_feed', None)
+                            ),
+                            'performance_score': ReportService._to_float(
+                                getattr(cycle_metrics, 'performance_score', None)
+                            ),
+                        },
+                        'period_metrics': {
+                            'log_count': len(cycle_logs),
+                            'sanitary_event_count': len(sanitary_logs),
+                            'total_feed': total_feed,
+                            'total_mortality': total_mortality,
+                            'average_weight': sum(avg_weights) / len(avg_weights) if avg_weights else None,
+                            'average_temperature': None,
+                            'average_oxygen': None,
+                            'average_ph': None,
+                        },
+                        'logs': [
+                            {
+                                'id': str(log.id),
+                                'log_date': log.log_date.isoformat(),
+                                'mortality_count': int(log.mortality_count or 0),
+                                'mortality_reason': log.mortality_reason or None,
+                                'sample_count': log.sample_count,
+                                'sample_total_weight': ReportService._to_float(log.sample_total_weight),
+                                'average_weight': ReportService._to_float(log.average_weight),
+                                'feed_quantity': ReportService._to_float(log.feed_quantity),
+                                'feed_type': log.feed_type or None,
+                                'water_temperature': ReportService._to_float(log.water_temperature),
+                                'dissolved_oxygen': ReportService._to_float(log.dissolved_oxygen),
+                                'ph_level': ReportService._to_float(log.ph_level),
+                                'ammonia_level': ReportService._to_float(log.ammonia_level),
+                                'observations': log.observations or None,
+                            }
+                            for log in cycle_logs
+                        ],
+                        'sanitary_logs': [
+                            {
+                                'id': str(item.id),
+                                'event_date': item.event_date.isoformat(),
+                                'event_type': item.event_type,
+                                'event_type_display': item.get_event_type_display(),
+                                'symptoms': item.symptoms,
+                                'affected_count': item.affected_count,
+                                'treatment_applied': item.treatment_applied or None,
+                                'medication_used': item.medication_used or None,
+                                'dosage': item.dosage or None,
+                                'treatment_duration_days': item.treatment_duration_days,
+                                'resolved': item.resolved,
+                            }
+                            for item in sanitary_logs
+                        ],
+                        'feeding_plans': [
+                            {
+                                'week_number': plan.week_number,
+                                'start_date': plan.start_date.isoformat(),
+                                'end_date': plan.end_date.isoformat(),
+                                'daily_feed_amount': ReportService._to_float(plan.daily_feed_amount),
+                                'feeding_rate': ReportService._to_float(plan.feeding_rate),
+                                'meals_per_day': plan.meals_per_day,
+                                'feed_per_meal': ReportService._to_float(plan.feed_per_meal),
+                                'recommended_feed_type': plan.recommended_feed_type,
+                                'protein_percentage': plan.protein_percentage,
+                            }
+                            for plan in feeding_plans
+                        ],
+                    }
+                ],
                 'units': [],
             }
 

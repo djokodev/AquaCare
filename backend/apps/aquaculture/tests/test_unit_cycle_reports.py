@@ -306,5 +306,6 @@ class TestUnitCycleAwareReportPayloads:
         assert payload['summary']['total_mortality'] == 10
         assert payload['summary']['total_feed'] == 5.0
         assert payload['summary']['active_sanitary_events_count'] == 1
-        assert payload['cycles'] == []
+        assert len(payload['cycles']) == 1
+        assert payload['cycles'][0]['cycle']['id'] == str(cycle.id)
         assert payload['units'] == []

@@ -311,6 +311,17 @@ export default function DashboardScreen({ navigation }: any) {
     navigation.navigate('Store', { cycleId: primaryActiveCycle.id });
   };
 
+  const handleCycleReportPress = () => {
+    if (!primaryActiveCycle) {
+      return;
+    }
+
+    navigation.navigate('Reports', {
+      scope: 'cycle',
+      cycleId: primaryActiveCycle.id,
+    });
+  };
+
   const handleConfirmOrderReceipt = (orderId: string, orderNumber: string) => {
     Alert.alert(
       t('confirmReceiptTitle'),
@@ -594,6 +605,20 @@ export default function DashboardScreen({ navigation }: any) {
                 </Text>
                 <Ionicons
                   name="chevron-forward"
+                  size={20}
+                  color={AQUACARE_COLORS.GREEN_PRIMARY}
+                />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                className="mt-3 bg-white rounded-xl p-4 border border-aquacare-primary flex-row items-center justify-between"
+                onPress={handleCycleReportPress}
+              >
+                <Text className="flex-1 mr-3 text-base font-bold text-aquacare-primary">
+                  {t('reportCycleTitle')}
+                </Text>
+                <Ionicons
+                  name="document-text-outline"
                   size={20}
                   color={AQUACARE_COLORS.GREEN_PRIMARY}
                 />

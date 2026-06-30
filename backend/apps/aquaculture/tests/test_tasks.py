@@ -130,6 +130,37 @@ class TestGenerateReportAsyncTask:
         assert result.startswith(expected_message)
         assert report.status == 'draft'
 
+    def test_supports_legacy_cycle_scope_id_argument(self):
+        farm = FarmProfileFactory()
+        cycle = ProductionCycleFactory(farm_profile=farm, status='active')
+        report = ProductionReport.objects.create(
+            farm_profile=farm,
+            report_type='daily',
+            period_start=date(2026, 3, 1),
+            period_end=date(2026, 3, 1),
+            status='pending',
+            scope_type='cycle',
+            scope_object_id=None,
+            payload={
+                'report_meta': {
+                    'scope_type': 'cycle',
+                    'cycle_scope_id': str(cycle.id),
+                }
+            },
+        )
+
+        with patch(
+            'aquaculture.tasks.ReportService.generate_for_farm',
+        ) as mock_generate:
+            result = generate_report_async_task(str(report.id), str(cycle.id))
+
+        assert result == f'Report generated: {report.id}'
+        mock_generate.assert_called_once()
+        _, kwargs = mock_generate.call_args
+        assert kwargs['scope_type'] == 'cycle'
+        assert kwargs['scope_object_id'] == str(cycle.id)
+        assert kwargs['cycle_id'] == str(cycle.id)
+
     def test_retries_on_unexpected_error(self):
         farm = FarmProfileFactory()
         report = _create_report(farm_profile=farm, status='pending')
