@@ -421,27 +421,29 @@ export default function DashboardScreen({ navigation }: any) {
       >
 
       <View className="px-5 py-5">
-        <Text className="mb-3 text-xl font-bold text-gray-dark">
-          {t('cycleDashboardTitle')}
-        </Text>
-        {loading.dashboard && !dashboardData ? (
-          <View className="items-center justify-center py-10">
-            <ActivityIndicator size="large" color={AQUACARE_COLORS.GREEN_PRIMARY} />
-            <Text className="text-base text-gray-light mt-3">
-              {t('loadingData', { defaultValue: 'Chargement des données...' })}
-            </Text>
-          </View>
-        ) : (
-          <View className="flex-row flex-wrap justify-between">
-            {dashboardMetricCards.map((card) => (
-              <MetricCard
-                key={card.label}
-                value={card.value}
-                label={card.label}
-              />
-            ))}
-          </View>
-        )}
+        <View className="bg-white rounded-xl p-4 mb-4">
+          <Text className="text-lg font-bold text-gray-dark mb-3">
+            {t('cycleDashboardTitle')}
+          </Text>
+          {loading.dashboard && !dashboardData ? (
+            <View className="items-center justify-center py-8">
+              <ActivityIndicator size="large" color={AQUACARE_COLORS.GREEN_PRIMARY} />
+              <Text className="text-base text-gray-light mt-3">
+                {t('loadingData', { defaultValue: 'Chargement des données...' })}
+              </Text>
+            </View>
+          ) : (
+            <View className="flex-row flex-wrap justify-between">
+              {dashboardMetricCards.map((card) => (
+                <MetricCard
+                  key={card.label}
+                  value={card.value}
+                  label={card.label}
+                />
+              ))}
+            </View>
+          )}
+        </View>
       </View>
 
       {activeCycles.length > 1 && (
