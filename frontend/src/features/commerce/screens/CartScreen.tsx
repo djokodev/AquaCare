@@ -1,5 +1,5 @@
 ﻿import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, Alert, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
@@ -27,6 +27,7 @@ import SelectField from '@/components/SelectField';
 import logger from '@/utils/logger';
 import { RootStackParamList } from '@/navigation/MainNavigator';
 import { RouteProp, useRoute } from '@react-navigation/native';
+import { getProductBrandAsset } from '@/features/commerce/utils/productBrandAssets';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'Cart'>;
 type RoutePropType = RouteProp<RootStackParamList, 'Cart'>;
@@ -204,7 +205,7 @@ export default function CartScreen() {
     return (
       <View className="bg-white rounded-xl p-4 mb-3">
         <View className="w-14 h-14 bg-cream rounded-lg items-center justify-center mb-3">
-          <Ionicons name="cube-outline" size={32} color={AQUACARE_COLORS.GREEN_PRIMARY} />
+          <Image source={getProductBrandAsset(product.brand)} className="w-10 h-10" resizeMode="contain" />
         </View>
 
         <View className="mb-3">

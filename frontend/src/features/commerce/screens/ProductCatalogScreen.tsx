@@ -29,9 +29,9 @@ import { Product, ProductSpecies } from '@/types/commerce';
 import { AQUACARE_COLORS } from '@/constants/colors';
 import { PRODUCT_SPECIES } from '@/domain/commerce/constants';
 import { RootStackParamList } from '@/navigation/MainNavigator';
+import { getProductBrandAsset } from '@/features/commerce/utils/productBrandAssets';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'ProductCatalog'>;
-const dibaqLogo = require('../../../../assets/products/DIBAQ.png');
 
 export default function ProductCatalogScreen() {
   const { t } = useTranslation();
@@ -111,7 +111,7 @@ export default function ProductCatalogScreen() {
       activeOpacity={0.7}
     >
       <View className="w-20 h-20 bg-cream rounded-lg items-center justify-center mr-3 overflow-hidden">
-        <Image source={dibaqLogo} className="w-16 h-16" resizeMode="contain" />
+        <Image source={getProductBrandAsset(item.brand)} className="w-16 h-16" resizeMode="contain" />
       </View>
 
       <View className="flex-1">

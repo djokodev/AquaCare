@@ -8,6 +8,7 @@ import {
   ScrollView,
   FlatList,
   TouchableOpacity,
+  Image,
   ActivityIndicator,
   Alert,
 } from 'react-native';
@@ -22,6 +23,7 @@ import { fetchProductDetail, addToCart } from '@/features/commerce/store/commerc
 import { Product } from '@/types/commerce';
 import { AQUACARE_COLORS } from '@/constants/colors';
 import { RootStackParamList } from '@/navigation/MainNavigator';
+import { getProductBrandAsset } from '@/features/commerce/utils/productBrandAssets';
 
 type RouteParams = {
   ProductDetail: {
@@ -113,7 +115,11 @@ export default function ProductDetailScreen() {
         onPress={() => navigation.setParams({ productId: similarProduct.id } as never)}
       >
         <View className="w-full h-24 bg-white rounded-lg items-center justify-center mb-2">
-          <Ionicons name="cube-outline" size={32} color={AQUACARE_COLORS.GREEN_PRIMARY} />
+          <Image
+            source={getProductBrandAsset(similarProduct.brand)}
+            className="w-14 h-14"
+            resizeMode="contain"
+          />
         </View>
         <Text className="text-xs text-gray-light font-semibold mb-1">
           {similarProduct.brand.toUpperCase()}
@@ -169,11 +175,15 @@ export default function ProductDetailScreen() {
       </View>
 
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
-        <View className="bg-white items-center py-10">
-          <View className="w-48 h-48 bg-cream rounded-full items-center justify-center">
-            <Ionicons name="cube" size={80} color={AQUACARE_COLORS.GREEN_PRIMARY} />
-          </View>
+      <View className="bg-white items-center py-10">
+        <View className="w-48 h-48 bg-cream rounded-full items-center justify-center">
+          <Image
+            source={getProductBrandAsset(product.brand)}
+            className="w-28 h-28"
+            resizeMode="contain"
+          />
         </View>
+      </View>
 
         <View className="bg-white px-5 py-5 mt-2">
           <Text className="text-xs text-gray-light font-semibold mb-1">{product.brand.toUpperCase()}</Text>
