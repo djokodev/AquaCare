@@ -433,7 +433,7 @@ export default function DashboardScreen({ navigation }: any) {
               </Text>
             </View>
           ) : (
-            <View className="flex-row flex-wrap justify-between">
+            <View className="flex-row flex-wrap gap-3">
               {dashboardMetricCards.map((card) => (
                 <MetricCard
                   key={card.label}
@@ -528,29 +528,29 @@ export default function DashboardScreen({ navigation }: any) {
               key={cycle.id}
               className="bg-white rounded-xl p-4 mb-3 border border-gray-200"
             >
-              <View className="flex-row justify-between items-start">
-                <View className="flex-1 mr-3">
-                  <Text className="text-base font-bold text-gray-dark mb-1">{cycle.cycle_name}</Text>
-                  <Text className="text-sm text-gray-light mb-1">
-                    {cycle.species === 'clarias' ? t('catfish') : t('tilapia')}
-                    {cycle.unitCount > 0
-                      ? ` · ${t('productionUnitsCount', { count: cycle.unitCount })}`
-                      : ` - ${cycle.pond_identifier}`}
-                  </Text>
-                  <Text className="text-xs text-gray-light">
-                    {t('daysCount', { count: cycle.cycleAgeDays })} - {formatCurrency(cycle.estimatedMarketValueFcfa)} - {formatPercentage(cycle.survival_rate || 0)} {t('survivalRateShort')}
-                  </Text>
-                </View>
-
-                {cycle.unitCount > 0 ? null : (
-                  <TouchableOpacity
-                    className="bg-aquacare-primary flex-row items-center py-2 px-3 rounded-lg"
-                    onPress={() => openHarvestChoice(cycle)}
-                  >
-                    <Text className="text-white text-sm font-semibold ml-1">{t('harvest')}</Text>
-                  </TouchableOpacity>
-                )}
+              <View className="flex-row items-start justify-between">
+                <Text className="flex-1 mr-3 text-base font-bold text-gray-dark">
+                  {cycle.cycle_name}
+                </Text>
+                <Text className="text-sm text-gray-light text-right">
+                  {cycle.species === 'clarias' ? t('catfish') : t('tilapia')}
+                  {cycle.unitCount > 0
+                    ? ` · ${t('productionUnitsCount', { count: cycle.unitCount })}`
+                    : ` - ${cycle.pond_identifier}`}
+                </Text>
               </View>
+              <Text className="text-xs text-gray-light mt-1">
+                {t('daysCount', { count: cycle.cycleAgeDays })} - {formatCurrency(cycle.estimatedMarketValueFcfa)} - {formatPercentage(cycle.survival_rate || 0)} {t('survivalRateShort')}
+              </Text>
+
+              {cycle.unitCount > 0 ? null : (
+                <TouchableOpacity
+                  className="mt-2 bg-aquacare-primary flex-row items-center py-2 px-3 rounded-lg"
+                  onPress={() => openHarvestChoice(cycle)}
+                >
+                  <Text className="text-white text-sm font-semibold ml-1">{t('harvest')}</Text>
+                </TouchableOpacity>
+              )}
               {cycle.unitCount > 0 ? null : (
                 <TouchableOpacity
                   style={{ marginTop: 10, flexDirection: 'row', alignItems: 'center', gap: 4 }}

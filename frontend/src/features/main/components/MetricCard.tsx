@@ -9,7 +9,7 @@ export interface MetricCardProps {
 
 const MetricCard: React.FC<MetricCardProps> = ({ value, label, subtitle }) => {
   return (
-    <View className="w-[48%] bg-cream rounded-lg p-4">
+    <View className="flex-1 min-w-[45%] bg-cream rounded-lg p-4">
       <Text className="text-xl font-bold text-aquacare-primary" numberOfLines={2}>
         {value}
       </Text>
