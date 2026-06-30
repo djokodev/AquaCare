@@ -21,6 +21,7 @@ import { useTranslation } from 'react-i18next';
 import { AQUACARE_COLORS } from '@/constants/colors';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
 import { fetchCycleFeedStatus } from '@/features/aquaculture/store/aquacultureSlice';
+import DashboardMetricCard from '@/features/main/components/MetricCard';
 import { RootStackParamList } from '@/navigation/MainNavigator';
 import { AppDispatch, RootState } from '@/store/store';
 import { CycleStore } from '@/types/aquaculture';
@@ -195,13 +196,6 @@ export default function StoreScreen() {
     }
   };
 
-  const renderSummaryCard = (labelKey: string, value: string) => (
-    <View className="w-[48%] bg-cream rounded-xl p-3 mb-3">
-      <Text className="text-xs text-gray-light">{t(labelKey)}</Text>
-      <Text className="text-lg font-bold text-gray-dark mt-2">{value}</Text>
-    </View>
-  );
-
   const remainingToOrderValue =
     cycleFeedStatus
       ? formatNumber(cycleFeedStatus.bags_remaining_to_order, t('bags'), 0)
@@ -247,20 +241,28 @@ export default function StoreScreen() {
         >
           {store ? (
             <>
-              <View className="flex-row flex-wrap justify-between">
-                {renderSummaryCard(
-                  'storeFeedRemaining',
-                  formatNumber(toNumber(store.summary.estimated_feed_remaining_kg), t('kg'), 2)
-                )}
-                {renderSummaryCard(
-                  'storeFeedConsumed',
-                  formatNumber(toNumber(store.summary.feed_consumed_kg), t('kg'), 2)
-                )}
-                {renderSummaryCard(
-                  'storeFeedExpenses',
-                  formatCurrency(toNumber(store.summary.feed_expenses_fcfa))
-                )}
-                {renderSummaryCard('storeNeedRemaining', remainingToOrderValue)}
+              <View className="bg-white rounded-xl p-4 mb-4">
+                <Text className="text-lg font-bold text-gray-dark mb-3">
+                  {t('storeStatusTitle')}
+                </Text>
+                <View className="flex-row flex-wrap gap-3">
+                  <DashboardMetricCard
+                    value={formatNumber(toNumber(store.summary.estimated_feed_remaining_kg), t('kg'), 2)}
+                    label={t('storeFeedRemaining')}
+                  />
+                  <DashboardMetricCard
+                    value={formatNumber(toNumber(store.summary.feed_consumed_kg), t('kg'), 2)}
+                    label={t('storeFeedConsumed')}
+                  />
+                  <DashboardMetricCard
+                    value={formatCurrency(toNumber(store.summary.feed_expenses_fcfa))}
+                    label={t('storeFeedExpenses')}
+                  />
+                  <DashboardMetricCard
+                    value={remainingToOrderValue}
+                    label={t('storeNeedRemaining')}
+                  />
+                </View>
               </View>
 
               {store?.summary.stock_tracking_started_at ? (
