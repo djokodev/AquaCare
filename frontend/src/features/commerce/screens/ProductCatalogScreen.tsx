@@ -106,18 +106,19 @@ export default function ProductCatalogScreen() {
 
   const renderProductCard = ({ item }: { item: Product }) => (
     <TouchableOpacity
-      className="bg-white rounded-xl p-4 flex-row"
+      className="bg-white rounded-xl p-4 flex-row border border-[#d7e3d5] shadow-sm"
       onPress={() => handleProductPress(item)}
-      activeOpacity={0.7}
+      activeOpacity={0.85}
     >
       <View className="w-20 h-20 bg-cream rounded-lg items-center justify-center mr-3 overflow-hidden">
         <Image source={getProductBrandAsset(item.brand)} className="w-16 h-16" resizeMode="contain" />
       </View>
 
       <View className="flex-1">
-        <Text className="text-xs text-gray-light font-semibold mb-1">
-          {item.brand.toUpperCase()}
-        </Text>
+        <View className="flex-row items-start justify-between mb-1">
+          <Text className="text-xs text-gray-light font-semibold">{item.brand.toUpperCase()}</Text>
+          <Ionicons name="chevron-forward" size={18} color={AQUACARE_COLORS.GREEN_PRIMARY} />
+        </View>
         <Text className="text-base font-bold text-gray-dark mb-2" numberOfLines={2}>
           {item.name}
         </Text>
