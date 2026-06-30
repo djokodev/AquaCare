@@ -66,6 +66,15 @@ interface ActionItem {
   params?: Record<string, unknown>;
 }
 
+const hasValidProductionUnitContext = (
+  productionUnitContext: QuickActionsSheetProps['productionUnitContext']
+): boolean =>
+  Boolean(
+    productionUnitContext?.cycleId &&
+      productionUnitContext?.cycleUnitAllocationId &&
+      productionUnitContext?.productionUnitId
+  );
+
 /**
  * Composant QuickActionsSheet
  *
@@ -101,7 +110,13 @@ export default function QuickActionsSheet({
    * Configuration des actions Aquaculture
    */
   const aquacultureActions = useMemo((): ActionItem[] => {
-    if (scope === 'unit' && productionUnitContext) {
+    const isValidUnitContext = hasValidProductionUnitContext(productionUnitContext);
+
+    if (scope === 'unit') {
+      if (!isValidUnitContext) {
+        return [];
+      }
+
       return [
         {
           id: 'dailyLog',
@@ -129,31 +144,6 @@ export default function QuickActionsSheet({
           route: 'DailyLogHistory',
           category: 'aquaculture',
           params: productionUnitContext,
-        },
-        {
-          id: 'notifications',
-          labelKey: 'notifications',
-          icon: 'notifications-outline',
-          iconColor: AQUACARE_COLORS.WARNING,
-          route: 'Notifications',
-          category: 'aquaculture',
-          badge: unreadCount,
-        },
-        {
-          id: 'feedingPlan',
-          labelKey: 'feedingPlan',
-          icon: 'restaurant-outline',
-          iconColor: AQUACARE_COLORS.INFO,
-          route: 'FeedingPlan',
-          category: 'aquaculture',
-        },
-        {
-          id: 'reports',
-          labelKey: 'reports',
-          icon: 'document-text-outline',
-          iconColor: AQUACARE_COLORS.BLUE,
-          route: 'Reports',
-          category: 'aquaculture',
         },
       ];
     }

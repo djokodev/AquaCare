@@ -25,6 +25,13 @@ describe('features/aquaculture/screens/ProductionUnitOverviewScreen', () => {
     },
   } as any;
 
+  const routeWithoutAllocation = {
+    params: {
+      cycleId: 'cycle-1',
+      productionUnitId: 'unit-1',
+    },
+  } as any;
+
   beforeEach(() => {
     jest.clearAllMocks();
   });
@@ -83,7 +90,7 @@ describe('features/aquaculture/screens/ProductionUnitOverviewScreen', () => {
       ],
     });
 
-    const { getByText, queryByText } = render(
+    const { getByText, getAllByText, queryByText } = render(
       <ProductionUnitOverviewScreen navigation={navigation} route={route} />
     );
 
@@ -96,7 +103,10 @@ describe('features/aquaculture/screens/ProductionUnitOverviewScreen', () => {
       expect(getByText('productionUnitDashboardTitle')).toBeTruthy();
       expect(getByText('dailyLog')).toBeTruthy();
       expect(getByText('sanitaryLog')).toBeTruthy();
-      expect(getByText('notifications')).toBeTruthy();
+      expect(getByText('productionUnitLogHistoryAction')).toBeTruthy();
+      expect(queryByText('notifications')).toBeNull();
+      expect(queryByText('feedingPlan')).toBeNull();
+      expect(queryByText('reports')).toBeNull();
       expect(getByText('viewAllActions')).toBeTruthy();
       expect(queryByText('Bac 1')).toBeNull();
       expect(queryByText('Cycle Silure')).toBeNull();
@@ -117,7 +127,10 @@ describe('features/aquaculture/screens/ProductionUnitOverviewScreen', () => {
 
     await waitFor(() => {
       expect(getByText('productionUnitSanitaryLogAction')).toBeTruthy();
-      expect(getByText('productionUnitLogHistoryAction')).toBeTruthy();
+      expect(getAllByText('productionUnitLogHistoryAction').length).toBeGreaterThanOrEqual(2);
+      expect(queryByText('notifications')).toBeNull();
+      expect(queryByText('feedingPlan')).toBeNull();
+      expect(queryByText('reports')).toBeNull();
       expect(queryByText('categoryCommerce')).toBeNull();
       expect(queryByText('productCatalog')).toBeNull();
       expect(queryByText('cart')).toBeNull();
@@ -197,5 +210,19 @@ describe('features/aquaculture/screens/ProductionUnitOverviewScreen', () => {
 
     fireEvent.press(getByText('retry'));
     expect(mockGetProductionUnitDashboard).toHaveBeenCalledTimes(2);
+  });
+
+  it('n appelle pas le dashboard si le contexte unitaire est incomplet', async () => {
+    const { getByText, queryByText } = render(
+      <ProductionUnitOverviewScreen navigation={navigation} route={routeWithoutAllocation} />
+    );
+
+    await waitFor(() => {
+      expect(getByText('productionUnitContextIncompleteError')).toBeTruthy();
+      expect(queryByText('retry')).toBeNull();
+      expect(queryByText('viewAllActions')).toBeNull();
+    });
+
+    expect(mockGetProductionUnitDashboard).not.toHaveBeenCalled();
   });
 });

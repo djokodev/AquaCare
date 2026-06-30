@@ -69,6 +69,12 @@ The unit dashboard now starts directly with unit metrics and actions.
 The previous unit hero section was removed to keep the operational screen lightweight.
 Metric cards use static icons.
 
+## Production unit integrity rule
+
+1. Les actions d'une unite ecrivent des faits scopees a cette unite.
+2. Les dashboards de cycle agrègent les faits des unites.
+3. L'admin doit permettre d'inspecter ferme, cycle, unites, allocations et logs unitaires.
+
 ## Manual QA checklist — Production units flow
 
 1. Creer une ferme avec Bac 1, Bac 2 et Etang 1.

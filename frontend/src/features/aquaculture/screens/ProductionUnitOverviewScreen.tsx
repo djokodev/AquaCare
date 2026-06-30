@@ -48,9 +48,18 @@ const coerceNumber = (value: string | number | null | undefined): number | null 
   return Number.isFinite(coerced) ? coerced : null;
 };
 
+const hasValidProductionUnitContext = (
+  cycleId: string,
+  cycleUnitAllocationId: string,
+  productionUnitId: string
+): boolean => Boolean(cycleId && cycleUnitAllocationId && productionUnitId);
+
 export default function ProductionUnitOverviewScreen({ navigation, route }: Props) {
   const { t, i18n } = useTranslation();
-  const { cycleId, allocationId, productionUnitId, productionUnitName } = route.params;
+  const { cycleId, allocationId, cycleUnitAllocationId, productionUnitId, productionUnitName } =
+    route.params;
+  const resolvedCycleUnitAllocationId = cycleUnitAllocationId || allocationId || '';
+  const hasUnitContext = hasValidProductionUnitContext(cycleId, resolvedCycleUnitAllocationId, productionUnitId);
   const locale = i18n.language?.startsWith('fr') ? 'fr-FR' : 'en-US';
   const [actionsSheetVisible, setActionsSheetVisible] = useState(false);
   const [dashboard, setDashboard] = useState<ProductionUnitDashboard | null>(null);
@@ -58,10 +67,24 @@ export default function ProductionUnitOverviewScreen({ navigation, route }: Prop
   const [refreshing, setRefreshing] = useState(false);
   const [errorKey, setErrorKey] = useState<string | null>(null);
 
-  const errorMessage = errorKey ? t(errorKey) : null;
+  const errorMessage = !hasUnitContext
+    ? t('productionUnitContextIncompleteError')
+    : errorKey
+      ? t(errorKey)
+      : null;
 
   const loadDashboard = useCallback(
     async (mode: 'initial' | 'refresh' = 'initial') => {
+      if (!hasUnitContext) {
+        setDashboard(null);
+        if (mode === 'refresh') {
+          setRefreshing(false);
+        } else {
+          setLoading(false);
+        }
+        return;
+      }
+
       if (mode === 'refresh') {
         setRefreshing(true);
       } else {
@@ -69,7 +92,7 @@ export default function ProductionUnitOverviewScreen({ navigation, route }: Prop
       }
 
       try {
-        const result = await aquacultureService.getProductionUnitDashboard(allocationId);
+        const result = await aquacultureService.getProductionUnitDashboard(resolvedCycleUnitAllocationId);
         setDashboard(result);
         setErrorKey(null);
       } catch {
@@ -85,22 +108,31 @@ export default function ProductionUnitOverviewScreen({ navigation, route }: Prop
         }
       }
     },
-    [allocationId]
+    [hasUnitContext, resolvedCycleUnitAllocationId]
   );
 
   useEffect(() => {
+    if (!hasUnitContext) {
+      setDashboard(null);
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
+
     void loadDashboard();
-  }, [loadDashboard]);
+  }, [hasUnitContext, loadDashboard]);
 
   const allocation = dashboard?.allocation ?? null;
   const summary = dashboard?.summary ?? null;
   const unitName = productionUnitName || allocation?.production_unit_name || t('productionUnitsUnknownUnit');
-  const unitContext = {
-    cycleId,
-    cycleUnitAllocationId: allocationId,
-    productionUnitId,
-    productionUnitName: unitName,
-  };
+  const unitContext = hasUnitContext
+    ? {
+        cycleId,
+        cycleUnitAllocationId: resolvedCycleUnitAllocationId,
+        productionUnitId,
+        productionUnitName: unitName,
+      }
+    : undefined;
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -170,14 +202,16 @@ export default function ProductionUnitOverviewScreen({ navigation, route }: Prop
       <View style={styles.centered}>
         <Ionicons name="alert-circle-outline" size={48} color={AQUACARE_COLORS.ERROR} />
         <Text style={styles.errorText}>{errorMessage}</Text>
-        <TouchableOpacity
-          style={styles.retryButton}
-          onPress={() => {
-            void loadDashboard('refresh');
-          }}
-        >
-          <Text style={styles.retryButtonText}>{t('retry')}</Text>
-        </TouchableOpacity>
+        {hasUnitContext ? (
+          <TouchableOpacity
+            style={styles.retryButton}
+            onPress={() => {
+              void loadDashboard('refresh');
+            }}
+          >
+            <Text style={styles.retryButtonText}>{t('retry')}</Text>
+          </TouchableOpacity>
+        ) : null}
       </View>
     );
   }

@@ -140,7 +140,8 @@ export type RootStackParamList = {
   ProductionUnitsHub: { cycleId: string };
   ProductionUnitOverview: {
     cycleId: string;
-    allocationId: string;
+    allocationId?: string;
+    cycleUnitAllocationId?: string;
     productionUnitId: string;
     productionUnitName?: string;
   };

@@ -1357,6 +1357,8 @@
   productionUnitRecentActivity: 'Recent activity',
   productionUnitNoRecentActivity: 'No recent activity for this unit.',
   productionUnitDashboardLoadError: 'Unable to load this unit dashboard.',
+  productionUnitContextIncompleteError:
+    'This unit context is incomplete. Go back to the cycle and open a valid allocation.',
   productionUnitTrackingSectionTitle: 'Unit tracking',
   productionUnitTrackingSectionDescription: 'Record actions and observations for this production unit.',
   productionUnitDailyLogAction: 'Record my daily data',
