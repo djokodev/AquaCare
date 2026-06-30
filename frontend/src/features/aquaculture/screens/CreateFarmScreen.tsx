@@ -22,6 +22,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useDispatch, useSelector } from 'react-redux';
 
+import { useAuth } from '@/hooks/useAuth';
 import { AQUACARE_COLORS } from '@/constants/colors';
 import { RootStackParamList } from '@/navigation/MainNavigator';
 import { AppDispatch, RootState } from '@/store/store';
@@ -153,6 +154,7 @@ const areProductionUnitAllocationsEqual = (
 
 export default function CreateFarmScreen({ navigation }: Props) {
   const { t, i18n } = useTranslation();
+  const { farmProfile } = useAuth();
   const dispatch = useDispatch<AppDispatch>();
   const scrollViewRef = useRef<React.ElementRef<typeof ScrollView> | null>(null);
   const { loading: simLoading } = useSelector(
@@ -676,12 +678,40 @@ export default function CreateFarmScreen({ navigation }: Props) {
       style={{ flex: 1 }}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
+      <View className="bg-aquacare-primary flex-row items-center pt-14 pb-4 px-4">
+        <TouchableOpacity
+          testID="createFarmBackButton"
+          className="w-10 items-start justify-center"
+          onPress={() => navigation.goBack()}
+          accessibilityRole="button"
+          accessibilityLabel={t('back')}
+        >
+          <Ionicons name="arrow-back" size={24} color={AQUACARE_COLORS.WHITE} />
+        </TouchableOpacity>
+        <Text className="flex-1 text-center text-xl font-bold text-white">
+          {t('createFarmTitle')}
+        </Text>
+        <View className="w-10" />
+      </View>
+
     <ScrollView
       ref={scrollViewRef}
       style={styles.container}
       contentContainerStyle={styles.content}
       keyboardShouldPersistTaps="handled"
     >
+      <View className="bg-white p-4 rounded-lg flex-row items-center mb-6 gap-3 border border-gray-200">
+        <Ionicons name="business" size={20} color={AQUACARE_COLORS.GREEN_PRIMARY} />
+        <View className="flex-1">
+          <Text className="text-xs uppercase tracking-wide text-gray-light mb-1">
+            {t('currentFarm')}
+          </Text>
+          <Text className="text-base font-semibold text-gray-dark">
+            {farmProfile?.farm_name || t('farmNotDefined')}
+          </Text>
+        </View>
+      </View>
+
       <FieldLabel label={t('createFarmSpeciesLabel')} required />
       <View style={styles.chipRow}>
         {(['tilapia', 'clarias'] as FarmSetupSpecies[]).map(sp => (

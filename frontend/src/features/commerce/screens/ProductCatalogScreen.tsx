@@ -5,7 +5,7 @@
  * pour le cycle actif (total nécessaire / commandé / consommé / reste),
  * puis le catalogue DIBAQ filtré par espèce du cycle.
  */
-import React, { useEffect, useState } from 'react';
+import React, { useContext, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -19,8 +19,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
-import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
+import type { NavigationProp, RouteProp } from '@react-navigation/native';
+import { NavigationContext, NavigationRouteContext } from '@react-navigation/core';
 import { useDispatch, useSelector } from 'react-redux';
 
 import { AppDispatch, RootState } from '@/store/store';
@@ -28,22 +28,23 @@ import { fetchProducts, applyFilters, addToCart } from '@/features/commerce/stor
 import { Product, ProductSpecies } from '@/types/commerce';
 import { AQUACARE_COLORS } from '@/constants/colors';
 import { PRODUCT_SPECIES } from '@/domain/commerce/constants';
-import { RootStackParamList } from '@/navigation/MainNavigator';
+import type { RootStackParamList } from '@/navigation/MainNavigator';
 import { getProductBrandAsset } from '@/features/commerce/utils/productBrandAssets';
-
-type NavigationProp = StackNavigationProp<RootStackParamList, 'ProductCatalog'>;
 
 export default function ProductCatalogScreen() {
   const { t } = useTranslation();
-  const navigation = useNavigation<NavigationProp>();
-  const route = useRoute<RouteProp<RootStackParamList, 'ProductCatalog'>>();
+  const navigation = useContext(NavigationContext) as NavigationProp<RootStackParamList> | undefined;
+  const route = useContext(NavigationRouteContext) as RouteProp<
+    RootStackParamList,
+    'ProductCatalog'
+  > | undefined;
   const dispatch = useDispatch<AppDispatch>();
 
   const { products, cart } = useSelector((state: RootState) => state.commerce);
   const { items: productsList, loading, error, filters } = products;
   const cartItemsCount = cart.items.reduce((sum, item) => sum + item.quantity, 0);
 
-  const storeNavigationParams = route.params?.cycleId
+  const storeNavigationParams = route?.params?.cycleId
     ? { cycleId: route.params.cycleId, source: 'store' as const }
     : undefined;
 
@@ -94,6 +95,10 @@ export default function ProductCatalogScreen() {
   };
 
   const handleProductPress = (product: Product) => {
+    if (!navigation) {
+      return;
+    }
+
     navigation.navigate(
       'ProductDetail',
       storeNavigationParams ? { productId: product.id, ...storeNavigationParams } : { productId: product.id }
@@ -101,6 +106,10 @@ export default function ProductCatalogScreen() {
   };
 
   const handleCartPress = () => {
+    if (!navigation) {
+      return;
+    }
+
     navigation.navigate('Cart', storeNavigationParams);
   };
 
@@ -169,7 +178,7 @@ export default function ProductCatalogScreen() {
     <View className="flex-1 bg-cream">
       {/* Header */}
       <View className="bg-white px-5 pt-16 pb-5 flex-row justify-between items-center shadow">
-        <TouchableOpacity onPress={() => navigation.goBack()} className="w-10">
+        <TouchableOpacity onPress={() => navigation?.goBack()} className="w-10">
           <Ionicons name="arrow-back" size={24} color={AQUACARE_COLORS.GRAY_DARK} />
         </TouchableOpacity>
 

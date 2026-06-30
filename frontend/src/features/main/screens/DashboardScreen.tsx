@@ -17,6 +17,7 @@ import { AppDispatch, RootState } from '@/store/store';
 import {
   clearCurrentCycle,
   fetchDashboardData,
+  fetchProductionCycles,
   setCurrentCycle,
 } from '@/features/aquaculture/store/aquacultureSlice';
 import { fetchNotifications } from '@/features/notifications/store/notificationSlice';
@@ -38,6 +39,7 @@ import { AQUACARE_COLORS } from '@/constants/colors';
 import { formatNumber, formatPercentage, formatCurrency } from '@/utils';
 import { useAuth } from '@/hooks/useAuth';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
+import { formatCycleDisplayName } from '@/features/aquaculture/utils/cycleDisplay';
 
 import MetricCard from '../components/MetricCard';
 import {
@@ -63,6 +65,7 @@ export default function DashboardScreen({ navigation }: any) {
   const { dashboardData, loading, error, currentCycle } = useSelector(
     (state: RootState) => state.aquaculture
   );
+  const allCycles = useSelector((state: RootState) => state.aquaculture.cycles) || [];
   const { unreadCount } = useSelector((state: RootState) => state.notifications);
   const { items: ordersList } = useSelector((state: RootState) => state.commerce.orders);
 
@@ -70,6 +73,7 @@ export default function DashboardScreen({ navigation }: any) {
     const initializeDashboard = async () => {
       tryGlobalOfflineSync();
       dispatch(fetchDashboardData(undefined));
+      dispatch(fetchProductionCycles());
       dispatch(fetchNotifications());
       dispatch(fetchOrders());
     };
@@ -93,6 +97,7 @@ export default function DashboardScreen({ navigation }: any) {
 
         if (result.success > 0) {
           dispatch(fetchDashboardData(undefined));
+          dispatch(fetchProductionCycles());
         }
       }
     } catch (err) {
@@ -106,6 +111,7 @@ export default function DashboardScreen({ navigation }: any) {
   );
 
   const activeCycles = dashboardData?.active_cycles || [];
+  const cycleLabelSource = allCycles.length > 0 ? allCycles : activeCycles;
   const currentCycleInList = currentCycle
     ? activeCycles.find((cycle) => cycle.id === currentCycle.id)
     : undefined;
@@ -158,6 +164,7 @@ export default function DashboardScreen({ navigation }: any) {
     () =>
       activeCycles.map((cycle) => ({
         ...cycle,
+        displayName: formatCycleDisplayName(cycle, cycleLabelSource),
         unitCount:
           cycle.id === primaryActiveCycle?.id && currentCycleUnitCount !== null
             ? currentCycleUnitCount
@@ -169,7 +176,7 @@ export default function DashboardScreen({ navigation }: any) {
         ),
         estimatedMarketValueFcfa: calculateCycleEstimatedMarketValue(cycle),
       })),
-    [activeCycles, currentCycleUnitCount, primaryActiveCycle?.id]
+    [activeCycles, currentCycleUnitCount, cycleLabelSource, primaryActiveCycle?.id]
   );
   const dashboardMetricCards = useMemo(() => {
     if (primaryCycleHasProductionUnits) {
@@ -530,7 +537,7 @@ export default function DashboardScreen({ navigation }: any) {
             >
               <View className="flex-row items-start justify-between">
                 <Text className="flex-1 mr-3 text-base font-bold text-gray-dark">
-                  {cycle.cycle_name}
+                  {cycle.displayName}
                 </Text>
                 <Text className="text-sm text-gray-light text-right">
                   {cycle.unitCount > 0
@@ -568,14 +575,9 @@ export default function DashboardScreen({ navigation }: any) {
                 className="mt-2 bg-white rounded-xl p-4 border border-aquacare-primary flex-row items-center justify-between"
                 onPress={handleProductionUnitsPress}
               >
-                <View className="flex-1 mr-3">
-                  <Text className="text-base font-bold text-gray-dark">
-                    {t('productionUnitsDashboardCta')}
-                  </Text>
-                  <Text className="text-xs text-gray-light mt-1">
-                    {t('productionUnitsHubSubtitle')}
-                  </Text>
-                </View>
+                <Text className="flex-1 mr-3 text-base font-bold text-aquacare-primary">
+                  {t('productionUnitsDashboardCta')}
+                </Text>
                 <Ionicons
                   name="chevron-forward"
                   size={20}
@@ -587,14 +589,23 @@ export default function DashboardScreen({ navigation }: any) {
                 className="mt-3 bg-white rounded-xl p-4 border border-aquacare-primary flex-row items-center justify-between"
                 onPress={handleStorePress}
               >
-                <View className="flex-1 mr-3">
-                  <Text className="text-base font-bold text-gray-dark">
-                    {t('storeTitle')}
-                  </Text>
-                  <Text className="text-xs text-gray-light mt-1">
-                    {t('storeDescription')}
-                  </Text>
-                </View>
+                <Text className="flex-1 mr-3 text-base font-bold text-aquacare-primary">
+                  {t('storeTitle')}
+                </Text>
+                <Ionicons
+                  name="chevron-forward"
+                  size={20}
+                  color={AQUACARE_COLORS.GREEN_PRIMARY}
+                />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                className="mt-3 bg-white rounded-xl p-4 border border-aquacare-primary flex-row items-center justify-between"
+                onPress={() => navigation.navigate('CreateFarm')}
+              >
+                <Text className="flex-1 mr-3 text-base font-bold text-aquacare-primary">
+                  {t('createNewCycleDashboardTitle')}
+                </Text>
                 <Ionicons
                   name="chevron-forward"
                   size={20}

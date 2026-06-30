@@ -142,7 +142,7 @@ describe('FeedingSuggestionsScreen', () => {
     const { getByText } = render(<FeedingSuggestionsScreen />);
     fireEvent.press(getByText('startNewCycle'));
 
-    expect(mockNavigate).toHaveBeenCalledWith('NewCycle');
+    expect(mockNavigate).toHaveBeenCalledWith('CreateFarm');
   });
 
   it('affiche l etat erreur et permet retry', () => {

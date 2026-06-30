@@ -55,7 +55,10 @@ describe('features/aquaculture/screens/CycleSessionEntryScreen', () => {
     // etre connecte dans ces scenarios.
     (useSelector as unknown as jest.Mock).mockImplementation(
       (selector: (state: unknown) => unknown) =>
-        selector({ auth: { isAuthenticated: true } })
+        selector({
+          auth: { isAuthenticated: true },
+          aquaculture: { cycles: [] },
+        })
     );
   });
 
@@ -147,8 +150,8 @@ describe('features/aquaculture/screens/CycleSessionEntryScreen', () => {
     let cycleBEl: ReturnType<typeof getByText>;
     let confirmEl: ReturnType<typeof getByText>;
     await waitFor(() => {
-      expect(getByText('Cycle A')).toBeTruthy();
-      cycleBEl = getByText('Cycle B');
+      expect(getByText('Cycle A #1')).toBeTruthy();
+      cycleBEl = getByText('Cycle B #2');
       confirmEl = getByText('sessionCycleConfirm');
     });
 

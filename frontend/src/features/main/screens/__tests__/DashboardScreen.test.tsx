@@ -170,9 +170,11 @@ describe('features/main/screens/DashboardScreen', () => {
     expect(getByText('dashboardFeedCostConsumed')).toBeTruthy();
     expect(getByText('dashboardTimeRemainingCycle')).toBeTruthy();
     expect(getByText('dashboardDirectProductionCost')).toBeTruthy();
+    expect(getByText('Cycle A #1')).toBeTruthy();
+    expect(getByText('Cycle B #2')).toBeTruthy();
     await waitFor(() => {
       expect(getByText('storeTitle')).toBeTruthy();
-      expect(getByText('storeDescription')).toBeTruthy();
+      expect(getByText('createNewCycleDashboardTitle')).toBeTruthy();
       expect(queryByText('storeDashboardSubtitle')).toBeNull();
     });
 
@@ -180,12 +182,24 @@ describe('features/main/screens/DashboardScreen', () => {
     expect(navigation.navigate).toHaveBeenCalledWith('Store', { cycleId: cycleA.id });
 
     fireEvent.press(getByText('changeSessionCycle'));
-    fireEvent.press(getAllByText('Cycle B').pop() as any);
+    fireEvent.press(getAllByText('Cycle B #2').pop() as any);
     fireEvent.press(getByText('sessionCycleConfirm'));
 
     await waitFor(() => {
       expect(mockDispatch).toHaveBeenCalledWith(setCurrentCycle(cycleB));
     });
+  });
+
+  it('ouvre le flux de creation de cycle depuis le dashboard', async () => {
+    const { getByText } = render(<DashboardScreen navigation={navigation} />);
+
+    await waitFor(() => {
+      expect(getByText('createNewCycleDashboardTitle')).toBeTruthy();
+    });
+
+    fireEvent.press(getByText('createNewCycleDashboardTitle'));
+
+    expect(navigation.navigate).toHaveBeenCalledWith('CreateFarm');
   });
 
   it('affiche un CTA vers les unites en production pour le cycle actif', async () => {
@@ -248,7 +262,6 @@ describe('features/main/screens/DashboardScreen', () => {
       expect(getByText('dashboardTimeRemainingCycle')).toBeTruthy();
       expect(getByText('productionUnitsDashboardCta')).toBeTruthy();
       expect(getByText('storeTitle')).toBeTruthy();
-      expect(getByText('storeDescription')).toBeTruthy();
       expect(queryByText('storeDashboardSubtitle')).toBeNull();
       expect(queryByText('viewAllActions')).toBeNull();
       expect(queryByText('dailyLog')).toBeNull();

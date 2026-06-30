@@ -7,6 +7,7 @@ export const fr = {
   farmProfile: 'Profil Ferme',
   settings: 'Paramètres',
   logout: 'Déconnexion',
+  currentFarm: 'Ferme actuelle',
 
   // Authentication
   phoneNumber: 'Numéro de téléphone',
@@ -213,6 +214,8 @@ export const fr = {
   dashboardDirectProductionCost: 'Coût de production direct actuel',
   dashboardDirectProductionCostUnit: 'FCFA',
   productionUnitsCount: '{{count}} unités',
+  createNewCycleDashboardTitle: 'Créer un nouveau cycle',
+  createNewCycleDashboardDescription: 'Lancez un autre cycle depuis votre tableau de bord.',
 
   // Dashboard Header & Quick Actions
   notificationsBell: 'Notifications',
@@ -1146,7 +1149,7 @@ export const fr = {
   stagingBannerText: 'BUILD DE TEST — STAGING',
 
   // ── Flux "Créer mon élevage" ─────────────────────────────────────────────
-  createFarmTitle: 'Créer mon élevage',
+  createFarmTitle: 'Créer un nouveau cycle',
   createFarmSubtitle: "Renseignez les informations de votre exploitation pour démarrer votre accompagnement AquaCare.",
   createFarmSectionBreeding: 'Votre élevage',
   createFarmSectionCapacity: 'Votre capacité',
@@ -1296,6 +1299,7 @@ export const fr = {
   simulationOtherCostsInfo: 'Info : les autres charges sont estimées à 5 % du chiffre d’affaires du cycle.',
   simulationDays: '{{days}} jours',
   simulationLaunchBtn: 'Lancer mon premier cycle →',
+  simulationLaunchAdditionalBtn: 'Lancer mon cycle →',
   simulationModifyBtn: '← Modifier mes données',
   simulationLoading: 'Calcul en cours...',
   simulationErrorRetry: 'Erreur de simulation. Réessayer',

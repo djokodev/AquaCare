@@ -82,10 +82,16 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
   const { result: cycleSimulationResult, loading: simLoading } = useSelector(
     (s: RootState) => s.farmSetup.cycleSimulation
   );
+  const aquacultureState = useSelector((s: RootState) => s.aquaculture);
+  const { currentCycle, dashboardData } = aquacultureState ?? {};
   const [launching, setLaunching] = useState(false);
   const [currentResult, setCurrentResult] = useState<CycleSimulationResult | null>(
     cycleSimulationResult
   );
+  const hasExistingCycle = Boolean(currentCycle || (dashboardData?.active_cycles?.length ?? 0) > 0);
+  const launchButtonLabel = hasExistingCycle
+    ? t('simulationLaunchAdditionalBtn')
+    : t('simulationLaunchBtn');
   const productionUnitsDensityPreview = useMemo(
     () =>
       getProductionUnitsDensityPreview({
@@ -467,7 +473,7 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
         {launching ? (
           <ActivityIndicator color={AQUACARE_COLORS.WHITE} />
         ) : (
-          <Text style={styles.launchBtnText}>{t('simulationLaunchBtn')}</Text>
+          <Text style={styles.launchBtnText}>{launchButtonLabel}</Text>
         )}
       </TouchableOpacity>
 

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Alert } from 'react-native';
 import { fireEvent, render } from '@testing-library/react-native';
+import { NavigationContext, NavigationRouteContext } from '@react-navigation/core';
 
 import ProductCatalogScreen from '../ProductCatalogScreen';
 
@@ -9,16 +10,6 @@ const mockGoBack = jest.fn();
 const mockDispatch = jest.fn();
 let mockState: any;
 let mockRouteParams: any;
-
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({
-    navigate: mockNavigate,
-    goBack: mockGoBack,
-  }),
-  useRoute: () => ({
-    params: mockRouteParams,
-  }),
-}));
 
 jest.mock('react-redux', () => ({
   useDispatch: () => mockDispatch,
@@ -73,8 +64,32 @@ describe('ProductCatalogScreen', () => {
     };
   });
 
+  const renderScreen = () =>
+    render(
+      <NavigationContext.Provider
+        value={
+          {
+            navigate: mockNavigate,
+            goBack: mockGoBack,
+          } as any
+        }
+      >
+        <NavigationRouteContext.Provider
+          value={
+            {
+              key: 'ProductCatalog-key',
+              name: 'ProductCatalog',
+              params: mockRouteParams,
+            } as any
+          }
+        >
+          <ProductCatalogScreen />
+        </NavigationRouteContext.Provider>
+      </NavigationContext.Provider>
+    );
+
   it('affiche les produits et ouvre les details', () => {
-    const { getByText, queryByText } = render(<ProductCatalogScreen />);
+    const { getByText, queryByText } = renderScreen();
 
     expect(queryByText('myFeedCycleHeader')).toBeNull();
 
@@ -89,7 +104,7 @@ describe('ProductCatalogScreen', () => {
 
   it('affiche l etat vide et reset les filtres', () => {
     mockState.commerce.products.items = [];
-    const { getByText } = render(<ProductCatalogScreen />);
+    const { getByText } = renderScreen();
 
     expect(getByText('noProductsFound')).toBeTruthy();
     fireEvent.press(getByText('resetFilters'));
@@ -99,7 +114,7 @@ describe('ProductCatalogScreen', () => {
 
   it('affiche l etat erreur et relance le chargement', () => {
     mockState.commerce.products.error = 'boom';
-    const { getByText } = render(<ProductCatalogScreen />);
+    const { getByText } = renderScreen();
 
     fireEvent.press(getByText('retry'));
 
@@ -107,7 +122,7 @@ describe('ProductCatalogScreen', () => {
   });
 
   it('conserve le contexte Magasin quand on ouvre le panier depuis le catalogue', () => {
-    const { getByLabelText } = render(<ProductCatalogScreen />);
+    const { getByLabelText } = renderScreen();
 
     fireEvent.press(getByLabelText('cart'));
 

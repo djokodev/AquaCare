@@ -256,7 +256,7 @@ export default function MainNavigator() {
   return (
     <RootStack.Navigator
       initialRouteName="CycleSessionEntry"
-      screenOptions={{ headerShown: false }}
+      screenOptions={{ headerShown: false, headerBackTitle: t('back') }}
     >
       <RootStack.Screen
         name="CycleSessionEntry"
@@ -398,12 +398,7 @@ export default function MainNavigator() {
         name="CreateFarm"
         component={CreateFarmScreen}
         options={{
-          headerShown: true,
-          headerStyle: { backgroundColor: AQUACARE_COLORS.GREEN_PRIMARY },
-          headerTintColor: AQUACARE_COLORS.WHITE,
-          headerTitleStyle: { fontWeight: 'bold' },
-          title: t('createFarmTitle'),
-          headerLeft: () => null,
+          headerShown: false,
         }}
       />
       <RootStack.Screen

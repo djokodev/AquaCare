@@ -7,6 +7,7 @@
   farmProfile: 'Farm Profile',
   settings: 'Settings',
   logout: 'Logout',
+  currentFarm: 'Current farm',
 
   // Authentication
   phoneNumber: 'Phone Number',
@@ -213,6 +214,8 @@
   dashboardDirectProductionCost: 'Current direct production cost',
   dashboardDirectProductionCostUnit: 'FCFA',
   productionUnitsCount: '{{count}} units',
+  createNewCycleDashboardTitle: 'Create a new cycle',
+  createNewCycleDashboardDescription: 'Start another cycle from your dashboard.',
 
   // Dashboard Header & Quick Actions
   notificationsBell: 'Notifications',
@@ -1146,7 +1149,7 @@
   stagingBannerText: 'TEST BUILD — STAGING',
 
   // ── Create Farm flow ──────────────────────────────────────────────────────
-  createFarmTitle: 'Create my farm',
+  createFarmTitle: 'Create a new cycle',
   createFarmSubtitle: 'Enter your farm details to start your AquaCare support.',
   createFarmSectionBreeding: 'Your farming',
   createFarmSectionCapacity: 'Your capacity',
@@ -1296,6 +1299,7 @@
   simulationOtherCostsInfo: 'Info: other costs are estimated at 5% of cycle revenue.',
   simulationDays: '{{days}} days',
   simulationLaunchBtn: 'Launch my first cycle →',
+  simulationLaunchAdditionalBtn: 'Launch my cycle →',
   simulationModifyBtn: '← Edit my data',
   simulationLoading: 'Calculating...',
   simulationErrorRetry: 'Simulation error. Retry',

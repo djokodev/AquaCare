@@ -291,7 +291,7 @@ export default function SanitaryLogScreen({ navigation, route }: SanitaryLogScre
         <Ionicons name="medical-outline" size={64} color={AQUACARE_COLORS.GRAY_LIGHT} />
         <Text className="text-lg font-bold text-gray-dark mt-4">{t('noActiveCycles')}</Text>
         <Text className="text-sm text-gray-light text-center mt-2 mb-6">{t('createCycleToStart')}</Text>
-        <TouchableOpacity className="bg-aquacare-primary px-5 py-3 rounded-lg" onPress={() => navigation.navigate('NewCycle')}>
+        <TouchableOpacity className="bg-aquacare-primary px-5 py-3 rounded-lg" onPress={() => navigation.navigate('CreateFarm')}>
           <Text className="text-white text-base font-semibold">{t('createCycle')}</Text>
         </TouchableOpacity>
       </View>

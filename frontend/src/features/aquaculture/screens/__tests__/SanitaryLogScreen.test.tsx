@@ -103,14 +103,14 @@ describe('features/aquaculture/screens/SanitaryLogScreen', () => {
     );
   };
 
-  it('affiche un etat vide sans cycle actif et navigue vers NewCycle', async () => {
+  it('affiche un etat vide sans cycle actif et navigue vers CreateFarm', async () => {
     setSelectorState([]);
 
     const { getByText } = render(<SanitaryLogScreen navigation={navigation} />);
 
     expect(getByText('noActiveCycles')).toBeTruthy();
     fireEvent.press(getByText('createCycle'));
-    expect(navigation.navigate).toHaveBeenCalledWith('NewCycle');
+    expect(navigation.navigate).toHaveBeenCalledWith('CreateFarm');
   });
 
   it('bloque la sauvegarde si le type d evenement est absent', async () => {

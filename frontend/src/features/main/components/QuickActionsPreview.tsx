@@ -133,8 +133,8 @@ export default function QuickActionsPreview({
       actions.push({
         icon: 'add-circle',
         color: AQUACARE_COLORS.GREEN_PRIMARY,
-        label: t('newCycle'),
-        route: 'NewCycle',
+        label: t('startNewCycle'),
+        route: 'CreateFarm',
       });
     }
 

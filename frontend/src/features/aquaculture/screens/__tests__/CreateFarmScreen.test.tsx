@@ -11,10 +11,17 @@ jest.mock('react-redux', () => ({
   useSelector: jest.fn(),
 }));
 
+jest.mock('@/hooks/useAuth', () => ({
+  useAuth: () => ({
+    farmProfile: { farm_name: 'Ferme Test' },
+  }),
+}));
+
 describe('features/aquaculture/screens/CreateFarmScreen', () => {
   const mockDispatch = jest.fn();
   const navigation = {
     navigate: jest.fn(),
+    goBack: jest.fn(),
   } as any;
 
   const mockSimulationSuccess = () => {
@@ -34,8 +41,33 @@ describe('features/aquaculture/screens/CreateFarmScreen', () => {
     (useDispatch as unknown as jest.Mock).mockReturnValue(mockDispatch);
     (useSelector as unknown as jest.Mock).mockImplementation(
       (selector: (state: any) => unknown) =>
-        selector({ farmSetup: { cycleSimulation: { loading: false } } })
+        selector({
+          farmSetup: { cycleSimulation: { loading: false } },
+          auth: {
+            isAuthenticated: false,
+            user: null,
+            farmProfile: { farm_name: 'Ferme Test' },
+            isLoading: false,
+            error: null,
+          },
+        })
     );
+  });
+
+  it('affiche le nom de la ferme en haut du flux', () => {
+    const { getByText } = render(<CreateFarmScreen navigation={navigation} />);
+
+    expect(getByText('currentFarm')).toBeTruthy();
+    expect(getByText('Ferme Test')).toBeTruthy();
+    expect(getByText('createFarmTitle')).toBeTruthy();
+  });
+
+  it('permet de revenir au dashboard via la fleche de retour', () => {
+    const { getByTestId } = render(<CreateFarmScreen navigation={navigation} />);
+
+    fireEvent.press(getByTestId('createFarmBackButton'));
+
+    expect(navigation.goBack).toHaveBeenCalled();
   });
 
   it('n selectionne aucun type par defaut dans les deux formulaires', () => {
