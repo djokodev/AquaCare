@@ -533,10 +533,9 @@ export default function DashboardScreen({ navigation }: any) {
                   {cycle.cycle_name}
                 </Text>
                 <Text className="text-sm text-gray-light text-right">
-                  {cycle.species === 'clarias' ? t('catfish') : t('tilapia')}
                   {cycle.unitCount > 0
-                    ? ` · ${t('productionUnitsCount', { count: cycle.unitCount })}`
-                    : ` - ${cycle.pond_identifier}`}
+                    ? t('productionUnitsCount', { count: cycle.unitCount })
+                    : cycle.pond_identifier}
                 </Text>
               </View>
               <Text className="text-xs text-gray-light mt-1">
