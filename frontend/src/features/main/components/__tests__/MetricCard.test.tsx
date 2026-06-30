@@ -1,7 +1,6 @@
 import React from 'react';
 import { render } from '@testing-library/react-native';
 
-import { AQUACARE_COLORS } from '@/constants/colors';
 import MetricCard from '../MetricCard';
 
 describe('features/main/components/MetricCard', () => {
@@ -14,11 +13,9 @@ describe('features/main/components/MetricCard', () => {
     jest.useRealTimers();
   });
 
-  it('renders without timers with the default props', () => {
+  it('renders value and label with the default props', () => {
     const { getByText } = render(
       <MetricCard
-        icon="analytics-outline"
-        color={AQUACARE_COLORS.GREEN_PRIMARY}
         value="3600"
         label="Total poissons"
       />
@@ -29,11 +26,9 @@ describe('features/main/components/MetricCard', () => {
     expect(jest.getTimerCount()).toBe(0);
   });
 
-  it('renders without timers when an animation type is provided', () => {
+  it('renders value and label without scheduling timers', () => {
     const { getByText } = render(
       <MetricCard
-        icon="refresh-outline"
-        color={AQUACARE_COLORS.GREEN_PRIMARY}
         value="88%"
         label="Survie"
       />

@@ -117,8 +117,6 @@ export default function ProductionUnitOverviewScreen({ navigation, route }: Prop
           summary?.days_since_last_log !== null && summary?.days_since_last_log !== undefined
             ? t('daysCount', { count: summary.days_since_last_log })
             : undefined,
-        icon: 'fish-outline' as const,
-        color: AQUACARE_COLORS.GREEN_PRIMARY,
       },
       {
         label: t('productionUnitCumulativeMortality'),
@@ -129,8 +127,6 @@ export default function ProductionUnitOverviewScreen({ navigation, route }: Prop
                 rate: formatPercentage(coerceNumber(summary.mortality_rate_pct) ?? 0, locale),
               })
             : undefined,
-        icon: 'remove-circle-outline' as const,
-        color: AQUACARE_COLORS.WARNING,
       },
       {
         label: t('productionUnitConsumedFeed'),
@@ -144,8 +140,6 @@ export default function ProductionUnitOverviewScreen({ navigation, route }: Prop
                 coerceNumber(summary.latest_average_weight_g) ?? 0
               )} g`
             : undefined,
-        icon: 'restaurant-outline' as const,
-        color: AQUACARE_COLORS.GREEN_LIGHT,
       },
       {
         label: t('productionUnitEstimatedBiomass'),
@@ -157,8 +151,6 @@ export default function ProductionUnitOverviewScreen({ navigation, route }: Prop
           summary?.last_daily_log_date !== null && summary?.last_daily_log_date !== undefined
             ? `${t('productionUnitLastTracking')}: ${formatDate(summary.last_daily_log_date)}`
             : undefined,
-        icon: 'water-outline' as const,
-        color: AQUACARE_COLORS.GREEN_DARK,
       },
     ],
     [locale, summary, t]
@@ -214,8 +206,6 @@ export default function ProductionUnitOverviewScreen({ navigation, route }: Prop
           {metricCards.map((card) => (
             <DashboardMetricCard
               key={card.label}
-              icon={card.icon}
-              color={card.color}
               value={card.value}
               label={card.label}
               subtitle={card.subtitle}

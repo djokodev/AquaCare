@@ -175,26 +175,18 @@ export default function DashboardScreen({ navigation }: any) {
     if (primaryCycleHasProductionUnits) {
       return [
         {
-          icon: 'cash-outline' as const,
-          color: AQUACARE_COLORS.GREEN_PRIMARY,
           value: formatCurrency(dashboardBusinessMetrics.estimatedMarketValueFcfa),
           label: t('dashboardEstimatedMarketValue'),
         },
         {
-          icon: 'calculator-outline' as const,
-          color: AQUACARE_COLORS.SUCCESS,
           value: formatCurrency(dashboardBusinessMetrics.directProductionCostFcfa),
           label: t('dashboardDirectProductionCost'),
         },
         {
-          icon: 'fish-outline' as const,
-          color: AQUACARE_COLORS.GREEN_LIGHT,
           value: formatNumber(dashboardData?.total_fish_count ?? 0, undefined, 0),
           label: t('dashboardEstimatedCurrentFish'),
         },
         {
-          icon: 'time-outline' as const,
-          color: AQUACARE_COLORS.GREEN_DARK,
           value:
             dashboardBusinessMetrics.timeRemainingDays === null
               ? '-'
@@ -206,20 +198,14 @@ export default function DashboardScreen({ navigation }: any) {
 
     return [
         {
-          icon: 'cash-outline' as const,
-          color: AQUACARE_COLORS.GREEN_PRIMARY,
           value: formatCurrency(dashboardBusinessMetrics.estimatedMarketValueFcfa),
           label: t('dashboardEstimatedMarketValue'),
         },
         {
-          icon: 'restaurant-outline' as const,
-          color: AQUACARE_COLORS.GREEN_LIGHT,
           value: formatCurrency(dashboardBusinessMetrics.feedCostConsumedFcfa),
           label: t('dashboardFeedCostConsumed'),
         },
         {
-          icon: 'time-outline' as const,
-          color: AQUACARE_COLORS.GREEN_DARK,
           value:
             dashboardBusinessMetrics.timeRemainingDays === null
               ? '-'
@@ -227,8 +213,6 @@ export default function DashboardScreen({ navigation }: any) {
           label: t('dashboardTimeRemainingCycle'),
         },
         {
-          icon: 'calculator-outline' as const,
-          color: AQUACARE_COLORS.SUCCESS,
           value: formatCurrency(dashboardBusinessMetrics.directProductionCostFcfa),
           label: t('dashboardDirectProductionCost'),
         },
@@ -452,8 +436,6 @@ export default function DashboardScreen({ navigation }: any) {
             {dashboardMetricCards.map((card) => (
               <MetricCard
                 key={card.label}
-                icon={card.icon}
-                color={card.color}
                 value={card.value}
                 label={card.label}
               />

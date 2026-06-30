@@ -8,6 +8,7 @@ import {
   RefreshControl,
   Alert,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -289,8 +290,8 @@ export default function OrdersHistoryScreen() {
   return (
     <View className="flex-1 bg-cream">
       <View className="bg-white px-5 pt-16 pb-5 flex-row items-center justify-between shadow">
-        <TouchableOpacity onPress={() => navigation.goBack()} className="w-14">
-          <Text className="text-sm font-semibold text-gray-dark">{t('back')}</Text>
+        <TouchableOpacity onPress={() => navigation.goBack()} className="w-10">
+          <Ionicons name="arrow-back" size={24} color={AQUACARE_COLORS.GRAY_DARK} />
         </TouchableOpacity>
         <View className="flex-1 items-center">
           <Text className="text-2xl font-bold text-gray-dark">{t('ordersHistory')}</Text>
