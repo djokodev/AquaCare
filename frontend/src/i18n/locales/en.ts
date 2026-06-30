@@ -894,7 +894,7 @@
   totalOrders: 'Total Orders',
   totalSpent: 'Total Spent',
   totalBags: 'Total Bags',
-  averageOrder: 'Average Order',
+  sacksToReceive: 'Sacks to receive',
   noOrdersYet: 'No orders yet',
   noOrdersDescription: 'You haven\'t placed any orders yet. Explore our catalog!',
   orderItems: 'Order Items',
@@ -1375,8 +1375,7 @@
 
   // ── Cycle store ─────────────────────────────────────────────────────────
   storeTitle: 'Store',
-  storeDescription: 'Manage your feed stock',
-  storeDashboardSubtitle: 'Track your feed, consumption and orders.',
+  storeDescription: 'Control your feed, consumption and orders.',
   storeScreenSubtitle: 'Manage cycle feed and import received orders into stock.',
   storeOpen: 'Open Store',
   storeLoadError: 'Unable to load the Store.',

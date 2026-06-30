@@ -894,7 +894,7 @@ export const fr = {
   totalOrders: 'Total Commandes',
   totalSpent: 'Total Dépensé',
   totalBags: 'Total Sacs',
-  averageOrder: 'Commande Moyenne',
+  sacksToReceive: 'Sacs à recevoir',
   noOrdersYet: 'Aucune commande encore',
   noOrdersDescription: 'Vous n\'avez pas encore passé de commande. Explorez notre catalogue !',
   orderItems: 'Articles Commande',
@@ -1377,8 +1377,7 @@ export const fr = {
 
   // ── Magasin de cycle ─────────────────────────────────────────────────────
   storeTitle: 'Magasin',
-  storeDescription: 'Gérez votre stock d\'aliments',
-  storeDashboardSubtitle: 'Suivez vos aliments, vos consommations et vos commandes.',
+  storeDescription: 'Contrôlez vos aliments, vos consommations et vos commandes.',
   storeScreenSubtitle: 'Gérez les aliments du cycle et importez les commandes reçues dans le stock.',
   storeOpen: 'Ouvrir le Magasin',
   storeLoadError: 'Impossible de charger le Magasin.',

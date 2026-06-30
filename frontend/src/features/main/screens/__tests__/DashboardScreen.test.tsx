@@ -163,7 +163,7 @@ describe('features/main/screens/DashboardScreen', () => {
   });
 
   it('permet de changer le cycle de session depuis le dashboard', async () => {
-    const { getByText, getAllByText } = render(<DashboardScreen navigation={navigation} />);
+    const { getByText, getAllByText, queryByText } = render(<DashboardScreen navigation={navigation} />);
 
     expect(getByText('Dashboard du cycle')).toBeTruthy();
     expect(getByText('dashboardEstimatedMarketValue')).toBeTruthy();
@@ -173,7 +173,7 @@ describe('features/main/screens/DashboardScreen', () => {
     await waitFor(() => {
       expect(getByText('storeTitle')).toBeTruthy();
       expect(getByText('storeDescription')).toBeTruthy();
-      expect(getByText('storeDashboardSubtitle')).toBeTruthy();
+      expect(queryByText('storeDashboardSubtitle')).toBeNull();
     });
 
     fireEvent.press(getByText('storeTitle'));
@@ -249,7 +249,7 @@ describe('features/main/screens/DashboardScreen', () => {
       expect(getByText('productionUnitsDashboardCta')).toBeTruthy();
       expect(getByText('storeTitle')).toBeTruthy();
       expect(getByText('storeDescription')).toBeTruthy();
-      expect(getByText('storeDashboardSubtitle')).toBeTruthy();
+      expect(queryByText('storeDashboardSubtitle')).toBeNull();
       expect(queryByText('viewAllActions')).toBeNull();
       expect(queryByText('dailyLog')).toBeNull();
       expect(queryByText('productCatalog')).toBeNull();
