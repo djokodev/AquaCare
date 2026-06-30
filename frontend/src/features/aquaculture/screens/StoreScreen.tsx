@@ -15,13 +15,14 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp, useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { useSelector } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import { useTranslation } from 'react-i18next';
 
 import { AQUACARE_COLORS } from '@/constants/colors';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
+import { fetchCycleFeedStatus } from '@/features/aquaculture/store/aquacultureSlice';
 import { RootStackParamList } from '@/navigation/MainNavigator';
-import { RootState } from '@/store/store';
+import { AppDispatch, RootState } from '@/store/store';
 import { CycleStore } from '@/types/aquaculture';
 import { formatCurrency, formatNumber } from '@/utils';
 
@@ -81,6 +82,7 @@ export default function StoreScreen() {
   const { t, i18n } = useTranslation();
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<RouteProp<RootStackParamList, 'Store'>>();
+  const dispatch = useDispatch<AppDispatch>();
   const currentCycle = useSelector((state: RootState) => state.aquaculture.currentCycle);
   const cycleFeedStatus = useSelector((state: RootState) => state.aquaculture.cycleFeedStatus.data);
 
@@ -126,12 +128,18 @@ export default function StoreScreen() {
   useFocusEffect(
     useCallback(() => {
       void loadStore();
-    }, [loadStore])
+      if (cycleId) {
+        dispatch(fetchCycleFeedStatus(cycleId));
+      }
+    }, [loadStore, cycleId, dispatch])
   );
 
   const handleRefresh = async () => {
     setRefreshing(true);
     await loadStore();
+    if (cycleId) {
+      dispatch(fetchCycleFeedStatus(cycleId));
+    }
   };
 
   const openManualModal = () => {
@@ -194,9 +202,10 @@ export default function StoreScreen() {
     </View>
   );
 
-  const remainingToOrderValue = cycleFeedStatus
-    ? formatNumber(cycleFeedStatus.bags_remaining_to_order, t('bags'), 0)
-    : formatNumber(toNumber(store?.summary.estimated_feed_remaining_kg), t('kg'), 2);
+  const remainingToOrderValue =
+    cycleFeedStatus
+      ? formatNumber(cycleFeedStatus.bags_remaining_to_order, t('bags'), 0)
+      : '-';
 
   return (
     <View className="flex-1 bg-cream">

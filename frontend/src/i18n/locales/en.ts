@@ -1390,7 +1390,7 @@
   storeFeedConsumed: 'Feed consumed',
   storeFeedExpenses: 'Feed expenses',
   storePendingOrders: 'Pending orders',
-  storeNeedRemaining: 'Remaining to order',
+  storeNeedRemaining: 'Estimated remaining need',
   storeEmptyTitle: 'No stock declared',
   storeEmptyDescription: 'Declare your first stock to start tracking the store.',
   storePendingOrdersTitle: 'Pending orders',

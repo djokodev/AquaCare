@@ -7,8 +7,13 @@ import { aquacultureService } from '@/features/aquaculture/services/aquacultureS
 
 const mockNavigate = jest.fn();
 const mockGoBack = jest.fn();
+const mockDispatch = jest.fn();
 const mockGetCycleStore = jest.fn();
 const mockDeclareCycleStoreManualStock = jest.fn();
+const mockFetchCycleFeedStatus = jest.fn((cycleId: string) => ({
+  type: 'aquaculture/fetchCycleFeedStatus',
+  payload: cycleId,
+}));
 let mockState: any;
 const mockUseEffect = React.useEffect;
 
@@ -26,7 +31,12 @@ jest.mock('@react-navigation/native', () => ({
 }));
 
 jest.mock('react-redux', () => ({
+  useDispatch: () => mockDispatch,
   useSelector: (selector: any) => selector(mockState),
+}));
+
+jest.mock('@/features/aquaculture/store/aquacultureSlice', () => ({
+  fetchCycleFeedStatus: (cycleId: string) => mockFetchCycleFeedStatus(cycleId),
 }));
 
 jest.mock('@/features/aquaculture/services/aquacultureService', () => ({
@@ -134,6 +144,8 @@ describe('StoreScreen', () => {
       expect(getByText('storeNeedRemaining')).toBeTruthy();
       expect(getByText('ORD-001')).toBeTruthy();
     });
+
+    expect(mockFetchCycleFeedStatus).toHaveBeenCalledWith('cycle-1');
 
     fireEvent.press(getByText('storeViewProducts'));
     expect(mockNavigate).toHaveBeenCalledWith('ProductCatalog', {

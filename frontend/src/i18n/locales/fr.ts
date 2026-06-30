@@ -1392,7 +1392,7 @@ export const fr = {
   storeFeedConsumed: 'Aliment consommé',
   storeFeedExpenses: 'Dépenses en aliments',
   storePendingOrders: 'Commandes en attente',
-  storeNeedRemaining: 'Reste à commander',
+  storeNeedRemaining: 'Besoin restant estimé',
   storeEmptyTitle: 'Aucun stock déclaré',
   storeEmptyDescription: 'Déclarez votre premier stock pour commencer le suivi du Magasin.',
   storePendingOrdersTitle: 'Commandes en attente',

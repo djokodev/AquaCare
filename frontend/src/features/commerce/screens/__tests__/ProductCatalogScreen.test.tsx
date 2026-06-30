@@ -74,7 +74,9 @@ describe('ProductCatalogScreen', () => {
   });
 
   it('affiche les produits et ouvre les details', () => {
-    const { getByText } = render(<ProductCatalogScreen />);
+    const { getByText, queryByText } = render(<ProductCatalogScreen />);
+
+    expect(queryByText('myFeedCycleHeader')).toBeNull();
 
     fireEvent.press(getByText('Feed Starter'));
 
