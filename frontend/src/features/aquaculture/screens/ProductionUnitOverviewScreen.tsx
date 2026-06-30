@@ -50,7 +50,9 @@ const coerceNumber = (value: string | number | null | undefined): number | null 
 
 export default function ProductionUnitOverviewScreen({ navigation, route }: Props) {
   const { t, i18n } = useTranslation();
-  const { cycleId, allocationId, productionUnitId, productionUnitName } = route.params;
+  const { cycleId, allocationId, cycleUnitAllocationId, productionUnitId, productionUnitName } =
+    route.params;
+  const resolvedCycleUnitAllocationId = cycleUnitAllocationId || allocationId || '';
   const locale = i18n.language?.startsWith('fr') ? 'fr-FR' : 'en-US';
   const [actionsSheetVisible, setActionsSheetVisible] = useState(false);
   const [dashboard, setDashboard] = useState<ProductionUnitDashboard | null>(null);
@@ -69,7 +71,7 @@ export default function ProductionUnitOverviewScreen({ navigation, route }: Prop
       }
 
       try {
-        const result = await aquacultureService.getProductionUnitDashboard(allocationId);
+        const result = await aquacultureService.getProductionUnitDashboard(resolvedCycleUnitAllocationId);
         setDashboard(result);
         setErrorKey(null);
       } catch {
@@ -85,7 +87,7 @@ export default function ProductionUnitOverviewScreen({ navigation, route }: Prop
         }
       }
     },
-    [allocationId]
+    [resolvedCycleUnitAllocationId]
   );
 
   useEffect(() => {
@@ -97,7 +99,7 @@ export default function ProductionUnitOverviewScreen({ navigation, route }: Prop
   const unitName = productionUnitName || allocation?.production_unit_name || t('productionUnitsUnknownUnit');
   const unitContext = {
     cycleId,
-    cycleUnitAllocationId: allocationId,
+    cycleUnitAllocationId: resolvedCycleUnitAllocationId,
     productionUnitId,
     productionUnitName: unitName,
   };

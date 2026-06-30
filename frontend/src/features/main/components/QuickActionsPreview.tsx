@@ -92,7 +92,11 @@ export default function QuickActionsPreview({
    * Retourne les 3 actions les plus pertinentes selon le contexte utilisateur
    */
   const suggestedActions = useMemo((): SuggestedAction[] => {
-    if (scope === 'unit' && productionUnitContext) {
+    if (scope === 'unit') {
+      if (!productionUnitContext) {
+        return [];
+      }
+
       return [
         {
           icon: 'create',
@@ -109,10 +113,11 @@ export default function QuickActionsPreview({
           params: productionUnitContext,
         },
         {
-          icon: 'notifications-outline',
-          color: AQUACARE_COLORS.WARNING,
-          label: t('notifications'),
-          route: 'Notifications',
+          icon: 'time-outline',
+          color: AQUACARE_COLORS.GREEN_DARK,
+          label: t('productionUnitLogHistoryAction'),
+          route: 'DailyLogHistory',
+          params: productionUnitContext,
         },
       ];
     }

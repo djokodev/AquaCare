@@ -104,6 +104,56 @@ class AquacultureSecuredAdmin(SecuredModelAdmin):
         return search_fields
 
 
+class CycleUnitAllocationInline(admin.TabularInline):
+    """Affiche les allocations directement depuis la page d'un cycle."""
+
+    model = CycleUnitAllocation
+    fk_name = 'cycle'
+    extra = 0
+    show_change_link = True
+    fields = (
+        'production_unit',
+        'initial_fish_count',
+        'current_fish_count',
+        'initial_biomass_kg',
+        'current_biomass_kg',
+        'expected_survival_rate_pct',
+        'survival_rate_pct',
+        'created_at',
+    )
+    readonly_fields = ('survival_rate_pct', 'created_at')
+
+
+class CycleLogInline(admin.TabularInline):
+    """Affiche les journaux quotidiens liés à une allocation."""
+
+    model = CycleLog
+    fk_name = 'cycle_unit_allocation'
+    extra = 0
+    show_change_link = True
+    can_delete = False
+    fields = ('log_date', 'mortality_count', 'feed_quantity', 'average_weight', 'created_offline')
+    readonly_fields = fields
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+
+class SanitaryLogInline(admin.TabularInline):
+    """Affiche les journaux sanitaires liés à une allocation."""
+
+    model = SanitaryLog
+    fk_name = 'cycle_unit_allocation'
+    extra = 0
+    show_change_link = True
+    can_delete = False
+    fields = ('event_date', 'event_type', 'resolved', 'affected_count', 'created_offline')
+    readonly_fields = fields
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+
 @admin.register(ProductionCycle)
 class ProductionCycleAdmin(AquacultureSecuredAdmin):
     """
@@ -130,7 +180,10 @@ class ProductionCycleAdmin(AquacultureSecuredAdmin):
         'performance_indicator',
     ]
     list_filter = [
-        'status', 'species', 'start_date',
+        'farm_profile',
+        'status',
+        'species',
+        'start_date',
         'farm_profile__certification_status', 'farm_profile__user__region'
     ]
     search_fields = [
@@ -138,6 +191,7 @@ class ProductionCycleAdmin(AquacultureSecuredAdmin):
         'farm_profile__user__phone_number', 'farm_profile__user__first_name',
         'farm_profile__user__last_name'
     ]
+    inlines = [CycleUnitAllocationInline]
     readonly_fields = [
         'id', 'initial_biomass', 'current_biomass', 'survival_rate', 'fcr',
         'days_active', 'created_at', 'updated_at'
@@ -181,7 +235,7 @@ class ProductionCycleAdmin(AquacultureSecuredAdmin):
         """Optimize queries with select_related."""
         return super().get_queryset(request).select_related(
             'farm_profile__user'
-        ).prefetch_related('logs', 'feeding_plans', 'sanitary_logs')
+        ).prefetch_related('logs', 'feeding_plans', 'sanitary_logs', 'unit_allocations')
 
     def get_actions(self, request):
         """Retire les actions selon le role."""
@@ -324,8 +378,14 @@ class ProductionUnitAdmin(AquacultureSecuredAdmin):
         'status_display',
         'created_at',
     ]
-    list_filter = ['unit_type', 'status', 'farm_profile__user__region']
-    search_fields = ['name', 'farm_profile__farm_name', 'farm_profile__user__phone_number']
+    list_filter = ['farm_profile', 'unit_type', 'status', 'farm_profile__user__region']
+    search_fields = [
+        'name',
+        'farm_profile__farm_name',
+        'farm_profile__user__phone_number',
+        'farm_profile__user__first_name',
+        'farm_profile__user__last_name',
+    ]
     readonly_fields = ['id', 'created_at', 'updated_at']
 
     fieldsets = (
@@ -371,6 +431,7 @@ class CycleUnitAllocationAdmin(AquacultureSecuredAdmin):
     """Administration des allocations de cycle par unité."""
 
     list_display = [
+        'farm_display',
         'cycle_display',
         'production_unit_display',
         'initial_fish_count',
@@ -378,13 +439,32 @@ class CycleUnitAllocationAdmin(AquacultureSecuredAdmin):
         'survival_rate_display',
         'created_at',
     ]
-    list_filter = ['cycle__status', 'production_unit__unit_type']
-    search_fields = ['cycle__cycle_name', 'production_unit__name']
-    readonly_fields = ['id', 'created_at', 'updated_at']
+    list_filter = [
+        'cycle__farm_profile',
+        'cycle',
+        'cycle__status',
+        'production_unit',
+        'production_unit__unit_type',
+        'production_unit__status',
+        'created_at',
+    ]
+    search_fields = [
+        'cycle__cycle_name',
+        'cycle__farm_profile__farm_name',
+        'production_unit__name',
+    ]
+    readonly_fields = ['id', 'survival_rate_pct', 'created_at', 'updated_at']
+    inlines = [CycleLogInline, SanitaryLogInline]
 
     fieldsets = (
         (_('Allocation'), {
-            'fields': ('cycle', 'production_unit', 'initial_fish_count', 'current_fish_count')
+            'fields': (
+                'cycle',
+                'production_unit',
+                'initial_fish_count',
+                'current_fish_count',
+                'survival_rate_pct',
+            )
         }),
         (_('Biomasse'), {
             'fields': ('initial_biomass_kg', 'current_biomass_kg', 'expected_survival_rate_pct')
@@ -403,12 +483,19 @@ class CycleUnitAllocationAdmin(AquacultureSecuredAdmin):
             'production_unit__farm_profile',
         )
 
+    def farm_display(self, obj):
+        url = reverse('admin:accounts_farmprofile_change', args=[obj.cycle.farm_profile.id])
+        return format_html('<a href="{}">{}</a>', url, obj.cycle.farm_profile.farm_name)
+    farm_display.short_description = _('Ferme')
+
     def cycle_display(self, obj):
-        return obj.cycle.cycle_name
+        url = reverse('admin:aquaculture_productioncycle_change', args=[obj.cycle.id])
+        return format_html('<a href="{}">{}</a>', url, obj.cycle.cycle_name)
     cycle_display.short_description = _('Cycle')
 
     def production_unit_display(self, obj):
-        return obj.production_unit.name
+        url = reverse('admin:aquaculture_productionunit_change', args=[obj.production_unit.id])
+        return format_html('<a href="{}">{}</a>', url, obj.production_unit.name)
     production_unit_display.short_description = _('Unité')
 
     def survival_rate_display(self, obj):
@@ -517,23 +604,48 @@ class CycleUnitAllocationAdmin(AquacultureSecuredAdmin):
 class CycleLogAdmin(AquacultureSecuredAdmin):
     """Administration securisee des journaux de cycle."""
     list_display = [
-        'id_short', 'cycle_display', 'log_date', 'mortality_count', 'average_weight',
-        'feed_quantity', 'water_temp_status', 'created_offline'
+        'id_short',
+        'farm_display',
+        'cycle_display',
+        'allocation_display',
+        'production_unit_display',
+        'log_date',
+        'mortality_count',
+        'average_weight',
+        'feed_quantity',
+        'water_temp_status',
+        'created_offline',
     ]
     list_filter = [
-        'created_offline', 'log_date', 'cycle__species', 'cycle__status'
+        'cycle__farm_profile',
+        'cycle',
+        'cycle_unit_allocation',
+        'cycle_unit_allocation__production_unit',
+        'created_offline',
+        'log_date',
+        'cycle__species',
+        'cycle__status',
     ]
     search_fields = [
-        'cycle__cycle_name', 'cycle__farm_profile__farm_name'
+        'cycle__cycle_name',
+        'cycle__farm_profile__farm_name',
+        'cycle_unit_allocation__production_unit__name',
+        'observations',
     ]
     readonly_fields = [
         'id', 'client_uuid', 'synced_at', 'created_at', 'log_time'
     ]
     date_hierarchy = 'log_date'
 
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related(
+            'cycle__farm_profile',
+            'cycle_unit_allocation__production_unit',
+        )
+
     fieldsets = (
         (_('Informations de base'), {
-            'fields': ('cycle', 'log_date', 'log_time')
+            'fields': ('cycle', 'cycle_unit_allocation', 'log_date', 'log_time')
         }),
         (_('Donnees de mortalite'), {
             'fields': ('mortality_count', 'mortality_reason')
@@ -565,6 +677,29 @@ class CycleLogAdmin(AquacultureSecuredAdmin):
         return format_html('<a href="{}">{}</a>', url, obj.cycle.cycle_name)
     cycle_display.short_description = _('Cycle')
     cycle_display.admin_order_field = 'cycle__cycle_name'
+
+    def farm_display(self, obj):
+        """Display farm name with link."""
+        url = reverse('admin:accounts_farmprofile_change', args=[obj.cycle.farm_profile.id])
+        return format_html('<a href="{}">{}</a>', url, obj.cycle.farm_profile.farm_name)
+    farm_display.short_description = _('Ferme')
+    farm_display.admin_order_field = 'cycle__farm_profile__farm_name'
+
+    def allocation_display(self, obj):
+        allocation = obj.cycle_unit_allocation
+        if not allocation:
+            return '-'
+        url = reverse('admin:aquaculture_cycleunitallocation_change', args=[allocation.id])
+        return format_html('<a href="{}">{}</a>', url, f"{str(allocation.id)[:8]}...")
+    allocation_display.short_description = _('Allocation')
+
+    def production_unit_display(self, obj):
+        allocation = obj.cycle_unit_allocation
+        if not allocation or not allocation.production_unit:
+            return '-'
+        url = reverse('admin:aquaculture_productionunit_change', args=[allocation.production_unit.id])
+        return format_html('<a href="{}">{}</a>', url, allocation.production_unit.name)
+    production_unit_display.short_description = _('Unité')
 
     def water_temp_status(self, obj):
         """Display water temperature with status indicator."""
@@ -605,14 +740,33 @@ class CycleLogAdmin(AquacultureSecuredAdmin):
 class SanitaryLogAdmin(AquacultureSecuredAdmin):
     """Administration securisee des journaux sanitaires."""
     list_display = [
-        'id_short', 'cycle_display', 'farmer_contact', 'event_date', 'event_type_display',
-        'affected_count', 'resolution_status', 'has_photo'
+        'id_short',
+        'farm_display',
+        'cycle_display',
+        'allocation_display',
+        'production_unit_display',
+        'event_date',
+        'event_type_display',
+        'affected_count',
+        'resolution_status',
+        'has_photo',
     ]
     list_filter = [
-        'event_type', 'resolved', 'event_date', 'created_offline'
+        'cycle__farm_profile',
+        'cycle',
+        'cycle_unit_allocation',
+        'cycle_unit_allocation__production_unit',
+        'event_type',
+        'resolved',
+        'event_date',
+        'created_offline',
     ]
     search_fields = [
-        'cycle__cycle_name', 'symptoms', 'treatment_applied'
+        'cycle__cycle_name',
+        'cycle__farm_profile__farm_name',
+        'cycle_unit_allocation__production_unit__name',
+        'symptoms',
+        'treatment_applied',
     ]
     readonly_fields = ['id', 'created_at', 'farmer_contact']
     date_hierarchy = 'event_date'
@@ -620,12 +774,13 @@ class SanitaryLogAdmin(AquacultureSecuredAdmin):
     def get_queryset(self, request):
         """Optimize queries with select_related for farmer contact info."""
         return super().get_queryset(request).select_related(
-            'cycle__farm_profile__user'
+            'cycle__farm_profile__user',
+            'cycle_unit_allocation__production_unit',
         )
 
     fieldsets = (
         (_('Informations de base'), {
-            'fields': ('cycle', 'farmer_contact', 'event_date', 'event_type')
+            'fields': ('cycle', 'cycle_unit_allocation', 'farmer_contact', 'event_date', 'event_type')
         }),
         (_('Details de l evenement'), {
             'fields': ('symptoms', 'affected_count')
@@ -653,6 +808,28 @@ class SanitaryLogAdmin(AquacultureSecuredAdmin):
         url = reverse('admin:aquaculture_productioncycle_change', args=[obj.cycle.id])
         return format_html('<a href="{}">{}</a>', url, obj.cycle.cycle_name)
     cycle_display.short_description = _('Cycle')
+
+    def farm_display(self, obj):
+        """Display farm name with link."""
+        url = reverse('admin:accounts_farmprofile_change', args=[obj.cycle.farm_profile.id])
+        return format_html('<a href="{}">{}</a>', url, obj.cycle.farm_profile.farm_name)
+    farm_display.short_description = _('Ferme')
+
+    def allocation_display(self, obj):
+        allocation = obj.cycle_unit_allocation
+        if not allocation:
+            return '-'
+        url = reverse('admin:aquaculture_cycleunitallocation_change', args=[allocation.id])
+        return format_html('<a href="{}">{}</a>', url, f"{str(allocation.id)[:8]}...")
+    allocation_display.short_description = _('Allocation')
+
+    def production_unit_display(self, obj):
+        allocation = obj.cycle_unit_allocation
+        if not allocation or not allocation.production_unit:
+            return '-'
+        url = reverse('admin:aquaculture_productionunit_change', args=[allocation.production_unit.id])
+        return format_html('<a href="{}">{}</a>', url, allocation.production_unit.name)
+    production_unit_display.short_description = _('Unité')
 
     def event_type_display(self, obj):
         """Display event type with warning for abnormal mortality."""

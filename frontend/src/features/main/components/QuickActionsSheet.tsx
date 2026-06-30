@@ -101,7 +101,11 @@ export default function QuickActionsSheet({
    * Configuration des actions Aquaculture
    */
   const aquacultureActions = useMemo((): ActionItem[] => {
-    if (scope === 'unit' && productionUnitContext) {
+    if (scope === 'unit') {
+      if (!productionUnitContext) {
+        return [];
+      }
+
       return [
         {
           id: 'dailyLog',
@@ -129,31 +133,6 @@ export default function QuickActionsSheet({
           route: 'DailyLogHistory',
           category: 'aquaculture',
           params: productionUnitContext,
-        },
-        {
-          id: 'notifications',
-          labelKey: 'notifications',
-          icon: 'notifications-outline',
-          iconColor: AQUACARE_COLORS.WARNING,
-          route: 'Notifications',
-          category: 'aquaculture',
-          badge: unreadCount,
-        },
-        {
-          id: 'feedingPlan',
-          labelKey: 'feedingPlan',
-          icon: 'restaurant-outline',
-          iconColor: AQUACARE_COLORS.INFO,
-          route: 'FeedingPlan',
-          category: 'aquaculture',
-        },
-        {
-          id: 'reports',
-          labelKey: 'reports',
-          icon: 'document-text-outline',
-          iconColor: AQUACARE_COLORS.BLUE,
-          route: 'Reports',
-          category: 'aquaculture',
         },
       ];
     }

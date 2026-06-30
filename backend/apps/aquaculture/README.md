@@ -395,6 +395,12 @@ Regle de coherence:
 1. Le frontend peut estimer pour UX instantanee.
 2. Le backend reste la source definitive des metriques, statuts, couts.
 
+## Production Unit Integrity
+
+1. Les actions lancees depuis une unite doivent rester rattachees a la bonne `CycleUnitAllocation`.
+2. Les dashboards de cycle agregent les faits des unites sans melanger les vues unitaires.
+3. L'admin doit permettre d'inspecter ferme, cycle, unite, allocation, journaux journaliers et journaux sanitaires.
+
 ## Tests Et Reprise
 
 Points de validation recommandes:
