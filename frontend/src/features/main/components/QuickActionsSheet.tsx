@@ -50,6 +50,13 @@ interface QuickActionsSheetProps {
     productionUnitId: string;
     productionUnitName: string;
   };
+
+  /**
+   * Contexte cycle pour les actions globales du cycle.
+   */
+  cycleContext?: {
+    cycleId: string;
+  };
 }
 
 /**
@@ -68,12 +75,17 @@ interface ActionItem {
 
 const hasValidProductionUnitContext = (
   productionUnitContext: QuickActionsSheetProps['productionUnitContext']
-): boolean =>
+): productionUnitContext is NonNullable<QuickActionsSheetProps['productionUnitContext']> =>
   Boolean(
     productionUnitContext?.cycleId &&
       productionUnitContext?.cycleUnitAllocationId &&
       productionUnitContext?.productionUnitId
   );
+
+const hasValidCycleContext = (
+  cycleContext: QuickActionsSheetProps['cycleContext']
+): cycleContext is NonNullable<QuickActionsSheetProps['cycleContext']> =>
+  Boolean(cycleContext?.cycleId);
 
 /**
  * Composant QuickActionsSheet
@@ -103,6 +115,7 @@ export default function QuickActionsSheet({
   navigation,
   scope = 'cycle',
   productionUnitContext,
+  cycleContext,
 }: QuickActionsSheetProps) {
   const { t } = useTranslation();
 
@@ -117,6 +130,8 @@ export default function QuickActionsSheet({
         return [];
       }
 
+      const unitContext = productionUnitContext;
+
       return [
         {
           id: 'dailyLog',
@@ -125,7 +140,7 @@ export default function QuickActionsSheet({
           iconColor: AQUACARE_COLORS.GREEN_LIGHT,
           route: 'DailyLog',
           category: 'aquaculture',
-          params: productionUnitContext,
+          params: unitContext,
         },
         {
           id: 'sanitaryLog',
@@ -134,7 +149,7 @@ export default function QuickActionsSheet({
           iconColor: AQUACARE_COLORS.ERROR,
           route: 'SanitaryLog',
           category: 'aquaculture',
-          params: productionUnitContext,
+          params: unitContext,
         },
         {
           id: 'history',
@@ -143,7 +158,60 @@ export default function QuickActionsSheet({
           iconColor: AQUACARE_COLORS.GREEN_DARK,
           route: 'DailyLogHistory',
           category: 'aquaculture',
-          params: productionUnitContext,
+          params: unitContext,
+        },
+        {
+          id: 'report',
+          labelKey: 'productionUnitReportAction',
+          icon: 'document-text-outline',
+          iconColor: AQUACARE_COLORS.BLUE,
+          route: 'Reports',
+          category: 'aquaculture',
+          params: {
+            scope: 'unit',
+            cycleId: unitContext.cycleId,
+            cycleUnitAllocationId: unitContext.cycleUnitAllocationId,
+            productionUnitId: unitContext.productionUnitId,
+            productionUnitName: unitContext.productionUnitName,
+          },
+        },
+      ];
+    }
+
+    if (!hasValidCycleContext(cycleContext)) {
+      return [
+        {
+          id: 'dailyLog',
+          labelKey: 'dailyLog',
+          icon: 'create',
+          iconColor: AQUACARE_COLORS.GREEN_LIGHT,
+          route: 'DailyLog',
+          category: 'aquaculture',
+        },
+        {
+          id: 'sanitaryLog',
+          labelKey: 'sanitaryLog',
+          icon: 'warning-outline',
+          iconColor: AQUACARE_COLORS.ERROR,
+          route: 'SanitaryLog',
+          category: 'aquaculture',
+        },
+        {
+          id: 'notifications',
+          labelKey: 'notifications',
+          icon: 'notifications-outline',
+          iconColor: AQUACARE_COLORS.WARNING,
+          route: 'Notifications',
+          category: 'aquaculture',
+          badge: unreadCount,
+        },
+        {
+          id: 'feedingPlan',
+          labelKey: 'feedingPlan',
+          icon: 'restaurant-outline',
+          iconColor: AQUACARE_COLORS.INFO,
+          route: 'FeedingPlan',
+          category: 'aquaculture',
         },
       ];
     }
@@ -189,9 +257,13 @@ export default function QuickActionsSheet({
         iconColor: AQUACARE_COLORS.BLUE,
         route: 'Reports',
         category: 'aquaculture',
+        params: {
+          scope: 'cycle',
+          cycleId: cycleContext.cycleId,
+        },
       },
     ];
-  }, [productionUnitContext, scope, unreadCount]);
+  }, [productionUnitContext, cycleContext, scope, unreadCount]);
 
   /**
    * Configuration des actions Commerce

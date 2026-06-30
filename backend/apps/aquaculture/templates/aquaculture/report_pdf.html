@@ -148,8 +148,12 @@
   </style>
 </head>
 <body>
+  {% with scope_type=payload.report_meta.scope_type|default:'cycle' %}
   <div class="header">
     <h1>{{ labels.report_title }}</h1>
+    <div class="pill" style="margin: 6px 0 8px 0;">
+      {{ scope_label|default:labels.report_scope }}
+    </div>
     <div>
       <strong>{{ labels.farm }}:</strong> {{ payload.farm.farm_name }} |
       <strong>{{ labels.report_type }}:</strong> {{ report_type_label }} |
@@ -160,6 +164,101 @@
     </div>
   </div>
 
+  <div class="section">
+    {% if scope_type == 'unit' %}
+      <h2>{{ labels.unit_summary }}</h2>
+    {% else %}
+      <h2>{{ labels.cycle_summary }}</h2>
+    {% endif %}
+    <table class="grid">
+      <tr>
+        {% if scope_type == 'unit' %}
+          <th>{{ labels.report_scope }}</th>
+          <th>{{ labels.initial_fish_count }}</th>
+          <th>{{ labels.estimated_current_fish_count }}</th>
+          <th>{{ labels.cumulative_mortality }}</th>
+          <th>{{ labels.mortality_rate }}</th>
+          <th>{{ labels.feed_consumed }}</th>
+          <th>{{ labels.estimated_current_biomass }}</th>
+          <th>{{ labels.last_average_weight }}</th>
+          <th>{{ labels.last_entry }}</th>
+        {% else %}
+          <th>{{ labels.report_scope }}</th>
+          <th>{{ labels.initial_fish_count }}</th>
+          <th>{{ labels.estimated_current_fish_count }}</th>
+          <th>{{ labels.cumulative_mortality }}</th>
+          <th>{{ labels.mortality_rate }}</th>
+          <th>{{ labels.feed_consumed }}</th>
+          <th>{{ labels.estimated_current_biomass }}</th>
+          <th>{{ labels.units_today }}</th>
+          <th>{{ labels.units_missing_today }}</th>
+          <th>{{ labels.active_sanitary_events_count }}</th>
+        {% endif %}
+      </tr>
+      <tr>
+        {% if scope_type == 'unit' %}
+          <td>{{ payload.summary.scope_name|default:scope_name|default:empty_value_label }}</td>
+          <td>{{ payload.summary.initial_fish_count|default_if_none:empty_value_label }}</td>
+          <td>{{ payload.summary.estimated_current_fish_count|default_if_none:empty_value_label }}</td>
+          <td>{{ payload.summary.total_mortality_count|default_if_none:empty_value_label }}</td>
+          <td>{% if payload.summary.mortality_rate_pct is not None %}{{ payload.summary.mortality_rate_pct }} %{% else %}{{ empty_value_label }}{% endif %}</td>
+          <td>{% if payload.summary.total_feed_consumed_kg is not None %}{{ payload.summary.total_feed_consumed_kg|floatformat:2 }} kg{% else %}{{ empty_value_label }}{% endif %}</td>
+          <td>{% if payload.summary.estimated_current_biomass_kg is not None %}{{ payload.summary.estimated_current_biomass_kg|floatformat:2 }} kg{% else %}{{ empty_value_label }}{% endif %}</td>
+          <td>{% if payload.cycles and payload.cycles.0.current_metrics.current_average_weight is not None %}{{ payload.cycles.0.current_metrics.current_average_weight|floatformat:1 }} g{% else %}{{ empty_value_label }}{% endif %}</td>
+          <td>{% if payload.cycles and payload.cycles.0.logs %}{{ payload.cycles.0.logs.0.log_date }}{% else %}{{ empty_value_label }}{% endif %}</td>
+        {% else %}
+          <td>{{ payload.summary.cycle_name|default:scope_name|default:empty_value_label }}</td>
+          <td>{{ payload.summary.initial_fish_count|default_if_none:empty_value_label }}</td>
+          <td>{{ payload.summary.estimated_current_fish_count|default_if_none:empty_value_label }}</td>
+          <td>{{ payload.summary.total_mortality_count|default_if_none:empty_value_label }}</td>
+          <td>{% if payload.summary.mortality_rate_pct is not None %}{{ payload.summary.mortality_rate_pct }} %{% else %}{{ empty_value_label }}{% endif %}</td>
+          <td>{% if payload.summary.total_feed_consumed_kg is not None %}{{ payload.summary.total_feed_consumed_kg|floatformat:2 }} kg{% else %}{{ empty_value_label }}{% endif %}</td>
+          <td>{% if payload.summary.estimated_current_biomass_kg is not None %}{{ payload.summary.estimated_current_biomass_kg|floatformat:2 }} kg{% else %}{{ empty_value_label }}{% endif %}</td>
+          <td>{{ payload.summary.units_with_today_log_count|default_if_none:0 }}</td>
+          <td>{{ payload.summary.units_missing_today_log_count|default_if_none:0 }}</td>
+          <td>{{ payload.summary.active_sanitary_events_count|default_if_none:0 }}</td>
+        {% endif %}
+      </tr>
+    </table>
+  </div>
+
+  {% if scope_type != 'unit' %}
+    <div class="section">
+      <h2>{{ labels.comparison_by_unit }}</h2>
+      {% if payload.units %}
+        <table class="grid small">
+          <tr>
+            <th>{{ labels.report_scope }}</th>
+            <th>{{ labels.estimated_current_fish_count }}</th>
+            <th>{{ labels.cumulative_mortality }}</th>
+            <th>{{ labels.feed_consumed }}</th>
+            <th>{{ labels.estimated_current_biomass }}</th>
+            <th>{{ labels.sanitary_events }}</th>
+            <th>{{ labels.last_entry }}</th>
+          </tr>
+          {% for unit in payload.units %}
+            <tr>
+              <td>
+                {{ unit.name|default:empty_value_label }}
+                {% if unit.production_unit_dimension %}
+                  <div class="small muted">{{ unit.production_unit_dimension }}</div>
+                {% endif %}
+              </td>
+              <td>{{ unit.estimated_current_fish_count|default_if_none:empty_value_label }}</td>
+              <td>{{ unit.total_mortality_count|default_if_none:empty_value_label }}</td>
+              <td>{% if unit.total_feed_consumed_kg is not None %}{{ unit.total_feed_consumed_kg|floatformat:2 }} kg{% else %}{{ empty_value_label }}{% endif %}</td>
+              <td>{% if unit.estimated_current_biomass_kg is not None %}{{ unit.estimated_current_biomass_kg|floatformat:2 }} kg{% else %}{{ empty_value_label }}{% endif %}</td>
+              <td>{{ unit.sanitary_status_short|default:empty_value_label }}</td>
+              <td>{{ unit.last_daily_log_date|default:empty_value_label }}</td>
+            </tr>
+          {% endfor %}
+        </table>
+      {% else %}
+        <div class="muted">{{ labels.no_units_in_cycle }}</div>
+      {% endif %}
+    </div>
+  {% endif %}
+
   <div class="details-section">
     <h2>{{ labels.details_by_cycle }}</h2>
 
@@ -167,69 +266,77 @@
       <div class="cycle-list">
       {% for section in payload.cycles %}
         <div class="cycle-block{% if forloop.first %} cycle-block-first{% endif %}">
-          <h3>{{ section.cycle.cycle_name }} <span class="pill">{{ section.cycle.species_display }}</span></h3>
+          <h3>
+            {% if section.unit.production_unit_name %}
+              {{ section.unit.production_unit_name }}
+            {% else %}
+              {{ section.cycle.cycle_name }}
+            {% endif %}
+            <span class="pill">{{ section.cycle.species_display }}</span>
+          </h3>
           <div class="small muted">
+            {% if section.unit.production_unit_type_display %}
+              {{ section.unit.production_unit_type_display }} |
+            {% endif %}
             {{ labels.started_on }} {{ section.cycle.start_date }} |
             {{ labels.active_days }}: {{ section.cycle.days_active }}
           </div>
 
-          {% with metrics=section.dashboard_metrics %}
-            <h3>{{ labels.dashboard_metrics }}</h3>
-            <table class="kpi-table">
-              <tr>
-                <td class="kpi-cell">
-                  <div class="kpi-value">
-                    {% if metrics.estimated_market_value_fcfa == 0 %}
-                      0 FCFA
-                    {% elif metrics.estimated_market_value_fcfa %}
-                      {{ metrics.estimated_market_value_fcfa|floatformat:0 }} FCFA
-                    {% else %}
-                      {{ empty_value_label }}
-                    {% endif %}
-                  </div>
-                  <div class="kpi-label">{{ labels.estimated_market_value }}</div>
-                </td>
-                <td class="kpi-cell">
-                  <div class="kpi-value">
-                    {% if metrics.feed_cost_consumed_fcfa == 0 %}
-                      0 FCFA
-                    {% elif metrics.feed_cost_consumed_fcfa %}
-                      {{ metrics.feed_cost_consumed_fcfa|floatformat:0 }} FCFA
-                    {% else %}
-                      {{ empty_value_label }}
-                    {% endif %}
-                  </div>
-                  <div class="kpi-label">{{ labels.feed_cost_consumed }}</div>
-                </td>
-              </tr>
-              <tr>
-                <td class="kpi-cell">
-                  <div class="kpi-value">
-                    {% if metrics.time_remaining_days == 0 %}
-                      0 {{ labels.days_short }}
-                    {% elif metrics.time_remaining_days %}
-                      {{ metrics.time_remaining_days }} {{ labels.days_short }}
-                    {% else %}
-                      {{ empty_value_label }}
-                    {% endif %}
-                  </div>
-                  <div class="kpi-label">{{ labels.time_remaining_cycle }}</div>
-                </td>
-                <td class="kpi-cell">
-                  <div class="kpi-value">
-                    {% if metrics.direct_production_cost_fcfa == 0 %}
-                      0 {{ labels.direct_production_cost_unit }}
-                    {% elif metrics.direct_production_cost_fcfa %}
-                      {{ metrics.direct_production_cost_fcfa|floatformat:0 }} {{ labels.direct_production_cost_unit }}
-                    {% else %}
-                      {{ empty_value_label }}
-                    {% endif %}
-                  </div>
-                  <div class="kpi-label">{{ labels.direct_production_cost }}</div>
-                </td>
-              </tr>
-            </table>
-          {% endwith %}
+          <h3>{% if scope_type == 'unit' %}{{ labels.unit_summary }}{% else %}{{ labels.dashboard_metrics }}{% endif %}</h3>
+          <table class="kpi-table">
+            <tr>
+              <td class="kpi-cell">
+                <div class="kpi-value">
+                  {% if section.dashboard_metrics.estimated_market_value_fcfa == 0 %}
+                    0 FCFA
+                  {% elif section.dashboard_metrics.estimated_market_value_fcfa %}
+                    {{ section.dashboard_metrics.estimated_market_value_fcfa|floatformat:0 }} FCFA
+                  {% else %}
+                    {{ empty_value_label }}
+                  {% endif %}
+                </div>
+                <div class="kpi-label">{{ labels.estimated_market_value }}</div>
+              </td>
+              <td class="kpi-cell">
+                <div class="kpi-value">
+                  {% if section.dashboard_metrics.feed_cost_consumed_fcfa == 0 %}
+                    0 FCFA
+                  {% elif section.dashboard_metrics.feed_cost_consumed_fcfa %}
+                    {{ section.dashboard_metrics.feed_cost_consumed_fcfa|floatformat:0 }} FCFA
+                  {% else %}
+                    {{ empty_value_label }}
+                  {% endif %}
+                </div>
+                <div class="kpi-label">{{ labels.feed_cost_consumed }}</div>
+              </td>
+            </tr>
+            <tr>
+              <td class="kpi-cell">
+                <div class="kpi-value">
+                  {% if section.dashboard_metrics.time_remaining_days == 0 %}
+                    0 {{ labels.days_short }}
+                  {% elif section.dashboard_metrics.time_remaining_days %}
+                    {{ section.dashboard_metrics.time_remaining_days }} {{ labels.days_short }}
+                  {% else %}
+                    {{ empty_value_label }}
+                  {% endif %}
+                </div>
+                <div class="kpi-label">{{ labels.time_remaining_cycle }}</div>
+              </td>
+              <td class="kpi-cell">
+                <div class="kpi-value">
+                  {% if section.dashboard_metrics.direct_production_cost_fcfa == 0 %}
+                    0 {{ labels.direct_production_cost_unit }}
+                  {% elif section.dashboard_metrics.direct_production_cost_fcfa %}
+                    {{ section.dashboard_metrics.direct_production_cost_fcfa|floatformat:0 }} {{ labels.direct_production_cost_unit }}
+                  {% else %}
+                    {{ empty_value_label }}
+                  {% endif %}
+                </div>
+                <div class="kpi-label">{{ labels.direct_production_cost }}</div>
+              </td>
+            </tr>
+          </table>
 
           <h3>{{ labels.current_indicators }}</h3>
           <table class="grid">
@@ -330,12 +437,13 @@
       {% endfor %}
       </div>
     {% else %}
-      <div class="muted">{{ labels.no_active_cycle }}</div>
+      <div class="muted">{{ labels.no_report_data }}</div>
     {% endif %}
   </div>
 
   <div class="footer">
     {{ labels.footer }}
   </div>
+  {% endwith %}
 </body>
 </html>

@@ -54,7 +54,46 @@ class TestReportApplicationService:
             )
 
         assert report.status == "pending"
-        mock_dispatch.assert_called_once_with(report, str(cycle.id))
+        mock_dispatch.assert_called_once_with(report)
+
+    def test_request_report_generation_supports_unit_scope(self):
+        user = UserFactory()
+        farm_profile = FarmProfileFactory(user=user)
+        cycle = ProductionCycleFactory(
+            farm_profile=farm_profile,
+            status="active",
+        )
+        from aquaculture.models import CycleUnitAllocation, ProductionUnit
+
+        unit = ProductionUnit.objects.create(
+            farm_profile=farm_profile,
+            name="Bac 1",
+            unit_type="tank",
+            volume_m3="3.00",
+        )
+        allocation = CycleUnitAllocation.objects.create(
+            cycle=cycle,
+            production_unit=unit,
+            initial_fish_count=900,
+            current_fish_count=900,
+            initial_biomass_kg="9.00",
+            current_biomass_kg="9.00",
+        )
+
+        with patch.object(ReportApplicationService, "_dispatch_generation") as mock_dispatch:
+            report = ReportApplicationService.request_report_generation(
+                user,
+                GenerateReportCommand(
+                    report_type="daily",
+                    scope="unit",
+                    cycle_unit_allocation_id=str(allocation.id),
+                ),
+            )
+
+        assert report.status == "pending"
+        assert report.scope_type == "unit"
+        assert str(report.scope_object_id) == str(allocation.id)
+        mock_dispatch.assert_called_once_with(report)
 
     def test_prepare_report_download_returns_pending_when_status_is_pending(self):
         farm_profile = FarmProfileFactory()

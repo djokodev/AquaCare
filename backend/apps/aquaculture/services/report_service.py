@@ -20,6 +20,7 @@ from accounts.models import FarmProfile, User
 from django.conf import settings
 from django.core.files.base import ContentFile
 from django.core.mail import EmailMessage
+from django.db.models import Prefetch
 from django.template.loader import render_to_string
 from django.utils import timezone
 from django.utils.formats import date_format
@@ -28,12 +29,16 @@ from django.utils.translation import override
 
 from ..constants import DEFAULT_FEED_PRICE_PER_KG, ECONOMIC_DEFAULTS_BY_SPECIES
 from ..models import (
+    CycleLog,
+    CycleUnitAllocation,
     ProductionCycle,
     ProductionReport,
     ReportDispatchLog,
+    SanitaryLog,
 )
 from .base import BaseService
 from .farm_production_plan_service import FarmProductionPlanService
+from .production_unit_dashboard_service import ProductionUnitDashboardService
 
 logger = logging.getLogger(__name__)
 
@@ -62,10 +67,15 @@ class ReportDispatchMetadata(TypedDict, total=False):
 
 class ReportMetaSnapshot(TypedDict):
     report_type: str
+    scope_type: str
+    scope_object_id: str | None
     period_start: str
     period_end: str
     cycle_scope_id: str | None
+    cycle_unit_allocation_id: str | None
     cycle_scope_name: str | None
+    scope_name: str | None
+    scope_label: str | None
     generated_at: str
     timezone: str
 
@@ -212,6 +222,8 @@ class PDFContext(TypedDict):
     report_type_label: str
     period_label: str
     empty_value_label: str
+    scope_label: str
+    scope_name: str | None
 
 
 class ReportService(BaseService):
@@ -219,9 +231,52 @@ class ReportService(BaseService):
 
     @staticmethod
     def _resolve_cycle_scope_id(report: ProductionReport) -> str | None:
+        meta = ReportService._resolve_report_meta(report)
+        if meta.get('cycle_scope_id'):
+            return str(meta.get('cycle_scope_id'))
+        if report.scope_type == 'cycle' and report.scope_object_id:
+            return str(report.scope_object_id)
+        return None
+
+    @staticmethod
+    def _resolve_report_meta(report: ProductionReport) -> dict[str, object]:
         if not isinstance(report.payload, dict):
-            return None
-        return (report.payload.get('report_meta', {}) or {}).get('cycle_scope_id')
+            return {}
+        report_meta = report.payload.get('report_meta', {})
+        return report_meta if isinstance(report_meta, dict) else {}
+
+    @staticmethod
+    def _resolve_report_scope_from_report(report: ProductionReport) -> tuple[str, str | None]:
+        meta = ReportService._resolve_report_meta(report)
+        scope_type = str(meta.get('scope_type') or report.scope_type or 'cycle')
+        scope_object_id = meta.get('scope_object_id') or (
+            str(report.scope_object_id) if report.scope_object_id else None
+        )
+        if scope_type == 'cycle' and not scope_object_id:
+            scope_object_id = ReportService._resolve_cycle_scope_id(report)
+        if scope_type not in {'cycle', 'unit'}:
+            scope_type = 'cycle'
+        return scope_type, str(scope_object_id) if scope_object_id else None
+
+    @staticmethod
+    def _resolve_scope_label(scope_type: str, language_code: str) -> str:
+        if scope_type == 'unit':
+            return ReportService._pick_text(language_code, 'Rapport de l’unité', 'Unit report')
+        return ReportService._pick_text(language_code, 'Rapport du cycle', 'Cycle report')
+
+    @staticmethod
+    def _resolve_scope_subject(scope_type: str, scope_name: str | None, language_code: str) -> str:
+        if scope_type == 'unit':
+            return ReportService._pick_text(
+                language_code,
+                f"Rapport de l’unité {scope_name}" if scope_name else 'Rapport de l’unité',
+                f"Unit report {scope_name}" if scope_name else 'Unit report',
+            )
+        return ReportService._pick_text(
+            language_code,
+            f"Rapport du cycle {scope_name}" if scope_name else 'Rapport du cycle',
+            f"Cycle report {scope_name}" if scope_name else 'Cycle report',
+        )
 
     @staticmethod
     def _build_report_filename(
@@ -230,11 +285,14 @@ class ReportService(BaseService):
         farm_profile_id: str,
         period_start: date,
         period_end: date,
-        cycle_id: str | None,
+        scope_type: str,
+        scope_object_id: str | None,
     ) -> str:
         filename_parts = [f"report_{report_type}", str(farm_profile_id)]
-        if cycle_id:
-            filename_parts.append(cycle_id)
+        if scope_type:
+            filename_parts.append(scope_type)
+        if scope_object_id:
+            filename_parts.append(scope_object_id)
         filename_parts.extend([period_start.isoformat(), period_end.isoformat()])
         return '_'.join(filename_parts) + '.pdf'
 
@@ -316,17 +374,22 @@ class ReportService(BaseService):
         report_type: str,
         period_start: date,
         period_end: date,
+        scope_type: str = 'cycle',
+        scope_object_id: str | None = None,
         cycle_id: str | None = None,
         preserve_validation: bool = False,
     ) -> ProductionReport:
         """
         Génère (ou régénère) un rapport consolidé pour une ferme et une période.
         """
+        effective_scope_object_id = scope_object_id or cycle_id
         report, _ = ProductionReport.objects.get_or_create(
             farm_profile=farm_profile,
             report_type=report_type,
             period_start=period_start,
             period_end=period_end,
+            scope_type=scope_type,
+            scope_object_id=effective_scope_object_id,
             defaults={
                 'status': 'draft',
             },
@@ -337,6 +400,8 @@ class ReportService(BaseService):
             report_type=report_type,
             period_start=period_start,
             period_end=period_end,
+            scope_type=scope_type,
+            scope_object_id=scope_object_id,
             cycle_id=cycle_id,
         )
 
@@ -353,7 +418,8 @@ class ReportService(BaseService):
             farm_profile_id=str(farm_profile.id),
             period_start=period_start,
             period_end=period_end,
-            cycle_id=cycle_id,
+            scope_type=scope_type,
+            scope_object_id=effective_scope_object_id,
         )
         return ReportService._apply_generated_report_content(
             report,
@@ -367,12 +433,14 @@ class ReportService(BaseService):
     @staticmethod
     def regenerate(report: ProductionReport) -> ProductionReport:
         """Régénère un rapport existant en conservant sa période/type."""
+        scope_type, scope_object_id = ReportService._resolve_report_scope_from_report(report)
         return ReportService.generate_for_farm(
             farm_profile=report.farm_profile,
             report_type=report.report_type,
             period_start=report.period_start,
             period_end=report.period_end,
-            cycle_id=ReportService._resolve_cycle_scope_id(report),
+            scope_type=scope_type,
+            scope_object_id=scope_object_id,
         )
 
     @staticmethod
@@ -525,14 +593,553 @@ class ReportService(BaseService):
         return generated
 
     @staticmethod
+    def _build_unit_dashboard_section(
+        *,
+        cycle: ProductionCycle,
+        allocation: CycleUnitAllocation,
+        daily_logs: list,
+        sanitary_logs: list,
+        feeding_plans: list,
+        language_code: str,
+    ) -> dict:
+        dashboard = ProductionUnitDashboardService.build_dashboard_payload_from_logs(
+            allocation=allocation,
+            daily_logs=daily_logs,
+            sanitary_logs=sanitary_logs,
+        )
+        summary = dashboard['summary']
+        latest_weight = summary.get('latest_average_weight_g')
+        total_feed = summary.get('total_feed_consumed_kg') or 0
+        estimated_biomass = summary.get('estimated_current_biomass_kg') or allocation.current_biomass_kg
+        plan_data = FarmProductionPlanService.get_plan_data(allocation.cycle.farm_profile)
+        feed_price = (
+            ReportService._to_float(plan_data["default_feed_price_per_kg"])
+            or ReportService._to_float(DEFAULT_FEED_PRICE_PER_KG)
+            or 0.0
+        )
+        feed_consumed_kg = ReportService._to_float(total_feed) or 0.0
+        feed_cost_consumed_fcfa = round(feed_consumed_kg * feed_price, 2)
+        unit_name = allocation.production_unit.name
+        planned_price = ReportService._to_float(allocation.cycle.planned_selling_price_per_kg_fcfa)
+        effective_selling_price = planned_price or ReportService._default_selling_price_for_species(
+            allocation.cycle.species
+        )
+
+        return {
+            'cycle': {
+                'id': str(cycle.id),
+                'cycle_name': cycle.cycle_name,
+                'species': cycle.species,
+                'species_display': cycle.get_species_display(),
+                'status': cycle.status,
+                'status_display': cycle.get_status_display(),
+                'pond_identifier': cycle.pond_identifier,
+                'start_date': cycle.start_date.isoformat(),
+                'days_active': cycle.days_active(),
+            },
+            'unit': {
+                'id': str(allocation.id),
+                'cycle_unit_allocation_id': str(allocation.id),
+                'production_unit_id': str(allocation.production_unit.id),
+                'production_unit_name': unit_name,
+                'production_unit_type': allocation.production_unit.unit_type,
+                'production_unit_type_display': allocation.production_unit.get_unit_type_display(),
+                'production_unit_dimension': allocation.production_unit.display_dimension,
+                'initial_fish_count': allocation.initial_fish_count,
+                'current_fish_count': allocation.current_fish_count,
+                'initial_biomass_kg': ReportService._to_float(allocation.initial_biomass_kg),
+                'current_biomass_kg': ReportService._to_float(allocation.current_biomass_kg),
+                'expected_survival_rate_pct': ReportService._to_float(
+                    allocation.expected_survival_rate_pct
+                ),
+            },
+            'dashboard_metrics': {
+                'estimated_market_value_fcfa': round(
+                    (ReportService._to_float(estimated_biomass) or 0.0) * effective_selling_price,
+                    0,
+                ),
+                'feed_cost_consumed_fcfa': round(feed_cost_consumed_fcfa, 0),
+                'time_remaining_days': ReportService._calculate_cycle_days_remaining(cycle),
+                'direct_production_cost_fcfa': round(feed_cost_consumed_fcfa, 0),
+            },
+            'current_metrics': {
+                'current_count': summary['estimated_current_fish_count'],
+                'current_average_weight': ReportService._to_float(latest_weight),
+                'current_biomass': ReportService._to_float(estimated_biomass),
+                'total_feed_consumed': ReportService._to_float(total_feed),
+                'survival_rate': (
+                    100.0 - ReportService._to_float(summary.get('mortality_rate_pct'))
+                    if ReportService._to_float(summary.get('mortality_rate_pct')) is not None
+                    else None
+                ),
+                'fcr': None,
+                'daily_growth_rate': None,
+                'specific_growth_rate': None,
+                'average_daily_feed': None,
+                'performance_score': None,
+            },
+            'period_metrics': {
+                'log_count': len(daily_logs),
+                'sanitary_event_count': len(sanitary_logs),
+                'total_feed': feed_consumed_kg,
+                'total_mortality': summary['total_mortality_count'],
+                'average_weight': ReportService._to_float(latest_weight),
+                'average_temperature': None,
+                'average_oxygen': None,
+                'average_ph': None,
+            },
+            'logs': [
+                {
+                    'id': str(log.id),
+                    'log_date': log.log_date.isoformat(),
+                    'mortality_count': int(log.mortality_count or 0),
+                    'mortality_reason': log.mortality_reason or None,
+                    'sample_count': log.sample_count,
+                    'sample_total_weight': ReportService._to_float(log.sample_total_weight),
+                    'average_weight': ReportService._to_float(log.average_weight),
+                    'feed_quantity': ReportService._to_float(log.feed_quantity),
+                    'feed_type': log.feed_type or None,
+                    'water_temperature': ReportService._to_float(log.water_temperature),
+                    'dissolved_oxygen': ReportService._to_float(log.dissolved_oxygen),
+                    'ph_level': ReportService._to_float(log.ph_level),
+                    'ammonia_level': ReportService._to_float(log.ammonia_level),
+                    'observations': log.observations or None,
+                }
+                for log in daily_logs
+            ],
+            'sanitary_logs': [
+                {
+                    'id': str(item.id),
+                    'event_date': item.event_date.isoformat(),
+                    'event_type': item.event_type,
+                    'event_type_display': item.get_event_type_display(),
+                    'symptoms': item.symptoms,
+                    'affected_count': item.affected_count,
+                    'treatment_applied': item.treatment_applied or None,
+                    'medication_used': item.medication_used or None,
+                    'dosage': item.dosage or None,
+                    'treatment_duration_days': item.treatment_duration_days,
+                    'resolved': item.resolved,
+                }
+                for item in sanitary_logs
+            ],
+            'feeding_plans': [
+                {
+                    'week_number': plan.week_number,
+                    'start_date': plan.start_date.isoformat(),
+                    'end_date': plan.end_date.isoformat(),
+                    'daily_feed_amount': ReportService._to_float(plan.daily_feed_amount),
+                    'feeding_rate': ReportService._to_float(plan.feeding_rate),
+                    'meals_per_day': plan.meals_per_day,
+                    'feed_per_meal': ReportService._to_float(plan.feed_per_meal),
+                    'recommended_feed_type': plan.recommended_feed_type,
+                    'protein_percentage': plan.protein_percentage,
+                }
+                for plan in feeding_plans
+            ],
+        }
+
+    @staticmethod
+    def _build_unit_comparison_snapshot(section: dict) -> dict:
+        unit = section.get('unit', {}) if isinstance(section, dict) else {}
+        period_metrics = section.get('period_metrics', {}) if isinstance(section, dict) else {}
+        sanitary_logs = section.get('sanitary_logs', []) if isinstance(section, dict) else []
+        active_sanitary_issues_count = sum(
+            1 for item in sanitary_logs if isinstance(item, dict) and not item.get('resolved')
+        )
+        today = timezone.localdate().isoformat()
+        logs = section.get('logs', []) if isinstance(section, dict) else []
+        last_daily_log_date = logs[0].get('log_date') if logs else None
+        return {
+            'id': unit.get('id'),
+            'name': unit.get('production_unit_name'),
+            'production_unit_type': unit.get('production_unit_type'),
+            'production_unit_dimension': unit.get('production_unit_dimension'),
+            'estimated_current_fish_count': section.get('current_metrics', {}).get('current_count'),
+            'total_mortality_count': period_metrics.get('total_mortality'),
+            'total_feed_consumed_kg': period_metrics.get('total_feed'),
+            'estimated_current_biomass_kg': section.get('current_metrics', {}).get('current_biomass'),
+            'sanitary_status_short': (
+                'active' if active_sanitary_issues_count else 'ok'
+            ),
+            'last_daily_log_date': last_daily_log_date,
+            'has_today_daily_log': last_daily_log_date == today,
+            'active_sanitary_issues_count': active_sanitary_issues_count,
+        }
+
+    @staticmethod
+    def _build_cycle_report_payload(
+        *,
+        farm_profile: FarmProfile,
+        report_type: str,
+        period_start: date,
+        period_end: date,
+        cycle: ProductionCycle,
+    ) -> dict:
+        allocations = list(
+            cycle.unit_allocations.select_related('production_unit').prefetch_related(
+                Prefetch(
+                    'daily_logs',
+                    queryset=CycleLog.objects.filter(
+                        log_date__gte=period_start,
+                        log_date__lte=period_end,
+                    ).order_by('-log_date', '-log_time'),
+                    to_attr='period_daily_logs',
+                ),
+                Prefetch(
+                    'sanitary_logs',
+                    queryset=SanitaryLog.objects.filter(
+                        event_date__gte=period_start,
+                        event_date__lte=period_end,
+                    ).order_by('-event_date', '-created_at'),
+                    to_attr='period_sanitary_logs',
+                ),
+            )
+        )
+        if not allocations:
+            cycle_logs = list(
+                cycle.logs.filter(
+                    log_date__gte=period_start,
+                    log_date__lte=period_end,
+                ).order_by('-log_date', '-log_time')
+            )
+            sanitary_logs = list(
+                cycle.sanitary_logs.filter(
+                    event_date__gte=period_start,
+                    event_date__lte=period_end,
+                ).order_by('-event_date', '-created_at')
+            )
+            total_feed = sum(float(log.feed_quantity or 0) for log in cycle_logs)
+            total_mortality = sum(int(log.mortality_count or 0) for log in cycle_logs)
+            total_log_count = len(cycle_logs)
+            total_sanitary_count = len(sanitary_logs)
+            total_initial = cycle.initial_count or 0
+            estimated_current = cycle.current_count or 0
+            mortality_rate_pct = 0.0
+            if total_initial > 0:
+                mortality_rate_pct = round((total_mortality / total_initial) * 100, 2)
+            return {
+                'report_meta': {
+                    'report_type': report_type,
+                    'scope_type': 'cycle',
+                    'scope_object_id': str(cycle.id),
+                    'period_start': period_start.isoformat(),
+                    'period_end': period_end.isoformat(),
+                    'cycle_scope_id': str(cycle.id),
+                    'cycle_unit_allocation_id': None,
+                    'cycle_scope_name': cycle.cycle_name,
+                    'scope_name': cycle.cycle_name,
+                    'scope_label': ReportService._pick_text(
+                        ReportService._resolve_language_code(farm_profile.user),
+                        'Rapport du cycle',
+                        'Cycle report',
+                    ),
+                    'generated_at': timezone.localtime(timezone.now()).isoformat(),
+                    'timezone': str(timezone.get_current_timezone()),
+                },
+                'farm': {
+                    'id': str(farm_profile.id),
+                    'farm_name': farm_profile.farm_name,
+                    'certification_status': farm_profile.certification_status,
+                    'total_ponds': farm_profile.total_ponds,
+                    'main_species': farm_profile.main_species,
+                    'annual_production_kg': farm_profile.annual_production_kg,
+                    'promoter_name': farm_profile.user.promoter_name or farm_profile.user.display_name,
+                    'promoter_email': farm_profile.user.email or '',
+                    'promoter_phone': farm_profile.user.phone_number,
+                },
+                'summary': {
+                    'cycle_name': cycle.cycle_name,
+                    'species': cycle.get_species_display(),
+                    'status': cycle.status,
+                    'total_units': 0,
+                    'cycle_count': 1,
+                    'total_allocations': 0,
+                    'initial_fish_count': total_initial,
+                    'estimated_current_fish_count': estimated_current,
+                    'total_mortality_count': total_mortality,
+                    'mortality_rate_pct': mortality_rate_pct,
+                    'total_feed_consumed_kg': round(total_feed, 2),
+                    'estimated_current_biomass_kg': ReportService._to_float(cycle.current_biomass),
+                    'units_with_today_log_count': 0,
+                    'units_missing_today_log_count': 0,
+                    'active_sanitary_events_count': sum(1 for item in sanitary_logs if not item.resolved),
+                    'total_log_count': total_log_count,
+                    'total_sanitary_events': total_sanitary_count,
+                    'total_feed': round(total_feed, 2),
+                    'total_mortality': total_mortality,
+                    'comparison_units_count': 0,
+                },
+                'cycles': [],
+                'units': [],
+            }
+
+        feeding_plans = list(
+            cycle.feeding_plans.filter(
+                start_date__lte=period_end,
+                end_date__gte=period_start,
+            ).order_by('week_number')
+        )
+
+        sections: list[dict] = []
+        comparison: list[dict] = []
+        total_initial_fish_count = 0
+        total_estimated_current_fish_count = 0
+        total_mortality_count = 0
+        total_feed_consumed = 0.0
+        total_biomass = 0.0
+        units_with_today_log_count = 0
+        units_missing_today_log_count = 0
+        active_sanitary_events_count = 0
+        total_log_count = 0
+        total_sanitary_count = 0
+
+        for allocation in allocations:
+            daily_logs = list(getattr(allocation, 'period_daily_logs', []))
+            sanitary_logs = list(getattr(allocation, 'period_sanitary_logs', []))
+            today = timezone.localdate()
+            has_today_log = any(log.log_date == today for log in daily_logs)
+            section = ReportService._build_unit_dashboard_section(
+                cycle=cycle,
+                allocation=allocation,
+                daily_logs=daily_logs,
+                sanitary_logs=sanitary_logs,
+                feeding_plans=feeding_plans,
+                language_code=ReportService._resolve_language_code(farm_profile.user),
+            )
+            sections.append(section)
+            comparison.append(ReportService._build_unit_comparison_snapshot(section))
+
+            unit_summary = section['current_metrics']
+            period_metrics = section['period_metrics']
+            total_initial_fish_count += int(section['unit']['initial_fish_count'] or 0)
+            total_estimated_current_fish_count += int(unit_summary['current_count'] or 0)
+            total_mortality_count += int(period_metrics['total_mortality'] or 0)
+            total_feed_consumed += float(period_metrics['total_feed'] or 0)
+            total_biomass += float(unit_summary['current_biomass'] or 0)
+            total_log_count += len(daily_logs)
+            total_sanitary_count += len(sanitary_logs)
+            if has_today_log:
+                units_with_today_log_count += 1
+            else:
+                units_missing_today_log_count += 1
+            if any(not item.resolved for item in sanitary_logs):
+                active_sanitary_events_count += 1
+
+        mortality_rate_pct = 0.0
+        if total_initial_fish_count > 0:
+            mortality_rate_pct = round((total_mortality_count / total_initial_fish_count) * 100, 2)
+
+        scope_label = ReportService._pick_text(
+            ReportService._resolve_language_code(farm_profile.user),
+            'Rapport du cycle',
+            'Cycle report',
+        )
+        return {
+            'report_meta': {
+                'report_type': report_type,
+                'scope_type': 'cycle',
+                'scope_object_id': str(cycle.id),
+                'period_start': period_start.isoformat(),
+                'period_end': period_end.isoformat(),
+                'cycle_scope_id': str(cycle.id),
+                'cycle_unit_allocation_id': None,
+                'cycle_scope_name': cycle.cycle_name,
+                'scope_name': cycle.cycle_name,
+                'scope_label': scope_label,
+                'generated_at': timezone.localtime(timezone.now()).isoformat(),
+                'timezone': str(timezone.get_current_timezone()),
+            },
+            'farm': {
+                'id': str(farm_profile.id),
+                'farm_name': farm_profile.farm_name,
+                'certification_status': farm_profile.certification_status,
+                'total_ponds': farm_profile.total_ponds,
+                'main_species': farm_profile.main_species,
+                'annual_production_kg': farm_profile.annual_production_kg,
+                'promoter_name': farm_profile.user.promoter_name or farm_profile.user.display_name,
+                'promoter_email': farm_profile.user.email or '',
+                'promoter_phone': farm_profile.user.phone_number,
+            },
+            'summary': {
+                'cycle_name': cycle.cycle_name,
+                'species': cycle.get_species_display(),
+                'status': cycle.status,
+                'total_units': len(allocations),
+                'cycle_count': 1,
+                'total_allocations': len(allocations),
+                'initial_fish_count': total_initial_fish_count,
+                'estimated_current_fish_count': total_estimated_current_fish_count,
+                'total_mortality_count': total_mortality_count,
+                'mortality_rate_pct': mortality_rate_pct,
+                'total_feed_consumed_kg': round(total_feed_consumed, 2),
+                'estimated_current_biomass_kg': round(total_biomass, 2),
+                'units_with_today_log_count': units_with_today_log_count,
+                'units_missing_today_log_count': units_missing_today_log_count,
+                'active_sanitary_events_count': active_sanitary_events_count,
+                'total_log_count': total_log_count,
+                'total_sanitary_events': total_sanitary_count,
+                'total_feed': round(total_feed_consumed, 2),
+                'total_mortality': total_mortality_count,
+                'comparison_units_count': len(comparison),
+            },
+            'cycles': sections,
+            'units': comparison,
+        }
+
+    @staticmethod
+    def _build_unit_report_payload(
+        *,
+        farm_profile: FarmProfile,
+        report_type: str,
+        period_start: date,
+        period_end: date,
+        allocation: CycleUnitAllocation,
+    ) -> dict:
+        cycle = allocation.cycle
+        daily_logs = list(
+            allocation.daily_logs.filter(
+                log_date__gte=period_start,
+                log_date__lte=period_end,
+            ).order_by('-log_date', '-log_time')
+        )
+        sanitary_logs = list(
+            allocation.sanitary_logs.filter(
+                event_date__gte=period_start,
+                event_date__lte=period_end,
+            ).order_by('-event_date', '-created_at')
+        )
+        feeding_plans = list(
+            cycle.feeding_plans.filter(
+                start_date__lte=period_end,
+                end_date__gte=period_start,
+            ).order_by('week_number')
+        )
+        section = ReportService._build_unit_dashboard_section(
+            cycle=cycle,
+            allocation=allocation,
+            daily_logs=daily_logs,
+            sanitary_logs=sanitary_logs,
+            feeding_plans=feeding_plans,
+            language_code=ReportService._resolve_language_code(farm_profile.user),
+        )
+        today = timezone.localdate()
+        has_today_log = any(log.log_date == today for log in daily_logs)
+        scope_label = ReportService._pick_text(
+            ReportService._resolve_language_code(farm_profile.user),
+            'Rapport de l’unité',
+            'Unit report',
+        )
+        return {
+            'report_meta': {
+                'report_type': report_type,
+                'scope_type': 'unit',
+                'scope_object_id': str(allocation.id),
+                'period_start': period_start.isoformat(),
+                'period_end': period_end.isoformat(),
+                'cycle_scope_id': str(cycle.id),
+                'cycle_unit_allocation_id': str(allocation.id),
+                'cycle_scope_name': cycle.cycle_name,
+                'scope_name': allocation.production_unit.name,
+                'scope_label': scope_label,
+                'generated_at': timezone.localtime(timezone.now()).isoformat(),
+                'timezone': str(timezone.get_current_timezone()),
+            },
+            'farm': {
+                'id': str(farm_profile.id),
+                'farm_name': farm_profile.farm_name,
+                'certification_status': farm_profile.certification_status,
+                'total_ponds': farm_profile.total_ponds,
+                'main_species': farm_profile.main_species,
+                'annual_production_kg': farm_profile.annual_production_kg,
+                'promoter_name': farm_profile.user.promoter_name or farm_profile.user.display_name,
+                'promoter_email': farm_profile.user.email or '',
+                'promoter_phone': farm_profile.user.phone_number,
+            },
+            'summary': {
+                'cycle_name': cycle.cycle_name,
+                'scope_name': allocation.production_unit.name,
+                'scope_type': 'unit',
+                'species': cycle.get_species_display(),
+                'status': cycle.status,
+                'total_units': 1,
+                'cycle_count': 1,
+                'total_allocations': 1,
+                'initial_fish_count': allocation.initial_fish_count,
+                'estimated_current_fish_count': section['current_metrics']['current_count'],
+                'total_mortality_count': section['period_metrics']['total_mortality'],
+                'mortality_rate_pct': (
+                    round(
+                        (section['period_metrics']['total_mortality'] / allocation.initial_fish_count) * 100,
+                        2,
+                    )
+                    if allocation.initial_fish_count
+                    else 0.0
+                ),
+                'total_feed_consumed_kg': section['period_metrics']['total_feed'],
+                'estimated_current_biomass_kg': section['current_metrics']['current_biomass'],
+                'units_with_today_log_count': 1 if has_today_log else 0,
+                'units_missing_today_log_count': 0 if has_today_log else 1,
+                'active_sanitary_events_count': sum(1 for item in sanitary_logs if not item.resolved),
+                'total_log_count': len(daily_logs),
+                'total_sanitary_events': len(sanitary_logs),
+                'total_feed': section['period_metrics']['total_feed'],
+                'total_mortality': section['period_metrics']['total_mortality'],
+                'comparison_units_count': 1,
+            },
+            'cycles': [section],
+            'units': [ReportService._build_unit_comparison_snapshot(section)],
+        }
+
+    @staticmethod
     def _build_payload(
         farm_profile: FarmProfile,
         report_type: str,
         period_start: date,
         period_end: date,
+        scope_type: str = 'cycle',
+        scope_object_id: str | None = None,
         cycle_id: str | None = None,
     ) -> ReportPayload:
         """Construit le snapshot JSON complet utilisé pour le PDF."""
+        if scope_object_id is None and cycle_id:
+            scope_object_id = cycle_id
+        if scope_type == 'unit':
+            if not scope_object_id:
+                raise ValueError(_("Contexte d'unité incomplet."))
+            allocation = CycleUnitAllocation.objects.select_related(
+                'cycle',
+                'production_unit',
+            ).filter(
+                id=scope_object_id,
+                cycle__farm_profile=farm_profile,
+            ).first()
+            if allocation is None:
+                raise ValueError(_("Allocation de cycle introuvable ou inaccessible."))
+            return ReportService._build_unit_report_payload(
+                farm_profile=farm_profile,
+                report_type=report_type,
+                period_start=period_start,
+                period_end=period_end,
+                allocation=allocation,
+            )
+
+        if scope_type == 'cycle' and scope_object_id:
+            cycle = ProductionCycle.objects.filter(
+                id=scope_object_id,
+                farm_profile=farm_profile,
+                status='active',
+            ).select_related('farm_profile').first()
+            if cycle is None:
+                raise ValueError(_("Cycle de session introuvable ou inactif."))
+            return ReportService._build_cycle_report_payload(
+                farm_profile=farm_profile,
+                report_type=report_type,
+                period_start=period_start,
+                period_end=period_end,
+                cycle=cycle,
+            )
+
         cycles_qs = ProductionCycle.objects.filter(
             farm_profile=farm_profile,
             status='active',
@@ -866,7 +1473,40 @@ class ReportService(BaseService):
         )
 
     @staticmethod
-    def _build_cycle_line(report: ProductionReport, language_code: str) -> str:
+    def _extract_scope_name(report: ProductionReport) -> str | None:
+        meta = ReportService._resolve_report_meta(report)
+        scope_name = meta.get('scope_name')
+        return str(scope_name) if scope_name else None
+
+    @staticmethod
+    def _build_scope_line(report: ProductionReport, language_code: str) -> str:
+        scope_type, _scope_object_id = ReportService._resolve_report_scope_from_report(report)
+        scope_name = ReportService._extract_scope_name(report)
+        cycle_name = None
+        if scope_type == 'unit':
+            cycle_name = (ReportService._resolve_report_meta(report).get('cycle_scope_name') or None)
+        else:
+            cycle_name = scope_name
+
+        if scope_type == 'unit':
+            if scope_name and cycle_name:
+                return ReportService._pick_text(
+                    language_code,
+                    f"Unité concernée: {scope_name} ({cycle_name})",
+                    f"Unit: {scope_name} ({cycle_name})",
+                )
+            if scope_name:
+                return ReportService._pick_text(
+                    language_code,
+                    f"Unité concernée: {scope_name}",
+                    f"Unit: {scope_name}",
+                )
+            return ReportService._pick_text(
+                language_code,
+                "Unité concernée: non renseignée",
+                "Unit: not provided",
+            )
+
         cycle_names = ReportService._extract_cycle_names(report)
         if not cycle_names:
             return ReportService._pick_text(
@@ -900,30 +1540,34 @@ class ReportService(BaseService):
 
     @staticmethod
     def _build_email_subject(report: ProductionReport, language_code: str) -> str:
+        scope_name = ReportService._extract_scope_name(report)
         if report.report_type == 'daily':
             day_label = ReportService._format_natural_date(report.period_start, language_code)
-            return ReportService._pick_text(
+            subject = ReportService._pick_text(
                 language_code,
                 f"Rapport journalier du {day_label}",
                 f"Daily report for {day_label}",
             )
+            return f"{subject} - {scope_name}" if scope_name else subject
 
         if report.report_type == 'weekly':
             start_label = ReportService._format_natural_date(report.period_start, language_code)
             end_label = ReportService._format_natural_date(report.period_end, language_code)
-            return ReportService._pick_text(
+            subject = ReportService._pick_text(
                 language_code,
                 f"Rapport hebdomadaire du {start_label} au {end_label}",
                 f"Weekly report from {start_label} to {end_label}",
             )
+            return f"{subject} - {scope_name}" if scope_name else subject
 
         with override(language_code):
             month_label = date_format(report.period_start, format='F Y', use_l10n=True)
-        return ReportService._pick_text(
+        subject = ReportService._pick_text(
             language_code,
             f"Rapport mensuel de {month_label}",
             f"Monthly report for {month_label}",
         )
+        return f"{subject} - {scope_name}" if scope_name else subject
 
     @staticmethod
     def _build_email_body(report: ProductionReport, language_code: str) -> str:
@@ -933,14 +1577,14 @@ class ReportService(BaseService):
             period_end=report.period_end,
             language_code=language_code,
         )
-        cycle_line = ReportService._build_cycle_line(report, language_code)
+        scope_line = ReportService._build_scope_line(report, language_code)
         report_type_label = ReportService._get_report_type_label(report.report_type, language_code)
 
         if language_code == 'en':
             return (
                 "Please find attached your production report.\n\n"
                 f"Farm: {report.farm_profile.farm_name}\n"
-                f"{cycle_line}\n"
+                f"{scope_line}\n"
                 f"Analyzed period: {period_label}\n"
                 f"Report type: {report_type_label}\n\n"
                 "Regards,\nAquaCare"
@@ -949,7 +1593,7 @@ class ReportService(BaseService):
         return (
             "Veuillez trouver ci-joint votre rapport de production.\n\n"
             f"Ferme: {report.farm_profile.farm_name}\n"
-            f"{cycle_line}\n"
+            f"{scope_line}\n"
             f"Période analysée: {period_label}\n"
             f"Type de rapport: {report_type_label}\n\n"
             "Cordialement,\nAquaCare"
@@ -961,12 +1605,16 @@ class ReportService(BaseService):
         if is_en:
             return {
                 'report_title': 'Fish farming production monitoring report',
+                'report_scope': 'Scope',
                 'farm': 'Farm',
                 'report_type': 'Type',
                 'period_analyzed': 'Analyzed period',
                 'generated_on': 'Generated on',
                 'promoter': 'Promoter',
                 'dashboard_metrics': 'Key indicators',
+                'cycle_summary': 'Cycle summary',
+                'unit_summary': 'Unit summary',
+                'comparison_by_unit': 'Comparison by unit',
                 'estimated_market_value': 'Estimated market value of fish',
                 'feed_cost_consumed': 'Feed cost already consumed',
                 'time_remaining_cycle': 'Time remaining until cycle end',
@@ -980,6 +1628,17 @@ class ReportService(BaseService):
                 'feed_period': 'Feed in period (kg)',
                 'mortality_period': 'Mortality in period',
                 'details_by_cycle': 'Cycle detail',
+                'initial_fish_count': 'Initial fish',
+                'estimated_current_fish_count': 'Estimated fish',
+                'cumulative_mortality': 'Cumulative mortality',
+                'mortality_rate': 'Mortality rate',
+                'feed_consumed': 'Feed consumed',
+                'estimated_current_biomass': 'Estimated biomass',
+                'last_average_weight': 'Last average weight',
+                'last_entry': 'Last entry',
+                'units_today': 'Units tracked today',
+                'units_missing_today': 'Units missing today',
+                'active_sanitary_events_count': 'Active sanitary events',
                 'pond': 'Pond',
                 'started_on': 'Started on',
                 'active_days': 'Active days',
@@ -1014,18 +1673,25 @@ class ReportService(BaseService):
                 'resolved': 'Resolved',
                 'active': 'Active',
                 'no_sanitary_logs': 'No sanitary event in this analyzed period.',
+                'no_report_data': 'No report data available.',
+                'no_units_in_cycle': 'No unit has been assigned to this cycle yet.',
+                'incomplete_unit_context': 'Incomplete unit context.',
                 'no_active_cycle': 'No active cycle with exploitable data for this analyzed period.',
                 'footer': 'by AquaCare',
             }
 
         return {
             'report_title': 'Rapport de suivi de production piscicole',
+            'report_scope': 'Portée',
             'farm': 'Ferme',
             'report_type': 'Type',
             'period_analyzed': 'Période analysée',
             'generated_on': 'Généré le',
             'promoter': 'Promoteur',
             'dashboard_metrics': 'Indicateurs clés du tableau de bord',
+            'cycle_summary': 'Résumé du cycle',
+            'unit_summary': "Résumé de l'unité",
+            'comparison_by_unit': 'Comparaison par unité',
             'estimated_market_value': 'Valeur marchande estimée des poissons',
             'feed_cost_consumed': 'Coût des aliments déjà consommés',
             'time_remaining_cycle': "Temps restant pour la fin du cycle d'élevage",
@@ -1039,6 +1705,17 @@ class ReportService(BaseService):
             'feed_period': 'Aliment période (kg)',
             'mortality_period': 'Mortalité période',
             'details_by_cycle': 'Détail du cycle',
+            'initial_fish_count': 'Poissons initiaux',
+            'estimated_current_fish_count': 'Poissons estimés',
+            'cumulative_mortality': 'Mortalité cumulée',
+            'mortality_rate': 'Taux de mortalité',
+            'feed_consumed': 'Aliment consommé',
+            'estimated_current_biomass': 'Biomasse estimée',
+            'last_average_weight': 'Dernier poids moyen',
+            'last_entry': 'Dernière saisie',
+            'units_today': "Unités suivies aujourd'hui",
+            'units_missing_today': "Unités sans saisie aujourd'hui",
+            'active_sanitary_events_count': 'Événements sanitaires actifs',
             'pond': 'Bassin',
             'started_on': 'Démarré le',
             'active_days': 'Jours actifs',
@@ -1073,6 +1750,9 @@ class ReportService(BaseService):
             'resolved': 'Résolue',
             'active': 'Active',
             'no_sanitary_logs': 'Aucun événement sanitaire dans cette période analysée.',
+            'no_report_data': 'Aucune donnée de rapport disponible.',
+            'no_units_in_cycle': "Aucune unité n'a encore été affectée à ce cycle.",
+            'incomplete_unit_context': "Contexte d'unité incomplet.",
             'no_active_cycle': 'Aucun cycle actif avec données exploitables pour cette période analysée.',
             'footer': 'by AquaCare',
         }
@@ -1084,6 +1764,12 @@ class ReportService(BaseService):
         generated_at: datetime,
         language_code: str,
     ) -> PDFContext:
+        report_meta = payload.get('report_meta', {}) if isinstance(payload, dict) else {}
+        scope_label = ''
+        scope_name = None
+        if isinstance(report_meta, dict):
+            scope_label = str(report_meta.get('scope_label') or '')
+            scope_name = report_meta.get('scope_name')
         return {
             'report': report,
             'payload': payload,
@@ -1099,6 +1785,8 @@ class ReportService(BaseService):
                 language_code=language_code,
             ),
             'empty_value_label': ReportService._pick_text(language_code, 'Non renseigné', 'Not provided'),
+            'scope_label': scope_label,
+            'scope_name': scope_name,
         }
 
     @staticmethod

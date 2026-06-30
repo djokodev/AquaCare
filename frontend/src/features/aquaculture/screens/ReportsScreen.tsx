@@ -1,32 +1,51 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, ActivityIndicator, FlatList, RefreshControl, Alert } from 'react-native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { useFocusEffect } from '@react-navigation/native';
+import { RouteProp, useFocusEffect } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { useSelector } from 'react-redux';
 
 import { RootStackParamList } from '@/navigation/MainNavigator';
 import { AQUACARE_COLORS } from '@/constants/colors';
-import { ProductionReport, ReportType } from '@/types/aquaculture';
+import { ProductionReport, ReportScopeType, ReportType } from '@/types/aquaculture';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
 import { parseApiError } from '@/utils/errorParser';
 import { formatAquacultureErrorWithAction } from '@/features/aquaculture/utils/aquacultureErrorPresenter';
-import { formatDate, formatDateTime } from '@/utils';
+import { formatDateTime } from '@/utils';
 import { RootState } from '@/store/store';
 import logger from '@/utils/logger';
 
 type ReportsScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Reports'>;
+type ReportsScreenRouteProp = RouteProp<RootStackParamList, 'Reports'>;
 
 interface ReportsScreenProps {
   navigation: ReportsScreenNavigationProp;
+  route: ReportsScreenRouteProp;
 }
 
 const REPORT_TYPES: ReportType[] = ['daily', 'weekly', 'monthly'];
 
-export default function ReportsScreen({ navigation }: ReportsScreenProps) {
+export default function ReportsScreen({ navigation, route }: ReportsScreenProps) {
   const { t } = useTranslation();
   const currentCycle = useSelector((state: RootState) => state.aquaculture.currentCycle);
+  const routeParams = route.params;
+
+  const reportScope = routeParams?.scope ?? (routeParams?.cycleUnitAllocationId ? 'unit' : 'cycle');
+  const resolvedCycleId = routeParams?.cycleId ?? currentCycle?.id ?? undefined;
+  const resolvedCycleUnitAllocationId = routeParams?.cycleUnitAllocationId;
+  const resolvedProductionUnitId = routeParams?.productionUnitId;
+
+  const hasValidUnitContext = Boolean(
+    resolvedCycleId && resolvedCycleUnitAllocationId && resolvedProductionUnitId
+  );
+  const hasValidCycleContext = Boolean(resolvedCycleId);
+  const canGenerateReports = reportScope === 'unit' ? hasValidUnitContext : hasValidCycleContext;
+
+  const scopeTitle = reportScope === 'unit' ? t('reportUnitTitle') : t('reportCycleTitle');
+  const scopeError = reportScope === 'unit'
+    ? t('incompleteUnitContext')
+    : t('reportContextIncompleteError');
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -44,12 +63,48 @@ export default function ReportsScreen({ navigation }: ReportsScreenProps) {
     }
   }, []);
 
+  const reportFilters = useMemo(() => {
+    if (reportScope === 'unit' && hasValidUnitContext) {
+      return {
+        scope: 'unit' as ReportScopeType,
+        cycle_id: resolvedCycleId,
+        cycle_unit_allocation_id: resolvedCycleUnitAllocationId,
+      };
+    }
+    if (reportScope === 'cycle' && hasValidCycleContext) {
+      return {
+        scope: 'cycle' as ReportScopeType,
+        cycle_id: resolvedCycleId,
+      };
+    }
+    if (currentCycle?.id) {
+      return { scope: 'cycle' as ReportScopeType, cycle_id: currentCycle.id };
+    }
+    return undefined;
+  }, [
+    currentCycle?.id,
+    hasValidCycleContext,
+    hasValidUnitContext,
+    reportScope,
+    resolvedCycleId,
+    resolvedCycleUnitAllocationId,
+  ]);
+
   const loadReports = useCallback(async () => {
+    if (reportScope === 'unit' && !hasValidUnitContext) {
+      setError(scopeError);
+      setLoading(false);
+      return [];
+    }
+    if (reportScope === 'cycle' && !hasValidCycleContext && !currentCycle?.id) {
+      setError(scopeError);
+      setLoading(false);
+      return [];
+    }
+
     try {
       setError(null);
-      const data = await aquacultureService.getReports(
-        currentCycle?.id ? { cycle_id: currentCycle.id } : undefined
-      );
+      const data = await aquacultureService.getReports(reportFilters);
       setReports(data);
       return data;
     } catch (error: unknown) {
@@ -59,7 +114,7 @@ export default function ReportsScreen({ navigation }: ReportsScreenProps) {
     } finally {
       setLoading(false);
     }
-  }, [currentCycle?.id, t]);
+  }, [currentCycle?.id, hasValidCycleContext, hasValidUnitContext, reportFilters, reportScope, scopeError, t]);
 
   const startPollingIfPending = useCallback((data: ProductionReport[]) => {
     const hasPending = data.some((r) => r.status === 'pending');
@@ -96,8 +151,8 @@ export default function ReportsScreen({ navigation }: ReportsScreenProps) {
   };
 
   const handleGenerateReport = async (reportType: ReportType) => {
-    if (!currentCycle?.id) {
-      setError(t('sessionCycleNotSelected'));
+    if (!canGenerateReports) {
+      setError(scopeError);
       return;
     }
     try {
@@ -105,7 +160,9 @@ export default function ReportsScreen({ navigation }: ReportsScreenProps) {
       setInfoMessage(null);
       await aquacultureService.generateReport({
         report_type: reportType,
-        cycle_id: currentCycle.id,
+        scope: reportScope,
+        cycle_id: resolvedCycleId,
+        cycle_unit_allocation_id: resolvedCycleUnitAllocationId,
       });
       setInfoMessage(t('reportGenerating'));
       const data = await loadReports();
@@ -142,7 +199,7 @@ export default function ReportsScreen({ navigation }: ReportsScreenProps) {
         },
       ]
     );
-  }, [t]);
+  }, [canGenerateReports, loadReports, reportScope, resolvedCycleId, resolvedCycleUnitAllocationId, scopeError, t]);
 
   const getStatusStyle = (reportStatus: string) => {
     if (reportStatus === 'validated') return 'text-aquacare-primary';
@@ -156,15 +213,8 @@ export default function ReportsScreen({ navigation }: ReportsScreenProps) {
     return t('reportStatusDraft');
   };
 
-  const getPeriodLabel = (periodStart: string, periodEnd: string) => {
-    if (periodStart === periodEnd) return formatDate(periodStart);
-    return `${formatDate(periodStart)} - ${formatDate(periodEnd)}`;
-  };
-
   const filteredReports = reports.filter(
-    (report) =>
-      (selectedType === 'all' || report.report_type === selectedType) &&
-      (!currentCycle?.id || report.cycle_scope_id === currentCycle.id)
+    (report) => selectedType === 'all' || report.report_type === selectedType
   );
 
   const renderHeader = () => (
@@ -172,7 +222,7 @@ export default function ReportsScreen({ navigation }: ReportsScreenProps) {
       <TouchableOpacity className="mr-4" onPress={() => navigation.goBack()}>
         <Ionicons name="arrow-back" size={24} color={AQUACARE_COLORS.WHITE} />
       </TouchableOpacity>
-      <Text className="text-xl font-bold text-white">{t('reportsTitle')}</Text>
+      <Text className="text-xl font-bold text-white">{scopeTitle}</Text>
     </View>
   );
 
@@ -183,13 +233,18 @@ export default function ReportsScreen({ navigation }: ReportsScreenProps) {
         onPress={() => navigation.navigate('ReportDetail', { reportId: report.id })}
       >
         <View className="flex-row items-center justify-between">
-          <Text className="text-sm font-bold text-gray-dark">
+          <View className="flex-1 mr-3">
+            <Text className="text-sm font-bold text-gray-dark">
             {report.report_type === 'daily'
               ? t('reportTypeDaily')
               : report.report_type === 'weekly'
                 ? t('reportTypeWeekly')
                 : t('reportTypeMonthly')}
-          </Text>
+            </Text>
+            <Text className="text-xs text-gray-light mt-1">
+              {report.scope_label || (report.scope_type === 'unit' ? t('reportUnitTitle') : t('reportCycleTitle'))}
+            </Text>
+          </View>
           <View className="flex-row items-center">
             <Text className={`text-xs font-semibold mr-3 ${getStatusStyle(report.status)}`}>
               {getStatusLabel(report.status)}
@@ -225,31 +280,39 @@ export default function ReportsScreen({ navigation }: ReportsScreenProps) {
   const renderListHeader = useCallback(
     () => (
         <View className="px-4 py-4">
-          <Text className="text-base font-bold text-gray-dark mb-3">{t('generateReport')}</Text>
+          {canGenerateReports ? (
+            <>
+              <Text className="text-base font-bold text-gray-dark mb-3">{t('generateReport')}</Text>
 
-          <View className="flex-row flex-wrap justify-between">
-            {REPORT_TYPES.map((reportType) => (
-              <TouchableOpacity
-                key={reportType}
-                className="w-[32%] bg-white border border-gray-200 rounded-xl p-3 items-center mb-3"
-                onPress={() => handleGenerateReport(reportType)}
-                disabled={Boolean(generatingType)}
-              >
-                {generatingType === reportType ? (
-                  <ActivityIndicator color={AQUACARE_COLORS.GREEN_PRIMARY} />
-                ) : (
-                  <Ionicons name="document-text-outline" size={22} color={AQUACARE_COLORS.GREEN_PRIMARY} />
-                )}
-                <Text className="text-xs font-semibold text-gray-dark mt-2 text-center">
-                  {reportType === 'daily'
-                    ? t('reportTypeDaily')
-                    : reportType === 'weekly'
-                      ? t('reportTypeWeekly')
-                      : t('reportTypeMonthly')}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+              <View className="flex-row flex-wrap justify-between">
+                {REPORT_TYPES.map((reportType) => (
+                  <TouchableOpacity
+                    key={reportType}
+                    className="w-[32%] bg-white border border-gray-200 rounded-xl p-3 items-center mb-3"
+                    onPress={() => handleGenerateReport(reportType)}
+                    disabled={Boolean(generatingType)}
+                  >
+                    {generatingType === reportType ? (
+                      <ActivityIndicator color={AQUACARE_COLORS.GREEN_PRIMARY} />
+                    ) : (
+                      <Ionicons name="document-text-outline" size={22} color={AQUACARE_COLORS.GREEN_PRIMARY} />
+                    )}
+                    <Text className="text-xs font-semibold text-gray-dark mt-2 text-center">
+                      {reportType === 'daily'
+                        ? t('reportTypeDaily')
+                        : reportType === 'weekly'
+                          ? t('reportTypeWeekly')
+                          : t('reportTypeMonthly')}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </>
+          ) : (
+            <View className="bg-white border border-gray-200 rounded-xl p-4 mb-3">
+              <Text className="text-sm text-gray-dark">{scopeError}</Text>
+            </View>
+          )}
 
           {infoMessage && (
             <View className="bg-green-50 border border-aquacare-primary rounded-lg p-3 mb-3">
@@ -290,7 +353,7 @@ export default function ReportsScreen({ navigation }: ReportsScreenProps) {
           </View>
         </View>
     ),
-    [currentCycle?.id, error, infoMessage, generatingType, selectedType, t]
+    [canGenerateReports, error, generatingType, handleGenerateReport, infoMessage, scopeError, selectedType, t]
   );
 
   const renderEmptyState = useCallback(

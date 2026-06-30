@@ -53,6 +53,8 @@ from .production_unit_dashboard_service import ProductionUnitDashboardService
 from .report_application_service import (
     GenerateReportCommand,
     InvalidReportCycleScopeError,
+    InvalidReportScopeError,
+    InvalidReportUnitScopeError,
     MissingReportEmailError,
     ReportApplicationService,
     ReportDownloadDecision,
@@ -96,6 +98,8 @@ __all__ = [
     'CycleDashboardService',
     'GenerateReportCommand',
     'InvalidReportCycleScopeError',
+    'InvalidReportScopeError',
+    'InvalidReportUnitScopeError',
     'MissingReportEmailError',
     'ReportApplicationService',
     'ReportDownloadDecision',

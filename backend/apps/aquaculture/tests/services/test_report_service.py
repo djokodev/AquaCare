@@ -4,7 +4,7 @@ Tests unitaires ciblés pour ReportService (emails + rendu template PDF).
 from datetime import date
 
 import pytest
-from aquaculture.models import ProductionReport
+from aquaculture.models import CycleUnitAllocation, ProductionReport, ProductionUnit
 from aquaculture.services.report_service import ReportService
 from django.core import mail
 from django.core.files.base import ContentFile
@@ -162,6 +162,20 @@ class TestReportServicePayloadAndPdfTemplate:
         farm_profile = FarmProfileFactory()
         scoped_cycle = ProductionCycleFactory(farm_profile=farm_profile, cycle_name='Cycle Scope A', status='active')
         ProductionCycleFactory(farm_profile=farm_profile, cycle_name='Cycle Scope B', status='active')
+        unit = ProductionUnit.objects.create(
+            farm_profile=farm_profile,
+            name='Bac Scope A',
+            unit_type='tank',
+            volume_m3='3.00',
+        )
+        CycleUnitAllocation.objects.create(
+            cycle=scoped_cycle,
+            production_unit=unit,
+            initial_fish_count=1000,
+            current_fish_count=1000,
+            initial_biomass_kg='10.00',
+            current_biomass_kg='10.00',
+        )
 
         payload = ReportService._build_payload(
             farm_profile=farm_profile,
@@ -316,4 +330,4 @@ class TestReportServicePayloadAndPdfTemplate:
 
         assert 'Analyzed period' in html
         assert 'Analyzed period synthesis' not in html  # absent because no cycle section rendered
-        assert 'No active cycle with exploitable data for this analyzed period.' in html
+        assert 'No report data available.' in html

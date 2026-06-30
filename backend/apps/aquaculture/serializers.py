@@ -1302,9 +1302,12 @@ class ProductionReportListSerializer(serializers.ModelSerializer):
     """
 
     report_type_display = serializers.CharField(source='get_report_type_display', read_only=True)
+    scope_type_display = serializers.CharField(source='get_scope_type_display', read_only=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     farm_name = serializers.CharField(source='farm_profile.farm_name', read_only=True)
     cycle_scope_id = serializers.SerializerMethodField()
+    scope_name = serializers.SerializerMethodField()
+    scope_label = serializers.SerializerMethodField()
 
     class Meta:
         model = ProductionReport
@@ -1314,6 +1317,11 @@ class ProductionReportListSerializer(serializers.ModelSerializer):
             'farm_name',
             'report_type',
             'report_type_display',
+            'scope_type',
+            'scope_type_display',
+            'scope_object_id',
+            'scope_name',
+            'scope_label',
             'period_start',
             'period_end',
             'status',
@@ -1332,11 +1340,29 @@ class ProductionReportListSerializer(serializers.ModelSerializer):
 
     def get_cycle_scope_id(self, obj: ProductionReport) -> str | None:
         if not isinstance(obj.payload, dict):
+            return str(obj.scope_object_id) if obj.scope_type == 'cycle' and obj.scope_object_id else None
+        report_meta = obj.payload.get('report_meta')
+        if isinstance(report_meta, dict):
+            cycle_scope_id = report_meta.get('cycle_scope_id')
+            if cycle_scope_id:
+                return cycle_scope_id
+        return str(obj.scope_object_id) if obj.scope_type == 'cycle' and obj.scope_object_id else None
+
+    def get_scope_name(self, obj: ProductionReport) -> str | None:
+        if not isinstance(obj.payload, dict):
             return None
         report_meta = obj.payload.get('report_meta')
         if not isinstance(report_meta, dict):
             return None
-        return report_meta.get('cycle_scope_id')
+        return report_meta.get('scope_name') or report_meta.get('cycle_scope_name')
+
+    def get_scope_label(self, obj: ProductionReport) -> str | None:
+        if not isinstance(obj.payload, dict):
+            return None
+        report_meta = obj.payload.get('report_meta')
+        if not isinstance(report_meta, dict):
+            return None
+        return report_meta.get('scope_label')
 
 
 class ProductionReportDetailSerializer(ProductionReportListSerializer):
@@ -1384,7 +1410,41 @@ class GenerateReportSerializer(serializers.Serializer):
 
     report_type = serializers.ChoiceField(choices=['daily', 'weekly', 'monthly'])
     reference_date = serializers.DateField(required=False)
+    scope = serializers.ChoiceField(choices=['cycle', 'unit'], required=False)
     cycle_id = serializers.UUIDField(required=False)
+    cycle_unit_allocation_id = serializers.UUIDField(required=False)
+
+    def validate(self, attrs):
+        scope = attrs.get('scope')
+        cycle_id = attrs.get('cycle_id')
+        cycle_unit_allocation_id = attrs.get('cycle_unit_allocation_id')
+
+        if scope == 'unit':
+            if not cycle_unit_allocation_id:
+                raise serializers.ValidationError(
+                    {'cycle_unit_allocation_id': _("L'allocation de cycle est requise pour un rapport d'unité.")}
+                )
+            return attrs
+
+        if scope == 'cycle':
+            if not cycle_id:
+                raise serializers.ValidationError(
+                    {'cycle_id': _("Le cycle est requis pour un rapport de cycle.")}
+                )
+            return attrs
+
+        if cycle_unit_allocation_id and not cycle_id:
+            raise serializers.ValidationError(
+                {'cycle_id': _("Le cycle associé à l'allocation est requis.")}
+            )
+
+        if not cycle_id:
+            raise serializers.ValidationError(
+                {'cycle_id': _("Le cycle est requis pour générer un rapport.")}
+            )
+
+        attrs['scope'] = 'cycle'
+        return attrs
 
 
 class SanitaryResolutionSerializer(serializers.Serializer):

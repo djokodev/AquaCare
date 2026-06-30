@@ -47,6 +47,7 @@ describe('features/main/components/QuickActionsSheet', () => {
     expect(getByText('productionUnitDailyLogAction')).toBeTruthy();
     expect(getByText('productionUnitSanitaryLogAction')).toBeTruthy();
     expect(getByText('productionUnitLogHistoryAction')).toBeTruthy();
+    expect(getByText('productionUnitReportAction')).toBeTruthy();
     expect(queryByText('dailyLog')).toBeNull();
     expect(queryByText('sanitaryLog')).toBeNull();
     expect(queryByText('notifications')).toBeNull();
@@ -72,5 +73,6 @@ describe('features/main/components/QuickActionsSheet', () => {
     expect(queryByText('productionUnitDailyLogAction')).toBeNull();
     expect(queryByText('productionUnitSanitaryLogAction')).toBeNull();
     expect(queryByText('productionUnitLogHistoryAction')).toBeNull();
+    expect(queryByText('productionUnitReportAction')).toBeNull();
   });
 });

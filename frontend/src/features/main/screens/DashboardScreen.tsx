@@ -640,12 +640,13 @@ export default function DashboardScreen({ navigation }: any) {
       />
 
       {!primaryCycleHasProductionUnits ? (
-        <QuickActionsSheet
+      <QuickActionsSheet
           visible={actionsSheetVisible}
           onClose={() => setActionsSheetVisible(false)}
           unreadCount={unreadCount}
           navigation={navigation}
           scope="cycle"
+          cycleContext={currentCycle?.id ? { cycleId: currentCycle.id } : undefined}
         />
       ) : null}
 
