@@ -77,7 +77,7 @@ function UnitCard({
 
       <TouchableOpacity style={styles.openButton} onPress={onOpen}>
         <Text style={styles.openButtonText}>{t('productionUnitsOpenUnit')}</Text>
-        <Ionicons name="chevron-forward" size={16} color={AQUACARE_COLORS.WHITE} />
+        <Ionicons name="chevron-forward" size={16} color={AQUACARE_COLORS.GREEN_PRIMARY} />
       </TouchableOpacity>
     </View>
   );
@@ -393,11 +393,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     borderRadius: 14,
-    backgroundColor: AQUACARE_COLORS.GREEN_PRIMARY,
+    backgroundColor: AQUACARE_COLORS.WHITE,
+    borderWidth: 1.5,
+    borderColor: AQUACARE_COLORS.GREEN_PRIMARY,
     paddingVertical: 12,
   },
   openButtonText: {
-    color: AQUACARE_COLORS.WHITE,
+    color: AQUACARE_COLORS.GREEN_PRIMARY,
     fontSize: 14,
     fontWeight: '700',
   },

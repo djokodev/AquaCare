@@ -33,6 +33,10 @@ export default function OrdersHistoryScreen() {
 
   const { orders } = useSelector((state: RootState) => state.commerce);
   const { items: ordersList, statistics, loading, error } = orders;
+  const sacksToReceive = ordersList.reduce(
+    (sum, order) => (order.status === 'received' ? sum : sum + order.total_bags),
+    0
+  );
 
   const [refreshing, setRefreshing] = useState(false);
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
@@ -51,30 +55,6 @@ export default function OrdersHistoryScreen() {
 
   const toggleOrderExpansion = (orderId: string) => {
     setExpandedOrderId(expandedOrderId === orderId ? null : orderId);
-  };
-
-  const getStatusConfig = (status: Order['status']) => {
-    if (status === 'received') {
-      return {
-        icon: 'checkmark-done-circle' as const,
-        color: AQUACARE_COLORS.SUCCESS,
-        label: t('orderStatusReceived'),
-      };
-    }
-
-    if (status === 'delivered') {
-      return {
-        icon: 'cube-outline' as const,
-        color: AQUACARE_COLORS.WARNING,
-        label: t('orderStatusDelivered'),
-      };
-    }
-
-    return {
-      icon: 'time-outline' as const,
-      color: AQUACARE_COLORS.GREEN_PRIMARY,
-      label: t('orderStatusConfirmed'),
-    };
   };
 
   const handleConfirmReceipt = (order: Order) => {
@@ -119,7 +99,6 @@ export default function OrdersHistoryScreen() {
     const subtotal = parseFloat(order.subtotal);
     const deliveryFee = parseFloat(order.delivery_fee);
     const total = parseFloat(order.total);
-    const statusConfig = getStatusConfig(order.status);
     const isConfirming = confirmingOrderId === order.id;
 
     return (
@@ -128,27 +107,27 @@ export default function OrdersHistoryScreen() {
         onPress={() => toggleOrderExpansion(order.id)}
         activeOpacity={0.8}
       >
-        <View className="flex-row justify-between items-center mb-3">
-          <View className="flex-row items-center flex-1">
-            <Ionicons name="receipt-outline" size={24} color={AQUACARE_COLORS.GREEN_PRIMARY} />
-            <View className="ml-3 flex-1">
-              <Text className="text-base font-bold text-gray-dark">{order.order_number}</Text>
-              <Text className="text-xs text-gray-light mt-1">
-                {formatDate(order.created_at)} - {formatTime(order.created_at)}
-              </Text>
-            </View>
+        <View className="flex-row justify-between items-start mb-3">
+          <View className="flex-1">
+            <Text className="text-base font-bold text-gray-dark">{order.order_number}</Text>
+            <Text className="text-xs text-gray-light mt-1">
+              {formatDate(order.created_at)} - {formatTime(order.created_at)}
+            </Text>
           </View>
-          <Ionicons
-            name={isExpanded ? 'chevron-up' : 'chevron-down'}
-            size={24}
-            color={AQUACARE_COLORS.GRAY_LIGHT}
-          />
+          <Text className="text-xs font-semibold text-aquacare-primary">
+            {t(isExpanded ? 'collapseActions' : 'details')}
+          </Text>
         </View>
 
         <View className="flex-row justify-between items-center mb-3">
-          <View className="flex-row items-center px-3 py-2 rounded-full bg-cream gap-2">
-            <Ionicons name={statusConfig.icon} size={16} color={statusConfig.color} />
-            <Text className="text-xs font-semibold text-aquacare-primary">{statusConfig.label}</Text>
+          <View className="px-3 py-2 rounded-full bg-cream">
+            <Text className="text-xs font-semibold text-aquacare-primary">
+              {order.status === 'received'
+                ? t('orderStatusReceived')
+                : order.status === 'delivered'
+                  ? t('orderStatusDelivered')
+                  : t('orderStatusConfirmed')}
+            </Text>
           </View>
           <Text className="text-lg font-bold text-aquacare-primary">{total.toLocaleString()} FCFA</Text>
         </View>
@@ -168,25 +147,18 @@ export default function OrdersHistoryScreen() {
         )}
 
         <View className="flex-row flex-wrap gap-3">
-          <View className="flex-row items-center gap-2">
-            <Ionicons name="cube-outline" size={16} color={AQUACARE_COLORS.GRAY_LIGHT} />
+          <View className="px-3 py-2 rounded-full bg-cream">
             <Text className="text-sm text-gray-light">
               {order.total_bags} {t(order.total_bags > 1 ? 'bags' : 'bag')}
             </Text>
           </View>
-          <View className="flex-row items-center gap-2">
-            <Ionicons
-              name={order.delivery_method === 'home' ? 'home-outline' : 'storefront-outline'}
-              size={16}
-              color={AQUACARE_COLORS.GRAY_LIGHT}
-            />
+          <View className="px-3 py-2 rounded-full bg-cream">
             <Text className="text-sm text-gray-light">
               {t(order.delivery_method === 'home' ? 'homeDelivery' : 'pickupStore')}
             </Text>
           </View>
           {order.is_free_delivery && (
-            <View className="flex-row items-center bg-cream px-2 py-1 rounded-full gap-1.5">
-              <Ionicons name="gift-outline" size={16} color={AQUACARE_COLORS.SUCCESS} />
+            <View className="bg-cream px-2 py-1 rounded-full">
               <Text className="text-xs font-semibold text-aquacare-primary">{t('free')}</Text>
             </View>
           )}
@@ -259,8 +231,7 @@ export default function OrdersHistoryScreen() {
               <View className="mt-4">
                 <View className="h-px bg-[#f1f5f9] my-3" />
                 <Text className="text-sm font-semibold text-gray-dark mb-2">{t('pickupPoint')}</Text>
-                <View className="flex-row items-center bg-cream p-3 rounded-lg gap-2">
-                  <Ionicons name="location" size={20} color={AQUACARE_COLORS.GREEN_PRIMARY} />
+                <View className="bg-cream p-3 rounded-lg">
                   <Text className="text-sm font-semibold text-aquacare-primary">
                     {t('pickupLocationPrefix')} {order.pickup_location === 'ndokoti' ? 'Ndokoti' : 'Ndogpasi'}
                   </Text>
@@ -277,31 +248,26 @@ export default function OrdersHistoryScreen() {
     if (!statistics) return null;
 
     const totalSpent = parseFloat(statistics.total_spent);
-    const avgOrderValue = parseFloat(statistics.average_order_value);
 
     return (
       <View className="bg-white rounded-xl p-4 mb-4">
         <Text className="text-lg font-bold text-gray-dark mb-3">{t('orderStatistics')}</Text>
         <View className="flex-row flex-wrap gap-3">
-          <View className="flex-1 min-w-[45%] bg-cream rounded-lg p-4 items-center">
-            <Ionicons name="receipt-outline" size={32} color={AQUACARE_COLORS.GREEN_PRIMARY} />
-            <Text className="text-xl font-bold text-aquacare-primary mt-2">{statistics.total_orders}</Text>
-            <Text className="text-xs text-gray-light mt-1 text-center">{t('totalOrders')}</Text>
+          <View className="flex-1 min-w-[45%] bg-cream rounded-lg p-4">
+            <Text className="text-xl font-bold text-aquacare-primary">{statistics.total_orders}</Text>
+            <Text className="text-xs text-gray-light mt-1">{t('totalOrders')}</Text>
           </View>
-          <View className="flex-1 min-w-[45%] bg-cream rounded-lg p-4 items-center">
-            <Ionicons name="wallet-outline" size={32} color={AQUACARE_COLORS.GREEN_PRIMARY} />
-            <Text className="text-xl font-bold text-aquacare-primary mt-2">{totalSpent.toLocaleString()}</Text>
-            <Text className="text-xs text-gray-light mt-1 text-center">{t('totalSpent')}</Text>
+          <View className="flex-1 min-w-[45%] bg-cream rounded-lg p-4">
+            <Text className="text-xl font-bold text-aquacare-primary">{totalSpent.toLocaleString()}</Text>
+            <Text className="text-xs text-gray-light mt-1">{t('totalSpent')}</Text>
           </View>
-          <View className="flex-1 min-w-[45%] bg-cream rounded-lg p-4 items-center">
-            <Ionicons name="cube-outline" size={32} color={AQUACARE_COLORS.GREEN_PRIMARY} />
-            <Text className="text-xl font-bold text-aquacare-primary mt-2">{statistics.total_bags_ordered}</Text>
-            <Text className="text-xs text-gray-light mt-1 text-center">{t('totalBags')}</Text>
+          <View className="flex-1 min-w-[45%] bg-cream rounded-lg p-4">
+            <Text className="text-xl font-bold text-aquacare-primary">{sacksToReceive}</Text>
+            <Text className="text-xs text-gray-light mt-1">{t('sacksToReceive')}</Text>
           </View>
-          <View className="flex-1 min-w-[45%] bg-cream rounded-lg p-4 items-center">
-            <Ionicons name="trending-up-outline" size={32} color={AQUACARE_COLORS.GREEN_PRIMARY} />
-            <Text className="text-xl font-bold text-aquacare-primary mt-2">{avgOrderValue.toLocaleString()}</Text>
-            <Text className="text-xs text-gray-light mt-1 text-center">{t('averageOrder')}</Text>
+          <View className="flex-1 min-w-[45%] bg-cream rounded-lg p-4">
+            <Text className="text-xl font-bold text-aquacare-primary">{statistics.total_bags_ordered}</Text>
+            <Text className="text-xs text-gray-light mt-1">{t('totalBags')}</Text>
           </View>
         </View>
       </View>
@@ -310,14 +276,12 @@ export default function OrdersHistoryScreen() {
 
   const renderEmptyState = () => (
     <View className="py-16 items-center">
-      <Ionicons name="receipt-outline" size={100} color={AQUACARE_COLORS.GRAY_LIGHT} />
       <Text className="mt-5 text-2xl font-bold text-gray-dark">{t('noOrdersYet')}</Text>
       <Text className="mt-3 text-base text-gray-light text-center px-10">{t('noOrdersDescription')}</Text>
       <TouchableOpacity
-        className="mt-6 bg-aquacare-primary flex-row items-center px-6 py-3 rounded-lg gap-2"
+        className="mt-6 bg-aquacare-primary px-6 py-3 rounded-lg"
         onPress={() => navigation.navigate('ProductCatalog')}
       >
-        <Ionicons name="albums-outline" size={20} color={AQUACARE_COLORS.WHITE} />
         <Text className="text-white text-base font-semibold">{t('browseCatalog')}</Text>
       </TouchableOpacity>
     </View>
@@ -345,7 +309,6 @@ export default function OrdersHistoryScreen() {
         </View>
       ) : error ? (
         <View className="flex-1 items-center justify-center px-10 py-10">
-          <Ionicons name="alert-circle-outline" size={48} color={AQUACARE_COLORS.ERROR} />
           <Text className="mt-3 text-base text-[#dc2626] text-center">{error}</Text>
           <TouchableOpacity
             className="mt-5 bg-aquacare-primary px-6 py-3 rounded-lg"

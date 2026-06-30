@@ -5,11 +5,13 @@ import { useTranslation } from 'react-i18next';
 
 import { AQUACARE_COLORS } from '@/constants/colors';
 import { ProductionCycle } from '@/types/aquaculture';
+import { formatCycleDisplayName } from '@/features/aquaculture/utils/cycleDisplay';
 
 interface CyclePickerProps {
   cycles: ProductionCycle[];
   selectedCycleId: string | null;
   onSelectCycle: (cycleId: string) => void;
+  rankingCycles?: ProductionCycle[];
 }
 
 const getDaysActive = (startDate: string): number => {
@@ -28,8 +30,9 @@ const formatSurvivalRate = (cycle: ProductionCycle): string => {
   return Number.isFinite(rate) ? `${rate.toFixed(0)}%` : '-';
 };
 
-function CyclePicker({ cycles, selectedCycleId, onSelectCycle }: CyclePickerProps) {
+function CyclePicker({ cycles, selectedCycleId, onSelectCycle, rankingCycles }: CyclePickerProps) {
   const { t } = useTranslation();
+  const cycleRankingSource = rankingCycles && rankingCycles.length > 0 ? rankingCycles : cycles;
 
   const renderCycleItem = useCallback(
     ({ item: cycle }: { item: ProductionCycle }) => {
@@ -38,6 +41,7 @@ function CyclePicker({ cycles, selectedCycleId, onSelectCycle }: CyclePickerProp
       const speciesLabel = cycle.species === 'clarias' ? t('catfish') : t('tilapia');
       const speciesIcon: keyof typeof Ionicons.glyphMap =
         cycle.species === 'clarias' ? 'fish' : 'fish-outline';
+      const displayName = formatCycleDisplayName(cycle, cycleRankingSource);
 
       return (
         <TouchableOpacity
@@ -48,7 +52,7 @@ function CyclePicker({ cycles, selectedCycleId, onSelectCycle }: CyclePickerProp
         >
           <View className="flex-row items-start justify-between">
             <View className="flex-1 mr-3">
-              <Text className="text-base font-bold text-gray-dark mb-1">{cycle.cycle_name}</Text>
+              <Text className="text-base font-bold text-gray-dark mb-1">{displayName}</Text>
 
               <View className="flex-row items-center mb-2">
                 <Ionicons name={speciesIcon} size={14} color={AQUACARE_COLORS.GREEN_PRIMARY} />
@@ -84,7 +88,7 @@ function CyclePicker({ cycles, selectedCycleId, onSelectCycle }: CyclePickerProp
         </TouchableOpacity>
       );
     },
-    [onSelectCycle, selectedCycleId, t]
+    [cycleRankingSource, onSelectCycle, selectedCycleId, t]
   );
 
   return (

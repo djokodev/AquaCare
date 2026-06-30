@@ -78,6 +78,9 @@ describe('OrdersHistoryScreen', () => {
   it('affiche le prefixe i18n du point de retrait sans branding hardcode', () => {
     const { getByText, queryByText } = render(<OrdersHistoryScreen />);
 
+    expect(getByText('sacksToReceive')).toBeTruthy();
+    expect(queryByText('averageOrder')).toBeNull();
+
     fireEvent.press(getByText('ORD-001'));
 
     expect(getByText('pickupLocationPrefix Ndokoti')).toBeTruthy();

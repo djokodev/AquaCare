@@ -5,47 +5,48 @@
  * pour le cycle actif (total nécessaire / commandé / consommé / reste),
  * puis le catalogue DIBAQ filtré par espèce du cycle.
  */
-import React, { useEffect, useState } from 'react';
+import React, { useContext, useEffect, useState } from 'react';
 import {
   View,
   Text,
   FlatList,
   TouchableOpacity,
+  Image,
   TextInput,
   ActivityIndicator,
   RefreshControl,
   Alert,
-  StyleSheet,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
-import { useNavigation } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
+import type { NavigationProp, RouteProp } from '@react-navigation/native';
+import { NavigationContext, NavigationRouteContext } from '@react-navigation/core';
 import { useDispatch, useSelector } from 'react-redux';
 
 import { AppDispatch, RootState } from '@/store/store';
 import { fetchProducts, applyFilters, addToCart } from '@/features/commerce/store/commerceSlice';
-import { fetchCycleFeedStatus } from '@/features/aquaculture/store/aquacultureSlice';
 import { Product, ProductSpecies } from '@/types/commerce';
 import { AQUACARE_COLORS } from '@/constants/colors';
 import { PRODUCT_SPECIES } from '@/domain/commerce/constants';
-import { RootStackParamList } from '@/navigation/MainNavigator';
-
-type NavigationProp = StackNavigationProp<RootStackParamList, 'ProductCatalog'>;
+import type { RootStackParamList } from '@/navigation/MainNavigator';
+import { getProductBrandAsset } from '@/features/commerce/utils/productBrandAssets';
 
 export default function ProductCatalogScreen() {
   const { t } = useTranslation();
-  const navigation = useNavigation<NavigationProp>();
+  const navigation = useContext(NavigationContext) as NavigationProp<RootStackParamList> | undefined;
+  const route = useContext(NavigationRouteContext) as RouteProp<
+    RootStackParamList,
+    'ProductCatalog'
+  > | undefined;
   const dispatch = useDispatch<AppDispatch>();
 
   const { products, cart } = useSelector((state: RootState) => state.commerce);
   const { items: productsList, loading, error, filters } = products;
   const cartItemsCount = cart.items.reduce((sum, item) => sum + item.quantity, 0);
 
-  const currentCycle = useSelector((s: RootState) => s.aquaculture.currentCycle);
-  const { data: feedStatus, loading: feedLoading } = useSelector(
-    (s: RootState) => s.aquaculture.cycleFeedStatus
-  );
+  const storeNavigationParams = route?.params?.cycleId
+    ? { cycleId: route.params.cycleId, source: 'store' as const }
+    : undefined;
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSpecies, setSelectedSpecies] = useState<ProductSpecies | undefined>();
@@ -60,13 +61,6 @@ export default function ProductCatalogScreen() {
     dispatch(applyFilters(dibaqFilters));
     dispatch(fetchProducts(dibaqFilters));
   }, [selectedSpecies]);
-
-  // Charger le statut aliments pour le cycle actif
-  useEffect(() => {
-    if (currentCycle?.id) {
-      dispatch(fetchCycleFeedStatus(currentCycle.id));
-    }
-  }, [currentCycle?.id]);
 
   const handleApplySearch = () => {
     const newFilters = {
@@ -92,7 +86,6 @@ export default function ProductCatalogScreen() {
       ...(selectedSpecies ? { species: selectedSpecies } : {}),
     };
     await dispatch(fetchProducts(dibaqFilters));
-    if (currentCycle?.id) await dispatch(fetchCycleFeedStatus(currentCycle.id));
     setRefreshing(false);
   };
 
@@ -102,33 +95,39 @@ export default function ProductCatalogScreen() {
   };
 
   const handleProductPress = (product: Product) => {
-    navigation.navigate('ProductDetail', { productId: product.id });
+    if (!navigation) {
+      return;
+    }
+
+    navigation.navigate(
+      'ProductDetail',
+      storeNavigationParams ? { productId: product.id, ...storeNavigationParams } : { productId: product.id }
+    );
   };
 
   const handleCartPress = () => {
-    navigation.navigate('Cart');
-  };
-
-  const handleOrderRemaining = () => {
-    if (currentCycle?.id) {
-      navigation.navigate('CycleFeedPhases', { cycleId: currentCycle.id });
+    if (!navigation) {
+      return;
     }
+
+    navigation.navigate('Cart', storeNavigationParams);
   };
 
   const renderProductCard = ({ item }: { item: Product }) => (
     <TouchableOpacity
-      className="bg-white rounded-xl p-4 flex-row"
+      className="bg-white rounded-xl p-4 flex-row border border-[#d7e3d5] shadow-sm"
       onPress={() => handleProductPress(item)}
-      activeOpacity={0.7}
+      activeOpacity={0.85}
     >
-      <View className="w-20 h-20 bg-cream rounded-lg items-center justify-center mr-3">
-        <Ionicons name="cube-outline" size={40} color={AQUACARE_COLORS.GREEN_PRIMARY} />
+      <View className="w-20 h-20 bg-cream rounded-lg items-center justify-center mr-3 overflow-hidden">
+        <Image source={getProductBrandAsset(item.brand)} className="w-16 h-16" resizeMode="contain" />
       </View>
 
       <View className="flex-1">
-        <Text className="text-xs text-gray-light font-semibold mb-1">
-          {item.brand.toUpperCase()}
-        </Text>
+        <View className="flex-row items-start justify-between mb-1">
+          <Text className="text-xs text-gray-light font-semibold">{item.brand.toUpperCase()}</Text>
+          <Ionicons name="chevron-forward" size={18} color={AQUACARE_COLORS.GREEN_PRIMARY} />
+        </View>
         <Text className="text-base font-bold text-gray-dark mb-2" numberOfLines={2}>
           {item.name}
         </Text>
@@ -179,7 +178,7 @@ export default function ProductCatalogScreen() {
     <View className="flex-1 bg-cream">
       {/* Header */}
       <View className="bg-white px-5 pt-16 pb-5 flex-row justify-between items-center shadow">
-        <TouchableOpacity onPress={() => navigation.goBack()} className="w-10">
+        <TouchableOpacity onPress={() => navigation?.goBack()} className="w-10">
           <Ionicons name="arrow-back" size={24} color={AQUACARE_COLORS.GRAY_DARK} />
         </TouchableOpacity>
 
@@ -190,7 +189,11 @@ export default function ProductCatalogScreen() {
           </Text>
         </View>
 
-        <TouchableOpacity className="relative w-10 items-end" onPress={handleCartPress}>
+      <TouchableOpacity
+          className="relative w-10 items-end"
+          onPress={handleCartPress}
+          accessibilityLabel={t('cart')}
+        >
           <Ionicons name="cart-outline" size={28} color={AQUACARE_COLORS.GREEN_PRIMARY} />
           {cartItemsCount > 0 && (
             <View className="absolute -top-2 -right-2 bg-[#dc2626] rounded-full min-w-[24px] h-6 justify-center items-center px-1.5">
@@ -199,74 +202,6 @@ export default function ProductCatalogScreen() {
           )}
         </TouchableOpacity>
       </View>
-
-      {/* Bannière suivi aliments cycle actif */}
-      {currentCycle ? (
-        <View style={cycleCardStyles.card}>
-          <Text style={cycleCardStyles.cardTitle}>{t('myFeedCycleHeader')}</Text>
-
-          {feedLoading ? (
-            <ActivityIndicator size="small" color={AQUACARE_COLORS.GREEN_PRIMARY} style={{ marginVertical: 8 }} />
-          ) : feedStatus ? (
-            <>
-              {/* Total + barre de progression */}
-              <View style={cycleCardStyles.totalRow}>
-                <View>
-                  <Text style={cycleCardStyles.totalLabel}>{t('myFeedTotalNeeded')}</Text>
-                  <Text style={cycleCardStyles.totalValue}>
-                    {feedStatus.total_bags_needed} {t('bags')}
-                  </Text>
-                </View>
-                <View style={cycleCardStyles.progressBlock}>
-                  <FeedProgressBar
-                    ordered={feedStatus.total_bags_ordered}
-                    total={feedStatus.total_bags_needed}
-                  />
-                  <Text style={cycleCardStyles.progressLabel}>
-                    {feedStatus.total_bags_ordered}/{feedStatus.total_bags_needed} {t('myFeedOrderedShort')}
-                  </Text>
-                </View>
-              </View>
-
-              {/* Détails secondaires */}
-              <FeedRow label={t('myFeedOrdered')} value={feedStatus.total_bags_ordered} />
-              <FeedRow label={t('myFeedConsumed')} value={feedStatus.bags_consumed_equivalent} />
-              <FeedRow
-                label={t('myFeedRemaining')}
-                value={feedStatus.bags_remaining_to_order}
-                highlight
-              />
-
-              {/* CTA toujours visible */}
-              <TouchableOpacity
-                style={[
-                  cycleCardStyles.orderBtn,
-                  feedStatus.bags_remaining_to_order === 0 && cycleCardStyles.orderBtnSecondary,
-                ]}
-                onPress={handleOrderRemaining}
-                activeOpacity={0.8}
-              >
-                <Ionicons
-                  name={feedStatus.bags_remaining_to_order > 0 ? 'cart-outline' : 'list-outline'}
-                  size={16}
-                  color="#fff"
-                  style={{ marginRight: 6 }}
-                />
-                <Text style={cycleCardStyles.orderBtnText}>
-                  {feedStatus.bags_remaining_to_order > 0
-                    ? t('myFeedOrderRemainingBtn', { count: feedStatus.bags_remaining_to_order })
-                    : t('myFeedViewPlanBtn')}
-                </Text>
-              </TouchableOpacity>
-            </>
-          ) : null}
-        </View>
-      ) : (
-        <View style={cycleCardStyles.noCycleCard}>
-          <Ionicons name="information-circle-outline" size={20} color={AQUACARE_COLORS.GRAY_LIGHT} />
-          <Text style={cycleCardStyles.noCycleText}>{t('myFeedNoCycle')}</Text>
-        </View>
-      )}
 
       {/* Filtres produits (espèce uniquement, plus de filtre marque) */}
       <View className="bg-white px-4 py-4 mb-2">
@@ -354,145 +289,3 @@ export default function ProductCatalogScreen() {
     </View>
   );
 }
-
-// ── Sub-components for cycle feed banner ─────────────────────────────────────
-
-function FeedRow({
-  label,
-  value,
-  highlight,
-}: {
-  label: string;
-  value: number;
-  highlight?: boolean;
-}) {
-  return (
-    <View style={cycleCardStyles.row}>
-      <Text style={cycleCardStyles.rowLabel}>{label}</Text>
-      <Text style={[cycleCardStyles.rowValue, highlight && cycleCardStyles.rowValueHighlight]}>
-        {value} sacs
-      </Text>
-    </View>
-  );
-}
-
-function FeedProgressBar({ ordered, total }: { ordered: number; total: number }) {
-  const pct = total > 0 ? Math.min(ordered / total, 1) : 0;
-  return (
-    <View style={cycleCardStyles.progressTrack}>
-      <View style={[cycleCardStyles.progressFill, { width: `${Math.round(pct * 100)}%` }]} />
-    </View>
-  );
-}
-
-const cycleCardStyles = StyleSheet.create({
-  card: {
-    backgroundColor: '#fff',
-    marginHorizontal: 12,
-    marginVertical: 8,
-    borderRadius: 12,
-    padding: 14,
-    borderLeftWidth: 4,
-    borderLeftColor: AQUACARE_COLORS.GREEN_PRIMARY,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  cardTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: AQUACARE_COLORS.GRAY_DARK,
-    marginBottom: 10,
-  },
-  totalRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  totalLabel: {
-    fontSize: 12,
-    color: AQUACARE_COLORS.GRAY_LIGHT,
-    marginBottom: 2,
-  },
-  totalValue: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: AQUACARE_COLORS.GREEN_PRIMARY,
-  },
-  progressBlock: {
-    flex: 1,
-    marginLeft: 16,
-  },
-  progressLabel: {
-    fontSize: 11,
-    color: AQUACARE_COLORS.GRAY_LIGHT,
-    marginTop: 3,
-    textAlign: 'right',
-  },
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 4,
-  },
-  rowLabel: {
-    fontSize: 13,
-    color: AQUACARE_COLORS.GRAY_LIGHT,
-  },
-  rowValue: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: AQUACARE_COLORS.GRAY_DARK,
-  },
-  rowValueHighlight: {
-    color: AQUACARE_COLORS.GREEN_PRIMARY,
-    fontSize: 14,
-  },
-  progressTrack: {
-    height: 6,
-    backgroundColor: '#e2e8f0',
-    borderRadius: 3,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: AQUACARE_COLORS.GREEN_PRIMARY,
-    borderRadius: 3,
-  },
-  orderBtn: {
-    backgroundColor: AQUACARE_COLORS.GREEN_PRIMARY,
-    borderRadius: 8,
-    paddingVertical: 11,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 12,
-  },
-  orderBtnSecondary: {
-    backgroundColor: AQUACARE_COLORS.GREEN_DARK,
-  },
-  orderBtnText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  noCycleCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#f1f5f9',
-    marginHorizontal: 12,
-    marginVertical: 8,
-    borderRadius: 10,
-    padding: 12,
-  },
-  noCycleText: {
-    fontSize: 13,
-    color: AQUACARE_COLORS.GRAY_LIGHT,
-    flex: 1,
-    lineHeight: 18,
-  },
-});
-

@@ -30,6 +30,7 @@ import ReportDetailScreen from '@/features/aquaculture/screens/ReportDetailScree
 import ReportsScreen from '@/features/aquaculture/screens/ReportsScreen';
 import SanitaryLogScreen from '@/features/aquaculture/screens/SanitaryLogScreen';
 import StatisticsScreen from '@/features/aquaculture/screens/StatisticsScreen';
+import StoreScreen from '@/features/aquaculture/screens/StoreScreen';
 
 // Commerce Screens
 import CartScreen from '@/features/commerce/screens/CartScreen';
@@ -84,10 +85,32 @@ export type RootStackParamList = {
   Reports: undefined;
   ReportDetail: { reportId: string };
   // Commerce Screens
-  ProductCatalog: undefined;
-  ProductDetail: { productId: string };
-  Cart: undefined;
-  OrdersHistory: undefined;
+  ProductCatalog:
+    | {
+        cycleId?: string;
+        source?: 'store';
+      }
+    | undefined;
+  ProductDetail:
+    | {
+        productId: string;
+        cycleId?: string;
+        source?: 'store';
+      }
+    | undefined;
+  Cart:
+    | {
+        cycleId?: string;
+        source?: 'store';
+      }
+    | undefined;
+  OrdersHistory:
+    | {
+        cycleId?: string;
+        source?: 'store';
+      }
+    | undefined;
+  Store: { cycleId?: string } | undefined;
   FeedingSuggestions: undefined;
   CycleSimulator: {
     cycleId?: string;
@@ -233,7 +256,7 @@ export default function MainNavigator() {
   return (
     <RootStack.Navigator
       initialRouteName="CycleSessionEntry"
-      screenOptions={{ headerShown: false }}
+      screenOptions={{ headerShown: false, headerBackTitle: t('back') }}
     >
       <RootStack.Screen
         name="CycleSessionEntry"
@@ -289,6 +312,10 @@ export default function MainNavigator() {
       <RootStack.Screen
         name="ReportDetail"
         component={ReportDetailScreen}
+      />
+      <RootStack.Screen
+        name="Store"
+        component={StoreScreen}
       />
       {/* Commerce Screens */}
       <RootStack.Screen
@@ -371,12 +398,7 @@ export default function MainNavigator() {
         name="CreateFarm"
         component={CreateFarmScreen}
         options={{
-          headerShown: true,
-          headerStyle: { backgroundColor: AQUACARE_COLORS.GREEN_PRIMARY },
-          headerTintColor: AQUACARE_COLORS.WHITE,
-          headerTitleStyle: { fontWeight: 'bold' },
-          title: t('createFarmTitle'),
-          headerLeft: () => null,
+          headerShown: false,
         }}
       />
       <RootStack.Screen

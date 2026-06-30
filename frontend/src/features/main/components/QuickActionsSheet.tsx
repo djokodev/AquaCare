@@ -104,14 +104,6 @@ export default function QuickActionsSheet({
     if (scope === 'unit' && productionUnitContext) {
       return [
         {
-          id: 'newCycle',
-          labelKey: 'newCycle',
-          icon: 'add-circle',
-          iconColor: AQUACARE_COLORS.GREEN_PRIMARY,
-          route: 'NewCycle',
-          category: 'aquaculture',
-        },
-        {
           id: 'dailyLog',
           labelKey: 'productionUnitDailyLogAction',
           icon: 'create',
@@ -167,14 +159,6 @@ export default function QuickActionsSheet({
     }
 
     return [
-      {
-        id: 'newCycle',
-        labelKey: 'newCycle',
-        icon: 'add-circle',
-        iconColor: AQUACARE_COLORS.GREEN_PRIMARY,
-        route: 'NewCycle',
-        category: 'aquaculture',
-      },
       {
         id: 'dailyLog',
         labelKey: 'dailyLog',
@@ -248,20 +232,7 @@ export default function QuickActionsSheet({
       category: 'commerce',
     },
   ], []);
-
-  /**
-   * Configuration des actions Planification
-   */
-  const planningActions = useMemo((): ActionItem[] => [
-    {
-      id: 'cycleSimulator',
-      labelKey: 'cycleSimulator',
-      icon: 'analytics-outline',
-      iconColor: AQUACARE_COLORS.GREEN_DARK,
-      route: 'CycleSimulator',
-      category: 'planning',
-    },
-  ], []);
+  const showCommerceSection = scope !== 'unit';
 
   /**
    * Gère le clic sur une action
@@ -346,21 +317,15 @@ export default function QuickActionsSheet({
               {aquacultureActions.map(renderActionItem)}
             </View>
 
-            {/* Commerce Section */}
-            <View className="mb-4">
-              <Text className="text-lg font-bold text-gray-dark mb-3">
-                {t('categoryCommerce')}
-              </Text>
-              {commerceActions.map(renderActionItem)}
-            </View>
+            {showCommerceSection ? (
+              <View className="mb-4">
+                <Text className="text-lg font-bold text-gray-dark mb-3">
+                  {t('categoryCommerce')}
+                </Text>
+                {commerceActions.map(renderActionItem)}
+              </View>
+            ) : null}
 
-            {/* Planification Section */}
-            <View className="mb-2">
-              <Text className="text-lg font-bold text-gray-dark mb-3">
-                {t('categoryPlanning')}
-              </Text>
-              {planningActions.map(renderActionItem)}
-            </View>
           </ScrollView>
         </View>
       </View>

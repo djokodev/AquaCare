@@ -227,9 +227,9 @@ export default function FeedingPlanScreen({ navigation }: FeedingPlanScreenProps
             <Text className="text-sm text-gray-light text-center mb-6">{t('createCycleToGeneratePlan')}</Text>
             <TouchableOpacity
               className="bg-aquacare-primary px-6 py-3 rounded-lg"
-              onPress={() => navigation.navigate('NewCycle')}
+              onPress={() => navigation.navigate('CreateFarm')}
             >
-              <Text className="text-white text-base font-semibold">{t('newCycle')}</Text>
+              <Text className="text-white text-base font-semibold">{t('startNewCycle')}</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>

@@ -8,32 +8,43 @@ import {
   ScrollView,
   FlatList,
   TouchableOpacity,
+  Image,
   ActivityIndicator,
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { StackNavigationProp } from '@react-navigation/stack';
 import { useDispatch, useSelector } from 'react-redux';
 
 import { AppDispatch, RootState } from '@/store/store';
 import { fetchProductDetail, addToCart } from '@/features/commerce/store/commerceSlice';
 import { Product } from '@/types/commerce';
 import { AQUACARE_COLORS } from '@/constants/colors';
+import { RootStackParamList } from '@/navigation/MainNavigator';
+import { getProductBrandAsset } from '@/features/commerce/utils/productBrandAssets';
 
 type RouteParams = {
   ProductDetail: {
     productId: string;
+    cycleId?: string;
+    source?: 'store';
   };
 };
 
+type NavigationProp = StackNavigationProp<RootStackParamList, 'ProductDetail'>;
+
 export default function ProductDetailScreen() {
   const { t } = useTranslation();
-  const navigation = useNavigation();
+  const navigation = useNavigation<NavigationProp>();
   const route = useRoute<RouteProp<RouteParams, 'ProductDetail'>>();
   const dispatch = useDispatch<AppDispatch>();
 
   const { productId } = route.params;
+  const cartNavigationParams = route.params.cycleId
+    ? { cycleId: route.params.cycleId, source: 'store' as const }
+    : undefined;
 
   const { products, cart } = useSelector((state: RootState) => state.commerce);
   const { items: allProducts } = products;
@@ -73,7 +84,7 @@ export default function ProductDetailScreen() {
       [
         {
           text: t('viewCart'),
-          onPress: () => navigation.navigate('Cart' as never),
+          onPress: () => navigation.navigate('Cart', cartNavigationParams),
         },
         { text: t('continueShopping') },
       ]
@@ -104,7 +115,11 @@ export default function ProductDetailScreen() {
         onPress={() => navigation.setParams({ productId: similarProduct.id } as never)}
       >
         <View className="w-full h-24 bg-white rounded-lg items-center justify-center mb-2">
-          <Ionicons name="cube-outline" size={32} color={AQUACARE_COLORS.GREEN_PRIMARY} />
+          <Image
+            source={getProductBrandAsset(similarProduct.brand)}
+            className="w-14 h-14"
+            resizeMode="contain"
+          />
         </View>
         <Text className="text-xs text-gray-light font-semibold mb-1">
           {similarProduct.brand.toUpperCase()}
@@ -149,7 +164,7 @@ export default function ProductDetailScreen() {
           <Ionicons name="arrow-back" size={24} color={AQUACARE_COLORS.GRAY_DARK} />
         </TouchableOpacity>
         <Text className="text-lg font-bold text-gray-dark">{t('productDetails')}</Text>
-        <TouchableOpacity onPress={() => navigation.navigate('Cart' as never)} className="relative">
+        <TouchableOpacity onPress={() => navigation.navigate('Cart', cartNavigationParams)} className="relative" accessibilityLabel={t('cart')}>
           <Ionicons name="cart-outline" size={24} color={AQUACARE_COLORS.GREEN_PRIMARY} />
           {cartItemsCount > 0 && (
             <View className="absolute -top-2 -right-2 bg-[#dc2626] rounded-full min-w-[20px] h-5 justify-center items-center px-1">
@@ -160,23 +175,25 @@ export default function ProductDetailScreen() {
       </View>
 
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
-        <View className="bg-white items-center py-10">
-          <View className="w-48 h-48 bg-cream rounded-full items-center justify-center">
-            <Ionicons name="cube" size={80} color={AQUACARE_COLORS.GREEN_PRIMARY} />
-          </View>
+      <View className="bg-white items-center py-10">
+        <View className="w-48 h-48 bg-cream rounded-full items-center justify-center">
+          <Image
+            source={getProductBrandAsset(product.brand)}
+            className="w-28 h-28"
+            resizeMode="contain"
+          />
         </View>
+      </View>
 
         <View className="bg-white px-5 py-5 mt-2">
           <Text className="text-xs text-gray-light font-semibold mb-1">{product.brand.toUpperCase()}</Text>
           <Text className="text-2xl font-bold text-gray-dark mb-4">{product.name}</Text>
 
           <View className="flex-row flex-wrap gap-2 mb-5">
-            <View className="flex-row items-center bg-cream px-3 py-2 rounded-xl gap-2">
-              <Ionicons name="fish" size={16} color={AQUACARE_COLORS.GREEN_PRIMARY} />
+            <View className="bg-cream px-3 py-2 rounded-xl">
               <Text className="text-sm text-gray-dark font-semibold">{t(product.species)}</Text>
             </View>
-            <View className="flex-row items-center bg-cream px-3 py-2 rounded-xl gap-2">
-              <Ionicons name="resize" size={16} color={AQUACARE_COLORS.GREEN_PRIMARY} />
+            <View className="bg-cream px-3 py-2 rounded-xl">
               <Text className="text-sm text-gray-dark font-semibold">{product.pellet_size_mm}mm</Text>
             </View>
             {product.phase && (

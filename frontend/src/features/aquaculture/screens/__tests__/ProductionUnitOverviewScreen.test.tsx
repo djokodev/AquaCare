@@ -93,14 +93,13 @@ describe('features/aquaculture/screens/ProductionUnitOverviewScreen', () => {
       expect(getByText('productionUnitCumulativeMortality')).toBeTruthy();
       expect(getByText('productionUnitConsumedFeed')).toBeTruthy();
       expect(getByText('productionUnitEstimatedBiomass')).toBeTruthy();
+      expect(getByText('productionUnitDashboardTitle')).toBeTruthy();
       expect(getByText('dailyLog')).toBeTruthy();
-      expect(getByText('productCatalog')).toBeTruthy();
+      expect(getByText('sanitaryLog')).toBeTruthy();
       expect(getByText('notifications')).toBeTruthy();
       expect(getByText('viewAllActions')).toBeTruthy();
       expect(queryByText('Bac 1')).toBeNull();
       expect(queryByText('Cycle Silure')).toBeNull();
-      expect(queryByText('productionUnitDashboardTitle')).toBeNull();
-      expect(queryByText('productionUnitDashboardDescription')).toBeNull();
       expect(queryByText('productionUnitTodayLogDone')).toBeNull();
       expect(queryByText('productionUnitActiveHealthIssue')).toBeNull();
       expect(queryByText('productionUnitRecentActivity')).toBeNull();
@@ -119,6 +118,10 @@ describe('features/aquaculture/screens/ProductionUnitOverviewScreen', () => {
     await waitFor(() => {
       expect(getByText('productionUnitSanitaryLogAction')).toBeTruthy();
       expect(getByText('productionUnitLogHistoryAction')).toBeTruthy();
+      expect(queryByText('categoryCommerce')).toBeNull();
+      expect(queryByText('productCatalog')).toBeNull();
+      expect(queryByText('cart')).toBeNull();
+      expect(queryByText('ordersHistory')).toBeNull();
     });
 
     fireEvent.press(getByText('productionUnitSanitaryLogAction'));
@@ -178,7 +181,7 @@ describe('features/aquaculture/screens/ProductionUnitOverviewScreen', () => {
     await waitFor(() => {
       expect(navigation.setOptions).toHaveBeenCalledWith({ title: 'Bac 1' });
       expect(getByText('currentFish')).toBeTruthy();
-      expect(queryByText('productionUnitDashboardTitle')).toBeNull();
+      expect(getByText('productionUnitDashboardTitle')).toBeTruthy();
     });
   });
 

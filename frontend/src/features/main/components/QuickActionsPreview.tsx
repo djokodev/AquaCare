@@ -63,7 +63,6 @@ interface SuggestedAction {
  * Affiche un aperçu replié avec 3 actions suggérées intelligemment :
  * - Si cycles actifs → prioriser "Saisie du jour"
  * - Si aucun cycle → prioriser "Nouvel élevage"
- * - Toujours inclure "Catalogue Produits" (commerce)
  * - Si notifications non lues → ajouter "Notifications", sinon "Plan d'alimentation"
  *
  * Affiche également un bouton "Voir toutes les actions" qui ouvre le Bottom Sheet.
@@ -103,10 +102,11 @@ export default function QuickActionsPreview({
           params: productionUnitContext,
         },
         {
-          icon: 'storefront-outline',
-          color: AQUACARE_COLORS.GREEN_PRIMARY,
-          label: t('productCatalog'),
-          route: 'ProductCatalog',
+          icon: 'warning-outline',
+          color: AQUACARE_COLORS.ERROR,
+          label: t('sanitaryLog'),
+          route: 'SanitaryLog',
+          params: productionUnitContext,
         },
         {
           icon: 'notifications-outline',
@@ -133,8 +133,8 @@ export default function QuickActionsPreview({
       actions.push({
         icon: 'add-circle',
         color: AQUACARE_COLORS.GREEN_PRIMARY,
-        label: t('newCycle'),
-        route: 'NewCycle',
+        label: t('startNewCycle'),
+        route: 'CreateFarm',
       });
     }
 

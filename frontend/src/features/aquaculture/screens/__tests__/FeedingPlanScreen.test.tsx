@@ -119,18 +119,18 @@ describe('features/aquaculture/screens/FeedingPlanScreen', () => {
     );
   });
 
-  it('affiche l etat sans cycle actif et navigue vers NewCycle', async () => {
+  it('affiche l etat sans cycle actif et navigue vers CreateFarm', async () => {
     mockService.getActiveCycles.mockResolvedValueOnce([]);
 
     const { getByText } = render(<FeedingPlanScreen navigation={navigation} />);
 
     await waitFor(() => {
       expect(getByText('noActiveCycles')).toBeTruthy();
-      expect(getByText('newCycle')).toBeTruthy();
+      expect(getByText('startNewCycle')).toBeTruthy();
     });
 
-    fireEvent.press(getByText('newCycle'));
-    expect(navigation.navigate).toHaveBeenCalledWith('NewCycle');
+    fireEvent.press(getByText('startNewCycle'));
+    expect(navigation.navigate).toHaveBeenCalledWith('CreateFarm');
   });
 
   it('charge le premier cycle actif et ses plans', async () => {

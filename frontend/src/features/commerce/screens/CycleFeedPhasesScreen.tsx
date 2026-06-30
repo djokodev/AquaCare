@@ -129,8 +129,8 @@ export default function CycleFeedPhasesScreen({ navigation, route }: Props) {
         );
       }
     }
-    navigation.navigate('Cart');
-  }, [dispatch, phases, quantities, navigation]);
+    navigation.navigate('Cart', { cycleId });
+  }, [cycleId, dispatch, phases, quantities, navigation]);
 
   const totalBags = phases.reduce((sum, ph) => sum + ph.total_bags, 0);
 
@@ -213,7 +213,7 @@ export default function CycleFeedPhasesScreen({ navigation, route }: Props) {
         <View style={{ flex: 1, alignItems: 'center' }}>
           <Text style={styles.headerTitle}>{t('feedPhasesTitle')}</Text>
         </View>
-        <TouchableOpacity style={styles.headerCart} onPress={() => navigation.navigate('Cart')}>
+        <TouchableOpacity style={styles.headerCart} onPress={() => navigation.navigate('Cart', { cycleId })}>
           <Ionicons name="cart-outline" size={26} color={AQUACARE_COLORS.GREEN_PRIMARY} />
           {cartItemsCount > 0 && (
             <View style={styles.cartBadge}>

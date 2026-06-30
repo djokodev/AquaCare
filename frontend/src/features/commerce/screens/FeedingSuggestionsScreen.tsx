@@ -330,7 +330,7 @@ export default function FeedingSuggestionsScreen() {
         </Text>
         <TouchableOpacity
           className="mt-6 bg-aquacare-primary flex-row items-center px-6 py-3 rounded-lg gap-2"
-          onPress={() => navigation.navigate('NewCycle')}
+          onPress={() => navigation.navigate('CreateFarm')}
         >
           <Ionicons name="add-circle-outline" size={20} color={AQUACARE_COLORS.WHITE} />
           <Text className="text-white text-base font-semibold">{t('startNewCycle')}</Text>

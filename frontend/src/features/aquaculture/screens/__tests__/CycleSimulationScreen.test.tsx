@@ -256,6 +256,25 @@ describe('features/aquaculture/screens/CycleSimulationScreen', () => {
     });
   });
 
+  it('affiche le CTA de lancement adapte quand un cycle existe deja', async () => {
+    (useSelector as unknown as jest.Mock).mockImplementation((selector: (state: any) => unknown) =>
+      selector({
+        aquaculture: {
+          currentCycle: { id: 'cycle-existing' },
+          dashboardData: { active_cycles: [{ id: 'cycle-existing' }] },
+        },
+        farmSetup: { cycleSimulation: { result: null, loading: false } },
+      })
+    );
+
+    const route = buildRoute();
+    const { getByText } = render(<CycleSimulationScreen navigation={navigation} route={route} />);
+
+    await waitFor(() => {
+      expect(getByText('simulationLaunchAdditionalBtn')).toBeTruthy();
+    });
+  });
+
   it('affiche un message lisible si la persistance du cycle echoue', async () => {
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined as never);
     mockLaunchFirstCycle.mockRejectedValueOnce(

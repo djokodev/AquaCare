@@ -104,7 +104,7 @@ describe('features/aquaculture/screens/DailyLogScreen', () => {
 
     expect(getByText('noActiveCycles')).toBeTruthy();
     fireEvent.press(getByText('createCycle'));
-    expect(navigation.navigate).toHaveBeenCalledWith('NewCycle');
+    expect(navigation.navigate).toHaveBeenCalledWith('CreateFarm');
   });
 
   it('valide sample_count minimum quand sample_total_weight est renseigne', async () => {

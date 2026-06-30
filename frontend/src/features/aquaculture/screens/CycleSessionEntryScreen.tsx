@@ -10,6 +10,7 @@ import { RootStackParamList } from '@/navigation/MainNavigator';
 import {
   clearCurrentCycle,
   fetchDashboardData,
+  fetchProductionCycles,
   setCurrentCycle,
 } from '@/features/aquaculture/store/aquacultureSlice';
 import { ProductionCycle } from '@/types/aquaculture';
@@ -118,6 +119,7 @@ interface Props {
 export default function CycleSessionEntryScreen({ navigation }: Props) {
   const dispatch = useDispatch<AppDispatch>();
   const isAuthenticated = useSelector((state: RootState) => state.auth.isAuthenticated);
+  const allCycles = useSelector((state: RootState) => state.aquaculture.cycles) || [];
   const { t } = useTranslation();
   const isMounted = useRef(true);
 
@@ -163,6 +165,7 @@ export default function CycleSessionEntryScreen({ navigation }: Props) {
     if (fetchDashboardData.fulfilled.match(result)) {
       const cycles = result.payload.active_cycles || [];
       handleEntryLogic(cycles);
+      void dispatch(fetchProductionCycles());
       // Set loading=false after handleEntryLogic in same microtask to minimize intermediate renders
       if (isMounted.current) setLoading(false);
     } else {
@@ -236,6 +239,7 @@ export default function CycleSessionEntryScreen({ navigation }: Props) {
           cycles={activeCycles}
           selectedCycleId={selectedCycleId}
           onSelectCycle={setSelectedCycleId}
+          rankingCycles={allCycles}
         />
       </View>
 

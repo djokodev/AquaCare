@@ -1211,6 +1211,56 @@ class CycleDashboardSerializer(serializers.Serializer):
     allocations = ProductionUnitDashboardSerializer(many=True)
 
 
+class CycleStorePendingOrderSerializer(serializers.Serializer):
+    """Résumé d'une commande en cours affichée dans le Magasin."""
+
+    id = serializers.UUIDField()
+    order_number = serializers.CharField()
+    status = serializers.CharField()
+    delivery_method = serializers.CharField()
+    total_bags = serializers.IntegerField()
+    total_fcfa = serializers.CharField()
+    estimated_feed_kg = serializers.CharField()
+    created_at = serializers.DateTimeField()
+
+
+class CycleStoreSummarySerializer(serializers.Serializer):
+    """Indicateurs agrégés du Magasin de cycle."""
+
+    manual_feed_kg = serializers.CharField()
+    received_order_feed_kg = serializers.CharField()
+    total_feed_added_kg = serializers.CharField()
+    feed_consumed_kg = serializers.CharField()
+    estimated_feed_remaining_kg = serializers.CharField()
+    feed_expenses_fcfa = serializers.CharField()
+    pending_orders_count = serializers.IntegerField()
+    pending_order_amount_fcfa = serializers.CharField()
+    pending_order_feed_kg = serializers.CharField()
+    stock_tracking_started_at = serializers.DateField(required=False, allow_null=True)
+
+
+class CycleStoreSerializer(serializers.Serializer):
+    """Payload du Magasin du cycle."""
+
+    cycle_id = serializers.UUIDField()
+    summary = CycleStoreSummarySerializer()
+    status = serializers.CharField()
+    pending_orders = CycleStorePendingOrderSerializer(many=True)
+    stock_tracking_started_at = serializers.DateField(required=False, allow_null=True)
+
+
+class CycleStoreManualStockSerializer(serializers.Serializer):
+    """Sérialiseur de création manuelle du stock du Magasin."""
+
+    label = serializers.CharField(max_length=200)
+    quantity_kg = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=Decimal('0.01'))
+    total_cost_fcfa = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=Decimal('0'))
+    entry_date = serializers.DateField()
+    note = serializers.CharField(required=False, allow_blank=True, allow_null=True, default='')
+    client_uuid = serializers.UUIDField(required=False, allow_null=True)
+    created_offline = serializers.BooleanField(required=False, default=False)
+
+
 class DashboardQuerySerializer(serializers.Serializer):
     """Validation des query params du dashboard aquaculture."""
 

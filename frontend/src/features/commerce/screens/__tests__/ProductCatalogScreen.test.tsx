@@ -1,6 +1,7 @@
 import React from 'react';
 import { Alert } from 'react-native';
 import { fireEvent, render } from '@testing-library/react-native';
+import { NavigationContext, NavigationRouteContext } from '@react-navigation/core';
 
 import ProductCatalogScreen from '../ProductCatalogScreen';
 
@@ -8,13 +9,7 @@ const mockNavigate = jest.fn();
 const mockGoBack = jest.fn();
 const mockDispatch = jest.fn();
 let mockState: any;
-
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({
-    navigate: mockNavigate,
-    goBack: mockGoBack,
-  }),
-}));
+let mockRouteParams: any;
 
 jest.mock('react-redux', () => ({
   useDispatch: () => mockDispatch,
@@ -43,6 +38,10 @@ describe('ProductCatalogScreen', () => {
     jest.clearAllMocks();
     jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
     mockDispatch.mockResolvedValue(undefined);
+    mockRouteParams = {
+      cycleId: 'cycle-store',
+      source: 'store',
+    };
     mockState = {
       commerce: {
         products: {
@@ -65,17 +64,47 @@ describe('ProductCatalogScreen', () => {
     };
   });
 
+  const renderScreen = () =>
+    render(
+      <NavigationContext.Provider
+        value={
+          {
+            navigate: mockNavigate,
+            goBack: mockGoBack,
+          } as any
+        }
+      >
+        <NavigationRouteContext.Provider
+          value={
+            {
+              key: 'ProductCatalog-key',
+              name: 'ProductCatalog',
+              params: mockRouteParams,
+            } as any
+          }
+        >
+          <ProductCatalogScreen />
+        </NavigationRouteContext.Provider>
+      </NavigationContext.Provider>
+    );
+
   it('affiche les produits et ouvre les details', () => {
-    const { getByText } = render(<ProductCatalogScreen />);
+    const { getByText, queryByText } = renderScreen();
+
+    expect(queryByText('myFeedCycleHeader')).toBeNull();
 
     fireEvent.press(getByText('Feed Starter'));
 
-    expect(mockNavigate).toHaveBeenCalledWith('ProductDetail', { productId: 'prod-1' });
+    expect(mockNavigate).toHaveBeenCalledWith('ProductDetail', {
+      productId: 'prod-1',
+      cycleId: 'cycle-store',
+      source: 'store',
+    });
   });
 
   it('affiche l etat vide et reset les filtres', () => {
     mockState.commerce.products.items = [];
-    const { getByText } = render(<ProductCatalogScreen />);
+    const { getByText } = renderScreen();
 
     expect(getByText('noProductsFound')).toBeTruthy();
     fireEvent.press(getByText('resetFilters'));
@@ -85,10 +114,21 @@ describe('ProductCatalogScreen', () => {
 
   it('affiche l etat erreur et relance le chargement', () => {
     mockState.commerce.products.error = 'boom';
-    const { getByText } = render(<ProductCatalogScreen />);
+    const { getByText } = renderScreen();
 
     fireEvent.press(getByText('retry'));
 
     expect(mockDispatch).toHaveBeenCalled();
+  });
+
+  it('conserve le contexte Magasin quand on ouvre le panier depuis le catalogue', () => {
+    const { getByLabelText } = renderScreen();
+
+    fireEvent.press(getByLabelText('cart'));
+
+    expect(mockNavigate).toHaveBeenCalledWith('Cart', {
+      cycleId: 'cycle-store',
+      source: 'store',
+    });
   });
 });

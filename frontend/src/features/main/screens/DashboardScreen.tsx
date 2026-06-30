@@ -17,6 +17,7 @@ import { AppDispatch, RootState } from '@/store/store';
 import {
   clearCurrentCycle,
   fetchDashboardData,
+  fetchProductionCycles,
   setCurrentCycle,
 } from '@/features/aquaculture/store/aquacultureSlice';
 import { fetchNotifications } from '@/features/notifications/store/notificationSlice';
@@ -38,6 +39,7 @@ import { AQUACARE_COLORS } from '@/constants/colors';
 import { formatNumber, formatPercentage, formatCurrency } from '@/utils';
 import { useAuth } from '@/hooks/useAuth';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
+import { formatCycleDisplayName } from '@/features/aquaculture/utils/cycleDisplay';
 
 import MetricCard from '../components/MetricCard';
 import {
@@ -63,6 +65,7 @@ export default function DashboardScreen({ navigation }: any) {
   const { dashboardData, loading, error, currentCycle } = useSelector(
     (state: RootState) => state.aquaculture
   );
+  const allCycles = useSelector((state: RootState) => state.aquaculture.cycles) || [];
   const { unreadCount } = useSelector((state: RootState) => state.notifications);
   const { items: ordersList } = useSelector((state: RootState) => state.commerce.orders);
 
@@ -70,6 +73,7 @@ export default function DashboardScreen({ navigation }: any) {
     const initializeDashboard = async () => {
       tryGlobalOfflineSync();
       dispatch(fetchDashboardData(undefined));
+      dispatch(fetchProductionCycles());
       dispatch(fetchNotifications());
       dispatch(fetchOrders());
     };
@@ -93,6 +97,7 @@ export default function DashboardScreen({ navigation }: any) {
 
         if (result.success > 0) {
           dispatch(fetchDashboardData(undefined));
+          dispatch(fetchProductionCycles());
         }
       }
     } catch (err) {
@@ -100,18 +105,13 @@ export default function DashboardScreen({ navigation }: any) {
     }
   };
 
-  const onRefresh = useCallback(() => {
-    dispatch(fetchDashboardData(undefined));
-    dispatch(fetchNotifications());
-    dispatch(fetchOrders());
-  }, [dispatch]);
-
   const pendingDeliveryConfirmations = useMemo(
     () => ordersList.filter((order) => order.status === 'delivered'),
     [ordersList]
   );
 
   const activeCycles = dashboardData?.active_cycles || [];
+  const cycleLabelSource = allCycles.length > 0 ? allCycles : activeCycles;
   const currentCycleInList = currentCycle
     ? activeCycles.find((cycle) => cycle.id === currentCycle.id)
     : undefined;
@@ -154,10 +154,17 @@ export default function DashboardScreen({ navigation }: any) {
     };
   }, [primaryActiveCycle?.id, primaryCycleHasProductionUnits]);
 
+  const onRefresh = useCallback(() => {
+    dispatch(fetchDashboardData(undefined));
+    dispatch(fetchNotifications());
+    dispatch(fetchOrders());
+  }, [dispatch]);
+
   const cycleCards = useMemo(
     () =>
       activeCycles.map((cycle) => ({
         ...cycle,
+        displayName: formatCycleDisplayName(cycle, cycleLabelSource),
         unitCount:
           cycle.id === primaryActiveCycle?.id && currentCycleUnitCount !== null
             ? currentCycleUnitCount
@@ -169,32 +176,24 @@ export default function DashboardScreen({ navigation }: any) {
         ),
         estimatedMarketValueFcfa: calculateCycleEstimatedMarketValue(cycle),
       })),
-    [activeCycles, currentCycleUnitCount, primaryActiveCycle?.id]
+    [activeCycles, currentCycleUnitCount, cycleLabelSource, primaryActiveCycle?.id]
   );
   const dashboardMetricCards = useMemo(() => {
     if (primaryCycleHasProductionUnits) {
       return [
         {
-          icon: 'cash-outline' as const,
-          color: AQUACARE_COLORS.GREEN_PRIMARY,
           value: formatCurrency(dashboardBusinessMetrics.estimatedMarketValueFcfa),
           label: t('dashboardEstimatedMarketValue'),
         },
         {
-          icon: 'calculator-outline' as const,
-          color: AQUACARE_COLORS.SUCCESS,
           value: formatCurrency(dashboardBusinessMetrics.directProductionCostFcfa),
           label: t('dashboardDirectProductionCost'),
         },
         {
-          icon: 'fish-outline' as const,
-          color: AQUACARE_COLORS.GREEN_LIGHT,
           value: formatNumber(dashboardData?.total_fish_count ?? 0, undefined, 0),
           label: t('dashboardEstimatedCurrentFish'),
         },
         {
-          icon: 'time-outline' as const,
-          color: AQUACARE_COLORS.GREEN_DARK,
           value:
             dashboardBusinessMetrics.timeRemainingDays === null
               ? '-'
@@ -206,20 +205,14 @@ export default function DashboardScreen({ navigation }: any) {
 
     return [
         {
-          icon: 'cash-outline' as const,
-          color: AQUACARE_COLORS.GREEN_PRIMARY,
           value: formatCurrency(dashboardBusinessMetrics.estimatedMarketValueFcfa),
           label: t('dashboardEstimatedMarketValue'),
         },
         {
-          icon: 'restaurant-outline' as const,
-          color: AQUACARE_COLORS.GREEN_LIGHT,
           value: formatCurrency(dashboardBusinessMetrics.feedCostConsumedFcfa),
           label: t('dashboardFeedCostConsumed'),
         },
         {
-          icon: 'time-outline' as const,
-          color: AQUACARE_COLORS.GREEN_DARK,
           value:
             dashboardBusinessMetrics.timeRemainingDays === null
               ? '-'
@@ -227,8 +220,6 @@ export default function DashboardScreen({ navigation }: any) {
           label: t('dashboardTimeRemainingCycle'),
         },
         {
-          icon: 'calculator-outline' as const,
-          color: AQUACARE_COLORS.SUCCESS,
           value: formatCurrency(dashboardBusinessMetrics.directProductionCostFcfa),
           label: t('dashboardDirectProductionCost'),
         },
@@ -312,6 +303,14 @@ export default function DashboardScreen({ navigation }: any) {
     navigation.navigate('ProductionUnitsHub', { cycleId: primaryActiveCycle.id });
   };
 
+  const handleStorePress = () => {
+    if (!primaryActiveCycle) {
+      return;
+    }
+
+    navigation.navigate('Store', { cycleId: primaryActiveCycle.id });
+  };
+
   const handleConfirmOrderReceipt = (orderId: string, orderNumber: string) => {
     Alert.alert(
       t('confirmReceiptTitle'),
@@ -324,7 +323,10 @@ export default function DashboardScreen({ navigation }: any) {
             try {
               setConfirmingOrderId(orderId);
               await dispatch(confirmOrderReceipt(orderId)).unwrap();
-              await Promise.all([dispatch(fetchOrders()), dispatch(fetchOrderStatistics())]);
+              await Promise.all([
+                dispatch(fetchOrders()),
+                dispatch(fetchOrderStatistics()),
+              ]);
               Alert.alert(t('success'), t('confirmReceiptSuccess'));
             } catch {
               Alert.alert(t('error'), t('confirmReceiptError'));
@@ -426,29 +428,29 @@ export default function DashboardScreen({ navigation }: any) {
       >
 
       <View className="px-5 py-5">
-        <Text className="mb-3 text-xl font-bold text-gray-dark">
-          {t('cycleDashboardTitle')}
-        </Text>
-        {loading.dashboard && !dashboardData ? (
-          <View className="items-center justify-center py-10">
-            <ActivityIndicator size="large" color={AQUACARE_COLORS.GREEN_PRIMARY} />
-            <Text className="text-base text-gray-light mt-3">
-              {t('loadingData', { defaultValue: 'Chargement des données...' })}
-            </Text>
-          </View>
-        ) : (
-          <View className="flex-row flex-wrap justify-between">
-            {dashboardMetricCards.map((card) => (
-              <MetricCard
-                key={card.label}
-                icon={card.icon}
-                color={card.color}
-                value={card.value}
-                label={card.label}
-              />
-            ))}
-          </View>
-        )}
+        <View className="bg-white rounded-xl p-4 mb-4">
+          <Text className="text-lg font-bold text-gray-dark mb-3">
+            {t('cycleDashboardTitle')}
+          </Text>
+          {loading.dashboard && !dashboardData ? (
+            <View className="items-center justify-center py-8">
+              <ActivityIndicator size="large" color={AQUACARE_COLORS.GREEN_PRIMARY} />
+              <Text className="text-base text-gray-light mt-3">
+                {t('loadingData', { defaultValue: 'Chargement des données...' })}
+              </Text>
+            </View>
+          ) : (
+            <View className="flex-row flex-wrap gap-3">
+              {dashboardMetricCards.map((card) => (
+                <MetricCard
+                  key={card.label}
+                  value={card.value}
+                  label={card.label}
+                />
+              ))}
+            </View>
+          )}
+        </View>
       </View>
 
       {activeCycles.length > 1 && (
@@ -533,29 +535,28 @@ export default function DashboardScreen({ navigation }: any) {
               key={cycle.id}
               className="bg-white rounded-xl p-4 mb-3 border border-gray-200"
             >
-              <View className="flex-row justify-between items-start">
-                <View className="flex-1 mr-3">
-                  <Text className="text-base font-bold text-gray-dark mb-1">{cycle.cycle_name}</Text>
-                  <Text className="text-sm text-gray-light mb-1">
-                    {cycle.species === 'clarias' ? t('catfish') : t('tilapia')}
-                    {cycle.unitCount > 0
-                      ? ` · ${t('productionUnitsCount', { count: cycle.unitCount })}`
-                      : ` - ${cycle.pond_identifier}`}
-                  </Text>
-                  <Text className="text-xs text-gray-light">
-                    {t('daysCount', { count: cycle.cycleAgeDays })} - {formatCurrency(cycle.estimatedMarketValueFcfa)} - {formatPercentage(cycle.survival_rate || 0)} {t('survivalRateShort')}
-                  </Text>
-                </View>
-
-                {cycle.unitCount > 0 ? null : (
-                  <TouchableOpacity
-                    className="bg-aquacare-primary flex-row items-center py-2 px-3 rounded-lg"
-                    onPress={() => openHarvestChoice(cycle)}
-                  >
-                    <Text className="text-white text-sm font-semibold ml-1">{t('harvest')}</Text>
-                  </TouchableOpacity>
-                )}
+              <View className="flex-row items-start justify-between">
+                <Text className="flex-1 mr-3 text-base font-bold text-gray-dark">
+                  {cycle.displayName}
+                </Text>
+                <Text className="text-sm text-gray-light text-right">
+                  {cycle.unitCount > 0
+                    ? t('productionUnitsCount', { count: cycle.unitCount })
+                    : cycle.pond_identifier}
+                </Text>
               </View>
+              <Text className="text-xs text-gray-light mt-1">
+                {t('daysCount', { count: cycle.cycleAgeDays })} - {formatCurrency(cycle.estimatedMarketValueFcfa)} - {formatPercentage(cycle.survival_rate || 0)} {t('survivalRateShort')}
+              </Text>
+
+              {cycle.unitCount > 0 ? null : (
+                <TouchableOpacity
+                  className="mt-2 bg-aquacare-primary flex-row items-center py-2 px-3 rounded-lg"
+                  onPress={() => openHarvestChoice(cycle)}
+                >
+                  <Text className="text-white text-sm font-semibold ml-1">{t('harvest')}</Text>
+                </TouchableOpacity>
+              )}
               {cycle.unitCount > 0 ? null : (
                 <TouchableOpacity
                   style={{ marginTop: 10, flexDirection: 'row', alignItems: 'center', gap: 4 }}
@@ -569,24 +570,49 @@ export default function DashboardScreen({ navigation }: any) {
           ))}
 
           {primaryActiveCycle && (
-            <TouchableOpacity
-              className="mt-2 bg-white rounded-xl p-4 border border-aquacare-primary flex-row items-center justify-between"
-              onPress={handleProductionUnitsPress}
-            >
-              <View className="flex-1 mr-3">
-                <Text className="text-base font-bold text-gray-dark">
+            <>
+              <TouchableOpacity
+                className="mt-2 bg-white rounded-xl p-4 border border-aquacare-primary flex-row items-center justify-between"
+                onPress={handleProductionUnitsPress}
+              >
+                <Text className="flex-1 mr-3 text-base font-bold text-aquacare-primary">
                   {t('productionUnitsDashboardCta')}
                 </Text>
-                <Text className="text-xs text-gray-light mt-1">
-                  {t('productionUnitsHubSubtitle')}
+                <Ionicons
+                  name="chevron-forward"
+                  size={20}
+                  color={AQUACARE_COLORS.GREEN_PRIMARY}
+                />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                className="mt-3 bg-white rounded-xl p-4 border border-aquacare-primary flex-row items-center justify-between"
+                onPress={handleStorePress}
+              >
+                <Text className="flex-1 mr-3 text-base font-bold text-aquacare-primary">
+                  {t('storeTitle')}
                 </Text>
-              </View>
-              <Ionicons
-                name="chevron-forward"
-                size={20}
-                color={AQUACARE_COLORS.GREEN_PRIMARY}
-              />
-            </TouchableOpacity>
+                <Ionicons
+                  name="chevron-forward"
+                  size={20}
+                  color={AQUACARE_COLORS.GREEN_PRIMARY}
+                />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                className="mt-3 bg-white rounded-xl p-4 border border-aquacare-primary flex-row items-center justify-between"
+                onPress={() => navigation.navigate('CreateFarm')}
+              >
+                <Text className="flex-1 mr-3 text-base font-bold text-aquacare-primary">
+                  {t('createNewCycleDashboardTitle')}
+                </Text>
+                <Ionicons
+                  name="chevron-forward"
+                  size={20}
+                  color={AQUACARE_COLORS.GREEN_PRIMARY}
+                />
+              </TouchableOpacity>
+            </>
           )}
         </View>
       )}

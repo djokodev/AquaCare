@@ -9,6 +9,8 @@ import {
   SanitaryLog,
   DashboardData,
   CycleDashboard,
+  CycleStore,
+  CycleStoreManualStockPayload,
   ProductionReport,
   ReportType,
   SyncPayload,
@@ -151,6 +153,34 @@ class AquacultureService {
       return await requestPromise;
     } finally {
       this.inFlightCycleDashboardRequests.delete(requestKey);
+    }
+  }
+
+  async getCycleStore(cycleId: string): Promise<CycleStore> {
+    try {
+      const response = await apiService.get<CycleStore>(`${this.baseUrl}/cycles/${cycleId}/store/`);
+      return response.data;
+    } catch (error) {
+      if (!isUnauthorizedError(error)) {
+        logger.error(`Erreur lors de la recuperation du Magasin du cycle ${cycleId}:`, error);
+      }
+      throw error;
+    }
+  }
+
+  async declareCycleStoreManualStock(
+    cycleId: string,
+    payload: CycleStoreManualStockPayload
+  ): Promise<CycleStore> {
+    try {
+      const response = await apiService.post<CycleStore>(
+        `${this.baseUrl}/cycles/${cycleId}/store/manual-stock/`,
+        payload
+      );
+      return response.data;
+    } catch (error) {
+      logger.error(`Erreur lors de la declaration de stock du cycle ${cycleId}:`, error);
+      throw error;
     }
   }
 

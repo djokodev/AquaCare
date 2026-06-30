@@ -11,6 +11,8 @@ If a local-only `backend/docker-compose.yml` exists in your environment:
 - `docker compose -f backend/docker-compose.yml exec api pytest`
 - `docker compose -f backend/docker-compose.yml exec api pytest backend/apps/aquaculture/tests/`
 
+If the API container is already running and new migrations were pulled afterward, rerun the `migrate` command above or recreate the `api` service so the database schema catches up with the mounted code.
+
 For CI-aligned host validation from the repository root:
 
 - `ruff check backend/manage.py backend/apps backend/aquacare_api backend/tests`

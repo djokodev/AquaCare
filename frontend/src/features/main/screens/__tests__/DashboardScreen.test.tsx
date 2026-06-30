@@ -1,4 +1,5 @@
 import React from 'react';
+import { Alert } from 'react-native';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import { useDispatch, useSelector } from 'react-redux';
 
@@ -114,6 +115,7 @@ describe('features/main/screens/DashboardScreen', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockDispatch.mockImplementation(() => ({ unwrap: jest.fn().mockResolvedValue({}) }));
     (useDispatch as unknown as jest.Mock).mockReturnValue(mockDispatch);
     mockOffline.hasAnyPendingSync.mockResolvedValue(false);
     mockOffline.syncAllOfflineData.mockResolvedValue({ success: 0, failed: 0, details: {} as any });
@@ -122,7 +124,6 @@ describe('features/main/screens/DashboardScreen', () => {
         total_allocations: 3,
       },
     });
-
     mockUseSelector.mockImplementation((selector: (state: any) => unknown) =>
       selector({
         aquaculture: {
@@ -162,21 +163,43 @@ describe('features/main/screens/DashboardScreen', () => {
   });
 
   it('permet de changer le cycle de session depuis le dashboard', async () => {
-    const { getByText, getAllByText } = render(<DashboardScreen navigation={navigation} />);
+    const { getByText, getAllByText, queryByText } = render(<DashboardScreen navigation={navigation} />);
 
     expect(getByText('Dashboard du cycle')).toBeTruthy();
     expect(getByText('dashboardEstimatedMarketValue')).toBeTruthy();
     expect(getByText('dashboardFeedCostConsumed')).toBeTruthy();
     expect(getByText('dashboardTimeRemainingCycle')).toBeTruthy();
     expect(getByText('dashboardDirectProductionCost')).toBeTruthy();
+    expect(getByText('Cycle A #1')).toBeTruthy();
+    expect(getByText('Cycle B #2')).toBeTruthy();
+    await waitFor(() => {
+      expect(getByText('storeTitle')).toBeTruthy();
+      expect(getByText('createNewCycleDashboardTitle')).toBeTruthy();
+      expect(queryByText('storeDashboardSubtitle')).toBeNull();
+    });
+
+    fireEvent.press(getByText('storeTitle'));
+    expect(navigation.navigate).toHaveBeenCalledWith('Store', { cycleId: cycleA.id });
 
     fireEvent.press(getByText('changeSessionCycle'));
-    fireEvent.press(getAllByText('Cycle B').pop() as any);
+    fireEvent.press(getAllByText('Cycle B #2').pop() as any);
     fireEvent.press(getByText('sessionCycleConfirm'));
 
     await waitFor(() => {
       expect(mockDispatch).toHaveBeenCalledWith(setCurrentCycle(cycleB));
     });
+  });
+
+  it('ouvre le flux de creation de cycle depuis le dashboard', async () => {
+    const { getByText } = render(<DashboardScreen navigation={navigation} />);
+
+    await waitFor(() => {
+      expect(getByText('createNewCycleDashboardTitle')).toBeTruthy();
+    });
+
+    fireEvent.press(getByText('createNewCycleDashboardTitle'));
+
+    expect(navigation.navigate).toHaveBeenCalledWith('CreateFarm');
   });
 
   it('affiche un CTA vers les unites en production pour le cycle actif', async () => {
@@ -238,12 +261,12 @@ describe('features/main/screens/DashboardScreen', () => {
       expect(getByText('dashboardEstimatedCurrentFish')).toBeTruthy();
       expect(getByText('dashboardTimeRemainingCycle')).toBeTruthy();
       expect(getByText('productionUnitsDashboardCta')).toBeTruthy();
-      expect(getByText(/3 unités/)).toBeTruthy();
+      expect(getByText('storeTitle')).toBeTruthy();
+      expect(queryByText('storeDashboardSubtitle')).toBeNull();
       expect(queryByText('viewAllActions')).toBeNull();
       expect(queryByText('dailyLog')).toBeNull();
-      expect(queryByText('sanitaryLog')).toBeNull();
+      expect(queryByText('productCatalog')).toBeNull();
       expect(queryByText('harvest')).toBeNull();
-      expect(queryByText('Bac 1')).toBeNull();
     });
 
     expect(mockGetCycleDashboard).toHaveBeenCalledWith('cycle-unit');

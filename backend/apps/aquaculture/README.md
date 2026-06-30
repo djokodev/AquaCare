@@ -104,6 +104,16 @@ Role:
 
 PR #63 ajoute aussi un dashboard opérationnel par allocation pour calculer les indicateurs de suivi à partir des logs unit-scoped.
 
+### CycleFeedStockEntry
+
+Modele: `aquaculture.models.CycleFeedStockEntry`
+
+Role:
+
+1. Centraliser le stock d'aliments d'un cycle au niveau Magasin.
+2. Conserver les declarations manuelles et les imports automatiques de commandes recues.
+3. Supporter la deduplication offline-first via `client_uuid` et la traçabilite `order_item`.
+
 ### ProductionCycle
 
 Modele central: `aquaculture.models.ProductionCycle`
@@ -244,6 +254,20 @@ Regles:
 1. `harvest` cloture cycle, calcule survie, FCR, biomasse finale.
 2. `partial-harvest` garde le cycle actif, decremente effectif courant.
 
+### 5.5 Magasin De Cycle
+
+Endpoints:
+
+1. `GET /api/aquaculture/cycles/{id}/store/`
+2. `POST /api/aquaculture/cycles/{id}/store/manual-stock/`
+
+Regles:
+
+1. Les ajouts manuels sont idempotents via `client_uuid`.
+2. Les commandes passees a `received` sont importees automatiquement dans le stock.
+3. Les commandes en attente restent visibles mais ne sont pas comptees dans le stock.
+4. Le stock consomme est calcule a partir des logs a partir du premier point de suivi stock.
+
 ### 6. Dashboard
 
 Endpoint:
@@ -299,6 +323,8 @@ Cycle:
 | `/cycles/{id}/harvest/` | `POST` | Cloture cycle |
 | `/cycles/{id}/statistics/` | `GET` | Analytics detaillees |
 | `/cycles/{id}/comparison/` | `GET` | Comparatif historique |
+| `/cycles/{id}/store/` | `GET` | Resume du Magasin |
+| `/cycles/{id}/store/manual-stock/` | `POST` | Declaration manuelle de stock |
 | `/cycles/{id}/feed-phases/` | `GET` | Phases commande aliment |
 | `/cycles/{id}/feed-status/` | `GET` | Besoin, commande, consomme |
 | `/cycles/{id}/partial-harvest/` | `POST` | Vente partielle |
