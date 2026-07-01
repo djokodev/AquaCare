@@ -11,6 +11,7 @@ export type Species = 'tilapia' | 'clarias';
 export type CycleStatus = 'planned' | 'active' | 'harvested' | 'cancelled';
 export type ReportType = 'daily' | 'weekly' | 'monthly';
 export type ReportStatus = 'draft' | 'validated' | 'pending';
+export type ReportScopeType = 'cycle' | 'unit';
 export type EmailReportStatus = 'not_sent' | 'sent' | 'failed';
 export type WhatsAppReportStatus = 'not_shared' | 'shared';
 export type SanitaryEventType =
@@ -434,6 +435,11 @@ export interface ProductionReport {
   farm_name?: string;
   report_type: ReportType;
   report_type_display?: string;
+  scope_type?: ReportScopeType;
+  scope_type_display?: string;
+  scope_object_id?: string | null;
+  scope_name?: string | null;
+  scope_label?: string | null;
   cycle_scope_id?: string | null;
   period_start: string;
   period_end: string;

@@ -149,7 +149,12 @@ def invalidate_dashboard_cache(user_id: str) -> None:
     max_retries=2,
     default_retry_delay=30,
 )
-def generate_report_async_task(self, report_id: str, cycle_id: str = None, restore_validation: bool = False) -> str:
+def generate_report_async_task(
+    self,
+    report_id: str,
+    cycle_scope_id: str | None = None,
+    restore_validation: bool = False,
+) -> str:
     """
     Generate a single report asynchronously (PDF rendering in Celery worker).
 
@@ -167,12 +172,23 @@ def generate_report_async_task(self, report_id: str, cycle_id: str = None, resto
         return f"Report not found: {report_id}"
 
     try:
+        scope_type = report.scope_type or "cycle"
+        scope_object_id = str(report.scope_object_id) if report.scope_object_id else None
+        if not scope_object_id and isinstance(report.payload, dict):
+            report_meta = report.payload.get("report_meta", {}) or {}
+            if isinstance(report_meta, dict):
+                scope_type = str(report_meta.get("scope_type") or scope_type)
+                scope_object_id = report_meta.get("scope_object_id") or report_meta.get("cycle_scope_id")
+        if not scope_object_id and cycle_scope_id and scope_type == "cycle":
+            scope_object_id = cycle_scope_id
         ReportService.generate_for_farm(
             farm_profile=report.farm_profile,
             report_type=report.report_type,
             period_start=report.period_start,
             period_end=report.period_end,
-            cycle_id=cycle_id,
+            scope_type=scope_type,
+            scope_object_id=str(scope_object_id) if scope_object_id else None,
+            cycle_id=cycle_scope_id if scope_type == "cycle" else None,
             preserve_validation=restore_validation,
         )
         logger.info("Async report generated: %s", report_id)

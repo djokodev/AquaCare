@@ -5,7 +5,9 @@ from __future__ import annotations
 
 import logging
 from urllib.parse import quote
+from uuid import UUID
 
+from django.db.models import Q
 from django.http import FileResponse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
@@ -13,6 +15,7 @@ from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiExample, OpenApiParameter, extend_schema, extend_schema_view
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError
 from rest_framework.request import Request
 from rest_framework.response import Response
 
@@ -26,6 +29,8 @@ from ..serializers import (
 from ..services import (
     GenerateReportCommand,
     InvalidReportCycleScopeError,
+    InvalidReportScopeError,
+    InvalidReportUnitScopeError,
     MissingReportEmailError,
     ReportApplicationService,
     ReportDownloadDecision,
@@ -64,6 +69,19 @@ logger = logging.getLogger(__name__)
                 location=OpenApiParameter.QUERY,
                 description='Filtrer les rapports sur un cycle de session spécifique (UUID)'
             ),
+            OpenApiParameter(
+                name='scope',
+                type=OpenApiTypes.STR,
+                location=OpenApiParameter.QUERY,
+                enum=['cycle', 'unit'],
+                description='Filtrer les rapports par portée'
+            ),
+            OpenApiParameter(
+                name='cycle_unit_allocation_id',
+                type=OpenApiTypes.STR,
+                location=OpenApiParameter.QUERY,
+                description='Filtrer les rapports sur une allocation d’unité spécifique (UUID)'
+            ),
         ],
         responses={200: ProductionReportListSerializer(many=True)},
     ),
@@ -101,6 +119,16 @@ class ProductionReportViewSet(viewsets.ReadOnlyModelViewSet):
     def _pending_response(message: str) -> Response:
         return Response({'detail': message}, status=status.HTTP_409_CONFLICT)
 
+    @staticmethod
+    def _normalize_uuid_query_param(value: str | None, field_name: str) -> str | None:
+        if value in (None, ''):
+            return None
+        try:
+            UUID(str(value))
+        except (TypeError, ValueError) as exc:
+            raise ValidationError({field_name: _('Identifiant UUID invalide.')}) from exc
+        return str(value)
+
     def get_queryset(self):
         detail_actions = {
             'retrieve',
@@ -125,9 +153,37 @@ class ProductionReportViewSet(viewsets.ReadOnlyModelViewSet):
         if status_filter:
             queryset = queryset.filter(status=status_filter)
 
-        cycle_id = self.request.query_params.get('cycle_id')
-        if cycle_id:
-            queryset = queryset.filter(payload__report_meta__cycle_scope_id=cycle_id)
+        cycle_id = self._normalize_uuid_query_param(self.request.query_params.get('cycle_id'), 'cycle_id')
+        scope = self.request.query_params.get('scope')
+        cycle_unit_allocation_id = self._normalize_uuid_query_param(
+            self.request.query_params.get('cycle_unit_allocation_id'),
+            'cycle_unit_allocation_id',
+        )
+
+        if scope == 'unit':
+            if not cycle_unit_allocation_id:
+                raise ValidationError({'cycle_unit_allocation_id': _('Contexte d’unité incomplet.')})
+            queryset = queryset.filter(
+                scope_type='unit',
+                scope_object_id=cycle_unit_allocation_id,
+            )
+        elif scope == 'cycle':
+            if not cycle_id:
+                raise ValidationError({'cycle_id': _('Contexte de cycle incomplet.')})
+            queryset = queryset.filter(
+                scope_type='cycle',
+                scope_object_id=cycle_id,
+            )
+        elif cycle_id:
+            queryset = queryset.filter(
+                Q(scope_type='cycle', scope_object_id=cycle_id)
+                | Q(payload__report_meta__cycle_scope_id=cycle_id)
+            )
+        if cycle_unit_allocation_id and scope != 'unit':
+            queryset = queryset.filter(
+                Q(scope_type='unit', scope_object_id=cycle_unit_allocation_id)
+                | Q(payload__report_meta__cycle_unit_allocation_id=cycle_unit_allocation_id)
+            )
 
         return queryset.order_by('-period_start', '-created_at')
 
@@ -160,14 +216,20 @@ class ProductionReportViewSet(viewsets.ReadOnlyModelViewSet):
                 GenerateReportCommand(
                     report_type=serializer.validated_data['report_type'],
                     reference_date=serializer.validated_data.get('reference_date'),
+                    scope=serializer.validated_data.get('scope', 'cycle'),
                     cycle_id=(
                         str(serializer.validated_data['cycle_id'])
                         if serializer.validated_data.get('cycle_id')
                         else None
                     ),
+                    cycle_unit_allocation_id=(
+                        str(serializer.validated_data['cycle_unit_allocation_id'])
+                        if serializer.validated_data.get('cycle_unit_allocation_id')
+                        else None
+                    ),
                 ),
             )
-        except InvalidReportCycleScopeError as exc:
+        except (InvalidReportCycleScopeError, InvalidReportUnitScopeError, InvalidReportScopeError) as exc:
             return Response(
                 {'detail': str(exc)},
                 status=status.HTTP_400_BAD_REQUEST,

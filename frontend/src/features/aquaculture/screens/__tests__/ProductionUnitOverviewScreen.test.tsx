@@ -104,6 +104,7 @@ describe('features/aquaculture/screens/ProductionUnitOverviewScreen', () => {
       expect(getByText('dailyLog')).toBeTruthy();
       expect(getByText('sanitaryLog')).toBeTruthy();
       expect(getByText('productionUnitLogHistoryAction')).toBeTruthy();
+      expect(queryByText('productionUnitReportAction')).toBeNull();
       expect(queryByText('notifications')).toBeNull();
       expect(queryByText('feedingPlan')).toBeNull();
       expect(queryByText('reports')).toBeNull();
@@ -128,6 +129,7 @@ describe('features/aquaculture/screens/ProductionUnitOverviewScreen', () => {
     await waitFor(() => {
       expect(getByText('productionUnitSanitaryLogAction')).toBeTruthy();
       expect(getAllByText('productionUnitLogHistoryAction').length).toBeGreaterThanOrEqual(2);
+      expect(getByText('productionUnitReportAction')).toBeTruthy();
       expect(queryByText('notifications')).toBeNull();
       expect(queryByText('feedingPlan')).toBeNull();
       expect(queryByText('reports')).toBeNull();
@@ -141,6 +143,24 @@ describe('features/aquaculture/screens/ProductionUnitOverviewScreen', () => {
 
     await waitFor(() => {
       expect(navigation.navigate).toHaveBeenCalledWith('SanitaryLog', {
+        cycleId: 'cycle-1',
+        cycleUnitAllocationId: 'allocation-1',
+        productionUnitId: 'unit-1',
+        productionUnitName: 'Bac 1',
+      });
+    });
+
+    fireEvent.press(getByText('viewAllActions'));
+
+    await waitFor(() => {
+      expect(getByText('productionUnitReportAction')).toBeTruthy();
+    });
+
+    fireEvent.press(getByText('productionUnitReportAction'));
+
+    await waitFor(() => {
+      expect(navigation.navigate).toHaveBeenCalledWith('Reports', {
+        scope: 'unit',
         cycleId: 'cycle-1',
         cycleUnitAllocationId: 'allocation-1',
         productionUnitId: 'unit-1',

@@ -349,16 +349,17 @@ describe('features/aquaculture/services/aquacultureService', () => {
   });
 
   it('retourne les rapports depuis une reponse paginee avec filtres', async () => {
-    const report = { id: 'report-1', report_type: 'daily' };
+    const report = { id: 'report-1', report_type: 'daily', scope_type: 'cycle' };
     mockApi.get.mockResolvedValueOnce({ data: { results: [report] } } as never);
 
     const result = await aquacultureService.getReports({
       report_type: 'daily',
       status: 'draft',
+      scope: 'cycle',
     });
 
     expect(result).toEqual([report]);
-    expect(mockApi.get).toHaveBeenCalledWith('/aquaculture/reports/?report_type=daily&status=draft');
+    expect(mockApi.get).toHaveBeenCalledWith('/aquaculture/reports/?report_type=daily&status=draft&scope=cycle');
   });
 
   it('ajoute cycle_id dans le filtre des rapports quand fourni', async () => {
@@ -369,11 +370,30 @@ describe('features/aquaculture/services/aquacultureService', () => {
     expect(mockApi.get).toHaveBeenCalledWith('/aquaculture/reports/?cycle_id=cycle-session-1');
   });
 
+  it('ajoute le contexte unitaire dans le filtre des rapports quand fourni', async () => {
+    mockApi.get.mockResolvedValueOnce({ data: { results: [] } } as never);
+
+    await aquacultureService.getReports({
+      scope: 'unit',
+      cycle_id: 'cycle-session-1',
+      cycle_unit_allocation_id: 'allocation-1',
+    });
+
+    expect(mockApi.get).toHaveBeenCalledWith(
+      '/aquaculture/reports/?scope=unit&cycle_id=cycle-session-1&cycle_unit_allocation_id=allocation-1'
+    );
+  });
+
   it('appelle les endpoints de rapport (generate, validate, send, whatsapp)', async () => {
     const reportPayload = { id: 'report-1', status: 'draft' };
     mockApi.post.mockResolvedValue({ data: reportPayload } as never);
 
-    await aquacultureService.generateReport({ report_type: 'weekly' });
+    await aquacultureService.generateReport({
+      report_type: 'weekly',
+      scope: 'unit',
+      cycle_id: 'cycle-1',
+      cycle_unit_allocation_id: 'allocation-1',
+    });
     await aquacultureService.validateReport('report-1');
     await aquacultureService.sendReportEmail('report-1');
     await aquacultureService.markReportWhatsAppShared('report-1', {
@@ -384,7 +404,12 @@ describe('features/aquaculture/services/aquacultureService', () => {
     expect(mockApi.post).toHaveBeenNthCalledWith(
       1,
       '/aquaculture/reports/generate/',
-      { report_type: 'weekly' }
+      {
+        report_type: 'weekly',
+        scope: 'unit',
+        cycle_id: 'cycle-1',
+        cycle_unit_allocation_id: 'allocation-1',
+      }
     );
     expect(mockApi.post).toHaveBeenNthCalledWith(2, '/aquaculture/reports/report-1/validate/');
     expect(mockApi.post).toHaveBeenNthCalledWith(3, '/aquaculture/reports/report-1/send-email/');

@@ -261,12 +261,19 @@ describe('features/main/screens/DashboardScreen', () => {
       expect(getByText('dashboardEstimatedCurrentFish')).toBeTruthy();
       expect(getByText('dashboardTimeRemainingCycle')).toBeTruthy();
       expect(getByText('productionUnitsDashboardCta')).toBeTruthy();
+      expect(getByText('reportCycleTitle')).toBeTruthy();
       expect(getByText('storeTitle')).toBeTruthy();
       expect(queryByText('storeDashboardSubtitle')).toBeNull();
       expect(queryByText('viewAllActions')).toBeNull();
       expect(queryByText('dailyLog')).toBeNull();
       expect(queryByText('productCatalog')).toBeNull();
       expect(queryByText('harvest')).toBeNull();
+    });
+
+    fireEvent.press(getByText('reportCycleTitle'));
+    expect(navigation.navigate).toHaveBeenCalledWith('Reports', {
+      scope: 'cycle',
+      cycleId: cycleWithUnits.id,
     });
 
     expect(mockGetCycleDashboard).toHaveBeenCalledWith('cycle-unit');

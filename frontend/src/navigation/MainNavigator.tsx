@@ -43,6 +43,7 @@ import CycleFeedPhasesScreen from '@/features/commerce/screens/CycleFeedPhasesSc
 
 // Chat/Support Screens
 import { ChatScreen } from '@/features/chat/screens/ChatScreen';
+import type { ReportScopeType } from '@/types/aquaculture';
 
 export type MainTabParamList = {
   Dashboard: undefined;
@@ -82,7 +83,15 @@ export type RootStackParamList = {
   Notifications: undefined;
   FeedingPlan: undefined;
   Statistics: undefined;
-  Reports: undefined;
+  Reports:
+    | {
+        scope?: ReportScopeType;
+        cycleId?: string;
+        cycleUnitAllocationId?: string;
+        productionUnitId?: string;
+        productionUnitName?: string;
+      }
+    | undefined;
   ReportDetail: { reportId: string };
   // Commerce Screens
   ProductCatalog:

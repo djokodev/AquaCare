@@ -1635,6 +1635,11 @@ class ProductionReport(models.Model):
     manuellement avant envoi. Le PDF est stocké pour audit et partage.
     """
 
+    REPORT_SCOPE_CHOICES = [
+        ('cycle', _('Cycle')),
+        ('unit', _('Unité')),
+    ]
+
     REPORT_TYPE_CHOICES = [
         ('daily', _('Journalier')),
         ('weekly', _('Hebdomadaire')),
@@ -1670,6 +1675,19 @@ class ProductionReport(models.Model):
         max_length=20,
         choices=REPORT_TYPE_CHOICES,
         verbose_name=_("Type de rapport")
+    )
+    scope_type = models.CharField(
+        max_length=20,
+        choices=REPORT_SCOPE_CHOICES,
+        default='cycle',
+        verbose_name=_("Portée du rapport"),
+        help_text=_("Cycle ou unité de production ciblée"),
+    )
+    scope_object_id = models.UUIDField(
+        null=True,
+        blank=True,
+        verbose_name=_("UUID du contexte de rapport"),
+        help_text=_("UUID du cycle ou de l'allocation ciblée"),
     )
     period_start = models.DateField(verbose_name=_("Début période"))
     period_end = models.DateField(verbose_name=_("Fin période"))
@@ -1751,13 +1769,21 @@ class ProductionReport(models.Model):
         verbose_name_plural = _("Rapports de production")
         constraints = [
             models.UniqueConstraint(
-                fields=['farm_profile', 'report_type', 'period_start', 'period_end'],
-                name='uniq_report_period_per_farm'
+                fields=[
+                    'farm_profile',
+                    'report_type',
+                    'period_start',
+                    'period_end',
+                    'scope_type',
+                    'scope_object_id',
+                ],
+                name='uniq_report_period_per_farm_scope',
             )
         ]
         indexes = [
             models.Index(fields=['farm_profile', 'report_type', 'period_start'], name='rpt_farm_type_start_idx'),
             models.Index(fields=['status', 'generated_at'], name='rpt_status_generated_idx'),
+            models.Index(fields=['scope_type', 'scope_object_id'], name='rpt_scope_type_object_idx'),
             GinIndex(fields=['payload'], name='rpt_payload_gin_idx'),
         ]
 

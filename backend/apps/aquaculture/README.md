@@ -188,6 +188,13 @@ Role:
 2. Workflow `pending -> draft -> validated`.
 3. Diffusion email/whatsapp tracee pour audit.
 
+Reports rule:
+
+1. Les rapports existants sont maintenant scope-aware.
+2. Un rapport d'unite explique une seule unite de production.
+3. Un rapport de cycle agrege tous les faits des unites du cycle.
+4. Les rapports ne creent pas de faits, ils resument les logs deja enregistres par les unites.
+
 ## Flux Metier
 
 ### 1. Setup Ferme Et Simulation

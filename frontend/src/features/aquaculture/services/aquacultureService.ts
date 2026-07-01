@@ -31,6 +31,7 @@ import {
   ProductionUnitDashboard,
   ProductionUnitCreatePayload,
   CycleUnitAllocationCreatePayload,
+  ReportScopeType,
 } from '@/types/aquaculture';
 
 interface PaginatedResponse<T> {
@@ -189,7 +190,9 @@ class AquacultureService {
   async getReports(params?: {
     report_type?: ReportType;
     status?: 'draft' | 'validated';
+    scope?: ReportScopeType;
     cycle_id?: string;
+    cycle_unit_allocation_id?: string;
   }): Promise<ProductionReport[]> {
     try {
       const query = new URLSearchParams();
@@ -199,8 +202,14 @@ class AquacultureService {
       if (params?.status) {
         query.append('status', params.status);
       }
+      if (params?.scope) {
+        query.append('scope', params.scope);
+      }
       if (params?.cycle_id) {
         query.append('cycle_id', params.cycle_id);
+      }
+      if (params?.cycle_unit_allocation_id) {
+        query.append('cycle_unit_allocation_id', params.cycle_unit_allocation_id);
       }
 
       const queryString = query.toString();
@@ -227,7 +236,9 @@ class AquacultureService {
   async generateReport(payload: {
     report_type: ReportType;
     reference_date?: string;
+    scope?: ReportScopeType;
     cycle_id?: string;
+    cycle_unit_allocation_id?: string;
   }): Promise<ProductionReport> {
     try {
       const response = await apiService.post<ProductionReport>(
