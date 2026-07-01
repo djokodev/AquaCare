@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import logging
 from urllib.parse import quote
+from uuid import UUID
 
 from django.db.models import Q
 from django.http import FileResponse
@@ -118,6 +119,16 @@ class ProductionReportViewSet(viewsets.ReadOnlyModelViewSet):
     def _pending_response(message: str) -> Response:
         return Response({'detail': message}, status=status.HTTP_409_CONFLICT)
 
+    @staticmethod
+    def _normalize_uuid_query_param(value: str | None, field_name: str) -> str | None:
+        if value in (None, ''):
+            return None
+        try:
+            UUID(str(value))
+        except (TypeError, ValueError) as exc:
+            raise ValidationError({field_name: _('Identifiant UUID invalide.')}) from exc
+        return str(value)
+
     def get_queryset(self):
         detail_actions = {
             'retrieve',
@@ -142,9 +153,12 @@ class ProductionReportViewSet(viewsets.ReadOnlyModelViewSet):
         if status_filter:
             queryset = queryset.filter(status=status_filter)
 
-        cycle_id = self.request.query_params.get('cycle_id')
+        cycle_id = self._normalize_uuid_query_param(self.request.query_params.get('cycle_id'), 'cycle_id')
         scope = self.request.query_params.get('scope')
-        cycle_unit_allocation_id = self.request.query_params.get('cycle_unit_allocation_id')
+        cycle_unit_allocation_id = self._normalize_uuid_query_param(
+            self.request.query_params.get('cycle_unit_allocation_id'),
+            'cycle_unit_allocation_id',
+        )
 
         if scope == 'unit':
             if not cycle_unit_allocation_id:

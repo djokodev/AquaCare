@@ -54,6 +54,24 @@ class TestScopedProductionReportsApi:
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert 'allocation' in str(response.data).lower() or 'unité' in str(response.data).lower()
 
+    def test_list_reports_rejects_invalid_cycle_uuid(self, auth_client):
+        response = auth_client.get(
+            reverse('aquaculture:production-report-list'),
+            {'scope': 'cycle', 'cycle_id': 'not-a-uuid'},
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert 'cycle_id' in response.data
+
+    def test_list_reports_rejects_invalid_unit_uuid(self, auth_client):
+        response = auth_client.get(
+            reverse('aquaculture:production-report-list'),
+            {'scope': 'unit', 'cycle_unit_allocation_id': 'not-a-uuid'},
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert 'cycle_unit_allocation_id' in response.data
+
     def test_list_reports_filters_cycle_and_unit_scopes(self, auth_client, farm_profile):
         cycle = ProductionCycleFactory(
             farm_profile=farm_profile,
