@@ -138,6 +138,7 @@ export const useAuth = () => {
     isAuthenticated: authState.isAuthenticated,
     isLoading: authState.isLoading,
     error: authState.error,
+    fieldErrors: authState.fieldErrors,
 
     // Actions
     login,

@@ -1,6 +1,6 @@
 ﻿import * as SecureStore from 'expo-secure-store';
 
-import { authService } from '../authService';
+import { AuthRequestError, authService } from '../authService';
 import { apiService } from '@/services/api';
 import { STORAGE_KEYS } from '@/constants/api';
 
@@ -105,12 +105,18 @@ describe('services/authService', () => {
       const errorResponse = {
         response: {
           status: 400,
-          data: { phone: ['Ce numéro existe déjà'] },
+          data: { phone_number: ['Ce numéro existe déjà'] },
         },
       };
       mockApiService.post.mockRejectedValueOnce(errorResponse as any);
 
-      await expect(authService.register(mockRegisterData)).rejects.toThrow();
+      await expect(authService.register(mockRegisterData)).rejects.toMatchObject(
+        {
+          fieldErrors: {
+            phone_number: 'Ce numéro existe déjà',
+          },
+        } as Partial<AuthRequestError>
+      );
     });
   });
 

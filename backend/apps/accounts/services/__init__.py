@@ -1,6 +1,7 @@
 from .account_deletion_service import AccountDeletionService
 from .auth_application_service import (
     AuthApplicationService,
+    AuthValidationError,
     AuthSuccessResult,
     AuthTokenPair,
     InvalidCredentialsError,
@@ -17,6 +18,7 @@ __all__ = [
     "AccountDeletionService",
     "AccountRegistrationService",
     "AuthApplicationService",
+    "AuthValidationError",
     "AuthSuccessResult",
     "AuthTokenPair",
     "FarmSetupService",

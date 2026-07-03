@@ -155,14 +155,8 @@ class TestRegistrationEndpoint:
         response = self.client.post(self.url, data, format='json')
         
         assert response.status_code == status.HTTP_400_BAD_REQUEST
-        phone_error = "phone_number" in response.data and (
-            "Impossible de créer ce compte" in str(response.data["phone_number"])
-        )
-        non_field_error = "non_field_errors" in response.data and (
-            "Impossible de créer ce compte" in str(response.data["non_field_errors"])
-        )
-        error_found = phone_error or non_field_error
-        assert error_found, f"Expected duplicate phone error but got: {response.data}"
+        assert "phone_number" in response.data
+        assert "existe déjà avec ce numéro" in str(response.data["phone_number"])
     
     def test_register_password_mismatch_fails(self):
         """Test échec avec mots de passe différents."""
@@ -313,7 +307,7 @@ class TestLoginEndpoint:
         response = self.client.post(self.url, data, format='json')
         
         assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert "Identifiants invalides" in str(response.data)
+        assert response.data["password"][0] == "Mot de passe incorrect."
     
     def test_login_nonexistent_user_fails(self):
         """Test échec avec utilisateur inexistant."""
@@ -325,6 +319,7 @@ class TestLoginEndpoint:
         response = self.client.post(self.url, data, format='json')
         
         assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.data["login_name"][0] == "Aucun compte n'est associé à ce nom de connexion."
     
     def test_login_inactive_user_fails(self):
         """Test échec avec compte désactivé."""
@@ -340,7 +335,7 @@ class TestLoginEndpoint:
         response = self.client.post(self.url, data, format='json')
         
         assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert "Identifiants invalides" in str(response.data)
+        assert "désactivé" in str(response.data["non_field_errors"][0])
 
     def test_login_ambiguous_name_guides_user_to_phone_login(self):
         """Un login_name ambigu doit donner une erreur actionnable, pas une 500."""
@@ -362,7 +357,10 @@ class TestLoginEndpoint:
         )
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert "Identifiants invalides" in str(response.data)
+        assert (
+            response.data["login_name"][0]
+            == "Plusieurs comptes correspondent à ce nom de connexion. Utilisez plutôt votre numéro de téléphone."
+        )
 
 
 @pytest.mark.django_db

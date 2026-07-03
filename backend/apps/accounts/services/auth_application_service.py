@@ -8,7 +8,8 @@ from dataclasses import dataclass
 from accounts.domain.login_identifier import LoginIdentifier
 from accounts.managers import AmbiguousLoginNameError
 from accounts.models import User
-from django.contrib.auth import authenticate
+from accounts.validators import normalize_phone_number
+from django.utils.translation import gettext as _
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.settings import api_settings
 from rest_framework_simplejwt.tokens import RefreshToken, UntypedToken
@@ -48,11 +49,19 @@ class InvalidRefreshTokenError(Exception):
     """Refresh token invalide ou deja invalide."""
 
 
-class InvalidCredentialsError(Exception):
+class AuthValidationError(Exception):
+    """Erreur metier liee au formulaire d'authentification."""
+
+    def __init__(self, message: str, *, field_name: str | None = None) -> None:
+        super().__init__(message)
+        self.field_name = field_name
+
+
+class InvalidCredentialsError(AuthValidationError):
     """Identifiants invalides ou compte inactif."""
 
 
-class AmbiguousCredentialsError(Exception):
+class AmbiguousCredentialsError(AuthValidationError):
     """Le nom de connexion correspond a plusieurs comptes."""
 
 
@@ -81,14 +90,31 @@ class AuthApplicationService:
                     "status_code": 400,
                 },
             )
-            raise InvalidCredentialsError("missing credentials")
+            raise InvalidCredentialsError(
+                _("Veuillez fournir soit le nom de connexion soit le numéro de téléphone."),
+            )
+
+        if not password:
+            logger.warning(
+                "Authentication rejected",
+                extra={
+                    "event": "accounts.login.rejected",
+                    "reason_code": "missing_password",
+                    "auth_method": "phone_number" if identifier.phone_number else "login_name",
+                    "status_code": 400,
+                },
+            )
+            raise InvalidCredentialsError(
+                _("Le mot de passe est requis."),
+                field_name="password",
+            )
 
         try:
-            user = authenticate(
-                login_name=identifier.login_name,
-                phone_number=identifier.phone_number,
-                password=password,
-            )
+            if identifier.login_name:
+                user = User.objects.get_by_login_name(identifier.login_name)
+            else:
+                normalized_phone = normalize_phone_number(identifier.phone_number)
+                user = User.objects.get_by_natural_key(normalized_phone)
         except AmbiguousLoginNameError as err:
             logger.warning(
                 "Authentication rejected",
@@ -99,18 +125,62 @@ class AuthApplicationService:
                     "status_code": 400,
                 },
             )
-            raise AmbiguousCredentialsError("ambiguous login name") from err
-        if not user or not user.is_active:
+            raise AmbiguousCredentialsError(
+                _(
+                    "Plusieurs comptes correspondent à ce nom de connexion. "
+                    "Utilisez plutôt votre numéro de téléphone."
+                ),
+                field_name="login_name",
+            ) from err
+        except User.DoesNotExist as err:
+            auth_method = "phone_number" if identifier.phone_number else "login_name"
+            reason_code = "unknown_phone_number" if identifier.phone_number else "unknown_login_name"
             logger.warning(
                 "Authentication rejected",
                 extra={
                     "event": "accounts.login.rejected",
-                    "reason_code": "invalid_credentials",
+                    "reason_code": reason_code,
+                    "auth_method": auth_method,
+                    "status_code": 400,
+                },
+            )
+            if identifier.phone_number:
+                raise InvalidCredentialsError(
+                    _("Aucun compte n'est associé à ce numéro de téléphone."),
+                    field_name="phone_number",
+                ) from err
+            raise InvalidCredentialsError(
+                _("Aucun compte n'est associé à ce nom de connexion."),
+                field_name="login_name",
+            ) from err
+
+        if not user.is_active:
+            logger.warning(
+                "Authentication rejected",
+                extra={
+                    "event": "accounts.login.rejected",
+                    "reason_code": "inactive_account",
                     "auth_method": "phone_number" if identifier.phone_number else "login_name",
                     "status_code": 400,
                 },
             )
-            raise InvalidCredentialsError("invalid credentials")
+            raise InvalidCredentialsError(
+                _("Ce compte a été désactivé. Contactez AquaCare pour obtenir de l'aide."),
+            )
+        if not user.check_password(password):
+            logger.warning(
+                "Authentication rejected",
+                extra={
+                    "event": "accounts.login.rejected",
+                    "reason_code": "invalid_password",
+                    "auth_method": "phone_number" if identifier.phone_number else "login_name",
+                    "status_code": 400,
+                },
+            )
+            raise InvalidCredentialsError(
+                _("Mot de passe incorrect."),
+                field_name="password",
+            )
         return user
 
     @staticmethod

@@ -30,6 +30,7 @@ describe('store/slices/authSlice', () => {
     isAuthenticated: false,
     isLoading: false,
     error: null,
+    fieldErrors: {},
   };
 
   const mockUser: User = {
@@ -65,6 +66,7 @@ describe('store/slices/authSlice', () => {
       const newState = authSliceReducer(stateWithError, clearError());
 
       expect(newState.error).toBeNull();
+      expect(newState.fieldErrors).toEqual({});
     });
 
     it('setUser définit l\'utilisateur', () => {
@@ -87,6 +89,7 @@ describe('store/slices/authSlice', () => {
 
       expect(newState.isLoading).toBe(true);
       expect(newState.error).toBeNull();
+      expect(newState.fieldErrors).toEqual({});
     });
 
     it('gère l\'état fulfilled', () => {
@@ -105,7 +108,10 @@ describe('store/slices/authSlice', () => {
     it('gère l\'état rejected', () => {
       const action = {
         type: loginUser.rejected.type,
-        payload: 'Identifiants invalides',
+        payload: {
+          message: 'Identifiants invalides',
+          fieldErrors: {},
+        },
       };
       const newState = authSliceReducer(initialState, action);
 
@@ -113,6 +119,7 @@ describe('store/slices/authSlice', () => {
       expect(newState.isAuthenticated).toBe(false);
       expect(newState.user).toBeNull();
       expect(newState.error).toBe('Identifiants invalides');
+      expect(newState.fieldErrors).toEqual({});
     });
   });
 
@@ -123,6 +130,7 @@ describe('store/slices/authSlice', () => {
 
       expect(newState.isLoading).toBe(true);
       expect(newState.error).toBeNull();
+      expect(newState.fieldErrors).toEqual({});
     });
 
     it('gère l\'état fulfilled', () => {
@@ -141,14 +149,22 @@ describe('store/slices/authSlice', () => {
     it('gère l\'état rejected', () => {
       const action = {
         type: registerUser.rejected.type,
-        payload: 'Numéro déjà utilisé',
+        payload: {
+          message: null,
+          fieldErrors: {
+            phone_number: 'Numéro déjà utilisé',
+          },
+        },
       };
       const newState = authSliceReducer(initialState, action);
 
       expect(newState.isLoading).toBe(false);
       expect(newState.isAuthenticated).toBe(false);
       expect(newState.user).toBeNull();
-      expect(newState.error).toBe('Numéro déjà utilisé');
+      expect(newState.error).toBeNull();
+      expect(newState.fieldErrors).toEqual({
+        phone_number: 'Numéro déjà utilisé',
+      });
     });
   });
 
@@ -176,12 +192,16 @@ describe('store/slices/authSlice', () => {
       expect(newState.user).toBeNull();
       expect(newState.farmProfile).toBeNull();
       expect(newState.error).toBeNull();
+      expect(newState.fieldErrors).toEqual({});
     });
 
     it('gère l\'état rejected et nettoie quand même l\'état local', () => {
       const action = {
         type: logoutUser.rejected.type,
-        payload: 'Erreur réseau',
+        payload: {
+          message: 'Erreur réseau',
+          fieldErrors: {},
+        },
       };
       const newState = authSliceReducer(authenticatedState, action);
 
@@ -190,6 +210,7 @@ describe('store/slices/authSlice', () => {
       expect(newState.user).toBeNull();
       expect(newState.farmProfile).toBeNull();
       expect(newState.error).toBe('Erreur réseau');
+      expect(newState.fieldErrors).toEqual({});
     });
   });
 
@@ -207,6 +228,7 @@ describe('store/slices/authSlice', () => {
 
       expect(newState.isLoading).toBe(true);
       expect(newState.error).toBeNull();
+      expect(newState.fieldErrors).toEqual({});
     });
 
     it('gere l etat fulfilled et nettoie l etat', () => {
@@ -218,12 +240,16 @@ describe('store/slices/authSlice', () => {
       expect(newState.user).toBeNull();
       expect(newState.farmProfile).toBeNull();
       expect(newState.error).toBeNull();
+      expect(newState.fieldErrors).toEqual({});
     });
 
     it('gere l etat rejected et conserve la session', () => {
       const action = {
         type: deleteAccountUser.rejected.type,
-        payload: 'Erreur reseau',
+        payload: {
+          message: 'Erreur reseau',
+          fieldErrors: {},
+        },
       };
       const newState = authSliceReducer(authenticatedState, action);
 
@@ -232,6 +258,7 @@ describe('store/slices/authSlice', () => {
       expect(newState.user).toEqual(mockUser);
       expect(newState.farmProfile).toEqual(mockFarmProfile);
       expect(newState.error).toBe('Erreur reseau');
+      expect(newState.fieldErrors).toEqual({});
     });
   });
 
@@ -270,7 +297,10 @@ describe('store/slices/authSlice', () => {
     it('gère l\'état rejected', () => {
       const action = {
         type: checkAuthStatus.rejected.type,
-        payload: 'Token expiré',
+        payload: {
+          message: 'Token expiré',
+          fieldErrors: {},
+        },
       };
       const newState = authSliceReducer(initialState, action);
 
@@ -278,6 +308,7 @@ describe('store/slices/authSlice', () => {
       expect(newState.isAuthenticated).toBe(false);
       expect(newState.user).toBeNull();
       expect(newState.error).toBe('Token expiré');
+      expect(newState.fieldErrors).toEqual({});
     });
   });
 
@@ -294,6 +325,7 @@ describe('store/slices/authSlice', () => {
 
       expect(newState.isLoading).toBe(true);
       expect(newState.error).toBeNull();
+      expect(newState.fieldErrors).toEqual({});
     });
 
     it('gère l\'état fulfilled', () => {
@@ -323,12 +355,16 @@ describe('store/slices/authSlice', () => {
     it('gère l\'état rejected quand authentifié — affiche l\'erreur', () => {
       const action = {
         type: loadUserProfile.rejected.type,
-        payload: 'Erreur chargement profil',
+        payload: {
+          message: 'Erreur chargement profil',
+          fieldErrors: {},
+        },
       };
       const newState = authSliceReducer(authenticatedState, action);
 
       expect(newState.isLoading).toBe(false);
       expect(newState.error).toBe('Erreur chargement profil');
+      expect(newState.fieldErrors).toEqual({});
     });
 
     it('gère l\'état rejected après logout (requête en-vol) — n\'affiche pas l\'erreur', () => {
@@ -337,7 +373,10 @@ describe('store/slices/authSlice', () => {
       // L'erreur NE DOIT PAS s'afficher sur le LoginScreen.
       const action = {
         type: loadUserProfile.rejected.type,
-        payload: 'AUTH_INVALID_CREDENTIALS',
+        payload: {
+          message: 'AUTH_INVALID_CREDENTIALS',
+          fieldErrors: {},
+        },
       };
       const newState = authSliceReducer(initialState, action); // isAuthenticated = false
 
@@ -359,16 +398,21 @@ describe('store/slices/authSlice', () => {
 
       expect(newState.user).toEqual(updatedUser);
       expect(newState.error).toBeNull();
+      expect(newState.fieldErrors).toEqual({});
     });
 
     it('gère l\'état rejected', () => {
       const action = {
         type: updateUserProfile.rejected.type,
-        payload: 'Erreur mise à jour',
+        payload: {
+          message: 'Erreur mise à jour',
+          fieldErrors: {},
+        },
       };
       const newState = authSliceReducer(stateWithUser, action);
 
       expect(newState.error).toBe('Erreur mise à jour');
+      expect(newState.fieldErrors).toEqual({});
     });
   });
 
@@ -385,16 +429,21 @@ describe('store/slices/authSlice', () => {
 
       expect(newState.farmProfile).toEqual(updatedFarm);
       expect(newState.error).toBeNull();
+      expect(newState.fieldErrors).toEqual({});
     });
 
     it('gère l\'état rejected', () => {
       const action = {
         type: updateFarmProfile.rejected.type,
-        payload: 'Erreur mise à jour ferme',
+        payload: {
+          message: 'Erreur mise à jour ferme',
+          fieldErrors: {},
+        },
       };
       const newState = authSliceReducer(stateWithFarm, action);
 
       expect(newState.error).toBe('Erreur mise à jour ferme');
+      expect(newState.fieldErrors).toEqual({});
     });
   });
 });

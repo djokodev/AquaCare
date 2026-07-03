@@ -21,6 +21,7 @@ from .models import FarmProfile, User
 from .services.auth_application_service import (
     AmbiguousCredentialsError,
     AuthApplicationService,
+    AuthValidationError,
     InvalidCredentialsError,
 )
 from .services.farm_setup_service import FarmSetupService
@@ -81,8 +82,8 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data: dict[str, Any]) -> User:
         validated_data.pop('password_confirm')
-        generic_registration_error = _(
-            "Impossible de créer ce compte avec les informations fournies."
+        phone_number_exists_error = _(
+            "Un compte existe déjà avec ce numéro de téléphone. Connectez-vous ou utilisez un autre numéro."
         )
 
         try:
@@ -92,7 +93,7 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
             if hasattr(err, 'error_dict'):
                 if 'phone_number' in err.error_dict:
                     raise serializers.ValidationError({
-                        'phone_number': [generic_registration_error]
+                        'phone_number': [phone_number_exists_error]
                     }) from err
                 raise serializers.ValidationError({
                     field: [str(error) for error in errors]
@@ -103,7 +104,7 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         except IntegrityError as err:
             if 'phone_number' in str(err):
                 raise serializers.ValidationError({
-                    'phone_number': [generic_registration_error]
+                    'phone_number': [phone_number_exists_error]
                 }) from err
             else:
                 raise serializers.ValidationError(
@@ -148,19 +149,10 @@ class LoginSerializer(serializers.Serializer):
                 phone_number=phone_number,
                 password=password,
             )
-        except AmbiguousCredentialsError as err:
-            raise serializers.ValidationError(
-                _(
-                    "Identifiants invalides. Vérifiez vos informations ou utilisez "
-                    "votre numéro de téléphone si votre nom de connexion est ambigu."
-                )
-            ) from err
-        except InvalidCredentialsError as err:
-            error_msg = _(
-                "Identifiants invalides. Vérifiez vos informations ou utilisez "
-                "votre numéro de téléphone si votre nom de connexion est ambigu."
-            )
-            raise serializers.ValidationError(error_msg) from err
+        except (AmbiguousCredentialsError, InvalidCredentialsError, AuthValidationError) as err:
+            if err.field_name:
+                raise serializers.ValidationError({err.field_name: [str(err)]}) from err
+            raise serializers.ValidationError(str(err)) from err
 
         attrs['user'] = user
         return attrs

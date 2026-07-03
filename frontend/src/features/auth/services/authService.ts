@@ -4,11 +4,35 @@ import { apiService } from '@/services/api';
 import logger from '@/utils/logger';
 import { API_ENDPOINTS, STORAGE_KEYS } from '@/constants/api';
 import {
+  AuthFieldErrors,
   LoginRequest,
   RegisterRequest,
   AuthResponse,
   User,
 } from '@/features/auth/types/auth';
+
+const AUTH_META_FIELDS = new Set(['code', 'status_code']);
+
+const toFieldMessage = (value: unknown): string | null => {
+  if (typeof value === 'string' && value.trim()) {
+    return value;
+  }
+  if (Array.isArray(value) && value.length > 0) {
+    const firstValue = value[0];
+    return typeof firstValue === 'string' && firstValue.trim() ? firstValue : null;
+  }
+  return null;
+};
+
+export class AuthRequestError extends Error {
+  fieldErrors: AuthFieldErrors;
+
+  constructor(message: string, fieldErrors: AuthFieldErrors = {}) {
+    super(message);
+    this.name = 'AuthRequestError';
+    this.fieldErrors = fieldErrors;
+  }
+}
 
 class AuthService {
   /**
@@ -189,29 +213,50 @@ class AuthService {
       };
 
       if (status === 400 && data && typeof data === 'object') {
-        // Field-level errors — messages come from the backend in the user's language
-        for (const field of ['phone_number', 'email', 'password', 'non_field_errors', 'message'] as const) {
-          const val = data[field];
-          if (val) return new Error(Array.isArray(val) ? String(val[0]) : String(val));
+        const fieldErrors: AuthFieldErrors = {};
+        let generalMessage: string | null = null;
+
+        for (const [field, value] of Object.entries(data)) {
+          if (AUTH_META_FIELDS.has(field)) {
+            continue;
+          }
+
+          const message = toFieldMessage(value);
+          if (!message) {
+            continue;
+          }
+
+          if (field === 'message') {
+            generalMessage = message;
+            continue;
+          }
+
+          if (field === 'non_field_errors') {
+            generalMessage = generalMessage || message;
+            continue;
+          }
+
+          fieldErrors[field] = message;
         }
-        const errorMessages = Object.values(data)
-          .map((v) => (Array.isArray(v) ? String(v[0]) : String(v)))
-          .join(' ');
-        return new Error(errorMessages || JSON.stringify(data));
+
+        return new AuthRequestError(
+          generalMessage || '',
+          fieldErrors
+        );
       }
 
       if (status in HTTP_ERROR_CODES) {
-        return new Error(HTTP_ERROR_CODES[status]);
+        return new AuthRequestError(HTTP_ERROR_CODES[status]);
       }
 
-      return new Error(data?.message as string || `HTTP_${status}`);
+      return new AuthRequestError(data?.message as string || `HTTP_${status}`);
     }
 
     if (axiosErr.request) {
-      return new Error('AUTH_NETWORK_ERROR');
+      return new AuthRequestError('AUTH_NETWORK_ERROR');
     }
 
-    return new Error(axiosErr.message || 'AUTH_UNKNOWN_ERROR');
+    return new AuthRequestError(axiosErr.message || 'AUTH_UNKNOWN_ERROR');
   }
 }
 

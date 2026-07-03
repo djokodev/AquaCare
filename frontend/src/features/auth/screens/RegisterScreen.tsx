@@ -24,7 +24,7 @@ interface Props {
 
 export default function RegisterScreen({ navigation }: Props) {
   const { t } = useTranslation();
-  const { register, isLoading, error, clearAuthError } = useAuth();
+  const { register, isLoading, error, fieldErrors, clearAuthError } = useAuth();
 
   const [formData, setFormData] = useState<RegisterRequest>({
     phone_number: '',
@@ -69,8 +69,14 @@ export default function RegisterScreen({ navigation }: Props) {
     if (error) clearAuthError();
   };
 
-  const renderError = (field: keyof typeof errors) =>
-    errors[field] ? <Text className="text-sm text-error mt-1">{t(errors[field])}</Text> : null;
+  const phoneFieldError = errors.phone_number || fieldErrors.phone_number;
+
+  const renderError = (field: keyof RegisterValidationErrors) => {
+    const message = errors[field] || fieldErrors[field];
+    return message ? (
+      <Text className="text-sm text-error mt-1">{t(message, { defaultValue: message })}</Text>
+    ) : null;
+  };
 
   return (
     <KeyboardAvoidingView
@@ -121,7 +127,7 @@ export default function RegisterScreen({ navigation }: Props) {
           <PhoneInputField
             value={formData.phone_number}
             onChange={(formatted) => updateField('phone_number', formatted)}
-            error={errors.phone_number}
+            error={phoneFieldError}
             hint={t('whatsAppHint')}
             required
           />
@@ -234,6 +240,7 @@ export default function RegisterScreen({ navigation }: Props) {
             onChange={(value) => updateField('region', value)}
             options={REGIONS}
             placeholder={t('selectRegion')}
+            error={fieldErrors.region}
           />
 
           <View className="mb-4">

@@ -318,8 +318,19 @@ class TestLoginSerializer:
         
         serializer = LoginSerializer(data=data)
         assert not serializer.is_valid()
-        assert 'non_field_errors' in serializer.errors
-        assert 'Identifiants invalides' in str(serializer.errors)
+        assert 'password' in serializer.errors
+        assert 'Mot de passe incorrect' in str(serializer.errors)
+
+    def test_unknown_login_name_is_reported_on_login_name_field(self):
+        data = {
+            'login_name': 'Jean Inexistant',
+            'password': 'wrong_password',
+        }
+
+        serializer = LoginSerializer(data=data)
+        assert not serializer.is_valid()
+        assert 'login_name' in serializer.errors
+        assert "Aucun compte" in str(serializer.errors)
     
     def test_inactive_user_login(self, user_factory):
         """
@@ -344,9 +355,8 @@ class TestLoginSerializer:
         
         serializer = LoginSerializer(data=data)
         assert not serializer.is_valid()
-        # L'utilisateur inactif est rejeté au niveau de l'authentification
         assert 'non_field_errors' in serializer.errors
-        assert 'Identifiants invalides' in str(serializer.errors)
+        assert 'désactivé' in str(serializer.errors)
     
     def test_missing_credentials(self):
         """

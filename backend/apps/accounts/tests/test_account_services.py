@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 from decimal import Decimal
-from unittest.mock import Mock
 
 import pytest
 from accounts.models import FarmProfile
@@ -28,16 +27,11 @@ from django.test import RequestFactory
 
 @pytest.mark.django_db
 class TestAuthApplicationService:
-    def test_authenticate_user_normalizes_identifier_before_django_auth(
-        self,
-        monkeypatch,
-        user_factory,
-    ) -> None:
-        user = user_factory(password="motdepasse_test123")
-        authenticate_mock = Mock(return_value=user)
-        monkeypatch.setattr(
-            "accounts.services.auth_application_service.authenticate",
-            authenticate_mock,
+    def test_authenticate_user_normalizes_login_name_before_lookup(self, user_factory) -> None:
+        user = user_factory(
+            first_name="Jean",
+            last_name="Farmer",
+            password="motdepasse_test123",
         )
 
         result = AuthApplicationService.authenticate_user(
@@ -46,15 +40,36 @@ class TestAuthApplicationService:
         )
 
         assert result == user
-        authenticate_mock.assert_called_once_with(
-            login_name="Jean Farmer",
-            phone_number=None,
-            password="motdepasse_test123",
-        )
 
     def test_authenticate_user_rejects_missing_identifier(self) -> None:
         with pytest.raises(InvalidCredentialsError):
             AuthApplicationService.authenticate_user(password="motdepasse_test123")
+
+    def test_authenticate_user_returns_explicit_error_for_unknown_phone(self) -> None:
+        with pytest.raises(InvalidCredentialsError) as exc_info:
+            AuthApplicationService.authenticate_user(
+                phone_number="+237699000001",
+                password="motdepasse_test123",
+            )
+
+        assert exc_info.value.field_name == "phone_number"
+        assert "Aucun compte" in str(exc_info.value)
+
+    def test_authenticate_user_returns_explicit_error_for_invalid_password(self, user_factory) -> None:
+        user_factory(
+            first_name="Jean",
+            last_name="Farmer",
+            password="motdepasse_test123",
+        )
+
+        with pytest.raises(InvalidCredentialsError) as exc_info:
+            AuthApplicationService.authenticate_user(
+                login_name="Jean Farmer",
+                password="motdepasse_invalide",
+            )
+
+        assert exc_info.value.field_name == "password"
+        assert "Mot de passe incorrect" in str(exc_info.value)
 
     def test_auth_success_result_payload_contains_user_tokens_and_message(self, user_factory) -> None:
         user = user_factory(password="motdepasse_test123")

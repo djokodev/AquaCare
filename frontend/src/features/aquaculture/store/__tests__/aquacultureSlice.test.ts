@@ -261,7 +261,12 @@ describe('features/aquaculture/store/aquacultureSlice', () => {
 
     const nextState = aquacultureReducer(
       dirtyState,
-      logoutUser.rejected(new Error('boom'), 'request-id', undefined, 'boom')
+      logoutUser.rejected(
+        new Error('boom'),
+        'request-id',
+        undefined,
+        { message: 'boom', fieldErrors: {} }
+      )
     );
 
     expect(nextState).toEqual(initial);

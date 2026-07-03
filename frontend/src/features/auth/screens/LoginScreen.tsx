@@ -22,7 +22,7 @@ interface Props {
 
 export default function LoginScreen({ navigation }: Props) {
   const { t } = useTranslation();
-  const { login, isLoading, error, clearAuthError } = useAuth();
+  const { login, isLoading, error, fieldErrors, clearAuthError } = useAuth();
 
   const [formData, setFormData] = useState({
     loginName: '',
@@ -78,8 +78,19 @@ export default function LoginScreen({ navigation }: Props) {
     }
   };
 
-  const renderError = (field: keyof typeof errors) =>
-    errors[field] ? <Text className="text-sm text-error mt-1">{t(errors[field])}</Text> : null;
+  const backendFieldErrors: Partial<Record<keyof typeof formData, string>> = {
+    loginName: fieldErrors.login_name,
+    phoneNumber: fieldErrors.phone_number,
+    password: fieldErrors.password,
+  };
+  const phoneFieldError = errors.phoneNumber || backendFieldErrors.phoneNumber;
+
+  const renderError = (field: keyof typeof errors) => {
+    const message = errors[field] || backendFieldErrors[field];
+    return message ? (
+      <Text className="text-sm text-error mt-1">{t(message, { defaultValue: message })}</Text>
+    ) : null;
+  };
 
   return (
     <KeyboardAvoidingView
@@ -133,7 +144,7 @@ export default function LoginScreen({ navigation }: Props) {
             <PhoneInputField
               value={formData.phoneNumber}
               onChange={(formatted) => updateField('phoneNumber', formatted)}
-              error={errors.phoneNumber}
+              error={phoneFieldError}
             />
           )}
 

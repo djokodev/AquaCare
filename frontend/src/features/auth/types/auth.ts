@@ -68,3 +68,10 @@ export interface ApiError {
   message: string;
   details?: Record<string, string[]>;
 }
+
+export type AuthFieldErrors = Record<string, string>;
+
+export interface AuthErrorPayload {
+  message: string | null;
+  fieldErrors: AuthFieldErrors;
+}
