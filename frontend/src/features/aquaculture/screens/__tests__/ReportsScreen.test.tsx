@@ -72,7 +72,7 @@ describe('features/aquaculture/screens/ReportsScreen', () => {
     ]);
     mockGenerateReport.mockResolvedValueOnce({ id: 'report-2' });
 
-    const { getByText, getAllByText } = render(
+    const { getByText, queryByText, getAllByText } = render(
       <ReportsScreen
         navigation={navigation}
         route={{ key: 'Reports', name: 'Reports', params: { scope: 'cycle', cycleId: 'cycle-1' } } as any}
@@ -80,12 +80,16 @@ describe('features/aquaculture/screens/ReportsScreen', () => {
     );
 
     await waitFor(() => {
-      expect(getByText('reportCycleTitle')).toBeTruthy();
-      expect(getAllByText('reportTypeDaily').length).toBeGreaterThan(0);
+      expect(getAllByText('reportCycleTitle').length).toBeGreaterThan(0);
+      expect(getByText('generateCycleReport')).toBeTruthy();
+      expect(queryByText('reportGenerationDaily')).toBeNull();
+      expect(queryByText('reportGenerationDailyShort')).toBeNull();
+      expect(queryByText('reportGenerationWeeklyShort')).toBeNull();
+      expect(queryByText('reportGenerationMonthlyShort')).toBeNull();
       expect(getByText('Rapport du cycle')).toBeTruthy();
     });
 
-    fireEvent.press(getAllByText('reportTypeDaily')[0]);
+    fireEvent.press(getByText('generateCycleReport'));
 
     await waitFor(() => {
       expect(mockGenerateReport).toHaveBeenCalledWith({
@@ -128,9 +132,10 @@ describe('features/aquaculture/screens/ReportsScreen', () => {
     await waitFor(() => {
       expect(getByText('reportUnitTitle')).toBeTruthy();
       expect(getByText('generateReport')).toBeTruthy();
+      expect(getByText('reportGenerationDaily')).toBeTruthy();
     });
 
-    fireEvent.press(getByText('reportTypeWeekly'));
+    fireEvent.press(getByText('reportGenerationWeekly'));
 
     await waitFor(() => {
       expect(mockGenerateReport).toHaveBeenCalledWith({

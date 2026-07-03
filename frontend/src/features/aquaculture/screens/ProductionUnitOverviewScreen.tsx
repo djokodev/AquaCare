@@ -20,7 +20,6 @@ import DashboardMetricCard from '@/features/main/components/MetricCard';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
 import { RootStackParamList } from '@/navigation/MainNavigator';
 import type { ProductionUnitDashboard } from '@/types/aquaculture';
-import { formatDate } from '@/utils';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'ProductionUnitOverview'>;
 type RouteType = RouteProp<RootStackParamList, 'ProductionUnitOverview'>;
@@ -122,6 +121,18 @@ export default function ProductionUnitOverviewScreen({ navigation, route }: Prop
     void loadDashboard();
   }, [hasUnitContext, loadDashboard]);
 
+  useEffect(() => {
+    if (!hasUnitContext || typeof navigation.addListener !== 'function') {
+      return undefined;
+    }
+
+    const unsubscribe = navigation.addListener('focus', () => {
+      void loadDashboard('refresh');
+    });
+
+    return unsubscribe;
+  }, [hasUnitContext, loadDashboard, navigation]);
+
   const allocation = dashboard?.allocation ?? null;
   const summary = dashboard?.summary ?? null;
   const unitName = productionUnitName || allocation?.production_unit_name || t('productionUnitsUnknownUnit');
@@ -145,10 +156,7 @@ export default function ProductionUnitOverviewScreen({ navigation, route }: Prop
       {
         label: t('currentFish'),
         value: summary ? formatCount(summary.estimated_current_fish_count, locale) : '-',
-        subtitle:
-          summary?.days_since_last_log !== null && summary?.days_since_last_log !== undefined
-            ? t('daysCount', { count: summary.days_since_last_log })
-            : undefined,
+        subtitle: undefined,
       },
       {
         label: t('productionUnitCumulativeMortality'),
@@ -179,10 +187,7 @@ export default function ProductionUnitOverviewScreen({ navigation, route }: Prop
           summary && coerceNumber(summary.estimated_current_biomass_kg) !== null
             ? formatKg(coerceNumber(summary.estimated_current_biomass_kg) ?? 0, locale)
             : '-',
-        subtitle:
-          summary?.last_daily_log_date !== null && summary?.last_daily_log_date !== undefined
-            ? `${t('productionUnitLastTracking')}: ${formatDate(summary.last_daily_log_date)}`
-            : undefined,
+        subtitle: undefined,
       },
     ],
     [locale, summary, t]

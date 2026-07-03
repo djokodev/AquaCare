@@ -139,6 +139,50 @@ class NotificationService:
             )
 
     @staticmethod
+    def _resolve_cycle_context(content_object: Model | None) -> tuple[str | None, str | None]:
+        if content_object is None:
+            return None, None
+
+        cycle_candidate = None
+        direct_cycle_name = getattr(content_object, "cycle_name", None)
+        direct_farm_profile = getattr(content_object, "farm_profile", None)
+
+        if direct_cycle_name and direct_farm_profile is not None:
+            cycle_candidate = content_object
+        else:
+            nested_cycle = getattr(content_object, "cycle", None)
+            production_cycle = getattr(content_object, "production_cycle", None)
+            cycle_candidate = nested_cycle or production_cycle
+
+        if cycle_candidate is None:
+            return None, None
+
+        cycle_id = getattr(cycle_candidate, "id", None)
+        cycle_name = getattr(cycle_candidate, "cycle_name", None)
+        resolved_cycle_id = str(cycle_id) if cycle_id is not None else None
+        resolved_cycle_name = str(cycle_name).strip() if cycle_name else None
+
+        return resolved_cycle_id, resolved_cycle_name
+
+    @staticmethod
+    def _enrich_metadata_with_cycle_context(
+        metadata: NotificationMetadata | None,
+        content_object: Model | None,
+    ) -> NotificationMetadata:
+        enriched_metadata = dict(metadata or {})
+        cycle_id, cycle_name = NotificationService._resolve_cycle_context(content_object)
+
+        if cycle_id:
+            enriched_metadata.setdefault("cycle_id", cycle_id)
+            enriched_metadata.setdefault("production_cycle_id", cycle_id)
+
+        if cycle_name:
+            enriched_metadata.setdefault("cycle_name", cycle_name)
+            enriched_metadata.setdefault("production_cycle_name", cycle_name)
+
+        return enriched_metadata
+
+    @staticmethod
     @transaction.atomic
     def create_notification(
         user: AccountUser,
@@ -219,6 +263,7 @@ class NotificationService:
             return None
 
         priority = NotificationService._resolve_priority(notification_type, priority)
+        metadata = NotificationService._enrich_metadata_with_cycle_context(metadata, content_object)
         notification = Notification.objects.create(
             user=user,
             notification_type=notification_type,
@@ -226,7 +271,7 @@ class NotificationService:
             message=message,
             content_type=ContentType.objects.get_for_model(content_object) if content_object else None,
             object_id=content_object.pk if content_object else None,
-            metadata=metadata or {},
+            metadata=metadata,
             channels=channels,
             priority=priority,
             scheduled_for=scheduled_for or timezone.now()

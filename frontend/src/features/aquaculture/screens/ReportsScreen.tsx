@@ -216,6 +216,9 @@ export default function ReportsScreen({ navigation, route }: ReportsScreenProps)
   const filteredReports = reports.filter(
     (report) => selectedType === 'all' || report.report_type === selectedType
   );
+  const reportHistoryFilters = reportScope === 'cycle'
+    ? (['all'] as const)
+    : (['all', ...REPORT_TYPES] as const);
 
   const renderHeader = () => (
     <View className="bg-aquacare-primary flex-row items-center pt-14 pb-4 px-4">
@@ -230,6 +233,8 @@ export default function ReportsScreen({ navigation, route }: ReportsScreenProps)
     ({ item: report }: { item: ProductionReport }) => (
       <TouchableOpacity
         className="bg-white rounded-xl p-4 mb-3 mx-4 border border-gray-200 shadow-sm"
+        accessibilityRole="button"
+        accessibilityLabel={t('openReportDetails')}
         onPress={() => navigation.navigate('ReportDetail', { reportId: report.id })}
       >
         <View className="flex-row items-center justify-between">
@@ -249,13 +254,20 @@ export default function ReportsScreen({ navigation, route }: ReportsScreenProps)
             <Text className={`text-xs font-semibold mr-3 ${getStatusStyle(report.status)}`}>
               {getStatusLabel(report.status)}
             </Text>
+            <Ionicons name="chevron-forward" size={18} color={AQUACARE_COLORS.GRAY_LIGHT} />
             <TouchableOpacity
               onPress={() => handleDeleteReport(report)}
+              className="ml-3"
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
               <Ionicons name="trash-outline" size={16} color={AQUACARE_COLORS.ERROR} />
             </TouchableOpacity>
           </View>
+        </View>
+
+        <View className="mt-3 pt-3 border-t border-gray-100 flex-row items-center justify-between">
+          <Text className="text-xs text-gray-light">{t('openReportDetails')}</Text>
+          <Ionicons name="arrow-forward" size={14} color={AQUACARE_COLORS.GREEN_PRIMARY} />
         </View>
 
         {report.generated_at && (
@@ -279,11 +291,35 @@ export default function ReportsScreen({ navigation, route }: ReportsScreenProps)
 
   const renderListHeader = useCallback(
     () => (
-        <View className="px-4 py-4">
-          {canGenerateReports ? (
-            <>
-              <Text className="text-base font-bold text-gray-dark mb-3">{t('generateReport')}</Text>
+      <View className="px-4 py-4">
+        {canGenerateReports ? (
+          <>
+            <Text className="text-base font-bold text-gray-dark mb-3">{t('generateReport')}</Text>
 
+            {reportScope === 'cycle' ? (
+              <TouchableOpacity
+                className="bg-white border border-gray-200 rounded-xl p-4 flex-row items-center justify-between mb-3"
+                onPress={() => handleGenerateReport('daily')}
+                disabled={Boolean(generatingType)}
+              >
+                <View className="flex-row items-center flex-1 pr-3">
+                  {generatingType ? (
+                    <ActivityIndicator color={AQUACARE_COLORS.GREEN_PRIMARY} />
+                  ) : (
+                    <Ionicons name="document-text-outline" size={22} color={AQUACARE_COLORS.GREEN_PRIMARY} />
+                  )}
+                  <View className="ml-3 flex-1">
+                    <Text className="text-sm font-semibold text-gray-dark">
+                      {t('generateCycleReport')}
+                    </Text>
+                    <Text className="text-xs text-gray-light mt-1">
+                      {t('reportCycleTitle')}
+                    </Text>
+                  </View>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={AQUACARE_COLORS.GRAY_LIGHT} />
+              </TouchableOpacity>
+            ) : (
               <View className="flex-row flex-wrap justify-between">
                 {REPORT_TYPES.map((reportType) => (
                   <TouchableOpacity
@@ -299,61 +335,62 @@ export default function ReportsScreen({ navigation, route }: ReportsScreenProps)
                     )}
                     <Text className="text-xs font-semibold text-gray-dark mt-2 text-center">
                       {reportType === 'daily'
-                        ? t('reportTypeDaily')
+                        ? t('reportGenerationDaily')
                         : reportType === 'weekly'
-                          ? t('reportTypeWeekly')
-                          : t('reportTypeMonthly')}
+                          ? t('reportGenerationWeekly')
+                          : t('reportGenerationMonthly')}
                     </Text>
                   </TouchableOpacity>
                 ))}
               </View>
-            </>
-          ) : (
-            <View className="bg-white border border-gray-200 rounded-xl p-4 mb-3">
-              <Text className="text-sm text-gray-dark">{scopeError}</Text>
-            </View>
-          )}
-
-          {infoMessage && (
-            <View className="bg-green-50 border border-aquacare-primary rounded-lg p-3 mb-3">
-              <Text className="text-sm text-aquacare-primary">{infoMessage}</Text>
-            </View>
-          )}
-
-          {error && (
-            <View className="bg-white border border-error rounded-lg p-3 mb-3">
-              <Text className="text-sm text-error">{error}</Text>
-            </View>
-          )}
-
-          <Text className="text-base font-bold text-gray-dark mb-3">{t('reportHistory')}</Text>
-
-          <View className="flex-row mb-3">
-            {(['all', ...REPORT_TYPES] as const).map((type) => (
-              <TouchableOpacity
-                key={type}
-                className={`px-3 py-2 rounded-full border mr-2 ${
-                  selectedType === type
-                    ? 'bg-aquacare-primary border-aquacare-primary'
-                    : 'bg-white border-gray-200'
-                }`}
-                onPress={() => setSelectedType(type)}
-              >
-                <Text className={`text-xs ${selectedType === type ? 'text-white' : 'text-gray-dark'}`}>
-                  {type === 'all'
-                    ? t('all')
-                    : type === 'daily'
-                      ? t('reportTypeDailyShort')
-                      : type === 'weekly'
-                        ? t('reportTypeWeeklyShort')
-                        : t('reportTypeMonthlyShort')}
-                </Text>
-              </TouchableOpacity>
-            ))}
+            )}
+          </>
+        ) : (
+          <View className="bg-white border border-gray-200 rounded-xl p-4 mb-3">
+            <Text className="text-sm text-gray-dark">{scopeError}</Text>
           </View>
+        )}
+
+        {infoMessage && (
+          <View className="bg-green-50 border border-aquacare-primary rounded-lg p-3 mb-3">
+            <Text className="text-sm text-aquacare-primary">{infoMessage}</Text>
+          </View>
+        )}
+
+        {error && (
+          <View className="bg-white border border-error rounded-lg p-3 mb-3">
+            <Text className="text-sm text-error">{error}</Text>
+          </View>
+        )}
+
+        <Text className="text-base font-bold text-gray-dark mb-3">{t('reportHistory')}</Text>
+
+        <View className="flex-row mb-3">
+          {reportHistoryFilters.map((type) => (
+            <TouchableOpacity
+              key={type}
+              className={`px-3 py-2 rounded-full border mr-2 ${
+                selectedType === type
+                  ? 'bg-aquacare-primary border-aquacare-primary'
+                  : 'bg-white border-gray-200'
+              }`}
+              onPress={() => setSelectedType(type)}
+            >
+              <Text className={`text-xs ${selectedType === type ? 'text-white' : 'text-gray-dark'}`}>
+                {type === 'all'
+                  ? t('all')
+                  : type === 'daily'
+                    ? t('reportGenerationDailyShort')
+                    : type === 'weekly'
+                      ? t('reportGenerationWeeklyShort')
+                      : t('reportGenerationMonthlyShort')}
+              </Text>
+            </TouchableOpacity>
+          ))}
         </View>
+      </View>
     ),
-    [canGenerateReports, error, generatingType, handleGenerateReport, infoMessage, scopeError, selectedType, t]
+    [canGenerateReports, error, generatingType, handleGenerateReport, infoMessage, reportScope, scopeError, selectedType, t]
   );
 
   const renderEmptyState = useCallback(

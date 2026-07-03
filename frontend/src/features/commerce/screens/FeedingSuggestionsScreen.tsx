@@ -369,7 +369,7 @@ export default function FeedingSuggestionsScreen() {
           <Text className="mt-2 text-sm text-gray-light text-center">{t('sessionCyclePickerDescription')}</Text>
           <TouchableOpacity
             className="mt-5 bg-aquacare-primary px-6 py-3 rounded-lg"
-            onPress={() => navigation.navigate('CycleSessionEntry')}
+            onPress={() => navigation.navigate('CycleSessionEntry', { showBackToDashboard: true })}
           >
             <Text className="text-white text-base font-semibold">{t('sessionCycleConfirm')}</Text>
           </TouchableOpacity>

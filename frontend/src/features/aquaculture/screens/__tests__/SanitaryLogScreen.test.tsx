@@ -117,13 +117,17 @@ describe('features/aquaculture/screens/SanitaryLogScreen', () => {
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     setSelectorState([activeCycle]);
 
-    const { getByText, getByPlaceholderText } = render(<SanitaryLogScreen navigation={navigation} />);
+    const { getByText, getByPlaceholderText, queryByText } = render(
+      <SanitaryLogScreen navigation={navigation} />
+    );
 
     fireEvent.changeText(getByPlaceholderText('symptomsPlaceholder'), 'Respiration rapide');
     fireEvent.press(getByText('save'));
 
     expect(alertSpy).toHaveBeenCalledWith('error', 'selectEventType');
     expect(mockService.createSanitaryLog).not.toHaveBeenCalled();
+    expect(queryByText('sanitaryEventVaccination')).toBeNull();
+    expect(queryByText('sanitaryEventWaterQuality')).toBeNull();
     alertSpy.mockRestore();
   });
 
@@ -140,7 +144,7 @@ describe('features/aquaculture/screens/SanitaryLogScreen', () => {
     const { getByText, getByPlaceholderText } = render(<SanitaryLogScreen navigation={navigation} />);
 
     fireEvent.press(getByText('sanitaryEventOther'));
-    fireEvent.changeText(getByPlaceholderText('symptomsPlaceholder'), 'Observation');
+    fireEvent.changeText(getByPlaceholderText('observationsPlaceholder'), 'Observation');
     fireEvent.press(getByText('save'));
 
     await waitFor(() => {
@@ -162,7 +166,7 @@ describe('features/aquaculture/screens/SanitaryLogScreen', () => {
     const { getByText, getByPlaceholderText } = render(<SanitaryLogScreen navigation={navigation} />);
 
     fireEvent.press(getByText('sanitaryEventOther'));
-    fireEvent.changeText(getByPlaceholderText('symptomsPlaceholder'), 'Observation mineure');
+    fireEvent.changeText(getByPlaceholderText('observationsPlaceholder'), 'Observation mineure');
     fireEvent.changeText(getByPlaceholderText('exampleAffectedCount'), '12');
     fireEvent.press(getByText('save'));
 
@@ -185,20 +189,22 @@ describe('features/aquaculture/screens/SanitaryLogScreen', () => {
     alertSpy.mockRestore();
   });
 
-  it('affiche le contexte d unité et envoie cycle_unit_allocation', async () => {
+  it('affiche le cycle selectionne sans contexte unitaire redondant', async () => {
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     setSelectorState([activeCycle]);
     mockService.createSanitaryLog.mockResolvedValueOnce({ id: 'san-unit' } as any);
 
-    const { getByText, getByPlaceholderText } = render(
+    const { getByText, getByPlaceholderText, queryByText } = render(
       <SanitaryLogScreen navigation={navigation} route={route} />
     );
 
-    expect(getByText('productionUnitSanitaryLogContextTitle')).toBeTruthy();
-    expect(getByText('Bac 1')).toBeTruthy();
+    expect(queryByText('productionUnitSanitaryLogContextTitle')).toBeNull();
+    expect(queryByText('Bac 1')).toBeNull();
+    expect(getByText('Cycle Sanitaire')).toBeTruthy();
+    expect(queryByText('Zone P1')).toBeNull();
 
     fireEvent.press(getByText('sanitaryEventOther'));
-    fireEvent.changeText(getByPlaceholderText('symptomsPlaceholder'), 'Observation');
+    fireEvent.changeText(getByPlaceholderText('observationsPlaceholder'), 'Observation');
     fireEvent.press(getByText('save'));
 
     await waitFor(() => {
@@ -243,6 +249,27 @@ describe('features/aquaculture/screens/SanitaryLogScreen', () => {
       expect.any(Array)
     );
     alertSpy.mockRestore();
+  });
+
+  it('fait varier les champs selon le type d evenement', async () => {
+    setSelectorState([activeCycle]);
+
+    const { getByText, queryByText, getByPlaceholderText } = render(
+      <SanitaryLogScreen navigation={navigation} />
+    );
+
+    fireEvent.press(getByText('sanitaryEventDisease'));
+    expect(queryByText('treatmentApplied')).toBeNull();
+    expect(queryByText('treatmentFieldsInfo')).toBeNull();
+    expect(getByPlaceholderText('symptomsPlaceholder')).toBeTruthy();
+
+    fireEvent.press(getByText('sanitaryEventTreatment'));
+    expect(getByText('treatmentFieldsInfo')).toBeTruthy();
+    expect(getByText('treatmentApplied')).toBeTruthy();
+
+    fireEvent.press(getByText('sanitaryEventAbnormalMortality'));
+    expect(getByText('mortalityReason')).toBeTruthy();
+    expect(getByText('noTreatmentRequired')).toBeTruthy();
   });
 
   it('affiche les details de validation en cas erreur API', async () => {

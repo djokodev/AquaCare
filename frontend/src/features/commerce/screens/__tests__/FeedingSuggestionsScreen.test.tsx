@@ -165,6 +165,8 @@ describe('FeedingSuggestionsScreen', () => {
 
     expect(getByText('sessionCycleNotSelected')).toBeTruthy();
     fireEvent.press(getByText('sessionCycleConfirm'));
-    expect(mockNavigate).toHaveBeenCalledWith('CycleSessionEntry');
+    expect(mockNavigate).toHaveBeenCalledWith('CycleSessionEntry', {
+      showBackToDashboard: true,
+    });
   });
 });

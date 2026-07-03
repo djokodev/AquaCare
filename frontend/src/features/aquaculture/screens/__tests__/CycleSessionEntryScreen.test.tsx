@@ -19,6 +19,11 @@ describe('features/aquaculture/screens/CycleSessionEntryScreen', () => {
   const mockDispatch = jest.fn();
   const navigation = {
     replace: jest.fn(),
+    goBack: jest.fn(),
+    navigate: jest.fn(),
+  } as any;
+  const route = {
+    params: undefined,
   } as any;
 
   const cycleA: ProductionCycle = {
@@ -90,7 +95,7 @@ describe('features/aquaculture/screens/CycleSessionEntryScreen', () => {
       )
     );
 
-    const { getByText } = render(<CycleSessionEntryScreen navigation={navigation} />);
+    const { getByText } = render(<CycleSessionEntryScreen navigation={navigation} route={route} />);
 
     await waitFor(() => {
       expect(mockDispatch).toHaveBeenCalledWith(clearCurrentCycle());
@@ -117,7 +122,7 @@ describe('features/aquaculture/screens/CycleSessionEntryScreen', () => {
       )
     );
 
-    render(<CycleSessionEntryScreen navigation={navigation} />);
+    render(<CycleSessionEntryScreen navigation={navigation} route={route} />);
 
     await waitFor(() => {
       expect(mockDispatch).toHaveBeenCalledWith(setCurrentCycle(cycleA));
@@ -144,7 +149,7 @@ describe('features/aquaculture/screens/CycleSessionEntryScreen', () => {
       )
     );
 
-    const { getByText } = render(<CycleSessionEntryScreen navigation={navigation} />);
+    const { getByText } = render(<CycleSessionEntryScreen navigation={navigation} route={route} />);
 
     // Capture references inside waitFor to avoid race condition on state flush
     let cycleBEl: ReturnType<typeof getByText>;
@@ -162,5 +167,48 @@ describe('features/aquaculture/screens/CycleSessionEntryScreen', () => {
       expect(mockDispatch).toHaveBeenCalledWith(setCurrentCycle(cycleB));
       expect(navigation.replace).toHaveBeenCalledWith('MainTabs');
     });
+  });
+
+  it('affiche un retour explicite vers le dashboard quand demandé par la navigation', async () => {
+    const navigationWithBack = {
+      replace: jest.fn(),
+      goBack: jest.fn(),
+      navigate: jest.fn(),
+    } as any;
+    const routeWithBack = {
+      params: {
+        showBackToDashboard: true,
+      },
+    } as any;
+
+    mockDashboardDispatchResult(
+      fetchDashboardData.fulfilled(
+        {
+          active_cycles_count: 2,
+          total_biomass: 216,
+          total_fish_count: 1800,
+          average_fcr: 1.8,
+          average_survival_rate: 90,
+          active_cycles: [cycleA, cycleB],
+          recent_logs: [],
+          current_feeding_plans: [],
+          pending_notifications: [],
+        },
+        'req-id',
+        undefined
+      )
+    );
+
+    const { getByText } = render(
+      <CycleSessionEntryScreen navigation={navigationWithBack} route={routeWithBack} />
+    );
+
+    await waitFor(() => {
+      expect(getByText('backToDashboard')).toBeTruthy();
+    });
+
+    fireEvent.press(getByText('backToDashboard'));
+
+    expect(navigationWithBack.navigate).toHaveBeenCalledWith('MainTabs');
   });
 });

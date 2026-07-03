@@ -22,6 +22,7 @@ import PostHarvestConsolidationScreen from '@/features/aquaculture/screens/PostH
 import CycleHistoryScreen from '@/features/aquaculture/screens/CycleHistoryScreen';
 import CycleSessionEntryScreen from '@/features/aquaculture/screens/CycleSessionEntryScreen';
 import DailyLogHistoryScreen from '@/features/aquaculture/screens/DailyLogHistoryScreen';
+import DailyLogDetailScreen from '@/features/aquaculture/screens/DailyLogDetailScreen';
 import DailyLogScreen from '@/features/aquaculture/screens/DailyLogScreen';
 import FeedingPlanScreen from '@/features/aquaculture/screens/FeedingPlanScreen';
 import NewCycleScreen from '@/features/aquaculture/screens/NewCycleScreen';
@@ -43,7 +44,7 @@ import CycleFeedPhasesScreen from '@/features/commerce/screens/CycleFeedPhasesSc
 
 // Chat/Support Screens
 import { ChatScreen } from '@/features/chat/screens/ChatScreen';
-import type { ReportScopeType } from '@/types/aquaculture';
+import type { CycleLog, ReportScopeType } from '@/types/aquaculture';
 
 export type MainTabParamList = {
   Dashboard: undefined;
@@ -52,7 +53,11 @@ export type MainTabParamList = {
 };
 
 export type RootStackParamList = {
-  CycleSessionEntry: undefined;
+  CycleSessionEntry:
+    | {
+        showBackToDashboard?: boolean;
+      }
+    | undefined;
   MainTabs: undefined;
   DailyLog:
     | {
@@ -70,6 +75,14 @@ export type RootStackParamList = {
         productionUnitName?: string;
       }
     | undefined;
+  DailyLogDetail:
+    | {
+        log: CycleLog;
+        cycleId?: string;
+        cycleUnitAllocationId?: string;
+        productionUnitName?: string;
+      }
+    | undefined;
   SanitaryLog:
     | {
         cycleId?: string;
@@ -80,7 +93,12 @@ export type RootStackParamList = {
     | undefined;
   NewCycle: undefined;
   CycleHistory: undefined;
-  Notifications: undefined;
+  Notifications:
+    | {
+        cycleId?: string;
+        cycleName?: string;
+      }
+    | undefined;
   FeedingPlan: undefined;
   Statistics: undefined;
   Reports:
@@ -283,6 +301,10 @@ export default function MainNavigator() {
       <RootStack.Screen
         name="DailyLogHistory"
         component={DailyLogHistoryScreen}
+      />
+      <RootStack.Screen
+        name="DailyLogDetail"
+        component={DailyLogDetailScreen}
       />
       <RootStack.Screen
         name="SanitaryLog"

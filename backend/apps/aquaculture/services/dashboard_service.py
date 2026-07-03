@@ -94,7 +94,7 @@ class DashboardService:
             cycle_contexts = DashboardService._build_cycle_contexts(active_cycles_list)
             recent_logs = DashboardService._get_recent_logs(user, cycle_scope)
             current_plans = DashboardService._get_current_plans(user, cycle_scope)
-            pending_notifications = DashboardService._get_pending_notifications(user)
+            pending_notifications = DashboardService._get_pending_notifications(user, cycle_scope)
             active_issues = DashboardService._get_active_issues(user, cycle_scope)
             growth_chart_data = DashboardService._prepare_growth_chart_data(cycle_contexts)
             mortality_chart_data = DashboardService._prepare_mortality_chart_data(cycle_contexts)
@@ -151,10 +151,11 @@ class DashboardService:
         return FeedingPlan.objects.for_api().filter(**filters)
 
     @staticmethod
-    def _get_pending_notifications(user):
-        return Notification.objects.filter(
-            user=user, is_read=False, scheduled_for__lte=timezone.now()
-        ).order_by('scheduled_for')[:10]
+    def _get_pending_notifications(user, cycle_scope):
+        notifications = Notification.objects.visible_for_user(user).filter(is_read=False)
+        if cycle_scope:
+            notifications = notifications.scoped_to_cycle(str(cycle_scope.id))
+        return notifications.order_by('scheduled_for')[:10]
 
     @staticmethod
     def _get_active_issues(user, cycle_scope):

@@ -26,7 +26,11 @@ import { AppDispatch, RootState } from '@/store/store';
 import {
   runCycleSimulation,
 } from '@/features/aquaculture/store/farmSetupSlice';
-import { addCreatedProductionCycle } from '@/features/aquaculture/store/aquacultureSlice';
+import {
+  addCreatedProductionCycle,
+  fetchDashboardData,
+  setCurrentCycle,
+} from '@/features/aquaculture/store/aquacultureSlice';
 import { setFarmProfile } from '@/features/auth/store/authSlice';
 import type { CycleSimulationResult } from '@/features/aquaculture/types/farmSetup';
 import {
@@ -179,6 +183,8 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
       });
       dispatch(addCreatedProductionCycle(launchResult.productionCycle));
       dispatch(setFarmProfile(launchResult.farmProfile));
+      await dispatch(fetchDashboardData({ forceAllCycles: true })).unwrap();
+      dispatch(setCurrentCycle(launchResult.productionCycle));
 
       if (launchResult.productionUnits.length > 0) {
         navigation.reset({

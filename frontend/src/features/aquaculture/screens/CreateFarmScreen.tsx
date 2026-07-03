@@ -190,6 +190,18 @@ export default function CreateFarmScreen({ navigation }: Props) {
   const [singleFormOffsetY, setSingleFormOffsetY] = useState(0);
   const [allocationMode, setAllocationMode] = useState<'auto' | 'manual'>('auto');
 
+  const handleGoBack = () => {
+    if (navigation.canGoBack?.()) {
+      navigation.goBack();
+      return;
+    }
+
+    navigation.reset({
+      index: 0,
+      routes: [{ name: 'MainTabs' }],
+    });
+  };
+
   useEffect(() => {
     const summary = getProductionUnitsCompatibilitySummary(form.productionUnits);
     setForm((prev) => {
@@ -682,7 +694,7 @@ export default function CreateFarmScreen({ navigation }: Props) {
         <TouchableOpacity
           testID="createFarmBackButton"
           className="w-10 items-start justify-center"
-          onPress={() => navigation.goBack()}
+          onPress={handleGoBack}
           accessibilityRole="button"
           accessibilityLabel={t('back')}
         >

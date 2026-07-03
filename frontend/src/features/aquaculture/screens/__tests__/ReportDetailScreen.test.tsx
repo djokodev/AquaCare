@@ -251,13 +251,26 @@ describe('features/aquaculture/screens/ReportDetailScreen', () => {
               average_weight: 97.5,
             },
             logs: [{ log_date: '2026-06-30', feed_quantity: 3.2, mortality_count: 0, average_weight: 97.5 }],
-            sanitary_logs: [],
+            sanitary_logs: [
+              {
+                event_date: '2026-06-30',
+                event_type_display: 'Disease',
+                symptoms: 'Points blancs',
+                affected_count: 2,
+                treatment_applied: 'Traitement X',
+                medication_used: 'Médicament Y',
+                dosage: '2 ml/kg',
+                treatment_duration_days: 3,
+                observations: 'Isoler les poissons malades',
+                resolved: false,
+              },
+            ],
           },
         ],
       },
     });
 
-    const { getByText } = render(
+    const { getByText, queryByText } = render(
       <ReportDetailScreen
         navigation={navigation}
         route={{ key: 'ReportDetail', name: 'ReportDetail', params: { reportId: 'report-2' } } as any}
@@ -266,8 +279,14 @@ describe('features/aquaculture/screens/ReportDetailScreen', () => {
 
     await waitFor(() => {
       expect(getByText('reportSummaryUnit')).toBeTruthy();
+      expect(getByText('reportLatestSanitaryEvents')).toBeTruthy();
+      expect(getByText('reportActiveSanitaryEvents')).toBeTruthy();
       expect(getByText('reportLastAverageWeight')).toBeTruthy();
-      expect(getByText('reportLastEntry')).toBeTruthy();
+      expect(getByText('reportSanitaryEventType: Disease')).toBeTruthy();
+      expect(getByText('reportSanitarySymptoms: Points blancs')).toBeTruthy();
+      expect(getByText('reportSanitaryTreatmentApplied: Traitement X')).toBeTruthy();
+      expect(getByText('reportSanitaryEventStatus: reportSanitaryEventActive')).toBeTruthy();
+      expect(queryByText('reportLatestUnitLogs')).toBeNull();
       expect(getByText('Bac 1')).toBeTruthy();
       expect(getByText("Rapport de l'unité")).toBeTruthy();
     });

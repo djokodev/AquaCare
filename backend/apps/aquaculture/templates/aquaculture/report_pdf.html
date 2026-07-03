@@ -287,13 +287,15 @@
             <tr>
               <td class="kpi-cell">
                 <div class="kpi-value">
-                  {% if section.dashboard_metrics.estimated_market_value_fcfa == 0 %}
-                    0 FCFA
-                  {% elif section.dashboard_metrics.estimated_market_value_fcfa %}
-                    {{ section.dashboard_metrics.estimated_market_value_fcfa|floatformat:0 }} FCFA
-                  {% else %}
-                    {{ empty_value_label }}
-                  {% endif %}
+                  {% with market_value=section.dashboard_metrics.estimated_market_value_fcfa fish_count=section.current_metrics.current_count biomass=section.current_metrics.current_biomass %}
+                    {% if market_value %}
+                      {{ market_value|floatformat:0 }} FCFA
+                    {% elif fish_count == 0 and biomass == 0 %}
+                      0 FCFA
+                    {% else %}
+                      {{ empty_value_label }}
+                    {% endif %}
+                  {% endwith %}
                 </div>
                 <div class="kpi-label">{{ labels.estimated_market_value }}</div>
               </td>
@@ -427,6 +429,20 @@
                   <td>{{ item.affected_count|default_if_none:empty_value_label }}</td>
                   <td>{{ item.treatment_applied|default:empty_value_label }}</td>
                   <td>{% if item.resolved %}{{ labels.resolved }}{% else %}{{ labels.active }}{% endif %}</td>
+                </tr>
+                <tr>
+                  <td colspan="5" class="muted">
+                    <strong>{{ labels.symptoms }}:</strong> {{ item.symptoms|default:empty_value_label }}<br />
+                    <strong>{{ labels.medication_used }}:</strong> {{ item.medication_used|default:empty_value_label }}<br />
+                    <strong>{{ labels.dosage }}:</strong> {{ item.dosage|default:empty_value_label }}<br />
+                    <strong>{{ labels.treatment_duration }}:</strong>
+                    {% if item.treatment_duration_days is not None %}
+                      {{ item.treatment_duration_days }} {{ labels.days_short }}
+                    {% else %}
+                      {{ empty_value_label }}
+                    {% endif %}<br />
+                    <strong>{{ labels.notes }}:</strong> {{ item.notes|default:empty_value_label }}
+                  </td>
                 </tr>
               {% endfor %}
             </table>

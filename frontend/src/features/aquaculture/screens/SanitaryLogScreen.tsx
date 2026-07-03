@@ -20,18 +20,61 @@ import {
   runSilentOfflineSync,
 } from '@/features/aquaculture/services/aquacultureWorkflowService';
 
+type VisibleSanitaryEventType = 'disease' | 'treatment' | 'abnormal_mortality' | 'other';
+
 const SANITARY_EVENT_TYPES: Array<{
-  value: SanitaryEventType;
+  value: VisibleSanitaryEventType;
   labelKey: string;
-  icon: keyof typeof Ionicons.glyphMap;
 }> = [
-  { value: 'disease', labelKey: 'sanitaryEventDisease', icon: 'medical' },
-  { value: 'treatment', labelKey: 'sanitaryEventTreatment', icon: 'medical-outline' },
-  { value: 'vaccination', labelKey: 'sanitaryEventVaccination', icon: 'shield-checkmark' },
-  { value: 'abnormal_mortality', labelKey: 'sanitaryEventAbnormalMortality', icon: 'skull' },
-  { value: 'water_quality', labelKey: 'sanitaryEventWaterQuality', icon: 'water' },
-  { value: 'other', labelKey: 'sanitaryEventOther', icon: 'help-circle' },
+  { value: 'disease', labelKey: 'sanitaryEventDisease' },
+  { value: 'treatment', labelKey: 'sanitaryEventTreatment' },
+  { value: 'abnormal_mortality', labelKey: 'sanitaryEventAbnormalMortality' },
+  { value: 'other', labelKey: 'sanitaryEventOther' },
 ];
+
+const SANITARY_EVENT_LAYOUT: Record<
+  VisibleSanitaryEventType,
+  {
+    firstFieldLabelKey: string;
+    firstFieldPlaceholderKey: string;
+    countFieldLabelKey: string;
+    countFieldPlaceholderKey: string;
+    showTreatmentFields: boolean;
+    infoMessageKey?: string;
+  }
+> = {
+  disease: {
+    firstFieldLabelKey: 'symptoms',
+    firstFieldPlaceholderKey: 'symptomsPlaceholder',
+    countFieldLabelKey: 'affectedCount',
+    countFieldPlaceholderKey: 'exampleAffectedCount',
+    showTreatmentFields: false,
+  },
+  treatment: {
+    firstFieldLabelKey: 'symptoms',
+    firstFieldPlaceholderKey: 'symptomsPlaceholder',
+    countFieldLabelKey: 'affectedCount',
+    countFieldPlaceholderKey: 'exampleAffectedCount',
+    showTreatmentFields: true,
+    infoMessageKey: 'treatmentFieldsInfo',
+  },
+  abnormal_mortality: {
+    firstFieldLabelKey: 'mortalityReason',
+    firstFieldPlaceholderKey: 'mortalityReasonPlaceholder',
+    countFieldLabelKey: 'mortality',
+    countFieldPlaceholderKey: 'mortalityPlaceholder',
+    showTreatmentFields: false,
+    infoMessageKey: 'noTreatmentRequired',
+  },
+  other: {
+    firstFieldLabelKey: 'observations',
+    firstFieldPlaceholderKey: 'observationsPlaceholder',
+    countFieldLabelKey: 'affectedCount',
+    countFieldPlaceholderKey: 'exampleAffectedCount',
+    showTreatmentFields: false,
+    infoMessageKey: 'noTreatmentRequired',
+  },
+};
 
 type SanitaryLogScreenNavigationProp = StackNavigationProp<RootStackParamList, 'SanitaryLog'>;
 type SanitaryLogScreenRouteProp = RouteProp<RootStackParamList, 'SanitaryLog'>;
@@ -43,7 +86,7 @@ interface SanitaryLogScreenProps {
 
 interface SanitaryLogData {
   cycle_id: string;
-  event_type: string;
+  event_type: VisibleSanitaryEventType | '';
   symptoms: string;
   treatment_applied: string;
   medication_used: string;
@@ -63,7 +106,6 @@ export default function SanitaryLogScreen({ navigation, route }: SanitaryLogScre
   const routeParams = route?.params;
   const routeCycleId = routeParams?.cycleId;
   const unitAllocationId = routeParams?.cycleUnitAllocationId;
-  const unitName = routeParams?.productionUnitName || t('productionUnitsUnknownUnit');
   const sessionScopedCycles = routeCycleId
     ? activeCycles.filter((cycle) => cycle.id === routeCycleId)
     : currentCycle?.id
@@ -85,7 +127,9 @@ export default function SanitaryLogScreen({ navigation, route }: SanitaryLogScre
   });
   const [saving, setSaving] = useState(false);
 
-  const shouldShowTreatmentFields = ['treatment', 'vaccination', 'disease'].includes(formData.event_type);
+  const selectedEventLayout = formData.event_type
+    ? SANITARY_EVENT_LAYOUT[formData.event_type as VisibleSanitaryEventType]
+    : SANITARY_EVENT_LAYOUT.disease;
 
   const getSuccessMessage = (eventType: string) => {
     switch (eventType) {
@@ -93,12 +137,8 @@ export default function SanitaryLogScreen({ navigation, route }: SanitaryLogScre
         return t('sanitarySuccessDisease');
       case 'treatment':
         return t('sanitarySuccessTreatment');
-      case 'vaccination':
-        return t('sanitarySuccessVaccination');
       case 'abnormal_mortality':
         return t('sanitarySuccessAbnormalMortality');
-      case 'water_quality':
-        return t('sanitarySuccessWaterQuality');
       case 'other':
         return t('sanitarySuccessOther');
       default:
@@ -130,7 +170,7 @@ export default function SanitaryLogScreen({ navigation, route }: SanitaryLogScre
   }, [routeCycleId, sessionScopedCycles, selectedCycle]);
 
   useEffect(() => {
-    if (!shouldShowTreatmentFields) {
+    if (!selectedEventLayout.showTreatmentFields) {
       setFormData((prev) => ({
         ...prev,
         treatment_applied: '',
@@ -139,7 +179,7 @@ export default function SanitaryLogScreen({ navigation, route }: SanitaryLogScre
         treatment_duration_days: '',
       }));
     }
-  }, [shouldShowTreatmentFields]);
+  }, [selectedEventLayout.showTreatmentFields]);
 
   const requestPermissions = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -308,19 +348,6 @@ export default function SanitaryLogScreen({ navigation, route }: SanitaryLogScre
       </View>
 
       <View className="p-4">
-        {unitAllocationId ? (
-          <View className="mb-6 rounded-2xl border border-green-200 bg-white p-4">
-            <View className="flex-row items-center mb-2">
-              <Ionicons name="medical-outline" size={18} color={AQUACARE_COLORS.GREEN_PRIMARY} />
-              <Text className="ml-2 text-base font-bold text-gray-dark">
-                {t('productionUnitSanitaryLogContextTitle')}
-              </Text>
-            </View>
-            <Text className="text-sm font-semibold text-aquacare-primary mb-1">{unitName}</Text>
-            <Text className="text-sm text-gray-light">{t('productionUnitSanitaryLogContextDescription')}</Text>
-          </View>
-        ) : null}
-
         <CycleSelector
           cycles={sessionScopedCycles}
           selectedCycleId={selectedCycle}
@@ -332,6 +359,8 @@ export default function SanitaryLogScreen({ navigation, route }: SanitaryLogScre
               dispatch(setCurrentCycle(cycle));
             }
           }}
+          showTitle={false}
+          displayMode="cycle_name"
         />
 
         <View className="mb-6">
@@ -347,11 +376,6 @@ export default function SanitaryLogScreen({ navigation, route }: SanitaryLogScre
                     }`}
                     onPress={() => setFormData((prev) => ({ ...prev, event_type: type.value }))}
                   >
-                    <Ionicons
-                      name={type.icon}
-                      size={32}
-                      color={isSelected ? AQUACARE_COLORS.WHITE : AQUACARE_COLORS.GRAY_LIGHT}
-                    />
                     <Text className={`text-xs text-center mt-2 ${isSelected ? 'text-white' : 'text-gray-dark'}`}>
                       {t(type.labelKey)}
                     </Text>
@@ -361,55 +385,65 @@ export default function SanitaryLogScreen({ navigation, route }: SanitaryLogScre
             })}
           </View>
 
-          {formData.event_type && (
+          {selectedEventLayout.infoMessageKey ? (
             <View
               className={`flex-row items-center p-3 mt-4 rounded-lg border ${
-                shouldShowTreatmentFields ? 'bg-[#f0fdf4] border-green-200' : 'bg-[#eff6ff] border-blue-200'
+                selectedEventLayout.infoMessageKey === 'treatmentFieldsInfo'
+                  ? 'bg-[#f0fdf4] border-green-200'
+                  : 'bg-[#eff6ff] border-blue-200'
               }`}
             >
               <Ionicons
-                name={shouldShowTreatmentFields ? 'medical' : 'information-circle'}
+                name={selectedEventLayout.infoMessageKey === 'treatmentFieldsInfo' ? 'medical' : 'information-circle'}
                 size={16}
-                color={shouldShowTreatmentFields ? AQUACARE_COLORS.GREEN_PRIMARY : AQUACARE_COLORS.BLUE}
+                color={
+                  selectedEventLayout.infoMessageKey === 'treatmentFieldsInfo'
+                    ? AQUACARE_COLORS.GREEN_PRIMARY
+                    : AQUACARE_COLORS.BLUE
+                }
               />
               <Text
                 className={`ml-2 text-sm flex-1 ${
-                  shouldShowTreatmentFields ? 'text-green-700' : 'text-blue-700'
+                  selectedEventLayout.infoMessageKey === 'treatmentFieldsInfo' ? 'text-green-700' : 'text-blue-700'
                 }`}
               >
-                {shouldShowTreatmentFields ? t('treatmentFieldsInfo') : t('noTreatmentRequired')}
+                {selectedEventLayout.infoMessageKey ? t(selectedEventLayout.infoMessageKey) : ''}
               </Text>
             </View>
-          )}
+          ) : null}
         </View>
 
         <View className="mb-6">
           <Text className="text-base font-bold text-gray-dark mb-3">{t('details')}</Text>
 
           <View className="mb-4">
-            <Text className="text-sm font-medium text-gray-dark mb-2">{t('symptoms')}</Text>
+            <Text className="text-sm font-medium text-gray-dark mb-2">
+              {t(selectedEventLayout.firstFieldLabelKey)}
+            </Text>
             <TextInput
               className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark h-20"
               value={formData.symptoms}
               onChangeText={(value) => setFormData((prev) => ({ ...prev, symptoms: value }))}
-              placeholder={t('symptomsPlaceholder')}
+              placeholder={t(selectedEventLayout.firstFieldPlaceholderKey)}
               multiline
               numberOfLines={3}
             />
           </View>
 
           <View className="mb-4">
-            <Text className="text-sm font-medium text-gray-dark mb-2">{t('affectedCount')}</Text>
+            <Text className="text-sm font-medium text-gray-dark mb-2">
+              {t(selectedEventLayout.countFieldLabelKey)}
+            </Text>
             <TextInput
               className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
               value={formData.affected_count}
               onChangeText={(value) => setFormData((prev) => ({ ...prev, affected_count: value }))}
-              placeholder={t('exampleAffectedCount')}
+              placeholder={t(selectedEventLayout.countFieldPlaceholderKey)}
               keyboardType="numeric"
             />
           </View>
 
-          {shouldShowTreatmentFields && (
+          {selectedEventLayout.showTreatmentFields && (
             <>
               <View className="mb-4">
                 <Text className="text-sm font-medium text-gray-dark mb-2">{t('treatmentApplied')}</Text>

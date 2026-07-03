@@ -5,7 +5,10 @@ import { useDispatch, useSelector } from 'react-redux';
 
 import CycleSimulationScreen from '../CycleSimulationScreen';
 import { FirstCycleLaunchError, launchFirstCycle } from '@/features/aquaculture/services/firstCycleLaunchService';
-import { addCreatedProductionCycle } from '@/features/aquaculture/store/aquacultureSlice';
+import {
+  addCreatedProductionCycle,
+  setCurrentCycle,
+} from '@/features/aquaculture/store/aquacultureSlice';
 import { runCycleSimulation } from '@/features/aquaculture/store/farmSetupSlice';
 import type { ProductionCycle } from '@/types/aquaculture';
 
@@ -113,6 +116,26 @@ describe('features/aquaculture/screens/CycleSimulationScreen', () => {
       (selector: (state: any) => unknown) =>
         selector({ farmSetup: { cycleSimulation: { result: null, loading: false } } })
     );
+    let defaultFunctionCallCount = 0;
+    mockDispatch.mockImplementation((action: unknown) => {
+      if (typeof action === 'function') {
+        defaultFunctionCallCount += 1;
+        if (defaultFunctionCallCount === 1) {
+          return {
+            type: runCycleSimulation.fulfilled.type,
+            payload: currentResult,
+          };
+        }
+
+        return {
+          unwrap: jest.fn().mockResolvedValue({
+            active_cycles: [],
+          }),
+        };
+      }
+
+      return action;
+    });
     mockLaunchFirstCycle.mockResolvedValue({
       farmProfile: { id: 'farm-profile-1' },
       productionCycle: createdProductionCycle,
@@ -132,10 +155,16 @@ describe('features/aquaculture/screens/CycleSimulationScreen', () => {
           };
         }
 
+        if (functionCallCount === 2) {
+          return {
+            unwrap: jest.fn().mockResolvedValue({
+              active_cycles: [],
+            }),
+          };
+        }
+
         return {
-          unwrap: jest.fn().mockResolvedValue({
-            id: 'farm-profile-1',
-          }),
+          unwrap: jest.fn().mockResolvedValue({}),
         };
       }
 
@@ -207,6 +236,7 @@ describe('features/aquaculture/screens/CycleSimulationScreen', () => {
           payload: { id: 'farm-profile-1' },
         })
       );
+      expect(mockDispatch).toHaveBeenCalledWith(setCurrentCycle(createdProductionCycle));
       expect(navigation.reset).toHaveBeenCalledWith({
         index: 1,
         routes: [
@@ -221,11 +251,21 @@ describe('features/aquaculture/screens/CycleSimulationScreen', () => {
   }, 10000);
 
   it('conserve la navigation legacy quand aucune unite de production n est persistee', async () => {
+    let functionCallCount = 0;
     mockDispatch.mockImplementation((action: unknown) => {
       if (typeof action === 'function') {
+        functionCallCount += 1;
+        if (functionCallCount === 1) {
+          return {
+            type: runCycleSimulation.fulfilled.type,
+            payload: currentResult,
+          };
+        }
+
         return {
-          type: runCycleSimulation.fulfilled.type,
-          payload: currentResult,
+          unwrap: jest.fn().mockResolvedValue({
+            active_cycles: [],
+          }),
         };
       }
 
@@ -249,6 +289,7 @@ describe('features/aquaculture/screens/CycleSimulationScreen', () => {
     fireEvent.press(getByText('simulationLaunchBtn'));
 
     await waitFor(() => {
+      expect(mockDispatch).toHaveBeenCalledWith(setCurrentCycle(createdProductionCycle));
       expect(navigation.reset).toHaveBeenCalledWith({
         index: 0,
         routes: [{ name: 'MainTabs' }],

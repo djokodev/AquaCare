@@ -12,6 +12,7 @@ import type { AppDispatch, RootState } from '@/store/store';
 export function useNotificationsPolling(intervalMs: number = 4000) {
   const dispatch = useDispatch<AppDispatch>();
   const isAuthenticated = useSelector((state: RootState) => state.auth.isAuthenticated);
+  const currentCycleId = useSelector((state: RootState) => state.aquaculture.currentCycle?.id);
 
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
   const isFetchingRef = useRef(false);
@@ -30,11 +31,11 @@ export function useNotificationsPolling(intervalMs: number = 4000) {
 
     isFetchingRef.current = true;
     try {
-      await dispatch(fetchNotificationsSilent());
+      await dispatch(fetchNotificationsSilent({ cycleId: currentCycleId }));
     } finally {
       isFetchingRef.current = false;
     }
-  }, [dispatch, isAuthenticated]);
+  }, [currentCycleId, dispatch, isAuthenticated]);
 
   const startPolling = useCallback(() => {
     if (!isAuthenticated || pollingRef.current) {

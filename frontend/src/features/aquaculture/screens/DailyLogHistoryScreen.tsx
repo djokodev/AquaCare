@@ -50,16 +50,16 @@ export default function DailyLogHistoryScreen({ navigation, route }: DailyLogHis
       return;
     }
 
-      try {
-        setLoading(true);
-        setError(null);
+    try {
+      setLoading(true);
+      setError(null);
       const logsData = cycleUnitAllocationId
         ? await aquacultureService.getCycleLogs(effectiveCycleId, { cycleUnitAllocationId })
         : await aquacultureService.getCycleLogs(effectiveCycleId);
-        setLogs(logsData);
-      } catch (error) {
-        logger.error('Erreur lors du chargement des logs:', error);
-        setError(t('dailyLogLoadError'));
+      setLogs(logsData);
+    } catch (error) {
+      logger.error('Erreur lors du chargement des logs:', error);
+      setError(t('dailyLogLoadError'));
     } finally {
       setLoading(false);
     }
@@ -74,19 +74,24 @@ export default function DailyLogHistoryScreen({ navigation, route }: DailyLogHis
     setRefreshing(false);
   };
 
-  const getCycleName = (cycleId: string) => {
-    if (currentCycle?.id === cycleId) {
-      return currentCycle.pond_identifier;
-    }
-    const cycle = activeCycles.find((currentCycle) => currentCycle.id === cycleId);
-    return cycle ? cycle.pond_identifier : `Cycle ${cycleId.slice(-4)}`;
-  };
-
   const renderLogCard = useCallback(({ item: log }: { item: CycleLog }) => (
-    <View className="bg-white rounded-xl p-4 mb-3">
+    <TouchableOpacity
+      className="bg-white rounded-xl p-4 mb-3"
+      activeOpacity={0.85}
+      accessibilityRole="button"
+      testID={`daily-log-card-${log.id}`}
+      onPress={() => {
+        navigation.navigate('DailyLogDetail', {
+          log,
+          cycleId: effectiveCycleId || undefined,
+          cycleUnitAllocationId: cycleUnitAllocationId || undefined,
+          productionUnitName,
+        });
+      }}
+    >
       <View className="flex-row justify-between items-center mb-3 pb-2 border-b border-slate-100">
         <Text className="text-base font-semibold text-gray-dark">{formatDate(log.log_date)}</Text>
-        <Text className="text-sm font-medium text-aquacare-primary">{getCycleName(log.cycle)}</Text>
+        <Ionicons name="chevron-forward" size={18} color={AQUACARE_COLORS.GRAY_LIGHT} />
       </View>
 
       <View className="mb-2">
@@ -127,32 +132,18 @@ export default function DailyLogHistoryScreen({ navigation, route }: DailyLogHis
           <Text className="text-sm text-gray-light italic">{log.observations}</Text>
         </View>
       )}
-    </View>
-  ), [currentCycle?.id, activeCycles, t]);
+    </TouchableOpacity>
+  ), [cycleUnitAllocationId, effectiveCycleId, navigation, productionUnitName, t]);
 
   const renderListHeader = useCallback(
     () => (
       <View className="bg-white p-4 border-b border-slate-200">
-        <Text className="text-sm font-medium text-gray-dark mb-1">
-          {t('sessionActiveCycleLabel', { defaultValue: 'Cycle actif de la session' })}
-        </Text>
         <Text className="text-base font-bold text-aquacare-primary">
           {selectedCycle?.cycle_name || t('sessionCycleNotSelected')}
         </Text>
-        {selectedCycle ? (
-          <Text className="text-xs text-gray-light mt-1">
-            {t('pond')} {selectedCycle.pond_identifier}
-          </Text>
-        ) : null}
-        {cycleUnitAllocationId ? (
-          <View className="mt-3 rounded-xl border border-green-100 bg-green-50 p-3">
-            <Text className="text-sm font-semibold text-green-800">{t('productionUnitLogHistoryContextTitle')}</Text>
-            <Text className="text-sm text-green-700 mt-1">{productionUnitName}</Text>
-          </View>
-        ) : null}
       </View>
     ),
-    [activeCycles, cycleUnitAllocationId, productionUnitName, selectedCycle, t]
+    [selectedCycle, t]
   );
 
   const renderEmptyState = useCallback(

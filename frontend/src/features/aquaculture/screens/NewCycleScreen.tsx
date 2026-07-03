@@ -68,6 +68,18 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
   });
   const [saving, setSaving] = useState(false);
 
+  const handleGoBack = () => {
+    if (navigation.canGoBack?.()) {
+      navigation.goBack();
+      return;
+    }
+
+    navigation.reset({
+      index: 0,
+      routes: [{ name: 'MainTabs' }],
+    });
+  };
+
   const getSelectedSpecies = () => SPECIES_OPTIONS.find((option) => option.value === formData.species);
 
   const applyEconomicDefaults = (species: 'clarias' | 'tilapia') => {
@@ -207,7 +219,13 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
   return (
     <ScrollView className="flex-1 bg-cream">
       <View className="bg-aquacare-primary flex-row items-center pt-14 pb-4 px-4">
-        <TouchableOpacity className="mr-4" onPress={() => navigation.goBack()}>
+        <TouchableOpacity
+          testID="newCycleBackButton"
+          className="mr-4"
+          onPress={handleGoBack}
+          accessibilityRole="button"
+          accessibilityLabel={t('back')}
+        >
           <Ionicons name="arrow-back" size={24} color={AQUACARE_COLORS.WHITE} />
         </TouchableOpacity>
         <Text className="text-xl font-bold text-white">{t('newCycleTitle')}</Text>

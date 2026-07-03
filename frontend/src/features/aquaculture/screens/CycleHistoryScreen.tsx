@@ -140,22 +140,22 @@ export default function CycleHistoryScreen({ navigation }: CycleHistoryScreenPro
 
           <View className="flex-row flex-wrap justify-between">
             <View className="w-[48%] items-center bg-cream p-3 rounded-lg mb-2">
-              <Text className="text-xl font-bold text-aquacare-primary mb-1">{totalCycles}</Text>
+              <Text className="text-xl font-bold text-black mb-1">{totalCycles}</Text>
               <Text className="text-xs text-gray-light text-center">{t('completedCycles')}</Text>
             </View>
 
             <View className="w-[48%] items-center bg-cream p-3 rounded-lg mb-2">
-              <Text className="text-xl font-bold text-aquacare-primary mb-1">{formatPercentage(avgSurvival)}</Text>
+              <Text className="text-xl font-bold text-black mb-1">{formatPercentage(avgSurvival)}</Text>
               <Text className="text-xs text-gray-light text-center">{t('avgSurvival')}</Text>
             </View>
 
             <View className="w-[48%] items-center bg-cream p-3 rounded-lg mb-2">
-              <Text className="text-xl font-bold text-aquacare-primary mb-1">{avgFCR > 0 ? avgFCR.toFixed(2) : '0'}</Text>
+              <Text className="text-xl font-bold text-black mb-1">{avgFCR > 0 ? avgFCR.toFixed(2) : '0'}</Text>
               <Text className="text-xs text-gray-light text-center">{t('avgFCR')}</Text>
             </View>
 
             <View className="w-[48%] items-center bg-cream p-3 rounded-lg mb-2">
-              <Text className="text-xl font-bold text-aquacare-primary mb-1">{formatNumber(totalBiomass, 'kg')}</Text>
+              <Text className="text-xl font-bold text-black mb-1">{formatNumber(totalBiomass, 'kg')}</Text>
               <Text className="text-xs text-gray-light text-center">{t('totalHarvested')}</Text>
             </View>
           </View>

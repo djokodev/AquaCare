@@ -12,9 +12,16 @@ jest.mock('@/features/aquaculture/services/aquacultureService', () => ({
 
 describe('features/aquaculture/screens/ProductionUnitOverviewScreen', () => {
   const mockGetProductionUnitDashboard = aquacultureService.getProductionUnitDashboard as jest.Mock;
+  let focusListener: (() => void) | null = null;
   const navigation = {
     navigate: jest.fn(),
     setOptions: jest.fn(),
+    addListener: jest.fn((event: string, callback: () => void) => {
+      if (event === 'focus') {
+        focusListener = callback;
+      }
+      return jest.fn();
+    }),
   } as any;
 
   const route = {
@@ -34,6 +41,7 @@ describe('features/aquaculture/screens/ProductionUnitOverviewScreen', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    focusListener = null;
   });
 
   it('affiche les indicateurs, le statut et navigue avec le contexte unitaire', async () => {
@@ -114,6 +122,13 @@ describe('features/aquaculture/screens/ProductionUnitOverviewScreen', () => {
       expect(queryByText('productionUnitTodayLogDone')).toBeNull();
       expect(queryByText('productionUnitActiveHealthIssue')).toBeNull();
       expect(queryByText('productionUnitRecentActivity')).toBeNull();
+    });
+
+    expect(navigation.addListener).toHaveBeenCalledWith('focus', expect.any(Function));
+    focusListener?.();
+
+    await waitFor(() => {
+      expect(mockGetProductionUnitDashboard).toHaveBeenCalledTimes(2);
     });
 
     fireEvent.press(getByText('dailyLog'));

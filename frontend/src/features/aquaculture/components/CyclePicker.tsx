@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { AQUACARE_COLORS } from '@/constants/colors';
 import { ProductionCycle } from '@/types/aquaculture';
 import { formatCycleDisplayName } from '@/features/aquaculture/utils/cycleDisplay';
+import { formatPercentage } from '@/utils';
 
 interface CyclePickerProps {
   cycles: ProductionCycle[];
@@ -27,7 +28,7 @@ const formatBiomass = (cycle: ProductionCycle): string => {
 
 const formatSurvivalRate = (cycle: ProductionCycle): string => {
   const rate = Number(cycle.survival_rate ?? 0);
-  return Number.isFinite(rate) ? `${rate.toFixed(0)}%` : '-';
+  return Number.isFinite(rate) ? formatPercentage(rate) : '-';
 };
 
 function CyclePicker({ cycles, selectedCycleId, onSelectCycle, rankingCycles }: CyclePickerProps) {
@@ -39,8 +40,6 @@ function CyclePicker({ cycles, selectedCycleId, onSelectCycle, rankingCycles }: 
       const isSelected = selectedCycleId === cycle.id;
       const daysActive = getDaysActive(cycle.start_date);
       const speciesLabel = cycle.species === 'clarias' ? t('catfish') : t('tilapia');
-      const speciesIcon: keyof typeof Ionicons.glyphMap =
-        cycle.species === 'clarias' ? 'fish' : 'fish-outline';
       const displayName = formatCycleDisplayName(cycle, cycleRankingSource);
 
       return (
@@ -54,12 +53,9 @@ function CyclePicker({ cycles, selectedCycleId, onSelectCycle, rankingCycles }: 
             <View className="flex-1 mr-3">
               <Text className="text-base font-bold text-gray-dark mb-1">{displayName}</Text>
 
-              <View className="flex-row items-center mb-2">
-                <Ionicons name={speciesIcon} size={14} color={AQUACARE_COLORS.GREEN_PRIMARY} />
-                <Text className="text-sm text-gray-light ml-1">
-                  {speciesLabel} - {cycle.pond_identifier}
-                </Text>
-              </View>
+              <Text className="text-sm text-gray-light mb-2">
+                {speciesLabel} - {cycle.pond_identifier}
+              </Text>
 
               <View className="flex-row flex-wrap gap-x-4 gap-y-1">
                 <View className="flex-row items-center">

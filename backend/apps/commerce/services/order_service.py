@@ -420,7 +420,8 @@ class OrderService(BaseCommerceService):
             metadata={
                 'order_id': str(order.id),
                 'order_number': order.order_number,
-                'total': float(order.total)
+                'total': float(order.total),
+                'production_cycle_id': str(order.production_cycle_id) if order.production_cycle_id else None,
             },
             channels=['in_app', 'email'],
             send_immediately=True

@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
-  Modal,
   Alert,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
@@ -30,20 +29,17 @@ import { offlineService } from '@/services/offlineService';
 import HarvestModal from '@/components/modals/HarvestModal';
 import PartialHarvestModal from '@/components/modals/PartialHarvestModal';
 import PartialHarvestHistoryModal from '@/components/modals/PartialHarvestHistoryModal';
-import CyclePicker from '@/features/aquaculture/components/CyclePicker';
 import DashboardHeader from '../components/DashboardHeader';
 import QuickActionsPreview from '../components/QuickActionsPreview';
 import QuickActionsSheet from '../components/QuickActionsSheet';
 import { ProductionCycle } from '@/types/aquaculture';
 import { AQUACARE_COLORS } from '@/constants/colors';
-import { formatNumber, formatPercentage, formatCurrency } from '@/utils';
+import { formatNumber, formatCurrency } from '@/utils';
 import { useAuth } from '@/hooks/useAuth';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
-import { formatCycleDisplayName } from '@/features/aquaculture/utils/cycleDisplay';
 
 import MetricCard from '../components/MetricCard';
 import {
-  calculateCycleEstimatedMarketValue,
   calculateDashboardBusinessMetrics,
 } from '../utils/dashboardCalculations';
 
@@ -57,8 +53,6 @@ export default function DashboardScreen({ navigation }: any) {
   const [partialHarvestHistoryModalVisible, setPartialHarvestHistoryModalVisible] = useState(false);
   const [selectedCycle, setSelectedCycle] = useState<ProductionCycle | null>(null);
   const [actionsSheetVisible, setActionsSheetVisible] = useState(false);
-  const [cycleSwitchModalVisible, setCycleSwitchModalVisible] = useState(false);
-  const [pendingCycleId, setPendingCycleId] = useState<string | null>(null);
   const [confirmingOrderId, setConfirmingOrderId] = useState<string | null>(null);
   const [currentCycleUnitCount, setCurrentCycleUnitCount] = useState<number | null>(null);
 
@@ -74,19 +68,22 @@ export default function DashboardScreen({ navigation }: any) {
       tryGlobalOfflineSync();
       dispatch(fetchDashboardData(undefined));
       dispatch(fetchProductionCycles());
-      dispatch(fetchNotifications());
       dispatch(fetchOrders());
     };
 
     initializeDashboard();
   }, [dispatch]);
 
+  useEffect(() => {
+    dispatch(fetchNotifications({ cycleId: currentCycle?.id }));
+  }, [currentCycle?.id, dispatch]);
+
   // Rafraîchir les notifications à chaque retour sur le dashboard (ex: après création commande)
   useFocusEffect(
     useCallback(() => {
-      dispatch(fetchNotifications());
+      dispatch(fetchNotifications({ cycleId: currentCycle?.id }));
       dispatch(fetchOrders());
-    }, [dispatch])
+    }, [currentCycle?.id, dispatch])
   );
 
   const tryGlobalOfflineSync = async () => {
@@ -111,11 +108,12 @@ export default function DashboardScreen({ navigation }: any) {
   );
 
   const activeCycles = dashboardData?.active_cycles || [];
-  const cycleLabelSource = allCycles.length > 0 ? allCycles : activeCycles;
+  const cyclesAvailableForSwitch = allCycles.length > 0 ? allCycles : activeCycles;
   const currentCycleInList = currentCycle
     ? activeCycles.find((cycle) => cycle.id === currentCycle.id)
     : undefined;
   const primaryActiveCycle = currentCycleInList || activeCycles[0] || null;
+  const sessionCycle = currentCycleInList || primaryActiveCycle;
   const primaryCycleHasProductionUnits = Boolean(
     primaryActiveCycle?.infrastructure_type && primaryActiveCycle.infrastructure_type.length > 0
   );
@@ -123,8 +121,6 @@ export default function DashboardScreen({ navigation }: any) {
     () => calculateDashboardBusinessMetrics(activeCycles, currentCycleInList),
     [activeCycles, currentCycleInList]
   );
-  const requiresCycleSelection = activeCycles.length > 1 && !currentCycleInList;
-
   useEffect(() => {
     let cancelled = false;
     setCurrentCycleUnitCount(null);
@@ -156,28 +152,10 @@ export default function DashboardScreen({ navigation }: any) {
 
   const onRefresh = useCallback(() => {
     dispatch(fetchDashboardData(undefined));
-    dispatch(fetchNotifications());
+    dispatch(fetchNotifications({ cycleId: currentCycle?.id }));
     dispatch(fetchOrders());
-  }, [dispatch]);
+  }, [currentCycle?.id, dispatch]);
 
-  const cycleCards = useMemo(
-    () =>
-      activeCycles.map((cycle) => ({
-        ...cycle,
-        displayName: formatCycleDisplayName(cycle, cycleLabelSource),
-        unitCount:
-          cycle.id === primaryActiveCycle?.id && currentCycleUnitCount !== null
-            ? currentCycleUnitCount
-            : Array.isArray(cycle.infrastructure_type)
-              ? cycle.infrastructure_type.length
-              : 0,
-        cycleAgeDays: Math.floor(
-          (Date.now() - new Date(cycle.start_date).getTime()) / (1000 * 60 * 60 * 24)
-        ),
-        estimatedMarketValueFcfa: calculateCycleEstimatedMarketValue(cycle),
-      })),
-    [activeCycles, currentCycleUnitCount, cycleLabelSource, primaryActiveCycle?.id]
-  );
   const dashboardMetricCards = useMemo(() => {
     if (primaryCycleHasProductionUnits) {
       return [
@@ -231,8 +209,6 @@ export default function DashboardScreen({ navigation }: any) {
       if (currentCycle) {
         dispatch(clearCurrentCycle());
       }
-      setCycleSwitchModalVisible(false);
-      setPendingCycleId(null);
       return;
     }
 
@@ -240,15 +216,11 @@ export default function DashboardScreen({ navigation }: any) {
       if (currentCycle?.id !== activeCycles[0].id) {
         dispatch(setCurrentCycle(activeCycles[0]));
       }
-      setCycleSwitchModalVisible(false);
-      setPendingCycleId(null);
       return;
     }
 
     if (!currentCycleInList) {
       dispatch(clearCurrentCycle());
-      setCycleSwitchModalVisible(true);
-      setPendingCycleId(null);
     } else if (currentCycleInList.id !== currentCycle?.id) {
       dispatch(setCurrentCycle(currentCycleInList));
     }
@@ -288,7 +260,15 @@ export default function DashboardScreen({ navigation }: any) {
   };
 
   const handleNotificationsPress = () => {
-    navigation.navigate('Notifications');
+    navigation.navigate(
+      'Notifications',
+      currentCycle
+        ? {
+            cycleId: currentCycle.id,
+            cycleName: currentCycle.cycle_name,
+          }
+        : undefined
+    );
   };
 
   const handleSettingsPress = () => {
@@ -348,38 +328,6 @@ export default function DashboardScreen({ navigation }: any) {
         },
       ]
     );
-  };
-
-  const openCycleSwitchModal = () => {
-    if (activeCycles.length < 2) {
-      return;
-    }
-    setPendingCycleId(currentCycleInList?.id || null);
-    setCycleSwitchModalVisible(true);
-  };
-
-  const closeCycleSwitchModal = () => {
-    if (requiresCycleSelection) {
-      return;
-    }
-    setCycleSwitchModalVisible(false);
-    setPendingCycleId(currentCycleInList?.id || null);
-  };
-
-  const confirmCycleSwitch = () => {
-    if (!pendingCycleId) {
-      return;
-    }
-
-    const selected = activeCycles.find((cycle) => cycle.id === pendingCycleId);
-    if (!selected) {
-      return;
-    }
-
-    dispatch(setCurrentCycle(selected));
-    dispatch(fetchDashboardData({ cycleId: selected.id }));
-    setCycleSwitchModalVisible(false);
-    setPendingCycleId(null);
   };
 
   if (error && !dashboardData) {
@@ -464,18 +412,33 @@ export default function DashboardScreen({ navigation }: any) {
         </View>
       </View>
 
-      {activeCycles.length > 1 && (
-        <View className="px-5 pb-1 items-end">
+      {sessionCycle ? (
+        <View className="px-5 pb-1">
           <TouchableOpacity
-            className="px-3 py-2 rounded-lg border border-aquacare-primary bg-white"
-            onPress={openCycleSwitchModal}
+            className="bg-white rounded-xl p-4 border border-aquacare-primary flex-row items-center justify-between shadow-sm"
+            onPress={() => navigation.navigate('CycleSessionEntry', { showBackToDashboard: true })}
           >
-            <Text className="text-sm font-semibold text-aquacare-primary">
-              {t('changeSessionCycle', { defaultValue: 'Changer de cycle' })}
-            </Text>
+            <View className="flex-1 mr-3">
+              <Text className="text-xs font-semibold uppercase tracking-wide text-gray-light">
+                {t('sessionActiveCycleLabel')}
+              </Text>
+              <Text className="text-base font-bold text-gray-dark mt-1">
+                {sessionCycle.cycle_name}
+              </Text>
+              {cyclesAvailableForSwitch.length > 1 ? (
+                <Text className="text-sm text-aquacare-primary mt-1">
+                  {t('changeSessionCycle', { defaultValue: 'Changer de cycle' })}
+                </Text>
+              ) : null}
+            </View>
+            <Ionicons
+              name="chevron-forward"
+              size={20}
+              color={AQUACARE_COLORS.GREEN_PRIMARY}
+            />
           </TouchableOpacity>
         </View>
-      )}
+      ) : null}
 
       {pendingDeliveryConfirmations.length > 0 && (
         <View className="px-5 pb-2">
@@ -538,48 +501,8 @@ export default function DashboardScreen({ navigation }: any) {
         />
       ) : null}
 
-      {activeCycles.length > 0 && (
+      {sessionCycle ? (
         <View className="px-5 py-5">
-
-          {cycleCards.map((cycle) => (
-            <View
-              key={cycle.id}
-              className="bg-white rounded-xl p-4 mb-3 border border-gray-200"
-            >
-              <View className="flex-row items-start justify-between">
-                <Text className="flex-1 mr-3 text-base font-bold text-gray-dark">
-                  {cycle.displayName}
-                </Text>
-                <Text className="text-sm text-gray-light text-right">
-                  {cycle.unitCount > 0
-                    ? t('productionUnitsCount', { count: cycle.unitCount })
-                    : cycle.pond_identifier}
-                </Text>
-              </View>
-              <Text className="text-xs text-gray-light mt-1">
-                {t('daysCount', { count: cycle.cycleAgeDays })} - {formatCurrency(cycle.estimatedMarketValueFcfa)} - {formatPercentage(cycle.survival_rate || 0)} {t('survivalRateShort')}
-              </Text>
-
-              {cycle.unitCount > 0 ? null : (
-                <TouchableOpacity
-                  className="mt-2 bg-aquacare-primary flex-row items-center py-2 px-3 rounded-lg"
-                  onPress={() => openHarvestChoice(cycle)}
-                >
-                  <Text className="text-white text-sm font-semibold ml-1">{t('harvest')}</Text>
-                </TouchableOpacity>
-              )}
-              {cycle.unitCount > 0 ? null : (
-                <TouchableOpacity
-                  style={{ marginTop: 10, flexDirection: 'row', alignItems: 'center', gap: 4 }}
-                  onPress={() => { setSelectedCycle(cycle); setPartialHarvestHistoryModalVisible(true); }}
-                >
-                  <Ionicons name="time-outline" size={14} color={AQUACARE_COLORS.GREEN_PRIMARY} />
-                  <Text className="text-sm text-aquacare-primary">{t('partialHarvestHistory')}</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          ))}
-
           {primaryActiveCycle && (
             <>
               <TouchableOpacity
@@ -618,7 +541,7 @@ export default function DashboardScreen({ navigation }: any) {
                   {t('reportCycleTitle')}
                 </Text>
                 <Ionicons
-                  name="document-text-outline"
+                  name="chevron-forward"
                   size={20}
                   color={AQUACARE_COLORS.GREEN_PRIMARY}
                 />
@@ -640,7 +563,7 @@ export default function DashboardScreen({ navigation }: any) {
             </>
           )}
         </View>
-      )}
+      ) : null}
 
       <HarvestModal
         visible={harvestModalVisible}
@@ -671,57 +594,9 @@ export default function DashboardScreen({ navigation }: any) {
           unreadCount={unreadCount}
           navigation={navigation}
           scope="cycle"
-          cycleContext={currentCycle?.id ? { cycleId: currentCycle.id } : undefined}
+          cycleContext={sessionCycle?.id ? { cycleId: sessionCycle.id } : undefined}
         />
       ) : null}
-
-      <Modal
-        visible={cycleSwitchModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={closeCycleSwitchModal}
-      >
-        <View className="flex-1 bg-black/40 items-center justify-center px-4">
-          <View className="bg-white w-full rounded-xl p-4">
-            <Text className="text-lg font-bold text-gray-dark mb-1">
-              {t('sessionCyclePickerTitle', { defaultValue: 'Sélection du cycle' })}
-            </Text>
-            <Text className="text-sm text-gray-light mb-4">
-              {t('sessionCyclePickerDescription', {
-                defaultValue: 'Choisissez le cycle sur lequel vous travaillez maintenant.',
-              })}
-            </Text>
-
-            <CyclePicker
-              cycles={activeCycles}
-              selectedCycleId={pendingCycleId}
-              onSelectCycle={setPendingCycleId}
-            />
-
-            <View className="flex-row justify-end gap-2 mt-3">
-              {!requiresCycleSelection && (
-                <TouchableOpacity
-                  className="px-4 py-2 rounded-lg border border-gray-300"
-                  onPress={closeCycleSwitchModal}
-                >
-                  <Text className="text-sm text-gray-dark">{t('cancel')}</Text>
-                </TouchableOpacity>
-              )}
-              <TouchableOpacity
-                className={`px-4 py-2 rounded-lg ${
-                  pendingCycleId ? 'bg-aquacare-primary' : 'bg-gray-300'
-                }`}
-                disabled={!pendingCycleId}
-                onPress={confirmCycleSwitch}
-              >
-                <Text className="text-sm text-white font-semibold">
-                  {t('sessionCycleConfirm', { defaultValue: 'Confirmer le cycle' })}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
       </ScrollView>
     </View>
   );

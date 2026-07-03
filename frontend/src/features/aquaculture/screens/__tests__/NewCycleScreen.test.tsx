@@ -66,6 +66,8 @@ describe('features/aquaculture/screens/NewCycleScreen', () => {
     goBack: jest.fn(),
     navigate: jest.fn(),
     replace: jest.fn(),
+    reset: jest.fn(),
+    canGoBack: jest.fn().mockReturnValue(true),
   } as any;
 
   beforeEach(() => {
@@ -139,6 +141,20 @@ describe('features/aquaculture/screens/NewCycleScreen', () => {
     );
 
     alertSpy.mockRestore();
+  });
+
+  it('revient au dashboard racine si la pile ne permet pas un retour', () => {
+    navigation.canGoBack.mockReturnValue(false);
+
+    const { getByTestId } = render(<NewCycleScreen navigation={navigation} />);
+
+    fireEvent.press(getByTestId('newCycleBackButton'));
+
+    expect(navigation.goBack).not.toHaveBeenCalled();
+    expect(navigation.reset).toHaveBeenCalledWith({
+      index: 0,
+      routes: [{ name: 'MainTabs' }],
+    });
   });
 
   it('bascule en sauvegarde offline sur erreur reseau', async () => {
