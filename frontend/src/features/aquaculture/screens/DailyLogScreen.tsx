@@ -63,6 +63,8 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
     : activeCycles;
 
   const [selectedCycle, setSelectedCycle] = useState<string>(routeCycleId || '');
+  const selectedCycleData =
+    sessionScopedCycles.find((cycle) => cycle.id === selectedCycle) || sessionScopedCycles[0] || null;
   const [formData, setFormData] = useState<DailyLogData>({
     cycle_id: routeCycleId || '',
     mortality_count: '',
@@ -271,29 +273,25 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
       <View className="p-4">
         {unitAllocationId ? (
           <View className="mb-6 rounded-2xl border border-green-200 bg-white p-4">
-            <View className="flex-row items-center mb-2">
-              <Ionicons name="cube-outline" size={18} color={AQUACARE_COLORS.GREEN_PRIMARY} />
-              <Text className="ml-2 text-base font-bold text-gray-dark">
-                {t('productionUnitLogContextTitle')}
-              </Text>
-            </View>
-            <Text className="text-sm font-semibold text-aquacare-primary mb-1">{unitName}</Text>
-            <Text className="text-sm text-gray-light">{t('productionUnitLogContextDescription')}</Text>
+            <Text className="text-sm font-semibold text-aquacare-primary mb-1">
+              {selectedCycleData?.cycle_name || t('sessionCycleNotSelected')}
+            </Text>
+            <Text className="text-sm text-gray-light">{t('dailyLogUnitContextLabel', { unitName })}</Text>
           </View>
-        ) : null}
-
-        <CycleSelector
-          cycles={sessionScopedCycles}
-          selectedCycleId={selectedCycle}
-          onSelectCycle={(cycleId) => {
-            setSelectedCycle(cycleId);
-            setFormData((prev) => ({ ...prev, cycle_id: cycleId }));
-            const cycle = sessionScopedCycles.find((item) => item.id === cycleId);
-            if (cycle) {
-              dispatch(setCurrentCycle(cycle));
-            }
-          }}
-        />
+        ) : (
+          <CycleSelector
+            cycles={sessionScopedCycles}
+            selectedCycleId={selectedCycle}
+            onSelectCycle={(cycleId) => {
+              setSelectedCycle(cycleId);
+              setFormData((prev) => ({ ...prev, cycle_id: cycleId }));
+              const cycle = sessionScopedCycles.find((item) => item.id === cycleId);
+              if (cycle) {
+                dispatch(setCurrentCycle(cycle));
+              }
+            }}
+          />
+        )}
 
         <View className="mb-6">
           <Text className="text-base font-bold text-gray-dark mb-3">{t('dailyRecommendedSection')}</Text>

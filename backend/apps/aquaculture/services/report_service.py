@@ -179,6 +179,7 @@ class ReportSanitarySnapshot(TypedDict):
     medication_used: str | None
     dosage: str | None
     treatment_duration_days: int | None
+    notes: str | None
     resolved: bool
 
 
@@ -719,6 +720,7 @@ class ReportService(BaseService):
                     'medication_used': item.medication_used or None,
                     'dosage': item.dosage or None,
                     'treatment_duration_days': item.treatment_duration_days,
+                    'notes': item.notes or None,
                     'resolved': item.resolved,
                 }
                 for item in sanitary_logs
@@ -781,7 +783,6 @@ class ReportService(BaseService):
                 Prefetch(
                     'daily_logs',
                     queryset=CycleLog.objects.filter(
-                        log_date__gte=period_start,
                         log_date__lte=period_end,
                     ).order_by('-log_date', '-log_time'),
                     to_attr='period_daily_logs',
@@ -789,7 +790,6 @@ class ReportService(BaseService):
                 Prefetch(
                     'sanitary_logs',
                     queryset=SanitaryLog.objects.filter(
-                        event_date__gte=period_start,
                         event_date__lte=period_end,
                     ).order_by('-event_date', '-created_at'),
                     to_attr='period_sanitary_logs',
@@ -799,13 +799,11 @@ class ReportService(BaseService):
         if not allocations:
             cycle_logs = list(
                 cycle.logs.filter(
-                    log_date__gte=period_start,
                     log_date__lte=period_end,
                 ).order_by('-log_date', '-log_time')
             )
             sanitary_logs = list(
                 cycle.sanitary_logs.filter(
-                    event_date__gte=period_start,
                     event_date__lte=period_end,
                 ).order_by('-event_date', '-created_at')
             )
@@ -976,6 +974,7 @@ class ReportService(BaseService):
                                 'medication_used': item.medication_used or None,
                                 'dosage': item.dosage or None,
                                 'treatment_duration_days': item.treatment_duration_days,
+                                'notes': item.notes or None,
                                 'resolved': item.resolved,
                             }
                             for item in sanitary_logs
@@ -1124,13 +1123,11 @@ class ReportService(BaseService):
         cycle = allocation.cycle
         daily_logs = list(
             allocation.daily_logs.filter(
-                log_date__gte=period_start,
                 log_date__lte=period_end,
             ).order_by('-log_date', '-log_time')
         )
         sanitary_logs = list(
             allocation.sanitary_logs.filter(
-                event_date__gte=period_start,
                 event_date__lte=period_end,
             ).order_by('-event_date', '-created_at')
         )
@@ -1436,6 +1433,7 @@ class ReportService(BaseService):
                         'medication_used': item.medication_used or None,
                         'dosage': item.dosage or None,
                         'treatment_duration_days': item.treatment_duration_days,
+                        'notes': item.notes or None,
                         'resolved': item.resolved,
                     }
                     for item in sanitary_logs
@@ -1794,6 +1792,11 @@ class ReportService(BaseService):
                 'event_type': 'Type',
                 'affected_fish': 'Affected fish',
                 'treatment': 'Treatment',
+                'symptoms': 'Symptoms',
+                'medication_used': 'Medication',
+                'dosage': 'Dosage',
+                'treatment_duration': 'Treatment duration',
+                'notes': 'Notes',
                 'status': 'Status',
                 'resolved': 'Resolved',
                 'active': 'Active',
@@ -1871,6 +1874,11 @@ class ReportService(BaseService):
             'event_type': 'Type',
             'affected_fish': 'Poissons affectés',
             'treatment': 'Traitement',
+            'symptoms': 'Symptômes',
+            'medication_used': 'Médicament utilisé',
+            'dosage': 'Dosage',
+            'treatment_duration': 'Durée du traitement',
+            'notes': 'Notes',
             'status': 'État',
             'resolved': 'Résolue',
             'active': 'Active',

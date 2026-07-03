@@ -16,6 +16,11 @@ from rest_framework.test import APIRequestFactory
 class TestNotificationSerializers:
     """Tests des serializers de notification."""
 
+    def test_notification_list_serializer_includes_metadata(self, notification):
+        serializer = NotificationListSerializer(notification)
+
+        assert 'metadata' in serializer.data
+
     def test_notification_serializer_exposes_delivery_errors_to_staff(self, notification):
         staff_user = User.objects.create_user(
             phone_number="+237611111111",

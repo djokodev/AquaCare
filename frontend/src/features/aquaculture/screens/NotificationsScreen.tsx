@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AppState, View, Text, FlatList, TouchableOpacity, ActivityIndicator, RefreshControl, Alert } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
+import { RouteProp, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useDispatch, useSelector } from 'react-redux';
 import { useFocusEffect } from '@react-navigation/native';
@@ -28,6 +29,7 @@ const NOTIFICATION_COLORS = {
 };
 
 type NotificationsScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Notifications'>;
+type NotificationsScreenRouteProp = RouteProp<RootStackParamList, 'Notifications'>;
 
 interface NotificationsScreenProps {
   navigation: NotificationsScreenNavigationProp;
@@ -37,14 +39,67 @@ interface ErrorWithMessage {
   message?: string;
 }
 
+type NotificationCycleContext =
+  | {
+      kind: 'name';
+      value: string;
+    }
+  | {
+      kind: 'tag';
+      value: string;
+    }
+  | null;
+
+const getNotificationMetadataString = (
+  metadata: Record<string, unknown>,
+  keys: string[]
+): string | null => {
+  for (const key of keys) {
+    const value = metadata[key];
+    if (typeof value === 'string' && value.trim().length > 0) {
+      return value.trim();
+    }
+  }
+  return null;
+};
+
+const resolveNotificationCycleContext = (metadata: Record<string, unknown>): NotificationCycleContext => {
+  const cycleName = getNotificationMetadataString(metadata, [
+    'cycle_name',
+    'cycleName',
+    'cycle_label',
+    'cycleLabel',
+    'production_cycle_name',
+    'productionCycleName',
+  ]);
+  if (cycleName) {
+    return { kind: 'name', value: cycleName };
+  }
+
+  const cycleId = getNotificationMetadataString(metadata, [
+    'cycle_id',
+    'cycleId',
+    'production_cycle_id',
+    'productionCycleId',
+  ]);
+  if (cycleId) {
+    return { kind: 'tag', value: cycleId.slice(0, 8) };
+  }
+
+  return null;
+};
+
 export default function NotificationsScreen({ navigation }: NotificationsScreenProps) {
   const { t, i18n } = useTranslation();
   const dispatch = useDispatch<AppDispatch>();
+  const route = useRoute<NotificationsScreenRouteProp>();
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
 
   const [selectedFilter, setSelectedFilter] = useState<'all' | 'unread' | 'read'>('all');
 
   const { notifications, loading, error, unreadCount } = useSelector((state: RootState) => state.notifications);
+  const currentCycleId = useSelector((state: RootState) => state.aquaculture.currentCycle?.id);
+  const effectiveCycleId = route.params?.cycleId ?? currentCycleId;
 
   const stopPolling = useCallback(() => {
     if (pollingRef.current) {
@@ -59,38 +114,38 @@ export default function NotificationsScreen({ navigation }: NotificationsScreenP
     }
 
     pollingRef.current = setInterval(() => {
-      dispatch(fetchNotificationsSilent());
+      dispatch(fetchNotificationsSilent({ cycleId: effectiveCycleId }));
     }, 4000);
-  }, [dispatch]);
+  }, [dispatch, effectiveCycleId]);
 
   useEffect(() => {
-    dispatch(fetchNotifications());
-  }, [dispatch]);
+    dispatch(fetchNotifications({ cycleId: effectiveCycleId }));
+  }, [dispatch, effectiveCycleId]);
 
   useFocusEffect(
     useCallback(() => {
-      dispatch(fetchNotificationsSilent());
+      dispatch(fetchNotificationsSilent({ cycleId: effectiveCycleId }));
       startPolling();
 
       return () => {
         stopPolling();
       };
-    }, [dispatch, startPolling, stopPolling])
+    }, [dispatch, effectiveCycleId, startPolling, stopPolling])
   );
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (status) => {
       if (status === 'active') {
-        dispatch(fetchNotificationsSilent());
+        dispatch(fetchNotificationsSilent({ cycleId: effectiveCycleId }));
       }
     });
 
     return () => subscription.remove();
-  }, [dispatch]);
+  }, [dispatch, effectiveCycleId]);
 
   const onRefresh = React.useCallback(() => {
-    dispatch(fetchNotifications());
-  }, [dispatch]);
+    dispatch(fetchNotifications({ cycleId: effectiveCycleId }));
+  }, [dispatch, effectiveCycleId]);
 
   const sortedNotifications = useMemo(
     () =>
@@ -174,7 +229,7 @@ export default function NotificationsScreen({ navigation }: NotificationsScreenP
         text: t('confirm'),
         onPress: async () => {
           try {
-            await dispatch(markAllNotificationsAsRead()).unwrap();
+            await dispatch(markAllNotificationsAsRead({ cycleId: effectiveCycleId })).unwrap();
           } catch {
             Alert.alert(t('error'), t('markAllReadError'));
           }
@@ -220,7 +275,7 @@ export default function NotificationsScreen({ navigation }: NotificationsScreenP
         style: 'destructive',
         onPress: async () => {
           try {
-            await dispatch(deleteAllReadNotifications()).unwrap();
+            await dispatch(deleteAllReadNotifications({ cycleId: effectiveCycleId })).unwrap();
           } catch (deleteAllError: unknown) {
             const errorWithMessage = deleteAllError as ErrorWithMessage;
             Alert.alert(t('error'), errorWithMessage.message || t('deleteAllReadError'));
@@ -236,6 +291,7 @@ export default function NotificationsScreen({ navigation }: NotificationsScreenP
     ({ item: notification }: { item: Notification }) => {
       const iconName = getNotificationIcon(notification.notification_type);
       const color = getNotificationColor(notification.notification_type);
+      const cycleContext = resolveNotificationCycleContext(notification.metadata || {});
 
       return (
         <View
@@ -254,6 +310,21 @@ export default function NotificationsScreen({ navigation }: NotificationsScreenP
               </View>
 
               <Text className="text-sm text-gray-light mb-2 leading-5">{notification.message}</Text>
+
+              {cycleContext ? (
+                <View className="self-start flex-row items-center rounded-full bg-[#f0fdf4] px-2 py-1 mb-2">
+                  <Ionicons
+                    name="pricetag-outline"
+                    size={12}
+                    color={AQUACARE_COLORS.GREEN_PRIMARY}
+                  />
+                  <Text className="text-[11px] font-semibold text-aquacare-primary ml-1">
+                    {cycleContext.kind === 'name'
+                      ? t('notificationCycleContext', { cycleName: cycleContext.value })
+                      : t('notificationCycleTag', { cycleTag: cycleContext.value })}
+                  </Text>
+                </View>
+              ) : null}
 
               <View className="flex-row justify-between items-center">
                 <Text className="text-xs text-gray-light">{formatRelativeDate(notification.scheduled_for)}</Text>
@@ -394,7 +465,10 @@ export default function NotificationsScreen({ navigation }: NotificationsScreenP
         <View className="flex-1 items-center justify-center p-6">
           <Ionicons name="alert-circle" size={48} color={AQUACARE_COLORS.ERROR} />
           <Text className="text-lg text-error text-center mt-3">{error ? t(error) : ''}</Text>
-          <TouchableOpacity className="mt-4 bg-aquacare-primary px-5 py-3 rounded-lg" onPress={() => dispatch(fetchNotifications())}>
+          <TouchableOpacity
+            className="mt-4 bg-aquacare-primary px-5 py-3 rounded-lg"
+            onPress={() => dispatch(fetchNotifications({ cycleId: effectiveCycleId }))}
+          >
             <Text className="text-white text-base font-semibold">{t('retry')}</Text>
           </TouchableOpacity>
         </View>

@@ -105,6 +105,19 @@ const welcomeStyles = StyleSheet.create({
     ...AQUACARE_TYPOGRAPHY.button,
     color: AQUACARE_COLORS.WHITE,
   },
+  backButton: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 18,
+    paddingVertical: 8,
+    paddingRight: 8,
+  },
+  backButtonText: {
+    ...AQUACARE_TYPOGRAPHY.smallStrong,
+    color: AQUACARE_COLORS.WHITE,
+  },
 });
 
 type CycleSessionEntryNavigationProp = StackNavigationProp<
@@ -114,14 +127,20 @@ type CycleSessionEntryNavigationProp = StackNavigationProp<
 
 interface Props {
   navigation: CycleSessionEntryNavigationProp;
+  route: {
+    params?: {
+      showBackToDashboard?: boolean;
+    };
+  };
 }
 
-export default function CycleSessionEntryScreen({ navigation }: Props) {
+export default function CycleSessionEntryScreen({ navigation, route }: Props) {
   const dispatch = useDispatch<AppDispatch>();
   const isAuthenticated = useSelector((state: RootState) => state.auth.isAuthenticated);
   const allCycles = useSelector((state: RootState) => state.aquaculture.cycles) || [];
   const { t } = useTranslation();
   const isMounted = useRef(true);
+  const showBackToDashboard = route.params?.showBackToDashboard === true;
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -192,6 +211,28 @@ export default function CycleSessionEntryScreen({ navigation }: Props) {
   if (loading) {
     return (
       <View className="flex-1 bg-cream items-center justify-center px-6">
+        {showBackToDashboard ? (
+          <TouchableOpacity
+            style={{
+              position: 'absolute',
+              top: 58,
+              left: 24,
+              zIndex: 10,
+              backgroundColor: '#ecfdf5',
+              borderRadius: 999,
+              paddingHorizontal: 12,
+              paddingVertical: 6,
+            }}
+            onPress={() => navigation.navigate('MainTabs')}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Ionicons name="arrow-back" size={18} color={AQUACARE_COLORS.GREEN_PRIMARY} />
+              <Text style={[welcomeStyles.backButtonText, { color: AQUACARE_COLORS.GREEN_PRIMARY }]}>
+                {t('backToDashboard')}
+              </Text>
+            </View>
+          </TouchableOpacity>
+        ) : null}
         <ActivityIndicator size="large" color={AQUACARE_COLORS.GREEN_PRIMARY} />
         <Text className="text-base text-gray-light mt-3">{t('sessionCycleLoading')}</Text>
       </View>
@@ -201,6 +242,28 @@ export default function CycleSessionEntryScreen({ navigation }: Props) {
   if (error) {
     return (
       <View className="flex-1 bg-cream items-center justify-center px-6">
+        {showBackToDashboard ? (
+          <TouchableOpacity
+            style={{
+              position: 'absolute',
+              top: 58,
+              left: 24,
+              zIndex: 10,
+              backgroundColor: '#ecfdf5',
+              borderRadius: 999,
+              paddingHorizontal: 12,
+              paddingVertical: 6,
+            }}
+            onPress={() => navigation.navigate('MainTabs')}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Ionicons name="arrow-back" size={18} color={AQUACARE_COLORS.GREEN_PRIMARY} />
+              <Text style={[welcomeStyles.backButtonText, { color: AQUACARE_COLORS.GREEN_PRIMARY }]}>
+                {t('backToDashboard')}
+              </Text>
+            </View>
+          </TouchableOpacity>
+        ) : null}
         <Ionicons name="alert-circle-outline" size={48} color={AQUACARE_COLORS.ERROR} />
         <Text className="text-base text-error text-center mt-3 mb-5">{error}</Text>
         <TouchableOpacity className="bg-aquacare-primary px-6 py-3 rounded-lg" onPress={loadCycles}>
@@ -214,6 +277,14 @@ export default function CycleSessionEntryScreen({ navigation }: Props) {
   if (activeCycles.length === 0) {
     return (
       <View style={welcomeStyles.container}>
+        {showBackToDashboard ? (
+          <TouchableOpacity style={welcomeStyles.backButton} onPress={() => navigation.navigate('MainTabs')}>
+            <Ionicons name="arrow-back" size={18} color={AQUACARE_COLORS.GREEN_PRIMARY} />
+            <Text style={[welcomeStyles.backButtonText, { color: AQUACARE_COLORS.GREEN_PRIMARY }]}>
+              {t('backToDashboard')}
+            </Text>
+          </TouchableOpacity>
+        ) : null}
         <TouchableOpacity
           style={welcomeStyles.ctaBtn}
           onPress={() => navigation.replace('CreateFarm')}
@@ -230,6 +301,12 @@ export default function CycleSessionEntryScreen({ navigation }: Props) {
   return (
     <View className="flex-1 bg-cream">
       <View className="bg-aquacare-primary px-5 pt-16 pb-6">
+        {showBackToDashboard ? (
+          <TouchableOpacity style={welcomeStyles.backButton} onPress={() => navigation.navigate('MainTabs')}>
+            <Ionicons name="arrow-back" size={18} color={AQUACARE_COLORS.WHITE} />
+            <Text style={welcomeStyles.backButtonText}>{t('backToDashboard')}</Text>
+          </TouchableOpacity>
+        ) : null}
         <Text className="text-2xl font-bold text-white mb-2">{t('sessionCycleTitle')}</Text>
         <Text className="text-sm text-white/90">{t('sessionCycleDescription')}</Text>
       </View>

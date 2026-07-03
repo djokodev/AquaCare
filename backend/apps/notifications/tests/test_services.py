@@ -55,6 +55,9 @@ class TestNotificationServiceCreate:
         )
 
         assert notif.content_object == production_cycle
+        assert notif.metadata['cycle_id'] == str(production_cycle.id)
+        assert notif.metadata['production_cycle_id'] == str(production_cycle.id)
+        assert notif.metadata['cycle_name'] == production_cycle.cycle_name
 
     def test_create_notification_with_metadata(self, user):
         """Test création avec métadonnées."""
@@ -317,6 +320,87 @@ class TestNotificationInboxApplicationService:
 
         assert queryset.count() == 1
         assert queryset.first().notification_type == 'order_confirmed'
+
+    def test_get_user_notifications_filters_by_cycle(self, user, production_cycle):
+        other_cycle = production_cycle.__class__.objects.create(
+            farm_profile=production_cycle.farm_profile,
+            cycle_name='Cycle Test Clarias',
+            species='clarias',
+            pond_identifier='Bassin B',
+            pond_surface_m2=production_cycle.pond_surface_m2,
+            start_date=production_cycle.start_date,
+            initial_count=800,
+            initial_average_weight=production_cycle.initial_average_weight,
+            initial_biomass=production_cycle.initial_biomass,
+            status='active',
+        )
+        Notification.objects.filter(user=user).delete()
+        Notification.objects.create(
+            user=user,
+            content_object=production_cycle,
+            notification_type='feeding_reminder',
+            title='Cycle A',
+            message='Scoped A',
+            scheduled_for=timezone.now(),
+        )
+        Notification.objects.create(
+            user=user,
+            content_object=other_cycle,
+            notification_type='feeding_reminder',
+            title='Cycle B',
+            message='Scoped B',
+            scheduled_for=timezone.now(),
+        )
+
+        queryset = NotificationInboxApplicationService.get_user_notifications(
+            user,
+            NotificationQueryFilters(cycle_id=str(production_cycle.id)),
+        )
+
+        assert queryset.count() == 1
+        assert queryset.first().title == 'Cycle A'
+
+    def test_mark_all_notifications_as_read_with_filters_scopes_to_cycle(self, user, production_cycle):
+        other_cycle = production_cycle.__class__.objects.create(
+            farm_profile=production_cycle.farm_profile,
+            cycle_name='Cycle Test Clarias',
+            species='clarias',
+            pond_identifier='Bassin C',
+            pond_surface_m2=production_cycle.pond_surface_m2,
+            start_date=production_cycle.start_date,
+            initial_count=600,
+            initial_average_weight=production_cycle.initial_average_weight,
+            initial_biomass=production_cycle.initial_biomass,
+            status='active',
+        )
+        Notification.objects.filter(user=user).delete()
+        target = Notification.objects.create(
+            user=user,
+            content_object=production_cycle,
+            notification_type='feeding_reminder',
+            title='Cycle A',
+            message='Unread A',
+            scheduled_for=timezone.now(),
+        )
+        untouched = Notification.objects.create(
+            user=user,
+            content_object=other_cycle,
+            notification_type='feeding_reminder',
+            title='Cycle B',
+            message='Unread B',
+            scheduled_for=timezone.now(),
+        )
+
+        count = NotificationInboxApplicationService.mark_all_notifications_as_read_with_filters(
+            user,
+            NotificationQueryFilters(cycle_id=str(production_cycle.id)),
+        )
+
+        target.refresh_from_db()
+        untouched.refresh_from_db()
+        assert count == 1
+        assert target.is_read is True
+        assert untouched.is_read is False
 
     def test_mark_notification_as_read_rejects_foreign_owner(self, user, user2):
         notification = Notification.objects.create(

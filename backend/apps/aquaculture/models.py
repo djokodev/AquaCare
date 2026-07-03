@@ -69,7 +69,6 @@ class ProductionCycleQuerySet(models.QuerySet):
             Prefetch(
                 'logs',
                 queryset=CycleLog.objects.filter(
-                    log_date__gte=period_start,
                     log_date__lte=period_end,
                 ).order_by('log_date'),
                 to_attr='period_logs',
@@ -77,7 +76,6 @@ class ProductionCycleQuerySet(models.QuerySet):
             Prefetch(
                 'sanitary_logs',
                 queryset=SanitaryLog.objects.filter(
-                    event_date__gte=period_start,
                     event_date__lte=period_end,
                 ).order_by('event_date'),
                 to_attr='period_sanitary',

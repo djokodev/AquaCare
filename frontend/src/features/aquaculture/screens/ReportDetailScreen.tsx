@@ -114,8 +114,13 @@ interface ReportCycleData {
     id?: string;
     event_date?: string;
     event_type_display?: string;
+    symptoms?: string;
     affected_count?: number | null;
     treatment_applied?: string | null;
+    medication_used?: string | null;
+    dosage?: string | null;
+    treatment_duration_days?: number | null;
+    observations?: string | null;
     resolved?: boolean;
   }>;
 }
@@ -310,12 +315,14 @@ export default function ReportDetailScreen({ navigation, route }: ReportDetailSc
     () => ((payload.cycles as ReportCycleData[]) || []) as ReportCycleData[],
     [payload]
   );
-  const latestUnitLogs = cycles[0]?.logs?.slice(0, 3) ?? [];
   const latestSanitaryLogs = cycles[0]?.sanitary_logs?.slice(0, 3) ?? [];
 
   const renderCycleSection = useCallback(
     ({ item: section, index }: { item: ReportCycleData; index: number }) => (
-      <View className="mx-4 mb-3 rounded-xl border border-gray-100 bg-white p-4">
+      <View
+        key={section.unit?.id || section.cycle?.id || index}
+        className="mx-4 mb-3 rounded-xl border border-gray-100 bg-white p-4"
+      >
         <Text className="text-sm font-semibold text-gray-dark">
           {section.unit?.production_unit_name || section.cycle?.cycle_name || t('cycle')}
         </Text>
@@ -425,11 +432,11 @@ export default function ReportDetailScreen({ navigation, route }: ReportDetailSc
             </View>
             <View className="w-[48%] mb-2">
               <Text className="text-xs text-gray-light">
-                {scopeType === 'unit' ? t('reportLastEntry') : t('reportUnitsMissingToday')}
+                {scopeType === 'unit' ? t('reportActiveSanitaryEvents') : t('reportUnitsMissingToday')}
               </Text>
               <Text className="text-sm font-semibold text-gray-dark">
                 {scopeType === 'unit'
-                  ? (cycles[0]?.logs?.[0]?.log_date || t('notProvided'))
+                  ? (summary.active_sanitary_events_count || 0)
                   : (summary.units_missing_today_log_count || 0)}
               </Text>
             </View>
@@ -465,49 +472,45 @@ export default function ReportDetailScreen({ navigation, route }: ReportDetailSc
         ) : null}
 
         {scopeType === 'unit' ? (
-          <>
-            <View className="bg-white rounded-xl p-4 mb-4">
-              <Text className="text-base font-bold text-gray-dark mb-3">{t('dailyLog')}</Text>
-              {latestUnitLogs.length ? (
-                latestUnitLogs.map((log) => (
-                  <View key={log.id} className="mb-2 rounded-lg bg-cream p-3">
-                    <Text className="text-sm font-semibold text-gray-dark">
-                      {log.log_date}
-                    </Text>
-                    <Text className="text-xs text-gray-light mt-1">
-                      {t('reportFeedConsumed')}: {(log.feed_quantity ?? 0).toFixed(2)} kg
-                    </Text>
-                    <Text className="text-xs text-gray-light">
-                      {t('reportCumulativeMortality')}: {log.mortality_count ?? 0}
-                    </Text>
-                  </View>
-                ))
-              ) : (
-                <Text className="text-sm text-gray-light">{t('noReportDataAvailable')}</Text>
-              )}
-            </View>
-
-            <View className="bg-white rounded-xl p-4 mb-4">
-              <Text className="text-base font-bold text-gray-dark mb-3">{t('sanitaryLog')}</Text>
-              {latestSanitaryLogs.length ? (
-                latestSanitaryLogs.map((event) => (
-                  <View key={event.id} className="mb-2 rounded-lg bg-cream p-3">
-                    <Text className="text-sm font-semibold text-gray-dark">
-                      {event.event_date}
-                    </Text>
-                    <Text className="text-xs text-gray-light mt-1">
-                      {event.event_type_display || t('sanitaryLog')}
-                    </Text>
-                    <Text className="text-xs text-gray-light">
-                      {t('reportActiveSanitaryEvents')}: {event.resolved ? t('resolved') : t('active')}
-                    </Text>
-                  </View>
-                ))
-              ) : (
-                <Text className="text-sm text-gray-light">{t('noReportDataAvailable')}</Text>
-              )}
-            </View>
-          </>
+          <View className="bg-white rounded-xl p-4 mb-4">
+            <Text className="text-base font-bold text-gray-dark mb-3">{t('reportLatestSanitaryEvents')}</Text>
+            {latestSanitaryLogs.length ? (
+              latestSanitaryLogs.map((event) => (
+                <View key={event.id} className="mb-2 rounded-lg bg-cream p-3">
+                  <Text className="text-sm font-semibold text-gray-dark">{event.event_date}</Text>
+                  <Text className="text-xs text-gray-light mt-1">
+                    {t('reportSanitaryEventType')}: {event.event_type_display || t('sanitaryLog')}
+                  </Text>
+                  <Text className="text-xs text-gray-light">
+                    {t('reportSanitaryAffectedCount')}: {event.affected_count ?? 0}
+                  </Text>
+                  <Text className="text-xs text-gray-light">
+                    {t('reportSanitarySymptoms')}: {event.symptoms || t('notProvided')}
+                  </Text>
+                  <Text className="text-xs text-gray-light">
+                    {t('reportSanitaryTreatmentApplied')}: {event.treatment_applied || t('notProvided')}
+                  </Text>
+                  <Text className="text-xs text-gray-light">
+                    {t('reportSanitaryMedicationUsed')}: {event.medication_used || t('notProvided')}
+                  </Text>
+                  <Text className="text-xs text-gray-light">
+                    {t('reportSanitaryDosage')}: {event.dosage || t('notProvided')}
+                  </Text>
+                  <Text className="text-xs text-gray-light">
+                    {t('reportSanitaryTreatmentDuration')}: {event.treatment_duration_days ? t('daysCount', { count: event.treatment_duration_days }) : t('notProvided')}
+                  </Text>
+                  <Text className="text-xs text-gray-light">
+                    {t('reportSanitaryEventStatus')}: {event.resolved ? t('reportSanitaryEventResolved') : t('reportSanitaryEventActive')}
+                  </Text>
+                  <Text className="text-xs text-gray-light">
+                    {t('reportSanitaryObservations')}: {event.observations || t('notProvided')}
+                  </Text>
+                </View>
+              ))
+            ) : (
+              <Text className="text-sm text-gray-light">{t('noUnitSanitaryLogs')}</Text>
+            )}
+          </View>
         ) : null}
 
         <View className="bg-white rounded-xl p-4 mb-6">
@@ -591,7 +594,6 @@ export default function ReportDetailScreen({ navigation, route }: ReportDetailSc
       handleEmailAction,
       handleShareWhatsApp,
       latestSanitaryLogs,
-      latestUnitLogs,
       report,
       reportMetaScopeName,
       runAction,

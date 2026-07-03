@@ -9,14 +9,22 @@ interface CycleSelectorProps {
   cycles: ProductionCycle[];
   selectedCycleId: string | null;
   onSelectCycle: (cycleId: string) => void;
+  showTitle?: boolean;
+  displayMode?: 'pond' | 'cycle_name';
 }
 
-export default function CycleSelector({ cycles, selectedCycleId, onSelectCycle }: CycleSelectorProps) {
+export default function CycleSelector({
+  cycles,
+  selectedCycleId,
+  onSelectCycle,
+  showTitle = true,
+  displayMode = 'pond',
+}: CycleSelectorProps) {
   const { t } = useTranslation();
 
   return (
     <View className="mb-6">
-      <Text className="text-base font-bold text-gray-dark mb-3">{t('cycleSelection')}</Text>
+      {showTitle ? <Text className="text-base font-bold text-gray-dark mb-3">{t('cycleSelection')}</Text> : null}
       {cycles.map((cycle) => (
         <TouchableOpacity
           key={cycle.id}
@@ -27,7 +35,9 @@ export default function CycleSelector({ cycles, selectedCycleId, onSelectCycle }
         >
           <View className="flex-1">
             <Text className="text-base font-semibold text-gray-dark">
-              {t('pondPrefix')} {cycle.pond_identifier || cycle.id.slice(-4)}
+              {displayMode === 'cycle_name'
+                ? cycle.cycle_name
+                : `${t('pondPrefix')} ${cycle.pond_identifier || cycle.id.slice(-4)}`}
             </Text>
             <Text className="text-sm text-gray-light mt-1">
               {cycle.current_count} {t('fishLabel')} - {t(cycle.species)}

@@ -202,10 +202,12 @@ describe('features/aquaculture/screens/DailyLogScreen', () => {
     setSelectorCycles([activeCycle]);
     mockService.createCycleLog.mockResolvedValueOnce({ id: 'log-unit' } as any);
 
-    const { getByText } = render(<DailyLogScreen navigation={navigation} route={route} />);
+    const { getByText, queryByText } = render(<DailyLogScreen navigation={navigation} route={route} />);
 
-    expect(getByText('productionUnitLogContextTitle')).toBeTruthy();
-    expect(getByText('Bac 1')).toBeTruthy();
+    expect(getByText('Cycle 1')).toBeTruthy();
+    expect(getByText('dailyLogUnitContextLabel')).toBeTruthy();
+    expect(queryByText('productionUnitLogContextTitle')).toBeNull();
+    expect(queryByText('cycleSelection')).toBeNull();
 
     fireEvent.press(getByText('save'));
 

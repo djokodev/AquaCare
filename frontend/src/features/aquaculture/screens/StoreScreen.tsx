@@ -326,42 +326,50 @@ export default function StoreScreen() {
           </View>
 
           <View className="bg-white rounded-2xl p-4 border border-[#dbe3d9]">
-            <Text className="text-base font-bold text-gray-dark mb-3">{t('storeActionsTitle')}</Text>
-
-            <TouchableOpacity
-              className="flex-row items-center justify-between rounded-xl bg-aquacare-primary px-4 py-3 mb-3"
-              onPress={openManualModal}
-            >
-              <Text className="text-white text-sm font-semibold">{t('storeManualSubmit')}</Text>
-            </TouchableOpacity>
-
             <View className="gap-3">
               <TouchableOpacity
-                className="flex-row items-center justify-between rounded-xl border border-[#dbe3d9] bg-cream px-4 py-4"
+                className="flex-row items-center justify-between rounded-xl border border-[#dbe3d9] bg-white px-4 py-4"
+                onPress={openManualModal}
+              >
+                <Text className="flex-1 mr-3 text-base font-bold text-aquacare-primary">
+                  {t('storeManualSubmit')}
+                </Text>
+                <Ionicons name="chevron-forward" size={20} color={AQUACARE_COLORS.GREEN_PRIMARY} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                className="flex-row items-center justify-between rounded-xl border border-[#dbe3d9] bg-white px-4 py-4"
                 onPress={handleOpenProducts}
               >
-                <Text className="text-sm font-semibold text-gray-dark">{t('storeViewProducts')}</Text>
+                <Text className="flex-1 mr-3 text-base font-bold text-aquacare-primary">
+                  {t('storeViewProducts')}
+                </Text>
                 <Ionicons name="chevron-forward" size={20} color={AQUACARE_COLORS.GREEN_PRIMARY} />
               </TouchableOpacity>
               <TouchableOpacity
-                className="flex-row items-center justify-between rounded-xl border border-[#dbe3d9] bg-cream px-4 py-4"
+                className="flex-row items-center justify-between rounded-xl border border-[#dbe3d9] bg-white px-4 py-4"
                 onPress={handleOpenCart}
               >
-                <Text className="text-sm font-semibold text-gray-dark">{t('storeViewCart')}</Text>
+                <Text className="flex-1 mr-3 text-base font-bold text-aquacare-primary">
+                  {t('storeViewCart')}
+                </Text>
                 <Ionicons name="chevron-forward" size={20} color={AQUACARE_COLORS.GREEN_PRIMARY} />
               </TouchableOpacity>
               <TouchableOpacity
-                className="flex-row items-center justify-between rounded-xl border border-[#dbe3d9] bg-cream px-4 py-4"
+                className="flex-row items-center justify-between rounded-xl border border-[#dbe3d9] bg-white px-4 py-4"
                 onPress={handleOpenOrders}
               >
-                <Text className="text-sm font-semibold text-gray-dark">{t('storeViewOrders')}</Text>
+                <Text className="flex-1 mr-3 text-base font-bold text-aquacare-primary">
+                  {t('storeViewOrders')}
+                </Text>
                 <Ionicons name="chevron-forward" size={20} color={AQUACARE_COLORS.GREEN_PRIMARY} />
               </TouchableOpacity>
               <TouchableOpacity
-                className="flex-row items-center justify-between rounded-xl border border-[#dbe3d9] bg-cream px-4 py-4"
+                className="flex-row items-center justify-between rounded-xl border border-[#dbe3d9] bg-white px-4 py-4"
                 onPress={handleOrderCycleNeed}
               >
-                <Text className="text-sm font-semibold text-gray-dark">{t('storeOrderCycleNeed')}</Text>
+                <Text className="flex-1 mr-3 text-base font-bold text-aquacare-primary">
+                  {t('storeOrderCycleNeed')}
+                </Text>
                 <Ionicons name="chevron-forward" size={20} color={AQUACARE_COLORS.GREEN_PRIMARY} />
               </TouchableOpacity>
             </View>

@@ -259,6 +259,65 @@ class TestUnitCycleAwareReportPayloads:
         assert payload_bac_2['cycles'][0]['logs'][0]['mortality_count'] == 20
         assert payload_bac_2['cycles'][0]['sanitary_logs'][0]['resolved'] is True
 
+    def test_unit_report_uses_latest_state_available_at_generation_time(self):
+        today = date.today()
+        yesterday = today - timedelta(days=1)
+        farm_profile = FarmProfileFactory()
+        cycle = ProductionCycleFactory(
+            farm_profile=farm_profile,
+            cycle_name='Cycle Etat Courant',
+            species='clarias',
+            status='active',
+            initial_count=900,
+            current_count=900,
+            current_average_weight=Decimal('20.00'),
+            current_biomass=Decimal('18.00'),
+            total_feed_consumed=Decimal('10.00'),
+        )
+
+        bac_1 = _create_unit(farm_profile, 'Bac 1', '3.00')
+        allocation = _create_allocation(cycle, bac_1, 900, 895, '17.90')
+
+        _create_cycle_log(
+            cycle=cycle,
+            allocation=allocation,
+            log_date=yesterday,
+            mortality_count=5,
+            feed_quantity='10.00',
+            average_weight='20.00',
+        )
+        _create_sanitary_log(
+            cycle=cycle,
+            allocation=allocation,
+            event_date=yesterday,
+            event_type='disease',
+            symptoms='Suspicion de maladie',
+            resolved=False,
+        )
+
+        payload = ReportService._build_payload(
+            farm_profile=farm_profile,
+            report_type='daily',
+            period_start=today,
+            period_end=today,
+            scope_type='unit',
+            scope_object_id=str(allocation.id),
+        )
+
+        summary = payload['summary']
+        section = payload['cycles'][0]
+
+        assert summary['estimated_current_fish_count'] == 895
+        assert summary['total_mortality_count'] == 5
+        assert summary['total_feed_consumed_kg'] == 10.0
+        assert summary['active_sanitary_events_count'] == 1
+        assert summary['units_with_today_log_count'] == 0
+        assert summary['units_missing_today_log_count'] == 1
+        assert section['current_metrics']['current_count'] == 895
+        assert section['current_metrics']['total_feed_consumed'] == 10.0
+        assert section['logs'][0]['log_date'] == yesterday.isoformat()
+        assert section['sanitary_logs'][0]['event_date'] == yesterday.isoformat()
+
     def test_cycle_without_allocations_remains_stable(self):
         today = date.today()
         farm_profile = FarmProfileFactory()

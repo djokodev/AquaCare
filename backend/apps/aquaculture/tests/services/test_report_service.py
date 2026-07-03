@@ -271,8 +271,13 @@ class TestReportServicePayloadAndPdfTemplate:
                         {
                             'event_date': '2026-02-25',
                             'event_type_display': 'Maladie',
+                            'symptoms': 'Points blancs',
                             'affected_count': None,
                             'treatment_applied': None,
+                            'medication_used': None,
+                            'dosage': None,
+                            'treatment_duration_days': None,
+                            'notes': 'Isoler les poissons suspects.',
                             'resolved': False,
                         }
                     ],
@@ -294,6 +299,11 @@ class TestReportServicePayloadAndPdfTemplate:
         assert 'Coût de production direct' in html
         assert 'Synthèse de la période analysée' in html
         assert 'Non renseigné' in html
+        assert 'Symptômes' in html
+        assert 'Points blancs' in html
+        assert 'Médicament utilisé' in html
+        assert 'Notes' in html
+        assert 'Isoler les poissons suspects.' in html
         assert '>0<' in html or '>0.0<' in html or '>0.00<' in html
         assert 'cycle-block-first' in html
         assert 'page-break-before: always;' in html

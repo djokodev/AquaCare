@@ -22,6 +22,8 @@ describe('features/aquaculture/screens/CreateFarmScreen', () => {
   const navigation = {
     navigate: jest.fn(),
     goBack: jest.fn(),
+    reset: jest.fn(),
+    canGoBack: jest.fn().mockReturnValue(true),
   } as any;
 
   const mockSimulationSuccess = () => {
@@ -68,6 +70,19 @@ describe('features/aquaculture/screens/CreateFarmScreen', () => {
     fireEvent.press(getByTestId('createFarmBackButton'));
 
     expect(navigation.goBack).toHaveBeenCalled();
+  });
+
+  it('revient au dashboard racine si la pile ne permet pas un retour', () => {
+    navigation.canGoBack.mockReturnValue(false);
+    const { getByTestId } = render(<CreateFarmScreen navigation={navigation} />);
+
+    fireEvent.press(getByTestId('createFarmBackButton'));
+
+    expect(navigation.goBack).not.toHaveBeenCalled();
+    expect(navigation.reset).toHaveBeenCalledWith({
+      index: 0,
+      routes: [{ name: 'MainTabs' }],
+    });
   });
 
   it('n selectionne aucun type par defaut dans les deux formulaires', () => {

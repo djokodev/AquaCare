@@ -17,6 +17,7 @@ jest.mock('react-redux', () => ({
 
 jest.mock('@react-navigation/native', () => ({
   useFocusEffect: jest.fn(),
+  useRoute: jest.fn(() => ({ params: { cycleId: 'cycle-1' } })),
 }));
 
 jest.mock('@/features/notifications/store/notificationSlice', () => ({
@@ -59,6 +60,12 @@ describe('features/aquaculture/screens/NotificationsScreen', () => {
     mockUseSelector.mockImplementation((selector: (s: any) => unknown) =>
       selector({
         notifications: state,
+        aquaculture: {
+          currentCycle: {
+            id: 'cycle-1',
+            cycle_name: 'Cycle Tilapia 2026',
+          },
+        },
       })
     );
   };
@@ -86,7 +93,7 @@ describe('features/aquaculture/screens/NotificationsScreen', () => {
 
     expect(getByText('Erreur notifications')).toBeTruthy();
     fireEvent.press(getByText('retry'));
-    expect(fetchNotifications).toHaveBeenCalled();
+    expect(fetchNotifications).toHaveBeenCalledWith({ cycleId: 'cycle-1' });
   });
 
   it('filtre les notifications par statut lu/non lu', () => {
@@ -114,6 +121,25 @@ describe('features/aquaculture/screens/NotificationsScreen', () => {
     expect(queryByText('Notif non lue')).toBeNull();
   });
 
+  it('affiche le contexte du cycle dans une notification', () => {
+    setSelectorState({
+      notifications: [
+        makeNotification({
+          id: 'n1',
+          title: 'Alerte sanitaire',
+          metadata: { cycle_name: 'Cycle Tilapia 2026' },
+        }),
+      ],
+      loading: false,
+      error: null,
+      unreadCount: 1,
+    });
+
+    const { getByText } = render(<NotificationsScreen navigation={navigation} />);
+
+    expect(getByText('notificationCycleContext')).toBeTruthy();
+  });
+
   it('marque une notification non lue comme lue', async () => {
     setSelectorState({
       notifications: [makeNotification({ id: 'n1', title: 'Notif non lue', is_read: false })],
@@ -129,5 +155,18 @@ describe('features/aquaculture/screens/NotificationsScreen', () => {
       expect(markNotificationAsRead).toHaveBeenCalledWith('n1');
       expect(mockDispatch).toHaveBeenCalled();
     });
+  });
+
+  it('charge et rafraichit les notifications selon le cycle de session', () => {
+    setSelectorState({
+      notifications: [],
+      loading: false,
+      error: null,
+      unreadCount: 0,
+    });
+
+    render(<NotificationsScreen navigation={navigation} />);
+
+    expect(fetchNotifications).toHaveBeenCalledWith({ cycleId: 'cycle-1' });
   });
 });
