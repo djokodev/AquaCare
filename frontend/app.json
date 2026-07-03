@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "AquaCare",
-    "slug": "aquacare",
+    "slug": "mavecam-aquacare",
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
@@ -10,13 +10,13 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "cm.aquacare.app",
+      "bundleIdentifier": "cm.mavecam.aquacare",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
-      "package": "cm.aquacare.app",
+      "package": "cm.mavecam.aquacare",
       "permissions": [
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION"
