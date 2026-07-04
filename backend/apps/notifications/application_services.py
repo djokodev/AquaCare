@@ -9,7 +9,6 @@ from django.db.models import Count, Q
 from django.utils import timezone
 
 from .models import Notification, NotificationPreference, PushToken
-from .services import NotificationService
 
 if TYPE_CHECKING:
     from accounts.models import User as AccountUser
