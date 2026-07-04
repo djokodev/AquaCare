@@ -11,6 +11,7 @@ import pytest
 from aquaculture.models import (
     CycleLog,
     CycleUnitAllocation,
+    FeedingPlan,
     NutritionalGuide,
     ProductionCycle,
     ProductionUnit,
@@ -535,6 +536,50 @@ class TestFeedingPlanSerializer:
         assert 'feed_per_meal_display' in data
         assert float(data['total_week_feed']) == 12.6  # 1.8 * 7 jours
         assert data['feed_per_meal_display'] == '0.6kg'
+
+    def test_unit_scope_fields(self, production_cycle, farm_profile):
+        """Test des champs de contexte unité du sérialiseur."""
+        unit = ProductionUnit.objects.create(
+            farm_profile=farm_profile,
+            name='Bac 1',
+            unit_type='tank',
+            volume_m3=Decimal('3.00'),
+        )
+        allocation = CycleUnitAllocation.objects.create(
+            cycle=production_cycle,
+            production_unit=unit,
+            initial_fish_count=900,
+            current_fish_count=900,
+            initial_biomass_kg=Decimal('9.00'),
+            current_biomass_kg=Decimal('9.00'),
+        )
+        plan = FeedingPlan.objects.create(
+            cycle=production_cycle,
+            cycle_unit_allocation=allocation,
+            week_number=1,
+            estimated_fish_count=900,
+            average_weight=Decimal('15.00'),
+            biomass=Decimal('13.50'),
+            daily_feed_amount=Decimal('0.90'),
+            feeding_rate=Decimal('4.00'),
+            meals_per_day=2,
+            feed_per_meal=Decimal('0.45'),
+            recommended_feed_type='AquaCare Superior 2-3mm',
+            feed_size_mm=Decimal('2.0'),
+            protein_percentage=38,
+            start_date=date.today(),
+            end_date=date.today() + timedelta(days=6),
+        )
+
+        serializer = FeedingPlanSerializer(plan)
+        data = serializer.data
+
+        assert str(data['cycle_unit_allocation']) == str(allocation.id)
+        assert data['production_unit'] == str(unit.id)
+        assert data['production_unit_name'] == 'Bac 1'
+        assert data['production_unit_type'] == 'tank'
+        assert data['production_unit_display_dimension'] == '3.00 m³'
+        assert data['scope_label'] == "Plan d'alimentation de Bac 1"
 
 
 @pytest.mark.django_db

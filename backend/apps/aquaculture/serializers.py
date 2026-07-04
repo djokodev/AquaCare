@@ -731,22 +731,79 @@ class FeedingPlanSerializer(serializers.ModelSerializer):
     """
     Sérialiseur pour les plans d'alimentation avec calculs automatiques.
     """
+    cycle = serializers.PrimaryKeyRelatedField(
+        queryset=ProductionCycle.objects.select_related('farm_profile', 'farm_profile__user'),
+        required=False,
+    )
+    cycle_unit_allocation = serializers.PrimaryKeyRelatedField(
+        queryset=CycleUnitAllocation.objects.select_related(
+            'cycle__farm_profile__user',
+            'production_unit__farm_profile',
+        ),
+        required=False,
+        allow_null=True,
+    )
     cycle_name = serializers.CharField(source='cycle.cycle_name', read_only=True)
+    production_unit = serializers.SerializerMethodField()
+    production_unit_name = serializers.SerializerMethodField()
+    production_unit_type = serializers.SerializerMethodField()
+    production_unit_display_dimension = serializers.SerializerMethodField()
+    scope_label = serializers.SerializerMethodField()
     total_week_feed = serializers.SerializerMethodField()
     feed_per_meal_display = serializers.SerializerMethodField()
 
     class Meta:
         model = FeedingPlan
         fields = [
-            'id', 'cycle', 'cycle_name', 'week_number', 'estimated_fish_count',
-            'average_weight', 'biomass', 'daily_feed_amount', 'feeding_rate',
-            'meals_per_day', 'feed_per_meal', 'total_week_feed',
-            'recommended_feed_type', 'feed_size_mm', 'protein_percentage',
+            'id', 'cycle', 'cycle_unit_allocation', 'cycle_name',
+            'production_unit', 'production_unit_name', 'production_unit_type',
+            'production_unit_display_dimension', 'scope_label',
+            'week_number', 'estimated_fish_count', 'average_weight', 'biomass',
+            'daily_feed_amount', 'feeding_rate', 'meals_per_day', 'feed_per_meal',
+            'total_week_feed', 'recommended_feed_type', 'feed_size_mm', 'protein_percentage',
             'start_date', 'end_date', 'is_active', 'feed_per_meal_display',
             'temperature_used_c', 'used_default_temperature', 'data_source',
             'created_at'
         ]
-        read_only_fields = ['id', 'created_at']
+        validators = []
+        read_only_fields = [
+            'id',
+            'cycle_name',
+            'production_unit',
+            'production_unit_name',
+            'production_unit_type',
+            'production_unit_display_dimension',
+            'scope_label',
+            'created_at',
+        ]
+
+    def get_production_unit(self, obj):
+        allocation = getattr(obj, 'cycle_unit_allocation', None)
+        return str(allocation.production_unit_id) if allocation else None
+
+    def get_production_unit_name(self, obj):
+        allocation = getattr(obj, 'cycle_unit_allocation', None)
+        if allocation and allocation.production_unit:
+            return allocation.production_unit.name
+        return None
+
+    def get_production_unit_type(self, obj):
+        allocation = getattr(obj, 'cycle_unit_allocation', None)
+        if allocation and allocation.production_unit:
+            return allocation.production_unit.unit_type
+        return None
+
+    def get_production_unit_display_dimension(self, obj):
+        allocation = getattr(obj, 'cycle_unit_allocation', None)
+        if allocation and allocation.production_unit and allocation.production_unit.display_dimension:
+            return str(allocation.production_unit.display_dimension)
+        return None
+
+    def get_scope_label(self, obj):
+        unit_name = self.get_production_unit_name(obj)
+        if unit_name:
+            return _("Plan d'alimentation de %(unit_name)s") % {'unit_name': unit_name}
+        return _("Plan d'alimentation de l'unité")
 
     def get_total_week_feed(self, obj):
         """Calcule l'aliment total pour la semaine."""
@@ -760,6 +817,37 @@ class FeedingPlanSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         """Valide les données du plan d'alimentation."""
+        from aquaculture.domain.validators import validate_cycle_unit_allocation_context
+
+        allocation = attrs.get('cycle_unit_allocation') or getattr(self.instance, 'cycle_unit_allocation', None)
+        cycle = attrs.get('cycle') or getattr(self.instance, 'cycle', None)
+        request = self.context.get('request')
+        request_user = getattr(request, 'user', None)
+
+        if allocation and not cycle:
+            attrs['cycle'] = allocation.cycle
+            cycle = attrs['cycle']
+
+        if allocation and cycle and allocation.cycle_id != cycle.id:
+            raise serializers.ValidationError({
+                'cycle_unit_allocation': _("L'allocation doit appartenir au même cycle que le plan")
+            })
+
+        if allocation:
+            try:
+                validate_cycle_unit_allocation_context(
+                    cycle=cycle,
+                    cycle_unit_allocation=allocation,
+                    user=request_user if getattr(request_user, 'is_authenticated', False) else None,
+                )
+            except DjangoValidationError as exc:
+                raise serializers.ValidationError(exc.message_dict or exc.messages)
+
+        if not cycle and not allocation and self.instance is None:
+            raise serializers.ValidationError({
+                'cycle': _("Le cycle ou l'allocation de cycle par unité est requis")
+            })
+
         # Ensure week dates are consistent
         if attrs.get('start_date') and attrs.get('end_date'):
             if (attrs['end_date'] - attrs['start_date']).days != FEEDING_WEEK_DURATION_DAYS:
@@ -773,7 +861,8 @@ class FeedingPlanSerializer(serializers.ModelSerializer):
 class FeedingPlanGenerationRequestSerializer(serializers.Serializer):
     """Payload DRF de generation automatique de plans d'alimentation."""
 
-    cycle_id = serializers.UUIDField()
+    cycle_id = serializers.UUIDField(required=False, allow_null=True)
+    cycle_unit_allocation_id = serializers.UUIDField(required=False, allow_null=True)
     weeks_ahead = serializers.IntegerField(min_value=1, max_value=MAX_GENERATION_WEEKS, default=1)
 
 

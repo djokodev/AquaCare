@@ -13,7 +13,7 @@ import logger from '@/utils/logger';
 const ALARM_REGISTRY_KEY = 'feeding_alarm_registry_v1';
 const FEEDING_ALARMS_ENABLED_KEY = 'feeding_alarms_enabled_v1';
 
-type AlarmRegistry = Record<string, { ids: string[]; cycleId: string; updatedAt: string }>;
+type AlarmRegistry = Record<string, { ids: string[]; cycleId: string; scopeId: string; updatedAt: string }>;
 
 export type AlarmSyncStatus = 'scheduled' | 'disabled' | 'permission_denied' | 'error';
 
@@ -66,7 +66,8 @@ export const useLocalFeedingAlarms = () => {
     async (
       plan: FeedingPlan,
       cycleName: string,
-      messages: FeedingAlarmMessages
+      messages: FeedingAlarmMessages,
+      scopeId?: string
     ): Promise<AlarmSyncResult> => {
       try {
         const registry = await loadRegistry();
@@ -81,6 +82,7 @@ export const useLocalFeedingAlarms = () => {
         registry[plan.id] = {
           ids: result.ids,
           cycleId: plan.cycle,
+          scopeId: scopeId || plan.cycle,
           updatedAt: new Date().toISOString(),
         };
         await saveRegistry(registry);
@@ -138,12 +140,14 @@ export const useLocalFeedingAlarms = () => {
   const reconcileCycleAlarms = useCallback(
     async ({
       cycleId,
+      scopeId,
       cycleName,
       activePlans,
       enabled,
       messages,
     }: {
       cycleId: string;
+      scopeId?: string;
       cycleName: string;
       activePlans: FeedingPlan[];
       enabled: boolean;
@@ -152,12 +156,13 @@ export const useLocalFeedingAlarms = () => {
       try {
         const registry = await loadRegistry();
         const activePlanIds = new Set(activePlans.map((plan) => plan.id));
+        const registryScopeId = scopeId || cycleId;
 
         let scheduledCount = 0;
         let permissionDenied = false;
 
         for (const [planId, entry] of Object.entries(registry)) {
-          if (entry.cycleId !== cycleId) {
+          if (entry.scopeId !== registryScopeId) {
             continue;
           }
           if (!enabled || !activePlanIds.has(planId)) {
@@ -176,6 +181,7 @@ export const useLocalFeedingAlarms = () => {
             registry[plan.id] = {
               ids: result.ids,
               cycleId,
+              scopeId: registryScopeId,
               updatedAt: new Date().toISOString(),
             };
             scheduledCount += result.ids.length;

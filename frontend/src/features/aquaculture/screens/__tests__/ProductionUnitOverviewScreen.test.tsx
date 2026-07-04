@@ -111,12 +111,11 @@ describe('features/aquaculture/screens/ProductionUnitOverviewScreen', () => {
       expect(getByText('productionUnitDashboardTitle')).toBeTruthy();
       expect(getByText('dailyLog')).toBeTruthy();
       expect(getByText('sanitaryLog')).toBeTruthy();
-      expect(getByText('productionUnitLogHistoryAction')).toBeTruthy();
+      expect(getAllByText('feedingPlan').length).toBeGreaterThanOrEqual(1);
+      expect(getByText('viewAllActions')).toBeTruthy();
       expect(queryByText('productionUnitReportAction')).toBeNull();
       expect(queryByText('notifications')).toBeNull();
-      expect(queryByText('feedingPlan')).toBeNull();
       expect(queryByText('reports')).toBeNull();
-      expect(getByText('viewAllActions')).toBeTruthy();
       expect(queryByText('Bac 1')).toBeNull();
       expect(queryByText('Cycle Silure')).toBeNull();
       expect(queryByText('productionUnitTodayLogDone')).toBeNull();
@@ -139,14 +138,22 @@ describe('features/aquaculture/screens/ProductionUnitOverviewScreen', () => {
       productionUnitName: 'Bac 1',
     });
 
+    fireEvent.press(getByText('feedingPlan'));
+    expect(navigation.navigate).toHaveBeenCalledWith('FeedingPlan', {
+      cycleId: 'cycle-1',
+      cycleUnitAllocationId: 'allocation-1',
+      productionUnitId: 'unit-1',
+      productionUnitName: 'Bac 1',
+    });
+
     fireEvent.press(getByText('viewAllActions'));
 
     await waitFor(() => {
       expect(getByText('productionUnitSanitaryLogAction')).toBeTruthy();
-      expect(getAllByText('productionUnitLogHistoryAction').length).toBeGreaterThanOrEqual(2);
+      expect(getAllByText('productionUnitLogHistoryAction').length).toBeGreaterThanOrEqual(1);
+      expect(getAllByText('feedingPlan').length).toBeGreaterThanOrEqual(2);
       expect(getByText('productionUnitReportAction')).toBeTruthy();
       expect(queryByText('notifications')).toBeNull();
-      expect(queryByText('feedingPlan')).toBeNull();
       expect(queryByText('reports')).toBeNull();
       expect(queryByText('categoryCommerce')).toBeNull();
       expect(queryByText('productCatalog')).toBeNull();

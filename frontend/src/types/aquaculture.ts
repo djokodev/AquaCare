@@ -177,6 +177,12 @@ export interface CycleLog {
 export interface FeedingPlan {
   id: string;
   cycle: string;
+  cycle_unit_allocation?: string | null;
+  production_unit?: string | null;
+  production_unit_name?: string | null;
+  production_unit_type?: ProductionUnitType | null;
+  production_unit_display_dimension?: string | null;
+  scope_label?: string;
   week_number: number;
 
   // Parametres de base
@@ -191,7 +197,7 @@ export interface FeedingPlan {
   feed_per_meal: number;
 
   // Type d'aliment recommande
-  recommended_feed: string;
+  recommended_feed?: string;
   protein_percentage: number;
 
   // Periode de validite

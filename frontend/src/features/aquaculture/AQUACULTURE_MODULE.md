@@ -75,6 +75,13 @@ Metric cards use static icons.
 2. Les dashboards de cycle agrègent les faits des unites.
 3. L'admin doit permettre d'inspecter ferme, cycle, unites, allocations et logs unitaires.
 
+## Feeding plan scope
+
+1. Les plans d'alimentation sont scopes par unite de production.
+2. Un plan appartient a une `CycleUnitAllocation`.
+3. Le cycle conserve le contexte de permission et de compatibilite, mais ne porte pas d'action globale de plan d'alimentation.
+4. Les notifications de nourrissage restent globales, mais transportent le contexte unitaire.
+
 ## Manual QA checklist — Production units flow
 
 1. Creer une ferme avec Bac 1, Bac 2 et Etang 1.

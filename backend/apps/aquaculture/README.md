@@ -150,6 +150,12 @@ Role:
 1. Recommendations hebdomadaires de rationnement.
 2. Generation auto selon cycle, guides nutritionnels, temperature.
 
+Feeding plan scope:
+
+1. A feeding plan belongs to a `CycleUnitAllocation`.
+2. The production cycle remains a compatibility and permission scope, not the operational owner of the plan.
+3. Feeding notifications stay global, but they carry unit context in title, message and metadata.
+
 ### SanitaryLog
 
 Role:
