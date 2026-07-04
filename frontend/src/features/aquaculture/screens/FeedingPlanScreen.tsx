@@ -36,14 +36,52 @@ interface StatRowProps {
   value: string;
 }
 
+interface StatSectionProps {
+  title: string;
+  items: StatRowProps[];
+}
+
 function StatRow({ label, value }: StatRowProps) {
   return (
-    <View className="flex-1 rounded-xl bg-white px-3 py-3">
-      <Text className="text-[11px] uppercase tracking-wide text-gray-light mb-1">{label}</Text>
-      <Text className="text-sm font-semibold text-gray-dark">{value}</Text>
+    <View className="w-full rounded-xl bg-white border border-gray-100 px-4 py-3">
+      <Text className="text-xs font-semibold uppercase tracking-wide text-gray-light">{label}</Text>
+      <Text className="mt-1 text-base font-semibold text-gray-dark" numberOfLines={2}>
+        {value}
+      </Text>
     </View>
   );
 }
+
+function StatSection({ title, items }: StatSectionProps) {
+  return (
+    <View className="w-full">
+      <Text className="text-sm font-bold text-gray-dark mb-3">{title}</Text>
+      <View className="gap-3">
+        {items.map((item) => (
+          <StatRow key={item.label} label={item.label} value={item.value} />
+        ))}
+      </View>
+    </View>
+  );
+}
+
+const formatMetricValue = (value: number | string | null | undefined, unit?: string, decimals = 1) => {
+  if (value === null || value === undefined || value === '') {
+    return '-';
+  }
+
+  return formatNumber(value, unit, decimals);
+};
+
+const formatMetricPercentage = (value: number | string | null | undefined, decimals = 1) => {
+  if (value === null || value === undefined || value === '') {
+    return '-';
+  }
+
+  return formatPercentage(value, decimals);
+};
+
+const formatMetricText = (value: string | null | undefined) => value?.trim() || '-';
 
 export default function FeedingPlanScreen({ navigation, route }: FeedingPlanScreenProps) {
   const { t, i18n } = useTranslation();
@@ -224,16 +262,21 @@ export default function FeedingPlanScreen({ navigation, route }: FeedingPlanScre
       return;
     }
 
-    Alert.alert(t('generateUnitFeedingPlan'), t('generateUnitFeedingPlanConfirm'), [
+    const hasExistingPlan = feedingPlans.length > 0;
+    const confirmMessage = hasExistingPlan
+      ? t('feedingPlanGenerateConfirmExisting', { unitName: unitLabel })
+      : t('feedingPlanGenerateConfirmEmpty', { unitName: unitLabel });
+
+    Alert.alert(t('feedingPlanGenerateConfirmTitle'), confirmMessage, [
       { text: t('cancel'), style: 'cancel' },
       {
-        text: t('confirm'),
+        text: t('generatePlan'),
         onPress: async () => {
           try {
             setGeneratingPlan(true);
             await aquacultureService.generateFeedingPlanForAllocation({
               cycleUnitAllocationId,
-              weeksAhead: 4,
+              weeksAhead: 1,
               cycleId,
             });
             const updatedPlans = await aquacultureService.getFeedingPlansForAllocation(cycleUnitAllocationId);
@@ -248,7 +291,7 @@ export default function FeedingPlanScreen({ navigation, route }: FeedingPlanScre
         },
       },
     ]);
-  }, [cycleId, cycleUnitAllocationId, hasValidUnitContext, t]);
+  }, [cycleId, cycleUnitAllocationId, feedingPlans.length, hasValidUnitContext, t, unitLabel]);
 
   const locale = i18n.language?.startsWith('fr') ? 'fr-FR' : 'en-US';
 
@@ -294,13 +337,6 @@ export default function FeedingPlanScreen({ navigation, route }: FeedingPlanScre
       {renderHeader()}
 
       <ScrollView refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
-        <View className="mx-4 mt-4 mb-3 flex-row items-start bg-[#ecfdf5] rounded-xl p-4 gap-3">
-          <Ionicons name="information-circle-outline" size={20} color={AQUACARE_COLORS.GREEN_PRIMARY} style={{ marginTop: 1 }} />
-          <Text className="flex-1 text-sm text-[#065f46] leading-5">
-            {t('feedingPlanUnitScreenDescription', { unitName: unitLabel })}
-          </Text>
-        </View>
-
         <View className="bg-white mx-4 mb-6 p-4 rounded-xl">
           <View className="mb-4">
             <Text className="text-lg font-bold text-gray-dark mb-3">{t('feedingPlans')}</Text>
@@ -354,7 +390,7 @@ export default function FeedingPlanScreen({ navigation, route }: FeedingPlanScre
                   <Ionicons name="refresh" size={16} color={AQUACARE_COLORS.WHITE} />
                 )}
                 <Text className="text-white text-sm font-semibold ml-2">
-                  {generatingPlan ? t('generating') : t('generateUnitFeedingPlan')}
+                  {generatingPlan ? t('generating') : t('generateFeedingPlanShort')}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -410,62 +446,71 @@ export default function FeedingPlanScreen({ navigation, route }: FeedingPlanScre
             </View>
           ) : (
             feedingPlans.map((plan) => {
-              const recommendedFeed = plan.recommended_feed_type || plan.recommended_feed || '-';
-              const temperatureLabel = plan.used_default_temperature
-                ? t('defaultTemperatureUsed', {
-                    temp: plan.temperature_used_c ?? 26,
-                  })
-                : t('unitTemperatureUsed', {
-                    temp: plan.temperature_used_c ?? 26,
-                  });
+              const recommendedFeed = formatMetricText(plan.recommended_feed_type || plan.recommended_feed);
+              const temperatureValue = formatMetricValue(plan.temperature_used_c, undefined, 1);
+              const proteinValue = plan.protein_percentage === null || plan.protein_percentage === undefined
+                ? '-'
+                : `${formatNumber(plan.protein_percentage, undefined, 0)} %`;
 
               return (
                 <View key={plan.id} className="bg-cream rounded-lg p-4 mb-3 border-l-4 border-l-aquacare-primary">
-                  <View className="flex-row justify-between items-start mb-3">
-                    <View className="flex-1 pr-3">
-                      <Text className="text-base font-bold text-gray-dark">
-                        {t('week')} {plan.week_number}
-                      </Text>
-                      <Text className="text-xs text-gray-light mt-1">
-                        {plan.scope_label || t('feedingPlanUnitTitle', { unitName: unitLabel })}
-                      </Text>
+                  <View className="mb-4">
+                    <View className="flex-row items-start justify-between gap-3">
+                      <View className="flex-1">
+                        <Text className="text-base font-bold text-gray-dark">
+                          {t('week')} {plan.week_number}
+                        </Text>
+                        <Text className="text-sm text-gray-light mt-1">
+                          {formatDate(plan.start_date, locale)} - {formatDate(plan.end_date, locale)}
+                        </Text>
+                      </View>
                     </View>
-                    <Text className="text-xs text-gray-light text-right">
-                      {formatDate(plan.start_date, locale)} - {formatDate(plan.end_date, locale)}
+                    <Text className="text-sm font-semibold text-aquacare-primary mt-2">
+                      {plan.scope_label || t('feedingPlanUnitTitle', { unitName: unitLabel })}
                     </Text>
                   </View>
 
-                  <View className="flex-row flex-wrap gap-3 mb-3">
-                    <StatRow label={t('estimatedFishCount')} value={formatNumber(plan.estimated_fish_count, undefined, 0)} />
-                    <StatRow label={t('averageWeight')} value={`${formatNumber(plan.average_weight, undefined, 1)} g`} />
-                    <StatRow label={t('estimatedBiomass')} value={`${formatNumber(plan.biomass, undefined, 2)} kg`} />
-                    <StatRow label={t('dailyRation')} value={`${formatNumber(plan.daily_feed_amount, undefined, 2)} kg/j`} />
-                    <StatRow label={t('feedingPercentage')} value={formatPercentage(plan.feeding_rate)} />
-                    <StatRow label={t('feedingFrequency')} value={`${plan.meals_per_day}x/${t('day')}`} />
-                    <StatRow label={t('feedPerMeal')} value={`${formatNumber(plan.feed_per_meal, undefined, 2)} kg`} />
-                    <StatRow label={t('feedSizeMm')} value={`${formatNumber(plan.feed_size_mm ?? 0, undefined, 1)} mm`} />
-                    <StatRow label={t('protein')} value={`${formatNumber(plan.protein_percentage, undefined, 0)} %`} />
-                  </View>
+                  <View className="gap-4">
+                    <StatSection
+                      title={t('feedingPlanUnitSummary')}
+                      items={[
+                        { label: t('estimatedFishCount'), value: formatMetricValue(plan.estimated_fish_count, undefined, 0) },
+                        { label: t('averageWeight'), value: formatMetricValue(plan.average_weight, 'g', 1) },
+                        { label: t('estimatedBiomass'), value: formatMetricValue(plan.biomass, 'kg', 2) },
+                      ]}
+                    />
 
-                  <View className="rounded-lg bg-white p-3 gap-2">
-                    <View className="flex-row justify-between items-center">
-                      <Text className="text-xs text-gray-light">{t('feedingPlanRecommendedFeed')}</Text>
-                      <Text className="text-xs font-semibold text-gray-dark flex-1 text-right pl-2">
-                        {recommendedFeed}
-                      </Text>
-                    </View>
-                    <View className="flex-row justify-between items-center">
-                      <Text className="text-xs text-gray-light">{t('feedingPlanTemperatureLabel')}</Text>
-                      <Text className="text-xs font-semibold text-gray-dark flex-1 text-right pl-2">
-                        {temperatureLabel}
-                      </Text>
-                    </View>
-                    <View className="flex-row justify-between items-center">
-                      <Text className="text-xs text-gray-light">{t('dataSource')}</Text>
-                      <Text className="text-xs font-semibold text-gray-dark flex-1 text-right pl-2">
-                        {plan.data_source || '-'}
-                      </Text>
-                    </View>
+                    <StatSection
+                      title={t('feedingPlanRecommendationSection')}
+                      items={[
+                        { label: t('dailyRation'), value: formatMetricValue(plan.daily_feed_amount, 'kg/j', 2) },
+                        { label: t('feedingPercentage'), value: formatMetricPercentage(plan.feeding_rate) },
+                        {
+                          label: t('feedingFrequency'),
+                          value: plan.meals_per_day === null || plan.meals_per_day === undefined
+                            ? '-'
+                            : `${plan.meals_per_day}x/${t('day')}`,
+                        },
+                        { label: t('feedPerMeal'), value: formatMetricValue(plan.feed_per_meal, 'kg', 2) },
+                      ]}
+                    />
+
+                    <StatSection
+                      title={t('feedingPlanFeedSection')}
+                      items={[
+                        { label: t('feedingPlanRecommendedFeed'), value: recommendedFeed },
+                        { label: t('feedSizeMm'), value: formatMetricValue(plan.feed_size_mm, 'mm', 1) },
+                        { label: t('protein'), value: proteinValue },
+                      ]}
+                    />
+
+                    <StatSection
+                      title={t('feedingPlanDataSection')}
+                      items={[
+                        { label: t('feedingPlanTemperatureLabel'), value: temperatureValue },
+                        { label: t('dataSource'), value: formatMetricText(plan.data_source) },
+                      ]}
+                    />
                   </View>
                 </View>
               );

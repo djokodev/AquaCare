@@ -111,9 +111,11 @@ describe('features/aquaculture/screens/FeedingPlanScreen', () => {
       expect(getByText('feedingPlanUnitTitle')).toBeTruthy();
       expect(getByText('feedingPlans')).toBeTruthy();
       expect(getByText('week 1')).toBeTruthy();
+      expect(getByText('feedingPlanUnitSummary')).toBeTruthy();
       expect(getByText('estimatedFishCount')).toBeTruthy();
-      expect(getByText('feedingPlanRecommendedFeed')).toBeTruthy();
-      expect(getByText('feedingPlanTemperatureLabel')).toBeTruthy();
+      expect(getByText('feedingPlanRecommendationSection')).toBeTruthy();
+      expect(getByText('feedingPlanFeedSection')).toBeTruthy();
+      expect(getByText('feedingPlanDataSection')).toBeTruthy();
     });
 
     await waitFor(() => {
@@ -136,23 +138,47 @@ describe('features/aquaculture/screens/FeedingPlanScreen', () => {
     const { getByText } = render(<FeedingPlanScreen navigation={navigation} route={route} />);
 
     await waitFor(() => {
-      expect(getByText('generateUnitFeedingPlan')).toBeTruthy();
+      expect(getByText('generateFeedingPlanShort')).toBeTruthy();
     });
 
-    fireEvent.press(getByText('generateUnitFeedingPlan'));
+    fireEvent.press(getByText('generateFeedingPlanShort'));
 
     const alertArgs = alertSpy.mock.calls[0];
     const buttons = alertArgs?.[2] as Array<{ text?: string; onPress?: () => void }> | undefined;
-    buttons?.find((button) => button.text === 'confirm')?.onPress?.();
+    expect(alertArgs?.[0]).toBe('feedingPlanGenerateConfirmTitle');
+    expect(alertArgs?.[1]).toBe('feedingPlanGenerateConfirmExisting');
+    buttons?.find((button) => button.text === 'cancel')?.onPress?.();
+    buttons?.find((button) => button.text === 'generatePlan')?.onPress?.();
 
     await waitFor(() => {
       expect(mockService.generateFeedingPlanForAllocation).toHaveBeenCalledWith({
         cycleUnitAllocationId: 'allocation-1',
-        weeksAhead: 4,
+        weeksAhead: 1,
         cycleId: 'cycle-1',
       });
       expect(mockService.getFeedingPlansForAllocation).toHaveBeenCalledTimes(2);
     });
+
+    alertSpy.mockRestore();
+  });
+
+  it('affiche le bon message de confirmation quand aucun plan n existe', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    mockService.getFeedingPlansForAllocation.mockResolvedValueOnce([]);
+    mockService.getFeedingPlansForAllocation.mockResolvedValueOnce([]);
+    mockService.generateFeedingPlanForAllocation.mockResolvedValueOnce([]);
+
+    const { getByText } = render(<FeedingPlanScreen navigation={navigation} route={route} />);
+
+    await waitFor(() => {
+      expect(getByText('generateFeedingPlanShort')).toBeTruthy();
+    });
+
+    fireEvent.press(getByText('generateFeedingPlanShort'));
+
+    const alertArgs = alertSpy.mock.calls[0];
+    expect(alertArgs?.[0]).toBe('feedingPlanGenerateConfirmTitle');
+    expect(alertArgs?.[1]).toBe('feedingPlanGenerateConfirmEmpty');
 
     alertSpy.mockRestore();
   });
