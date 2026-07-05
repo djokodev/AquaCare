@@ -83,6 +83,14 @@ const formatMetricPercentage = (value: number | string | null | undefined, decim
 
 const formatMetricText = (value: string | null | undefined) => value?.trim() || '-';
 
+const getLocalDateIso = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = `${now.getMonth() + 1}`.padStart(2, '0');
+  const day = `${now.getDate()}`.padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 export default function FeedingPlanScreen({ navigation, route }: FeedingPlanScreenProps) {
   const { t, i18n } = useTranslation();
   const {
@@ -112,6 +120,15 @@ export default function FeedingPlanScreen({ navigation, route }: FeedingPlanScre
   const [alarmInfo, setAlarmInfo] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const isSchedulingRef = useRef(false);
+  const todayIsoDate = useMemo(getLocalDateIso, []);
+  const displayedFeedingPlans = useMemo(
+    () =>
+      feedingPlans
+        .filter((plan) => plan.start_date <= todayIsoDate && todayIsoDate <= plan.end_date)
+        .sort((left, right) => left.week_number - right.week_number)
+        .slice(0, 1),
+    [feedingPlans, todayIsoDate]
+  );
 
   const alarmMessages = useMemo(
     () => ({
@@ -199,7 +216,9 @@ export default function FeedingPlanScreen({ navigation, route }: FeedingPlanScre
       }
 
       try {
-        const plans = await aquacultureService.getFeedingPlansForAllocation(cycleUnitAllocationId);
+        const plans = await aquacultureService.getFeedingPlansForAllocation(cycleUnitAllocationId, {
+          currentWeekOnly: true,
+        });
         setFeedingPlans(plans);
         setError(null);
       } catch (err: unknown) {
@@ -254,15 +273,15 @@ export default function FeedingPlanScreen({ navigation, route }: FeedingPlanScre
       return;
     }
 
-    void syncAlarmsForCurrentUnit(feedingPlans);
-  }, [alarmsReady, feedingPlans, hasValidUnitContext, syncAlarmsForCurrentUnit]);
+    void syncAlarmsForCurrentUnit(displayedFeedingPlans);
+  }, [alarmsReady, displayedFeedingPlans, hasValidUnitContext, syncAlarmsForCurrentUnit]);
 
   const generateFeedingPlan = useCallback(() => {
     if (!hasValidUnitContext) {
       return;
     }
 
-    const hasExistingPlan = feedingPlans.length > 0;
+    const hasExistingPlan = displayedFeedingPlans.length > 0;
     const confirmMessage = hasExistingPlan
       ? t('feedingPlanGenerateConfirmExisting', { unitName: unitLabel })
       : t('feedingPlanGenerateConfirmEmpty', { unitName: unitLabel });
@@ -279,7 +298,9 @@ export default function FeedingPlanScreen({ navigation, route }: FeedingPlanScre
               weeksAhead: 1,
               cycleId,
             });
-            const updatedPlans = await aquacultureService.getFeedingPlansForAllocation(cycleUnitAllocationId);
+            const updatedPlans = await aquacultureService.getFeedingPlansForAllocation(cycleUnitAllocationId, {
+              currentWeekOnly: true,
+            });
             setFeedingPlans(updatedPlans);
             Alert.alert(t('success'), t('feedingPlanGenerated'));
           } catch (err: unknown) {
@@ -291,7 +312,7 @@ export default function FeedingPlanScreen({ navigation, route }: FeedingPlanScre
         },
       },
     ]);
-  }, [cycleId, cycleUnitAllocationId, feedingPlans.length, hasValidUnitContext, t, unitLabel]);
+  }, [cycleId, cycleUnitAllocationId, displayedFeedingPlans.length, hasValidUnitContext, t, unitLabel]);
 
   const locale = i18n.language?.startsWith('fr') ? 'fr-FR' : 'en-US';
 
@@ -438,19 +459,29 @@ export default function FeedingPlanScreen({ navigation, route }: FeedingPlanScre
             </View>
           ) : null}
 
-          {feedingPlans.length === 0 ? (
+          {displayedFeedingPlans.length === 0 ? (
             <View className="items-center py-10">
               <Ionicons name="restaurant-outline" size={48} color={AQUACARE_COLORS.GRAY_LIGHT} />
               <Text className="text-base font-bold text-gray-dark mt-3">{t('noUnitFeedingPlans')}</Text>
               <Text className="text-sm text-gray-light text-center mt-1">{t('createUnitFeedingPlan')}</Text>
             </View>
           ) : (
-            feedingPlans.map((plan) => {
+            displayedFeedingPlans.map((plan) => {
               const recommendedFeed = formatMetricText(plan.recommended_feed_type || plan.recommended_feed);
-              const temperatureValue = formatMetricValue(plan.temperature_used_c, undefined, 1);
+              const temperatureValue = plan.temperature_used_c === null || plan.temperature_used_c === undefined
+                ? '-'
+                : `${formatNumber(plan.temperature_used_c, undefined, 1)}°C`;
               const proteinValue = plan.protein_percentage === null || plan.protein_percentage === undefined
                 ? '-'
                 : `${formatNumber(plan.protein_percentage, undefined, 0)} %`;
+              const referenceValue = (() => {
+                const source = (plan.data_source || '').trim().toUpperCase();
+                if (source === 'DIBAQ') {
+                  return t('feedingPlanReferenceDibaq');
+                }
+
+                return t('feedingPlanReferenceAquacareEstimate');
+              })();
 
               return (
                 <View key={plan.id} className="bg-cream rounded-lg p-4 mb-3 border-l-4 border-l-aquacare-primary">
@@ -458,7 +489,7 @@ export default function FeedingPlanScreen({ navigation, route }: FeedingPlanScre
                     <View className="flex-row items-start justify-between gap-3">
                       <View className="flex-1">
                         <Text className="text-base font-bold text-gray-dark">
-                          {t('week')} {plan.week_number}
+                          {t('feedingPlanCurrentWeekLabel')} · {t('week')} {plan.week_number}
                         </Text>
                         <Text className="text-sm text-gray-light mt-1">
                           {formatDate(plan.start_date, locale)} - {formatDate(plan.end_date, locale)}
@@ -508,7 +539,7 @@ export default function FeedingPlanScreen({ navigation, route }: FeedingPlanScre
                       title={t('feedingPlanDataSection')}
                       items={[
                         { label: t('feedingPlanTemperatureLabel'), value: temperatureValue },
-                        { label: t('dataSource'), value: formatMetricText(plan.data_source) },
+                        { label: t('feedingPlanReferenceUsed'), value: referenceValue },
                       ]}
                     />
                   </View>

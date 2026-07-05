@@ -706,9 +706,15 @@ class AquacultureService {
     }
   }
 
-  async getFeedingPlans(cycleId: string): Promise<FeedingPlan[]> {
+  async getFeedingPlans(
+    cycleId: string,
+    options?: { currentWeekOnly?: boolean }
+  ): Promise<FeedingPlan[]> {
     try {
-      const response = await apiService.get<ListResponse<FeedingPlan>>(`${this.baseUrl}/feeding-plans/?cycle=${cycleId}`);
+      const query = options?.currentWeekOnly ? '&current_week_only=true' : '';
+      const response = await apiService.get<ListResponse<FeedingPlan>>(
+        `${this.baseUrl}/feeding-plans/?cycle=${cycleId}${query}`
+      );
       return extractResults(response.data);
     } catch (error) {
       logger.error("Erreur lors de la recuperation des plans d'alimentation:", error);
@@ -716,10 +722,14 @@ class AquacultureService {
     }
   }
 
-  async getFeedingPlansForAllocation(cycleUnitAllocationId: string): Promise<FeedingPlan[]> {
+  async getFeedingPlansForAllocation(
+    cycleUnitAllocationId: string,
+    options?: { currentWeekOnly?: boolean }
+  ): Promise<FeedingPlan[]> {
     try {
+      const query = options?.currentWeekOnly ? '&current_week_only=true' : '';
       const response = await apiService.get<ListResponse<FeedingPlan>>(
-        `${this.baseUrl}/feeding-plans/?cycle_unit_allocation=${cycleUnitAllocationId}`
+        `${this.baseUrl}/feeding-plans/?cycle_unit_allocation=${cycleUnitAllocationId}${query}`
       );
       return extractResults(response.data);
     } catch (error) {

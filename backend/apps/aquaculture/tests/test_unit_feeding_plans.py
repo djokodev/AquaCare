@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 import pytest
@@ -117,6 +117,47 @@ class TestUnitFeedingPlans:
 
         assert plan_1.id == plan_2.id
         assert FeedingPlan.objects.filter(cycle=cycle, cycle_unit_allocation=allocation, week_number=1).count() == 1
+
+    def test_generate_current_week_deactivates_future_plans_for_allocation(self):
+        create_guide()
+        cycle = ProductionCycleFactory(
+            species='tilapia',
+            current_count=1000,
+            current_average_weight=Decimal('25.00'),
+            current_biomass=Decimal('25.00'),
+        )
+        allocation = create_allocation(cycle, 'Bac 1', current_fish_count=500, current_biomass_kg=Decimal('10.00'))
+
+        current_plan = FeedingPlanService.generate_plan_for_allocation_week(allocation, week_number=1)
+        future_plan = FeedingPlan.objects.create(
+            cycle=cycle,
+            cycle_unit_allocation=allocation,
+            week_number=2,
+            estimated_fish_count=900,
+            average_weight=Decimal('20.00'),
+            biomass=Decimal('18.00'),
+            daily_feed_amount=Decimal('1.20'),
+            feeding_rate=Decimal('4.50'),
+            meals_per_day=2,
+            feed_per_meal=Decimal('0.60'),
+            recommended_feed_type='Future Feed',
+            feed_size_mm=Decimal('2.0'),
+            protein_percentage=40,
+            start_date=current_plan.end_date + timedelta(days=1),
+            end_date=current_plan.end_date + timedelta(days=7),
+            temperature_used_c=Decimal('26.0'),
+            used_default_temperature=True,
+            data_source='fallback_interne',
+            is_active=True,
+        )
+
+        plans = FeedingPlanService.generate_weekly_plans_for_allocation(allocation, weeks_ahead=1)
+
+        future_plan.refresh_from_db()
+
+        assert len(plans) == 1
+        assert plans[0].week_number == 1
+        assert future_plan.is_active is False
 
     def test_notifications_include_unit_metadata(self):
         create_guide()

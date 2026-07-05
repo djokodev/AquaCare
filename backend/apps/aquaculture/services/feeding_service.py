@@ -363,6 +363,9 @@ class FeedingPlanService(BaseService):
                     level='error',
                 )
 
+        if weeks_ahead == 1:
+            FeedingPlanService.deactivate_future_plans_for_allocation(allocation)
+
         FeedingPlanService.log_operation(
             "allocation_weekly_plans_generated",
             {
@@ -374,6 +377,61 @@ class FeedingPlanService(BaseService):
         )
 
         return plans
+
+    @staticmethod
+    @transaction.atomic
+    def deactivate_future_plans_for_allocation(allocation: CycleUnitAllocation) -> int:
+        """
+        Désactive les plans futurs actifs d'une allocation d'unité.
+
+        Utilisé quand l'utilisateur régénère uniquement le plan de la semaine en cours
+        pour éviter d'afficher ou d'alimenter des semaines futures héritées.
+        """
+        days_elapsed = (date.today() - allocation.cycle.start_date).days
+        current_week = max(1, days_elapsed // 7 + 1)
+
+        future_plans = list(
+            FeedingPlan.objects.select_related('cycle_unit_allocation__production_unit').filter(
+                cycle=allocation.cycle,
+                cycle_unit_allocation=allocation,
+                is_active=True,
+                week_number__gt=current_week,
+            )
+        )
+
+        count = len(future_plans)
+        FeedingPlan.objects.filter(
+            cycle=allocation.cycle,
+            cycle_unit_allocation=allocation,
+            is_active=True,
+            week_number__gt=current_week,
+        ).update(is_active=False)
+
+        now = timezone.now()
+        notification_scope = Q()
+        for plan in future_plans:
+            content_type, object_id = FeedingPlanService._get_plan_scope_notification_target(plan)
+            notification_scope |= Q(content_type=content_type, object_id=object_id)
+
+        if notification_scope:
+            Notification.objects.filter(
+                notification_scope,
+                notification_type='feeding_reminder',
+                scheduled_for__gt=now,
+            ).delete()
+
+        FeedingPlanService.log_operation(
+            "future_allocation_plans_deactivated",
+            {
+                "cycle_id": str(allocation.cycle_id),
+                "cycle_unit_allocation_id": str(allocation.id),
+                "current_week": current_week,
+                "count": count,
+            },
+            level='info',
+        )
+
+        return count
 
     @staticmethod
     @transaction.atomic

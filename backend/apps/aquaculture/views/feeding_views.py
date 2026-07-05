@@ -1,6 +1,8 @@
 """
 Feeding Views pour le module aquaculture.
 """
+from datetime import date
+
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiExample, OpenApiParameter, extend_schema, extend_schema_view
 from rest_framework import permissions, status, viewsets
@@ -53,6 +55,12 @@ from ..services import (
                 type=OpenApiTypes.INT,
                 location=OpenApiParameter.QUERY,
                 description='Filtrer par numéro de semaine'
+            ),
+            OpenApiParameter(
+                name='current_week_only',
+                type=OpenApiTypes.BOOL,
+                location=OpenApiParameter.QUERY,
+                description="Ne retourner que le plan de la semaine courante",
             ),
         ],
         examples=[
@@ -113,6 +121,10 @@ class FeedingPlanViewSet(viewsets.ModelViewSet):
             return FeedingPlanGenerationRequestSerializer
         return super().get_serializer_class()
 
+    @staticmethod
+    def _is_truthy_query_param(value: str | None) -> bool:
+        return str(value).lower() in {'1', 'true', 'yes', 'on'}
+
     def get_queryset(self):
         """Retourne les plans d'alimentation actifs pour les cycles de l'utilisateur."""
         queryset = FeedingPlan.objects.for_api().filter(
@@ -132,6 +144,16 @@ class FeedingPlanViewSet(viewsets.ModelViewSet):
         cycle_id = self.request.query_params.get('cycle') or self.request.query_params.get('cycle_id')
         if cycle_id and not allocation_id:
             queryset = queryset.filter(cycle_id=cycle_id)
+
+        current_week_only = self._is_truthy_query_param(
+            self.request.query_params.get('current_week_only') or self.request.query_params.get('current')
+        )
+        if current_week_only:
+            today = date.today()
+            queryset = queryset.filter(
+                start_date__lte=today,
+                end_date__gte=today,
+            )
 
         return queryset
     

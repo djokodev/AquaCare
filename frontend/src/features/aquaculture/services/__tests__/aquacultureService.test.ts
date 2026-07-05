@@ -226,6 +226,20 @@ describe('features/aquaculture/services/aquacultureService', () => {
     );
   });
 
+  it('retourne les plans d alimentation courants pour une allocation', async () => {
+    const plan = { id: 'plan-1', cycle: 'cycle-1', cycle_unit_allocation: 'allocation-1' };
+    mockApi.get.mockResolvedValueOnce({ data: [plan] } as never);
+
+    const result = await aquacultureService.getFeedingPlansForAllocation('allocation-1', {
+      currentWeekOnly: true,
+    });
+
+    expect(result).toEqual([plan]);
+    expect(mockApi.get).toHaveBeenCalledWith(
+      '/aquaculture/feeding-plans/?cycle_unit_allocation=allocation-1&current_week_only=true'
+    );
+  });
+
   it('genere les plans d alimentation pour une allocation', async () => {
     const plans = [{ id: 'plan-1', cycle: 'cycle-1', cycle_unit_allocation: 'allocation-1' }];
     mockApi.post.mockResolvedValueOnce({ data: plans } as never);

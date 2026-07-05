@@ -8,6 +8,19 @@ import { useLocalFeedingAlarms } from '@/features/notifications/hooks/useLocalFe
 
 const mockT = jest.fn((key: string) => key);
 
+const getLocalDateIso = (date = new Date()) => {
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, '0');
+  const day = `${date.getDate()}`.padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const addDaysIso = (days: number) => {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  return getLocalDateIso(date);
+};
+
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: mockT,
@@ -75,14 +88,22 @@ describe('features/aquaculture/screens/FeedingPlanScreen', () => {
     feed_per_meal: 0.41,
     recommended_feed_type: 'Feed Pro',
     protein_percentage: 40,
-    start_date: '2026-02-01',
-    end_date: '2026-02-07',
+    start_date: getLocalDateIso(),
+    end_date: addDaysIso(6),
     is_active: true,
     temperature_used_c: 28,
     used_default_temperature: false,
     data_source: 'DIBAQ',
     feed_size_mm: 2,
     created_at: '2026-02-01T00:00:00Z',
+  };
+  const futureFeedingPlan = {
+    ...feedingPlan,
+    id: 'plan-2',
+    week_number: 2,
+    start_date: addDaysIso(7),
+    end_date: addDaysIso(13),
+    created_at: '2026-02-08T00:00:00Z',
   };
 
   beforeEach(() => {
@@ -101,21 +122,26 @@ describe('features/aquaculture/screens/FeedingPlanScreen', () => {
   });
 
   it('charge les plans d une unite et affiche le titre unitaire', async () => {
-    mockService.getFeedingPlansForAllocation.mockResolvedValueOnce([feedingPlan]);
+    mockService.getFeedingPlansForAllocation.mockResolvedValueOnce([feedingPlan, futureFeedingPlan]);
 
-    const { getByText } = render(<FeedingPlanScreen navigation={navigation} route={route} />);
+    const { getByText, queryByText } = render(<FeedingPlanScreen navigation={navigation} route={route} />);
 
     await waitFor(() => {
       expect(navigation.setOptions).toHaveBeenCalledWith({ title: 'feedingPlanUnitTitle' });
-      expect(mockService.getFeedingPlansForAllocation).toHaveBeenCalledWith('allocation-1');
+      expect(mockService.getFeedingPlansForAllocation).toHaveBeenCalledWith('allocation-1', {
+        currentWeekOnly: true,
+      });
       expect(getByText('feedingPlanUnitTitle')).toBeTruthy();
       expect(getByText('feedingPlans')).toBeTruthy();
-      expect(getByText('week 1')).toBeTruthy();
+      expect(getByText('feedingPlanCurrentWeekLabel · week 1')).toBeTruthy();
       expect(getByText('feedingPlanUnitSummary')).toBeTruthy();
       expect(getByText('estimatedFishCount')).toBeTruthy();
       expect(getByText('feedingPlanRecommendationSection')).toBeTruthy();
       expect(getByText('feedingPlanFeedSection')).toBeTruthy();
       expect(getByText('feedingPlanDataSection')).toBeTruthy();
+      expect(getByText('feedingPlanReferenceUsed')).toBeTruthy();
+      expect(getByText('feedingPlanReferenceDibaq')).toBeTruthy();
+      expect(queryByText('feedingPlanCurrentWeekLabel · week 2')).toBeNull();
     });
 
     await waitFor(() => {
@@ -126,6 +152,23 @@ describe('features/aquaculture/screens/FeedingPlanScreen', () => {
           cycleName: 'Bac 1',
         })
       );
+    });
+  });
+
+  it('traduit une source technique en reference lisible', async () => {
+    mockService.getFeedingPlansForAllocation.mockResolvedValueOnce([
+      {
+        ...feedingPlan,
+        data_source: 'fallback_interne',
+      },
+    ]);
+
+    const { getByText, queryByText } = render(<FeedingPlanScreen navigation={navigation} route={route} />);
+
+    await waitFor(() => {
+      expect(getByText('feedingPlanReferenceUsed')).toBeTruthy();
+      expect(getByText('feedingPlanReferenceAquacareEstimate')).toBeTruthy();
+      expect(queryByText('fallback_interne')).toBeNull();
     });
   });
 
@@ -157,6 +200,9 @@ describe('features/aquaculture/screens/FeedingPlanScreen', () => {
         cycleId: 'cycle-1',
       });
       expect(mockService.getFeedingPlansForAllocation).toHaveBeenCalledTimes(2);
+      expect(mockService.getFeedingPlansForAllocation).toHaveBeenLastCalledWith('allocation-1', {
+        currentWeekOnly: true,
+      });
     });
 
     alertSpy.mockRestore();
