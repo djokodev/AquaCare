@@ -1,3 +1,5 @@
+import { sanitizeUserFacingErrorMessage } from '@/utils/errorParser';
+
 type Translate = (key: string, options?: Record<string, unknown>) => string;
 
 const KNOWN_ERROR_KEYS = new Set([
@@ -21,9 +23,30 @@ const getMessageFromThrownValue = (error: unknown): string => {
   return 'AUTH_UNKNOWN_ERROR';
 };
 
+const isTechnicalOnlyMessage = (message: string): boolean => {
+  const normalized = message.trim();
+
+  if (!normalized) {
+    return false;
+  }
+
+  return (
+    normalized.startsWith('{') ||
+    normalized.startsWith('[') ||
+    /^HTTP_\d{3}(?:\s+invalid)?$/i.test(normalized) ||
+    /^status[_-]?code(?:\s*[:=]\s*\d{3})?$/i.test(normalized) ||
+    /^code(?:\s*[:=]\s*[A-Za-z0-9_-]+)?$/i.test(normalized) ||
+    /status code\s*\d{3}/i.test(normalized)
+  );
+};
+
 export const getAccountErrorMessage = (error: unknown, t: Translate): string => {
   const message = getMessageFromThrownValue(error);
-  const normalized = message.trim();
+  if (isTechnicalOnlyMessage(message)) {
+    return t('accountsErrorGeneric');
+  }
+
+  const normalized = sanitizeUserFacingErrorMessage(message).trim();
 
   if (KNOWN_ERROR_KEYS.has(normalized)) {
     return t(normalized, { defaultValue: t('accountsErrorGeneric') });
@@ -37,11 +60,13 @@ export const getAccountErrorMessage = (error: unknown, t: Translate): string => 
     return t('AUTH_NETWORK_ERROR', { defaultValue: t('accountsErrorGeneric') });
   }
 
-  if (normalized.startsWith('HTTP_')) {
-    return t('accountsErrorGeneric');
-  }
-
-  if (normalized.startsWith('{') || normalized.startsWith('[')) {
+  if (
+    normalized === 'UNKNOWN_ERROR' ||
+    normalized.startsWith('HTTP_') ||
+    normalized.startsWith('{') ||
+    normalized.startsWith('[') ||
+    normalized === 'invalid'
+  ) {
     return t('accountsErrorGeneric');
   }
 

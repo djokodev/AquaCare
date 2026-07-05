@@ -29,10 +29,87 @@ export interface ParsedApiError {
 }
 
 const META_FIELDS = new Set(['code', 'status_code']);
+const USER_FACING_ERROR_KEYS = new Set([
+  'AUTH_INVALID_CREDENTIALS',
+  'AUTH_FORBIDDEN',
+  'AUTH_NOT_FOUND',
+  'AUTH_RATE_LIMITED',
+  'AUTH_SERVER_ERROR',
+  'AUTH_NETWORK_ERROR',
+  'AUTH_UNKNOWN_ERROR',
+  'UNKNOWN_ERROR',
+  'accountsErrorGeneric',
+]);
+
+const TECHNICAL_ONLY_PATTERNS = [
+  /^(?:HTTP_)?\d{3}(?:\s+invalid)?$/i,
+  /^status[_-]?code(?:\s*[:=]\s*\d{3})?$/i,
+  /^code(?:\s*[:=]\s*[A-Za-z0-9_-]+)?$/i,
+  /^AUTH_[A-Z0-9_]+$/i,
+  /^invalid$/i,
+  /status code\s*\d{3}/i,
+];
+
+const TECHNICAL_SUFFIX_PATTERNS = [
+  /\s+(?:HTTP_)?\d{3}\s+invalid$/i,
+  /\s+(?:HTTP_)?\d{3}$/i,
+  /\s+status[_-]?code(?:\s*[:=]\s*\d{3})?$/i,
+  /\s+code(?:\s*[:=]\s*[A-Za-z0-9_-]+)?$/i,
+  /\s+AUTH_[A-Z0-9_]+$/i,
+];
+
+/**
+ * Retire les fragments techniques visibles pour l'utilisateur, sans
+ * toucher aux phrases métiers lisibles ni aux clés i18n connues.
+ */
+export const sanitizeUserFacingErrorMessage = (message: string): string => {
+  const normalized = message.trim();
+
+  if (!normalized) {
+    return 'UNKNOWN_ERROR';
+  }
+
+  if (USER_FACING_ERROR_KEYS.has(normalized)) {
+    return normalized;
+  }
+
+  if (normalized.startsWith('{') || normalized.startsWith('[')) {
+    return 'UNKNOWN_ERROR';
+  }
+
+  if (TECHNICAL_ONLY_PATTERNS.some((pattern) => pattern.test(normalized))) {
+    return 'UNKNOWN_ERROR';
+  }
+
+  let sanitized = normalized;
+  let previous = '';
+
+  while (sanitized !== previous) {
+    previous = sanitized;
+    for (const pattern of TECHNICAL_SUFFIX_PATTERNS) {
+      sanitized = sanitized.replace(pattern, '').trim();
+    }
+  }
+
+  if (!sanitized) {
+    return 'UNKNOWN_ERROR';
+  }
+
+  if (USER_FACING_ERROR_KEYS.has(sanitized)) {
+    return sanitized;
+  }
+
+  if (TECHNICAL_ONLY_PATTERNS.some((pattern) => pattern.test(sanitized))) {
+    return 'UNKNOWN_ERROR';
+  }
+
+  return sanitized;
+};
 
 const toDisplayMessages = (value: unknown): string[] => {
   if (typeof value === 'string' && value.trim()) {
-    return [value];
+    const sanitized = sanitizeUserFacingErrorMessage(value);
+    return sanitized === 'UNKNOWN_ERROR' ? [] : [sanitized];
   }
   if (typeof value === 'number' || typeof value === 'boolean') {
     return [String(value)];
@@ -52,7 +129,8 @@ const toDisplayMessages = (value: unknown): string[] => {
 
 const getFirstApiMessage = (data: unknown): string | undefined => {
   if (typeof data === 'string' && data.trim()) {
-    return data;
+    const sanitized = sanitizeUserFacingErrorMessage(data);
+    return sanitized === 'UNKNOWN_ERROR' ? undefined : sanitized;
   }
   if (!data || typeof data !== 'object') {
     return undefined;
@@ -128,7 +206,7 @@ export const parseApiError = (error: unknown): ParsedApiError => {
     const details: ApiErrorDetails[] = [];
 
     Object.entries(data).forEach(([field, fieldErrors]) => {
-      if (META_FIELDS.has(field)) {
+      if (META_FIELDS.has(field) || field === 'detail' || field === 'message' || field === 'error') {
         return;
       }
       const messages = toDisplayMessages(fieldErrors);
@@ -209,7 +287,11 @@ export const parseApiError = (error: unknown): ParsedApiError => {
   // Cas par défaut
   return {
     status,
-    message: getFirstApiMessage(data) ?? candidate.message ?? 'Une erreur est survenue',
+    message:
+      getFirstApiMessage(data) ??
+      (candidate.message && sanitizeUserFacingErrorMessage(candidate.message) !== 'UNKNOWN_ERROR'
+        ? sanitizeUserFacingErrorMessage(candidate.message)
+        : 'Une erreur est survenue'),
     code: responseCode ?? candidate.code,
     details: [],
     rawError: data,
@@ -395,11 +477,15 @@ export const isNetworkError = (error: unknown): boolean => {
  * @param fallback - Message par défaut si aucun message trouvé
  */
 export const getApiErrorMessage = (error: unknown, fallback = 'Une erreur est survenue'): string => {
-  if (typeof error === 'string' && error.trim()) return error;
+  if (typeof error === 'string' && error.trim()) {
+    const sanitized = sanitizeUserFacingErrorMessage(error);
+    return sanitized === 'UNKNOWN_ERROR' ? fallback : sanitized;
+  }
   if (!error || typeof error !== 'object') return fallback;
   const candidate = error as ApiErrorLike;
   if (!candidate.response && candidate.message && !isNetworkError(error)) {
-    return candidate.message;
+    const sanitized = sanitizeUserFacingErrorMessage(candidate.message);
+    return sanitized === 'UNKNOWN_ERROR' ? fallback : sanitized;
   }
 
   const parsedError = parseApiError(error);
@@ -409,10 +495,14 @@ export const getApiErrorMessage = (error: unknown, fallback = 'Une erreur est su
   }
 
   if (parsedError.message) {
-    return parsedError.message;
+    const sanitized = sanitizeUserFacingErrorMessage(parsedError.message);
+    return sanitized === 'UNKNOWN_ERROR' ? fallback : sanitized;
   }
 
-  if (candidate.message) return candidate.message;
+  if (candidate.message) {
+    const sanitized = sanitizeUserFacingErrorMessage(candidate.message);
+    return sanitized === 'UNKNOWN_ERROR' ? fallback : sanitized;
+  }
   return fallback;
 };
 

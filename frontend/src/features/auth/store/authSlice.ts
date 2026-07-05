@@ -1,6 +1,7 @@
 ﻿import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import { AuthRequestError, authService } from '@/features/auth/services/authService';
 import { profileService } from '@/features/profile/services/profileService';
+import { sanitizeUserFacingErrorMessage } from '@/utils/errorParser';
 import {
   AuthErrorPayload,
   User,
@@ -32,17 +33,39 @@ const initialState: AuthState = {
   fieldErrors: {},
 };
 
+const normalizeAuthMessage = (message: string | null | undefined): string | null => {
+  if (!message) {
+    return null;
+  }
+
+  const sanitized = sanitizeUserFacingErrorMessage(message);
+  return sanitized === 'UNKNOWN_ERROR' ? 'UNKNOWN_ERROR' : sanitized;
+};
+
+const normalizeFieldErrors = (fieldErrors: Record<string, string>): Record<string, string> => {
+  const sanitizedFieldErrors: Record<string, string> = {};
+
+  for (const [field, message] of Object.entries(fieldErrors)) {
+    const sanitized = normalizeAuthMessage(message);
+    if (sanitized) {
+      sanitizedFieldErrors[field] = sanitized;
+    }
+  }
+
+  return sanitizedFieldErrors;
+};
+
 const getThunkErrorPayload = (error: unknown): AuthErrorPayload => {
   if (error instanceof AuthRequestError) {
     return {
-      message: error.message || null,
-      fieldErrors: error.fieldErrors,
+      message: normalizeAuthMessage(error.message),
+      fieldErrors: normalizeFieldErrors(error.fieldErrors),
     };
   }
 
   if (error instanceof Error) {
     return {
-      message: error.message,
+      message: normalizeAuthMessage(error.message),
       fieldErrors: {},
     };
   }
@@ -55,38 +78,38 @@ const getThunkErrorPayload = (error: unknown): AuthErrorPayload => {
 
   if (typeof data === 'string' && data.trim()) {
     return {
-      message: data,
+      message: normalizeAuthMessage(data),
       fieldErrors: {},
     };
   }
   if (data && typeof data === 'object') {
     if (typeof data.detail === 'string') {
-      return { message: data.detail, fieldErrors: {} };
+      return { message: normalizeAuthMessage(data.detail), fieldErrors: {} };
     }
     if (typeof data.message === 'string') {
-      return { message: data.message, fieldErrors: {} };
+      return { message: normalizeAuthMessage(data.message), fieldErrors: {} };
     }
     if (typeof data.error === 'string') {
-      return { message: data.error, fieldErrors: {} };
+      return { message: normalizeAuthMessage(data.error), fieldErrors: {} };
     }
 
     const firstFieldError = Object.values(data).find(Boolean);
     if (Array.isArray(firstFieldError) && firstFieldError.length > 0) {
       return {
-        message: String(firstFieldError[0]),
+        message: normalizeAuthMessage(String(firstFieldError[0])),
         fieldErrors: {},
       };
     }
     if (firstFieldError) {
       return {
-        message: String(firstFieldError),
+        message: normalizeAuthMessage(String(firstFieldError)),
         fieldErrors: {},
       };
     }
   }
 
   return {
-    message: apiError.message || 'UNKNOWN_ERROR',
+    message: normalizeAuthMessage(apiError.message) ?? 'UNKNOWN_ERROR',
     fieldErrors: {},
   };
 };
@@ -97,8 +120,8 @@ const clearAuthErrors = (state: AuthState) => {
 };
 
 const applyAuthError = (state: AuthState, payload?: AuthErrorPayload) => {
-  const fieldErrors = payload?.fieldErrors ?? {};
-  state.error = payload?.message ?? (Object.keys(fieldErrors).length > 0 ? null : 'UNKNOWN_ERROR');
+  const fieldErrors = normalizeFieldErrors(payload?.fieldErrors ?? {});
+  state.error = normalizeAuthMessage(payload?.message) ?? (Object.keys(fieldErrors).length > 0 ? null : 'UNKNOWN_ERROR');
   state.fieldErrors = fieldErrors;
 };
 

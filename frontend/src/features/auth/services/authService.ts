@@ -3,6 +3,7 @@ import * as SecureStore from 'expo-secure-store';
 import { apiService } from '@/services/api';
 import logger from '@/utils/logger';
 import { API_ENDPOINTS, STORAGE_KEYS } from '@/constants/api';
+import { sanitizeUserFacingErrorMessage } from '@/utils/errorParser';
 import {
   AuthFieldErrors,
   LoginRequest,
@@ -15,11 +16,16 @@ const AUTH_META_FIELDS = new Set(['code', 'status_code']);
 
 const toFieldMessage = (value: unknown): string | null => {
   if (typeof value === 'string' && value.trim()) {
-    return value;
+    const sanitized = sanitizeUserFacingErrorMessage(value);
+    return sanitized === 'UNKNOWN_ERROR' ? null : sanitized;
   }
   if (Array.isArray(value) && value.length > 0) {
     const firstValue = value[0];
-    return typeof firstValue === 'string' && firstValue.trim() ? firstValue : null;
+    if (typeof firstValue === 'string' && firstValue.trim()) {
+      const sanitized = sanitizeUserFacingErrorMessage(firstValue);
+      return sanitized === 'UNKNOWN_ERROR' ? null : sanitized;
+    }
+    return null;
   }
   return null;
 };
@@ -203,9 +209,11 @@ class AuthService {
 
     if (axiosErr.response) {
       const { status, data } = axiosErr.response;
+      const responseMessage = typeof data?.detail === 'string' ? data.detail : typeof data?.message === 'string' ? data.message : '';
+      const sanitizedResponseMessage = responseMessage ? sanitizeUserFacingErrorMessage(responseMessage) : 'UNKNOWN_ERROR';
 
       const HTTP_ERROR_CODES: Record<number, string> = {
-        401: data?.detail as string || data?.message as string || 'AUTH_INVALID_CREDENTIALS',
+        401: sanitizedResponseMessage !== 'UNKNOWN_ERROR' ? sanitizedResponseMessage : 'AUTH_INVALID_CREDENTIALS',
         403: 'AUTH_FORBIDDEN',
         404: 'AUTH_NOT_FOUND',
         429: 'AUTH_RATE_LIMITED',
@@ -240,7 +248,7 @@ class AuthService {
         }
 
         return new AuthRequestError(
-          generalMessage || '',
+          generalMessage || 'UNKNOWN_ERROR',
           fieldErrors
         );
       }
@@ -249,14 +257,21 @@ class AuthService {
         return new AuthRequestError(HTTP_ERROR_CODES[status]);
       }
 
-      return new AuthRequestError(data?.message as string || `HTTP_${status}`);
+      const fallbackMessage = typeof data?.message === 'string'
+        ? sanitizeUserFacingErrorMessage(data.message)
+        : `HTTP_${status}`;
+
+      return new AuthRequestError(
+        fallbackMessage === 'UNKNOWN_ERROR' ? `HTTP_${status}` : fallbackMessage
+      );
     }
 
     if (axiosErr.request) {
       return new AuthRequestError('AUTH_NETWORK_ERROR');
     }
 
-    return new AuthRequestError(axiosErr.message || 'AUTH_UNKNOWN_ERROR');
+    const fallbackMessage = axiosErr.message ? sanitizeUserFacingErrorMessage(axiosErr.message) : 'AUTH_UNKNOWN_ERROR';
+    return new AuthRequestError(fallbackMessage === 'UNKNOWN_ERROR' ? 'AUTH_UNKNOWN_ERROR' : fallbackMessage);
   }
 }
 

@@ -28,6 +28,7 @@ import logger from '@/utils/logger';
 import { RootStackParamList } from '@/navigation/MainNavigator';
 import { RouteProp, useRoute } from '@react-navigation/native';
 import { getProductBrandAsset } from '@/features/commerce/utils/productBrandAssets';
+import { sanitizeUserFacingErrorMessage } from '@/utils/errorParser';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'Cart'>;
 type RoutePropType = RouteProp<RootStackParamList, 'Cart'>;
@@ -38,13 +39,30 @@ interface AxiosApiError {
 }
 
 const extractErrorMessage = (error: unknown, fallback: string): string => {
-  if (typeof error === 'string') return error;
+  if (typeof error === 'string') {
+    const sanitized = sanitizeUserFacingErrorMessage(error);
+    return sanitized === 'UNKNOWN_ERROR' || sanitized.startsWith('AUTH_') ? fallback : sanitized;
+  }
   const err = error as AxiosApiError;
   const data = err?.response?.data;
-  if (typeof data?.message === 'string') return data.message;
-  if (typeof data?.error === 'string') return data.error;
-  if (typeof data?.detail === 'string') return data.detail;
-  if (typeof err?.message === 'string') return err.message;
+  const shouldUseFallback = (message: string): boolean =>
+    message === 'UNKNOWN_ERROR' || message.startsWith('AUTH_');
+  if (typeof data?.message === 'string') {
+    const sanitized = sanitizeUserFacingErrorMessage(data.message);
+    return shouldUseFallback(sanitized) ? fallback : sanitized;
+  }
+  if (typeof data?.error === 'string') {
+    const sanitized = sanitizeUserFacingErrorMessage(data.error);
+    return shouldUseFallback(sanitized) ? fallback : sanitized;
+  }
+  if (typeof data?.detail === 'string') {
+    const sanitized = sanitizeUserFacingErrorMessage(data.detail);
+    return shouldUseFallback(sanitized) ? fallback : sanitized;
+  }
+  if (typeof err?.message === 'string') {
+    const sanitized = sanitizeUserFacingErrorMessage(err.message);
+    return shouldUseFallback(sanitized) ? fallback : sanitized;
+  }
   return fallback;
 };
 
