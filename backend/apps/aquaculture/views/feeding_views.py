@@ -1,10 +1,13 @@
 """
 Feeding Views pour le module aquaculture.
 """
+from datetime import date
+
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiExample, OpenApiParameter, extend_schema, extend_schema_view
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 
 from ..models import FeedingPlan
@@ -19,8 +22,8 @@ from ..services import (
     list=extend_schema(
         summary="Lister les plans d'alimentation",
         description="""
-        Retourne les plans d'alimentation actifs pour les cycles de l'utilisateur.
-        Plans générés automatiquement basés sur les guides nutritionnels et l'état actuel des cycles.
+        Retourne les plans d'alimentation actifs pour les unités de production de l'utilisateur.
+        Plans générés automatiquement basés sur les guides nutritionnels et l'état actuel des allocations.
         """,
         parameters=[
             OpenApiParameter(
@@ -36,10 +39,28 @@ from ..services import (
                 description='Alias rétrocompatible de cycle'
             ),
             OpenApiParameter(
+                name='cycle_unit_allocation',
+                type=OpenApiTypes.UUID,
+                location=OpenApiParameter.QUERY,
+                description="Filtrer par allocation de cycle par unité",
+            ),
+            OpenApiParameter(
+                name='cycle_unit_allocation_id',
+                type=OpenApiTypes.UUID,
+                location=OpenApiParameter.QUERY,
+                description="Alias de filtre pour l'allocation de cycle par unité",
+            ),
+            OpenApiParameter(
                 name='week_number',
                 type=OpenApiTypes.INT,
                 location=OpenApiParameter.QUERY,
                 description='Filtrer par numéro de semaine'
+            ),
+            OpenApiParameter(
+                name='current_week_only',
+                type=OpenApiTypes.BOOL,
+                location=OpenApiParameter.QUERY,
+                description="Ne retourner que le plan de la semaine courante",
             ),
         ],
         examples=[
@@ -65,8 +86,8 @@ from ..services import (
     create=extend_schema(
         summary="Créer un plan d'alimentation",
         description="""
-        Crée un plan d'alimentation personnalisé pour une semaine spécifique d'un cycle.
-        Calcule automatiquement les quantités en fonction de la biomasse actuelle.
+        Crée un plan d'alimentation personnalisé pour une semaine spécifique d'une unité.
+        Calcule automatiquement les quantités en fonction de la biomasse actuelle de l'allocation.
         """,
         examples=[
             OpenApiExample(
@@ -100,24 +121,46 @@ class FeedingPlanViewSet(viewsets.ModelViewSet):
             return FeedingPlanGenerationRequestSerializer
         return super().get_serializer_class()
 
+    @staticmethod
+    def _is_truthy_query_param(value: str | None) -> bool:
+        return str(value).lower() in {'1', 'true', 'yes', 'on'}
+
     def get_queryset(self):
         """Retourne les plans d'alimentation actifs pour les cycles de l'utilisateur."""
         queryset = FeedingPlan.objects.for_api().filter(
             cycle__farm_profile__user=self.request.user,
             is_active=True
-        ).order_by('cycle', 'week_number')
+        ).order_by('cycle_unit_allocation__production_unit__name', 'week_number')
+
+        # Filtrer par allocation si spécifié dans les paramètres URL
+        allocation_id = (
+            self.request.query_params.get('cycle_unit_allocation')
+            or self.request.query_params.get('cycle_unit_allocation_id')
+        )
+        if allocation_id:
+            queryset = queryset.filter(cycle_unit_allocation_id=allocation_id)
 
         # Filtrer par cycle si spécifié dans les paramètres URL
         cycle_id = self.request.query_params.get('cycle') or self.request.query_params.get('cycle_id')
-        if cycle_id:
+        if cycle_id and not allocation_id:
             queryset = queryset.filter(cycle_id=cycle_id)
+
+        current_week_only = self._is_truthy_query_param(
+            self.request.query_params.get('current_week_only') or self.request.query_params.get('current')
+        )
+        if current_week_only:
+            today = date.today()
+            queryset = queryset.filter(
+                start_date__lte=today,
+                end_date__gte=today,
+            )
 
         return queryset
     
     @extend_schema(
         summary="Générer plans d'alimentation automatiques",
         description="""
-        Génère automatiquement des plans d'alimentation pour les semaines à venir d'un cycle.
+        Génère automatiquement des plans d'alimentation pour les semaines à venir d'une allocation d'unité.
         Calcule les quantités optimales basées sur la croissance prévue et les guides nutritionnels.
         """,
         request=FeedingPlanGenerationRequestSerializer,
@@ -132,15 +175,22 @@ class FeedingPlanViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['post'])
     def generate(self, request):
         """
-        Génère un plan d'alimentation pour un cycle et des semaines spécifiés.
+        Génère un plan d'alimentation pour une allocation d'unité et des semaines spécifiées.
         """
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        cycle_unit_allocation_id = serializer.validated_data.get('cycle_unit_allocation_id')
+        if not cycle_unit_allocation_id:
+            raise ValidationError({
+                'cycle_unit_allocation_id': "Le plan d'alimentation doit être généré depuis une unité de production."
+            })
+
         plans = FeedingPlanApplicationService.generate_feeding_plans(
             user=request.user,
             command=GenerateFeedingPlansCommand(
-                cycle_id=serializer.validated_data['cycle_id'],
+                cycle_unit_allocation_id=cycle_unit_allocation_id,
                 weeks_ahead=serializer.validated_data['weeks_ahead'],
+                cycle_id=serializer.validated_data.get('cycle_id'),
             ),
         )
 

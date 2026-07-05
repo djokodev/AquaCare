@@ -102,7 +102,12 @@ class FeedingPlanQuerySet(models.QuerySet):
     """QuerySet optimisé pour les plans d'alimentation."""
 
     def for_api(self):
-        return self.select_related('cycle')
+        return self.select_related(
+            'cycle',
+            'cycle__farm_profile',
+            'cycle_unit_allocation',
+            'cycle_unit_allocation__production_unit',
+        )
 
 
 class SanitaryLogQuerySet(models.QuerySet):
@@ -1099,10 +1104,16 @@ class FeedingPlan(models.Model):
     """
     class Meta:
         app_label = 'aquaculture'
-        unique_together = ['cycle', 'week_number']
-        ordering = ['cycle', 'week_number']
+        ordering = ['cycle', 'cycle_unit_allocation', 'week_number']
         verbose_name = _("Plan d'alimentation")
         verbose_name_plural = _("Plans d'alimentation")
+        constraints = [
+            models.UniqueConstraint(
+                fields=['cycle_unit_allocation', 'week_number'],
+                condition=Q(cycle_unit_allocation__isnull=False),
+                name='uniq_unit_feeding_plan_week',
+            ),
+        ]
         indexes = [
             models.Index(
                 fields=['cycle', 'is_active', 'start_date', 'end_date'],
@@ -1112,6 +1123,10 @@ class FeedingPlan(models.Model):
                 fields=['cycle', 'created_at'],
                 name='aq_feed_cycle_created_idx',
             ),
+            models.Index(
+                fields=['cycle_unit_allocation', 'is_active', 'start_date', 'end_date'],
+                name='aq_feed_unit_active_dates_idx',
+            ),
         ]
 
     cycle = models.ForeignKey(
@@ -1119,6 +1134,14 @@ class FeedingPlan(models.Model):
         on_delete=models.CASCADE, 
         related_name='feeding_plans',
         verbose_name=_("Cycle de production")
+    )
+    cycle_unit_allocation = models.ForeignKey(
+        'aquaculture.CycleUnitAllocation',
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name='feeding_plans',
+        verbose_name=_("Allocation de cycle par unité"),
     )
 
     week_number = models.PositiveIntegerField(
@@ -1212,6 +1235,8 @@ class FeedingPlan(models.Model):
     objects = FeedingPlanQuerySet.as_manager()
 
     def __str__(self):
+        if self.cycle_unit_allocation and self.cycle_unit_allocation.production_unit:
+            return f"{self.cycle_unit_allocation.production_unit.name} - Semaine {self.week_number}"
         return f"{self.cycle.cycle_name} - Semaine {self.week_number}"
 
 

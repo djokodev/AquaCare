@@ -161,6 +161,20 @@ export default function QuickActionsSheet({
           params: unitContext,
         },
         {
+          id: 'feedingPlan',
+          labelKey: 'feedingPlan',
+          icon: 'restaurant-outline',
+          iconColor: AQUACARE_COLORS.INFO,
+          route: 'FeedingPlan',
+          category: 'aquaculture',
+          params: {
+            cycleId: unitContext.cycleId,
+            cycleUnitAllocationId: unitContext.cycleUnitAllocationId,
+            productionUnitId: unitContext.productionUnitId,
+            productionUnitName: unitContext.productionUnitName,
+          },
+        },
+        {
           id: 'report',
           labelKey: 'productionUnitReportAction',
           icon: 'document-text-outline',
@@ -205,14 +219,6 @@ export default function QuickActionsSheet({
           category: 'aquaculture',
           badge: unreadCount,
         },
-        {
-          id: 'feedingPlan',
-          labelKey: 'feedingPlan',
-          icon: 'restaurant-outline',
-          iconColor: AQUACARE_COLORS.INFO,
-          route: 'FeedingPlan',
-          category: 'aquaculture',
-        },
       ];
     }
 
@@ -241,14 +247,6 @@ export default function QuickActionsSheet({
         route: 'Notifications',
         category: 'aquaculture',
         badge: unreadCount, // Badge dynamique
-      },
-      {
-        id: 'feedingPlan',
-        labelKey: 'feedingPlan',
-        icon: 'restaurant-outline',
-        iconColor: AQUACARE_COLORS.INFO,
-        route: 'FeedingPlan',
-        category: 'aquaculture',
       },
       {
         id: 'reports',

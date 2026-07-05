@@ -706,12 +706,34 @@ class AquacultureService {
     }
   }
 
-  async getFeedingPlans(cycleId: string): Promise<FeedingPlan[]> {
+  async getFeedingPlans(
+    cycleId: string,
+    options?: { currentWeekOnly?: boolean }
+  ): Promise<FeedingPlan[]> {
     try {
-      const response = await apiService.get<ListResponse<FeedingPlan>>(`${this.baseUrl}/feeding-plans/?cycle=${cycleId}`);
+      const query = options?.currentWeekOnly ? '&current_week_only=true' : '';
+      const response = await apiService.get<ListResponse<FeedingPlan>>(
+        `${this.baseUrl}/feeding-plans/?cycle=${cycleId}${query}`
+      );
       return extractResults(response.data);
     } catch (error) {
       logger.error("Erreur lors de la recuperation des plans d'alimentation:", error);
+      throw error;
+    }
+  }
+
+  async getFeedingPlansForAllocation(
+    cycleUnitAllocationId: string,
+    options?: { currentWeekOnly?: boolean }
+  ): Promise<FeedingPlan[]> {
+    try {
+      const query = options?.currentWeekOnly ? '&current_week_only=true' : '';
+      const response = await apiService.get<ListResponse<FeedingPlan>>(
+        `${this.baseUrl}/feeding-plans/?cycle_unit_allocation=${cycleUnitAllocationId}${query}`
+      );
+      return extractResults(response.data);
+    } catch (error) {
+      logger.error("Erreur lors de la recuperation des plans d'alimentation de l'unité:", error);
       throw error;
     }
   }
@@ -736,6 +758,24 @@ class AquacultureService {
       return response.data;
     } catch (error) {
       logger.error("Erreur lors de la generation du plan d'alimentation:", error);
+      throw error;
+    }
+  }
+
+  async generateFeedingPlanForAllocation(payload: {
+    cycleUnitAllocationId: string;
+    weeksAhead?: number;
+    cycleId?: string;
+  }): Promise<FeedingPlan[]> {
+    try {
+      const response = await apiService.post<FeedingPlan[]>(`${this.baseUrl}/feeding-plans/generate/`, {
+        cycle_unit_allocation_id: payload.cycleUnitAllocationId,
+        weeks_ahead: payload.weeksAhead ?? 4,
+        ...(payload.cycleId ? { cycle_id: payload.cycleId } : {}),
+      });
+      return response.data;
+    } catch (error) {
+      logger.error("Erreur lors de la generation du plan d'alimentation de l'unité:", error);
       throw error;
     }
   }

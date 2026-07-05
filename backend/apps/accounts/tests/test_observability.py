@@ -54,5 +54,5 @@ class TestAccountsObservability:
             if getattr(record, "event", None) == "accounts.login.rejected"
         ]
         assert rejection_logs
-        assert rejection_logs[0].reason_code == "invalid_credentials"
+        assert rejection_logs[0].reason_code == "unknown_login_name"
         assert "secret-password" not in rejection_logs[0].getMessage()

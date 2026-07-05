@@ -8,11 +8,11 @@ from unittest.mock import patch
 from uuid import uuid4
 
 import pytest
+from aquaculture.domain.exceptions import FeedingPlanGenerationError
 from aquaculture.models import CycleLog, CycleUnitAllocation, ProductionCycle, ProductionUnit
 from aquaculture.services import (
     CycleLogApplicationService,
     DashboardApplicationService,
-    FeedingCycleNotFoundError,
     FeedingPlanApplicationService,
     GenerateFeedingPlansCommand,
     InvalidDashboardCycleScopeError,
@@ -173,12 +173,12 @@ class TestCycleLogApplicationService:
 
 @pytest.mark.django_db
 class TestFeedingPlanApplicationService:
-    def test_generate_feeding_plans_rejects_unknown_cycle(self, authenticated_user):
-        with pytest.raises(FeedingCycleNotFoundError):
+    def test_generate_feeding_plans_rejects_unknown_allocation(self, authenticated_user):
+        with pytest.raises(FeedingPlanGenerationError):
             FeedingPlanApplicationService.generate_feeding_plans(
                 user=authenticated_user,
                 command=GenerateFeedingPlansCommand(
-                    cycle_id=str(uuid4()),
+                    cycle_unit_allocation_id=str(uuid4()),
                     weeks_ahead=1,
                 ),
             )

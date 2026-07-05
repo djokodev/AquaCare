@@ -1,9 +1,9 @@
 from .account_deletion_service import AccountDeletionService
 from .auth_application_service import (
     AuthApplicationService,
-    AuthValidationError,
     AuthSuccessResult,
     AuthTokenPair,
+    AuthValidationError,
     InvalidCredentialsError,
     InvalidRefreshTokenError,
 )
@@ -15,6 +15,7 @@ from .profile_query_service import ProfileQueryService
 from .registration_service import AccountRegistrationService
 
 __all__ = [
+    "AccountProfileMutationService",
     "AccountDeletionService",
     "AccountRegistrationService",
     "AuthApplicationService",
@@ -27,6 +28,5 @@ __all__ = [
     "LanguagePreferenceService",
     "LoginAttemptTracker",
     "LoginRateLimitService",
-    "AccountProfileMutationService",
     "ProfileQueryService",
 ]

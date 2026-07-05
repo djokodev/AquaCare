@@ -29,6 +29,8 @@ from notifications.models import Notification
 from rest_framework import status
 from rest_framework.test import APIClient
 
+from tests.fixtures.factories import FarmProfileFactory
+
 
 @pytest.fixture
 def authenticated_client(api_client, authenticated_user):
@@ -1217,11 +1219,13 @@ class TestCycleLogViewSet:
 class TestFeedingPlanViewSet:
     """Tests pour le ViewSet FeedingPlan."""
 
-    def test_generate_feeding_plan(self, auth_client, production_cycle):
-        """Test génération automatique plan alimentation."""
+    def test_generate_feeding_plan_for_allocation(self, auth_client, production_cycle):
+        """Test génération automatique plan alimentation pour une allocation."""
+        allocation = create_cycle_unit_allocation(production_cycle, name='Bac 1')
         url = reverse('aquaculture:feeding-plan-generate')
         data = {
             'cycle_id': str(production_cycle.id),
+            'cycle_unit_allocation_id': str(allocation.id),
             'weeks_ahead': 2
         }
         
@@ -1232,28 +1236,239 @@ class TestFeedingPlanViewSet:
         
         # Vérifier structure plan
         plan = response.data[0]
+        assert str(plan['cycle_unit_allocation']) == str(allocation.id)
+        assert plan['production_unit_name'] == 'Bac 1'
+        assert plan['scope_label'] == "Plan d'alimentation de Bac 1"
         assert 'week_number' in plan
         assert 'daily_feed_amount' in plan
         assert 'meals_per_day' in plan
         assert 'recommended_feed_type' in plan
 
-    def test_generate_plan_cycle_not_found(self, auth_client):
-        """Test erreur cycle inexistant pour génération plan."""
-        import uuid
-        
+    def test_generate_feeding_plan_recomputes_biomass_when_allocation_value_is_zero(
+        self,
+        auth_client,
+        production_cycle,
+    ):
+        """Test recalcul biomasse effective si l'allocation est à zéro."""
+        NutritionalGuide.objects.create(
+            species='tilapia',
+            growth_stage='alevin',
+            min_weight=Decimal('1.00'),
+            max_weight=Decimal('10.00'),
+            feeding_rate_percentage=Decimal('8.00'),
+            protein_requirement=45,
+            meals_per_day=4,
+            feed_size_mm=Decimal('2.0'),
+            recommended_products=['DIBAQ Tilapia 2mm'],
+            expected_fcr=Decimal('1.05'),
+            source='DIBAQ',
+            temperature_rates={'26': 8.0},
+            reference_temperature_c=26,
+        )
+        production_cycle.current_average_weight = Decimal('5.00')
+        production_cycle.current_biomass = Decimal('0.00')
+        production_cycle.save(update_fields=['current_average_weight', 'current_biomass'])
+
+        allocation = create_cycle_unit_allocation(production_cycle, name='Bac 1')
+        allocation.current_biomass_kg = Decimal('0.00')
+        allocation.save(update_fields=['current_biomass_kg'])
+        CycleLog.objects.create(
+            cycle=production_cycle,
+            cycle_unit_allocation=allocation,
+            log_date=date.today(),
+            average_weight=Decimal('5.00'),
+            water_temperature=Decimal('26.0'),
+        )
+
+        other_allocation = create_cycle_unit_allocation(production_cycle, name='Bac 2')
+        CycleLog.objects.create(
+            cycle=production_cycle,
+            cycle_unit_allocation=other_allocation,
+            log_date=date.today(),
+            average_weight=Decimal('25.00'),
+            water_temperature=Decimal('28.0'),
+        )
+
         url = reverse('aquaculture:feeding-plan-generate')
         data = {
-            'cycle_id': str(uuid.uuid4()),  # UUID inexistant
+            'cycle_id': str(production_cycle.id),
+            'cycle_unit_allocation_id': str(allocation.id),
+            'weeks_ahead': 1,
+        }
+
+        response = auth_client.post(url, data, format='json')
+
+        assert response.status_code == status.HTTP_201_CREATED
+        plan = response.data[0]
+        assert Decimal(str(plan['average_weight'])) == Decimal('5.00')
+        assert Decimal(str(plan['biomass'])) == Decimal('4.50')
+        assert Decimal(str(plan['daily_feed_amount'])) > 0
+        assert Decimal(str(plan['feed_per_meal'])) > 0
+
+    def test_generate_plan_requires_allocation_context(self, auth_client):
+        """Test erreur claire si la génération est appelée sans allocation."""
+        import uuid
+
+        url = reverse('aquaculture:feeding-plan-generate')
+        data = {
+            'cycle_id': str(uuid.uuid4()),
+            'weeks_ahead': 1,
+        }
+
+        response = auth_client.post(url, data, format='json')
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert 'cycle_unit_allocation_id' in response.data
+
+    def test_generate_plan_rejects_foreign_allocation(self, auth_client, farm_profile):
+        """Test rejet d'une allocation appartenant à une autre ferme/utilisateur."""
+        foreign_farm_profile = FarmProfileFactory()
+        other_cycle = ProductionCycle.objects.create(
+            farm_profile=foreign_farm_profile,
+            cycle_name='Cycle extérieur',
+            species='tilapia',
+            pond_identifier='Bassin extérieur',
+            pond_surface_m2=Decimal('100.00'),
+            start_date=date.today(),
+            initial_count=1000,
+            initial_average_weight=Decimal('10.00'),
+            initial_biomass=Decimal('10.00'),
+            current_count=1000,
+            current_average_weight=Decimal('10.00'),
+            current_biomass=Decimal('10.00'),
+        )
+        allocation = create_cycle_unit_allocation(other_cycle, name='Bac étranger')
+
+        url = reverse('aquaculture:feeding-plan-generate')
+        data = {
+            'cycle_unit_allocation_id': str(allocation.id),
             'weeks_ahead': 1
         }
         
         response = auth_client.post(url, data, format='json')
         
-        assert response.status_code == status.HTTP_404_NOT_FOUND
-        assert 'detail' in response.data
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert 'detail' in response.data or 'cycle_unit_allocation_id' in response.data
+
+    def test_list_feeding_plans_filters_by_allocation(self, auth_client, production_cycle):
+        """Test filtrage de la liste par allocation."""
+        allocation_a = create_cycle_unit_allocation(production_cycle, name='Bac A')
+        allocation_b = create_cycle_unit_allocation(production_cycle, name='Bac B')
+
+        FeedingPlan.objects.create(
+            cycle=production_cycle,
+            cycle_unit_allocation=allocation_a,
+            week_number=1,
+            estimated_fish_count=900,
+            average_weight=Decimal('20.00'),
+            biomass=Decimal('18.00'),
+            daily_feed_amount=Decimal('1.20'),
+            feeding_rate=Decimal('4.50'),
+            meals_per_day=2,
+            feed_per_meal=Decimal('0.60'),
+            recommended_feed_type='Feed A',
+            feed_size_mm=Decimal('2.0'),
+            protein_percentage=40,
+            start_date=date.today(),
+            end_date=date.today() + timedelta(days=6),
+            temperature_used_c=Decimal('26.0'),
+            used_default_temperature=True,
+            data_source='DIBAQ',
+        )
+        FeedingPlan.objects.create(
+            cycle=production_cycle,
+            cycle_unit_allocation=allocation_b,
+            week_number=1,
+            estimated_fish_count=850,
+            average_weight=Decimal('18.00'),
+            biomass=Decimal('15.30'),
+            daily_feed_amount=Decimal('1.00'),
+            feeding_rate=Decimal('4.00'),
+            meals_per_day=2,
+            feed_per_meal=Decimal('0.50'),
+            recommended_feed_type='Feed B',
+            feed_size_mm=Decimal('2.0'),
+            protein_percentage=40,
+            start_date=date.today(),
+            end_date=date.today() + timedelta(days=6),
+            temperature_used_c=Decimal('26.0'),
+            used_default_temperature=True,
+            data_source='DIBAQ',
+        )
+
+        url = reverse('aquaculture:feeding-plan-list')
+        response = auth_client.get(url, {'cycle_unit_allocation': str(allocation_a.id)})
+
+        assert response.status_code == status.HTTP_200_OK
+        assert len(response.data['results']) == 1
+        assert str(response.data['results'][0]['cycle_unit_allocation']) == str(allocation_a.id)
+
+    def test_list_feeding_plans_current_week_only_filters_future_plans(
+        self,
+        auth_client,
+        production_cycle,
+    ):
+        """Test filtrage semaine courante pour une allocation."""
+        allocation = create_cycle_unit_allocation(production_cycle, name='Bac courant')
+
+        FeedingPlan.objects.create(
+            cycle=production_cycle,
+            cycle_unit_allocation=allocation,
+            week_number=1,
+            estimated_fish_count=900,
+            average_weight=Decimal('20.00'),
+            biomass=Decimal('18.00'),
+            daily_feed_amount=Decimal('1.20'),
+            feeding_rate=Decimal('4.50'),
+            meals_per_day=2,
+            feed_per_meal=Decimal('0.60'),
+            recommended_feed_type='Feed Current',
+            feed_size_mm=Decimal('2.0'),
+            protein_percentage=40,
+            start_date=date.today(),
+            end_date=date.today() + timedelta(days=6),
+            temperature_used_c=Decimal('26.0'),
+            used_default_temperature=True,
+            data_source='fallback_interne',
+        )
+        FeedingPlan.objects.create(
+            cycle=production_cycle,
+            cycle_unit_allocation=allocation,
+            week_number=2,
+            estimated_fish_count=860,
+            average_weight=Decimal('24.00'),
+            biomass=Decimal('20.64'),
+            daily_feed_amount=Decimal('1.30'),
+            feeding_rate=Decimal('4.40'),
+            meals_per_day=2,
+            feed_per_meal=Decimal('0.65'),
+            recommended_feed_type='Feed Future',
+            feed_size_mm=Decimal('2.0'),
+            protein_percentage=40,
+            start_date=date.today() + timedelta(days=7),
+            end_date=date.today() + timedelta(days=13),
+            temperature_used_c=Decimal('26.0'),
+            used_default_temperature=True,
+            data_source='fallback_interne',
+        )
+
+        url = reverse('aquaculture:feeding-plan-list')
+        response = auth_client.get(
+            url,
+            {
+                'cycle_unit_allocation': str(allocation.id),
+                'current_week_only': 'true',
+            },
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert len(response.data['results']) == 1
+        assert response.data['results'][0]['week_number'] == 1
+        assert str(response.data['results'][0]['cycle_unit_allocation']) == str(allocation.id)
 
     def test_notification_creation_on_plan_generation(self, auth_client, production_cycle):
         """Test création notifications lors génération plan."""
+        allocation = create_cycle_unit_allocation(production_cycle, name='Bac 1')
         # Compter notif avant
         notif_count_before = Notification.objects.filter(
             user=production_cycle.farm_profile.user,
@@ -1262,7 +1477,7 @@ class TestFeedingPlanViewSet:
 
         url = reverse('aquaculture:feeding-plan-generate')
         data = {
-            'cycle_id': str(production_cycle.id),
+            'cycle_unit_allocation_id': str(allocation.id),
             'weeks_ahead': 1
         }
 

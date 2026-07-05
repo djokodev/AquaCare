@@ -14,6 +14,13 @@ describe('features/main/components/QuickActionsPreview', () => {
     navigate: jest.fn(),
   } as any;
 
+  const productionUnitContext = {
+    cycleId: 'cycle-1',
+    cycleUnitAllocationId: 'allocation-1',
+    productionUnitId: 'unit-1',
+    productionUnitName: 'Bac 1',
+  };
+
   const incompleteProductionUnitContext = {
     cycleId: 'cycle-1',
     cycleUnitAllocationId: '',
@@ -37,5 +44,20 @@ describe('features/main/components/QuickActionsPreview', () => {
     expect(queryByText('sanitaryLog')).toBeNull();
     expect(queryByText('productionUnitLogHistoryAction')).toBeNull();
     expect(getByText('viewAllActions')).toBeTruthy();
+  });
+
+  it('affiche Plan d alimentation en mode unite', () => {
+    const { getByText } = render(
+      <QuickActionsPreview
+        onOpenSheet={jest.fn()}
+        hasActiveCycles
+        unreadCount={0}
+        navigation={navigation}
+        scope="unit"
+        productionUnitContext={productionUnitContext}
+      />
+    );
+
+    expect(getByText('feedingPlan')).toBeTruthy();
   });
 });

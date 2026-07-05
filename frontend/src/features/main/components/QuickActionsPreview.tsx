@@ -72,7 +72,7 @@ const hasValidProductionUnitContext = (
  * Affiche un aperçu replié avec 3 actions suggérées intelligemment :
  * - Si cycles actifs → prioriser "Saisie du jour"
  * - Si aucun cycle → prioriser "Nouvel élevage"
- * - Si notifications non lues → ajouter "Notifications", sinon "Plan d'alimentation"
+ * - Si notifications non lues → ajouter "Notifications", sinon "Rapports"
  *
  * Affiche également un bouton "Voir toutes les actions" qui ouvre le Bottom Sheet.
  *
@@ -124,10 +124,10 @@ export default function QuickActionsPreview({
           params: productionUnitContext,
         },
         {
-          icon: 'time-outline',
-          color: AQUACARE_COLORS.GREEN_DARK,
-          label: t('productionUnitLogHistoryAction'),
-          route: 'DailyLogHistory',
+          icon: 'restaurant-outline',
+          color: AQUACARE_COLORS.INFO,
+          label: t('feedingPlan'),
+          route: 'FeedingPlan',
           params: productionUnitContext,
         },
       ];
@@ -162,7 +162,7 @@ export default function QuickActionsPreview({
       route: 'ProductCatalog',
     });
 
-    // Suggestion 3 : Notifications si non lues, sinon plan d'alimentation
+    // Suggestion 3 : Notifications si non lues, sinon rapports
     if (unreadCount > 0) {
       actions.push({
         icon: 'notifications-outline',
@@ -172,10 +172,11 @@ export default function QuickActionsPreview({
       });
     } else {
       actions.push({
-        icon: 'restaurant-outline',
-        color: AQUACARE_COLORS.INFO,
-        label: t('feedingPlan'),
-        route: 'FeedingPlan',
+        icon: 'document-text-outline',
+        color: AQUACARE_COLORS.BLUE,
+        label: t('reports'),
+        route: 'Reports',
+        params: { scope: 'cycle' },
       });
     }
 

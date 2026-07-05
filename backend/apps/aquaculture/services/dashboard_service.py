@@ -7,7 +7,6 @@ from datetime import date, timedelta
 from typing import Any
 
 from django.core.cache import cache
-from django.utils import timezone
 from notifications.models import Notification
 
 from ..domain.calculators import AquacultureCalculator

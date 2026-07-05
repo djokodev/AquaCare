@@ -99,7 +99,14 @@ export type RootStackParamList = {
         cycleName?: string;
       }
     | undefined;
-  FeedingPlan: undefined;
+  FeedingPlan:
+    | {
+        cycleId: string;
+        cycleUnitAllocationId: string;
+        productionUnitId: string;
+        productionUnitName?: string;
+      }
+    | undefined;
   Statistics: undefined;
   Reports:
     | {
