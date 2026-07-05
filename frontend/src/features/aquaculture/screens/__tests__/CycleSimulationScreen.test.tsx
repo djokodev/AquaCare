@@ -474,6 +474,31 @@ describe('features/aquaculture/screens/CycleSimulationScreen', () => {
     });
   });
 
+  it('n affiche pas la capacite de recolte estimee dans le detail technique', async () => {
+    mockDispatch.mockImplementation((action: unknown) => {
+      if (typeof action === 'function') {
+        return {
+          type: runCycleSimulation.fulfilled.type,
+          payload: currentResult,
+        };
+      }
+
+      return action;
+    });
+
+    const route = buildRoute();
+    const { getByText, queryByText } = render(
+      <CycleSimulationScreen navigation={navigation} route={route} />
+    );
+
+    await waitFor(() => {
+      expect(getByText('simulationCycleTechnicalTitle')).toBeTruthy();
+      expect(getByText('simulationSpecies')).toBeTruthy();
+      expect(getByText('simulationFeedBags')).toBeTruthy();
+      expect(queryByText('simulationHarvestCapacityHint')).toBeNull();
+    });
+  });
+
   it('affiche un resume de repartition par unite quand les allocations sont presentes', async () => {
     mockDispatch.mockImplementation((action: unknown) => {
       if (typeof action === 'function') {

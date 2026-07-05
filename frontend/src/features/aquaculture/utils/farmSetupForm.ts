@@ -1,8 +1,6 @@
 import {
   DEFAULT_EXPECTED_SURVIVAL_RATE_PCT,
   TECHNICAL_PAUSE_BETWEEN_CYCLES_DAYS,
-  HARVEST_DENSITY_POND_KG_PER_M2,
-  HARVEST_DENSITY_TANK_KG_PER_M3,
   STOCKING_DENSITY_POND_PER_M2,
   STOCKING_DENSITY_TANK_PER_M3,
 } from '@/constants/aquaculture';
@@ -327,19 +325,6 @@ export const getFingerlingsSuggestionPreview = (
   return {
     value: Math.round(maxAllowed),
   };
-};
-
-export const getHarvestCapacityPerCycle = (form: FarmSetupFormState): number | null => {
-  const unitCount = toFloat(form.unitCount);
-  if (!unitCount || !form.infraType) return null;
-
-  if (form.infraType === 'etang') {
-    const surface = toFloat(form.unitSurface);
-    return unitCount * surface * HARVEST_DENSITY_POND_KG_PER_M2;
-  }
-
-  const volume = toFloat(form.unitVolume);
-  return unitCount * volume * HARVEST_DENSITY_TANK_KG_PER_M3;
 };
 
 export const validateFarmSetupForm = (

@@ -35,7 +35,6 @@ import { setFarmProfile } from '@/features/auth/store/authSlice';
 import type { CycleSimulationResult } from '@/features/aquaculture/types/farmSetup';
 import {
   buildCycleSimulationInput,
-  getHarvestCapacityPerCycle,
   getSpeciesHarvestWeightDefault,
   getStockingDensityPreview,
   getTotalCapacityPreview,
@@ -147,7 +146,6 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
 
   const legacyStockingDensityCheck = useMemo(() => getStockingDensityPreview(formData), [formData]);
   const totalCapacity = useMemo(() => getTotalCapacityPreview(formData), [formData]);
-  const harvestCapacityPerCycle = useMemo(() => getHarvestCapacityPerCycle(formData), [formData]);
   const harvestWeightDefault = getSpeciesHarvestWeightDefault(formData.species);
   const speciesLabel = t(
     formData.species === 'clarias' ? 'speciesClarias' : 'speciesTilapia'
@@ -373,13 +371,6 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
           label={t('simulationFeedBags')}
           value={t('myFeedSacks', { count: currentResult.feed_bags_per_cycle })}
         />
-        {harvestCapacityPerCycle !== null && (
-          <Text style={styles.hintText}>
-            {t('simulationHarvestCapacityHint', {
-              kg: formatKgValue(harvestCapacityPerCycle),
-            })}
-          </Text>
-        )}
       </View>
 
       {formData.productionUnitAllocations?.length ? (

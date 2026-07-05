@@ -7,9 +7,7 @@
 
 // Densités terrain — validées DT AquaCare
 export const STOCKING_DENSITY_TANK_PER_M3 = 300;    // alevins/m³ au départ (bacs/cages) — maximum
-export const HARVEST_DENSITY_TANK_KG_PER_M3 = 150;  // kg/m³ à la récolte (bacs/cages)
 export const STOCKING_DENSITY_POND_PER_M2 = 10;     // alevins/m² au départ (étangs) — maximum
-export const HARVEST_DENSITY_POND_KG_PER_M2 = 10;   // kg/m² à la récolte (étangs)
 
 // Defaults métier cycle-first alignés avec le backend
 export const DEFAULT_EXPECTED_SURVIVAL_RATE_PCT = 95;
