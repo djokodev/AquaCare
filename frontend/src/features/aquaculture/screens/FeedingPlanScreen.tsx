@@ -470,7 +470,9 @@ export default function FeedingPlanScreen({ navigation, route }: FeedingPlanScre
               const recommendedFeed = formatMetricText(plan.recommended_feed_type || plan.recommended_feed);
               const temperatureValue = plan.temperature_used_c === null || plan.temperature_used_c === undefined
                 ? '-'
-                : `${formatNumber(plan.temperature_used_c, undefined, 1)}°C`;
+                : `${formatNumber(plan.temperature_used_c, undefined, 1)}°C${
+                  plan.used_default_temperature ? ` ${t('feedingDefaultTemperatureSuffix')}` : ''
+                }`;
               const proteinValue = plan.protein_percentage === null || plan.protein_percentage === undefined
                 ? '-'
                 : `${formatNumber(plan.protein_percentage, undefined, 0)} %`;
@@ -503,19 +505,9 @@ export default function FeedingPlanScreen({ navigation, route }: FeedingPlanScre
 
                   <View className="gap-4">
                     <StatSection
-                      title={t('feedingPlanUnitSummary')}
-                      items={[
-                        { label: t('estimatedFishCount'), value: formatMetricValue(plan.estimated_fish_count, undefined, 0) },
-                        { label: t('averageWeight'), value: formatMetricValue(plan.average_weight, 'g', 1) },
-                        { label: t('estimatedBiomass'), value: formatMetricValue(plan.biomass, 'kg', 2) },
-                      ]}
-                    />
-
-                    <StatSection
                       title={t('feedingPlanRecommendationSection')}
                       items={[
                         { label: t('dailyRation'), value: formatMetricValue(plan.daily_feed_amount, 'kg/j', 2) },
-                        { label: t('feedingPercentage'), value: formatMetricPercentage(plan.feeding_rate) },
                         {
                           label: t('feedingFrequency'),
                           value: plan.meals_per_day === null || plan.meals_per_day === undefined
@@ -523,22 +515,22 @@ export default function FeedingPlanScreen({ navigation, route }: FeedingPlanScre
                             : `${plan.meals_per_day}x/${t('day')}`,
                         },
                         { label: t('feedPerMeal'), value: formatMetricValue(plan.feed_per_meal, 'kg', 2) },
+                        { label: t('feedingRecommendedRate'), value: formatMetricPercentage(plan.feeding_rate) },
                       ]}
                     />
 
                     <StatSection
                       title={t('feedingPlanFeedSection')}
                       items={[
-                        { label: t('feedingPlanRecommendedFeed'), value: recommendedFeed },
-                        { label: t('feedSizeMm'), value: formatMetricValue(plan.feed_size_mm, 'mm', 1) },
-                        { label: t('protein'), value: proteinValue },
+                        { label: t('feedingFeedLabel'), value: recommendedFeed },
+                        { label: t('feedingProteinRate'), value: proteinValue },
                       ]}
                     />
 
                     <StatSection
                       title={t('feedingPlanDataSection')}
                       items={[
-                        { label: t('feedingPlanTemperatureLabel'), value: temperatureValue },
+                        { label: t('feedingWaterTemperature'), value: temperatureValue },
                         { label: t('feedingPlanReferenceUsed'), value: referenceValue },
                       ]}
                     />

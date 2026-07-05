@@ -134,14 +134,19 @@ describe('features/aquaculture/screens/FeedingPlanScreen', () => {
       expect(getByText('feedingPlanUnitTitle')).toBeTruthy();
       expect(getByText('feedingPlans')).toBeTruthy();
       expect(getByText('feedingPlanCurrentWeekLabel · week 1')).toBeTruthy();
-      expect(getByText('feedingPlanUnitSummary')).toBeTruthy();
-      expect(getByText('estimatedFishCount')).toBeTruthy();
+      expect(getByText('feedingRecommendedRate')).toBeTruthy();
       expect(getByText('feedingPlanRecommendationSection')).toBeTruthy();
+      expect(getByText('feedingFeedLabel')).toBeTruthy();
+      expect(getByText('feedingProteinRate')).toBeTruthy();
       expect(getByText('feedingPlanFeedSection')).toBeTruthy();
       expect(getByText('feedingPlanDataSection')).toBeTruthy();
+      expect(getByText('feedingWaterTemperature')).toBeTruthy();
       expect(getByText('feedingPlanReferenceUsed')).toBeTruthy();
       expect(getByText('feedingPlanReferenceDibaq')).toBeTruthy();
       expect(queryByText('feedingPlanCurrentWeekLabel · week 2')).toBeNull();
+      expect(queryByText('feedingPlanUnitSummary')).toBeNull();
+      expect(queryByText('estimatedFishCount')).toBeNull();
+      expect(queryByText('feedSizeMm')).toBeNull();
     });
 
     await waitFor(() => {
@@ -169,6 +174,21 @@ describe('features/aquaculture/screens/FeedingPlanScreen', () => {
       expect(getByText('feedingPlanReferenceUsed')).toBeTruthy();
       expect(getByText('feedingPlanReferenceAquacareEstimate')).toBeTruthy();
       expect(queryByText('fallback_interne')).toBeNull();
+    });
+  });
+
+  it('ajoute un suffixe quand la temperature est une valeur par defaut', async () => {
+    mockService.getFeedingPlansForAllocation.mockResolvedValueOnce([
+      {
+        ...feedingPlan,
+        used_default_temperature: true,
+      },
+    ]);
+
+    const { getByText } = render(<FeedingPlanScreen navigation={navigation} route={route} />);
+
+    await waitFor(() => {
+      expect(getByText('28.0°C feedingDefaultTemperatureSuffix')).toBeTruthy();
     });
   });
 
