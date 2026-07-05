@@ -423,7 +423,7 @@ export default function SanitaryLogScreen({ navigation, route }: SanitaryLogScre
             </Text>
             <TextInput
               className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark h-20"
-              style={[sharedTextInputStyles.multiline, { height: 80 }]}
+              style={sharedTextInputStyles.multilineCompact}
               value={formData.symptoms}
               onChangeText={(value) => setFormData((prev) => ({ ...prev, symptoms: value }))}
               placeholder={t(selectedEventLayout.firstFieldPlaceholderKey)}
@@ -452,7 +452,7 @@ export default function SanitaryLogScreen({ navigation, route }: SanitaryLogScre
                 <Text className="text-sm font-medium text-gray-dark mb-2">{t('treatmentApplied')}</Text>
                 <TextInput
                   className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark h-20"
-              style={[sharedTextInputStyles.multiline, { height: 80 }]}
+                  style={sharedTextInputStyles.multilineCompact}
                   value={formData.treatment_applied}
                   onChangeText={(value) => setFormData((prev) => ({ ...prev, treatment_applied: value }))}
                   placeholder={t('treatmentAppliedPlaceholder')}
@@ -503,7 +503,7 @@ export default function SanitaryLogScreen({ navigation, route }: SanitaryLogScre
             <Text className="text-sm font-medium text-gray-dark mb-2">{t('additionalComments')}</Text>
             <TextInput
               className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark h-20"
-              style={[sharedTextInputStyles.multiline, { height: 80 }]}
+              style={sharedTextInputStyles.multilineCompact}
               value={formData.comments}
               onChangeText={(value) => setFormData((prev) => ({ ...prev, comments: value }))}
               placeholder={t('commentsPlaceholder')}

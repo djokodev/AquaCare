@@ -369,8 +369,8 @@ function InfoRow({
       </View>
       {editable ? (
         <TextInput
-          className="border border-gray-300 rounded-md px-2 h-10 text-sm text-right text-gray-dark flex-1"
-          style={[sharedTextInputStyles.compact, { flex: 1 }]}
+          className="border border-gray-300 rounded-md px-2 text-right text-gray-dark flex-1"
+          style={[sharedTextInputStyles.compactSmall, { flex: 1 }]}
           value={inputValue}
           onChangeText={onChangeText}
           placeholder={placeholder}

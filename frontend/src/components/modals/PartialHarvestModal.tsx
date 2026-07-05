@@ -313,7 +313,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.CREAM,
   },
   inputMultiline: {
-    ...sharedTextInputStyles.multiline,
+    ...sharedTextInputStyles.multilineCompact,
     height: 80,
   },
   recap: {

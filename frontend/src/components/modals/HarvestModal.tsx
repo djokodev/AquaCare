@@ -384,7 +384,7 @@ const styles = StyleSheet.create({
     backgroundColor: AQUACARE_COLORS.WHITE,
   },
   notesInput: {
-    ...sharedTextInputStyles.multiline,
+    ...sharedTextInputStyles.multilineCompact,
     height: 80,
   },
   calculatedField: {
