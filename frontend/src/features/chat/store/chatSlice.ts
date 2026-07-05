@@ -17,6 +17,7 @@ import type {
 } from '../types/chat';
 import * as chatApi from '../services/api/chatApi';
 import * as offlineChatService from '../services/offline/offlineChatService';
+import { sanitizeUserFacingErrorMessage } from '@/utils/errorParser';
 
 /**
  * Initial state
@@ -54,7 +55,8 @@ const ERROR_KEYS = {
 function getApiErrorMessage(error: any, fallbackKey: string): string {
   const apiError = error?.response?.data?.error;
   if (typeof apiError === 'string' && apiError.trim().length > 0) {
-    return apiError;
+    const sanitized = sanitizeUserFacingErrorMessage(apiError);
+    return sanitized === 'UNKNOWN_ERROR' ? fallbackKey : sanitized;
   }
   return fallbackKey;
 }

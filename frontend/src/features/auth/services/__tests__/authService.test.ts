@@ -88,6 +88,20 @@ describe('services/authService', () => {
 
       await expect(authService.login(mockCredentials)).rejects.toThrow();
     });
+
+    it('nettoie les suffixes techniques dans le message de connexion', async () => {
+      const errorResponse = {
+        response: {
+          status: 401,
+          data: { detail: "Aucun compte n'est associé à ce nom de connexion. 400 invalid" },
+        },
+      };
+      mockApiService.post.mockRejectedValueOnce(errorResponse as any);
+
+      await expect(authService.login(mockCredentials)).rejects.toMatchObject({
+        message: "Aucun compte n'est associé à ce nom de connexion.",
+      });
+    });
   });
 
   describe('register', () => {
@@ -117,6 +131,35 @@ describe('services/authService', () => {
           },
         } as Partial<AuthRequestError>
       );
+    });
+
+    it('retourne uniquement les erreurs de champ quand le backend ne fournit pas de message global', async () => {
+      const errorResponse = {
+        response: {
+          status: 400,
+          data: { phone_number: ['Ce numéro est déjà utilisé.'] },
+        },
+      };
+      mockApiService.post.mockRejectedValueOnce(errorResponse as any);
+
+      await expect(authService.register(mockRegisterData)).rejects.toMatchObject({
+        message: '',
+        fieldErrors: {
+          phone_number: 'Ce numéro est déjà utilisé.',
+        },
+      });
+    });
+
+    it('retourne une erreur générique si le backend envoie seulement un code technique', async () => {
+      const errorResponse = {
+        response: {
+          status: 400,
+          data: { code: 'invalid', status_code: 400 },
+        },
+      };
+      mockApiService.post.mockRejectedValueOnce(errorResponse as any);
+
+      await expect(authService.register(mockRegisterData)).rejects.toHaveProperty('message', '');
     });
   });
 

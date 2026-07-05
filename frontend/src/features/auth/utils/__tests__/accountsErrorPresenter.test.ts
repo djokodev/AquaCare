@@ -24,6 +24,12 @@ describe('getAccountErrorMessage', () => {
     expect(getAccountErrorMessage('HTTP_502', t)).toBe('Erreur générique.');
   });
 
+  it('nettoie les suffixes techniques sans perdre le message métier', () => {
+    expect(
+      getAccountErrorMessage("Aucun compte n'est associé à ce nom de connexion. 400 invalid", t)
+    ).toBe("Aucun compte n'est associé à ce nom de connexion.");
+  });
+
   it('normalise les erreurs reseau et timeout', () => {
     expect(getAccountErrorMessage('Network Error', t)).toBe('Connexion impossible.');
     expect(getAccountErrorMessage('timeout of 10000ms exceeded', t)).toBe('Connexion impossible.');

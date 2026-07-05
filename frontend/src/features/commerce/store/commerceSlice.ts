@@ -9,41 +9,49 @@ import {
   CreateOrderPayload,
 } from '@/types/commerce';
 import commerceApi from '@/features/commerce/services/commerceApi';
+import { sanitizeUserFacingErrorMessage } from '@/utils/errorParser';
 
 const extractApiErrorMessage = (error: unknown, fallback: string): string => {
   const err = error as any;
   const data = err?.response?.data;
 
   if (typeof data === 'string' && data.trim()) {
-    return data;
+    const sanitized = sanitizeUserFacingErrorMessage(data);
+    return sanitized === 'UNKNOWN_ERROR' ? fallback : sanitized;
   }
 
   if (data && typeof data === 'object') {
     if (typeof data.message === 'string' && data.message.trim()) {
-      return data.message;
+      const sanitized = sanitizeUserFacingErrorMessage(data.message);
+      return sanitized === 'UNKNOWN_ERROR' ? fallback : sanitized;
     }
     if (typeof data.error === 'string' && data.error.trim()) {
-      return data.error;
+      const sanitized = sanitizeUserFacingErrorMessage(data.error);
+      return sanitized === 'UNKNOWN_ERROR' ? fallback : sanitized;
     }
     if (typeof data.detail === 'string' && data.detail.trim()) {
-      return data.detail;
+      const sanitized = sanitizeUserFacingErrorMessage(data.detail);
+      return sanitized === 'UNKNOWN_ERROR' ? fallback : sanitized;
     }
     if (Array.isArray(data.non_field_errors) && data.non_field_errors.length > 0) {
-      return String(data.non_field_errors[0]);
+      const sanitized = sanitizeUserFacingErrorMessage(String(data.non_field_errors[0]));
+      return sanitized === 'UNKNOWN_ERROR' ? fallback : sanitized;
     }
 
     for (const value of Object.values(data)) {
       if (Array.isArray(value) && value.length > 0) {
         const first = value[0];
         if (typeof first === 'string' && first.trim()) {
-          return first;
+          const sanitized = sanitizeUserFacingErrorMessage(first);
+          return sanitized === 'UNKNOWN_ERROR' ? fallback : sanitized;
         }
       }
     }
   }
 
   if (typeof err?.message === 'string' && err.message.trim()) {
-    return err.message;
+    const sanitized = sanitizeUserFacingErrorMessage(err.message);
+    return sanitized === 'UNKNOWN_ERROR' ? fallback : sanitized;
   }
 
   return fallback;

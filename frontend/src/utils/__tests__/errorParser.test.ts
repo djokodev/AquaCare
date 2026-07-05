@@ -5,6 +5,7 @@ import {
   hasFieldError,
   getFieldErrorMessage,
   getApiErrorMessage,
+  sanitizeUserFacingErrorMessage,
 } from '../errorParser';
 import logger from '../logger';
 
@@ -84,6 +85,50 @@ describe('utils/errorParser', () => {
     expect(getApiErrorMessage({ response: { status: 400, data: { non_field_errors: ['Valeur incohérente'] } } })).toBe(
       'Erreur de validation des données\n\n• Erreur générale : Valeur incohérente'
     );
+  });
+
+  it('sanitizeUserFacingErrorMessage supprime les suffixes techniques visibles', () => {
+    expect(
+      sanitizeUserFacingErrorMessage("Aucun compte n'est associé à ce nom de connexion. 400 invalid")
+    ).toBe("Aucun compte n'est associé à ce nom de connexion.");
+    expect(sanitizeUserFacingErrorMessage('Identifiants invalides. 401 invalid')).toBe('Identifiants invalides.');
+    expect(sanitizeUserFacingErrorMessage('HTTP_400')).toBe('UNKNOWN_ERROR');
+    expect(sanitizeUserFacingErrorMessage('AUTH_NETWORK_ERROR')).toBe('AUTH_NETWORK_ERROR');
+    expect(sanitizeUserFacingErrorMessage('Erreur. HTTP_400')).toBe('Erreur.');
+    expect(sanitizeUserFacingErrorMessage('status_code: 400')).toBe('UNKNOWN_ERROR');
+    expect(sanitizeUserFacingErrorMessage('code: invalid')).toBe('UNKNOWN_ERROR');
+  });
+
+  it('sanitizeUserFacingErrorMessage preserve les messages métiers valides', () => {
+    expect(sanitizeUserFacingErrorMessage('Veuillez saisir le code')).toBe('Veuillez saisir le code');
+    expect(sanitizeUserFacingErrorMessage('Le code de confirmation est invalide')).toBe(
+      'Le code de confirmation est invalide'
+    );
+    expect(sanitizeUserFacingErrorMessage('La quantité minimale est 400')).toBe('La quantité minimale est 400');
+  });
+
+  it('getApiErrorMessage masque les erreurs purement techniques', () => {
+    expect(getApiErrorMessage('HTTP_400', 'Message générique')).toBe('Message générique');
+    expect(
+      getApiErrorMessage({
+        response: {
+          status: 400,
+          data: { detail: "Aucun compte n'est associé à ce nom de connexion. 400 invalid" },
+        },
+      })
+    ).toBe("Aucun compte n'est associé à ce nom de connexion.");
+  });
+
+  it('parseApiError garde un message métier 400 sans suffixe technique', () => {
+    const parsed = parseApiError({
+      response: {
+        status: 400,
+        data: { detail: "Aucun compte n'est associé à ce nom de connexion. 400 invalid" },
+      },
+    });
+
+    expect(parsed.message).toBe("Aucun compte n'est associé à ce nom de connexion.");
+    expect(parsed.details).toEqual([]);
   });
 
   it('parseApiError couvre les statuts 401/403/404/500+/default', () => {

@@ -27,6 +27,7 @@ import { RootStackParamList } from '@/navigation/MainNavigator';
 import { AppDispatch, RootState } from '@/store/store';
 import { CycleStore } from '@/types/aquaculture';
 import { formatCurrency, formatNumber } from '@/utils';
+import { sanitizeUserFacingErrorMessage } from '@/utils/errorParser';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'Store'>;
 
@@ -42,19 +43,29 @@ interface AxiosErrorShape {
 }
 
 const extractErrorMessage = (error: unknown, fallback: string): string => {
+  if (typeof error === 'string') {
+    const sanitized = sanitizeUserFacingErrorMessage(error);
+    return sanitized === 'UNKNOWN_ERROR' || sanitized.startsWith('AUTH_') ? fallback : sanitized;
+  }
   const candidate = error as AxiosErrorShape;
   const data = candidate.response?.data;
+  const shouldUseFallback = (message: string): boolean =>
+    message === 'UNKNOWN_ERROR' || message.startsWith('AUTH_');
   if (typeof data?.detail === 'string') {
-    return data.detail;
+    const sanitized = sanitizeUserFacingErrorMessage(data.detail);
+    return shouldUseFallback(sanitized) ? fallback : sanitized;
   }
   if (typeof data?.message === 'string') {
-    return data.message;
+    const sanitized = sanitizeUserFacingErrorMessage(data.message);
+    return shouldUseFallback(sanitized) ? fallback : sanitized;
   }
   if (typeof data?.error === 'string') {
-    return data.error;
+    const sanitized = sanitizeUserFacingErrorMessage(data.error);
+    return shouldUseFallback(sanitized) ? fallback : sanitized;
   }
   if (typeof candidate.message === 'string') {
-    return candidate.message;
+    const sanitized = sanitizeUserFacingErrorMessage(candidate.message);
+    return shouldUseFallback(sanitized) ? fallback : sanitized;
   }
   return fallback;
 };

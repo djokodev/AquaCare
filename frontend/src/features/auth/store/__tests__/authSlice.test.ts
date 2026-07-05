@@ -121,6 +121,19 @@ describe('store/slices/authSlice', () => {
       expect(newState.error).toBe('Identifiants invalides');
       expect(newState.fieldErrors).toEqual({});
     });
+
+    it('nettoie les suffixes techniques dans le message global', () => {
+      const action = {
+        type: loginUser.rejected.type,
+        payload: {
+          message: "Aucun compte n'est associé à ce nom de connexion. 400 invalid",
+          fieldErrors: {},
+        },
+      };
+      const newState = authSliceReducer(initialState, action);
+
+      expect(newState.error).toBe("Aucun compte n'est associé à ce nom de connexion.");
+    });
   });
 
   describe('registerUser thunk', () => {
@@ -164,6 +177,42 @@ describe('store/slices/authSlice', () => {
       expect(newState.error).toBeNull();
       expect(newState.fieldErrors).toEqual({
         phone_number: 'Numéro déjà utilisé',
+      });
+    });
+
+    it('nettoie les suffixes techniques des erreurs de champ', () => {
+      const action = {
+        type: registerUser.rejected.type,
+        payload: {
+          message: null,
+          fieldErrors: {
+            phone_number: 'Ce numéro existe déjà. 400 invalid',
+          },
+        },
+      };
+      const newState = authSliceReducer(initialState, action);
+
+      expect(newState.error).toBeNull();
+      expect(newState.fieldErrors).toEqual({
+        phone_number: 'Ce numéro existe déjà.',
+      });
+    });
+
+    it('ignore UNKNOWN_ERROR quand des erreurs de champ sont déjà présentes', () => {
+      const action = {
+        type: registerUser.rejected.type,
+        payload: {
+          message: 'UNKNOWN_ERROR',
+          fieldErrors: {
+            phone_number: 'Ce numéro est déjà utilisé.',
+          },
+        },
+      };
+      const newState = authSliceReducer(initialState, action);
+
+      expect(newState.error).toBeNull();
+      expect(newState.fieldErrors).toEqual({
+        phone_number: 'Ce numéro est déjà utilisé.',
       });
     });
   });
