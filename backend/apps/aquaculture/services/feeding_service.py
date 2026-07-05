@@ -263,6 +263,11 @@ class FeedingPlanService(BaseService):
 
     @staticmethod
     def _get_allocation_average_weight(allocation: CycleUnitAllocation) -> Decimal:
+        unit_logs_exist = CycleLog.objects.filter(
+            cycle=allocation.cycle,
+            cycle_unit_allocation__isnull=False,
+        ).exists()
+
         latest_log_with_weight = CycleLog.objects.filter(
             cycle=allocation.cycle,
             cycle_unit_allocation=allocation,
@@ -280,6 +285,9 @@ class FeedingPlanService(BaseService):
                     * Decimal('1000')
                 )
                 return estimated_weight.quantize(Decimal('0.01'))
+
+        if unit_logs_exist:
+            return Decimal('0')
 
         cycle_average_weight = getattr(allocation.cycle, 'current_average_weight', None)
         if cycle_average_weight is not None:
@@ -466,6 +474,13 @@ class FeedingPlanService(BaseService):
 
         current_average_weight = FeedingPlanService._get_allocation_average_weight(allocation)
         water_temp_c, used_default_temperature = FeedingPlanService._get_allocation_temperature(allocation)
+        effective_biomass_kg = Decimal(str(allocation.current_biomass_kg or 0))
+        if effective_biomass_kg <= 0 and allocation.current_fish_count and allocation.current_fish_count > 0:
+            if current_average_weight > 0:
+                effective_biomass_kg = AquacultureCalculator.calculate_biomass(
+                    allocation.current_fish_count,
+                    current_average_weight,
+                )
 
         guide = NutritionalGuide.objects.filter(
             species=allocation.cycle.species,
@@ -489,7 +504,7 @@ class FeedingPlanService(BaseService):
             data_source = guide.source
 
         plan_data = AquacultureCalculator.calculate_weekly_feeding_plan(
-            current_biomass_kg=allocation.current_biomass_kg,
+            current_biomass_kg=effective_biomass_kg,
             current_weight_g=current_average_weight,
             current_count=allocation.current_fish_count,
             species=allocation.cycle.species,

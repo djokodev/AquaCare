@@ -871,6 +871,7 @@ export const fr = {
   feedingProteinRate: 'Taux de protéines',
   feedingWaterTemperature: 'Température de l\'eau',
   feedingDefaultTemperatureSuffix: 'par défaut',
+  feedingPlanInsufficientDataWarning: 'Les données de poids ou de biomasse sont insuffisantes pour calculer une ration fiable.',
   feedingPlansLoadError: 'Erreur lors du chargement des donnees du plan d\'alimentation',
   feedingPlansLoadByCycleError: 'Erreur lors du chargement des plans pour ce cycle',
 

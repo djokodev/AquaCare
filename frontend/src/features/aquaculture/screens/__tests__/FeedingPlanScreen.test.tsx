@@ -124,7 +124,7 @@ describe('features/aquaculture/screens/FeedingPlanScreen', () => {
   it('charge les plans d une unite et affiche le titre unitaire', async () => {
     mockService.getFeedingPlansForAllocation.mockResolvedValueOnce([feedingPlan, futureFeedingPlan]);
 
-    const { getByText, queryByText } = render(<FeedingPlanScreen navigation={navigation} route={route} />);
+    const { getByText, queryByText, getByTestId } = render(<FeedingPlanScreen navigation={navigation} route={route} />);
 
     await waitFor(() => {
       expect(navigation.setOptions).toHaveBeenCalledWith({ title: 'feedingPlanUnitTitle' });
@@ -147,6 +147,7 @@ describe('features/aquaculture/screens/FeedingPlanScreen', () => {
       expect(queryByText('feedingPlanUnitSummary')).toBeNull();
       expect(queryByText('estimatedFishCount')).toBeNull();
       expect(queryByText('feedSizeMm')).toBeNull();
+      expect(getByTestId('feeding-plan-card').props.className).not.toContain('border-l-4');
     });
 
     await waitFor(() => {
@@ -189,6 +190,23 @@ describe('features/aquaculture/screens/FeedingPlanScreen', () => {
 
     await waitFor(() => {
       expect(getByText('28.0°C feedingDefaultTemperatureSuffix')).toBeTruthy();
+    });
+  });
+
+  it('affiche un avertissement si la ration calculée reste nulle', async () => {
+    mockService.getFeedingPlansForAllocation.mockResolvedValueOnce([
+      {
+        ...feedingPlan,
+        biomass: 0,
+        daily_feed_amount: 0,
+        feed_per_meal: 0,
+      },
+    ]);
+
+    const { getByText } = render(<FeedingPlanScreen navigation={navigation} route={route} />);
+
+    await waitFor(() => {
+      expect(getByText('feedingPlanInsufficientDataWarning')).toBeTruthy();
     });
   });
 

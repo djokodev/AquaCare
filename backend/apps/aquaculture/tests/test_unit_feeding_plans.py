@@ -27,20 +27,27 @@ def create_allocation(cycle, name: str, current_fish_count: int, current_biomass
     )
 
 
-def create_guide():
+def create_guide(
+    *,
+    min_weight: Decimal = Decimal('10.00'),
+    max_weight: Decimal = Decimal('50.00'),
+    feeding_rate_percentage: Decimal = Decimal('5.30'),
+    meals_per_day: int = 3,
+    temperature_rates: dict[str, float] | None = None,
+):
     return NutritionalGuide.objects.create(
         species='tilapia',
         growth_stage='alevin',
-        min_weight=Decimal('10.00'),
-        max_weight=Decimal('50.00'),
-        feeding_rate_percentage=Decimal('5.30'),
+        min_weight=min_weight,
+        max_weight=max_weight,
+        feeding_rate_percentage=feeding_rate_percentage,
         protein_requirement=45,
-        meals_per_day=3,
+        meals_per_day=meals_per_day,
         feed_size_mm=Decimal('2.0'),
         recommended_products=['DIBAQ Tilapia 2mm'],
         expected_fcr=Decimal('1.05'),
         source='DIBAQ',
-        temperature_rates={'26': 5.3, '28': 5.5},
+        temperature_rates=temperature_rates or {'26': 5.3, '28': 5.5},
         reference_temperature_c=26,
     )
 
@@ -101,6 +108,58 @@ class TestUnitFeedingPlans:
 
         assert plan.temperature_used_c == Decimal('26.0')
         assert plan.used_default_temperature is True
+
+    def test_generate_plan_recomputes_biomass_when_allocation_value_is_zero(self):
+        create_guide(
+            min_weight=Decimal('1.00'),
+            max_weight=Decimal('10.00'),
+            feeding_rate_percentage=Decimal('8.00'),
+            meals_per_day=4,
+            temperature_rates={'26': 8.0},
+        )
+        cycle = ProductionCycleFactory(
+            species='tilapia',
+            current_count=900,
+            current_average_weight=Decimal('5.00'),
+            current_biomass=Decimal('0.00'),
+        )
+        allocation = create_allocation(cycle, 'Bac 1', current_fish_count=900, current_biomass_kg=Decimal('0.00'))
+        CycleLog.objects.create(
+            cycle=cycle,
+            cycle_unit_allocation=allocation,
+            log_date=date.today(),
+            average_weight=Decimal('5.00'),
+            water_temperature=Decimal('26.0'),
+        )
+
+        other_unit = ProductionUnit.objects.create(
+            farm_profile=cycle.farm_profile,
+            name='Bac 2',
+            unit_type='tank',
+            volume_m3=Decimal('3.00'),
+        )
+        other_allocation = CycleUnitAllocation.objects.create(
+            cycle=cycle,
+            production_unit=other_unit,
+            initial_fish_count=500,
+            current_fish_count=500,
+            initial_biomass_kg=Decimal('10.00'),
+            current_biomass_kg=Decimal('10.00'),
+        )
+        CycleLog.objects.create(
+            cycle=cycle,
+            cycle_unit_allocation=other_allocation,
+            log_date=date.today(),
+            average_weight=Decimal('25.00'),
+            water_temperature=Decimal('28.0'),
+        )
+
+        plan = FeedingPlanService.generate_plan_for_allocation_week(allocation, week_number=1)
+
+        assert plan.average_weight == Decimal('5.00')
+        assert plan.biomass == Decimal('4.50')
+        assert plan.daily_feed_amount > 0
+        assert plan.feed_per_meal > 0
 
     def test_generate_plan_is_idempotent_per_allocation_and_week(self):
         create_guide()

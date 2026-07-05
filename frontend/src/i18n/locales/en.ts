@@ -871,6 +871,7 @@
   feedingProteinRate: 'Protein rate',
   feedingWaterTemperature: 'Water temperature',
   feedingDefaultTemperatureSuffix: 'default',
+  feedingPlanInsufficientDataWarning: 'Weight or biomass data is insufficient to calculate a reliable ration.',
   feedingPlansLoadError: 'Error loading feeding plan data',
   feedingPlansLoadByCycleError: 'Error loading feeding plans for this cycle',
 

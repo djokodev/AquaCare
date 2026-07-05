@@ -1244,6 +1244,67 @@ class TestFeedingPlanViewSet:
         assert 'meals_per_day' in plan
         assert 'recommended_feed_type' in plan
 
+    def test_generate_feeding_plan_recomputes_biomass_when_allocation_value_is_zero(
+        self,
+        auth_client,
+        production_cycle,
+    ):
+        """Test recalcul biomasse effective si l'allocation est à zéro."""
+        NutritionalGuide.objects.create(
+            species='tilapia',
+            growth_stage='alevin',
+            min_weight=Decimal('1.00'),
+            max_weight=Decimal('10.00'),
+            feeding_rate_percentage=Decimal('8.00'),
+            protein_requirement=45,
+            meals_per_day=4,
+            feed_size_mm=Decimal('2.0'),
+            recommended_products=['DIBAQ Tilapia 2mm'],
+            expected_fcr=Decimal('1.05'),
+            source='DIBAQ',
+            temperature_rates={'26': 8.0},
+            reference_temperature_c=26,
+        )
+        production_cycle.current_average_weight = Decimal('5.00')
+        production_cycle.current_biomass = Decimal('0.00')
+        production_cycle.save(update_fields=['current_average_weight', 'current_biomass'])
+
+        allocation = create_cycle_unit_allocation(production_cycle, name='Bac 1')
+        allocation.current_biomass_kg = Decimal('0.00')
+        allocation.save(update_fields=['current_biomass_kg'])
+        CycleLog.objects.create(
+            cycle=production_cycle,
+            cycle_unit_allocation=allocation,
+            log_date=date.today(),
+            average_weight=Decimal('5.00'),
+            water_temperature=Decimal('26.0'),
+        )
+
+        other_allocation = create_cycle_unit_allocation(production_cycle, name='Bac 2')
+        CycleLog.objects.create(
+            cycle=production_cycle,
+            cycle_unit_allocation=other_allocation,
+            log_date=date.today(),
+            average_weight=Decimal('25.00'),
+            water_temperature=Decimal('28.0'),
+        )
+
+        url = reverse('aquaculture:feeding-plan-generate')
+        data = {
+            'cycle_id': str(production_cycle.id),
+            'cycle_unit_allocation_id': str(allocation.id),
+            'weeks_ahead': 1,
+        }
+
+        response = auth_client.post(url, data, format='json')
+
+        assert response.status_code == status.HTTP_201_CREATED
+        plan = response.data[0]
+        assert Decimal(str(plan['average_weight'])) == Decimal('5.00')
+        assert Decimal(str(plan['biomass'])) == Decimal('4.50')
+        assert Decimal(str(plan['daily_feed_amount'])) > 0
+        assert Decimal(str(plan['feed_per_meal'])) > 0
+
     def test_generate_plan_requires_allocation_context(self, auth_client):
         """Test erreur claire si la génération est appelée sans allocation."""
         import uuid
