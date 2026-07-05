@@ -248,7 +248,7 @@ class AuthService {
         }
 
         return new AuthRequestError(
-          generalMessage || 'UNKNOWN_ERROR',
+          generalMessage || '',
           fieldErrors
         );
       }

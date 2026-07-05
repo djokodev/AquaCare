@@ -121,7 +121,12 @@ const clearAuthErrors = (state: AuthState) => {
 
 const applyAuthError = (state: AuthState, payload?: AuthErrorPayload) => {
   const fieldErrors = normalizeFieldErrors(payload?.fieldErrors ?? {});
-  state.error = normalizeAuthMessage(payload?.message) ?? (Object.keys(fieldErrors).length > 0 ? null : 'UNKNOWN_ERROR');
+  const normalizedMessage = normalizeAuthMessage(payload?.message);
+  const hasFieldErrors = Object.keys(fieldErrors).length > 0;
+  state.error =
+    hasFieldErrors && (!normalizedMessage || normalizedMessage === 'UNKNOWN_ERROR')
+      ? null
+      : normalizedMessage ?? (hasFieldErrors ? null : 'UNKNOWN_ERROR');
   state.fieldErrors = fieldErrors;
 };
 

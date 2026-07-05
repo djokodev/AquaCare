@@ -42,20 +42,19 @@ const USER_FACING_ERROR_KEYS = new Set([
 ]);
 
 const TECHNICAL_ONLY_PATTERNS = [
-  /^(?:HTTP_)?\d{3}(?:\s+invalid)?$/i,
-  /^status[_-]?code(?:\s*[:=]\s*\d{3})?$/i,
-  /^code(?:\s*[:=]\s*[A-Za-z0-9_-]+)?$/i,
+  /^HTTP_\d{3}$/i,
+  /^HTTP_\d{3}\s+invalid$/i,
   /^AUTH_[A-Z0-9_]+$/i,
   /^invalid$/i,
-  /status code\s*\d{3}/i,
+  /^status[_-]?code\s*[:=]\s*\d{3}$/i,
+  /^code\s*[:=]\s*invalid$/i,
 ];
 
 const TECHNICAL_SUFFIX_PATTERNS = [
-  /\s+(?:HTTP_)?\d{3}\s+invalid$/i,
-  /\s+(?:HTTP_)?\d{3}$/i,
-  /\s+status[_-]?code(?:\s*[:=]\s*\d{3})?$/i,
-  /\s+code(?:\s*[:=]\s*[A-Za-z0-9_-]+)?$/i,
+  /\s+HTTP_\d{3}\s+invalid$/i,
+  /\s+HTTP_\d{3}$/i,
   /\s+AUTH_[A-Z0-9_]+$/i,
+  /\s+\d{3}\s+invalid$/i,
 ];
 
 /**

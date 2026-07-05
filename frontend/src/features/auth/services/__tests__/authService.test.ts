@@ -133,6 +133,23 @@ describe('services/authService', () => {
       );
     });
 
+    it('retourne uniquement les erreurs de champ quand le backend ne fournit pas de message global', async () => {
+      const errorResponse = {
+        response: {
+          status: 400,
+          data: { phone_number: ['Ce numéro est déjà utilisé.'] },
+        },
+      };
+      mockApiService.post.mockRejectedValueOnce(errorResponse as any);
+
+      await expect(authService.register(mockRegisterData)).rejects.toMatchObject({
+        message: '',
+        fieldErrors: {
+          phone_number: 'Ce numéro est déjà utilisé.',
+        },
+      });
+    });
+
     it('retourne une erreur générique si le backend envoie seulement un code technique', async () => {
       const errorResponse = {
         response: {
@@ -142,9 +159,7 @@ describe('services/authService', () => {
       };
       mockApiService.post.mockRejectedValueOnce(errorResponse as any);
 
-      await expect(authService.register(mockRegisterData)).rejects.toMatchObject({
-        message: 'UNKNOWN_ERROR',
-      });
+      await expect(authService.register(mockRegisterData)).rejects.toHaveProperty('message', '');
     });
   });
 

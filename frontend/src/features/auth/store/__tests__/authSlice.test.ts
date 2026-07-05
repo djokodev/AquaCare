@@ -197,6 +197,24 @@ describe('store/slices/authSlice', () => {
         phone_number: 'Ce numéro existe déjà.',
       });
     });
+
+    it('ignore UNKNOWN_ERROR quand des erreurs de champ sont déjà présentes', () => {
+      const action = {
+        type: registerUser.rejected.type,
+        payload: {
+          message: 'UNKNOWN_ERROR',
+          fieldErrors: {
+            phone_number: 'Ce numéro est déjà utilisé.',
+          },
+        },
+      };
+      const newState = authSliceReducer(initialState, action);
+
+      expect(newState.error).toBeNull();
+      expect(newState.fieldErrors).toEqual({
+        phone_number: 'Ce numéro est déjà utilisé.',
+      });
+    });
   });
 
   describe('logoutUser thunk', () => {
