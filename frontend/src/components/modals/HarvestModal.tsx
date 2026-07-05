@@ -18,6 +18,7 @@ import { harvestCycle } from '@/features/aquaculture/store/aquacultureSlice';
 import { ProductionCycle, HarvestData } from '@/types/aquaculture';
 import { AQUACARE_COLORS } from '@/constants/colors';
 import { getApiErrorMessage } from '@/utils/errorParser';
+import { sharedTextInputStyles } from '@/components/common/inputStyles';
 
 interface HarvestModalProps {
   visible: boolean;
@@ -376,16 +377,15 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   textInput: {
+    ...sharedTextInputStyles.base,
     borderWidth: 1,
     borderColor: AQUACARE_COLORS.GRAY_LIGHT,
     borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
     backgroundColor: AQUACARE_COLORS.WHITE,
   },
   notesInput: {
+    ...sharedTextInputStyles.multiline,
     height: 80,
-    textAlignVertical: 'top',
   },
   calculatedField: {
     flexDirection: 'row',

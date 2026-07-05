@@ -18,6 +18,7 @@ import { AppDispatch, RootState } from '@/store/store';
 import { fetchCycleSimulation, resetSimulation, addToCart, fetchProducts } from '@/features/commerce/store/commerceSlice';
 import { CycleSimulationParams } from '@/types/commerce';
 import { AQUACARE_COLORS } from '@/constants/colors';
+import { sharedTextInputStyles } from '@/components/common/inputStyles';
 import { CYCLE_SIMULATION_DEFAULTS } from '@/domain/commerce/constants';
 import { RootStackParamList } from '@/navigation/MainNavigator';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
@@ -427,6 +428,7 @@ export default function CycleSimulatorScreen() {
             <Text className="text-sm font-semibold text-gray-dark mb-2">{t('initialFishCount')} *</Text>
             <TextInput
               className="border border-gray-light rounded-lg px-3 py-3 text-base text-gray-dark"
+              style={sharedTextInputStyles.base}
               value={initialFishCount}
               onChangeText={setInitialFishCount}
               keyboardType="numeric"
@@ -438,6 +440,7 @@ export default function CycleSimulatorScreen() {
             <Text className="text-sm font-semibold text-gray-dark mb-2">{t('simulationInitialWeight')} (g)</Text>
             <TextInput
               className="border border-gray-light rounded-lg px-3 py-3 text-base text-gray-dark"
+              style={sharedTextInputStyles.base}
               value={initialWeightG}
               onChangeText={setInitialWeightG}
               keyboardType="numeric"
@@ -449,6 +452,7 @@ export default function CycleSimulatorScreen() {
             <Text className="text-sm font-semibold text-gray-dark mb-2">{t('targetWeight')} (g)</Text>
             <TextInput
               className="border border-gray-light rounded-lg px-3 py-3 text-base text-gray-dark"
+              style={sharedTextInputStyles.base}
               value={targetWeightG}
               onChangeText={setTargetWeightG}
               keyboardType="numeric"
@@ -460,6 +464,7 @@ export default function CycleSimulatorScreen() {
             <Text className="text-sm font-semibold text-gray-dark mb-2">{t('cycleDuration')} ({t('days')})</Text>
             <TextInput
               className="border border-gray-light rounded-lg px-3 py-3 text-base text-gray-dark"
+              style={sharedTextInputStyles.base}
               value={cycleDurationDays}
               onChangeText={setCycleDurationDays}
               keyboardType="numeric"
@@ -471,6 +476,7 @@ export default function CycleSimulatorScreen() {
             <Text className="text-sm font-semibold text-gray-dark mb-2">{t('survivalRate')} (%)</Text>
             <TextInput
               className="border border-gray-light rounded-lg px-3 py-3 text-base text-gray-dark"
+              style={sharedTextInputStyles.base}
               value={survivalRate}
               onChangeText={setSurvivalRate}
               keyboardType="numeric"
@@ -482,6 +488,7 @@ export default function CycleSimulatorScreen() {
             <Text className="text-sm font-semibold text-gray-dark mb-2">{t('preEstimatedSellingPrice')}</Text>
             <TextInput
               className="border border-gray-light rounded-lg px-3 py-3 text-base text-gray-dark"
+              style={sharedTextInputStyles.base}
               value={sellingPricePerKg}
               onChangeText={setSellingPricePerKg}
               keyboardType="numeric"
@@ -494,6 +501,7 @@ export default function CycleSimulatorScreen() {
               <Text className="text-sm font-semibold text-gray-dark mb-2">{t('fingerlingsCostFcfa')}</Text>
               <TextInput
                 className="border border-gray-light rounded-lg px-3 py-3 text-base text-gray-dark"
+              style={sharedTextInputStyles.base}
                 value={fingerlingsCost}
                 onChangeText={setFingerlingsCost}
                 keyboardType="numeric"
@@ -504,6 +512,7 @@ export default function CycleSimulatorScreen() {
               <Text className="text-sm font-semibold text-gray-dark mb-2">{t('otherOperationalCosts')}</Text>
               <TextInput
                 className="border border-gray-light rounded-lg px-3 py-3 text-base text-gray-dark"
+              style={sharedTextInputStyles.base}
                 value={otherCosts}
                 onChangeText={setOtherCosts}
                 keyboardType="numeric"

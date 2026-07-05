@@ -31,6 +31,7 @@ import {
 import type { MediaType } from '../types/chat';
 import { AQUACARE_COLORS } from '@/constants/colors';
 import { AQUACARE_TYPOGRAPHY } from '@/constants/typography';
+import { sharedTextInputStyles } from '@/components/common/inputStyles';
 
 /**
  * AquaCare Design System Colors
@@ -379,15 +380,15 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   textInput: {
-    flex: 1,
+    ...sharedTextInputStyles.multiline,
     minHeight: 40,
     maxHeight: 100,
+    flex: 1,
     backgroundColor: AQUACARE_COLORS.CREAM,
     borderRadius: 20,
     paddingHorizontal: 16,
     paddingVertical: 10,
     ...AQUACARE_TYPOGRAPHY.small,
-    color: AQUACARE_COLORS.GRAY_DARK,
   },
   sendButton: {
     width: 40,

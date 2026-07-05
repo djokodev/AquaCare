@@ -24,6 +24,7 @@ import { useDispatch, useSelector } from 'react-redux';
 
 import { useAuth } from '@/hooks/useAuth';
 import { AQUACARE_COLORS } from '@/constants/colors';
+import { sharedTextInputStyles } from '@/components/common/inputStyles';
 import { RootStackParamList } from '@/navigation/MainNavigator';
 import { AppDispatch, RootState } from '@/store/store';
 import { runCycleSimulation } from '@/features/aquaculture/store/farmSetupSlice';
@@ -1495,13 +1496,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   input: {
+    ...sharedTextInputStyles.base,
     backgroundColor: '#fff',
     borderWidth: 1,
     borderColor: '#cbd5e1',
     borderRadius: 8,
-    paddingHorizontal: 14,
-    paddingVertical: Platform.OS === 'ios' ? 14 : 10,
-    fontSize: 15,
     color: AQUACARE_COLORS.GRAY_DARK,
   },
   inputError: {

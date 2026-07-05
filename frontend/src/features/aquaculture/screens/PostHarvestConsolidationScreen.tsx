@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
+import { sharedTextInputStyles } from '@/components/common/inputStyles';
 import { useDispatch, useSelector } from 'react-redux';
 import { StackScreenProps } from '@react-navigation/stack';
 import { AppDispatch, RootState } from '@/store/store';
@@ -520,12 +521,10 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   textInput: {
+    ...sharedTextInputStyles.base,
     borderWidth: 1,
     borderColor: '#cbd5e1',
     borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 16,
     backgroundColor: AQUACARE_COLORS.WHITE,
     color: AQUACARE_COLORS.GRAY_DARK,
   },

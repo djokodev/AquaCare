@@ -8,6 +8,7 @@ import { LoginRequest } from '@/features/auth/types/auth';
 import logger from '@/utils/logger';
 import PhoneInputField from '@/components/common/PhoneInputField';
 import AuthErrorBlock from '@/components/common/AuthErrorBlock';
+import { sharedTextInputStyles } from '@/components/common/inputStyles';
 import {
   hasValidationErrors,
   validateLoginForm,
@@ -131,12 +132,12 @@ export default function LoginScreen({ navigation }: Props) {
                 className={`border border-gray-300 rounded-lg px-3 h-12 text-base bg-white ${
                   errors.loginName ? 'border-error' : ''
                 }`}
+                style={sharedTextInputStyles.base}
                 value={formData.loginName}
                 onChangeText={(value) => updateField('loginName', value)}
                 placeholder={t('placeholderLoginName')}
                 autoCapitalize="words"
                 autoComplete="name"
-                textAlignVertical="center"
               />
               {renderError('loginName')}
             </View>
@@ -154,12 +155,12 @@ export default function LoginScreen({ navigation }: Props) {
               className={`border border-gray-300 rounded-lg px-3 h-12 text-base bg-white ${
                 errors.password ? 'border-error' : ''
               }`}
+              style={sharedTextInputStyles.base}
               value={formData.password}
               onChangeText={(value) => updateField('password', value)}
               placeholder="********"
               secureTextEntry
               autoComplete="password"
-              textAlignVertical="center"
             />
             {renderError('password')}
           </View>

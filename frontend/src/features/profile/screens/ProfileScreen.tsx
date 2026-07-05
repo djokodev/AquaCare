@@ -14,6 +14,7 @@ import LocationSelector from "@/components/common/LocationSelector";
 import { getAccountErrorMessage } from "@/features/auth/utils/accountsErrorPresenter";
 import { useProfileEditor } from "@/features/profile/hooks/useProfileEditor";
 import { formatFarmName, getCertificationPresentation } from "@/features/profile/utils/accountProfilePresentation";
+import { sharedTextInputStyles } from "@/components/common/inputStyles";
 
 type ProfileScreenNavigationProp = StackNavigationProp<ProfileStackParamList, "ProfileMain">;
 
@@ -369,12 +370,12 @@ function InfoRow({
       {editable ? (
         <TextInput
           className="border border-gray-300 rounded-md px-2 h-10 text-sm text-right text-gray-dark flex-1"
+          style={[sharedTextInputStyles.compact, { flex: 1 }]}
           value={inputValue}
           onChangeText={onChangeText}
           placeholder={placeholder}
           keyboardType={keyboardType}
           autoCapitalize="words"
-          textAlignVertical="center"
         />
       ) : (
         <Text

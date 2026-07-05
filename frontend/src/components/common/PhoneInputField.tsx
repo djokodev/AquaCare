@@ -1,7 +1,8 @@
 import React from 'react';
-import { View, Text, TextInput, Platform } from 'react-native';
+import { View, Text, TextInput } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { formatCameroonPhone } from '@/utils/phoneFormatter';
+import { sharedTextInputStyles } from '@/components/common/inputStyles';
 
 interface PhoneInputFieldProps {
   value: string;
@@ -33,32 +34,13 @@ export default function PhoneInputField({
       <Text className="text-base font-medium text-gray-dark mb-2">
         {displayLabel}{required ? ' *' : ''}
       </Text>
-      <View
-        className={`flex-row items-center h-12 border rounded-lg bg-white px-3 ${
-          error ? 'border-error' : 'border-gray-300'
-        }`}
-      >
-        <View className="h-10 justify-center mr-2">
-          <Text
-            className="text-base font-semibold text-aquacare-primary"
-            style={{ lineHeight: 20, marginVertical: 0, paddingVertical: 0 }}
-          >
-            +237
-          </Text>
+      <View className={`flex-row items-center h-12 border rounded-lg bg-white px-3 ${error ? 'border-error' : 'border-gray-300'}`}>
+        <View style={[sharedTextInputStyles.prefixContainer, { marginRight: 8 }]}>
+          <Text style={sharedTextInputStyles.prefixText}>+237</Text>
         </View>
         <TextInput
-          className="flex-1 h-10 text-base text-gray-dark self-center"
-          style={{
-            paddingVertical: 0,
-            marginVertical: 0,
-            lineHeight: 20,
-            ...(Platform.OS === 'android'
-              ? {
-                  textAlignVertical: 'center',
-                  includeFontPadding: false,
-                }
-              : null),
-          }}
+          className="flex-1 text-base text-gray-dark"
+          style={[sharedTextInputStyles.base, { flex: 1, paddingHorizontal: 0 }]}
           value={value.replace('+237', '')}
           onChangeText={(raw) => onChange(formatCameroonPhone(raw))}
           placeholder={t('placeholderPhoneExample')}

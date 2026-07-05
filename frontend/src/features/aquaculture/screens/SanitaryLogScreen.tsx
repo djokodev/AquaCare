@@ -11,6 +11,7 @@ import { ReactNativeUploadFile, SanitaryLogForm, SanitaryEventType } from '@/typ
 import { RootStackParamList } from '@/navigation/MainNavigator';
 import * as ImagePicker from 'expo-image-picker';
 import { AQUACARE_COLORS } from '@/constants/colors';
+import { sharedTextInputStyles } from '@/components/common/inputStyles';
 import logger from '@/utils/logger';
 import { getApiErrorMessage, parseApiError } from '@/utils/errorParser';
 import CycleSelector from '@/components/common/CycleSelector';
@@ -422,6 +423,7 @@ export default function SanitaryLogScreen({ navigation, route }: SanitaryLogScre
             </Text>
             <TextInput
               className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark h-20"
+              style={[sharedTextInputStyles.multiline, { height: 80 }]}
               value={formData.symptoms}
               onChangeText={(value) => setFormData((prev) => ({ ...prev, symptoms: value }))}
               placeholder={t(selectedEventLayout.firstFieldPlaceholderKey)}
@@ -436,6 +438,7 @@ export default function SanitaryLogScreen({ navigation, route }: SanitaryLogScre
             </Text>
             <TextInput
               className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
+              style={sharedTextInputStyles.base}
               value={formData.affected_count}
               onChangeText={(value) => setFormData((prev) => ({ ...prev, affected_count: value }))}
               placeholder={t(selectedEventLayout.countFieldPlaceholderKey)}
@@ -449,6 +452,7 @@ export default function SanitaryLogScreen({ navigation, route }: SanitaryLogScre
                 <Text className="text-sm font-medium text-gray-dark mb-2">{t('treatmentApplied')}</Text>
                 <TextInput
                   className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark h-20"
+              style={[sharedTextInputStyles.multiline, { height: 80 }]}
                   value={formData.treatment_applied}
                   onChangeText={(value) => setFormData((prev) => ({ ...prev, treatment_applied: value }))}
                   placeholder={t('treatmentAppliedPlaceholder')}
@@ -462,6 +466,7 @@ export default function SanitaryLogScreen({ navigation, route }: SanitaryLogScre
                   <Text className="text-sm font-medium text-gray-dark mb-2">{t('medicationUsed')}</Text>
                   <TextInput
                     className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
+              style={sharedTextInputStyles.base}
                     value={formData.medication_used}
                     onChangeText={(value) => setFormData((prev) => ({ ...prev, medication_used: value }))}
                     placeholder={t('exampleMedication')}
@@ -472,6 +477,7 @@ export default function SanitaryLogScreen({ navigation, route }: SanitaryLogScre
                   <Text className="text-sm font-medium text-gray-dark mb-2">{t('dosage')}</Text>
                   <TextInput
                     className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
+              style={sharedTextInputStyles.base}
                     value={formData.dosage}
                     onChangeText={(value) => setFormData((prev) => ({ ...prev, dosage: value }))}
                     placeholder={t('exampleDosage')}
@@ -483,6 +489,7 @@ export default function SanitaryLogScreen({ navigation, route }: SanitaryLogScre
                 <Text className="text-sm font-medium text-gray-dark mb-2">{t('treatmentDurationDays')}</Text>
                 <TextInput
                   className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
+              style={sharedTextInputStyles.base}
                   value={formData.treatment_duration_days}
                   onChangeText={(value) => setFormData((prev) => ({ ...prev, treatment_duration_days: value }))}
                   placeholder={t('exampleTreatmentDuration')}
@@ -496,6 +503,7 @@ export default function SanitaryLogScreen({ navigation, route }: SanitaryLogScre
             <Text className="text-sm font-medium text-gray-dark mb-2">{t('additionalComments')}</Text>
             <TextInput
               className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark h-20"
+              style={[sharedTextInputStyles.multiline, { height: 80 }]}
               value={formData.comments}
               onChangeText={(value) => setFormData((prev) => ({ ...prev, comments: value }))}
               placeholder={t('commentsPlaceholder')}

@@ -30,6 +30,7 @@ import { AQUACARE_COLORS } from '@/constants/colors';
 import { PRODUCT_SPECIES } from '@/domain/commerce/constants';
 import type { RootStackParamList } from '@/navigation/MainNavigator';
 import { getProductBrandAsset } from '@/features/commerce/utils/productBrandAssets';
+import { sharedTextInputStyles } from '@/components/common/inputStyles';
 
 export default function ProductCatalogScreen() {
   const { t } = useTranslation();
@@ -208,7 +209,8 @@ export default function ProductCatalogScreen() {
         <View className="flex-row items-center bg-cream rounded-lg px-3 mb-3">
           <Ionicons name="search-outline" size={20} color={AQUACARE_COLORS.GRAY_LIGHT} />
           <TextInput
-            className="flex-1 py-3 pl-2 text-base text-gray-dark"
+            className="flex-1 text-base text-gray-dark"
+            style={[sharedTextInputStyles.compact, { flex: 1, paddingHorizontal: 8 }]}
             placeholder={t('searchProducts')}
             value={searchQuery}
             onChangeText={setSearchQuery}

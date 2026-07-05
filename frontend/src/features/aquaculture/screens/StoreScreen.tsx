@@ -19,6 +19,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { useTranslation } from 'react-i18next';
 
 import { AQUACARE_COLORS } from '@/constants/colors';
+import { sharedTextInputStyles } from '@/components/common/inputStyles';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
 import { fetchCycleFeedStatus } from '@/features/aquaculture/store/aquacultureSlice';
 import DashboardMetricCard from '@/features/main/components/MetricCard';
@@ -403,6 +404,7 @@ export default function StoreScreen() {
                   <Text className="text-sm font-semibold text-gray-dark mb-2">{t('storeManualLabel')}</Text>
                   <TextInput
                     className="bg-cream rounded-xl px-4 py-3 text-base text-gray-dark"
+                    style={sharedTextInputStyles.base}
                     value={label}
                     onChangeText={setLabel}
                     placeholder={t('storeManualLabelPlaceholder')}
@@ -417,6 +419,7 @@ export default function StoreScreen() {
                     </Text>
                     <TextInput
                       className="bg-cream rounded-xl px-4 py-3 text-base text-gray-dark"
+                    style={sharedTextInputStyles.base}
                       value={quantityKg}
                       onChangeText={setQuantityKg}
                       keyboardType="decimal-pad"
@@ -430,6 +433,7 @@ export default function StoreScreen() {
                     </Text>
                     <TextInput
                       className="bg-cream rounded-xl px-4 py-3 text-base text-gray-dark"
+                    style={sharedTextInputStyles.base}
                       value={totalCostFcfa}
                       onChangeText={setTotalCostFcfa}
                       keyboardType="decimal-pad"
@@ -443,6 +447,7 @@ export default function StoreScreen() {
                   <Text className="text-sm font-semibold text-gray-dark mb-2">{t('storeManualDate')}</Text>
                   <TextInput
                     className="bg-cream rounded-xl px-4 py-3 text-base text-gray-dark"
+                    style={sharedTextInputStyles.base}
                     value={entryDate}
                     onChangeText={setEntryDate}
                     placeholder={t('storeManualDatePlaceholder')}
@@ -454,6 +459,7 @@ export default function StoreScreen() {
                   <Text className="text-sm font-semibold text-gray-dark mb-2">{t('storeManualNote')}</Text>
                   <TextInput
                     className="bg-cream rounded-xl px-4 py-3 text-base text-gray-dark min-h-[96px]"
+                    style={[sharedTextInputStyles.multiline, { minHeight: 96 }]}
                     value={note}
                     onChangeText={setNote}
                     placeholder={t('storeManualNotePlaceholder')}

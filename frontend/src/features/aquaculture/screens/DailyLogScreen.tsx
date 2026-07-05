@@ -14,6 +14,7 @@ import { estimateAverageWeight } from '@/domain/aquaculture/estimators';
 import { calculateStockValue, calculateEstimatedBiomass } from '@/constants/aquaculture';
 import SuccessRewardModal from '@/components/modals/SuccessRewardModal';
 import CycleSelector from '@/components/common/CycleSelector';
+import { sharedTextInputStyles } from '@/components/common/inputStyles';
 import { getApiErrorMessage, parseApiError } from '@/utils/errorParser';
 import { formatAquacultureErrorWithAction } from '@/features/aquaculture/utils/aquacultureErrorPresenter';
 import {
@@ -301,6 +302,7 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
               <Text className="text-sm font-medium text-gray-dark mb-2">{t('mortality')}</Text>
               <TextInput
                 className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
+              style={sharedTextInputStyles.base}
                 value={formData.mortality_count}
                 onChangeText={(value) => setFormData((prev) => ({ ...prev, mortality_count: value }))}
                 placeholder={t('mortalityPlaceholder')}
@@ -312,6 +314,7 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
               <Text className="text-sm font-medium text-gray-dark mb-2">{t('mortalityReason')}</Text>
               <TextInput
                 className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
+              style={sharedTextInputStyles.base}
                 value={formData.mortality_reason}
                 onChangeText={(value) => setFormData((prev) => ({ ...prev, mortality_reason: value }))}
                 placeholder={t('mortalityReasonPlaceholder')}
@@ -324,6 +327,7 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
               <Text className="text-sm font-medium text-gray-dark mb-2">{t('feedQuantity')}</Text>
               <TextInput
                 className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
+              style={sharedTextInputStyles.base}
                 value={formData.feed_quantity}
                 onChangeText={(value) => setFormData((prev) => ({ ...prev, feed_quantity: value }))}
                 placeholder={t('feedQuantityPlaceholder')}
@@ -335,6 +339,7 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
               <Text className="text-sm font-medium text-gray-dark mb-2">{t('feedType')}</Text>
               <TextInput
                 className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
+              style={sharedTextInputStyles.base}
                 value={formData.feed_type}
                 onChangeText={(value) => setFormData((prev) => ({ ...prev, feed_type: value }))}
                 placeholder={t('feedTypePlaceholder')}
@@ -346,6 +351,7 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
             <Text className="text-sm font-medium text-gray-dark mb-2">{t('feedSizeMm')}</Text>
             <TextInput
               className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
+              style={sharedTextInputStyles.base}
               value={formData.feed_size_mm}
               onChangeText={(value) => setFormData((prev) => ({ ...prev, feed_size_mm: value }))}
               placeholder={t('feedSizeMmPlaceholder')}
@@ -358,6 +364,7 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
               <Text className="text-sm font-medium text-gray-dark mb-2">{t('waterTemperatureUnit')}</Text>
               <TextInput
                 className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
+              style={sharedTextInputStyles.base}
                 value={formData.water_temperature}
                 onChangeText={(value) => setFormData((prev) => ({ ...prev, water_temperature: value }))}
                 placeholder={t('waterTemperaturePlaceholder')}
@@ -369,6 +376,7 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
               <Text className="text-sm font-medium text-gray-dark mb-2">{t('dissolvedOxygen')}</Text>
               <TextInput
                 className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
+              style={sharedTextInputStyles.base}
                 value={formData.dissolved_oxygen}
                 onChangeText={(value) => setFormData((prev) => ({ ...prev, dissolved_oxygen: value }))}
                 placeholder={t('dissolvedOxygenPlaceholder')}
@@ -382,6 +390,7 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
               <Text className="text-sm font-medium text-gray-dark mb-2">{t('phLevel')}</Text>
               <TextInput
                 className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
+              style={sharedTextInputStyles.base}
                 value={formData.ph_level}
                 onChangeText={(value) => setFormData((prev) => ({ ...prev, ph_level: value }))}
                 placeholder={t('phLevelPlaceholder')}
@@ -393,6 +402,7 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
               <Text className="text-sm font-medium text-gray-dark mb-2">{t('ammoniaLevel')}</Text>
               <TextInput
                 className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
+              style={sharedTextInputStyles.base}
                 value={formData.ammonia_level}
                 onChangeText={(value) => setFormData((prev) => ({ ...prev, ammonia_level: value }))}
                 placeholder={t('ammoniaLevelPlaceholder')}
@@ -405,6 +415,7 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
             <Text className="text-sm font-medium text-gray-dark mb-2">{t('feedingTimes')}</Text>
             <TextInput
               className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
+              style={sharedTextInputStyles.base}
               value={formData.feeding_times}
               onChangeText={(value) => setFormData((prev) => ({ ...prev, feeding_times: value }))}
               placeholder={t('feedingTimesPlaceholder')}
@@ -415,6 +426,7 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
             <Text className="text-sm font-medium text-gray-dark mb-2">{t('observations')}</Text>
             <TextInput
               className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark h-24"
+              style={[sharedTextInputStyles.multiline, { height: 96 }]}
               value={formData.observations}
               onChangeText={(value) => setFormData((prev) => ({ ...prev, observations: value }))}
               placeholder={t('observationsPlaceholder')}
@@ -430,6 +442,7 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
               <Text className="text-sm font-medium text-gray-dark mb-2">{t('sampleCount')}</Text>
               <TextInput
                 className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
+              style={sharedTextInputStyles.base}
                 value={formData.sample_count}
                 onChangeText={(value) => setFormData((prev) => ({ ...prev, sample_count: value }))}
                 placeholder={t('exampleAffectedCount')}
@@ -441,6 +454,7 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
               <Text className="text-sm font-medium text-gray-dark mb-2">{t('sampleWeight')}</Text>
               <TextInput
                 className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
+              style={sharedTextInputStyles.base}
                 value={formData.sample_total_weight}
                 onChangeText={(value) => setFormData((prev) => ({ ...prev, sample_total_weight: value }))}
                 placeholder={t('sampleWeightPlaceholder')}

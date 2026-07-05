@@ -18,6 +18,7 @@ import { createPartialHarvest } from '@/features/aquaculture/store/aquacultureSl
 import { ProductionCycle, PartialHarvestData } from '@/types/aquaculture';
 import { AQUACARE_COLORS as COLORS } from '@/constants/colors';
 import { getApiErrorMessage } from '@/utils/errorParser';
+import { sharedTextInputStyles } from '@/components/common/inputStyles';
 
 interface PartialHarvestModalProps {
   visible: boolean;
@@ -304,18 +305,16 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   input: {
+    ...sharedTextInputStyles.base,
     borderWidth: 1,
     borderColor: COLORS.GRAY_LIGHT,
     borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 16,
     color: COLORS.GRAY_DARK,
     backgroundColor: COLORS.CREAM,
   },
   inputMultiline: {
+    ...sharedTextInputStyles.multiline,
     height: 80,
-    textAlignVertical: 'top',
   },
   recap: {
     backgroundColor: COLORS.CREAM,

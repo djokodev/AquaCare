@@ -14,6 +14,7 @@ import { fetchDashboardData } from "@/features/aquaculture/store/aquacultureSlic
 import { getAccountErrorMessage } from "@/features/auth/utils/accountsErrorPresenter";
 import { useFarmProfileEditor } from "@/features/profile/hooks/useFarmProfileEditor";
 import { formatFarmName, getCertificationPresentation } from "@/features/profile/utils/accountProfilePresentation";
+import { sharedTextInputStyles } from "@/components/common/inputStyles";
 
 type NavigationProp = StackNavigationProp<RootStackParamList>;
 
@@ -364,12 +365,12 @@ function FarmInfoRow({
       {editable ? (
         <TextInput
           className="border border-gray-300 rounded-md px-2 h-10 text-sm text-right text-gray-dark flex-1"
+          style={[sharedTextInputStyles.compact, { flex: 1 }]}
           value={inputValue}
           onChangeText={onChangeText}
           placeholder={placeholder}
           keyboardType={keyboardType}
           autoCapitalize="words"
-          textAlignVertical="center"
         />
       ) : (
         <Text className="text-sm text-gray-dark font-medium flex-1 text-right">{value}</Text>

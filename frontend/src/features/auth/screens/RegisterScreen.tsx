@@ -9,6 +9,7 @@ import SelectField from '@/components/SelectField';
 import logger from '@/utils/logger';
 import PhoneInputField from '@/components/common/PhoneInputField';
 import AuthErrorBlock from '@/components/common/AuthErrorBlock';
+import { sharedTextInputStyles } from '@/components/common/inputStyles';
 import { REGIONS, AGE_GROUPS, LEGAL_STATUS_OPTIONS } from '@/constants/registration';
 import {
   hasValidationErrors,
@@ -136,12 +137,12 @@ export default function RegisterScreen({ navigation }: Props) {
             <Text className="text-base font-medium text-gray-dark mb-2">{t('email')}</Text>
             <TextInput
               className={`border rounded-lg px-3 h-12 text-base bg-white ${errors.email ? 'border-error' : 'border-gray-300'}`}
+              style={sharedTextInputStyles.base}
               value={formData.email}
               onChangeText={(value) => updateField('email', value)}
               placeholder={t('placeholderEmail')}
               keyboardType="email-address"
               autoCapitalize="none"
-              textAlignVertical="center"
             />
             {renderError('email')}
           </View>
@@ -154,11 +155,11 @@ export default function RegisterScreen({ navigation }: Props) {
                   className={`border rounded-lg px-3 h-12 text-base bg-white ${
                     errors.first_name ? 'border-error' : 'border-gray-300'
                   }`}
+                  style={sharedTextInputStyles.base}
                   value={formData.first_name}
                   onChangeText={(value) => updateField('first_name', value)}
                   placeholder={t('placeholderFirstName')}
                   autoCapitalize="words"
-                  textAlignVertical="center"
                 />
                 {renderError('first_name')}
               </View>
@@ -169,11 +170,11 @@ export default function RegisterScreen({ navigation }: Props) {
                   className={`border rounded-lg px-3 h-12 text-base bg-white ${
                     errors.last_name ? 'border-error' : 'border-gray-300'
                   }`}
+                  style={sharedTextInputStyles.base}
                   value={formData.last_name}
                   onChangeText={(value) => updateField('last_name', value)}
                   placeholder={t('placeholderLastName')}
                   autoCapitalize="words"
-                  textAlignVertical="center"
                 />
                 {renderError('last_name')}
               </View>
@@ -198,11 +199,11 @@ export default function RegisterScreen({ navigation }: Props) {
                   className={`border rounded-lg px-3 h-12 text-base bg-white ${
                     errors.business_name ? 'border-error' : 'border-gray-300'
                   }`}
+                  style={sharedTextInputStyles.base}
                   value={formData.business_name}
                   onChangeText={(value) => updateField('business_name', value)}
                   placeholder={t('placeholderBusinessName')}
                   autoCapitalize="words"
-                  textAlignVertical="center"
                 />
                 {renderError('business_name')}
               </View>
@@ -223,11 +224,11 @@ export default function RegisterScreen({ navigation }: Props) {
                   className={`border rounded-lg px-3 h-12 text-base bg-white ${
                     errors.promoter_name ? 'border-error' : 'border-gray-300'
                   }`}
+                  style={sharedTextInputStyles.base}
                   value={formData.promoter_name}
                   onChangeText={(value) => updateField('promoter_name', value)}
                   placeholder={t('placeholderPromoterName')}
                   autoCapitalize="words"
-                  textAlignVertical="center"
                 />
                 {renderError('promoter_name')}
               </View>
@@ -249,11 +250,11 @@ export default function RegisterScreen({ navigation }: Props) {
               className={`border rounded-lg px-3 h-12 text-base bg-white ${
                 errors.password ? 'border-error' : 'border-gray-300'
               }`}
+              style={sharedTextInputStyles.base}
               value={formData.password}
               onChangeText={(value) => updateField('password', value)}
               placeholder="********"
               secureTextEntry
-              textAlignVertical="center"
             />
             {renderError('password')}
           </View>
@@ -264,11 +265,11 @@ export default function RegisterScreen({ navigation }: Props) {
               className={`border rounded-lg px-3 h-12 text-base bg-white ${
                 errors.password_confirm ? 'border-error' : 'border-gray-300'
               }`}
+              style={sharedTextInputStyles.base}
               value={formData.password_confirm}
               onChangeText={(value) => updateField('password_confirm', value)}
               placeholder="********"
               secureTextEntry
-              textAlignVertical="center"
             />
             {renderError('password_confirm')}
           </View>

@@ -9,6 +9,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { AppDispatch } from '@/store/store';
 import { fetchDashboardData } from '@/features/aquaculture/store/aquacultureSlice';
 import { AQUACARE_COLORS } from '@/constants/colors';
+import { sharedTextInputStyles } from '@/components/common/inputStyles';
 import { estimateBiomass, estimateDensityWithUnit } from '@/domain/aquaculture/estimators';
 import { parseApiError, logApiError, hasFieldError } from '@/utils/errorParser';
 import { RootStackParamList } from '@/navigation/MainNavigator';
@@ -285,6 +286,7 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
             </Text>
             <TextInput
               className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
+              style={sharedTextInputStyles.base}
               value={formData.pond_identifier}
               onChangeText={(value) => setFormData((prev) => ({ ...prev, pond_identifier: value }))}
               placeholder={t('pondNamePlaceholder')}
@@ -327,6 +329,7 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
               <Text className="text-sm font-medium text-gray-dark mb-2">{t('surface')}</Text>
               <TextInput
                 className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
+              style={sharedTextInputStyles.base}
                 value={formData.pond_surface_m2}
                 onChangeText={(value) => setFormData((prev) => ({ ...prev, pond_surface_m2: value }))}
                 placeholder={t('exampleValuePlaceholder', { value: 100 })}
@@ -338,6 +341,7 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
               <Text className="text-sm font-medium text-gray-dark mb-2">{t('volume')}</Text>
               <TextInput
                 className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
+              style={sharedTextInputStyles.base}
                 value={formData.pond_volume_m3}
                 onChangeText={(value) => setFormData((prev) => ({ ...prev, pond_volume_m3: value }))}
                 placeholder={t('exampleValuePlaceholder', { value: 150 })}
@@ -357,6 +361,7 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
               </Text>
               <TextInput
                 className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
+              style={sharedTextInputStyles.base}
                 value={formData.initial_count}
                 onChangeText={(value) => setFormData((prev) => ({ ...prev, initial_count: value }))}
                 placeholder={t('exampleValuePlaceholder', { value: 1000 })}
@@ -370,6 +375,7 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
               </Text>
               <TextInput
                 className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
+              style={sharedTextInputStyles.base}
                 value={formData.initial_average_weight}
                 onChangeText={(value) => setFormData((prev) => ({ ...prev, initial_average_weight: value }))}
                 placeholder={t('exampleValuePlaceholder', { value: 10 })}
@@ -384,6 +390,7 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
             </Text>
             <TextInput
               className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
+              style={sharedTextInputStyles.base}
               value={formData.start_date}
               onChangeText={(value) => setFormData((prev) => ({ ...prev, start_date: value }))}
               placeholder={t('dateFormatPlaceholder')}
@@ -394,6 +401,7 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
             <Text className="text-sm font-medium text-gray-dark mb-2">{t('cycleName')}</Text>
             <TextInput
               className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
+              style={sharedTextInputStyles.base}
               value={formData.cycle_name}
               onChangeText={(value) => setFormData((prev) => ({ ...prev, cycle_name: value }))}
               placeholder={t('cycleNamePlaceholder')}
@@ -411,6 +419,7 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
               </Text>
               <TextInput
                 className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
+              style={sharedTextInputStyles.base}
                 value={formData.target_harvest_weight_g}
                 onChangeText={(value) => setFormData((prev) => ({ ...prev, target_harvest_weight_g: value }))}
                 placeholder={t('exampleValuePlaceholder', {
@@ -426,6 +435,7 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
               </Text>
               <TextInput
                 className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
+              style={sharedTextInputStyles.base}
                 value={formData.planned_cycle_duration_days}
                 onChangeText={(value) => setFormData((prev) => ({ ...prev, planned_cycle_duration_days: value }))}
                 placeholder={t('exampleValuePlaceholder', {
@@ -443,6 +453,7 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
               </Text>
               <TextInput
                 className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
+              style={sharedTextInputStyles.base}
                 value={formData.expected_survival_rate_pct}
                 onChangeText={(value) => setFormData((prev) => ({ ...prev, expected_survival_rate_pct: value }))}
                 placeholder={t('exampleValuePlaceholder', { value: 85 })}
@@ -456,6 +467,7 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
               </Text>
               <TextInput
                 className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
+              style={sharedTextInputStyles.base}
                 value={formData.planned_selling_price_per_kg_fcfa}
                 onChangeText={(value) => setFormData((prev) => ({ ...prev, planned_selling_price_per_kg_fcfa: value }))}
                 placeholder={t('exampleValuePlaceholder', {
@@ -474,6 +486,7 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
               <Text className="text-sm font-medium text-gray-dark mb-2">{t('fingerlingsCostFcfa')}</Text>
               <TextInput
                 className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
+              style={sharedTextInputStyles.base}
                 value={formData.fingerlings_cost_fcfa}
                 onChangeText={(value) => setFormData((prev) => ({ ...prev, fingerlings_cost_fcfa: value }))}
                 placeholder={t('zeroValuePlaceholder')}
@@ -485,6 +498,7 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
               <Text className="text-sm font-medium text-gray-dark mb-2">{t('otherOperationalCosts')}</Text>
               <TextInput
                 className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
+              style={sharedTextInputStyles.base}
                 value={formData.other_operational_costs_fcfa}
                 onChangeText={(value) => setFormData((prev) => ({ ...prev, other_operational_costs_fcfa: value }))}
                 placeholder={t('zeroValuePlaceholder')}
