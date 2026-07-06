@@ -463,6 +463,16 @@ class CycleUnitAllocation(models.Model):
         blank=True,
         verbose_name=_("Récoltée le"),
     )
+    final_harvest_date = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name=_("Date métier de récolte"),
+    )
+    final_harvest_notes = models.TextField(
+        blank=True,
+        default='',
+        verbose_name=_("Notes de récolte finale"),
+    )
     final_fish_count = models.PositiveIntegerField(
         null=True,
         blank=True,
