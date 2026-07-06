@@ -351,6 +351,8 @@ export interface CycleUnitAllocation {
   status?: 'active' | 'harvested' | 'inactive';
   status_display?: string;
   harvested_at?: string | null;
+  final_harvest_date?: string | null;
+  final_harvest_notes?: string | null;
   final_fish_count?: number | null;
   final_average_weight_g?: number | null;
   final_biomass_kg?: number | null;
