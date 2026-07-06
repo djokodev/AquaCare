@@ -59,6 +59,11 @@ interface QuickActionsSheetProps {
   };
 
   /**
+   * Masque les actions opérationnelles globales quand des allocations existent.
+   */
+  hideGlobalCycleOperationalActions?: boolean;
+
+  /**
    * Ouvre la modale de récolte partielle du cycle.
    */
   onPartialHarvestCycle?: () => void;
@@ -141,6 +146,7 @@ export default function QuickActionsSheet({
   onHarvestCycle,
   onPartialHarvestUnit,
   onHarvestUnit,
+  hideGlobalCycleOperationalActions = false,
 }: QuickActionsSheetProps) {
   const { t } = useTranslation();
 
@@ -269,6 +275,43 @@ export default function QuickActionsSheet({
       ];
     }
 
+    if (hideGlobalCycleOperationalActions) {
+      return [
+        {
+          id: 'notifications',
+          labelKey: 'notifications',
+          icon: 'notifications-outline',
+          iconColor: AQUACARE_COLORS.WARNING,
+          route: 'Notifications',
+          category: 'aquaculture',
+          badge: unreadCount,
+        },
+        {
+          id: 'reports',
+          labelKey: 'reports',
+          icon: 'document-text-outline',
+          iconColor: AQUACARE_COLORS.BLUE,
+          route: 'Reports',
+          category: 'aquaculture',
+          params: {
+            scope: 'cycle',
+            cycleId: cycleContext.cycleId,
+          },
+        },
+        ...(onHarvestCycle
+          ? [{
+              id: 'harvestCycle',
+              labelKey: 'harvestEntireCycleAction',
+              icon: 'checkmark-done-outline' as const,
+              iconColor: AQUACARE_COLORS.GREEN_PRIMARY,
+              route: '',
+              category: 'aquaculture' as const,
+              onPress: onHarvestCycle,
+            }]
+          : []),
+      ];
+    }
+
     return [
       {
         id: 'dailyLog',
@@ -330,7 +373,7 @@ export default function QuickActionsSheet({
           }]
         : []),
     ];
-  }, [cycleContext, onHarvestCycle, onPartialHarvestCycle, onHarvestUnit, onPartialHarvestUnit, productionUnitContext, scope, unreadCount]);
+  }, [cycleContext, hideGlobalCycleOperationalActions, onHarvestCycle, onPartialHarvestCycle, onHarvestUnit, onPartialHarvestUnit, productionUnitContext, scope, unreadCount]);
 
   /**
    * Configuration des actions Commerce

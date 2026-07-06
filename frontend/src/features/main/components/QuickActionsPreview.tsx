@@ -44,6 +44,11 @@ interface QuickActionsPreviewProps {
     productionUnitId: string;
     productionUnitName: string;
   };
+
+  /**
+   * Masque les actions globales de cycle quand des allocations existent.
+   */
+  hideGlobalCycleOperationalActions?: boolean;
 }
 
 /**
@@ -93,6 +98,7 @@ export default function QuickActionsPreview({
   navigation,
   scope = 'cycle',
   productionUnitContext,
+  hideGlobalCycleOperationalActions = false,
 }: QuickActionsPreviewProps) {
   const { t } = useTranslation();
 
@@ -136,13 +142,21 @@ export default function QuickActionsPreview({
     const actions: SuggestedAction[] = [];
 
     // Suggestion 1 : Basée sur l'état des cycles
-    if (hasActiveCycles) {
+    if (hasActiveCycles && !hideGlobalCycleOperationalActions) {
       // Si cycles actifs → prioriser saisie quotidienne
       actions.push({
         icon: 'create',
         color: AQUACARE_COLORS.GREEN_LIGHT,
         label: t('dailyLog'),
         route: 'DailyLog',
+      });
+    } else if (hasActiveCycles) {
+      actions.push({
+        icon: 'document-text-outline',
+        color: AQUACARE_COLORS.BLUE,
+        label: t('reports'),
+        route: 'Reports',
+        params: { scope: 'cycle' },
       });
     } else {
       // Si aucun cycle → prioriser création
@@ -170,7 +184,7 @@ export default function QuickActionsPreview({
         label: `${t('notifications')} (${unreadCount})`,
         route: 'Notifications',
       });
-    } else {
+    } else if (!hideGlobalCycleOperationalActions || !hasActiveCycles) {
       actions.push({
         icon: 'document-text-outline',
         color: AQUACARE_COLORS.BLUE,
@@ -178,10 +192,17 @@ export default function QuickActionsPreview({
         route: 'Reports',
         params: { scope: 'cycle' },
       });
+    } else {
+      actions.push({
+        icon: 'notifications-outline',
+        color: AQUACARE_COLORS.WARNING,
+        label: t('notifications'),
+        route: 'Notifications',
+      });
     }
 
     return actions.slice(0, 3); // Toujours max 3 suggestions
-  }, [hasActiveCycles, unreadCount, t, scope, productionUnitContext]);
+  }, [hasActiveCycles, unreadCount, t, scope, productionUnitContext, hideGlobalCycleOperationalActions]);
 
   return (
     <View className="px-5 py-5">

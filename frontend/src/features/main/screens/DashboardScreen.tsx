@@ -127,7 +127,7 @@ export default function DashboardScreen({ navigation }: any) {
     setCurrentCycleUnitCount(null);
 
     const loadCurrentCycleUnitCount = async () => {
-      if (!primaryActiveCycle || !primaryCycleHasProductionUnits) {
+      if (!primaryActiveCycle) {
         return;
       }
 
@@ -149,7 +149,7 @@ export default function DashboardScreen({ navigation }: any) {
     return () => {
       cancelled = true;
     };
-  }, [primaryActiveCycle?.id, primaryCycleHasProductionUnits]);
+  }, [primaryActiveCycle?.id]);
 
   const onRefresh = useCallback(() => {
     dispatch(fetchDashboardData(undefined));
@@ -495,6 +495,7 @@ export default function DashboardScreen({ navigation }: any) {
         unreadCount={unreadCount}
         navigation={navigation}
         scope="cycle"
+        hideGlobalCycleOperationalActions={cycleHasProductionUnits}
       />
 
       {sessionCycle ? (
@@ -592,6 +593,7 @@ export default function DashboardScreen({ navigation }: any) {
         cycleContext={sessionCycle?.id ? { cycleId: sessionCycle.id } : undefined}
         onPartialHarvestCycle={cycleHasProductionUnits ? undefined : openCyclePartialHarvestModal}
         onHarvestCycle={openCycleHarvestModal}
+        hideGlobalCycleOperationalActions={cycleHasProductionUnits}
       />
       </ScrollView>
     </View>

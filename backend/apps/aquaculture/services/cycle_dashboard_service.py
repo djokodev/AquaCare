@@ -76,13 +76,21 @@ class CycleDashboardService:
             allocations_payload.append(payload)
 
             summary = payload['summary']
-            total_initial_fish_count += allocation.initial_fish_count
-            total_estimated_current_fish_count += summary['estimated_current_fish_count']
-            total_mortality_count += summary['total_mortality_count']
-            total_feed_consumed_kg += summary['total_feed_consumed_kg'] or CycleDashboardService.ZERO_DECIMAL
-            total_estimated_current_biomass_kg += (
-                summary['estimated_current_biomass_kg'] or CycleDashboardService.ZERO_DECIMAL
+            allocation_mortality_count = summary['total_mortality_count']
+            allocation_current_fish_count = CycleDashboardService._estimate_current_fish_count(
+                allocation=allocation,
+                mortality_count=allocation_mortality_count,
             )
+            allocation_current_biomass_kg = CycleDashboardService._estimate_current_biomass_kg(
+                allocation=allocation,
+                current_fish_count=allocation_current_fish_count,
+                latest_average_weight_g=summary['latest_average_weight_g'],
+            )
+            total_initial_fish_count += allocation.initial_fish_count
+            total_estimated_current_fish_count += allocation_current_fish_count
+            total_mortality_count += allocation_mortality_count
+            total_feed_consumed_kg += summary['total_feed_consumed_kg'] or CycleDashboardService.ZERO_DECIMAL
+            total_estimated_current_biomass_kg += allocation_current_biomass_kg
 
             if summary['has_today_daily_log']:
                 units_with_today_log_count += 1
@@ -132,6 +140,48 @@ class CycleDashboardService:
             },
             'allocations': allocations_payload,
         }
+
+    @staticmethod
+    def _estimate_current_fish_count(
+        *,
+        allocation: CycleUnitAllocation,
+        mortality_count: int,
+    ) -> int:
+        """Estime le stock courant réel d'une allocation."""
+        if allocation.status == CycleUnitAllocation.STATUS_HARVESTED:
+            return 0
+
+        return max(allocation.current_fish_count - mortality_count, 0)
+
+    @staticmethod
+    def _estimate_current_biomass_kg(
+        *,
+        allocation: CycleUnitAllocation,
+        current_fish_count: int,
+        latest_average_weight_g: Decimal | None,
+    ) -> Decimal:
+        """Estime la biomasse courante d'une allocation à partir de son stock réel."""
+        if allocation.status == CycleUnitAllocation.STATUS_HARVESTED:
+            return CycleDashboardService.ZERO_DECIMAL
+
+        if latest_average_weight_g is not None:
+            return (
+                Decimal(current_fish_count)
+                * Decimal(str(latest_average_weight_g))
+                / Decimal('1000')
+            ).quantize(CycleDashboardService.BIOMASS_QUANTIZE)
+
+        if allocation.current_biomass_kg is not None:
+            return Decimal(str(allocation.current_biomass_kg)).quantize(
+                CycleDashboardService.BIOMASS_QUANTIZE
+            )
+
+        if allocation.initial_biomass_kg is not None:
+            return Decimal(str(allocation.initial_biomass_kg)).quantize(
+                CycleDashboardService.BIOMASS_QUANTIZE
+            )
+
+        return CycleDashboardService.ZERO_DECIMAL
 
     @staticmethod
     def _build_legacy_dashboard_payload(cycle: ProductionCycle) -> dict[str, Any]:
