@@ -252,6 +252,137 @@ export default function HarvestModal({
     ? (formData.final_average_weight - initialAverageWeight).toFixed(0)
     : '0';
 
+  if (isUnitScope) {
+    return (
+      <Modal
+        visible={visible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={onClose}
+      >
+        <View style={styles.unitOverlay}>
+          <View style={styles.unitContainer}>
+            {/* Header */}
+            <View style={styles.unitHeader}>
+              <View>
+                <Text style={styles.unitTitle}>
+                  {t('harvestThisUnitTitle', { unitName })}
+                </Text>
+                <Text style={styles.unitSubtitle}>{unitName}</Text>
+              </View>
+              <TouchableOpacity onPress={onClose} style={styles.unitCloseButton}>
+                <Ionicons name="close" size={24} color={AQUACARE_COLORS.GRAY_DARK} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} style={styles.unitBody}>
+              {/* Info disponible */}
+              <View style={styles.infoRow}>
+                <Text style={styles.infoText}>
+                  {t('fishAvailableInThisUnit')} : <Text style={styles.infoBold}>{availableFishCount}</Text>
+                </Text>
+              </View>
+
+              {/* Résumé de l'unité */}
+              <View style={styles.unitSectionCard}>
+                <Text style={styles.unitSectionTitle}>{t('productionUnitSummary')}</Text>
+                <Text style={styles.unitSectionText}>
+                  <Text style={styles.unitSectionLabel}>{t('productionUnit')}: </Text>
+                  {unitName}
+                </Text>
+                <Text style={styles.unitSectionText}>
+                  <Text style={styles.unitSectionLabel}>{t('thisActionWillCloseThisProductionUnit')}</Text>
+                </Text>
+              </View>
+
+              {/* Formulaire de récolte */}
+              <View style={styles.unitSectionCard}>
+                <Text style={styles.unitSectionTitle}>{t('harvestData')}</Text>
+
+                <Text style={styles.label}>{t('harvestDate')} *</Text>
+                <TextInput
+                  style={styles.input}
+                  value={formData.harvest_date}
+                  onChangeText={(value) => handleInputChange('harvest_date', value)}
+                  placeholder={t('dateFormatPlaceholder')}
+                  placeholderTextColor={AQUACARE_COLORS.GRAY_LIGHT}
+                />
+
+                <Text style={styles.label}>{t('finalCount')} *</Text>
+                <TextInput
+                  style={styles.input}
+                  value={formData.final_count.toString()}
+                  onChangeText={(value) => handleInputChange('final_count', parseInt(value) || 0)}
+                  keyboardType="numeric"
+                  placeholder={t('enterFinalCount')}
+                  placeholderTextColor={AQUACARE_COLORS.GRAY_LIGHT}
+                />
+
+                <Text style={styles.label}>{t('finalAverageWeight')} (g) *</Text>
+                <TextInput
+                  style={styles.input}
+                  value={formData.final_average_weight.toString()}
+                  onChangeText={(value) => handleInputChange('final_average_weight', parseFloat(value) || 0)}
+                  keyboardType="numeric"
+                  placeholder={t('enterFinalWeight')}
+                  placeholderTextColor={AQUACARE_COLORS.GRAY_LIGHT}
+                />
+
+                <Text style={styles.label}>{t('harvestNotes')} ({t('optional')})</Text>
+                <TextInput
+                  style={[styles.input, styles.inputMultiline]}
+                  value={formData.harvest_notes}
+                  onChangeText={(value) => handleInputChange('harvest_notes', value)}
+                  placeholder={t('enterHarvestNotes')}
+                  placeholderTextColor={AQUACARE_COLORS.GRAY_LIGHT}
+                  multiline
+                  numberOfLines={3}
+                />
+              </View>
+
+              {/* Récapitulatif */}
+              <View style={styles.unitRecap}>
+                <Text style={styles.unitRecapTitle}>{t('performanceMetrics')}</Text>
+
+                <View style={styles.unitRecapRow}>
+                  <Text style={styles.unitRecapLabel}>{t('unitSurvivalRate')}</Text>
+                  <Text style={styles.unitRecapValue}>{survivalRate}%</Text>
+                </View>
+
+                <View style={styles.unitRecapRow}>
+                  <Text style={styles.unitRecapLabel}>{t('unitWeightGain')}</Text>
+                  <Text style={styles.unitRecapValue}>+{weightGain}g</Text>
+                </View>
+
+                <View style={styles.unitRecapRow}>
+                  <Text style={styles.unitRecapLabel}>{t('totalHarvestedWeight')} (kg)</Text>
+                  <Text style={styles.unitRecapValue}>
+                    {formData.total_harvested_weight.toLocaleString('fr-FR')} kg
+                  </Text>
+                </View>
+              </View>
+            </ScrollView>
+
+            <TouchableOpacity
+              style={[styles.unitSubmitBtn, loading && styles.unitSubmitBtnDisabled]}
+              onPress={handleSubmit}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color={AQUACARE_COLORS.WHITE} />
+              ) : (
+                <>
+                  <Ionicons name="cut-outline" size={20} color={AQUACARE_COLORS.WHITE} />
+                  <Text style={styles.unitSubmitBtnText}>{t('confirmUnitHarvest')}</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    );
+  }
+
   return (
     <Modal
       visible={visible}
@@ -582,5 +713,141 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     opacity: 0.6,
+  },
+  unitOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  unitContainer: {
+    backgroundColor: AQUACARE_COLORS.WHITE,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 32,
+    maxHeight: '90%',
+  },
+  unitHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 16,
+  },
+  unitTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: AQUACARE_COLORS.GRAY_DARK,
+  },
+  unitSubtitle: {
+    fontSize: 14,
+    color: AQUACARE_COLORS.GRAY_LIGHT,
+    marginTop: 2,
+  },
+  unitCloseButton: {
+    padding: 4,
+  },
+  unitBody: {
+    flexGrow: 0,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: AQUACARE_COLORS.CREAM,
+    padding: 10,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  infoText: {
+    fontSize: 14,
+    color: AQUACARE_COLORS.GRAY_DARK,
+  },
+  infoBold: {
+    fontWeight: 'bold',
+    color: AQUACARE_COLORS.GREEN_PRIMARY,
+  },
+  unitSectionCard: {
+    backgroundColor: AQUACARE_COLORS.CREAM,
+    borderRadius: 12,
+    padding: 14,
+    marginTop: 16,
+  },
+  unitSectionTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: AQUACARE_COLORS.GREEN_PRIMARY,
+    marginBottom: 10,
+  },
+  unitSectionText: {
+    fontSize: 14,
+    color: AQUACARE_COLORS.GRAY_DARK,
+    marginBottom: 4,
+  },
+  unitSectionLabel: {
+    fontWeight: '600',
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: AQUACARE_COLORS.GRAY_DARK,
+    marginBottom: 6,
+    marginTop: 12,
+  },
+  input: {
+    ...sharedTextInputStyles.base,
+    borderWidth: 1,
+    borderColor: AQUACARE_COLORS.GRAY_LIGHT,
+    borderRadius: 8,
+    color: AQUACARE_COLORS.GRAY_DARK,
+    backgroundColor: AQUACARE_COLORS.CREAM,
+  },
+  inputMultiline: {
+    ...sharedTextInputStyles.multilineCompact,
+    height: 80,
+  },
+  unitRecap: {
+    backgroundColor: AQUACARE_COLORS.CREAM,
+    borderRadius: 12,
+    padding: 14,
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  unitRecapTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: AQUACARE_COLORS.GREEN_PRIMARY,
+    marginBottom: 10,
+  },
+  unitRecapRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  unitRecapLabel: {
+    fontSize: 14,
+    color: AQUACARE_COLORS.GRAY_LIGHT,
+  },
+  unitRecapValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: AQUACARE_COLORS.GRAY_DARK,
+  },
+  unitSubmitBtn: {
+    backgroundColor: AQUACARE_COLORS.GREEN_PRIMARY,
+    borderRadius: 12,
+    paddingVertical: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  unitSubmitBtnDisabled: {
+    opacity: 0.6,
+  },
+  unitSubmitBtnText: {
+    color: AQUACARE_COLORS.WHITE,
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
