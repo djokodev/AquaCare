@@ -489,14 +489,16 @@ export default function DashboardScreen({ navigation }: any) {
         </View>
       )}
 
-      <QuickActionsPreview
-        onOpenSheet={() => setActionsSheetVisible(true)}
-        hasActiveCycles={activeCycles.length > 0}
-        unreadCount={unreadCount}
-        navigation={navigation}
-        scope="cycle"
-        hideGlobalCycleOperationalActions={cycleHasProductionUnits}
-      />
+      {!cycleHasProductionUnits ? (
+        <QuickActionsPreview
+          onOpenSheet={() => setActionsSheetVisible(true)}
+          hasActiveCycles={activeCycles.length > 0}
+          unreadCount={unreadCount}
+          navigation={navigation}
+          scope="cycle"
+          hideGlobalCycleOperationalActions={cycleHasProductionUnits}
+        />
+      ) : null}
 
       {sessionCycle ? (
         <View className="px-5 py-5">
@@ -584,17 +586,19 @@ export default function DashboardScreen({ navigation }: any) {
         cycle={selectedCycle}
       />
 
-      <QuickActionsSheet
-        visible={actionsSheetVisible}
-        onClose={() => setActionsSheetVisible(false)}
-        unreadCount={unreadCount}
-        navigation={navigation}
-        scope="cycle"
-        cycleContext={sessionCycle?.id ? { cycleId: sessionCycle.id } : undefined}
-        onPartialHarvestCycle={cycleHasProductionUnits ? undefined : openCyclePartialHarvestModal}
-        onHarvestCycle={openCycleHarvestModal}
-        hideGlobalCycleOperationalActions={cycleHasProductionUnits}
-      />
+      {!cycleHasProductionUnits ? (
+        <QuickActionsSheet
+          visible={actionsSheetVisible}
+          onClose={() => setActionsSheetVisible(false)}
+          unreadCount={unreadCount}
+          navigation={navigation}
+          scope="cycle"
+          cycleContext={sessionCycle?.id ? { cycleId: sessionCycle.id } : undefined}
+          onPartialHarvestCycle={cycleHasProductionUnits ? undefined : openCyclePartialHarvestModal}
+          onHarvestCycle={openCycleHarvestModal}
+          hideGlobalCycleOperationalActions={cycleHasProductionUnits}
+        />
+      ) : null}
       </ScrollView>
     </View>
   );
