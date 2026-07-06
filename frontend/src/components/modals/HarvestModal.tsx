@@ -263,16 +263,16 @@ export default function HarvestModal({
         <View style={styles.unitOverlay}>
           <View style={styles.unitContainer}>
             {/* Header */}
-            <View style={styles.unitHeader}>
-              <View>
-                <Text style={styles.unitTitle}>
-                  {t('harvestThisUnitTitle', { unitName })}
-                </Text>
-                <Text style={styles.unitSubtitle}>{unitName}</Text>
-              </View>
-              <TouchableOpacity onPress={onClose} style={styles.unitCloseButton}>
-                <Ionicons name="close" size={24} color={AQUACARE_COLORS.GRAY_DARK} />
-              </TouchableOpacity>
+          <View style={styles.unitHeader}>
+            <View>
+              <Text style={styles.unitTitle}>
+                  {t('harvestThisUnitAction')}
+              </Text>
+                <Text style={styles.unitSubtitle}>{t('productionUnitSummary')}</Text>
+            </View>
+            <TouchableOpacity onPress={onClose} style={styles.unitCloseButton}>
+              <Ionicons name="close" size={24} color={AQUACARE_COLORS.GRAY_DARK} />
+            </TouchableOpacity>
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} style={styles.unitBody}>

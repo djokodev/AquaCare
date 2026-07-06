@@ -189,9 +189,9 @@ export default function PartialHarvestModal({
           <View style={styles.header}>
             <View>
               <Text style={styles.title}>
-                {isUnitScope ? t('partialHarvestUnitTitle', { unitName }) : t('partialHarvestTitle')}
+                {isUnitScope ? t('partialHarvestUnitAction') : t('partialHarvestTitle')}
               </Text>
-              <Text style={styles.subtitle}>{isUnitScope ? unitName : cycle?.cycle_name}</Text>
+              <Text style={styles.subtitle}>{isUnitScope ? t('productionUnitSummary') : cycle?.cycle_name}</Text>
             </View>
             <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
               <Ionicons name="close" size={24} color={COLORS.GRAY_DARK} />
