@@ -855,6 +855,81 @@ class TestCycleUnitAllocationDashboardViewSet:
 
 
 @pytest.mark.django_db
+class TestCycleUnitAllocationHarvestActionsViewSet:
+    """Tests pour les actions de récolte sur une allocation de cycle."""
+
+    def test_harvest_allocation_updates_allocation_and_cycle(self, auth_client, production_cycle):
+        allocation = create_cycle_unit_allocation(production_cycle, name='Bac récolte', volume_m3='3.00')
+        allocation.current_fish_count = 900
+        allocation.current_biomass_kg = Decimal('270.00')
+        allocation.save(update_fields=['current_fish_count', 'current_biomass_kg', 'updated_at'])
+
+        url = reverse('aquaculture:cycle-unit-allocation-harvest', kwargs={'pk': allocation.id})
+        data = {
+            'harvest_date': date.today().isoformat(),
+            'final_count': 880,
+            'final_average_weight': '300.00',
+            'harvest_notes': "Recolte de l'unite principale",
+        }
+
+        response = auth_client.post(url, data, format='json')
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data['message']
+        assert response.data['cycle']['id'] == str(production_cycle.id)
+        assert response.data['cycle']['current_count'] == 0
+        assert Decimal(str(response.data['cycle']['current_biomass'])) == Decimal('0.00')
+        assert response.data['cycle_unit_allocation']['status'] == 'harvested'
+        assert response.data['cycle_unit_allocation']['status_display']
+        assert response.data['cycle_unit_allocation']['final_fish_count'] == 880
+        assert Decimal(str(response.data['cycle_unit_allocation']['final_average_weight_g'])) == Decimal('300.00')
+        assert Decimal(str(response.data['cycle_unit_allocation']['final_biomass_kg'])) == Decimal('264.00')
+
+        allocation.refresh_from_db()
+        production_cycle.refresh_from_db()
+        assert allocation.status == 'harvested'
+        assert allocation.current_fish_count == 0
+        assert allocation.final_fish_count == 880
+        assert production_cycle.current_count == 0
+        assert production_cycle.current_biomass == Decimal('0.00')
+
+    def test_partial_harvest_allocation_returns_enriched_payload(self, auth_client, production_cycle):
+        allocation = create_cycle_unit_allocation(production_cycle, name='Bac partiel', volume_m3='3.00')
+        allocation.current_fish_count = 900
+        allocation.current_biomass_kg = Decimal('270.00')
+        allocation.save(update_fields=['current_fish_count', 'current_biomass_kg', 'updated_at'])
+
+        url = reverse('aquaculture:cycle-unit-allocation-partial-harvest', kwargs={'pk': allocation.id})
+        data = {
+            'harvest_date': date.today().isoformat(),
+            'count_harvested': 120,
+            'average_weight_g': '300.00',
+            'sale_price_fcfa_per_kg': '1800.00',
+            'notes': 'Vente locale',
+        }
+
+        response = auth_client.post(url, data, format='json')
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data['message']
+        assert response.data['cycle']['id'] == str(production_cycle.id)
+        assert response.data['cycle_unit_allocation']['id'] == str(allocation.id)
+        assert response.data['cycle_unit_allocation']['current_fish_count'] == 780
+        assert Decimal(str(response.data['cycle_unit_allocation']['current_biomass_kg'])) == Decimal('234.00')
+        assert response.data['partial_harvest']['count_harvested'] == 120
+        assert response.data['partial_harvest']['cycle_unit_allocation'] == str(allocation.id)
+        assert response.data['partial_harvest']['production_unit'] == str(allocation.production_unit_id)
+        assert response.data['partial_harvest']['production_unit_name'] == 'Bac partiel'
+
+        allocation.refresh_from_db()
+        production_cycle.refresh_from_db()
+        assert allocation.current_fish_count == 780
+        assert allocation.current_biomass_kg == Decimal('234.00')
+        assert production_cycle.current_count == 780
+        assert production_cycle.current_biomass == Decimal('234.00')
+
+
+@pytest.mark.django_db
 class TestCycleLogViewSet:
     """Tests pour le ViewSet CycleLog."""
 

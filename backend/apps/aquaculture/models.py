@@ -406,6 +406,15 @@ class ProductionUnit(models.Model):
 class CycleUnitAllocation(models.Model):
     """Allocation d'un cycle de production à une unité réelle."""
 
+    STATUS_ACTIVE = 'active'
+    STATUS_HARVESTED = 'harvested'
+    STATUS_INACTIVE = 'inactive'
+    STATUS_CHOICES = [
+        (STATUS_ACTIVE, _('Actif')),
+        (STATUS_HARVESTED, _('Récolté')),
+        (STATUS_INACTIVE, _('Inactif')),
+    ]
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     cycle = models.ForeignKey(
         'ProductionCycle',
@@ -442,6 +451,36 @@ class CycleUnitAllocation(models.Model):
         default=Decimal('0'),
         validators=[MinValueValidator(Decimal('0'))],
         verbose_name=_("Biomasse actuelle (kg)"),
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=STATUS_ACTIVE,
+        verbose_name=_("Statut"),
+    )
+    harvested_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name=_("Récoltée le"),
+    )
+    final_fish_count = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        verbose_name=_("Nombre final de poissons"),
+    )
+    final_average_weight_g = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name=_("Poids moyen final (g)"),
+    )
+    final_biomass_kg = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name=_("Biomasse finale (kg)"),
     )
     expected_survival_rate_pct = models.DecimalField(
         max_digits=5,
@@ -1372,7 +1411,7 @@ class PartialHarvestQuerySet(models.QuerySet):
     """QuerySet optimisé pour les récoltes partielles."""
 
     def for_api(self):
-        return self.select_related('cycle')
+        return self.select_related('cycle', 'cycle_unit_allocation__production_unit')
 
 
 class PartialHarvest(models.Model):
@@ -1393,6 +1432,7 @@ class PartialHarvest(models.Model):
         verbose_name_plural = _("Récoltes partielles")
         indexes = [
             models.Index(fields=['cycle', 'harvest_date']),
+            models.Index(fields=['cycle_unit_allocation', 'harvest_date']),
             models.Index(fields=['client_uuid']),
             models.Index(fields=['created_offline', 'synced_at']),
         ]
@@ -1412,6 +1452,15 @@ class PartialHarvest(models.Model):
         on_delete=models.CASCADE,
         related_name='partial_harvests',
         verbose_name=_("Cycle de production")
+    )
+
+    cycle_unit_allocation = models.ForeignKey(
+        CycleUnitAllocation,
+        on_delete=models.SET_NULL,
+        related_name='unit_partial_harvests',
+        null=True,
+        blank=True,
+        verbose_name=_("Allocation d'unité de production"),
     )
 
     harvest_date = models.DateField(verbose_name=_("Date de récolte partielle"))
@@ -1466,7 +1515,13 @@ class PartialHarvest(models.Model):
     objects = PartialHarvestQuerySet.as_manager()
 
     def __str__(self):
-        return f"{self.cycle.cycle_name} — récolte partielle {self.harvest_date} ({self.count_harvested} poissons)"
+        unit_label = ''
+        if self.cycle_unit_allocation and self.cycle_unit_allocation.production_unit:
+            unit_label = f" — {self.cycle_unit_allocation.production_unit.name}"
+        return (
+            f"{self.cycle.cycle_name}{unit_label} — récolte partielle "
+            f"{self.harvest_date} ({self.count_harvested} poissons)"
+        )
 
 
 class NutritionalGuide(models.Model):

@@ -24,6 +24,7 @@ from decimal import Decimal
 from typing import TYPE_CHECKING, Any, TypedDict
 
 from django.db import transaction
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from ..constants import (
@@ -47,7 +48,7 @@ from ..domain.exceptions import (
     OfflineSyncConflictError,
 )
 from ..domain.production_units import normalize_production_unit_type
-from ..models import CycleLog, PartialHarvest, ProductionCycle
+from ..models import CycleLog, CycleUnitAllocation, PartialHarvest, ProductionCycle
 from .base import BaseService
 
 if TYPE_CHECKING:
@@ -283,6 +284,11 @@ class ProductionCycleService(BaseService):
         )
 
         # 7. Actions post-récolte (désactiver plans futurs, etc.)
+        ProductionCycleService._finalize_cycle_unit_allocations_on_cycle_harvest(
+            cycle=cycle,
+            harvest_date=harvest_date,
+            final_average_weight=final_average_weight,
+        )
         ProductionCycleService._post_harvest_actions(cycle)
 
         return cycle
@@ -534,6 +540,318 @@ class ProductionCycleService(BaseService):
         cycle.current_biomass = locked_cycle.current_biomass
         return locked_cycle, partial_harvest
 
+    @staticmethod
+    @transaction.atomic
+    def partial_harvest_cycle_unit_allocation(
+        allocation: CycleUnitAllocation,
+        harvest_date: date,
+        count_harvested: int,
+        average_weight_g: Decimal,
+        sale_price_fcfa_per_kg: Decimal | None = None,
+        notes: str = "",
+        client_uuid=None,
+        created_offline: bool = False,
+    ) -> tuple[ProductionCycle, CycleUnitAllocation, PartialHarvest]:
+        """Enregistre une récolte partielle sur une unité de production précise."""
+        ProductionCycleService.log_operation(
+            "partial_harvest_cycle_unit_allocation",
+            {"allocation_id": str(allocation.id), "count_harvested": count_harvested}
+        )
+
+        locked_allocation = CycleUnitAllocation.objects.select_for_update().select_related(
+            'cycle__farm_profile__user',
+            'production_unit',
+        ).get(id=allocation.id)
+        locked_cycle = locked_allocation.cycle
+
+        if locked_cycle.status == 'harvested':
+            raise CycleAlreadyHarvestedError(
+                _("Ce cycle a déjà été récolté le %(date)s") % {'date': locked_cycle.end_date}
+            )
+
+        if locked_allocation.status == CycleUnitAllocation.STATUS_HARVESTED:
+            raise BusinessRuleViolation(
+                _("Cette unité a déjà été récoltée.")
+            )
+
+        if client_uuid:
+            existing = PartialHarvest.objects.select_related(
+                'cycle__farm_profile__user',
+                'cycle_unit_allocation__production_unit',
+            ).filter(client_uuid=client_uuid).first()
+            if existing:
+                if existing.cycle.farm_profile.user_id != locked_cycle.farm_profile.user_id:
+                    raise OfflineSyncConflictError(
+                        _("Conflit de synchronisation : ce client_uuid appartient à un autre utilisateur.")
+                    )
+                if existing.cycle_id != locked_cycle.id:
+                    raise OfflineSyncConflictError(
+                        _("Conflit de synchronisation : ce client_uuid est déjà lié à un autre cycle.")
+                    )
+                if existing.cycle_unit_allocation_id != locked_allocation.id:
+                    raise OfflineSyncConflictError(
+                        _("Conflit de synchronisation : ce client_uuid est déjà lié à une autre unité.")
+                    )
+                return locked_cycle, locked_allocation, existing
+
+        ProductionCycleService._validate_partial_harvest_rules(
+            locked_cycle,
+            harvest_date,
+            count_harvested,
+            average_weight_g,
+            available_count=locked_allocation.current_fish_count,
+        )
+
+        total_weight_kg = Decimal(str(count_harvested)) * average_weight_g / Decimal('1000')
+
+        partial_harvest = PartialHarvest.objects.create(
+            cycle=locked_cycle,
+            cycle_unit_allocation=locked_allocation,
+            harvest_date=harvest_date,
+            count_harvested=count_harvested,
+            average_weight_g=average_weight_g,
+            total_weight_kg=total_weight_kg,
+            sale_price_fcfa_per_kg=sale_price_fcfa_per_kg,
+            notes=notes,
+            client_uuid=client_uuid,
+            created_offline=created_offline,
+        )
+
+        remaining_count = max(locked_allocation.current_fish_count - count_harvested, 0)
+        effective_average_weight_g = ProductionCycleService._get_allocation_average_weight_g(locked_allocation)
+        remaining_biomass = AquacultureCalculator.calculate_biomass(
+            remaining_count,
+            effective_average_weight_g,
+        )
+
+        locked_allocation.current_fish_count = remaining_count
+        locked_allocation.current_biomass_kg = remaining_biomass
+        locked_allocation.save(
+            update_fields=[
+                'current_fish_count',
+                'current_biomass_kg',
+                'updated_at',
+            ]
+        )
+
+        ProductionCycleService._sync_cycle_current_metrics_from_allocations(locked_cycle)
+
+        ProductionCycleService.log_operation(
+            "partial_harvest_unit_recorded",
+            {
+                "cycle_id": str(locked_cycle.id),
+                "allocation_id": str(locked_allocation.id),
+                "partial_harvest_id": str(partial_harvest.id),
+                "remaining_count": locked_allocation.current_fish_count,
+            },
+            level='info'
+        )
+
+        return locked_cycle, locked_allocation, partial_harvest
+
+    @staticmethod
+    @transaction.atomic
+    def harvest_cycle_unit_allocation(
+        allocation: CycleUnitAllocation,
+        harvest_date: date,
+        final_count: int,
+        final_average_weight: Decimal,
+        harvest_notes: str = "",
+    ) -> tuple[ProductionCycle, CycleUnitAllocation]:
+        """Finalise complètement une unité de production liée à un cycle."""
+        ProductionCycleService.log_operation(
+            "harvest_cycle_unit_allocation",
+            {"allocation_id": str(allocation.id), "harvest_date": str(harvest_date)}
+        )
+
+        locked_allocation = CycleUnitAllocation.objects.select_for_update().select_related(
+            'cycle__farm_profile__user',
+            'production_unit',
+        ).get(id=allocation.id)
+        locked_cycle = locked_allocation.cycle
+
+        if locked_cycle.status == 'harvested':
+            raise CycleAlreadyHarvestedError(
+                _("Ce cycle a déjà été récolté le %(date)s") % {'date': locked_cycle.end_date}
+            )
+
+        if locked_allocation.status == CycleUnitAllocation.STATUS_HARVESTED:
+            raise BusinessRuleViolation(
+                _("Cette unité a déjà été récoltée.")
+            )
+
+        if harvest_date < locked_cycle.start_date:
+            raise InvalidHarvestDataError(
+                _("Date de récolte (%(harvest)s) ne peut être avant le début du cycle (%(start)s)")
+                % {'harvest': harvest_date, 'start': locked_cycle.start_date}
+            )
+
+        future_limit = date.today() + timedelta(days=7)
+        if harvest_date > future_limit:
+            raise InvalidHarvestDataError(
+                _("Date de récolte ne peut être dans le futur")
+            )
+
+        if final_count < 0:
+            raise InvalidHarvestDataError(_("Nombre final de poissons invalide"))
+        if final_count > locked_allocation.current_fish_count:
+            raise InsufficientFishCountError(
+                _("Le nombre final (%(n)s) ne peut dépasser l'effectif actuel (%(c)s)")
+                % {'n': final_count, 'c': locked_allocation.current_fish_count}
+            )
+
+        current_average_weight = ProductionCycleService._get_allocation_average_weight_g(locked_allocation)
+        if current_average_weight > 0 and final_average_weight < current_average_weight * Decimal('0.8'):
+            raise InvalidHarvestDataError(
+                _("Poids moyen final (%(final).1fg) anormalement inférieur au poids actuel (%(current).1fg)")
+                % {'final': final_average_weight, 'current': current_average_weight}
+            )
+
+        species = locked_cycle.species
+        min_harvest_weight = {
+            'tilapia': 200,
+            'clarias': 250,
+        }
+        min_weight = min_harvest_weight.get(species, 150)
+        if final_average_weight < min_weight:
+            raise InvalidHarvestDataError(
+                _("Poids moyen final trop faible (%(weight)s g). Minimum pour %(species)s : %(min)s g")
+                % {'weight': final_average_weight, 'species': species, 'min': min_weight}
+            )
+
+        final_biomass = AquacultureCalculator.calculate_biomass(final_count, final_average_weight)
+        now = timezone.now()
+
+        locked_allocation.final_fish_count = final_count
+        locked_allocation.final_average_weight_g = final_average_weight
+        locked_allocation.final_biomass_kg = final_biomass
+        locked_allocation.harvested_at = now
+        locked_allocation.status = CycleUnitAllocation.STATUS_HARVESTED
+        locked_allocation.current_fish_count = 0
+        locked_allocation.current_biomass_kg = Decimal('0')
+        locked_allocation.save(
+            update_fields=[
+                'final_fish_count',
+                'final_average_weight_g',
+                'final_biomass_kg',
+                'harvested_at',
+                'status',
+                'current_fish_count',
+                'current_biomass_kg',
+                'updated_at',
+            ]
+        )
+
+        ProductionCycleService._sync_cycle_current_metrics_from_allocations(locked_cycle)
+
+        ProductionCycleService.log_operation(
+            "unit_harvest_recorded",
+            {
+                "cycle_id": str(locked_cycle.id),
+                "allocation_id": str(locked_allocation.id),
+                "final_count": final_count,
+                "final_biomass": float(final_biomass),
+            },
+            level='info'
+        )
+
+        return locked_cycle, locked_allocation
+
+    @staticmethod
+    def _get_allocation_average_weight_g(allocation: CycleUnitAllocation) -> Decimal:
+        """Retourne le poids moyen courant estimé d'une allocation."""
+        if allocation.current_fish_count > 0 and allocation.current_biomass_kg is not None:
+            return (
+                Decimal(str(allocation.current_biomass_kg)) * Decimal('1000')
+                / Decimal(allocation.current_fish_count)
+            )
+        if allocation.final_fish_count and allocation.final_average_weight_g:
+            return Decimal(str(allocation.final_average_weight_g))
+        if allocation.initial_fish_count > 0 and allocation.initial_biomass_kg is not None:
+            return (
+                Decimal(str(allocation.initial_biomass_kg)) * Decimal('1000')
+                / Decimal(allocation.initial_fish_count)
+            )
+        return Decimal('0')
+
+    @staticmethod
+    def _sync_cycle_current_metrics_from_allocations(cycle: ProductionCycle) -> ProductionCycle:
+        """Recalcule les métriques courantes d'un cycle à partir de ses allocations."""
+        allocations = list(
+            cycle.unit_allocations.all().select_related('production_unit')
+        )
+        if not allocations:
+            return cycle
+
+        total_count = sum((allocation.current_fish_count for allocation in allocations), 0)
+        total_biomass = sum(
+            (
+                Decimal(str(allocation.current_biomass_kg))
+                if allocation.current_biomass_kg is not None
+                else Decimal('0')
+                for allocation in allocations
+            ),
+            Decimal('0'),
+        )
+
+        cycle.current_count = total_count
+        cycle.current_biomass = total_biomass.quantize(Decimal('0.01'))
+        if total_count > 0:
+            cycle.current_average_weight = (
+                cycle.current_biomass * Decimal('1000') / Decimal(total_count)
+            ).quantize(Decimal('0.01'))
+        else:
+            cycle.current_average_weight = Decimal('0')
+        cycle.save(update_fields=['current_count', 'current_biomass', 'current_average_weight', 'updated_at'])
+        return cycle
+
+    @staticmethod
+    def _finalize_cycle_unit_allocations_on_cycle_harvest(
+        *,
+        cycle: ProductionCycle,
+        harvest_date: date,
+        final_average_weight: Decimal,
+    ) -> None:
+        """Marque les unités restantes comme récoltées lors d'une récolte globale du cycle."""
+        if not cycle.unit_allocations.exists():
+            return
+
+        now = timezone.now()
+        for allocation in cycle.unit_allocations.select_for_update().select_related('production_unit'):
+            if allocation.status == CycleUnitAllocation.STATUS_HARVESTED:
+                continue
+
+            current_count = allocation.current_fish_count
+            if current_count <= 0:
+                current_count = allocation.final_fish_count or 0
+
+            current_average_weight = ProductionCycleService._get_allocation_average_weight_g(allocation)
+            if current_average_weight <= 0:
+                current_average_weight = Decimal(str(final_average_weight))
+
+            allocation.final_fish_count = current_count
+            allocation.final_average_weight_g = current_average_weight
+            allocation.final_biomass_kg = allocation.current_biomass_kg or AquacultureCalculator.calculate_biomass(
+                current_count,
+                current_average_weight,
+            )
+            allocation.harvested_at = now
+            allocation.status = CycleUnitAllocation.STATUS_HARVESTED
+            allocation.current_fish_count = 0
+            allocation.current_biomass_kg = Decimal('0')
+            allocation.save(
+                update_fields=[
+                    'final_fish_count',
+                    'final_average_weight_g',
+                    'final_biomass_kg',
+                    'harvested_at',
+                    'status',
+                    'current_fish_count',
+                    'current_biomass_kg',
+                    'updated_at',
+                ]
+            )
+
     # =================== MÉTHODES PRIVÉES (VALIDATION) ===================
 
     @staticmethod
@@ -770,6 +1088,7 @@ class ProductionCycleService(BaseService):
         harvest_date: date,
         count_harvested: int,
         average_weight_g: Decimal,
+        available_count: int | None = None,
     ) -> None:
         """
         Valide les règles métier d'une récolte partielle.
@@ -779,10 +1098,11 @@ class ProductionCycleService(BaseService):
             InvalidHarvestDataError: poids sous le minimum commercial
         """
         # Effectif disponible
-        if count_harvested > cycle.current_count:
+        current_available_count = cycle.current_count if available_count is None else available_count
+        if count_harvested > current_available_count:
             raise InsufficientFishCountError(
                 _("Nombre à récolter (%(n)d) supérieur à l'effectif disponible (%(c)d)")
-                % {'n': count_harvested, 'c': cycle.current_count}
+                % {'n': count_harvested, 'c': current_available_count}
             )
 
         # Poids minimum commercial par espèce

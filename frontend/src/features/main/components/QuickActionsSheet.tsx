@@ -57,6 +57,26 @@ interface QuickActionsSheetProps {
   cycleContext?: {
     cycleId: string;
   };
+
+  /**
+   * Ouvre la modale de récolte partielle du cycle.
+   */
+  onPartialHarvestCycle?: () => void;
+
+  /**
+   * Ouvre la modale de récolte complète du cycle.
+   */
+  onHarvestCycle?: () => void;
+
+  /**
+   * Ouvre la modale de récolte partielle d'une unité.
+   */
+  onPartialHarvestUnit?: () => void;
+
+  /**
+   * Ouvre la modale de récolte complète d'une unité.
+   */
+  onHarvestUnit?: () => void;
 }
 
 /**
@@ -71,6 +91,7 @@ interface ActionItem {
   category: 'aquaculture' | 'commerce' | 'planning';
   badge?: number; // Nombre affiché dans le badge (ex: notifications)
   params?: Record<string, unknown>;
+  onPress?: () => void;
 }
 
 const hasValidProductionUnitContext = (
@@ -116,6 +137,10 @@ export default function QuickActionsSheet({
   scope = 'cycle',
   productionUnitContext,
   cycleContext,
+  onPartialHarvestCycle,
+  onHarvestCycle,
+  onPartialHarvestUnit,
+  onHarvestUnit,
 }: QuickActionsSheetProps) {
   const { t } = useTranslation();
 
@@ -189,6 +214,28 @@ export default function QuickActionsSheet({
             productionUnitName: unitContext.productionUnitName,
           },
         },
+        ...(onPartialHarvestUnit
+          ? [{
+              id: 'partialHarvestUnit',
+              labelKey: 'partialHarvestUnitAction',
+              icon: 'cut-outline' as const,
+              iconColor: AQUACARE_COLORS.WARNING,
+              route: '',
+              category: 'aquaculture' as const,
+              onPress: onPartialHarvestUnit,
+            }]
+          : []),
+        ...(onHarvestUnit
+          ? [{
+              id: 'harvestUnit',
+              labelKey: 'harvestThisUnitAction',
+              icon: 'checkmark-done-outline' as const,
+              iconColor: AQUACARE_COLORS.GREEN_PRIMARY,
+              route: '',
+              category: 'aquaculture' as const,
+              onPress: onHarvestUnit,
+            }]
+          : []),
       ];
     }
 
@@ -260,8 +307,30 @@ export default function QuickActionsSheet({
           cycleId: cycleContext.cycleId,
         },
       },
+      ...(onPartialHarvestCycle
+        ? [{
+            id: 'partialHarvestCycle',
+            labelKey: 'partialHarvestOption',
+            icon: 'cut-outline' as const,
+            iconColor: AQUACARE_COLORS.WARNING,
+            route: '',
+            category: 'aquaculture' as const,
+            onPress: onPartialHarvestCycle,
+          }]
+        : []),
+      ...(onHarvestCycle
+        ? [{
+            id: 'harvestCycle',
+            labelKey: 'harvestEntireCycleAction',
+            icon: 'checkmark-done-outline' as const,
+            iconColor: AQUACARE_COLORS.GREEN_PRIMARY,
+            route: '',
+            category: 'aquaculture' as const,
+            onPress: onHarvestCycle,
+          }]
+        : []),
     ];
-  }, [productionUnitContext, cycleContext, scope, unreadCount]);
+  }, [cycleContext, onHarvestCycle, onPartialHarvestCycle, onHarvestUnit, onPartialHarvestUnit, productionUnitContext, scope, unreadCount]);
 
   /**
    * Configuration des actions Commerce
@@ -299,10 +368,10 @@ export default function QuickActionsSheet({
    * Ferme le sheet puis navigue après un petit délai pour une animation fluide
    */
   const handleActionPress = (route: string, params?: Record<string, unknown>) => {
-    onClose(); // Fermer d'abord le sheet
-    // Délai pour animation fluide
     setTimeout(() => {
-      navigation.navigate(route, params);
+      if (route) {
+        navigation.navigate(route, params);
+      }
     }, 300);
   };
 
@@ -313,7 +382,16 @@ export default function QuickActionsSheet({
     <TouchableOpacity
       key={action.id}
       className="flex-row items-center p-4 bg-white mb-2 rounded-xl shadow-sm"
-      onPress={() => handleActionPress(action.route, action.params)}
+      onPress={() => {
+        onClose();
+        setTimeout(() => {
+          if (action.onPress) {
+            action.onPress();
+          } else {
+            handleActionPress(action.route, action.params);
+          }
+        }, 300);
+      }}
       activeOpacity={0.7}
     >
       {/* Icône dans un cercle coloré */}

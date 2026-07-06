@@ -14,64 +14,123 @@ import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { useDispatch } from 'react-redux';
 import { AppDispatch } from '@/store/store';
-import { createPartialHarvest } from '@/features/aquaculture/store/aquacultureSlice';
-import { ProductionCycle, PartialHarvestData } from '@/types/aquaculture';
+import {
+  createPartialHarvest,
+  createPartialHarvestForUnit,
+} from '@/features/aquaculture/store/aquacultureSlice';
+import { CycleUnitAllocation, PartialHarvestData, ProductionCycle } from '@/types/aquaculture';
 import { AQUACARE_COLORS as COLORS } from '@/constants/colors';
 import { getApiErrorMessage } from '@/utils/errorParser';
 import { sharedTextInputStyles } from '@/components/common/inputStyles';
+
+type HarvestScope = 'cycle' | 'unit';
+
+interface ProductionUnitContext {
+  cycleId: string;
+  cycleUnitAllocationId: string;
+  productionUnitId: string;
+  productionUnitName: string;
+}
 
 interface PartialHarvestModalProps {
   visible: boolean;
   onClose: () => void;
   cycle: ProductionCycle | null;
+  scope?: HarvestScope;
+  productionUnitContext?: ProductionUnitContext;
+  unitAllocation?: CycleUnitAllocation | null;
   onSuccess?: () => void;
 }
 
-export default function PartialHarvestModal({ visible, onClose, cycle, onSuccess }: PartialHarvestModalProps) {
+const toNumber = (value: number | string | null | undefined): number => {
+  const parsed = typeof value === 'number' ? value : Number(value ?? 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const getAllocationAverageWeight = (allocation: CycleUnitAllocation | null | undefined): number => {
+  if (!allocation) return 0;
+  if (allocation.current_fish_count > 0 && allocation.current_biomass_kg != null) {
+    return (toNumber(allocation.current_biomass_kg) * 1000) / allocation.current_fish_count;
+  }
+  if (allocation.final_fish_count && allocation.final_average_weight_g != null) {
+    return toNumber(allocation.final_average_weight_g);
+  }
+  if (allocation.initial_fish_count > 0 && allocation.initial_biomass_kg != null) {
+    return (toNumber(allocation.initial_biomass_kg) * 1000) / allocation.initial_fish_count;
+  }
+  return 0;
+};
+
+export default function PartialHarvestModal({
+  visible,
+  onClose,
+  cycle,
+  scope = 'cycle',
+  productionUnitContext,
+  unitAllocation,
+  onSuccess,
+}: PartialHarvestModalProps) {
   const { t } = useTranslation();
   const dispatch = useDispatch<AppDispatch>();
   const [loading, setLoading] = useState(false);
+  const isUnitScope = scope === 'unit';
+  const unitName = productionUnitContext?.productionUnitName ?? unitAllocation?.production_unit_name ?? t('productionUnit');
 
   const today = new Date().toISOString().split('T')[0];
+  const availableFishCount = isUnitScope
+    ? unitAllocation?.current_fish_count ?? 0
+    : cycle?.current_count ?? 0;
+  const averageWeightDefault = isUnitScope
+    ? getAllocationAverageWeight(unitAllocation)
+    : cycle?.current_average_weight || 0;
 
   const [formData, setFormData] = useState<PartialHarvestData>({
     harvest_date: today,
     count_harvested: 0,
-    average_weight_g: cycle?.current_average_weight || 0,
+    average_weight_g: averageWeightDefault,
     sale_price_fcfa_per_kg: undefined,
     notes: '',
   });
 
   React.useEffect(() => {
-    if (visible && cycle) {
+    if (visible && ((isUnitScope && unitAllocation) || (!isUnitScope && cycle))) {
       setFormData({
         harvest_date: today,
         count_harvested: 0,
-        average_weight_g: cycle.current_average_weight || 0,
+        average_weight_g: averageWeightDefault,
         sale_price_fcfa_per_kg: undefined,
         notes: '',
       });
     }
-  }, [visible, cycle]);
+  }, [averageWeightDefault, cycle, isUnitScope, today, unitAllocation, visible]);
 
-  if (!cycle) return null;
+  if ((isUnitScope && (!productionUnitContext || !unitAllocation)) || (!isUnitScope && !cycle)) return null;
 
   // Calculs UX temps réel (backend fait le calcul autoritaire)
   const totalWeightKg = (formData.count_harvested * formData.average_weight_g) / 1000;
   const estimatedRevenue = formData.sale_price_fcfa_per_kg
     ? totalWeightKg * formData.sale_price_fcfa_per_kg
     : null;
-  const remainingFish = cycle.current_count - formData.count_harvested;
+  const remainingFish = availableFishCount - formData.count_harvested;
 
   const handleChange = (field: keyof PartialHarvestData, value: string) => {
     const numericFields: (keyof PartialHarvestData)[] = [
       'count_harvested', 'average_weight_g', 'sale_price_fcfa_per_kg',
     ];
     if (numericFields.includes(field)) {
+      if (field === 'sale_price_fcfa_per_kg' && value.trim() === '') {
+        setFormData(prev => ({
+          ...prev,
+          sale_price_fcfa_per_kg: undefined,
+        }));
+        return;
+      }
+
       const parsed = parseFloat(value);
+      const normalizedValue = field === 'count_harvested' ? parseInt(value, 10) : parsed;
       setFormData(prev => ({
         ...prev,
-        [field]: isNaN(parsed) ? 0 : parsed,
+        [field]: Number.isNaN(normalizedValue) ? 0 : normalizedValue,
       }));
     } else {
       setFormData(prev => ({ ...prev, [field]: value }));
@@ -87,7 +146,7 @@ export default function PartialHarvestModal({ visible, onClose, cycle, onSuccess
       Alert.alert(t('error'), t('partialHarvestCountRequired'));
       return false;
     }
-    if (formData.count_harvested > cycle.current_count) {
+    if (formData.count_harvested > availableFishCount) {
       Alert.alert(t('error'), t('partialHarvestCountExceedsAvailable'));
       return false;
     }
@@ -102,14 +161,21 @@ export default function PartialHarvestModal({ visible, onClose, cycle, onSuccess
     if (!validate()) return;
     setLoading(true);
     try {
-      await dispatch(createPartialHarvest({ id: cycle.id, data: formData })).unwrap();
+      if (isUnitScope && productionUnitContext && unitAllocation) {
+        await dispatch(createPartialHarvestForUnit({
+          allocationId: productionUnitContext.cycleUnitAllocationId,
+          data: formData,
+        })).unwrap();
+      } else if (cycle) {
+        await dispatch(createPartialHarvest({ id: cycle.id, data: formData })).unwrap();
+      }
       Alert.alert(
         t('success'),
-        t('partialHarvestSuccess', { remaining: remainingFish }),
+        t(isUnitScope ? 'productionUnitPartialHarvestSuccess' : 'partialHarvestSuccess', { remaining: remainingFish }),
         [{ text: t('ok'), onPress: () => { onSuccess?.(); onClose(); } }]
       );
     } catch (error: unknown) {
-      Alert.alert(t('error'), getApiErrorMessage(error, t('partialHarvestError')));
+      Alert.alert(t('error'), getApiErrorMessage(error, isUnitScope ? t('productionUnitPartialHarvestError') : t('partialHarvestError')));
     } finally {
       setLoading(false);
     }
@@ -122,8 +188,10 @@ export default function PartialHarvestModal({ visible, onClose, cycle, onSuccess
           {/* Header */}
           <View style={styles.header}>
             <View>
-              <Text style={styles.title}>{t('partialHarvestTitle')}</Text>
-              <Text style={styles.subtitle}>{cycle.cycle_name}</Text>
+              <Text style={styles.title}>
+                {isUnitScope ? t('partialHarvestUnitTitle', { unitName }) : t('partialHarvestTitle')}
+              </Text>
+              <Text style={styles.subtitle}>{isUnitScope ? unitName : cycle?.cycle_name}</Text>
             </View>
             <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
               <Ionicons name="close" size={24} color={COLORS.GRAY_DARK} />
@@ -134,7 +202,7 @@ export default function PartialHarvestModal({ visible, onClose, cycle, onSuccess
             {/* Info disponible */}
             <View style={styles.infoRow}>
               <Text style={styles.infoText}>
-                {t('remainingFish')} : <Text style={styles.infoBold}>{cycle.current_count}</Text>
+                {isUnitScope ? t('fishAvailableInThisUnit') : t('remainingFish')} : <Text style={styles.infoBold}>{availableFishCount}</Text>
               </Text>
             </View>
 
@@ -155,7 +223,7 @@ export default function PartialHarvestModal({ visible, onClose, cycle, onSuccess
               value={formData.count_harvested > 0 ? String(formData.count_harvested) : ''}
               onChangeText={(v) => handleChange('count_harvested', v)}
               keyboardType="numeric"
-              placeholder={t('maxValuePlaceholder', { max: cycle.current_count })}
+              placeholder={t('maxValuePlaceholder', { max: availableFishCount })}
               placeholderTextColor={COLORS.GRAY_LIGHT}
             />
 
@@ -171,7 +239,7 @@ export default function PartialHarvestModal({ visible, onClose, cycle, onSuccess
             />
 
             {/* Prix de vente (optionnel) */}
-            <Text style={styles.label}>{t('salePriceFcfa')} ({t('optional')})</Text>
+              <Text style={styles.label}>{t('salePriceFcfa')} ({t('optional')})</Text>
             <TextInput
               style={styles.input}
               value={formData.sale_price_fcfa_per_kg ? String(formData.sale_price_fcfa_per_kg) : ''}
@@ -210,7 +278,7 @@ export default function PartialHarvestModal({ visible, onClose, cycle, onSuccess
                   </View>
                 )}
                 <View style={styles.recapRow}>
-                  <Text style={styles.recapLabel}>{t('remainingFish')}</Text>
+                  <Text style={styles.recapLabel}>{isUnitScope ? t('fishAvailableInThisUnit') : t('remainingFish')}</Text>
                   <Text style={[
                     styles.recapValue,
                     { color: remainingFish < 0 ? COLORS.ERROR : COLORS.GRAY_DARK }

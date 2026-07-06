@@ -226,24 +226,21 @@ export default function DashboardScreen({ navigation }: any) {
     }
   }, [activeCycles, currentCycle, currentCycleInList, dispatch]);
 
-  const openHarvestChoice = (cycle: ProductionCycle) => {
-    setSelectedCycle(cycle);
-    Alert.alert(
-      t('harvestTypeTitle'),
-      '',
-      [
-        {
-          text: t('partialHarvestOption'),
-          onPress: () => setPartialHarvestModalVisible(true),
-        },
-        {
-          text: t('completeHarvest'),
-          onPress: () => setHarvestModalVisible(true),
-        },
-        { text: t('cancel'), style: 'cancel', onPress: () => setSelectedCycle(null) },
-      ]
-    );
-  };
+  const openCycleHarvestModal = useCallback(() => {
+    if (!sessionCycle) {
+      return;
+    }
+    setSelectedCycle(sessionCycle);
+    setHarvestModalVisible(true);
+  }, [sessionCycle]);
+
+  const openCyclePartialHarvestModal = useCallback(() => {
+    if (!sessionCycle) {
+      return;
+    }
+    setSelectedCycle(sessionCycle);
+    setPartialHarvestModalVisible(true);
+  }, [sessionCycle]);
 
   const closeHarvestModal = () => {
     setHarvestModalVisible(false);
@@ -491,15 +488,13 @@ export default function DashboardScreen({ navigation }: any) {
         </View>
       )}
 
-      {!primaryCycleHasProductionUnits ? (
-        <QuickActionsPreview
-          onOpenSheet={() => setActionsSheetVisible(true)}
-          hasActiveCycles={activeCycles.length > 0}
-          unreadCount={unreadCount}
-          navigation={navigation}
-          scope="cycle"
-        />
-      ) : null}
+      <QuickActionsPreview
+        onOpenSheet={() => setActionsSheetVisible(true)}
+        hasActiveCycles={activeCycles.length > 0}
+        unreadCount={unreadCount}
+        navigation={navigation}
+        scope="cycle"
+      />
 
       {sessionCycle ? (
         <View className="px-5 py-5">
@@ -587,16 +582,16 @@ export default function DashboardScreen({ navigation }: any) {
         cycle={selectedCycle}
       />
 
-      {!primaryCycleHasProductionUnits ? (
       <QuickActionsSheet
-          visible={actionsSheetVisible}
-          onClose={() => setActionsSheetVisible(false)}
-          unreadCount={unreadCount}
-          navigation={navigation}
-          scope="cycle"
-          cycleContext={sessionCycle?.id ? { cycleId: sessionCycle.id } : undefined}
-        />
-      ) : null}
+        visible={actionsSheetVisible}
+        onClose={() => setActionsSheetVisible(false)}
+        unreadCount={unreadCount}
+        navigation={navigation}
+        scope="cycle"
+        cycleContext={sessionCycle?.id ? { cycleId: sessionCycle.id } : undefined}
+        onPartialHarvestCycle={openCyclePartialHarvestModal}
+        onHarvestCycle={openCycleHarvestModal}
+      />
       </ScrollView>
     </View>
   );

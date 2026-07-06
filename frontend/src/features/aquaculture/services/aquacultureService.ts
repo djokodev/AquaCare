@@ -25,6 +25,8 @@ import {
   PartialHarvest,
   PartialHarvestData,
   CycleHarvestResponse,
+  CycleUnitHarvestResponse,
+  CycleUnitPartialHarvestResponse,
   ActiveSanitaryIssueGroup,
   ProductionUnit,
   CycleUnitAllocation,
@@ -450,6 +452,27 @@ class AquacultureService {
     }
   }
 
+  async harvestProductionUnitAllocation(
+    allocationId: string,
+    harvestData: {
+      harvest_date: string;
+      final_count: number;
+      final_average_weight: number;
+      harvest_notes?: string;
+    }
+  ): Promise<CycleUnitHarvestResponse> {
+    try {
+      const response = await apiService.post<CycleUnitHarvestResponse>(
+        `${this.baseUrl}/cycle-unit-allocations/${allocationId}/harvest/`,
+        harvestData
+      );
+      return response.data;
+    } catch (error) {
+      logger.error(`Erreur lors de la récolte de l'unité ${allocationId}:`, error);
+      throw error;
+    }
+  }
+
   async partialHarvestCycle(
     id: string,
     data: PartialHarvestData
@@ -465,6 +488,26 @@ class AquacultureService {
       );
       return response.data;
     } catch (error) {
+      throw error;
+    }
+  }
+
+  async partialHarvestProductionUnitAllocation(
+    allocationId: string,
+    data: PartialHarvestData
+  ): Promise<CycleUnitPartialHarvestResponse> {
+    try {
+      const payload: PartialHarvestData = {
+        ...data,
+        client_uuid: data.client_uuid ?? this.generateClientUUID(),
+      };
+      const response = await apiService.post<CycleUnitPartialHarvestResponse>(
+        `${this.baseUrl}/cycle-unit-allocations/${allocationId}/partial-harvest/`,
+        payload
+      );
+      return response.data;
+    } catch (error) {
+      logger.error(`Erreur lors de la récolte partielle de l'unité ${allocationId}:`, error);
       throw error;
     }
   }

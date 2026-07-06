@@ -67,6 +67,8 @@ class ProductionUnitDashboardService:
     ) -> dict[str, Any]:
         total_mortality_count = sum((log.mortality_count or 0) for log in daily_logs)
         estimated_current_fish_count = max(allocation.initial_fish_count - total_mortality_count, 0)
+        if allocation.status == CycleUnitAllocation.STATUS_HARVESTED:
+            estimated_current_fish_count = 0
 
         mortality_rate_pct = ProductionUnitDashboardService.ZERO_DECIMAL
         if allocation.initial_fish_count > 0:
@@ -98,6 +100,11 @@ class ProductionUnitDashboardService:
             ).quantize(ProductionUnitDashboardService.BIOMASS_QUANTIZE)
         else:
             estimated_current_biomass_kg = allocation.current_biomass_kg or allocation.initial_biomass_kg
+
+        if allocation.status == CycleUnitAllocation.STATUS_HARVESTED:
+            estimated_current_biomass_kg = ProductionUnitDashboardService.ZERO_DECIMAL.quantize(
+                ProductionUnitDashboardService.BIOMASS_QUANTIZE
+            )
 
         last_daily_log_date = daily_logs[0].log_date if daily_logs else None
         today = timezone.localdate()

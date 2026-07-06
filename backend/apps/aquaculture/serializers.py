@@ -157,6 +157,7 @@ class CycleUnitAllocationSerializer(serializers.ModelSerializer):
         source='production_unit.recommended_capacity',
         read_only=True,
     )
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
     survival_rate_pct = serializers.SerializerMethodField()
 
     class Meta:
@@ -175,6 +176,12 @@ class CycleUnitAllocationSerializer(serializers.ModelSerializer):
             'current_fish_count',
             'initial_biomass_kg',
             'current_biomass_kg',
+            'status',
+            'status_display',
+            'harvested_at',
+            'final_fish_count',
+            'final_average_weight_g',
+            'final_biomass_kg',
             'expected_survival_rate_pct',
             'survival_rate_pct',
             'created_at',
@@ -188,6 +195,12 @@ class CycleUnitAllocationSerializer(serializers.ModelSerializer):
             'production_unit_display_dimension',
             'production_unit_capacity_density_unit',
             'production_unit_recommended_capacity',
+            'status',
+            'status_display',
+            'harvested_at',
+            'final_fish_count',
+            'final_average_weight_g',
+            'final_biomass_kg',
             'survival_rate_pct',
             'created_at',
             'updated_at',
@@ -1155,6 +1168,9 @@ class PartialHarvestReadSerializer(serializers.ModelSerializer):
     """Sérialiseur lecture pour une récolte partielle."""
 
     estimated_revenue_fcfa = serializers.SerializerMethodField()
+    cycle_unit_allocation = serializers.SerializerMethodField()
+    production_unit = serializers.SerializerMethodField()
+    production_unit_name = serializers.SerializerMethodField()
 
     class Meta:
         model = PartialHarvest
@@ -1162,12 +1178,26 @@ class PartialHarvestReadSerializer(serializers.ModelSerializer):
             'id', 'harvest_date', 'count_harvested', 'average_weight_g',
             'total_weight_kg', 'sale_price_fcfa_per_kg', 'estimated_revenue_fcfa',
             'notes', 'client_uuid', 'created_offline', 'synced_at', 'created_at',
+            'cycle_unit_allocation', 'production_unit', 'production_unit_name',
         ]
         read_only_fields = fields
 
     def get_estimated_revenue_fcfa(self, obj):
         if obj.sale_price_fcfa_per_kg:
             return round(float(obj.total_weight_kg) * float(obj.sale_price_fcfa_per_kg), 2)
+        return None
+
+    def get_cycle_unit_allocation(self, obj):
+        return str(obj.cycle_unit_allocation_id) if obj.cycle_unit_allocation_id else None
+
+    def get_production_unit(self, obj):
+        allocation = getattr(obj, 'cycle_unit_allocation', None)
+        return str(allocation.production_unit_id) if allocation and allocation.production_unit_id else None
+
+    def get_production_unit_name(self, obj):
+        allocation = getattr(obj, 'cycle_unit_allocation', None)
+        if allocation and allocation.production_unit:
+            return allocation.production_unit.name
         return None
 
 
@@ -1184,6 +1214,23 @@ class CycleHarvestResponseSerializer(serializers.Serializer):
 
     message = serializers.CharField()
     cycle = ProductionCycleSerializer()
+
+
+class CycleUnitAllocationHarvestResponseSerializer(serializers.Serializer):
+    """Réponse d'une récolte complète d'une unité de production."""
+
+    message = serializers.CharField()
+    cycle = ProductionCycleSerializer()
+    cycle_unit_allocation = CycleUnitAllocationSerializer()
+
+
+class CycleUnitAllocationPartialHarvestResponseSerializer(serializers.Serializer):
+    """Réponse d'une récolte partielle d'une unité de production."""
+
+    message = serializers.CharField()
+    cycle = ProductionCycleSerializer()
+    cycle_unit_allocation = CycleUnitAllocationSerializer()
+    partial_harvest = PartialHarvestReadSerializer()
 
 
 class CycleStatisticsSerializer(serializers.Serializer):

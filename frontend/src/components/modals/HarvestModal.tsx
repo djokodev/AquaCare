@@ -14,26 +14,84 @@ import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { useDispatch, useSelector } from 'react-redux';
 import { AppDispatch, RootState } from '@/store/store';
-import { harvestCycle } from '@/features/aquaculture/store/aquacultureSlice';
-import { ProductionCycle, HarvestData } from '@/types/aquaculture';
+import {
+  harvestCycle,
+  harvestCycleUnitAllocation,
+} from '@/features/aquaculture/store/aquacultureSlice';
+import { CycleUnitAllocation, HarvestData, ProductionCycle } from '@/types/aquaculture';
 import { AQUACARE_COLORS } from '@/constants/colors';
 import { getApiErrorMessage } from '@/utils/errorParser';
 import { sharedTextInputStyles } from '@/components/common/inputStyles';
+
+type HarvestScope = 'cycle' | 'unit';
+
+interface ProductionUnitContext {
+  cycleId: string;
+  cycleUnitAllocationId: string;
+  productionUnitId: string;
+  productionUnitName: string;
+}
 
 interface HarvestModalProps {
   visible: boolean;
   onClose: () => void;
   cycle: ProductionCycle | null;
+  scope?: HarvestScope;
+  productionUnitContext?: ProductionUnitContext;
+  unitAllocation?: CycleUnitAllocation | null;
   onSuccess?: () => void;
   onContactBuyer?: () => void;
   onNextCycle?: (harvestedCycleId: string) => void;
 }
 
-export default function HarvestModal({ visible, onClose, cycle, onSuccess, onContactBuyer, onNextCycle }: HarvestModalProps) {
+const toNumber = (value: number | string | null | undefined): number => {
+  const parsed = typeof value === 'number' ? value : Number(value ?? 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const getAllocationAverageWeight = (allocation: CycleUnitAllocation | null | undefined): number => {
+  if (!allocation) return 0;
+  if (allocation.current_fish_count > 0 && allocation.current_biomass_kg != null) {
+    return (toNumber(allocation.current_biomass_kg) * 1000) / allocation.current_fish_count;
+  }
+  if (allocation.final_fish_count && allocation.final_average_weight_g != null) {
+    return toNumber(allocation.final_average_weight_g);
+  }
+  if (allocation.initial_fish_count > 0 && allocation.initial_biomass_kg != null) {
+    return (toNumber(allocation.initial_biomass_kg) * 1000) / allocation.initial_fish_count;
+  }
+  return 0;
+};
+
+export default function HarvestModal({
+  visible,
+  onClose,
+  cycle,
+  scope = 'cycle',
+  productionUnitContext,
+  unitAllocation,
+  onSuccess,
+  onContactBuyer,
+  onNextCycle,
+}: HarvestModalProps) {
   const { t } = useTranslation();
   const dispatch = useDispatch<AppDispatch>();
   const farmProfile = useSelector((s: RootState) => s.auth.farmProfile);
   const cycles = useSelector((s: RootState) => s.aquaculture.cycles);
+  const isUnitScope = scope === 'unit';
+  const unitName = productionUnitContext?.productionUnitName ?? unitAllocation?.production_unit_name ?? t('productionUnit');
+  const availableFishCount = isUnitScope
+    ? unitAllocation?.current_fish_count ?? 0
+    : cycle?.current_count ?? 0;
+  const initialFishCount = isUnitScope
+    ? unitAllocation?.initial_fish_count ?? 0
+    : cycle?.initial_count ?? 0;
+  const initialAverageWeight = isUnitScope
+    ? getAllocationAverageWeight(unitAllocation)
+    : cycle?.initial_average_weight ?? 0;
+  const availableAverageWeight = isUnitScope
+    ? getAllocationAverageWeight(unitAllocation)
+    : cycle?.current_average_weight ?? 0;
 
   const currentYear = new Date().getFullYear();
   const harvestedThisYear = cycles.filter(
@@ -41,14 +99,14 @@ export default function HarvestModal({ visible, onClose, cycle, onSuccess, onCon
   ).length;
   const numCyclesPerYear = farmProfile?.num_cycles_per_year ?? 1;
   // +1 because the current cycle being harvested is not yet counted
-  const hasMoreCycles = onNextCycle != null && (harvestedThisYear + 1) < numCyclesPerYear;
+  const hasMoreCycles = scope === 'cycle' && onNextCycle != null && (harvestedThisYear + 1) < numCyclesPerYear;
   const [loading, setLoading] = useState(false);
 
   // Etat du formulaire
   const [formData, setFormData] = useState<HarvestData>({
     harvest_date: new Date().toISOString().split('T')[0],
-    final_count: cycle?.current_count || 0,
-    final_average_weight: cycle?.current_average_weight || 0,
+    final_count: availableFishCount,
+    final_average_weight: availableAverageWeight,
     total_harvested_weight: 0,
     harvest_notes: '',
   });
@@ -80,6 +138,11 @@ export default function HarvestModal({ visible, onClose, cycle, onSuccess, onCon
       return false;
     }
 
+    if (formData.final_count > availableFishCount) {
+      Alert.alert(t('error'), t('harvestCountExceedsAvailable'));
+      return false;
+    }
+
     if (formData.final_average_weight <= 0) {
       Alert.alert(t('error'), t('finalWeightRequired'));
       return false;
@@ -89,49 +152,64 @@ export default function HarvestModal({ visible, onClose, cycle, onSuccess, onCon
   };
 
   const handleSubmit = async () => {
-    if (!cycle || !validateForm()) return;
+    if ((isUnitScope && (!productionUnitContext || !unitAllocation)) || (!isUnitScope && !cycle) || !validateForm()) {
+      return;
+    }
 
     setLoading(true);
     try {
-      await dispatch(harvestCycle({
-        id: cycle.id,
-        harvestData: formData,
-      })).unwrap();
+      if (isUnitScope && productionUnitContext && unitAllocation) {
+        await dispatch(harvestCycleUnitAllocation({
+          allocationId: productionUnitContext.cycleUnitAllocationId,
+          harvestData: formData,
+        })).unwrap();
 
-      const harvestedId = cycle.id;
-      Alert.alert(
-        t('success'),
-        t('harvestSuccess'),
-        [
-          ...(hasMoreCycles ? [{
-            text: t('consolidationStartNextCycle', { num: harvestedThisYear + 2 }),
-            onPress: () => {
-              onSuccess?.();
-              onClose();
-              onNextCycle!(harvestedId);
+        Alert.alert(
+          t('success'),
+          t('productionUnitHarvestSuccess'),
+          [{ text: t('ok'), onPress: () => { onSuccess?.(); onClose(); } }]
+        );
+      } else if (cycle) {
+        await dispatch(harvestCycle({
+          id: cycle.id,
+          harvestData: formData,
+        })).unwrap();
+
+        const harvestedId = cycle.id;
+        Alert.alert(
+          t('success'),
+          t('harvestSuccess'),
+          [
+            ...(hasMoreCycles ? [{
+              text: t('consolidationStartNextCycle', { num: harvestedThisYear + 2 }),
+              onPress: () => {
+                onSuccess?.();
+                onClose();
+                onNextCycle!(harvestedId);
+              },
+            }] : []),
+            ...(onContactBuyer ? [{
+              text: t('buyerNetworkCTA'),
+              onPress: () => {
+                onSuccess?.();
+                onClose();
+                onContactBuyer();
+              },
+            }] : []),
+            {
+              text: t('ok'),
+              onPress: () => {
+                onSuccess?.();
+                onClose();
+              },
             },
-          }] : []),
-          ...(onContactBuyer ? [{
-            text: t('buyerNetworkCTA'),
-            onPress: () => {
-              onSuccess?.();
-              onClose();
-              onContactBuyer();
-            },
-          }] : []),
-          {
-            text: t('ok'),
-            onPress: () => {
-              onSuccess?.();
-              onClose();
-            },
-          },
-        ]
-      );
+          ]
+        );
+      }
     } catch (error: unknown) {
       Alert.alert(
         t('error'),
-        getApiErrorMessage(error, t('harvestError'))
+        getApiErrorMessage(error, isUnitScope ? t('productionUnitHarvestError') : t('harvestError'))
       );
     } finally {
       setLoading(false);
@@ -139,22 +217,24 @@ export default function HarvestModal({ visible, onClose, cycle, onSuccess, onCon
   };
 
   const resetForm = () => {
+    const initialCount = isUnitScope ? availableFishCount : cycle?.current_count || 0;
+    const initialWeight = isUnitScope ? availableAverageWeight : cycle?.current_average_weight || 0;
     setFormData({
       harvest_date: new Date().toISOString().split('T')[0],
-      final_count: cycle?.current_count || 0,
-      final_average_weight: cycle?.current_average_weight || 0,
+      final_count: initialCount,
+      final_average_weight: initialWeight,
       total_harvested_weight: 0,
       harvest_notes: '',
     });
   };
 
   React.useEffect(() => {
-    if (visible && cycle) {
+    if (visible && ((isUnitScope && unitAllocation) || (!isUnitScope && cycle))) {
       resetForm();
     }
-  }, [visible, cycle]);
+  }, [availableAverageWeight, availableFishCount, cycle, isUnitScope, unitAllocation, visible]);
 
-  if (!cycle) return null;
+  if ((isUnitScope && (!productionUnitContext || !unitAllocation)) || (!isUnitScope && !cycle)) return null;
 
   /**
    * ⚠️ CALCULS TEMPORAIRES UX UNIQUEMENT
@@ -164,12 +244,12 @@ export default function HarvestModal({ visible, onClose, cycle, onSuccess, onCon
    * Note: weightGain est OK (simple différence pour UX).
    * survivalRate devrait idéalement venir du backend après calcul.
    */
-  const survivalRate = cycle.initial_count > 0
-    ? ((formData.final_count / cycle.initial_count) * 100).toFixed(1)
+  const survivalRate = initialFishCount > 0
+    ? ((formData.final_count / initialFishCount) * 100).toFixed(1)
     : '0';
 
-  const weightGain = cycle.initial_average_weight > 0
-    ? (formData.final_average_weight - cycle.initial_average_weight).toFixed(0)
+  const weightGain = initialAverageWeight > 0
+    ? (formData.final_average_weight - initialAverageWeight).toFixed(0)
     : '0';
 
   return (
@@ -183,7 +263,11 @@ export default function HarvestModal({ visible, onClose, cycle, onSuccess, onCon
         <View style={styles.modalContainer}>
           {/* Header */}
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>{t('harvestCycle')}</Text>
+            <Text style={styles.modalTitle}>
+              {isUnitScope && productionUnitContext
+                ? t('harvestThisUnitTitle', { unitName })
+                : t('harvestCycle')}
+            </Text>
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
               <Ionicons name="close" size={24} color={AQUACARE_COLORS.GRAY_DARK} />
             </TouchableOpacity>
@@ -192,19 +276,42 @@ export default function HarvestModal({ visible, onClose, cycle, onSuccess, onCon
           <ScrollView style={styles.modalContent}>
             {/* Informations du cycle */}
             <View style={styles.cycleInfoContainer}>
-              <Text style={styles.sectionTitle}>{t('cycleInformation')}</Text>
-              <Text style={styles.cycleInfo}>
-                <Text style={styles.infoLabel}>{t('cycleName')}: </Text>
-                {cycle.cycle_name}
+              <Text style={styles.sectionTitle}>
+                {isUnitScope ? t('productionUnitSummary') : t('cycleInformation')}
               </Text>
-              <Text style={styles.cycleInfo}>
-                <Text style={styles.infoLabel}>{t('species')}: </Text>
-                {cycle.species === 'clarias' ? t('clariasSpeciesFull') : t('tilapia')}
-              </Text>
-              <Text style={styles.cycleInfo}>
-                <Text style={styles.infoLabel}>{t('duration')}: </Text>
-                {Math.floor((new Date().getTime() - new Date(cycle.start_date).getTime()) / (1000 * 60 * 60 * 24))} {t('days')}
-              </Text>
+              {isUnitScope ? (
+                <>
+                  <Text style={styles.cycleInfo}>
+                    <Text style={styles.infoLabel}>{t('productionUnit')}: </Text>
+                    {unitName}
+                  </Text>
+                  <Text style={styles.cycleInfo}>
+                    <Text style={styles.infoLabel}>{t('fishAvailableInThisUnit')}: </Text>
+                    {availableFishCount}
+                  </Text>
+                  <Text style={styles.cycleInfo}>
+                    <Text style={styles.infoLabel}>{t('thisActionWillCloseThisProductionUnit')}</Text>
+                  </Text>
+                </>
+              ) : (
+                <>
+                  <Text style={styles.cycleInfo}>
+                    <Text style={styles.infoLabel}>{t('cycleName')}: </Text>
+                    {cycle?.cycle_name}
+                  </Text>
+                  <Text style={styles.cycleInfo}>
+                    <Text style={styles.infoLabel}>{t('species')}: </Text>
+                    {cycle?.species === 'clarias' ? t('clariasSpeciesFull') : t('tilapia')}
+                  </Text>
+                  <Text style={styles.cycleInfo}>
+                    <Text style={styles.infoLabel}>{t('duration')}: </Text>
+                    {cycle ? Math.floor((new Date().getTime() - new Date(cycle.start_date).getTime()) / (1000 * 60 * 60 * 24)) : 0} {t('days')}
+                  </Text>
+                  <Text style={styles.cycleInfo}>
+                    <Text style={styles.infoLabel}>{t('thisActionWillCloseEntireCycle')}</Text>
+                  </Text>
+                </>
+              )}
             </View>
 
             {/* Formulaire de récolte */}
@@ -275,12 +382,16 @@ export default function HarvestModal({ visible, onClose, cycle, onSuccess, onCon
               <View style={styles.metricsGrid}>
                 <View style={styles.metricCard}>
                   <Text style={styles.metricValue}>{survivalRate}%</Text>
-                  <Text style={styles.metricLabel}>{t('harvestSurvivalRate')}</Text>
+                  <Text style={styles.metricLabel}>
+                    {isUnitScope ? t('unitSurvivalRate') : t('harvestSurvivalRate')}
+                  </Text>
                 </View>
 
                 <View style={styles.metricCard}>
                   <Text style={styles.metricValue}>+{weightGain}g</Text>
-                  <Text style={styles.metricLabel}>{t('harvestWeightGain')}</Text>
+                  <Text style={styles.metricLabel}>
+                    {isUnitScope ? t('unitWeightGain') : t('harvestWeightGain')}
+                  </Text>
                 </View>
               </View>
             </View>
@@ -304,7 +415,9 @@ export default function HarvestModal({ visible, onClose, cycle, onSuccess, onCon
               {loading ? (
                 <ActivityIndicator color={AQUACARE_COLORS.WHITE} />
               ) : (
-                <Text style={styles.harvestButtonText}>{t('confirmHarvest')}</Text>
+                <Text style={styles.harvestButtonText}>
+                  {isUnitScope ? t('confirmUnitHarvest') : t('confirmHarvest')}
+                </Text>
               )}
             </TouchableOpacity>
           </View>

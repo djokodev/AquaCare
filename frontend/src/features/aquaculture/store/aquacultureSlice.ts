@@ -186,6 +186,36 @@ export const createPartialHarvest = createAsyncThunk(
   }
 );
 
+export const harvestCycleUnitAllocation = createAsyncThunk(
+  'aquaculture/harvestCycleUnitAllocation',
+  async (
+    { allocationId, harvestData }: { allocationId: string; harvestData: HarvestData },
+    { rejectWithValue }
+  ) => {
+    try {
+      const response = await aquacultureService.harvestProductionUnitAllocation(allocationId, harvestData);
+      return response;
+    } catch (error: unknown) {
+      return rejectWithValue(extractErrorMessage(error, "Erreur lors de la récolte de l'unité"));
+    }
+  }
+);
+
+export const createPartialHarvestForUnit = createAsyncThunk(
+  'aquaculture/createPartialHarvestForUnit',
+  async (
+    { allocationId, data }: { allocationId: string; data: PartialHarvestData },
+    { rejectWithValue }
+  ) => {
+    try {
+      const result = await aquacultureService.partialHarvestProductionUnitAllocation(allocationId, data);
+      return result;
+    } catch (error: unknown) {
+      return rejectWithValue(extractErrorMessage(error, 'Erreur lors de la récolte partielle de l’unité'));
+    }
+  }
+);
+
 export const fetchCycleLogs = createAsyncThunk(
   'aquaculture/fetchCycleLogs',
   async (cycleId: string | undefined, { rejectWithValue }) => {
@@ -482,6 +512,40 @@ export const aquacultureSlice = createSlice({
         if (idx !== -1) state.cycles[idx] = updatedCycle;
         const activeIdx = state.activeCycles.findIndex((c) => c.id === updatedCycle.id);
         if (activeIdx !== -1) state.activeCycles[activeIdx] = updatedCycle;
+        if (state.currentCycle?.id === updatedCycle.id) state.currentCycle = updatedCycle;
+      })
+
+      .addCase(createPartialHarvestForUnit.fulfilled, (state, action) => {
+        const { cycle: updatedCycle } = action.payload;
+        const idx = state.cycles.findIndex((c) => c.id === updatedCycle.id);
+        if (idx !== -1) state.cycles[idx] = updatedCycle;
+
+        const activeIdx = state.activeCycles.findIndex((c) => c.id === updatedCycle.id);
+        if (activeIdx !== -1) {
+          if (updatedCycle.status === 'active') {
+            state.activeCycles[activeIdx] = updatedCycle;
+          } else {
+            state.activeCycles.splice(activeIdx, 1);
+          }
+        }
+
+        if (state.currentCycle?.id === updatedCycle.id) state.currentCycle = updatedCycle;
+      })
+
+      .addCase(harvestCycleUnitAllocation.fulfilled, (state, action) => {
+        const { cycle: updatedCycle } = action.payload;
+        const idx = state.cycles.findIndex((c) => c.id === updatedCycle.id);
+        if (idx !== -1) state.cycles[idx] = updatedCycle;
+
+        const activeIdx = state.activeCycles.findIndex((c) => c.id === updatedCycle.id);
+        if (activeIdx !== -1) {
+          if (updatedCycle.status === 'active') {
+            state.activeCycles[activeIdx] = updatedCycle;
+          } else {
+            state.activeCycles.splice(activeIdx, 1);
+          }
+        }
+
         if (state.currentCycle?.id === updatedCycle.id) state.currentCycle = updatedCycle;
       })
 
