@@ -263,12 +263,15 @@ describe('features/main/screens/DashboardScreen', () => {
       expect(getByText('productionUnitsDashboardCta')).toBeTruthy();
       expect(getByText('reportCycleTitle')).toBeTruthy();
       expect(getByText('storeTitle')).toBeTruthy();
+      expect(getByText('viewAllActions')).toBeTruthy();
       expect(queryByText('storeDashboardSubtitle')).toBeNull();
-      expect(queryByText('Cycle A #1')).toBeNull();
-      expect(queryByText('viewAllActions')).toBeNull();
-      expect(queryByText('dailyLog')).toBeNull();
-      expect(queryByText('productCatalog')).toBeNull();
-      expect(queryByText('harvest')).toBeNull();
+    });
+
+    fireEvent.press(getByText('viewAllActions'));
+
+    await waitFor(() => {
+      expect(getByText('harvestEntireCycleAction')).toBeTruthy();
+      expect(queryByText('partialHarvestOption')).toBeNull();
     });
 
     fireEvent.press(getByText('reportCycleTitle'));

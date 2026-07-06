@@ -1,29 +1,28 @@
 """
 ViewSets DRF pour les unités de production et leurs allocations de cycle.
 """
-from drf_spectacular.utils import extend_schema
 from django.utils.translation import gettext_lazy as _
-from rest_framework import permissions, viewsets
+from drf_spectacular.utils import extend_schema
+from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework import status
 
 from ..domain.production_units import normalize_production_unit_type
 from ..models import CycleUnitAllocation, ProductionUnit
 from ..serializers import (
-    CycleUnitAllocationSerializer,
     CycleUnitAllocationHarvestResponseSerializer,
     CycleUnitAllocationPartialHarvestResponseSerializer,
+    CycleUnitAllocationSerializer,
     HarvestSerializer,
     PartialHarvestSerializer,
     ProductionUnitDashboardSerializer,
     ProductionUnitSerializer,
 )
-from ..services import ProductionUnitDashboardService
 from ..services import (
     HarvestCycleCommand,
     PartialHarvestCommand,
     ProductionCycleApplicationService,
+    ProductionUnitDashboardService,
 )
 
 
@@ -132,17 +131,19 @@ class CycleUnitAllocationViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        updated_cycle, updated_allocation, partial = ProductionCycleApplicationService.partial_harvest_cycle_unit_allocation(
-            allocation=allocation,
-            command=PartialHarvestCommand(
-                harvest_date=serializer.validated_data['harvest_date'],
-                count_harvested=serializer.validated_data['count_harvested'],
-                average_weight_g=serializer.validated_data['average_weight_g'],
-                sale_price_fcfa_per_kg=serializer.validated_data.get('sale_price_fcfa_per_kg'),
-                notes=serializer.validated_data.get('notes', ''),
-                client_uuid=serializer.validated_data.get('client_uuid'),
-                created_offline=serializer.validated_data.get('created_offline', False),
-            ),
+        updated_cycle, updated_allocation, partial = (
+            ProductionCycleApplicationService.partial_harvest_cycle_unit_allocation(
+                allocation=allocation,
+                command=PartialHarvestCommand(
+                    harvest_date=serializer.validated_data['harvest_date'],
+                    count_harvested=serializer.validated_data['count_harvested'],
+                    average_weight_g=serializer.validated_data['average_weight_g'],
+                    sale_price_fcfa_per_kg=serializer.validated_data.get('sale_price_fcfa_per_kg'),
+                    notes=serializer.validated_data.get('notes', ''),
+                    client_uuid=serializer.validated_data.get('client_uuid'),
+                    created_offline=serializer.validated_data.get('created_offline', False),
+                ),
+            )
         )
 
         response_serializer = CycleUnitAllocationPartialHarvestResponseSerializer(

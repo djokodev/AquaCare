@@ -117,6 +117,7 @@ export default function DashboardScreen({ navigation }: any) {
   const primaryCycleHasProductionUnits = Boolean(
     primaryActiveCycle?.infrastructure_type && primaryActiveCycle.infrastructure_type.length > 0
   );
+  const cycleHasProductionUnits = primaryCycleHasProductionUnits || (currentCycleUnitCount ?? 0) > 0;
   const dashboardBusinessMetrics = useMemo(
     () => calculateDashboardBusinessMetrics(activeCycles, currentCycleInList),
     [activeCycles, currentCycleInList]
@@ -589,7 +590,7 @@ export default function DashboardScreen({ navigation }: any) {
         navigation={navigation}
         scope="cycle"
         cycleContext={sessionCycle?.id ? { cycleId: sessionCycle.id } : undefined}
-        onPartialHarvestCycle={openCyclePartialHarvestModal}
+        onPartialHarvestCycle={cycleHasProductionUnits ? undefined : openCyclePartialHarvestModal}
         onHarvestCycle={openCycleHarvestModal}
       />
       </ScrollView>

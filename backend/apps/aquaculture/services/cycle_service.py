@@ -480,6 +480,14 @@ class ProductionCycleService(BaseService):
                   "(statut actuel: %(status)s)") % {'status': locked_cycle.get_status_display()}
             )
 
+        if locked_cycle.unit_allocations.exists():
+            raise BusinessRuleViolation(
+                _(
+                    "La récolte partielle globale est indisponible pour les cycles avec unités "
+                    "de production. Utilisez la récolte partielle au niveau des unités."
+                )
+            )
+
         # 2. Déduplication offline
         if client_uuid:
             existing = PartialHarvest.objects.select_related('cycle__farm_profile__user').filter(
@@ -564,14 +572,15 @@ class ProductionCycleService(BaseService):
         ).get(id=allocation.id)
         locked_cycle = locked_allocation.cycle
 
-        if locked_cycle.status == 'harvested':
-            raise CycleAlreadyHarvestedError(
-                _("Ce cycle a déjà été récolté le %(date)s") % {'date': locked_cycle.end_date}
+        if locked_cycle.status != 'active':
+            raise CycleNotActiveError(
+                _("Seuls les cycles actifs peuvent être récoltés via une unité "
+                  "(statut actuel: %(status)s)") % {'status': locked_cycle.get_status_display()}
             )
 
-        if locked_allocation.status == CycleUnitAllocation.STATUS_HARVESTED:
+        if locked_allocation.status != CycleUnitAllocation.STATUS_ACTIVE:
             raise BusinessRuleViolation(
-                _("Cette unité a déjà été récoltée.")
+                _("Cette unité de production doit être active pour être récoltée.")
             )
 
         if client_uuid:
@@ -670,14 +679,15 @@ class ProductionCycleService(BaseService):
         ).get(id=allocation.id)
         locked_cycle = locked_allocation.cycle
 
-        if locked_cycle.status == 'harvested':
-            raise CycleAlreadyHarvestedError(
-                _("Ce cycle a déjà été récolté le %(date)s") % {'date': locked_cycle.end_date}
+        if locked_cycle.status != 'active':
+            raise CycleNotActiveError(
+                _("Seuls les cycles actifs peuvent être récoltés via une unité "
+                  "(statut actuel: %(status)s)") % {'status': locked_cycle.get_status_display()}
             )
 
-        if locked_allocation.status == CycleUnitAllocation.STATUS_HARVESTED:
+        if locked_allocation.status != CycleUnitAllocation.STATUS_ACTIVE:
             raise BusinessRuleViolation(
-                _("Cette unité a déjà été récoltée.")
+                _("Cette unité de production doit être active pour être récoltée.")
             )
 
         if harvest_date < locked_cycle.start_date:

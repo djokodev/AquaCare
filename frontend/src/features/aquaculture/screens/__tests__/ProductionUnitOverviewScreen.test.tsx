@@ -1,5 +1,6 @@
 import React from 'react';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { useDispatch } from 'react-redux';
 
 import ProductionUnitOverviewScreen from '../ProductionUnitOverviewScreen';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
@@ -10,8 +11,23 @@ jest.mock('@/features/aquaculture/services/aquacultureService', () => ({
   },
 }));
 
+jest.mock('react-redux', () => ({
+  useDispatch: jest.fn(),
+}));
+
+jest.mock('@/components/modals/HarvestModal', () => ({
+  __esModule: true,
+  default: () => null,
+}));
+
+jest.mock('@/components/modals/PartialHarvestModal', () => ({
+  __esModule: true,
+  default: () => null,
+}));
+
 describe('features/aquaculture/screens/ProductionUnitOverviewScreen', () => {
   const mockGetProductionUnitDashboard = aquacultureService.getProductionUnitDashboard as jest.Mock;
+  const mockUseDispatch = useDispatch as unknown as jest.Mock;
   let focusListener: (() => void) | null = null;
   const navigation = {
     navigate: jest.fn(),
@@ -29,6 +45,7 @@ describe('features/aquaculture/screens/ProductionUnitOverviewScreen', () => {
       cycleId: 'cycle-1',
       allocationId: 'allocation-1',
       productionUnitId: 'unit-1',
+      productionUnitName: 'Bac 1',
     },
   } as any;
 
@@ -42,6 +59,7 @@ describe('features/aquaculture/screens/ProductionUnitOverviewScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     focusListener = null;
+    mockUseDispatch.mockReturnValue(jest.fn());
   });
 
   it('affiche les indicateurs, le statut et navigue avec le contexte unitaire', async () => {
