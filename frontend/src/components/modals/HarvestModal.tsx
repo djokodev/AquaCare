@@ -284,12 +284,8 @@ export default function HarvestModal({
               </View>
 
               {/* Résumé de l'unité */}
-              <View style={styles.unitSectionCard}>
-                <Text style={styles.unitSectionTitle}>{t('productionUnitSummary')}</Text>
-                <Text style={styles.unitSectionText}>
-                  <Text style={styles.unitSectionLabel}>{t('productionUnit')}: </Text>
-                  {unitName}
-                </Text>
+            <View style={styles.unitSectionCard}>
+              <Text style={styles.unitSectionTitle}>{t('productionUnitSummary')}</Text>
                 <Text style={styles.unitSectionText}>
                   <Text style={styles.unitSectionLabel}>{t('thisActionWillCloseThisProductionUnit')}</Text>
                 </Text>
