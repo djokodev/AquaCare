@@ -32,13 +32,13 @@ export default function FarmProfileScreen() {
     () => getCertificationPresentation(farmProfile, t),
     [farmProfile, t]
   );
+  const activeProductionUnits = useMemo(
+    () => productionUnits.filter((unit) => unit.status === "active"),
+    [productionUnits]
+  );
   const { totalSurfaceM2, totalVolumeM3 } = useMemo(() => {
-    const countableUnits = productionUnits.filter(
-      (unit) => unit.status !== "inactive" && unit.status !== "archived"
-    );
-
     const aggregateDimension = (selector: (unit: ProductionUnit) => number | string | null | undefined) =>
-      countableUnits.reduce((total, unit) => {
+      activeProductionUnits.reduce((total, unit) => {
         const value = Number(selector(unit));
         if (!Number.isFinite(value) || value <= 0) {
           return total;
@@ -50,7 +50,7 @@ export default function FarmProfileScreen() {
       totalSurfaceM2: aggregateDimension((unit) => unit.surface_m2),
       totalVolumeM3: aggregateDimension((unit) => unit.volume_m3),
     };
-  }, [productionUnits]);
+  }, [activeProductionUnits]);
   const { status: locationStatus, requestLocation } = useFarmLocation();
 
   const refreshFarmProfile = useCallback(async () => {
@@ -210,7 +210,7 @@ export default function FarmProfileScreen() {
           />
           <FarmInfoRow
             label={t("totalPonds") || ""}
-            value={(farmProfile.setup_unit_count ?? farmProfile.total_ponds ?? 0).toString()}
+            value={activeProductionUnits.length.toString()}
             editable={false}
           />
           <FarmInfoRow

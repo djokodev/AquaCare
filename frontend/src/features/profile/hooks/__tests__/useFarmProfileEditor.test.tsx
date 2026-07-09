@@ -34,6 +34,7 @@ describe('features/profile/hooks/useFarmProfileEditor', () => {
     });
 
     expect(updateFarm).toHaveBeenCalledTimes(1);
+    expect(updateFarm.mock.calls[0][0]).not.toHaveProperty('total_ponds');
     expect(updateFarm.mock.calls[0][0]).not.toHaveProperty('annual_production_kg');
   });
 });

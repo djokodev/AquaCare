@@ -84,8 +84,8 @@ describe('features/profile/screens/FarmProfileScreen', () => {
         id: 'farm-1',
         farm_name: 'Ferme Test',
         certification_status: 'pending',
-        total_ponds: 2,
-        setup_unit_count: 3,
+        total_ponds: 50,
+        setup_unit_count: 99,
         total_area_m2: 120,
         water_source: 'Riviere',
         main_species: 'tilapia',
@@ -131,17 +131,6 @@ describe('features/profile/screens/FarmProfileScreen', () => {
         unit_type: 'tank',
         surface_m2: null,
         volume_m3: 5,
-        status: 'active',
-        created_at: '2026-01-01T00:00:00Z',
-        updated_at: '2026-01-01T00:00:00Z',
-      },
-      {
-        id: 'unit-4',
-        farm_profile: 'farm-1',
-        name: 'Archivé',
-        unit_type: 'pond',
-        surface_m2: 999,
-        volume_m3: null,
         status: 'archived',
         created_at: '2026-01-01T00:00:00Z',
         updated_at: '2026-01-01T00:00:00Z',
@@ -195,11 +184,14 @@ describe('features/profile/screens/FarmProfileScreen', () => {
   });
 
   it('affiche la surface issue du profil ferme et le volume des unités actives', async () => {
-    const { getByText } = render(<FarmProfileScreen />);
+    const { getByText, queryByText } = render(<FarmProfileScreen />);
 
     await waitFor(() => {
       expect(getByText('120 m²')).toBeTruthy();
-      expect(getByText('8 m³')).toBeTruthy();
+      expect(getByText('3 m³')).toBeTruthy();
+      expect(getByText('2')).toBeTruthy();
+      expect(queryByText('99')).toBeNull();
+      expect(queryByText('50')).toBeNull();
     });
   });
 
