@@ -98,6 +98,26 @@ describe('features/main/components/QuickActionsSheet', () => {
     expect(queryByText('feedingPlan')).toBeNull();
   });
 
+  it('masque les actions globales opérationnelles pour un cycle avec unités', () => {
+    const { getByText, queryByText } = render(
+      <QuickActionsSheet
+        visible
+        onClose={jest.fn()}
+        unreadCount={4}
+        navigation={navigation}
+        scope="cycle"
+        cycleContext={{ cycleId: 'cycle-1' }}
+        hideGlobalCycleOperationalActions
+        onHarvestCycle={jest.fn()}
+      />
+    );
+
+    expect(queryByText('dailyLog')).toBeNull();
+    expect(queryByText('sanitaryLog')).toBeNull();
+    expect(queryByText('partialHarvestOption')).toBeNull();
+    expect(getByText('harvestEntireCycleAction')).toBeTruthy();
+  });
+
   it('refuse un contexte unitaire incomplet', () => {
     const { getByText, queryByText } = render(
       <QuickActionsSheet

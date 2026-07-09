@@ -12,12 +12,17 @@ import {
   View,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import { useDispatch } from 'react-redux';
 
 import { AQUACARE_COLORS } from '@/constants/colors';
+import HarvestModal from '@/components/modals/HarvestModal';
+import PartialHarvestModal from '@/components/modals/PartialHarvestModal';
+import { fetchDashboardData, fetchProductionCycles } from '@/features/aquaculture/store/aquacultureSlice';
 import QuickActionsPreview from '@/features/main/components/QuickActionsPreview';
 import QuickActionsSheet from '@/features/main/components/QuickActionsSheet';
 import DashboardMetricCard from '@/features/main/components/MetricCard';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
+import { AppDispatch } from '@/store/store';
 import { RootStackParamList } from '@/navigation/MainNavigator';
 import type { ProductionUnitDashboard } from '@/types/aquaculture';
 
@@ -55,12 +60,15 @@ const hasValidProductionUnitContext = (
 
 export default function ProductionUnitOverviewScreen({ navigation, route }: Props) {
   const { t, i18n } = useTranslation();
+  const dispatch = useDispatch<AppDispatch>();
   const { cycleId, allocationId, cycleUnitAllocationId, productionUnitId, productionUnitName } =
     route.params;
   const resolvedCycleUnitAllocationId = cycleUnitAllocationId || allocationId || '';
   const hasUnitContext = hasValidProductionUnitContext(cycleId, resolvedCycleUnitAllocationId, productionUnitId);
   const locale = i18n.language?.startsWith('fr') ? 'fr-FR' : 'en-US';
   const [actionsSheetVisible, setActionsSheetVisible] = useState(false);
+  const [partialHarvestModalVisible, setPartialHarvestModalVisible] = useState(false);
+  const [harvestModalVisible, setHarvestModalVisible] = useState(false);
   const [dashboard, setDashboard] = useState<ProductionUnitDashboard | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -144,6 +152,20 @@ export default function ProductionUnitOverviewScreen({ navigation, route }: Prop
         productionUnitName: unitName,
       }
     : undefined;
+
+  const refreshAfterHarvest = useCallback(() => {
+    void loadDashboard('refresh');
+    void dispatch(fetchProductionCycles());
+    void dispatch(fetchDashboardData({ cycleId }));
+  }, [cycleId, dispatch, loadDashboard]);
+
+  const openPartialHarvestModal = useCallback(() => {
+    setPartialHarvestModalVisible(true);
+  }, []);
+
+  const openHarvestModal = useCallback(() => {
+    setHarvestModalVisible(true);
+  }, []);
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -272,6 +294,29 @@ export default function ProductionUnitOverviewScreen({ navigation, route }: Prop
         navigation={navigation}
         scope="unit"
         productionUnitContext={unitContext}
+        onPartialHarvestUnit={openPartialHarvestModal}
+        onHarvestUnit={openHarvestModal}
+      />
+
+      <PartialHarvestModal
+        visible={partialHarvestModalVisible}
+        onClose={() => setPartialHarvestModalVisible(false)}
+        cycle={null}
+        scope="unit"
+        productionUnitContext={unitContext}
+        unitAllocation={allocation}
+        onSuccess={refreshAfterHarvest}
+      />
+
+      <HarvestModal
+        visible={harvestModalVisible}
+        onClose={() => setHarvestModalVisible(false)}
+        cycle={null}
+        scope="unit"
+        productionUnitContext={unitContext}
+        unitAllocation={allocation}
+        onSuccess={refreshAfterHarvest}
+        onUnitHarvestSuccess={() => navigation.navigate('MainTabs', { screen: 'Dashboard' })}
       />
 
       {errorMessage ? <Text style={styles.inlineError}>{errorMessage}</Text> : null}

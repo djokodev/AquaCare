@@ -77,6 +77,37 @@ class ProductionCycleApplicationService:
         )
 
     @staticmethod
+    def partial_harvest_cycle_unit_allocation(
+        allocation,
+        command: PartialHarvestCommand,
+    ) -> tuple[ProductionCycle, Any, PartialHarvest]:
+        """Enregistre une récolte partielle sur une allocation d'unité."""
+        return ProductionCycleService.partial_harvest_cycle_unit_allocation(
+            allocation=allocation,
+            harvest_date=command.harvest_date,
+            count_harvested=command.count_harvested,
+            average_weight_g=command.average_weight_g,
+            sale_price_fcfa_per_kg=command.sale_price_fcfa_per_kg,
+            notes=command.notes,
+            client_uuid=command.client_uuid,
+            created_offline=command.created_offline,
+        )
+
+    @staticmethod
+    def harvest_cycle_unit_allocation(
+        allocation,
+        command: HarvestCycleCommand,
+    ) -> tuple[ProductionCycle, Any]:
+        """Finalise une allocation d'unité via la couche applicative."""
+        return ProductionCycleService.harvest_cycle_unit_allocation(
+            allocation=allocation,
+            harvest_date=command.harvest_date,
+            final_count=command.final_count,
+            final_average_weight=command.final_average_weight,
+            harvest_notes=command.harvest_notes,
+        )
+
+    @staticmethod
     def get_cycle_statistics(cycle: ProductionCycle) -> dict[str, Any]:
         """Retourne les statistiques d'un cycle pour l'adapter HTTP."""
         return AnalyticsService.get_cycle_statistics(cycle)

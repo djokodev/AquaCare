@@ -117,6 +117,7 @@ export default function DashboardScreen({ navigation }: any) {
   const primaryCycleHasProductionUnits = Boolean(
     primaryActiveCycle?.infrastructure_type && primaryActiveCycle.infrastructure_type.length > 0
   );
+  const cycleHasProductionUnits = primaryCycleHasProductionUnits || (currentCycleUnitCount ?? 0) > 0;
   const dashboardBusinessMetrics = useMemo(
     () => calculateDashboardBusinessMetrics(activeCycles, currentCycleInList),
     [activeCycles, currentCycleInList]
@@ -126,7 +127,7 @@ export default function DashboardScreen({ navigation }: any) {
     setCurrentCycleUnitCount(null);
 
     const loadCurrentCycleUnitCount = async () => {
-      if (!primaryActiveCycle || !primaryCycleHasProductionUnits) {
+      if (!primaryActiveCycle) {
         return;
       }
 
@@ -148,7 +149,7 @@ export default function DashboardScreen({ navigation }: any) {
     return () => {
       cancelled = true;
     };
-  }, [primaryActiveCycle?.id, primaryCycleHasProductionUnits]);
+  }, [primaryActiveCycle?.id]);
 
   const onRefresh = useCallback(() => {
     dispatch(fetchDashboardData(undefined));
@@ -226,24 +227,21 @@ export default function DashboardScreen({ navigation }: any) {
     }
   }, [activeCycles, currentCycle, currentCycleInList, dispatch]);
 
-  const openHarvestChoice = (cycle: ProductionCycle) => {
-    setSelectedCycle(cycle);
-    Alert.alert(
-      t('harvestTypeTitle'),
-      '',
-      [
-        {
-          text: t('partialHarvestOption'),
-          onPress: () => setPartialHarvestModalVisible(true),
-        },
-        {
-          text: t('completeHarvest'),
-          onPress: () => setHarvestModalVisible(true),
-        },
-        { text: t('cancel'), style: 'cancel', onPress: () => setSelectedCycle(null) },
-      ]
-    );
-  };
+  const openCycleHarvestModal = useCallback(() => {
+    if (!sessionCycle) {
+      return;
+    }
+    setSelectedCycle(sessionCycle);
+    setHarvestModalVisible(true);
+  }, [sessionCycle]);
+
+  const openCyclePartialHarvestModal = useCallback(() => {
+    if (!sessionCycle) {
+      return;
+    }
+    setSelectedCycle(sessionCycle);
+    setPartialHarvestModalVisible(true);
+  }, [sessionCycle]);
 
   const closeHarvestModal = () => {
     setHarvestModalVisible(false);
@@ -491,13 +489,14 @@ export default function DashboardScreen({ navigation }: any) {
         </View>
       )}
 
-      {!primaryCycleHasProductionUnits ? (
+      {!cycleHasProductionUnits ? (
         <QuickActionsPreview
           onOpenSheet={() => setActionsSheetVisible(true)}
           hasActiveCycles={activeCycles.length > 0}
           unreadCount={unreadCount}
           navigation={navigation}
           scope="cycle"
+          hideGlobalCycleOperationalActions={cycleHasProductionUnits}
         />
       ) : null}
 
@@ -587,14 +586,17 @@ export default function DashboardScreen({ navigation }: any) {
         cycle={selectedCycle}
       />
 
-      {!primaryCycleHasProductionUnits ? (
-      <QuickActionsSheet
+      {!cycleHasProductionUnits ? (
+        <QuickActionsSheet
           visible={actionsSheetVisible}
           onClose={() => setActionsSheetVisible(false)}
           unreadCount={unreadCount}
           navigation={navigation}
           scope="cycle"
           cycleContext={sessionCycle?.id ? { cycleId: sessionCycle.id } : undefined}
+          onPartialHarvestCycle={cycleHasProductionUnits ? undefined : openCyclePartialHarvestModal}
+          onHarvestCycle={openCycleHarvestModal}
+          hideGlobalCycleOperationalActions={cycleHasProductionUnits}
         />
       ) : null}
       </ScrollView>

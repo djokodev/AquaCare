@@ -60,4 +60,22 @@ describe('features/main/components/QuickActionsPreview', () => {
 
     expect(getByText('feedingPlan')).toBeTruthy();
   });
+
+  it('masque les actions globales opérationnelles pour un cycle avec unités', () => {
+    const { queryByText, getByText } = render(
+      <QuickActionsPreview
+        onOpenSheet={jest.fn()}
+        hasActiveCycles
+        unreadCount={0}
+        navigation={navigation}
+        scope="cycle"
+        hideGlobalCycleOperationalActions
+      />
+    );
+
+    expect(queryByText('dailyLog')).toBeNull();
+    expect(getByText('reports')).toBeTruthy();
+    expect(getByText('productCatalog')).toBeTruthy();
+    expect(getByText('notifications')).toBeTruthy();
+  });
 });

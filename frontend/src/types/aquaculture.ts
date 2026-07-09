@@ -112,6 +112,9 @@ export interface PartialHarvest {
   estimated_revenue_fcfa?: number;
   notes?: string;
   client_uuid?: string;
+  cycle_unit_allocation?: string | null;
+  production_unit?: string | null;
+  production_unit_name?: string | null;
   created_offline?: boolean;
   synced_at?: string;
   created_at: string;
@@ -130,6 +133,19 @@ export interface PartialHarvestData {
 export interface CycleHarvestResponse {
   message: string;
   cycle: ProductionCycle;
+}
+
+export interface CycleUnitHarvestResponse {
+  message: string;
+  cycle: ProductionCycle;
+  cycle_unit_allocation: CycleUnitAllocation;
+}
+
+export interface CycleUnitPartialHarvestResponse {
+  message: string;
+  cycle: ProductionCycle;
+  cycle_unit_allocation: CycleUnitAllocation;
+  partial_harvest: PartialHarvest;
 }
 
 export interface CycleLog {
@@ -332,6 +348,14 @@ export interface CycleUnitAllocation {
   current_fish_count: number;
   initial_biomass_kg?: number | null;
   current_biomass_kg?: number | null;
+  status?: 'active' | 'harvested' | 'inactive';
+  status_display?: string;
+  harvested_at?: string | null;
+  final_harvest_date?: string | null;
+  final_harvest_notes?: string | null;
+  final_fish_count?: number | null;
+  final_average_weight_g?: number | null;
+  final_biomass_kg?: number | null;
   expected_survival_rate_pct?: number | null;
   cycle_name?: string;
   production_unit_name?: string;

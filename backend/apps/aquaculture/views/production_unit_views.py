@@ -1,19 +1,29 @@
 """
 ViewSets DRF pour les unités de production et leurs allocations de cycle.
 """
+from django.utils.translation import gettext_lazy as _
 from drf_spectacular.utils import extend_schema
-from rest_framework import permissions, viewsets
+from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from ..domain.production_units import normalize_production_unit_type
 from ..models import CycleUnitAllocation, ProductionUnit
 from ..serializers import (
+    CycleUnitAllocationHarvestResponseSerializer,
+    CycleUnitAllocationPartialHarvestResponseSerializer,
     CycleUnitAllocationSerializer,
+    HarvestSerializer,
+    PartialHarvestSerializer,
     ProductionUnitDashboardSerializer,
     ProductionUnitSerializer,
 )
-from ..services import ProductionUnitDashboardService
+from ..services import (
+    HarvestCycleCommand,
+    PartialHarvestCommand,
+    ProductionCycleApplicationService,
+    ProductionUnitDashboardService,
+)
 
 
 class ProductionUnitViewSet(viewsets.ModelViewSet):
@@ -52,6 +62,13 @@ class CycleUnitAllocationViewSet(viewsets.ModelViewSet):
     serializer_class = CycleUnitAllocationSerializer
     permission_classes = [permissions.IsAuthenticated]
 
+    def get_serializer_class(self):
+        if self.action == 'harvest':
+            return HarvestSerializer
+        if self.action == 'partial_harvest':
+            return PartialHarvestSerializer
+        return super().get_serializer_class()
+
     def get_queryset(self):
         queryset = CycleUnitAllocation.objects.for_api().filter(cycle__farm_profile__user=self.request.user)
 
@@ -71,3 +88,71 @@ class CycleUnitAllocationViewSet(viewsets.ModelViewSet):
         payload = ProductionUnitDashboardService.build_dashboard_payload(allocation)
         serializer = ProductionUnitDashboardSerializer(payload, context={'request': request})
         return Response(serializer.data)
+
+    @extend_schema(
+        summary="Récolter une allocation de cycle par unité",
+        request=HarvestSerializer,
+        responses=CycleUnitAllocationHarvestResponseSerializer,
+    )
+    @action(detail=True, methods=['post'], url_path='harvest')
+    def harvest(self, request, pk=None):
+        allocation = self.get_object()
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        harvested_cycle, harvested_allocation = ProductionCycleApplicationService.harvest_cycle_unit_allocation(
+            allocation=allocation,
+            command=HarvestCycleCommand(
+                harvest_date=serializer.validated_data['harvest_date'],
+                final_count=serializer.validated_data['final_count'],
+                final_average_weight=serializer.validated_data['final_average_weight'],
+                harvest_notes=serializer.validated_data.get('harvest_notes', ''),
+            ),
+        )
+
+        response_serializer = CycleUnitAllocationHarvestResponseSerializer(
+            {
+                'message': _('Unité récoltée avec succès'),
+                'cycle': harvested_cycle,
+                'cycle_unit_allocation': harvested_allocation,
+            },
+            context={'request': request},
+        )
+        return Response(response_serializer.data, status=status.HTTP_200_OK)
+
+    @extend_schema(
+        summary="Récolte partielle d'une allocation de cycle par unité",
+        request=PartialHarvestSerializer,
+        responses=CycleUnitAllocationPartialHarvestResponseSerializer,
+    )
+    @action(detail=True, methods=['post'], url_path='partial-harvest')
+    def partial_harvest(self, request, pk=None):
+        allocation = self.get_object()
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        updated_cycle, updated_allocation, partial = (
+            ProductionCycleApplicationService.partial_harvest_cycle_unit_allocation(
+                allocation=allocation,
+                command=PartialHarvestCommand(
+                    harvest_date=serializer.validated_data['harvest_date'],
+                    count_harvested=serializer.validated_data['count_harvested'],
+                    average_weight_g=serializer.validated_data['average_weight_g'],
+                    sale_price_fcfa_per_kg=serializer.validated_data.get('sale_price_fcfa_per_kg'),
+                    notes=serializer.validated_data.get('notes', ''),
+                    client_uuid=serializer.validated_data.get('client_uuid'),
+                    created_offline=serializer.validated_data.get('created_offline', False),
+                ),
+            )
+        )
+
+        response_serializer = CycleUnitAllocationPartialHarvestResponseSerializer(
+            {
+                'message': _('Récolte partielle enregistrée avec succès'),
+                'cycle': updated_cycle,
+                'cycle_unit_allocation': updated_allocation,
+                'partial_harvest': partial,
+            },
+            context={'request': request},
+        )
+        return Response(response_serializer.data, status=status.HTTP_200_OK)

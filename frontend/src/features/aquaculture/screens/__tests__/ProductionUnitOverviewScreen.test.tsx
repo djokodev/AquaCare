@@ -1,8 +1,11 @@
 import React from 'react';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { useDispatch } from 'react-redux';
 
 import ProductionUnitOverviewScreen from '../ProductionUnitOverviewScreen';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
+
+let harvestModalProps: any = null;
 
 jest.mock('@/features/aquaculture/services/aquacultureService', () => ({
   aquacultureService: {
@@ -10,8 +13,26 @@ jest.mock('@/features/aquaculture/services/aquacultureService', () => ({
   },
 }));
 
+jest.mock('react-redux', () => ({
+  useDispatch: jest.fn(),
+}));
+
+jest.mock('@/components/modals/HarvestModal', () => ({
+  __esModule: true,
+  default: (props: any) => {
+    harvestModalProps = props;
+    return null;
+  },
+}));
+
+jest.mock('@/components/modals/PartialHarvestModal', () => ({
+  __esModule: true,
+  default: () => null,
+}));
+
 describe('features/aquaculture/screens/ProductionUnitOverviewScreen', () => {
   const mockGetProductionUnitDashboard = aquacultureService.getProductionUnitDashboard as jest.Mock;
+  const mockUseDispatch = useDispatch as unknown as jest.Mock;
   let focusListener: (() => void) | null = null;
   const navigation = {
     navigate: jest.fn(),
@@ -29,6 +50,7 @@ describe('features/aquaculture/screens/ProductionUnitOverviewScreen', () => {
       cycleId: 'cycle-1',
       allocationId: 'allocation-1',
       productionUnitId: 'unit-1',
+      productionUnitName: 'Bac 1',
     },
   } as any;
 
@@ -41,7 +63,9 @@ describe('features/aquaculture/screens/ProductionUnitOverviewScreen', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    harvestModalProps = null;
     focusListener = null;
+    mockUseDispatch.mockReturnValue(jest.fn());
   });
 
   it('affiche les indicateurs, le statut et navigue avec le contexte unitaire', async () => {
@@ -189,6 +213,10 @@ describe('features/aquaculture/screens/ProductionUnitOverviewScreen', () => {
         productionUnitName: 'Bac 1',
       });
     });
+
+    expect(harvestModalProps?.onUnitHarvestSuccess).toEqual(expect.any(Function));
+    harvestModalProps.onUnitHarvestSuccess();
+    expect(navigation.navigate).toHaveBeenCalledWith('MainTabs', { screen: 'Dashboard' });
   });
 
   it('affiche un loading initial avant le dashboard unitaire', async () => {

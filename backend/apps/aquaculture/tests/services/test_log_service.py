@@ -153,6 +153,45 @@ class TestCycleLogServiceCreateLog:
         assert CycleLog.objects.filter(cycle=cycle, log_date=log_date, cycle_unit_allocation=allocation_1).count() == 1
         assert CycleLog.objects.filter(cycle=cycle, log_date=log_date, cycle_unit_allocation=allocation_2).count() == 1
 
+    def test_create_unit_log_updates_allocation_current_stock(self):
+        """Un log unitaire met a jour le stock courant reel de l'allocation."""
+        cycle = ProductionCycleFactory(current_count=500, current_biomass=Decimal('5.00'))
+        allocation = create_cycle_unit_allocation(cycle, 'Bac stock reel')
+
+        log = CycleLogService.create_log(
+            cycle,
+            {
+                'log_date': date.today(),
+                'cycle_unit_allocation': allocation,
+                'mortality_count': 20,
+                'average_weight': Decimal('20.00'),
+            },
+        )
+
+        allocation.refresh_from_db()
+        cycle.refresh_from_db()
+
+        assert log.cycle_unit_allocation_id == allocation.id
+        assert allocation.current_fish_count == 480
+        assert allocation.current_biomass_kg == Decimal('9.60')
+        assert cycle.current_count == 480
+        assert cycle.current_biomass == Decimal('9.60')
+
+    def test_create_unit_log_rejects_mortality_above_unit_stock(self):
+        """La mortalite unitaire ne peut pas depasser le stock reel de l'unite."""
+        cycle = ProductionCycleFactory(current_count=500, current_biomass=Decimal('5.00'))
+        allocation = create_cycle_unit_allocation(cycle, 'Bac validation')
+
+        with pytest.raises(InsufficientFishCountError):
+            CycleLogService.create_log(
+                cycle,
+                {
+                    'log_date': date.today(),
+                    'cycle_unit_allocation': allocation,
+                    'mortality_count': 501,
+                },
+            )
+
     def test_create_log_with_client_uuid_for_sync(self):
         """Test création log avec client_uuid pour sync offline."""
         import uuid

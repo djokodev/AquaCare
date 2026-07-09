@@ -77,11 +77,11 @@ class CycleDashboardService:
 
             summary = payload['summary']
             total_initial_fish_count += allocation.initial_fish_count
-            total_estimated_current_fish_count += summary['estimated_current_fish_count']
+            total_estimated_current_fish_count += allocation.current_fish_count
             total_mortality_count += summary['total_mortality_count']
             total_feed_consumed_kg += summary['total_feed_consumed_kg'] or CycleDashboardService.ZERO_DECIMAL
             total_estimated_current_biomass_kg += (
-                summary['estimated_current_biomass_kg'] or CycleDashboardService.ZERO_DECIMAL
+                Decimal(str(allocation.current_biomass_kg or CycleDashboardService.ZERO_DECIMAL))
             )
 
             if summary['has_today_daily_log']:

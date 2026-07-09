@@ -575,11 +575,12 @@ class CycleLogService(BaseService):
         sample_count = log_data.get('sample_count')
         sample_total_weight = log_data.get('sample_total_weight')
         average_weight = log_data.get('average_weight')
+        cycle_unit_allocation = log_data.get('cycle_unit_allocation')
         from aquaculture.domain.validators import validate_cycle_unit_allocation_context
 
         validate_cycle_unit_allocation_context(
             cycle=cycle,
-            cycle_unit_allocation=log_data.get('cycle_unit_allocation'),
+            cycle_unit_allocation=cycle_unit_allocation,
             user=user,
         )
 
@@ -601,10 +602,14 @@ class CycleLogService(BaseService):
                 )
 
         # Validation mortalité <= effectif disponible
-        if mortality_count > cycle.current_count:
+        available_count = cycle.current_count
+        if cycle_unit_allocation is not None:
+            available_count = cycle_unit_allocation.current_fish_count
+
+        if mortality_count > available_count:
             raise InsufficientFishCountError(
                 _("Mortalité (%(mortality)d) ne peut dépasser l'effectif actuel (%(current)d)")
-                % {'mortality': mortality_count, 'current': cycle.current_count}
+                % {'mortality': mortality_count, 'current': available_count}
             )
 
         # Validation cohérence échantillonnage
