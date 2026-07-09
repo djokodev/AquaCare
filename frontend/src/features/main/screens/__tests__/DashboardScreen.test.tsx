@@ -129,6 +129,13 @@ describe('features/main/screens/DashboardScreen', () => {
     infrastructure_type: ['tank', 'pond'],
   };
 
+  const archivedCycle: ProductionCycle = {
+    ...cycleA,
+    id: 'cycle-archived',
+    cycle_name: 'Archived Cycle',
+    status: 'harvested',
+  };
+
   beforeEach(() => {
     jest.clearAllMocks();
     mockDispatch.mockImplementation(() => ({ unwrap: jest.fn().mockResolvedValue({}) }));
@@ -155,6 +162,7 @@ describe('features/main/screens/DashboardScreen', () => {
             current_feeding_plans: [],
             pending_notifications: [],
           },
+          cycles: [cycleA, cycleB, archivedCycle],
           loading: {
             dashboard: false,
             cycles: false,
@@ -221,6 +229,7 @@ describe('features/main/screens/DashboardScreen', () => {
             current_feeding_plans: [],
             pending_notifications: [],
           },
+          cycles: [cycleA, cycleB, archivedCycle],
           loading: {
             dashboard: false,
             cycles: false,
@@ -312,6 +321,7 @@ describe('features/main/screens/DashboardScreen', () => {
             current_feeding_plans: [],
             pending_notifications: [],
           },
+          cycles: [cycleWithUnits, archivedCycle],
           loading: {
             dashboard: false,
             cycles: false,

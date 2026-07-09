@@ -60,7 +60,6 @@ export default function DashboardScreen({ navigation }: any) {
   const { dashboardData, loading, error, currentCycle } = useSelector(
     (state: RootState) => state.aquaculture
   );
-  const allCycles = useSelector((state: RootState) => state.aquaculture.cycles) || [];
   const { unreadCount } = useSelector((state: RootState) => state.notifications);
   const { items: ordersList } = useSelector((state: RootState) => state.commerce.orders);
 
@@ -109,8 +108,7 @@ export default function DashboardScreen({ navigation }: any) {
   );
 
   const activeCycles = dashboardData?.active_cycles || [];
-  const cyclesAvailableForSwitch = allCycles.length > 0 ? allCycles : activeCycles;
-  const canSwitchCycle = cyclesAvailableForSwitch.length > 1;
+  const canSwitchCycle = activeCycles.length > 1;
   const currentCycleInList = currentCycle
     ? activeCycles.find((cycle) => cycle.id === currentCycle.id)
     : undefined;
