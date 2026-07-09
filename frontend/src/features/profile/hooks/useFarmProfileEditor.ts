@@ -18,10 +18,7 @@ export const useFarmProfileEditor = ({ farmProfile, updateFarm }: UseFarmProfile
     setEditData({
       farm_name: farmProfile.farm_name || '',
       total_ponds: farmProfile.total_ponds || 0,
-      total_area_m2: farmProfile.total_area_m2 || 0,
       water_source: farmProfile.water_source || '',
-      main_species: farmProfile.main_species || '',
-      annual_production_kg: farmProfile.annual_production_kg || 0,
       latitude: farmProfile.latitude ?? null,
       longitude: farmProfile.longitude ?? null,
       location_address: farmProfile.location_address || '',
