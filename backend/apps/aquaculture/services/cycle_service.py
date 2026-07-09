@@ -618,6 +618,7 @@ class ProductionCycleService(BaseService):
             count_harvested,
             average_weight_g,
             available_count=locked_allocation.current_fish_count,
+            require_remaining_fish=True,
         )
 
         total_weight_kg = Decimal(str(count_harvested)) * average_weight_g / Decimal('1000')
@@ -1239,6 +1240,7 @@ class ProductionCycleService(BaseService):
         count_harvested: int,
         average_weight_g: Decimal,
         available_count: int | None = None,
+        require_remaining_fish: bool = False,
     ) -> None:
         """
         Valide les règles métier d'une récolte partielle.
@@ -1253,6 +1255,10 @@ class ProductionCycleService(BaseService):
             raise InsufficientFishCountError(
                 _("Nombre à récolter (%(n)d) supérieur à l'effectif disponible (%(c)d)")
                 % {'n': count_harvested, 'c': current_available_count}
+            )
+        if require_remaining_fish and count_harvested >= current_available_count:
+            raise BusinessRuleViolation(
+                _("Cette quantité viderait l'unité. Utilisez la récolte complète de l'unité.")
             )
 
         # Poids minimum commercial par espèce

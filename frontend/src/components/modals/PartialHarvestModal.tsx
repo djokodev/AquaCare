@@ -146,6 +146,10 @@ export default function PartialHarvestModal({
       Alert.alert(t('error'), t('partialHarvestCountRequired'));
       return false;
     }
+    if (isUnitScope && formData.count_harvested >= availableFishCount) {
+      Alert.alert(t('error'), t('partialHarvestWouldEmptyUnit'));
+      return false;
+    }
     if (formData.count_harvested > availableFishCount) {
       Alert.alert(t('error'), t('partialHarvestCountExceedsAvailable'));
       return false;
@@ -189,9 +193,11 @@ export default function PartialHarvestModal({
           <View style={styles.header}>
             <View>
               <Text style={styles.title}>
-                {isUnitScope ? t('partialHarvestUnitAction') : t('partialHarvestTitle')}
+                {isUnitScope ? t('partialHarvestUnitTitleWithName', { unitName }) : t('partialHarvestTitle')}
               </Text>
-              <Text style={styles.subtitle}>{isUnitScope ? t('productionUnitSummary') : cycle?.cycle_name}</Text>
+              <Text style={styles.subtitle}>
+                {isUnitScope ? t('partialHarvestUnitSubtitle') : cycle?.cycle_name}
+              </Text>
             </View>
             <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
               <Ionicons name="close" size={24} color={COLORS.GRAY_DARK} />
@@ -239,7 +245,7 @@ export default function PartialHarvestModal({
             />
 
             {/* Prix de vente (optionnel) */}
-              <Text style={styles.label}>{t('salePriceFcfa')} ({t('optional')})</Text>
+            <Text style={styles.label}>{t('salePriceFcfa')} ({t('optional')})</Text>
             <TextInput
               style={styles.input}
               value={formData.sale_price_fcfa_per_kg ? String(formData.sale_price_fcfa_per_kg) : ''}

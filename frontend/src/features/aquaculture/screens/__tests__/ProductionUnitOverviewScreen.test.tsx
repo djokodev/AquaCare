@@ -216,7 +216,7 @@ describe('features/aquaculture/screens/ProductionUnitOverviewScreen', () => {
 
     expect(harvestModalProps?.onUnitHarvestSuccess).toEqual(expect.any(Function));
     harvestModalProps.onUnitHarvestSuccess();
-    expect(navigation.navigate).toHaveBeenCalledWith('MainTabs');
+    expect(navigation.navigate).toHaveBeenCalledWith('MainTabs', { screen: 'Dashboard' });
   });
 
   it('affiche un loading initial avant le dashboard unitaire', async () => {

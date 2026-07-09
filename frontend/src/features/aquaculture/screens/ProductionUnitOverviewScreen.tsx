@@ -316,7 +316,7 @@ export default function ProductionUnitOverviewScreen({ navigation, route }: Prop
         productionUnitContext={unitContext}
         unitAllocation={allocation}
         onSuccess={refreshAfterHarvest}
-        onUnitHarvestSuccess={() => navigation.navigate('MainTabs')}
+        onUnitHarvestSuccess={() => navigation.navigate('MainTabs', { screen: 'Dashboard' })}
       />
 
       {errorMessage ? <Text style={styles.inlineError}>{errorMessage}</Text> : null}

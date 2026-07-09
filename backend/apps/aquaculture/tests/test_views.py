@@ -1054,8 +1054,12 @@ class TestCycleUnitAllocationHarvestActionsViewSet:
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
-    def test_partial_harvest_accepts_real_unit_stock_after_mortality(self, auth_client, production_cycle):
-        allocation = create_cycle_unit_allocation(production_cycle, name='Bac mortalite ok', volume_m3='3.00')
+    def test_partial_harvest_rejects_when_requested_count_equals_real_unit_stock(
+        self,
+        auth_client,
+        production_cycle,
+    ):
+        allocation = create_cycle_unit_allocation(production_cycle, name='Bac mortalite egal', volume_m3='3.00')
         CycleLog.objects.create(
             cycle=production_cycle,
             cycle_unit_allocation=allocation,
@@ -1074,13 +1078,39 @@ class TestCycleUnitAllocationHarvestActionsViewSet:
             format='json',
         )
 
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_partial_harvest_accepts_when_requested_count_is_strictly_below_real_unit_stock(
+        self,
+        auth_client,
+        production_cycle,
+    ):
+        allocation = create_cycle_unit_allocation(production_cycle, name='Bac mortalite ok', volume_m3='3.00')
+        CycleLog.objects.create(
+            cycle=production_cycle,
+            cycle_unit_allocation=allocation,
+            log_date=date.today(),
+            mortality_count=20,
+            average_weight=Decimal('20.00'),
+        )
+
+        response = auth_client.post(
+            reverse('aquaculture:cycle-unit-allocation-partial-harvest', kwargs={'pk': allocation.id}),
+            {
+                'harvest_date': date.today().isoformat(),
+                'count_harvested': 879,
+                'average_weight_g': '300.00',
+            },
+            format='json',
+        )
+
         assert response.status_code == status.HTTP_200_OK
 
         allocation.refresh_from_db()
         production_cycle.refresh_from_db()
 
-        assert allocation.current_fish_count == 0
-        assert production_cycle.current_count == 0
+        assert allocation.current_fish_count == 1
+        assert production_cycle.current_count == 1
 
     def test_full_harvest_unit_a_does_not_close_cycle_if_unit_b_is_active(
         self,

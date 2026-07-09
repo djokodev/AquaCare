@@ -50,7 +50,15 @@ const toNumber = (value: number | string | null | undefined): number => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
-const getAllocationAverageWeight = (allocation: CycleUnitAllocation | null | undefined): number => {
+const getAllocationInitialAverageWeight = (allocation: CycleUnitAllocation | null | undefined): number => {
+  if (!allocation) return 0;
+  if (allocation.initial_fish_count > 0 && allocation.initial_biomass_kg != null) {
+    return (toNumber(allocation.initial_biomass_kg) * 1000) / allocation.initial_fish_count;
+  }
+  return 0;
+};
+
+const getAllocationCurrentAverageWeight = (allocation: CycleUnitAllocation | null | undefined): number => {
   if (!allocation) return 0;
   if (allocation.current_fish_count > 0 && allocation.current_biomass_kg != null) {
     return (toNumber(allocation.current_biomass_kg) * 1000) / allocation.current_fish_count;
@@ -58,10 +66,7 @@ const getAllocationAverageWeight = (allocation: CycleUnitAllocation | null | und
   if (allocation.final_fish_count && allocation.final_average_weight_g != null) {
     return toNumber(allocation.final_average_weight_g);
   }
-  if (allocation.initial_fish_count > 0 && allocation.initial_biomass_kg != null) {
-    return (toNumber(allocation.initial_biomass_kg) * 1000) / allocation.initial_fish_count;
-  }
-  return 0;
+  return getAllocationInitialAverageWeight(allocation);
 };
 
 export default function HarvestModal({
@@ -89,10 +94,10 @@ export default function HarvestModal({
     ? unitAllocation?.initial_fish_count ?? 0
     : cycle?.initial_count ?? 0;
   const initialAverageWeight = isUnitScope
-    ? getAllocationAverageWeight(unitAllocation)
+    ? getAllocationInitialAverageWeight(unitAllocation)
     : cycle?.initial_average_weight ?? 0;
   const availableAverageWeight = isUnitScope
-    ? getAllocationAverageWeight(unitAllocation)
+    ? getAllocationCurrentAverageWeight(unitAllocation)
     : cycle?.current_average_weight ?? 0;
 
   const currentYear = new Date().getFullYear();
@@ -272,16 +277,16 @@ export default function HarvestModal({
         <View style={styles.unitOverlay}>
           <View style={styles.unitContainer}>
             {/* Header */}
-          <View style={styles.unitHeader}>
-            <View>
-              <Text style={styles.unitTitle}>
-                  {t('harvestThisUnitAction')}
-              </Text>
-                <Text style={styles.unitSubtitle}>{t('productionUnitSummary')}</Text>
-            </View>
-            <TouchableOpacity onPress={onClose} style={styles.unitCloseButton}>
-              <Ionicons name="close" size={24} color={AQUACARE_COLORS.GRAY_DARK} />
-            </TouchableOpacity>
+            <View style={styles.unitHeader}>
+              <View>
+                <Text style={styles.unitTitle}>
+                  {t('harvestThisUnitTitleWithName', { unitName })}
+                </Text>
+                <Text style={styles.unitSubtitle}>{t('harvestThisUnitSubtitle')}</Text>
+              </View>
+              <TouchableOpacity onPress={onClose} style={styles.unitCloseButton}>
+                <Ionicons name="close" size={24} color={AQUACARE_COLORS.GRAY_DARK} />
+              </TouchableOpacity>
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} style={styles.unitBody}>
@@ -289,14 +294,6 @@ export default function HarvestModal({
               <View style={styles.infoRow}>
                 <Text style={styles.infoText}>
                   {t('fishAvailableInThisUnit')} : <Text style={styles.infoBold}>{availableFishCount}</Text>
-                </Text>
-              </View>
-
-              {/* Résumé de l'unité */}
-            <View style={styles.unitSectionCard}>
-              <Text style={styles.unitSectionTitle}>{t('productionUnitSummary')}</Text>
-                <Text style={styles.unitSectionText}>
-                  <Text style={styles.unitSectionLabel}>{t('thisActionWillCloseThisProductionUnit')}</Text>
                 </Text>
               </View>
 
