@@ -6,6 +6,7 @@ import {
   CycleHarvestResponse,
   CycleLog,
   ProductionCycle,
+  ProductionUnit,
   SanitaryLogForm,
 } from '@/types/aquaculture';
 
@@ -131,6 +132,27 @@ describe('features/aquaculture/services/aquacultureService', () => {
 
     expect(result).toEqual(dashboard);
     expect(mockApi.get).toHaveBeenCalledWith('/aquaculture/cycles/cycle-1/dashboard/');
+  });
+
+  it('retourne les unites de production avec le bon filtre de statut', async () => {
+    const units: ProductionUnit[] = [
+      {
+        id: 'unit-1',
+        farm_profile: 'farm-1',
+        name: 'Etang 1',
+        unit_type: 'pond',
+        surface_m2: 120,
+        status: 'active',
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+      },
+    ];
+    mockApi.get.mockResolvedValueOnce({ data: units } as never);
+
+    const result = await aquacultureService.getProductionUnits({ status: 'active' });
+
+    expect(result).toEqual(units);
+    expect(mockApi.get).toHaveBeenCalledWith('/aquaculture/production-units/?status=active');
   });
 
   it('dedoublonne les requetes dashboard concurrentes pour le meme scope et meme mode', async () => {

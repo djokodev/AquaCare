@@ -29,6 +29,8 @@ import {
   CycleUnitPartialHarvestResponse,
   ActiveSanitaryIssueGroup,
   ProductionUnit,
+  ProductionUnitStatus,
+  ProductionUnitType,
   CycleUnitAllocation,
   ProductionUnitDashboard,
   ProductionUnitCreatePayload,
@@ -345,6 +347,31 @@ class AquacultureService {
       return response.data;
     } catch (error) {
       logger.error('Erreur lors de la creation du cycle:', error);
+      throw error;
+    }
+  }
+
+  async getProductionUnits(params?: {
+    status?: ProductionUnitStatus;
+    unitType?: ProductionUnitType;
+  }): Promise<ProductionUnit[]> {
+    try {
+      const query = new URLSearchParams();
+      if (params?.status) {
+        query.append('status', params.status);
+      }
+      if (params?.unitType) {
+        query.append('unit_type', params.unitType);
+      }
+
+      const queryString = query.toString();
+      const paramsSuffix = queryString ? `?${queryString}` : '';
+      const response = await apiService.get<ListResponse<ProductionUnit>>(
+        `${this.baseUrl}/production-units/${paramsSuffix}`
+      );
+      return extractResults(response.data);
+    } catch (error) {
+      logger.error('Erreur lors de la recuperation des unites de production:', error);
       throw error;
     }
   }

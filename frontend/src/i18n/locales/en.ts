@@ -60,8 +60,9 @@
 
   // Farm Profile
   farmName: 'Farm Name',
-  totalPonds: 'Production zones',
-  totalArea: 'Total Area in Production (m²)',
+  totalPonds: 'Production units',
+  surfaceTotal: 'Total surface',
+  volumeTotal: 'Total volume',
   waterSource: 'Water Source',
   mainSpecies: 'Main Species',
   annualProduction: 'Annual Production (kg)',

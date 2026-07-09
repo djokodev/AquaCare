@@ -1,30 +1,30 @@
-﻿import React, { useEffect, useMemo } from "react";
-import { Alert, Linking, ScrollView, Text, TouchableOpacity, TextInput, View } from "react-native";
+﻿import React, { useCallback, useMemo, useRef, useState } from "react";
+import { Alert, Linking, RefreshControl, ScrollView, Text, TouchableOpacity, TextInput, View } from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
 import { useTranslation } from "react-i18next";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import type { RootStackParamList } from "@/navigation/MainNavigator";
 import type { StackNavigationProp } from "@react-navigation/stack";
 import { AQUACARE_COLORS } from "@/constants/colors";
+import { aquacultureService } from "@/features/aquaculture/services/aquacultureService";
 import { useAuth } from "@/hooks/useAuth";
 import { useFarmLocation } from "@/hooks/useFarmLocation";
-import { useSelector, useDispatch } from "react-redux";
-import { RootState, AppDispatch } from "@/store/store";
-import { fetchDashboardData } from "@/features/aquaculture/store/aquacultureSlice";
 import { getAccountErrorMessage } from "@/features/auth/utils/accountsErrorPresenter";
 import { useFarmProfileEditor } from "@/features/profile/hooks/useFarmProfileEditor";
 import { formatFarmName, getCertificationPresentation } from "@/features/profile/utils/accountProfilePresentation";
 import { sharedTextInputStyles } from "@/components/common/inputStyles";
+import type { ProductionUnit } from "@/types/aquaculture";
 
 type NavigationProp = StackNavigationProp<RootStackParamList>;
 
 export default function FarmProfileScreen() {
   const { t } = useTranslation();
   const navigation = useNavigation<NavigationProp>();
-  const dispatch = useDispatch<AppDispatch>();
-  const { farmProfile, isLoading, error, updateFarm, loadProfile } = useAuth();
-  const { dashboardData } = useSelector((state: RootState) => state.aquaculture);
-  const activeCycles = dashboardData?.active_cycles || [];
+  const { farmProfile, isLoading, error, updateFarm, loadFarmProfile } = useAuth();
+  const [refreshing, setRefreshing] = useState(false);
+  const refreshInProgressRef = useRef(false);
+  const [productionUnits, setProductionUnits] = useState<ProductionUnit[]>([]);
 
   const { isEditing, setIsEditing, isSaving, editData, updateEditField, save, saveLocation } =
     useFarmProfileEditor({ farmProfile, updateFarm });
@@ -32,11 +32,53 @@ export default function FarmProfileScreen() {
     () => getCertificationPresentation(farmProfile, t),
     [farmProfile, t]
   );
+  const activeProductionUnits = useMemo(
+    () => productionUnits.filter((unit) => unit.status === "active"),
+    [productionUnits]
+  );
+  const { totalSurfaceM2, totalVolumeM3 } = useMemo(() => {
+    const aggregateDimension = (selector: (unit: ProductionUnit) => number | string | null | undefined) =>
+      activeProductionUnits.reduce((total, unit) => {
+        const value = Number(selector(unit));
+        if (!Number.isFinite(value) || value <= 0) {
+          return total;
+        }
+        return total + value;
+      }, 0);
+
+    return {
+      totalSurfaceM2: aggregateDimension((unit) => unit.surface_m2),
+      totalVolumeM3: aggregateDimension((unit) => unit.volume_m3),
+    };
+  }, [activeProductionUnits]);
   const { status: locationStatus, requestLocation } = useFarmLocation();
 
-  useEffect(() => {
-    dispatch(fetchDashboardData(undefined));
-  }, [dispatch]);
+  const refreshFarmProfile = useCallback(async () => {
+    if (refreshInProgressRef.current) {
+      return;
+    }
+
+    refreshInProgressRef.current = true;
+    setRefreshing(true);
+
+    try {
+      await Promise.all([
+        loadFarmProfile(),
+        aquacultureService.getProductionUnits({ status: "active" }).then(setProductionUnits).catch(() => {
+          setProductionUnits([]);
+        }),
+      ]);
+    } finally {
+      refreshInProgressRef.current = false;
+      setRefreshing(false);
+    }
+  }, [loadFarmProfile]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void refreshFarmProfile();
+    }, [refreshFarmProfile])
+  );
 
   const handleLocateFarm = async () => {
     const coords = await requestLocation();
@@ -104,7 +146,7 @@ export default function FarmProfileScreen() {
         <Text className="text-sm text-gray-light mt-2 text-center">{t("unableToLoadFarmProfile")}</Text>
         <TouchableOpacity
           className="bg-aquacare-primary px-6 py-3 rounded-lg mt-5"
-          onPress={() => loadProfile()}
+          onPress={() => refreshFarmProfile()}
           disabled={isLoading}
         >
           <Text className="text-white text-base font-semibold">{isLoading ? t("loading") : t("retry")}</Text>
@@ -121,7 +163,7 @@ export default function FarmProfileScreen() {
         <Text className="text-sm text-gray-light mt-2 text-center">{t("loadingFarmProfile")}</Text>
         <TouchableOpacity
           className="bg-aquacare-primary px-6 py-3 rounded-lg mt-5"
-          onPress={() => loadProfile()}
+          onPress={() => refreshFarmProfile()}
           disabled={isLoading}
         >
           <Text className="text-white text-base font-semibold">{isLoading ? t("loading") : t("reloadProfile")}</Text>
@@ -130,10 +172,13 @@ export default function FarmProfileScreen() {
     );
   }
 
-  const totalSurface = activeCycles.reduce((total, cycle) => total + (Number(cycle.pond_surface_m2) || 0), 0);
-
   return (
-    <ScrollView className="flex-1 bg-cream">
+    <ScrollView
+      className="flex-1 bg-cream"
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={refreshFarmProfile} />
+      }
+    >
       <View className="bg-aquacare-primary items-center pt-14 pb-6 px-5">
         <View className="w-16 h-16 rounded-full bg-green-dark items-center justify-center mb-3">
           <Ionicons name="business" size={32} color={AQUACARE_COLORS.WHITE} />
@@ -165,21 +210,18 @@ export default function FarmProfileScreen() {
           />
           <FarmInfoRow
             label={t("totalPonds") || ""}
-            value={isEditing ? undefined : (farmProfile.total_ponds ?? 0).toString()}
-            editable={isEditing}
-            onChangeText={(value) => updateEditField("total_ponds", parseInt(value, 10) || 0)}
-            inputValue={editData.total_ponds?.toString()}
-            placeholder={t("totalPonds") || ""}
-            keyboardType="numeric"
+            value={activeProductionUnits.length.toString()}
+            editable={false}
           />
           <FarmInfoRow
-            label={t("totalArea") || ""}
-            value={isEditing ? undefined : `${totalSurface} m²`}
+            label={t("surfaceTotal") || ""}
+            value={totalSurfaceM2 > 0 ? `${totalSurfaceM2} m²` : t("notProvided")}
             editable={false}
-            onChangeText={(value) => updateEditField("total_area_m2", parseFloat(value) || 0)}
-            inputValue={editData.total_area_m2?.toString()}
-            placeholder={t("areaPlaceholder") || ""}
-            keyboardType="numeric"
+          />
+          <FarmInfoRow
+            label={t("volumeTotal") || ""}
+            value={totalVolumeM3 > 0 ? `${totalVolumeM3} m³` : t("notProvided")}
+            editable={false}
           />
           <FarmInfoRow
             label={t("waterSource") || ""}
@@ -188,23 +230,6 @@ export default function FarmProfileScreen() {
             onChangeText={(value) => updateEditField("water_source", value)}
             inputValue={editData.water_source}
             placeholder={t("waterSourcePlaceholder") || ""}
-          />
-          <FarmInfoRow
-            label={t("mainSpecies") || ""}
-            value={isEditing ? undefined : farmProfile.main_species || t("notProvided")}
-            editable={isEditing}
-            onChangeText={(value) => updateEditField("main_species", value)}
-            inputValue={editData.main_species}
-            placeholder={t("speciesPlaceholder") || ""}
-          />
-          <FarmInfoRow
-            label={t("annualProduction") || ""}
-            value={isEditing ? undefined : farmProfile.annual_production_kg?.toString() || "0"}
-            editable={isEditing}
-            onChangeText={(value) => updateEditField("annual_production_kg", parseFloat(value) || 0)}
-            inputValue={editData.annual_production_kg?.toString()}
-            placeholder={t("productionPlaceholder") || ""}
-            keyboardType="numeric"
           />
         </View>
       </View>
@@ -264,54 +289,6 @@ export default function FarmProfileScreen() {
             </>
           )}
         </View>
-      </View>
-
-      <View className="px-5 py-3">
-        <Text className="text-lg font-bold text-gray-dark mb-3">{t("currentCycles")}</Text>
-        {activeCycles.length === 0 ? (
-          <View className="items-center p-6">
-            <Text className="text-base text-gray-dark mb-2">{t("noActiveCycles")}</Text>
-            <Text className="text-sm text-gray-light text-center">{t("startCycle")}</Text>
-          </View>
-        ) : (
-          <View className="gap-3">
-            {activeCycles.map((cycle) => {
-              const startDate = new Date(cycle.start_date);
-              const currentDate = new Date();
-              const daysSinceStart = Math.floor((currentDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
-              const cycleDuration = cycle.species === "clarias" ? 120 : 180;
-
-              return (
-                <View key={cycle.id} className="bg-white rounded-xl p-4 border-l-4 border-l-aquacare-primary">
-                  <View className="flex-row items-center justify-between mb-3">
-                    <Text className="text-base font-bold text-gray-dark flex-1" numberOfLines={1}>
-                      {cycle.cycle_name}
-                    </Text>
-                    <View className="bg-green-light px-2 py-1 rounded-lg">
-                      <Text className="text-xs font-semibold text-white">
-                        {t("dayProgress", { day: daysSinceStart, duration: cycleDuration })}
-                      </Text>
-                    </View>
-                  </View>
-                  <View className="gap-2">
-                    <CycleRow label={t("pond") || ""} value={cycle.pond_identifier} />
-                    <CycleRow label={t("area") || ""} value={`${cycle.pond_surface_m2} m²`} />
-                    <CycleRow label={t("species") || ""} value={cycle.species === "clarias" ? "Clarias" : "Tilapia"} />
-                    <CycleRow label={t("currentFish") || ""} value={`${cycle.current_count}`} />
-                    <CycleRow label={t("currentBiomass") || ""} value={`${cycle.current_biomass} kg`} />
-                  </View>
-                </View>
-              );
-            })}
-          </View>
-        )}
-
-        <TouchableOpacity
-          onPress={() => navigation.navigate("DailyLogHistory")}
-          className="bg-aquacare-primary mt-4 py-3 px-4 rounded-lg items-center"
-        >
-          <Text className="text-white text-base font-semibold">{t("viewDailyLogHistory")}</Text>
-        </TouchableOpacity>
       </View>
 
       {isEditing && (
@@ -375,15 +352,6 @@ function FarmInfoRow({
       ) : (
         <Text className="text-sm text-gray-dark font-medium flex-1 text-right">{value}</Text>
       )}
-    </View>
-  );
-}
-
-function CycleRow({ label, value }: { label: string; value: string }) {
-  return (
-    <View className="flex-row justify-between items-center">
-      <Text className="text-sm text-gray-light flex-1">{label} :</Text>
-      <Text className="text-sm text-gray-dark font-semibold text-right flex-1">{value}</Text>
     </View>
   );
 }

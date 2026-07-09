@@ -60,8 +60,9 @@ export const fr = {
 
   // Farm Profile
   farmName: 'Nom de la ferme',
-  totalPonds: 'Zones de production',
-  totalArea: 'Superficie totale en production (m²)',
+  totalPonds: 'Unités de production',
+  surfaceTotal: 'Surface totale',
+  volumeTotal: 'Volume total',
   waterSource: "Source d'eau",
   mainSpecies: 'Espèce principale',
   annualProduction: 'Production annuelle (kg)',
