@@ -218,6 +218,21 @@ export const loadUserProfile = createAsyncThunk<
   }
 );
 
+export const loadFarmProfile = createAsyncThunk<
+  FarmProfile | null,
+  void,
+  { rejectValue: AuthErrorPayload }
+>(
+  'auth/loadFarmProfile',
+  async (_, { rejectWithValue }) => {
+    try {
+      return await profileService.getFarmProfile();
+    } catch (error: unknown) {
+      return rejectWithValue(getThunkErrorPayload(error));
+    }
+  }
+);
+
 export const updateUserProfile = createAsyncThunk<User, UpdateUserProfilePayload, { rejectValue: AuthErrorPayload }>(
   'auth/updateProfile',
   async (profileData: UpdateUserProfilePayload, { rejectWithValue }) => {
@@ -373,6 +388,18 @@ export const authSlice = createSlice({
         // Ne pas écraser l'erreur si l'utilisateur est déjà déconnecté :
         // les requêtes en-vol (after logout) reviennent avec 401 et ne doivent
         // pas afficher un message d'erreur sur le LoginScreen.
+        if (state.isAuthenticated) {
+          applyAuthError(state, action.payload as AuthErrorPayload | undefined);
+        }
+      });
+
+    // Load farm profile
+    builder
+      .addCase(loadFarmProfile.fulfilled, (state, action) => {
+        state.farmProfile = action.payload;
+        clearAuthErrors(state);
+      })
+      .addCase(loadFarmProfile.rejected, (state, action) => {
         if (state.isAuthenticated) {
           applyAuthError(state, action.payload as AuthErrorPayload | undefined);
         }
