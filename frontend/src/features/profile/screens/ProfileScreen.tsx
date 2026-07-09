@@ -6,14 +6,11 @@ import { StackNavigationProp } from "@react-navigation/stack";
 import { AQUACARE_COLORS } from "@/constants/colors";
 import { ProfileStackParamList } from "@/navigation/MainNavigator";
 import { useAuth } from "@/hooks/useAuth";
-import { useSelector, useDispatch } from "react-redux";
-import { RootState, AppDispatch } from "@/store/store";
-import { fetchDashboardData } from "@/features/aquaculture/store/aquacultureSlice";
 import { INTERVENTION_ZONES } from "@/constants/cameroon";
 import LocationSelector from "@/components/common/LocationSelector";
 import { getAccountErrorMessage } from "@/features/auth/utils/accountsErrorPresenter";
 import { useProfileEditor } from "@/features/profile/hooks/useProfileEditor";
-import { formatFarmName, getCertificationPresentation } from "@/features/profile/utils/accountProfilePresentation";
+import { getCertificationPresentation } from "@/features/profile/utils/accountProfilePresentation";
 import { sharedTextInputStyles } from "@/components/common/inputStyles";
 
 type ProfileScreenNavigationProp = StackNavigationProp<ProfileStackParamList, "ProfileMain">;
@@ -24,7 +21,6 @@ interface Props {
 
 export default function ProfileScreen({ navigation }: Props) {
   const { t } = useTranslation();
-  const dispatch = useDispatch<AppDispatch>();
   const {
     user,
     farmProfile,
@@ -36,13 +32,6 @@ export default function ProfileScreen({ navigation }: Props) {
     displayName,
     isIndividual,
   } = useAuth();
-
-  const { dashboardData } = useSelector((state: RootState) => state.aquaculture);
-  const activeCycles = dashboardData?.active_cycles || [];
-  const totalAreaInProduction = activeCycles.reduce(
-    (sum, cycle) => sum + (Number(cycle.pond_surface_m2) || 0),
-    0
-  );
 
   const [showInterventionZoneModal, setShowInterventionZoneModal] = useState(false);
   const {
@@ -61,14 +50,10 @@ export default function ProfileScreen({ navigation }: Props) {
   );
 
   useEffect(() => {
-    dispatch(fetchDashboardData(undefined));
-  }, [dispatch]);
-
-  useEffect(() => {
     if (!user && !farmProfile && !isLoading) {
       loadProfile();
     }
-  }, []);
+  }, [farmProfile, isLoading, loadProfile, user]);
 
   const handleSave = async () => {
     try {
@@ -210,38 +195,6 @@ export default function ProfileScreen({ navigation }: Props) {
         </View>
       </View>
 
-      {farmProfile && (
-        <View className="px-5 py-3">
-          <Text className="text-lg font-bold text-gray-dark mb-3">{t("farmInfo")}</Text>
-          <View className="bg-white rounded-xl p-4">
-            <InfoRow label={t("farmName") || ""} value={formatFarmName(farmProfile.farm_name)} editable={false} icon="business" />
-            <InfoRow label={t("totalPonds") || ""} value={activeCycles.length.toString()} editable={false} icon="water" />
-            {(totalAreaInProduction > 0 || farmProfile.total_area_m2) && (
-              <InfoRow
-                label={t("totalArea") || ""}
-                value={`${totalAreaInProduction > 0 ? totalAreaInProduction : farmProfile.total_area_m2} m²`}
-                editable={false}
-                icon="resize"
-              />
-            )}
-            {farmProfile.water_source && (
-              <InfoRow label={t("waterSource") || ""} value={farmProfile.water_source} editable={false} icon="water" />
-            )}
-            {farmProfile.main_species && (
-              <InfoRow label={t("mainSpecies") || ""} value={farmProfile.main_species} editable={false} icon="fish" />
-            )}
-            {farmProfile.annual_production_kg && (
-              <InfoRow
-                label={t("annualProduction") || ""}
-                value={`${farmProfile.annual_production_kg} kg`}
-                editable={false}
-                icon="scale"
-              />
-            )}
-          </View>
-        </View>
-      )}
-
       <View className="px-5 py-3">
         <Text className="text-lg font-bold text-gray-dark mb-3">{t("preferences")}</Text>
         <View className="bg-white rounded-xl p-4">
@@ -274,8 +227,7 @@ export default function ProfileScreen({ navigation }: Props) {
 
       <View className="px-5 pb-8">
         <TouchableOpacity className="bg-white flex-row items-center p-4 rounded-xl mb-3" onPress={() => navigation.navigate("FarmProfile")}>
-          <Ionicons name="analytics" size={20} color={AQUACARE_COLORS.GREEN_PRIMARY} />
-          <Text className="text-base font-semibold text-gray-dark flex-1 ml-3">{t("farmManagement")}</Text>
+          <Text className="text-base font-semibold text-gray-dark flex-1">{t("farmManagement")}</Text>
           <Ionicons name="chevron-forward" size={20} color={AQUACARE_COLORS.GRAY_LIGHT} />
         </TouchableOpacity>
 
