@@ -276,14 +276,14 @@ export default function HarvestModal({
       >
         <View style={styles.unitOverlay}>
           <View style={styles.unitContainer}>
-            {/* Header */}
-            <View style={styles.unitHeader}>
-              <View>
-                <Text style={styles.unitTitle}>
-                  {t('harvestThisUnitTitleWithName', { unitName })}
-                </Text>
-                <Text style={styles.unitSubtitle}>{t('harvestThisUnitSubtitle')}</Text>
-              </View>
+          {/* Header */}
+          <View style={styles.unitHeader}>
+            <View style={styles.unitHeaderText}>
+              <Text style={styles.unitTitle}>
+                {t('harvestThisUnitTitleWithName', { unitName })}
+              </Text>
+              <Text style={styles.unitSubtitle}>{t('harvestThisUnitSubtitle')}</Text>
+            </View>
               <TouchableOpacity onPress={onClose} style={styles.unitCloseButton}>
                 <Ionicons name="close" size={24} color={AQUACARE_COLORS.GRAY_DARK} />
               </TouchableOpacity>
@@ -736,18 +736,29 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     marginBottom: 16,
   },
+  unitHeaderText: {
+    flex: 1,
+    paddingRight: 12,
+  },
   unitTitle: {
     fontSize: 20,
     fontWeight: 'bold',
     color: AQUACARE_COLORS.GRAY_DARK,
+    flexShrink: 1,
   },
   unitSubtitle: {
     fontSize: 14,
     color: AQUACARE_COLORS.GRAY_LIGHT,
     marginTop: 2,
+    flexShrink: 1,
   },
   unitCloseButton: {
-    padding: 4,
+    width: 32,
+    height: 32,
+    marginLeft: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
   },
   unitBody: {
     flexGrow: 0,

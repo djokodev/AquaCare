@@ -191,7 +191,7 @@ export default function PartialHarvestModal({
         <View style={styles.container}>
           {/* Header */}
           <View style={styles.header}>
-            <View>
+            <View style={styles.headerText}>
               <Text style={styles.title}>
                 {isUnitScope ? t('partialHarvestUnitTitleWithName', { unitName }) : t('partialHarvestTitle')}
               </Text>
@@ -338,18 +338,29 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     marginBottom: 16,
   },
+  headerText: {
+    flex: 1,
+    paddingRight: 12,
+  },
   title: {
     fontSize: 20,
     fontWeight: 'bold',
     color: COLORS.GRAY_DARK,
+    flexShrink: 1,
   },
   subtitle: {
     fontSize: 14,
     color: COLORS.GRAY_LIGHT,
     marginTop: 2,
+    flexShrink: 1,
   },
   closeBtn: {
-    padding: 4,
+    width: 32,
+    height: 32,
+    marginLeft: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
   },
   body: {
     flexGrow: 0,
