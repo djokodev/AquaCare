@@ -183,7 +183,7 @@ describe('features/profile/screens/FarmProfileScreen', () => {
     });
   });
 
-  it('affiche la surface issue du profil ferme et le volume des unités actives', async () => {
+  it('affiche la surface, le volume et le compteur depuis les unités actives', async () => {
     const { getByText, queryByText } = render(<FarmProfileScreen />);
 
     await waitFor(() => {
