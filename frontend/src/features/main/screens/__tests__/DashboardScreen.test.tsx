@@ -1,12 +1,17 @@
 import React from 'react';
 import { Alert } from 'react-native';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { ScrollView } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
 
 import DashboardScreen from '../DashboardScreen';
 import { ProductionCycle } from '@/types/aquaculture';
 import { offlineService } from '@/services/offlineService';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
+import { fetchDashboardData } from '@/features/aquaculture/store/aquacultureSlice';
+
+const mockDispatch = jest.fn();
+const mockLoadProfile = jest.fn();
 
 jest.mock('react-redux', () => ({
   useDispatch: jest.fn(),
@@ -34,6 +39,16 @@ jest.mock('react-i18next', () => ({
   },
 }));
 
+jest.mock('@/features/aquaculture/store/aquacultureSlice', () => ({
+  clearCurrentCycle: jest.fn(() => ({ type: 'aquaculture/clearCurrentCycle' })),
+  fetchDashboardData: jest.fn(() => ({ type: 'aquaculture/fetchDashboardData' })),
+  fetchProductionCycles: jest.fn(() => ({ type: 'aquaculture/fetchProductionCycles' })),
+  setCurrentCycle: jest.fn((cycle: unknown) => ({
+    type: 'aquaculture/setCurrentCycle',
+    payload: cycle,
+  })),
+}));
+
 jest.mock('@/features/aquaculture/services/aquacultureService', () => ({
   aquacultureService: {
     getCycleDashboard: jest.fn(),
@@ -47,6 +62,8 @@ jest.mock('@react-navigation/native', () => ({
 jest.mock('@/hooks/useAuth', () => ({
   useAuth: () => ({
     displayName: 'Jean Test',
+    loadProfile: mockLoadProfile,
+    loadFarmProfile: mockLoadProfile,
   }),
 }));
 
@@ -68,10 +85,10 @@ jest.mock('@/components/modals/HarvestModal', () => ({
 }));
 
 describe('features/main/screens/DashboardScreen', () => {
-  const mockDispatch = jest.fn();
   const mockUseSelector = useSelector as unknown as jest.Mock;
   const mockOffline = offlineService as jest.Mocked<typeof offlineService>;
   const mockGetCycleDashboard = aquacultureService.getCycleDashboard as jest.Mock;
+  const mockFetchDashboardData = fetchDashboardData as unknown as jest.Mock;
   const navigation = {
     navigate: jest.fn(),
   } as any;
@@ -115,6 +132,7 @@ describe('features/main/screens/DashboardScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockDispatch.mockImplementation(() => ({ unwrap: jest.fn().mockResolvedValue({}) }));
+    mockLoadProfile.mockResolvedValue(undefined);
     (useDispatch as unknown as jest.Mock).mockReturnValue(mockDispatch);
     mockOffline.hasAnyPendingSync.mockResolvedValue(false);
     mockOffline.syncAllOfflineData.mockResolvedValue({ success: 0, failed: 0, details: {} as any });
@@ -186,6 +204,22 @@ describe('features/main/screens/DashboardScreen', () => {
     expect(navigation.navigate).toHaveBeenCalledWith('CycleSessionEntry', {
       showBackToDashboard: true,
     });
+  });
+
+  it('rafraichit aussi le profil ferme lors du pull-to-refresh', async () => {
+    const { UNSAFE_getByType } = render(<DashboardScreen navigation={navigation} />);
+
+    const scrollView = UNSAFE_getByType(ScrollView);
+
+    await act(async () => {
+      scrollView.props.refreshControl.props.onRefresh();
+    });
+
+    await waitFor(() => {
+      expect(mockLoadProfile).toHaveBeenCalledTimes(1);
+    });
+
+    expect(mockFetchDashboardData).toHaveBeenCalledWith(undefined);
   });
 
   it('ouvre le flux de creation de cycle depuis le dashboard', async () => {

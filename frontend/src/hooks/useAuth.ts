@@ -9,6 +9,7 @@ import {
   deleteAccountUser,
   checkAuthStatus,
   loadUserProfile,
+  loadFarmProfile,
   updateUserProfile,
   updateFarmProfile,
   clearError,
@@ -104,6 +105,10 @@ export const useAuth = () => {
     return dispatch(loadUserProfile());
   }, [dispatch]);
 
+  const loadFarmProfileOnly = useCallback(() => {
+    return dispatch(loadFarmProfile());
+  }, [dispatch]);
+
   const updateProfile = useCallback(
     (profileData: UpdateUserProfilePayload) => {
       return dispatch(updateUserProfile(profileData)).unwrap();
@@ -150,6 +155,7 @@ export const useAuth = () => {
     updateProfile,
     updateFarm,
     clearAuthError,
+    loadFarmProfile: loadFarmProfileOnly,
 
     // Computed properties
     isIndividual: authState.user?.is_individual || false,

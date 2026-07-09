@@ -45,7 +45,7 @@ import {
 
 export default function DashboardScreen({ navigation }: any) {
   const { t } = useTranslation();
-  const { displayName } = useAuth();
+  const { displayName, loadFarmProfile } = useAuth();
   const dispatch = useDispatch<AppDispatch>();
 
   const [harvestModalVisible, setHarvestModalVisible] = useState(false);
@@ -55,6 +55,7 @@ export default function DashboardScreen({ navigation }: any) {
   const [actionsSheetVisible, setActionsSheetVisible] = useState(false);
   const [confirmingOrderId, setConfirmingOrderId] = useState<string | null>(null);
   const [currentCycleUnitCount, setCurrentCycleUnitCount] = useState<number | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   const { dashboardData, loading, error, currentCycle } = useSelector(
     (state: RootState) => state.aquaculture
@@ -152,10 +153,16 @@ export default function DashboardScreen({ navigation }: any) {
   }, [primaryActiveCycle?.id]);
 
   const onRefresh = useCallback(() => {
-    dispatch(fetchDashboardData(undefined));
-    dispatch(fetchNotifications({ cycleId: currentCycle?.id }));
-    dispatch(fetchOrders());
-  }, [currentCycle?.id, dispatch]);
+    setRefreshing(true);
+    void Promise.all([
+      loadFarmProfile(),
+      dispatch(fetchDashboardData(undefined)),
+      dispatch(fetchNotifications({ cycleId: currentCycle?.id })),
+      dispatch(fetchOrders()),
+    ]).finally(() => {
+      setRefreshing(false);
+    });
+  }, [currentCycle?.id, dispatch, loadFarmProfile]);
 
   const dashboardMetricCards = useMemo(() => {
     if (primaryCycleHasProductionUnits) {
@@ -333,7 +340,7 @@ export default function DashboardScreen({ navigation }: any) {
       <ScrollView
         className="flex-1 bg-cream"
         refreshControl={
-          <RefreshControl refreshing={loading.dashboard} onRefresh={onRefresh} />
+          <RefreshControl refreshing={refreshing || loading.dashboard} onRefresh={onRefresh} />
         }
       >
         <DashboardHeader
@@ -379,7 +386,7 @@ export default function DashboardScreen({ navigation }: any) {
 
       <ScrollView
         refreshControl={
-          <RefreshControl refreshing={loading.dashboard} onRefresh={onRefresh} />
+          <RefreshControl refreshing={refreshing || loading.dashboard} onRefresh={onRefresh} />
         }
         contentContainerStyle={{ paddingTop: 140 }}
       >

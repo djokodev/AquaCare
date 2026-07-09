@@ -13,6 +13,7 @@ import authSliceReducer, {
   logoutUser,
   checkAuthStatus,
   loadUserProfile,
+  loadFarmProfile,
   updateUserProfile,
   updateFarmProfile,
   deleteAccountUser,
@@ -431,6 +432,40 @@ describe('store/slices/authSlice', () => {
 
       expect(newState.isLoading).toBe(false);
       expect(newState.error).toBeNull();
+    });
+  });
+
+  describe('loadFarmProfile thunk', () => {
+    const authenticatedState = {
+      ...initialState,
+      user: mockUser,
+      isAuthenticated: true,
+    };
+
+    it('met à jour uniquement le profil ferme', () => {
+      const action = {
+        type: loadFarmProfile.fulfilled.type,
+        payload: mockFarmProfile,
+      };
+      const newState = authSliceReducer(initialState, action);
+
+      expect(newState.isLoading).toBe(false);
+      expect(newState.user).toBeNull();
+      expect(newState.farmProfile).toEqual(mockFarmProfile);
+    });
+
+    it('gère l\'état rejected quand authentifié — affiche l\'erreur', () => {
+      const action = {
+        type: loadFarmProfile.rejected.type,
+        payload: {
+          message: 'Erreur chargement ferme',
+          fieldErrors: {},
+        },
+      };
+      const newState = authSliceReducer(authenticatedState, action);
+
+      expect(newState.error).toBe('Erreur chargement ferme');
+      expect(newState.fieldErrors).toEqual({});
     });
   });
 

@@ -1,5 +1,6 @@
-﻿import React, { useEffect, useMemo } from "react";
-import { Alert, Linking, ScrollView, Text, TouchableOpacity, TextInput, View } from "react-native";
+﻿import React, { useCallback, useMemo, useRef, useState } from "react";
+import { Alert, Linking, RefreshControl, ScrollView, Text, TouchableOpacity, TextInput, View } from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
 import { useTranslation } from "react-i18next";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
@@ -22,9 +23,11 @@ export default function FarmProfileScreen() {
   const { t } = useTranslation();
   const navigation = useNavigation<NavigationProp>();
   const dispatch = useDispatch<AppDispatch>();
-  const { farmProfile, isLoading, error, updateFarm, loadProfile } = useAuth();
+  const { farmProfile, isLoading, error, updateFarm, loadFarmProfile } = useAuth();
   const { dashboardData } = useSelector((state: RootState) => state.aquaculture);
   const activeCycles = dashboardData?.active_cycles || [];
+  const [refreshing, setRefreshing] = useState(false);
+  const refreshInProgressRef = useRef(false);
 
   const { isEditing, setIsEditing, isSaving, editData, updateEditField, save, saveLocation } =
     useFarmProfileEditor({ farmProfile, updateFarm });
@@ -34,9 +37,30 @@ export default function FarmProfileScreen() {
   );
   const { status: locationStatus, requestLocation } = useFarmLocation();
 
-  useEffect(() => {
-    dispatch(fetchDashboardData(undefined));
-  }, [dispatch]);
+  const refreshFarmProfile = useCallback(async () => {
+    if (refreshInProgressRef.current) {
+      return;
+    }
+
+    refreshInProgressRef.current = true;
+    setRefreshing(true);
+
+    try {
+      await Promise.all([
+        loadFarmProfile(),
+        dispatch(fetchDashboardData(undefined)),
+      ]);
+    } finally {
+      refreshInProgressRef.current = false;
+      setRefreshing(false);
+    }
+  }, [dispatch, loadFarmProfile]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void refreshFarmProfile();
+    }, [refreshFarmProfile])
+  );
 
   const handleLocateFarm = async () => {
     const coords = await requestLocation();
@@ -104,7 +128,7 @@ export default function FarmProfileScreen() {
         <Text className="text-sm text-gray-light mt-2 text-center">{t("unableToLoadFarmProfile")}</Text>
         <TouchableOpacity
           className="bg-aquacare-primary px-6 py-3 rounded-lg mt-5"
-          onPress={() => loadProfile()}
+          onPress={() => refreshFarmProfile()}
           disabled={isLoading}
         >
           <Text className="text-white text-base font-semibold">{isLoading ? t("loading") : t("retry")}</Text>
@@ -121,7 +145,7 @@ export default function FarmProfileScreen() {
         <Text className="text-sm text-gray-light mt-2 text-center">{t("loadingFarmProfile")}</Text>
         <TouchableOpacity
           className="bg-aquacare-primary px-6 py-3 rounded-lg mt-5"
-          onPress={() => loadProfile()}
+          onPress={() => refreshFarmProfile()}
           disabled={isLoading}
         >
           <Text className="text-white text-base font-semibold">{isLoading ? t("loading") : t("reloadProfile")}</Text>
@@ -133,7 +157,12 @@ export default function FarmProfileScreen() {
   const totalSurface = activeCycles.reduce((total, cycle) => total + (Number(cycle.pond_surface_m2) || 0), 0);
 
   return (
-    <ScrollView className="flex-1 bg-cream">
+    <ScrollView
+      className="flex-1 bg-cream"
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={refreshFarmProfile} />
+      }
+    >
       <View className="bg-aquacare-primary items-center pt-14 pb-6 px-5">
         <View className="w-16 h-16 rounded-full bg-green-dark items-center justify-center mb-3">
           <Ionicons name="business" size={32} color={AQUACARE_COLORS.WHITE} />
