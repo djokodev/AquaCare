@@ -206,6 +206,57 @@ describe('features/main/screens/DashboardScreen', () => {
     });
   });
 
+  it('desactive la session active quand un seul cycle est disponible', async () => {
+    mockUseSelector.mockImplementation((selector: (state: any) => unknown) =>
+      selector({
+        aquaculture: {
+          dashboardData: {
+            active_cycles_count: 1,
+            total_biomass: 216,
+            total_fish_count: 1800,
+            average_fcr: 1.8,
+            average_survival_rate: 88,
+            active_cycles: [cycleA],
+            recent_logs: [],
+            current_feeding_plans: [],
+            pending_notifications: [],
+          },
+          loading: {
+            dashboard: false,
+            cycles: false,
+            logs: false,
+            sync: false,
+          },
+          error: null,
+          currentCycle: cycleA,
+        },
+        notifications: {
+          unreadCount: 0,
+        },
+        commerce: {
+          orders: {
+            items: [],
+            statistics: null,
+            loading: false,
+            error: null,
+          },
+        },
+      })
+    );
+
+    const { getByTestId, getByText, queryByText } = render(<DashboardScreen navigation={navigation} />);
+
+    const sessionCard = getByTestId('session-active-cycle-card');
+
+    expect(getByText('sessionActiveCycleLabel')).toBeTruthy();
+    expect(getByText('Cycle A')).toBeTruthy();
+    expect(queryByText('changeSessionCycle')).toBeNull();
+
+    fireEvent.press(sessionCard);
+
+    expect(navigation.navigate).not.toHaveBeenCalled();
+  });
+
   it('rafraichit aussi le profil ferme lors du pull-to-refresh', async () => {
     const { UNSAFE_getByType } = render(<DashboardScreen navigation={navigation} />);
 

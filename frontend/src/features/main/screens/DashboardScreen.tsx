@@ -110,6 +110,7 @@ export default function DashboardScreen({ navigation }: any) {
 
   const activeCycles = dashboardData?.active_cycles || [];
   const cyclesAvailableForSwitch = allCycles.length > 0 ? allCycles : activeCycles;
+  const canSwitchCycle = cyclesAvailableForSwitch.length > 1;
   const currentCycleInList = currentCycle
     ? activeCycles.find((cycle) => cycle.id === currentCycle.id)
     : undefined;
@@ -420,17 +421,29 @@ export default function DashboardScreen({ navigation }: any) {
       {sessionCycle ? (
         <View className="px-5 pb-1">
           <TouchableOpacity
-            className="bg-white rounded-xl p-4 border border-aquacare-primary flex-row items-center justify-between shadow-sm"
-            onPress={() => navigation.navigate('CycleSessionEntry', { showBackToDashboard: true })}
+            testID="session-active-cycle-card"
+            className={`bg-white rounded-xl p-4 border border-aquacare-primary flex-row items-center justify-between shadow-sm ${
+              canSwitchCycle ? '' : 'opacity-70'
+            }`}
+            disabled={!canSwitchCycle}
+            onPress={
+              canSwitchCycle
+                ? () => navigation.navigate('CycleSessionEntry', { showBackToDashboard: true })
+                : undefined
+            }
           >
             <View className="flex-1 mr-3">
-              <Text className="text-xs font-semibold uppercase tracking-wide text-gray-light">
+              <Text
+                className={`text-xs font-semibold uppercase tracking-wide ${
+                  canSwitchCycle ? 'text-gray-light' : 'text-gray-light/80'
+                }`}
+              >
                 {t('sessionActiveCycleLabel')}
               </Text>
               <Text className="text-base font-bold text-gray-dark mt-1">
                 {sessionCycle.cycle_name}
               </Text>
-              {cyclesAvailableForSwitch.length > 1 ? (
+              {canSwitchCycle ? (
                 <Text className="text-sm text-aquacare-primary mt-1">
                   {t('changeSessionCycle', { defaultValue: 'Changer de cycle' })}
                 </Text>
@@ -439,7 +452,7 @@ export default function DashboardScreen({ navigation }: any) {
             <Ionicons
               name="chevron-forward"
               size={20}
-              color={AQUACARE_COLORS.GREEN_PRIMARY}
+              color={canSwitchCycle ? AQUACARE_COLORS.GREEN_PRIMARY : AQUACARE_COLORS.GRAY_LIGHT}
             />
           </TouchableOpacity>
         </View>
