@@ -42,6 +42,7 @@ interface HarvestModalProps {
   onSuccess?: () => void;
   onContactBuyer?: () => void;
   onNextCycle?: (harvestedCycleId: string) => void;
+  onUnitHarvestSuccess?: () => void;
 }
 
 const toNumber = (value: number | string | null | undefined): number => {
@@ -73,6 +74,7 @@ export default function HarvestModal({
   onSuccess,
   onContactBuyer,
   onNextCycle,
+  onUnitHarvestSuccess,
 }: HarvestModalProps) {
   const { t } = useTranslation();
   const dispatch = useDispatch<AppDispatch>();
@@ -167,7 +169,14 @@ export default function HarvestModal({
         Alert.alert(
           t('success'),
           t('productionUnitHarvestSuccess'),
-          [{ text: t('ok'), onPress: () => { onSuccess?.(); onClose(); } }]
+          [{
+            text: t('ok'),
+            onPress: () => {
+              onSuccess?.();
+              onClose();
+              onUnitHarvestSuccess?.();
+            },
+          }]
         );
       } else if (cycle) {
         await dispatch(harvestCycle({

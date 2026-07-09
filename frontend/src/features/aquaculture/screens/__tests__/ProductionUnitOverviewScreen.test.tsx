@@ -5,6 +5,8 @@ import { useDispatch } from 'react-redux';
 import ProductionUnitOverviewScreen from '../ProductionUnitOverviewScreen';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
 
+let harvestModalProps: any = null;
+
 jest.mock('@/features/aquaculture/services/aquacultureService', () => ({
   aquacultureService: {
     getProductionUnitDashboard: jest.fn(),
@@ -17,7 +19,10 @@ jest.mock('react-redux', () => ({
 
 jest.mock('@/components/modals/HarvestModal', () => ({
   __esModule: true,
-  default: () => null,
+  default: (props: any) => {
+    harvestModalProps = props;
+    return null;
+  },
 }));
 
 jest.mock('@/components/modals/PartialHarvestModal', () => ({
@@ -58,6 +63,7 @@ describe('features/aquaculture/screens/ProductionUnitOverviewScreen', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    harvestModalProps = null;
     focusListener = null;
     mockUseDispatch.mockReturnValue(jest.fn());
   });
@@ -207,6 +213,10 @@ describe('features/aquaculture/screens/ProductionUnitOverviewScreen', () => {
         productionUnitName: 'Bac 1',
       });
     });
+
+    expect(harvestModalProps?.onUnitHarvestSuccess).toEqual(expect.any(Function));
+    harvestModalProps.onUnitHarvestSuccess();
+    expect(navigation.navigate).toHaveBeenCalledWith('MainTabs');
   });
 
   it('affiche un loading initial avant le dashboard unitaire', async () => {
