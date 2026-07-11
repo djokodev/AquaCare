@@ -450,10 +450,11 @@ class TestReportServicePayloadAndPdfTemplate:
                 "estimated_market_value_fcfa": 0,
                 "feed_cost_consumed_fcfa": 0,
                 "time_remaining_days": 0,
-                "direct_production_cost_fcfa": 0,
+                "direct_production_cost_fcfa": 280000,
+                "total_production_cost_to_date_fcfa": 322000,
             },
             "growth_chart": {"state": "chart", "points": [], "svg": growth_svg},
-            "cost_breakdown": {"total_fcfa": 80000, "items": [], "svg": donut_svg},
+            "cost_breakdown": {"total_fcfa": 322000, "items": [], "svg": donut_svg.replace("80 000", "322 000")},
             "cycles": [],
         }
         context = ReportService._build_pdf_context(
@@ -469,7 +470,8 @@ class TestReportServicePayloadAndPdfTemplate:
         assert "<svg" in html
         assert "<rect" in html
         assert "<path" in html or "<circle" in html
-        assert "80 000 FCFA" in html
+        assert "280 000 FCFA" in html
+        assert "322 000 FCFA" in html
         assert "Coût total" in html
 
     def test_pdf_template_distinguishes_zero_from_missing_values(self):

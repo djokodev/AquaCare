@@ -1,11 +1,36 @@
-from datetime import date
+from datetime import date, time
+from types import SimpleNamespace
 
+from aquaculture.services.report_service import ReportService
 from aquaculture.services.report_visuals import (
     aggregate_growth_points,
     build_cost_breakdown,
     build_donut_svg,
     build_growth_svg,
 )
+
+
+def _weight_log(log_date, weight=None, sample_count=None, sample_total_weight=None):
+    return SimpleNamespace(
+        log_date=log_date,
+        log_time=time(8, 0),
+        average_weight=weight,
+        sample_count=sample_count,
+        sample_total_weight=sample_total_weight,
+    )
+
+
+def test_latest_valid_weight_is_resolved_as_of_period_end_and_recalculates_biomass():
+    logs = [_weight_log(date(2026, 7, 10), 170), _weight_log(date(2026, 7, 19), 198)]
+    assert ReportService._resolve_latest_valid_weight_as_of(logs, date(2026, 7, 12)) == 170
+    assert ReportService._resolve_latest_valid_weight_as_of(logs, date(2026, 7, 19)) == 198
+    assert ReportService._resolve_latest_valid_weight_as_of(logs, date(2026, 7, 9)) is None
+    assert round(920 * 198 / 1000, 2) == 182.16
+
+
+def test_latest_valid_weight_recalculates_sample_total_when_average_missing():
+    log = _weight_log(date(2026, 7, 19), sample_count=20, sample_total_weight=3960)
+    assert ReportService._resolve_latest_valid_weight_as_of([log], date(2026, 7, 19)) == 198
 
 
 def test_growth_uses_sample_count_weighting_and_legacy_fallback():
@@ -55,3 +80,32 @@ def test_cost_breakdown_excludes_zero_values_and_has_no_nan():
     assert build_growth_svg([]) == ""
     assert '<svg' in growth_svg and '<rect' in growth_svg
     assert 'width="520"' in growth_svg and 'height="220"' in growth_svg
+
+
+def test_enriched_payload_separates_direct_and_total_costs():
+    payload = {
+        "economic_plan": {
+            "feed_cost_consumed_fcfa": 185000,
+            "fingerlings_cost_fcfa": 95000,
+            "other_operational_costs_fcfa": 42000,
+        },
+        "cycles": [{
+            "cycle": {
+                "start_date": "2026-01-01",
+                "status": "harvested",
+                "species": "clarias",
+            },
+            "dashboard_metrics": {"estimated_market_value_fcfa": 0, "feed_cost_consumed_fcfa": 185000},
+            "economic_plan": {},
+            "logs": [],
+        }],
+        "growth_logs": [],
+    }
+    enriched = ReportService._enrich_payload(
+        payload,
+        report_type="monthly",
+        period_end=date(2026, 7, 31),
+    )
+    assert enriched["cycle_dashboard"]["direct_production_cost_fcfa"] == 280000
+    assert enriched["cycle_dashboard"]["total_production_cost_to_date_fcfa"] == 322000
+    assert enriched["cost_breakdown"]["total_fcfa"] == 322000

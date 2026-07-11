@@ -51,7 +51,7 @@ def _create_cycle_log(
         log_date=log_date,
         mortality_count=mortality_count,
         feed_quantity=Decimal(feed_quantity),
-        average_weight=Decimal(average_weight),
+        average_weight=Decimal(average_weight) if average_weight is not None else None,
     )
 
 
@@ -456,3 +456,103 @@ class TestUnitCycleAwareReportPayloads:
         assert len(payload["cycles"]) == 1
         assert payload["cycles"][0]["cycle"]["id"] == str(cycle.id)
         assert payload["units"] == []
+
+    def test_cycle_report_uses_latest_weight_for_units_biomass_and_growth(self):
+        farm_profile = FarmProfileFactory()
+        cycle = ProductionCycleFactory(
+            farm_profile=farm_profile, status="active", start_date=date(2026, 6, 1),
+            initial_count=1840, current_count=1840, current_biomass=Decimal("999.00"),
+        )
+        allocation_a = _create_allocation(cycle, _create_unit(farm_profile, "Bassin A", "3.00"), 920, 920, "999.00")
+        allocation_b = _create_allocation(cycle, _create_unit(farm_profile, "Bassin B", "3.00"), 920, 920, "999.00")
+        for allocation in (allocation_a, allocation_b):
+            previous = _create_cycle_log(
+                cycle=cycle, allocation=allocation, log_date=date(2026, 7, 12), mortality_count=0,
+                feed_quantity="1.00", average_weight="165.00",
+            )
+            previous.sample_count = 20
+            previous.save(update_fields=["sample_count"])
+            current = _create_cycle_log(
+                cycle=cycle, allocation=allocation, log_date=date(2026, 7, 19), mortality_count=0,
+                feed_quantity="1.00", average_weight="198.00",
+            )
+            current.sample_count = 20
+            current.save(update_fields=["sample_count"])
+
+        payload = ReportService._build_payload(
+            farm_profile=farm_profile, report_type="weekly", period_start=date(2026, 7, 13),
+            period_end=date(2026, 7, 19), scope_type="cycle", cycle_id=str(cycle.id),
+        )
+
+        assert [section["current_metrics"]["current_average_weight"] for section in payload["cycles"]] == [198.0, 198.0]
+        assert [section["current_metrics"]["current_biomass"] for section in payload["cycles"]] == [182.16, 182.16]
+        assert payload["summary"]["estimated_current_biomass_kg"] == 364.32
+        assert payload["growth_chart"]["points"][-1]["value_g"] == 198
+
+    def test_cycle_report_separates_unit_and_global_sanitary_events(self):
+        farm_profile = FarmProfileFactory()
+        cycle = ProductionCycleFactory(farm_profile=farm_profile, status="active")
+        allocation_a = _create_allocation(cycle, _create_unit(farm_profile, "Bassin A", "3.00"), 920, 920, "182.16")
+        _create_allocation(cycle, _create_unit(farm_profile, "Bassin B", "3.00"), 920, 920, "182.16")
+        unit_event = _create_sanitary_log(
+            cycle=cycle, allocation=allocation_a, event_date=date(2026, 7, 15), event_type="disease",
+            symptoms="Points blancs", resolved=False,
+        )
+        unit_event.affected_count = 18
+        unit_event.save(update_fields=["affected_count"])
+        resolved_during_period = _create_sanitary_log(
+            cycle=cycle, allocation=allocation_a, event_date=date(2026, 7, 10), event_type="treatment",
+            symptoms="Traitement", resolved=True,
+        )
+        resolved_during_period.resolution_date = date(2026, 7, 17)
+        resolved_during_period.save(update_fields=["resolution_date"])
+        global_event = _create_sanitary_log(
+            cycle=cycle, allocation=None, event_date=date(2026, 7, 16), event_type="water_quality",
+            symptoms="Eau trouble", resolved=False,
+        )
+        global_event.affected_count = 5
+        global_event.save(update_fields=["affected_count"])
+
+        payload = ReportService._build_payload(
+            farm_profile=farm_profile, report_type="weekly", period_start=date(2026, 7, 13),
+            period_end=date(2026, 7, 19), scope_type="cycle", cycle_id=str(cycle.id),
+        )
+
+        section_a, section_b = payload["cycles"]
+        assert section_a["active_sanitary_events_count"] == 1
+        assert section_b["active_sanitary_events_count"] == 0
+        assert len(section_a["active_sanitary_logs"]) == 1
+        assert len(section_b["active_sanitary_logs"]) == 0
+        assert len(section_a["sanitary_logs"]) == 2
+        assert len(section_b["sanitary_logs"]) == 0
+        assert len(payload["global_sanitary_logs"]["active_logs"]) == 1
+        assert len(payload["global_sanitary_logs"]["period_logs"]) == 1
+
+    def test_daily_report_keeps_last_known_weight_when_day_has_no_weighing(self):
+        farm_profile = FarmProfileFactory()
+        cycle = ProductionCycleFactory(
+            farm_profile=farm_profile, status="active", start_date=date(2026, 6, 1),
+            initial_count=920, current_count=920, current_biomass=Decimal("999.00"),
+        )
+        allocation = _create_allocation(cycle, _create_unit(farm_profile, "Bassin A", "3.00"), 920, 920, "999.00")
+        previous = _create_cycle_log(
+            cycle=cycle, allocation=allocation, log_date=date(2026, 7, 12), mortality_count=0,
+            feed_quantity="1.00", average_weight="170.00",
+        )
+        previous.sample_count = 20
+        previous.save(update_fields=["sample_count"])
+        daily = _create_cycle_log(
+            cycle=cycle, allocation=allocation, log_date=date(2026, 7, 19), mortality_count=0,
+            feed_quantity="1.00", average_weight=None,
+        )
+
+        payload = ReportService._build_payload(
+            farm_profile=farm_profile, report_type="daily", period_start=date(2026, 7, 19),
+            period_end=date(2026, 7, 19), scope_type="cycle", cycle_id=str(cycle.id),
+        )
+
+        section = payload["cycles"][0]
+        assert section["current_metrics"]["current_average_weight"] == 170.0
+        assert section["current_metrics"]["current_biomass"] == 156.4
+        assert section["logs"][0]["id"] == str(daily.id)
+        assert section["logs"][0]["average_weight"] is None

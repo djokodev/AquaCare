@@ -23,7 +23,7 @@ from accounts.models import FarmProfile, User
 from django.conf import settings
 from django.core.files.base import ContentFile
 from django.core.mail import EmailMessage
-from django.db.models import Prefetch
+from django.db.models import Prefetch, Q
 from django.template.loader import render_to_string
 from django.utils import timezone
 from django.utils.formats import date_format
@@ -129,6 +129,7 @@ class ReportDashboardMetrics(TypedDict):
     feed_cost_consumed_fcfa: float
     time_remaining_days: int | None
     direct_production_cost_fcfa: float
+    total_production_cost_to_date_fcfa: float
 
 
 class ReportCurrentMetrics(TypedDict):
@@ -650,9 +651,17 @@ class ReportService(BaseService):
             sanitary_logs=cumulative_sanitary_logs if cumulative_sanitary_logs is not None else sanitary_logs,
         )
         summary = dashboard["summary"]
-        latest_weight = summary.get("latest_average_weight_g")
+        latest_weight = ReportService._resolve_latest_valid_weight_as_of(
+            cumulative_daily_logs if cumulative_daily_logs is not None else daily_logs,
+            period_end,
+        )
         total_feed = summary.get("total_feed_consumed_kg") or 0
-        estimated_biomass = summary.get("estimated_current_biomass_kg") or allocation.current_biomass_kg
+        current_count = summary.get("estimated_current_fish_count")
+        estimated_biomass = (
+            round(float(current_count or 0) * latest_weight / 1000, 2)
+            if latest_weight is not None and current_count is not None
+            else summary.get("estimated_current_biomass_kg") or allocation.current_biomass_kg
+        )
         plan_data = FarmProductionPlanService.get_plan_data(allocation.cycle.farm_profile)
         feed_price = (
             ReportService._to_float(plan_data["default_feed_price_per_kg"])
@@ -753,7 +762,7 @@ class ReportService(BaseService):
                     "mortality_reason": log.mortality_reason or None,
                     "sample_count": log.sample_count,
                     "sample_total_weight": ReportService._to_float(log.sample_total_weight),
-                    "average_weight": ReportService._to_float(log.average_weight),
+                    "average_weight": ReportService._weight_from_log(log),
                     "feed_quantity": ReportService._to_float(log.feed_quantity),
                     "feed_type": log.feed_type or None,
                     "water_temperature": ReportService._to_float(log.water_temperature),
@@ -846,6 +855,38 @@ class ReportService(BaseService):
         }
 
     @staticmethod
+    def _weight_from_log(log: CycleLog) -> float | None:
+        average_weight = ReportService._to_float(getattr(log, "average_weight", None))
+        if average_weight is not None and average_weight > 0:
+            return average_weight
+        sample_count = ReportService._to_float(getattr(log, "sample_count", None))
+        total_weight = ReportService._to_float(getattr(log, "sample_total_weight", None))
+        if sample_count and sample_count > 0 and total_weight and total_weight > 0:
+            return total_weight / sample_count
+        return None
+
+    @staticmethod
+    def _resolve_latest_valid_weight_as_of(logs: list[CycleLog], period_end: date | None) -> float | None:
+        """Return the latest valid weighing, never using a post-period snapshot."""
+        for log in sorted(logs, key=lambda item: (item.log_date, str(getattr(item, "log_time", ""))), reverse=True):
+            if period_end is not None and log.log_date > period_end:
+                continue
+            weight = ReportService._weight_from_log(log)
+            if weight is not None:
+                return weight
+        return None
+
+    @staticmethod
+    def _is_sanitary_event_in_period(event: SanitaryLog, period_start: date, period_end: date) -> bool:
+        return (
+            period_start <= event.event_date <= period_end
+            or (
+                event.resolution_date is not None
+                and period_start <= event.resolution_date <= period_end
+            )
+        )
+
+    @staticmethod
     def _build_weekly_activity(
         logs: list,
         sanitary_logs: list,
@@ -863,7 +904,11 @@ class ReportService(BaseService):
         for (week_start, week_end), week_logs in sorted(buckets.items()):
             metrics = ReportService._build_period_metrics(
                 week_logs,
-                [item for item in sanitary_logs if week_start <= item.event_date <= week_end],
+                [
+                    item
+                    for item in sanitary_logs
+                    if ReportService._is_sanitary_event_in_period(item, week_start, week_end)
+                ],
             )
             result.append({
                 "label": ReportService._format_period_range(week_start, week_end, language_code),
@@ -978,8 +1023,8 @@ class ReportService(BaseService):
                 Prefetch(
                     "sanitary_logs",
                     queryset=SanitaryLog.objects.filter(
-                        event_date__gte=period_start,
-                        event_date__lte=period_end,
+                        Q(event_date__gte=period_start, event_date__lte=period_end)
+                        | Q(resolution_date__gte=period_start, resolution_date__lte=period_end)
                     ).order_by("-event_date", "-created_at"),
                     to_attr="period_sanitary_logs",
                 ),
@@ -997,6 +1042,18 @@ class ReportService(BaseService):
                 ),
             )
         )
+        global_period_sanitary_logs = list(
+            cycle.sanitary_logs.filter(cycle_unit_allocation__isnull=True)
+            .filter(
+                Q(event_date__gte=period_start, event_date__lte=period_end)
+                | Q(resolution_date__gte=period_start, resolution_date__lte=period_end)
+            )
+            .order_by("-event_date", "-created_at")
+        )
+        global_cumulative_sanitary_logs = list(
+            cycle.sanitary_logs.filter(cycle_unit_allocation__isnull=True, event_date__lte=period_end)
+            .order_by("-event_date", "-created_at")
+        )
         if not allocations:
             cycle_logs = list(
                 cycle.logs.filter(
@@ -1004,12 +1061,7 @@ class ReportService(BaseService):
                     log_date__lte=period_end,
                 ).order_by("-log_date", "-log_time")
             )
-            sanitary_logs = list(
-                cycle.sanitary_logs.filter(
-                    event_date__gte=period_start,
-                    event_date__lte=period_end,
-                ).order_by("-event_date", "-created_at")
-            )
+            sanitary_logs = global_period_sanitary_logs
             cumulative_logs = list(cycle.logs.filter(log_date__lte=period_end))
             cumulative_sanitary_logs = list(cycle.sanitary_logs.filter(event_date__lte=period_end))
             total_feed = sum(float(log.feed_quantity or 0) for log in cumulative_logs)
@@ -1043,7 +1095,10 @@ class ReportService(BaseService):
                 consumed_kg=total_feed,
                 fallback_price_per_kg=feed_price_per_kg,
             )
+            latest_weight = ReportService._resolve_latest_valid_weight_as_of(cumulative_logs, period_end)
             current_biomass_val = ReportService._to_float(cycle.current_biomass) or 0.0
+            if latest_weight is not None:
+                current_biomass_val = round(estimated_current * latest_weight / 1000, 2)
             projected_revenue = effective_selling_price * current_biomass_val
             return {
                 "report_meta": {
@@ -1089,7 +1144,7 @@ class ReportService(BaseService):
                     "total_mortality_count": total_mortality,
                     "mortality_rate_pct": mortality_rate_pct,
                     "total_feed_consumed_kg": round(total_feed, 2),
-                    "estimated_current_biomass_kg": ReportService._to_float(cycle.current_biomass),
+                    "estimated_current_biomass_kg": current_biomass_val,
                     "units_with_today_log_count": 0,
                     "units_missing_today_log_count": 0,
                     "active_sanitary_events_count": sum(
@@ -1155,8 +1210,8 @@ class ReportService(BaseService):
                         },
                         "current_metrics": {
                             "current_count": estimated_current,
-                            "current_average_weight": ReportService._to_float(cycle.current_average_weight),
-                            "current_biomass": ReportService._to_float(cycle.current_biomass),
+                            "current_average_weight": latest_weight,
+                            "current_biomass": current_biomass_val,
                             "total_feed_consumed": total_feed,
                             "survival_rate": ReportService._to_float(cycle.survival_rate),
                             "fcr": ReportService._to_float(cycle.fcr),
@@ -1192,7 +1247,7 @@ class ReportService(BaseService):
                                 "mortality_reason": log.mortality_reason or None,
                                 "sample_count": log.sample_count,
                                 "sample_total_weight": ReportService._to_float(log.sample_total_weight),
-                                "average_weight": ReportService._to_float(log.average_weight),
+                                "average_weight": ReportService._weight_from_log(log),
                                 "feed_quantity": ReportService._to_float(log.feed_quantity),
                                 "feed_type": log.feed_type or None,
                                 "water_temperature": ReportService._to_float(log.water_temperature),
@@ -1247,6 +1302,25 @@ class ReportService(BaseService):
                     }
                 ],
                 "units": [],
+                "global_sanitary_logs": {
+                    "active_logs": [
+                        ReportService._serialize_sanitary_event(
+                            item,
+                            ReportService._resolve_language_code(farm_profile.user),
+                            period_end,
+                        )
+                        for item in cumulative_sanitary_logs
+                        if ReportService._is_sanitary_event_active_as_of(item, period_end)
+                    ],
+                    "period_logs": [
+                        ReportService._serialize_sanitary_event(
+                            item,
+                            ReportService._resolve_language_code(farm_profile.user),
+                            period_end,
+                        )
+                        for item in sanitary_logs
+                    ],
+                },
             }
 
         feeding_plans = list(
@@ -1267,6 +1341,7 @@ class ReportService(BaseService):
         units_with_today_log_count = 0
         units_missing_today_log_count = 0
         active_sanitary_events_count = 0
+        active_sanitary_affected_fish_count = 0
         total_log_count = 0
         total_sanitary_count = 0
 
@@ -1304,6 +1379,30 @@ class ReportService(BaseService):
             else:
                 units_missing_today_log_count += 1
             active_sanitary_events_count += int(section["active_sanitary_events_count"] or 0)
+            active_sanitary_affected_fish_count += int(section["active_sanitary_affected_fish_count"] or 0)
+
+        global_active_sanitary_logs = [
+            ReportService._serialize_sanitary_event(
+                item,
+                ReportService._resolve_language_code(farm_profile.user),
+                period_end,
+            )
+            for item in global_cumulative_sanitary_logs
+            if ReportService._is_sanitary_event_active_as_of(item, period_end)
+        ]
+        global_period_sanitary_payload = [
+            ReportService._serialize_sanitary_event(
+                item,
+                ReportService._resolve_language_code(farm_profile.user),
+                period_end,
+            )
+            for item in global_period_sanitary_logs
+        ]
+        active_sanitary_events_count += len(global_active_sanitary_logs)
+        active_sanitary_affected_fish_count += sum(
+            int(item.get("affected_count") or 0) for item in global_active_sanitary_logs
+        )
+        total_sanitary_count += len(global_period_sanitary_payload)
 
         mortality_rate_pct = 0.0
         if total_initial_fish_count > 0:
@@ -1374,6 +1473,7 @@ class ReportService(BaseService):
                 "units_with_today_log_count": units_with_today_log_count,
                 "units_missing_today_log_count": units_missing_today_log_count,
                 "active_sanitary_events_count": active_sanitary_events_count,
+                "active_sanitary_affected_fish_count": active_sanitary_affected_fish_count,
                 "total_log_count": total_log_count,
                 "total_sanitary_events": total_sanitary_count,
                 "total_feed": round(total_feed_consumed, 2),
@@ -1390,6 +1490,10 @@ class ReportService(BaseService):
             "growth_logs": ReportService._build_growth_logs(cycle, allocations, period_start, period_end),
             "cycles": sections,
             "units": comparison,
+            "global_sanitary_logs": {
+                "active_logs": global_active_sanitary_logs,
+                "period_logs": global_period_sanitary_payload,
+            },
         }
 
     @staticmethod
@@ -1751,7 +1855,7 @@ class ReportService(BaseService):
                             "mortality_reason": log.mortality_reason or None,
                             "sample_count": log.sample_count,
                             "sample_total_weight": ReportService._to_float(log.sample_total_weight),
-                            "average_weight": ReportService._to_float(log.average_weight),
+                            "average_weight": ReportService._weight_from_log(log),
                             "feed_quantity": ReportService._to_float(log.feed_quantity),
                             "feed_type": log.feed_type or None,
                             "water_temperature": ReportService._to_float(log.water_temperature),
@@ -1928,6 +2032,7 @@ class ReportService(BaseService):
                 default=None,
             ),
             "direct_production_cost_fcfa": direct,
+            "total_production_cost_to_date_fcfa": round(direct + other_to_date, 2),
         }
         payload["cost_breakdown"] = cost_breakdown
         payload["calculation_metadata"] = {
@@ -1936,6 +2041,8 @@ class ReportService(BaseService):
             "other_costs_progress": round(progress, 4),
             "other_costs_planned_fcfa": planned_other,
             "other_costs_to_date_fcfa": other_to_date,
+            "direct_production_cost_fcfa": direct,
+            "total_production_cost_to_date_fcfa": round(direct + other_to_date, 2),
         }
         if not growth_points:
             growth_state = "no_data"
@@ -2252,6 +2359,8 @@ class ReportService(BaseService):
                 "monthly_weekly_summary": "Weekly summary",
                 "period_feed": "Distributed feed (kg)",
                 "active_sanitary_alerts": "Active sanitary alerts",
+                "global_sanitary_alerts": "General sanitary alerts for the cycle",
+                "global_sanitary_followup": "General sanitary follow-up for the cycle",
                 "period_sanitary_followup": "Sanitary follow-up for the period",
                 "daily_log_title": "Daily log",
                 "weekly_log_title": "Weekly logs",
@@ -2380,6 +2489,8 @@ class ReportService(BaseService):
             "monthly_weekly_summary": "Synthèse hebdomadaire",
             "period_feed": "Aliment distribué (kg)",
             "active_sanitary_alerts": "Alertes sanitaires actives",
+            "global_sanitary_alerts": "Alertes sanitaires générales du cycle",
+            "global_sanitary_followup": "Suivi sanitaire général du cycle",
             "period_sanitary_followup": "Suivi sanitaire de la période",
             "daily_log_title": "Journal du jour",
             "weekly_log_title": "Journaux de la semaine",
