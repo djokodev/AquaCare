@@ -606,6 +606,7 @@ class ReportService(BaseService):
         sanitary_logs: list,
         feeding_plans: list,
         language_code: str,
+        period_end: date | None = None,
         cumulative_daily_logs: list | None = None,
         cumulative_sanitary_logs: list | None = None,
     ) -> dict:
@@ -637,12 +638,13 @@ class ReportService(BaseService):
                 "id": str(cycle.id),
                 "cycle_name": cycle.cycle_name,
                 "species": cycle.species,
-                "species_display": cycle.get_species_display(),
+                "species_display": ReportService._report_species_display(cycle.species, language_code),
                 "status": cycle.status,
                 "status_display": cycle.get_status_display(),
                 "pond_identifier": cycle.pond_identifier,
                 "start_date": cycle.start_date.isoformat(),
-                "days_active": cycle.days_active(),
+                "start_date_display": ReportService._format_report_date(cycle.start_date, language_code),
+                "days_active": ReportService._calculate_days_active(cycle, period_end),
             },
             "unit": {
                 "id": str(allocation.id),
@@ -664,7 +666,7 @@ class ReportService(BaseService):
                     0,
                 ),
                 "feed_cost_consumed_fcfa": round(feed_cost_consumed_fcfa, 0),
-                "time_remaining_days": ReportService._calculate_cycle_days_remaining(cycle),
+                "time_remaining_days": ReportService._calculate_cycle_days_remaining(cycle, period_end),
                 "direct_production_cost_fcfa": round(feed_cost_consumed_fcfa, 0),
             },
             "current_metrics": {
@@ -683,20 +685,24 @@ class ReportService(BaseService):
                 "average_daily_feed": None,
                 "performance_score": None,
             },
-            "period_metrics": {
-                "log_count": len(daily_logs),
-                "sanitary_event_count": len(sanitary_logs),
+            "cumulative_metrics": {
                 "total_feed": feed_consumed_kg,
                 "total_mortality": summary["total_mortality_count"],
-                "average_weight": ReportService._to_float(latest_weight),
-                "average_temperature": None,
-                "average_oxygen": None,
-                "average_ph": None,
             },
+            "active_sanitary_events_count": sum(
+                1 for item in (cumulative_sanitary_logs or sanitary_logs) if not item.resolved
+            ),
+            "active_sanitary_affected_fish_count": sum(
+                int(item.affected_count or 0)
+                for item in (cumulative_sanitary_logs or sanitary_logs)
+                if not item.resolved
+            ),
+            "period_metrics": ReportService._build_period_metrics(daily_logs, sanitary_logs),
             "logs": [
                 {
                     "id": str(log.id),
                     "log_date": log.log_date.isoformat(),
+                    "log_date_display": ReportService._format_report_date(log.log_date, language_code),
                     "mortality_count": int(log.mortality_count or 0),
                     "mortality_reason": log.mortality_reason or None,
                     "sample_count": log.sample_count,
@@ -716,6 +722,7 @@ class ReportService(BaseService):
                 {
                     "id": str(item.id),
                     "event_date": item.event_date.isoformat(),
+                    "event_date_display": ReportService._format_report_date(item.event_date, language_code),
                     "event_type": item.event_type,
                     "event_type_display": item.get_event_type_display(),
                     "symptoms": item.symptoms,
@@ -748,12 +755,7 @@ class ReportService(BaseService):
     @staticmethod
     def _build_unit_comparison_snapshot(section: dict) -> dict:
         unit = section.get("unit", {}) if isinstance(section, dict) else {}
-        period_metrics = section.get("period_metrics", {}) if isinstance(section, dict) else {}
-        sanitary_logs = section.get("sanitary_logs", []) if isinstance(section, dict) else []
-        active_sanitary_issues_count = sum(
-            1 for item in sanitary_logs if isinstance(item, dict) and not item.get("resolved")
-        )
-        today = timezone.localdate().isoformat()
+        cumulative_metrics = section.get("cumulative_metrics", {}) if isinstance(section, dict) else {}
         logs = section.get("logs", []) if isinstance(section, dict) else []
         last_daily_log_date = logs[0].get("log_date") if logs else None
         return {
@@ -762,13 +764,31 @@ class ReportService(BaseService):
             "production_unit_type": unit.get("production_unit_type"),
             "production_unit_dimension": unit.get("production_unit_dimension"),
             "estimated_current_fish_count": section.get("current_metrics", {}).get("current_count"),
-            "total_mortality_count": period_metrics.get("total_mortality"),
-            "total_feed_consumed_kg": period_metrics.get("total_feed"),
+            "total_mortality_count": cumulative_metrics.get("total_mortality"),
+            "total_feed_consumed_kg": cumulative_metrics.get("total_feed"),
             "estimated_current_biomass_kg": section.get("current_metrics", {}).get("current_biomass"),
-            "sanitary_status_short": ("active" if active_sanitary_issues_count else "ok"),
+            "active_sanitary_events_count": section.get("active_sanitary_events_count", 0),
+            "active_sanitary_affected_fish_count": section.get("active_sanitary_affected_fish_count", 0),
+            "sanitary_status_short": ("active" if section.get("active_sanitary_events_count", 0) else "ok"),
             "last_daily_log_date": last_daily_log_date,
-            "has_today_daily_log": last_daily_log_date == today,
-            "active_sanitary_issues_count": active_sanitary_issues_count,
+        }
+
+    @staticmethod
+    def _build_period_metrics(logs: list, sanitary_logs: list) -> dict:
+        def average(field: str) -> float | None:
+            values = [ReportService._to_float(getattr(log, field, None)) for log in logs]
+            valid = [value for value in values if value is not None]
+            return round(sum(valid) / len(valid), 2) if valid else None
+
+        return {
+            "log_count": len(logs),
+            "sanitary_event_count": len(sanitary_logs),
+            "total_feed": round(sum(float(log.feed_quantity or 0) for log in logs), 2),
+            "total_mortality": sum(int(log.mortality_count or 0) for log in logs),
+            "average_weight": average("average_weight"),
+            "average_temperature": average("water_temperature"),
+            "average_oxygen": average("dissolved_oxygen"),
+            "average_ph": average("ph_level"),
         }
 
     @staticmethod
@@ -843,7 +863,6 @@ class ReportService(BaseService):
                     end_date__gte=period_start,
                 ).order_by("week_number")
             )
-            avg_weights = [float(log.average_weight) for log in cycle_logs if log.average_weight is not None]
             planned_price = ReportService._to_float(cycle.planned_selling_price_per_kg_fcfa)
             effective_selling_price = planned_price or ReportService._default_selling_price_for_species(cycle.species)
             feed_price_per_kg = (
@@ -893,7 +912,9 @@ class ReportService(BaseService):
                 },
                 "summary": {
                     "cycle_name": cycle.cycle_name,
-                    "species": cycle.get_species_display(),
+                    "species": ReportService._report_species_display(
+                        cycle.species, ReportService._resolve_language_code(farm_profile.user)
+                    ),
                     "status": cycle.status,
                     "total_units": 0,
                     "cycle_count": 1,
@@ -913,18 +934,43 @@ class ReportService(BaseService):
                     "total_mortality": total_mortality,
                     "comparison_units_count": 0,
                 },
+                "economic_plan": {
+                    "fingerlings_cost_fcfa": ReportService._to_float(cycle.fingerlings_cost_fcfa) or 0.0,
+                    "other_operational_costs_fcfa": ReportService._to_float(cycle.other_operational_costs_fcfa) or 0.0,
+                    "feed_cost_consumed_fcfa": feed_cost_consumed_fcfa,
+                    "feed_consumed_kg": total_feed,
+                    "planned_feed_cost_fcfa": round(
+                        CycleFeedService.get_feed_status(cycle)["total_feed_needed_kg"] * feed_price_per_kg, 2
+                    ),
+                },
+                "growth_logs": [
+                    {
+                        "log_date": log.log_date.isoformat(),
+                        "log_date_display": ReportService._format_report_date(
+                            log.log_date, ReportService._resolve_language_code(farm_profile.user)
+                        ),
+                        "sample_count": log.sample_count,
+                        "sample_total_weight": ReportService._to_float(log.sample_total_weight),
+                        "average_weight": ReportService._to_float(log.average_weight),
+                    }
+                    for log in cycle.logs.filter(
+                        log_date__gte=period_start - timedelta(days=7), log_date__lte=period_end
+                    )
+                ],
                 "cycles": [
                     {
                         "cycle": {
                             "id": str(cycle.id),
                             "cycle_name": cycle.cycle_name,
                             "species": cycle.species,
-                            "species_display": cycle.get_species_display(),
+                            "species_display": ReportService._report_species_display(
+                                cycle.species, ReportService._resolve_language_code(farm_profile.user)
+                            ),
                             "status": cycle.status,
                             "status_display": cycle.get_status_display(),
                             "pond_identifier": cycle.pond_identifier,
                             "start_date": cycle.start_date.isoformat(),
-                            "days_active": cycle.days_active(),
+                            "days_active": ReportService._calculate_days_active(cycle, period_end),
                             "planned_cycle_duration_days": cycle.planned_cycle_duration_days,
                         },
                         "unit": None,
@@ -964,16 +1010,7 @@ class ReportService(BaseService):
                                 getattr(cycle_metrics, "performance_score", None)
                             ),
                         },
-                        "period_metrics": {
-                            "log_count": len(cycle_logs),
-                            "sanitary_event_count": len(sanitary_logs),
-                            "total_feed": total_feed,
-                            "total_mortality": total_mortality,
-                            "average_weight": sum(avg_weights) / len(avg_weights) if avg_weights else None,
-                            "average_temperature": None,
-                            "average_oxygen": None,
-                            "average_ph": None,
-                        },
+                        "period_metrics": ReportService._build_period_metrics(cycle_logs, sanitary_logs),
                         "logs": [
                             {
                                 "id": str(log.id),
@@ -996,7 +1033,10 @@ class ReportService(BaseService):
                         "sanitary_logs": [
                             {
                                 "id": str(item.id),
-                                "event_date": item.event_date.isoformat(),
+                        "event_date": item.event_date.isoformat(),
+                        "event_date_display": ReportService._format_report_date(
+                            item.event_date, ReportService._resolve_language_code(farm_profile.user)
+                        ),
                                 "event_type": item.event_type,
                                 "event_type_display": item.get_event_type_display(),
                                 "symptoms": item.symptoms,
@@ -1042,6 +1082,7 @@ class ReportService(BaseService):
         total_estimated_current_fish_count = 0
         total_mortality_count = 0
         total_feed_consumed = 0.0
+        cumulative_total_feed_consumed = 0.0
         total_biomass = 0.0
         units_with_today_log_count = 0
         units_missing_today_log_count = 0
@@ -1061,6 +1102,7 @@ class ReportService(BaseService):
                 sanitary_logs=sanitary_logs,
                 feeding_plans=feeding_plans,
                 language_code=ReportService._resolve_language_code(farm_profile.user),
+                period_end=period_end,
                 cumulative_daily_logs=list(getattr(allocation, "cumulative_daily_logs", [])),
                 cumulative_sanitary_logs=list(getattr(allocation, "cumulative_sanitary_logs", [])),
             )
@@ -1068,11 +1110,12 @@ class ReportService(BaseService):
             comparison.append(ReportService._build_unit_comparison_snapshot(section))
 
             unit_summary = section["current_metrics"]
-            period_metrics = section["period_metrics"]
             total_initial_fish_count += int(section["unit"]["initial_fish_count"] or 0)
             total_estimated_current_fish_count += int(unit_summary["current_count"] or 0)
-            total_mortality_count += int(period_metrics["total_mortality"] or 0)
-            total_feed_consumed += float(period_metrics["total_feed"] or 0)
+            cumulative_metrics = section["cumulative_metrics"]
+            total_mortality_count += int(cumulative_metrics["total_mortality"] or 0)
+            total_feed_consumed += float(cumulative_metrics["total_feed"] or 0)
+            cumulative_total_feed_consumed += float(cumulative_metrics["total_feed"] or 0)
             total_biomass += float(unit_summary["current_biomass"] or 0)
             total_log_count += len(daily_logs)
             total_sanitary_count += len(sanitary_logs)
@@ -1080,12 +1123,27 @@ class ReportService(BaseService):
                 units_with_today_log_count += 1
             else:
                 units_missing_today_log_count += 1
-            if any(not item.resolved for item in sanitary_logs):
-                active_sanitary_events_count += 1
+            active_sanitary_events_count += int(section["active_sanitary_events_count"] or 0)
 
         mortality_rate_pct = 0.0
         if total_initial_fish_count > 0:
             mortality_rate_pct = round((total_mortality_count / total_initial_fish_count) * 100, 2)
+
+        plan_data = FarmProductionPlanService.get_plan_data(farm_profile)
+        feed_price_per_kg = (
+            ReportService._to_float(plan_data["default_feed_price_per_kg"])
+            or ReportService._to_float(DEFAULT_FEED_PRICE_PER_KG)
+            or 0.0
+        )
+        cycle_feed_cost = CycleFeedService.get_consumed_cost(
+            cycle,
+            period_end=period_end,
+            consumed_kg=cumulative_total_feed_consumed,
+            fallback_price_per_kg=feed_price_per_kg,
+        )
+        fingerlings_cost = ReportService._to_float(cycle.fingerlings_cost_fcfa) or 0.0
+        planned_feed_kg = CycleFeedService.get_feed_status(cycle)["total_feed_needed_kg"]
+        planned_feed_cost = round(planned_feed_kg * feed_price_per_kg, 2)
 
         scope_label = ReportService._pick_text(
             ReportService._resolve_language_code(farm_profile.user),
@@ -1120,7 +1178,9 @@ class ReportService(BaseService):
             },
             "summary": {
                 "cycle_name": cycle.cycle_name,
-                "species": cycle.get_species_display(),
+                "species": ReportService._report_species_display(
+                    cycle.species, ReportService._resolve_language_code(farm_profile.user)
+                ),
                 "status": cycle.status,
                 "total_units": len(allocations),
                 "cycle_count": 1,
@@ -1140,6 +1200,22 @@ class ReportService(BaseService):
                 "total_mortality": total_mortality_count,
                 "comparison_units_count": len(comparison),
             },
+            "economic_plan": {
+                "fingerlings_cost_fcfa": fingerlings_cost,
+                "other_operational_costs_fcfa": ReportService._to_float(cycle.other_operational_costs_fcfa) or 0.0,
+                "feed_cost_consumed_fcfa": cycle_feed_cost,
+                "feed_consumed_kg": cumulative_total_feed_consumed,
+                "planned_feed_cost_fcfa": planned_feed_cost,
+            },
+            "growth_logs": [
+                {
+                    "log_date": log.log_date.isoformat(),
+                    "sample_count": log.sample_count,
+                    "sample_total_weight": ReportService._to_float(log.sample_total_weight),
+                    "average_weight": ReportService._to_float(log.average_weight),
+                }
+                for log in cycle.logs.filter(log_date__gte=period_start - timedelta(days=7), log_date__lte=period_end)
+            ],
             "cycles": sections,
             "units": comparison,
         }
@@ -1177,6 +1253,7 @@ class ReportService(BaseService):
             sanitary_logs=sanitary_logs,
             feeding_plans=feeding_plans,
             language_code=ReportService._resolve_language_code(farm_profile.user),
+            period_end=period_end,
         )
         today = timezone.localdate()
         has_today_log = any(log.log_date == today for log in daily_logs)
@@ -1215,7 +1292,9 @@ class ReportService(BaseService):
                 "cycle_name": cycle.cycle_name,
                 "scope_name": allocation.production_unit.name,
                 "scope_type": "unit",
-                "species": cycle.get_species_display(),
+                "species": ReportService._report_species_display(
+                    cycle.species, ReportService._resolve_language_code(farm_profile.user)
+                ),
                 "status": cycle.status,
                 "total_units": 1,
                 "cycle_count": 1,
@@ -1285,6 +1364,7 @@ class ReportService(BaseService):
                 ),
                 report_type=report_type,
                 period_end=period_end,
+                language_code=ReportService._resolve_language_code(farm_profile.user),
             )
 
         if scope_type == "cycle" and scope_object_id:
@@ -1309,6 +1389,7 @@ class ReportService(BaseService):
                 ),
                 report_type=report_type,
                 period_end=period_end,
+                language_code=ReportService._resolve_language_code(farm_profile.user),
             )
 
         cycles_qs = ProductionCycle.objects.filter(
@@ -1418,12 +1499,17 @@ class ReportService(BaseService):
                         "id": str(cycle.id),
                         "cycle_name": cycle.cycle_name,
                         "species": cycle.species,
-                        "species_display": cycle.get_species_display(),
+                        "species_display": ReportService._report_species_display(
+                            cycle.species, ReportService._resolve_language_code(farm_profile.user)
+                        ),
                         "status": cycle.status,
                         "status_display": cycle.get_status_display(),
                         "pond_identifier": cycle.pond_identifier,
                         "start_date": cycle.start_date.isoformat(),
-                        "days_active": cycle.days_active(),
+                        "start_date_display": ReportService._format_report_date(
+                            cycle.start_date, ReportService._resolve_language_code(farm_profile.user)
+                        ),
+                        "days_active": ReportService._calculate_days_active(cycle, period_end),
                         "planned_cycle_duration_days": cycle.planned_cycle_duration_days,
                     },
                     "economic_plan": {
@@ -1469,6 +1555,9 @@ class ReportService(BaseService):
                         {
                             "id": str(log.id),
                             "log_date": log.log_date.isoformat(),
+                            "log_date_display": ReportService._format_report_date(
+                                log.log_date, ReportService._resolve_language_code(farm_profile.user)
+                            ),
                             "mortality_count": int(log.mortality_count or 0),
                             "mortality_reason": log.mortality_reason or None,
                             "sample_count": log.sample_count,
@@ -1488,6 +1577,9 @@ class ReportService(BaseService):
                         {
                             "id": str(item.id),
                             "event_date": item.event_date.isoformat(),
+                            "event_date_display": ReportService._format_report_date(
+                                item.event_date, ReportService._resolve_language_code(farm_profile.user)
+                            ),
                             "event_type": item.event_type,
                             "event_type_display": item.get_event_type_display(),
                             "symptoms": item.symptoms,
@@ -1551,28 +1643,54 @@ class ReportService(BaseService):
             },
             report_type=report_type,
             period_end=period_end,
+            language_code=ReportService._resolve_language_code(farm_profile.user),
         )
 
     @staticmethod
-    def _enrich_payload(payload: dict, *, report_type: str, period_end: date) -> dict:
+    def _enrich_payload(
+        payload: dict,
+        *,
+        report_type: str,
+        period_end: date,
+        language_code: str = "fr",
+    ) -> dict:
         """Add deterministic cycle-level dashboard and SVG source data."""
         sections = payload.get("cycles", [])
         if not sections:
             return payload
-        feed_cost = sum(
-            float(section.get("dashboard_metrics", {}).get("feed_cost_consumed_fcfa") or 0) for section in sections
-        )
+        global_economic = payload.get("economic_plan") or {}
+        feed_cost = float(global_economic.get("feed_cost_consumed_fcfa") or 0)
+        if not global_economic:
+            feed_cost = sum(
+                float(section.get("dashboard_metrics", {}).get("feed_cost_consumed_fcfa") or 0) for section in sections
+            )
         first = sections[0]
-        fingerlings = float(first.get("economic_plan", {}).get("fingerlings_cost_fcfa") or 0)
+        fingerlings = float(global_economic.get("fingerlings_cost_fcfa") or 0)
+        if not global_economic:
+            fingerlings = sum(
+                float(section.get("economic_plan", {}).get("fingerlings_cost_fcfa") or 0) for section in sections
+            )
         direct = round(feed_cost + fingerlings, 2)
-        override = float(first.get("economic_plan", {}).get("other_operational_costs_fcfa") or 0)
-        planned_other = override if override > 0 else round(direct * 0.05 / 0.95, 2)
+        override = float(global_economic.get("other_operational_costs_fcfa") or 0)
+        if not global_economic:
+            override = sum(
+                float(section.get("economic_plan", {}).get("other_operational_costs_fcfa") or 0) for section in sections
+            )
+        planned_feed_cost = float(global_economic.get("planned_feed_cost_fcfa") or 0)
+        if not planned_feed_cost:
+            planned_feed_cost = sum(
+                float(section.get("economic_plan", {}).get("planned_feed_cost_fcfa") or 0) for section in sections
+            )
+        planned_direct = round(planned_feed_cost + fingerlings, 2) if planned_feed_cost else direct
+        planned_other = override if override > 0 else round(planned_direct * 0.05 / 0.95, 2)
         cycle = first.get("cycle", {})
         try:
             start_date = date.fromisoformat(str(cycle.get("start_date")))
         except (TypeError, ValueError):
             start_date = period_end
-        duration = max(int(cycle.get("planned_cycle_duration_days") or 0), 1)
+        duration = int(cycle.get("planned_cycle_duration_days") or 0)
+        if duration <= 0:
+            duration = 120 if str(cycle.get("species")).lower() == "clarias" else 180
         elapsed = max((period_end - start_date).days + 1, 0)
         progress = min(1.0, max(0.0, elapsed / duration))
         if cycle.get("status") in {"harvested", "cancelled"}:
@@ -1585,8 +1703,19 @@ class ReportService(BaseService):
                 "other": other_to_date,
             }
         )
-        growth_logs = [log for section in sections for log in section.get("logs", [])]
-        growth_points = aggregate_growth_points(growth_logs, report_type, start_date, period_end)
+        growth_logs = payload.get("growth_logs") or [log for section in sections for log in section.get("logs", [])]
+        report_labels = (
+            {"previous": "Previous week", "current": "Covered week", "week": "Week"}
+            if language_code == "en"
+            else {"previous": "Semaine précédente", "current": "Semaine couverte", "week": "Semaine"}
+        )
+        growth_points = aggregate_growth_points(
+            growth_logs,
+            report_type,
+            start_date,
+            period_end,
+            report_labels,
+        )
         payload["cycle_dashboard"] = {
             "estimated_market_value_fcfa": round(
                 sum(float(s.get("dashboard_metrics", {}).get("estimated_market_value_fcfa") or 0) for s in sections), 2
@@ -1605,7 +1734,7 @@ class ReportService(BaseService):
         payload["cost_breakdown"] = cost_breakdown
         payload["calculation_metadata"] = {
             "period_end": period_end.isoformat(),
-            "other_costs_rule": "direct_cost * 0.05 / 0.95",
+            "other_costs_rule": "planned_direct_cost * 0.05 / 0.95",
             "other_costs_progress": round(progress, 4),
             "other_costs_planned_fcfa": planned_other,
             "other_costs_to_date_fcfa": other_to_date,
@@ -1613,7 +1742,8 @@ class ReportService(BaseService):
         payload["growth_chart"] = {
             "points": growth_points if report_type in {"weekly", "monthly"} else [],
             "svg": build_growth_svg(growth_points)
-            if report_type in {"weekly", "monthly"} and len(growth_points) >= 1
+            if report_type == "monthly" and growth_points
+            or report_type == "weekly" and len(growth_points) >= 2
             else "",
         }
         payload["cost_breakdown"]["svg"] = (
@@ -1630,6 +1760,24 @@ class ReportService(BaseService):
         return ReportService._to_float(defaults.get("planned_selling_price_per_kg_fcfa")) or 0.0
 
     @staticmethod
+    def _report_species_display(species: str | None, language_code: str) -> str:
+        if (species or "").lower() == "clarias":
+            return "Catfish" if language_code == "en" else "Silure"
+        return "Tilapia"
+
+    @staticmethod
+    def _format_report_date(target_date: date, language_code: str) -> str:
+        with override(language_code):
+            return date_format(target_date, format="SHORT_DATE_FORMAT", use_l10n=True)
+
+    @staticmethod
+    def _calculate_days_active(cycle: ProductionCycle, as_of: date | None) -> int:
+        reference = as_of or timezone.localdate()
+        if reference < cycle.start_date:
+            return 0
+        return (reference - cycle.start_date).days + 1
+
+    @staticmethod
     def _calculate_cycle_days_remaining(cycle: ProductionCycle, as_of: date | None = None) -> int | None:
         reference_date = as_of or timezone.localdate()
 
@@ -1637,11 +1785,11 @@ class ReportService(BaseService):
             return max((cycle.planned_harvest_date - reference_date).days, 0)
 
         planned_duration = int(cycle.planned_cycle_duration_days or 0)
-        if planned_duration > 0:
-            elapsed = max((reference_date - cycle.start_date).days + 1, 0)
-            return max(planned_duration - elapsed, 0)
-
-        return None
+        if planned_duration <= 0:
+            defaults = ECONOMIC_DEFAULTS_BY_SPECIES.get(cycle.species, {})
+            planned_duration = int(defaults.get("planned_cycle_duration_days") or 180)
+        elapsed = max((reference_date - cycle.start_date).days + 1, 0)
+        return max(planned_duration - elapsed, 0)
 
     @staticmethod
     def _resolve_language_code(user: User | None) -> str:
@@ -1875,6 +2023,9 @@ class ReportService(BaseService):
                 "weight_axis": "Average weight (g)",
                 "cost_breakdown_title": "Estimated production cost breakdown to date",
                 "cost_total_to_date": "Estimated production cost to date",
+                "cost_feed": "Feed",
+                "cost_fingerlings": "Fingerlings",
+                "cost_other": "Other estimated costs",
                 "insufficient_cost_data": "Insufficient cost data to display the breakdown.",
                 "production_unit": "Production unit",
                 "production_unit_details": "Production unit details",
@@ -1977,6 +2128,9 @@ class ReportService(BaseService):
             "weight_axis": "Poids moyen (g)",
             "cost_breakdown_title": "Répartition estimée des coûts engagés à ce jour",
             "cost_total_to_date": "Coût total estimé à ce jour",
+            "cost_feed": "Alimentation",
+            "cost_fingerlings": "Alevins",
+            "cost_other": "Autres charges estimées",
             "insufficient_cost_data": "Données de coûts insuffisantes pour afficher la répartition.",
             "production_unit": "Unité",
             "production_unit_details": "Détail des unités de production",

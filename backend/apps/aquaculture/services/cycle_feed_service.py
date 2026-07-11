@@ -105,9 +105,13 @@ class CycleFeedService:
         quantity = max(float(consumed_kg or 0), 0)
         if quantity <= 0:
             return 0.0
-        entries = list(cycle.feed_stock_entries.filter(entry_date__lte=period_end))
-        received_kg = sum(float(entry.quantity_kg or 0) for entry in entries)
-        received_cost = sum(float(entry.total_cost_fcfa or 0) for entry in entries)
+        entries = cycle.feed_stock_entries.filter(
+            entry_date__lte=period_end,
+            quantity_kg__gt=0,
+            total_cost_fcfa__gt=0,
+        )
+        received_kg = sum(float(entry.quantity_kg) for entry in entries)
+        received_cost = sum(float(entry.total_cost_fcfa) for entry in entries)
         unit_price = received_cost / received_kg if received_kg > 0 else float(fallback_price_per_kg or 0)
         return round(max(0.0, quantity * unit_price), 2)
 

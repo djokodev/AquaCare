@@ -28,4 +28,5 @@ def test_cost_breakdown_excludes_zero_values_and_has_no_nan():
     assert sum(item['amount_fcfa'] for item in result['items']) == result['total_fcfa']
     assert build_donut_svg(result['items']).startswith('<svg')
     assert build_donut_svg([]) == ''
+    assert build_donut_svg([{'key': 'feed', 'amount_fcfa': 125, 'percentage': 100}]).count('<circle') == 2
     assert build_growth_svg([]) == ''
