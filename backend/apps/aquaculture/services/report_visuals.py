@@ -125,7 +125,13 @@ def build_cost_breakdown(categories: dict[str, float]) -> dict:
     }
 
 
-def build_donut_svg(items: list[dict], width: int = 300, height: int = 220) -> str:
+def build_donut_svg(
+    items: list[dict],
+    width: int = 300,
+    height: int = 220,
+    center_value: str = "",
+    center_label: str = "",
+) -> str:
     total = sum(_safe(item.get("amount_fcfa")) for item in items)
     if total <= 0 or not items:
         return ""
@@ -148,7 +154,13 @@ def build_donut_svg(items: list[dict], width: int = 300, height: int = 220) -> s
                 f'stroke-width="{stroke}"/>'
             )
             start = end
+    center_text = (
+        f'<text x="{cx}" y="{cy - 2}" text-anchor="middle" font-size="11">{escape(center_value)}</text>'
+        f'<text x="{cx}" y="{cy + 12}" text-anchor="middle" font-size="7">{escape(center_label)}</text>'
+        if center_value or center_label
+        else ""
+    )
     return (
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}" role="img">'
-        f'{"".join(paths)}<circle cx="{cx}" cy="{cy}" r="45" fill="white"/></svg>'
+        f'{"".join(paths)}<circle cx="{cx}" cy="{cy}" r="45" fill="white"/>{center_text}</svg>'
     )

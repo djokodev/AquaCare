@@ -640,11 +640,12 @@ class ReportService(BaseService):
                 "species": cycle.species,
                 "species_display": ReportService._report_species_display(cycle.species, language_code),
                 "status": cycle.status,
-                "status_display": cycle.get_status_display(),
+                "status_display": ReportService._localized_display(cycle, "get_status_display", language_code),
                 "pond_identifier": cycle.pond_identifier,
                 "start_date": cycle.start_date.isoformat(),
                 "start_date_display": ReportService._format_report_date(cycle.start_date, language_code),
                 "days_active": ReportService._calculate_days_active(cycle, period_end),
+                "planned_cycle_duration_days": cycle.planned_cycle_duration_days,
             },
             "unit": {
                 "id": str(allocation.id),
@@ -652,7 +653,9 @@ class ReportService(BaseService):
                 "production_unit_id": str(allocation.production_unit.id),
                 "production_unit_name": unit_name,
                 "production_unit_type": allocation.production_unit.unit_type,
-                "production_unit_type_display": allocation.production_unit.get_unit_type_display(),
+                "production_unit_type_display": ReportService._localized_display(
+                    allocation.production_unit, "get_unit_type_display", language_code
+                ),
                 "production_unit_dimension": allocation.production_unit.display_dimension,
                 "initial_fish_count": allocation.initial_fish_count,
                 "current_fish_count": allocation.current_fish_count,
@@ -690,12 +693,14 @@ class ReportService(BaseService):
                 "total_mortality": summary["total_mortality_count"],
             },
             "active_sanitary_events_count": sum(
-                1 for item in (cumulative_sanitary_logs or sanitary_logs) if not item.resolved
+                1
+                for item in (cumulative_sanitary_logs or sanitary_logs)
+                if ReportService._is_sanitary_event_active_as_of(item, period_end)
             ),
             "active_sanitary_affected_fish_count": sum(
                 int(item.affected_count or 0)
                 for item in (cumulative_sanitary_logs or sanitary_logs)
-                if not item.resolved
+                if ReportService._is_sanitary_event_active_as_of(item, period_end)
             ),
             "period_metrics": ReportService._build_period_metrics(daily_logs, sanitary_logs),
             "logs": [
@@ -724,7 +729,9 @@ class ReportService(BaseService):
                     "event_date": item.event_date.isoformat(),
                     "event_date_display": ReportService._format_report_date(item.event_date, language_code),
                     "event_type": item.event_type,
-                    "event_type_display": item.get_event_type_display(),
+                    "event_type_display": ReportService._localized_display(
+                        item, "get_event_type_display", language_code
+                    ),
                     "symptoms": item.symptoms,
                     "affected_count": item.affected_count,
                     "treatment_applied": item.treatment_applied or None,
@@ -733,6 +740,7 @@ class ReportService(BaseService):
                     "treatment_duration_days": item.treatment_duration_days,
                     "notes": item.notes or None,
                     "resolved": item.resolved,
+                    "active_as_of_period_end": ReportService._is_sanitary_event_active_as_of(item, period_end),
                 }
                 for item in sanitary_logs
             ],
@@ -790,6 +798,84 @@ class ReportService(BaseService):
             "average_oxygen": average("dissolved_oxygen"),
             "average_ph": average("ph_level"),
         }
+
+    @staticmethod
+    def _build_growth_logs(
+        cycle: ProductionCycle,
+        allocations: list[CycleUnitAllocation],
+        period_start: date,
+        period_end: date,
+    ) -> list[dict]:
+        start = period_start - timedelta(days=7)
+        global_logs = list(cycle.logs.filter(log_date__gte=start, log_date__lte=period_end))
+        if not allocations:
+            source_logs = global_logs
+        else:
+            unit_logs = list(
+                CycleLog.objects.filter(
+                    cycle_unit_allocation__in=allocations,
+                    log_date__gte=start,
+                    log_date__lte=period_end,
+                )
+            )
+            unit_weeks = {(log.log_date.isocalendar().year, log.log_date.isocalendar().week) for log in unit_logs}
+            source_logs = unit_logs + [
+                log
+                for log in global_logs
+                if (log.log_date.isocalendar().year, log.log_date.isocalendar().week) not in unit_weeks
+            ]
+        return [
+            {
+                "log_date": log.log_date.isoformat(),
+                "sample_count": log.sample_count,
+                "sample_total_weight": ReportService._to_float(log.sample_total_weight),
+                "average_weight": ReportService._to_float(log.average_weight),
+            }
+            for log in source_logs
+        ]
+
+    @staticmethod
+    def _is_sanitary_event_active_as_of(event: SanitaryLog, period_end: date | None) -> bool:
+        """Return the historical active state; resolved legacy rows stay resolved."""
+        if period_end is not None and event.event_date > period_end:
+            return False
+        if not event.resolved:
+            return True
+        if event.resolution_date is None:
+            # Legacy rows had no resolution date: their resolved flag is the
+            # only historical evidence, so they are treated as resolved.
+            return False
+        return period_end is None or event.resolution_date > period_end
+
+    @staticmethod
+    def _localized_display(instance: object, method_name: str, language_code: str) -> str:
+        if language_code == "en":
+            value = getattr(instance, "event_type", None)
+            event_labels = {
+                "disease": "Disease",
+                "treatment": "Treatment",
+                "vaccination": "Vaccination",
+                "abnormal_mortality": "Abnormal mortality",
+                "water_quality": "Water quality issue",
+                "other": "Other",
+            }
+            if method_name == "get_event_type_display" and value in event_labels:
+                return event_labels[value]
+            value = getattr(instance, "unit_type", None)
+            unit_labels = {"tank": "Tank", "pond": "Pond", "cage": "Cage"}
+            if method_name == "get_unit_type_display" and value in unit_labels:
+                return unit_labels[value]
+            value = getattr(instance, "status", None)
+            status_labels = {
+                "planned": "Planned",
+                "active": "Active",
+                "harvested": "Harvested",
+                "cancelled": "Cancelled",
+            }
+            if method_name == "get_status_display" and value in status_labels:
+                return status_labels[value]
+        with override(language_code):
+            return str(getattr(instance, method_name)())
 
     @staticmethod
     def _build_cycle_report_payload(
@@ -927,7 +1013,16 @@ class ReportService(BaseService):
                     "estimated_current_biomass_kg": ReportService._to_float(cycle.current_biomass),
                     "units_with_today_log_count": 0,
                     "units_missing_today_log_count": 0,
-                    "active_sanitary_events_count": sum(1 for item in cumulative_sanitary_logs if not item.resolved),
+                    "active_sanitary_events_count": sum(
+                        1
+                        for item in cumulative_sanitary_logs
+                        if ReportService._is_sanitary_event_active_as_of(item, period_end)
+                    ),
+                    "active_sanitary_affected_fish_count": sum(
+                        int(item.affected_count or 0)
+                        for item in cumulative_sanitary_logs
+                        if ReportService._is_sanitary_event_active_as_of(item, period_end)
+                    ),
                     "total_log_count": total_log_count,
                     "total_sanitary_events": total_sanitary_count,
                     "total_feed": round(total_feed, 2),
@@ -943,20 +1038,7 @@ class ReportService(BaseService):
                         CycleFeedService.get_feed_status(cycle)["total_feed_needed_kg"] * feed_price_per_kg, 2
                     ),
                 },
-                "growth_logs": [
-                    {
-                        "log_date": log.log_date.isoformat(),
-                        "log_date_display": ReportService._format_report_date(
-                            log.log_date, ReportService._resolve_language_code(farm_profile.user)
-                        ),
-                        "sample_count": log.sample_count,
-                        "sample_total_weight": ReportService._to_float(log.sample_total_weight),
-                        "average_weight": ReportService._to_float(log.average_weight),
-                    }
-                    for log in cycle.logs.filter(
-                        log_date__gte=period_start - timedelta(days=7), log_date__lte=period_end
-                    )
-                ],
+                "growth_logs": ReportService._build_growth_logs(cycle, [], period_start, period_end),
                 "cycles": [
                     {
                         "cycle": {
@@ -967,7 +1049,9 @@ class ReportService(BaseService):
                                 cycle.species, ReportService._resolve_language_code(farm_profile.user)
                             ),
                             "status": cycle.status,
-                            "status_display": cycle.get_status_display(),
+                            "status_display": ReportService._localized_display(
+                                cycle, "get_status_display", ReportService._resolve_language_code(farm_profile.user)
+                            ),
                             "pond_identifier": cycle.pond_identifier,
                             "start_date": cycle.start_date.isoformat(),
                             "days_active": ReportService._calculate_days_active(cycle, period_end),
@@ -1033,12 +1117,16 @@ class ReportService(BaseService):
                         "sanitary_logs": [
                             {
                                 "id": str(item.id),
-                        "event_date": item.event_date.isoformat(),
-                        "event_date_display": ReportService._format_report_date(
-                            item.event_date, ReportService._resolve_language_code(farm_profile.user)
-                        ),
+                                "event_date": item.event_date.isoformat(),
+                                "event_date_display": ReportService._format_report_date(
+                                    item.event_date, ReportService._resolve_language_code(farm_profile.user)
+                                ),
                                 "event_type": item.event_type,
-                                "event_type_display": item.get_event_type_display(),
+                                "event_type_display": ReportService._localized_display(
+                                    item,
+                                    "get_event_type_display",
+                                    ReportService._resolve_language_code(farm_profile.user),
+                                ),
                                 "symptoms": item.symptoms,
                                 "affected_count": item.affected_count,
                                 "treatment_applied": item.treatment_applied or None,
@@ -1047,6 +1135,9 @@ class ReportService(BaseService):
                                 "treatment_duration_days": item.treatment_duration_days,
                                 "notes": item.notes or None,
                                 "resolved": item.resolved,
+                                "active_as_of_period_end": ReportService._is_sanitary_event_active_as_of(
+                                    item, period_end
+                                ),
                             }
                             for item in sanitary_logs
                         ],
@@ -1207,15 +1298,7 @@ class ReportService(BaseService):
                 "feed_consumed_kg": cumulative_total_feed_consumed,
                 "planned_feed_cost_fcfa": planned_feed_cost,
             },
-            "growth_logs": [
-                {
-                    "log_date": log.log_date.isoformat(),
-                    "sample_count": log.sample_count,
-                    "sample_total_weight": ReportService._to_float(log.sample_total_weight),
-                    "average_weight": ReportService._to_float(log.average_weight),
-                }
-                for log in cycle.logs.filter(log_date__gte=period_start - timedelta(days=7), log_date__lte=period_end)
-            ],
+            "growth_logs": ReportService._build_growth_logs(cycle, allocations, period_start, period_end),
             "cycles": sections,
             "units": comparison,
         }
@@ -1314,7 +1397,14 @@ class ReportService(BaseService):
                 "estimated_current_biomass_kg": section["current_metrics"]["current_biomass"],
                 "units_with_today_log_count": 1 if has_today_log else 0,
                 "units_missing_today_log_count": 0 if has_today_log else 1,
-                "active_sanitary_events_count": sum(1 for item in sanitary_logs if not item.resolved),
+                "active_sanitary_events_count": sum(
+                    1 for item in sanitary_logs if ReportService._is_sanitary_event_active_as_of(item, period_end)
+                ),
+                "active_sanitary_affected_fish_count": sum(
+                    int(item.affected_count or 0)
+                    for item in sanitary_logs
+                    if ReportService._is_sanitary_event_active_as_of(item, period_end)
+                ),
                 "total_log_count": len(daily_logs),
                 "total_sanitary_events": len(sanitary_logs),
                 "total_feed": section["period_metrics"]["total_feed"],
@@ -1503,7 +1593,9 @@ class ReportService(BaseService):
                             cycle.species, ReportService._resolve_language_code(farm_profile.user)
                         ),
                         "status": cycle.status,
-                        "status_display": cycle.get_status_display(),
+                        "status_display": ReportService._localized_display(
+                            cycle, "get_status_display", ReportService._resolve_language_code(farm_profile.user)
+                        ),
                         "pond_identifier": cycle.pond_identifier,
                         "start_date": cycle.start_date.isoformat(),
                         "start_date_display": ReportService._format_report_date(
@@ -1581,7 +1673,9 @@ class ReportService(BaseService):
                                 item.event_date, ReportService._resolve_language_code(farm_profile.user)
                             ),
                             "event_type": item.event_type,
-                            "event_type_display": item.get_event_type_display(),
+                            "event_type_display": ReportService._localized_display(
+                                item, "get_event_type_display", ReportService._resolve_language_code(farm_profile.user)
+                            ),
                             "symptoms": item.symptoms,
                             "affected_count": item.affected_count,
                             "treatment_applied": item.treatment_applied or None,
@@ -1590,6 +1684,7 @@ class ReportService(BaseService):
                             "treatment_duration_days": item.treatment_duration_days,
                             "notes": item.notes or None,
                             "resolved": item.resolved,
+                            "active_as_of_period_end": ReportService._is_sanitary_event_active_as_of(item, period_end),
                         }
                         for item in sanitary_logs
                     ],
@@ -1739,15 +1834,27 @@ class ReportService(BaseService):
             "other_costs_planned_fcfa": planned_other,
             "other_costs_to_date_fcfa": other_to_date,
         }
+        if not growth_points:
+            growth_state = "no_data"
+        elif report_type == "weekly" and len(growth_points) == 1:
+            growth_state = "first_point"
+        elif report_type == "monthly" and len(growth_points) < 2:
+            growth_state = "first_point"
+        else:
+            growth_state = "chart"
         payload["growth_chart"] = {
+            "state": growth_state if report_type in {"weekly", "monthly"} else "no_data",
             "points": growth_points if report_type in {"weekly", "monthly"} else [],
-            "svg": build_growth_svg(growth_points)
-            if report_type == "monthly" and growth_points
-            or report_type == "weekly" and len(growth_points) >= 2
-            else "",
+            "svg": build_growth_svg(growth_points) if growth_state == "chart" else "",
         }
         payload["cost_breakdown"]["svg"] = (
-            build_donut_svg(cost_breakdown["items"]) if report_type in {"weekly", "monthly"} else ""
+            build_donut_svg(
+                cost_breakdown["items"],
+                center_value=f"{cost_breakdown['total_fcfa']:,.0f} FCFA",
+                center_label="Total cost" if language_code == "en" else "Coût total",
+            )
+            if report_type in {"weekly", "monthly"}
+            else ""
         )
         return payload
 

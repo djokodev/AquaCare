@@ -4,6 +4,7 @@ from decimal import Decimal
 import pytest
 from aquaculture.models import CycleLog, CycleUnitAllocation, ProductionCycle, ProductionUnit, SanitaryLog
 from aquaculture.services.report_service import ReportService
+from aquaculture.services.report_visuals import aggregate_growth_points
 
 from tests.fixtures.factories import FarmProfileFactory, ProductionCycleFactory
 
@@ -12,7 +13,7 @@ def _create_unit(farm_profile, name: str, volume_m3: str) -> ProductionUnit:
     return ProductionUnit.objects.create(
         farm_profile=farm_profile,
         name=name,
-        unit_type='tank',
+        unit_type="tank",
         volume_m3=Decimal(volume_m3),
     )
 
@@ -24,7 +25,7 @@ def _create_allocation(
     current_fish_count: int,
     current_biomass_kg: str,
 ) -> CycleUnitAllocation:
-    biomass = Decimal(initial_fish_count) * Decimal('10') / Decimal('1000')
+    biomass = Decimal(initial_fish_count) * Decimal("10") / Decimal("1000")
     return CycleUnitAllocation.objects.create(
         cycle=cycle,
         production_unit=production_unit,
@@ -75,189 +76,276 @@ def _create_sanitary_log(
 
 @pytest.mark.django_db
 class TestUnitCycleAwareReportPayloads:
+    def test_custom_unit_cycle_duration_is_used_for_cost_progress(self):
+        today = date.today()
+        farm_profile = FarmProfileFactory()
+        cycle = ProductionCycleFactory(
+            farm_profile=farm_profile,
+            species="clarias",
+            status="active",
+            start_date=today - timedelta(days=74),
+            planned_cycle_duration_days=150,
+            initial_count=1800,
+            current_count=1800,
+            current_average_weight=Decimal("20.00"),
+            current_biomass=Decimal("36.00"),
+        )
+        _create_allocation(cycle, _create_unit(farm_profile, "Bac 1", "3.00"), 900, 900, "18.00")
+        _create_allocation(cycle, _create_unit(farm_profile, "Bac 2", "4.00"), 900, 900, "18.00")
+
+        payload = ReportService._build_payload(
+            farm_profile=farm_profile,
+            report_type="weekly",
+            period_start=today - timedelta(days=6),
+            period_end=today,
+            scope_type="cycle",
+            cycle_id=str(cycle.id),
+        )
+
+        assert payload["cycles"][0]["cycle"]["planned_cycle_duration_days"] == 150
+        assert payload["calculation_metadata"]["other_costs_progress"] == pytest.approx(0.5, abs=0.01)
+
+    def test_resolved_event_after_period_end_is_still_active(self):
+        today = date.today()
+        farm_profile = FarmProfileFactory()
+        cycle = ProductionCycleFactory(farm_profile=farm_profile, status="active")
+        event = _create_sanitary_log(
+            cycle=cycle,
+            allocation=None,
+            event_date=today - timedelta(days=5),
+            event_type="disease",
+            symptoms="Suivi",
+            resolved=True,
+        )
+        event.resolution_date = today + timedelta(days=2)
+        event.save(update_fields=["resolution_date"])
+
+        payload = ReportService._build_payload(
+            farm_profile=farm_profile,
+            report_type="daily",
+            period_start=today,
+            period_end=today,
+            scope_type="cycle",
+            cycle_id=str(cycle.id),
+        )
+
+        assert payload["summary"]["active_sanitary_events_count"] == 1
+        assert payload["summary"]["active_sanitary_affected_fish_count"] == 0
+
+    def test_unit_growth_logs_take_precedence_over_global_same_week(self):
+        farm_profile = FarmProfileFactory()
+        cycle = ProductionCycleFactory(farm_profile=farm_profile, status="active")
+        unit = _create_unit(farm_profile, "Bac 1", "3.00")
+        allocation = _create_allocation(cycle, unit, 900, 900, "18.00")
+        _create_cycle_log(
+            cycle=cycle,
+            allocation=None,
+            log_date=date(2026, 7, 8),
+            mortality_count=0,
+            feed_quantity="1.00",
+            average_weight="100.00",
+        )
+        _create_cycle_log(
+            cycle=cycle,
+            allocation=allocation,
+            log_date=date(2026, 7, 8),
+            mortality_count=0,
+            feed_quantity="1.00",
+            average_weight="10.00",
+        )
+        growth_logs = ReportService._build_growth_logs(cycle, [allocation], date(2026, 7, 6), date(2026, 7, 12))
+        points = aggregate_growth_points(
+            growth_logs,
+            "weekly",
+            date(2026, 7, 6),
+            date(2026, 7, 12),
+            {"previous": "Previous week", "current": "Covered week", "week": "Week"},
+        )
+        assert points[0]["value_g"] == 10
+
     def test_cycle_report_aggregates_allocations_and_counts_today_logs(self):
         today = date.today()
         yesterday = today - timedelta(days=1)
         farm_profile = FarmProfileFactory()
         cycle = ProductionCycleFactory(
             farm_profile=farm_profile,
-            cycle_name='Cycle Clarias Juin 2026',
-            species='clarias',
-            status='active',
+            cycle_name="Cycle Clarias Juin 2026",
+            species="clarias",
+            status="active",
             initial_count=1800,
             current_count=1770,
-            current_average_weight=Decimal('100.00'),
-            current_biomass=Decimal('177.00'),
-            total_feed_consumed=Decimal('14.50'),
+            current_average_weight=Decimal("100.00"),
+            current_biomass=Decimal("177.00"),
+            total_feed_consumed=Decimal("14.50"),
         )
 
-        bac_1 = _create_unit(farm_profile, 'Bac 1', '3.00')
-        bac_2 = _create_unit(farm_profile, 'Bac 2', '4.00')
-        allocation_1 = _create_allocation(cycle, bac_1, 1000, 990, '99.00')
-        allocation_2 = _create_allocation(cycle, bac_2, 800, 780, '78.00')
+        bac_1 = _create_unit(farm_profile, "Bac 1", "3.00")
+        bac_2 = _create_unit(farm_profile, "Bac 2", "4.00")
+        allocation_1 = _create_allocation(cycle, bac_1, 1000, 990, "99.00")
+        allocation_2 = _create_allocation(cycle, bac_2, 800, 780, "78.00")
 
         _create_cycle_log(
             cycle=cycle,
             allocation=allocation_1,
             log_date=today,
             mortality_count=10,
-            feed_quantity='6.00',
-            average_weight='100.00',
+            feed_quantity="6.00",
+            average_weight="100.00",
         )
         _create_cycle_log(
             cycle=cycle,
             allocation=allocation_2,
             log_date=yesterday,
             mortality_count=20,
-            feed_quantity='8.50',
-            average_weight='100.00',
+            feed_quantity="8.50",
+            average_weight="100.00",
         )
         _create_sanitary_log(
             cycle=cycle,
             allocation=allocation_1,
             event_date=today,
-            event_type='disease',
-            symptoms='Points blancs',
+            event_type="disease",
+            symptoms="Points blancs",
             resolved=False,
         )
         _create_sanitary_log(
             cycle=cycle,
             allocation=allocation_2,
             event_date=yesterday,
-            event_type='treatment',
-            symptoms='Traitement préventif',
+            event_type="treatment",
+            symptoms="Traitement préventif",
             resolved=True,
         )
 
         payload = ReportService._build_payload(
             farm_profile=farm_profile,
-            report_type='daily',
+            report_type="daily",
             period_start=yesterday,
             period_end=today,
-            scope_type='cycle',
+            scope_type="cycle",
             cycle_id=str(cycle.id),
         )
 
-        summary = payload['summary']
-        assert summary['total_units'] == 2
-        assert summary['initial_fish_count'] == 1800
-        assert summary['estimated_current_fish_count'] == 1770
-        assert summary['total_mortality_count'] == 30
-        assert summary['mortality_rate_pct'] == 1.67
-        assert summary['total_feed_consumed_kg'] == 14.5
-        assert summary['estimated_current_biomass_kg'] == 177.0
-        assert summary['units_with_today_log_count'] == 1
-        assert summary['units_missing_today_log_count'] == 1
-        assert summary['active_sanitary_events_count'] == 1
-        assert summary['comparison_units_count'] == 2
+        summary = payload["summary"]
+        assert summary["total_units"] == 2
+        assert summary["initial_fish_count"] == 1800
+        assert summary["estimated_current_fish_count"] == 1770
+        assert summary["total_mortality_count"] == 30
+        assert summary["mortality_rate_pct"] == 1.67
+        assert summary["total_feed_consumed_kg"] == 14.5
+        assert summary["estimated_current_biomass_kg"] == 177.0
+        assert summary["units_with_today_log_count"] == 1
+        assert summary["units_missing_today_log_count"] == 1
+        assert summary["active_sanitary_events_count"] == 1
+        assert summary["comparison_units_count"] == 2
 
-        assert len(payload['cycles']) == 2
-        assert len(payload['units']) == 2
-        assert payload['cycles'][0]['unit']['production_unit_name'] == 'Bac 1'
-        assert payload['cycles'][1]['unit']['production_unit_name'] == 'Bac 2'
-        assert payload['cycles'][0]['current_metrics']['current_count'] == 990
-        assert payload['cycles'][1]['current_metrics']['current_count'] == 780
-        assert payload['cycles'][0]['period_metrics']['total_feed'] == 6.0
-        assert payload['cycles'][1]['period_metrics']['total_feed'] == 8.5
-        assert payload['units'][0]['name'] == 'Bac 1'
-        assert payload['units'][0]['sanitary_status_short'] == 'active'
-        assert payload['units'][1]['sanitary_status_short'] == 'ok'
+        assert len(payload["cycles"]) == 2
+        assert len(payload["units"]) == 2
+        assert payload["cycles"][0]["unit"]["production_unit_name"] == "Bac 1"
+        assert payload["cycles"][1]["unit"]["production_unit_name"] == "Bac 2"
+        assert payload["cycles"][0]["current_metrics"]["current_count"] == 990
+        assert payload["cycles"][1]["current_metrics"]["current_count"] == 780
+        assert payload["cycles"][0]["period_metrics"]["total_feed"] == 6.0
+        assert payload["cycles"][1]["period_metrics"]["total_feed"] == 8.5
+        assert payload["units"][0]["name"] == "Bac 1"
+        assert payload["units"][0]["sanitary_status_short"] == "active"
+        assert payload["units"][1]["sanitary_status_short"] == "ok"
 
     def test_unit_report_isolated_to_selected_allocation(self):
         today = date.today()
         farm_profile = FarmProfileFactory()
         cycle = ProductionCycleFactory(
             farm_profile=farm_profile,
-            cycle_name='Cycle Silure Juin 2026',
-            species='clarias',
-            status='active',
+            cycle_name="Cycle Silure Juin 2026",
+            species="clarias",
+            status="active",
             initial_count=1800,
             current_count=1770,
-            current_average_weight=Decimal('100.00'),
-            current_biomass=Decimal('177.00'),
-            total_feed_consumed=Decimal('14.50'),
+            current_average_weight=Decimal("100.00"),
+            current_biomass=Decimal("177.00"),
+            total_feed_consumed=Decimal("14.50"),
         )
 
-        bac_1 = _create_unit(farm_profile, 'Bac 1', '3.00')
-        bac_2 = _create_unit(farm_profile, 'Bac 2', '4.00')
-        allocation_1 = _create_allocation(cycle, bac_1, 1000, 990, '99.00')
-        allocation_2 = _create_allocation(cycle, bac_2, 800, 780, '78.00')
+        bac_1 = _create_unit(farm_profile, "Bac 1", "3.00")
+        bac_2 = _create_unit(farm_profile, "Bac 2", "4.00")
+        allocation_1 = _create_allocation(cycle, bac_1, 1000, 990, "99.00")
+        allocation_2 = _create_allocation(cycle, bac_2, 800, 780, "78.00")
 
         _create_cycle_log(
             cycle=cycle,
             allocation=allocation_1,
             log_date=today,
             mortality_count=10,
-            feed_quantity='6.00',
-            average_weight='100.00',
+            feed_quantity="6.00",
+            average_weight="100.00",
         )
         _create_cycle_log(
             cycle=cycle,
             allocation=allocation_2,
             log_date=today,
             mortality_count=20,
-            feed_quantity='8.50',
-            average_weight='100.00',
+            feed_quantity="8.50",
+            average_weight="100.00",
         )
         _create_sanitary_log(
             cycle=cycle,
             allocation=allocation_1,
             event_date=today,
-            event_type='disease',
-            symptoms='Points blancs',
+            event_type="disease",
+            symptoms="Points blancs",
             resolved=False,
         )
         _create_sanitary_log(
             cycle=cycle,
             allocation=allocation_2,
             event_date=today,
-            event_type='treatment',
-            symptoms='Traitement préventif',
+            event_type="treatment",
+            symptoms="Traitement préventif",
             resolved=True,
         )
 
         payload_bac_1 = ReportService._build_payload(
             farm_profile=farm_profile,
-            report_type='daily',
+            report_type="daily",
             period_start=today,
             period_end=today,
-            scope_type='unit',
+            scope_type="unit",
             scope_object_id=str(allocation_1.id),
         )
         payload_bac_2 = ReportService._build_payload(
             farm_profile=farm_profile,
-            report_type='daily',
+            report_type="daily",
             period_start=today,
             period_end=today,
-            scope_type='unit',
+            scope_type="unit",
             scope_object_id=str(allocation_2.id),
         )
 
-        assert payload_bac_1['report_meta']['scope_type'] == 'unit'
-        assert payload_bac_1['report_meta']['cycle_unit_allocation_id'] == str(allocation_1.id)
-        assert payload_bac_1['summary']['total_units'] == 1
-        assert payload_bac_1['summary']['initial_fish_count'] == 1000
-        assert payload_bac_1['summary']['estimated_current_fish_count'] == 990
-        assert payload_bac_1['summary']['total_mortality_count'] == 10
-        assert payload_bac_1['summary']['total_feed_consumed_kg'] == 6.0
-        assert payload_bac_1['summary']['estimated_current_biomass_kg'] == 99.0
-        assert payload_bac_1['summary']['active_sanitary_events_count'] == 1
-        assert payload_bac_1['cycles'][0]['unit']['production_unit_name'] == 'Bac 1'
-        assert payload_bac_1['cycles'][0]['logs'][0]['mortality_count'] == 10
-        assert payload_bac_1['cycles'][0]['sanitary_logs'][0]['resolved'] is False
+        assert payload_bac_1["report_meta"]["scope_type"] == "unit"
+        assert payload_bac_1["report_meta"]["cycle_unit_allocation_id"] == str(allocation_1.id)
+        assert payload_bac_1["summary"]["total_units"] == 1
+        assert payload_bac_1["summary"]["initial_fish_count"] == 1000
+        assert payload_bac_1["summary"]["estimated_current_fish_count"] == 990
+        assert payload_bac_1["summary"]["total_mortality_count"] == 10
+        assert payload_bac_1["summary"]["total_feed_consumed_kg"] == 6.0
+        assert payload_bac_1["summary"]["estimated_current_biomass_kg"] == 99.0
+        assert payload_bac_1["summary"]["active_sanitary_events_count"] == 1
+        assert payload_bac_1["cycles"][0]["unit"]["production_unit_name"] == "Bac 1"
+        assert payload_bac_1["cycles"][0]["logs"][0]["mortality_count"] == 10
+        assert payload_bac_1["cycles"][0]["sanitary_logs"][0]["resolved"] is False
 
-        assert payload_bac_2['report_meta']['scope_type'] == 'unit'
-        assert payload_bac_2['report_meta']['cycle_unit_allocation_id'] == str(allocation_2.id)
-        assert payload_bac_2['summary']['total_units'] == 1
-        assert payload_bac_2['summary']['initial_fish_count'] == 800
-        assert payload_bac_2['summary']['estimated_current_fish_count'] == 780
-        assert payload_bac_2['summary']['total_mortality_count'] == 20
-        assert payload_bac_2['summary']['total_feed_consumed_kg'] == 8.5
-        assert payload_bac_2['summary']['estimated_current_biomass_kg'] == 78.0
-        assert payload_bac_2['summary']['active_sanitary_events_count'] == 0
-        assert payload_bac_2['cycles'][0]['unit']['production_unit_name'] == 'Bac 2'
-        assert payload_bac_2['cycles'][0]['logs'][0]['mortality_count'] == 20
-        assert payload_bac_2['cycles'][0]['sanitary_logs'][0]['resolved'] is True
+        assert payload_bac_2["report_meta"]["scope_type"] == "unit"
+        assert payload_bac_2["report_meta"]["cycle_unit_allocation_id"] == str(allocation_2.id)
+        assert payload_bac_2["summary"]["total_units"] == 1
+        assert payload_bac_2["summary"]["initial_fish_count"] == 800
+        assert payload_bac_2["summary"]["estimated_current_fish_count"] == 780
+        assert payload_bac_2["summary"]["total_mortality_count"] == 20
+        assert payload_bac_2["summary"]["total_feed_consumed_kg"] == 8.5
+        assert payload_bac_2["summary"]["estimated_current_biomass_kg"] == 78.0
+        assert payload_bac_2["summary"]["active_sanitary_events_count"] == 0
+        assert payload_bac_2["cycles"][0]["unit"]["production_unit_name"] == "Bac 2"
+        assert payload_bac_2["cycles"][0]["logs"][0]["mortality_count"] == 20
+        assert payload_bac_2["cycles"][0]["sanitary_logs"][0]["resolved"] is True
 
     def test_unit_report_uses_latest_state_available_at_generation_time(self):
         today = date.today()
@@ -265,71 +353,71 @@ class TestUnitCycleAwareReportPayloads:
         farm_profile = FarmProfileFactory()
         cycle = ProductionCycleFactory(
             farm_profile=farm_profile,
-            cycle_name='Cycle Etat Courant',
-            species='clarias',
-            status='active',
+            cycle_name="Cycle Etat Courant",
+            species="clarias",
+            status="active",
             initial_count=900,
             current_count=900,
-            current_average_weight=Decimal('20.00'),
-            current_biomass=Decimal('18.00'),
-            total_feed_consumed=Decimal('10.00'),
+            current_average_weight=Decimal("20.00"),
+            current_biomass=Decimal("18.00"),
+            total_feed_consumed=Decimal("10.00"),
         )
 
-        bac_1 = _create_unit(farm_profile, 'Bac 1', '3.00')
-        allocation = _create_allocation(cycle, bac_1, 900, 895, '17.90')
+        bac_1 = _create_unit(farm_profile, "Bac 1", "3.00")
+        allocation = _create_allocation(cycle, bac_1, 900, 895, "17.90")
 
         _create_cycle_log(
             cycle=cycle,
             allocation=allocation,
             log_date=yesterday,
             mortality_count=5,
-            feed_quantity='10.00',
-            average_weight='20.00',
+            feed_quantity="10.00",
+            average_weight="20.00",
         )
         _create_sanitary_log(
             cycle=cycle,
             allocation=allocation,
             event_date=yesterday,
-            event_type='disease',
-            symptoms='Suspicion de maladie',
+            event_type="disease",
+            symptoms="Suspicion de maladie",
             resolved=False,
         )
 
         payload = ReportService._build_payload(
             farm_profile=farm_profile,
-            report_type='daily',
+            report_type="daily",
             period_start=today,
             period_end=today,
-            scope_type='unit',
+            scope_type="unit",
             scope_object_id=str(allocation.id),
         )
 
-        summary = payload['summary']
-        section = payload['cycles'][0]
+        summary = payload["summary"]
+        section = payload["cycles"][0]
 
-        assert summary['estimated_current_fish_count'] == 895
-        assert summary['total_mortality_count'] == 5
-        assert summary['total_feed_consumed_kg'] == 10.0
-        assert summary['active_sanitary_events_count'] == 1
-        assert summary['units_with_today_log_count'] == 0
-        assert summary['units_missing_today_log_count'] == 1
-        assert section['current_metrics']['current_count'] == 895
-        assert section['current_metrics']['total_feed_consumed'] == 10.0
-        assert section['logs'][0]['log_date'] == yesterday.isoformat()
-        assert section['sanitary_logs'][0]['event_date'] == yesterday.isoformat()
+        assert summary["estimated_current_fish_count"] == 895
+        assert summary["total_mortality_count"] == 5
+        assert summary["total_feed_consumed_kg"] == 10.0
+        assert summary["active_sanitary_events_count"] == 1
+        assert summary["units_with_today_log_count"] == 0
+        assert summary["units_missing_today_log_count"] == 1
+        assert section["current_metrics"]["current_count"] == 895
+        assert section["current_metrics"]["total_feed_consumed"] == 10.0
+        assert section["logs"][0]["log_date"] == yesterday.isoformat()
+        assert section["sanitary_logs"][0]["event_date"] == yesterday.isoformat()
 
     def test_cycle_without_allocations_remains_stable(self):
         today = date.today()
         farm_profile = FarmProfileFactory()
         cycle = ProductionCycleFactory(
             farm_profile=farm_profile,
-            cycle_name='Cycle Legacy',
-            status='active',
+            cycle_name="Cycle Legacy",
+            status="active",
             initial_count=500,
             current_count=490,
-            current_average_weight=Decimal('40.00'),
-            current_biomass=Decimal('19.60'),
-            total_feed_consumed=Decimal('5.00'),
+            current_average_weight=Decimal("40.00"),
+            current_biomass=Decimal("19.60"),
+            total_feed_consumed=Decimal("5.00"),
         )
 
         _create_cycle_log(
@@ -337,34 +425,34 @@ class TestUnitCycleAwareReportPayloads:
             allocation=None,
             log_date=today,
             mortality_count=10,
-            feed_quantity='5.00',
-            average_weight='40.00',
+            feed_quantity="5.00",
+            average_weight="40.00",
         )
         _create_sanitary_log(
             cycle=cycle,
             allocation=None,
             event_date=today,
-            event_type='disease',
-            symptoms='Event legacy',
+            event_type="disease",
+            symptoms="Event legacy",
             resolved=False,
         )
 
         payload = ReportService._build_payload(
             farm_profile=farm_profile,
-            report_type='daily',
+            report_type="daily",
             period_start=today,
             period_end=today,
-            scope_type='cycle',
+            scope_type="cycle",
             cycle_id=str(cycle.id),
         )
 
-        assert payload['summary']['total_units'] == 0
-        assert payload['summary']['cycle_count'] == 1
-        assert payload['summary']['initial_fish_count'] == 500
-        assert payload['summary']['estimated_current_fish_count'] == 490
-        assert payload['summary']['total_mortality'] == 10
-        assert payload['summary']['total_feed'] == 5.0
-        assert payload['summary']['active_sanitary_events_count'] == 1
-        assert len(payload['cycles']) == 1
-        assert payload['cycles'][0]['cycle']['id'] == str(cycle.id)
-        assert payload['units'] == []
+        assert payload["summary"]["total_units"] == 0
+        assert payload["summary"]["cycle_count"] == 1
+        assert payload["summary"]["initial_fish_count"] == 500
+        assert payload["summary"]["estimated_current_fish_count"] == 490
+        assert payload["summary"]["total_mortality"] == 10
+        assert payload["summary"]["total_feed"] == 5.0
+        assert payload["summary"]["active_sanitary_events_count"] == 1
+        assert len(payload["cycles"]) == 1
+        assert payload["cycles"][0]["cycle"]["id"] == str(cycle.id)
+        assert payload["units"] == []
