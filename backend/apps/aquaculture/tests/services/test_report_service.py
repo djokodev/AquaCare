@@ -590,6 +590,6 @@ class TestReportServicePayloadAndPdfTemplate:
         )
         html = render_to_string("aquaculture/report_pdf.html", context)
 
-        assert "Synthèse mensuelle" in html
-        assert "Annexe — Journaux quotidiens du mois" in html
+        assert "Synthèse hebdomadaire" in html
+        assert "Annexe — Détail des saisies quotidiennes du mois" in html
         assert "1 juil.–5 juil." in html

@@ -34,7 +34,14 @@ def _short_date(value: date, language: str) -> str:
 
 
 def _period_label(start: date, end: date, language: str) -> str:
-    return f"{_short_date(start, language)}–{_short_date(end, language)}"
+    months = (
+        ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."]
+        if language == "fr"
+        else ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    )
+    if start.month == end.month:
+        return f"{start.day:02d}–{end.day:02d} {months[start.month - 1]}"
+    return f"{start.day:02d} {months[start.month - 1]}–{end.day:02d} {months[end.month - 1]}"
 
 
 def _point(logs: list[dict], label: str, year: int, week: int) -> dict | None:
@@ -91,8 +98,10 @@ def aggregate_growth_points(
             current_week.week,
         )
         if previous_point:
+            previous_point["legend_label"] = previous_point["label"]
             points.append(previous_point)
         if current_point:
+            current_point["legend_label"] = current_point["label"]
             points.append(current_point)
         return points
 
@@ -102,11 +111,14 @@ def aggregate_growth_points(
             iso = log_date.isocalendar()
             buckets[(iso.year, iso.week)].append(log)
     points = []
-    for (year, week), bucket in sorted(buckets.items()):
+    for index, ((year, week), bucket) in enumerate(sorted(buckets.items()), start=1):
         week_start = date.fromisocalendar(year, week, 1)
         week_end = min(date.fromisocalendar(year, week, 7), period_end)
-        point = _point(bucket, _period_label(max(week_start, period_start), week_end, language), year, week)
+        range_label = _period_label(max(week_start, period_start), week_end, language)
+        axis_label = f"{'S' if language == 'fr' else 'W'}{index}"
+        point = _point(bucket, axis_label, year, week)
         if point:
+            point["legend_label"] = f"{axis_label} — {range_label}"
             points.append(point)
     return points
 
@@ -138,10 +150,11 @@ def build_growth_svg(points: list[dict], width: int = 520, height: int = 220, la
             labels.append(
                 f'<text x="{label_x:.1f}" y="{height - 14}" text-anchor="middle">{escape(point_label)}</text>'
             )
+        decimal_separator = "," if language == "fr" else "."
+        value_label = f'{point["value_g"]:.1f}'.replace(".", decimal_separator)
         labels.append(
-            f'<text x="{label_x:.1f}" y="{max(y - 4, 12):.1f}" text-anchor="middle">{point["value_g"]:.1f}</text>'
+            f'<text x="{label_x:.1f}" y="{max(y - 4, 12):.1f}" text-anchor="middle">{escape(value_label)}</text>'
         )
-    decimal_separator = "," if language == "fr" else "."
     ticks = []
     for index in range(6):
         value = axis_max * index / 5

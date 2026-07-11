@@ -34,7 +34,7 @@ def test_weekly_growth_uses_previous_and_current_week_only():
     )
 
     assert [point["value_g"] for point in points] == [25, 31]
-    assert [point["label"] for point in points] == ["6 Jul–12 Jul", "13 Jul–19 Jul"]
+    assert [point["label"] for point in points] == ["06–12 Jul", "13–19 Jul"]
 
 
 def test_cost_breakdown_excludes_zero_values_and_has_no_nan():

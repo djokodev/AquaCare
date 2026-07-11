@@ -612,6 +612,25 @@ class ReportService(BaseService):
         return generated
 
     @staticmethod
+    def _serialize_sanitary_event(item, language_code: str, period_end: date | None) -> dict:
+        return {
+            "id": str(item.id),
+            "event_date": item.event_date.isoformat(),
+            "event_date_display": ReportService._format_report_date(item.event_date, language_code),
+            "event_type": item.event_type,
+            "event_type_display": ReportService._localized_display(item, "get_event_type_display", language_code),
+            "symptoms": item.symptoms,
+            "affected_count": item.affected_count,
+            "treatment_applied": item.treatment_applied or None,
+            "medication_used": item.medication_used or None,
+            "dosage": item.dosage or None,
+            "treatment_duration_days": item.treatment_duration_days,
+            "notes": item.notes or None,
+            "resolved": item.resolved,
+            "active_as_of_period_end": ReportService._is_sanitary_event_active_as_of(item, period_end),
+        }
+
+    @staticmethod
     def _build_unit_dashboard_section(
         *,
         cycle: ProductionCycle,
@@ -765,6 +784,11 @@ class ReportService(BaseService):
                     "active_as_of_period_end": ReportService._is_sanitary_event_active_as_of(item, period_end),
                 }
                 for item in sanitary_logs
+            ],
+            "active_sanitary_logs": [
+                ReportService._serialize_sanitary_event(item, language_code, period_end)
+                for item in (cumulative_sanitary_logs or sanitary_logs)
+                if ReportService._is_sanitary_event_active_as_of(item, period_end)
             ],
             "feeding_plans": [
                 {
@@ -1161,6 +1185,9 @@ class ReportService(BaseService):
                             {
                                 "id": str(log.id),
                                 "log_date": log.log_date.isoformat(),
+                                "log_date_display": ReportService._format_report_date(
+                                    log.log_date, ReportService._resolve_language_code(farm_profile.user)
+                                ),
                                 "mortality_count": int(log.mortality_count or 0),
                                 "mortality_reason": log.mortality_reason or None,
                                 "sample_count": log.sample_count,
@@ -2218,10 +2245,18 @@ class ReportService(BaseService):
                 "activity_day": "Day activity",
                 "activity_week": "Week activity",
                 "activity_month": "Month activity",
+                "daily_input": "Daily entry",
+                "weekly_balance": "Week balance",
+                "monthly_balance": "Month balance",
+                "detailed_week_logs": "Detailed entries for the week",
+                "monthly_weekly_summary": "Weekly summary",
+                "period_feed": "Distributed feed (kg)",
+                "active_sanitary_alerts": "Active sanitary alerts",
+                "period_sanitary_followup": "Sanitary follow-up for the period",
                 "daily_log_title": "Daily log",
                 "weekly_log_title": "Weekly logs",
                 "monthly_summary": "Monthly summary",
-                "monthly_appendix": "Appendix — Daily logs for the month",
+                "monthly_appendix": "Appendix — Daily entries for the month",
                 "weekly_period": "Week",
                 "weekly_entries": "Entries",
                 "weekly_sanitary": "Sanitary incidents",
@@ -2338,10 +2373,18 @@ class ReportService(BaseService):
             "activity_day": "Activité du jour",
             "activity_week": "Activité de la semaine",
             "activity_month": "Activité du mois",
+            "daily_input": "Saisie du jour",
+            "weekly_balance": "Bilan de la semaine",
+            "monthly_balance": "Bilan du mois",
+            "detailed_week_logs": "Détail des saisies de la semaine",
+            "monthly_weekly_summary": "Synthèse hebdomadaire",
+            "period_feed": "Aliment distribué (kg)",
+            "active_sanitary_alerts": "Alertes sanitaires actives",
+            "period_sanitary_followup": "Suivi sanitaire de la période",
             "daily_log_title": "Journal du jour",
             "weekly_log_title": "Journaux de la semaine",
             "monthly_summary": "Synthèse mensuelle",
-            "monthly_appendix": "Annexe — Journaux quotidiens du mois",
+            "monthly_appendix": "Annexe — Détail des saisies quotidiennes du mois",
             "weekly_period": "Semaine",
             "weekly_entries": "Saisies",
             "weekly_sanitary": "Incidents sanitaires",
