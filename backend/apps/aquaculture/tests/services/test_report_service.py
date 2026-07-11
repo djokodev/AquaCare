@@ -292,12 +292,22 @@ class TestReportServicePayloadAndPdfTemplate:
         )
 
         html = render_to_string('aquaculture/report_pdf.html', context)
+        try:
+            pdf_bytes = ReportService._render_pdf(
+                report=report,
+                payload=payload,
+                generated_at=timezone.localtime(timezone.now()),
+                language_code='fr',
+            )
+        except OSError as exc:
+            pytest.skip(f'WeasyPrint runtime libraries unavailable: {exc}')
 
-        assert 'Période analysée' in html
-        assert 'Indicateurs clés du tableau de bord' in html
+        assert 'Période couverte' in html
+        assert pdf_bytes.startswith(b'%PDF')
+        assert 'Tableau de bord du cycle' in html
         assert 'Valeur marchande estimée des poissons' in html
         assert 'Coût de production direct' in html
-        assert 'Synthèse de la période analysée' in html
+        assert 'État et activité de la période' in html
         assert 'Non renseigné' in html
         assert 'Symptômes' in html
         assert 'Points blancs' in html
@@ -305,7 +315,7 @@ class TestReportServicePayloadAndPdfTemplate:
         assert 'Notes' in html
         assert 'Isoler les poissons suspects.' in html
         assert '>0<' in html or '>0.0<' in html or '>0.00<' in html
-        assert 'cycle-block-first' in html
+        assert '<div class="cycle-block">' in html
         assert 'page-break-before: always;' in html
 
     def test_pdf_template_supports_english_labels(self):
@@ -338,6 +348,6 @@ class TestReportServicePayloadAndPdfTemplate:
         )
         html = render_to_string('aquaculture/report_pdf.html', context)
 
-        assert 'Analyzed period' in html
+        assert 'Covered period' in html
         assert 'Analyzed period synthesis' not in html  # absent because no cycle section rendered
         assert 'No report data available.' in html

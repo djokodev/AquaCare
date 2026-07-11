@@ -361,7 +361,7 @@ class TestUnitCycleAwareReportPayloads:
         assert payload['summary']['total_units'] == 0
         assert payload['summary']['cycle_count'] == 1
         assert payload['summary']['initial_fish_count'] == 500
-        assert payload['summary']['estimated_current_fish_count'] == 480
+        assert payload['summary']['estimated_current_fish_count'] == 490
         assert payload['summary']['total_mortality'] == 10
         assert payload['summary']['total_feed'] == 5.0
         assert payload['summary']['active_sanitary_events_count'] == 1

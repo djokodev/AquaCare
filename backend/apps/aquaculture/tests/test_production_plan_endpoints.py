@@ -124,12 +124,16 @@ class TestProductionPlanSimulationEndpoint:
         assert response.data["other_costs_rate_pct"] == 5.0
         assert response.data["cycle_production_kg"] == 500.0
         assert response.data["cycle_revenue_fcfa"] == 1_400_000.0
-        assert response.data["cycle_other_costs_fcfa"] == 70_000.0
+        expected_other = (
+            response.data["cycle_feed_cost_fcfa"]
+            + response.data["cycle_fingerlings_cost_fcfa"]
+        ) * 0.05 / 0.95
+        assert response.data["cycle_other_costs_fcfa"] == pytest.approx(expected_other)
         assert response.data["cycle_aquacare_fee_fcfa"] == 10_000.0
         assert response.data["annual_projection_production_kg"] == 500.0
         assert response.data["annual_projection_revenue_fcfa"] == 1_400_000.0
         assert response.data["annual_projection_aquacare_fee_fcfa"] == 10_000.0
-        assert response.data["annual_other_costs_fcfa"] == 140_000.0
+        assert response.data["annual_other_costs_fcfa"] == pytest.approx(expected_other * 2)
         assert "annual_revenue_fcfa" in response.data
         assert "annual_net_profit_fcfa" in response.data
         assert response.data["aquacare_fee_fcfa"] == 20_000

@@ -5,6 +5,7 @@ Le contrat historique reste annual-first pour compatibilité API, mais la
 simulation expose maintenant aussi des métriques cycle-first explicites pour
 préparer la bascule métier.
 """
+
 from __future__ import annotations
 
 import math
@@ -27,17 +28,17 @@ from ..constants import (
 
 SPECIES_DEFAULTS = {
     species: {
-        'target_weight_g': float(defaults['target_harvest_weight_g']),
-        'duration_days': int(defaults['planned_cycle_duration_days']),
-        'selling_price_fcfa': float(defaults['planned_selling_price_per_kg_fcfa']),
-        'fingerlings_cost_per_unit': 50.0 if species == 'tilapia' else 75.0,
+        "target_weight_g": float(defaults["target_harvest_weight_g"]),
+        "duration_days": int(defaults["planned_cycle_duration_days"]),
+        "selling_price_fcfa": float(defaults["planned_selling_price_per_kg_fcfa"]),
+        "fingerlings_cost_per_unit": 50.0 if species == "tilapia" else 75.0,
     }
     for species, defaults in ECONOMIC_DEFAULTS_BY_SPECIES.items()
 }
 
-DEFAULT_SURVIVAL_RATE = float(DEFAULT_EXPECTED_SURVIVAL_RATE_PCT / Decimal('100'))
-INITIAL_WEIGHT_G = float(DEFAULT_INITIAL_AVERAGE_WEIGHT_G_BY_SPECIES['tilapia'])
-OTHER_COSTS_RATE = float(DEFAULT_OTHER_COSTS_RATE_PCT / Decimal('100'))
+DEFAULT_SURVIVAL_RATE = float(DEFAULT_EXPECTED_SURVIVAL_RATE_PCT / Decimal("100"))
+INITIAL_WEIGHT_G = float(DEFAULT_INITIAL_AVERAGE_WEIGHT_G_BY_SPECIES["tilapia"])
+OTHER_COSTS_RATE = float(DEFAULT_OTHER_COSTS_RATE_PCT / Decimal("100"))
 
 
 @dataclass(frozen=True)
@@ -172,43 +173,28 @@ class AnnualSimulationService:
             num_cycles=effective_num_cycles,
         )
 
-        fingerlings_cost_per_cycle = (
-            initial_fish_count * resolved_inputs.fingerlings_cost_unit
-        )
+        fingerlings_cost_per_cycle = initial_fish_count * resolved_inputs.fingerlings_cost_unit
         cycle_revenue = cycle_production_kg * resolved_inputs.selling_price
-        annual_revenue = cycle_revenue * effective_num_cycles
-        cycle_other_costs, annual_other_costs = AnnualSimulationService._resolve_other_costs_breakdown(
-            cycle_revenue=cycle_revenue,
-            annual_revenue=annual_revenue,
-            num_cycles=effective_num_cycles,
-            annual_other_costs_fcfa_per_year=other_costs_fcfa_per_year,
-        )
         cycle_aquacare_fee = round(float(AQUACARE_FEE_PER_KG) * cycle_production_kg, 2)
         cycle_sim = AnnualSimulationService._simulate_reference_cycle(
             resolved_inputs=resolved_inputs,
             initial_fish_count=initial_fish_count,
             fingerlings_cost_fcfa=fingerlings_cost_per_cycle,
-            other_costs_fcfa=cycle_other_costs,
+            other_costs_fcfa=0,
         )
 
-        feed_cost_per_cycle = cycle_sim['summary']['feed_cost_fcfa']
+        feed_cost_per_cycle = cycle_sim["summary"]["feed_cost_fcfa"]
+        cycle_other_costs, annual_other_costs = AnnualSimulationService._resolve_other_costs_breakdown(
+            direct_cost=feed_cost_per_cycle + fingerlings_cost_per_cycle,
+            num_cycles=effective_num_cycles,
+            annual_other_costs_fcfa_per_year=other_costs_fcfa_per_year,
+        )
         total_feed_bags_per_cycle = sum(
-            p['quantity_bags']
-            for phase in cycle_sim['feeding_phases']
-            for p in phase['products']
+            p["quantity_bags"] for phase in cycle_sim["feeding_phases"] for p in phase["products"]
         )
-        cycle_total_cost = (
-            feed_cost_per_cycle
-            + fingerlings_cost_per_cycle
-            + cycle_other_costs
-            + cycle_aquacare_fee
-        )
+        cycle_total_cost = feed_cost_per_cycle + fingerlings_cost_per_cycle + cycle_other_costs + cycle_aquacare_fee
         cycle_net_profit = cycle_revenue - cycle_total_cost
-        cycle_roi_pct = (
-            cycle_net_profit / cycle_total_cost * 100
-            if cycle_total_cost > 0
-            else 0
-        )
+        cycle_roi_pct = cycle_net_profit / cycle_total_cost * 100 if cycle_total_cost > 0 else 0
 
         # Détail par cycle avec dates estimées
         cycles_breakdown = AnnualSimulationService._build_cycles_breakdown(
@@ -235,31 +221,31 @@ class AnnualSimulationService:
         annual_projection_aquacare_fee_fcfa = round(cycle_aquacare_fee * cycles_per_year_derived, 2)
 
         return {
-            'species': resolved_inputs.species,
-            'num_cycles': effective_num_cycles,
-            'annual_production_target_kg': annual_production_target_kg,
-            'cycles_per_year_derived': cycles_per_year_derived,
-            'technical_pause_days': TECHNICAL_PAUSE_BETWEEN_CYCLES_DAYS,
-            'other_costs_rate_pct': float(DEFAULT_OTHER_COSTS_RATE_PCT),
+            "species": resolved_inputs.species,
+            "num_cycles": effective_num_cycles,
+            "annual_production_target_kg": annual_production_target_kg,
+            "cycles_per_year_derived": cycles_per_year_derived,
+            "technical_pause_days": TECHNICAL_PAUSE_BETWEEN_CYCLES_DAYS,
+            "other_costs_rate_pct": float(DEFAULT_OTHER_COSTS_RATE_PCT),
             **annual_summary,
-            'cycle_production_kg': round(cycle_production_kg, 2),
-            'cycle_revenue_fcfa': round(cycle_revenue, 2),
-            'cycle_feed_cost_fcfa': round(feed_cost_per_cycle, 2),
-            'cycle_fingerlings_cost_fcfa': round(fingerlings_cost_per_cycle, 2),
-            'cycle_other_costs_fcfa': round(cycle_other_costs, 2),
-            'cycle_aquacare_fee_fcfa': round(cycle_aquacare_fee, 2),
-            'cycle_total_cost_fcfa': round(cycle_total_cost, 2),
-            'cycle_net_profit_fcfa': round(cycle_net_profit, 2),
-            'cycle_roi_pct': round(cycle_roi_pct, 1),
-            'annual_projection_production_kg': annual_projection_production_kg,
-            'annual_projection_revenue_fcfa': annual_projection_revenue_fcfa,
-            'annual_projection_net_profit_fcfa': annual_projection_net_profit_fcfa,
-            'annual_projection_aquacare_fee_fcfa': annual_projection_aquacare_fee_fcfa,
-            'production_per_cycle_kg': round(cycle_production_kg, 2),
-            'cycle_duration_days': resolved_inputs.duration_days,
-            'feed_bags_per_cycle': total_feed_bags_per_cycle,
-            'initial_fish_count_per_cycle': initial_fish_count,
-            'cycles_breakdown': cycles_breakdown,
+            "cycle_production_kg": round(cycle_production_kg, 2),
+            "cycle_revenue_fcfa": round(cycle_revenue, 2),
+            "cycle_feed_cost_fcfa": round(feed_cost_per_cycle, 2),
+            "cycle_fingerlings_cost_fcfa": round(fingerlings_cost_per_cycle, 2),
+            "cycle_other_costs_fcfa": round(cycle_other_costs, 2),
+            "cycle_aquacare_fee_fcfa": round(cycle_aquacare_fee, 2),
+            "cycle_total_cost_fcfa": round(cycle_total_cost, 2),
+            "cycle_net_profit_fcfa": round(cycle_net_profit, 2),
+            "cycle_roi_pct": round(cycle_roi_pct, 1),
+            "annual_projection_production_kg": annual_projection_production_kg,
+            "annual_projection_revenue_fcfa": annual_projection_revenue_fcfa,
+            "annual_projection_net_profit_fcfa": annual_projection_net_profit_fcfa,
+            "annual_projection_aquacare_fee_fcfa": annual_projection_aquacare_fee_fcfa,
+            "production_per_cycle_kg": round(cycle_production_kg, 2),
+            "cycle_duration_days": resolved_inputs.duration_days,
+            "feed_bags_per_cycle": total_feed_bags_per_cycle,
+            "initial_fish_count_per_cycle": initial_fish_count,
+            "cycles_breakdown": cycles_breakdown,
         }
 
     @staticmethod
@@ -272,8 +258,7 @@ class AnnualSimulationService:
 
     @staticmethod
     def _resolve_other_costs_breakdown(
-        cycle_revenue: float,
-        annual_revenue: float,
+        direct_cost: float,
         num_cycles: int,
         annual_other_costs_fcfa_per_year: float,
     ) -> tuple[float, float]:
@@ -282,8 +267,8 @@ class AnnualSimulationService:
             annual_other_costs = float(annual_other_costs_fcfa_per_year)
             cycle_other_costs = annual_other_costs / num_cycles
         else:
-            annual_other_costs = annual_revenue * OTHER_COSTS_RATE
-            cycle_other_costs = cycle_revenue * OTHER_COSTS_RATE
+            cycle_other_costs = direct_cost * OTHER_COSTS_RATE / (1 - OTHER_COSTS_RATE)
+            annual_other_costs = cycle_other_costs * num_cycles
 
         return round(cycle_other_costs, 2), round(annual_other_costs, 2)
 
@@ -300,10 +285,10 @@ class AnnualSimulationService:
 
     @staticmethod
     def _normalize_species(species: str) -> str:
-        s = (species or '').lower()
-        if s in ('clarias', 'silure'):
-            return 'clarias'
-        return 'tilapia'
+        s = (species or "").lower()
+        if s in ("clarias", "silure"):
+            return "clarias"
+        return "tilapia"
 
     @staticmethod
     def _resolve_inputs(
@@ -315,23 +300,18 @@ class AnnualSimulationService:
     ) -> ResolvedSimulationInputs:
         """Applique les valeurs par défaut par espèce aux paramètres optionnels."""
         normalized = AnnualSimulationService._normalize_species(species)
-        defaults = SPECIES_DEFAULTS.get(normalized, SPECIES_DEFAULTS['tilapia'])
+        defaults = SPECIES_DEFAULTS.get(normalized, SPECIES_DEFAULTS["tilapia"])
         survival_rate = (
-            (expected_survival_rate_pct / 100.0)
-            if expected_survival_rate_pct is not None
-            else DEFAULT_SURVIVAL_RATE
+            (expected_survival_rate_pct / 100.0) if expected_survival_rate_pct is not None else DEFAULT_SURVIVAL_RATE
         )
 
         return ResolvedSimulationInputs(
             species=normalized,
-            selling_price=selling_price_per_kg_fcfa or defaults['selling_price_fcfa'],
-            fingerlings_cost_unit=(
-                fingerlings_cost_per_unit_fcfa
-                or defaults['fingerlings_cost_per_unit']
-            ),
-            target_weight_g=target_harvest_weight_g or defaults['target_weight_g'],
+            selling_price=selling_price_per_kg_fcfa or defaults["selling_price_fcfa"],
+            fingerlings_cost_unit=(fingerlings_cost_per_unit_fcfa or defaults["fingerlings_cost_per_unit"]),
+            target_weight_g=target_harvest_weight_g or defaults["target_weight_g"],
             survival_rate=survival_rate,
-            duration_days=defaults['duration_days'],
+            duration_days=defaults["duration_days"],
         )
 
     @staticmethod
@@ -351,9 +331,7 @@ class AnnualSimulationService:
         if total_fingerlings_count is not None:
             return math.ceil(total_fingerlings_count / num_cycles)
 
-        final_count_per_cycle = math.ceil(
-            (production_per_cycle_kg * 1000) / target_weight_g
-        )
+        final_count_per_cycle = math.ceil((production_per_cycle_kg * 1000) / target_weight_g)
         return math.ceil(final_count_per_cycle / survival_rate)
 
     @staticmethod
@@ -392,28 +370,19 @@ class AnnualSimulationService:
         annual_revenue = selling_price * annual_production_target_kg
         annual_other_costs = float(annual_other_costs_fcfa)
         aquacare_fee = float(AQUACARE_FEE_PER_KG * Decimal(str(annual_production_target_kg)))
-        annual_total_cost = (
-            annual_feed_cost
-            + annual_fingerlings_cost
-            + annual_other_costs
-            + aquacare_fee
-        )
+        annual_total_cost = annual_feed_cost + annual_fingerlings_cost + annual_other_costs + aquacare_fee
         annual_net_profit = annual_revenue - annual_total_cost
-        annual_roi_pct = (
-            annual_net_profit / annual_total_cost * 100
-            if annual_total_cost > 0
-            else 0
-        )
+        annual_roi_pct = annual_net_profit / annual_total_cost * 100 if annual_total_cost > 0 else 0
 
         return {
-            'annual_revenue_fcfa': round(annual_revenue, 2),
-            'annual_feed_cost_fcfa': round(annual_feed_cost, 2),
-            'annual_fingerlings_cost_fcfa': round(annual_fingerlings_cost, 2),
-            'annual_other_costs_fcfa': round(annual_other_costs, 2),
-            'annual_total_cost_fcfa': round(annual_total_cost, 2),
-            'aquacare_fee_fcfa': round(aquacare_fee, 2),
-            'annual_net_profit_fcfa': round(annual_net_profit, 2),
-            'annual_roi_pct': round(annual_roi_pct, 1),
+            "annual_revenue_fcfa": round(annual_revenue, 2),
+            "annual_feed_cost_fcfa": round(annual_feed_cost, 2),
+            "annual_fingerlings_cost_fcfa": round(annual_fingerlings_cost, 2),
+            "annual_other_costs_fcfa": round(annual_other_costs, 2),
+            "annual_total_cost_fcfa": round(annual_total_cost, 2),
+            "aquacare_fee_fcfa": round(aquacare_fee, 2),
+            "annual_net_profit_fcfa": round(annual_net_profit, 2),
+            "annual_roi_pct": round(annual_roi_pct, 1),
         }
 
     @staticmethod
@@ -436,17 +405,19 @@ class AnnualSimulationService:
 
         for i in range(1, num_cycles + 1):
             end_date = current_start + timedelta(days=duration_days - 1)
-            breakdown.append({
-                'cycle_num': i,
-                'production_kg': round(production_per_cycle_kg, 2),
-                'start_date_estimate': current_start.isoformat(),
-                'end_date_estimate': end_date.isoformat(),
-                'duration_days': duration_days,
-                'feed_bags_total': feed_bags_per_cycle,
-                'feed_cost_fcfa': round(feed_cost_per_cycle, 2),
-                'fingerlings_cost_fcfa': round(fingerlings_cost_per_cycle, 2),
-                'initial_fish_count': initial_fish_count,
-            })
+            breakdown.append(
+                {
+                    "cycle_num": i,
+                    "production_kg": round(production_per_cycle_kg, 2),
+                    "start_date_estimate": current_start.isoformat(),
+                    "end_date_estimate": end_date.isoformat(),
+                    "duration_days": duration_days,
+                    "feed_bags_total": feed_bags_per_cycle,
+                    "feed_cost_fcfa": round(feed_cost_per_cycle, 2),
+                    "fingerlings_cost_fcfa": round(fingerlings_cost_per_cycle, 2),
+                    "initial_fish_count": initial_fish_count,
+                }
+            )
             current_start = end_date + timedelta(days=inter_cycle_gap_days + 1)
 
         return breakdown
