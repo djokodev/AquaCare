@@ -339,7 +339,7 @@ class TestReportServicePayloadAndPdfTemplate:
         assert "Isoler les poissons suspects." in html
         assert ">0<" in html or ">0.0<" in html or ">0.00<" in html
         assert 'class="cycle-block' in html
-        assert "page-break-before: always;" in html
+        assert "cycle-block-break" in html
 
     def test_pdf_template_supports_english_labels(self):
         farm_profile = FarmProfileFactory(farm_name="Farm EN")
