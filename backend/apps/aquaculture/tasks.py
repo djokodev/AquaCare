@@ -262,7 +262,7 @@ def generate_daily_report_drafts_task():
     Dispatch one task per active farm for daily reports (parallelised).
     """
     target_date = timezone.localdate()
-    start, end = ReportService.build_period_bounds('daily', target_date)
+    start, end = ReportService.build_completed_period_bounds('daily', target_date)
     count = _dispatch_per_farm('daily', start, end)
     logger.info("Daily report tasks dispatched for %s farms (%s)", count, target_date)
     return f"Daily drafts dispatched: {count}"
@@ -274,10 +274,9 @@ def generate_weekly_report_drafts_task():
     Dispatch one task per active farm for weekly reports (parallelised).
     """
     current = timezone.localdate()
-    reference = current - timedelta(days=current.weekday() + 1)
-    start, end = ReportService.build_period_bounds('weekly', reference)
+    start, end = ReportService.build_completed_period_bounds('weekly', current)
     count = _dispatch_per_farm('weekly', start, end)
-    logger.info("Weekly report tasks dispatched for %s farms (ref=%s)", count, reference)
+    logger.info("Weekly report tasks dispatched for %s farms (ref=%s)", count, current)
     return f"Weekly drafts dispatched: {count}"
 
 
@@ -287,11 +286,9 @@ def generate_monthly_report_drafts_task():
     Dispatch one task per active farm for monthly reports (parallelised).
     """
     current = timezone.localdate()
-    first_day_current_month = current.replace(day=1)
-    reference = first_day_current_month - timedelta(days=1)
-    start, end = ReportService.build_period_bounds('monthly', reference)
+    start, end = ReportService.build_completed_period_bounds('monthly', current)
     count = _dispatch_per_farm('monthly', start, end)
-    logger.info("Monthly report tasks dispatched for %s farms (ref=%s)", count, reference)
+    logger.info("Monthly report tasks dispatched for %s farms (ref=%s)", count, current)
     return f"Monthly drafts dispatched: {count}"
 
 

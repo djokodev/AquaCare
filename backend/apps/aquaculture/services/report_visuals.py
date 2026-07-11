@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections import defaultdict
 from datetime import date, timedelta
 from html import escape
-from math import cos, pi, sin
+from math import ceil, cos, pi, sin
 
 
 def _safe(value: object) -> float:
@@ -22,6 +22,19 @@ def _average(values: list[tuple[float, float]]) -> float:
     if counts:
         return weighted / counts
     return sum(weight for weight, _ in values) / len(values)
+
+
+def _short_date(value: date, language: str) -> str:
+    months = (
+        ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."]
+        if language == "fr"
+        else ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    )
+    return f"{value.day} {months[value.month - 1]}"
+
+
+def _period_label(start: date, end: date, language: str) -> str:
+    return f"{_short_date(start, language)}–{_short_date(end, language)}"
 
 
 def _point(logs: list[dict], label: str, year: int, week: int) -> dict | None:
@@ -47,7 +60,8 @@ def aggregate_growth_points(
     labels: dict[str, str] | None = None,
 ) -> list[dict]:
     """Aggregate real weighing weeks, using sample-count weighting when possible."""
-    labels = labels or {"previous": "Previous week", "current": "Covered week", "week": "Week"}
+    labels = labels or {"previous": "Previous week", "current": "Covered week", "week": "Week", "language": "en"}
+    language = labels.get("language", "en")
     dated = []
     for log in logs:
         try:
@@ -64,8 +78,18 @@ def aggregate_growth_points(
         previous_week = previous_start.isocalendar()
         current_week = period_start.isocalendar()
         points = []
-        previous_point = _point(previous, labels["previous"], previous_week.year, previous_week.week)
-        current_point = _point(current, labels["current"], current_week.year, current_week.week)
+        previous_point = _point(
+            previous,
+            _period_label(previous_start, period_start - timedelta(days=1), language),
+            previous_week.year,
+            previous_week.week,
+        )
+        current_point = _point(
+            current,
+            _period_label(period_start, period_end, language),
+            current_week.year,
+            current_week.week,
+        )
         if previous_point:
             points.append(previous_point)
         if current_point:
@@ -79,48 +103,80 @@ def aggregate_growth_points(
             buckets[(iso.year, iso.week)].append(log)
     points = []
     for (year, week), bucket in sorted(buckets.items()):
-        point = _point(bucket, f"{labels['week']} {week}", year, week)
+        week_start = date.fromisocalendar(year, week, 1)
+        week_end = min(date.fromisocalendar(year, week, 7), period_end)
+        point = _point(bucket, _period_label(max(week_start, period_start), week_end, language), year, week)
         if point:
             points.append(point)
     return points
 
 
-def build_growth_svg(points: list[dict], width: int = 520, height: int = 220) -> str:
+def build_growth_svg(points: list[dict], width: int = 520, height: int = 220, language: str = "fr") -> str:
     if not points:
         return ""
     left, bottom, chart_width, chart_height = 52, 35, width - 72, height - 60
-    maximum = max(max(_safe(point["value_g"]) for point in points), 1)
+    highest = max(max(_safe(point["value_g"]) for point in points), 1)
+    step = max(1, ceil(highest / 5 / 5) * 5)
+    axis_max = max(step * 5, ceil(highest / step) * step)
     bar_width = min(72, chart_width / len(points) * 0.58)
     bars, labels = [], []
     for index, point in enumerate(points):
         x = left + (index + 0.5) * chart_width / len(points) - bar_width / 2
-        bar_height = _safe(point["value_g"]) / maximum * chart_height
+        bar_height = _safe(point["value_g"]) / axis_max * chart_height
         y = height - bottom - bar_height
         label_x = x + bar_width / 2
         bars.append(f'<rect x="{x:.1f}" y="{y:.1f}" width="{bar_width:.1f}" height="{bar_height:.1f}" fill="#059669"/>')
-        labels.append(
-            f'<text x="{label_x:.1f}" y="{height - 14}" text-anchor="middle">{escape(str(point["label"]))}</text>'
-        )
+        point_label = str(point["label"])
+        if len(point_label) > 12 and "–" in point_label:
+            label_start, label_end = point_label.split("–", 1)
+            labels.append(
+                f'<text x="{label_x:.1f}" y="{height - 24}" text-anchor="middle">'
+                f'<tspan x="{label_x:.1f}" dy="0">{escape(label_start)}–</tspan>'
+                f'<tspan x="{label_x:.1f}" dy="10">{escape(label_end)}</tspan></text>'
+            )
+        else:
+            labels.append(
+                f'<text x="{label_x:.1f}" y="{height - 14}" text-anchor="middle">{escape(point_label)}</text>'
+            )
         labels.append(
             f'<text x="{label_x:.1f}" y="{max(y - 4, 12):.1f}" text-anchor="middle">{point["value_g"]:.1f}</text>'
         )
+    decimal_separator = "," if language == "fr" else "."
+    ticks = []
+    for index in range(6):
+        value = axis_max * index / 5
+        y = height - bottom - value / axis_max * chart_height
+        text_value = f"{value:.0f}".replace(".", decimal_separator)
+        ticks.append(
+            f'<line x1="{left}" y1="{y:.1f}" x2="{width - 20}" y2="{y:.1f}" stroke="#dbe4e8"/>'
+            f'<text x="{left - 8}" y="{y + 3:.1f}" text-anchor="end" font-size="9">{text_value}</text>'
+        )
+    axis_title = escape("Poids moyen (g)" if language == "fr" else "Average weight (g)")
     return (
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
         f'viewBox="0 0 {width} {height}" role="img">'
-        f'<line x1="{left}" y1="{height - bottom}" x2="{width - 20}" y2="{height - bottom}" stroke="#64748b"/>'
+        f'<text x="12" y="14" font-size="10">{axis_title}</text>'
+        f'{"".join(ticks)}<line x1="{left}" y1="{height - bottom}" '
+        f'x2="{width - 20}" y2="{height - bottom}" stroke="#64748b"/>'
         f'<line x1="{left}" y1="20" x2="{left}" y2="{height - bottom}" stroke="#64748b"/>'
-        f'<text x="12" y="24" font-size="10">g</text>{"".join(bars)}{"".join(labels)}</svg>'
+        f'{"".join(bars)}{"".join(labels)}</svg>'
     )
 
 
 def build_cost_breakdown(categories: dict[str, float]) -> dict:
     clean = {key: round(_safe(value), 2) for key, value in categories.items()}
     total = round(sum(clean.values()), 2)
+    colors = ["#059669", "#0f766e", "#94a3b8"]
     return {
         "total_fcfa": total,
         "items": [
-            {"key": key, "amount_fcfa": amount, "percentage": round(amount / total * 100, 1)}
-            for key, amount in clean.items()
+            {
+                "key": key,
+                "amount_fcfa": amount,
+                "percentage": round(amount / total * 100, 1),
+                "color": colors[index % len(colors)],
+            }
+            for index, (key, amount) in enumerate(clean.items())
             if amount > 0
         ],
     }

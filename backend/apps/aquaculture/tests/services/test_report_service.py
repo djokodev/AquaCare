@@ -35,6 +35,20 @@ def _create_report(
 
 @pytest.mark.django_db
 class TestReportServiceEmailFormatting:
+    def test_completed_period_bounds_use_only_finished_periods(self):
+        assert ReportService.build_completed_period_bounds("daily", date(2026, 7, 20)) == (
+            date(2026, 7, 19),
+            date(2026, 7, 19),
+        )
+        assert ReportService.build_completed_period_bounds("weekly", date(2026, 7, 20)) == (
+            date(2026, 7, 13),
+            date(2026, 7, 19),
+        )
+        assert ReportService.build_completed_period_bounds("monthly", date(2026, 8, 1)) == (
+            date(2026, 7, 1),
+            date(2026, 7, 31),
+        )
+
     def test_build_email_subject_uses_natural_format(self):
         farm_profile = FarmProfileFactory()
 
@@ -315,6 +329,7 @@ class TestReportServicePayloadAndPdfTemplate:
         assert "Valeur marchande estimée des poissons" in html
         assert "Coût de production direct" in html
         assert "État et activité de la période" in html
+        assert "Journal du jour" in html
         assert "Non renseigné" in html
         assert "Symptômes" in html
         assert "Points blancs" in html
@@ -532,3 +547,49 @@ class TestReportServicePayloadAndPdfTemplate:
         assert missing_current["growth_chart"]["state"] == "missing_current_week"
         assert monthly["growth_chart"]["state"] == "chart"
         assert monthly["growth_chart"]["svg"].count("<rect") == 4
+
+    def test_monthly_template_separates_weekly_summary_from_daily_appendix(self):
+        farm_profile = FarmProfileFactory(farm_name="Ferme mensuelle")
+        report = _create_report(
+            farm_profile=farm_profile,
+            report_type="monthly",
+            period_start=date(2026, 7, 1),
+            period_end=date(2026, 7, 31),
+        )
+        payload = {
+            "report_meta": {"scope_type": "cycle"},
+            "farm": {"farm_name": farm_profile.farm_name},
+            "summary": {"cycle_count": 1, "total_feed": 12, "total_mortality": 2},
+            "cycle_dashboard": {"estimated_market_value_fcfa": 0, "feed_cost_consumed_fcfa": 0,
+                                 "time_remaining_days": 0, "direct_production_cost_fcfa": 0},
+            "growth_chart": {"state": "no_data", "points": [], "svg": ""},
+            "cost_breakdown": {"total_fcfa": 0, "items": [], "svg": ""},
+            "cycles": [{
+                "cycle": {"cycle_name": "Cycle mensuel", "species_display": "Silure",
+                           "start_date_display": "01/06/2026", "days_active": 60},
+                "unit": {"production_unit_name": "Bac 1"},
+                "current_metrics": {"current_count": 100, "current_average_weight": 30,
+                                     "current_biomass": 3, "fcr": 1.2, "survival_rate": 98},
+                "period_metrics": {"log_count": 1, "total_feed": 12, "total_mortality": 2,
+                                    "average_temperature": 28, "average_oxygen": 5, "average_ph": 7},
+                "weekly_activity": [{"label": "1 juil.–5 juil.", "log_count": 1,
+                                     "total_feed": 12, "total_mortality": 2, "average_temperature": 28,
+                                     "average_oxygen": 5, "average_ph": 7, "sanitary_event_count": 0}],
+                "logs": [{"log_date_display": "01/07/2026", "feed_quantity": 12, "mortality_count": 2,
+                          "average_weight": 30, "water_temperature": 28, "dissolved_oxygen": 5,
+                          "ph_level": 7, "observations": "OK"}],
+                "sanitary_logs": [],
+            }],
+            "units": [],
+        }
+        context = ReportService._build_pdf_context(
+            report=report,
+            payload=payload,
+            generated_at=timezone.localtime(timezone.now()),
+            language_code="fr",
+        )
+        html = render_to_string("aquaculture/report_pdf.html", context)
+
+        assert "Synthèse mensuelle" in html
+        assert "Annexe — Journaux quotidiens du mois" in html
+        assert "1 juil.–5 juil." in html

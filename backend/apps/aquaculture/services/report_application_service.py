@@ -156,10 +156,13 @@ class ReportApplicationService:
     @staticmethod
     def request_report_generation(user, command: GenerateReportCommand) -> ProductionReport:
         """Cree ou recharge un rapport en attente puis declenche la generation async."""
-        period_start, period_end = ReportService.build_period_bounds(
-            command.report_type,
-            command.reference_date,
-        )
+        if command.reference_date is None:
+            period_start, period_end = ReportService.build_completed_period_bounds(command.report_type)
+        else:
+            period_start, period_end = ReportService.build_period_bounds(
+                command.report_type,
+                command.reference_date,
+            )
         scope = command.scope or "cycle"
         cycle_id = command.cycle_id
         cycle_unit_allocation_id = command.cycle_unit_allocation_id

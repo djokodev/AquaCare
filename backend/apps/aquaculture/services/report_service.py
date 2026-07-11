@@ -374,6 +374,23 @@ class ReportService(BaseService):
         raise ValueError(f"Type de rapport non supporté: {report_type}")
 
     @staticmethod
+    def build_completed_period_bounds(
+        report_type: str,
+        execution_date: date | None = None,
+    ) -> tuple[date, date]:
+        """Return the last fully completed period at execution time."""
+        current = execution_date or timezone.localdate()
+        if report_type == "daily":
+            reference = current - timedelta(days=1)
+        elif report_type == "weekly":
+            reference = current - timedelta(days=current.weekday() + 1)
+        elif report_type == "monthly":
+            reference = current.replace(day=1) - timedelta(days=1)
+        else:
+            raise ValueError(f"Type de rapport non supporté: {report_type}")
+        return ReportService.build_period_bounds(report_type, reference)
+
+    @staticmethod
     def generate_for_farm(
         farm_profile: FarmProfile,
         report_type: str,
@@ -552,22 +569,19 @@ class ReportService(BaseService):
     @staticmethod
     def generate_daily_drafts(reference_date: date | None = None) -> int:
         """Génère les brouillons journaliers pour toutes les fermes actives."""
-        ref = reference_date or timezone.localdate()
-        start, end = ReportService.build_period_bounds("daily", ref)
+        start, end = ReportService.build_completed_period_bounds("daily", reference_date)
         return ReportService._generate_for_all_active_farms("daily", start, end)
 
     @staticmethod
     def generate_weekly_drafts(reference_date: date | None = None) -> int:
         """Génère les brouillons hebdomadaires pour toutes les fermes actives."""
-        ref = reference_date or timezone.localdate()
-        start, end = ReportService.build_period_bounds("weekly", ref)
+        start, end = ReportService.build_completed_period_bounds("weekly", reference_date)
         return ReportService._generate_for_all_active_farms("weekly", start, end)
 
     @staticmethod
     def generate_monthly_drafts(reference_date: date | None = None) -> int:
         """Génère les brouillons mensuels pour toutes les fermes actives."""
-        ref = reference_date or timezone.localdate()
-        start, end = ReportService.build_period_bounds("monthly", ref)
+        start, end = ReportService.build_completed_period_bounds("monthly", reference_date)
         return ReportService._generate_for_all_active_farms("monthly", start, end)
 
     @staticmethod
@@ -606,6 +620,7 @@ class ReportService(BaseService):
         sanitary_logs: list,
         feeding_plans: list,
         language_code: str,
+        period_start: date | None = None,
         period_end: date | None = None,
         cumulative_daily_logs: list | None = None,
         cumulative_sanitary_logs: list | None = None,
@@ -703,6 +718,13 @@ class ReportService(BaseService):
                 if ReportService._is_sanitary_event_active_as_of(item, period_end)
             ),
             "period_metrics": ReportService._build_period_metrics(daily_logs, sanitary_logs),
+            "weekly_activity": ReportService._build_weekly_activity(
+                daily_logs,
+                sanitary_logs,
+                period_start,
+                period_end,
+                language_code,
+            ) if period_start and period_end else [],
             "logs": [
                 {
                     "id": str(log.id),
@@ -798,6 +820,39 @@ class ReportService(BaseService):
             "average_oxygen": average("dissolved_oxygen"),
             "average_ph": average("ph_level"),
         }
+
+    @staticmethod
+    def _build_weekly_activity(
+        logs: list,
+        sanitary_logs: list,
+        period_start: date,
+        period_end: date,
+        language_code: str,
+    ) -> list[dict]:
+        buckets: dict[tuple[date, date], list] = {}
+        for log in logs:
+            week_start = log.log_date - timedelta(days=log.log_date.weekday())
+            week_end = min(week_start + timedelta(days=6), period_end)
+            key = (max(week_start, period_start), week_end)
+            buckets.setdefault(key, []).append(log)
+        result = []
+        for (week_start, week_end), week_logs in sorted(buckets.items()):
+            metrics = ReportService._build_period_metrics(
+                week_logs,
+                [item for item in sanitary_logs if week_start <= item.event_date <= week_end],
+            )
+            result.append({
+                "label": ReportService._format_period_range(week_start, week_end, language_code),
+                **metrics,
+            })
+        return result
+
+    @staticmethod
+    def _format_period_range(start: date, end: date, language_code: str) -> str:
+        if language_code == "en":
+            return f"{start.strftime('%b %-d')}–{end.strftime('%b %-d')}"
+        months = ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."]
+        return f"{start.day} {months[start.month - 1]}–{end.day} {months[end.month - 1]}"
 
     @staticmethod
     def _build_growth_logs(
@@ -1095,6 +1150,13 @@ class ReportService(BaseService):
                             ),
                         },
                         "period_metrics": ReportService._build_period_metrics(cycle_logs, sanitary_logs),
+                        "weekly_activity": ReportService._build_weekly_activity(
+                            cycle_logs,
+                            sanitary_logs,
+                            period_start,
+                            period_end,
+                            ReportService._resolve_language_code(farm_profile.user),
+                        ),
                         "logs": [
                             {
                                 "id": str(log.id),
@@ -1184,8 +1246,7 @@ class ReportService(BaseService):
         for allocation in allocations:
             daily_logs = list(getattr(allocation, "period_daily_logs", []))
             sanitary_logs = list(getattr(allocation, "period_sanitary_logs", []))
-            today = timezone.localdate()
-            has_today_log = any(log.log_date == today for log in daily_logs)
+            has_today_log = any(log.log_date == period_end for log in daily_logs)
             section = ReportService._build_unit_dashboard_section(
                 cycle=cycle,
                 allocation=allocation,
@@ -1193,6 +1254,7 @@ class ReportService(BaseService):
                 sanitary_logs=sanitary_logs,
                 feeding_plans=feeding_plans,
                 language_code=ReportService._resolve_language_code(farm_profile.user),
+                period_start=period_start,
                 period_end=period_end,
                 cumulative_daily_logs=list(getattr(allocation, "cumulative_daily_logs", [])),
                 cumulative_sanitary_logs=list(getattr(allocation, "cumulative_sanitary_logs", [])),
@@ -1336,6 +1398,7 @@ class ReportService(BaseService):
             sanitary_logs=sanitary_logs,
             feeding_plans=feeding_plans,
             language_code=ReportService._resolve_language_code(farm_profile.user),
+            period_start=period_start,
             period_end=period_end,
         )
         today = timezone.localdate()
@@ -1643,6 +1706,13 @@ class ReportService(BaseService):
                         "average_oxygen": ReportService._to_float(logs_agg.get("avg_oxygen")),
                         "average_ph": ReportService._to_float(logs_agg.get("avg_ph")),
                     },
+                    "weekly_activity": ReportService._build_weekly_activity(
+                        logs,
+                        sanitary_logs,
+                        period_start,
+                        period_end,
+                        ReportService._resolve_language_code(farm_profile.user),
+                    ),
                     "logs": [
                         {
                             "id": str(log.id),
@@ -1800,9 +1870,9 @@ class ReportService(BaseService):
         )
         growth_logs = payload.get("growth_logs") or [log for section in sections for log in section.get("logs", [])]
         report_labels = (
-            {"previous": "Previous week", "current": "Covered week", "week": "Week"}
+            {"previous": "Previous week", "current": "Covered week", "week": "Week", "language": "en"}
             if language_code == "en"
-            else {"previous": "Semaine précédente", "current": "Semaine couverte", "week": "Semaine"}
+            else {"previous": "Semaine précédente", "current": "Semaine couverte", "week": "Semaine", "language": "fr"}
         )
         if report_type == "weekly":
             growth_period_start = period_end - timedelta(days=6)
@@ -1843,10 +1913,13 @@ class ReportService(BaseService):
         if not growth_points:
             growth_state = "no_data"
         elif report_type == "weekly" and len(growth_points) == 1:
-            current_label = report_labels["current"]
+            current_period = growth_period_start.isocalendar()
             growth_state = (
                 "first_point"
-                if growth_points[0]["label"] == current_label
+                if (
+                    growth_points[0].get("year") == current_period.year
+                    and growth_points[0].get("week") == current_period.week
+                )
                 else "missing_current_week"
             )
         elif report_type == "monthly" and len(growth_points) < 2:
@@ -1856,7 +1929,7 @@ class ReportService(BaseService):
         payload["growth_chart"] = {
             "state": growth_state if report_type in {"weekly", "monthly"} else "no_data",
             "points": growth_points if report_type in {"weekly", "monthly"} else [],
-            "svg": build_growth_svg(growth_points) if growth_state == "chart" else "",
+            "svg": build_growth_svg(growth_points, language=language_code) if growth_state == "chart" else "",
         }
         payload["cost_breakdown"]["svg"] = (
             build_donut_svg(
@@ -2141,6 +2214,17 @@ class ReportService(BaseService):
                 "unit_report": "Unit report",
                 "period_covered": "Covered period",
                 "cycle_dashboard": "Cycle dashboard",
+                "cycle_situation_at": "Cycle situation as of",
+                "activity_day": "Day activity",
+                "activity_week": "Week activity",
+                "activity_month": "Month activity",
+                "daily_log_title": "Daily log",
+                "weekly_log_title": "Weekly logs",
+                "monthly_summary": "Monthly summary",
+                "monthly_appendix": "Appendix — Daily logs for the month",
+                "weekly_period": "Week",
+                "weekly_entries": "Entries",
+                "weekly_sanitary": "Sanitary incidents",
                 "species": "Species",
                 "growth_chart_title": "Weekly average weight evolution",
                 "weight_axis": "Average weight (g)",
@@ -2155,6 +2239,7 @@ class ReportService(BaseService):
                 "dashboard": "Dashboard",
                 "status_and_period_activity": "Current status and period activity",
                 "active_events": "active sanitary events",
+                "active_event": "active sanitary event",
                 "affected_fish_short": "fish affected",
                 "no_active_sanitary_event": "No active sanitary event",
                 "log_count": "Entries",
@@ -2249,6 +2334,17 @@ class ReportService(BaseService):
             "unit_report": "Rapport de l'unité",
             "period_covered": "Période couverte",
             "cycle_dashboard": "Tableau de bord du cycle",
+            "cycle_situation_at": "Situation du cycle au",
+            "activity_day": "Activité du jour",
+            "activity_week": "Activité de la semaine",
+            "activity_month": "Activité du mois",
+            "daily_log_title": "Journal du jour",
+            "weekly_log_title": "Journaux de la semaine",
+            "monthly_summary": "Synthèse mensuelle",
+            "monthly_appendix": "Annexe — Journaux quotidiens du mois",
+            "weekly_period": "Semaine",
+            "weekly_entries": "Saisies",
+            "weekly_sanitary": "Incidents sanitaires",
             "species": "Espèce",
             "growth_chart_title": "Évolution du poids moyen hebdomadaire",
             "weight_axis": "Poids moyen (g)",
@@ -2265,6 +2361,7 @@ class ReportService(BaseService):
             "current_status": "État actuel",
             "period_activity": "Activité de la période",
             "active_events": "événement(s) sanitaire(s) actif(s)",
+            "active_event": "événement sanitaire actif",
             "affected_fish_short": "poissons affectés",
             "no_active_sanitary_event": "Aucun événement sanitaire actif",
             "log_count": "Saisies",
@@ -2338,8 +2435,8 @@ class ReportService(BaseService):
             "treatment_duration": "Durée du traitement",
             "notes": "Notes",
             "status": "État",
-            "resolved": "Résolue",
-            "active": "Active",
+            "resolved": "Résolu",
+            "active": "Actif",
             "no_sanitary_logs": "Aucun événement sanitaire dans cette période analysée.",
             "no_report_data": "Aucune donnée de rapport disponible.",
             "no_units_in_cycle": "Aucune unité n'a encore été affectée à ce cycle.",

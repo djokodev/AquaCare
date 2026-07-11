@@ -30,11 +30,11 @@ def test_weekly_growth_uses_previous_and_current_week_only():
         "weekly",
         date(2026, 7, 13),
         date(2026, 7, 19),
-        {"previous": "Previous week", "current": "Covered week", "week": "Week"},
+        {"previous": "Previous week", "current": "Covered week", "week": "Week", "language": "en"},
     )
 
     assert [point["value_g"] for point in points] == [25, 31]
-    assert [point["label"] for point in points] == ["Previous week", "Covered week"]
+    assert [point["label"] for point in points] == ["6 Jul–12 Jul", "13 Jul–19 Jul"]
 
 
 def test_cost_breakdown_excludes_zero_values_and_has_no_nan():

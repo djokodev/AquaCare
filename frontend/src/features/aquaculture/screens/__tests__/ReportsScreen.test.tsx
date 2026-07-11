@@ -72,7 +72,7 @@ describe('features/aquaculture/screens/ReportsScreen', () => {
     ]);
     mockGenerateReport.mockResolvedValueOnce({ id: 'report-2' });
 
-    const { getByText, queryByText, getAllByText } = render(
+    const { getByText, getAllByText } = render(
       <ReportsScreen
         navigation={navigation}
         route={{ key: 'Reports', name: 'Reports', params: { scope: 'cycle', cycleId: 'cycle-1' } } as any}
@@ -81,24 +81,50 @@ describe('features/aquaculture/screens/ReportsScreen', () => {
 
     await waitFor(() => {
       expect(getAllByText('reportCycleTitle').length).toBeGreaterThan(0);
-      expect(getByText('generateCycleReport')).toBeTruthy();
-      expect(queryByText('reportGenerationDaily')).toBeNull();
-      expect(queryByText('reportGenerationDailyShort')).toBeNull();
-      expect(queryByText('reportGenerationWeeklyShort')).toBeNull();
-      expect(queryByText('reportGenerationMonthlyShort')).toBeNull();
+      expect(getByText('reportGenerationDaily')).toBeTruthy();
+      expect(getByText('reportGenerationWeekly')).toBeTruthy();
+      expect(getByText('reportGenerationMonthly')).toBeTruthy();
       expect(getByText('Rapport du cycle')).toBeTruthy();
     });
 
-    fireEvent.press(getByText('generateCycleReport'));
+    fireEvent.press(getByText('reportGenerationWeekly'));
 
     await waitFor(() => {
       expect(mockGenerateReport).toHaveBeenCalledWith({
-        report_type: 'daily',
+        report_type: 'weekly',
         scope: 'cycle',
         cycle_id: 'cycle-1',
-        cycle_unit_allocation_id: undefined,
       });
     });
+  });
+
+  it('genere les trois types depuis un cycle sans allocation unitaire', async () => {
+    mockGetReports.mockResolvedValue([]);
+    mockGenerateReport.mockResolvedValue({ id: 'report-4' });
+
+    const { getByText } = render(
+      <ReportsScreen
+        navigation={navigation}
+        route={{ key: 'Reports', name: 'Reports', params: { scope: 'cycle', cycleId: 'cycle-1' } } as any}
+      />
+    );
+
+    await waitFor(() => expect(getByText('reportGenerationDaily')).toBeTruthy());
+
+    for (const reportType of ['daily', 'weekly', 'monthly'] as const) {
+      fireEvent.press(getByText(
+        reportType === 'daily'
+          ? 'reportGenerationDaily'
+          : reportType === 'weekly'
+            ? 'reportGenerationWeekly'
+            : 'reportGenerationMonthly'
+      ));
+      await waitFor(() => expect(mockGenerateReport).toHaveBeenCalledWith({
+        report_type: reportType,
+        scope: 'cycle',
+        cycle_id: 'cycle-1',
+      }));
+    }
   });
 
   it('affiche un rapport unité et genere avec le contexte unitaire', async () => {

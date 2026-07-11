@@ -168,6 +168,7 @@ export const fr = {
   noUnitsInThisCycle: 'Aucune unité dans ce cycle',
   reportDetailTitle: 'Détail du rapport',
   reportHistory: 'Historique des rapports',
+  reportPeriodLabel: 'Période',
   generateReport: 'Générer un rapport',
   generateCycleReport: 'Générer le rapport du cycle',
   regenerateReport: 'Régénérer le rapport',
