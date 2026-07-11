@@ -43,6 +43,7 @@ from .base import BaseService
 from .cycle_feed_service import CycleFeedService
 from .farm_production_plan_service import FarmProductionPlanService
 from .production_unit_dashboard_service import ProductionUnitDashboardService
+from .production_unit_stock_snapshot_service import ProductionUnitStockSnapshotService
 from .report_visuals import (
     aggregate_growth_points,
     build_cost_breakdown,
@@ -176,6 +177,9 @@ class ReportLogSnapshot(TypedDict):
 class ReportSanitarySnapshot(TypedDict):
     id: str
     event_date: str
+    event_date_display: str
+    resolution_date: str | None
+    resolution_date_display: str | None
     event_type: str
     event_type_display: str
     symptoms: str
@@ -618,6 +622,12 @@ class ReportService(BaseService):
             "id": str(item.id),
             "event_date": item.event_date.isoformat(),
             "event_date_display": ReportService._format_report_date(item.event_date, language_code),
+            "resolution_date": item.resolution_date.isoformat() if item.resolution_date else None,
+            "resolution_date_display": (
+                ReportService._format_report_date(item.resolution_date, language_code)
+                if item.resolution_date
+                else None
+            ),
             "event_type": item.event_type,
             "event_type_display": ReportService._localized_display(item, "get_event_type_display", language_code),
             "symptoms": item.symptoms,
@@ -650,7 +660,15 @@ class ReportService(BaseService):
             daily_logs=cumulative_daily_logs if cumulative_daily_logs is not None else daily_logs,
             sanitary_logs=cumulative_sanitary_logs if cumulative_sanitary_logs is not None else sanitary_logs,
         )
+        stock_snapshot = ProductionUnitStockSnapshotService.build_as_of(
+            allocation=allocation,
+            as_of_date=period_end or timezone.localdate(),
+            daily_logs=cumulative_daily_logs if cumulative_daily_logs is not None else daily_logs,
+        )
         summary = dashboard["summary"]
+        summary["estimated_current_fish_count"] = stock_snapshot["estimated_current_fish_count"]
+        summary["total_mortality_count"] = stock_snapshot["mortality_count"]
+        summary["mortality_rate_pct"] = stock_snapshot["mortality_rate_pct"]
         latest_weight = ReportService._resolve_latest_valid_weight_as_of(
             cumulative_daily_logs if cumulative_daily_logs is not None else daily_logs,
             period_end,
@@ -716,13 +734,13 @@ class ReportService(BaseService):
                 "direct_production_cost_fcfa": round(feed_cost_consumed_fcfa, 0),
             },
             "current_metrics": {
-                "current_count": summary["estimated_current_fish_count"],
+                "current_count": stock_snapshot["estimated_current_fish_count"],
                 "current_average_weight": ReportService._to_float(latest_weight),
                 "current_biomass": ReportService._to_float(estimated_biomass),
                 "total_feed_consumed": ReportService._to_float(total_feed),
                 "survival_rate": (
-                    100.0 - ReportService._to_float(summary.get("mortality_rate_pct"))
-                    if ReportService._to_float(summary.get("mortality_rate_pct")) is not None
+                    ReportService._to_float(stock_snapshot.get("survival_rate_pct"))
+                    if ReportService._to_float(stock_snapshot.get("survival_rate_pct")) is not None
                     else None
                 ),
                 "fcr": ReportService._to_float(cycle.fcr),
@@ -733,7 +751,7 @@ class ReportService(BaseService):
             },
             "cumulative_metrics": {
                 "total_feed": feed_consumed_kg,
-                "total_mortality": summary["total_mortality_count"],
+                "total_mortality": stock_snapshot["mortality_count"],
             },
             "active_sanitary_events_count": sum(
                 1
@@ -778,6 +796,12 @@ class ReportService(BaseService):
                     "id": str(item.id),
                     "event_date": item.event_date.isoformat(),
                     "event_date_display": ReportService._format_report_date(item.event_date, language_code),
+                    "resolution_date": item.resolution_date.isoformat() if item.resolution_date else None,
+                    "resolution_date_display": (
+                        ReportService._format_report_date(item.resolution_date, language_code)
+                        if item.resolution_date
+                        else None
+                    ),
                     "event_type": item.event_type,
                     "event_type_display": ReportService._localized_display(
                         item, "get_event_type_display", language_code
@@ -1063,13 +1087,28 @@ class ReportService(BaseService):
             )
             sanitary_logs = global_period_sanitary_logs
             cumulative_logs = list(cycle.logs.filter(log_date__lte=period_end))
+            partial_harvests = list(cycle.partial_harvests.filter(harvest_date__lte=period_end))
             cumulative_sanitary_logs = list(cycle.sanitary_logs.filter(event_date__lte=period_end))
             total_feed = sum(float(log.feed_quantity or 0) for log in cumulative_logs)
             total_mortality = sum(int(log.mortality_count or 0) for log in cumulative_logs)
             total_log_count = len(cycle_logs)
             total_sanitary_count = len(sanitary_logs)
             total_initial = cycle.initial_count or 0
-            estimated_current = max(0, total_initial - total_mortality) if cumulative_logs else cycle.current_count or 0
+            harvested_fish_count = sum(int(item.count_harvested or 0) for item in partial_harvests)
+            has_completed_final_harvest = (
+                cycle.status == "harvested"
+                and cycle.end_date is not None
+                and cycle.end_date <= period_end
+            )
+            if cumulative_logs or partial_harvests or has_completed_final_harvest:
+                estimated_current = (
+                    0
+                    if has_completed_final_harvest
+                    else max(0, total_initial - total_mortality - harvested_fish_count)
+                )
+            else:
+                # Legacy cycles without reconstructible events retain their stored snapshot.
+                estimated_current = cycle.current_count or 0
             mortality_rate_pct = 0.0
             if total_initial > 0:
                 mortality_rate_pct = round((total_mortality / total_initial) * 100, 2)
@@ -1264,6 +1303,15 @@ class ReportService(BaseService):
                                 "event_date": item.event_date.isoformat(),
                                 "event_date_display": ReportService._format_report_date(
                                     item.event_date, ReportService._resolve_language_code(farm_profile.user)
+                                ),
+                                "resolution_date": item.resolution_date.isoformat() if item.resolution_date else None,
+                                "resolution_date_display": (
+                                    ReportService._format_report_date(
+                                        item.resolution_date,
+                                        ReportService._resolve_language_code(farm_profile.user),
+                                    )
+                                    if item.resolution_date
+                                    else None
                                 ),
                                 "event_type": item.event_type,
                                 "event_type_display": ReportService._localized_display(
@@ -1873,6 +1921,15 @@ class ReportService(BaseService):
                             "event_date_display": ReportService._format_report_date(
                                 item.event_date, ReportService._resolve_language_code(farm_profile.user)
                             ),
+                            "resolution_date": item.resolution_date.isoformat() if item.resolution_date else None,
+                            "resolution_date_display": (
+                                ReportService._format_report_date(
+                                    item.resolution_date,
+                                    ReportService._resolve_language_code(farm_profile.user),
+                                )
+                                if item.resolution_date
+                                else None
+                            ),
                             "event_type": item.event_type,
                             "event_type_display": ReportService._localized_display(
                                 item, "get_event_type_display", ReportService._resolve_language_code(farm_profile.user)
@@ -2036,7 +2093,20 @@ class ReportService(BaseService):
         }
         payload["cost_breakdown"] = cost_breakdown
         payload["calculation_metadata"] = {
+            "period_start": payload.get("report_meta", {}).get("period_start"),
             "period_end": period_end.isoformat(),
+            "calculated_as_of": period_end.isoformat(),
+            "data_lineage_version": "1.0.0",
+            "stock_snapshot_strategy": "production_unit_stock_snapshot_as_of_period_end",
+            "weight_strategy": "latest_valid_weighing_at_or_before_period_end",
+            "feed_cost_strategy": "cumulative_cycle_logs_to_period_end",
+            "other_costs_strategy": "planned_other_costs_prorated_by_configured_duration",
+            "legacy_fallbacks_used": (
+                ["legacy_current_count"]
+                if not any((section.get("unit") or {}).get("cycle_unit_allocation_id") for section in sections)
+                and not payload.get("cycles", [{}])[0].get("logs")
+                else []
+            ),
             "other_costs_rule": "planned_direct_cost * 0.05 / 0.95",
             "other_costs_progress": round(progress, 4),
             "other_costs_planned_fcfa": planned_other,
@@ -2440,6 +2510,7 @@ class ReportService(BaseService):
                 "average_ph": "Avg. pH",
                 "daily_logs": "Daily logs",
                 "date": "Date",
+                "resolution_date": "Resolved on",
                 "feed": "Feed (kg)",
                 "average_weight_short": "Avg. weight (g)",
                 "temperature": "Temp.",
@@ -2460,6 +2531,9 @@ class ReportService(BaseService):
                 "resolved": "Resolved",
                 "active": "Active",
                 "no_sanitary_logs": "No sanitary event in this analyzed period.",
+                "no_sanitary_logs_daily": "No new sanitary event on this day.",
+                "no_sanitary_logs_weekly": "No new sanitary event during this week.",
+                "no_sanitary_logs_monthly": "No new sanitary event during this month.",
                 "no_report_data": "No report data available.",
                 "no_units_in_cycle": "No unit has been assigned to this cycle yet.",
                 "incomplete_unit_context": "Incomplete unit context.",
@@ -2572,6 +2646,7 @@ class ReportService(BaseService):
             "average_ph": "pH moyen",
             "daily_logs": "Journaux quotidiens",
             "date": "Date",
+            "resolution_date": "Résolu le",
             "feed": "Aliment (kg)",
             "average_weight_short": "Poids moy (g)",
             "temperature": "Temp.",
@@ -2592,6 +2667,9 @@ class ReportService(BaseService):
             "resolved": "Résolu",
             "active": "Actif",
             "no_sanitary_logs": "Aucun événement sanitaire dans cette période analysée.",
+            "no_sanitary_logs_daily": "Aucun nouvel événement sanitaire ce jour.",
+            "no_sanitary_logs_weekly": "Aucun nouvel événement sanitaire pendant cette semaine.",
+            "no_sanitary_logs_monthly": "Aucun nouvel événement sanitaire pendant ce mois.",
             "no_report_data": "Aucune donnée de rapport disponible.",
             "no_units_in_cycle": "Aucune unité n'a encore été affectée à ce cycle.",
             "incomplete_unit_context": "Contexte d'unité incomplet.",

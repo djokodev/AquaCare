@@ -2,7 +2,14 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 import pytest
-from aquaculture.models import CycleLog, CycleUnitAllocation, ProductionCycle, ProductionUnit, SanitaryLog
+from aquaculture.models import (
+    CycleLog,
+    CycleUnitAllocation,
+    PartialHarvest,
+    ProductionCycle,
+    ProductionUnit,
+    SanitaryLog,
+)
 from aquaculture.services.report_service import ReportService
 from aquaculture.services.report_visuals import aggregate_growth_points
 
@@ -76,6 +83,127 @@ def _create_sanitary_log(
 
 @pytest.mark.django_db
 class TestUnitCycleAwareReportPayloads:
+    def test_historical_stock_snapshot_ignores_mutable_future_count(self):
+        farm_profile = FarmProfileFactory()
+        cycle = ProductionCycleFactory(
+            farm_profile=farm_profile,
+            species="clarias",
+            status="active",
+            start_date=date(2026, 6, 1),
+            initial_count=1000,
+            current_count=920,
+            current_average_weight=Decimal("200.00"),
+            current_biomass=Decimal("184.00"),
+        )
+        allocation = _create_allocation(
+            cycle,
+            _create_unit(farm_profile, "Bassin historique", "3.00"),
+            1000,
+            920,
+            "184.00",
+        )
+        _create_cycle_log(
+            cycle=cycle,
+            allocation=allocation,
+            log_date=date(2026, 7, 15),
+            mortality_count=40,
+            feed_quantity="1.00",
+            average_weight="190.00",
+        )
+        _create_cycle_log(
+            cycle=cycle,
+            allocation=allocation,
+            log_date=date(2026, 7, 25),
+            mortality_count=40,
+            feed_quantity="1.00",
+            average_weight="200.00",
+        )
+        allocation.current_fish_count = 920
+        allocation.save(update_fields=["current_fish_count", "updated_at"])
+
+        before_future_event = ReportService._build_payload(
+            farm_profile=farm_profile,
+            report_type="daily",
+            period_start=date(2026, 7, 19),
+            period_end=date(2026, 7, 19),
+            scope_type="cycle",
+            cycle_id=str(cycle.id),
+        )
+        after_future_event = ReportService._build_payload(
+            farm_profile=farm_profile,
+            report_type="monthly",
+            period_start=date(2026, 7, 1),
+            period_end=date(2026, 7, 31),
+            scope_type="cycle",
+            cycle_id=str(cycle.id),
+        )
+
+        before_summary = before_future_event["summary"]
+        after_summary = after_future_event["summary"]
+        assert before_summary["total_mortality_count"] == 40
+        assert before_summary["estimated_current_fish_count"] == 960
+        assert before_summary["mortality_rate_pct"] == 4.0
+        assert before_future_event["cycles"][0]["current_metrics"]["survival_rate"] == 96.0
+        assert after_summary["total_mortality_count"] == 80
+        assert after_summary["estimated_current_fish_count"] == 920
+        assert after_summary["mortality_rate_pct"] == 8.0
+        assert after_future_event["cycles"][0]["current_metrics"]["survival_rate"] == 92.0
+
+    def test_historical_stock_snapshot_subtracts_partial_harvest_by_date(self):
+        farm_profile = FarmProfileFactory()
+        cycle = ProductionCycleFactory(
+            farm_profile=farm_profile,
+            species="clarias",
+            status="active",
+            start_date=date(2026, 6, 1),
+            initial_count=1000,
+            current_count=850,
+            current_average_weight=Decimal("200.00"),
+            current_biomass=Decimal("170.00"),
+        )
+        allocation = _create_allocation(
+            cycle,
+            _create_unit(farm_profile, "Bassin récolte", "3.00"),
+            1000,
+            850,
+            "170.00",
+        )
+        _create_cycle_log(
+            cycle=cycle,
+            allocation=allocation,
+            log_date=date(2026, 7, 15),
+            mortality_count=40,
+            feed_quantity="1.00",
+            average_weight="190.00",
+        )
+        PartialHarvest.objects.create(
+            cycle=cycle,
+            cycle_unit_allocation=allocation,
+            harvest_date=date(2026, 7, 18),
+            count_harvested=100,
+            average_weight_g=Decimal("190.00"),
+            total_weight_kg=Decimal("19.00"),
+        )
+        PartialHarvest.objects.create(
+            cycle=cycle,
+            cycle_unit_allocation=allocation,
+            harvest_date=date(2026, 7, 25),
+            count_harvested=50,
+            average_weight_g=Decimal("200.00"),
+            total_weight_kg=Decimal("10.00"),
+        )
+
+        payload = ReportService._build_payload(
+            farm_profile=farm_profile,
+            report_type="weekly",
+            period_start=date(2026, 7, 13),
+            period_end=date(2026, 7, 19),
+            scope_type="cycle",
+            cycle_id=str(cycle.id),
+        )
+
+        assert payload["summary"]["estimated_current_fish_count"] == 860
+        assert payload["summary"]["total_mortality_count"] == 40
     def test_custom_unit_cycle_duration_is_used_for_cost_progress(self):
         today = date.today()
         farm_profile = FarmProfileFactory()

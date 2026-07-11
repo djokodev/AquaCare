@@ -333,6 +333,7 @@ class TestReportServicePayloadAndPdfTemplate:
         assert "Saisie du jour" in html
         assert "Non renseigné" in html
         assert "Symptômes" in html
+        assert "border-left:4px" not in html
         assert "Points blancs" in html
         assert "Médicament utilisé" in html
         assert "Notes" in html
@@ -397,6 +398,7 @@ class TestReportServicePayloadAndPdfTemplate:
                     "sanitary_logs": [
                         {
                             "event_date_display": "25/02/2026",
+                            "resolution_date_display": "27/02/2026",
                             "event_type_display": "Disease",
                             "affected_count": 2,
                             "treatment_applied": "Isolation",
@@ -423,6 +425,8 @@ class TestReportServicePayloadAndPdfTemplate:
         assert "Analyzed period synthesis" not in html  # absent because no cycle section rendered
         assert "Disease" in html
         assert "Maladie" not in html
+        assert "27/02/2026" in html
+        assert "border-left:4px" not in html
 
     def test_pdf_template_uses_scope_report_labels_and_real_svgs(self):
         farm_profile = FarmProfileFactory(farm_name="Ferme SVG")

@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Literal
 
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from ..models import CycleUnitAllocation, ProductionCycle, ProductionReport
@@ -26,6 +27,10 @@ class InvalidReportUnitScopeError(InvalidReportScopeError):
 
 class MissingReportEmailError(ValueError):
     """L'utilisateur n'a pas d'adresse email disponible pour l'envoi du rapport."""
+
+
+class InvalidReportPeriodError(InvalidReportScopeError):
+    """La période demandée n'est pas encore terminée."""
 
 
 @dataclass(frozen=True)
@@ -163,6 +168,10 @@ class ReportApplicationService:
                 command.report_type,
                 command.reference_date,
             )
+            if period_end > timezone.localdate():
+                raise InvalidReportPeriodError(
+                    _("La période demandée doit être entièrement terminée avant de générer le rapport.")
+                )
         scope = command.scope or "cycle"
         cycle_id = command.cycle_id
         cycle_unit_allocation_id = command.cycle_unit_allocation_id
