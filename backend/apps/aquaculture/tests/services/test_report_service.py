@@ -7,6 +7,7 @@ from datetime import date
 import pytest
 from aquaculture.models import CycleUnitAllocation, ProductionReport, ProductionUnit
 from aquaculture.services.report_service import ReportService
+from aquaculture.services.report_visuals import build_donut_svg, build_growth_svg
 from django.core import mail
 from django.core.files.base import ContentFile
 from django.template.loader import render_to_string
@@ -406,3 +407,128 @@ class TestReportServicePayloadAndPdfTemplate:
         assert "Analyzed period synthesis" not in html  # absent because no cycle section rendered
         assert "Disease" in html
         assert "Maladie" not in html
+
+    def test_pdf_template_uses_scope_report_labels_and_real_svgs(self):
+        farm_profile = FarmProfileFactory(farm_name="Ferme SVG")
+        report = _create_report(
+            farm_profile=farm_profile,
+            report_type="weekly",
+            period_start=date(2026, 7, 13),
+            period_end=date(2026, 7, 19),
+        )
+        growth_svg = build_growth_svg([
+            {"label": "Semaine précédente", "value_g": 25},
+            {"label": "Semaine couverte", "value_g": 31},
+        ])
+        donut_svg = build_donut_svg(
+            [{"key": "feed", "amount_fcfa": 45000, "percentage": 56.25},
+             {"key": "fingerlings", "amount_fcfa": 35000, "percentage": 43.75}],
+            center_value="80 000 FCFA",
+            center_label="Coût total",
+        )
+        payload = {
+            "report_meta": {"scope_type": "cycle"},
+            "farm": {"farm_name": farm_profile.farm_name},
+            "summary": {"cycle_count": 1, "total_feed": 0, "total_mortality": 0},
+            "cycle_dashboard": {
+                "estimated_market_value_fcfa": 0,
+                "feed_cost_consumed_fcfa": 0,
+                "time_remaining_days": 0,
+                "direct_production_cost_fcfa": 0,
+            },
+            "growth_chart": {"state": "chart", "points": [], "svg": growth_svg},
+            "cost_breakdown": {"total_fcfa": 80000, "items": [], "svg": donut_svg},
+            "cycles": [],
+        }
+        context = ReportService._build_pdf_context(
+            report=report,
+            payload=payload,
+            generated_at=timezone.localtime(timezone.now()),
+            language_code="fr",
+        )
+        html = render_to_string("aquaculture/report_pdf.html", context)
+
+        assert "Rapport du cycle" in html
+        assert "Portée" not in html
+        assert "<svg" in html
+        assert "<rect" in html
+        assert "<path" in html or "<circle" in html
+        assert "80 000 FCFA" in html
+        assert "Coût total" in html
+
+    def test_pdf_template_distinguishes_zero_from_missing_values(self):
+        farm_profile = FarmProfileFactory(farm_name="Ferme valeurs")
+        report = _create_report(farm_profile=farm_profile)
+        payload = {
+            "farm": {"farm_name": farm_profile.farm_name},
+            "summary": {"cycle_count": 1, "total_feed": 0, "total_mortality": 0},
+            "cycle_dashboard": {
+                "estimated_market_value_fcfa": 0,
+                "feed_cost_consumed_fcfa": None,
+                "time_remaining_days": None,
+                "direct_production_cost_fcfa": 0,
+            },
+            "cycles": [{
+                "cycle": {"cycle_name": "Cycle valeurs", "start_date_display": "25/02/2026", "days_active": 0},
+                "current_metrics": {"current_count": 0, "current_average_weight": None,
+                                     "current_biomass": 0, "fcr": None, "survival_rate": 0},
+                "period_metrics": {"log_count": 0, "total_feed": 0, "total_mortality": 0,
+                                    "average_temperature": None, "average_oxygen": 0, "average_ph": 0},
+                "logs": [], "sanitary_logs": [],
+            }],
+        }
+        context = ReportService._build_pdf_context(
+            report=report,
+            payload=payload,
+            generated_at=timezone.localtime(timezone.now()),
+            language_code="fr",
+        )
+        html = render_to_string("aquaculture/report_pdf.html", context)
+
+        assert "0 FCFA" in html
+        assert "0 kg" in html
+        assert "Non renseigné" in html
+        assert "Non renseigné</div>" in html
+
+    def test_growth_chart_states_cover_weekly_missing_current_and_monthly_chart(self):
+        base_payload = {
+            "cycles": [{"cycle": {"start_date": "2026-07-01", "species": "clarias"}}],
+            "growth_logs": [],
+            "economic_plan": {"fingerlings_cost_fcfa": 0, "feed_cost_consumed_fcfa": 0},
+        }
+
+        no_data = ReportService._enrich_payload(
+            {**base_payload, "growth_logs": []},
+            report_type="weekly",
+            period_end=date(2026, 7, 19),
+        )
+        first_point = ReportService._enrich_payload(
+            {**base_payload, "growth_logs": [{"log_date": "2026-07-15", "average_weight": 25}]},
+            report_type="weekly",
+            period_end=date(2026, 7, 19),
+        )
+        missing_current = ReportService._enrich_payload(
+            {**base_payload, "growth_logs": [{"log_date": "2026-07-06", "average_weight": 25}]},
+            report_type="weekly",
+            period_end=date(2026, 7, 19),
+        )
+        monthly = ReportService._enrich_payload(
+            {
+                **base_payload,
+                "growth_logs": [
+                    {"log_date": "2026-07-01", "average_weight": 20},
+                    {"log_date": "2026-07-08", "average_weight": 25},
+                    {"log_date": "2026-07-15", "average_weight": 30},
+                    {"log_date": "2026-07-29", "average_weight": 35},
+                ],
+            },
+            report_type="monthly",
+            period_end=date(2026, 7, 31),
+        )
+
+        assert no_data["growth_chart"] == {"state": "no_data", "points": [], "svg": ""}
+        assert first_point["growth_chart"]["state"] == "first_point"
+        assert first_point["growth_chart"]["svg"] == ""
+        assert missing_current["growth_chart"]["state"] == "missing_current_week"
+        assert monthly["growth_chart"]["state"] == "chart"
+        assert monthly["growth_chart"]["svg"].count("<rect") == 4

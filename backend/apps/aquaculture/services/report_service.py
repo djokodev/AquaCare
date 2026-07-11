@@ -1804,10 +1804,16 @@ class ReportService(BaseService):
             if language_code == "en"
             else {"previous": "Semaine précédente", "current": "Semaine couverte", "week": "Semaine"}
         )
+        if report_type == "weekly":
+            growth_period_start = period_end - timedelta(days=6)
+        elif report_type == "monthly":
+            growth_period_start = period_end.replace(day=1)
+        else:
+            growth_period_start = start_date
         growth_points = aggregate_growth_points(
             growth_logs,
             report_type,
-            start_date,
+            growth_period_start,
             period_end,
             report_labels,
         )
@@ -1837,7 +1843,12 @@ class ReportService(BaseService):
         if not growth_points:
             growth_state = "no_data"
         elif report_type == "weekly" and len(growth_points) == 1:
-            growth_state = "first_point"
+            current_label = report_labels["current"]
+            growth_state = (
+                "first_point"
+                if growth_points[0]["label"] == current_label
+                else "missing_current_week"
+            )
         elif report_type == "monthly" and len(growth_points) < 2:
             growth_state = "first_point"
         else:
@@ -1850,7 +1861,11 @@ class ReportService(BaseService):
         payload["cost_breakdown"]["svg"] = (
             build_donut_svg(
                 cost_breakdown["items"],
-                center_value=f"{cost_breakdown['total_fcfa']:,.0f} FCFA",
+                center_value=(
+                    f"{cost_breakdown['total_fcfa']:,.0f} FCFA"
+                    if language_code == "en"
+                    else f"{cost_breakdown['total_fcfa']:,.0f} FCFA".replace(",", " ")
+                ),
                 center_label="Total cost" if language_code == "en" else "Coût total",
             )
             if report_type in {"weekly", "monthly"}
@@ -2122,7 +2137,8 @@ class ReportService(BaseService):
         if is_en:
             return {
                 "report_title": "Fish farming production monitoring report",
-                "report_scope": "Scope",
+                "cycle_report": "Cycle report",
+                "unit_report": "Unit report",
                 "period_covered": "Covered period",
                 "cycle_dashboard": "Cycle dashboard",
                 "species": "Species",
@@ -2149,6 +2165,7 @@ class ReportService(BaseService):
                 "promoter": "Promoter",
                 "dashboard_metrics": "Key indicators",
                 "cycle_summary": "Cycle summary",
+                "cycle_details": "Cycle details",
                 "unit_summary": "Unit summary",
                 "comparison_by_unit": "Comparison by unit",
                 "estimated_market_value": "Estimated market value of fish",
@@ -2222,12 +2239,14 @@ class ReportService(BaseService):
                 "growth_first_point": (
                     "First growth data recorded. Comparison will be available after the next weighing."
                 ),
-                "growth_no_data": "No weighing recorded for this period.",
+                "growth_missing_current_week": "No weighing recorded for the analyzed week.",
+                "growth_no_data": "No growth data available.",
             }
 
         return {
             "report_title": "Rapport de suivi de production piscicole",
-            "report_scope": "Portée",
+            "cycle_report": "Rapport du cycle",
+            "unit_report": "Rapport de l'unité",
             "period_covered": "Période couverte",
             "cycle_dashboard": "Tableau de bord du cycle",
             "species": "Espèce",
@@ -2243,6 +2262,8 @@ class ReportService(BaseService):
             "production_unit_details": "Détail des unités de production",
             "dashboard": "Tableau de bord",
             "status_and_period_activity": "État et activité de la période",
+            "current_status": "État actuel",
+            "period_activity": "Activité de la période",
             "active_events": "événement(s) sanitaire(s) actif(s)",
             "affected_fish_short": "poissons affectés",
             "no_active_sanitary_event": "Aucun événement sanitaire actif",
@@ -2254,6 +2275,7 @@ class ReportService(BaseService):
             "promoter": "Promoteur",
             "dashboard_metrics": "Indicateurs clés du tableau de bord",
             "cycle_summary": "Résumé du cycle",
+            "cycle_details": "Détail du cycle",
             "unit_summary": "Résumé de l'unité",
             "comparison_by_unit": "Comparaison par unité",
             "estimated_market_value": "Valeur marchande estimée des poissons",
@@ -2327,7 +2349,8 @@ class ReportService(BaseService):
             "growth_first_point": (
                 "Première donnée de croissance enregistrée. La comparaison sera disponible après la prochaine pesée."
             ),
-            "growth_no_data": "Aucune pesée enregistrée pour cette période.",
+            "growth_missing_current_week": "Aucune pesée enregistrée pour la semaine analysée.",
+            "growth_no_data": "Aucune donnée de croissance disponible.",
         }
 
     @staticmethod

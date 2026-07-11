@@ -273,7 +273,8 @@ def generate_weekly_report_drafts_task():
     """
     Dispatch one task per active farm for weekly reports (parallelised).
     """
-    reference = timezone.localdate() - timedelta(days=1)
+    current = timezone.localdate()
+    reference = current - timedelta(days=current.weekday() + 1)
     start, end = ReportService.build_period_bounds('weekly', reference)
     count = _dispatch_per_farm('weekly', start, end)
     logger.info("Weekly report tasks dispatched for %s farms (ref=%s)", count, reference)

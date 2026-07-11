@@ -251,6 +251,22 @@ class TestDispatchPerFarm:
 
 
 class TestDraftDispatchTasks:
+    def test_weekly_scheduler_uses_the_completed_week(self):
+        with patch("aquaculture.tasks.timezone.localdate", return_value=date(2026, 7, 20)), patch(
+            "aquaculture.tasks._dispatch_per_farm", return_value=0
+        ) as mock_dispatch:
+            generate_weekly_report_drafts_task()
+
+        mock_dispatch.assert_called_once_with("weekly", date(2026, 7, 13), date(2026, 7, 19))
+
+    def test_monthly_scheduler_uses_the_completed_month(self):
+        with patch("aquaculture.tasks.timezone.localdate", return_value=date(2026, 3, 1)), patch(
+            "aquaculture.tasks._dispatch_per_farm", return_value=0
+        ) as mock_dispatch:
+            generate_monthly_report_drafts_task()
+
+        mock_dispatch.assert_called_once_with("monthly", date(2026, 2, 1), date(2026, 2, 28))
+
     @pytest.mark.parametrize(
         ('task_func', 'report_type', 'expected_prefix'),
         [

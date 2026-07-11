@@ -105,7 +105,8 @@ def build_growth_svg(points: list[dict], width: int = 520, height: int = 220) ->
             f'<text x="{label_x:.1f}" y="{max(y - 4, 12):.1f}" text-anchor="middle">{point["value_g"]:.1f}</text>'
         )
     return (
-        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}" role="img">'
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
+        f'viewBox="0 0 {width} {height}" role="img">'
         f'<line x1="{left}" y1="{height - bottom}" x2="{width - 20}" y2="{height - bottom}" stroke="#64748b"/>'
         f'<line x1="{left}" y1="20" x2="{left}" y2="{height - bottom}" stroke="#64748b"/>'
         f'<text x="12" y="24" font-size="10">g</text>{"".join(bars)}{"".join(labels)}</svg>'
@@ -135,7 +136,9 @@ def build_donut_svg(
     total = sum(_safe(item.get("amount_fcfa")) for item in items)
     if total <= 0 or not items:
         return ""
-    cx, cy, radius, stroke = 100, 110, 66, 28
+    cx, cy = width / 2, height / 2
+    radius = min(width, height) * 0.3
+    stroke = min(width, height) * 0.13
     colors = ["#059669", "#0f766e", "#94a3b8"]
     if len(items) == 1:
         paths = [f'<circle cx="{cx}" cy="{cy}" r="{radius}" fill="none" stroke="{colors[0]}" stroke-width="{stroke}"/>']
@@ -161,6 +164,7 @@ def build_donut_svg(
         else ""
     )
     return (
-        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}" role="img">'
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
+        f'viewBox="0 0 {width} {height}" role="img">'
         f'{"".join(paths)}<circle cx="{cx}" cy="{cy}" r="45" fill="white"/>{center_text}</svg>'
     )
