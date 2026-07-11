@@ -10,6 +10,8 @@ from aquaculture.models import (
     ProductionUnit,
     SanitaryLog,
 )
+from aquaculture.services.production_unit_stock_snapshot_service import ProductionUnitStockSnapshotService
+from aquaculture.services.report_fcr_service import ReportFcrService
 from aquaculture.services.report_service import ReportService
 from aquaculture.services.report_visuals import aggregate_growth_points
 
@@ -83,6 +85,46 @@ def _create_sanitary_log(
 
 @pytest.mark.django_db
 class TestUnitCycleAwareReportPayloads:
+    def test_unit_daily_report_separates_period_logs_from_cumulative_summary(self):
+        farm_profile = FarmProfileFactory()
+        cycle = ProductionCycleFactory(farm_profile=farm_profile, status="active")
+        allocation = _create_allocation(
+            cycle,
+            _create_unit(farm_profile, "Bassin période", "3.00"),
+            1000,
+            990,
+            "99.00",
+        )
+        for log_date, feed, mortality in (
+            (date(2026, 7, 1), "1.00", 2),
+            (date(2026, 7, 5), "2.00", 3),
+            (date(2026, 7, 12), "3.00", 4),
+            (date(2026, 7, 19), "4.00", 1),
+        ):
+            _create_cycle_log(
+                cycle=cycle,
+                allocation=allocation,
+                log_date=log_date,
+                mortality_count=mortality,
+                feed_quantity=feed,
+                average_weight="100.00",
+            )
+
+        payload = ReportService._build_payload(
+            farm_profile=farm_profile,
+            report_type="daily",
+            period_start=date(2026, 7, 19),
+            period_end=date(2026, 7, 19),
+            scope_type="unit",
+            scope_object_id=str(allocation.id),
+        )
+        section = payload["cycles"][0]
+
+        assert payload["summary"]["total_feed_consumed_kg"] == 10.0
+        assert payload["summary"]["total_mortality_count"] == 10
+        assert len(section["logs"]) == 1
+        assert section["logs"][0]["log_date"] == "2026-07-19"
+        assert section["period_metrics"]["total_feed"] == 4.0
     def test_historical_stock_snapshot_ignores_mutable_future_count(self):
         farm_profile = FarmProfileFactory()
         cycle = ProductionCycleFactory(
@@ -204,6 +246,55 @@ class TestUnitCycleAwareReportPayloads:
 
         assert payload["summary"]["estimated_current_fish_count"] == 860
         assert payload["summary"]["total_mortality_count"] == 40
+        assert payload["cycles"][0]["current_metrics"]["survival_rate"] == 96.0
+        assert payload["cycles"][0]["cumulative_metrics"]["stock_remaining_rate_pct"] == 86.0
+
+    def test_biological_survival_is_not_reduced_by_final_harvest(self):
+        farm_profile = FarmProfileFactory()
+        cycle = ProductionCycleFactory(
+            farm_profile=farm_profile,
+            status="harvested",
+            initial_count=1000,
+            current_count=0,
+            current_biomass=Decimal("0.00"),
+        )
+        allocation = _create_allocation(
+            cycle,
+            _create_unit(farm_profile, "Bassin final", "3.00"),
+            1000,
+            0,
+            "0.00",
+        )
+        allocation.status = CycleUnitAllocation.STATUS_HARVESTED
+        allocation.final_harvest_date = date(2026, 7, 19)
+        allocation.final_fish_count = 1000
+        allocation.final_biomass_kg = Decimal("100.00")
+        allocation.save(update_fields=["status", "final_harvest_date", "final_fish_count", "final_biomass_kg"])
+
+        snapshot = ProductionUnitStockSnapshotService.build_as_of(
+            allocation=allocation,
+            as_of_date=date(2026, 7, 19),
+        )
+
+        assert snapshot["estimated_current_fish_count"] == 0
+        assert snapshot["mortality_rate_pct"] == 0
+        assert snapshot["biological_survival_rate_pct"] == 100
+        assert snapshot["stock_remaining_rate_pct"] == 0
+
+    def test_report_fcr_uses_harvested_biomass_and_returns_none_when_missing(self):
+        assert ReportFcrService.calculate(
+            feed_consumed_kg=Decimal("120"),
+            initial_biomass_kg=Decimal("50"),
+            current_biomass_kg=Decimal("100"),
+            harvested_biomass_kg=Decimal("50"),
+        ) == 1.2
+        assert ReportFcrService.calculate(
+            feed_consumed_kg=Decimal("120"),
+            initial_biomass_kg=Decimal("50"),
+            current_biomass_kg=Decimal("100"),
+            harvested_biomass_kg=None,
+            harvest_data_complete=False,
+        ) is None
     def test_custom_unit_cycle_duration_is_used_for_cost_progress(self):
         today = date.today()
         farm_profile = FarmProfileFactory()
@@ -531,8 +622,10 @@ class TestUnitCycleAwareReportPayloads:
         assert summary["units_missing_today_log_count"] == 1
         assert section["current_metrics"]["current_count"] == 895
         assert section["current_metrics"]["total_feed_consumed"] == 10.0
-        assert section["logs"][0]["log_date"] == yesterday.isoformat()
-        assert section["sanitary_logs"][0]["event_date"] == yesterday.isoformat()
+        assert section["logs"] == []
+        assert section["period_metrics"]["log_count"] == 0
+        assert section["active_sanitary_logs"][0]["event_date"] == yesterday.isoformat()
+        assert section["sanitary_logs"] == []
 
     def test_cycle_without_allocations_remains_stable(self):
         today = date.today()
@@ -579,6 +672,7 @@ class TestUnitCycleAwareReportPayloads:
         assert payload["summary"]["initial_fish_count"] == 500
         assert payload["summary"]["estimated_current_fish_count"] == 490
         assert payload["summary"]["total_mortality"] == 10
+        assert payload["cycles"][0]["current_metrics"]["survival_rate"] == 98.0
         assert payload["summary"]["total_feed"] == 5.0
         assert payload["summary"]["active_sanitary_events_count"] == 1
         assert len(payload["cycles"]) == 1

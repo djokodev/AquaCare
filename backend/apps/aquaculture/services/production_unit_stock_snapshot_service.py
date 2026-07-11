@@ -32,6 +32,7 @@ class ProductionUnitStockSnapshotService:
             else list(allocation.unit_partial_harvests.filter(harvest_date__lte=as_of_date))
         )
         harvests = [harvest for harvest in harvests if harvest.harvest_date <= as_of_date]
+        harvest_data_complete = all(harvest.total_weight_kg is not None for harvest in harvests)
 
         mortality_count = sum(int(log.mortality_count or 0) for log in logs)
         harvested_fish_count = sum(int(harvest.count_harvested or 0) for harvest in harvests)
@@ -45,6 +46,23 @@ class ProductionUnitStockSnapshotService:
             and allocation.final_harvest_date is not None
             and allocation.final_harvest_date <= as_of_date
         )
+        final_harvested_fish_count = (
+            int(
+                allocation.final_fish_count
+                if allocation.final_fish_count is not None
+                else remaining_before_final_harvest
+            )
+            if final_harvest_applied
+            else 0
+        )
+        harvested_biomass_kg = sum(
+            (Decimal(str(harvest.total_weight_kg or 0)) for harvest in harvests),
+            Decimal("0"),
+        )
+        if final_harvest_applied:
+            harvested_biomass_kg += Decimal(str(allocation.final_biomass_kg or 0))
+            harvest_data_complete = harvest_data_complete and allocation.final_biomass_kg is not None
+        harvested_fish_count += final_harvested_fish_count
         estimated_current_fish_count = 0 if final_harvest_applied else remaining_before_final_harvest
         mortality_rate_pct = (
             (Decimal(mortality_count) / Decimal(initial_fish_count) * Decimal("100")).quantize(Decimal("0.01"))
@@ -58,13 +76,36 @@ class ProductionUnitStockSnapshotService:
             "harvested_fish_count": harvested_fish_count,
             "estimated_current_fish_count": estimated_current_fish_count,
             "mortality_rate_pct": mortality_rate_pct,
+            "biological_survival_rate_pct": (
+                (
+                    Decimal(initial_fish_count - mortality_count)
+                    / Decimal(initial_fish_count)
+                    * Decimal("100")
+                ).quantize(
+                    Decimal("0.01")
+                )
+                if initial_fish_count
+                else None
+            ),
             "survival_rate_pct": (
+                (
+                    Decimal(initial_fish_count - mortality_count)
+                    / Decimal(initial_fish_count)
+                    * Decimal("100")
+                ).quantize(Decimal("0.01"))
+                if initial_fish_count
+                else None
+            ),
+            "stock_remaining_rate_pct": (
                 (Decimal(estimated_current_fish_count) / Decimal(initial_fish_count) * Decimal("100")).quantize(
                     Decimal("0.01")
                 )
                 if initial_fish_count
                 else None
             ),
+            "harvested_biomass_kg": harvested_biomass_kg.quantize(Decimal("0.01")),
+            "final_harvested_fish_count": final_harvested_fish_count,
+            "harvest_data_complete": harvest_data_complete,
             "calculated_as_of": as_of_date.isoformat(),
             "source_event_counts": {
                 "mortality_logs": len(logs),

@@ -1,6 +1,6 @@
 # Cycle report data lineage
 
-Version: `1.0.0`
+Version: `1.1.0`
 
 This document defines the backend sources used by cycle and unit PDF reports. A
 report is a historical snapshot: values that describe the stock, biomass,
@@ -32,7 +32,8 @@ the mutable current dashboard state.
 | Initial fish | `summary.initial_fish_count`, `cycles[].unit.initial_fish_count` | Allocation/cycle initial state | `CycleUnitAllocation.initial_fish_count` or `ProductionCycle.initial_count` | `STATIC` | Direct field | — | Cycle field | stock tests |
 | Mortality cumulative | `summary.total_mortality_count`, `cycles[].cumulative_metrics.total_mortality` | Daily logs | `CycleLog.mortality_count` through `period_end` | `CUMULATIVE_TO_PERIOD_END` | Sum of mortality logs | Legacy stored summary only when no logs | No invented history | stock tests |
 | Fish remaining | `summary.estimated_current_fish_count`, `current_metrics.current_count` | Historical stock snapshot | `ProductionUnitStockSnapshotService` | `AS_OF_PERIOD_END` | Initial − mortality − partial harvest; final harvest makes stock zero | Legacy cycle uses stored `current_count` when no reconstructible event exists | Explicitly marked in metadata | historical stock tests |
-| Survival | `current_metrics.survival_rate` | Historical stock snapshot | `ProductionUnitStockSnapshotService` | `AS_OF_PERIOD_END` | Remaining stock / initial × 100 | `None` if initial is zero | Stored current state only in legacy path | stock tests |
+| Biological survival | `current_metrics.survival_rate`, `calculation_metadata.unit_calculations[].biological_survival_rate_pct` | Historical stock snapshot | `ProductionUnitStockSnapshotService` | `AS_OF_PERIOD_END` | (Initial − mortality) / initial × 100; live harvests do not reduce it | `None` if initial is zero or legacy history is unavailable | Explicit legacy fallback only when no history | stock/harvest tests |
+| Remaining stock rate | `calculation_metadata.unit_calculations[].stock_remaining_rate_pct` | Historical stock snapshot | `ProductionUnitStockSnapshotService` | `AS_OF_PERIOD_END` | Remaining stock / initial × 100 | `None` if initial is zero | Explicit legacy fallback | stock/harvest tests |
 | Mortality rate | `summary.mortality_rate_pct` | Historical mortality snapshot | Report aggregation / stock snapshot | `AS_OF_PERIOD_END` | Mortality / initial × 100 | 0 when initial is zero | Stored current state only for legacy no-history path | report service |
 | Feed period | `cycles[].period_metrics.total_feed` | Daily logs in period | `CycleLog.feed_quantity` | `PERIOD_ONLY` | Sum in bounds | 0 | Global legacy logs | report service |
 | Feed cumulative | `summary.total_feed_consumed_kg`, comparison units | Daily logs through end | `CycleLog.feed_quantity` | `CUMULATIVE_TO_PERIOD_END` | Sum through `period_end` | Cycle stored total only when no logs | Global legacy logs | feed aggregation tests |
@@ -48,6 +49,15 @@ the mutable current dashboard state.
 | Growth SVG | `growth_chart.svg` | Growth points | `build_growth_svg()` | `PERIOD_ONLY` | One bar per measured week | Empty SVG outside chart state | — | visual tests |
 | Cost SVG | `cost_breakdown.svg` | Cost items | `build_donut_svg()` | `CUMULATIVE_TO_PERIOD_END` | Escaped center total and translated label | Empty when total is zero | — | visual tests |
 | Unit comparison | `units[]` | Unit section snapshots | `ReportService._build_unit_comparison_snapshot()` | Mixed: as-of/cumulative | Reuses section values | Empty for legacy cycle | No duplicate global event | aggregation tests |
+| Fish harvested | `calculation_metadata.unit_calculations[].harvested_fish_count` | Partial/final harvest actions | `PartialHarvest`, `CycleUnitAllocation.final_fish_count` | `CUMULATIVE_TO_PERIOD_END` | Sum of live harvest actions | 0 when no harvest | Legacy partial harvests supported | harvest tests |
+| Harvested biomass | `calculation_metadata.unit_calculations[].harvested_biomass_kg` | Harvest action weights | `PartialHarvest.total_weight_kg`, final allocation biomass | `CUMULATIVE_TO_PERIOD_END` | Sum of known harvest biomass | `None` FCR when a harvest weight is missing | No invented biomass | FCR tests |
+| Unit FCR | `current_metrics.fcr`, `calculation_metadata.unit_calculations[].fcr` | Unit feed and biomass snapshot | `ReportFcrService` | `CUMULATIVE_TO_PERIOD_END` | Feed / (current biomass + harvested biomass − initial biomass) | `None` when gain or harvest data is insufficient | No `cycle.fcr` fallback | FCR tests |
+| Cycle FCR | `cycle_dashboard.fcr` | Aggregated feed and biomass snapshots | `ReportFcrService` | `CUMULATIVE_TO_PERIOD_END` | Total feed / total biomass gain | `None` if any required unit data is missing | Legacy uses same formula when reconstructible | FCR tests |
+| Period log count/feed/mortality | `cycles[].period_metrics.*` | Logs bounded by period | `CycleLog` | `PERIOD_ONLY` | Count/sum/averages in bounds | Empty/zero | Global legacy logs | unit-period tests |
+| Weekly summary | `cycles[].weekly_activity` | Period logs | `ReportService._build_weekly_activity()` | `PERIOD_ONLY` | Weekly count/sums/averages | Empty | Global legacy logs | monthly tests |
+| Observations | `cycles[].logs[].observations` | Daily log | `CycleLog.observations` | `PERIOD_ONLY` | Direct field | Empty label | Direct field | template tests |
+| Symptoms/treatment/medication/dosage/duration | `*.sanitary_logs[]` | Sanitary event | `SanitaryLog` fields | `PERIOD_ONLY` | Direct fields | Empty label | Nullable legacy fields | sanitary tests |
+| Unit type/dimension | `cycles[].unit.production_unit_type_display`, `production_unit_dimension` | Production unit | `ProductionUnit` | `STATIC` | Localized choice and display dimension | Empty label | No unit for legacy | unit tests |
 | Period sanitary events | `cycles[].sanitary_logs` | Sanitary logs created/resolved in bounds | `SanitaryLog.event_date`, `resolution_date` | `PERIOD_ONLY` | Event date or resolution date in period | Empty message | Global legacy events included separately | sanitary tests |
 | Active sanitary events | `active_sanitary_logs`, active counts | Sanitary logs at period end | `_is_sanitary_event_active_as_of()` | `AS_OF_PERIOD_END` | Event before end and unresolved, or resolution after end | Resolved legacy row stays resolved | Global null allocation separated | sanitary tests |
 | Resolution date | `resolution_date`, `resolution_date_display` | Sanitary log | `SanitaryLog.resolution_date` | `STATIC` | Direct field/display | Empty label | Nullable legacy field | sanitary/template tests |
@@ -66,10 +76,10 @@ partial harvests from global records. If no reconstructible event exists, it
 uses `ProductionCycle.current_count` as a documented legacy fallback and marks
 the strategy in `calculation_metadata`.
 
-Survival in this report means the proportion of fish remaining in the stock at
-`period_end`; partial harvests are reported separately and are not counted as
-mortality. This is a stock-survival indicator, not a biological survival rate
-including fish already sold.
+Survival in this report means biological survival: the proportion of the
+initial population that is not recorded as dead at `period_end`. Live partial
+and final harvests do not reduce survival. The remaining stock percentage is a
+separate metric and is not displayed under the `Survie` label.
 
 ## Known legacy limitations
 

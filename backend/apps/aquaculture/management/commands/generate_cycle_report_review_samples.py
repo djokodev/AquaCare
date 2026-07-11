@@ -16,6 +16,7 @@ from accounts.models import User
 from aquaculture.models import (
     CycleLog,
     CycleUnitAllocation,
+    PartialHarvest,
     ProductionCycle,
     ProductionUnit,
     SanitaryLog,
@@ -211,9 +212,9 @@ class Command(BaseCommand):
                     cycle=cycle,
                     production_unit=unit,
                     initial_fish_count=1000,
-                    current_fish_count=920,
+                    current_fish_count=820,
                     initial_biomass_kg=Decimal("20.00"),
-                    current_biomass_kg=Decimal("202.40"),
+                    current_biomass_kg=Decimal("180.40"),
                 )
             )
 
@@ -247,6 +248,14 @@ class Command(BaseCommand):
                     )
                 )
             CycleLog.objects.bulk_create(logs)
+            PartialHarvest.objects.create(
+                cycle=cycle,
+                cycle_unit_allocation=allocation,
+                harvest_date=date(2026, 7, 18),
+                count_harvested=100,
+                average_weight_g=Decimal("190.00"),
+                total_weight_kg=Decimal("19.00"),
+            )
 
         SanitaryLog.objects.create(
             cycle=cycle,
@@ -269,11 +278,12 @@ class Command(BaseCommand):
         )
         SanitaryLog.objects.create(
             cycle=cycle,
-            event_date=date(2026, 7, 16),
+            event_date=date(2026, 7, 14),
+            resolution_date=date(2026, 7, 17),
             event_type="water_quality",
             symptoms="Eau trouble",
             affected_count=5,
-            resolved=False,
+            resolved=True,
         )
 
         legacy_cycle = ProductionCycle.objects.create(

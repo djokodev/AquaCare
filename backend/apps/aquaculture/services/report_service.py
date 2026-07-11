@@ -44,6 +44,7 @@ from .cycle_feed_service import CycleFeedService
 from .farm_production_plan_service import FarmProductionPlanService
 from .production_unit_dashboard_service import ProductionUnitDashboardService
 from .production_unit_stock_snapshot_service import ProductionUnitStockSnapshotService
+from .report_fcr_service import ReportFcrService
 from .report_visuals import (
     aggregate_growth_points,
     build_cost_breakdown,
@@ -688,6 +689,13 @@ class ReportService(BaseService):
         )
         feed_consumed_kg = ReportService._to_float(total_feed) or 0.0
         feed_cost_consumed_fcfa = round(feed_consumed_kg * feed_price, 2)
+        unit_fcr = ReportFcrService.calculate(
+            feed_consumed_kg=feed_consumed_kg,
+            initial_biomass_kg=ReportService._to_float(allocation.initial_biomass_kg),
+            current_biomass_kg=ReportService._to_float(estimated_biomass),
+            harvested_biomass_kg=ReportService._to_float(stock_snapshot["harvested_biomass_kg"]),
+            harvest_data_complete=stock_snapshot["harvest_data_complete"],
+        )
         unit_name = allocation.production_unit.name
         planned_price = ReportService._to_float(allocation.cycle.planned_selling_price_per_kg_fcfa)
         effective_selling_price = planned_price or ReportService._default_selling_price_for_species(
@@ -739,11 +747,11 @@ class ReportService(BaseService):
                 "current_biomass": ReportService._to_float(estimated_biomass),
                 "total_feed_consumed": ReportService._to_float(total_feed),
                 "survival_rate": (
-                    ReportService._to_float(stock_snapshot.get("survival_rate_pct"))
-                    if ReportService._to_float(stock_snapshot.get("survival_rate_pct")) is not None
+                    ReportService._to_float(stock_snapshot.get("biological_survival_rate_pct"))
+                    if ReportService._to_float(stock_snapshot.get("biological_survival_rate_pct")) is not None
                     else None
                 ),
-                "fcr": ReportService._to_float(cycle.fcr),
+                "fcr": unit_fcr,
                 "daily_growth_rate": None,
                 "specific_growth_rate": None,
                 "average_daily_feed": None,
@@ -752,6 +760,13 @@ class ReportService(BaseService):
             "cumulative_metrics": {
                 "total_feed": feed_consumed_kg,
                 "total_mortality": stock_snapshot["mortality_count"],
+                "harvested_fish_count": stock_snapshot["harvested_fish_count"],
+                "harvested_biomass_kg": ReportService._to_float(stock_snapshot["harvested_biomass_kg"]),
+                "biological_survival_rate_pct": ReportService._to_float(
+                    stock_snapshot["biological_survival_rate_pct"]
+                ),
+                "stock_remaining_rate_pct": ReportService._to_float(stock_snapshot["stock_remaining_rate_pct"]),
+                "fcr": unit_fcr,
             },
             "active_sanitary_events_count": sum(
                 1
@@ -1138,6 +1153,25 @@ class ReportService(BaseService):
             current_biomass_val = ReportService._to_float(cycle.current_biomass) or 0.0
             if latest_weight is not None:
                 current_biomass_val = round(estimated_current * latest_weight / 1000, 2)
+            harvested_biomass_kg = sum(
+                float(item.total_weight_kg or 0) for item in partial_harvests
+            )
+            if has_completed_final_harvest:
+                harvested_biomass_kg += float(cycle.final_biomass or 0)
+            legacy_reconstructed = bool(cumulative_logs or partial_harvests or has_completed_final_harvest)
+            legacy_survival = (
+                round(((total_initial - total_mortality) / total_initial) * 100, 2)
+                if legacy_reconstructed and total_initial
+                else None
+            )
+            legacy_fcr = ReportFcrService.calculate(
+                feed_consumed_kg=total_feed,
+                initial_biomass_kg=ReportService._to_float(cycle.initial_biomass),
+                current_biomass_kg=current_biomass_val,
+                harvested_biomass_kg=harvested_biomass_kg,
+                harvest_data_complete=all(item.total_weight_kg is not None for item in partial_harvests)
+                and (not has_completed_final_harvest or cycle.final_biomass is not None),
+            ) if legacy_reconstructed else None
             projected_revenue = effective_selling_price * current_biomass_val
             return {
                 "report_meta": {
@@ -1227,6 +1261,9 @@ class ReportService(BaseService):
                             ),
                             "pond_identifier": cycle.pond_identifier,
                             "start_date": cycle.start_date.isoformat(),
+                            "start_date_display": ReportService._format_report_date(
+                                cycle.start_date, ReportService._resolve_language_code(farm_profile.user)
+                            ),
                             "days_active": ReportService._calculate_days_active(cycle, period_end),
                             "planned_cycle_duration_days": cycle.planned_cycle_duration_days,
                         },
@@ -1252,8 +1289,8 @@ class ReportService(BaseService):
                             "current_average_weight": latest_weight,
                             "current_biomass": current_biomass_val,
                             "total_feed_consumed": total_feed,
-                            "survival_rate": ReportService._to_float(cycle.survival_rate),
-                            "fcr": ReportService._to_float(cycle.fcr),
+                            "survival_rate": legacy_survival,
+                            "fcr": legacy_fcr,
                             "daily_growth_rate": ReportService._to_float(
                                 getattr(cycle_metrics, "daily_growth_rate", None)
                             ),
@@ -1554,15 +1591,23 @@ class ReportService(BaseService):
         allocation: CycleUnitAllocation,
     ) -> dict:
         cycle = allocation.cycle
-        daily_logs = list(
+        period_daily_logs = list(
             allocation.daily_logs.filter(
+                log_date__gte=period_start,
                 log_date__lte=period_end,
             ).order_by("-log_date", "-log_time")
         )
-        sanitary_logs = list(
+        cumulative_daily_logs = list(
+            allocation.daily_logs.filter(log_date__lte=period_end).order_by("-log_date", "-log_time")
+        )
+        period_sanitary_logs = list(
             allocation.sanitary_logs.filter(
-                event_date__lte=period_end,
+                Q(event_date__gte=period_start, event_date__lte=period_end)
+                | Q(resolution_date__gte=period_start, resolution_date__lte=period_end),
             ).order_by("-event_date", "-created_at")
+        )
+        cumulative_sanitary_logs = list(
+            allocation.sanitary_logs.filter(event_date__lte=period_end).order_by("-event_date", "-created_at")
         )
         feeding_plans = list(
             cycle.feeding_plans.filter(
@@ -1573,15 +1618,16 @@ class ReportService(BaseService):
         section = ReportService._build_unit_dashboard_section(
             cycle=cycle,
             allocation=allocation,
-            daily_logs=daily_logs,
-            sanitary_logs=sanitary_logs,
+            daily_logs=period_daily_logs,
+            sanitary_logs=period_sanitary_logs,
             feeding_plans=feeding_plans,
             language_code=ReportService._resolve_language_code(farm_profile.user),
             period_start=period_start,
             period_end=period_end,
+            cumulative_daily_logs=cumulative_daily_logs,
+            cumulative_sanitary_logs=cumulative_sanitary_logs,
         )
-        today = timezone.localdate()
-        has_today_log = any(log.log_date == today for log in daily_logs)
+        has_period_end_log = any(log.log_date == period_end for log in period_daily_logs)
         scope_label = ReportService._pick_text(
             ReportService._resolve_language_code(farm_profile.user),
             "Rapport de l’unité",
@@ -1626,31 +1672,33 @@ class ReportService(BaseService):
                 "total_allocations": 1,
                 "initial_fish_count": allocation.initial_fish_count,
                 "estimated_current_fish_count": section["current_metrics"]["current_count"],
-                "total_mortality_count": section["period_metrics"]["total_mortality"],
+                "total_mortality_count": section["cumulative_metrics"]["total_mortality"],
                 "mortality_rate_pct": (
                     round(
-                        (section["period_metrics"]["total_mortality"] / allocation.initial_fish_count) * 100,
+                        (section["cumulative_metrics"]["total_mortality"] / allocation.initial_fish_count) * 100,
                         2,
                     )
                     if allocation.initial_fish_count
                     else 0.0
                 ),
-                "total_feed_consumed_kg": section["period_metrics"]["total_feed"],
+                "total_feed_consumed_kg": section["cumulative_metrics"]["total_feed"],
                 "estimated_current_biomass_kg": section["current_metrics"]["current_biomass"],
-                "units_with_today_log_count": 1 if has_today_log else 0,
-                "units_missing_today_log_count": 0 if has_today_log else 1,
+                "units_with_today_log_count": 1 if has_period_end_log else 0,
+                "units_missing_today_log_count": 0 if has_period_end_log else 1,
                 "active_sanitary_events_count": sum(
-                    1 for item in sanitary_logs if ReportService._is_sanitary_event_active_as_of(item, period_end)
+                    1
+                    for item in cumulative_sanitary_logs
+                    if ReportService._is_sanitary_event_active_as_of(item, period_end)
                 ),
                 "active_sanitary_affected_fish_count": sum(
                     int(item.affected_count or 0)
-                    for item in sanitary_logs
+                    for item in cumulative_sanitary_logs
                     if ReportService._is_sanitary_event_active_as_of(item, period_end)
                 ),
-                "total_log_count": len(daily_logs),
-                "total_sanitary_events": len(sanitary_logs),
-                "total_feed": section["period_metrics"]["total_feed"],
-                "total_mortality": section["period_metrics"]["total_mortality"],
+                "total_log_count": len(period_daily_logs),
+                "total_sanitary_events": len(period_sanitary_logs),
+                "total_feed": section["cumulative_metrics"]["total_feed"],
+                "total_mortality": section["cumulative_metrics"]["total_mortality"],
                 "comparison_units_count": 1,
             },
             "cycles": [section],
@@ -2091,16 +2139,44 @@ class ReportService(BaseService):
             "direct_production_cost_fcfa": direct,
             "total_production_cost_to_date_fcfa": round(direct + other_to_date, 2),
         }
+        total_initial_biomass = sum(
+            float((section.get("unit") or {}).get("initial_biomass_kg") or 0) for section in sections
+        )
+        total_current_biomass = sum(
+            float((section.get("current_metrics") or {}).get("current_biomass") or 0) for section in sections
+        )
+        total_harvested_biomass = sum(
+            float((section.get("cumulative_metrics") or {}).get("harvested_biomass_kg") or 0)
+            for section in sections
+        )
+        payload["cycle_dashboard"]["fcr"] = ReportFcrService.calculate(
+            feed_consumed_kg=(
+                float(global_economic.get("feed_consumed_kg") or 0)
+                or sum(float((section.get("cumulative_metrics") or {}).get("total_feed") or 0) for section in sections)
+            ),
+            initial_biomass_kg=total_initial_biomass,
+            current_biomass_kg=total_current_biomass,
+            harvested_biomass_kg=total_harvested_biomass,
+            harvest_data_complete=all(
+                (section.get("cumulative_metrics") or {}).get("fcr") is not None for section in sections
+            ),
+        )
+        if not all("cumulative_metrics" in section for section in sections):
+            legacy_metrics = (sections[0].get("current_metrics") or {}) if sections else {}
+            payload["cycle_dashboard"]["fcr"] = legacy_metrics.get("fcr")
         payload["cost_breakdown"] = cost_breakdown
         payload["calculation_metadata"] = {
             "period_start": payload.get("report_meta", {}).get("period_start"),
             "period_end": period_end.isoformat(),
             "calculated_as_of": period_end.isoformat(),
-            "data_lineage_version": "1.0.0",
+            "data_lineage_version": "1.1.0",
             "stock_snapshot_strategy": "production_unit_stock_snapshot_as_of_period_end",
+            "survival_strategy": "biological_survival_from_mortality",
+            "stock_remaining_strategy": "initial_minus_mortality_minus_live_harvests",
             "weight_strategy": "latest_valid_weighing_at_or_before_period_end",
             "feed_cost_strategy": "cumulative_cycle_logs_to_period_end",
             "other_costs_strategy": "planned_other_costs_prorated_by_configured_duration",
+            "fcr_strategy": "feed_divided_by_biomass_gain_including_harvests",
             "legacy_fallbacks_used": (
                 ["legacy_current_count"]
                 if not any((section.get("unit") or {}).get("cycle_unit_allocation_id") for section in sections)
@@ -2114,6 +2190,28 @@ class ReportService(BaseService):
             "direct_production_cost_fcfa": direct,
             "total_production_cost_to_date_fcfa": round(direct + other_to_date, 2),
         }
+        payload["calculation_metadata"]["unit_calculations"] = [
+            {
+                "allocation_id": (section.get("unit") or {}).get("cycle_unit_allocation_id"),
+                "initial_fish_count": (section.get("unit") or {}).get("initial_fish_count"),
+                "mortality_count": (section.get("cumulative_metrics") or {}).get("total_mortality"),
+                "harvested_fish_count": (section.get("cumulative_metrics") or {}).get("harvested_fish_count", 0),
+                "remaining_fish_count": (section.get("current_metrics") or {}).get("current_count"),
+                "biological_survival_rate_pct": (section.get("cumulative_metrics") or {}).get(
+                    "biological_survival_rate_pct"
+                ),
+                "stock_remaining_rate_pct": (section.get("cumulative_metrics") or {}).get(
+                    "stock_remaining_rate_pct"
+                ),
+                "feed_consumed_kg": (section.get("cumulative_metrics") or {}).get("total_feed"),
+                "initial_biomass_kg": (section.get("unit") or {}).get("initial_biomass_kg"),
+                "current_biomass_kg": (section.get("current_metrics") or {}).get("current_biomass"),
+                "harvested_biomass_kg": (section.get("cumulative_metrics") or {}).get("harvested_biomass_kg", 0),
+                "fcr": (section.get("cumulative_metrics") or {}).get("fcr"),
+            }
+            for section in sections
+            if (section.get("unit") or {}).get("cycle_unit_allocation_id")
+        ]
         if not growth_points:
             growth_state = "no_data"
         elif report_type == "weekly" and len(growth_points) == 1:
@@ -2430,7 +2528,7 @@ class ReportService(BaseService):
                 "period_feed": "Distributed feed (kg)",
                 "active_sanitary_alerts": "Active sanitary alerts",
                 "global_sanitary_alerts": "General sanitary alerts for the cycle",
-                "global_sanitary_followup": "General sanitary follow-up for the cycle",
+                "global_sanitary_followup": "General sanitary follow-up for the period",
                 "period_sanitary_followup": "Sanitary follow-up for the period",
                 "daily_log_title": "Daily log",
                 "weekly_log_title": "Weekly logs",
@@ -2564,7 +2662,7 @@ class ReportService(BaseService):
             "period_feed": "Aliment distribué (kg)",
             "active_sanitary_alerts": "Alertes sanitaires actives",
             "global_sanitary_alerts": "Alertes sanitaires générales du cycle",
-            "global_sanitary_followup": "Suivi sanitaire général du cycle",
+            "global_sanitary_followup": "Suivi sanitaire général de la période",
             "period_sanitary_followup": "Suivi sanitaire de la période",
             "daily_log_title": "Journal du jour",
             "weekly_log_title": "Journaux de la semaine",
