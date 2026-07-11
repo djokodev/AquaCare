@@ -41,6 +41,11 @@ class Command(BaseCommand):
             default="tmp/report-review/final-source-of-truth",
             help="Directory for PDFs, payloads, manifest and optional PNG pages.",
         )
+        parser.add_argument(
+            "--git-sha",
+            default=None,
+            help="Source commit SHA when the command runs outside the repository checkout.",
+        )
 
     def handle(self, *args, **options):
         if not settings.DEBUG:
@@ -127,9 +132,12 @@ class Command(BaseCommand):
 
         self._render_pngs(output_dir)
         manifest = {
-            "git_sha": self._git_sha(),
+            "git_sha": options.get("git_sha") or self._git_sha(),
             "command": "manage.py generate_cycle_report_review_samples " + " ".join(
-                f"--output-dir {options['output_dir']}" for _ in [0]
+                [
+                    f"--output-dir {options['output_dir']}",
+                    *([f"--git-sha {options['git_sha']}"] if options.get("git_sha") else []),
+                ]
             ),
             "generated_at": timezone.localtime(timezone.now()).isoformat(),
             "database_mode": "temporary/rollback",
