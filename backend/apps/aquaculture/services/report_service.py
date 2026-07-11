@@ -725,7 +725,7 @@ class ReportService(BaseService):
                     if ReportService._to_float(summary.get("mortality_rate_pct")) is not None
                     else None
                 ),
-                "fcr": None,
+                "fcr": ReportService._to_float(cycle.fcr),
                 "daily_growth_rate": None,
                 "specific_growth_rate": None,
                 "average_daily_feed": None,
