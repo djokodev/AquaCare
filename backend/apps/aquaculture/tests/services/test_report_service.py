@@ -328,8 +328,9 @@ class TestReportServicePayloadAndPdfTemplate:
         assert "Tableau de bord du cycle" in html
         assert "Valeur marchande estimée des poissons" in html
         assert "Coût de production direct" in html
-        assert "État et activité de la période" in html
-        assert "Journal du jour" in html
+        assert "État et activité de la période" not in html
+        assert "État actuel" not in html
+        assert "Saisie du jour" in html
         assert "Non renseigné" in html
         assert "Symptômes" in html
         assert "Points blancs" in html
