@@ -9,10 +9,12 @@ Encapsule la logique métier de suivi des achats d'aliments :
 Architecture : Application service conforme DDD/Hexagonal.
   views.py → CycleFeedService.get_feed_status() → QuerySet ORM
 """
+
 from __future__ import annotations
 
 import logging
 import math
+from datetime import date
 from typing import Any, TypedDict
 
 from aquaculture.constants import DEFAULT_EXPECTED_SURVIVAL_RATE_PCT
@@ -72,9 +74,7 @@ class CycleFeedService:
             CycleFeedStatusResult avec tous les compteurs de suivi.
         """
         total_feed_needed_kg = CycleFeedService._compute_total_feed_needed_kg(cycle)
-        total_bags_needed = (
-            math.ceil(total_feed_needed_kg / BAG_WEIGHT_KG) if total_feed_needed_kg else 0
-        )
+        total_bags_needed = math.ceil(total_feed_needed_kg / BAG_WEIGHT_KG) if total_feed_needed_kg else 0
 
         bags_by_product, total_bags_ordered = CycleFeedService._compute_ordered_bags(cycle)
 
@@ -84,14 +84,36 @@ class CycleFeedService:
         bags_remaining = max(0, total_bags_needed - total_bags_ordered)
 
         return {
-            'total_bags_needed': total_bags_needed,
-            'total_feed_needed_kg': round(total_feed_needed_kg, 2),
-            'bags_by_product': list(bags_by_product.values()),
-            'total_bags_ordered': total_bags_ordered,
-            'total_feed_consumed_kg': feed_consumed_kg,
-            'bags_consumed_equivalent': bags_consumed_equivalent,
-            'bags_remaining_to_order': bags_remaining,
+            "total_bags_needed": total_bags_needed,
+            "total_feed_needed_kg": round(total_feed_needed_kg, 2),
+            "bags_by_product": list(bags_by_product.values()),
+            "total_bags_ordered": total_bags_ordered,
+            "total_feed_consumed_kg": feed_consumed_kg,
+            "bags_consumed_equivalent": bags_consumed_equivalent,
+            "bags_remaining_to_order": bags_remaining,
         }
+
+    @staticmethod
+    def get_consumed_cost(
+        cycle: ProductionCycle,
+        *,
+        period_end: date,
+        consumed_kg: float,
+        fallback_price_per_kg: float,
+    ) -> float:
+        """Value consumed feed at the weighted average cost of received stock."""
+        quantity = max(float(consumed_kg or 0), 0)
+        if quantity <= 0:
+            return 0.0
+        entries = cycle.feed_stock_entries.filter(
+            entry_date__lte=period_end,
+            quantity_kg__gt=0,
+            total_cost_fcfa__gt=0,
+        )
+        received_kg = sum(float(entry.quantity_kg) for entry in entries)
+        received_cost = sum(float(entry.total_cost_fcfa) for entry in entries)
+        unit_price = received_cost / received_kg if received_kg > 0 else float(fallback_price_per_kg or 0)
+        return round(max(0.0, quantity * unit_price), 2)
 
     @staticmethod
     def get_feed_phases(cycle: ProductionCycle) -> CycleFeedPhasesResult:
@@ -102,7 +124,7 @@ class CycleFeedService:
         l'appel commerce restent centralisés ici.
         """
         if not cycle.initial_count or not cycle.target_harvest_weight_g:
-            return {'feeding_phases': []}
+            return {"feeding_phases": []}
 
         from commerce.services.cycle_simulation_service import CycleSimulationService  # noqa: PLC0415
 
@@ -117,7 +139,7 @@ class CycleFeedService:
             fingerlings_cost_fcfa=float(cycle.fingerlings_cost_fcfa or 0),
             other_costs_fcfa=float(cycle.other_operational_costs_fcfa or 0),
         )
-        return {'feeding_phases': sim['feeding_phases']}
+        return {"feeding_phases": sim["feeding_phases"]}
 
     @staticmethod
     def _compute_total_feed_needed_kg(cycle: ProductionCycle) -> float:
@@ -129,12 +151,8 @@ class CycleFeedService:
         2. Fallback sur planned_feed_bags × BAG_WEIGHT_KG (valeur issue de la simulation)
         3. Estimation depuis les paramètres du cycle (FCR conservateur 1.5)
         """
-        result = (
-            FeedingPlan.objects
-            .filter(cycle=cycle)
-            .aggregate(total=Sum('daily_feed_amount'))
-        )
-        daily_total = float(result['total'] or 0)
+        result = FeedingPlan.objects.filter(cycle=cycle).aggregate(total=Sum("daily_feed_amount"))
+        daily_total = float(result["total"] or 0)
         if daily_total > 0:
             return daily_total * DAYS_PER_WEEK
 
@@ -159,6 +177,7 @@ class CycleFeedService:
 
         try:
             from commerce.services.cycle_simulation_service import CycleSimulationService  # noqa: PLC0415
+
             survival_rate = float(cycle.expected_survival_rate_pct or DEFAULT_EXPECTED_SURVIVAL_RATE_PCT) / 100
             cycle_sim = CycleSimulationService.simulate_cycle(
                 species=cycle.species,
@@ -171,9 +190,7 @@ class CycleFeedService:
                 other_costs_fcfa=float(cycle.other_operational_costs_fcfa or 0),
             )
             total_bags = sum(
-                p['quantity_bags']
-                for phase in cycle_sim.get('feeding_phases', [])
-                for p in phase.get('products', [])
+                p["quantity_bags"] for phase in cycle_sim.get("feeding_phases", []) for p in phase.get("products", [])
             )
             return float(total_bags) * BAG_WEIGHT_KG
         except Exception as exc:
@@ -187,23 +204,19 @@ class CycleFeedService:
     @staticmethod
     def _compute_ordered_bags(cycle: ProductionCycle) -> tuple[dict[str, ProductFeedStatus], int]:
         """Agrège les sacs commandés par produit pour ce cycle."""
-        order_items = (
-            OrderItem.objects
-            .filter(order__production_cycle=cycle)
-            .select_related('product')
-        )
+        order_items = OrderItem.objects.filter(order__production_cycle=cycle).select_related("product")
 
         bags_by_product: dict[str, ProductFeedStatus] = {}
         for item in order_items:
             pid = str(item.product.id)
             if pid not in bags_by_product:
                 bags_by_product[pid] = {
-                    'product_id': pid,
-                    'product_name': item.product.name,
-                    'package_weight_kg': float(item.product.package_weight_kg),
-                    'bags_ordered': 0,
+                    "product_id": pid,
+                    "product_name": item.product.name,
+                    "package_weight_kg": float(item.product.package_weight_kg),
+                    "bags_ordered": 0,
                 }
-            bags_by_product[pid]['bags_ordered'] += item.quantity
+            bags_by_product[pid]["bags_ordered"] += item.quantity
 
-        total_bags_ordered = sum(p['bags_ordered'] for p in bags_by_product.values())
+        total_bags_ordered = sum(p["bags_ordered"] for p in bags_by_product.values())
         return bags_by_product, total_bags_ordered

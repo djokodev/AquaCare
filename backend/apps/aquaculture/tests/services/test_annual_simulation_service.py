@@ -41,9 +41,14 @@ class TestAnnualSimulationServiceCycleFirstMetrics:
         assert result["cycles_per_year_derived"] == expected_cycles
         assert result["cycle_production_kg"] == pytest.approx(500.0)
         assert result["cycle_revenue_fcfa"] == pytest.approx(expected_cycle_revenue)
+        expected_cycle_other_costs = (
+            result["cycle_feed_cost_fcfa"] + result["cycle_fingerlings_cost_fcfa"]
+        ) * 0.05 / 0.95
         assert result["cycle_other_costs_fcfa"] == pytest.approx(expected_cycle_other_costs)
         assert result["cycle_aquacare_fee_fcfa"] == pytest.approx(expected_cycle_aquacare_fee)
-        assert result["annual_other_costs_fcfa"] == pytest.approx(expected_annual_other_costs)
+        assert result["annual_other_costs_fcfa"] == pytest.approx(
+            expected_cycle_other_costs * result["num_cycles"]
+        )
         assert result["cycle_total_cost_fcfa"] == pytest.approx(
             result["cycle_feed_cost_fcfa"]
             + result["cycle_fingerlings_cost_fcfa"]

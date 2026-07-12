@@ -34,6 +34,7 @@ from ..services import (
     MissingReportEmailError,
     ReportApplicationService,
     ReportDownloadDecision,
+    UnresolvableLegacyReportScopeError,
     WhatsAppShareCommand,
 )
 from ..throttles import AquacultureReportActionThrottle, AquacultureReportDownloadThrottle
@@ -243,7 +244,10 @@ class ProductionReportViewSet(viewsets.ReadOnlyModelViewSet):
     )
     @action(detail=True, methods=['post'], throttle_classes=[AquacultureReportActionThrottle])
     def regenerate(self, request: Request, pk: str | None = None) -> Response:
-        report = ReportApplicationService.request_report_regeneration(self.get_object())
+        try:
+            report = ReportApplicationService.request_report_regeneration(self.get_object())
+        except (InvalidReportScopeError, UnresolvableLegacyReportScopeError) as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         return self._serialize_report_detail(report, request, status_code=status.HTTP_202_ACCEPTED)
 
     @extend_schema(
@@ -335,7 +339,10 @@ class ProductionReportViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=True, methods=['get'], throttle_classes=[AquacultureReportDownloadThrottle])
     def download(self, request: Request, pk: str | None = None):
         report = self.get_object()
-        decision: ReportDownloadDecision = ReportApplicationService.prepare_report_download(report)
+        try:
+            decision: ReportDownloadDecision = ReportApplicationService.prepare_report_download(report)
+        except (InvalidReportScopeError, UnresolvableLegacyReportScopeError) as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         if decision.status == 'pending':
             return self._pending_response(
                 _("Le rapport est en cours de génération. Réessayez dans quelques instants.")
@@ -351,7 +358,10 @@ class ProductionReportViewSet(viewsets.ReadOnlyModelViewSet):
         except FileNotFoundError:
             report.pdf_file = None
             report.save(update_fields=['pdf_file', 'updated_at'])
-            ReportApplicationService.request_report_regeneration(report)
+            try:
+                ReportApplicationService.request_report_regeneration(report)
+            except (InvalidReportScopeError, UnresolvableLegacyReportScopeError) as exc:
+                return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
             return self._pending_response(
                 _("Le fichier PDF est introuvable. Régénération lancée, réessayez dans quelques instants.")
             )

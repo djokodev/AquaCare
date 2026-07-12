@@ -53,11 +53,13 @@ from .production_unit_dashboard_service import ProductionUnitDashboardService
 from .report_application_service import (
     GenerateReportCommand,
     InvalidReportCycleScopeError,
+    InvalidReportPeriodError,
     InvalidReportScopeError,
     InvalidReportUnitScopeError,
     MissingReportEmailError,
     ReportApplicationService,
     ReportDownloadDecision,
+    UnresolvableLegacyReportScopeError,
     WhatsAppShareCommand,
 )
 from .report_service import ReportService
@@ -98,11 +100,13 @@ __all__ = [
     'CycleDashboardService',
     'GenerateReportCommand',
     'InvalidReportCycleScopeError',
+    'InvalidReportPeriodError',
     'InvalidReportScopeError',
     'InvalidReportUnitScopeError',
     'MissingReportEmailError',
     'ReportApplicationService',
     'ReportDownloadDecision',
+    'UnresolvableLegacyReportScopeError',
     'ReportService',
     'SanitaryService',
     'SanitaryApplicationService',

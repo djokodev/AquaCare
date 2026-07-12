@@ -168,6 +168,7 @@
   noUnitsInThisCycle: 'No units in this cycle',
   reportDetailTitle: 'Report Details',
   reportHistory: 'Report History',
+  reportPeriodLabel: 'Period',
   generateReport: 'Generate report',
   generateCycleReport: 'Generate cycle report',
   regenerateReport: 'Regenerate report',

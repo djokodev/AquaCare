@@ -1,465 +1,58 @@
+{% load report_format %}
 <!DOCTYPE html>
 <html lang="{{ language_code|default:'fr' }}">
 <head>
   <meta charset="UTF-8" />
   <title>{{ labels.report_title }}</title>
   <style>
-    @page {
-      size: A4;
-      margin: 20mm 14mm;
-    }
-
-    body {
-      font-family: Arial, sans-serif;
-      color: #1e293b;
-      font-size: 12px;
-      line-height: 1.35;
-    }
-
-    h1, h2, h3 {
-      margin: 0 0 8px 0;
-      color: #047857;
-    }
-
-    h1 {
-      font-size: 22px;
-    }
-
-    h2 {
-      font-size: 16px;
-      margin-top: 14px;
-      border-bottom: 1px solid #e5e7eb;
-      padding-bottom: 4px;
-    }
-
-    h3 {
-      font-size: 14px;
-      margin-top: 12px;
-    }
-
-    .header {
-      border: 1px solid #e5e7eb;
-      border-left: 4px solid {{ brand_color }};
-      border-radius: 8px;
-      padding: 12px;
-      margin-bottom: 16px;
-      background: #f8fafc;
-    }
-
-    .grid {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 6px;
-    }
-
-    .grid th,
-    .grid td {
-      border: 1px solid #e5e7eb;
-      padding: 6px;
-      vertical-align: top;
-    }
-
-    .grid th {
-      background: #f1f5f9;
-      text-align: left;
-      font-weight: bold;
-    }
-
-    .pill {
-      display: inline-block;
-      padding: 2px 8px;
-      border-radius: 12px;
-      background: #dcfce7;
-      color: #065f46;
-      font-size: 11px;
-      font-weight: bold;
-    }
-
-    .muted {
-      color: #64748b;
-    }
-
-    .section {
-      margin-bottom: 16px;
-    }
-
-    .details-section {
-      margin-bottom: 16px;
-    }
-
-    .cycle-list {
-      margin-top: 8px;
-    }
-
-    .cycle-block {
-      border: 1px solid #e2e8f0;
-      border-radius: 8px;
-      padding: 10px;
-      margin-bottom: 16px;
-      page-break-before: always;
-    }
-
-    .cycle-block-first {
-      page-break-before: auto;
-    }
-
-    .small {
-      font-size: 11px;
-    }
-
-    .kpi-table {
-      width: 100%;
-      border-collapse: separate;
-      border-spacing: 8px 8px;
-      margin: 8px 0 14px 0;
-    }
-
-    .kpi-cell {
-      width: 50%;
-      border: 1px solid #e5e7eb;
-      border-radius: 12px;
-      padding: 10px;
-      text-align: center;
-      background: #ffffff;
-      vertical-align: top;
-    }
-
-    .kpi-value {
-      font-size: 13px;
-      font-weight: bold;
-      color: #1e293b;
-      margin-bottom: 2px;
-    }
-
-    .kpi-label {
-      font-size: 10px;
-      color: #64748b;
-      line-height: 1.25;
-    }
-
-    .footer {
-      margin-top: 40px;
-      padding-top: 14px;
-      border-top: 1px solid #e5e7eb;
-      font-size: 10px;
-      color: #94a3b8;
-      text-align: center;
-    }
+    @page { size: A4; margin: 16mm 13mm 18mm; @bottom-center { content: "{{ labels.footer }}  |  " counter(page) " / " counter(pages); color:#94a3b8; font-size:9px; } }
+    body { font-family: Arial, sans-serif; color:#1e293b; font-size:11px; line-height:1.3; }
+    h1,h2,h3 { color:#047857; margin:0 0 7px; } h1{font-size:21px;} h2{font-size:15px;border-bottom:1px solid #dbe4e8;padding-bottom:4px;margin-top:14px;} h3{font-size:13px;margin-top:11px;}
+    .logo { display:block; margin:0 auto 10px; max-width:150px; max-height:60px; width:auto; height:auto; }
+    .header { border:1px solid #dbe4e8; padding:11px; margin-bottom:13px; background:#f8fafc; }
+    .pill { display:inline-block; padding:3px 9px; border-radius:12px; background:#dcfce7; color:#065f46; font-size:10px; font-weight:bold; margin:4px 0 8px; }
+    .meta { width:100%; border-collapse:collapse; } .meta td{padding:2px 8px 2px 0;vertical-align:top;} .muted{color:#64748b;} .small{font-size:9px;}
+    .grid { width:100%; border-collapse:collapse; margin-top:5px; page-break-inside:auto; } .grid thead{display:table-header-group;} .grid th,.grid td{border:1px solid #dbe4e8;padding:5px;vertical-align:top;} .grid th{background:#f1f5f9;text-align:left;font-size:10px;} .grid tr{page-break-inside:avoid;}
+    .cards { width:100%; border-collapse:separate; border-spacing:5px; } .card{width:20%;border:1px solid #dbe4e8;padding:7px 4px;text-align:center;vertical-align:top;} .value{font-size:13px;font-weight:bold;} .label{font-size:9px;color:#64748b;margin-top:3px;}
+    .avoid-break{page-break-inside:avoid;} .chart-row{width:100%;border-collapse:separate;border-spacing:8px;} .chart-cell{width:50%;vertical-align:top;border:1px solid #dbe4e8;padding:7px;} .chart-cell svg{display:block;width:100%;height:auto;min-height:150px;} .legend{margin-top:5px;font-size:9px;} .legend span{display:block;margin:2px 0;}
+    .cycle-block{border:1px solid #dbe4e8;padding:9px;margin-top:12px;page-break-inside:avoid;} .cycle-block-break{page-break-before:auto;} .first-cycle-block{page-break-before:auto;}
+    .harvest-note{border-left:3px solid #059669;background:#f0fdf4;padding:6px 9px;margin-top:7px;} .warning{border-left:3px solid #d97706;background:#fffbeb;color:#92400e;padding:6px 9px;margin-top:7px;}
+    .detail-row td{background:#fbfdfe;font-size:10px;line-height:1.45;} .detail-label{font-weight:bold;color:#047857;} .section-break{page-break-before:always;} .cycle-block h3{page-break-after:avoid;}
   </style>
 </head>
 <body>
   {% with scope_type=payload.report_meta.scope_type|default:'cycle' %}
+  {% if logo_data_uri %}<img class="logo" src="{{ logo_data_uri }}" alt="" />{% endif %}
   <div class="header">
     <h1>{{ labels.report_title }}</h1>
-    <div class="pill" style="margin: 6px 0 8px 0;">
-      {{ scope_label|default:labels.report_scope }}
-    </div>
-    <div>
-      <strong>{{ labels.farm }}:</strong> {{ payload.farm.farm_name }} |
-      <strong>{{ labels.report_type }}:</strong> {{ report_type_label }} |
-      <strong>{{ labels.period_analyzed }}:</strong> {{ period_label }}
-    </div>
-    <div class="small muted">
-      {{ labels.generated_on }} {{ generated_at|date:"d/m/Y H:i" }}
-    </div>
-  </div>
-
-  <div class="section">
-    {% if scope_type == 'unit' %}
-      <h2>{{ labels.unit_summary }}</h2>
-    {% else %}
-      <h2>{{ labels.cycle_summary }}</h2>
-    {% endif %}
-    <table class="grid">
-      <tr>
-        {% if scope_type == 'unit' %}
-          <th>{{ labels.report_scope }}</th>
-          <th>{{ labels.initial_fish_count }}</th>
-          <th>{{ labels.estimated_current_fish_count }}</th>
-          <th>{{ labels.cumulative_mortality }}</th>
-          <th>{{ labels.mortality_rate }}</th>
-          <th>{{ labels.feed_consumed }}</th>
-          <th>{{ labels.estimated_current_biomass }}</th>
-          <th>{{ labels.last_average_weight }}</th>
-          <th>{{ labels.last_entry }}</th>
-        {% else %}
-          <th>{{ labels.report_scope }}</th>
-          <th>{{ labels.initial_fish_count }}</th>
-          <th>{{ labels.estimated_current_fish_count }}</th>
-          <th>{{ labels.cumulative_mortality }}</th>
-          <th>{{ labels.mortality_rate }}</th>
-          <th>{{ labels.feed_consumed }}</th>
-          <th>{{ labels.estimated_current_biomass }}</th>
-          <th>{{ labels.units_today }}</th>
-          <th>{{ labels.units_missing_today }}</th>
-          <th>{{ labels.active_sanitary_events_count }}</th>
-        {% endif %}
-      </tr>
-      <tr>
-        {% if scope_type == 'unit' %}
-          <td>{{ payload.summary.scope_name|default:scope_name|default:empty_value_label }}</td>
-          <td>{{ payload.summary.initial_fish_count|default_if_none:empty_value_label }}</td>
-          <td>{{ payload.summary.estimated_current_fish_count|default_if_none:empty_value_label }}</td>
-          <td>{{ payload.summary.total_mortality_count|default_if_none:empty_value_label }}</td>
-          <td>{% if payload.summary.mortality_rate_pct is not None %}{{ payload.summary.mortality_rate_pct }} %{% else %}{{ empty_value_label }}{% endif %}</td>
-          <td>{% if payload.summary.total_feed_consumed_kg is not None %}{{ payload.summary.total_feed_consumed_kg|floatformat:2 }} kg{% else %}{{ empty_value_label }}{% endif %}</td>
-          <td>{% if payload.summary.estimated_current_biomass_kg is not None %}{{ payload.summary.estimated_current_biomass_kg|floatformat:2 }} kg{% else %}{{ empty_value_label }}{% endif %}</td>
-          <td>{% if payload.cycles and payload.cycles.0.current_metrics.current_average_weight is not None %}{{ payload.cycles.0.current_metrics.current_average_weight|floatformat:1 }} g{% else %}{{ empty_value_label }}{% endif %}</td>
-          <td>{% if payload.cycles and payload.cycles.0.logs %}{{ payload.cycles.0.logs.0.log_date }}{% else %}{{ empty_value_label }}{% endif %}</td>
-        {% else %}
-          <td>{{ payload.summary.cycle_name|default:scope_name|default:empty_value_label }}</td>
-          <td>{{ payload.summary.initial_fish_count|default_if_none:empty_value_label }}</td>
-          <td>{{ payload.summary.estimated_current_fish_count|default_if_none:empty_value_label }}</td>
-          <td>{{ payload.summary.total_mortality_count|default_if_none:empty_value_label }}</td>
-          <td>{% if payload.summary.mortality_rate_pct is not None %}{{ payload.summary.mortality_rate_pct }} %{% else %}{{ empty_value_label }}{% endif %}</td>
-          <td>{% if payload.summary.total_feed_consumed_kg is not None %}{{ payload.summary.total_feed_consumed_kg|floatformat:2 }} kg{% else %}{{ empty_value_label }}{% endif %}</td>
-          <td>{% if payload.summary.estimated_current_biomass_kg is not None %}{{ payload.summary.estimated_current_biomass_kg|floatformat:2 }} kg{% else %}{{ empty_value_label }}{% endif %}</td>
-          <td>{{ payload.summary.units_with_today_log_count|default_if_none:0 }}</td>
-          <td>{{ payload.summary.units_missing_today_log_count|default_if_none:0 }}</td>
-          <td>{{ payload.summary.active_sanitary_events_count|default_if_none:0 }}</td>
-        {% endif %}
-      </tr>
-    </table>
+    <div class="pill">{% if scope_type == 'unit' %}{{ labels.unit_report }}{% else %}{{ labels.cycle_report }}{% endif %}</div>
+    <table class="meta"><tr><td><strong>{{ labels.farm }}:</strong> {{ payload.farm.farm_name|default:empty_value_label }}</td><td><strong>{{ labels.report_type }}:</strong> {{ report_type_label }}</td></tr>
+    <tr><td><strong>{{ labels.period_covered }}:</strong> {{ period_label }}</td><td><strong>{{ labels.generated_on }}:</strong> {{ generated_at_display }}</td></tr></table>
   </div>
 
   {% if scope_type != 'unit' %}
-    <div class="section">
-      <h2>{{ labels.comparison_by_unit }}</h2>
-      {% if payload.units %}
-        <table class="grid small">
-          <tr>
-            <th>{{ labels.report_scope }}</th>
-            <th>{{ labels.estimated_current_fish_count }}</th>
-            <th>{{ labels.cumulative_mortality }}</th>
-            <th>{{ labels.feed_consumed }}</th>
-            <th>{{ labels.estimated_current_biomass }}</th>
-            <th>{{ labels.sanitary_events }}</th>
-            <th>{{ labels.last_entry }}</th>
-          </tr>
-          {% for unit in payload.units %}
-            <tr>
-              <td>
-                {{ unit.name|default:empty_value_label }}
-                {% if unit.production_unit_dimension %}
-                  <div class="small muted">{{ unit.production_unit_dimension }}</div>
-                {% endif %}
-              </td>
-              <td>{{ unit.estimated_current_fish_count|default_if_none:empty_value_label }}</td>
-              <td>{{ unit.total_mortality_count|default_if_none:empty_value_label }}</td>
-              <td>{% if unit.total_feed_consumed_kg is not None %}{{ unit.total_feed_consumed_kg|floatformat:2 }} kg{% else %}{{ empty_value_label }}{% endif %}</td>
-              <td>{% if unit.estimated_current_biomass_kg is not None %}{{ unit.estimated_current_biomass_kg|floatformat:2 }} kg{% else %}{{ empty_value_label }}{% endif %}</td>
-              <td>{{ unit.sanitary_status_short|default:empty_value_label }}</td>
-              <td>{{ unit.last_daily_log_date|default:empty_value_label }}</td>
-            </tr>
-          {% endfor %}
-        </table>
-      {% else %}
-        <div class="muted">{{ labels.no_units_in_cycle }}</div>
-      {% endif %}
-    </div>
+  <section class="avoid-break"><h2>{{ labels.cycle_dashboard }}</h2><table class="cards"><tr>
+    <td class="card"><div class="value">{{ payload.cycle_dashboard.estimated_market_value_fcfa|report_measure:"FCFA|0" }}</div><div class="label">{{ labels.estimated_market_value }}</div></td>
+    <td class="card"><div class="value">{{ payload.cycle_dashboard.feed_cost_consumed_fcfa|report_measure:"FCFA|0" }}</div><div class="label">{{ labels.feed_cost_consumed }}</div></td>
+    <td class="card"><div class="value">{% if payload.cycle_dashboard.time_remaining_days is None %}{{ empty_value_label }}{% else %}{{ payload.cycle_dashboard.time_remaining_days }} {{ labels.days_short }}{% endif %}</div><div class="label">{{ labels.time_remaining_cycle }}</div></td>
+    <td class="card"><div class="value">{{ payload.cycle_dashboard.direct_production_cost_fcfa|report_measure:"FCFA|0" }}</div><div class="label">{{ labels.direct_production_cost }}</div></td>
+  </tr></table></section>
   {% endif %}
 
-  <div class="details-section">
-    <h2>{{ labels.details_by_cycle }}</h2>
+  <section class="avoid-break"><h2>{% if scope_type == 'unit' %}{{ labels.unit_summary }}{% else %}{{ labels.cycle_situation_at }} {{ period_end_display }}{% endif %}</h2><table class="grid"><tr><th>{{ labels.species }}</th><th>{{ labels.initial_fish_count }}</th><th>{{ labels.estimated_current_fish_count }}</th><th>{{ labels.cumulative_mortality }}</th><th>{{ labels.mortality_rate }}</th><th>{{ labels.feed_consumed }}</th><th>{{ labels.estimated_current_biomass }}</th></tr>
+  <tr><td>{% if payload.cycles %}{{ payload.cycles.0.cycle.species_display|default:empty_value_label }}{% else %}{{ empty_value_label }}{% endif %}</td><td>{% if payload.summary.initial_fish_count is None %}{{ empty_value_label }}{% else %}{{ payload.summary.initial_fish_count }}{% endif %}</td><td>{% if payload.summary.estimated_current_fish_count is None %}{{ empty_value_label }}{% else %}{{ payload.summary.estimated_current_fish_count }}{% endif %}</td><td>{% if payload.summary.total_mortality_count is None %}{{ empty_value_label }}{% else %}{{ payload.summary.total_mortality_count }}{% endif %}</td><td>{% if payload.summary.mortality_rate_pct is None %}{{ empty_value_label }}{% else %}{{ payload.summary.mortality_rate_pct|floatformat:1 }} %{% endif %}</td><td>{% if payload.summary.total_feed_consumed_kg is not None %}{{ payload.summary.total_feed_consumed_kg|floatformat:2 }} kg{% elif payload.summary.total_feed is not None %}{{ payload.summary.total_feed|floatformat:2 }} kg{% else %}{{ empty_value_label }}{% endif %}</td><td>{% if payload.summary.estimated_current_biomass_kg is None %}{{ empty_value_label }}{% else %}{{ payload.summary.estimated_current_biomass_kg|floatformat:2 }} kg{% endif %}</td></tr></table>{% if payload.summary.feed_history_source_label %}<div class="small muted">{{ labels.feed_history_source }}: {{ payload.summary.feed_history_source_label }} · {{ labels.feed_history_status }}: {{ payload.summary.feed_history_status_label }} · {{ labels.feed_history_logged_total }}: {% if payload.summary.feed_history_logged_total is None %}{{ empty_value_label }}{% else %}{{ payload.summary.feed_history_logged_total|floatformat:2 }} kg{% endif %} · {{ labels.feed_history_stored_total }}: {% if payload.summary.feed_history_stored_total is None %}{{ empty_value_label }}{% else %}{{ payload.summary.feed_history_stored_total|floatformat:2 }} kg{% endif %}</div>{% endif %}{% if payload.summary.feed_history_warning %}<div class="warning">{{ labels.incomplete_feed_history }}</div>{% endif %}{% if scope_type != 'unit' and payload.summary.total_harvested_fish_count %}<div class="harvest-note"><strong>{{ labels.harvested_since_cycle_start }}</strong><br/>{{ payload.summary.total_harvested_fish_count }} {{ labels.harvested_fish }}, {{ labels.harvest_weight_connector }} {{ payload.summary.total_harvested_biomass_kg|floatformat:2 }} kg</div>{% endif %}</section>
 
-    {% if payload.cycles %}
-      <div class="cycle-list">
-      {% for section in payload.cycles %}
-        <div class="cycle-block{% if forloop.first %} cycle-block-first{% endif %}">
-          <h3>
-            {% if section.unit.production_unit_name %}
-              {{ section.unit.production_unit_name }}
-            {% else %}
-              {{ section.cycle.cycle_name }}
-            {% endif %}
-            <span class="pill">{{ section.cycle.species_display }}</span>
-          </h3>
-          <div class="small muted">
-            {% if section.unit.production_unit_type_display %}
-              {{ section.unit.production_unit_type_display }} |
-            {% endif %}
-            {{ labels.started_on }} {{ section.cycle.start_date }} |
-            {{ labels.active_days }}: {{ section.cycle.days_active }}
-          </div>
+  {% if scope_type != 'unit' and report.report_type != 'daily' %}<section class="avoid-break"><h2>{{ labels.growth_chart_title }}</h2>{% if payload.growth_chart.state == 'chart' %}<table class="chart-row"><tr><td class="chart-cell">{{ payload.growth_chart.svg|safe }}</td><td class="chart-cell"><strong>{{ labels.weight_axis }}</strong><div class="legend">{% for point in payload.growth_chart.points %}<span>{{ point.legend_label|default:point.label }}: {{ point.value_g|floatformat:1 }} g</span>{% endfor %}</div></td></tr></table>{% elif payload.growth_chart.state == 'first_point' %}<div class="muted">{{ labels.growth_first_point }} {% if payload.growth_chart.points %}{{ payload.growth_chart.points.0.value_g|floatformat:1 }} g.{% endif %}</div>{% elif payload.growth_chart.state == 'missing_current_week' %}<div class="muted">{{ labels.growth_missing_current_week }}</div>{% else %}<div class="muted">{{ labels.growth_no_data }}</div>{% endif %}</section>{% endif %}
+  {% if scope_type != 'unit' and report.report_type != 'daily' %}<section class="avoid-break"><h2>{{ labels.cost_breakdown_title }}</h2>{% if payload.cost_breakdown.total_fcfa > 0 %}<table class="chart-row"><tr><td class="chart-cell">{{ payload.cost_breakdown.svg|safe }}</td><td class="chart-cell"><div class="legend">{% for item in payload.cost_breakdown.items %}<span><i style="display:inline-block;width:9px;height:9px;background:{{ item.color }};margin-right:4px;"></i>{% if item.key == 'feed' %}{{ labels.cost_feed }}{% elif item.key == 'fingerlings' %}{{ labels.cost_fingerlings }}{% else %}{{ labels.cost_other }}{% endif %}: {{ item.amount_fcfa|report_measure:"FCFA|0" }} ({{ item.percentage|report_measure:"%|1" }})</span>{% endfor %}</div></td></tr></table>{% else %}<div class="muted">{{ labels.insufficient_cost_data }}</div>{% endif %}</section>{% endif %}
 
-          <h3>{% if scope_type == 'unit' %}{{ labels.unit_summary }}{% else %}{{ labels.dashboard_metrics }}{% endif %}</h3>
-          <table class="kpi-table">
-            <tr>
-              <td class="kpi-cell">
-                <div class="kpi-value">
-                  {% with market_value=section.dashboard_metrics.estimated_market_value_fcfa fish_count=section.current_metrics.current_count biomass=section.current_metrics.current_biomass %}
-                    {% if market_value %}
-                      {{ market_value|floatformat:0 }} FCFA
-                    {% elif fish_count == 0 and biomass == 0 %}
-                      0 FCFA
-                    {% else %}
-                      {{ empty_value_label }}
-                    {% endif %}
-                  {% endwith %}
-                </div>
-                <div class="kpi-label">{{ labels.estimated_market_value }}</div>
-              </td>
-              <td class="kpi-cell">
-                <div class="kpi-value">
-                  {% if section.dashboard_metrics.feed_cost_consumed_fcfa == 0 %}
-                    0 FCFA
-                  {% elif section.dashboard_metrics.feed_cost_consumed_fcfa %}
-                    {{ section.dashboard_metrics.feed_cost_consumed_fcfa|floatformat:0 }} FCFA
-                  {% else %}
-                    {{ empty_value_label }}
-                  {% endif %}
-                </div>
-                <div class="kpi-label">{{ labels.feed_cost_consumed }}</div>
-              </td>
-            </tr>
-            <tr>
-              <td class="kpi-cell">
-                <div class="kpi-value">
-                  {% if section.dashboard_metrics.time_remaining_days == 0 %}
-                    0 {{ labels.days_short }}
-                  {% elif section.dashboard_metrics.time_remaining_days %}
-                    {{ section.dashboard_metrics.time_remaining_days }} {{ labels.days_short }}
-                  {% else %}
-                    {{ empty_value_label }}
-                  {% endif %}
-                </div>
-                <div class="kpi-label">{{ labels.time_remaining_cycle }}</div>
-              </td>
-              <td class="kpi-cell">
-                <div class="kpi-value">
-                  {% if section.dashboard_metrics.direct_production_cost_fcfa == 0 %}
-                    0 {{ labels.direct_production_cost_unit }}
-                  {% elif section.dashboard_metrics.direct_production_cost_fcfa %}
-                    {{ section.dashboard_metrics.direct_production_cost_fcfa|floatformat:0 }} {{ labels.direct_production_cost_unit }}
-                  {% else %}
-                    {{ empty_value_label }}
-                  {% endif %}
-                </div>
-                <div class="kpi-label">{{ labels.direct_production_cost }}</div>
-              </td>
-            </tr>
-          </table>
+  {% if scope_type != 'unit' and payload.global_sanitary_logs.active_logs %}<section><h2>{{ labels.global_sanitary_alerts }}</h2><table class="grid small"><thead><tr><th>{{ labels.date }}</th><th>{{ labels.resolution_date }}</th><th>{{ labels.event_type }}</th><th>{{ labels.affected_fish }}</th><th>{{ labels.status }}</th></tr></thead><tbody>{% for item in payload.global_sanitary_logs.active_logs %}<tr><td>{{ item.event_date_display|default:empty_value_label }}</td><td>{{ item.resolution_date_display|default:empty_value_label }}</td><td>{{ item.event_type_display|default:empty_value_label }}</td><td>{{ item.affected_count|default:empty_value_label }}</td><td>{{ labels.active }}</td></tr>{% endfor %}</tbody></table></section>{% endif %}{% if scope_type != 'unit' %}<section><h2>{{ labels.global_sanitary_followup }}</h2>{% if payload.global_sanitary_logs.period_logs %}<table class="grid small"><thead><tr><th>{{ labels.date }}</th><th>{{ labels.resolution_date }}</th><th>{{ labels.event_type }}</th><th>{{ labels.affected_fish }}</th><th>{{ labels.status }}</th></tr></thead><tbody>{% for item in payload.global_sanitary_logs.period_logs %}<tr><td>{{ item.event_date_display|default:empty_value_label }}</td><td>{{ item.resolution_date_display|default:empty_value_label }}</td><td>{{ item.event_type_display|default:empty_value_label }}</td><td>{{ item.affected_count|default:empty_value_label }}</td><td>{% if item.active_as_of_period_end %}{{ labels.active }}{% else %}{{ labels.resolved }}{% endif %}</td></tr><tr class="detail-row"><td colspan="5"><span class="detail-label">{{ labels.symptoms }}:</span> {{ item.symptoms|default:empty_value_label }} &nbsp; <span class="detail-label">{{ labels.treatment }}:</span> {{ item.treatment_applied|default:empty_value_label }} &nbsp; <span class="detail-label">{{ labels.medication_used }}:</span> {{ item.medication_used|default:empty_value_label }}<br/><span class="detail-label">{{ labels.dosage }}:</span> {{ item.dosage|default:empty_value_label }} &nbsp; <span class="detail-label">{{ labels.treatment_duration }}:</span> {% if item.treatment_duration_days is None %}{{ empty_value_label }}{% else %}{{ item.treatment_duration_days }} {{ labels.days_short }}{% endif %} &nbsp; <span class="detail-label">{{ labels.notes }}:</span> {{ item.notes|default:empty_value_label }}</td></tr>{% endfor %}</tbody></table>{% else %}<div class="muted">{% if report.report_type == 'daily' %}{{ labels.no_sanitary_logs_daily }}{% elif report.report_type == 'weekly' %}{{ labels.no_sanitary_logs_weekly }}{% else %}{{ labels.no_sanitary_logs_monthly }}{% endif %}</div>{% endif %}</section>{% endif %}{% if scope_type != 'unit' and payload.units %}<section><h2>{{ labels.comparison_by_unit }}</h2><table class="grid"><tr><th>{{ labels.production_unit }}</th><th>{{ labels.estimated_current_fish_count }}</th><th>{{ labels.cumulative_mortality }}</th><th>{{ labels.feed_consumed }}</th><th>{{ labels.estimated_current_biomass }}</th><th>{{ labels.sanitary_events }}</th></tr>{% for unit in payload.units %}<tr><td>{{ unit.name|default:empty_value_label }}</td><td>{% if unit.estimated_current_fish_count is None %}{{ empty_value_label }}{% else %}{{ unit.estimated_current_fish_count }}{% endif %}</td><td>{% if unit.total_mortality_count is None %}{{ empty_value_label }}{% else %}{{ unit.total_mortality_count }}{% endif %}</td><td>{% if unit.total_feed_consumed_kg is None %}{{ empty_value_label }}{% else %}{{ unit.total_feed_consumed_kg|floatformat:2 }} kg{% endif %}</td><td>{% if unit.estimated_current_biomass_kg is None %}{{ empty_value_label }}{% else %}{{ unit.estimated_current_biomass_kg|floatformat:2 }} kg{% endif %}</td><td>{% if unit.active_sanitary_events_count %}{{ unit.active_sanitary_events_count }} {% if unit.active_sanitary_events_count == 1 %}{{ labels.active_event }}{% else %}{{ labels.active_events }}{% endif %} - {{ unit.active_sanitary_affected_fish_count }} {{ labels.affected_fish_short }}{% else %}{{ labels.no_active_sanitary_event }}{% endif %}</td></tr>{% endfor %}</table></section>{% endif %}
 
-          <h3>{{ labels.current_indicators }}</h3>
-          <table class="grid">
-            <tr>
-              <th>{{ labels.current_fish_count }}</th>
-              <th>{{ labels.average_weight }}</th>
-              <th>{{ labels.biomass }}</th>
-              <th>{{ labels.fcr }}</th>
-              <th>{{ labels.survival }}</th>
-              <th>{{ labels.performance_score }}</th>
-            </tr>
-            <tr>
-              <td>{{ section.current_metrics.current_count }}</td>
-              <td>{{ section.current_metrics.current_average_weight|default_if_none:empty_value_label }}</td>
-              <td>{{ section.current_metrics.current_biomass|default_if_none:empty_value_label }}</td>
-              <td>{{ section.current_metrics.fcr|default_if_none:empty_value_label }}</td>
-              <td>{{ section.current_metrics.survival_rate|default_if_none:empty_value_label }}</td>
-              <td>{{ section.current_metrics.performance_score|default_if_none:empty_value_label }}</td>
-            </tr>
-          </table>
-
-          <h3>{{ labels.period_synthesis }}</h3>
-          <table class="grid">
-            <tr>
-              <th>{{ labels.logs }}</th>
-              <th>{{ labels.total_feed }}</th>
-              <th>{{ labels.mortality }}</th>
-              <th>{{ labels.average_weight }}</th>
-              <th>{{ labels.average_temp }}</th>
-              <th>{{ labels.average_oxygen }}</th>
-              <th>{{ labels.average_ph }}</th>
-            </tr>
-            <tr>
-              <td>{{ section.period_metrics.log_count }}</td>
-              <td>{{ section.period_metrics.total_feed|default_if_none:empty_value_label }}</td>
-              <td>{{ section.period_metrics.total_mortality }}</td>
-              <td>{{ section.period_metrics.average_weight|default_if_none:empty_value_label }}</td>
-              <td>{{ section.period_metrics.average_temperature|default_if_none:empty_value_label }}</td>
-              <td>{{ section.period_metrics.average_oxygen|default_if_none:empty_value_label }}</td>
-              <td>{{ section.period_metrics.average_ph|default_if_none:empty_value_label }}</td>
-            </tr>
-          </table>
-
-          <h3>{{ labels.daily_logs }}</h3>
-          {% if section.logs %}
-            <table class="grid small">
-              <tr>
-                <th>{{ labels.date }}</th>
-                <th>{{ labels.feed }}</th>
-                <th>{{ labels.mortality }}</th>
-                <th>{{ labels.average_weight_short }}</th>
-                <th>{{ labels.temperature }}</th>
-                <th>{{ labels.oxygen }}</th>
-                <th>{{ labels.ph }}</th>
-                <th>{{ labels.observations }}</th>
-              </tr>
-              {% for item in section.logs %}
-                <tr>
-                  <td>{{ item.log_date }}</td>
-                  <td>{{ item.feed_quantity|default_if_none:empty_value_label }}</td>
-                  <td>{{ item.mortality_count }}</td>
-                  <td>{{ item.average_weight|default_if_none:empty_value_label }}</td>
-                  <td>{{ item.water_temperature|default_if_none:empty_value_label }}</td>
-                  <td>{{ item.dissolved_oxygen|default_if_none:empty_value_label }}</td>
-                  <td>{{ item.ph_level|default_if_none:empty_value_label }}</td>
-                  <td>{{ item.observations|default:empty_value_label }}</td>
-                </tr>
-              {% endfor %}
-            </table>
-          {% else %}
-            <div class="small muted">{{ labels.no_daily_logs }}</div>
-          {% endif %}
-
-          <h3>{{ labels.sanitary_logs }}</h3>
-          {% if section.sanitary_logs %}
-            <table class="grid small">
-              <tr>
-                <th>{{ labels.date }}</th>
-                <th>{{ labels.event_type }}</th>
-                <th>{{ labels.affected_fish }}</th>
-                <th>{{ labels.treatment }}</th>
-                <th>{{ labels.status }}</th>
-              </tr>
-              {% for item in section.sanitary_logs %}
-                <tr>
-                  <td>{{ item.event_date }}</td>
-                  <td>{{ item.event_type_display }}</td>
-                  <td>{{ item.affected_count|default_if_none:empty_value_label }}</td>
-                  <td>{{ item.treatment_applied|default:empty_value_label }}</td>
-                  <td>{% if item.resolved %}{{ labels.resolved }}{% else %}{{ labels.active }}{% endif %}</td>
-                </tr>
-                <tr>
-                  <td colspan="5" class="muted">
-                    <strong>{{ labels.symptoms }}:</strong> {{ item.symptoms|default:empty_value_label }}<br />
-                    <strong>{{ labels.medication_used }}:</strong> {{ item.medication_used|default:empty_value_label }}<br />
-                    <strong>{{ labels.dosage }}:</strong> {{ item.dosage|default:empty_value_label }}<br />
-                    <strong>{{ labels.treatment_duration }}:</strong>
-                    {% if item.treatment_duration_days is not None %}
-                      {{ item.treatment_duration_days }} {{ labels.days_short }}
-                    {% else %}
-                      {{ empty_value_label }}
-                    {% endif %}<br />
-                    <strong>{{ labels.notes }}:</strong> {{ item.notes|default:empty_value_label }}
-                  </td>
-                </tr>
-              {% endfor %}
-            </table>
-          {% else %}
-            <div class="small muted">{{ labels.no_sanitary_logs }}</div>
-          {% endif %}
-        </div>
-      {% endfor %}
-      </div>
-    {% else %}
-      <div class="muted">{{ labels.no_report_data }}</div>
-    {% endif %}
-  </div>
-
-  <div class="footer">
-    {{ labels.footer }}
-  </div>
+  <section><h2>{% if scope_type == 'unit' %}{{ labels.production_unit_details }}{% elif payload.units %}{{ labels.production_unit_details }}{% else %}{{ labels.cycle_details }}{% endif %}</h2>{% for section in payload.cycles %}<div class="cycle-block{% if forloop.first %} first-cycle-block{% elif report.report_type != 'daily' %} cycle-block-break{% endif %}"><h3>{% if section.unit.production_unit_name %}{{ section.unit.production_unit_name }}{% if section.cycle.species_display %} ({{ section.cycle.species_display }}){% endif %}{% else %}{{ section.cycle.cycle_name|default:empty_value_label }}{% endif %}</h3><div class="small muted">{{ labels.started_on }} {% if section.cycle.start_date_display %}{{ section.cycle.start_date_display }}{% else %}{{ empty_value_label }}{% endif %} | {{ labels.active_days }}: {% if section.cycle.days_active is None %}{{ empty_value_label }}{% else %}{{ section.cycle.days_active }}{% endif %}</div>
+    <h3>{{ labels.dashboard }}</h3><table class="cards"><tr><td class="card"><div class="value">{% if section.current_metrics.current_count is None %}{{ empty_value_label }}{% else %}{{ section.current_metrics.current_count }}{% endif %}</div><div class="label">{{ labels.current_fish_count }}</div></td><td class="card"><div class="value">{% if section.current_metrics.current_average_weight is None %}{{ empty_value_label }}{% else %}{{ section.current_metrics.current_average_weight|floatformat:1 }} g{% endif %}</div><div class="label">{{ labels.average_weight }}</div></td><td class="card"><div class="value">{% if section.current_metrics.current_biomass is None %}{{ empty_value_label }}{% else %}{{ section.current_metrics.current_biomass|floatformat:2 }} kg{% endif %}</div><div class="label">{{ labels.biomass }}</div></td><td class="card"><div class="value">{% if section.current_metrics.fcr is None %}{{ empty_value_label }}{% else %}{{ section.current_metrics.fcr|floatformat:2 }}{% endif %}</div><div class="label">{{ labels.fcr }}</div></td><td class="card"><div class="value">{% if section.current_metrics.survival_rate is None %}{{ empty_value_label }}{% else %}{{ section.current_metrics.survival_rate|floatformat:1 }} %{% endif %}</div><div class="label">{{ labels.survival }}</div></td></tr></table>{% if section.cumulative_metrics.harvested_fish_count %}<div class="harvest-note"><strong>{{ labels.harvested_from_unit }}</strong><br/>{{ section.cumulative_metrics.harvested_fish_count }} {{ labels.harvested_fish }}, {{ labels.harvest_weight_connector }} {{ section.cumulative_metrics.harvested_biomass_kg|floatformat:2 }} kg</div>{% endif %}
+    {% if report.report_type != 'daily' %}<h3>{% if report.report_type == 'weekly' %}{{ labels.weekly_balance }}{% else %}{{ labels.monthly_balance }}{% endif %}</h3>{% endif %}{% if report.report_type != 'daily' %}<table class="grid compact"><tr><th>{{ labels.log_count }}</th><th>{{ labels.period_feed }}</th><th>{{ labels.mortality }}</th><th>{{ labels.average_temp }}</th><th>{{ labels.average_oxygen }}</th><th>{{ labels.average_ph }}</th></tr><tr><td>{% if section.period_metrics.log_count is None %}{{ empty_value_label }}{% else %}{{ section.period_metrics.log_count }}{% endif %}</td><td>{% if section.period_metrics.total_feed is None %}{{ empty_value_label }}{% else %}{{ section.period_metrics.total_feed|floatformat:2 }} kg{% endif %}</td><td>{% if section.period_metrics.total_mortality is None %}{{ empty_value_label }}{% else %}{{ section.period_metrics.total_mortality }}{% endif %}</td><td>{% if section.period_metrics.average_temperature is None %}{{ empty_value_label }}{% else %}{{ section.period_metrics.average_temperature|floatformat:1 }} °C{% endif %}</td><td>{% if section.period_metrics.average_oxygen is None %}{{ empty_value_label }}{% else %}{{ section.period_metrics.average_oxygen|floatformat:2 }} mg/L{% endif %}</td><td>{% if section.period_metrics.average_ph is None %}{{ empty_value_label }}{% else %}{{ section.period_metrics.average_ph|floatformat:2 }}{% endif %}</td></tr></table>{% endif %}
+    {% if report.report_type == 'monthly' %}<h3>{{ labels.monthly_weekly_summary }}</h3>{% if section.weekly_activity %}<table class="grid small"><tr><th>{{ labels.weekly_period }}</th><th>{{ labels.weekly_entries }}</th><th>{{ labels.period_feed }}</th><th>{{ labels.mortality }}</th><th>{{ labels.average_temp }}</th><th>{{ labels.average_oxygen }}</th><th>{{ labels.average_ph }}</th><th>{{ labels.weekly_sanitary }}</th></tr>{% for week in section.weekly_activity %}<tr><td>{{ week.label }}</td><td>{{ week.log_count }}</td><td>{{ week.total_feed|floatformat:2 }} kg</td><td>{{ week.total_mortality }}</td><td>{% if week.average_temperature is None %}{{ empty_value_label }}{% else %}{{ week.average_temperature|floatformat:1 }} °C{% endif %}</td><td>{% if week.average_oxygen is None %}{{ empty_value_label }}{% else %}{{ week.average_oxygen|floatformat:2 }} mg/L{% endif %}</td><td>{% if week.average_ph is None %}{{ empty_value_label }}{% else %}{{ week.average_ph|floatformat:2 }}{% endif %}</td><td>{{ week.sanitary_event_count }}</td></tr>{% endfor %}</table>{% endif %}{% else %}<h3>{% if report.report_type == 'daily' %}{{ labels.daily_input }}{% else %}{{ labels.detailed_week_logs }}{% endif %}</h3>{% if section.logs %}<table class="grid small"><tr><th>{{ labels.date }}</th><th>{{ labels.feed }}</th><th>{{ labels.mortality }}</th><th>{{ labels.average_weight_short }}</th><th>{{ labels.temperature }}</th><th>{{ labels.oxygen }}</th><th>{{ labels.ph }}</th><th>{{ labels.observations }}</th></tr>{% for item in section.logs %}<tr><td>{{ item.log_date_display|default:empty_value_label }}</td><td>{% if item.feed_quantity is None %}{{ empty_value_label }}{% else %}{{ item.feed_quantity|floatformat:2 }} kg{% endif %}</td><td>{% if item.mortality_count is None %}{{ empty_value_label }}{% else %}{{ item.mortality_count }}{% endif %}</td><td>{% if item.average_weight is None %}{{ empty_value_label }}{% else %}{{ item.average_weight|floatformat:1 }} g{% endif %}</td><td>{% if item.water_temperature is None %}{{ empty_value_label }}{% else %}{{ item.water_temperature|floatformat:1 }} °C{% endif %}</td><td>{% if item.dissolved_oxygen is None %}{{ empty_value_label }}{% else %}{{ item.dissolved_oxygen|floatformat:2 }} mg/L{% endif %}</td><td>{% if item.ph_level is None %}{{ empty_value_label }}{% else %}{{ item.ph_level|floatformat:2 }}{% endif %}</td><td>{{ item.observations|default:empty_value_label }}</td></tr>{% endfor %}</table>{% else %}<div class="muted">{{ labels.no_daily_logs }}</div>{% endif %}{% endif %}
+    {% if section.active_sanitary_logs %}<h3>{{ labels.active_sanitary_alerts }}</h3><table class="grid small"><thead><tr><th>{{ labels.date }}</th><th>{{ labels.resolution_date }}</th><th>{{ labels.event_type }}</th><th>{{ labels.affected_fish }}</th><th>{{ labels.status }}</th></tr></thead><tbody>{% for item in section.active_sanitary_logs %}<tr><td>{{ item.event_date_display|default:empty_value_label }}</td><td>{{ item.resolution_date_display|default:empty_value_label }}</td><td>{{ item.event_type_display|default:empty_value_label }}</td><td>{{ item.affected_count|default:empty_value_label }}</td><td>{{ labels.active }}</td></tr>{% endfor %}</table>{% endif %}<h3>{{ labels.period_sanitary_followup }}</h3>{% if section.sanitary_logs %}<table class="grid small"><thead><tr><th>{{ labels.date }}</th><th>{{ labels.resolution_date }}</th><th>{{ labels.event_type }}</th><th>{{ labels.affected_fish }}</th><th>{{ labels.status }}</th></tr></thead><tbody>{% for item in section.sanitary_logs %}<tr><td>{{ item.event_date_display|default:empty_value_label }}</td><td>{{ item.resolution_date_display|default:empty_value_label }}</td><td>{{ item.event_type_display|default:empty_value_label }}</td><td>{% if item.affected_count is None %}{{ empty_value_label }}{% else %}{{ item.affected_count }}{% endif %}</td><td>{% if item.active_as_of_period_end %}{{ labels.active }}{% else %}{{ labels.resolved }}{% endif %}</td></tr><tr class="detail-row"><td colspan="5"><span class="detail-label">{{ labels.symptoms }}:</span> {{ item.symptoms|default:empty_value_label }} &nbsp; <span class="detail-label">{{ labels.treatment }}:</span> {{ item.treatment_applied|default:empty_value_label }} &nbsp; <span class="detail-label">{{ labels.medication_used }}:</span> {{ item.medication_used|default:empty_value_label }}<br/><span class="detail-label">{{ labels.dosage }}:</span> {{ item.dosage|default:empty_value_label }} &nbsp; <span class="detail-label">{{ labels.treatment_duration }}:</span> {% if item.treatment_duration_days is None %}{{ empty_value_label }}{% else %}{{ item.treatment_duration_days }} {{ labels.days_short }}{% endif %} &nbsp; <span class="detail-label">{{ labels.notes }}:</span> {{ item.notes|default:empty_value_label }}</td></tr>{% endfor %}</tbody></table>{% else %}<div class="muted">{% if report.report_type == 'daily' %}{{ labels.no_sanitary_logs_daily }}{% elif report.report_type == 'weekly' %}{{ labels.no_sanitary_logs_weekly }}{% else %}{{ labels.no_sanitary_logs_monthly }}{% endif %}</div>{% endif %}
+  </div>{% empty %}<div class="muted">{{ labels.no_report_data }}</div>{% endfor %}</section>
+  {% if report.report_type == 'monthly' %}<section class="section-break"><h2>{{ labels.monthly_appendix }}</h2>{% for section in payload.cycles %}{% if section.logs %}<table class="grid small"><thead><tr><th colspan="8">{% if section.unit.production_unit_name %}{{ section.unit.production_unit_name }}{% else %}{{ section.cycle.cycle_name|default:empty_value_label }}{% endif %}</th></tr><tr><th>{{ labels.date }}</th><th>{{ labels.feed }}</th><th>{{ labels.mortality }}</th><th>{{ labels.average_weight_short }}</th><th>{{ labels.temperature }}</th><th>{{ labels.oxygen }}</th><th>{{ labels.ph }}</th><th>{{ labels.observations }}</th></tr></thead><tbody>{% for item in section.logs %}<tr><td>{{ item.log_date_display|default:empty_value_label }}</td><td>{% if item.feed_quantity is None %}{{ empty_value_label }}{% else %}{{ item.feed_quantity|floatformat:2 }} kg{% endif %}</td><td>{{ item.mortality_count }}</td><td>{% if item.average_weight is None %}{{ empty_value_label }}{% else %}{{ item.average_weight|floatformat:1 }} g{% endif %}</td><td>{% if item.water_temperature is None %}{{ empty_value_label }}{% else %}{{ item.water_temperature|floatformat:1 }} °C{% endif %}</td><td>{% if item.dissolved_oxygen is None %}{{ empty_value_label }}{% else %}{{ item.dissolved_oxygen|floatformat:2 }} mg/L{% endif %}</td><td>{% if item.ph_level is None %}{{ empty_value_label }}{% else %}{{ item.ph_level|floatformat:2 }}{% endif %}</td><td>{{ item.observations|default:empty_value_label }}</td></tr>{% endfor %}</tbody></table>{% else %}<div class="muted">{{ labels.no_daily_logs }}</div>{% endif %}{% endfor %}</section>{% endif %}
   {% endwith %}
-</body>
-</html>
+</body></html>
