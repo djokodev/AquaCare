@@ -343,7 +343,11 @@ class TestReportApplicationService:
         assert updated.status == "pending"
         assert str(updated.scope_object_id) == str(cycle.id)
         assert updated.payload["report_meta"]["scope_type"] == "cycle"
-        mock_dispatch.assert_called_once_with(updated, restore_validation=False)
+        mock_dispatch.assert_called_once_with(
+            updated,
+            restore_validation=False,
+            allow_historical_scope=True,
+        )
 
     def test_legacy_unit_report_with_allocation_scope_is_regenerable(self):
         from aquaculture.models import CycleUnitAllocation, ProductionUnit
@@ -386,7 +390,86 @@ class TestReportApplicationService:
         assert updated.status == "pending"
         assert str(updated.scope_object_id) == str(allocation.id)
         assert updated.payload["report_meta"]["scope_type"] == "unit"
-        mock_dispatch.assert_called_once_with(updated, restore_validation=False)
+        mock_dispatch.assert_called_once_with(
+            updated,
+            restore_validation=False,
+            allow_historical_scope=True,
+        )
+
+    def test_harvested_cycle_report_remains_regenerable(self):
+        farm_profile = FarmProfileFactory()
+        cycle = ProductionCycleFactory(
+            farm_profile=farm_profile,
+            status="harvested",
+            start_date=timezone.localdate() - timedelta(days=30),
+        )
+        report = ProductionReport.objects.create(
+            farm_profile=farm_profile,
+            report_type="daily",
+            period_start=timezone.localdate() - timedelta(days=1),
+            period_end=timezone.localdate() - timedelta(days=1),
+            status="draft",
+            scope_type="cycle",
+            scope_object_id=cycle.id,
+            payload={},
+        )
+
+        with patch.object(ReportApplicationService, "_dispatch_generation") as mock_dispatch:
+            updated = ReportApplicationService.request_report_regeneration(report)
+
+        assert updated.status == "pending"
+        assert str(updated.scope_object_id) == str(cycle.id)
+        mock_dispatch.assert_called_once_with(
+            updated,
+            restore_validation=False,
+            allow_historical_scope=True,
+        )
+
+    def test_harvested_unit_report_remains_regenerable(self):
+        from aquaculture.models import CycleUnitAllocation, ProductionUnit
+
+        farm_profile = FarmProfileFactory()
+        cycle = ProductionCycleFactory(
+            farm_profile=farm_profile,
+            status="harvested",
+            start_date=timezone.localdate() - timedelta(days=30),
+        )
+        unit = ProductionUnit.objects.create(
+            farm_profile=farm_profile,
+            name="Bac récolté",
+            unit_type="tank",
+            volume_m3="3.00",
+        )
+        allocation = CycleUnitAllocation.objects.create(
+            cycle=cycle,
+            production_unit=unit,
+            initial_fish_count=900,
+            current_fish_count=0,
+            initial_biomass_kg="9.00",
+            current_biomass_kg="0.00",
+            status="harvested",
+        )
+        report = ProductionReport.objects.create(
+            farm_profile=farm_profile,
+            report_type="daily",
+            period_start=timezone.localdate() - timedelta(days=1),
+            period_end=timezone.localdate() - timedelta(days=1),
+            status="draft",
+            scope_type="unit",
+            scope_object_id=allocation.id,
+            payload={},
+        )
+
+        with patch.object(ReportApplicationService, "_dispatch_generation") as mock_dispatch:
+            updated = ReportApplicationService.request_report_regeneration(report)
+
+        assert updated.status == "pending"
+        assert str(updated.scope_object_id) == str(allocation.id)
+        mock_dispatch.assert_called_once_with(
+            updated,
+            restore_validation=False,
+            allow_historical_scope=True,
+        )
 
     def test_request_report_regeneration_resets_communication_status_on_regen(self):
         """Vérifie que email_status et whatsapp_status sont toujours réinitialisés après regen."""

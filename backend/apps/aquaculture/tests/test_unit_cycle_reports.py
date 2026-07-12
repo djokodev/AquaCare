@@ -53,7 +53,7 @@ def _create_cycle_log(
     allocation: CycleUnitAllocation | None,
     log_date: date,
     mortality_count: int,
-    feed_quantity: str,
+    feed_quantity: str | None,
     average_weight: str,
 ) -> CycleLog:
     return CycleLog.objects.create(
@@ -61,7 +61,7 @@ def _create_cycle_log(
         cycle_unit_allocation=allocation,
         log_date=log_date,
         mortality_count=mortality_count,
-        feed_quantity=Decimal(feed_quantity),
+        feed_quantity=Decimal(feed_quantity) if feed_quantity is not None else None,
         average_weight=Decimal(average_weight) if average_weight is not None else None,
     )
 
@@ -371,7 +371,7 @@ class TestUnitCycleAwareReportPayloads:
             logs=[],
             period_end=period_end,
         )
-        assert stored_resolution["source"] == "legacy_stored_total_feed_consumed"
+        assert stored_resolution["source"] == "legacy_stored_total_minimum_known"
         assert stored_resolution["feed_consumed_kg"] == 77.5
 
         partial_cycle = ProductionCycleFactory(
@@ -462,6 +462,152 @@ class TestUnitCycleAwareReportPayloads:
         )
         assert payload["cycles"][0]["current_metrics"]["fcr"] is None
         assert payload["summary"]["feed_history_warning"] is True
+
+    def test_legacy_daily_logs_with_quantities_are_complete_and_fcr_is_available(self):
+        farm_profile = FarmProfileFactory()
+        cycle = ProductionCycleFactory(
+            farm_profile=farm_profile,
+            status="active",
+            start_date=date(2026, 7, 1),
+            initial_count=100,
+            initial_biomass=Decimal("2.00"),
+            current_count=100,
+            current_biomass=Decimal("20.00"),
+            total_feed_consumed=Decimal("99.00"),
+        )
+        logs = [
+            _create_cycle_log(
+                cycle=cycle,
+                allocation=None,
+                log_date=date(2026, 7, day),
+                mortality_count=0,
+                feed_quantity="2.00",
+                average_weight="200.00",
+            )
+            for day in range(1, 4)
+        ]
+
+        resolution = ReportService._resolve_legacy_cumulative_feed(
+            cycle=cycle,
+            logs=logs,
+            period_end=date(2026, 7, 3),
+        )
+        assert resolution["history_complete"] is True
+        assert resolution["source"] == "legacy_logs"
+        assert resolution["feed_consumed_kg"] == 6.0
+
+        payload = ReportService._build_payload(
+            farm_profile=farm_profile,
+            report_type="monthly",
+            period_start=date(2026, 7, 1),
+            period_end=date(2026, 7, 3),
+            scope_type="cycle",
+            cycle_id=str(cycle.id),
+        )
+        assert payload["summary"]["feed_history_warning"] is False
+        assert payload["cycles"][0]["current_metrics"]["fcr"] is not None
+
+    def test_legacy_none_feed_quantity_makes_history_incomplete(self):
+        farm_profile = FarmProfileFactory()
+        cycle = ProductionCycleFactory(
+            farm_profile=farm_profile,
+            status="active",
+            start_date=date(2026, 7, 1),
+            initial_count=100,
+            initial_biomass=Decimal("2.00"),
+            current_count=100,
+            current_biomass=Decimal("20.00"),
+        )
+        logs = [
+            _create_cycle_log(
+                cycle=cycle,
+                allocation=None,
+                log_date=date(2026, 7, day),
+                mortality_count=0,
+                feed_quantity=None if day == 2 else "2.00",
+                average_weight="200.00",
+            )
+            for day in range(1, 4)
+        ]
+
+        resolution = ReportService._resolve_legacy_cumulative_feed(
+            cycle=cycle,
+            logs=logs,
+            period_end=date(2026, 7, 3),
+        )
+        assert resolution["history_complete"] is False
+        assert resolution["source"] == "legacy_logs_minimum_known"
+        assert resolution["feed_consumed_kg"] == 4.0
+
+        payload = ReportService._build_payload(
+            farm_profile=farm_profile,
+            report_type="monthly",
+            period_start=date(2026, 7, 1),
+            period_end=date(2026, 7, 3),
+            scope_type="cycle",
+            cycle_id=str(cycle.id),
+        )
+        assert payload["summary"]["feed_history_warning"] is True
+        assert payload["cycles"][0]["current_metrics"]["fcr"] is None
+
+    def test_legacy_logs_without_any_feed_quantity_are_unavailable(self):
+        farm_profile = FarmProfileFactory()
+        cycle = ProductionCycleFactory(
+            farm_profile=farm_profile,
+            status="active",
+            start_date=date(2026, 7, 1),
+            total_feed_consumed=Decimal("0"),
+        )
+        log = _create_cycle_log(
+            cycle=cycle,
+            allocation=None,
+            log_date=date(2026, 7, 1),
+            mortality_count=0,
+            feed_quantity=None,
+            average_weight="200.00",
+        )
+
+        resolution = ReportService._resolve_legacy_cumulative_feed(
+            cycle=cycle,
+            logs=[log],
+            period_end=date(2026, 7, 1),
+        )
+        assert resolution["history_complete"] is False
+        assert resolution["source"] == "legacy_feed_unavailable"
+        assert resolution["feed_consumed_kg"] is None
+
+    def test_eligible_stored_feed_is_only_a_minimum_for_incomplete_logs(self):
+        farm_profile = FarmProfileFactory()
+        cycle = ProductionCycleFactory(
+            farm_profile=farm_profile,
+            status="active",
+            start_date=date(2026, 7, 1),
+            total_feed_consumed=Decimal("30.00"),
+        )
+        log = _create_cycle_log(
+            cycle=cycle,
+            allocation=None,
+            log_date=date(2026, 7, 1),
+            mortality_count=0,
+            feed_quantity="2.00",
+            average_weight="200.00",
+        )
+        cycle.__class__.objects.filter(pk=cycle.pk).update(
+            total_feed_consumed=Decimal("30.00"),
+            updated_at=timezone.make_aware(datetime(2026, 7, 2, 12, 0)),
+        )
+        cycle.refresh_from_db()
+
+        resolution = ReportService._resolve_legacy_cumulative_feed(
+            cycle=cycle,
+            logs=[log],
+            period_end=date(2026, 7, 3),
+        )
+
+        assert resolution["history_complete"] is False
+        assert resolution["feed_consumed_kg"] == 30.0
+        assert resolution["source"] == "legacy_logs_minimum_known"
+        assert "legacy_stored_total_minimum_known" in resolution["fallbacks_used"]
     def test_custom_unit_cycle_duration_is_used_for_cost_progress(self):
         today = date.today()
         farm_profile = FarmProfileFactory()
@@ -840,12 +986,13 @@ class TestUnitCycleAwareReportPayloads:
         assert payload["summary"]["estimated_current_fish_count"] == 490
         assert payload["summary"]["total_mortality"] == 10
         assert payload["cycles"][0]["current_metrics"]["survival_rate"] == 98.0
-        assert payload["summary"]["total_feed"] == 10.0
-        assert payload["calculation_metadata"]["legacy_feed"]["source"] == (
-            "legacy_stored_total_feed_consumed"
-        )
+        assert payload["summary"]["total_feed"] == 5.0
+        assert payload["calculation_metadata"]["legacy_feed"]["source"] == "legacy_logs"
         assert payload["summary"]["active_sanitary_events_count"] == 1
         assert len(payload["cycles"]) == 1
+        assert payload["cycles"][0]["sanitary_logs"] == []
+        assert len(payload["global_sanitary_logs"]["active_logs"]) == 1
+        assert len(payload["global_sanitary_logs"]["period_logs"]) == 1
         assert payload["cycles"][0]["cycle"]["id"] == str(cycle.id)
         assert payload["units"] == []
 

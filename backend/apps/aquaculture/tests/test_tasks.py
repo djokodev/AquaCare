@@ -169,6 +169,30 @@ class TestGenerateReportAsyncTask:
         assert kwargs['scope_object_id'] == str(cycle.id)
         assert kwargs['cycle_id'] == str(cycle.id)
 
+    def test_allows_historical_harvested_cycle_scope(self):
+        farm = FarmProfileFactory()
+        cycle = ProductionCycleFactory(farm_profile=farm, status='harvested')
+        report = ProductionReport.objects.create(
+            farm_profile=farm,
+            report_type='daily',
+            period_start=date(2026, 3, 1),
+            period_end=date(2026, 3, 1),
+            status='pending',
+            scope_type='cycle',
+            scope_object_id=cycle.id,
+            payload={},
+        )
+
+        with patch('aquaculture.tasks.ReportService.generate_for_farm') as mock_generate:
+            result = generate_report_async_task(
+                str(report.id),
+                allow_historical_scope=True,
+            )
+
+        assert result == f'Report generated: {report.id}'
+        assert mock_generate.call_args.kwargs['scope_object_id'] == str(cycle.id)
+        assert mock_generate.call_args.kwargs['allow_historical_scope'] is True
+
     def test_refuses_generic_regeneration_when_legacy_scope_is_missing(self):
         farm = FarmProfileFactory()
         report = _create_report(farm_profile=farm, status='pending')

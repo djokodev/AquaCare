@@ -245,6 +245,28 @@ class TestReportServicePayloadAndPdfTemplate:
                 cycle_id=str(inactive_cycle.id),
             )
 
+    def test_build_payload_allows_valid_historical_cycle_scope(self):
+        farm_profile = FarmProfileFactory()
+        harvested_cycle = ProductionCycleFactory(
+            farm_profile=farm_profile,
+            status="harvested",
+            start_date=date(2026, 2, 1),
+        )
+
+        payload = ReportService._build_payload(
+            farm_profile=farm_profile,
+            report_type="daily",
+            period_start=date(2026, 3, 1),
+            period_end=date(2026, 3, 1),
+            scope_type="cycle",
+            scope_object_id=str(harvested_cycle.id),
+            allow_historical_scope=True,
+        )
+
+        assert payload["summary"]["cycle_count"] == 1
+        assert payload["cycles"][0]["cycle"]["id"] == str(harvested_cycle.id)
+        assert payload["cycles"][0]["cycle"]["status"] == "harvested"
+
     def test_pdf_template_renders_period_label_missing_values_and_zero(self):
         farm_profile = FarmProfileFactory(farm_name="Ferme UI Test")
         report = _create_report(

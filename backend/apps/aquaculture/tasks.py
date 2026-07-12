@@ -154,6 +154,7 @@ def generate_report_async_task(
     report_id: str,
     cycle_scope_id: str | None = None,
     restore_validation: bool = False,
+    allow_historical_scope: bool = False,
 ) -> str:
     """
     Generate a single report asynchronously (PDF rendering in Celery worker).
@@ -194,6 +195,7 @@ def generate_report_async_task(
             scope_object_id=str(scope_object_id) if scope_object_id else None,
             cycle_id=cycle_scope_id if scope_type == "cycle" else None,
             preserve_validation=restore_validation,
+            allow_historical_scope=allow_historical_scope,
         )
         logger.info("Async report generated: %s", report_id)
         return f"Report generated: {report_id}"

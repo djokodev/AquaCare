@@ -2901,6 +2901,117 @@ class TestProductionReportViewSet:
         assert 'cycle d’origine' in response.data['detail']
         mock_dispatch.assert_not_called()
 
+    def test_download_missing_pdf_with_cycle_scope_starts_one_regeneration(
+        self,
+        auth_client,
+        farm_profile,
+    ):
+        cycle = ProductionCycle.objects.create(
+            farm_profile=farm_profile,
+            cycle_name='Cycle PDF disparu',
+            species='tilapia',
+            pond_identifier='Bassin PDF',
+            pond_surface_m2=Decimal('40.00'),
+            pond_volume_m3=Decimal('50.00'),
+            start_date=date(2026, 7, 1),
+            initial_count=500,
+            initial_average_weight=Decimal('15.00'),
+            initial_biomass=Decimal('7.50'),
+            current_count=500,
+            current_average_weight=Decimal('15.00'),
+            current_biomass=Decimal('7.50'),
+            status='active',
+        )
+        report = ProductionReport.objects.create(
+            farm_profile=farm_profile,
+            report_type='daily',
+            period_start=date(2026, 7, 19),
+            period_end=date(2026, 7, 19),
+            status='draft',
+            scope_type='cycle',
+            scope_object_id=cycle.id,
+            pdf_file='reports/missing-cycle.pdf',
+        )
+
+        with patch(
+            'django.core.files.storage.filesystem.FileSystemStorage.open',
+            side_effect=FileNotFoundError,
+        ), patch(
+            'aquaculture.services.report_application_service.ReportApplicationService._dispatch_generation'
+        ) as mock_dispatch:
+            response = auth_client.get(
+                reverse('aquaculture:production-report-download', kwargs={'pk': report.id}),
+            )
+
+        assert response.status_code == status.HTTP_409_CONFLICT
+        report.refresh_from_db()
+        assert report.status == 'pending'
+        mock_dispatch.assert_called_once()
+        assert mock_dispatch.call_args.kwargs['allow_historical_scope'] is True
+
+    def test_download_missing_pdf_with_unit_scope_starts_one_regeneration(
+        self,
+        auth_client,
+        farm_profile,
+    ):
+        cycle = ProductionCycle.objects.create(
+            farm_profile=farm_profile,
+            cycle_name='Cycle unité PDF disparu',
+            species='tilapia',
+            pond_identifier='Site PDF',
+            pond_surface_m2=Decimal('40.00'),
+            pond_volume_m3=Decimal('50.00'),
+            start_date=date(2026, 7, 1),
+            initial_count=500,
+            initial_average_weight=Decimal('15.00'),
+            initial_biomass=Decimal('7.50'),
+            current_count=500,
+            current_average_weight=Decimal('15.00'),
+            current_biomass=Decimal('7.50'),
+            status='harvested',
+        )
+        unit = ProductionUnit.objects.create(
+            farm_profile=farm_profile,
+            name='Bac PDF disparu',
+            unit_type='tank',
+            volume_m3=Decimal('3.00'),
+        )
+        allocation = CycleUnitAllocation.objects.create(
+            cycle=cycle,
+            production_unit=unit,
+            initial_fish_count=500,
+            current_fish_count=0,
+            initial_biomass_kg=Decimal('7.50'),
+            current_biomass_kg=Decimal('0.00'),
+            status='harvested',
+        )
+        report = ProductionReport.objects.create(
+            farm_profile=farm_profile,
+            report_type='daily',
+            period_start=date(2026, 7, 19),
+            period_end=date(2026, 7, 19),
+            status='draft',
+            scope_type='unit',
+            scope_object_id=allocation.id,
+            pdf_file='reports/missing-unit.pdf',
+        )
+
+        with patch(
+            'django.core.files.storage.filesystem.FileSystemStorage.open',
+            side_effect=FileNotFoundError,
+        ), patch(
+            'aquaculture.services.report_application_service.ReportApplicationService._dispatch_generation'
+        ) as mock_dispatch:
+            response = auth_client.get(
+                reverse('aquaculture:production-report-download', kwargs={'pk': report.id}),
+            )
+
+        assert response.status_code == status.HTTP_409_CONFLICT
+        report.refresh_from_db()
+        assert report.status == 'pending'
+        mock_dispatch.assert_called_once()
+        assert mock_dispatch.call_args.kwargs['allow_historical_scope'] is True
+
     def test_regenerate_legacy_report_with_cycle_scope_in_payload_is_allowed(
         self,
         auth_client,
@@ -2943,7 +3054,11 @@ class TestProductionReportViewSet:
         assert response.status_code == status.HTTP_202_ACCEPTED
         report.refresh_from_db()
         assert str(report.scope_object_id) == str(cycle.id)
-        mock_dispatch.assert_called_once_with(report, restore_validation=False)
+        mock_dispatch.assert_called_once_with(
+            report,
+            restore_validation=False,
+            allow_historical_scope=True,
+        )
 
     def test_list_reports_can_filter_by_cycle_scope(self, auth_client, farm_profile):
         """Le listing doit pouvoir filtrer les rapports par cycle_scope_id."""

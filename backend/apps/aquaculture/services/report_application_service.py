@@ -86,10 +86,15 @@ class ReportApplicationService:
     def _dispatch_generation(
         report: ProductionReport,
         restore_validation: bool = False,
+        allow_historical_scope: bool = False,
     ) -> None:
         from ..tasks import generate_report_async_task
 
-        generate_report_async_task.delay(str(report.id), restore_validation=restore_validation)
+        generate_report_async_task.delay(
+            str(report.id),
+            restore_validation=restore_validation,
+            allow_historical_scope=allow_historical_scope,
+        )
 
     @staticmethod
     def _extract_cycle_scope_id(report: ProductionReport) -> str | None:
@@ -260,7 +265,6 @@ class ReportApplicationService:
             scope_is_valid = ProductionCycle.objects.filter(
                 id=scope_object_id,
                 farm_profile=report.farm_profile,
-                status="active",
             ).exists()
         else:
             scope_is_valid = CycleUnitAllocation.objects.filter(
@@ -294,7 +298,11 @@ class ReportApplicationService:
                 else None
             ),
         )
-        ReportApplicationService._dispatch_generation(report, restore_validation=was_validated)
+        ReportApplicationService._dispatch_generation(
+            report,
+            restore_validation=was_validated,
+            allow_historical_scope=True,
+        )
         return report
 
     @staticmethod

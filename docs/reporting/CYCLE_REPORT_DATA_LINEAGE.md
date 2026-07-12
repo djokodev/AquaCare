@@ -1,6 +1,6 @@
 # Cycle report data lineage
 
-Version: `1.2.1`
+Version: `1.2.2`
 
 This document defines the backend sources used by cycle and unit PDF reports. A
 report is a historical snapshot: values that describe the stock, biomass,
@@ -95,8 +95,18 @@ snapshot is demonstrably valid at `period_end`.
 
 The first and last legacy log dates do not prove complete coverage. Log-based
 history is complete only when every calendar day from `cycle.start_date`
-through `period_end` is represented. Otherwise the logs are a known minimum,
-the warning is shown, and FCR is `None`.
+through `period_end` is represented and every corresponding `feed_quantity` is
+explicitly present. `feed_quantity=None` means unknown, not zero. Otherwise
+the logs are a known minimum, the warning is shown, and FCR is `None`.
+
+`cycle.updated_at <= period_end` is never evidence that a mutable
+`total_feed_consumed` snapshot is complete. A temporally eligible stored value
+may be retained as a known-minimum fallback, using `max(logged_total,
+stored_total)` when logs are incomplete, but `history_complete` remains false.
+A snapshot updated after `period_end` is rejected for the historical report.
+If there are no usable logs and only a temporally eligible stored value, it is
+still labeled as a known minimum and FCR remains unavailable. With no usable
+logs and a post-period snapshot, feed is unavailable rather than invented.
 
 When an old report has no `scope_object_id`, its payload has no
 `report_meta.cycle_scope_id`, and no valid `cycle_unit_allocation_id`, the
@@ -114,6 +124,16 @@ English PDF dates use short `19 Jul 2026` in tables, sanitary logs, and
 appendices. Long `19 July 2026` is used for cycle situation and start-date
 context, while `20 July 2026 at 10:00` is used for generation metadata.
 French dates keep the local `19/07/2026` and natural French period forms.
+
+An existing report may be regenerated from its validated cycle or allocation
+scope even after the cycle has been harvested. New manual reports and
+automatic scheduled reports remain restricted to active cycles. Reports with
+no identifiable cycle or unit scope are never regenerated generically.
+
+If a PDF path remains in the database but the physical file has disappeared,
+the download flow clears the stale path and starts one scoped regeneration.
+It returns HTTP 409 for a valid scope, or HTTP 400 with a business message for
+an unresolvable legacy scope; it never returns an unhandled HTTP 500.
 
 The review generator writes exact-byte `pdf_sha256` and `payload_sha256`
 values for every report, plus `git_sha`, `data_lineage_version`, and

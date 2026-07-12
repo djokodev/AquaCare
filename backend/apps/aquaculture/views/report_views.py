@@ -358,7 +358,10 @@ class ProductionReportViewSet(viewsets.ReadOnlyModelViewSet):
         except FileNotFoundError:
             report.pdf_file = None
             report.save(update_fields=['pdf_file', 'updated_at'])
-            ReportApplicationService.request_report_regeneration(report)
+            try:
+                ReportApplicationService.request_report_regeneration(report)
+            except (InvalidReportScopeError, UnresolvableLegacyReportScopeError) as exc:
+                return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
             return self._pending_response(
                 _("Le fichier PDF est introuvable. Régénération lancée, réessayez dans quelques instants.")
             )

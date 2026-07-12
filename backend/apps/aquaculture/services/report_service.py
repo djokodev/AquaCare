@@ -55,7 +55,7 @@ from .report_visuals import (
 
 logger = logging.getLogger(__name__)
 
-REPORT_DATA_LINEAGE_VERSION = "1.2.1"
+REPORT_DATA_LINEAGE_VERSION = "1.2.2"
 
 
 class UnresolvableLegacyReportScopeError(ValueError):
@@ -415,6 +415,7 @@ class ReportService(BaseService):
         scope_object_id: str | None = None,
         cycle_id: str | None = None,
         preserve_validation: bool = False,
+        allow_historical_scope: bool = False,
     ) -> ProductionReport:
         """
         Génère (ou régénère) un rapport consolidé pour une ferme et une période.
@@ -440,6 +441,7 @@ class ReportService(BaseService):
             scope_type=scope_type,
             scope_object_id=scope_object_id,
             cycle_id=cycle_id,
+            allow_historical_scope=allow_historical_scope,
         )
 
         pdf_bytes = ReportService._render_pdf(
@@ -488,6 +490,7 @@ class ReportService(BaseService):
             period_end=report.period_end,
             scope_type=scope_type,
             scope_object_id=scope_object_id,
+            allow_historical_scope=True,
         )
 
     @staticmethod
@@ -928,7 +931,8 @@ class ReportService(BaseService):
         period_end: date,
     ) -> dict:
         """Resolve legacy feed without treating a partial log stream as complete."""
-        logged_total = round(sum(float(log.feed_quantity or 0) for log in logs), 2)
+        known_feed_logs = [log for log in logs if log.feed_quantity is not None]
+        logged_total = round(sum(float(log.feed_quantity) for log in known_feed_logs), 2)
         stored_total = ReportService._to_float(cycle.total_feed_consumed)
         stored_total = stored_total if stored_total and stored_total > 0 else None
         log_dates = {log.log_date for log in logs}
@@ -936,10 +940,24 @@ class ReportService(BaseService):
             cycle.start_date + timedelta(days=offset)
             for offset in range((period_end - cycle.start_date).days + 1)
         } if cycle.start_date <= period_end else set()
-        log_history_complete = bool(expected_log_dates) and expected_log_dates.issubset(log_dates)
+        log_history_complete = (
+            bool(expected_log_dates)
+            and expected_log_dates.issubset(log_dates)
+            and len(known_feed_logs) == len(logs)
+        )
         updated_at_date = cycle.updated_at.date() if cycle.updated_at else None
-        stored_valid_at_period_end = updated_at_date is not None and updated_at_date <= period_end
+        stored_temporally_eligible = updated_at_date is not None and updated_at_date <= period_end
         fallbacks_used: list[str] = []
+
+        if log_history_complete:
+            return {
+                "feed_consumed_kg": logged_total,
+                "source": "legacy_logs",
+                "history_complete": True,
+                "logged_total": logged_total,
+                "stored_total": stored_total,
+                "fallbacks_used": [],
+            }
 
         if not logs and stored_total is None:
             return {
@@ -951,60 +969,37 @@ class ReportService(BaseService):
                 "fallbacks_used": ["legacy_feed_unavailable"],
             }
 
-        if not logs and stored_total is not None:
+        if not logs and stored_total is not None and stored_temporally_eligible:
             return {
                 "feed_consumed_kg": stored_total,
-                "source": "legacy_stored_total_feed_consumed",
-                "history_complete": stored_valid_at_period_end,
+                "source": "legacy_stored_total_minimum_known",
+                "history_complete": False,
                 "logged_total": 0.0,
                 "stored_total": stored_total,
-                "fallbacks_used": ["legacy_stored_total_feed_consumed"],
+                "fallbacks_used": ["legacy_stored_total_minimum_known"],
             }
 
-        if stored_total is None:
-            source = "legacy_logs" if log_history_complete else "legacy_logs_minimum_known"
-            if not log_history_complete:
-                fallbacks_used.append("legacy_logs_incomplete")
-            return {
-                "feed_consumed_kg": logged_total,
-                "source": source,
-                "history_complete": log_history_complete,
-                "logged_total": logged_total,
-                "stored_total": None,
-                "fallbacks_used": fallbacks_used,
-            }
+        if stored_total is not None and not stored_temporally_eligible:
+            fallbacks_used.append("legacy_stored_total_feed_consumed_rejected_post_period")
 
-        tolerance = max(0.01, max(stored_total, logged_total) * 0.01)
-        if abs(stored_total - logged_total) <= tolerance:
-            if not log_history_complete:
-                fallbacks_used.append("legacy_logs_incomplete")
+        if not known_feed_logs:
             return {
-                "feed_consumed_kg": logged_total,
-                "source": "legacy_logs" if log_history_complete else "legacy_logs_minimum_known",
-                "history_complete": log_history_complete,
-                "logged_total": logged_total,
+                "feed_consumed_kg": None,
+                "source": "legacy_feed_unavailable",
+                "history_complete": False,
+                "logged_total": 0.0,
                 "stored_total": stored_total,
-                "fallbacks_used": fallbacks_used,
+                "fallbacks_used": [*fallbacks_used, "legacy_feed_unavailable"],
             }
 
-        if stored_total > logged_total and stored_valid_at_period_end:
-            return {
-                "feed_consumed_kg": stored_total,
-                "source": "legacy_stored_total_feed_consumed",
-                "history_complete": True,
-                "logged_total": logged_total,
-                "stored_total": stored_total,
-                "fallbacks_used": ["legacy_stored_total_feed_consumed"],
-            }
-
-        fallbacks_used.extend(
-            [
-                "legacy_logs_minimum_known",
-                "legacy_stored_total_feed_consumed_rejected_post_period",
-            ]
-        )
+        fallbacks_used.insert(0, "legacy_logs_minimum_known")
+        minimum_known = logged_total
+        if stored_total is not None and stored_temporally_eligible:
+            minimum_known = max(logged_total, stored_total)
+            if stored_total > logged_total:
+                fallbacks_used.append("legacy_stored_total_minimum_known")
         return {
-            "feed_consumed_kg": logged_total,
+            "feed_consumed_kg": minimum_known,
             "source": "legacy_logs_minimum_known",
             "history_complete": False,
             "logged_total": logged_total,
@@ -1242,10 +1237,10 @@ class ReportService(BaseService):
                     "Journaux legacy",
                     "Legacy logs",
                 ),
-                "legacy_stored_total_feed_consumed": ReportService._pick_text(
+                "legacy_stored_total_minimum_known": ReportService._pick_text(
                     ReportService._resolve_language_code(farm_profile.user),
-                    "Total alimentaire stocké legacy",
-                    "Legacy stored feed total",
+                    "Snapshot alimentaire legacy (minimum connu)",
+                    "Legacy feed snapshot (known minimum)",
                 ),
                 "legacy_logs_minimum_known": ReportService._pick_text(
                     ReportService._resolve_language_code(farm_profile.user),
@@ -1398,7 +1393,7 @@ class ReportService(BaseService):
                     ),
                     "feed_history_logged_total": feed_resolution["logged_total"],
                     "feed_history_stored_total": feed_resolution["stored_total"],
-                    "feed_history_warning": not feed_resolution["history_complete"] and total_feed is not None,
+                    "feed_history_warning": not feed_resolution["history_complete"],
                     "units_with_today_log_count": 0,
                     "units_missing_today_log_count": 0,
                     "active_sanitary_events_count": sum(
@@ -1520,42 +1515,9 @@ class ReportService(BaseService):
                             }
                             for log in cycle_logs
                         ],
-                        "sanitary_logs": [
-                            {
-                                "id": str(item.id),
-                                "event_date": item.event_date.isoformat(),
-                                "event_date_display": ReportService._format_report_date(
-                                    item.event_date, ReportService._resolve_language_code(farm_profile.user)
-                                ),
-                                "resolution_date": item.resolution_date.isoformat() if item.resolution_date else None,
-                                "resolution_date_display": (
-                                    ReportService._format_report_date(
-                                        item.resolution_date,
-                                        ReportService._resolve_language_code(farm_profile.user),
-                                    )
-                                    if item.resolution_date
-                                    else None
-                                ),
-                                "event_type": item.event_type,
-                                "event_type_display": ReportService._localized_display(
-                                    item,
-                                    "get_event_type_display",
-                                    ReportService._resolve_language_code(farm_profile.user),
-                                ),
-                                "symptoms": item.symptoms,
-                                "affected_count": item.affected_count,
-                                "treatment_applied": item.treatment_applied or None,
-                                "medication_used": item.medication_used or None,
-                                "dosage": item.dosage or None,
-                                "treatment_duration_days": item.treatment_duration_days,
-                                "notes": item.notes or None,
-                                "resolved": item.resolved,
-                                "active_as_of_period_end": ReportService._is_sanitary_event_active_as_of(
-                                    item, period_end
-                                ),
-                            }
-                            for item in sanitary_logs
-                        ],
+                        # Legacy global sanitary events are already exposed in
+                        # global_sanitary_logs; keep them out of the cycle detail.
+                        "sanitary_logs": [],
                         "feeding_plans": [
                             {
                                 "week_number": plan.week_number,
@@ -1918,6 +1880,7 @@ class ReportService(BaseService):
         scope_type: str = "cycle",
         scope_object_id: str | None = None,
         cycle_id: str | None = None,
+        allow_historical_scope: bool = False,
     ) -> ReportPayload:
         """Construit le snapshot JSON complet utilisé pour le PDF."""
         if scope_object_id is None and cycle_id:
@@ -1961,12 +1924,14 @@ class ReportService(BaseService):
             )
 
         if scope_type == "cycle" and scope_object_id:
+            cycle_queryset = ProductionCycle.objects.filter(
+                id=scope_object_id,
+                farm_profile=farm_profile,
+            )
+            if not allow_historical_scope:
+                cycle_queryset = cycle_queryset.filter(status="active")
             cycle = (
-                ProductionCycle.objects.filter(
-                    id=scope_object_id,
-                    farm_profile=farm_profile,
-                    status="active",
-                )
+                cycle_queryset
                 .select_related("farm_profile")
                 .first()
             )
