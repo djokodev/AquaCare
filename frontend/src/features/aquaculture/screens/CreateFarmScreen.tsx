@@ -24,6 +24,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { useDispatch, useSelector } from 'react-redux';
 
 import { useAuth } from '@/hooks/useAuth';
+import { createClientUuid } from '@/utils/clientUuid';
 import { AQUACARE_COLORS } from '@/constants/colors';
 import { sharedTextInputStyles } from '@/components/common/inputStyles';
 import { RootStackParamList } from '@/navigation/MainNavigator';
@@ -169,6 +170,7 @@ export default function CreateFarmScreen({ navigation }: Props) {
     new Intl.NumberFormat(numberLocale, { maximumFractionDigits: 1 }).format(value);
 
   const [form, setForm] = useState<FarmSetupFormState>({
+    launchRequestId: createClientUuid(),
     species: '',
     infraType: '',
     unitCount: '',
@@ -341,6 +343,7 @@ export default function CreateFarmScreen({ navigation }: Props) {
 
   const getFieldLabel = (field: keyof FarmSetupFormState): string => {
     const labelByField: Record<keyof FarmSetupFormState, string> = {
+      launchRequestId: '',
       species: t('createFarmSpeciesLabel'),
       infraType: t('createFarmInfraLabel'),
       unitCount: t('createFarmUnitCountLabel'),

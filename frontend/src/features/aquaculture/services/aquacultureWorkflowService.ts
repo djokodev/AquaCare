@@ -34,7 +34,8 @@ export const runSilentOfflineSync = async (
 };
 
 /**
- * Cree un cycle en ligne, fallback automatique offline sur erreur reseau.
+ * @deprecated Legacy sync compatibility only. Modern cycle screens must use
+ * launchProductionCycle and keep an incomplete form in memory when offline.
  */
 export const createProductionCycleWithOfflineFallback = async (
   cycleData: CreateCycleForm

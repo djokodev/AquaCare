@@ -14,6 +14,7 @@ import {
 } from '@/features/aquaculture/utils/farmSetupForm';
 
 const baseForm: FarmSetupFormState = {
+  launchRequestId: '00000000-0000-4000-8000-000000000001',
   species: 'tilapia',
   infraType: 'bac_hors_sol',
   unitCount: '5',
@@ -34,7 +35,15 @@ const baseForm: FarmSetupFormState = {
 
 describe('farmSetupForm', () => {
   it('valide un formulaire cycle-first complet', () => {
-    const errors = validateFarmSetupForm(baseForm);
+    const errors = validateFarmSetupForm({
+      ...baseForm,
+      productionUnits: [
+        { local_id: 'unit-1', name: 'Bac 1', unit_type: 'tank', volume_m3: '50', surface_m2: '' },
+      ],
+      productionUnitAllocations: [
+        { production_unit_local_id: 'unit-1', fish_count: '4500' },
+      ],
+    });
 
     expect(errors).toEqual({});
     expect(hasFarmSetupErrors(errors)).toBe(false);

@@ -76,3 +76,76 @@ msgstr "La durée du cycle doit être comprise entre 30 et 365 jours."
 
 msgid "The estimated harvest date must match the cycle duration."
 msgstr "La date prévisionnelle de récolte doit correspondre à la durée du cycle."
+
+# Transactional cycle launch
+msgid "L'identifiant local de l'unité est obligatoire."
+msgstr "L'identifiant local de l'unité est obligatoire."
+
+msgid "Le nom de l'unité est obligatoire."
+msgstr "Le nom de l'unité est obligatoire."
+
+msgid "L'unité de l'allocation est obligatoire."
+msgstr "L'unité de l'allocation est obligatoire."
+
+msgid "Chaque unité doit avoir un identifiant local unique."
+msgstr "Chaque unité doit avoir un identifiant local unique."
+
+msgid "Chaque unité doit avoir exactement une allocation."
+msgstr "Chaque unité doit avoir exactement une allocation."
+
+msgid "Une allocation référence une unité inconnue."
+msgstr "Une allocation référence une unité inconnue."
+
+msgid "L'espèce du plan doit correspondre à celle du cycle."
+msgstr "L'espèce du plan doit correspondre à celle du cycle."
+
+msgid "La somme des allocations doit correspondre à l'effectif initial du cycle."
+msgstr "La somme des allocations doit correspondre à l'effectif initial du cycle."
+
+msgid "La capacité recommandée de l'unité est dépassée."
+msgstr "La capacité recommandée de l'unité est dépassée."
+
+msgid "Ce lancement existe déjà avec un contenu différent ou appartient à une autre ferme."
+msgstr "Ce lancement existe déjà avec un contenu différent ou appartient à une autre ferme."
+
+msgid "L'effectif courant du cycle ne correspond pas aux allocations."
+msgstr "L'effectif courant du cycle ne correspond pas aux allocations."
+
+msgid "Un nouveau cycle doit être lancé avec au moins une unité de production."
+msgstr "Un nouveau cycle doit être lancé avec au moins une unité de production."
+
+msgid "Une unité existante ne peut pas contenir des champs de création."
+msgstr "Une unité existante ne peut pas contenir des champs de création."
+
+msgid "L'identifiant de l'unité existante est obligatoire."
+msgstr "L'identifiant de l'unité existante est obligatoire."
+
+msgid "Une nouvelle unité ne peut pas référencer une unité existante."
+msgstr "Une nouvelle unité ne peut pas référencer une unité existante."
+
+msgid "Une même unité ne peut être sélectionnée deux fois."
+msgstr "Une même unité ne peut être sélectionnée deux fois."
+
+msgid "Le mode de lancement ne correspond pas à l'état de configuration de la ferme."
+msgstr "Le mode de lancement ne correspond pas à l'état de configuration de la ferme."
+
+msgid "Le plan de production est obligatoire pour le setup initial."
+msgstr "Le plan de production est obligatoire pour le setup initial."
+
+msgid "La configuration de la ferme est déjà terminée."
+msgstr "La configuration de la ferme est déjà terminée."
+
+msgid "La ferme doit être configurée avant de lancer un cycle supplémentaire."
+msgstr "La ferme doit être configurée avant de lancer un cycle supplémentaire."
+
+msgid "L'unité de production sélectionnée est inactive."
+msgstr "L'unité de production sélectionnée est inactive."
+
+msgid "Cette unité de production est déjà utilisée par un autre cycle actif."
+msgstr "Cette unité de production est déjà utilisée par un autre cycle actif."
+
+msgid "La capacité recommandée de l'unité de production est dépassée."
+msgstr "La capacité recommandée de l'unité de production est dépassée."
+
+msgid "La capacité de cette unité de production ne peut pas être déterminée."
+msgstr "La capacité de cette unité de production ne peut pas être déterminée."

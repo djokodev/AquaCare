@@ -1,5 +1,6 @@
 import { apiService } from '@/services/api';
-import { API_CONFIG } from '@/constants/api';
+import { API_CONFIG, API_ENDPOINTS } from '@/constants/api';
+import { normalizeFarmProfile } from '@/features/profile/services/farmProfileMapper';
 import logger from '@/utils/logger';
 import {
   ProductionCycle,
@@ -35,6 +36,8 @@ import {
   ProductionUnitDashboard,
   ProductionUnitCreatePayload,
   CycleUnitAllocationCreatePayload,
+  CycleLaunchRequest,
+  CycleLaunchResponse,
   ReportScopeType,
 } from '@/types/aquaculture';
 
@@ -347,6 +350,33 @@ class AquacultureService {
       return response.data;
     } catch (error) {
       logger.error('Erreur lors de la creation du cycle:', error);
+      throw error;
+    }
+  }
+
+  async launchProductionCycle(payload: CycleLaunchRequest): Promise<CycleLaunchResponse> {
+    try {
+      const response = await apiService.post<{
+        launch_uuid: string;
+        idempotent_replay: boolean;
+        farm_profile: Parameters<typeof normalizeFarmProfile>[0];
+        production_cycle: ProductionCycle;
+        production_units: ProductionUnit[];
+        cycle_unit_allocations: CycleUnitAllocation[];
+        production_unit_id_by_local_id: Record<string, string>;
+      }>(API_ENDPOINTS.AQUACULTURE.CYCLE_LAUNCH, payload);
+
+      return {
+        launchUuid: response.data.launch_uuid,
+        idempotentReplay: response.data.idempotent_replay,
+        farmProfile: normalizeFarmProfile(response.data.farm_profile),
+        productionCycle: response.data.production_cycle,
+        productionUnits: response.data.production_units,
+        cycleUnitAllocations: response.data.cycle_unit_allocations,
+        productionUnitIdByLocalId: response.data.production_unit_id_by_local_id,
+      };
+    } catch (error) {
+      logger.error('Erreur lors du lancement transactionnel du cycle:', error);
       throw error;
     }
   }

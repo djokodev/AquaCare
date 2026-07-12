@@ -8,6 +8,7 @@ from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import (
     OpenApiExample,
     OpenApiParameter,
+    OpenApiResponse,
     extend_schema,
     extend_schema_view,
 )
@@ -93,26 +94,20 @@ logger = logging.getLogger(__name__)
         ]
     ),
     create=extend_schema(
-        summary="Créer un nouveau cycle de production",
+        deprecated=True,
+        summary="Création directe désactivée (deprecated)",
         description="""
-        Crée un nouveau cycle de production aquacole.
-        Calcule automatiquement la biomasse initiale et initialise les métriques.
+        La création directe d'un cycle est désactivée pour les nouveaux parcours.
+        Utilisez POST /api/aquaculture/cycles/launch/ avec un mode de lancement,
+        des unités et leurs allocations. Les lectures, PATCH et les données legacy
+        restent disponibles.
         """,
-        examples=[
-            OpenApiExample(
-                'Nouveau cycle Clarias',
-                value={
-                    'cycle_name': 'Cycle Clarias P1-2025',
-                    'species': 'clarias',
-                    'pond_identifier': 'Bassin A1',
-                    'pond_surface_m2': 500.00,
-                    'pond_volume_m3': 600.00,
-                    'start_date': '2025-08-20',
-                    'initial_count': 5000,
-                    'initial_average_weight': 15.50
-                }
+        request=None,
+        responses={
+            400: OpenApiResponse(
+                description="cycle_launch_requires_production_units; utilisez /api/aquaculture/cycles/launch/"
             )
-        ]
+        }
     ),
     retrieve=extend_schema(
         summary="Détails d'un cycle de production",
@@ -147,6 +142,19 @@ class ProductionCycleViewSet(viewsets.ModelViewSet):
         if self.action == 'partial_harvest':
             return PartialHarvestSerializer
         return super().get_serializer_class()
+
+    def create(self, request, *args, **kwargs):
+        """Keep legacy reads/updates while requiring an aggregate launch for new cycles."""
+        return Response(
+            {
+                'code': 'cycle_launch_requires_production_units',
+                'detail': _(
+                    'Un nouveau cycle doit être lancé avec au moins une unité de production.'
+                ),
+                'endpoint': '/api/aquaculture/cycles/launch/',
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
 
     def get_queryset(self):
         """Retourne les cycles uniquement pour la ferme de l'utilisateur authentifié."""

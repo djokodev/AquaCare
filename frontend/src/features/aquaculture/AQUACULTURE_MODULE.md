@@ -22,7 +22,7 @@ Cette base de code couvre maintenant le flux complet des unites de production:
 1. Une unite de production represente un bac, un etang ou une cage physique.
 2. Le setup "Creer mon elevage" permet de declarer plusieurs unites, dont des duplications rapides d'un meme gabarit.
 3. La simulation de cycle calcule la repartition des poissons par unite.
-4. Le lancement du cycle persiste les unites et leurs allocations.
+4. Le lancement du cycle persiste le setup, le cycle, les unites et leurs allocations via un seul appel transactionnel.
 5. Le hub "Mes unites en production" ouvre la synthese globale du cycle puis le detail de chaque unite.
 6. Le dashboard unitaire reste scope a une seule `CycleUnitAllocation`.
 7. Les saisies journaliere et sanitaire restent unit-scoped quand elles sont lancees depuis une unite.
@@ -50,7 +50,7 @@ Le parcours cible est desormais le suivant:
 
 1. Setup des unites de production dans le formulaire d'eleveage.
 2. Repartition des poissons sur la base des capacites recommandees.
-3. Persistance des unites et allocations au lancement du cycle.
+3. Persistance atomique des unites et allocations au lancement du cycle.
 4. Arrivee sur le hub "Mes unites en production".
 5. Ouverture d'une unite et consultation du dashboard unitaire.
 6. Creation d'une saisie du jour ou d'un suivi sanitaire pour cette unite.
@@ -175,8 +175,9 @@ Flux:
 
 1. Form setup local, validation UX.
 2. Appel simulation backend `/aquaculture/production-plan/simulate/`.
-3. Appel setup backend `/aquaculture/production-plan/setup/`.
-4. Creation premier cycle via API cycles.
+3. Appel unique de lancement backend `/aquaculture/cycles/launch/`.
+4. Le `launchRequestId` reste stable pendant les recalculs et retries.
+5. Le parcours exige au moins une unité et une allocation positive par unité.
 
 ### 3. Cycle Operations
 
@@ -191,9 +192,12 @@ Ecrans:
 
 Pattern:
 
-1. Tentative online.
-2. Sur erreur reseau detectee, fallback offline automatique (`offlineService`).
-3. Sync silencieux au retour de connectivite.
+1. `NewCycleScreen` charge les unités actives existantes.
+2. L’utilisateur sélectionne au moins une unité et répartit l’effectif initial.
+3. L’écran envoie un seul `POST /aquaculture/cycles/launch/` en mode `additional_cycle`, avec un UUID stable pour les retries.
+4. Sur erreur réseau, le formulaire reste ouvert ; aucune création moderne de cycle isolé n’est sauvegardée offline. Le fallback `offlineService` reste réservé aux flux legacy et à la synchronisation historique.
+
+Règles de réutilisation : une unité physique ne peut avoir qu’une allocation active dans un cycle actif. Elle redevient disponible après récolte officielle ou passage dans un état canonique inactif. La capacité de chaque unité, y compris `source=existing`, est recalculée par le backend. Le nom personnalisé du cycle est trimé et persisté ; un nom absent ou vide est généré par le backend, et le replay identique reste autorisé.
 
 ### 4. Rapports
 
@@ -226,6 +230,7 @@ Service unique: `features/aquaculture/services/aquacultureService.ts`
 | --- | --- |
 | Dashboard | `GET /aquaculture/dashboard/` |
 | Cycle dashboard | `GET /aquaculture/cycles/{id}/dashboard/` |
+| Lancement transactionnel | `POST /aquaculture/cycles/launch/` |
 | Cycles CRUD | `/aquaculture/cycles/` |
 | Recolte finale | `POST /aquaculture/cycles/{id}/harvest/` |
 | Recolte partielle | `POST /aquaculture/cycles/{id}/partial-harvest/` |

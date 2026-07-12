@@ -46,6 +46,7 @@ export const API_ENDPOINTS = {
     SYNC: '/aquaculture/sync/',
     PRODUCTION_PLAN_SETUP: '/aquaculture/production-plan/setup/',
     PRODUCTION_PLAN_SIMULATE: '/aquaculture/production-plan/simulate/',
+    CYCLE_LAUNCH: '/aquaculture/cycles/launch/',
   },
 };
 

@@ -1,56 +1,59 @@
-import { aquacultureService } from '../aquacultureService';
-import { farmSetupService } from '../farmSetupService';
-import { launchFirstCycle } from '../firstCycleLaunchService';
+import { aquacultureService } from "../aquacultureService";
+import { launchFirstCycle } from "../firstCycleLaunchService";
 
-jest.mock('../aquacultureService', () => ({
+jest.mock("../aquacultureService", () => ({
   aquacultureService: {
-    createProductionCycle: jest.fn(),
-    createProductionUnit: jest.fn(),
-    createCycleUnitAllocation: jest.fn(),
+    launchProductionCycle: jest.fn(),
   },
 }));
 
-jest.mock('../farmSetupService', () => ({
-  farmSetupService: {
-    completeFarmSetup: jest.fn(),
-  },
-}));
-
-describe('features/aquaculture/services/firstCycleLaunchService', () => {
-  const mockAquaculture = aquacultureService as jest.Mocked<typeof aquacultureService>;
-  const mockFarmSetup = farmSetupService as jest.Mocked<typeof farmSetupService>;
-
-  const farmProfile = {
-    id: 'farm-1',
-    farm_name: 'Ferme Test',
-    certification_status: 'pending',
-    total_ponds: 1,
-    is_certified: false,
-    created_at: '2026-01-01T00:00:00Z',
-    updated_at: '2026-01-01T00:00:00Z',
+describe("features/aquaculture/services/firstCycleLaunchService", () => {
+  const mockAquaculture = aquacultureService as jest.Mocked<
+    typeof aquacultureService
+  >;
+  const launchResponse = {
+    launchUuid: "8bfdbf37-ef57-4829-a9b6-98a0c2645a31",
+    idempotentReplay: false,
+    farmProfile: { id: "farm-1" },
+    productionCycle: { id: "cycle-1" },
+    productionUnits: [{ id: "unit-1" }],
+    cycleUnitAllocations: [{ id: "allocation-1" }],
+    productionUnitIdByLocalId: { "unit-1": "unit-1" },
   } as any;
 
-  const productionCycle = {
-    id: 'cycle-1',
-    farm_profile: 'farm-1',
-    cycle_name: 'Cycle Tilapia 2026',
-    species: 'tilapia',
-    pond_identifier: 'Bac 1',
-    pond_surface_m2: 120,
-    start_date: '2026-05-15',
-    initial_count: 2100,
-    initial_average_weight: 10,
-    initial_biomass: 21,
-    current_count: 2100,
-    current_average_weight: 10,
-    current_biomass: 21,
-    total_feed_consumed: 0,
-    status: 'active',
-    created_at: '2026-05-15T00:00:00Z',
-    updated_at: '2026-05-15T00:00:00Z',
+  const formData = {
+    launchRequestId: launchResponse.launchUuid,
+    species: "tilapia",
+    infraType: "bac_hors_sol",
+    unitCount: "1",
+    unitVolume: "10",
+    unitSurface: "",
+    annualTarget: "",
+    startDate: "2026-05-15",
+    cycleDuration: "150",
+    fingerlingsPrice: "50",
+    sellingPrice: "2800",
+    otherCosts: "0",
+    fingerlingsCount: "2100",
+    harvestWeight: "350",
+    survivalRate: "95",
+    productionUnits: [
+      {
+        local_id: "unit-1",
+        name: "Bac 1",
+        unit_type: "tank",
+        volume_m3: "25",
+        surface_m2: "",
+      },
+    ],
+    productionUnitAllocations: [
+      { production_unit_local_id: "unit-1", fish_count: "2100" },
+    ],
   } as any;
 
-  const baseCurrentResult = {
+  const simulationResult = {
+    annual_production_target_kg: 700,
+    num_cycles: 1,
     cycle_duration_days: 150,
     cycle_fingerlings_cost_fcfa: 105000,
     cycle_other_costs_fcfa: 5000,
@@ -59,8 +62,8 @@ describe('features/aquaculture/services/firstCycleLaunchService', () => {
       {
         cycle_num: 1,
         production_kg: 0,
-        start_date_estimate: '2026-05-15',
-        end_date_estimate: '2026-08-28',
+        start_date_estimate: "2026-05-15",
+        end_date_estimate: "2026-10-11",
         duration_days: 150,
         feed_bags_total: 12,
         feed_cost_fcfa: 0,
@@ -70,343 +73,195 @@ describe('features/aquaculture/services/firstCycleLaunchService', () => {
     ],
   } as any;
 
-  const baseFormData = {
-    species: 'tilapia',
-    infraType: 'etang',
-    unitCount: '1',
-    unitVolume: '',
-    unitSurface: '120',
-    annualTarget: '',
-    startDate: '2026-04-01',
-    cycleDuration: '150',
-    fingerlingsPrice: '50',
-    sellingPrice: '2800',
-    otherCosts: '0',
-    fingerlingsCount: '2100',
-    harvestWeight: '350',
-    survivalRate: '95',
-    productionUnits: [],
-    productionUnitAllocations: [],
-  } as any;
-
   beforeEach(() => {
     jest.clearAllMocks();
-    mockFarmSetup.completeFarmSetup.mockResolvedValue(farmProfile);
-    mockAquaculture.createProductionCycle.mockResolvedValue(productionCycle);
-    mockAquaculture.createProductionUnit.mockImplementation(async (payload) => ({
-      id: payload.name === 'Bac 1' ? 'unit-backend-1' : 'unit-backend-2',
-      farm_profile: 'farm-1',
-      name: payload.name,
-      unit_type: payload.unit_type,
-      volume_m3: payload.volume_m3 ?? null,
-      surface_m2: payload.surface_m2 ?? null,
-      status: payload.status ?? 'active',
-      created_at: '2026-05-15T00:00:00Z',
-      updated_at: '2026-05-15T00:00:00Z',
-    } as any));
-    mockAquaculture.createCycleUnitAllocation.mockResolvedValue({
-      id: 'allocation-1',
-      cycle: 'cycle-1',
-      production_unit: 'unit-backend-1',
-      initial_fish_count: 900,
-      current_fish_count: 900,
-      initial_biomass_kg: 0,
-      current_biomass_kg: 0,
-      expected_survival_rate_pct: 95,
-      created_at: '2026-05-15T00:00:00Z',
-      updated_at: '2026-05-15T00:00:00Z',
-    } as any);
+    mockAquaculture.launchProductionCycle.mockResolvedValue(launchResponse);
   });
 
-  it('garde le flux legacy quand aucune production unit n\'est fournie', async () => {
+  it("effectue un seul appel réseau agrégé sans persistance best effort", async () => {
     const result = await launchFirstCycle({
-      formData: baseFormData,
-      simulationResult: baseCurrentResult,
-      defaultPondIdentifier: 'Bassin principal',
+      formData,
+      simulationResult,
+      defaultPondIdentifier: "Bassin principal",
     });
 
-    expect(mockFarmSetup.completeFarmSetup).toHaveBeenCalledTimes(1);
-    expect(mockAquaculture.createProductionCycle).toHaveBeenCalledTimes(1);
-    expect(mockAquaculture.createProductionUnit).not.toHaveBeenCalled();
-    expect(mockAquaculture.createCycleUnitAllocation).not.toHaveBeenCalled();
-    expect(result.productionUnitIdByLocalId).toEqual({});
-  });
-
-  it('persiste explicitement la durée personnalisée choisie', async () => {
-    await launchFirstCycle({
-      formData: baseFormData,
-      simulationResult: baseCurrentResult,
-      defaultPondIdentifier: 'Bassin principal',
-    });
-
-    expect(mockAquaculture.createProductionCycle).toHaveBeenCalledWith(
-      expect.objectContaining({ planned_cycle_duration_days: 150 })
-    );
-  });
-
-  it('rejette une durée de formulaire différente de la simulation', async () => {
-    await expect(
-      launchFirstCycle({
-        formData: { ...baseFormData, cycleDuration: '120' },
-        simulationResult: baseCurrentResult,
-        defaultPondIdentifier: 'Bassin principal',
-      })
-    ).rejects.toMatchObject({ translationKey: 'simulationCycleDurationMismatchError' });
-  });
-
-  it('rejette une durée de breakdown différente de la simulation', async () => {
-    await expect(
-      launchFirstCycle({
-        formData: baseFormData,
-        simulationResult: {
-          ...baseCurrentResult,
-          cycles_breakdown: [{ ...baseCurrentResult.cycles_breakdown[0], duration_days: 120 }],
-        },
-        defaultPondIdentifier: 'Bassin principal',
-      })
-    ).rejects.toMatchObject({ translationKey: 'simulationCycleDurationMismatchError' });
-  });
-
-  it('persiste les unités et allocations avec le mapping local vers backend', async () => {
-    const result = await launchFirstCycle({
-      formData: {
-        ...baseFormData,
-        productionUnits: [
-          {
-            local_id: 'unit-1',
-            name: 'Bac 1',
-            unit_type: 'tank',
-            volume_m3: '3',
-            surface_m2: '',
-          },
-          {
-            local_id: 'unit-2',
-            name: 'Étang principal',
-            unit_type: 'pond',
-            volume_m3: '',
-            surface_m2: '120',
-          },
-        ],
-        productionUnitAllocations: [
-          {
-            production_unit_local_id: 'unit-1',
-            fish_count: '900',
-          },
-          {
-            production_unit_local_id: 'unit-2',
-            fish_count: '1200',
-          },
-        ],
-      },
-      simulationResult: baseCurrentResult,
-      defaultPondIdentifier: 'Bassin principal',
-    });
-
-    expect(mockAquaculture.createProductionCycle).toHaveBeenCalledWith(
+    expect(mockAquaculture.launchProductionCycle).toHaveBeenCalledTimes(1);
+    expect(mockAquaculture.launchProductionCycle).toHaveBeenCalledWith(
       expect.objectContaining({
-        pond_identifier: 'Bac 1',
-        pond_volume_m3: 3,
-        infrastructure_type: ['tank', 'pond'],
-      })
+        launch_uuid: formData.launchRequestId,
+        launch_kind: "initial_setup",
+        production_units: [
+          {
+            local_id: "unit-1",
+            source: "new",
+            name: "Bac 1",
+            unit_type: "tank",
+            volume_m3: 25,
+          },
+        ],
+        allocations: [{ production_unit_local_id: "unit-1", fish_count: 2100 }],
+      }),
     );
-    expect(mockAquaculture.createProductionUnit).toHaveBeenNthCalledWith(1, {
-      name: 'Bac 1',
-      unit_type: 'tank',
-      volume_m3: 3,
-      status: 'active',
-    });
-    expect(mockAquaculture.createProductionUnit).toHaveBeenNthCalledWith(2, {
-      name: 'Étang principal',
-      unit_type: 'pond',
-      surface_m2: 120,
-      status: 'active',
-    });
-
-    const secondUnitPayload = mockAquaculture.createProductionUnit.mock.calls[1]?.[0] as any;
-    expect(secondUnitPayload.volume_m3).toBeUndefined();
-
-    expect(mockAquaculture.createCycleUnitAllocation).toHaveBeenNthCalledWith(1, {
-      cycle: 'cycle-1',
-      production_unit: 'unit-backend-1',
-      initial_fish_count: 900,
-      current_fish_count: 900,
-      expected_survival_rate_pct: 95,
-    });
-    expect(mockAquaculture.createCycleUnitAllocation).toHaveBeenNthCalledWith(2, {
-      cycle: 'cycle-1',
-      production_unit: 'unit-backend-2',
-      initial_fish_count: 1200,
-      current_fish_count: 1200,
-      expected_survival_rate_pct: 95,
-    });
-
-    expect(result.productionUnitIdByLocalId).toEqual({
-      'unit-1': 'unit-backend-1',
-      'unit-2': 'unit-backend-2',
-    });
+    const payload = mockAquaculture.launchProductionCycle.mock
+      .calls[0][0] as any;
+    expect(payload.cycle.current_fish_count).toBeUndefined();
+    expect(payload.cycle.initial_biomass).toBeUndefined();
+    expect(result.productionCycle.id).toBe("cycle-1");
   });
 
-  it('agrege l empreinte du cycle quand toutes les unites partagent le meme type', async () => {
+  it("conserve le même launch_uuid pour un retry", async () => {
     await launchFirstCycle({
-      formData: {
-        ...baseFormData,
-        productionUnits: [
-          {
-            local_id: 'unit-1',
-            name: 'Bac 1',
-            unit_type: 'tank',
-            volume_m3: '3',
-            surface_m2: '',
-          },
-          {
-            local_id: 'unit-2',
-            name: 'Bac 2',
-            unit_type: 'tank',
-            volume_m3: '5',
-            surface_m2: '',
-          },
-        ],
-        productionUnitAllocations: [
-          {
-            production_unit_local_id: 'unit-1',
-            fish_count: '900',
-          },
-          {
-            production_unit_local_id: 'unit-2',
-            fish_count: '1200',
-          },
-        ],
-      },
-      simulationResult: baseCurrentResult,
-      defaultPondIdentifier: 'Bassin principal',
+      formData,
+      simulationResult,
+      defaultPondIdentifier: "Bassin principal",
+    });
+    await launchFirstCycle({
+      formData,
+      simulationResult,
+      defaultPondIdentifier: "Bassin principal",
     });
 
-    expect(mockAquaculture.createProductionCycle).toHaveBeenCalledWith(
-      expect.objectContaining({
-        pond_volume_m3: 8,
-        infrastructure_type: ['tank'],
-      })
-    );
+    expect(mockAquaculture.launchProductionCycle).toHaveBeenCalledTimes(2);
+    expect(
+      mockAquaculture.launchProductionCycle.mock.calls[0][0].launch_uuid,
+    ).toBe(formData.launchRequestId);
+    expect(
+      mockAquaculture.launchProductionCycle.mock.calls[1][0].launch_uuid,
+    ).toBe(formData.launchRequestId);
   });
 
-  it('bloque le lancement si une allocation est manquante', async () => {
+  it("bloque un lancement sans unité réelle", async () => {
     await expect(
       launchFirstCycle({
         formData: {
-          ...baseFormData,
-          productionUnits: [
-            {
-              local_id: 'unit-1',
-              name: 'Bac 1',
-              unit_type: 'tank',
-              volume_m3: '3',
-              surface_m2: '',
-            },
-          ],
+          ...formData,
+          productionUnits: [],
           productionUnitAllocations: [],
         },
-        simulationResult: baseCurrentResult,
-        defaultPondIdentifier: 'Bassin principal',
-      })
+        simulationResult,
+        defaultPondIdentifier: "Bassin principal",
+      }),
     ).rejects.toMatchObject({
-      translationKey: 'simulationProductionUnitAllocationInvalidError',
+      translationKey: "createFarmAtLeastOneUnitError",
     });
-
-    expect(mockFarmSetup.completeFarmSetup).not.toHaveBeenCalled();
-    expect(mockAquaculture.createProductionCycle).not.toHaveBeenCalled();
+    expect(mockAquaculture.launchProductionCycle).not.toHaveBeenCalled();
   });
 
-  it('bloque le lancement si une allocation reference un local_id inconnu', async () => {
+  it("bloque une allocation partielle avant l appel réseau", async () => {
     await expect(
       launchFirstCycle({
         formData: {
-          ...baseFormData,
-          productionUnits: [
-            {
-              local_id: 'unit-1',
-              name: 'Bac 1',
-              unit_type: 'tank',
-              volume_m3: '3',
-              surface_m2: '',
-            },
-          ],
+          ...formData,
           productionUnitAllocations: [
-            {
-              production_unit_local_id: 'unit-unknown',
-              fish_count: '900',
-            },
+            { production_unit_local_id: "unit-1", fish_count: "2000" },
           ],
         },
-        simulationResult: baseCurrentResult,
-        defaultPondIdentifier: 'Bassin principal',
-      })
+        simulationResult,
+        defaultPondIdentifier: "Bassin principal",
+      }),
     ).rejects.toMatchObject({
-      translationKey: 'simulationProductionUnitAllocationInvalidError',
+      translationKey: "simulationProductionUnitAllocationInvalidError",
     });
-
-    expect(mockFarmSetup.completeFarmSetup).not.toHaveBeenCalled();
-    expect(mockAquaculture.createProductionCycle).not.toHaveBeenCalled();
+    expect(mockAquaculture.launchProductionCycle).not.toHaveBeenCalled();
   });
 
-  it('remonte une erreur lisible si la creation d une unite echoue', async () => {
-    mockAquaculture.createProductionUnit.mockRejectedValueOnce(new Error('boom'));
-
+  it("rejette une durée différente de la simulation", async () => {
     await expect(
       launchFirstCycle({
-        formData: {
-          ...baseFormData,
-          productionUnits: [
-            {
-              local_id: 'unit-1',
-              name: 'Bac 1',
-              unit_type: 'tank',
-              volume_m3: '10',
-              surface_m2: '',
-            },
-          ],
-          productionUnitAllocations: [
-            {
-              production_unit_local_id: 'unit-1',
-              fish_count: '2100',
-            },
-          ],
-        },
-        simulationResult: baseCurrentResult,
-        defaultPondIdentifier: 'Bassin principal',
-      })
+        formData: { ...formData, cycleDuration: "120" },
+        simulationResult,
+        defaultPondIdentifier: "Bassin principal",
+      }),
     ).rejects.toMatchObject({
-      translationKey: 'simulationUnableToSaveCycleProductionUnits',
+      translationKey: "simulationCycleDurationMismatchError",
     });
   });
 
-  it('remonte une erreur lisible si la creation d une allocation echoue', async () => {
-    mockAquaculture.createCycleUnitAllocation.mockRejectedValueOnce(new Error('boom'));
+  it("rejette une durée de breakdown différente de la simulation", async () => {
+    await expect(
+      launchFirstCycle({
+        formData,
+        simulationResult: {
+          ...simulationResult,
+          cycles_breakdown: [
+            { ...simulationResult.cycles_breakdown[0], duration_days: 120 },
+          ],
+        },
+        defaultPondIdentifier: "Bassin principal",
+      }),
+    ).rejects.toMatchObject({
+      translationKey: "simulationCycleDurationMismatchError",
+    });
+    expect(mockAquaculture.launchProductionCycle).not.toHaveBeenCalled();
+  });
 
+  it("rejette une allocation qui référence une unité inconnue", async () => {
     await expect(
       launchFirstCycle({
         formData: {
-          ...baseFormData,
-          productionUnits: [
-            {
-              local_id: 'unit-1',
-              name: 'Bac 1',
-              unit_type: 'tank',
-              volume_m3: '10',
-              surface_m2: '',
-            },
-          ],
+          ...formData,
           productionUnitAllocations: [
-            {
-              production_unit_local_id: 'unit-1',
-              fish_count: '2100',
-            },
+            { production_unit_local_id: "unit-unknown", fish_count: "2100" },
           ],
         },
-        simulationResult: baseCurrentResult,
-        defaultPondIdentifier: 'Bassin principal',
-      })
+        simulationResult,
+        defaultPondIdentifier: "Bassin principal",
+      }),
     ).rejects.toMatchObject({
-      translationKey: 'simulationUnableToSaveCycleUnitAllocations',
+      translationKey: "simulationProductionUnitAllocationInvalidError",
     });
+    expect(mockAquaculture.launchProductionCycle).not.toHaveBeenCalled();
+  });
+
+  it("rejette les allocations dupliquées pour une même unité", async () => {
+    await expect(
+      launchFirstCycle({
+        formData: {
+          ...formData,
+          productionUnitAllocations: [
+            { production_unit_local_id: "unit-1", fish_count: "1000" },
+            { production_unit_local_id: "unit-1", fish_count: "1100" },
+          ],
+        },
+        simulationResult,
+        defaultPondIdentifier: "Bassin principal",
+      }),
+    ).rejects.toMatchObject({
+      translationKey: "simulationProductionUnitAllocationInvalidError",
+    });
+    expect(mockAquaculture.launchProductionCycle).not.toHaveBeenCalled();
+  });
+
+  it("rejette une unité dont le type est invalide avant l appel réseau", async () => {
+    await expect(
+      launchFirstCycle({
+        formData: {
+          ...formData,
+          productionUnits: [
+            { ...formData.productionUnits[0], unit_type: "unknown" },
+          ],
+        },
+        simulationResult,
+        defaultPondIdentifier: "Bassin principal",
+      }),
+    ).rejects.toMatchObject({
+      translationKey: "simulationUnableToSaveCycleProductionUnits",
+    });
+    expect(mockAquaculture.launchProductionCycle).not.toHaveBeenCalled();
+  });
+
+  it("propage l erreur de lancement agrégé sans effectuer de second appel", async () => {
+    mockAquaculture.launchProductionCycle.mockRejectedValueOnce(
+      new Error("conflict"),
+    );
+
+    await expect(
+      launchFirstCycle({
+        formData,
+        simulationResult,
+        defaultPondIdentifier: "Bassin principal",
+      }),
+    ).rejects.toThrow("conflict");
+    expect(mockAquaculture.launchProductionCycle).toHaveBeenCalledTimes(1);
   });
 });

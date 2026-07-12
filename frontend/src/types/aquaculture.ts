@@ -3,24 +3,24 @@
  * Bases sur les modeles Django backend et l'API REST
  */
 
-import { Notification as NotificationPayload } from './notifications';
+import { Notification as NotificationPayload } from "./notifications";
 
 // =================== TYPES DE BASE ===================
 
-export type Species = 'tilapia' | 'clarias';
-export type CycleStatus = 'planned' | 'active' | 'harvested' | 'cancelled';
-export type ReportType = 'daily' | 'weekly' | 'monthly';
-export type ReportStatus = 'draft' | 'validated' | 'pending';
-export type ReportScopeType = 'cycle' | 'unit';
-export type EmailReportStatus = 'not_sent' | 'sent' | 'failed';
-export type WhatsAppReportStatus = 'not_shared' | 'shared';
+export type Species = "tilapia" | "clarias";
+export type CycleStatus = "planned" | "active" | "harvested" | "cancelled";
+export type ReportType = "daily" | "weekly" | "monthly";
+export type ReportStatus = "draft" | "validated" | "pending";
+export type ReportScopeType = "cycle" | "unit";
+export type EmailReportStatus = "not_sent" | "sent" | "failed";
+export type WhatsAppReportStatus = "not_shared" | "shared";
 export type SanitaryEventType =
-  | 'disease'
-  | 'treatment'
-  | 'vaccination'
-  | 'abnormal_mortality'
-  | 'water_quality'
-  | 'other';
+  | "disease"
+  | "treatment"
+  | "vaccination"
+  | "abnormal_mortality"
+  | "water_quality"
+  | "other";
 
 // =================== MODELES PRINCIPAUX ===================
 
@@ -80,7 +80,7 @@ export interface ProductionCycle {
 
   // Phase d'alimentation courante (calculée backend)
   feed_phase?: {
-    phase_key: 'pre_grossissement' | 'grossissement';
+    phase_key: "pre_grossissement" | "grossissement";
     phase_label: string;
     weight_range_g: [number, number];
     recommended_product: string;
@@ -273,11 +273,12 @@ export interface SanitaryLog {
   synced_at?: string;
 }
 
-export type ProductionUnitType = 'tank' | 'pond' | 'cage';
-export type ProductionUnitStatus = 'active' | 'inactive' | 'archived';
+export type ProductionUnitType = "tank" | "pond" | "cage";
+export type ProductionUnitStatus = "active" | "inactive" | "archived";
 
 export interface ProductionUnit {
   id: string;
+  client_uuid?: string | null;
   farm_profile: string;
   name: string;
   unit_type: ProductionUnitType;
@@ -300,6 +301,59 @@ export interface ProductionUnitCreatePayload {
   status?: ProductionUnitStatus;
 }
 
+export interface CycleLaunchUnitInput {
+  local_id: string;
+  source: "new" | "existing";
+  name?: string;
+  unit_type?: ProductionUnitType;
+  production_unit_id?: string;
+  volume_m3?: number;
+  surface_m2?: number;
+}
+
+export interface CycleLaunchAllocationInput {
+  production_unit_local_id: string;
+  fish_count: number;
+}
+
+export interface CycleLaunchRequest {
+  launch_uuid: string;
+  launch_kind: "initial_setup" | "additional_cycle";
+  production_plan?: {
+    annual_production_target_kg: number;
+    num_cycles_per_year: number;
+    fingerlings_cost_per_unit_fcfa: number;
+    planned_selling_price_per_kg_fcfa?: number;
+  };
+  cycle: {
+    cycle_name?: string;
+    species: Species;
+    start_date: string;
+    initial_count: number;
+    initial_average_weight?: number;
+    target_harvest_weight_g?: number;
+    planned_cycle_duration_days: number;
+    expected_survival_rate_pct: number;
+    planned_selling_price_per_kg_fcfa?: number;
+    fingerlings_cost_fcfa: number;
+    other_operational_costs_fcfa: number;
+    planned_feed_bags?: number;
+    created_offline: boolean;
+  };
+  production_units: CycleLaunchUnitInput[];
+  allocations: CycleLaunchAllocationInput[];
+}
+
+export interface CycleLaunchResponse {
+  launchUuid: string;
+  idempotentReplay: boolean;
+  farmProfile: import("@/features/profile/types/profile").FarmProfile;
+  productionCycle: ProductionCycle;
+  productionUnits: ProductionUnit[];
+  cycleUnitAllocations: CycleUnitAllocation[];
+  productionUnitIdByLocalId: Record<string, string>;
+}
+
 export interface ProductionUnitDraft {
   local_id: string;
   name: string;
@@ -318,7 +372,7 @@ export interface ProductionUnitAllocationStatus {
   fish_count: number | null;
   recommended_capacity: number | null;
   density: number | null;
-  density_unit: 'm3' | 'm2' | null;
+  density_unit: "m3" | "m2" | null;
   estimated_production_kg: number | null;
   is_over_capacity: boolean;
 }
@@ -333,7 +387,7 @@ export interface ProductionUnitFishAllocationValidationResult {
 }
 
 export interface ProductionUnitCompatibilitySummary {
-  legacy_infrastructure_type: 'etang' | 'cage_flottante' | 'bac_hors_sol';
+  legacy_infrastructure_type: "etang" | "cage_flottante" | "bac_hors_sol";
   legacy_unit_count: number;
   total_capacity: number | null;
   is_mixed: boolean;
@@ -342,13 +396,14 @@ export interface ProductionUnitCompatibilitySummary {
 
 export interface CycleUnitAllocation {
   id: string;
+  client_uuid?: string | null;
   cycle: string;
   production_unit: string;
   initial_fish_count: number;
   current_fish_count: number;
   initial_biomass_kg?: number | null;
   current_biomass_kg?: number | null;
-  status?: 'active' | 'harvested' | 'inactive';
+  status?: "active" | "harvested" | "inactive";
   status_display?: string;
   harvested_at?: string | null;
   final_harvest_date?: string | null;
@@ -415,7 +470,7 @@ export interface CycleDashboardSummary {
   last_daily_log_date?: string | null;
   last_sanitary_event_date?: string | null;
   has_allocations: boolean;
-  data_source: 'unit_allocations' | 'legacy_cycle';
+  data_source: "unit_allocations" | "legacy_cycle";
 }
 
 export interface CycleDashboard {
@@ -446,9 +501,9 @@ export interface NutritionalGuide {
 
 export interface ReportDispatchLog {
   id: string;
-  channel: 'email' | 'whatsapp';
+  channel: "email" | "whatsapp";
   channel_display?: string;
-  status: 'success' | 'failed';
+  status: "success" | "failed";
   status_display?: string;
   recipient: string;
   error_code?: string;
@@ -554,14 +609,14 @@ export interface SyncPayload {
 }
 
 export interface SyncError {
-  type: 'cycle' | 'cycle_log' | 'sanitary_log' | 'general';
+  type: "cycle" | "cycle_log" | "sanitary_log" | "general";
   data?: unknown;
   error: string;
   errors?: Record<string, string[]>;
 }
 
 export interface SyncResponse {
-  status: 'success' | 'partial_success' | 'error';
+  status: "success" | "partial_success" | "error";
   timestamp: string;
   processed: {
     cycles: number;
@@ -740,7 +795,7 @@ export interface CycleFeedStatus {
   bags_remaining_to_order: number;
 }
 
-export type CycleStoreStatus = 'not_started' | 'low' | 'check_stock' | 'ok';
+export type CycleStoreStatus = "not_started" | "low" | "check_stock" | "ok";
 
 export interface CycleStorePendingOrder {
   id: string;

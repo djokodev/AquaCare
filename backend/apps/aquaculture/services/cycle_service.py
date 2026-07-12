@@ -62,6 +62,7 @@ if TYPE_CHECKING:
 
 class CycleCreatePayload(TypedDict, total=False):
     client_uuid: Any
+    launch_payload_hash: str
     cycle_name: str
     species: str
     pond_identifier: str
