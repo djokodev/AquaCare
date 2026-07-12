@@ -27,6 +27,9 @@
 - A new cycle launch must include at least one real production unit.
 - `initial_setup` creates new units and completes setup; `additional_cycle` selects existing active units and never creates duplicates or rewrites setup.
 - Each launch unit has exactly one positive allocation, and the sum of allocations equals the cycle initial fish count.
+- A physical production unit can belong to at most one active cycle through one active allocation. The unit is reusable after official harvest or another canonical inactive state; historical inconsistent records remain readable.
+- Backend capacity validation applies independently to every new and existing unit. An unknown capacity is an error, and a local overflow is rejected even when the global allocation sum is correct.
+- `cycle_name` is trimmed and preserved when supplied; absent or blank names use the backend-generated default. It is part of the idempotency intent.
 - Launch setup, cycle, units, and allocations commit atomically; an intermediate failure rolls everything back. Additional-cycle rollback preserves the existing setup and units.
 - Launch retries use a stable `launch_uuid`; identical retries are replayed without duplicate rows, while changed payloads return a conflict.
 - Selling prices are resolved server-side when absent: 2,000 FCFA/kg for Clarias and 2,800 FCFA/kg for Tilapia. Zero and negative prices are invalid.

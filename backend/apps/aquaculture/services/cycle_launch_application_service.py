@@ -8,6 +8,7 @@ from decimal import Decimal
 from typing import Any
 
 from accounts.models import FarmProfile
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import IntegrityError, transaction
 from django.utils.translation import gettext_lazy as _
 
@@ -19,7 +20,10 @@ from ..domain.cycle_launch_idempotency import (
     derive_unit_client_uuid,
 )
 from ..domain.exceptions import AquacultureBusinessException, DataIntegrityError
-from ..domain.production_units import normalize_production_unit_type
+from ..domain.production_units import (
+    normalize_production_unit_type,
+    validate_production_unit_capacity,
+)
 from ..models import CycleUnitAllocation, ProductionCycle, ProductionUnit
 from .cycle_service import ProductionCycleService
 from .farm_production_plan_service import FarmProductionPlanService
@@ -49,6 +53,34 @@ class CycleLaunchUnitInactive(AquacultureBusinessException):
 
     default_code = "cycle_launch_unit_inactive"
     default_detail = _("L'unité de production sélectionnée est inactive.")
+
+
+class CycleLaunchUnitAlreadyAllocated(AquacultureBusinessException):
+    """An active unit allocation already occupies the selected unit."""
+
+    status_code = 409
+    default_code = "cycle_launch_unit_already_allocated"
+    default_detail = _(
+        "Cette unité de production est déjà utilisée par un autre cycle actif."
+    )
+
+
+class CycleLaunchUnitCapacityExceeded(AquacultureBusinessException):
+    """A selected unit cannot receive the requested fish count."""
+
+    default_code = "cycle_launch_unit_capacity_exceeded"
+    default_detail = _(
+        "La capacité recommandée de l'unité de production est dépassée."
+    )
+
+
+class CycleLaunchUnitCapacityUnavailable(AquacultureBusinessException):
+    """A selected unit has no calculable canonical capacity."""
+
+    default_code = "cycle_launch_unit_capacity_unavailable"
+    default_detail = _(
+        "La capacité de cette unité de production ne peut pas être déterminée."
+    )
 
 
 @dataclass(frozen=True)
@@ -130,7 +162,7 @@ class CycleLaunchApplicationService:
         cycle_data = {
             "client_uuid": payload["launch_uuid"],
             "launch_payload_hash": payload_hash,
-            "cycle_name": None,
+            "cycle_name": cycle.get("cycle_name") or None,
             "species": cycle["species"],
             "pond_identifier": unit_specs[0]["name"],
             "infrastructure_type": sorted({unit["unit_type"] for unit in unit_specs}),
@@ -193,6 +225,48 @@ class CycleLaunchApplicationService:
         if require_active and any(unit.status != "active" for unit in ordered_units):
             raise CycleLaunchUnitInactive()
         return ordered_units
+
+    @staticmethod
+    def _validate_existing_unit_availability(
+        units: list[ProductionUnit],
+    ) -> None:
+        occupied_unit_ids = set(
+            CycleUnitAllocation.objects.select_for_update()
+            .filter(
+                production_unit_id__in=[unit.id for unit in units],
+                status=CycleUnitAllocation.STATUS_ACTIVE,
+                cycle__status="active",
+            )
+            .values_list("production_unit_id", flat=True)
+        )
+        if occupied_unit_ids:
+            raise CycleLaunchUnitAlreadyAllocated()
+
+    @staticmethod
+    def _validate_existing_unit_capacities(
+        payload: dict[str, Any],
+        units: list[ProductionUnit],
+    ) -> None:
+        units_by_local_id = {
+            unit_data["local_id"]: unit
+            for unit_data, unit in zip(payload["production_units"], units)
+        }
+        allocations_by_local_id = {
+            allocation["production_unit_local_id"]: allocation
+            for allocation in payload["allocations"]
+        }
+        for local_id, unit in units_by_local_id.items():
+            try:
+                validate_production_unit_capacity(
+                    unit_type=unit.unit_type,
+                    fish_count=allocations_by_local_id[local_id]["fish_count"],
+                    volume_m3=unit.volume_m3,
+                    surface_m2=unit.surface_m2,
+                )
+            except DjangoValidationError as exc:
+                if exc.code == "cycle_launch_unit_capacity_unavailable":
+                    raise CycleLaunchUnitCapacityUnavailable() from exc
+                raise CycleLaunchUnitCapacityExceeded() from exc
 
     @classmethod
     def _resolve_new_units_for_replay(
@@ -330,6 +404,8 @@ class CycleLaunchApplicationService:
                 payload,
                 require_active=True,
             )
+            cls._validate_existing_unit_availability(production_units)
+            cls._validate_existing_unit_capacities(payload, production_units)
             unit_specs = cls._unit_specs_from_existing(payload, production_units)
 
         cycle_data = cls._build_cycle_data(payload, payload_hash, unit_specs)

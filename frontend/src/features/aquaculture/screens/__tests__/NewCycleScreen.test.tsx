@@ -151,12 +151,37 @@ describe("features/aquaculture/screens/NewCycleScreen", () => {
     expect(payload.allocations).toEqual([
       { production_unit_local_id: "existing-unit-1", fish_count: 1500 },
     ]);
+    expect(payload.cycle.cycle_name).toBeUndefined();
     expect(alertSpy).toHaveBeenCalledWith(
       "success",
       "cycleCreatedSuccess",
       expect.any(Array),
     );
     expect(mockOffline.saveNewCycleOffline).not.toHaveBeenCalled();
+    alertSpy.mockRestore();
+  });
+
+  it("transmet le nom de cycle personnalisé après trim", async () => {
+    const alertSpy = jest
+      .spyOn(Alert, "alert")
+      .mockImplementation(() => undefined);
+    const { getByTestId, getByText } = render(
+      <NewCycleScreen navigation={navigation} />,
+    );
+
+    await waitFor(() =>
+      expect(mockService.getProductionUnits).toHaveBeenCalled(),
+    );
+    fillValidForm(getByTestId, getByText);
+    fireEvent.changeText(getByTestId("newCycleName"), "  Cycle Test  ");
+    fireEvent.press(getByText("createCycle"));
+
+    await waitFor(() =>
+      expect(mockService.launchProductionCycle).toHaveBeenCalledTimes(1),
+    );
+    expect(
+      mockService.launchProductionCycle.mock.calls[0][0].cycle.cycle_name,
+    ).toBe("Cycle Test");
     alertSpy.mockRestore();
   });
 
@@ -250,4 +275,44 @@ describe("features/aquaculture/screens/NewCycleScreen", () => {
     expect(getByTestId("newCycleInitialCount").props.value).toBe("1500");
     alertSpy.mockRestore();
   });
+
+  it.each([
+    ["cycle_launch_unit_already_allocated", "cycleLaunchUnitAlreadyAllocated"],
+    ["cycle_launch_unit_capacity_exceeded", "cycleLaunchUnitCapacityExceeded"],
+  ])(
+    "conserve le formulaire sur erreur métier de lancement %s",
+    async (code, translationKey) => {
+      const alertSpy = jest
+        .spyOn(Alert, "alert")
+        .mockImplementation(() => undefined);
+      mockService.launchProductionCycle.mockRejectedValueOnce({
+        response: { status: 409, data: { code, detail: "business error" } },
+      });
+      mockParseApiError.mockReturnValue({
+        code,
+        message: "business error",
+      });
+      const { getByTestId, getByText } = render(
+        <NewCycleScreen navigation={navigation} />,
+      );
+
+      await waitFor(() =>
+        expect(mockService.getProductionUnits).toHaveBeenCalled(),
+      );
+      fillValidForm(getByTestId, getByText);
+      fireEvent.press(getByText("createCycle"));
+
+      await waitFor(() =>
+        expect(alertSpy).toHaveBeenCalledWith("error", translationKey, [
+          { text: "ok", style: "cancel" },
+        ]),
+      );
+      expect(getByTestId("newCycleInitialCount").props.value).toBe("1500");
+      expect(mockOffline.saveNewCycleOffline).not.toHaveBeenCalled();
+      expect(
+        mockService.launchProductionCycle.mock.calls[0][0].launch_uuid,
+      ).toBeTruthy();
+      alertSpy.mockRestore();
+    },
+  );
 });

@@ -106,22 +106,7 @@ logger = logging.getLogger(__name__)
             400: OpenApiResponse(
                 description="cycle_launch_requires_production_units; utilisez /api/aquaculture/cycles/launch/"
             )
-        },
-        examples=[
-            OpenApiExample(
-                'Nouveau cycle Clarias',
-                value={
-                    'cycle_name': 'Cycle Clarias P1-2025',
-                    'species': 'clarias',
-                    'pond_identifier': 'Bassin A1',
-                    'pond_surface_m2': 500.00,
-                    'pond_volume_m3': 600.00,
-                    'start_date': '2025-08-20',
-                    'initial_count': 5000,
-                    'initial_average_weight': 15.50
-                }
-            )
-        ]
+        }
     ),
     retrieve=extend_schema(
         summary="Détails d'un cycle de production",

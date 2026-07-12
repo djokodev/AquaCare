@@ -657,3 +657,12 @@ msgstr "The farm must be configured before launching an additional cycle."
 
 msgid "L'unité de production sélectionnée est inactive."
 msgstr "The selected production unit is inactive."
+
+msgid "Cette unité de production est déjà utilisée par un autre cycle actif."
+msgstr "This production unit is already assigned to another active cycle."
+
+msgid "La capacité recommandée de l'unité de production est dépassée."
+msgstr "The recommended capacity of the production unit has been exceeded."
+
+msgid "La capacité de cette unité de production ne peut pas être déterminée."
+msgstr "The capacity of this production unit cannot be determined."

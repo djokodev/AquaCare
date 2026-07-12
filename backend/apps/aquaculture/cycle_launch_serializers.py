@@ -11,8 +11,8 @@ from rest_framework import serializers
 
 from .domain.cycle_duration import MAX_CYCLE_DURATION_DAYS, MIN_CYCLE_DURATION_DAYS
 from .domain.production_units import (
-    get_production_unit_capacity,
     normalize_production_unit_type,
+    validate_production_unit_capacity,
     validate_production_unit_dimensions,
 )
 from .production_plan_serializers import ProductionPlanFarmProfileSerializer
@@ -46,6 +46,12 @@ class CycleLaunchProductionPlanSerializer(serializers.Serializer):
 class CycleLaunchCycleSerializer(serializers.Serializer):
     """Client-controlled cycle inputs; server-derived fields are intentionally absent."""
 
+    cycle_name = serializers.CharField(
+        max_length=100,
+        required=False,
+        allow_blank=True,
+        trim_whitespace=True,
+    )
     species = serializers.ChoiceField(choices=["tilapia", "clarias"])
     start_date = serializers.DateField()
     initial_count = serializers.IntegerField(min_value=1, max_value=100000)
@@ -250,14 +256,16 @@ class CycleLaunchRequestSerializer(serializers.Serializer):
             unit = units_by_id[allocation["production_unit_local_id"]]
             if unit["source"] == "existing":
                 continue
-            capacity = get_production_unit_capacity(
-                unit["unit_type"],
-                volume_m3=unit.get("volume_m3"),
-                surface_m2=unit.get("surface_m2"),
-            )
-            if capacity is None or Decimal(allocation["fish_count"]) > capacity:
+            try:
+                validate_production_unit_capacity(
+                    unit_type=unit["unit_type"],
+                    fish_count=allocation["fish_count"],
+                    volume_m3=unit.get("volume_m3"),
+                    surface_m2=unit.get("surface_m2"),
+                )
+            except DjangoValidationError as exc:
                 capacity_errors[allocation["production_unit_local_id"]] = str(
-                    _("La capacité recommandée de l'unité est dépassée.")
+                    exc.message
                 )
         if capacity_errors:
             raise serializers.ValidationError({"allocations": capacity_errors})

@@ -8,9 +8,16 @@ from uuid import uuid4
 import pytest
 from aquaculture.cycle_launch_serializers import CycleLaunchRequestSerializer
 from aquaculture.models import CycleUnitAllocation, FarmProductionPlan, ProductionCycle, ProductionUnit
-from aquaculture.services.cycle_launch_application_service import CycleLaunchApplicationService
+from aquaculture.services.cycle_launch_application_service import (
+    CycleLaunchApplicationService,
+    CycleLaunchUnitAlreadyAllocated,
+    CycleLaunchUnitCapacityExceeded,
+    CycleLaunchUnitCapacityUnavailable,
+)
+from aquaculture.services.cycle_service import ProductionCycleService
 from django.db import connection
 from django.urls import reverse
+from django.utils.translation import override
 from rest_framework import status
 
 
@@ -168,6 +175,13 @@ def test_additional_cycle_reuses_existing_units_and_preserves_setup(auth_client,
         format="json",
     )
     assert initial_response.status_code == status.HTTP_201_CREATED
+    initial_cycle = ProductionCycle.objects.get(farm_profile=farm_profile)
+    ProductionCycleService.harvest_cycle(
+        initial_cycle,
+        harvest_date=date.today(),
+        final_count=2000,
+        final_average_weight=Decimal("400"),
+    )
     existing_units = list(ProductionUnit.objects.filter(farm_profile=farm_profile).order_by("name"))
     plan_before = FarmProductionPlan.objects.get(farm_profile=farm_profile)
     setup_snapshot = {
@@ -345,6 +359,339 @@ def test_additional_cycle_rejects_foreign_and_inactive_units(
 
 
 @pytest.mark.django_db
+def test_additional_cycle_rejects_occupied_unit_but_accepts_another_free_unit(
+    auth_client,
+    farm_profile,
+):
+    initial_response = auth_client.post(
+        reverse("aquaculture:production_cycle_launch"),
+        launch_payload(),
+        format="json",
+    )
+    assert initial_response.status_code == status.HTTP_201_CREATED
+    occupied_unit = ProductionUnit.objects.filter(farm_profile=farm_profile).order_by("name").first()
+    free_unit = ProductionUnit.objects.create(
+        farm_profile=farm_profile,
+        name="Bassin libre",
+        unit_type="tank",
+        volume_m3=12,
+    )
+
+    free_response = auth_client.post(
+        reverse("aquaculture:production_cycle_launch"),
+        additional_launch_payload([free_unit]),
+        format="json",
+    )
+    assert free_response.status_code == status.HTTP_201_CREATED
+
+    occupied_response = auth_client.post(
+        reverse("aquaculture:production_cycle_launch"),
+        additional_launch_payload([occupied_unit]),
+        format="json",
+    )
+
+    assert occupied_response.status_code == status.HTTP_409_CONFLICT
+    assert occupied_response.data["code"] == "cycle_launch_unit_already_allocated"
+    assert ProductionCycle.objects.filter(farm_profile=farm_profile).count() == 2
+    assert CycleUnitAllocation.objects.filter(cycle__farm_profile=farm_profile).count() == 3
+
+
+@pytest.mark.django_db
+def test_harvested_allocation_can_reuse_its_production_unit(auth_client, farm_profile):
+    initial_response = auth_client.post(
+        reverse("aquaculture:production_cycle_launch"),
+        launch_payload(),
+        format="json",
+    )
+    assert initial_response.status_code == status.HTTP_201_CREATED
+    allocation = CycleUnitAllocation.objects.filter(
+        cycle__farm_profile=farm_profile,
+        initial_fish_count=1200,
+    ).get()
+    ProductionCycleService.harvest_cycle_unit_allocation(
+        allocation,
+        harvest_date=date.today(),
+        final_count=1200,
+        final_average_weight=Decimal("400"),
+    )
+
+    response = auth_client.post(
+        reverse("aquaculture:production_cycle_launch"),
+        additional_launch_payload([allocation.production_unit]),
+        format="json",
+    )
+
+    assert response.status_code == status.HTTP_201_CREATED
+
+
+@pytest.mark.django_db
+def test_harvested_cycle_can_reuse_its_production_units(auth_client, farm_profile):
+    initial_response = auth_client.post(
+        reverse("aquaculture:production_cycle_launch"),
+        launch_payload(),
+        format="json",
+    )
+    assert initial_response.status_code == status.HTTP_201_CREATED
+    initial_cycle = ProductionCycle.objects.get(farm_profile=farm_profile)
+    ProductionCycleService.harvest_cycle(
+        initial_cycle,
+        harvest_date=date.today(),
+        final_count=2000,
+        final_average_weight=Decimal("400"),
+    )
+    existing_units = list(ProductionUnit.objects.filter(farm_profile=farm_profile).order_by("name"))
+
+    response = auth_client.post(
+        reverse("aquaculture:production_cycle_launch"),
+        additional_launch_payload(existing_units),
+        format="json",
+    )
+
+    assert response.status_code == status.HTTP_201_CREATED
+
+
+@pytest.mark.django_db
+def test_existing_tank_capacity_accepts_exact_limit_and_rejects_overflow(
+    auth_client,
+    farm_profile,
+):
+    initial_response = auth_client.post(
+        reverse("aquaculture:production_cycle_launch"),
+        launch_payload(),
+        format="json",
+    )
+    assert initial_response.status_code == status.HTTP_201_CREATED
+    exact_unit = ProductionUnit.objects.create(
+        farm_profile=farm_profile,
+        name="Bac capacité exacte",
+        unit_type="tank",
+        volume_m3=4,
+    )
+    exact_payload = additional_launch_payload([exact_unit])
+    exact_payload["cycle"]["initial_count"] = 1200
+    exact_payload["allocations"][0]["fish_count"] = 1200
+    exact_response = auth_client.post(
+        reverse("aquaculture:production_cycle_launch"),
+        exact_payload,
+        format="json",
+    )
+    assert exact_response.status_code == status.HTTP_201_CREATED
+
+    overflow_unit = ProductionUnit.objects.create(
+        farm_profile=farm_profile,
+        name="Bac capacité dépassée",
+        unit_type="tank",
+        volume_m3=4,
+    )
+    overflow_payload = additional_launch_payload([overflow_unit])
+    overflow_payload["cycle"]["initial_count"] = 1201
+    overflow_payload["allocations"][0]["fish_count"] = 1201
+    overflow_response = auth_client.post(
+        reverse("aquaculture:production_cycle_launch"),
+        overflow_payload,
+        format="json",
+    )
+
+    assert overflow_response.status_code == status.HTTP_400_BAD_REQUEST
+    assert overflow_response.data["code"] == "cycle_launch_unit_capacity_exceeded"
+    assert ProductionCycle.objects.filter(farm_profile=farm_profile).count() == 2
+
+
+@pytest.mark.django_db
+def test_existing_pond_capacity_is_validated(auth_client, farm_profile):
+    initial_response = auth_client.post(
+        reverse("aquaculture:production_cycle_launch"),
+        launch_payload(),
+        format="json",
+    )
+    assert initial_response.status_code == status.HTTP_201_CREATED
+    pond = ProductionUnit.objects.create(
+        farm_profile=farm_profile,
+        name="Étang capacité",
+        unit_type="pond",
+        surface_m2=120,
+    )
+    payload = additional_launch_payload([pond])
+    payload["cycle"]["initial_count"] = 1200
+    payload["allocations"][0]["fish_count"] = 1200
+
+    response = auth_client.post(
+        reverse("aquaculture:production_cycle_launch"),
+        payload,
+        format="json",
+    )
+
+    assert response.status_code == status.HTTP_201_CREATED
+
+
+@pytest.mark.django_db
+def test_existing_unit_without_dimensions_returns_structured_capacity_error(
+    auth_client,
+    farm_profile,
+):
+    initial_response = auth_client.post(
+        reverse("aquaculture:production_cycle_launch"),
+        launch_payload(),
+        format="json",
+    )
+    assert initial_response.status_code == status.HTTP_201_CREATED
+    unit = ProductionUnit.objects.create(
+        farm_profile=farm_profile,
+        name="Bac sans dimension",
+        unit_type="tank",
+        volume_m3=4,
+    )
+    ProductionUnit.objects.filter(pk=unit.pk).update(volume_m3=None)
+    payload = additional_launch_payload([unit])
+
+    response = auth_client.post(
+        reverse("aquaculture:production_cycle_launch"),
+        payload,
+        format="json",
+    )
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert response.data["code"] == "cycle_launch_unit_capacity_unavailable"
+    assert ProductionCycle.objects.filter(farm_profile=farm_profile).count() == 1
+    assert CycleUnitAllocation.objects.filter(cycle__farm_profile=farm_profile).count() == 2
+
+
+@pytest.mark.django_db
+def test_existing_unit_overflow_is_rejected_even_when_total_is_valid(
+    auth_client,
+    farm_profile,
+):
+    initial_response = auth_client.post(
+        reverse("aquaculture:production_cycle_launch"),
+        launch_payload(),
+        format="json",
+    )
+    assert initial_response.status_code == status.HTTP_201_CREATED
+    first_unit = ProductionUnit.objects.create(
+        farm_profile=farm_profile,
+        name="Bac surcharge",
+        unit_type="tank",
+        volume_m3=4,
+    )
+    second_unit = ProductionUnit.objects.create(
+        farm_profile=farm_profile,
+        name="Bac équilibré",
+        unit_type="tank",
+        volume_m3=4,
+    )
+    payload = additional_launch_payload([first_unit, second_unit])
+    payload["cycle"]["initial_count"] = 2400
+    payload["allocations"] = [
+        {"production_unit_local_id": f"selected-{first_unit.id}", "fish_count": 1201},
+        {"production_unit_local_id": f"selected-{second_unit.id}", "fish_count": 1199},
+    ]
+
+    response = auth_client.post(
+        reverse("aquaculture:production_cycle_launch"),
+        payload,
+        format="json",
+    )
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert response.data["code"] == "cycle_launch_unit_capacity_exceeded"
+    assert ProductionCycle.objects.filter(farm_profile=farm_profile).count() == 1
+
+
+@pytest.mark.django_db
+def test_additional_cycle_preserves_custom_name_and_hashes_it(
+    auth_client,
+    farm_profile,
+):
+    initial_response = auth_client.post(
+        reverse("aquaculture:production_cycle_launch"),
+        launch_payload(),
+        format="json",
+    )
+    assert initial_response.status_code == status.HTTP_201_CREATED
+    ProductionCycleService.harvest_cycle(
+        ProductionCycle.objects.get(farm_profile=farm_profile),
+        harvest_date=date.today(),
+        final_count=2000,
+        final_average_weight=Decimal("400"),
+    )
+    unit = ProductionUnit.objects.filter(farm_profile=farm_profile).order_by("name").first()
+    payload = additional_launch_payload([unit])
+    payload["cycle"]["cycle_name"] = "  Cycle Clarias Bassin Nord  "
+
+    response = auth_client.post(
+        reverse("aquaculture:production_cycle_launch"),
+        payload,
+        format="json",
+    )
+    assert response.status_code == status.HTTP_201_CREATED
+    cycle = ProductionCycle.objects.get(client_uuid=payload["launch_uuid"])
+    assert cycle.cycle_name == "Cycle Clarias Bassin Nord"
+
+    replay = auth_client.post(
+        reverse("aquaculture:production_cycle_launch"),
+        payload,
+        format="json",
+    )
+    assert replay.status_code == status.HTTP_200_OK
+
+    conflict_payload = {**payload, "cycle": {**payload["cycle"], "cycle_name": "Autre nom"}}
+    conflict = auth_client.post(
+        reverse("aquaculture:production_cycle_launch"),
+        conflict_payload,
+        format="json",
+    )
+    assert conflict.status_code == status.HTTP_409_CONFLICT
+    assert conflict.data["code"] == "cycle_launch_idempotency_conflict"
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("cycle_name", [None, "   "])
+def test_missing_or_blank_cycle_name_uses_backend_default(auth_client, cycle_name):
+    payload = launch_payload()
+    if cycle_name is None:
+        payload["cycle"].pop("cycle_name", None)
+    else:
+        payload["cycle"]["cycle_name"] = cycle_name
+
+    response = auth_client.post(
+        reverse("aquaculture:production_cycle_launch"),
+        payload,
+        format="json",
+    )
+
+    assert response.status_code == status.HTTP_201_CREATED
+    assert response.data["production_cycle"]["cycle_name"].startswith("Cycle Clarias")
+
+
+@pytest.mark.parametrize(
+    ("language", "expected_messages"),
+    [
+        (
+            "fr",
+            [
+                "Cette unité de production est déjà utilisée par un autre cycle actif.",
+                "La capacité recommandée de l'unité de production est dépassée.",
+                "La capacité de cette unité de production ne peut pas être déterminée.",
+            ],
+        ),
+        (
+            "en",
+            [
+                "This production unit is already assigned to another active cycle.",
+                "The recommended capacity of the production unit has been exceeded.",
+                "The capacity of this production unit cannot be determined.",
+            ],
+        ),
+    ],
+)
+def test_new_launch_errors_are_localized(language, expected_messages):
+    with override(language):
+        assert str(CycleLaunchUnitAlreadyAllocated().detail) == expected_messages[0]
+        assert str(CycleLaunchUnitCapacityExceeded().detail) == expected_messages[1]
+        assert str(CycleLaunchUnitCapacityUnavailable().detail) == expected_messages[2]
+
+
+@pytest.mark.django_db
 def test_launch_preserves_client_unit_and_allocation_order(auth_client):
     payload = launch_payload()
     payload["production_units"].reverse()
@@ -375,6 +722,12 @@ def test_additional_cycle_payload_change_returns_idempotency_conflict(auth_clien
         format="json",
     )
     assert initial_response.status_code == status.HTTP_201_CREATED
+    ProductionCycleService.harvest_cycle(
+        ProductionCycle.objects.get(farm_profile=farm_profile),
+        harvest_date=date.today(),
+        final_count=2000,
+        final_average_weight=Decimal("400"),
+    )
     existing_units = list(ProductionUnit.objects.filter(farm_profile=farm_profile).order_by("name"))
     payload = additional_launch_payload(existing_units)
     created = auth_client.post(
@@ -410,6 +763,12 @@ def test_additional_cycle_rolls_back_cycle_and_allocations(
         format="json",
     )
     assert initial_response.status_code == status.HTTP_201_CREATED
+    ProductionCycleService.harvest_cycle(
+        ProductionCycle.objects.get(farm_profile=farm_profile),
+        harvest_date=date.today(),
+        final_count=2000,
+        final_average_weight=Decimal("400"),
+    )
     existing_units = list(ProductionUnit.objects.filter(farm_profile=farm_profile).order_by("name"))
     original_save = CycleUnitAllocation.save
 
@@ -496,3 +855,50 @@ def test_concurrent_identical_launches_create_one_aggregate(farm_profile):
     assert ProductionCycle.objects.filter(farm_profile=farm_profile).count() == 1
     assert ProductionUnit.objects.filter(farm_profile=farm_profile).count() == 2
     assert CycleUnitAllocation.objects.filter(cycle__farm_profile=farm_profile).count() == 2
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.skipif(
+    connection.vendor != "postgresql",
+    reason="Concurrent row-lock verification requires PostgreSQL",
+)
+def test_concurrent_different_launches_reserve_one_existing_unit(farm_profile):
+    setup_serializer = CycleLaunchRequestSerializer(data=launch_payload())
+    assert setup_serializer.is_valid(), setup_serializer.errors
+    user = farm_profile.user
+    initial_result = CycleLaunchApplicationService.launch(
+        user,
+        setup_serializer.validated_data,
+    )
+    unit = initial_result.production_units[0]
+    CycleUnitAllocation.objects.filter(
+        cycle=initial_result.production_cycle,
+        production_unit=unit,
+    ).update(status=CycleUnitAllocation.STATUS_HARVESTED)
+    payloads = [
+        additional_launch_payload([unit], launch_uuid=str(uuid4())),
+        additional_launch_payload([unit], launch_uuid=str(uuid4())),
+    ]
+    validated_payloads = []
+    for payload in payloads:
+        serializer = CycleLaunchRequestSerializer(data=payload)
+        assert serializer.is_valid(), serializer.errors
+        validated_payloads.append(serializer.validated_data)
+
+    def launch_once(payload):
+        connection.close()
+        try:
+            return CycleLaunchApplicationService.launch(user, payload)
+        except CycleLaunchUnitAlreadyAllocated:
+            return "occupied"
+        finally:
+            connection.close()
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(executor.map(launch_once, validated_payloads))
+
+    assert sum(result != "occupied" for result in results) == 1
+    assert results.count("occupied") == 1
+    assert ProductionCycle.objects.filter(farm_profile=farm_profile).count() == 2
+    assert ProductionUnit.objects.filter(farm_profile=farm_profile).count() == 2
+    assert CycleUnitAllocation.objects.filter(cycle__farm_profile=farm_profile).count() == 3

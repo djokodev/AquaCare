@@ -326,6 +326,7 @@ export interface CycleLaunchRequest {
     planned_selling_price_per_kg_fcfa?: number;
   };
   cycle: {
+    cycle_name?: string;
     species: Species;
     start_date: string;
     initial_count: number;

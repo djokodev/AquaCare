@@ -197,6 +197,8 @@ Pattern:
 3. L’écran envoie un seul `POST /aquaculture/cycles/launch/` en mode `additional_cycle`, avec un UUID stable pour les retries.
 4. Sur erreur réseau, le formulaire reste ouvert ; aucune création moderne de cycle isolé n’est sauvegardée offline. Le fallback `offlineService` reste réservé aux flux legacy et à la synchronisation historique.
 
+Règles de réutilisation : une unité physique ne peut avoir qu’une allocation active dans un cycle actif. Elle redevient disponible après récolte officielle ou passage dans un état canonique inactif. La capacité de chaque unité, y compris `source=existing`, est recalculée par le backend. Le nom personnalisé du cycle est trimé et persisté ; un nom absent ou vide est généré par le backend, et le replay identique reste autorisé.
+
 ### 4. Rapports
 
 Ecrans:

@@ -7,7 +7,7 @@ import logging
 from accounts.models import FarmProfile
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.http import Http404
-from drf_spectacular.utils import OpenApiResponse, extend_schema
+from drf_spectacular.utils import OpenApiExample, OpenApiResponse, extend_schema
 from rest_framework import permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -50,8 +50,75 @@ class CycleLaunchView(APIView):
             200: OpenApiResponse(CycleLaunchResponseSerializer),
             400: OpenApiResponse(description="Payload ou règle métier invalide"),
             404: OpenApiResponse(description="Ferme introuvable"),
-            409: OpenApiResponse(description="Conflit d'idempotence"),
+            409: OpenApiResponse(description="Conflit d'idempotence ou unité occupée"),
         },
+        examples=[
+            OpenApiExample(
+                "Initial setup",
+                request_only=True,
+                value={
+                    "launch_uuid": "11111111-1111-4111-8111-111111111111",
+                    "launch_kind": "initial_setup",
+                    "production_plan": {
+                        "annual_production_target_kg": "1520.00",
+                        "num_cycles_per_year": 2,
+                        "fingerlings_cost_per_unit_fcfa": "50.00",
+                    },
+                    "cycle": {
+                        "species": "clarias",
+                        "start_date": "2026-07-12",
+                        "initial_count": 2000,
+                        "planned_cycle_duration_days": 120,
+                        "expected_survival_rate_pct": "95.00",
+                        "fingerlings_cost_fcfa": "100000.00",
+                        "other_operational_costs_fcfa": "12000.00",
+                    },
+                    "production_units": [
+                        {
+                            "local_id": "unit-a",
+                            "source": "new",
+                            "name": "Bassin A",
+                            "unit_type": "tank",
+                            "volume_m3": "12",
+                        }
+                    ],
+                    "allocations": [
+                        {"production_unit_local_id": "unit-a", "fish_count": 2000}
+                    ],
+                },
+            ),
+            OpenApiExample(
+                "Additional cycle",
+                request_only=True,
+                value={
+                    "launch_uuid": "22222222-2222-4222-8222-222222222222",
+                    "launch_kind": "additional_cycle",
+                    "cycle": {
+                        "cycle_name": "Cycle Clarias Bassin Nord",
+                        "species": "clarias",
+                        "start_date": "2026-07-12",
+                        "initial_count": 1200,
+                        "planned_cycle_duration_days": 120,
+                        "expected_survival_rate_pct": "95.00",
+                        "fingerlings_cost_fcfa": "60000.00",
+                        "other_operational_costs_fcfa": "8000.00",
+                    },
+                    "production_units": [
+                        {
+                            "local_id": "existing-unit-a",
+                            "source": "existing",
+                            "production_unit_id": "33333333-3333-4333-8333-333333333333",
+                        }
+                    ],
+                    "allocations": [
+                        {
+                            "production_unit_local_id": "existing-unit-a",
+                            "fish_count": 1200,
+                        }
+                    ],
+                },
+            ),
+        ],
     )
     def post(self, request, *args, **kwargs):
         serializer = CycleLaunchRequestSerializer(data=request.data)

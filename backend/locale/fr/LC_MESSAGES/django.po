@@ -140,3 +140,12 @@ msgstr "La ferme doit être configurée avant de lancer un cycle supplémentaire
 
 msgid "L'unité de production sélectionnée est inactive."
 msgstr "L'unité de production sélectionnée est inactive."
+
+msgid "Cette unité de production est déjà utilisée par un autre cycle actif."
+msgstr "Cette unité de production est déjà utilisée par un autre cycle actif."
+
+msgid "La capacité recommandée de l'unité de production est dépassée."
+msgstr "La capacité recommandée de l'unité de production est dépassée."
+
+msgid "La capacité de cette unité de production ne peut pas être déterminée."
+msgstr "La capacité de cette unité de production ne peut pas être déterminée."

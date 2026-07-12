@@ -197,7 +197,9 @@ jobs:
           CELERY_RESULT_BACKEND: redis://127.0.0.1:6379/0
         run: |
           pytest -n 0 apps/aquaculture/tests/test_cycle_launch.py -q
-          if pytest -n 0 apps/aquaculture/tests/test_cycle_launch.py -q -k concurrent_identical_launches_create_one_aggregate | grep -q SKIPPED; then
+          concurrency_output="$(pytest -n 0 apps/aquaculture/tests/test_cycle_launch.py -q -k 'concurrent_identical_launches_create_one_aggregate or concurrent_different_launches_reserve_one_existing_unit')"
+          echo "$concurrency_output"
+          if echo "$concurrency_output" | grep -qi skipped; then
             echo "Concurrent PostgreSQL launch test was skipped"
             exit 1
           fi

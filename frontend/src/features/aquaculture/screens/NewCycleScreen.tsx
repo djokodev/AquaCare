@@ -55,6 +55,12 @@ const SPECIES_OPTIONS = [
   { value: "tilapia", labelKey: "tilapia", durationDays: 180 },
 ] as const;
 
+const TRANSACTIONAL_LAUNCH_ERROR_KEYS: Record<string, string> = {
+  cycle_launch_unit_already_allocated: "cycleLaunchUnitAlreadyAllocated",
+  cycle_launch_unit_capacity_exceeded: "cycleLaunchUnitCapacityExceeded",
+  cycle_launch_unit_capacity_unavailable: "cycleLaunchUnitCapacityUnavailable",
+};
+
 type NewCycleScreenNavigationProp = StackNavigationProp<
   RootStackParamList,
   "NewCycle"
@@ -256,9 +262,14 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
       }
       const parsedError = parseApiError(error);
       logApiError(error, "Creation cycle de production");
-      Alert.alert(t("error"), parsedError.message, [
-        { text: t("ok"), style: "cancel" },
-      ]);
+      const translatedError = parsedError.code
+        ? TRANSACTIONAL_LAUNCH_ERROR_KEYS[parsedError.code]
+        : undefined;
+      Alert.alert(
+        t("error"),
+        translatedError ? t(translatedError) : parsedError.message,
+        [{ text: t("ok"), style: "cancel" }],
+      );
     } finally {
       setSaving(false);
     }
@@ -532,6 +543,7 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
             <TextInput
               className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
               style={sharedTextInputStyles.base}
+              testID="newCycleName"
               value={formData.cycle_name}
               onChangeText={(value) =>
                 setFormData((prev) => ({ ...prev, cycle_name: value }))

@@ -122,6 +122,9 @@ export const buildAdditionalCycleLaunchRequest = (
     other_operational_costs_fcfa:
       toFiniteNumber(formData.other_operational_costs_fcfa) ?? 0,
     created_offline: false,
+    ...(formData.cycle_name.trim()
+      ? { cycle_name: formData.cycle_name.trim() }
+      : {}),
     ...(toFiniteNumber(formData.initial_average_weight) === undefined
       ? {}
       : {

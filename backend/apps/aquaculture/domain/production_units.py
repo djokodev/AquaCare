@@ -92,6 +92,32 @@ def get_production_unit_capacity(
     return None
 
 
+def validate_production_unit_capacity(
+    *,
+    unit_type: str | None,
+    fish_count: int,
+    volume_m3: Decimal | None = None,
+    surface_m2: Decimal | None = None,
+) -> Decimal:
+    """Validate one allocation against the canonical capacity calculation."""
+    capacity = get_production_unit_capacity(
+        unit_type,
+        volume_m3=volume_m3,
+        surface_m2=surface_m2,
+    )
+    if capacity is None:
+        raise ValidationError(
+            _("La capacité de cette unité de production ne peut pas être déterminée."),
+            code="cycle_launch_unit_capacity_unavailable",
+        )
+    if Decimal(fish_count) > capacity:
+        raise ValidationError(
+            _("La capacité recommandée de l'unité de production est dépassée."),
+            code="cycle_launch_unit_capacity_exceeded",
+        )
+    return capacity
+
+
 def validate_production_unit_dimensions(
     unit_type: str | None,
     *,
