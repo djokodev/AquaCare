@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import pytest
 from aquaculture.models import CycleUnitAllocation, ProductionReport, ProductionUnit
-from aquaculture.services.report_service import ReportService
+from aquaculture.services.report_service import ReportService, UnresolvableLegacyReportScopeError
 from aquaculture.services.report_visuals import build_donut_svg, build_growth_svg
 from django.core import mail
 from django.core.files.base import ContentFile
@@ -146,6 +146,20 @@ class TestReportServiceEmailFormatting:
         assert "Analyzed period:" in mail.outbox[0].body
         assert "Période analysée:" not in mail.outbox[0].body
 
+    def test_send_email_uses_existing_pdf_without_regeneration(self):
+        owner = UserFactory(email="existing-report@test.com")
+        farm_profile = FarmProfileFactory(user=owner)
+        report = _create_report(farm_profile=farm_profile)
+        report.pdf_file.save("existing-report.pdf", ContentFile(b"%PDF-existing"), save=True)
+        sender = UserFactory()
+
+        with patch.object(ReportService, "regenerate") as mock_regenerate:
+            updated_report = ReportService.send_email(report, sender)
+
+        mock_regenerate.assert_not_called()
+        assert updated_report.email_status == "sent"
+        assert mail.outbox[0].attachments[0][1] == b"%PDF-existing"
+
     @pytest.mark.parametrize("status", ["draft", "validated"])
     def test_send_email_regenerates_missing_pdf_and_preserves_status(self, status):
         owner = UserFactory(email=f"{status}-report@test.com")
@@ -171,6 +185,46 @@ class TestReportServiceEmailFormatting:
         assert updated_report.email_status == "sent"
         assert len(mail.outbox) == 1
         assert mail.outbox[0].attachments[0][1] == b"%PDF-regenerated"
+
+    @pytest.mark.parametrize("status", ["draft", "validated"])
+    def test_send_email_regenerates_when_pdf_path_is_stale(self, status):
+        owner = UserFactory(email=f"stale-{status}@test.com")
+        farm_profile = FarmProfileFactory(user=owner)
+        cycle = ProductionCycleFactory(farm_profile=farm_profile, start_date=date(2026, 2, 1))
+        sender = UserFactory()
+        report = _create_report(
+            farm_profile=farm_profile,
+            status=status,
+            scope_object_id=cycle.id,
+        )
+        report.pdf_file.name = "reports/physically-missing.pdf"
+        report.save(update_fields=["pdf_file"])
+        if status == "validated":
+            report.validated_by = sender
+            report.validated_at = timezone.now()
+            report.save(update_fields=["validated_by", "validated_at"])
+
+        with patch.object(ReportService, "_render_pdf", return_value=b"%PDF-stale-recovered"):
+            updated_report = ReportService.send_email(report, sender)
+
+        assert updated_report.status == status
+        assert updated_report.email_status == "sent"
+        assert mail.outbox[0].attachments[0][1] == b"%PDF-stale-recovered"
+
+    def test_send_email_stale_legacy_pdf_without_scope_fails_once(self):
+        farm_profile = FarmProfileFactory(user__email="legacy-stale@test.com")
+        sender = UserFactory()
+        report = _create_report(farm_profile=farm_profile)
+        report.pdf_file.name = "reports/legacy-physically-missing.pdf"
+        report.save(update_fields=["pdf_file"])
+
+        with pytest.raises(UnresolvableLegacyReportScopeError):
+            ReportService.send_email(report, sender)
+
+        assert not mail.outbox
+        dispatch = report.dispatch_logs.get(channel="email")
+        assert dispatch.status == "failed"
+        assert dispatch.error_code == "REPORT_SCOPE_UNRESOLVABLE"
 
 
 @pytest.mark.django_db
@@ -422,7 +476,7 @@ class TestReportServicePayloadAndPdfTemplate:
         html = render_to_string("aquaculture/report_pdf.html", {**context, "payload": payload})
         assert "Poissons déjà récoltés depuis le début du cycle" in html
         assert "200 poissons, pour un poids total de 38,00 kg" in html
-        assert "Les 1720 poissons encore présents correspondent" in html
+        assert "Les 1720 poissons encore présents correspondent" not in html
         english_context = ReportService._build_pdf_context(
             report=report,
             payload=payload,
@@ -433,7 +487,7 @@ class TestReportServicePayloadAndPdfTemplate:
             english_html = render_to_string("aquaculture/report_pdf.html", english_context)
         assert "Fish already harvested since the start of the cycle" in english_html
         assert "200 fish, with a total harvested weight of 38.00 kg" in english_html
-        assert "The 1720 fish still present correspond" in english_html
+        assert "The 1720 fish still present correspond" not in english_html
         assert "État et activité de la période" not in html
         assert "État actuel" not in html
         assert "Saisie du jour" in html
@@ -728,3 +782,5 @@ class TestReportServicePayloadAndPdfTemplate:
         assert "Poissons déjà récoltés depuis le début du cycle" in html
         assert "200 poissons" in html
         assert "1 juil.–5 juil." in html
+        assert '<thead><tr><th colspan="8">Bac 1</th></tr>' in html
+        assert '<thead><tr><th colspan="8">Bac 1</th></tr><tr><th>Date</th>' in html

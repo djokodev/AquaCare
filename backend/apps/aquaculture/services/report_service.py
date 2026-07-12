@@ -522,10 +522,41 @@ class ReportService(BaseService):
             )
             raise ValueError(_("Aucune adresse email renseignée pour ce compte."))
 
-        if not report.pdf_file:
-            report = ReportService.regenerate(report)
-
-        pdf_content = ReportService._load_report_pdf_content(report)
+        try:
+            if report.pdf_file:
+                pdf_content = ReportService._load_report_pdf_content(report)
+            else:
+                report = ReportService.regenerate(report)
+                pdf_content = ReportService._load_report_pdf_content(report)
+        except FileNotFoundError:
+            if report.pdf_file:
+                report.pdf_file.delete(save=False)
+                report.save(update_fields=["pdf_file", "updated_at"])
+            try:
+                report = ReportService.regenerate(report)
+                pdf_content = ReportService._load_report_pdf_content(report)
+            except UnresolvableLegacyReportScopeError as exc:
+                ReportService._create_dispatch_log(
+                    report=report,
+                    channel="email",
+                    status="failed",
+                    dispatched_by=user,
+                    recipient=recipient,
+                    error_code="REPORT_SCOPE_UNRESOLVABLE",
+                    error_message=str(exc),
+                )
+                raise
+        except UnresolvableLegacyReportScopeError as exc:
+            ReportService._create_dispatch_log(
+                report=report,
+                channel="email",
+                status="failed",
+                dispatched_by=user,
+                recipient=recipient,
+                error_code="REPORT_SCOPE_UNRESOLVABLE",
+                error_message=str(exc),
+            )
+            raise
 
         language_code = ReportService._resolve_language_code(report.farm_profile.user)
         with override(language_code):
