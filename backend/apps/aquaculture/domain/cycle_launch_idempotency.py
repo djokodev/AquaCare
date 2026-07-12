@@ -25,6 +25,16 @@ def _canonical_value(value: Any) -> Any:
 def canonicalize_cycle_launch_payload(payload: dict[str, Any]) -> dict[str, Any]:
     """Return an order-independent copy without mutating the validated payload."""
     canonical = _canonical_value(payload)
+    cycle = canonical.get("cycle")
+    if isinstance(cycle, dict):
+        raw_cycle_name = cycle.get("cycle_name")
+        if raw_cycle_name is not None:
+            normalized_cycle_name = str(raw_cycle_name).strip()
+            if normalized_cycle_name:
+                cycle["cycle_name"] = normalized_cycle_name
+            else:
+                cycle.pop("cycle_name", None)
+
     canonical["production_units"] = sorted(
         canonical.get("production_units", []),
         key=lambda unit: (

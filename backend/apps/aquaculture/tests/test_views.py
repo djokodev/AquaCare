@@ -26,11 +26,31 @@ from django.db import connection
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
+from drf_spectacular.generators import SchemaGenerator
 from notifications.models import Notification
 from rest_framework import status
 from rest_framework.test import APIClient
 
 from tests.fixtures.factories import FarmProfileFactory
+
+
+def test_cycle_create_openapi_operation_is_deprecated():
+    schema = SchemaGenerator().get_schema(request=None, public=True)
+    create_operation = schema["paths"]["/api/aquaculture/cycles/"]["post"]
+    launch_operation = schema["paths"]["/api/aquaculture/cycles/launch/"]["post"]
+
+    assert create_operation["deprecated"] is True
+    assert "requestBody" not in create_operation
+    assert "400" in create_operation["responses"]
+    assert "Nouveau cycle Clarias" not in str(create_operation)
+    launch_example_summaries = {
+        example["summary"]
+        for example in launch_operation["requestBody"]["content"]["application/json"]["examples"].values()
+    }
+    assert launch_example_summaries == {
+        "Initial setup",
+        "Additional cycle",
+    }
 
 
 @pytest.fixture

@@ -2,6 +2,7 @@ from datetime import date
 from decimal import Decimal
 from uuid import UUID
 
+import pytest
 from aquaculture.domain.cycle_launch_idempotency import (
     calculate_cycle_launch_payload_hash,
     canonicalize_cycle_launch_payload,
@@ -46,3 +47,47 @@ def test_hash_changes_when_existing_unit_selection_changes():
     changed["production_units"][0]["production_unit_id"] = UUID("33333333-3333-3333-3333-333333333333")
 
     assert calculate_cycle_launch_payload_hash(payload) != calculate_cycle_launch_payload_hash(changed)
+
+
+@pytest.mark.parametrize("blank_cycle_name", ["", "   "])
+def test_missing_cycle_name_hash_matches_blank_cycle_name(blank_cycle_name):
+    missing = launch_payload()
+    blank = launch_payload()
+    blank["cycle"]["cycle_name"] = blank_cycle_name
+
+    assert calculate_cycle_launch_payload_hash(missing) == calculate_cycle_launch_payload_hash(blank)
+
+
+def test_cycle_name_hash_is_stable_after_trimming():
+    trimmed = launch_payload()
+    padded = launch_payload()
+    trimmed["cycle"]["cycle_name"] = "Cycle Test"
+    padded["cycle"]["cycle_name"] = "  Cycle Test  "
+
+    assert calculate_cycle_launch_payload_hash(trimmed) == calculate_cycle_launch_payload_hash(padded)
+
+
+def test_cycle_name_hash_changes_for_different_non_empty_names():
+    first = launch_payload()
+    second = launch_payload()
+    first["cycle"]["cycle_name"] = "Cycle Test"
+    second["cycle"]["cycle_name"] = "Autre cycle"
+
+    assert calculate_cycle_launch_payload_hash(first) != calculate_cycle_launch_payload_hash(second)
+
+
+def test_cycle_name_canonicalization_does_not_mutate_payload():
+    payload = launch_payload()
+    payload["cycle"]["cycle_name"] = "  Cycle Test  "
+    original_payload = {
+        **payload,
+        "cycle": {**payload["cycle"]},
+        "production_units": [*payload["production_units"]],
+        "allocations": [*payload["allocations"]],
+    }
+
+    canonicalize_cycle_launch_payload(payload)
+    calculate_cycle_launch_payload_hash(payload)
+
+    assert payload == original_payload
+    assert payload["cycle"]["cycle_name"] == "  Cycle Test  "

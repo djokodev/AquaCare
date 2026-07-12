@@ -663,6 +663,50 @@ def test_missing_or_blank_cycle_name_uses_backend_default(auth_client, cycle_nam
     assert response.data["production_cycle"]["cycle_name"].startswith("Cycle Clarias")
 
 
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("first_cycle_name", "retry_cycle_name"),
+    [(None, "   "), ("   ", None)],
+)
+def test_cycle_launch_replays_when_cycle_name_is_missing_or_blank(
+    auth_client,
+    first_cycle_name,
+    retry_cycle_name,
+):
+    payload = launch_payload()
+    if first_cycle_name is not None:
+        payload["cycle"]["cycle_name"] = first_cycle_name
+
+    created = auth_client.post(
+        reverse("aquaculture:production_cycle_launch"),
+        payload,
+        format="json",
+    )
+    assert created.status_code == status.HTTP_201_CREATED
+
+    retry_payload = {
+        **payload,
+        "cycle": {**payload["cycle"]},
+    }
+    if retry_cycle_name is None:
+        retry_payload["cycle"].pop("cycle_name", None)
+    else:
+        retry_payload["cycle"]["cycle_name"] = retry_cycle_name
+
+    replay = auth_client.post(
+        reverse("aquaculture:production_cycle_launch"),
+        retry_payload,
+        format="json",
+    )
+
+    assert replay.status_code == status.HTTP_200_OK
+    assert replay.data["idempotent_replay"] is True
+    assert replay.data["production_cycle"]["id"] == created.data["production_cycle"]["id"]
+    assert ProductionCycle.objects.count() == 1
+    assert ProductionUnit.objects.count() == 2
+    assert CycleUnitAllocation.objects.count() == 2
+
+
 @pytest.mark.parametrize(
     ("language", "expected_messages"),
     [

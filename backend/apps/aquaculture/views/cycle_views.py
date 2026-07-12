@@ -94,6 +94,7 @@ logger = logging.getLogger(__name__)
         ]
     ),
     create=extend_schema(
+        deprecated=True,
         summary="Création directe désactivée (deprecated)",
         description="""
         La création directe d'un cycle est désactivée pour les nouveaux parcours.
