@@ -412,6 +412,56 @@ class TestUnitCycleAwareReportPayloads:
         assert partial_payload["cycles"][0]["current_metrics"]["fcr"] is None
         assert partial_payload["summary"]["feed_history_warning"] is True
         assert partial_payload["calculation_metadata"]["legacy_feed"]["history_complete"] is False
+
+    def test_legacy_first_and_last_logs_do_not_prove_complete_feed_history(self):
+        farm_profile = FarmProfileFactory()
+        cycle = ProductionCycleFactory(
+            farm_profile=farm_profile,
+            status="active",
+            start_date=date(2026, 4, 1),
+            total_feed_consumed=Decimal("5.00"),
+        )
+        first_log = _create_cycle_log(
+            cycle=cycle,
+            allocation=None,
+            log_date=date(2026, 4, 1),
+            mortality_count=0,
+            feed_quantity="2.00",
+            average_weight=None,
+        )
+        last_log = _create_cycle_log(
+            cycle=cycle,
+            allocation=None,
+            log_date=date(2026, 7, 31),
+            mortality_count=0,
+            feed_quantity="3.00",
+            average_weight=None,
+        )
+        ProductionCycle.objects.filter(id=cycle.id).update(
+            total_feed_consumed=Decimal("5.00"),
+            updated_at=timezone.make_aware(datetime(2026, 7, 31, 18, 0)),
+        )
+        cycle.refresh_from_db()
+
+        resolution = ReportService._resolve_legacy_cumulative_feed(
+            cycle=cycle,
+            logs=[first_log, last_log],
+            period_end=date(2026, 7, 31),
+        )
+        assert resolution["history_complete"] is False
+        assert resolution["source"] == "legacy_logs_minimum_known"
+        assert resolution["feed_consumed_kg"] == 5.0
+
+        payload = ReportService._build_payload(
+            farm_profile=farm_profile,
+            report_type="monthly",
+            period_start=date(2026, 7, 1),
+            period_end=date(2026, 7, 31),
+            scope_type="cycle",
+            cycle_id=str(cycle.id),
+        )
+        assert payload["cycles"][0]["current_metrics"]["fcr"] is None
+        assert payload["summary"]["feed_history_warning"] is True
     def test_custom_unit_cycle_duration_is_used_for_cost_progress(self):
         today = date.today()
         farm_profile = FarmProfileFactory()

@@ -181,6 +181,10 @@ def generate_report_async_task(
                 scope_object_id = report_meta.get("scope_object_id") or report_meta.get("cycle_scope_id")
         if not scope_object_id and cycle_scope_id and scope_type == "cycle":
             scope_object_id = cycle_scope_id
+        if not scope_object_id:
+            raise ValueError(
+                "Historical report scope is not identifiable; generic regeneration is forbidden."
+            )
         ReportService.generate_for_farm(
             farm_profile=report.farm_profile,
             report_type=report.report_type,
@@ -314,6 +318,7 @@ def _dispatch_per_active_cycle(report_type: str, start, end) -> int:
     cycles = ProductionCycle.objects.filter(
         farm_profile__user__is_active=True,
         status='active',
+        start_date__lte=end,
     ).values_list('farm_profile_id', 'id')
 
     for farm_id, cycle_id in cycles:

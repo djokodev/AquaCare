@@ -55,7 +55,11 @@ from .report_visuals import (
 
 logger = logging.getLogger(__name__)
 
-REPORT_DATA_LINEAGE_VERSION = "1.2.0"
+REPORT_DATA_LINEAGE_VERSION = "1.2.1"
+
+
+class UnresolvableLegacyReportScopeError(ValueError):
+    """A historical report has no safe scope for regeneration."""
 
 _pdf_patched = False
 
@@ -268,6 +272,8 @@ class ReportService(BaseService):
         )
         if scope_type == "cycle" and not scope_object_id:
             scope_object_id = ReportService._resolve_cycle_scope_id(report)
+        if scope_type == "unit" and not scope_object_id:
+            scope_object_id = meta.get("cycle_unit_allocation_id")
         if scope_type not in {"cycle", "unit"}:
             scope_type = "cycle"
         return scope_type, str(scope_object_id) if scope_object_id else None
@@ -465,6 +471,16 @@ class ReportService(BaseService):
     def regenerate(report: ProductionReport) -> ProductionReport:
         """Régénère un rapport existant en conservant sa période/type."""
         scope_type, scope_object_id = ReportService._resolve_report_scope_from_report(report)
+        if not scope_object_id:
+            raise UnresolvableLegacyReportScopeError(
+                ReportService._pick_text(
+                    ReportService._resolve_language_code(report.farm_profile.user),
+                    "Ce rapport historique ne peut pas être régénéré automatiquement, "
+                    "car son cycle d’origine n’est pas identifiable.",
+                    "This historical report cannot be regenerated automatically "
+                    "because its original cycle cannot be identified.",
+                )
+            )
         return ReportService.generate_for_farm(
             farm_profile=report.farm_profile,
             report_type=report.report_type,
@@ -598,6 +614,7 @@ class ReportService(BaseService):
         cycles = ProductionCycle.objects.filter(
             farm_profile__user__is_active=True,
             status="active",
+            start_date__lte=end,
         ).select_related("farm_profile")
 
         generated = 0
@@ -720,7 +737,7 @@ class ReportService(BaseService):
                 "status_display": ReportService._localized_display(cycle, "get_status_display", language_code),
                 "pond_identifier": cycle.pond_identifier,
                 "start_date": cycle.start_date.isoformat(),
-                "start_date_display": ReportService._format_report_date(cycle.start_date, language_code),
+                "start_date_display": ReportService._format_long_report_date(cycle.start_date, language_code),
                 "days_active": ReportService._calculate_days_active(cycle, period_end),
                 "planned_cycle_duration_days": cycle.planned_cycle_duration_days,
             },
@@ -914,8 +931,12 @@ class ReportService(BaseService):
         logged_total = round(sum(float(log.feed_quantity or 0) for log in logs), 2)
         stored_total = ReportService._to_float(cycle.total_feed_consumed)
         stored_total = stored_total if stored_total and stored_total > 0 else None
-        log_dates = [log.log_date for log in logs]
-        log_history_complete = bool(log_dates) and min(log_dates) <= cycle.start_date and max(log_dates) >= period_end
+        log_dates = {log.log_date for log in logs}
+        expected_log_dates = {
+            cycle.start_date + timedelta(days=offset)
+            for offset in range((period_end - cycle.start_date).days + 1)
+        } if cycle.start_date <= period_end else set()
+        log_history_complete = bool(expected_log_dates) and expected_log_dates.issubset(log_dates)
         updated_at_date = cycle.updated_at.date() if cycle.updated_at else None
         stored_valid_at_period_end = updated_at_date is not None and updated_at_date <= period_end
         fallbacks_used: list[str] = []
@@ -959,7 +980,7 @@ class ReportService(BaseService):
                 fallbacks_used.append("legacy_logs_incomplete")
             return {
                 "feed_consumed_kg": logged_total,
-                "source": "legacy_logs",
+                "source": "legacy_logs" if log_history_complete else "legacy_logs_minimum_known",
                 "history_complete": log_history_complete,
                 "logged_total": logged_total,
                 "stored_total": stored_total,
@@ -1426,7 +1447,7 @@ class ReportService(BaseService):
                             ),
                             "pond_identifier": cycle.pond_identifier,
                             "start_date": cycle.start_date.isoformat(),
-                            "start_date_display": ReportService._format_report_date(
+                            "start_date_display": ReportService._format_long_report_date(
                                 cycle.start_date, ReportService._resolve_language_code(farm_profile.user)
                             ),
                             "days_active": ReportService._calculate_days_active(cycle, period_end),
@@ -2080,7 +2101,7 @@ class ReportService(BaseService):
                         ),
                         "pond_identifier": cycle.pond_identifier,
                         "start_date": cycle.start_date.isoformat(),
-                        "start_date_display": ReportService._format_report_date(
+                        "start_date_display": ReportService._format_long_report_date(
                             cycle.start_date, ReportService._resolve_language_code(farm_profile.user)
                         ),
                         "days_active": ReportService._calculate_days_active(cycle, period_end),
@@ -2470,6 +2491,16 @@ class ReportService(BaseService):
             months = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
             return f"{target_date.day} {months[target_date.month - 1]} {target_date.year}"
         return f"{target_date.day:02d}/{target_date.month:02d}/{target_date.year}"
+
+    @staticmethod
+    def _format_long_report_date(target_date: date, language_code: str) -> str:
+        if language_code == "en":
+            months = (
+                "January", "February", "March", "April", "May", "June",
+                "July", "August", "September", "October", "November", "December",
+            )
+            return f"{target_date.day} {months[target_date.month - 1]} {target_date.year}"
+        return ReportService._format_report_date(target_date, language_code)
 
     @staticmethod
     def _calculate_days_active(cycle: ProductionCycle, as_of: date | None) -> int:
@@ -3058,7 +3089,7 @@ class ReportService(BaseService):
                 period_end=report.period_end,
                 language_code=language_code,
             ),
-            "period_end_display": ReportService._format_report_date(report.period_end, language_code),
+            "period_end_display": ReportService._format_long_report_date(report.period_end, language_code),
             "generated_at_display": ReportService._format_generated_at(generated_at, language_code),
             "empty_value_label": ReportService._pick_text(language_code, "Non renseigné", "Not provided"),
             "scope_label": scope_label,

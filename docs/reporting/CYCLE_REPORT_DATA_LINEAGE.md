@@ -1,6 +1,6 @@
 # Cycle report data lineage
 
-Version: `1.2.0`
+Version: `1.2.1`
 
 This document defines the backend sources used by cycle and unit PDF reports. A
 report is a historical snapshot: values that describe the stock, biomass,
@@ -26,8 +26,10 @@ the mutable current dashboard state.
   period, so repeated dispatches reuse the same `ProductionReport`.
 - A new cycle-scoped report request must provide an active cycle belonging to
   the authenticated farm. Missing, invalid, foreign, or inactive cycles are
-  rejected as a business error and returned as HTTP 400. Existing legacy
-  reports with a null scope remain readable, downloadable, and deletable.
+  rejected as a business error and returned as HTTP 400. The requested
+  `period_end` must also be on or after the cycle `start_date`, for cycle and
+  unit scopes. Existing legacy reports with a null scope remain readable and
+  deletable, but they cannot be regenerated automatically.
 - Allocation harvests are prefetched up to `period_end` with
   `to_attr="cumulative_partial_harvests"`; report generation passes those
   lists to the stock snapshot service and does not query harvests once per
@@ -91,15 +93,27 @@ not an unqualified complete total. A legacy cycle with no logs may use the
 stored total only as an explicit fallback; FCR is calculated only when that
 snapshot is demonstrably valid at `period_end`.
 
+The first and last legacy log dates do not prove complete coverage. Log-based
+history is complete only when every calendar day from `cycle.start_date`
+through `period_end` is represented. Otherwise the logs are a known minimum,
+the warning is shown, and FCR is `None`.
+
+When an old report has no `scope_object_id`, its payload has no
+`report_meta.cycle_scope_id`, and no valid `cycle_unit_allocation_id`, the
+application refuses regeneration. It never falls back to a generic farm
+report, selects an active cycle, or rebuilds historical values from mutable
+current fields. A valid cycle or unit allocation scope remains regenerable.
+
 The public historical unit payload keeps static/routing data and the
 `current_metrics.*` snapshot only. Mutable `unit.current_fish_count` and
 `unit.current_biomass_kg` are intentionally absent. Diagnostic mutable values,
 when required by legacy fallback, are isolated under
 `calculation_metadata.source_model_state`.
 
-English PDF dates use `19 Jul 2026` in tables, `1 April 2026` for long cycle
-dates, and `20 July 2026 at 10:00` for generation metadata. French dates keep
-the local `19/07/2026` and natural French period forms.
+English PDF dates use short `19 Jul 2026` in tables, sanitary logs, and
+appendices. Long `19 July 2026` is used for cycle situation and start-date
+context, while `20 July 2026 at 10:00` is used for generation metadata.
+French dates keep the local `19/07/2026` and natural French period forms.
 
 The review generator writes exact-byte `pdf_sha256` and `payload_sha256`
 values for every report, plus `git_sha`, `data_lineage_version`, and

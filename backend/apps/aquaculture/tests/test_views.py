@@ -2783,6 +2783,168 @@ class TestProductionReportViewSet:
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert 'cycle' in response.data['detail'].lower()
 
+    def test_generate_report_rejects_period_before_cycle_start(self, auth_client, farm_profile):
+        future_cycle = ProductionCycle.objects.create(
+            farm_profile=farm_profile,
+            cycle_name='Cycle du 20 juillet',
+            species='tilapia',
+            pond_identifier='Bassin futur',
+            pond_surface_m2=Decimal('40.00'),
+            pond_volume_m3=Decimal('50.00'),
+            start_date=date(2026, 7, 20),
+            initial_count=500,
+            initial_average_weight=Decimal('15.00'),
+            initial_biomass=Decimal('7.50'),
+            current_count=500,
+            current_average_weight=Decimal('15.00'),
+            current_biomass=Decimal('7.50'),
+            status='active',
+        )
+
+        with patch(
+            'aquaculture.services.report_application_service.timezone.localdate',
+            return_value=date(2026, 7, 31),
+        ):
+            response = auth_client.post(
+                reverse('aquaculture:production-report-generate'),
+                {
+                    'report_type': 'daily',
+                    'reference_date': '2026-07-19',
+                    'cycle_id': str(future_cycle.id),
+                },
+                format='json',
+            )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.data['detail'] == 'La période sélectionnée est antérieure au démarrage du cycle.'
+        assert not ProductionReport.objects.filter(
+            farm_profile=farm_profile,
+            scope_object_id=future_cycle.id,
+        ).exists()
+
+    def test_generate_unit_report_rejects_period_before_cycle_start(self, auth_client, farm_profile):
+        future_cycle = ProductionCycle.objects.create(
+            farm_profile=farm_profile,
+            cycle_name='Cycle unité du 20 juillet',
+            species='tilapia',
+            pond_identifier='Site futur',
+            pond_surface_m2=Decimal('40.00'),
+            pond_volume_m3=Decimal('50.00'),
+            start_date=date(2026, 7, 20),
+            initial_count=500,
+            initial_average_weight=Decimal('15.00'),
+            initial_biomass=Decimal('7.50'),
+            current_count=500,
+            current_average_weight=Decimal('15.00'),
+            current_biomass=Decimal('7.50'),
+            status='active',
+        )
+        unit = ProductionUnit.objects.create(
+            farm_profile=farm_profile,
+            name='Bac futur',
+            unit_type='tank',
+            volume_m3=Decimal('3.00'),
+        )
+        allocation = CycleUnitAllocation.objects.create(
+            cycle=future_cycle,
+            production_unit=unit,
+            initial_fish_count=500,
+            current_fish_count=500,
+            initial_biomass_kg=Decimal('7.50'),
+            current_biomass_kg=Decimal('7.50'),
+        )
+
+        with patch(
+            'aquaculture.services.report_application_service.timezone.localdate',
+            return_value=date(2026, 7, 31),
+        ):
+            response = auth_client.post(
+                reverse('aquaculture:production-report-generate'),
+                {
+                    'report_type': 'daily',
+                    'reference_date': '2026-07-19',
+                    'scope': 'unit',
+                    'cycle_unit_allocation_id': str(allocation.id),
+                },
+                format='json',
+            )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.data['detail'] == 'La période sélectionnée est antérieure au démarrage du cycle.'
+        assert not ProductionReport.objects.filter(
+            farm_profile=farm_profile,
+            scope_object_id=allocation.id,
+        ).exists()
+
+    def test_download_legacy_report_without_scope_returns_business_error(
+        self,
+        auth_client,
+        farm_profile,
+    ):
+        report = ProductionReport.objects.create(
+            farm_profile=farm_profile,
+            report_type='daily',
+            period_start=date(2026, 7, 19),
+            period_end=date(2026, 7, 19),
+            status='validated',
+            payload={},
+        )
+
+        with patch(
+            'aquaculture.services.report_application_service.ReportApplicationService._dispatch_generation'
+        ) as mock_dispatch:
+            response = auth_client.get(
+                reverse('aquaculture:production-report-download', kwargs={'pk': report.id}),
+            )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert 'cycle d’origine' in response.data['detail']
+        mock_dispatch.assert_not_called()
+
+    def test_regenerate_legacy_report_with_cycle_scope_in_payload_is_allowed(
+        self,
+        auth_client,
+        farm_profile,
+    ):
+        cycle = ProductionCycle.objects.create(
+            farm_profile=farm_profile,
+            cycle_name='Cycle régénérable',
+            species='tilapia',
+            pond_identifier='Bassin régénérable',
+            pond_surface_m2=Decimal('40.00'),
+            pond_volume_m3=Decimal('50.00'),
+            start_date=date(2026, 7, 1),
+            initial_count=500,
+            initial_average_weight=Decimal('15.00'),
+            initial_biomass=Decimal('7.50'),
+            current_count=500,
+            current_average_weight=Decimal('15.00'),
+            current_biomass=Decimal('7.50'),
+            status='active',
+        )
+        report = ProductionReport.objects.create(
+            farm_profile=farm_profile,
+            report_type='daily',
+            period_start=date(2026, 7, 19),
+            period_end=date(2026, 7, 19),
+            status='draft',
+            scope_object_id=None,
+            payload={'report_meta': {'cycle_scope_id': str(cycle.id)}},
+        )
+
+        with patch(
+            'aquaculture.services.report_application_service.ReportApplicationService._dispatch_generation'
+        ) as mock_dispatch:
+            response = auth_client.post(
+                reverse('aquaculture:production-report-regenerate', kwargs={'pk': report.id}),
+                format='json',
+            )
+
+        assert response.status_code == status.HTTP_202_ACCEPTED
+        report.refresh_from_db()
+        assert str(report.scope_object_id) == str(cycle.id)
+        mock_dispatch.assert_called_once_with(report, restore_validation=False)
+
     def test_list_reports_can_filter_by_cycle_scope(self, auth_client, farm_profile):
         """Le listing doit pouvoir filtrer les rapports par cycle_scope_id."""
         scoped_cycle = ProductionCycle.objects.create(

@@ -11,7 +11,11 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from ..models import CycleUnitAllocation, ProductionCycle, ProductionReport
-from .report_service import ReportDispatchMetadata, ReportService
+from .report_service import (
+    ReportDispatchMetadata,
+    ReportService,
+    UnresolvableLegacyReportScopeError,
+)
 
 
 class InvalidReportScopeError(ValueError):
@@ -103,23 +107,39 @@ class ReportApplicationService:
         return report.scope_type or "cycle"
 
     @staticmethod
-    def _ensure_active_cycle_scope(user, cycle_id: str | None) -> None:
+    def _ensure_active_cycle_scope(user, cycle_id: str | None) -> ProductionCycle:
         if not cycle_id:
             raise InvalidReportCycleScopeError(
                 _("Le cycle est obligatoire pour générer ce rapport.")
             )
 
         try:
-            cycle_exists = ProductionCycle.objects.filter(
+            cycle = ProductionCycle.objects.filter(
                 id=cycle_id,
                 farm_profile=user.farm_profile,
                 status="active",
-            ).exists()
+            ).first()
         except (DjangoValidationError, TypeError, ValueError):
-            cycle_exists = False
-        if not cycle_exists:
+            cycle = None
+        if cycle is None:
             raise InvalidReportCycleScopeError(
                 _("Le cycle est introuvable, inaccessible ou inactif.")
+            )
+        return cycle
+
+    @staticmethod
+    def _ensure_period_covers_cycle(
+        cycle: ProductionCycle,
+        period_end: date,
+        language_code: str = "fr",
+    ) -> None:
+        if period_end < cycle.start_date:
+            raise InvalidReportPeriodError(
+                ReportService._pick_text(
+                    language_code,
+                    "La période sélectionnée est antérieure au démarrage du cycle.",
+                    "The selected period is before the cycle start date.",
+                )
             )
 
     @staticmethod
@@ -186,10 +206,20 @@ class ReportApplicationService:
 
         if scope == "unit":
             allocation = ReportApplicationService._ensure_active_unit_scope(user, cycle_unit_allocation_id)
+            ReportApplicationService._ensure_period_covers_cycle(
+                allocation.cycle,
+                period_end,
+                ReportService._resolve_language_code(user),
+            )
             cycle_id = str(allocation.cycle_id)
             cycle_unit_allocation_id = str(allocation.id)
         else:
-            ReportApplicationService._ensure_active_cycle_scope(user, cycle_id)
+            cycle = ReportApplicationService._ensure_active_cycle_scope(user, cycle_id)
+            ReportApplicationService._ensure_period_covers_cycle(
+                cycle,
+                period_end,
+                ReportService._resolve_language_code(user),
+            )
 
         report, _created = ProductionReport.objects.get_or_create(
             farm_profile=user.farm_profile,
@@ -215,18 +245,51 @@ class ReportApplicationService:
     def request_report_regeneration(report: ProductionReport) -> ProductionReport:
         """Relance la generation async pour un rapport existant."""
         was_validated = report.status == "validated"
-        cycle_scope_id = ReportApplicationService._extract_cycle_scope_id(report)
-        scope = ReportApplicationService._extract_scope_type(report)
+        scope, scope_object_id = ReportService._resolve_report_scope_from_report(report)
+        if not scope_object_id:
+            raise UnresolvableLegacyReportScopeError(
+                ReportService._pick_text(
+                    ReportService._resolve_language_code(report.farm_profile.user),
+                    "Ce rapport historique ne peut pas être régénéré automatiquement, "
+                    "car son cycle d’origine n’est pas identifiable.",
+                    "This historical report cannot be regenerated automatically "
+                    "because its original cycle cannot be identified.",
+                )
+            )
+        if scope == "cycle":
+            scope_is_valid = ProductionCycle.objects.filter(
+                id=scope_object_id,
+                farm_profile=report.farm_profile,
+                status="active",
+            ).exists()
+        else:
+            scope_is_valid = CycleUnitAllocation.objects.filter(
+                id=scope_object_id,
+                cycle__farm_profile=report.farm_profile,
+            ).exists()
+        if not scope_is_valid:
+            raise InvalidReportScopeError(_("La portée historique du rapport est introuvable ou inaccessible."))
+
+        cycle_scope_id = (
+            scope_object_id
+            if scope == "cycle"
+            else ReportApplicationService._extract_cycle_scope_id(report)
+        )
         report = ReportApplicationService._set_pending_status(report)
+        if str(report.scope_object_id or "") != str(scope_object_id):
+            report.scope_object_id = scope_object_id
+            report.save(update_fields=["scope_object_id", "updated_at"])
         ReportApplicationService._set_scope_in_payload(
             report,
             scope=scope,
             scope_object_id=(
-                str(report.scope_object_id) if report.scope_object_id else cycle_scope_id
+                scope_object_id
             ),
             cycle_id=cycle_scope_id,
             cycle_unit_allocation_id=(
-                (report.payload.get("report_meta", {}) or {}).get("cycle_unit_allocation_id")
+                scope_object_id
+                if scope == "unit"
+                else (report.payload.get("report_meta", {}) or {}).get("cycle_unit_allocation_id")
                 if isinstance(report.payload, dict)
                 else None
             ),

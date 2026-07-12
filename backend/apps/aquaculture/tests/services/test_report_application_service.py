@@ -1,6 +1,6 @@
 """Tests des use cases applicatifs de rapports aquaculture."""
 
-from datetime import date
+from datetime import date, timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -8,8 +8,10 @@ from aquaculture.models import ProductionReport
 from aquaculture.services import (
     GenerateReportCommand,
     InvalidReportCycleScopeError,
+    InvalidReportPeriodError,
     MissingReportEmailError,
     ReportApplicationService,
+    UnresolvableLegacyReportScopeError,
 )
 from django.utils import timezone
 
@@ -63,12 +65,100 @@ class TestReportApplicationService:
                 ),
             )
 
+    def test_request_report_generation_rejects_period_before_cycle_start(self):
+        user = UserFactory()
+        farm_profile = FarmProfileFactory(user=user)
+        cycle = ProductionCycleFactory(
+            farm_profile=farm_profile,
+            status="active",
+            start_date=date(2026, 7, 20),
+        )
+
+        with patch.object(timezone, "localdate", return_value=date(2026, 7, 31)), patch.object(
+            ReportApplicationService, "_dispatch_generation"
+        ) as mock_dispatch:
+            with pytest.raises(InvalidReportPeriodError, match="antérieure"):
+                ReportApplicationService.request_report_generation(
+                    user,
+                    GenerateReportCommand(
+                        report_type="daily",
+                        reference_date=date(2026, 7, 19),
+                        cycle_id=str(cycle.id),
+                    ),
+                )
+
+        assert not ProductionReport.objects.filter(farm_profile=farm_profile).exists()
+        mock_dispatch.assert_not_called()
+
+    def test_request_unit_report_rejects_period_before_cycle_start(self):
+        from aquaculture.models import CycleUnitAllocation, ProductionUnit
+
+        user = UserFactory()
+        farm_profile = FarmProfileFactory(user=user)
+        cycle = ProductionCycleFactory(
+            farm_profile=farm_profile,
+            status="active",
+            start_date=date(2026, 7, 20),
+        )
+        unit = ProductionUnit.objects.create(
+            farm_profile=farm_profile,
+            name="Bac avant démarrage",
+            unit_type="tank",
+            volume_m3="3.00",
+        )
+        allocation = CycleUnitAllocation.objects.create(
+            cycle=cycle,
+            production_unit=unit,
+            initial_fish_count=900,
+            current_fish_count=900,
+            initial_biomass_kg="9.00",
+            current_biomass_kg="9.00",
+        )
+
+        with patch.object(timezone, "localdate", return_value=date(2026, 7, 31)), patch.object(
+            ReportApplicationService, "_dispatch_generation"
+        ) as mock_dispatch:
+            with pytest.raises(InvalidReportPeriodError, match="antérieure"):
+                ReportApplicationService.request_report_generation(
+                    user,
+                    GenerateReportCommand(
+                        report_type="daily",
+                        reference_date=date(2026, 7, 19),
+                        scope="unit",
+                        cycle_unit_allocation_id=str(allocation.id),
+                    ),
+                )
+
+        assert not ProductionReport.objects.filter(farm_profile=farm_profile).exists()
+        mock_dispatch.assert_not_called()
+
+    def test_request_report_generation_localizes_period_error_in_english(self):
+        user = UserFactory(language_preference="en")
+        farm_profile = FarmProfileFactory(user=user)
+        cycle = ProductionCycleFactory(
+            farm_profile=farm_profile,
+            status="active",
+            start_date=date(2026, 7, 20),
+        )
+
+        with patch.object(timezone, "localdate", return_value=date(2026, 7, 31)):
+            with pytest.raises(InvalidReportPeriodError, match="The selected period"):
+                ReportApplicationService.request_report_generation(
+                    user,
+                    GenerateReportCommand(
+                        report_type="daily",
+                        reference_date=date(2026, 7, 19),
+                        cycle_id=str(cycle.id),
+                    ),
+                )
+
     def test_request_report_generation_sets_pending_and_dispatches_task(self):
         user = UserFactory()
         farm_profile = FarmProfileFactory(user=user)
         cycle = ProductionCycleFactory(
             farm_profile=farm_profile,
             status="active",
+            start_date=date(2026, 3, 1),
         )
 
         with patch.object(ReportApplicationService, "_dispatch_generation") as mock_dispatch:
@@ -90,6 +180,7 @@ class TestReportApplicationService:
         cycle = ProductionCycleFactory(
             farm_profile=farm_profile,
             status="active",
+            start_date=timezone.localdate() - timedelta(days=2),
         )
         from aquaculture.models import CycleUnitAllocation, ProductionUnit
 
@@ -139,12 +230,15 @@ class TestReportApplicationService:
 
     def test_prepare_report_download_triggers_regeneration_when_no_pdf_file(self):
         farm_profile = FarmProfileFactory()
+        cycle = ProductionCycleFactory(farm_profile=farm_profile, status="active")
         report = ProductionReport.objects.create(
             farm_profile=farm_profile,
             report_type="daily",
             period_start=timezone.localdate(),
             period_end=timezone.localdate(),
             status="validated",
+            scope_type="cycle",
+            scope_object_id=cycle.id,
         )
         assert not report.pdf_file
 
@@ -175,12 +269,15 @@ class TestReportApplicationService:
 
     def test_request_report_regeneration_passes_restore_validation_when_validated(self):
         farm_profile = FarmProfileFactory()
+        cycle = ProductionCycleFactory(farm_profile=farm_profile, status="active")
         report = ProductionReport.objects.create(
             farm_profile=farm_profile,
             report_type="daily",
             period_start=timezone.localdate(),
             period_end=timezone.localdate(),
             status="validated",
+            scope_type="cycle",
+            scope_object_id=cycle.id,
         )
 
         with patch.object(ReportApplicationService, "_dispatch_generation") as mock_dispatch:
@@ -191,12 +288,15 @@ class TestReportApplicationService:
 
     def test_request_report_regeneration_does_not_restore_validation_when_draft(self):
         farm_profile = FarmProfileFactory()
+        cycle = ProductionCycleFactory(farm_profile=farm_profile, status="active")
         report = ProductionReport.objects.create(
             farm_profile=farm_profile,
             report_type="daily",
             period_start=timezone.localdate(),
             period_end=timezone.localdate(),
             status="draft",
+            scope_type="cycle",
+            scope_object_id=cycle.id,
         )
 
         with patch.object(ReportApplicationService, "_dispatch_generation") as mock_dispatch:
@@ -205,6 +305,89 @@ class TestReportApplicationService:
         _call_kwargs = mock_dispatch.call_args
         assert _call_kwargs.kwargs.get("restore_validation") is False
 
+    def test_legacy_report_without_scope_cannot_be_regenerated(self):
+        farm_profile = FarmProfileFactory()
+        report = ProductionReport.objects.create(
+            farm_profile=farm_profile,
+            report_type="daily",
+            period_start=timezone.localdate(),
+            period_end=timezone.localdate(),
+            status="validated",
+            payload={},
+        )
+
+        with patch.object(ReportApplicationService, "_dispatch_generation") as mock_dispatch:
+            with pytest.raises(UnresolvableLegacyReportScopeError, match="cycle d’origine"):
+                ReportApplicationService.request_report_regeneration(report)
+
+        report.refresh_from_db()
+        assert report.status == "validated"
+        mock_dispatch.assert_not_called()
+
+    def test_legacy_report_with_cycle_scope_in_payload_is_regenerable(self):
+        farm_profile = FarmProfileFactory()
+        cycle = ProductionCycleFactory(farm_profile=farm_profile, status="active")
+        report = ProductionReport.objects.create(
+            farm_profile=farm_profile,
+            report_type="daily",
+            period_start=timezone.localdate(),
+            period_end=timezone.localdate(),
+            status="draft",
+            scope_object_id=None,
+            payload={"report_meta": {"cycle_scope_id": str(cycle.id)}},
+        )
+
+        with patch.object(ReportApplicationService, "_dispatch_generation") as mock_dispatch:
+            updated = ReportApplicationService.request_report_regeneration(report)
+
+        assert updated.status == "pending"
+        assert str(updated.scope_object_id) == str(cycle.id)
+        assert updated.payload["report_meta"]["scope_type"] == "cycle"
+        mock_dispatch.assert_called_once_with(updated, restore_validation=False)
+
+    def test_legacy_unit_report_with_allocation_scope_is_regenerable(self):
+        from aquaculture.models import CycleUnitAllocation, ProductionUnit
+
+        farm_profile = FarmProfileFactory()
+        cycle = ProductionCycleFactory(farm_profile=farm_profile, status="active")
+        unit = ProductionUnit.objects.create(
+            farm_profile=farm_profile,
+            name="Bac legacy",
+            unit_type="tank",
+            volume_m3="3.00",
+        )
+        allocation = CycleUnitAllocation.objects.create(
+            cycle=cycle,
+            production_unit=unit,
+            initial_fish_count=900,
+            current_fish_count=900,
+            initial_biomass_kg="9.00",
+            current_biomass_kg="9.00",
+        )
+        report = ProductionReport.objects.create(
+            farm_profile=farm_profile,
+            report_type="daily",
+            period_start=timezone.localdate(),
+            period_end=timezone.localdate(),
+            status="draft",
+            scope_type="unit",
+            scope_object_id=None,
+            payload={
+                "report_meta": {
+                    "scope_type": "unit",
+                    "cycle_unit_allocation_id": str(allocation.id),
+                }
+            },
+        )
+
+        with patch.object(ReportApplicationService, "_dispatch_generation") as mock_dispatch:
+            updated = ReportApplicationService.request_report_regeneration(report)
+
+        assert updated.status == "pending"
+        assert str(updated.scope_object_id) == str(allocation.id)
+        assert updated.payload["report_meta"]["scope_type"] == "unit"
+        mock_dispatch.assert_called_once_with(updated, restore_validation=False)
+
     def test_request_report_regeneration_resets_communication_status_on_regen(self):
         """Vérifie que email_status et whatsapp_status sont toujours réinitialisés après regen."""
         from unittest.mock import patch as _patch
@@ -212,6 +395,7 @@ class TestReportApplicationService:
         from aquaculture.services.report_service import ReportService
 
         farm_profile = FarmProfileFactory()
+        cycle = ProductionCycleFactory(farm_profile=farm_profile, status="active")
         report = ProductionReport.objects.create(
             farm_profile=farm_profile,
             report_type="daily",
@@ -220,6 +404,8 @@ class TestReportApplicationService:
             status="validated",
             email_status="sent",
             whatsapp_status="shared",
+            scope_type="cycle",
+            scope_object_id=cycle.id,
         )
 
         fake_pdf = b"%PDF-fake"

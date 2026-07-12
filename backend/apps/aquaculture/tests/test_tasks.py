@@ -118,7 +118,15 @@ class TestGenerateReportAsyncTask:
     )
     def test_resets_report_to_draft_on_non_retryable_errors(self, side_effect, expected_message):
         farm = FarmProfileFactory()
+        cycle = ProductionCycleFactory(
+            farm_profile=farm,
+            status='active',
+            start_date=date(2026, 2, 1),
+        )
         report = _create_report(farm_profile=farm, status='pending')
+        report.scope_type = 'cycle'
+        report.scope_object_id = cycle.id
+        report.save(update_fields=['scope_type', 'scope_object_id'])
 
         with patch(
             'aquaculture.tasks.ReportService.generate_for_farm',
@@ -161,9 +169,29 @@ class TestGenerateReportAsyncTask:
         assert kwargs['scope_object_id'] == str(cycle.id)
         assert kwargs['cycle_id'] == str(cycle.id)
 
-    def test_retries_on_unexpected_error(self):
+    def test_refuses_generic_regeneration_when_legacy_scope_is_missing(self):
         farm = FarmProfileFactory()
         report = _create_report(farm_profile=farm, status='pending')
+
+        with patch('aquaculture.tasks.ReportService.generate_for_farm') as mock_generate:
+            result = generate_report_async_task(str(report.id))
+
+        report.refresh_from_db()
+        assert result == f'Report failed (business error): {report.id}'
+        assert report.status == 'draft'
+        mock_generate.assert_not_called()
+
+    def test_retries_on_unexpected_error(self):
+        farm = FarmProfileFactory()
+        cycle = ProductionCycleFactory(
+            farm_profile=farm,
+            status='active',
+            start_date=date(2026, 2, 1),
+        )
+        report = _create_report(farm_profile=farm, status='pending')
+        report.scope_type = 'cycle'
+        report.scope_object_id = cycle.id
+        report.save(update_fields=['scope_type', 'scope_object_id'])
 
         with patch.object(
             generate_report_async_task,
@@ -238,8 +266,16 @@ class TestGenerateSingleCycleReportTask:
 class TestDispatchPerActiveCycle:
     def test_dispatches_one_task_per_active_cycle_and_skips_inactive_cycles(self):
         included_farm = FarmProfileFactory(user=UserFactory(is_active=True))
-        first_cycle = ProductionCycleFactory(farm_profile=included_farm, status='active')
-        second_cycle = ProductionCycleFactory(farm_profile=included_farm, status='active')
+        first_cycle = ProductionCycleFactory(
+            farm_profile=included_farm,
+            status='active',
+            start_date=date(2026, 2, 20),
+        )
+        second_cycle = ProductionCycleFactory(
+            farm_profile=included_farm,
+            status='active',
+            start_date=date(2026, 3, 1),
+        )
 
         excluded_inactive_user_farm = FarmProfileFactory(user=UserFactory(is_active=False))
         ProductionCycleFactory(farm_profile=excluded_inactive_user_farm, status='active')
@@ -262,6 +298,26 @@ class TestDispatchPerActiveCycle:
             '2026-03-01',
             '2026-03-01',
         )
+
+    def test_skips_active_cycles_started_after_period_end(self):
+        farm = FarmProfileFactory(user=UserFactory(is_active=True))
+        included_cycle = ProductionCycleFactory(
+            farm_profile=farm,
+            status='active',
+            start_date=date(2026, 3, 1),
+        )
+        excluded_cycle = ProductionCycleFactory(
+            farm_profile=farm,
+            status='active',
+            start_date=date(2026, 3, 2),
+        )
+
+        with patch('aquaculture.tasks.generate_single_cycle_report_task.delay') as mock_delay:
+            count = _dispatch_per_active_cycle('daily', date(2026, 2, 28), date(2026, 3, 1))
+
+        assert count == 1
+        assert mock_delay.call_args.args[1] == str(included_cycle.id)
+        assert str(excluded_cycle.id) not in {call.args[1] for call in mock_delay.call_args_list}
 
     @pytest.mark.parametrize('report_type', ['daily', 'weekly', 'monthly'])
     def test_active_cycle_task_is_idempotent_for_same_scope(self, report_type):

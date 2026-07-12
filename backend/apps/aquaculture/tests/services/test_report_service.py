@@ -3,6 +3,7 @@ Tests unitaires ciblés pour ReportService (emails + rendu template PDF).
 """
 
 from datetime import date, datetime
+from unittest.mock import patch
 
 import pytest
 from aquaculture.models import CycleUnitAllocation, ProductionReport, ProductionUnit
@@ -205,6 +206,31 @@ class TestReportServicePayloadAndPdfTemplate:
         assert payload["cycles"][0]["cycle"]["id"] == str(scoped_cycle.id)
         assert payload["report_meta"]["cycle_scope_id"] == str(scoped_cycle.id)
         assert payload["report_meta"]["cycle_scope_name"] == scoped_cycle.cycle_name
+
+    def test_generate_all_active_cycles_skips_cycles_started_after_period_end(self):
+        farm_profile = FarmProfileFactory()
+        included_cycle = ProductionCycleFactory(
+            farm_profile=farm_profile,
+            status="active",
+            start_date=date(2026, 3, 1),
+        )
+        excluded_cycle = ProductionCycleFactory(
+            farm_profile=farm_profile,
+            status="active",
+            start_date=date(2026, 3, 2),
+        )
+
+        with patch.object(ReportService, "generate_for_farm") as mock_generate:
+            count = ReportService._generate_for_all_active_cycles(
+                "daily",
+                date(2026, 2, 28),
+                date(2026, 3, 1),
+            )
+
+        assert count == 1
+        mock_generate.assert_called_once()
+        assert mock_generate.call_args.kwargs["cycle_id"] == str(included_cycle.id)
+        assert mock_generate.call_args.kwargs["cycle_id"] != str(excluded_cycle.id)
 
     def test_build_payload_rejects_invalid_or_inactive_cycle_scope(self):
         farm_profile = FarmProfileFactory()
@@ -425,6 +451,8 @@ class TestReportServicePayloadAndPdfTemplate:
         assert "Analyzed period synthesis" not in html  # absent because no cycle section rendered
         assert "Disease" in html
         assert "Maladie" not in html
+        assert "Cycle situation as of 19 July 2026" in html
+        assert "Started on 1 April 2026" in html
         assert "19 Jul 2026" in html
         assert "1 April 2026" in html
         assert "20 July 2026 at 10:00" in html
