@@ -25,14 +25,17 @@
 - The first cycle day is the stocking date, so the planned harvest date is the start date plus duration minus one day.
 
 - A new cycle launch must include at least one real production unit.
+- `initial_setup` creates new units and completes setup; `additional_cycle` selects existing active units and never creates duplicates or rewrites setup.
 - Each launch unit has exactly one positive allocation, and the sum of allocations equals the cycle initial fish count.
-- Launch setup, cycle, units, and allocations commit atomically; an intermediate failure rolls everything back.
+- Launch setup, cycle, units, and allocations commit atomically; an intermediate failure rolls everything back. Additional-cycle rollback preserves the existing setup and units.
 - Launch retries use a stable `launch_uuid`; identical retries are replayed without duplicate rows, while changed payloads return a conflict.
+- Selling prices are resolved server-side when absent: 2,000 FCFA/kg for Clarias and 2,800 FCFA/kg for Tilapia. Zero and negative prices are invalid.
 - A custom duration survives species changes and is used consistently by simulation, annual projections, persistence, reports, and time remaining.
 
 ## What to avoid
 
 - Frontend-only business truth.
 - Hardcoded text strings in UI components.
+- Modern cycle creation that falls back to an isolated offline cycle; keep the form open and retry the canonical launch instead.
 - Hardcoded secrets or machine-specific infrastructure values in docs.
 - Breaking existing sync identifiers or deduplication rules.

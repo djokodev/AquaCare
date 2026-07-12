@@ -89,9 +89,11 @@ describe("features/aquaculture/services/firstCycleLaunchService", () => {
     expect(mockAquaculture.launchProductionCycle).toHaveBeenCalledWith(
       expect.objectContaining({
         launch_uuid: formData.launchRequestId,
+        launch_kind: "initial_setup",
         production_units: [
           {
             local_id: "unit-1",
+            source: "new",
             name: "Bac 1",
             unit_type: "tank",
             volume_m3: 25,

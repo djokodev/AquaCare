@@ -192,9 +192,10 @@ Ecrans:
 
 Pattern:
 
-1. Tentative online.
-2. Sur erreur reseau detectee, fallback offline automatique (`offlineService`).
-3. Sync silencieux au retour de connectivite.
+1. `NewCycleScreen` charge les unités actives existantes.
+2. L’utilisateur sélectionne au moins une unité et répartit l’effectif initial.
+3. L’écran envoie un seul `POST /aquaculture/cycles/launch/` en mode `additional_cycle`, avec un UUID stable pour les retries.
+4. Sur erreur réseau, le formulaire reste ouvert ; aucune création moderne de cycle isolé n’est sauvegardée offline. Le fallback `offlineService` reste réservé aux flux legacy et à la synchronisation historique.
 
 ### 4. Rapports
 

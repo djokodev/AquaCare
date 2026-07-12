@@ -26,11 +26,20 @@ This domain covers fish production planning, daily operational logs, feeding gui
 
 ## Transactional cycle launch
 
-New cycle launches use `POST /api/aquaculture/cycles/launch/`. The operation updates the farm production plan and creates the cycle, its production units, and exactly one positive fish allocation per unit in one database transaction. The allocation total must equal the cycle initial count, and each unit capacity is checked by the backend.
+All new launches use `POST /api/aquaculture/cycles/launch/` with an explicit `launch_kind`:
 
-`launch_uuid` is the idempotency key and is stored as the cycle `client_uuid`. The validated input is hashed with SHA-256. An identical retry returns HTTP 200 with the same IDs and `idempotent_replay=true`; reusing the UUID with another payload or farm returns HTTP 409 with `cycle_launch_idempotency_conflict`.
+- `initial_setup` requires a production plan and `source=new` units. It completes the farm setup and creates the cycle, units, and exactly one positive allocation per unit in one database transaction. A completed setup cannot be initialized again.
+- `additional_cycle` requires a completed setup and `source=existing` references to active units owned by the farm. The selected units are locked and reused; only the cycle and its allocations are created. Setup data is never rewritten, and a rollback leaves the existing setup unchanged.
 
-Direct `POST /api/aquaculture/cycles/` is reserved for no new cycles and returns `cycle_launch_requires_production_units`. Reads and updates of historical cycles without units remain supported, as does legacy cycle creation used by synchronization internals.
+In both modes, allocation totals must equal the cycle initial count and new-unit capacity is checked by the backend. A foreign or unknown existing-unit ID is intentionally opaque and returns 404; an owned inactive unit returns 400. The domain permits a unit to be selected by more than one cycle when the model allows it.
+
+`launch_uuid` is the idempotency key and is stored as the cycle `client_uuid`. Pure domain code canonicalizes a copy of the validated payload and computes its SHA-256 hash; client array order is preserved in the business result. An identical retry returns HTTP 200 with the same IDs and `idempotent_replay=true`; reusing the UUID with another payload or farm returns HTTP 409 with `cycle_launch_idempotency_conflict`.
+
+Selling prices are optional at the HTTP boundary. When absent, the backend resolves the species default from `ECONOMIC_DEFAULTS_BY_SPECIES` (Clarias 2,000 FCFA/kg, Tilapia 2,800 FCFA/kg); zero and negative values are rejected.
+
+Direct `POST /api/aquaculture/cycles/` is deprecated and disabled for new cycles; it returns `cycle_launch_requires_production_units` and points callers to the launch endpoint. Reads and updates of historical cycles remain supported, as does legacy cycle creation used by synchronization internals.
+
+The modern `NewCycleScreen` uses one online launch request with a stable UUID for retries. It does not create an isolated modern cycle offline; the incomplete form stays in memory. The legacy synchronization fallback remains available only for compatibility with older flows.
 
 ## Constants and references
 

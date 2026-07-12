@@ -38,6 +38,12 @@ class CycleLaunchView(APIView):
 
     @extend_schema(
         summary="Lancer un cycle avec ses unités de production",
+        description=(
+            "initial_setup complète le setup et crée les unités source=new ; "
+            "additional_cycle exige un setup terminé et réutilise les unités "
+            "source=existing sélectionnées. Les deux modes créent le cycle et "
+            "ses allocations dans une transaction atomique."
+        ),
         request=CycleLaunchRequestSerializer,
         responses={
             201: OpenApiResponse(CycleLaunchResponseSerializer),

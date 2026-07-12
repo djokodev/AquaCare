@@ -2,12 +2,8 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
-from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
-from uuid import UUID
 
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.utils.translation import gettext_lazy as _
@@ -42,6 +38,8 @@ class CycleLaunchProductionPlanSerializer(serializers.Serializer):
         max_digits=10,
         decimal_places=2,
         min_value=Decimal("0.01"),
+        required=False,
+        allow_null=True,
     )
 
 
@@ -77,6 +75,8 @@ class CycleLaunchCycleSerializer(serializers.Serializer):
         max_digits=12,
         decimal_places=2,
         min_value=Decimal("0.01"),
+        required=False,
+        allow_null=True,
     )
     fingerlings_cost_fcfa = serializers.DecimalField(
         max_digits=12,
@@ -93,11 +93,13 @@ class CycleLaunchCycleSerializer(serializers.Serializer):
 
 
 class CycleLaunchUnitSerializer(serializers.Serializer):
-    """A new production unit identified by a launch-local identifier."""
+    """A discriminated new or existing production unit reference."""
 
     local_id = serializers.CharField(max_length=120, trim_whitespace=True)
-    name = serializers.CharField(max_length=120, trim_whitespace=True)
-    unit_type = serializers.CharField(max_length=20, trim_whitespace=True)
+    source = serializers.ChoiceField(choices=["new", "existing"])
+    name = serializers.CharField(max_length=120, trim_whitespace=True, required=False, allow_blank=True)
+    unit_type = serializers.CharField(max_length=20, trim_whitespace=True, required=False, allow_blank=True)
+    production_unit_id = serializers.UUIDField(required=False)
     volume_m3 = serializers.DecimalField(
         max_digits=10,
         decimal_places=2,
@@ -115,10 +117,28 @@ class CycleLaunchUnitSerializer(serializers.Serializer):
 
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
         local_id = attrs.get("local_id", "").strip()
-        name = attrs.get("name", "").strip()
-        unit_type = normalize_production_unit_type(attrs.get("unit_type"))
         if not local_id:
             raise serializers.ValidationError({"local_id": _("L'identifiant local de l'unité est obligatoire.")})
+        attrs["local_id"] = local_id
+
+        if attrs["source"] == "existing":
+            creation_fields = {"name", "unit_type", "volume_m3", "surface_m2"}
+            if creation_fields.intersection(attrs):
+                raise serializers.ValidationError(
+                    {"source": _("Une unité existante ne peut pas contenir des champs de création.")}
+                )
+            if not attrs.get("production_unit_id"):
+                raise serializers.ValidationError(
+                    {"production_unit_id": _("L'identifiant de l'unité existante est obligatoire.")}
+                )
+            return attrs
+
+        if attrs.get("production_unit_id"):
+            raise serializers.ValidationError(
+                {"production_unit_id": _("Une nouvelle unité ne peut pas référencer une unité existante.")}
+            )
+        name = attrs.get("name", "").strip()
+        unit_type = normalize_production_unit_type(attrs.get("unit_type"))
         if not name:
             raise serializers.ValidationError({"name": _("Le nom de l'unité est obligatoire.")})
         try:
@@ -129,7 +149,6 @@ class CycleLaunchUnitSerializer(serializers.Serializer):
             )
         except DjangoValidationError as exc:
             raise serializers.ValidationError(exc.message_dict or exc.messages) from exc
-        attrs["local_id"] = local_id
         attrs["name"] = name
         attrs["unit_type"] = unit_type
         return attrs
@@ -154,7 +173,8 @@ class CycleLaunchRequestSerializer(serializers.Serializer):
     """Validates every structural launch invariant before any database write."""
 
     launch_uuid = serializers.UUIDField()
-    production_plan = CycleLaunchProductionPlanSerializer()
+    launch_kind = serializers.ChoiceField(choices=["initial_setup", "additional_cycle"])
+    production_plan = CycleLaunchProductionPlanSerializer(required=False, allow_null=True)
     cycle = CycleLaunchCycleSerializer()
     production_units = CycleLaunchUnitSerializer(many=True, allow_empty=False)
     allocations = CycleLaunchAllocationSerializer(many=True, allow_empty=False)
@@ -163,7 +183,22 @@ class CycleLaunchRequestSerializer(serializers.Serializer):
         units = attrs["production_units"]
         allocations = attrs["allocations"]
         cycle = attrs["cycle"]
-        plan = attrs["production_plan"]
+        plan = attrs.get("production_plan")
+        launch_kind = attrs["launch_kind"]
+
+        if launch_kind == "initial_setup" and not plan:
+            raise serializers.ValidationError(
+                {"production_plan": _("Le plan de production est obligatoire pour le setup initial.")}
+            )
+
+        expected_source = "new" if launch_kind == "initial_setup" else "existing"
+        invalid_sources = [
+            unit["local_id"] for unit in units if unit["source"] != expected_source
+        ]
+        if invalid_sources:
+            raise serializers.ValidationError(
+                {"production_units": _("Le type d'unité ne correspond pas au mode de lancement.")}
+            )
 
         local_ids = [unit["local_id"] for unit in units]
         duplicate_unit_ids = sorted({local_id for local_id in local_ids if local_ids.count(local_id) > 1})
@@ -193,7 +228,7 @@ class CycleLaunchRequestSerializer(serializers.Serializer):
                 {"allocations": _("Chaque unité doit avoir exactement une allocation.")}
             )
 
-        if plan.get("species") and plan["species"] != cycle["species"]:
+        if plan and plan.get("species") and plan["species"] != cycle["species"]:
             raise serializers.ValidationError(
                 {"production_plan": {"species": _("L'espèce du plan doit correspondre à celle du cycle.")}}
             )
@@ -205,9 +240,16 @@ class CycleLaunchRequestSerializer(serializers.Serializer):
             )
 
         units_by_id = {unit["local_id"]: unit for unit in units}
+        existing_unit_ids = [unit.get("production_unit_id") for unit in units if unit["source"] == "existing"]
+        if len(set(existing_unit_ids)) != len(existing_unit_ids):
+            raise serializers.ValidationError(
+                {"production_units": _("Une même unité ne peut être sélectionnée deux fois.")}
+            )
         capacity_errors: dict[str, str] = {}
         for allocation in allocations:
             unit = units_by_id[allocation["production_unit_local_id"]]
+            if unit["source"] == "existing":
+                continue
             capacity = get_production_unit_capacity(
                 unit["unit_type"],
                 volume_m3=unit.get("volume_m3"),
@@ -220,11 +262,6 @@ class CycleLaunchRequestSerializer(serializers.Serializer):
         if capacity_errors:
             raise serializers.ValidationError({"allocations": capacity_errors})
 
-        attrs["production_units"] = sorted(units, key=lambda unit: unit["local_id"])
-        attrs["allocations"] = sorted(
-            allocations,
-            key=lambda allocation: allocation["production_unit_local_id"],
-        )
         return attrs
 
 
@@ -238,33 +275,3 @@ class CycleLaunchResponseSerializer(serializers.Serializer):
     production_units = ProductionUnitSerializer(many=True)
     cycle_unit_allocations = CycleUnitAllocationSerializer(many=True)
     production_unit_id_by_local_id = serializers.DictField(child=serializers.UUIDField())
-
-
-def _canonical_value(value: Any) -> Any:
-    if isinstance(value, (date, datetime)):
-        return value.isoformat()
-    if isinstance(value, (Decimal, UUID)):
-        return str(value)
-    if isinstance(value, dict):
-        return {key: _canonical_value(value[key]) for key in sorted(value)}
-    if isinstance(value, list):
-        return [_canonical_value(item) for item in value]
-    return value
-
-
-def calculate_launch_payload_hash(validated_data: dict[str, Any]) -> str:
-    """Return a stable hash of client inputs, excluding all server-derived values."""
-    canonical = {
-        "launch_uuid": validated_data["launch_uuid"],
-        "production_plan": validated_data["production_plan"],
-        "cycle": validated_data["cycle"],
-        "production_units": validated_data["production_units"],
-        "allocations": validated_data["allocations"],
-    }
-    encoded = json.dumps(
-        _canonical_value(canonical),
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-    ).encode("utf-8")
-    return hashlib.sha256(encoded).hexdigest()

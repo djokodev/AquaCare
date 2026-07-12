@@ -1,29 +1,29 @@
-import React from 'react';
-import { Alert } from 'react-native';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
-import NewCycleScreen from '../NewCycleScreen';
-import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
-import { offlineService } from '@/services/offlineService';
-import { useDispatch } from 'react-redux';
-import { useAuth } from '@/hooks/useAuth';
-import { parseApiError, hasFieldError, isNetworkError } from '@/utils/errorParser';
-import { formatAquacultureErrorWithAction } from '@/features/aquaculture/utils/aquacultureErrorPresenter';
+import React from "react";
+import { Alert } from "react-native";
+import { fireEvent, render, waitFor } from "@testing-library/react-native";
+import NewCycleScreen from "../NewCycleScreen";
+import { aquacultureService } from "@/features/aquaculture/services/aquacultureService";
+import { offlineService } from "@/services/offlineService";
+import { useDispatch } from "react-redux";
+import { useAuth } from "@/hooks/useAuth";
+import { isNetworkError, parseApiError } from "@/utils/errorParser";
 
-jest.mock('react-redux', () => ({
+jest.mock("react-redux", () => ({
   useDispatch: jest.fn(),
 }));
 
-jest.mock('@/hooks/useAuth', () => ({
+jest.mock("@/hooks/useAuth", () => ({
   useAuth: jest.fn(),
 }));
 
-jest.mock('@/features/aquaculture/services/aquacultureService', () => ({
+jest.mock("@/features/aquaculture/services/aquacultureService", () => ({
   aquacultureService: {
-    createProductionCycle: jest.fn(),
+    getProductionUnits: jest.fn(),
+    launchProductionCycle: jest.fn(),
   },
 }));
 
-jest.mock('@/services/offlineService', () => ({
+jest.mock("@/services/offlineService", () => ({
   offlineService: {
     hasAnyPendingSync: jest.fn(),
     syncAllOfflineData: jest.fn(),
@@ -31,18 +31,13 @@ jest.mock('@/services/offlineService', () => ({
   },
 }));
 
-jest.mock('@/utils/errorParser', () => ({
+jest.mock("@/utils/errorParser", () => ({
   parseApiError: jest.fn(),
   logApiError: jest.fn(),
-  hasFieldError: jest.fn(),
   isNetworkError: jest.fn().mockReturnValue(false),
 }));
 
-jest.mock('@/features/aquaculture/utils/aquacultureErrorPresenter', () => ({
-  formatAquacultureErrorWithAction: jest.fn(),
-}));
-
-jest.mock('@/utils/logger', () => ({
+jest.mock("@/utils/logger", () => ({
   __esModule: true,
   default: {
     error: jest.fn(),
@@ -53,15 +48,15 @@ jest.mock('@/utils/logger', () => ({
   },
 }));
 
-describe('features/aquaculture/screens/NewCycleScreen', () => {
+describe("features/aquaculture/screens/NewCycleScreen", () => {
   const mockDispatch = jest.fn();
-  const mockService = aquacultureService as jest.Mocked<typeof aquacultureService>;
+  const mockService = aquacultureService as jest.Mocked<
+    typeof aquacultureService
+  >;
   const mockOffline = offlineService as jest.Mocked<typeof offlineService>;
   const mockUseAuth = useAuth as jest.Mock;
-  const mockParseApiError = parseApiError as jest.Mock;
-  const mockFormatErrorWithAction = formatAquacultureErrorWithAction as jest.Mock;
-  const mockHasFieldError = hasFieldError as jest.Mock;
   const mockIsNetworkError = isNetworkError as jest.Mock;
+  const mockParseApiError = parseApiError as jest.Mock;
   const navigation = {
     goBack: jest.fn(),
     navigate: jest.fn(),
@@ -69,153 +64,190 @@ describe('features/aquaculture/screens/NewCycleScreen', () => {
     reset: jest.fn(),
     canGoBack: jest.fn().mockReturnValue(true),
   } as any;
+  const units = [
+    {
+      id: "unit-1",
+      farm_profile: "farm-1",
+      name: "Bassin A",
+      unit_type: "tank",
+      volume_m3: 10,
+      surface_m2: null,
+      recommended_capacity: 3000,
+      status: "active",
+      created_at: "",
+      updated_at: "",
+    },
+    {
+      id: "unit-2",
+      farm_profile: "farm-1",
+      name: "Bassin B",
+      unit_type: "tank",
+      volume_m3: 8,
+      surface_m2: null,
+      recommended_capacity: 2400,
+      status: "active",
+      created_at: "",
+      updated_at: "",
+    },
+  ] as any;
 
   beforeEach(() => {
     jest.clearAllMocks();
     (useDispatch as unknown as jest.Mock).mockReturnValue(mockDispatch);
-    mockUseAuth.mockReturnValue({
-      farmProfile: { farm_name: 'Ferme Test' },
-    });
+    mockUseAuth.mockReturnValue({ farmProfile: { farm_name: "Ferme Test" } });
     mockOffline.hasAnyPendingSync.mockResolvedValue(false);
     mockOffline.syncAllOfflineData.mockResolvedValue({
       success: 0,
       failed: 0,
-      details: {
-        cycleLogs: { success: 0, failed: 0 },
-        newCycles: { success: 0, failed: 0 },
-        sanitaryLogs: { success: 0, failed: 0 },
-      },
-    });
-    mockFormatErrorWithAction.mockReturnValue('Erreur formatee');
-    mockHasFieldError.mockReturnValue(false);
+    } as any);
+    mockService.getProductionUnits.mockResolvedValue(units);
+    mockIsNetworkError.mockReturnValue(false);
+    mockService.launchProductionCycle.mockResolvedValue({
+      productionCycle: { id: "cycle-2" },
+    } as any);
+    mockParseApiError.mockReturnValue({ message: "Erreur de validation" });
   });
 
-  const fillValidForm = (getByText: any, getByPlaceholderText: any, getAllByPlaceholderText: any) => {
-    const numericInputs = getAllByPlaceholderText('exampleValuePlaceholder');
-    fireEvent.press(getByText('tilapia'));
-    fireEvent.changeText(getByPlaceholderText('pondNamePlaceholder'), 'Bassin-1');
-    fireEvent.changeText(getByPlaceholderText('cycleNamePlaceholder'), 'Cycle Test');
-    fireEvent.changeText(numericInputs[0], '120');
-    fireEvent.changeText(numericInputs[2], '1500');
-    fireEvent.changeText(numericInputs[3], '12');
+  const fillValidForm = (getByTestId: any, getByText: any) => {
+    fireEvent.press(getByText("tilapia"));
+    fireEvent.press(getByTestId("newCycleUnit-unit-1"));
+    fireEvent.changeText(getByTestId("newCycleInitialCount"), "1500");
+    fireEvent.changeText(getByTestId("newCycleInitialWeight"), "12");
+    fireEvent.changeText(getByTestId("newCycleTargetWeight"), "350");
+    fireEvent.changeText(getByTestId("newCycleDuration"), "150");
+    fireEvent.changeText(getByTestId("newCycleSurvival"), "95");
+    fireEvent.changeText(getByTestId("newCycleSellingPrice"), "2800");
+    fireEvent.changeText(getByTestId("newCycleAllocation-unit-1"), "1500");
   };
 
-  it('cree un cycle en ligne avec les donnees converties', async () => {
-    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
-    mockService.createProductionCycle.mockResolvedValue({ id: 'cycle-1' } as any);
-
-    const { getByText, getByPlaceholderText, getAllByPlaceholderText } = render(
-      <NewCycleScreen navigation={navigation} />
+  it("lance un cycle supplémentaire avec une unité existante en un seul appel", async () => {
+    const alertSpy = jest
+      .spyOn(Alert, "alert")
+      .mockImplementation(() => undefined);
+    const { getByTestId, getByText } = render(
+      <NewCycleScreen navigation={navigation} />,
     );
 
-    fillValidForm(getByText, getByPlaceholderText, getAllByPlaceholderText);
-    fireEvent.press(getByText('createCycle'));
+    await waitFor(() =>
+      expect(mockService.getProductionUnits).toHaveBeenCalledWith({
+        status: "active",
+      }),
+    );
+    fillValidForm(getByTestId, getByText);
+    fireEvent.press(getByText("createCycle"));
 
-    await waitFor(() => {
-      expect(mockService.createProductionCycle).toHaveBeenCalledWith(
-        expect.objectContaining({
-          cycle_name: 'Cycle Test',
-          species: 'tilapia',
-          pond_identifier: 'Bassin-1',
-          pond_surface_m2: 120,
-          initial_count: 1500,
-          initial_average_weight: 12,
-        })
-      );
-    });
-
+    await waitFor(() =>
+      expect(mockService.launchProductionCycle).toHaveBeenCalledTimes(1),
+    );
+    const payload = mockService.launchProductionCycle.mock.calls[0][0];
+    expect(payload.launch_kind).toBe("additional_cycle");
+    expect(payload.production_units).toEqual([
+      {
+        local_id: "existing-unit-1",
+        source: "existing",
+        production_unit_id: "unit-1",
+      },
+    ]);
+    expect(payload.allocations).toEqual([
+      { production_unit_local_id: "existing-unit-1", fish_count: 1500 },
+    ]);
     expect(alertSpy).toHaveBeenCalledWith(
-      'success',
-      'cycleCreatedSuccess',
-      expect.any(Array)
+      "success",
+      "cycleCreatedSuccess",
+      expect.any(Array),
     );
-
-    const successCall = (alertSpy as jest.Mock).mock.calls.find((call) => call[1] === 'cycleCreatedSuccess');
-    const buttons = successCall?.[2] as Array<{ onPress?: () => void }>;
-    buttons?.[0]?.onPress?.();
-    expect(navigation.replace).toHaveBeenCalledWith(
-      'CycleSimulator',
-      expect.objectContaining({
-        cycleId: 'cycle-1',
-      })
-    );
-
+    expect(mockOffline.saveNewCycleOffline).not.toHaveBeenCalled();
     alertSpy.mockRestore();
   });
 
-  it('revient au dashboard racine si la pile ne permet pas un retour', () => {
-    navigation.canGoBack.mockReturnValue(false);
+  it("bloque la soumission sans unité sélectionnée", async () => {
+    const { getByText } = render(<NewCycleScreen navigation={navigation} />);
 
-    const { getByTestId } = render(<NewCycleScreen navigation={navigation} />);
+    await waitFor(() =>
+      expect(mockService.getProductionUnits).toHaveBeenCalled(),
+    );
+    fireEvent.press(getByText("createCycle"));
 
-    fireEvent.press(getByTestId('newCycleBackButton'));
-
-    expect(navigation.goBack).not.toHaveBeenCalled();
-    expect(navigation.reset).toHaveBeenCalledWith({
-      index: 0,
-      routes: [{ name: 'MainTabs' }],
-    });
+    expect(mockService.launchProductionCycle).not.toHaveBeenCalled();
   });
 
-  it('bascule en sauvegarde offline sur erreur reseau', async () => {
-    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  it("conserve le formulaire et ne crée pas de cycle offline sur erreur réseau", async () => {
+    const alertSpy = jest
+      .spyOn(Alert, "alert")
+      .mockImplementation(() => undefined);
     mockIsNetworkError.mockReturnValueOnce(true);
-    mockService.createProductionCycle.mockRejectedValueOnce({ message: 'Network Error' });
-    mockOffline.saveNewCycleOffline.mockResolvedValueOnce('offline-1');
-
-    const { getByText, getByPlaceholderText, getAllByPlaceholderText } = render(
-      <NewCycleScreen navigation={navigation} />
+    mockService.launchProductionCycle.mockRejectedValueOnce(
+      new Error("Network Error"),
+    );
+    const { getByTestId, getByText } = render(
+      <NewCycleScreen navigation={navigation} />,
     );
 
-    fillValidForm(getByText, getByPlaceholderText, getAllByPlaceholderText);
-    fireEvent.press(getByText('createCycle'));
-
-    await waitFor(() => {
-      expect(mockOffline.saveNewCycleOffline).toHaveBeenCalledWith(
-        expect.objectContaining({
-          cycle_name: 'Cycle Test',
-          species: 'tilapia',
-        })
-      );
-    });
-
-    expect(alertSpy).toHaveBeenCalledWith(
-      'success',
-      'cycleCreatedOfflineSimulationInfo',
-      expect.any(Array)
+    await waitFor(() =>
+      expect(mockService.getProductionUnits).toHaveBeenCalled(),
     );
+    fillValidForm(getByTestId, getByText);
+    fireEvent.press(getByText("createCycle"));
+
+    await waitFor(() =>
+      expect(alertSpy).toHaveBeenCalledWith("error", "cycleLaunchNetworkRetry"),
+    );
+    expect(mockOffline.saveNewCycleOffline).not.toHaveBeenCalled();
+    expect(getByTestId("newCycleInitialCount").props.value).toBe("1500");
     alertSpy.mockRestore();
   });
 
-  it('affiche une erreur formatee quand l API renvoie une erreur metier', async () => {
-    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
-    const apiError = { response: { data: { initial_count: ['Trop eleve'] } } };
-    mockService.createProductionCycle.mockRejectedValueOnce(apiError);
-    mockParseApiError.mockReturnValue({
-      status: 400,
-      message: 'Erreur de validation',
-      details: [{ field: 'initial_count', messages: ['Trop eleve'] }],
-      rawError: apiError,
-    });
-    mockFormatErrorWithAction.mockReturnValue('Erreur de validation');
-
-    const { getByText, getByPlaceholderText, getAllByPlaceholderText } = render(
-      <NewCycleScreen navigation={navigation} />
+  it("conserve le même launch_uuid lors d un retry", async () => {
+    mockService.launchProductionCycle
+      .mockRejectedValueOnce(new Error("temporary"))
+      .mockResolvedValueOnce({ productionCycle: { id: "cycle-2" } } as any);
+    mockIsNetworkError.mockReturnValue(true);
+    const { getByTestId, getByText } = render(
+      <NewCycleScreen navigation={navigation} />,
     );
 
-    fillValidForm(getByText, getByPlaceholderText, getAllByPlaceholderText);
-    fireEvent.press(getByText('createCycle'));
+    await waitFor(() =>
+      expect(mockService.getProductionUnits).toHaveBeenCalled(),
+    );
+    fillValidForm(getByTestId, getByText);
+    fireEvent.press(getByText("createCycle"));
+    await waitFor(() =>
+      expect(mockService.launchProductionCycle).toHaveBeenCalledTimes(1),
+    );
+    fireEvent.press(getByText("createCycle"));
+    await waitFor(() =>
+      expect(mockService.launchProductionCycle).toHaveBeenCalledTimes(2),
+    );
 
-    await waitFor(() => {
-      expect(mockParseApiError).toHaveBeenCalledWith(apiError);
-      expect(mockFormatErrorWithAction).toHaveBeenCalled();
-      expect(alertSpy).toHaveBeenCalledWith(
-        'error',
-        'Erreur de validation',
-        [{ text: 'ok', style: 'cancel' }]
-      );
+    expect(mockService.launchProductionCycle.mock.calls[0][0].launch_uuid).toBe(
+      mockService.launchProductionCycle.mock.calls[1][0].launch_uuid,
+    );
+  });
+
+  it("affiche une erreur métier sans effacer les valeurs saisies", async () => {
+    const alertSpy = jest
+      .spyOn(Alert, "alert")
+      .mockImplementation(() => undefined);
+    mockService.launchProductionCycle.mockRejectedValueOnce({
+      response: { data: { detail: "invalid" } },
     });
+    mockParseApiError.mockReturnValue({ message: "Erreur de validation" });
+    const { getByTestId, getByText } = render(
+      <NewCycleScreen navigation={navigation} />,
+    );
 
+    await waitFor(() =>
+      expect(mockService.getProductionUnits).toHaveBeenCalled(),
+    );
+    fillValidForm(getByTestId, getByText);
+    fireEvent.press(getByText("createCycle"));
+
+    await waitFor(() =>
+      expect(alertSpy).toHaveBeenCalledWith("error", "Erreur de validation", [
+        { text: "ok", style: "cancel" },
+      ]),
+    );
+    expect(getByTestId("newCycleInitialCount").props.value).toBe("1500");
     alertSpy.mockRestore();
   });
 });

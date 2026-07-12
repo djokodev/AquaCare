@@ -8,6 +8,7 @@ from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import (
     OpenApiExample,
     OpenApiParameter,
+    OpenApiResponse,
     extend_schema,
     extend_schema_view,
 )
@@ -93,11 +94,19 @@ logger = logging.getLogger(__name__)
         ]
     ),
     create=extend_schema(
-        summary="Créer un nouveau cycle de production",
+        summary="Création directe désactivée (deprecated)",
         description="""
-        Crée un nouveau cycle de production aquacole.
-        Calcule automatiquement la biomasse initiale et initialise les métriques.
+        La création directe d'un cycle est désactivée pour les nouveaux parcours.
+        Utilisez POST /api/aquaculture/cycles/launch/ avec un mode de lancement,
+        des unités et leurs allocations. Les lectures, PATCH et les données legacy
+        restent disponibles.
         """,
+        request=None,
+        responses={
+            400: OpenApiResponse(
+                description="cycle_launch_requires_production_units; utilisez /api/aquaculture/cycles/launch/"
+            )
+        },
         examples=[
             OpenApiExample(
                 'Nouveau cycle Clarias',

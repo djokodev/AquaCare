@@ -630,3 +630,30 @@ msgstr "The cycle current fish count does not match its allocations."
 
 msgid "Un nouveau cycle doit être lancé avec au moins une unité de production."
 msgstr "A new cycle must be launched with at least one production unit."
+
+msgid "Une unité existante ne peut pas contenir des champs de création."
+msgstr "An existing unit cannot contain creation fields."
+
+msgid "L'identifiant de l'unité existante est obligatoire."
+msgstr "The existing production unit identifier is required."
+
+msgid "Une nouvelle unité ne peut pas référencer une unité existante."
+msgstr "A new unit cannot reference an existing production unit."
+
+msgid "Une même unité ne peut être sélectionnée deux fois."
+msgstr "The same production unit cannot be selected twice."
+
+msgid "Le mode de lancement ne correspond pas à l'état de configuration de la ferme."
+msgstr "The launch mode does not match the farm setup state."
+
+msgid "Le plan de production est obligatoire pour le setup initial."
+msgstr "The production plan is required for initial setup."
+
+msgid "La configuration de la ferme est déjà terminée."
+msgstr "The farm setup is already complete."
+
+msgid "La ferme doit être configurée avant de lancer un cycle supplémentaire."
+msgstr "The farm must be configured before launching an additional cycle."
+
+msgid "L'unité de production sélectionnée est inactive."
+msgstr "The selected production unit is inactive."

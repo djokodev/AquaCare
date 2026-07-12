@@ -1,4 +1,4 @@
-"""Transactional application service for launching a cycle aggregate."""
+"""Transactional application service for initial and additional cycle launches."""
 
 from __future__ import annotations
 
@@ -11,8 +11,13 @@ from accounts.models import FarmProfile
 from django.db import IntegrityError, transaction
 from django.utils.translation import gettext_lazy as _
 
-from ..cycle_launch_serializers import calculate_launch_payload_hash
+from ..constants import ECONOMIC_DEFAULTS_BY_SPECIES
 from ..domain.calculators import AquacultureCalculator
+from ..domain.cycle_launch_idempotency import (
+    calculate_cycle_launch_payload_hash,
+    derive_allocation_client_uuid,
+    derive_unit_client_uuid,
+)
 from ..domain.exceptions import AquacultureBusinessException, DataIntegrityError
 from ..domain.production_units import normalize_production_unit_type
 from ..models import CycleUnitAllocation, ProductionCycle, ProductionUnit
@@ -28,6 +33,22 @@ class CycleLaunchIdempotencyConflict(AquacultureBusinessException):
     default_detail = _(
         "Ce lancement existe déjà avec un contenu différent ou appartient à une autre ferme."
     )
+
+
+class CycleLaunchModeConflict(AquacultureBusinessException):
+    """The requested launch mode does not match the farm setup state."""
+
+    default_code = "cycle_launch_mode_conflict"
+    default_detail = _(
+        "Le mode de lancement ne correspond pas à l'état de configuration de la ferme."
+    )
+
+
+class CycleLaunchUnitInactive(AquacultureBusinessException):
+    """An inactive unit cannot receive a new allocation."""
+
+    default_code = "cycle_launch_unit_inactive"
+    default_detail = _("L'unité de production sélectionnée est inactive.")
 
 
 @dataclass(frozen=True)
@@ -53,15 +74,13 @@ class CycleLaunchApplicationService:
         }[unit_type]
 
     @classmethod
-    def _build_setup_data(
-        cls,
-        payload: dict[str, Any],
-    ) -> dict[str, Any]:
+    def _build_setup_data(cls, payload: dict[str, Any]) -> dict[str, Any]:
         units = payload["production_units"]
         plan = payload["production_plan"]
         cycle = payload["cycle"]
         primary_unit = units[0]
         primary_type = primary_unit["unit_type"]
+        species_defaults = ECONOMIC_DEFAULTS_BY_SPECIES[cycle["species"]]
         return {
             "setup_species": cycle["species"],
             "setup_infrastructure_type": cls._legacy_infrastructure_type(primary_type),
@@ -75,7 +94,10 @@ class CycleLaunchApplicationService:
             "annual_production_target_kg": plan["annual_production_target_kg"],
             "num_cycles_per_year": plan["num_cycles_per_year"],
             "fingerlings_cost_per_unit_fcfa": plan["fingerlings_cost_per_unit_fcfa"],
-            "planned_selling_price_per_kg_fcfa": plan["planned_selling_price_per_kg_fcfa"],
+            "planned_selling_price_per_kg_fcfa": (
+                plan.get("planned_selling_price_per_kg_fcfa")
+                or species_defaults["planned_selling_price_per_kg_fcfa"]
+            ),
         }
 
     @staticmethod
@@ -101,25 +123,26 @@ class CycleLaunchApplicationService:
         cls,
         payload: dict[str, Any],
         payload_hash: str,
+        unit_specs: list[dict[str, Any]],
     ) -> dict[str, Any]:
         cycle = payload["cycle"]
-        units = payload["production_units"]
-        dimensions = cls._build_legacy_cycle_dimensions(units)
-        infrastructure_types = sorted({unit["unit_type"] for unit in units})
+        dimensions = cls._build_legacy_cycle_dimensions(unit_specs)
         cycle_data = {
             "client_uuid": payload["launch_uuid"],
             "launch_payload_hash": payload_hash,
             "cycle_name": None,
             "species": cycle["species"],
-            "pond_identifier": units[0]["name"],
-            "infrastructure_type": infrastructure_types,
+            "pond_identifier": unit_specs[0]["name"],
+            "infrastructure_type": sorted({unit["unit_type"] for unit in unit_specs}),
             "start_date": cycle["start_date"],
             "initial_count": cycle["initial_count"],
             "initial_average_weight": cycle.get("initial_average_weight"),
             "target_harvest_weight_g": cycle.get("target_harvest_weight_g"),
             "planned_cycle_duration_days": cycle["planned_cycle_duration_days"],
             "expected_survival_rate_pct": cycle["expected_survival_rate_pct"],
-            "planned_selling_price_per_kg_fcfa": cycle["planned_selling_price_per_kg_fcfa"],
+            "planned_selling_price_per_kg_fcfa": cycle.get(
+                "planned_selling_price_per_kg_fcfa"
+            ),
             "fingerlings_cost_fcfa": cycle["fingerlings_cost_fcfa"],
             "other_operational_costs_fcfa": cycle["other_operational_costs_fcfa"],
             "planned_feed_bags": cycle.get("planned_feed_bags"),
@@ -129,9 +152,7 @@ class CycleLaunchApplicationService:
         return cycle_data
 
     @staticmethod
-    def _load_existing_cycle(
-        launch_uuid: uuid.UUID,
-    ) -> ProductionCycle | None:
+    def _load_existing_cycle(launch_uuid: uuid.UUID) -> ProductionCycle | None:
         return (
             ProductionCycle.objects.select_for_update()
             .select_related("farm_profile", "farm_profile__user")
@@ -151,46 +172,97 @@ class CycleLaunchApplicationService:
             raise CycleLaunchIdempotencyConflict()
 
     @classmethod
+    def _resolve_existing_units(
+        cls,
+        farm_profile: FarmProfile,
+        payload: dict[str, Any],
+        *,
+        require_active: bool,
+    ) -> list[ProductionUnit]:
+        requested_ids = [unit["production_unit_id"] for unit in payload["production_units"]]
+        units_by_id = {
+            unit.id: unit
+            for unit in ProductionUnit.objects.for_api()
+            .select_for_update()
+            .filter(farm_profile=farm_profile, id__in=requested_ids)
+        }
+        if len(units_by_id) != len(requested_ids):
+            # Do not reveal whether an ID belongs to another farm.
+            raise FarmProfile.DoesNotExist
+        ordered_units = [units_by_id[unit_id] for unit_id in requested_ids]
+        if require_active and any(unit.status != "active" for unit in ordered_units):
+            raise CycleLaunchUnitInactive()
+        return ordered_units
+
+    @classmethod
+    def _resolve_new_units_for_replay(
+        cls,
+        farm_profile: FarmProfile,
+        payload: dict[str, Any],
+    ) -> list[ProductionUnit]:
+        requested_ids = [
+            derive_unit_client_uuid(payload["launch_uuid"], unit["local_id"])
+            for unit in payload["production_units"]
+        ]
+        units_by_client_uuid = {
+            unit.client_uuid: unit
+            for unit in ProductionUnit.objects.for_api()
+            .select_for_update()
+            .filter(farm_profile=farm_profile, client_uuid__in=requested_ids)
+        }
+        if len(units_by_client_uuid) != len(requested_ids):
+            raise CycleLaunchIdempotencyConflict()
+        return [units_by_client_uuid[client_uuid] for client_uuid in requested_ids]
+
+    @staticmethod
+    def _unit_specs_from_existing(
+        payload: dict[str, Any],
+        units: list[ProductionUnit],
+    ) -> list[dict[str, Any]]:
+        return [
+            {
+                "local_id": source["local_id"],
+                "name": unit.name,
+                "unit_type": unit.unit_type,
+                "volume_m3": unit.volume_m3,
+                "surface_m2": unit.surface_m2,
+            }
+            for source, unit in zip(payload["production_units"], units)
+        ]
+
+    @classmethod
     def _build_result(
         cls,
         *,
         farm_profile: FarmProfile,
         cycle: ProductionCycle,
         payload: dict[str, Any],
+        production_units: list[ProductionUnit],
         idempotent_replay: bool,
     ) -> CycleLaunchResult:
-        unit_ids = [
-            uuid.uuid5(payload["launch_uuid"], f"unit:{unit['local_id']}")
-            for unit in payload["production_units"]
-        ]
-        units_by_client_uuid = {
-            str(unit.client_uuid): unit
-            for unit in ProductionUnit.objects.for_api()
-            .filter(farm_profile=farm_profile, client_uuid__in=unit_ids)
-        }
-        if len(units_by_client_uuid) != len(unit_ids):
-            raise CycleLaunchIdempotencyConflict()
-
-        ordered_units = [units_by_client_uuid[str(unit_id)] for unit_id in unit_ids]
         allocations = list(
-            CycleUnitAllocation.objects.for_api()
-            .filter(cycle=cycle, client_uuid__in=[
-                uuid.uuid5(payload["launch_uuid"], f"allocation:{unit['local_id']}")
-                for unit in payload["production_units"]
-            ])
+            CycleUnitAllocation.objects.for_api().filter(
+                cycle=cycle,
+                client_uuid__in=[
+                    derive_allocation_client_uuid(
+                        payload["launch_uuid"], unit["local_id"]
+                    )
+                    for unit in payload["production_units"]
+                ],
+            )
         )
         allocations_by_unit_id = {
             allocation.production_unit_id: allocation for allocation in allocations
         }
-        if len(allocations_by_unit_id) != len(ordered_units):
+        if len(allocations_by_unit_id) != len(production_units):
             raise CycleLaunchIdempotencyConflict()
 
-        ordered_allocations = [allocations_by_unit_id[unit.id] for unit in ordered_units]
+        ordered_allocations = [allocations_by_unit_id[unit.id] for unit in production_units]
         mapping = {
             local_id: unit.id
             for local_id, unit in zip(
                 (item["local_id"] for item in payload["production_units"]),
-                ordered_units,
+                production_units,
             )
         }
         return CycleLaunchResult(
@@ -198,7 +270,7 @@ class CycleLaunchApplicationService:
             idempotent_replay=idempotent_replay,
             farm_profile=farm_profile,
             production_cycle=cycle,
-            production_units=ordered_units,
+            production_units=production_units,
             cycle_unit_allocations=ordered_allocations,
             production_unit_id_by_local_id=mapping,
         )
@@ -206,7 +278,7 @@ class CycleLaunchApplicationService:
     @classmethod
     @transaction.atomic
     def launch(cls, user, payload: dict[str, Any]) -> CycleLaunchResult:
-        """Create or replay the complete farm setup and cycle aggregate atomically."""
+        """Create or replay a complete initial or additional cycle launch."""
         if not user.is_active:
             raise FarmProfile.DoesNotExist
 
@@ -215,23 +287,52 @@ class CycleLaunchApplicationService:
             .select_related("user")
             .get(user_id=user.pk, is_deleted=False)
         )
-        payload_hash = calculate_launch_payload_hash(payload)
+        payload_hash = calculate_cycle_launch_payload_hash(payload)
         existing_cycle = cls._load_existing_cycle(payload["launch_uuid"])
         if existing_cycle:
             cls._validate_existing_cycle(existing_cycle, farm_profile, payload_hash)
-            replay_farm = FarmProfile.objects.select_related("user", "production_plan").get(
-                pk=farm_profile.pk
+            replay_units = (
+                cls._resolve_existing_units(farm_profile, payload, require_active=False)
+                if payload["launch_kind"] == "additional_cycle"
+                else cls._resolve_new_units_for_replay(farm_profile, payload)
             )
+            replay_farm = FarmProfile.objects.select_related(
+                "user", "production_plan"
+            ).get(pk=farm_profile.pk)
             return cls._build_result(
                 farm_profile=replay_farm,
                 cycle=existing_cycle,
                 payload=payload,
+                production_units=replay_units,
                 idempotent_replay=True,
             )
 
-        setup_data = cls._build_setup_data(payload)
-        updated_farm = FarmProductionPlanService.complete_setup(farm_profile, setup_data)
-        cycle_data = cls._build_cycle_data(payload, payload_hash)
+        plan = FarmProductionPlanService.get_or_create_locked_plan(farm_profile)
+        if payload["launch_kind"] == "initial_setup":
+            if plan.setup_completed:
+                raise CycleLaunchModeConflict(
+                    detail=_("La configuration de la ferme est déjà terminée.")
+                )
+            updated_farm = FarmProductionPlanService.complete_setup(
+                farm_profile,
+                cls._build_setup_data(payload),
+            )
+            production_units: list[ProductionUnit] = []
+            unit_specs = payload["production_units"]
+        else:
+            if not plan.setup_completed:
+                raise CycleLaunchModeConflict(
+                    detail=_("La ferme doit être configurée avant de lancer un cycle supplémentaire.")
+                )
+            updated_farm = farm_profile
+            production_units = cls._resolve_existing_units(
+                farm_profile,
+                payload,
+                require_active=True,
+            )
+            unit_specs = cls._unit_specs_from_existing(payload, production_units)
+
+        cycle_data = cls._build_cycle_data(payload, payload_hash, unit_specs)
         try:
             with transaction.atomic():
                 cycle = ProductionCycleService.create_cycle(updated_farm, cycle_data)
@@ -239,33 +340,43 @@ class CycleLaunchApplicationService:
             existing_cycle = cls._load_existing_cycle(payload["launch_uuid"])
             if existing_cycle:
                 cls._validate_existing_cycle(existing_cycle, updated_farm, payload_hash)
-                replay_farm = FarmProfile.objects.select_related("user", "production_plan").get(
-                    pk=updated_farm.pk
+                replay_units = (
+                    cls._resolve_existing_units(farm_profile, payload, require_active=False)
+                    if payload["launch_kind"] == "additional_cycle"
+                    else cls._resolve_new_units_for_replay(farm_profile, payload)
                 )
+                replay_farm = FarmProfile.objects.select_related(
+                    "user", "production_plan"
+                ).get(pk=updated_farm.pk)
                 return cls._build_result(
                     farm_profile=replay_farm,
                     cycle=existing_cycle,
                     payload=payload,
+                    production_units=replay_units,
                     idempotent_replay=True,
                 )
             raise
 
-        units_by_local_id: dict[str, ProductionUnit] = {}
-        for unit_data in payload["production_units"]:
-            client_uuid = uuid.uuid5(
-                payload["launch_uuid"],
-                f"unit:{unit_data['local_id']}",
-            )
-            units_by_local_id[unit_data["local_id"]] = ProductionUnit.objects.create(
-                client_uuid=client_uuid,
-                farm_profile=updated_farm,
-                name=unit_data["name"],
-                unit_type=normalize_production_unit_type(unit_data["unit_type"]),
-                volume_m3=unit_data.get("volume_m3"),
-                surface_m2=unit_data.get("surface_m2"),
-                status="active",
-            )
+        if payload["launch_kind"] == "initial_setup":
+            for unit_data in payload["production_units"]:
+                production_units.append(
+                    ProductionUnit.objects.create(
+                        client_uuid=derive_unit_client_uuid(
+                            payload["launch_uuid"], unit_data["local_id"]
+                        ),
+                        farm_profile=updated_farm,
+                        name=unit_data["name"],
+                        unit_type=normalize_production_unit_type(unit_data["unit_type"]),
+                        volume_m3=unit_data.get("volume_m3"),
+                        surface_m2=unit_data.get("surface_m2"),
+                        status="active",
+                    )
+                )
 
+        units_by_local_id = {
+            unit_data["local_id"]: unit
+            for unit_data, unit in zip(payload["production_units"], production_units)
+        }
         allocations_by_local_id = {
             allocation["production_unit_local_id"]: allocation
             for allocation in payload["allocations"]
@@ -277,9 +388,8 @@ class CycleLaunchApplicationService:
                 cycle.initial_average_weight,
             )
             CycleUnitAllocation.objects.create(
-                client_uuid=uuid.uuid5(
-                    payload["launch_uuid"],
-                    f"allocation:{local_id}",
+                client_uuid=derive_allocation_client_uuid(
+                    payload["launch_uuid"], local_id
                 ),
                 cycle=cycle,
                 production_unit=unit,
@@ -298,9 +408,9 @@ class CycleLaunchApplicationService:
                 _("L'effectif courant du cycle ne correspond pas aux allocations.")
             )
 
-        result_farm = FarmProfile.objects.select_related("user", "production_plan").get(
-            pk=updated_farm.pk
-        )
+        result_farm = FarmProfile.objects.select_related(
+            "user", "production_plan"
+        ).get(pk=updated_farm.pk)
         result_cycle = ProductionCycle.objects.select_related(
             "farm_profile",
             "farm_profile__production_plan",
@@ -310,5 +420,6 @@ class CycleLaunchApplicationService:
             farm_profile=result_farm,
             cycle=result_cycle,
             payload=payload,
+            production_units=production_units,
             idempotent_replay=False,
         )

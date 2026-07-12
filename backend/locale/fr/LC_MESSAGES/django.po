@@ -113,3 +113,30 @@ msgstr "L'effectif courant du cycle ne correspond pas aux allocations."
 
 msgid "Un nouveau cycle doit être lancé avec au moins une unité de production."
 msgstr "Un nouveau cycle doit être lancé avec au moins une unité de production."
+
+msgid "Une unité existante ne peut pas contenir des champs de création."
+msgstr "Une unité existante ne peut pas contenir des champs de création."
+
+msgid "L'identifiant de l'unité existante est obligatoire."
+msgstr "L'identifiant de l'unité existante est obligatoire."
+
+msgid "Une nouvelle unité ne peut pas référencer une unité existante."
+msgstr "Une nouvelle unité ne peut pas référencer une unité existante."
+
+msgid "Une même unité ne peut être sélectionnée deux fois."
+msgstr "Une même unité ne peut être sélectionnée deux fois."
+
+msgid "Le mode de lancement ne correspond pas à l'état de configuration de la ferme."
+msgstr "Le mode de lancement ne correspond pas à l'état de configuration de la ferme."
+
+msgid "Le plan de production est obligatoire pour le setup initial."
+msgstr "Le plan de production est obligatoire pour le setup initial."
+
+msgid "La configuration de la ferme est déjà terminée."
+msgstr "La configuration de la ferme est déjà terminée."
+
+msgid "La ferme doit être configurée avant de lancer un cycle supplémentaire."
+msgstr "La ferme doit être configurée avant de lancer un cycle supplémentaire."
+
+msgid "L'unité de production sélectionnée est inactive."
+msgstr "L'unité de production sélectionnée est inactive."
