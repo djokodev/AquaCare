@@ -10,6 +10,11 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.utils.translation import gettext as _
 from rest_framework import serializers
 
+from .domain.cycle_duration import (
+    CYCLE_DURATION_ERROR_MESSAGE,
+    MAX_CYCLE_DURATION_DAYS,
+    MIN_CYCLE_DURATION_DAYS,
+)
 from .domain.farm_setup_rules import FarmSetupRules
 from .services.farm_production_plan_service import FarmProductionPlanService
 
@@ -300,12 +305,12 @@ class AnnualSimulationInputSerializer(serializers.Serializer):
     cycle_duration_days = serializers.IntegerField(
         required=False,
         allow_null=True,
-        min_value=30,
-        max_value=365,
+        min_value=MIN_CYCLE_DURATION_DAYS,
+        max_value=MAX_CYCLE_DURATION_DAYS,
         error_messages={
-            'min_value': 'La durée du cycle doit être comprise entre 30 et 365 jours.',
-            'max_value': 'La durée du cycle doit être comprise entre 30 et 365 jours.',
-            'invalid': 'La durée du cycle doit être comprise entre 30 et 365 jours.',
+            'min_value': CYCLE_DURATION_ERROR_MESSAGE,
+            'max_value': CYCLE_DURATION_ERROR_MESSAGE,
+            'invalid': CYCLE_DURATION_ERROR_MESSAGE,
         },
     )
 

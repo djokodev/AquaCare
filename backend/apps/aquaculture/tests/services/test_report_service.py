@@ -229,6 +229,46 @@ class TestReportServiceEmailFormatting:
 
 @pytest.mark.django_db
 class TestReportServicePayloadAndPdfTemplate:
+    def test_report_payload_exposes_configured_duration_source(self):
+        farm_profile = FarmProfileFactory()
+        ProductionCycleFactory(
+            farm_profile=farm_profile,
+            species="clarias",
+            start_date=date(2026, 4, 1),
+            planned_cycle_duration_days=150,
+            planned_harvest_date=date(2026, 8, 28),
+        )
+
+        payload = ReportService._build_payload(
+            farm_profile=farm_profile,
+            report_type="daily",
+            period_start=date(2026, 7, 19),
+            period_end=date(2026, 7, 19),
+        )
+
+        assert payload["cycle_dashboard"]["resolved_cycle_duration_days"] == 150
+        assert payload["cycle_dashboard"]["cycle_duration_source"] == "configured"
+
+    def test_legacy_report_payload_exposes_species_fallback_source(self):
+        farm_profile = FarmProfileFactory()
+        ProductionCycleFactory(
+            farm_profile=farm_profile,
+            species="clarias",
+            start_date=date(2026, 4, 1),
+            planned_cycle_duration_days=None,
+            planned_harvest_date=None,
+        )
+
+        payload = ReportService._build_payload(
+            farm_profile=farm_profile,
+            report_type="daily",
+            period_start=date(2026, 7, 19),
+            period_end=date(2026, 7, 19),
+        )
+
+        assert payload["cycle_dashboard"]["resolved_cycle_duration_days"] == 120
+        assert payload["cycle_dashboard"]["cycle_duration_source"] == "species_default"
+
     def test_custom_cycle_duration_drives_active_days_and_time_remaining(self):
         farm_profile = FarmProfileFactory()
         cycle = ProductionCycleFactory(

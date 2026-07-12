@@ -2,10 +2,15 @@
 
 from datetime import date, timedelta
 
+from django.utils.translation import gettext_lazy as _
+
 from ..constants import ECONOMIC_DEFAULTS_BY_SPECIES
 
 MIN_CYCLE_DURATION_DAYS = 30
 MAX_CYCLE_DURATION_DAYS = 365
+CYCLE_DURATION_ERROR_MESSAGE = _(
+    "The cycle duration must be between 30 and 365 days."
+)
 
 
 def get_default_cycle_duration_days(species: str | None) -> int:
@@ -21,9 +26,9 @@ def get_default_cycle_duration_days(species: str | None) -> int:
 def validate_cycle_duration_days(duration_days: int) -> int:
     """Validate and normalize a configured cycle duration."""
     if isinstance(duration_days, bool) or not isinstance(duration_days, int):
-        raise ValueError("The cycle duration must be an integer between 30 and 365 days.")
+        raise ValueError(str(CYCLE_DURATION_ERROR_MESSAGE))
     if not MIN_CYCLE_DURATION_DAYS <= duration_days <= MAX_CYCLE_DURATION_DAYS:
-        raise ValueError("The cycle duration must be between 30 and 365 days.")
+        raise ValueError(str(CYCLE_DURATION_ERROR_MESSAGE))
     return duration_days
 
 

@@ -1170,6 +1170,7 @@ export default function CreateFarmScreen({ navigation }: Props) {
 
       <FieldLabel label={t('createFarmCycleProductionLabel')} />
       <TextInput
+        testID="createFarmCycleProductionPreview"
         style={[styles.input, styles.readonlyInput]}
         editable={false}
         selectTextOnFocus={false}
@@ -1178,6 +1179,7 @@ export default function CreateFarmScreen({ navigation }: Props) {
             ? `${Math.round(cycleProductionEstimate)} kg / cycle`
             : t('createFarmCycleProductionPending')
         }
+        numberOfLines={1}
       />
       <Text style={styles.readonlyHelper}>{t('createFarmCycleProductionHelper')}</Text>
 
@@ -1192,6 +1194,7 @@ export default function CreateFarmScreen({ navigation }: Props) {
 
       <FieldLabel label={t('createFarmCycleDurationLabel')} required />
       <TextInput
+        testID="createFarmCycleDurationInput"
         style={[styles.input, validateFarmSetupForm(form).cycleDuration && styles.inputError]}
         keyboardType="number-pad"
         placeholder={t(form.species === 'clarias' ? 'createFarmCycleDurationClariasPlaceholder' : 'createFarmCycleDurationTilapiaPlaceholder')}

@@ -51,6 +51,7 @@ describe('features/aquaculture/services/firstCycleLaunchService', () => {
   } as any;
 
   const baseCurrentResult = {
+    cycle_duration_days: 150,
     cycle_fingerlings_cost_fcfa: 105000,
     cycle_other_costs_fcfa: 5000,
     feed_bags_per_cycle: 12,
@@ -59,8 +60,8 @@ describe('features/aquaculture/services/firstCycleLaunchService', () => {
         cycle_num: 1,
         production_kg: 0,
         start_date_estimate: '2026-05-15',
-        end_date_estimate: '2026-08-13',
-        duration_days: 90,
+        end_date_estimate: '2026-08-28',
+        duration_days: 150,
         feed_bags_total: 12,
         feed_cost_fcfa: 0,
         fingerlings_cost_fcfa: 105000,
@@ -76,7 +77,8 @@ describe('features/aquaculture/services/firstCycleLaunchService', () => {
     unitVolume: '',
     unitSurface: '120',
     annualTarget: '',
-    startDate: '2026-05-14',
+    startDate: '2026-04-01',
+    cycleDuration: '150',
     fingerlingsPrice: '50',
     sellingPrice: '2800',
     otherCosts: '0',
@@ -128,6 +130,41 @@ describe('features/aquaculture/services/firstCycleLaunchService', () => {
     expect(mockAquaculture.createProductionUnit).not.toHaveBeenCalled();
     expect(mockAquaculture.createCycleUnitAllocation).not.toHaveBeenCalled();
     expect(result.productionUnitIdByLocalId).toEqual({});
+  });
+
+  it('persiste explicitement la durée personnalisée choisie', async () => {
+    await launchFirstCycle({
+      formData: baseFormData,
+      simulationResult: baseCurrentResult,
+      defaultPondIdentifier: 'Bassin principal',
+    });
+
+    expect(mockAquaculture.createProductionCycle).toHaveBeenCalledWith(
+      expect.objectContaining({ planned_cycle_duration_days: 150 })
+    );
+  });
+
+  it('rejette une durée de formulaire différente de la simulation', async () => {
+    await expect(
+      launchFirstCycle({
+        formData: { ...baseFormData, cycleDuration: '120' },
+        simulationResult: baseCurrentResult,
+        defaultPondIdentifier: 'Bassin principal',
+      })
+    ).rejects.toMatchObject({ translationKey: 'simulationCycleDurationMismatchError' });
+  });
+
+  it('rejette une durée de breakdown différente de la simulation', async () => {
+    await expect(
+      launchFirstCycle({
+        formData: baseFormData,
+        simulationResult: {
+          ...baseCurrentResult,
+          cycles_breakdown: [{ ...baseCurrentResult.cycles_breakdown[0], duration_days: 120 }],
+        },
+        defaultPondIdentifier: 'Bassin principal',
+      })
+    ).rejects.toMatchObject({ translationKey: 'simulationCycleDurationMismatchError' });
   });
 
   it('persiste les unités et allocations avec le mapping local vers backend', async () => {

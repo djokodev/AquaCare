@@ -2317,6 +2317,7 @@ class ReportService(BaseService):
         except (TypeError, ValueError):
             start_date = period_end
         duration = int(cycle.get("planned_cycle_duration_days") or 0)
+        duration_source = "configured" if duration > 0 else "species_default"
         if duration <= 0:
             duration = get_default_cycle_duration_days(str(cycle.get("species") or "tilapia"))
         elapsed = max((period_end - start_date).days + 1, 0)
@@ -2363,6 +2364,8 @@ class ReportService(BaseService):
                 ),
                 default=None,
             ),
+            "resolved_cycle_duration_days": duration,
+            "cycle_duration_source": duration_source,
             "direct_production_cost_fcfa": direct,
             "total_production_cost_to_date_fcfa": round(direct + other_to_date, 2),
         }
@@ -2841,6 +2844,8 @@ class ReportService(BaseService):
                 "feed_cost_consumed": "Feed cost already consumed",
                 "time_remaining_cycle": "Time remaining until cycle end",
                 "configured_cycle_duration": "Configured duration",
+                "reference_cycle_duration": "Reference duration",
+                "recommended_species_duration": "Recommended value for the species",
                 "direct_production_cost": "Direct production cost",
                 "direct_production_cost_unit": "FCFA",
                 "days_short": "days",
@@ -2994,6 +2999,8 @@ class ReportService(BaseService):
             "feed_cost_consumed": "Coût des aliments déjà consommés",
             "time_remaining_cycle": "Temps restant pour la fin du cycle d'élevage",
             "configured_cycle_duration": "Durée configurée",
+            "reference_cycle_duration": "Durée de référence",
+            "recommended_species_duration": "Valeur recommandée pour l'espèce",
             "direct_production_cost": "Coût de production direct",
             "direct_production_cost_unit": "FCFA",
             "days_short": "jours",

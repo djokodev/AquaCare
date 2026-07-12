@@ -95,6 +95,62 @@ describe('features/aquaculture/screens/CreateFarmScreen', () => {
     expect(getByPlaceholderText('createFarmBulkUnitCountPlaceholder').props.value).toBe('');
   });
 
+  it.each([
+    ['createFarmSpeciesClarias', '120', 'createFarmCycleDurationClariasPlaceholder'],
+    ['createFarmSpeciesTilapia', '180', 'createFarmCycleDurationTilapiaPlaceholder'],
+  ])('préremplit la durée recommandée pour %s', (speciesLabel, expected, placeholder) => {
+    const { getByText, getByTestId } = render(<CreateFarmScreen navigation={navigation} />);
+
+    fireEvent.press(getByText(speciesLabel));
+
+    expect(getByTestId('createFarmCycleDurationInput').props.value).toBe(expected);
+    expect(getByTestId('createFarmCycleDurationInput').props.placeholder).toBe(placeholder);
+  });
+
+  it('change le défaut d espèce tant que la durée n est pas personnalisée', () => {
+    const { getByText, getByTestId } = render(<CreateFarmScreen navigation={navigation} />);
+
+    fireEvent.press(getByText('createFarmSpeciesTilapia'));
+    fireEvent.press(getByText('createFarmSpeciesClarias'));
+
+    expect(getByTestId('createFarmCycleDurationInput').props.value).toBe('120');
+  });
+
+  it('conserve une durée personnalisée lors du changement d espèce', () => {
+    const { getByText, getByTestId } = render(<CreateFarmScreen navigation={navigation} />);
+    const durationInput = getByTestId('createFarmCycleDurationInput');
+
+    fireEvent.press(getByText('createFarmSpeciesClarias'));
+    fireEvent.changeText(durationInput, '150abc');
+    fireEvent.press(getByText('createFarmSpeciesTilapia'));
+
+    expect(getByTestId('createFarmCycleDurationInput').props.value).toBe('150');
+  });
+
+  it.each([
+    ['', 'required'],
+    ['29', 'createFarmCycleDurationRangeError'],
+    ['0', 'createFarmCycleDurationRangeError'],
+    ['366', 'createFarmCycleDurationRangeError'],
+  ])('affiche une erreur de durée pour %s', (value, errorKey) => {
+    const { getByText, getByTestId, queryByText } = render(<CreateFarmScreen navigation={navigation} />);
+
+    fireEvent.press(getByText('createFarmSpeciesClarias'));
+    fireEvent.changeText(getByTestId('createFarmCycleDurationInput'), value);
+
+    expect(queryByText(errorKey)).toBeTruthy();
+  });
+
+  it('expose unité, aide et accessibilité pour la durée', () => {
+    const { getByText, getByTestId } = render(<CreateFarmScreen navigation={navigation} />);
+    fireEvent.press(getByText('createFarmSpeciesClarias'));
+    const input = getByTestId('createFarmCycleDurationInput');
+
+    expect(getByText('createFarmCycleDurationHint')).toBeTruthy();
+    expect(input.props.accessibilityLabel).toBe('createFarmCycleDurationLabel');
+    expect(input.props.accessibilityHint).toBe('createFarmCycleDurationHint');
+  });
+
   it('clic sur Bac selectionne puis deselectionne le type', () => {
     const { getAllByText, queryByPlaceholderText, getByPlaceholderText } = render(
       <CreateFarmScreen navigation={navigation} />

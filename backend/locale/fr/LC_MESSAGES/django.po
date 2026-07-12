@@ -70,3 +70,6 @@ msgstr "Donnez %(amount).1f kg d'aliment ce matin"
 
 msgid "Donnez %(amount).1f kg d'aliment ce soir"
 msgstr "Donnez %(amount).1f kg d'aliment ce soir"
+
+msgid "The cycle duration must be between 30 and 365 days."
+msgstr "La durée du cycle doit être comprise entre 30 et 365 jours."

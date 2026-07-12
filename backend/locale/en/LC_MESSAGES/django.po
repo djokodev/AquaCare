@@ -587,3 +587,6 @@ msgstr "City in the district"
 
 msgid "Quartier ou localité spécifique"
 msgstr "Specific neighborhood or locality"
+
+msgid "The cycle duration must be between 30 and 365 days."
+msgstr "The cycle duration must be between 30 and 365 days."
