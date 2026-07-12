@@ -229,6 +229,18 @@ class TestReportServiceEmailFormatting:
 
 @pytest.mark.django_db
 class TestReportServicePayloadAndPdfTemplate:
+    def test_custom_cycle_duration_drives_active_days_and_time_remaining(self):
+        farm_profile = FarmProfileFactory()
+        cycle = ProductionCycleFactory(
+            farm_profile=farm_profile,
+            species="clarias",
+            start_date=date(2026, 4, 1),
+            planned_cycle_duration_days=150,
+            planned_harvest_date=date(2026, 8, 28),
+        )
+
+        assert ReportService._calculate_days_active(cycle, date(2026, 7, 19)) == 110
+        assert ReportService._calculate_cycle_days_remaining(cycle, date(2026, 7, 19)) == 40
     def test_build_payload_keeps_only_active_cycles(self):
         farm_profile = FarmProfileFactory()
         active_cycle = ProductionCycleFactory(

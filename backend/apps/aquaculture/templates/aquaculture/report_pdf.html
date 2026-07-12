@@ -35,6 +35,7 @@
     <td class="card"><div class="value">{{ payload.cycle_dashboard.estimated_market_value_fcfa|report_measure:"FCFA|0" }}</div><div class="label">{{ labels.estimated_market_value }}</div></td>
     <td class="card"><div class="value">{{ payload.cycle_dashboard.feed_cost_consumed_fcfa|report_measure:"FCFA|0" }}</div><div class="label">{{ labels.feed_cost_consumed }}</div></td>
     <td class="card"><div class="value">{% if payload.cycle_dashboard.time_remaining_days is None %}{{ empty_value_label }}{% else %}{{ payload.cycle_dashboard.time_remaining_days }} {{ labels.days_short }}{% endif %}</div><div class="label">{{ labels.time_remaining_cycle }}</div></td>
+    <td class="card"><div class="value">{% if payload.cycles.0.cycle.planned_cycle_duration_days %}{{ payload.cycles.0.cycle.planned_cycle_duration_days }} {{ labels.days_short }}{% else %}{{ empty_value_label }}{% endif %}</div><div class="label">{{ labels.configured_cycle_duration }}</div></td>
     <td class="card"><div class="value">{{ payload.cycle_dashboard.direct_production_cost_fcfa|report_measure:"FCFA|0" }}</div><div class="label">{{ labels.direct_production_cost }}</div></td>
   </tr></table></section>
   {% endif %}

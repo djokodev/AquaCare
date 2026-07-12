@@ -28,6 +28,12 @@ Cette base de code couvre maintenant le flux complet des unites de production:
 7. Les saisies journaliere et sanitaire restent unit-scoped quand elles sont lancees depuis une unite.
 8. Le dashboard global du cycle agrege les unites liees et conserve la compatibilite legacy pour les cycles sans unites.
 
+## Durée prévisionnelle du cycle
+
+La durée est une propriété du cycle entier et est donc commune à toutes ses unités. Le formulaire propose une recommandation de 120 jours pour Clarias/Silure et 180 jours pour Tilapia, puis permet une valeur personnalisée de 30 à 365 jours. Une durée modifiée manuellement reste conservée lors d'un changement d'espèce.
+
+Le backend reste la source de vérité pour la durée résolue, la simulation, les projections et la date de récolte. Le jour de démarrage est le jour 1 : `date de récolte = date de début + durée - 1 jour`. Les anciens clients qui omettent le champ utilisent le défaut de l'espèce et les cycles historiques sans durée conservent ce fallback.
+
 ## Magasin De Cycle
 
 Le Magasin de cycle est la source de verite frontend pour les stocks d'aliments rattaches a un cycle:

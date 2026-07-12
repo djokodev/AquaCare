@@ -21,6 +21,7 @@ export interface CycleSimulationInput {
   target_harvest_weight_g?: number;
   expected_survival_rate_pct?: number;
   total_fingerlings_count?: number;
+  cycle_duration_days?: number;
 }
 
 export interface CycleBreakdown {

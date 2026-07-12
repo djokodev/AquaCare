@@ -481,6 +481,17 @@ class AnnualSimulationInputSerializer(serializers.Serializer):
         min_value=1,
         help_text="Nombre total d'alevins achetés sur l'année (tous cycles confondus)"
     )
+    cycle_duration_days = serializers.IntegerField(
+        required=False,
+        allow_null=True,
+        min_value=30,
+        max_value=365,
+        error_messages={
+            'min_value': "La durée du cycle doit être comprise entre 30 et 365 jours.",
+            'max_value': "La durée du cycle doit être comprise entre 30 et 365 jours.",
+            'invalid': "La durée du cycle doit être comprise entre 30 et 365 jours.",
+        },
+    )
 
     def validate_num_cycles(self, value: Any) -> int:
         return int(value)

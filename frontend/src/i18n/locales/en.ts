@@ -1340,6 +1340,10 @@
   createFarmCycleProductionHelper: 'It is automatically calculated from fingerlings, survival rate, and target harvest weight.',
   createFarmStartDateLabel: 'Planned start date',
   createFarmStartDatePlaceholder: 'YYYY-MM-DD',
+  createFarmCycleDurationLabel: 'Planned cycle duration',
+  createFarmCycleDurationHint: 'Estimated time between stocking and harvest. You can adjust it to your farming conditions.',
+  createFarmCycleDurationClariasPlaceholder: '120',
+  createFarmCycleDurationTilapiaPlaceholder: '180',
   createFarmFingerlingsLabel: 'Cost per fingerling (FCFA)',
   createFarmFingerlingsPlaceholder: 'E.g. 50',
   createFarmSellingPriceLabel: 'Estimated selling price (FCFA / kg)',
@@ -1370,6 +1374,7 @@
   createFarmInvalidDateError: 'Enter a valid date in YYYY-MM-DD format.',
   createFarmHarvestWeightRangeError: 'Target weight must be between 50 g and 5000 g.',
   createFarmSurvivalRateRangeError: 'Survival rate must be between 1% and 100%.',
+  createFarmCycleDurationRangeError: 'The cycle duration must be between 30 and 365 days.',
 
   // ── Annual simulation ─────────────────────────────────────────────────────
   simulationNavTitle: 'Simulation',
@@ -1415,6 +1420,9 @@
   simulationAnnualProjectionAquacareFee: 'Annual AquaCare fees',
   simulationOtherCostsInfo: 'Info: other costs are estimated at 5% of cycle revenue.',
   simulationDays: '{{days}} days',
+  simulationEstimatedHarvestDate: 'Estimated harvest date',
+  simulationPlannedDuration: 'Planned duration',
+  simulationCycleDurationMismatchError: 'The entered duration does not match the simulated duration.',
   simulationLaunchBtn: 'Launch my first cycle →',
   simulationLaunchAdditionalBtn: 'Launch my cycle →',
   simulationModifyBtn: '← Edit my data',

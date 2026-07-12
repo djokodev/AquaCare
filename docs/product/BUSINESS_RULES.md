@@ -20,6 +20,10 @@
 - FCFA is the monetary context for the app.
 - The aquaculture domain currently centers on tilapia and clarias.
 - The app uses a consistent set of backend and frontend constants for prices, densities, and thresholds.
+- Recommended planned cycle duration: Clarias 120 days, Tilapia 180 days, other species 180 days for compatibility.
+- Planned cycle duration is editable from 30 to 365 calendar days and belongs to the cycle, not to individual production units.
+- The first cycle day is the stocking date, so the planned harvest date is the start date plus duration minus one day.
+- A custom duration survives species changes and is used consistently by simulation, annual projections, persistence, reports, and time remaining.
 
 ## What to avoid
 

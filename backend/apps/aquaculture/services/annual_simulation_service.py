@@ -22,6 +22,10 @@ from ..constants import (
     ECONOMIC_DEFAULTS_BY_SPECIES,
     TECHNICAL_PAUSE_BETWEEN_CYCLES_DAYS,
 )
+from ..domain.cycle_duration import (
+    get_default_cycle_duration_days,
+    validate_cycle_duration_days,
+)
 
 # CycleSimulationService importé en lazy pour éviter les imports circulaires
 # (accounts → commerce → accounts via les modèles Django).
@@ -132,6 +136,7 @@ class AnnualSimulationService:
         target_harvest_weight_g: float | None = None,
         expected_survival_rate_pct: float | None = None,
         total_fingerlings_count: int | None = None,
+        cycle_duration_days: int | None = None,
     ) -> AnnualSimulationResult:
         """
         Simule la production annuelle et expose aussi les métriques cycle-first.
@@ -155,6 +160,7 @@ class AnnualSimulationService:
             fingerlings_cost_per_unit_fcfa=fingerlings_cost_per_unit_fcfa,
             target_harvest_weight_g=target_harvest_weight_g,
             expected_survival_rate_pct=expected_survival_rate_pct,
+            cycle_duration_days=cycle_duration_days,
         )
         effective_start = start_date or date.today()
         cycles_per_year_derived = AnnualSimulationService._calculate_cycles_per_year(
@@ -297,6 +303,7 @@ class AnnualSimulationService:
         fingerlings_cost_per_unit_fcfa: float | None,
         target_harvest_weight_g: float | None,
         expected_survival_rate_pct: float | None,
+        cycle_duration_days: int | None,
     ) -> ResolvedSimulationInputs:
         """Applique les valeurs par défaut par espèce aux paramètres optionnels."""
         normalized = AnnualSimulationService._normalize_species(species)
@@ -305,13 +312,19 @@ class AnnualSimulationService:
             (expected_survival_rate_pct / 100.0) if expected_survival_rate_pct is not None else DEFAULT_SURVIVAL_RATE
         )
 
+        resolved_duration = (
+            validate_cycle_duration_days(cycle_duration_days)
+            if cycle_duration_days is not None
+            else get_default_cycle_duration_days(normalized)
+        )
+
         return ResolvedSimulationInputs(
             species=normalized,
             selling_price=selling_price_per_kg_fcfa or defaults["selling_price_fcfa"],
             fingerlings_cost_unit=(fingerlings_cost_per_unit_fcfa or defaults["fingerlings_cost_per_unit"]),
             target_weight_g=target_harvest_weight_g or defaults["target_weight_g"],
             survival_rate=survival_rate,
-            duration_days=defaults["duration_days"],
+            duration_days=resolved_duration,
         )
 
     @staticmethod

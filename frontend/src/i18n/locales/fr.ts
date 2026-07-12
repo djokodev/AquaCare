@@ -1340,6 +1340,10 @@ export const fr = {
   createFarmCycleProductionHelper: 'Elle est calculée automatiquement à partir du nombre d’alevins, du taux de survie et du poids cible.',
   createFarmStartDateLabel: 'Date de démarrage prévue',
   createFarmStartDatePlaceholder: 'AAAA-MM-JJ',
+  createFarmCycleDurationLabel: 'Durée prévisionnelle du cycle',
+  createFarmCycleDurationHint: 'Durée estimée entre l’empoissonnement et la récolte. Vous pouvez l’adapter selon vos conditions d’élevage.',
+  createFarmCycleDurationClariasPlaceholder: '120',
+  createFarmCycleDurationTilapiaPlaceholder: '180',
   createFarmFingerlingsLabel: 'Coût par alevin (FCFA)',
   createFarmFingerlingsPlaceholder: 'Ex : 50',
   createFarmSellingPriceLabel: 'Prix de vente estimé (FCFA / kg)',
@@ -1370,6 +1374,7 @@ export const fr = {
   createFarmInvalidDateError: 'Saisissez une date valide au format AAAA-MM-JJ.',
   createFarmHarvestWeightRangeError: 'Le poids cible doit être compris entre 50 g et 5000 g.',
   createFarmSurvivalRateRangeError: 'Le taux de survie doit être compris entre 1 % et 100 %.',
+  createFarmCycleDurationRangeError: 'La durée du cycle doit être comprise entre 30 et 365 jours.',
 
   // ── Simulation annuelle ───────────────────────────────────────────────────
   simulationNavTitle: 'Simulation',
@@ -1415,6 +1420,9 @@ export const fr = {
   simulationAnnualProjectionAquacareFee: 'Frais AquaCare annuels',
   simulationOtherCostsInfo: 'Info : les autres charges sont estimées à 5 % du chiffre d’affaires du cycle.',
   simulationDays: '{{days}} jours',
+  simulationEstimatedHarvestDate: 'Date prévisionnelle de récolte',
+  simulationPlannedDuration: 'Durée prévisionnelle',
+  simulationCycleDurationMismatchError: 'La durée saisie ne correspond pas à la durée simulée.',
   simulationLaunchBtn: 'Lancer mon premier cycle →',
   simulationLaunchAdditionalBtn: 'Lancer mon cycle →',
   simulationModifyBtn: '← Modifier mes données',
