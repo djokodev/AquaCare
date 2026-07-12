@@ -312,6 +312,13 @@ class ProductionUnit(models.Model):
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    client_uuid = models.UUIDField(
+        unique=True,
+        null=True,
+        blank=True,
+        verbose_name=_("UUID client"),
+        help_text=_("UUID généré côté mobile ou dérivé du lancement pour déduplication"),
+    )
     farm_profile = models.ForeignKey(
         'accounts.FarmProfile',
         on_delete=models.CASCADE,
@@ -418,6 +425,13 @@ class CycleUnitAllocation(models.Model):
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    client_uuid = models.UUIDField(
+        unique=True,
+        null=True,
+        blank=True,
+        verbose_name=_("UUID client"),
+        help_text=_("UUID généré côté mobile ou dérivé du lancement pour déduplication"),
+    )
     cycle = models.ForeignKey(
         'ProductionCycle',
         on_delete=models.CASCADE,
@@ -697,6 +711,14 @@ class ProductionCycle(models.Model):
         blank=True,
         verbose_name=_("UUID client"),
         help_text=_("UUID généré côté mobile pour déduplication")
+    )
+    launch_payload_hash = models.CharField(
+        max_length=64,
+        null=True,
+        blank=True,
+        editable=False,
+        verbose_name=_("Empreinte du lancement"),
+        help_text=_("Empreinte SHA-256 du payload de lancement transactionnel"),
     )
     farm_profile = models.ForeignKey(
         'accounts.FarmProfile', 

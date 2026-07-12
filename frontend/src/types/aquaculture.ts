@@ -278,6 +278,7 @@ export type ProductionUnitStatus = 'active' | 'inactive' | 'archived';
 
 export interface ProductionUnit {
   id: string;
+  client_uuid?: string | null;
   farm_profile: string;
   name: string;
   unit_type: ProductionUnitType;
@@ -298,6 +299,55 @@ export interface ProductionUnitCreatePayload {
   volume_m3?: number;
   surface_m2?: number;
   status?: ProductionUnitStatus;
+}
+
+export interface CycleLaunchUnitInput {
+  local_id: string;
+  name: string;
+  unit_type: ProductionUnitType;
+  volume_m3?: number;
+  surface_m2?: number;
+}
+
+export interface CycleLaunchAllocationInput {
+  production_unit_local_id: string;
+  fish_count: number;
+}
+
+export interface CycleLaunchRequest {
+  launch_uuid: string;
+  production_plan: {
+    annual_production_target_kg: number;
+    num_cycles_per_year: number;
+    fingerlings_cost_per_unit_fcfa: number;
+    planned_selling_price_per_kg_fcfa: number;
+  };
+  cycle: {
+    species: Species;
+    start_date: string;
+    initial_count: number;
+    initial_average_weight?: number;
+    target_harvest_weight_g?: number;
+    planned_cycle_duration_days: number;
+    expected_survival_rate_pct: number;
+    planned_selling_price_per_kg_fcfa: number;
+    fingerlings_cost_fcfa: number;
+    other_operational_costs_fcfa: number;
+    planned_feed_bags?: number;
+    created_offline: boolean;
+  };
+  production_units: CycleLaunchUnitInput[];
+  allocations: CycleLaunchAllocationInput[];
+}
+
+export interface CycleLaunchResponse {
+  launchUuid: string;
+  idempotentReplay: boolean;
+  farmProfile: import('@/features/profile/types/profile').FarmProfile;
+  productionCycle: ProductionCycle;
+  productionUnits: ProductionUnit[];
+  cycleUnitAllocations: CycleUnitAllocation[];
+  productionUnitIdByLocalId: Record<string, string>;
 }
 
 export interface ProductionUnitDraft {
@@ -342,6 +392,7 @@ export interface ProductionUnitCompatibilitySummary {
 
 export interface CycleUnitAllocation {
   id: string;
+  client_uuid?: string | null;
   cycle: string;
   production_unit: string;
   initial_fish_count: number;

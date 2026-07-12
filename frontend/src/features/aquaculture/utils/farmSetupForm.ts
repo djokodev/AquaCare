@@ -23,6 +23,7 @@ export type FarmSetupSpecies = 'tilapia' | 'clarias' | 'autre';
 export type FarmSetupInfraType = 'etang' | 'cage_flottante' | 'bac_hors_sol' | 'bac_en_sol';
 
 export interface FarmSetupFormState {
+  launchRequestId: string;
   species: FarmSetupSpecies | '';
   infraType: FarmSetupInfraType | '';
   unitCount: string;
@@ -347,6 +348,7 @@ export const validateFarmSetupForm = (
   if (!form.species) errors.species = 'required';
 
   if (!hasProductionUnits) {
+    errors.productionUnits = 'createFarmAtLeastOneUnitError';
     if (!form.infraType) errors.infraType = 'required';
 
     if (!form.unitCount.trim()) {

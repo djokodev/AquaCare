@@ -93,8 +93,8 @@ class TestProductionCycleViewSet:
 
         assert response.status_code == status.HTTP_200_OK
 
-    def test_create_cycle(self, auth_client, authenticated_user, farm_profile):
-        """Test création nouveau cycle."""
+    def test_create_cycle_requires_units(self, auth_client, authenticated_user, farm_profile):
+        """A new cycle must use the aggregate launch endpoint."""
         # S'assurer que l'utilisateur a bien un farm_profile accessible
         authenticated_user.refresh_from_db()
         assert hasattr(authenticated_user, 'farm_profile')
@@ -114,18 +114,8 @@ class TestProductionCycleViewSet:
         
         response = auth_client.post(url, data, format='json')
         
-        if response.status_code != status.HTTP_201_CREATED:
-            print(f"Erreur création cycle: {response.data}")
-            print(f"User: {authenticated_user}")
-            print(f"Has farm_profile: {hasattr(authenticated_user, 'farm_profile')}")
-        
-        assert response.status_code == status.HTTP_201_CREATED
-        assert response.data['cycle_name'] == 'Nouveau Cycle Test'
-        assert response.data['species'] == 'tilapia'
-        
-        # Vérifier calculs automatiques
-        assert float(response.data['initial_biomass']) == 9.0  # 750 * 12g / 1000
-        assert response.data['current_count'] == 750
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.data['code'] == 'cycle_launch_requires_production_units'
 
     def test_patch_contradictory_planned_harvest_date_returns_400(
         self, auth_client, production_cycle

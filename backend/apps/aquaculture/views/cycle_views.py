@@ -148,6 +148,19 @@ class ProductionCycleViewSet(viewsets.ModelViewSet):
             return PartialHarvestSerializer
         return super().get_serializer_class()
 
+    def create(self, request, *args, **kwargs):
+        """Keep legacy reads/updates while requiring an aggregate launch for new cycles."""
+        return Response(
+            {
+                'code': 'cycle_launch_requires_production_units',
+                'detail': _(
+                    'Un nouveau cycle doit être lancé avec au moins une unité de production.'
+                ),
+                'endpoint': '/api/aquaculture/cycles/launch/',
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
     def get_queryset(self):
         """Retourne les cycles uniquement pour la ferme de l'utilisateur authentifié."""
         queryset = ProductionCycle.objects.filter(

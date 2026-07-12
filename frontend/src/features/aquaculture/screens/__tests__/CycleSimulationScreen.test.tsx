@@ -321,6 +321,8 @@ describe('features/aquaculture/screens/CycleSimulationScreen', () => {
       productionCycle: createdProductionCycle,
       productionUnitIdByLocalId: {},
       productionUnits: [],
+      cycleUnitAllocations: [],
+      idempotentReplay: false,
     });
 
     const route = buildRoute();
@@ -335,8 +337,11 @@ describe('features/aquaculture/screens/CycleSimulationScreen', () => {
     await waitFor(() => {
       expect(mockDispatch).toHaveBeenCalledWith(setCurrentCycle(createdProductionCycle));
       expect(navigation.reset).toHaveBeenCalledWith({
-        index: 0,
-        routes: [{ name: 'MainTabs' }],
+        index: 1,
+        routes: [
+          { name: 'MainTabs' },
+          { name: 'ProductionUnitsHub', params: { cycleId: createdProductionCycle.id } },
+        ],
       });
     });
   });

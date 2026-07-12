@@ -32,6 +32,11 @@ from .annual_simulation_service import (
 from .base import BaseService
 from .cycle_application_service import HarvestCycleCommand, PartialHarvestCommand, ProductionCycleApplicationService
 from .cycle_dashboard_service import CycleDashboardService
+from .cycle_launch_application_service import (
+    CycleLaunchApplicationService,
+    CycleLaunchIdempotencyConflict,
+    CycleLaunchResult,
+)
 from .cycle_service import ProductionCycleService
 from .cycle_store_application_service import CycleStoreApplicationService, DeclareManualStockCommand
 from .dashboard_application_service import DashboardApplicationService, InvalidDashboardCycleScopeError
@@ -84,6 +89,9 @@ __all__ = [
     'UnauthorizedCycleAccessError',
     'CycleStoreApplicationService',
     'DeclareManualStockCommand',
+    'CycleLaunchApplicationService',
+    'CycleLaunchIdempotencyConflict',
+    'CycleLaunchResult',
     'FeedingPlanService',
     'FarmProductionPlanService',
     'FeedingPlanApplicationService',

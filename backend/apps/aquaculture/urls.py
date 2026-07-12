@@ -6,6 +6,7 @@ from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
 from .views import (
+    CycleLaunchView,
     CycleLogViewSet,
     CycleUnitAllocationViewSet,
     DashboardView,
@@ -51,6 +52,11 @@ urlpatterns = [
         'production-plan/simulate/',
         ProductionPlanSimulationView.as_view(),
         name='production_plan_simulation',
+    ),
+    path(
+        'cycles/launch/',
+        CycleLaunchView.as_view(),
+        name='production_cycle_launch',
     ),
     
     # Include all ViewSet routes

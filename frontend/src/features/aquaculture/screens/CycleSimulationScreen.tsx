@@ -189,21 +189,16 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
       await dispatch(fetchDashboardData({ forceAllCycles: true })).unwrap();
       dispatch(setCurrentCycle(launchResult.productionCycle));
 
-      if (launchResult.productionUnits.length > 0) {
-        navigation.reset({
-          index: 1,
-          routes: [
-            { name: 'MainTabs' },
-            {
-              name: 'ProductionUnitsHub',
-              params: { cycleId: launchResult.productionCycle.id },
-            },
-          ],
-        });
-        return;
-      }
-
-      navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
+      navigation.reset({
+        index: 1,
+        routes: [
+          { name: 'MainTabs' },
+          {
+            name: 'ProductionUnitsHub',
+            params: { cycleId: launchResult.productionCycle.id },
+          },
+        ],
+      });
     } catch (err: unknown) {
       if (err instanceof FirstCycleLaunchError) {
         Alert.alert(t('error'), t(err.translationKey));

@@ -593,3 +593,40 @@ msgstr "The cycle duration must be between 30 and 365 days."
 
 msgid "The estimated harvest date must match the cycle duration."
 msgstr "The estimated harvest date must match the cycle duration."
+
+# Transactional cycle launch
+msgid "L'identifiant local de l'unité est obligatoire."
+msgstr "The unit local identifier is required."
+
+msgid "Le nom de l'unité est obligatoire."
+msgstr "The unit name is required."
+
+msgid "L'unité de l'allocation est obligatoire."
+msgstr "The allocation unit is required."
+
+msgid "Chaque unité doit avoir un identifiant local unique."
+msgstr "Each unit must have a unique local identifier."
+
+msgid "Chaque unité doit avoir exactement une allocation."
+msgstr "Each unit must have exactly one allocation."
+
+msgid "Une allocation référence une unité inconnue."
+msgstr "An allocation references an unknown unit."
+
+msgid "L'espèce du plan doit correspondre à celle du cycle."
+msgstr "The plan species must match the cycle species."
+
+msgid "La somme des allocations doit correspondre à l'effectif initial du cycle."
+msgstr "The allocation total must match the cycle initial fish count."
+
+msgid "La capacité recommandée de l'unité est dépassée."
+msgstr "The unit recommended capacity is exceeded."
+
+msgid "Ce lancement existe déjà avec un contenu différent ou appartient à une autre ferme."
+msgstr "This launch already exists with different content or belongs to another farm."
+
+msgid "L'effectif courant du cycle ne correspond pas aux allocations."
+msgstr "The cycle current fish count does not match its allocations."
+
+msgid "Un nouveau cycle doit être lancé avec au moins une unité de production."
+msgstr "A new cycle must be launched with at least one production unit."

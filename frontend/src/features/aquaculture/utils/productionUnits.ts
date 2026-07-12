@@ -415,10 +415,6 @@ export const validateProductionUnitFishAllocations = (params: {
   survivalRatePct?: string | number | null;
   targetWeightG?: string | number | null;
 }): ProductionUnitFishAllocationValidationResult | null => {
-  if (!params.productionUnits.length) {
-    return null;
-  }
-
   const totalFishCount = toPositiveInteger(params.totalFishCount);
   if (totalFishCount === null || totalFishCount <= 0) {
     return null;
@@ -478,7 +474,7 @@ export const validateProductionUnitFishAllocations = (params: {
 
     if (fishCount === undefined || fishCount === '') {
       unitErrors[unit.local_id] = 'createFarmProductionUnitAllocationRequiredError';
-    } else if (parsedFishCount === null || parsedFishCount < 0) {
+    } else if (parsedFishCount === null || parsedFishCount <= 0) {
       unitErrors[unit.local_id] = 'createFarmProductionUnitAllocationRequiredError';
     } else if (isOverCapacity) {
       unitErrors[unit.local_id] = 'createFarmProductionUnitRecommendedCapacityExceededError';
