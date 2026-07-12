@@ -2,6 +2,7 @@ import { aquacultureService } from '@/features/aquaculture/services/aquacultureS
 import { farmSetupService } from '@/features/aquaculture/services/farmSetupService';
 import {
   buildFarmSetupPayload,
+  getValidCycleDuration,
   type FarmSetupFormState,
 } from '@/features/aquaculture/utils/farmSetupForm';
 import {
@@ -218,6 +219,19 @@ export const launchFirstCycle = async (
   if (!firstCycle) {
     throw new FirstCycleLaunchError('simulationErrorRetry');
   }
+  const rawDuration = formData.cycleDuration;
+  const configuredDuration =
+    rawDuration === undefined || rawDuration === ''
+      ? simulationResult.cycle_duration_days ?? firstCycle.duration_days
+      : getValidCycleDuration(rawDuration);
+  if (
+    configuredDuration === undefined ||
+    (simulationResult.cycle_duration_days !== undefined &&
+      configuredDuration !== simulationResult.cycle_duration_days) ||
+    configuredDuration !== firstCycle.duration_days
+  ) {
+    throw new FirstCycleLaunchError('simulationCycleDurationMismatchError');
+  }
 
   const productionUnits = formData.productionUnits ?? [];
   const productionUnitAllocations = formData.productionUnitAllocations ?? [];
@@ -268,7 +282,7 @@ export const launchFirstCycle = async (
     initial_average_weight: undefined,
     start_date: firstCycle.start_date_estimate,
     target_harvest_weight_g: toFiniteNumber(formData.harvestWeight),
-    planned_cycle_duration_days: firstCycle.duration_days,
+    planned_cycle_duration_days: configuredDuration,
     expected_survival_rate_pct: toFiniteNumber(formData.survivalRate),
     planned_selling_price_per_kg_fcfa: toFiniteNumber(formData.sellingPrice),
     fingerlings_cost_fcfa: fingerlingsCost,

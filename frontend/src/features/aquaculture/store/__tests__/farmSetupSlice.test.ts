@@ -4,6 +4,14 @@ import farmSetupReducer, {
   runCycleSimulation,
 } from '@/features/aquaculture/store/farmSetupSlice';
 import type { CycleSimulationResult } from '@/features/aquaculture/types/farmSetup';
+import { farmSetupService } from '@/features/aquaculture/services/farmSetupService';
+
+jest.mock('@/features/aquaculture/services/farmSetupService', () => ({
+  farmSetupService: {
+    simulateCycle: jest.fn(),
+    completeFarmSetup: jest.fn(),
+  },
+}));
 
 describe('features/aquaculture/store/farmSetupSlice', () => {
   const initialState = {
@@ -96,5 +104,21 @@ describe('features/aquaculture/store/farmSetupSlice', () => {
     });
 
     expect(state).toEqual(initialState);
+  });
+
+  it('transmet cycle_duration_days au service de simulation', async () => {
+    const result = simulationResult;
+    (farmSetupService.simulateCycle as jest.Mock).mockResolvedValue(result);
+
+    await runCycleSimulation({
+      species: 'clarias',
+      annual_production_target_kg: 1000,
+      num_cycles: 1,
+      cycle_duration_days: 150,
+    } as any)(jest.fn(), jest.fn(), undefined as never);
+
+    expect(farmSetupService.simulateCycle).toHaveBeenCalledWith(
+      expect.objectContaining({ cycle_duration_days: 150 })
+    );
   });
 });

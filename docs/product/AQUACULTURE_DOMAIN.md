@@ -19,6 +19,10 @@ This domain covers fish production planning, daily operational logs, feeding gui
 - Optimistic frontend estimates are allowed, but they must be replaced by backend results.
 - Syncable records should tolerate retries without creating duplicates.
 - Cycle state transitions must remain consistent with the backend model and service logic.
+- A cycle has one planned duration shared by all production units. Recommended values are 120 days for Clarias and 180 days for Tilapia; other species use 180 days as the compatibility fallback.
+- The configured duration is an integer from 30 through 365 days and may be customized during farm setup. A manual value is not overwritten when the species changes.
+- Planned harvest dates use inclusive calendar-day semantics: `start_date + planned_cycle_duration_days - 1 day`.
+- The resolved duration drives annual cadence, cycle simulation, feed/cost projections, reports, and remaining-time calculations. Legacy clients may omit it, and legacy null cycles fall back to the species recommendation.
 
 ## Constants and references
 

@@ -74,6 +74,11 @@ function formatPercent(amount: number): string {
   return `${amount > 0 ? '+' : ''}${amount.toFixed(1)} %`;
 }
 
+function formatLocalDate(value: string, locale: string): string {
+  const date = new Date(`${value}T00:00:00Z`);
+  return new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeZone: 'UTC' }).format(date);
+}
+
 export default function CycleSimulationScreen({ navigation, route }: Props) {
   const { t, i18n } = useTranslation();
   const dispatch = useDispatch<AppDispatch>();
@@ -364,8 +369,14 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
           value={`${formData.harvestWeight || harvestWeightDefault} g`}
         />
         <MetricRow
-          label={t('simulationCycleDuration')}
+          label={t('simulationPlannedDuration')}
           value={t('simulationDays', { days: currentResult.cycle_duration_days })}
+        />
+        <MetricRow
+          label={t('simulationEstimatedHarvestDate')}
+          value={currentResult.cycles_breakdown[0]?.end_date_estimate
+            ? formatLocalDate(currentResult.cycles_breakdown[0].end_date_estimate, densityLocale)
+            : '—'}
         />
         <MetricRow
           label={t('simulationFeedBags')}

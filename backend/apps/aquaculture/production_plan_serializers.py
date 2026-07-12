@@ -10,6 +10,11 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.utils.translation import gettext as _
 from rest_framework import serializers
 
+from .domain.cycle_duration import (
+    CYCLE_DURATION_ERROR_MESSAGE,
+    MAX_CYCLE_DURATION_DAYS,
+    MIN_CYCLE_DURATION_DAYS,
+)
 from .domain.farm_setup_rules import FarmSetupRules
 from .services.farm_production_plan_service import FarmProductionPlanService
 
@@ -296,6 +301,17 @@ class AnnualSimulationInputSerializer(serializers.Serializer):
         allow_null=True,
         min_value=1,
         help_text="Nombre total d'alevins achetés sur l'année (tous cycles confondus)",
+    )
+    cycle_duration_days = serializers.IntegerField(
+        required=False,
+        allow_null=True,
+        min_value=MIN_CYCLE_DURATION_DAYS,
+        max_value=MAX_CYCLE_DURATION_DAYS,
+        error_messages={
+            'min_value': CYCLE_DURATION_ERROR_MESSAGE,
+            'max_value': CYCLE_DURATION_ERROR_MESSAGE,
+            'invalid': CYCLE_DURATION_ERROR_MESSAGE,
+        },
     )
 
     def validate_num_cycles(self, value: Any) -> int:

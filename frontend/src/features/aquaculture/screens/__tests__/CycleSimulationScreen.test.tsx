@@ -17,6 +17,21 @@ jest.mock('react-redux', () => ({
   useSelector: jest.fn(),
 }));
 
+jest.mock('react-i18next', () => {
+  const actual = jest.requireActual('react-i18next');
+  return {
+    ...actual,
+    useTranslation: () => ({
+      i18n: { language: 'en' },
+      t: (key: string, options?: { days?: number; count?: number }) => {
+        if (key === 'simulationDays') return `${options?.days} days`;
+        if (key === 'myFeedSacks') return `${options?.count} sacks`;
+        return key;
+      },
+    }),
+  };
+});
+
 jest.mock('@/features/aquaculture/services/firstCycleLaunchService', () => ({
   launchFirstCycle: jest.fn(),
   FirstCycleLaunchError: class FirstCycleLaunchError extends Error {
@@ -75,7 +90,7 @@ describe('features/aquaculture/screens/CycleSimulationScreen', () => {
         cycle_num: 1,
         production_kg: 0,
         start_date_estimate: '2026-05-15',
-        end_date_estimate: '2026-08-13',
+        end_date_estimate: '2026-08-12',
         duration_days: 90,
         feed_bags_total: 0,
         feed_cost_fcfa: 0,
@@ -96,6 +111,7 @@ describe('features/aquaculture/screens/CycleSimulationScreen', () => {
           unitSurface: '',
           annualTarget: '',
           startDate: '2026-05-14',
+          cycleDuration: '90',
           fingerlingsPrice: '50',
           sellingPrice: '2800',
           otherCosts: '0',
@@ -140,6 +156,34 @@ describe('features/aquaculture/screens/CycleSimulationScreen', () => {
       farmProfile: { id: 'farm-profile-1' },
       productionCycle: createdProductionCycle,
       productionUnitIdByLocalId: {},
+    });
+  });
+
+  it('affiche la durée et la date de récolte fournies par le backend', async () => {
+    const route = buildRoute({ cycleDuration: '150', startDate: '2026-04-01' });
+    const result = {
+      ...currentResult,
+      cycle_duration_days: 150,
+      cycles_breakdown: [{
+        ...currentResult.cycles_breakdown[0],
+        start_date_estimate: '2026-04-01',
+        end_date_estimate: '2026-08-28',
+        duration_days: 150,
+      }],
+    };
+    mockDispatch.mockImplementation((action: unknown) =>
+      typeof action === 'function'
+        ? { type: runCycleSimulation.fulfilled.type, payload: result }
+        : action
+    );
+
+    const { getByText } = render(<CycleSimulationScreen navigation={navigation} route={route} />);
+
+    await waitFor(() => {
+      expect(getByText('simulationPlannedDuration')).toBeTruthy();
+      expect(getByText('150 days')).toBeTruthy();
+      expect(getByText('simulationEstimatedHarvestDate')).toBeTruthy();
+      expect(getByText('Aug 28, 2026')).toBeTruthy();
     });
   });
 

@@ -31,6 +31,7 @@ from django.utils.translation import gettext as _
 from django.utils.translation import override
 
 from ..constants import DEFAULT_FEED_PRICE_PER_KG, ECONOMIC_DEFAULTS_BY_SPECIES
+from ..domain.cycle_duration import get_default_cycle_duration_days
 from ..models import (
     CycleLog,
     CycleUnitAllocation,
@@ -55,7 +56,7 @@ from .report_visuals import (
 
 logger = logging.getLogger(__name__)
 
-REPORT_DATA_LINEAGE_VERSION = "1.2.3"
+REPORT_DATA_LINEAGE_VERSION = "1.2.4"
 
 
 class UnresolvableLegacyReportScopeError(ValueError):
@@ -2316,8 +2317,9 @@ class ReportService(BaseService):
         except (TypeError, ValueError):
             start_date = period_end
         duration = int(cycle.get("planned_cycle_duration_days") or 0)
+        duration_source = "configured" if duration > 0 else "species_default"
         if duration <= 0:
-            duration = 120 if str(cycle.get("species")).lower() == "clarias" else 180
+            duration = get_default_cycle_duration_days(str(cycle.get("species") or "tilapia"))
         elapsed = max((period_end - start_date).days + 1, 0)
         progress = min(1.0, max(0.0, elapsed / duration))
         if cycle.get("status") in {"harvested", "cancelled"}:
@@ -2362,6 +2364,8 @@ class ReportService(BaseService):
                 ),
                 default=None,
             ),
+            "resolved_cycle_duration_days": duration,
+            "cycle_duration_source": duration_source,
             "direct_production_cost_fcfa": direct,
             "total_production_cost_to_date_fcfa": round(direct + other_to_date, 2),
         }
@@ -2528,8 +2532,7 @@ class ReportService(BaseService):
 
         planned_duration = int(cycle.planned_cycle_duration_days or 0)
         if planned_duration <= 0:
-            defaults = ECONOMIC_DEFAULTS_BY_SPECIES.get(cycle.species, {})
-            planned_duration = int(defaults.get("planned_cycle_duration_days") or 180)
+            planned_duration = get_default_cycle_duration_days(cycle.species)
         elapsed = max((reference_date - cycle.start_date).days + 1, 0)
         return max(planned_duration - elapsed, 0)
 
@@ -2840,6 +2843,9 @@ class ReportService(BaseService):
                 "estimated_market_value": "Estimated market value of fish",
                 "feed_cost_consumed": "Feed cost already consumed",
                 "time_remaining_cycle": "Time remaining until cycle end",
+                "configured_cycle_duration": "Configured duration",
+                "reference_cycle_duration": "Reference duration",
+                "recommended_species_duration": "Recommended value for the species",
                 "direct_production_cost": "Direct production cost",
                 "direct_production_cost_unit": "FCFA",
                 "days_short": "days",
@@ -2992,6 +2998,9 @@ class ReportService(BaseService):
             "estimated_market_value": "Valeur marchande estimée des poissons",
             "feed_cost_consumed": "Coût des aliments déjà consommés",
             "time_remaining_cycle": "Temps restant pour la fin du cycle d'élevage",
+            "configured_cycle_duration": "Durée configurée",
+            "reference_cycle_duration": "Durée de référence",
+            "recommended_species_duration": "Valeur recommandée pour l'espèce",
             "direct_production_cost": "Coût de production direct",
             "direct_production_cost_unit": "FCFA",
             "days_short": "jours",

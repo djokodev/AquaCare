@@ -37,6 +37,11 @@ from ..constants import (
     MAX_STOCKING_DENSITY_TANK_PER_M3,
 )
 from ..domain.calculators import AquacultureCalculator
+from ..domain.cycle_duration import (
+    CYCLE_DURATION_ERROR_MESSAGE,
+    calculate_planned_harvest_date,
+    validate_cycle_duration_days,
+)
 from ..domain.exceptions import (
     BusinessRuleViolation,
     CycleAlreadyHarvestedError,
@@ -1091,10 +1096,11 @@ class ProductionCycleService(BaseService):
                 _("Le poids cible de récolte doit être supérieur au poids moyen initial")
             )
 
-        if planned_duration and (int(planned_duration) < 30 or int(planned_duration) > 365):
-            raise BusinessRuleViolation(
-                _("La durée prévisionnelle du cycle doit être comprise entre 30 et 365 jours")
-            )
+        if planned_duration is not None:
+            try:
+                validate_cycle_duration_days(planned_duration)
+            except ValueError as exc:
+                raise BusinessRuleViolation(str(CYCLE_DURATION_ERROR_MESSAGE)) from exc
 
         if expected_survival is not None:
             expected_survival_decimal = Decimal(str(expected_survival))
@@ -1161,12 +1167,26 @@ class ProductionCycleService(BaseService):
         if cycle_data.get('other_operational_costs_fcfa') is None:
             cycle_data['other_operational_costs_fcfa'] = DEFAULT_OTHER_OPERATIONAL_COSTS_FCFA
 
-        if cycle_data.get('planned_harvest_date') is None and cycle_data.get('start_date'):
+        if cycle_data.get('start_date'):
             start_date_value = cycle_data['start_date']
             if isinstance(start_date_value, str):
                 start_date_value = date.fromisoformat(start_date_value)
-            duration = int(cycle_data['planned_cycle_duration_days'])
-            cycle_data['planned_harvest_date'] = start_date_value + timedelta(days=duration)
+            try:
+                duration = validate_cycle_duration_days(cycle_data['planned_cycle_duration_days'])
+            except ValueError as exc:
+                raise BusinessRuleViolation(str(CYCLE_DURATION_ERROR_MESSAGE)) from exc
+            derived_harvest_date = calculate_planned_harvest_date(start_date_value, duration)
+            supplied_harvest_date = cycle_data.get('planned_harvest_date')
+            if isinstance(supplied_harvest_date, str):
+                supplied_harvest_date = date.fromisoformat(supplied_harvest_date)
+            if supplied_harvest_date is not None and supplied_harvest_date != derived_harvest_date:
+                raise InvalidDateRangeError(
+                    _(
+                        "La date prévisionnelle de récolte doit correspondre "
+                        "à la durée du cycle"
+                    )
+                )
+            cycle_data['planned_harvest_date'] = derived_harvest_date
 
     @staticmethod
     def _validate_harvest_business_rules(

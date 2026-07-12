@@ -3,6 +3,11 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Any
 
+from aquaculture.domain.cycle_duration import (
+    CYCLE_DURATION_ERROR_MESSAGE,
+    MAX_CYCLE_DURATION_DAYS,
+    MIN_CYCLE_DURATION_DAYS,
+)
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ObjectDoesNotExist
 from django.core.exceptions import ValidationError as DjangoValidationError
@@ -480,6 +485,17 @@ class AnnualSimulationInputSerializer(serializers.Serializer):
         allow_null=True,
         min_value=1,
         help_text="Nombre total d'alevins achetés sur l'année (tous cycles confondus)"
+    )
+    cycle_duration_days = serializers.IntegerField(
+        required=False,
+        allow_null=True,
+        min_value=MIN_CYCLE_DURATION_DAYS,
+        max_value=MAX_CYCLE_DURATION_DAYS,
+        error_messages={
+            'min_value': CYCLE_DURATION_ERROR_MESSAGE,
+            'max_value': CYCLE_DURATION_ERROR_MESSAGE,
+            'invalid': CYCLE_DURATION_ERROR_MESSAGE,
+        },
     )
 
     def validate_num_cycles(self, value: Any) -> int:

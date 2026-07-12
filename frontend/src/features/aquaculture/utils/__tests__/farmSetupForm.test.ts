@@ -21,6 +21,7 @@ const baseForm: FarmSetupFormState = {
   unitSurface: '',
   annualTarget: '',
   startDate: '2026-05-14',
+  cycleDuration: '180',
   fingerlingsPrice: '50',
   sellingPrice: '2800',
   otherCosts: '0',
@@ -37,6 +38,25 @@ describe('farmSetupForm', () => {
 
     expect(errors).toEqual({});
     expect(hasFarmSetupErrors(errors)).toBe(false);
+  });
+
+  it('uses the species recommendation and preserves a valid custom duration', () => {
+    expect(getCompatibilityCyclesPerYear({ ...baseForm, species: 'clarias', cycleDuration: '120' })).toBe(2);
+    expect(getCompatibilityCyclesPerYear({ ...baseForm, species: 'clarias', cycleDuration: '150' })).toBe(2);
+    expect(getCompatibilityCyclesPerYear({ ...baseForm, species: 'tilapia', cycleDuration: '' })).toBe(1);
+  });
+
+  it.each([
+    ['29', 'createFarmCycleDurationRangeError'],
+    ['366', 'createFarmCycleDurationRangeError'],
+    ['', 'required'],
+  ])('validates cycle duration %s', (cycleDuration, expectedError) => {
+    expect(validateFarmSetupForm({ ...baseForm, cycleDuration }).cycleDuration).toBe(expectedError);
+  });
+
+  it('sends only a validated numeric duration', () => {
+    expect(buildCycleSimulationInput({ ...baseForm, cycleDuration: '150' }).cycle_duration_days).toBe(150);
+    expect(buildCycleSimulationInput({ ...baseForm, cycleDuration: 'not-a-number' }).cycle_duration_days).toBeUndefined();
   });
 
   it('bloque les valeurs numeriques invalides avant appel API', () => {

@@ -10,11 +10,13 @@ import math
 from decimal import Decimal
 from typing import TypedDict
 
+from aquaculture.domain.cycle_duration import (
+    get_default_cycle_duration_days,
+    validate_cycle_duration_days,
+)
 from django.db.models import QuerySet
 
 from ..constants import (
-    CYCLE_DURATION_DEFAULT_CATFISH,
-    CYCLE_DURATION_DEFAULT_TILAPIA,
     INITIAL_WEIGHT_DEFAULT,
     SURVIVAL_RATE_DEFAULT,
     TARGET_WEIGHT_CATFISH_DEFAULT,
@@ -218,11 +220,11 @@ class CycleSimulationService(BaseCommerceService):
         # Valeurs par défaut selon espèce
         if normalized_species == 'tilapia':
             default_target_weight = TARGET_WEIGHT_TILAPIA_DEFAULT
-            default_duration = CYCLE_DURATION_DEFAULT_TILAPIA
+            default_duration = get_default_cycle_duration_days('tilapia')
             default_price = 2800
         else:
             default_target_weight = TARGET_WEIGHT_CATFISH_DEFAULT
-            default_duration = CYCLE_DURATION_DEFAULT_CATFISH
+            default_duration = get_default_cycle_duration_days('clarias')
             default_price = 2000
 
         return {
@@ -230,7 +232,11 @@ class CycleSimulationService(BaseCommerceService):
             'initial_fish_count': initial_fish_count,
             'initial_weight_g': initial_weight_g or INITIAL_WEIGHT_DEFAULT,
             'target_weight_g': target_weight_g or default_target_weight,
-            'cycle_duration_days': cycle_duration_days or default_duration,
+            'cycle_duration_days': (
+                validate_cycle_duration_days(cycle_duration_days)
+                if cycle_duration_days is not None
+                else default_duration
+            ),
             'survival_rate': survival_rate or SURVIVAL_RATE_DEFAULT,
             'selling_price_per_kg_fcfa': selling_price_per_kg_fcfa or default_price,
             'fingerlings_cost_fcfa': fingerlings_cost_fcfa or 0,

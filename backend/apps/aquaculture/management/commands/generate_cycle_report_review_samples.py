@@ -139,18 +139,22 @@ class Command(BaseCommand):
                 storage.delete(name)
 
         self._render_pngs(output_dir)
+        generation_command = "manage.py generate_cycle_report_review_samples " + " ".join(
+            [
+                f"--output-dir {options['output_dir']}",
+                *( ["--acceptance-only"] if options.get("acceptance_only") else []),
+                *( [f"--git-sha {options['git_sha']}"] if options.get("git_sha") else []),
+            ]
+        )
         manifest = {
             "git_sha": options.get("git_sha") or self._git_sha(),
             "data_lineage_version": REPORT_DATA_LINEAGE_VERSION,
-            "command": "manage.py generate_cycle_report_review_samples " + " ".join(
-                [
-                    f"--output-dir {options['output_dir']}",
-                    *(["--acceptance-only"] if options.get("acceptance_only") else []),
-                    *([f"--git-sha {options['git_sha']}"] if options.get("git_sha") else []),
-                ]
-            ),
+            "command": generation_command,
+            "generation_command": generation_command,
             "generated_at": timezone.localtime(timezone.now()).isoformat(),
             "database_mode": "temporary/rollback",
+            "report_period_start": reports[0]["period_start"] if reports else None,
+            "report_period_end": reports[0]["period_end"] if reports else None,
             "reports": reports,
         }
         (output_dir / "manifest.json").write_text(
@@ -208,6 +212,7 @@ class Command(BaseCommand):
             initial_average_weight=Decimal("20.00"),
             initial_biomass=Decimal("40.00"),
             planned_cycle_duration_days=150,
+            planned_harvest_date=date(2026, 8, 28),
             current_count=1656,
             current_average_weight=Decimal("219.38"),
             current_biomass=Decimal("362.52"),

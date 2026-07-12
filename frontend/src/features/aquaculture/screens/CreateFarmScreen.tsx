@@ -16,6 +16,7 @@ import {
   ActivityIndicator,
   Platform,
   KeyboardAvoidingView,
+  type TextInputProps,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
@@ -38,6 +39,7 @@ import {
   getFingerlingsSuggestionPreview,
   getStockingDensityPreview,
   sanitizePositiveIntegerInput,
+  getRecommendedCycleDuration,
   todayISO,
   type FarmSetupFormState,
   type FarmSetupSpecies,
@@ -174,6 +176,7 @@ export default function CreateFarmScreen({ navigation }: Props) {
     unitSurface: '',
     annualTarget: '',
     startDate: todayISO(),
+    cycleDuration: '',
     fingerlingsPrice: '',
     sellingPrice: '',
     otherCosts: '',
@@ -190,6 +193,14 @@ export default function CreateFarmScreen({ navigation }: Props) {
   const [editingUnitId, setEditingUnitId] = useState<string | null>(null);
   const [singleFormOffsetY, setSingleFormOffsetY] = useState(0);
   const [allocationMode, setAllocationMode] = useState<'auto' | 'manual'>('auto');
+  const [isCycleDurationCustomized, setIsCycleDurationCustomized] = useState(false);
+  const formErrors = useMemo(() => validateFarmSetupForm(form), [form]);
+  const cycleDurationErrorKey = formErrors.cycleDuration;
+  const cycleDurationAccessibilityText = cycleDurationErrorKey
+    ? t(cycleDurationErrorKey === 'required' ? 'required' : cycleDurationErrorKey)
+    : form.cycleDuration
+      ? `${form.cycleDuration} ${t('days')}`
+      : '';
 
   const handleGoBack = () => {
     if (navigation.canGoBack?.()) {
@@ -337,6 +348,7 @@ export default function CreateFarmScreen({ navigation }: Props) {
       unitSurface: t('createFarmUnitSurfaceLabel'),
       annualTarget: t('createFarmCycleProductionLabel'),
       startDate: t('createFarmStartDateLabel'),
+      cycleDuration: t('createFarmCycleDurationLabel'),
       fingerlingsPrice: t('createFarmFingerlingsLabel'),
       sellingPrice: t('createFarmSellingPriceLabel'),
       otherCosts: t('createFarmOtherCostsLabel'),
@@ -442,7 +454,7 @@ export default function CreateFarmScreen({ navigation }: Props) {
       return t('createFarmAtLeastOneUnitError');
     }
 
-    const validationErrors = validateFarmSetupForm(form);
+    const validationErrors = formErrors;
     if (!hasFarmSetupErrors(validationErrors)) {
       return null;
     }
@@ -483,9 +495,15 @@ export default function CreateFarmScreen({ navigation }: Props) {
         next.sellingPrice = SELLING_PRICE_DEFAULTS[value] ?? '2800';
         next.fingerlingsPrice = FINGERLINGS_DEFAULTS[value] ?? '50';
         next.harvestWeight = HARVEST_WEIGHT_DEFAULTS[value] ?? '350';
+        if (!isCycleDurationCustomized) {
+          next.cycleDuration = String(getRecommendedCycleDuration(value as FarmSetupSpecies));
+        }
       }
       return next;
     });
+    if (key === 'cycleDuration') {
+      setIsCycleDurationCustomized(true);
+    }
   }
 
   const resetSingleUnitDraft = () => {
@@ -1160,6 +1178,7 @@ export default function CreateFarmScreen({ navigation }: Props) {
 
       <FieldLabel label={t('createFarmCycleProductionLabel')} />
       <TextInput
+        testID="createFarmCycleProductionPreview"
         style={[styles.input, styles.readonlyInput]}
         editable={false}
         selectTextOnFocus={false}
@@ -1168,6 +1187,7 @@ export default function CreateFarmScreen({ navigation }: Props) {
             ? `${Math.round(cycleProductionEstimate)} kg / cycle`
             : t('createFarmCycleProductionPending')
         }
+        numberOfLines={1}
       />
       <Text style={styles.readonlyHelper}>{t('createFarmCycleProductionHelper')}</Text>
 
@@ -1179,6 +1199,32 @@ export default function CreateFarmScreen({ navigation }: Props) {
         value={form.startDate}
         onChangeText={v => setField('startDate', v)}
       />
+
+      <FieldLabel label={t('createFarmCycleDurationLabel')} required />
+      <TextInput
+        testID="createFarmCycleDurationInput"
+        style={[styles.input, cycleDurationErrorKey && styles.inputError]}
+        keyboardType="number-pad"
+        placeholder={t(form.species === 'clarias' ? 'createFarmCycleDurationClariasPlaceholder' : 'createFarmCycleDurationTilapiaPlaceholder')}
+        placeholderTextColor={AQUACARE_COLORS.GRAY_LIGHT}
+        value={form.cycleDuration}
+        onChangeText={v => setField('cycleDuration', sanitizePositiveIntegerInput(v))}
+        accessibilityLabel={t('createFarmCycleDurationLabel')}
+        accessibilityHint={t('createFarmCycleDurationHint')}
+        accessibilityValue={{
+          text: cycleDurationAccessibilityText,
+        }}
+        accessibilityState={
+          { invalid: Boolean(cycleDurationErrorKey) } as unknown as TextInputProps['accessibilityState']
+        }
+        accessibilityLiveRegion="polite"
+      />
+      <Text style={styles.readonlyHelper}>{t('createFarmCycleDurationHint')}</Text>
+      {cycleDurationErrorKey && (
+        <Text style={styles.inlineError} accessibilityLiveRegion="polite">
+          {t(cycleDurationErrorKey === 'required' ? 'required' : cycleDurationErrorKey)}
+        </Text>
+      )}
 
       <FieldLabel label={t('createFarmSellingPriceLabel')} />
       <TextInput

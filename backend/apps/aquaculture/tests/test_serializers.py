@@ -168,7 +168,7 @@ class TestProductionCycleSerializer:
         assert serializer.validated_data['planned_cycle_duration_days'] == 180
         assert serializer.validated_data['expected_survival_rate_pct'] == Decimal('95')
         assert serializer.validated_data['planned_selling_price_per_kg_fcfa'] == Decimal('2800')
-        assert serializer.validated_data['planned_harvest_date'] == date.today() + timedelta(days=180)
+        assert serializer.validated_data['planned_harvest_date'] == date.today() + timedelta(days=179)
 
     def test_target_weight_must_exceed_initial_weight(self, farm_profile):
         data = {

@@ -1,10 +1,10 @@
 import {
+  DEFAULT_CYCLE_DURATION_DAYS_BY_SPECIES,
   DEFAULT_EXPECTED_SURVIVAL_RATE_PCT,
   TECHNICAL_PAUSE_BETWEEN_CYCLES_DAYS,
   STOCKING_DENSITY_POND_PER_M2,
   STOCKING_DENSITY_TANK_PER_M3,
 } from '@/constants/aquaculture';
-import { CYCLE_SIMULATION_DEFAULTS } from '@/domain/commerce/constants';
 import {
   getProductionUnitsCompatibilitySummary,
   getTotalProductionUnitsCapacity,
@@ -30,6 +30,7 @@ export interface FarmSetupFormState {
   unitSurface: string;
   annualTarget: string;
   startDate: string;
+  cycleDuration: string;
   fingerlingsPrice: string;
   sellingPrice: string;
   otherCosts: string;
@@ -93,8 +94,8 @@ const parseStrictNumber = (value: string): number | null => {
   return Number.isFinite(parsed) ? parsed : null;
 };
 
-const parseStrictInteger = (value: string): number | null => {
-  const trimmed = value.trim();
+const parseStrictInteger = (value: string | undefined): number | null => {
+  const trimmed = (value ?? '').trim();
   if (!trimmed) return null;
   if (!/^\d+$/.test(trimmed)) return null;
   const parsed = Number(trimmed);
@@ -115,11 +116,19 @@ export const getSimulationSpecies = (species: FarmSetupFormState['species']): 't
 export const getSpeciesHarvestWeightDefault = (species: FarmSetupFormState['species']): number =>
   species === 'clarias' ? 400 : 350;
 
+export const getRecommendedCycleDuration = (
+  species: FarmSetupFormState['species']
+): number => species === 'clarias' ? DEFAULT_CYCLE_DURATION_DAYS_BY_SPECIES.clarias : DEFAULT_CYCLE_DURATION_DAYS_BY_SPECIES.tilapia;
+
+export const getValidCycleDuration = (value?: string): number | undefined => {
+  const parsed = parseStrictInteger(value);
+  return parsed !== null && parsed >= 30 && parsed <= 365 ? parsed : undefined;
+};
+
 export const getCompatibilityCyclesPerYear = (
   form: FarmSetupFormState
 ): 1 | 2 | 3 => {
-  const speciesKey = form.species === 'clarias' ? 'catfish' : 'tilapia';
-  const cycleDurationDays = CYCLE_SIMULATION_DEFAULTS[speciesKey].cycle_duration_days;
+  const cycleDurationDays = getValidCycleDuration(form.cycleDuration) ?? getRecommendedCycleDuration(form.species);
   const periodDays = cycleDurationDays + TECHNICAL_PAUSE_BETWEEN_CYCLES_DAYS;
   const derived = periodDays > 0 ? Math.floor(365 / periodDays) : 1;
   return Math.min(3, Math.max(1, derived)) as 1 | 2 | 3;
@@ -378,6 +387,12 @@ export const validateFarmSetupForm = (
     errors.startDate = 'createFarmInvalidDateError';
   }
 
+  if (!form.cycleDuration.trim()) {
+    errors.cycleDuration = 'required';
+  } else if (getValidCycleDuration(form.cycleDuration) === undefined) {
+    errors.cycleDuration = 'createFarmCycleDurationRangeError';
+  }
+
   if (form.fingerlingsPrice.trim()) {
     const value = parseStrictNumber(form.fingerlingsPrice);
     if (value === null || value < 0) {
@@ -440,6 +455,7 @@ export const buildCycleSimulationInput = (
   })(),
   num_cycles: numCycles ?? getCompatibilityCyclesPerYear(form),
   start_date: form.startDate || todayISO(),
+  cycle_duration_days: getValidCycleDuration(form.cycleDuration),
   selling_price_per_kg_fcfa: form.sellingPrice ? toFloat(form.sellingPrice) : undefined,
   fingerlings_cost_per_unit_fcfa: form.fingerlingsPrice ? toFloat(form.fingerlingsPrice) : undefined,
   other_costs_fcfa_per_year: form.otherCosts ? toFloat(form.otherCosts) : undefined,

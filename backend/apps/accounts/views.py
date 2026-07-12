@@ -772,6 +772,7 @@ class AnnualSimulationView(generics.GenericAPIView):
                 if data.get('expected_survival_rate_pct') else None
             ),
             total_fingerlings_count=data.get('total_fingerlings_count'),
+            cycle_duration_days=data.get('cycle_duration_days'),
         )
         logger.info(
             "Annual simulation completed",

@@ -40,6 +40,15 @@ from .constants import (
     SPECIES_CHOICES,
 )
 from .domain.calculators import AquacultureCalculator
+from .domain.cycle_duration import (
+    CYCLE_DURATION_ERROR_MESSAGE,
+    CYCLE_HARVEST_DATE_ERROR_MESSAGE,
+    MAX_CYCLE_DURATION_DAYS,
+    MIN_CYCLE_DURATION_DAYS,
+    calculate_planned_harvest_date,
+    get_default_cycle_duration_days,
+    validate_cycle_duration_days,
+)
 from .domain.feed_phase_calculator import get_feed_phase
 from .domain.production_units import (
     normalize_production_unit_type,
@@ -280,6 +289,22 @@ class ProductionCycleSerializer(serializers.ModelSerializer):
     # Champs calculés pour coûts
     total_feed_cost = serializers.SerializerMethodField()
 
+    planned_cycle_duration_days = serializers.IntegerField(
+        required=False,
+        allow_null=True,
+        min_value=MIN_CYCLE_DURATION_DAYS,
+        max_value=MAX_CYCLE_DURATION_DAYS,
+        help_text=(
+            'Optional cycle duration in days. A null value is accepted for legacy '
+            'clients and never erases an existing configured duration.'
+        ),
+        error_messages={
+            'min_value': CYCLE_DURATION_ERROR_MESSAGE,
+            'max_value': CYCLE_DURATION_ERROR_MESSAGE,
+            'invalid': CYCLE_DURATION_ERROR_MESSAGE,
+        },
+    )
+
     # Phase d'alimentation actuelle (basée sur le poids moyen courant)
     feed_phase = serializers.SerializerMethodField()
 
@@ -410,6 +435,11 @@ class ProductionCycleSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         species = attrs.get('species') or getattr(self.instance, 'species', None)
         defaults = ECONOMIC_DEFAULTS_BY_SPECIES.get(species or 'tilapia', ECONOMIC_DEFAULTS_BY_SPECIES['tilapia'])
+        is_create = self.instance is None
+        duration_was_supplied = 'planned_cycle_duration_days' in attrs
+        start_date_was_supplied = 'start_date' in attrs
+        harvest_date_was_supplied = 'planned_harvest_date' in attrs
+        supplied_harvest_date = attrs.get('planned_harvest_date')
 
         start_date_value = attrs.get('start_date') or getattr(self.instance, 'start_date', None)
         if attrs.get('cycle_name') is None and not getattr(self.instance, 'cycle_name', None) and start_date_value:
@@ -428,11 +458,22 @@ class ProductionCycleSerializer(serializers.ModelSerializer):
         if attrs.get('target_harvest_weight_g') is None and not getattr(self.instance, 'target_harvest_weight_g', None):
             attrs['target_harvest_weight_g'] = defaults['target_harvest_weight_g']
 
-        if (
-            attrs.get('planned_cycle_duration_days') is None
-            and not getattr(self.instance, 'planned_cycle_duration_days', None)
-        ):
-            attrs['planned_cycle_duration_days'] = defaults['planned_cycle_duration_days']
+        stored_duration = getattr(self.instance, 'planned_cycle_duration_days', None)
+        supplied_duration = attrs.get('planned_cycle_duration_days')
+        effective_duration = supplied_duration if supplied_duration is not None else stored_duration
+        if effective_duration is not None:
+            try:
+                effective_duration = validate_cycle_duration_days(effective_duration)
+            except ValueError as exc:
+                raise serializers.ValidationError({'planned_cycle_duration_days': str(exc)}) from exc
+        elif is_create:
+            effective_duration = get_default_cycle_duration_days(species)
+            attrs['planned_cycle_duration_days'] = effective_duration
+
+        if not is_create and duration_was_supplied and supplied_duration is None:
+            # ``null`` is accepted for legacy clients, but never means "erase"
+            # on an update.  Keep the stored value (including legacy null).
+            attrs.pop('planned_cycle_duration_days', None)
 
         if (
             attrs.get('expected_survival_rate_pct') is None
@@ -536,13 +577,35 @@ class ProductionCycleSerializer(serializers.ModelSerializer):
                         ) % {'max_density': max_density}
                     })
 
-        start_date_value = attrs.get('start_date') or getattr(self.instance, 'start_date', None)
-        planned_duration = (
-            attrs.get('planned_cycle_duration_days')
-            or getattr(self.instance, 'planned_cycle_duration_days', None)
+        start_date_value = attrs.get('start_date') if start_date_was_supplied else getattr(
+            self.instance,
+            'start_date',
+            None,
         )
-        if attrs.get('planned_harvest_date') is None and start_date_value and planned_duration:
-            attrs['planned_harvest_date'] = start_date_value + timedelta(days=int(planned_duration))
+        should_recalculate_harvest = (
+            is_create
+            or start_date_was_supplied
+            or duration_was_supplied
+            or harvest_date_was_supplied
+        )
+        calculation_duration = effective_duration
+        if calculation_duration is None and (start_date_was_supplied or supplied_harvest_date is not None):
+            calculation_duration = get_default_cycle_duration_days(species)
+        derived_harvest = (
+            calculate_planned_harvest_date(start_date_value, calculation_duration)
+            if should_recalculate_harvest and start_date_value and calculation_duration is not None
+            else None
+        )
+        if (
+            supplied_harvest_date is not None
+            and derived_harvest
+            and supplied_harvest_date != derived_harvest
+        ):
+            raise serializers.ValidationError({
+                'planned_harvest_date': CYCLE_HARVEST_DATE_ERROR_MESSAGE
+            })
+        if derived_harvest:
+            attrs['planned_harvest_date'] = derived_harvest
 
         planned_harvest = attrs.get('planned_harvest_date') or getattr(self.instance, 'planned_harvest_date', None)
         if start_date_value and planned_harvest and planned_harvest < start_date_value:

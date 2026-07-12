@@ -6,6 +6,20 @@ import { useDispatch, useSelector } from 'react-redux';
 import CreateFarmScreen from '../CreateFarmScreen';
 import { runCycleSimulation } from '@/features/aquaculture/store/farmSetupSlice';
 
+let mockLanguage = 'fr';
+
+jest.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (key: string) => {
+      if (key === 'days') return mockLanguage === 'fr' ? 'jours' : 'days';
+      if (key === 'required') return mockLanguage === 'fr' ? 'Ce champ est requis' : 'This field is required';
+      return key;
+    },
+    i18n: { language: mockLanguage },
+  }),
+  initReactI18next: { type: '3rdParty', init: jest.fn() },
+}));
+
 jest.mock('react-redux', () => ({
   useDispatch: jest.fn(),
   useSelector: jest.fn(),
@@ -39,6 +53,7 @@ describe('features/aquaculture/screens/CreateFarmScreen', () => {
   };
 
   beforeEach(() => {
+    mockLanguage = 'fr';
     jest.clearAllMocks();
     (useDispatch as unknown as jest.Mock).mockReturnValue(mockDispatch);
     (useSelector as unknown as jest.Mock).mockImplementation(
@@ -93,6 +108,101 @@ describe('features/aquaculture/screens/CreateFarmScreen', () => {
     expect(queryByPlaceholderText('createFarmUnitVolumePlaceholder')).toBeNull();
     expect(queryByPlaceholderText('createFarmUnitSurfacePlaceholder')).toBeNull();
     expect(getByPlaceholderText('createFarmBulkUnitCountPlaceholder').props.value).toBe('');
+  });
+
+  it.each([
+    ['createFarmSpeciesClarias', '120', 'createFarmCycleDurationClariasPlaceholder'],
+    ['createFarmSpeciesTilapia', '180', 'createFarmCycleDurationTilapiaPlaceholder'],
+  ])('préremplit la durée recommandée pour %s', (speciesLabel, expected, placeholder) => {
+    const { getByText, getByTestId } = render(<CreateFarmScreen navigation={navigation} />);
+
+    fireEvent.press(getByText(speciesLabel));
+
+    expect(getByTestId('createFarmCycleDurationInput').props.value).toBe(expected);
+    expect(getByTestId('createFarmCycleDurationInput').props.placeholder).toBe(placeholder);
+  });
+
+  it('change le défaut d espèce tant que la durée n est pas personnalisée', () => {
+    const { getByText, getByTestId } = render(<CreateFarmScreen navigation={navigation} />);
+
+    fireEvent.press(getByText('createFarmSpeciesTilapia'));
+    fireEvent.press(getByText('createFarmSpeciesClarias'));
+
+    expect(getByTestId('createFarmCycleDurationInput').props.value).toBe('120');
+  });
+
+  it('conserve une durée personnalisée lors du changement d espèce', () => {
+    const { getByText, getByTestId } = render(<CreateFarmScreen navigation={navigation} />);
+    const durationInput = getByTestId('createFarmCycleDurationInput');
+
+    fireEvent.press(getByText('createFarmSpeciesClarias'));
+    fireEvent.changeText(durationInput, '150abc');
+    fireEvent.press(getByText('createFarmSpeciesTilapia'));
+
+    expect(getByTestId('createFarmCycleDurationInput').props.value).toBe('150');
+  });
+
+  it.each([
+    ['', 'Ce champ est requis'],
+    ['29', 'createFarmCycleDurationRangeError'],
+    ['0', 'createFarmCycleDurationRangeError'],
+    ['366', 'createFarmCycleDurationRangeError'],
+  ])('affiche une erreur de durée pour %s', (value, errorKey) => {
+    const { getByText, getByTestId, queryByText } = render(<CreateFarmScreen navigation={navigation} />);
+
+    fireEvent.press(getByText('createFarmSpeciesClarias'));
+    fireEvent.changeText(getByTestId('createFarmCycleDurationInput'), value);
+
+    expect(queryByText(errorKey)).toBeTruthy();
+  });
+
+  it('expose unité, aide et accessibilité pour la durée', () => {
+    const { getByText, getByTestId } = render(<CreateFarmScreen navigation={navigation} />);
+    fireEvent.press(getByText('createFarmSpeciesClarias'));
+    const input = getByTestId('createFarmCycleDurationInput');
+
+    expect(getByText('createFarmCycleDurationHint')).toBeTruthy();
+    expect(input.props.accessibilityLabel).toBe('createFarmCycleDurationLabel');
+    expect(input.props.accessibilityHint).toBe('createFarmCycleDurationHint');
+  });
+
+  it('synchronise l erreur visible et l annonce accessible pour un champ vide', () => {
+    const { getByText, getByTestId } = render(<CreateFarmScreen navigation={navigation} />);
+    fireEvent.press(getByText('createFarmSpeciesClarias'));
+    const input = getByTestId('createFarmCycleDurationInput');
+    fireEvent.changeText(input, '');
+
+    expect(input.props.accessibilityState).toEqual({ invalid: true });
+    expect(input.props.accessibilityValue.text).toBe('Ce champ est requis');
+    expect(getByText('Ce champ est requis')).toBeTruthy();
+  });
+
+  it('annonce la plage pour 29 et la valeur avec son unité pour 150', () => {
+    const { getByText, getByTestId, queryByText } = render(
+      <CreateFarmScreen navigation={navigation} />
+    );
+    fireEvent.press(getByText('createFarmSpeciesClarias'));
+    const input = getByTestId('createFarmCycleDurationInput');
+
+    fireEvent.changeText(input, '29');
+    expect(input.props.accessibilityState).toEqual({ invalid: true });
+    expect(input.props.accessibilityValue.text).toBe('createFarmCycleDurationRangeError');
+    expect(queryByText('createFarmCycleDurationRangeError')).toBeTruthy();
+
+    fireEvent.changeText(input, '150');
+    expect(input.props.accessibilityState).toEqual({ invalid: false });
+    expect(input.props.accessibilityValue.text).toBe('150 jours');
+    expect(queryByText('createFarmCycleDurationRangeError')).toBeNull();
+  });
+
+  it('annonce la durée en anglais avec days', () => {
+    mockLanguage = 'en';
+    const { getByText, getByTestId } = render(<CreateFarmScreen navigation={navigation} />);
+    fireEvent.press(getByText('createFarmSpeciesClarias'));
+    const input = getByTestId('createFarmCycleDurationInput');
+    fireEvent.changeText(input, '150');
+
+    expect(input.props.accessibilityValue.text).toBe('150 days');
   });
 
   it('clic sur Bac selectionne puis deselectionne le type', () => {

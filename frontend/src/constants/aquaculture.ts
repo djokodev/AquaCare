@@ -14,6 +14,12 @@ export const DEFAULT_EXPECTED_SURVIVAL_RATE_PCT = 95;
 export const TECHNICAL_PAUSE_BETWEEN_CYCLES_DAYS = 14;
 export const DEFAULT_OTHER_COSTS_RATE_PCT = 5;
 
+// Keep aligned with backend ECONOMIC_DEFAULTS_BY_SPECIES (offline-first copy).
+export const DEFAULT_CYCLE_DURATION_DAYS_BY_SPECIES = {
+  tilapia: 180,
+  clarias: 120,
+} as const;
+
 // Densités recommandées (semi-intensif) — utilisées pour les suggestions automatiques
 export const RECOMMENDED_STOCKING_DENSITY_POND_PER_M2 = 3;   // 3 poissons/m² (étangs)
 export const RECOMMENDED_STOCKING_DENSITY_TANK_PER_M3 = 100;  // 100 poissons/m³ (bacs/cages)
