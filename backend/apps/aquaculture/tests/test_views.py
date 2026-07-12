@@ -127,6 +127,29 @@ class TestProductionCycleViewSet:
         assert float(response.data['initial_biomass']) == 9.0  # 750 * 12g / 1000
         assert response.data['current_count'] == 750
 
+    def test_patch_contradictory_planned_harvest_date_returns_400(
+        self, auth_client, production_cycle
+    ):
+        production_cycle.start_date = date(2026, 4, 1)
+        production_cycle.planned_cycle_duration_days = 150
+        production_cycle.planned_harvest_date = date(2026, 8, 28)
+        production_cycle.save(
+            update_fields=['start_date', 'planned_cycle_duration_days', 'planned_harvest_date']
+        )
+
+        url = reverse('aquaculture:production-cycle-detail', kwargs={'pk': production_cycle.id})
+        response = auth_client.patch(
+            url,
+            {'planned_harvest_date': '2026-09-15'},
+            format='json',
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert 'planned_harvest_date' in response.data
+        production_cycle.refresh_from_db()
+        assert production_cycle.planned_cycle_duration_days == 150
+        assert production_cycle.planned_harvest_date == date(2026, 8, 28)
+
     def test_cycle_isolation_between_users(self, user_factory, farm_profile):
         """Test isolation des cycles entre utilisateurs."""
         # Créer un autre utilisateur avec sa ferme

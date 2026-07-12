@@ -11,6 +11,9 @@ MAX_CYCLE_DURATION_DAYS = 365
 CYCLE_DURATION_ERROR_MESSAGE = _(
     "The cycle duration must be between 30 and 365 days."
 )
+CYCLE_HARVEST_DATE_ERROR_MESSAGE = _(
+    "The estimated harvest date must match the cycle duration."
+)
 
 
 def get_default_cycle_duration_days(species: str | None) -> int:

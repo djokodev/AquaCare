@@ -1,6 +1,6 @@
 # Cycle report data lineage
 
-Version: `1.2.3`
+Version: `1.2.4`
 
 This document defines the backend sources used by cycle and unit PDF reports. A
 report is a historical snapshot: values that describe the stock, biomass,
@@ -45,6 +45,8 @@ the mutable current dashboard state.
 | Cycle species/status | `cycles[].cycle.*` | Production cycle | `ProductionCycle` and localized helpers | `STATIC` | Direct field | — | Direct field | report service |
 | Start date / active days | `cycles[].cycle.start_date_display`, `days_active` | Production cycle | `ProductionCycle.start_date` | `STATIC` / `AS_OF_PERIOD_END` | `period_end - start + 1` | — | Direct field | report service |
 | Planned duration | `cycles[].cycle.planned_cycle_duration_days` | Production cycle | `ProductionCycle.planned_cycle_duration_days` | `FORECAST` | Direct field | Species default in cost/time helpers | Legacy species default | custom duration tests |
+| Resolved cycle duration | `cycle_dashboard.resolved_cycle_duration_days` | Configured duration or recommended species default | `ProductionCycle.planned_cycle_duration_days`, otherwise `get_default_cycle_duration_days(species)` | `FORECAST` | Configured duration when present; otherwise species default | Recommended species duration | Fallback is used for calculations and display without silent persistence on independent PATCH | duration/report tests |
+| Cycle duration source | `cycle_dashboard.cycle_duration_source` | Presence of configured cycle duration | `ProductionCycle.planned_cycle_duration_days` | `STATIC` | `configured` when present, otherwise `species_default` | `species_default` | Provenance used to display Configured duration or Reference duration | duration/report tests |
 | Time remaining | `cycle_dashboard.time_remaining_days` | Cycle plan | `ReportService._calculate_cycle_days_remaining()` | `FORECAST` | Planned harvest date or duration minus elapsed days | Species duration default | `None` only when cycle dates are unavailable | report service |
 | Initial fish | `summary.initial_fish_count`, `cycles[].unit.initial_fish_count` | Allocation/cycle initial state | `CycleUnitAllocation.initial_fish_count` or `ProductionCycle.initial_count` | `STATIC` | Direct field | — | Cycle field | stock tests |
 | Mortality cumulative | `summary.total_mortality_count`, `cycles[].cumulative_metrics.total_mortality` | Daily logs | `CycleLog.mortality_count` through `period_end` | `CUMULATIVE_TO_PERIOD_END` | Sum of mortality logs | Legacy stored summary only when no logs | No invented history | stock tests |
@@ -79,6 +81,10 @@ the mutable current dashboard state.
 | Active sanitary events | `active_sanitary_logs`, active counts | Sanitary logs at period end | `_is_sanitary_event_active_as_of()` | `AS_OF_PERIOD_END` | Event before end and unresolved, or resolution after end | Resolved legacy row stays resolved | Global null allocation separated | sanitary tests |
 | Resolution date | `resolution_date`, `resolution_date_display` | Sanitary log | `SanitaryLog.resolution_date` | `STATIC` | Direct field/display | Empty label | Nullable legacy field | sanitary/template tests |
 | Unit sanitary scope | `cycles[].sanitary_logs` | Allocation relation | `SanitaryLog.cycle_unit_allocation` | `STATIC` | Direct relation | Global logs are not duplicated | Global logs under `global_sanitary_logs` | isolation tests |
+
+`planned_harvest_date` is a derived forecast and must always equal
+`start_date + resolved cycle duration - 1 day`. It cannot diverge from the
+effective duration through an independent API update.
 
 ## Legacy feed provenance
 

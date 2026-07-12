@@ -33,7 +33,7 @@ def test_review_sample_manifest_hashes_exact_pdf_and_payload_bytes(tmp_path):
 
     manifest = json.loads((tmp_path / "manifest.json").read_text())
     assert manifest["git_sha"] == "test-source-sha"
-    assert manifest["data_lineage_version"] == "1.2.3"
+    assert manifest["data_lineage_version"] == "1.2.4"
     assert manifest["database_mode"] == "temporary/rollback"
     assert len(manifest["reports"]) == 6
 

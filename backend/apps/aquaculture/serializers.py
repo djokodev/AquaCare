@@ -42,6 +42,7 @@ from .constants import (
 from .domain.calculators import AquacultureCalculator
 from .domain.cycle_duration import (
     CYCLE_DURATION_ERROR_MESSAGE,
+    CYCLE_HARVEST_DATE_ERROR_MESSAGE,
     MAX_CYCLE_DURATION_DAYS,
     MIN_CYCLE_DURATION_DAYS,
     calculate_planned_harvest_date,
@@ -437,6 +438,8 @@ class ProductionCycleSerializer(serializers.ModelSerializer):
         is_create = self.instance is None
         duration_was_supplied = 'planned_cycle_duration_days' in attrs
         start_date_was_supplied = 'start_date' in attrs
+        harvest_date_was_supplied = 'planned_harvest_date' in attrs
+        supplied_harvest_date = attrs.get('planned_harvest_date')
 
         start_date_value = attrs.get('start_date') or getattr(self.instance, 'start_date', None)
         if attrs.get('cycle_name') is None and not getattr(self.instance, 'cycle_name', None) and start_date_value:
@@ -579,23 +582,27 @@ class ProductionCycleSerializer(serializers.ModelSerializer):
             'start_date',
             None,
         )
-        should_recalculate_harvest = is_create or start_date_was_supplied or (
-            duration_was_supplied and supplied_duration is not None
+        should_recalculate_harvest = (
+            is_create
+            or start_date_was_supplied
+            or duration_was_supplied
+            or harvest_date_was_supplied
         )
         calculation_duration = effective_duration
-        if calculation_duration is None and start_date_was_supplied:
+        if calculation_duration is None and (start_date_was_supplied or supplied_harvest_date is not None):
             calculation_duration = get_default_cycle_duration_days(species)
         derived_harvest = (
             calculate_planned_harvest_date(start_date_value, calculation_duration)
             if should_recalculate_harvest and start_date_value and calculation_duration is not None
             else None
         )
-        supplied_harvest = attrs.get('planned_harvest_date')
-        if supplied_harvest is not None and derived_harvest and supplied_harvest != derived_harvest:
+        if (
+            supplied_harvest_date is not None
+            and derived_harvest
+            and supplied_harvest_date != derived_harvest
+        ):
             raise serializers.ValidationError({
-                'planned_harvest_date': _(
-                    'La date prévisionnelle de récolte doit correspondre à la durée du cycle'
-                )
+                'planned_harvest_date': CYCLE_HARVEST_DATE_ERROR_MESSAGE
             })
         if derived_harvest:
             attrs['planned_harvest_date'] = derived_harvest

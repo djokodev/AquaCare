@@ -248,6 +248,7 @@ class TestReportServicePayloadAndPdfTemplate:
 
         assert payload["cycle_dashboard"]["resolved_cycle_duration_days"] == 150
         assert payload["cycle_dashboard"]["cycle_duration_source"] == "configured"
+        assert payload["calculation_metadata"]["data_lineage_version"] == "1.2.4"
 
     def test_legacy_report_payload_exposes_species_fallback_source(self):
         farm_profile = FarmProfileFactory()

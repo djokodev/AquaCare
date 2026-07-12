@@ -56,7 +56,7 @@ from .report_visuals import (
 
 logger = logging.getLogger(__name__)
 
-REPORT_DATA_LINEAGE_VERSION = "1.2.3"
+REPORT_DATA_LINEAGE_VERSION = "1.2.4"
 
 
 class UnresolvableLegacyReportScopeError(ValueError):
