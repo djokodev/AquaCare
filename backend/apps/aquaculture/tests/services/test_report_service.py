@@ -13,6 +13,7 @@ from django.core import mail
 from django.core.files.base import ContentFile
 from django.template.loader import render_to_string
 from django.utils import timezone
+from django.utils.translation import override
 
 from tests.fixtures.factories import FarmProfileFactory, ProductionCycleFactory, UserFactory
 
@@ -428,7 +429,8 @@ class TestReportServicePayloadAndPdfTemplate:
             generated_at=timezone.localtime(timezone.now()),
             language_code="en",
         )
-        english_html = render_to_string("aquaculture/report_pdf.html", english_context)
+        with override("en"):
+            english_html = render_to_string("aquaculture/report_pdf.html", english_context)
         assert "Fish already harvested since the start of the cycle" in english_html
         assert "200 fish, with a total harvested weight of 38.00 kg" in english_html
         assert "The 1720 fish still present correspond" in english_html
