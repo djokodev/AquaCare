@@ -136,7 +136,11 @@ class CycleLaunchUnitSerializer(serializers.Serializer):
 
 
 class CycleLaunchAllocationSerializer(serializers.Serializer):
-    production_unit_local_id = serializers.CharField(max_length=120, trim_whitespace=True)
+    production_unit_local_id = serializers.CharField(
+        max_length=120,
+        trim_whitespace=True,
+        allow_blank=True,
+    )
     fish_count = serializers.IntegerField(min_value=1)
 
     def validate_production_unit_local_id(self, value: str) -> str:
