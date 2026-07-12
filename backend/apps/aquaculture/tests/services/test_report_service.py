@@ -2,7 +2,7 @@
 Tests unitaires ciblés pour ReportService (emails + rendu template PDF).
 """
 
-from datetime import date
+from datetime import date, datetime
 
 import pytest
 from aquaculture.models import CycleUnitAllocation, ProductionReport, ProductionUnit
@@ -347,8 +347,8 @@ class TestReportServicePayloadAndPdfTemplate:
         report = _create_report(
             farm_profile=farm_profile,
             report_type="monthly",
-            period_start=date(2026, 2, 1),
-            period_end=date(2026, 2, 28),
+            period_start=date(2026, 7, 13),
+            period_end=date(2026, 7, 19),
         )
         payload = {
             "farm": {
@@ -375,7 +375,7 @@ class TestReportServicePayloadAndPdfTemplate:
                     "cycle": {
                         "cycle_name": "Cycle EN",
                         "species_display": "Catfish",
-                        "start_date_display": "01/02/2026",
+                        "start_date_display": "1 April 2026",
                         "days_active": 28,
                     },
                     "unit": None,
@@ -397,8 +397,8 @@ class TestReportServicePayloadAndPdfTemplate:
                     "logs": [],
                     "sanitary_logs": [
                         {
-                            "event_date_display": "25/02/2026",
-                            "resolution_date_display": "27/02/2026",
+                            "event_date_display": "19 Jul 2026",
+                            "resolution_date_display": "20 Jul 2026",
                             "event_type_display": "Disease",
                             "affected_count": 2,
                             "treatment_applied": "Isolation",
@@ -416,7 +416,7 @@ class TestReportServicePayloadAndPdfTemplate:
         context = ReportService._build_pdf_context(
             report=report,
             payload=payload,
-            generated_at=timezone.localtime(timezone.now()),
+            generated_at=timezone.make_aware(datetime(2026, 7, 20, 10, 0)),
             language_code="en",
         )
         html = render_to_string("aquaculture/report_pdf.html", context)
@@ -425,7 +425,12 @@ class TestReportServicePayloadAndPdfTemplate:
         assert "Analyzed period synthesis" not in html  # absent because no cycle section rendered
         assert "Disease" in html
         assert "Maladie" not in html
-        assert "27/02/2026" in html
+        assert "19 Jul 2026" in html
+        assert "1 April 2026" in html
+        assert "20 July 2026 at 10:00" in html
+        assert "07/19/2026" not in html
+        assert "04/01/2026" not in html
+        assert "27/02/2026" not in html
         assert "border-left:4px" not in html
 
     def test_pdf_template_uses_scope_report_labels_and_real_svgs(self):
@@ -566,7 +571,19 @@ class TestReportServicePayloadAndPdfTemplate:
         payload = {
             "report_meta": {"scope_type": "cycle"},
             "farm": {"farm_name": farm_profile.farm_name},
-            "summary": {"cycle_count": 1, "total_feed": 12, "total_mortality": 2},
+            "summary": {
+                "cycle_count": 1,
+                "total_feed": 12,
+                "total_mortality": 2,
+                "initial_fish_count": 1000,
+                "estimated_current_fish_count": 780,
+                "total_mortality_count": 20,
+                "mortality_rate_pct": 2,
+                "total_feed_consumed_kg": 12,
+                "estimated_current_biomass_kg": 156,
+                "total_harvested_fish_count": 200,
+                "total_harvested_biomass_kg": 38,
+            },
             "cycle_dashboard": {"estimated_market_value_fcfa": 0, "feed_cost_consumed_fcfa": 0,
                                  "time_remaining_days": 0, "direct_production_cost_fcfa": 0},
             "growth_chart": {"state": "no_data", "points": [], "svg": ""},
@@ -577,6 +594,7 @@ class TestReportServicePayloadAndPdfTemplate:
                 "unit": {"production_unit_name": "Bac 1"},
                 "current_metrics": {"current_count": 100, "current_average_weight": 30,
                                      "current_biomass": 3, "fcr": 1.2, "survival_rate": 98},
+                "cumulative_metrics": {"harvested_fish_count": 100, "harvested_biomass_kg": 19},
                 "period_metrics": {"log_count": 1, "total_feed": 12, "total_mortality": 2,
                                     "average_temperature": 28, "average_oxygen": 5, "average_ph": 7},
                 "weekly_activity": [{"label": "1 juil.–5 juil.", "log_count": 1,
@@ -599,4 +617,6 @@ class TestReportServicePayloadAndPdfTemplate:
 
         assert "Synthèse hebdomadaire" in html
         assert "Annexe — Détail des saisies quotidiennes du mois" in html
+        assert "Récoltes cumulées" in html
+        assert "200 poissons" in html
         assert "1 juil.–5 juil." in html

@@ -18,6 +18,34 @@ from tests.fixtures.factories import FarmProfileFactory, ProductionCycleFactory,
 
 @pytest.mark.django_db
 class TestReportApplicationService:
+    def test_request_report_generation_requires_cycle_for_cycle_scope(self):
+        user = UserFactory()
+        FarmProfileFactory(user=user)
+
+        with pytest.raises(InvalidReportCycleScopeError, match="obligatoire"):
+            ReportApplicationService.request_report_generation(
+                user,
+                GenerateReportCommand(report_type="daily"),
+            )
+
+    def test_request_report_generation_rejects_unknown_or_foreign_cycle(self):
+        user = UserFactory()
+        FarmProfileFactory(user=user)
+        foreign_farm = FarmProfileFactory(user=UserFactory())
+        foreign_cycle = ProductionCycleFactory(farm_profile=foreign_farm, status="active")
+
+        with pytest.raises(InvalidReportCycleScopeError, match="introuvable"):
+            ReportApplicationService.request_report_generation(
+                user,
+                GenerateReportCommand(report_type="daily", cycle_id=str(foreign_cycle.id)),
+            )
+
+        with pytest.raises(InvalidReportCycleScopeError, match="introuvable"):
+            ReportApplicationService.request_report_generation(
+                user,
+                GenerateReportCommand(report_type="daily", cycle_id="not-a-uuid"),
+            )
+
     def test_request_report_generation_rejects_inactive_cycle_scope(self):
         user = UserFactory()
         farm_profile = FarmProfileFactory(user=user)

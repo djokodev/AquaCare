@@ -34,6 +34,7 @@ from ..constants import DEFAULT_FEED_PRICE_PER_KG, ECONOMIC_DEFAULTS_BY_SPECIES
 from ..models import (
     CycleLog,
     CycleUnitAllocation,
+    PartialHarvest,
     ProductionCycle,
     ProductionReport,
     ReportDispatchLog,
@@ -53,6 +54,8 @@ from .report_visuals import (
 )
 
 logger = logging.getLogger(__name__)
+
+REPORT_DATA_LINEAGE_VERSION = "1.2.0"
 
 _pdf_patched = False
 
@@ -574,44 +577,47 @@ class ReportService(BaseService):
 
     @staticmethod
     def generate_daily_drafts(reference_date: date | None = None) -> int:
-        """Génère les brouillons journaliers pour toutes les fermes actives."""
+        """Génère un brouillon journalier par cycle actif."""
         start, end = ReportService.build_completed_period_bounds("daily", reference_date)
-        return ReportService._generate_for_all_active_farms("daily", start, end)
+        return ReportService._generate_for_all_active_cycles("daily", start, end)
 
     @staticmethod
     def generate_weekly_drafts(reference_date: date | None = None) -> int:
         """Génère les brouillons hebdomadaires pour toutes les fermes actives."""
         start, end = ReportService.build_completed_period_bounds("weekly", reference_date)
-        return ReportService._generate_for_all_active_farms("weekly", start, end)
+        return ReportService._generate_for_all_active_cycles("weekly", start, end)
 
     @staticmethod
     def generate_monthly_drafts(reference_date: date | None = None) -> int:
         """Génère les brouillons mensuels pour toutes les fermes actives."""
         start, end = ReportService.build_completed_period_bounds("monthly", reference_date)
-        return ReportService._generate_for_all_active_farms("monthly", start, end)
+        return ReportService._generate_for_all_active_cycles("monthly", start, end)
 
     @staticmethod
-    def _generate_for_all_active_farms(report_type: str, start: date, end: date) -> int:
-        farms = FarmProfile.objects.filter(
-            user__is_active=True,
-            production_cycles__status="active",
-        ).distinct()
+    def _generate_for_all_active_cycles(report_type: str, start: date, end: date) -> int:
+        cycles = ProductionCycle.objects.filter(
+            farm_profile__user__is_active=True,
+            status="active",
+        ).select_related("farm_profile")
 
         generated = 0
-        for farm in farms:
+        for cycle in cycles:
             try:
                 ReportService.generate_for_farm(
-                    farm_profile=farm,
+                    farm_profile=cycle.farm_profile,
                     report_type=report_type,
                     period_start=start,
                     period_end=end,
+                    scope_type="cycle",
+                    scope_object_id=str(cycle.id),
+                    cycle_id=str(cycle.id),
                 )
                 generated += 1
             except Exception:
                 logger.exception(
-                    "Echec generation rapport %s pour ferme %s (%s -> %s)",
+                    "Echec generation rapport %s pour cycle %s (%s -> %s)",
                     report_type,
-                    farm.id,
+                    cycle.id,
                     start,
                     end,
                 )
@@ -655,6 +661,7 @@ class ReportService(BaseService):
         period_end: date | None = None,
         cumulative_daily_logs: list | None = None,
         cumulative_sanitary_logs: list | None = None,
+        cumulative_partial_harvests: list | None = None,
     ) -> dict:
         dashboard = ProductionUnitDashboardService.build_dashboard_payload_from_logs(
             allocation=allocation,
@@ -665,6 +672,7 @@ class ReportService(BaseService):
             allocation=allocation,
             as_of_date=period_end or timezone.localdate(),
             daily_logs=cumulative_daily_logs if cumulative_daily_logs is not None else daily_logs,
+            partial_harvests=cumulative_partial_harvests,
         )
         summary = dashboard["summary"]
         summary["estimated_current_fish_count"] = stock_snapshot["estimated_current_fish_count"]
@@ -679,7 +687,7 @@ class ReportService(BaseService):
         estimated_biomass = (
             round(float(current_count or 0) * latest_weight / 1000, 2)
             if latest_weight is not None and current_count is not None
-            else summary.get("estimated_current_biomass_kg") or allocation.current_biomass_kg
+            else None
         )
         plan_data = FarmProductionPlanService.get_plan_data(allocation.cycle.farm_profile)
         feed_price = (
@@ -727,10 +735,10 @@ class ReportService(BaseService):
                 ),
                 "production_unit_dimension": allocation.production_unit.display_dimension,
                 "initial_fish_count": allocation.initial_fish_count,
-                "current_fish_count": allocation.current_fish_count,
                 "initial_biomass_kg": ReportService._to_float(allocation.initial_biomass_kg),
-                "current_biomass_kg": ReportService._to_float(allocation.current_biomass_kg),
-                "expected_survival_rate_pct": ReportService._to_float(allocation.expected_survival_rate_pct),
+                "planned_survival_rate_pct": ReportService._to_float(allocation.expected_survival_rate_pct),
+                "harvested_fish_count": stock_snapshot["harvested_fish_count"],
+                "harvested_biomass_kg": ReportService._to_float(stock_snapshot["harvested_biomass_kg"]),
             },
             "dashboard_metrics": {
                 "estimated_market_value_fcfa": round(
@@ -869,6 +877,8 @@ class ReportService(BaseService):
             "total_mortality_count": cumulative_metrics.get("total_mortality"),
             "total_feed_consumed_kg": cumulative_metrics.get("total_feed"),
             "estimated_current_biomass_kg": section.get("current_metrics", {}).get("current_biomass"),
+            "harvested_fish_count": cumulative_metrics.get("harvested_fish_count", 0),
+            "harvested_biomass_kg": cumulative_metrics.get("harvested_biomass_kg", 0),
             "active_sanitary_events_count": section.get("active_sanitary_events_count", 0),
             "active_sanitary_affected_fish_count": section.get("active_sanitary_affected_fish_count", 0),
             "sanitary_status_short": ("active" if section.get("active_sanitary_events_count", 0) else "ok"),
@@ -891,6 +901,94 @@ class ReportService(BaseService):
             "average_temperature": average("water_temperature"),
             "average_oxygen": average("dissolved_oxygen"),
             "average_ph": average("ph_level"),
+        }
+
+    @staticmethod
+    def _resolve_legacy_cumulative_feed(
+        *,
+        cycle: ProductionCycle,
+        logs: list[CycleLog],
+        period_end: date,
+    ) -> dict:
+        """Resolve legacy feed without treating a partial log stream as complete."""
+        logged_total = round(sum(float(log.feed_quantity or 0) for log in logs), 2)
+        stored_total = ReportService._to_float(cycle.total_feed_consumed)
+        stored_total = stored_total if stored_total and stored_total > 0 else None
+        log_dates = [log.log_date for log in logs]
+        log_history_complete = bool(log_dates) and min(log_dates) <= cycle.start_date and max(log_dates) >= period_end
+        updated_at_date = cycle.updated_at.date() if cycle.updated_at else None
+        stored_valid_at_period_end = updated_at_date is not None and updated_at_date <= period_end
+        fallbacks_used: list[str] = []
+
+        if not logs and stored_total is None:
+            return {
+                "feed_consumed_kg": None,
+                "source": "legacy_no_feed_data",
+                "history_complete": False,
+                "logged_total": 0.0,
+                "stored_total": None,
+                "fallbacks_used": ["legacy_feed_unavailable"],
+            }
+
+        if not logs and stored_total is not None:
+            return {
+                "feed_consumed_kg": stored_total,
+                "source": "legacy_stored_total_feed_consumed",
+                "history_complete": stored_valid_at_period_end,
+                "logged_total": 0.0,
+                "stored_total": stored_total,
+                "fallbacks_used": ["legacy_stored_total_feed_consumed"],
+            }
+
+        if stored_total is None:
+            source = "legacy_logs" if log_history_complete else "legacy_logs_minimum_known"
+            if not log_history_complete:
+                fallbacks_used.append("legacy_logs_incomplete")
+            return {
+                "feed_consumed_kg": logged_total,
+                "source": source,
+                "history_complete": log_history_complete,
+                "logged_total": logged_total,
+                "stored_total": None,
+                "fallbacks_used": fallbacks_used,
+            }
+
+        tolerance = max(0.01, max(stored_total, logged_total) * 0.01)
+        if abs(stored_total - logged_total) <= tolerance:
+            if not log_history_complete:
+                fallbacks_used.append("legacy_logs_incomplete")
+            return {
+                "feed_consumed_kg": logged_total,
+                "source": "legacy_logs",
+                "history_complete": log_history_complete,
+                "logged_total": logged_total,
+                "stored_total": stored_total,
+                "fallbacks_used": fallbacks_used,
+            }
+
+        if stored_total > logged_total and stored_valid_at_period_end:
+            return {
+                "feed_consumed_kg": stored_total,
+                "source": "legacy_stored_total_feed_consumed",
+                "history_complete": True,
+                "logged_total": logged_total,
+                "stored_total": stored_total,
+                "fallbacks_used": ["legacy_stored_total_feed_consumed"],
+            }
+
+        fallbacks_used.extend(
+            [
+                "legacy_logs_minimum_known",
+                "legacy_stored_total_feed_consumed_rejected_post_period",
+            ]
+        )
+        return {
+            "feed_consumed_kg": logged_total,
+            "source": "legacy_logs_minimum_known",
+            "history_complete": False,
+            "logged_total": logged_total,
+            "stored_total": stored_total,
+            "fallbacks_used": fallbacks_used,
         }
 
     @staticmethod
@@ -1079,6 +1177,13 @@ class ReportService(BaseService):
                     ),
                     to_attr="cumulative_sanitary_logs",
                 ),
+                Prefetch(
+                    "unit_partial_harvests",
+                    queryset=PartialHarvest.objects.filter(harvest_date__lte=period_end).order_by(
+                        "-harvest_date", "-created_at"
+                    ),
+                    to_attr="cumulative_partial_harvests",
+                ),
             )
         )
         global_period_sanitary_logs = list(
@@ -1104,7 +1209,34 @@ class ReportService(BaseService):
             cumulative_logs = list(cycle.logs.filter(log_date__lte=period_end))
             partial_harvests = list(cycle.partial_harvests.filter(harvest_date__lte=period_end))
             cumulative_sanitary_logs = list(cycle.sanitary_logs.filter(event_date__lte=period_end))
-            total_feed = sum(float(log.feed_quantity or 0) for log in cumulative_logs)
+            feed_resolution = ReportService._resolve_legacy_cumulative_feed(
+                cycle=cycle,
+                logs=cumulative_logs,
+                period_end=period_end,
+            )
+            total_feed = feed_resolution["feed_consumed_kg"]
+            feed_source_label = {
+                "legacy_logs": ReportService._pick_text(
+                    ReportService._resolve_language_code(farm_profile.user),
+                    "Journaux legacy",
+                    "Legacy logs",
+                ),
+                "legacy_stored_total_feed_consumed": ReportService._pick_text(
+                    ReportService._resolve_language_code(farm_profile.user),
+                    "Total alimentaire stocké legacy",
+                    "Legacy stored feed total",
+                ),
+                "legacy_logs_minimum_known": ReportService._pick_text(
+                    ReportService._resolve_language_code(farm_profile.user),
+                    "Saisies disponibles (minimum connu)",
+                    "Available entries (known minimum)",
+                ),
+                "legacy_no_feed_data": ReportService._pick_text(
+                    ReportService._resolve_language_code(farm_profile.user),
+                    "Aucune donnée alimentaire",
+                    "No feed data",
+                ),
+            }.get(feed_resolution["source"], feed_resolution["source"])
             total_mortality = sum(int(log.mortality_count or 0) for log in cumulative_logs)
             total_log_count = len(cycle_logs)
             total_sanitary_count = len(sanitary_logs)
@@ -1146,7 +1278,7 @@ class ReportService(BaseService):
             feed_cost_consumed_fcfa = CycleFeedService.get_consumed_cost(
                 cycle,
                 period_end=period_end,
-                consumed_kg=total_feed,
+                consumed_kg=total_feed or 0,
                 fallback_price_per_kg=feed_price_per_kg,
             )
             latest_weight = ReportService._resolve_latest_valid_weight_as_of(cumulative_logs, period_end)
@@ -1159,20 +1291,27 @@ class ReportService(BaseService):
             if has_completed_final_harvest:
                 harvested_biomass_kg += float(cycle.final_biomass or 0)
             legacy_reconstructed = bool(cumulative_logs or partial_harvests or has_completed_final_harvest)
+            feed_display = round(total_feed, 2) if total_feed is not None else None
             legacy_survival = (
                 round(((total_initial - total_mortality) / total_initial) * 100, 2)
                 if legacy_reconstructed and total_initial
                 else None
+            )
+            fcr_data_reliable = feed_resolution["history_complete"] and (
+                legacy_reconstructed or not cumulative_logs
             )
             legacy_fcr = ReportFcrService.calculate(
                 feed_consumed_kg=total_feed,
                 initial_biomass_kg=ReportService._to_float(cycle.initial_biomass),
                 current_biomass_kg=current_biomass_val,
                 harvested_biomass_kg=harvested_biomass_kg,
-                harvest_data_complete=all(item.total_weight_kg is not None for item in partial_harvests)
+                harvest_data_complete=fcr_data_reliable
+                and all(item.total_weight_kg is not None for item in partial_harvests)
                 and (not has_completed_final_harvest or cycle.final_biomass is not None),
             ) if legacy_reconstructed else None
-            projected_revenue = effective_selling_price * current_biomass_val
+            if legacy_reconstructed and latest_weight is None:
+                current_biomass_val = None
+            projected_revenue = effective_selling_price * (current_biomass_val or 0)
             return {
                 "report_meta": {
                     "report_type": report_type,
@@ -1216,8 +1355,29 @@ class ReportService(BaseService):
                     "estimated_current_fish_count": estimated_current,
                     "total_mortality_count": total_mortality,
                     "mortality_rate_pct": mortality_rate_pct,
-                    "total_feed_consumed_kg": round(total_feed, 2),
+                    "total_feed_consumed_kg": feed_display,
                     "estimated_current_biomass_kg": current_biomass_val,
+                    "total_harvested_fish_count": harvested_fish_count + (
+                        int(cycle.final_count or 0) if has_completed_final_harvest else 0
+                    ),
+                    "total_harvested_biomass_kg": round(harvested_biomass_kg, 2),
+                    "biological_survival_rate_pct": round(
+                        ((total_initial - total_mortality) / total_initial) * 100, 2
+                    ) if total_initial else None,
+                    "stock_remaining_rate_pct": round(
+                        (estimated_current / total_initial) * 100, 2
+                    ) if total_initial else None,
+                    "feed_history_complete": feed_resolution["history_complete"],
+                    "feed_history_source": feed_resolution["source"],
+                    "feed_history_source_label": feed_source_label,
+                    "feed_history_status_label": ReportService._pick_text(
+                        ReportService._resolve_language_code(farm_profile.user),
+                        "Complet" if feed_resolution["history_complete"] else "Incomplet",
+                        "Complete" if feed_resolution["history_complete"] else "Incomplete",
+                    ),
+                    "feed_history_logged_total": feed_resolution["logged_total"],
+                    "feed_history_stored_total": feed_resolution["stored_total"],
+                    "feed_history_warning": not feed_resolution["history_complete"] and total_feed is not None,
                     "units_with_today_log_count": 0,
                     "units_missing_today_log_count": 0,
                     "active_sanitary_events_count": sum(
@@ -1232,7 +1392,7 @@ class ReportService(BaseService):
                     ),
                     "total_log_count": total_log_count,
                     "total_sanitary_events": total_sanitary_count,
-                    "total_feed": round(total_feed, 2),
+                    "total_feed": feed_display,
                     "total_mortality": total_mortality,
                     "comparison_units_count": 0,
                 },
@@ -1246,6 +1406,11 @@ class ReportService(BaseService):
                     ),
                 },
                 "growth_logs": ReportService._build_growth_logs(cycle, [], period_start, period_end),
+                "_legacy_feed_resolution": feed_resolution,
+                "_legacy_source_model_state": {
+                    "mutable_current_fish_count": cycle.current_count,
+                    "mutable_current_biomass_kg": ReportService._to_float(cycle.current_biomass),
+                },
                 "cycles": [
                     {
                         "cycle": {
@@ -1423,6 +1588,8 @@ class ReportService(BaseService):
         total_feed_consumed = 0.0
         cumulative_total_feed_consumed = 0.0
         total_biomass = 0.0
+        total_harvested_fish_count = 0
+        total_harvested_biomass = 0.0
         units_with_today_log_count = 0
         units_missing_today_log_count = 0
         active_sanitary_events_count = 0
@@ -1445,6 +1612,7 @@ class ReportService(BaseService):
                 period_end=period_end,
                 cumulative_daily_logs=list(getattr(allocation, "cumulative_daily_logs", [])),
                 cumulative_sanitary_logs=list(getattr(allocation, "cumulative_sanitary_logs", [])),
+                cumulative_partial_harvests=list(getattr(allocation, "cumulative_partial_harvests", [])),
             )
             sections.append(section)
             comparison.append(ReportService._build_unit_comparison_snapshot(section))
@@ -1457,6 +1625,8 @@ class ReportService(BaseService):
             total_feed_consumed += float(cumulative_metrics["total_feed"] or 0)
             cumulative_total_feed_consumed += float(cumulative_metrics["total_feed"] or 0)
             total_biomass += float(unit_summary["current_biomass"] or 0)
+            total_harvested_fish_count += int(cumulative_metrics["harvested_fish_count"] or 0)
+            total_harvested_biomass += float(cumulative_metrics["harvested_biomass_kg"] or 0)
             total_log_count += len(daily_logs)
             total_sanitary_count += len(sanitary_logs)
             if has_today_log:
@@ -1553,8 +1723,16 @@ class ReportService(BaseService):
                 "estimated_current_fish_count": total_estimated_current_fish_count,
                 "total_mortality_count": total_mortality_count,
                 "mortality_rate_pct": mortality_rate_pct,
+                "biological_survival_rate_pct": round(
+                    ((total_initial_fish_count - total_mortality_count) / total_initial_fish_count) * 100, 2
+                ) if total_initial_fish_count else None,
+                "stock_remaining_rate_pct": round(
+                    (total_estimated_current_fish_count / total_initial_fish_count) * 100, 2
+                ) if total_initial_fish_count else None,
                 "total_feed_consumed_kg": round(total_feed_consumed, 2),
                 "estimated_current_biomass_kg": round(total_biomass, 2),
+                "total_harvested_fish_count": total_harvested_fish_count,
+                "total_harvested_biomass_kg": round(total_harvested_biomass, 2),
                 "units_with_today_log_count": units_with_today_log_count,
                 "units_missing_today_log_count": units_missing_today_log_count,
                 "active_sanitary_events_count": active_sanitary_events_count,
@@ -1626,6 +1804,7 @@ class ReportService(BaseService):
             period_end=period_end,
             cumulative_daily_logs=cumulative_daily_logs,
             cumulative_sanitary_logs=cumulative_sanitary_logs,
+            cumulative_partial_harvests=list(getattr(allocation, "cumulative_partial_harvests", [])),
         )
         has_period_end_log = any(log.log_date == period_end for log in period_daily_logs)
         scope_label = ReportService._pick_text(
@@ -1673,6 +1852,10 @@ class ReportService(BaseService):
                 "initial_fish_count": allocation.initial_fish_count,
                 "estimated_current_fish_count": section["current_metrics"]["current_count"],
                 "total_mortality_count": section["cumulative_metrics"]["total_mortality"],
+                "biological_survival_rate_pct": section["cumulative_metrics"]["biological_survival_rate_pct"],
+                "stock_remaining_rate_pct": section["cumulative_metrics"]["stock_remaining_rate_pct"],
+                "total_harvested_fish_count": section["cumulative_metrics"]["harvested_fish_count"],
+                "total_harvested_biomass_kg": section["cumulative_metrics"]["harvested_biomass_kg"],
                 "mortality_rate_pct": (
                     round(
                         (section["cumulative_metrics"]["total_mortality"] / allocation.initial_fish_count) * 100,
@@ -1725,6 +1908,15 @@ class ReportService(BaseService):
                 CycleUnitAllocation.objects.select_related(
                     "cycle",
                     "production_unit",
+                )
+                .prefetch_related(
+                    Prefetch(
+                        "unit_partial_harvests",
+                        queryset=PartialHarvest.objects.filter(harvest_date__lte=period_end).order_by(
+                            "-harvest_date", "-created_at"
+                        ),
+                        to_attr="cumulative_partial_harvests",
+                    )
                 )
                 .filter(
                     id=scope_object_id,
@@ -2059,6 +2251,9 @@ class ReportService(BaseService):
         sections = payload.get("cycles", [])
         if not sections:
             return payload
+        existing_metadata = payload.get("calculation_metadata") or {}
+        legacy_feed_resolution = payload.pop("_legacy_feed_resolution", None)
+        legacy_source_model_state = payload.pop("_legacy_source_model_state", None)
         global_economic = payload.get("economic_plan") or {}
         feed_cost = float(global_economic.get("feed_cost_consumed_fcfa") or 0)
         if not global_economic:
@@ -2165,11 +2360,21 @@ class ReportService(BaseService):
             legacy_metrics = (sections[0].get("current_metrics") or {}) if sections else {}
             payload["cycle_dashboard"]["fcr"] = legacy_metrics.get("fcr")
         payload["cost_breakdown"] = cost_breakdown
+        legacy_fallbacks_used = list(
+            existing_metadata.get("legacy_fallbacks_used")
+            or (legacy_feed_resolution or {}).get("fallbacks_used", [])
+        )
+        if (
+            legacy_source_model_state
+            and not sections[0].get("logs")
+            and "legacy_current_count" not in legacy_fallbacks_used
+        ):
+            legacy_fallbacks_used.append("legacy_current_count")
         payload["calculation_metadata"] = {
             "period_start": payload.get("report_meta", {}).get("period_start"),
             "period_end": period_end.isoformat(),
             "calculated_as_of": period_end.isoformat(),
-            "data_lineage_version": "1.1.0",
+            "data_lineage_version": REPORT_DATA_LINEAGE_VERSION,
             "stock_snapshot_strategy": "production_unit_stock_snapshot_as_of_period_end",
             "survival_strategy": "biological_survival_from_mortality",
             "stock_remaining_strategy": "initial_minus_mortality_minus_live_harvests",
@@ -2177,12 +2382,9 @@ class ReportService(BaseService):
             "feed_cost_strategy": "cumulative_cycle_logs_to_period_end",
             "other_costs_strategy": "planned_other_costs_prorated_by_configured_duration",
             "fcr_strategy": "feed_divided_by_biomass_gain_including_harvests",
-            "legacy_fallbacks_used": (
-                ["legacy_current_count"]
-                if not any((section.get("unit") or {}).get("cycle_unit_allocation_id") for section in sections)
-                and not payload.get("cycles", [{}])[0].get("logs")
-                else []
-            ),
+            "legacy_fallbacks_used": legacy_fallbacks_used,
+            "legacy_feed": legacy_feed_resolution,
+            "source_model_state": legacy_source_model_state,
             "other_costs_rule": "planned_direct_cost * 0.05 / 0.95",
             "other_costs_progress": round(progress, 4),
             "other_costs_planned_fcfa": planned_other,
@@ -2264,8 +2466,10 @@ class ReportService(BaseService):
 
     @staticmethod
     def _format_report_date(target_date: date, language_code: str) -> str:
-        with override(language_code):
-            return date_format(target_date, format="SHORT_DATE_FORMAT", use_l10n=True)
+        if language_code == "en":
+            months = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+            return f"{target_date.day} {months[target_date.month - 1]} {target_date.year}"
+        return f"{target_date.day:02d}/{target_date.month:02d}/{target_date.year}"
 
     @staticmethod
     def _calculate_days_active(cycle: ProductionCycle, as_of: date | None) -> int:
@@ -2315,8 +2519,35 @@ class ReportService(BaseService):
 
     @staticmethod
     def _format_natural_date(target_date: date, language_code: str) -> str:
+        if language_code == "en":
+            weekdays = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+            months = (
+                "January", "February", "March", "April", "May", "June",
+                "July", "August", "September", "October", "November", "December",
+            )
+            return (
+                f"{weekdays[target_date.weekday()]} {target_date.day} "
+                f"{months[target_date.month - 1]} {target_date.year}"
+            )
         with override(language_code):
             return date_format(target_date, format="l j F Y", use_l10n=True)
+
+    @staticmethod
+    def _format_generated_at(generated_at: datetime, language_code: str) -> str:
+        local_generated_at = timezone.localtime(generated_at)
+        if language_code == "en":
+            months = (
+                "January", "February", "March", "April", "May", "June",
+                "July", "August", "September", "October", "November", "December",
+            )
+            date_label = (
+                f"{local_generated_at.day} {months[local_generated_at.month - 1]} "
+                f"{local_generated_at.year}"
+            )
+        else:
+            date_label = ReportService._format_report_date(local_generated_at.date(), language_code)
+        separator = "at" if language_code == "en" else "à"
+        return f"{date_label} {separator} {local_generated_at:%H:%M}"
 
     @staticmethod
     def _format_report_period_label(
@@ -2536,7 +2767,7 @@ class ReportService(BaseService):
                 "monthly_appendix": "Appendix — Daily entries for the month",
                 "weekly_period": "Week",
                 "weekly_entries": "Entries",
-                "weekly_sanitary": "Sanitary incidents",
+                "weekly_sanitary": "Sanitary activities",
                 "species": "Species",
                 "growth_chart_title": "Weekly average weight evolution",
                 "weight_axis": "Average weight (g)",
@@ -2642,6 +2873,16 @@ class ReportService(BaseService):
                 ),
                 "growth_missing_current_week": "No weighing recorded for the analyzed week.",
                 "growth_no_data": "No growth data available.",
+                "cumulative_harvests": "Cumulative harvests",
+                "harvested_fish": "fish",
+                "stock_remaining_formula": "Estimated stock = initial fish − cumulative mortality − harvested fish",
+                "incomplete_feed_history": (
+                    "Incomplete feed history: the displayed total only includes available entries."
+                ),
+                "feed_history_source": "Feed source",
+                "feed_history_status": "History status",
+                "feed_history_logged_total": "Available entries",
+                "feed_history_stored_total": "Stored snapshot",
             }
 
         return {
@@ -2670,7 +2911,7 @@ class ReportService(BaseService):
             "monthly_appendix": "Annexe — Détail des saisies quotidiennes du mois",
             "weekly_period": "Semaine",
             "weekly_entries": "Saisies",
-            "weekly_sanitary": "Incidents sanitaires",
+            "weekly_sanitary": "Activités sanitaires",
             "species": "Espèce",
             "growth_chart_title": "Évolution du poids moyen hebdomadaire",
             "weight_axis": "Poids moyen (g)",
@@ -2778,6 +3019,16 @@ class ReportService(BaseService):
             ),
             "growth_missing_current_week": "Aucune pesée enregistrée pour la semaine analysée.",
             "growth_no_data": "Aucune donnée de croissance disponible.",
+            "cumulative_harvests": "Récoltes cumulées",
+            "harvested_fish": "poissons",
+            "stock_remaining_formula": "Stock estimé = poissons initiaux − mortalité cumulée − poissons récoltés",
+            "incomplete_feed_history": (
+                "Historique alimentaire incomplet : le cumul présenté correspond uniquement aux saisies disponibles."
+            ),
+            "feed_history_source": "Source de l'alimentation",
+            "feed_history_status": "Complétude de l'historique",
+            "feed_history_logged_total": "Saisies disponibles",
+            "feed_history_stored_total": "Snapshot stocké",
         }
 
     @staticmethod
@@ -2807,6 +3058,8 @@ class ReportService(BaseService):
                 period_end=report.period_end,
                 language_code=language_code,
             ),
+            "period_end_display": ReportService._format_report_date(report.period_end, language_code),
+            "generated_at_display": ReportService._format_generated_at(generated_at, language_code),
             "empty_value_label": ReportService._pick_text(language_code, "Non renseigné", "Not provided"),
             "scope_label": scope_label,
             "scope_name": scope_name,

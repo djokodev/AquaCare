@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Literal
 
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
@@ -104,15 +105,22 @@ class ReportApplicationService:
     @staticmethod
     def _ensure_active_cycle_scope(user, cycle_id: str | None) -> None:
         if not cycle_id:
-            return
+            raise InvalidReportCycleScopeError(
+                _("Le cycle est obligatoire pour générer ce rapport.")
+            )
 
-        cycle_exists = ProductionCycle.objects.filter(
-            id=cycle_id,
-            farm_profile=user.farm_profile,
-            status="active",
-        ).exists()
+        try:
+            cycle_exists = ProductionCycle.objects.filter(
+                id=cycle_id,
+                farm_profile=user.farm_profile,
+                status="active",
+            ).exists()
+        except (DjangoValidationError, TypeError, ValueError):
+            cycle_exists = False
         if not cycle_exists:
-            raise InvalidReportCycleScopeError(_("Cycle de session introuvable ou inactif."))
+            raise InvalidReportCycleScopeError(
+                _("Le cycle est introuvable, inaccessible ou inactif.")
+            )
 
     @staticmethod
     def _ensure_active_unit_scope(user, cycle_unit_allocation_id: str | None) -> CycleUnitAllocation:

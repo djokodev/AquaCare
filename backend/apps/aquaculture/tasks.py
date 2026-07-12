@@ -214,28 +214,40 @@ def generate_report_async_task(
 
 
 # ---------------------------------------------------------------------------
-# Batch report generation — 1 task per farm (S2.2)
+# Batch report generation — 1 task per active cycle (S2.2)
 # ---------------------------------------------------------------------------
 
 @shared_task
-def generate_single_farm_report_task(
+def generate_single_cycle_report_task(
     farm_id: str,
+    cycle_id: str,
     report_type: str,
     period_start_iso: str,
     period_end_iso: str,
 ) -> str:
     """
-    Generate a report for a single farm. Dispatched by batch tasks below.
+    Generate a report for one active cycle. Dispatched by batch tasks below.
     """
     from datetime import date as date_type
 
     from accounts.models import FarmProfile
+
+    from .models import ProductionCycle
 
     try:
         farm = FarmProfile.objects.select_related('user').get(id=uuid.UUID(farm_id))
     except FarmProfile.DoesNotExist:
         logger.error("Farm %s not found for report generation", farm_id)
         return f"Farm not found: {farm_id}"
+    try:
+        cycle = ProductionCycle.objects.get(
+            id=uuid.UUID(cycle_id),
+            farm_profile_id=farm.id,
+            status='active',
+        )
+    except ProductionCycle.DoesNotExist:
+        logger.error("Active cycle %s not found for farm %s", cycle_id, farm_id)
+        return f"Active cycle not found: {cycle_id}"
 
     start = date_type.fromisoformat(period_start_iso)
     end = date_type.fromisoformat(period_end_iso)
@@ -246,70 +258,74 @@ def generate_single_farm_report_task(
             report_type=report_type,
             period_start=start,
             period_end=end,
+            scope_type="cycle",
+            scope_object_id=str(cycle.id),
+            cycle_id=str(cycle.id),
         )
-        return f"Report generated: farm={farm_id}, type={report_type}"
+        return f"Report generated: farm={farm_id}, cycle={cycle_id}, type={report_type}"
     except Exception:
         logger.exception(
-            "Failed report %s for farm %s (%s -> %s)",
-            report_type, farm_id, start, end,
+            "Failed report %s for cycle %s at farm %s (%s -> %s)",
+            report_type, cycle_id, farm_id, start, end,
         )
-        return f"Failed: farm={farm_id}"
+        return f"Failed: farm={farm_id}, cycle={cycle_id}"
 
 
 @shared_task
 def generate_daily_report_drafts_task():
     """
-    Dispatch one task per active farm for daily reports (parallelised).
+    Dispatch one task per active cycle for daily reports (parallelised).
     """
     target_date = timezone.localdate()
     start, end = ReportService.build_completed_period_bounds('daily', target_date)
-    count = _dispatch_per_farm('daily', start, end)
-    logger.info("Daily report tasks dispatched for %s farms (%s)", count, target_date)
+    count = _dispatch_per_active_cycle('daily', start, end)
+    logger.info("Daily report tasks dispatched for %s cycles (%s)", count, target_date)
     return f"Daily drafts dispatched: {count}"
 
 
 @shared_task
 def generate_weekly_report_drafts_task():
     """
-    Dispatch one task per active farm for weekly reports (parallelised).
+    Dispatch one task per active cycle for weekly reports (parallelised).
     """
     current = timezone.localdate()
     start, end = ReportService.build_completed_period_bounds('weekly', current)
-    count = _dispatch_per_farm('weekly', start, end)
-    logger.info("Weekly report tasks dispatched for %s farms (ref=%s)", count, current)
+    count = _dispatch_per_active_cycle('weekly', start, end)
+    logger.info("Weekly report tasks dispatched for %s cycles (ref=%s)", count, current)
     return f"Weekly drafts dispatched: {count}"
 
 
 @shared_task
 def generate_monthly_report_drafts_task():
     """
-    Dispatch one task per active farm for monthly reports (parallelised).
+    Dispatch one task per active cycle for monthly reports (parallelised).
     """
     current = timezone.localdate()
     start, end = ReportService.build_completed_period_bounds('monthly', current)
-    count = _dispatch_per_farm('monthly', start, end)
-    logger.info("Monthly report tasks dispatched for %s farms (ref=%s)", count, current)
+    count = _dispatch_per_active_cycle('monthly', start, end)
+    logger.info("Monthly report tasks dispatched for %s cycles (ref=%s)", count, current)
     return f"Monthly drafts dispatched: {count}"
 
 
-def _dispatch_per_farm(report_type: str, start, end) -> int:
-    """Dispatch individual Celery tasks per active farm (no sequential blocking)."""
-    from accounts.models import FarmProfile
+def _dispatch_per_active_cycle(report_type: str, start, end) -> int:
+    """Dispatch one idempotent report task for every active cycle."""
+    from .models import ProductionCycle
 
-    farms = FarmProfile.objects.filter(
-        user__is_active=True,
-        production_cycles__status='active',
-    ).distinct().values_list('id', flat=True)
+    cycles = ProductionCycle.objects.filter(
+        farm_profile__user__is_active=True,
+        status='active',
+    ).values_list('farm_profile_id', 'id')
 
-    for farm_id in farms:
-        generate_single_farm_report_task.delay(
+    for farm_id, cycle_id in cycles:
+        generate_single_cycle_report_task.delay(
             str(farm_id),
+            str(cycle_id),
             report_type,
             start.isoformat(),
             end.isoformat(),
         )
 
-    return len(farms)
+    return len(cycles)
 
 
 # ---------------------------------------------------------------------------

@@ -1,6 +1,6 @@
 # Cycle report data lineage
 
-Version: `1.1.0`
+Version: `1.2.0`
 
 This document defines the backend sources used by cycle and unit PDF reports. A
 report is a historical snapshot: values that describe the stock, biomass,
@@ -17,6 +17,21 @@ the mutable current dashboard state.
 | `PERIOD_ONLY` | Values strictly between `period_start` and `period_end`. |
 | `FORECAST` | Planned or estimated value. |
 | `CURRENT_MUTABLE_STATE` | Current model field; not used for historical reconstruction except documented legacy fallback. |
+
+## Generation and scope rules
+
+- Automatic daily, weekly, and monthly schedulers dispatch one task per active
+  cycle. Each task passes `farm_id`, `cycle_id`, `scope_type="cycle"`, and the
+  completed period bounds. The report uniqueness key is farm, cycle, type, and
+  period, so repeated dispatches reuse the same `ProductionReport`.
+- A new cycle-scoped report request must provide an active cycle belonging to
+  the authenticated farm. Missing, invalid, foreign, or inactive cycles are
+  rejected as a business error and returned as HTTP 400. Existing legacy
+  reports with a null scope remain readable, downloadable, and deletable.
+- Allocation harvests are prefetched up to `period_end` with
+  `to_attr="cumulative_partial_harvests"`; report generation passes those
+  lists to the stock snapshot service and does not query harvests once per
+  unit.
 
 ## Report fields
 
@@ -36,9 +51,9 @@ the mutable current dashboard state.
 | Remaining stock rate | `calculation_metadata.unit_calculations[].stock_remaining_rate_pct` | Historical stock snapshot | `ProductionUnitStockSnapshotService` | `AS_OF_PERIOD_END` | Remaining stock / initial × 100 | `None` if initial is zero | Explicit legacy fallback | stock/harvest tests |
 | Mortality rate | `summary.mortality_rate_pct` | Historical mortality snapshot | Report aggregation / stock snapshot | `AS_OF_PERIOD_END` | Mortality / initial × 100 | 0 when initial is zero | Stored current state only for legacy no-history path | report service |
 | Feed period | `cycles[].period_metrics.total_feed` | Daily logs in period | `CycleLog.feed_quantity` | `PERIOD_ONLY` | Sum in bounds | 0 | Global legacy logs | report service |
-| Feed cumulative | `summary.total_feed_consumed_kg`, comparison units | Daily logs through end | `CycleLog.feed_quantity` | `CUMULATIVE_TO_PERIOD_END` | Sum through `period_end` | Cycle stored total only when no logs | Global legacy logs | feed aggregation tests |
-| Average weight | `current_metrics.current_average_weight` | Latest valid weighing | `CycleLog.average_weight` or sample total / count | `AS_OF_PERIOD_END` | Latest valid log at or before end | Stored biomass/current weight when no weighing | Stored legacy fields | weighing tests |
-| Biomass | `summary.estimated_current_biomass_kg`, unit dashboard | Historical stock + latest weight | Report service using stock snapshot | `AS_OF_PERIOD_END` | Remaining fish × latest weight / 1000 | Stored biomass if no valid weight | Stored legacy biomass | stock/weight tests |
+| Feed cumulative | `summary.total_feed_consumed_kg`, comparison units | Daily logs through end | `CycleLog.feed_quantity` and `_resolve_legacy_cumulative_feed()` | `CUMULATIVE_TO_PERIOD_END` | Sum through `period_end` when complete | Legacy stored total only as an explicit fallback; a post-period mutable total is rejected and logs are reported as a known minimum | `calculation_metadata.legacy_feed` records source, logged total, stored total, completeness, and fallbacks | legacy feed tests |
+| Average weight | `current_metrics.current_average_weight` | Latest valid weighing | `CycleLog.average_weight` or sample total / count | `AS_OF_PERIOD_END` | Latest valid log at or before end | `None` when no historical weighing exists | Mutable unit state is not copied into the public unit payload | weighing tests |
+| Biomass | `summary.estimated_current_biomass_kg`, unit dashboard | Historical stock + latest weight | Report service using stock snapshot | `AS_OF_PERIOD_END` | Remaining fish × latest weight / 1000 | `None` when no historical weighing exists | Legacy stored biomass is retained only in `calculation_metadata.source_model_state` when needed for diagnosis | stock/weight tests |
 | Market value | `cycle_dashboard.estimated_market_value_fcfa` | Biomass and applicable price | Report service species price fallback | `AS_OF_PERIOD_END` | Biomass × planned/default price | Non-zero species default; otherwise 0 | Stored legacy value only if no calculation possible | economic tests |
 | Feed cost | `economic_plan.feed_cost_consumed_fcfa` | Feed consumption and price | `CycleFeedService.get_consumed_cost()` | `CUMULATIVE_TO_PERIOD_END` | Consumed kg × applicable feed price | Farm/default feed price | Legacy cycle total | report service |
 | Fingerling cost | `economic_plan.fingerlings_cost_fcfa` | Cycle plan | `ProductionCycle.fingerlings_cost_fcfa` | `STATIC` | Direct field | 0 | Direct field | report service |
@@ -49,12 +64,12 @@ the mutable current dashboard state.
 | Growth SVG | `growth_chart.svg` | Growth points | `build_growth_svg()` | `PERIOD_ONLY` | One bar per measured week | Empty SVG outside chart state | — | visual tests |
 | Cost SVG | `cost_breakdown.svg` | Cost items | `build_donut_svg()` | `CUMULATIVE_TO_PERIOD_END` | Escaped center total and translated label | Empty when total is zero | — | visual tests |
 | Unit comparison | `units[]` | Unit section snapshots | `ReportService._build_unit_comparison_snapshot()` | Mixed: as-of/cumulative | Reuses section values | Empty for legacy cycle | No duplicate global event | aggregation tests |
-| Fish harvested | `calculation_metadata.unit_calculations[].harvested_fish_count` | Partial/final harvest actions | `PartialHarvest`, `CycleUnitAllocation.final_fish_count` | `CUMULATIVE_TO_PERIOD_END` | Sum of live harvest actions | 0 when no harvest | Legacy partial harvests supported | harvest tests |
-| Harvested biomass | `calculation_metadata.unit_calculations[].harvested_biomass_kg` | Harvest action weights | `PartialHarvest.total_weight_kg`, final allocation biomass | `CUMULATIVE_TO_PERIOD_END` | Sum of known harvest biomass | `None` FCR when a harvest weight is missing | No invented biomass | FCR tests |
+| Fish harvested | `summary.total_harvested_fish_count`, `cycles[].unit.harvested_fish_count`, `calculation_metadata.unit_calculations[].harvested_fish_count` | Partial/final harvest actions | `PartialHarvest`, `CycleUnitAllocation.final_fish_count` | `CUMULATIVE_TO_PERIOD_END` | Sum of live harvest actions | 0 when no harvest | Legacy partial harvests supported | harvest tests |
+| Harvested biomass | `summary.total_harvested_biomass_kg`, `cycles[].unit.harvested_biomass_kg`, `calculation_metadata.unit_calculations[].harvested_biomass_kg` | Harvest action weights | `PartialHarvest.total_weight_kg`, final allocation biomass | `CUMULATIVE_TO_PERIOD_END` | Sum of known harvest biomass | `None` FCR when a harvest weight is missing | No invented biomass | FCR tests |
 | Unit FCR | `current_metrics.fcr`, `calculation_metadata.unit_calculations[].fcr` | Unit feed and biomass snapshot | `ReportFcrService` | `CUMULATIVE_TO_PERIOD_END` | Feed / (current biomass + harvested biomass − initial biomass) | `None` when gain or harvest data is insufficient | No `cycle.fcr` fallback | FCR tests |
 | Cycle FCR | `cycle_dashboard.fcr` | Aggregated feed and biomass snapshots | `ReportFcrService` | `CUMULATIVE_TO_PERIOD_END` | Total feed / total biomass gain | `None` if any required unit data is missing | Legacy uses same formula when reconstructible | FCR tests |
 | Period log count/feed/mortality | `cycles[].period_metrics.*` | Logs bounded by period | `CycleLog` | `PERIOD_ONLY` | Count/sum/averages in bounds | Empty/zero | Global legacy logs | unit-period tests |
-| Weekly summary | `cycles[].weekly_activity` | Period logs | `ReportService._build_weekly_activity()` | `PERIOD_ONLY` | Weekly count/sums/averages | Empty | Global legacy logs | monthly tests |
+| Weekly summary | `cycles[].weekly_activity` | Period logs and sanitary events | `ReportService._build_weekly_activity()` | `PERIOD_ONLY` | Weekly count/sums/averages; sanitary activity includes declaration or resolution in the week, once per event per week | Empty | A situation may create one activity in its declaration week and another in its resolution week | monthly tests |
 | Observations | `cycles[].logs[].observations` | Daily log | `CycleLog.observations` | `PERIOD_ONLY` | Direct field | Empty label | Direct field | template tests |
 | Symptoms/treatment/medication/dosage/duration | `*.sanitary_logs[]` | Sanitary event | `SanitaryLog` fields | `PERIOD_ONLY` | Direct fields | Empty label | Nullable legacy fields | sanitary tests |
 | Unit type/dimension | `cycles[].unit.production_unit_type_display`, `production_unit_dimension` | Production unit | `ProductionUnit` | `STATIC` | Localized choice and display dimension | Empty label | No unit for legacy | unit tests |
@@ -62,6 +77,33 @@ the mutable current dashboard state.
 | Active sanitary events | `active_sanitary_logs`, active counts | Sanitary logs at period end | `_is_sanitary_event_active_as_of()` | `AS_OF_PERIOD_END` | Event before end and unresolved, or resolution after end | Resolved legacy row stays resolved | Global null allocation separated | sanitary tests |
 | Resolution date | `resolution_date`, `resolution_date_display` | Sanitary log | `SanitaryLog.resolution_date` | `STATIC` | Direct field/display | Empty label | Nullable legacy field | sanitary/template tests |
 | Unit sanitary scope | `cycles[].sanitary_logs` | Allocation relation | `SanitaryLog.cycle_unit_allocation` | `STATIC` | Direct relation | Global logs are not duplicated | Global logs under `global_sanitary_logs` | isolation tests |
+
+## Legacy feed provenance
+
+Legacy cycles expose `calculation_metadata.legacy_feed` with
+`feed_consumed_kg`, `source`, `logged_total`, `stored_total`,
+`history_complete`, and `fallbacks_used`. A stored total greater than the
+available logs is accepted only when the cycle snapshot was updated on or
+before `period_end`. If it was updated afterwards, the report uses the logs as
+a known minimum, marks the history incomplete, leaves FCR unavailable, and
+shows a visible warning. Costs then represent known/minimum consumed feed,
+not an unqualified complete total. A legacy cycle with no logs may use the
+stored total only as an explicit fallback; FCR is calculated only when that
+snapshot is demonstrably valid at `period_end`.
+
+The public historical unit payload keeps static/routing data and the
+`current_metrics.*` snapshot only. Mutable `unit.current_fish_count` and
+`unit.current_biomass_kg` are intentionally absent. Diagnostic mutable values,
+when required by legacy fallback, are isolated under
+`calculation_metadata.source_model_state`.
+
+English PDF dates use `19 Jul 2026` in tables, `1 April 2026` for long cycle
+dates, and `20 July 2026 at 10:00` for generation metadata. French dates keep
+the local `19/07/2026` and natural French period forms.
+
+The review generator writes exact-byte `pdf_sha256` and `payload_sha256`
+values for every report, plus `git_sha`, `data_lineage_version`, and
+`database_mode="temporary/rollback"` in `manifest.json`.
 
 ## Canonical stock strategy
 

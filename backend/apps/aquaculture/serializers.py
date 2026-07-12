@@ -1569,7 +1569,7 @@ class GenerateReportSerializer(serializers.Serializer):
         if scope == 'cycle':
             if not cycle_id:
                 raise serializers.ValidationError(
-                    {'cycle_id': _("Le cycle est requis pour un rapport de cycle.")}
+                    {'cycle_id': _("Le cycle est obligatoire pour générer ce rapport.")}
                 )
             return attrs
 

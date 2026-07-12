@@ -2743,6 +2743,16 @@ class TestProductionReportViewSet:
         assert report.payload['summary']['total_log_count'] == 1
         assert report.payload['cycles'][0]['cycle']['id'] == str(selected_cycle.id)
 
+    def test_generate_cycle_report_requires_cycle_id(self, auth_client, farm_profile):
+        response = auth_client.post(
+            reverse('aquaculture:production-report-generate'),
+            {'report_type': 'daily', 'scope': 'cycle'},
+            format='json',
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.data['cycle_id'][0] == 'Le cycle est obligatoire pour générer ce rapport.'
+
     def test_generate_report_rejects_inactive_cycle_scope(self, auth_client, farm_profile):
         """Un cycle de session inactif doit être rejeté."""
         harvested_cycle = ProductionCycle.objects.create(

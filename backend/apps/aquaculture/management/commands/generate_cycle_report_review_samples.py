@@ -21,7 +21,7 @@ from aquaculture.models import (
     ProductionUnit,
     SanitaryLog,
 )
-from aquaculture.services.report_service import ReportService
+from aquaculture.services.report_service import REPORT_DATA_LINEAGE_VERSION, ReportService
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
@@ -105,10 +105,10 @@ class Command(BaseCommand):
                     pdf_path = output_dir / f"{stem}.pdf"
                     payload_path = output_dir / f"{stem}.payload.json"
                     pdf_path.write_bytes(pdf_bytes)
-                    payload_path.write_text(
-                        json.dumps(report.payload, ensure_ascii=False, indent=2, default=str) + "\n",
-                        encoding="utf-8",
-                    )
+                    payload_bytes = (
+                        json.dumps(report.payload, ensure_ascii=False, indent=2, default=str) + "\n"
+                    ).encode("utf-8")
+                    payload_path.write_bytes(payload_bytes)
                     stored_files.append((report.pdf_file.storage, report.pdf_file.name))
                     reports.append(
                         {
@@ -120,7 +120,8 @@ class Command(BaseCommand):
                             "generated_at": report.generated_at.isoformat(),
                             "pdf_path": str(pdf_path),
                             "payload_path": str(payload_path),
-                            "sha256": hashlib.sha256(pdf_bytes).hexdigest(),
+                            "pdf_sha256": hashlib.sha256(pdf_bytes).hexdigest(),
+                            "payload_sha256": hashlib.sha256(payload_bytes).hexdigest(),
                         }
                     )
                 raise _RollbackReviewSamples
@@ -133,6 +134,7 @@ class Command(BaseCommand):
         self._render_pngs(output_dir)
         manifest = {
             "git_sha": options.get("git_sha") or self._git_sha(),
+            "data_lineage_version": REPORT_DATA_LINEAGE_VERSION,
             "command": "manage.py generate_cycle_report_review_samples " + " ".join(
                 [
                     f"--output-dir {options['output_dir']}",
@@ -321,6 +323,9 @@ class Command(BaseCommand):
             average_weight=Decimal("200.00"),
             sample_count=20,
             sample_total_weight=Decimal("4000.00"),
+        )
+        ProductionCycle.objects.filter(id=legacy_cycle.id).update(
+            updated_at=timezone.make_aware(datetime(2026, 8, 2, 10, 0))
         )
         SanitaryLog.objects.create(
             cycle=legacy_cycle,
