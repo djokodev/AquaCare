@@ -157,6 +157,59 @@ def test_patch_species_preserves_custom_duration_and_date(farm_profile):
 
 
 @pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("species", "expected_duration", "expected_harvest"),
+    [
+        ("clarias", 120, date(2026, 7, 29)),
+        ("tilapia", 180, date(2026, 9, 27)),
+    ],
+)
+def test_creation_with_explicit_null_persists_species_default(
+    farm_profile, species, expected_duration, expected_harvest
+):
+    serializer = ProductionCycleSerializer(
+        data={
+            "species": species,
+            "pond_identifier": "Bassin création null",
+            "pond_surface_m2": Decimal("100"),
+            "start_date": date(2026, 4, 1),
+            "initial_count": 100,
+            "initial_average_weight": Decimal("10"),
+            "planned_cycle_duration_days": None,
+        }
+    )
+    assert serializer.is_valid(), serializer.errors
+    cycle = serializer.save(farm_profile=farm_profile)
+    assert cycle.planned_cycle_duration_days == expected_duration
+    assert cycle.planned_harvest_date == expected_harvest
+
+
+@pytest.mark.django_db
+def test_patch_explicit_null_preserves_modern_duration_and_date(farm_profile):
+    cycle = ProductionCycle.objects.create(
+        farm_profile=farm_profile,
+        species="clarias",
+        pond_identifier="Bassin custom null",
+        pond_surface_m2=Decimal("100"),
+        start_date=date(2026, 4, 1),
+        initial_count=100,
+        initial_average_weight=Decimal("10"),
+        initial_biomass=Decimal("1"),
+        planned_cycle_duration_days=150,
+        planned_harvest_date=date(2026, 8, 28),
+    )
+    serializer = ProductionCycleSerializer(
+        cycle,
+        data={"species": "tilapia", "planned_cycle_duration_days": None},
+        partial=True,
+    )
+    assert serializer.is_valid(), serializer.errors
+    updated = serializer.save()
+    assert updated.planned_cycle_duration_days == 150
+    assert updated.planned_harvest_date == date(2026, 8, 28)
+
+
+@pytest.mark.django_db
 def test_patch_start_date_uses_legacy_fallback_without_persisting_duration(farm_profile):
     cycle = ProductionCycle.objects.create(
         farm_profile=farm_profile,
@@ -173,13 +226,38 @@ def test_patch_start_date_uses_legacy_fallback_without_persisting_duration(farm_
 
     serializer = ProductionCycleSerializer(
         cycle,
-        data={"start_date": date(2026, 5, 1)},
+        data={"start_date": date(2026, 5, 1), "planned_cycle_duration_days": None},
         partial=True,
     )
     assert serializer.is_valid(), serializer.errors
     updated = serializer.save()
     assert updated.planned_cycle_duration_days is None
     assert updated.planned_harvest_date == date(2026, 8, 28)
+
+
+@pytest.mark.django_db
+def test_patch_explicit_null_preserves_legacy_duration_and_date(farm_profile):
+    cycle = ProductionCycle.objects.create(
+        farm_profile=farm_profile,
+        species="clarias",
+        pond_identifier="Bassin legacy null",
+        pond_surface_m2=Decimal("100"),
+        start_date=date(2026, 4, 1),
+        initial_count=100,
+        initial_average_weight=Decimal("10"),
+        initial_biomass=Decimal("1"),
+        planned_cycle_duration_days=None,
+        planned_harvest_date=None,
+    )
+    serializer = ProductionCycleSerializer(
+        cycle,
+        data={"planned_cycle_duration_days": None},
+        partial=True,
+    )
+    assert serializer.is_valid(), serializer.errors
+    updated = serializer.save()
+    assert updated.planned_cycle_duration_days is None
+    assert updated.planned_harvest_date is None
 
 
 @pytest.mark.django_db

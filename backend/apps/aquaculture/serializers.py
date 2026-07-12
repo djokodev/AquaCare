@@ -293,6 +293,10 @@ class ProductionCycleSerializer(serializers.ModelSerializer):
         allow_null=True,
         min_value=MIN_CYCLE_DURATION_DAYS,
         max_value=MAX_CYCLE_DURATION_DAYS,
+        help_text=(
+            'Optional cycle duration in days. A null value is accepted for legacy '
+            'clients and never erases an existing configured duration.'
+        ),
         error_messages={
             'min_value': CYCLE_DURATION_ERROR_MESSAGE,
             'max_value': CYCLE_DURATION_ERROR_MESSAGE,
@@ -462,6 +466,11 @@ class ProductionCycleSerializer(serializers.ModelSerializer):
         elif is_create:
             effective_duration = get_default_cycle_duration_days(species)
             attrs['planned_cycle_duration_days'] = effective_duration
+
+        if not is_create and duration_was_supplied and supplied_duration is None:
+            # ``null`` is accepted for legacy clients, but never means "erase"
+            # on an update.  Keep the stored value (including legacy null).
+            attrs.pop('planned_cycle_duration_days', None)
 
         if (
             attrs.get('expected_survival_rate_pct') is None

@@ -16,6 +16,7 @@ import {
   ActivityIndicator,
   Platform,
   KeyboardAvoidingView,
+  type TextInputProps,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
@@ -193,6 +194,13 @@ export default function CreateFarmScreen({ navigation }: Props) {
   const [singleFormOffsetY, setSingleFormOffsetY] = useState(0);
   const [allocationMode, setAllocationMode] = useState<'auto' | 'manual'>('auto');
   const [isCycleDurationCustomized, setIsCycleDurationCustomized] = useState(false);
+  const formErrors = useMemo(() => validateFarmSetupForm(form), [form]);
+  const cycleDurationErrorKey = formErrors.cycleDuration;
+  const cycleDurationAccessibilityText = cycleDurationErrorKey
+    ? t(cycleDurationErrorKey === 'required' ? 'required' : cycleDurationErrorKey)
+    : form.cycleDuration
+      ? `${form.cycleDuration} ${t('days')}`
+      : '';
 
   const handleGoBack = () => {
     if (navigation.canGoBack?.()) {
@@ -446,7 +454,7 @@ export default function CreateFarmScreen({ navigation }: Props) {
       return t('createFarmAtLeastOneUnitError');
     }
 
-    const validationErrors = validateFarmSetupForm(form);
+    const validationErrors = formErrors;
     if (!hasFarmSetupErrors(validationErrors)) {
       return null;
     }
@@ -1195,7 +1203,7 @@ export default function CreateFarmScreen({ navigation }: Props) {
       <FieldLabel label={t('createFarmCycleDurationLabel')} required />
       <TextInput
         testID="createFarmCycleDurationInput"
-        style={[styles.input, validateFarmSetupForm(form).cycleDuration && styles.inputError]}
+        style={[styles.input, cycleDurationErrorKey && styles.inputError]}
         keyboardType="number-pad"
         placeholder={t(form.species === 'clarias' ? 'createFarmCycleDurationClariasPlaceholder' : 'createFarmCycleDurationTilapiaPlaceholder')}
         placeholderTextColor={AQUACARE_COLORS.GRAY_LIGHT}
@@ -1204,14 +1212,18 @@ export default function CreateFarmScreen({ navigation }: Props) {
         accessibilityLabel={t('createFarmCycleDurationLabel')}
         accessibilityHint={t('createFarmCycleDurationHint')}
         accessibilityValue={{
-          text: validateFarmSetupForm(form).cycleDuration
-            ? t('createFarmCycleDurationRangeError')
-            : form.cycleDuration,
+          text: cycleDurationAccessibilityText,
         }}
+        accessibilityState={
+          { invalid: Boolean(cycleDurationErrorKey) } as unknown as TextInputProps['accessibilityState']
+        }
+        accessibilityLiveRegion="polite"
       />
       <Text style={styles.readonlyHelper}>{t('createFarmCycleDurationHint')}</Text>
-      {validateFarmSetupForm(form).cycleDuration && (
-        <Text style={styles.inlineError}>{t(validateFarmSetupForm(form).cycleDuration as string)}</Text>
+      {cycleDurationErrorKey && (
+        <Text style={styles.inlineError} accessibilityLiveRegion="polite">
+          {t(cycleDurationErrorKey === 'required' ? 'required' : cycleDurationErrorKey)}
+        </Text>
       )}
 
       <FieldLabel label={t('createFarmSellingPriceLabel')} />
