@@ -7,7 +7,7 @@ import json
 import shutil
 import subprocess
 import uuid
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from pathlib import Path
 from unittest.mock import patch
@@ -45,6 +45,11 @@ class Command(BaseCommand):
             "--git-sha",
             default=None,
             help="Source commit SHA when the command runs outside the repository checkout.",
+        )
+        parser.add_argument(
+            "--acceptance-only",
+            action="store_true",
+            help="Generate only the final daily, weekly and monthly cycle reports.",
         )
 
     def handle(self, *args, **options):
@@ -89,6 +94,8 @@ class Command(BaseCommand):
                         "cycle", cycle.id, "en", date(2026, 7, 20),
                     ),
                 ]
+                if options.get("acceptance_only"):
+                    specs = specs[:3]
                 for stem, report_type, period_start, period_end, scope, scope_id, language, generated_on in specs:
                     farm.user.language_preference = language
                     farm.user.save(update_fields=["language_preference"])
@@ -138,6 +145,7 @@ class Command(BaseCommand):
             "command": "manage.py generate_cycle_report_review_samples " + " ".join(
                 [
                     f"--output-dir {options['output_dir']}",
+                    *(["--acceptance-only"] if options.get("acceptance_only") else []),
                     *([f"--git-sha {options['git_sha']}"] if options.get("git_sha") else []),
                 ]
             ),
@@ -200,16 +208,17 @@ class Command(BaseCommand):
             initial_average_weight=Decimal("20.00"),
             initial_biomass=Decimal("40.00"),
             planned_cycle_duration_days=150,
-            current_count=1840,
-            current_average_weight=Decimal("220.00"),
-            current_biomass=Decimal("404.80"),
-            total_feed_consumed=Decimal("148.00"),
+            current_count=1656,
+            current_average_weight=Decimal("219.38"),
+            current_biomass=Decimal("362.52"),
+            total_feed_consumed=Decimal("0.00"),
             fingerlings_cost_fcfa=Decimal("95000.00"),
             planned_selling_price_per_kg_fcfa=Decimal("2000.00"),
-            other_operational_costs_fcfa=Decimal("0.00"),
+            other_operational_costs_fcfa=Decimal("12000.00"),
             status="active",
         )
         allocations = []
+        initial_counts = (1200, 800)
         for index, name in enumerate(("Bassin A", "Bassin B")):
             unit = ProductionUnit.objects.create(
                 farm_profile=farm,
@@ -221,50 +230,64 @@ class Command(BaseCommand):
                 CycleUnitAllocation.objects.create(
                     cycle=cycle,
                     production_unit=unit,
-                    initial_fish_count=1000,
-                    current_fish_count=820,
-                    initial_biomass_kg=Decimal("20.00"),
-                    current_biomass_kg=Decimal("180.40"),
+                    initial_fish_count=initial_counts[index],
+                    current_fish_count=(984, 672)[index],
+                    initial_biomass_kg=Decimal("24.00") if index == 0 else Decimal("16.00"),
+                    current_biomass_kg=Decimal("221.40") if index == 0 else Decimal("141.12"),
                 )
             )
 
-        weight_by_day = {5: "160.00", 12: "175.00", 19: "190.00", 26: "205.00", 31: "220.00"}
+        weight_by_day = {
+            5: (("160.00", 25), ("150.00", 15)),
+            12: (("175.00", 25), ("165.00", 15)),
+            19: (("190.00", 25), ("180.00", 15)),
+            26: (("205.00", 25), ("195.00", 15)),
+            31: (("225.00", 25), ("210.00", 15)),
+        }
+        cycle_start = date(2026, 4, 1)
+        total_days = (date(2026, 7, 31) - cycle_start).days + 1
+        mortality_targets = (96, 48)
         for allocation_index, allocation in enumerate(allocations):
             logs = []
-            for day in range(1, 32):
-                mortality = 0
-                if day <= 19:
-                    mortality = 2 if day < 19 else 4
-                elif day <= 27:
-                    mortality = 3
-                else:
-                    mortality = 4
+            for day_index in range(total_days):
+                log_date = cycle_start + timedelta(days=day_index)
+                mortality = (
+                    int((day_index + 1) * mortality_targets[allocation_index] / total_days)
+                    - int(day_index * mortality_targets[allocation_index] / total_days)
+                )
+                weight_data = weight_by_day.get(log_date.day) if log_date.month == 7 else None
+                weight_entry = weight_data[allocation_index] if weight_data else None
+                feed_base = Decimal("1.20") if allocation_index == 0 else Decimal("0.95")
+                feed_growth = Decimal("1.00") if allocation_index == 0 else Decimal("0.80")
+                feed_quantity = (feed_base + feed_growth * Decimal(day_index + 1) / Decimal(total_days)).quantize(
+                    Decimal("0.01")
+                )
                 logs.append(
                     CycleLog(
                         cycle=cycle,
                         cycle_unit_allocation=allocation,
-                        log_date=date(2026, 7, day),
+                        log_date=log_date,
                         mortality_count=mortality,
-                        feed_quantity=Decimal("2.50") + Decimal(str(allocation_index * 0.10)),
-                        sample_count=20 if day in weight_by_day else None,
-                        average_weight=Decimal(weight_by_day[day]) if day in weight_by_day else None,
+                        feed_quantity=feed_quantity,
+                        sample_count=weight_entry[1] if weight_entry else None,
+                        average_weight=Decimal(weight_entry[0]) if weight_entry else None,
                         sample_total_weight=(
-                            Decimal(weight_by_day[day]) * Decimal("20") if day in weight_by_day else None
+                            Decimal(weight_entry[0]) * Decimal(weight_entry[1]) if weight_entry else None
                         ),
                         water_temperature=Decimal("28.00"),
                         dissolved_oxygen=Decimal("5.00"),
                         ph_level=Decimal("7.00"),
-                        observations=f"Suivi quotidien {day}/07",
+                        observations=f"Suivi quotidien {log_date:%d/%m}",
                     )
                 )
             CycleLog.objects.bulk_create(logs)
             PartialHarvest.objects.create(
                 cycle=cycle,
                 cycle_unit_allocation=allocation,
-                harvest_date=date(2026, 7, 18),
-                count_harvested=100,
-                average_weight_g=Decimal("190.00"),
-                total_weight_kg=Decimal("19.00"),
+                harvest_date=date(2026, 7, 18) if allocation_index == 0 else date(2026, 7, 17),
+                count_harvested=(120, 80)[allocation_index],
+                average_weight_g=Decimal("190.00") if allocation_index == 0 else Decimal("180.00"),
+                total_weight_kg=Decimal("22.80") if allocation_index == 0 else Decimal("14.40"),
             )
 
         SanitaryLog.objects.create(

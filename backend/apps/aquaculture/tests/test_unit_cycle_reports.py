@@ -606,8 +606,38 @@ class TestUnitCycleAwareReportPayloads:
 
         assert resolution["history_complete"] is False
         assert resolution["feed_consumed_kg"] == 30.0
-        assert resolution["source"] == "legacy_logs_minimum_known"
+        assert resolution["source"] == "legacy_combined_minimum_known"
         assert "legacy_stored_total_minimum_known" in resolution["fallbacks_used"]
+
+    def test_lower_eligible_snapshot_does_not_replace_available_logs(self):
+        farm_profile = FarmProfileFactory()
+        cycle = ProductionCycleFactory(
+            farm_profile=farm_profile,
+            start_date=date(2026, 7, 1),
+            total_feed_consumed=Decimal("2.00"),
+        )
+        log = _create_cycle_log(
+            cycle=cycle,
+            allocation=None,
+            log_date=date(2026, 7, 1),
+            mortality_count=0,
+            feed_quantity="5.00",
+            average_weight="200.00",
+        )
+        ProductionCycle.objects.filter(id=cycle.id).update(
+            total_feed_consumed=Decimal("2.00"),
+            updated_at=timezone.make_aware(datetime(2026, 7, 2, 12, 0)),
+        )
+        cycle.refresh_from_db()
+
+        resolution = ReportService._resolve_legacy_cumulative_feed(
+            cycle=cycle,
+            logs=[log],
+            period_end=date(2026, 7, 3),
+        )
+
+        assert resolution["source"] == "legacy_logs_minimum_known"
+        assert resolution["feed_consumed_kg"] == 5.0
     def test_custom_unit_cycle_duration_is_used_for_cost_progress(self):
         today = date.today()
         farm_profile = FarmProfileFactory()

@@ -1,6 +1,6 @@
 # Cycle report data lineage
 
-Version: `1.2.2`
+Version: `1.2.3`
 
 This document defines the backend sources used by cycle and unit PDF reports. A
 report is a historical snapshot: values that describe the stock, biomass,

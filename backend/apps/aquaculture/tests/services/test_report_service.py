@@ -23,13 +23,16 @@ def _create_report(
     period_start=date(2026, 2, 25),
     period_end=date(2026, 2, 25),
     payload=None,
+    status="draft",
+    scope_object_id=None,
 ):
     return ProductionReport.objects.create(
         farm_profile=farm_profile,
         report_type=report_type,
         period_start=period_start,
         period_end=period_end,
-        status="draft",
+        status=status,
+        scope_object_id=scope_object_id,
         payload=payload or {},
     )
 
@@ -141,6 +144,32 @@ class TestReportServiceEmailFormatting:
         assert mail.outbox[0].subject.startswith("Daily report for ")
         assert "Analyzed period:" in mail.outbox[0].body
         assert "Période analysée:" not in mail.outbox[0].body
+
+    @pytest.mark.parametrize("status", ["draft", "validated"])
+    def test_send_email_regenerates_missing_pdf_and_preserves_status(self, status):
+        owner = UserFactory(email=f"{status}-report@test.com")
+        farm_profile = FarmProfileFactory(user=owner)
+        cycle = ProductionCycleFactory(farm_profile=farm_profile, start_date=date(2026, 2, 1))
+        sender = UserFactory()
+        report = _create_report(
+            farm_profile=farm_profile,
+            period_start=date(2026, 2, 25),
+            period_end=date(2026, 2, 25),
+            status=status,
+            scope_object_id=cycle.id,
+        )
+        if status == "validated":
+            report.validated_by = sender
+            report.validated_at = timezone.now()
+            report.save(update_fields=["validated_by", "validated_at"])
+
+        with patch.object(ReportService, "_render_pdf", return_value=b"%PDF-regenerated"):
+            updated_report = ReportService.send_email(report, sender)
+
+        assert updated_report.status == status
+        assert updated_report.email_status == "sent"
+        assert len(mail.outbox) == 1
+        assert mail.outbox[0].attachments[0][1] == b"%PDF-regenerated"
 
 
 @pytest.mark.django_db
@@ -286,6 +315,10 @@ class TestReportServicePayloadAndPdfTemplate:
                 "total_sanitary_events": 1,
                 "total_feed": 0,
                 "total_mortality": 0,
+                "feed_history_source_label": "Données alimentaires indisponibles",
+                "feed_history_status_label": "Historique incomplet",
+                "feed_history_logged_total": None,
+                "feed_history_stored_total": None,
             },
             "cycles": [
                 {
@@ -376,6 +409,29 @@ class TestReportServicePayloadAndPdfTemplate:
         assert "Tableau de bord du cycle" in html
         assert "Valeur marchande estimée des poissons" in html
         assert "Coût de production direct" in html
+        assert "Données alimentaires indisponibles" in html
+        assert "legacy_feed_unavailable" not in html
+        payload["summary"].update(
+            {
+                "estimated_current_fish_count": 1720,
+                "total_harvested_fish_count": 200,
+                "total_harvested_biomass_kg": 38.0,
+            }
+        )
+        html = render_to_string("aquaculture/report_pdf.html", {**context, "payload": payload})
+        assert "Poissons déjà récoltés depuis le début du cycle" in html
+        assert "200 poissons, pour un poids total de 38,00 kg" in html
+        assert "Les 1720 poissons encore présents correspondent" in html
+        english_context = ReportService._build_pdf_context(
+            report=report,
+            payload=payload,
+            generated_at=timezone.localtime(timezone.now()),
+            language_code="en",
+        )
+        english_html = render_to_string("aquaculture/report_pdf.html", english_context)
+        assert "Fish already harvested since the start of the cycle" in english_html
+        assert "200 fish, with a total harvested weight of 38.00 kg" in english_html
+        assert "The 1720 fish still present correspond" in english_html
         assert "État et activité de la période" not in html
         assert "État actuel" not in html
         assert "Saisie du jour" in html
@@ -667,6 +723,6 @@ class TestReportServicePayloadAndPdfTemplate:
 
         assert "Synthèse hebdomadaire" in html
         assert "Annexe — Détail des saisies quotidiennes du mois" in html
-        assert "Récoltes cumulées" in html
+        assert "Poissons déjà récoltés depuis le début du cycle" in html
         assert "200 poissons" in html
         assert "1 juil.–5 juil." in html

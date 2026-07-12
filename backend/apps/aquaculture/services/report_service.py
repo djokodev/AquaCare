@@ -55,7 +55,7 @@ from .report_visuals import (
 
 logger = logging.getLogger(__name__)
 
-REPORT_DATA_LINEAGE_VERSION = "1.2.2"
+REPORT_DATA_LINEAGE_VERSION = "1.2.3"
 
 
 class UnresolvableLegacyReportScopeError(ValueError):
@@ -483,6 +483,7 @@ class ReportService(BaseService):
                     "because its original cycle cannot be identified.",
                 )
             )
+        preserve_validation = report.status == "validated"
         return ReportService.generate_for_farm(
             farm_profile=report.farm_profile,
             report_type=report.report_type,
@@ -490,6 +491,7 @@ class ReportService(BaseService):
             period_end=report.period_end,
             scope_type=scope_type,
             scope_object_id=scope_object_id,
+            preserve_validation=preserve_validation,
             allow_historical_scope=True,
         )
 
@@ -994,13 +996,15 @@ class ReportService(BaseService):
 
         fallbacks_used.insert(0, "legacy_logs_minimum_known")
         minimum_known = logged_total
+        source = "legacy_logs_minimum_known"
         if stored_total is not None and stored_temporally_eligible:
             minimum_known = max(logged_total, stored_total)
             if stored_total > logged_total:
                 fallbacks_used.append("legacy_stored_total_minimum_known")
+                source = "legacy_combined_minimum_known"
         return {
             "feed_consumed_kg": minimum_known,
-            "source": "legacy_logs_minimum_known",
+            "source": source,
             "history_complete": False,
             "logged_total": logged_total,
             "stored_total": stored_total,
@@ -1247,10 +1251,20 @@ class ReportService(BaseService):
                     "Saisies disponibles (minimum connu)",
                     "Available entries (known minimum)",
                 ),
+                "legacy_combined_minimum_known": ReportService._pick_text(
+                    ReportService._resolve_language_code(farm_profile.user),
+                    "Saisies et snapshot stocké (minimum connu)",
+                    "Available entries and stored snapshot (known minimum)",
+                ),
                 "legacy_no_feed_data": ReportService._pick_text(
                     ReportService._resolve_language_code(farm_profile.user),
-                    "Aucune donnée alimentaire",
-                    "No feed data",
+                    "Données alimentaires indisponibles",
+                    "Feed data unavailable",
+                ),
+                "legacy_feed_unavailable": ReportService._pick_text(
+                    ReportService._resolve_language_code(farm_profile.user),
+                    "Données alimentaires indisponibles",
+                    "Feed data unavailable",
                 ),
             }.get(feed_resolution["source"], feed_resolution["source"])
             total_mortality = sum(int(log.mortality_count or 0) for log in cumulative_logs)
@@ -2806,7 +2820,7 @@ class ReportService(BaseService):
                 "mortality_period": "Mortality in period",
                 "details_by_cycle": "Cycle detail",
                 "initial_fish_count": "Initial fish",
-                "estimated_current_fish_count": "Estimated fish",
+                "estimated_current_fish_count": "Estimated fish still present",
                 "cumulative_mortality": "Cumulative mortality",
                 "mortality_rate": "Mortality rate",
                 "feed_consumed": "Feed consumed",
@@ -2869,9 +2883,15 @@ class ReportService(BaseService):
                 ),
                 "growth_missing_current_week": "No weighing recorded for the analyzed week.",
                 "growth_no_data": "No growth data available.",
-                "cumulative_harvests": "Cumulative harvests",
+                "harvested_since_cycle_start": "Fish already harvested since the start of the cycle",
+                "harvested_from_unit": "Already harvested from this production unit:",
                 "harvested_fish": "fish",
-                "stock_remaining_formula": "Estimated stock = initial fish − cumulative mortality − harvested fish",
+                "harvest_weight_connector": "with a total harvested weight of",
+                "stock_remaining_intro": "The",
+                "stock_remaining_description": (
+                    "fish still present correspond to the fish stocked at the beginning, "
+                    "minus cumulative mortality and fish already harvested."
+                ),
                 "incomplete_feed_history": (
                     "Incomplete feed history: the displayed total only includes available entries."
                 ),
@@ -2952,7 +2972,7 @@ class ReportService(BaseService):
             "mortality_period": "Mortalité période",
             "details_by_cycle": "Détail du cycle",
             "initial_fish_count": "Poissons initiaux",
-            "estimated_current_fish_count": "Poissons estimés",
+            "estimated_current_fish_count": "Poissons encore présents (estimés)",
             "cumulative_mortality": "Mortalité cumulée",
             "mortality_rate": "Taux de mortalité",
             "feed_consumed": "Aliment consommé",
@@ -3015,9 +3035,15 @@ class ReportService(BaseService):
             ),
             "growth_missing_current_week": "Aucune pesée enregistrée pour la semaine analysée.",
             "growth_no_data": "Aucune donnée de croissance disponible.",
-            "cumulative_harvests": "Récoltes cumulées",
+            "harvested_since_cycle_start": "Poissons déjà récoltés depuis le début du cycle",
+            "harvested_from_unit": "Déjà récoltés dans cette unité :",
             "harvested_fish": "poissons",
-            "stock_remaining_formula": "Stock estimé = poissons initiaux − mortalité cumulée − poissons récoltés",
+            "harvest_weight_connector": "pour un poids total de",
+            "stock_remaining_intro": "Les",
+            "stock_remaining_description": (
+                "poissons encore présents correspondent aux poissons au démarrage, "
+                "moins les mortalités cumulées et les poissons déjà récoltés."
+            ),
             "incomplete_feed_history": (
                 "Historique alimentaire incomplet : le cumul présenté correspond uniquement aux saisies disponibles."
             ),
