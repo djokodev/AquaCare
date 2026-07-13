@@ -8,6 +8,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
+  Pressable,
   ScrollView,
   TouchableOpacity,
   StyleSheet,
@@ -31,12 +32,9 @@ import {
   AppText,
   Button,
   Card,
-  FormField,
-  InlineAlert,
-  SegmentedControl,
   TextField,
 } from '@/components/ui';
-import { colors, spacing } from '@/theme';
+import { colors, radii, sizing, spacing } from '@/theme';
 import { RootStackParamList } from '@/navigation/MainNavigator';
 import { AppDispatch, RootState } from '@/store/store';
 import { runCycleSimulation } from '@/features/aquaculture/store/farmSetupSlice';
@@ -752,8 +750,9 @@ export default function CreateFarmScreen({ navigation }: Props) {
         ))}
       </View>
 
-      <SectionTitle label={t('createFarmProductionUnitsSectionTitle')} icon="layers-outline" />
-      <Text style={styles.sectionDescription}>{t('createFarmProductionUnitsSectionDescription')}</Text>
+      <AppText variant="sectionTitle" style={styles.productionUnitsHeading}>
+        {t('createFarmProductionUnitsSectionTitle')}
+      </AppText>
 
       {form.productionUnits.length === 0 && (
         <View style={styles.noticeBadge}>
@@ -1227,6 +1226,7 @@ export default function CreateFarmScreen({ navigation }: Props) {
         label={t('createFarmSimulateBtn')}
         onPress={handleSimulate}
         loading={simLoading}
+        style={styles.simulateButton}
       />
 
       <View style={{ height: 40 }} />
@@ -1265,13 +1265,21 @@ function Chip({
   onPress: () => void;
 }) {
   return (
-    <Button
-      label={label}
-      variant={selected ? 'primary' : 'outline'}
-      size="small"
-      fullWidth={false}
+    <Pressable
+      accessibilityRole="radio"
+      accessibilityLabel={label}
+      accessibilityState={{ selected }}
       onPress={onPress}
-    />
+      style={({ pressed }) => [
+        styles.choiceChip,
+        selected && styles.choiceChipSelected,
+        pressed && styles.choiceChipPressed,
+      ]}
+    >
+      <AppText variant="label" color={selected ? 'inverse' : 'link'}>
+        {label}
+      </AppText>
+    </Pressable>
   );
 }
 
@@ -1284,6 +1292,30 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 16,
+  },
+  productionUnitsHeading: {
+    marginTop: spacing[5],
+    marginBottom: spacing[3],
+  },
+  choiceChip: {
+    minHeight: sizing.touchTargetMinimum,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.brand.primary,
+    borderRadius: radii.lg,
+    backgroundColor: colors.surface.card,
+    paddingHorizontal: spacing[3],
+  },
+  choiceChipSelected: {
+    backgroundColor: colors.brand.primary,
+  },
+  choiceChipPressed: {
+    opacity: 0.8,
+  },
+  simulateButton: {
+    marginTop: spacing[3],
+    backgroundColor: colors.brand.primary,
   },
   header: {
     alignItems: 'center',
