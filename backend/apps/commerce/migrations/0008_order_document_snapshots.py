@@ -14,7 +14,10 @@ PARTNER = {
     "phones": ["+237 686 528 904", "+237 657 983 215"],
     "emails": ["customerservice@mavecam.cm", "info@mavecam.cm"],
 }
-PICKUP_LABELS = {"ndokoti": "Marché Ndokoti", "ndogpasi": "Marché Ndogpasi"}
+PICKUP_LABELS = {
+    "ndokoti": {"fr": "Marché Ndokoti", "en": "Ndokoti Market"},
+    "ndogpasi": {"fr": "Marché Ndogpasi", "en": "Ndogpasi Market"},
+}
 
 
 def backfill_order_document_snapshots(apps, schema_editor):
@@ -31,7 +34,8 @@ def backfill_order_document_snapshots(apps, schema_editor):
             production_cycle_name_snapshot=(
                 getattr(getattr(order, "production_cycle", None), "cycle_name", "") or ""
             ),
-            pickup_location_display_snapshot=PICKUP_LABELS.get(order.pickup_location, ""),
+            pickup_location_display_fr_snapshot=PICKUP_LABELS.get(order.pickup_location, {}).get("fr", ""),
+            pickup_location_display_en_snapshot=PICKUP_LABELS.get(order.pickup_location, {}).get("en", ""),
         )
     for item in OrderItem.objects.select_related("product").iterator():
         product = getattr(item, "product", None)
@@ -61,7 +65,8 @@ class Migration(migrations.Migration):
         migrations.AddField(model_name="order", name="issuer_snapshot", field=models.JSONField(default=dict, verbose_name="Émetteur figé")),
         migrations.AddField(model_name="order", name="fulfilment_partner_snapshot", field=models.JSONField(default=dict, verbose_name="Partenaire figé")),
         migrations.AddField(model_name="order", name="production_cycle_name_snapshot", field=models.CharField(blank=True, default="", max_length=200, verbose_name="Nom du cycle figé")),
-        migrations.AddField(model_name="order", name="pickup_location_display_snapshot", field=models.CharField(blank=True, default="", max_length=100, verbose_name="Libellé du point de retrait figé")),
+        migrations.AddField(model_name="order", name="pickup_location_display_fr_snapshot", field=models.CharField(blank=True, default="", max_length=100, verbose_name="Libellé français du point de retrait figé")),
+        migrations.AddField(model_name="order", name="pickup_location_display_en_snapshot", field=models.CharField(blank=True, default="", max_length=100, verbose_name="Libellé anglais du point de retrait figé")),
         migrations.AddField(model_name="orderitem", name="product_brand_snapshot", field=models.CharField(blank=True, default="", max_length=50, verbose_name="Marque figée")),
         migrations.AddField(model_name="orderitem", name="product_species_snapshot", field=models.CharField(blank=True, default="", max_length=20, verbose_name="Espèce figée")),
         migrations.AddField(model_name="orderitem", name="product_phase_snapshot", field=models.CharField(blank=True, default="", max_length=30, verbose_name="Phase figée")),

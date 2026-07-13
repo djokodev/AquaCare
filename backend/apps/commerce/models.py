@@ -322,8 +322,11 @@ class Order(models.Model):
     issuer_snapshot = models.JSONField(_('Émetteur figé'), default=dict)
     fulfilment_partner_snapshot = models.JSONField(_('Partenaire figé'), default=dict)
     production_cycle_name_snapshot = models.CharField(_('Nom du cycle figé'), max_length=200, blank=True, default='')
-    pickup_location_display_snapshot = models.CharField(
-        _('Libellé du point de retrait figé'), max_length=100, blank=True, default=''
+    pickup_location_display_fr_snapshot = models.CharField(
+        _('Libellé français du point de retrait figé'), max_length=100, blank=True, default=''
+    )
+    pickup_location_display_en_snapshot = models.CharField(
+        _('Libellé anglais du point de retrait figé'), max_length=100, blank=True, default=''
     )
 
     # Montants (calculés automatiquement, immutables après création)

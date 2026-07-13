@@ -23,6 +23,7 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         output_dir = Path(options["output"])
         output_dir.mkdir(parents=True, exist_ok=True)
+        self._reset_output_directory(output_dir)
         generated: dict[str, bytes] = {}
         with transaction.atomic():
             user = self._user()
@@ -93,6 +94,14 @@ class Command(BaseCommand):
             [{"product_id": str(product.id), "quantity": index % 4 + 1} for index, product in enumerate(products)],
             delivery_method, "ndokoti" if delivery_method == "pickup" else None,
         )
+
+    @staticmethod
+    def _reset_output_directory(output_dir):
+        for pdf_path in output_dir.glob("*.pdf"):
+            pdf_path.unlink()
+        for page_dir in output_dir.iterdir():
+            if page_dir.is_dir():
+                rmtree(page_dir, ignore_errors=True)
 
     @staticmethod
     def _render_pages(pdf_path, page_dir):

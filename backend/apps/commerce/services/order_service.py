@@ -402,8 +402,12 @@ class OrderService(BaseCommerceService):
                     issuer_snapshot=dict(settings.ORDER_DOCUMENT_ISSUER),
                     fulfilment_partner_snapshot=dict(settings.ORDER_DOCUMENT_FULFILMENT_PARTNER),
                     production_cycle_name_snapshot=(production_cycle.cycle_name if production_cycle else ''),
-                    pickup_location_display_snapshot=(
+                    pickup_location_display_fr_snapshot=(
                         dict(PICKUP_LOCATION_CHOICES).get(pickup_location, '') if pickup_location else ''
+                    ),
+                    pickup_location_display_en_snapshot=(
+                        {'ndokoti': 'Ndokoti Market', 'ndogpasi': 'Ndogpasi Market'}.get(pickup_location, '')
+                        if pickup_location else ''
                     ),
                     # Montants
                     subtotal=subtotal,

@@ -475,7 +475,8 @@ class TestOrderService:
 
         assert order.farm_name_snapshot == original_farm_name
         assert order.production_cycle_name_snapshot == "Cycle au moment de la commande"
-        assert order.pickup_location_display_snapshot == "Marché Ndokoti"
+        assert order.pickup_location_display_fr_snapshot == "Marché Ndokoti"
+        assert order.pickup_location_display_en_snapshot == "Ndokoti Market"
         assert order.items.first().product_name == "Product 1"
         payload = OrderDocumentService.build_payload(order, "fr")
         assert payload.order["cycle"] == "Cycle au moment de la commande"
