@@ -2,10 +2,8 @@
 import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
-  Text,
   ScrollView,
   TouchableOpacity,
-  ActivityIndicator,
   RefreshControl,
   Alert,
 } from 'react-native';
@@ -39,6 +37,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
 
 import MetricCard from '../components/MetricCard';
+import { AppText, Button, Card, ErrorState, LoadingState } from '@/components/ui';
 import {
   calculateDashboardBusinessMetrics,
 } from '../utils/dashboardCalculations';
@@ -349,16 +348,7 @@ export default function DashboardScreen({ navigation }: any) {
           onSettingsPress={handleSettingsPress}
         />
 
-        <View className="flex-1 items-center justify-center px-5 py-10">
-          <Ionicons name="alert-circle" size={48} color={AQUACARE_COLORS.ERROR} />
-          <Text className="text-base text-[#dc2626] text-center mt-3 mb-5">{error}</Text>
-          <TouchableOpacity
-            className="bg-aquacare-primary px-6 py-3 rounded-lg"
-            onPress={onRefresh}
-          >
-            <Text className="text-white text-base font-semibold">{t('retry', { defaultValue: 'Réessayer' })}</Text>
-          </TouchableOpacity>
-        </View>
+        <ErrorState message={error} actionLabel={t('retry')} onAction={onRefresh} />
       </ScrollView>
     );
   }
@@ -391,17 +381,12 @@ export default function DashboardScreen({ navigation }: any) {
       >
 
       <View className="px-5 py-5">
-        <View className="bg-white rounded-xl p-4 mb-4">
-          <Text className="text-lg font-bold text-gray-dark mb-3">
+        <Card variant="outlined" style={{ marginBottom: 16 }}>
+          <AppText variant="cardTitle" style={{ marginBottom: 12 }}>
             {t('cycleDashboardTitle')}
-          </Text>
+          </AppText>
           {loading.dashboard && !dashboardData ? (
-            <View className="items-center justify-center py-8">
-              <ActivityIndicator size="large" color={AQUACARE_COLORS.GREEN_PRIMARY} />
-              <Text className="text-base text-gray-light mt-3">
-                {t('loadingData', { defaultValue: 'Chargement des données...' })}
-              </Text>
-            </View>
+            <LoadingState message={t('loadingData', { defaultValue: 'Chargement des données...' })} compact />
           ) : (
             <View className="flex-row flex-wrap gap-3">
               {dashboardMetricCards.map((card) => (
@@ -413,7 +398,7 @@ export default function DashboardScreen({ navigation }: any) {
               ))}
             </View>
           )}
-        </View>
+        </Card>
       </View>
 
       {sessionCycle ? (
@@ -431,20 +416,20 @@ export default function DashboardScreen({ navigation }: any) {
             }
           >
             <View className="flex-1 mr-3">
-              <Text
+              <AppText
                 className={`text-xs font-semibold uppercase tracking-wide ${
                   canSwitchCycle ? 'text-gray-light' : 'text-gray-light/80'
                 }`}
               >
                 {t('sessionActiveCycleLabel')}
-              </Text>
-              <Text className="text-base font-bold text-gray-dark mt-1">
+              </AppText>
+              <AppText variant="bodyStrong" style={{ marginTop: 4 }}>
                 {sessionCycle.cycle_name}
-              </Text>
+              </AppText>
               {canSwitchCycle ? (
-                <Text className="text-sm text-aquacare-primary mt-1">
+                <AppText variant="helper" color="link" style={{ marginTop: 4 }}>
                   {t('changeSessionCycle', { defaultValue: 'Changer de cycle' })}
-                </Text>
+                </AppText>
               ) : null}
             </View>
             <Ionicons
@@ -458,52 +443,49 @@ export default function DashboardScreen({ navigation }: any) {
 
       {pendingDeliveryConfirmations.length > 0 && (
         <View className="px-5 pb-2">
-          <View className="bg-white rounded-xl p-4 shadow-sm">
+          <Card variant="elevated" style={{ marginBottom: 8 }}>
             <View className="flex-row items-center justify-between mb-3">
               <View className="flex-1 mr-3">
-                <Text className="text-base font-bold text-gray-dark">
+                <AppText variant="bodyStrong">
                   {t('ordersPendingConfirmationTitle', { count: pendingDeliveryConfirmations.length })}
-                </Text>
-                <Text className="text-xs text-gray-light mt-1">
+                </AppText>
+                <AppText variant="caption" color="muted" style={{ marginTop: 4 }}>
                   {t('ordersPendingConfirmationDescription')}
-                </Text>
+                </AppText>
               </View>
-              <TouchableOpacity
-                className="px-3 py-2 rounded-lg border border-aquacare-primary"
+              <Button
+                label={t('ordersHistory')}
                 onPress={() => navigation.navigate('OrdersHistory')}
-              >
-                <Text className="text-sm font-semibold text-aquacare-primary">{t('ordersHistory')}</Text>
-              </TouchableOpacity>
+                variant="outline"
+                size="small"
+                fullWidth={false}
+              />
             </View>
 
             {pendingDeliveryConfirmations.slice(0, 2).map((order) => {
               const total = Number.parseFloat(order.total || '0');
               const isConfirming = confirmingOrderId === order.id;
               return (
-                <View key={order.id} className="border border-gray-100 rounded-lg p-3 mb-2 last:mb-0">
+                <Card key={order.id} variant="outlined" style={{ padding: 12, marginBottom: 8 }}>
                   <View className="flex-row items-center justify-between">
                     <View className="flex-1 mr-3">
-                      <Text className="text-sm font-semibold text-gray-dark">{order.order_number}</Text>
-                      <Text className="text-xs text-gray-light mt-1">
+                      <AppText variant="label">{order.order_number}</AppText>
+                      <AppText variant="caption" color="muted" style={{ marginTop: 4 }}>
                         {Number.isFinite(total) ? `${total.toLocaleString()} FCFA` : order.total}
-                      </Text>
+                      </AppText>
                     </View>
-                    <TouchableOpacity
-                      className={`px-3 py-2 rounded-lg ${isConfirming ? 'bg-gray-300' : 'bg-aquacare-primary'}`}
-                      disabled={isConfirming}
+                    <Button
+                      label={t('confirmReceiptAction')}
+                      size="small"
+                      fullWidth={false}
+                      loading={isConfirming}
                       onPress={() => handleConfirmOrderReceipt(order.id, order.order_number)}
-                    >
-                      {isConfirming ? (
-                        <ActivityIndicator size="small" color={AQUACARE_COLORS.WHITE} />
-                      ) : (
-                        <Text className="text-white text-xs font-semibold">{t('confirmReceiptAction')}</Text>
-                      )}
-                    </TouchableOpacity>
+                    />
                   </View>
-                </View>
+                </Card>
               );
             })}
-          </View>
+          </Card>
         </View>
       )}
 
@@ -526,9 +508,9 @@ export default function DashboardScreen({ navigation }: any) {
                 className="mt-2 bg-white rounded-xl p-4 border border-aquacare-primary flex-row items-center justify-between"
                 onPress={handleProductionUnitsPress}
               >
-                <Text className="flex-1 mr-3 text-base font-bold text-aquacare-primary">
+                <AppText variant="bodyStrong" color="link" style={{ flex: 1, marginRight: 12 }}>
                   {t('productionUnitsDashboardCta')}
-                </Text>
+                </AppText>
                 <Ionicons
                   name="chevron-forward"
                   size={20}
@@ -540,9 +522,9 @@ export default function DashboardScreen({ navigation }: any) {
                 className="mt-3 bg-white rounded-xl p-4 border border-aquacare-primary flex-row items-center justify-between"
                 onPress={handleStorePress}
               >
-                <Text className="flex-1 mr-3 text-base font-bold text-aquacare-primary">
+                <AppText variant="bodyStrong" color="link" style={{ flex: 1, marginRight: 12 }}>
                   {t('storeTitle')}
-                </Text>
+                </AppText>
                 <Ionicons
                   name="chevron-forward"
                   size={20}
@@ -554,9 +536,9 @@ export default function DashboardScreen({ navigation }: any) {
                 className="mt-3 bg-white rounded-xl p-4 border border-aquacare-primary flex-row items-center justify-between"
                 onPress={handleCycleReportPress}
               >
-                <Text className="flex-1 mr-3 text-base font-bold text-aquacare-primary">
+                <AppText variant="bodyStrong" color="link" style={{ flex: 1, marginRight: 12 }}>
                   {t('reportCycleTitle')}
-                </Text>
+                </AppText>
                 <Ionicons
                   name="chevron-forward"
                   size={20}
@@ -568,9 +550,9 @@ export default function DashboardScreen({ navigation }: any) {
                 className="mt-3 bg-white rounded-xl p-4 border border-aquacare-primary flex-row items-center justify-between"
                 onPress={() => navigation.navigate('CreateFarm')}
               >
-                <Text className="flex-1 mr-3 text-base font-bold text-aquacare-primary">
+                <AppText variant="bodyStrong" color="link" style={{ flex: 1, marginRight: 12 }}>
                   {t('createNewCycleDashboardTitle')}
-                </Text>
+                </AppText>
                 <Ionicons
                   name="chevron-forward"
                   size={20}

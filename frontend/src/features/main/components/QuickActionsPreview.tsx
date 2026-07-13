@@ -1,8 +1,9 @@
 import React, { useMemo } from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
-import { AQUACARE_COLORS } from '@/constants/colors';
+import { AppText, Card, Divider } from '@/components/ui';
+import { colors, spacing } from '@/theme';
 
 /**
  * Props pour le composant QuickActionsPreview
@@ -117,21 +118,21 @@ export default function QuickActionsPreview({
       return [
         {
           icon: 'create',
-          color: AQUACARE_COLORS.GREEN_LIGHT,
+          color: colors.brand.light,
           label: t('dailyLog'),
           route: 'DailyLog',
           params: productionUnitContext,
         },
         {
           icon: 'warning-outline',
-          color: AQUACARE_COLORS.ERROR,
+          color: colors.status.error,
           label: t('sanitaryLog'),
           route: 'SanitaryLog',
           params: productionUnitContext,
         },
         {
           icon: 'restaurant-outline',
-          color: AQUACARE_COLORS.INFO,
+          color: colors.status.info,
           label: t('feedingPlan'),
           route: 'FeedingPlan',
           params: productionUnitContext,
@@ -146,14 +147,14 @@ export default function QuickActionsPreview({
       // Si cycles actifs → prioriser saisie quotidienne
       actions.push({
         icon: 'create',
-        color: AQUACARE_COLORS.GREEN_LIGHT,
+        color: colors.brand.light,
         label: t('dailyLog'),
         route: 'DailyLog',
       });
     } else if (hasActiveCycles) {
       actions.push({
         icon: 'document-text-outline',
-        color: AQUACARE_COLORS.BLUE,
+        color: colors.legacy.blue,
         label: t('reports'),
         route: 'Reports',
         params: { scope: 'cycle' },
@@ -162,7 +163,7 @@ export default function QuickActionsPreview({
       // Si aucun cycle → prioriser création
       actions.push({
         icon: 'add-circle',
-        color: AQUACARE_COLORS.GREEN_PRIMARY,
+        color: colors.brand.primary,
         label: t('startNewCycle'),
         route: 'CreateFarm',
       });
@@ -171,7 +172,7 @@ export default function QuickActionsPreview({
     // Suggestion 2 : Toujours suggérer catalogue commerce
     actions.push({
       icon: 'storefront-outline',
-      color: AQUACARE_COLORS.GREEN_PRIMARY,
+      color: colors.brand.primary,
       label: t('productCatalog'),
       route: 'ProductCatalog',
     });
@@ -180,14 +181,14 @@ export default function QuickActionsPreview({
     if (unreadCount > 0) {
       actions.push({
         icon: 'notifications-outline',
-        color: AQUACARE_COLORS.WARNING,
+        color: colors.status.warning,
         label: `${t('notifications')} (${unreadCount})`,
         route: 'Notifications',
       });
     } else if (!hideGlobalCycleOperationalActions || !hasActiveCycles) {
       actions.push({
         icon: 'document-text-outline',
-        color: AQUACARE_COLORS.BLUE,
+        color: colors.legacy.blue,
         label: t('reports'),
         route: 'Reports',
         params: { scope: 'cycle' },
@@ -195,7 +196,7 @@ export default function QuickActionsPreview({
     } else {
       actions.push({
         icon: 'notifications-outline',
-        color: AQUACARE_COLORS.WARNING,
+        color: colors.status.warning,
         label: t('notifications'),
         route: 'Notifications',
       });
@@ -207,27 +208,27 @@ export default function QuickActionsPreview({
   return (
     <View className="px-5 py-5">
       {/* Suggested Actions Preview */}
-      <View className="bg-white rounded-xl shadow-sm overflow-hidden">
+      <Card variant="elevated" style={styles.card}>
         {suggestedActions.map((action, index) => (
-          <TouchableOpacity
-            key={action.route}
-            className={`flex-row items-center p-4 ${
-              index < suggestedActions.length - 1 ? 'border-b border-gray-100' : ''
-            }`}
-            onPress={() => navigation.navigate(action.route, action.params)}
-            activeOpacity={0.7}
-          >
-            <View
-              className="w-10 h-10 rounded-full items-center justify-center"
-              style={{ backgroundColor: `${action.color}20` }}
+          <React.Fragment key={action.route}>
+            <TouchableOpacity
+              className="flex-row items-center p-4"
+              onPress={() => navigation.navigate(action.route, action.params)}
+              activeOpacity={0.7}
             >
-              <Ionicons name={action.icon as any} size={20} color={action.color} />
-            </View>
-            <Text className="text-base font-medium text-gray-dark ml-3 flex-1">
-              {action.label}
-            </Text>
-            <Ionicons name="chevron-forward" size={20} color={AQUACARE_COLORS.GRAY_LIGHT} />
-          </TouchableOpacity>
+              <View
+                className="w-10 h-10 rounded-full items-center justify-center"
+                style={{ backgroundColor: `${action.color}20` }}
+              >
+                <Ionicons name={action.icon as any} size={20} color={action.color} />
+              </View>
+              <AppText variant="bodyStrong" style={styles.actionLabel}>
+                {action.label}
+              </AppText>
+              <Ionicons name="chevron-forward" size={20} color={colors.text.muted} />
+            </TouchableOpacity>
+            {index < suggestedActions.length - 1 ? <Divider /> : null}
+          </React.Fragment>
         ))}
 
         {/* View All Button */}
@@ -236,12 +237,18 @@ export default function QuickActionsPreview({
           onPress={onOpenSheet}
           activeOpacity={0.7}
         >
-          <Text className="text-base font-semibold text-aquacare-primary mr-2">
+          <AppText variant="bodyStrong" color="link" style={styles.viewAllLabel}>
             {t('viewAllActions')}
-          </Text>
-          <Ionicons name="chevron-down" size={20} color={AQUACARE_COLORS.GREEN_PRIMARY} />
+          </AppText>
+          <Ionicons name="chevron-down" size={20} color={colors.brand.primary} />
         </TouchableOpacity>
-      </View>
+      </Card>
     </View>
   );
 }
+
+const styles = {
+  card: { padding: 0, overflow: 'hidden' as const },
+  actionLabel: { flex: 1, marginLeft: spacing[3] },
+  viewAllLabel: { marginRight: spacing[2] },
+};

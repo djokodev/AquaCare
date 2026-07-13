@@ -1,7 +1,7 @@
 import React from 'react';
-import { View, Text } from 'react-native';
+import { View } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { IconButton } from '@/components/ui';
+import { AppText, IconButton } from '@/components/ui';
 
 /**
  * Props pour le composant DashboardHeader
@@ -64,10 +64,10 @@ export default function DashboardHeader({
       {/* Greeting Row */}
       <View className="flex-row justify-between items-start">
         <View className="flex-1 mr-4">
-          <Text className="text-2xl font-bold text-white mb-1">
+          <AppText variant="screenTitle" color="inverse" style={{ marginBottom: 4 }}>
             {t('hello')}, {firstName}!
-          </Text>
-          <Text className="text-base text-white/90">{t('welcomeBoard')}</Text>
+          </AppText>
+          <AppText variant="body" color="inverse">{t('welcomeBoard')}</AppText>
         </View>
 
         {/* Right Actions */}
