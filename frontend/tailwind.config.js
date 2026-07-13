@@ -1,3 +1,5 @@
+const tokens = require('./src/theme/tokens.json');
+
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   content: [
@@ -21,13 +23,13 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        'aquacare-primary': '#059669',
-        'aquacare-primary-light': '#10b981',
-        'aquacare-primary-dark': '#047857',
-        cream: '#f8fafc',
-        'gray-light': '#64748b',
-        'gray-dark': '#1e293b',
-        error: '#dc2626',
+        'aquacare-primary': tokens.colors.brand.primary,
+        'aquacare-primary-light': tokens.colors.brand.light,
+        'aquacare-primary-dark': tokens.colors.brand.dark,
+        cream: tokens.colors.surface.page,
+        'gray-light': tokens.colors.text.muted,
+        'gray-dark': tokens.colors.text.primary,
+        error: tokens.colors.status.error,
       },
       fontSize: {
         xs: ['0.75rem', { lineHeight: '1rem' }],
