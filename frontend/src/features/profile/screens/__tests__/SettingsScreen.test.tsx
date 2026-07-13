@@ -79,7 +79,7 @@ describe('features/profile/screens/SettingsScreen', () => {
     expect(getByText('Jean Dupont')).toBeTruthy();
     expect(getByText('+237670000000')).toBeTruthy();
 
-    fireEvent.press(getByText('English'));
+    fireEvent.press(getByText('languageEnglish'));
 
     await waitFor(() => {
       expect(mockI18n.changeLanguage).toHaveBeenCalledWith('en');

@@ -134,11 +134,14 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
 
       <View className="px-5 py-4">
         <Text className="text-lg font-bold text-gray-dark mb-3">{t("language")}</Text>
-        {[{ code: "fr", label: "Français" }, { code: "en", label: "English" }].map((lang) => (
+        {[
+          { code: "fr", label: t('languageFrench') },
+          { code: "en", label: t('languageEnglish') },
+        ].map((lang) => (
           <TouchableOpacity
             key={lang.code}
             className={`bg-white flex-row items-center justify-between p-4 rounded-lg mb-2 border ${
-              settings.language === lang.code ? "border-aquacare-primary bg-[#f0fdf4]" : "border-gray-200"
+              settings.language === lang.code ? "border-aquacare-primary bg-aquacare-selected" : "border-gray-200"
             }`}
             onPress={() => handleLanguageChange(lang.code as "fr" | "en")}
             disabled={isUpdatingLanguage}
@@ -201,7 +204,7 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
           </View>
         </TouchableOpacity>
 
-        {__DEV__ && navigation && (
+        {__DEV__ && (
           <TouchableOpacity
             className="bg-white flex-row items-center p-4 rounded-xl border border-gray-200 mt-3"
             onPress={handleResetOnboarding}

@@ -1605,4 +1605,6 @@ export const fr = {
   designSystemOpenSelection: 'Ouvrir la sélection',
   designSystemOptionOne: 'Première option',
   designSystemOptionTwo: 'Deuxième option',
+  languageFrench: 'Français',
+  languageEnglish: 'Anglais',
 };

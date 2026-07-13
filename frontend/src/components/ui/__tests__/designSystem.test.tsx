@@ -1,8 +1,22 @@
 import React from 'react';
 import { fireEvent, render } from '@testing-library/react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { Button, Card, EmptyState, ErrorState, IconButton, SelectionModal, TextField } from '..';
+import { colors } from '@/theme';
+import tokens from '@/theme/tokens.json';
+
+const tailwindConfig = require('../../../../tailwind.config.js');
 
 describe('shared design system components', () => {
+  it('keeps Tailwind aliases aligned with the primitive token source', () => {
+    const tailwindColors = tailwindConfig.theme.extend.colors;
+
+    expect(tailwindColors['aquacare-primary']).toBe(tokens.colors.brand.primary);
+    expect(tailwindColors['aquacare-selected']).toBe(tokens.colors.surface.selected);
+    expect(tailwindColors.error).toBe(tokens.colors.status.error);
+    expect(tailwindConfig.theme.extend.borderRadius.xl).toBe(`${tokens.radii.xl}px`);
+  });
+
   it('renders button variants and invokes its action', () => {
     const onPress = jest.fn();
     const { getByLabelText, getByText } = render(<><Button label="Save" onPress={onPress} iconLeft="checkmark" /><Button label="Delete" onPress={onPress} variant="danger" /><Button label="Loading" onPress={onPress} loading /></>);
@@ -17,6 +31,20 @@ describe('shared design system components', () => {
     const { getByLabelText } = render(<IconButton icon="settings-outline" accessibilityLabel="Settings" onPress={onPress} disabled />);
     fireEvent.press(getByLabelText('Settings'));
     expect(onPress).not.toHaveBeenCalled();
+  });
+
+  it('uses the inverse tone for icons on a brand surface', () => {
+    const { UNSAFE_getByType } = render(
+      <IconButton
+        icon="arrow-back"
+        accessibilityLabel="Back"
+        onPress={jest.fn()}
+        variant="ghost"
+        tone="inverse"
+      />,
+    );
+
+    expect(UNSAFE_getByType(Ionicons).props.color).toBe(colors.text.inverse);
   });
 
   it('renders form feedback, selectable cards, states, and a selection modal', () => {

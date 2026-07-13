@@ -9,7 +9,7 @@ export const AQUACARE_COLORS = {
   GREEN_DARK: colors.brand.dark,
   WHITE: colors.surface.card,
   CREAM: colors.surface.page,
-  BLUE: '#2563eb',
+  BLUE: colors.legacy.blue,
   SUCCESS: colors.status.success,
   WARNING: colors.status.warning,
   ERROR: colors.status.error,

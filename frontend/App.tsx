@@ -1,6 +1,6 @@
 import 'react-native-gesture-handler';
 import React, { useEffect } from 'react';
-import { Platform, StyleSheet } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 import { Provider } from 'react-redux';
 import { NavigationContainer } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
@@ -163,7 +163,11 @@ function App() {
             <StatusBar style="auto" />
           </NavigationContainer>
           {config.environment === 'staging' && (
-            <AppText style={styles.stagingBanner} color="inverse" variant="caption" pointerEvents="none">{i18n.t('stagingBuild')}</AppText>
+            <View style={styles.stagingBanner} pointerEvents="none">
+              <AppText style={styles.stagingBannerText} color="inverse" variant="caption">
+                {i18n.t('stagingBuild')}
+              </AppText>
+            </View>
           )}
         </ErrorBoundary>
       </SafeAreaProvider>
@@ -182,6 +186,9 @@ const styles = StyleSheet.create({
     paddingBottom: spacing[1],
     alignItems: 'center',
     zIndex: 9999,
+  },
+  stagingBannerText: {
+    textAlign: 'center',
   },
 });
 

@@ -1,7 +1,8 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { colors, radii, shadows, spacing } from '@/theme';
+import { AppText, Button, Card } from '@/components/ui';
+import { colors, radii, sizing, spacing } from '@/theme';
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -18,19 +19,17 @@ function ErrorFallback({ error, onReset }: { error: Error | null; onReset: () =>
 
   return (
     <View style={styles.container}>
-      <View style={styles.card}>
-        <Text style={styles.icon}>!</Text>
-        <Text style={styles.title}>{t('errorBoundaryTitle')}</Text>
-        <Text style={styles.message}>{t('errorBoundaryMessage')}</Text>
+      <Card variant="elevated" style={styles.card}>
+        <AppText variant="display" color="error" style={styles.icon}>!</AppText>
+        <AppText variant="sectionTitle" style={styles.title}>{t('errorBoundaryTitle')}</AppText>
+        <AppText variant="helper" color="muted" style={styles.message}>{t('errorBoundaryMessage')}</AppText>
         {__DEV__ && error && (
           <ScrollView style={styles.detailsContainer}>
-            <Text style={styles.details}>{error.message}</Text>
+            <AppText variant="caption" color="error" style={styles.details}>{error.message}</AppText>
           </ScrollView>
         )}
-        <TouchableOpacity style={styles.button} onPress={onReset}>
-          <Text style={styles.buttonText}>{t('errorBoundaryRetry')}</Text>
-        </TouchableOpacity>
-      </View>
+        <Button label={t('errorBoundaryRetry')} onPress={onReset} fullWidth={false} />
+      </Card>
     </View>
   );
 }
@@ -89,58 +88,31 @@ const styles = StyleSheet.create({
     padding: spacing[6],
   },
   card: {
-    backgroundColor: colors.surface.card,
-    borderRadius: radii.lg,
-    padding: 32,
+    padding: spacing[8],
     alignItems: 'center',
     width: '100%',
     maxWidth: 400,
-    ...shadows.medium,
   },
   icon: {
-    fontSize: 48,
-    color: colors.status.error,
-    marginBottom: 16,
-    fontWeight: 'bold',
+    marginBottom: spacing[4],
   },
   title: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: colors.text.primary,
-    marginBottom: 8,
+    marginBottom: spacing[2],
     textAlign: 'center',
   },
   message: {
-    fontSize: 14,
-    color: colors.text.muted,
     textAlign: 'center',
-    marginBottom: 20,
-    lineHeight: 20,
+    marginBottom: spacing[5],
   },
   detailsContainer: {
-    maxHeight: 120,
+    maxHeight: sizing.avatarLarge * 2,
     width: '100%',
     backgroundColor: colors.status.errorSurface,
     borderRadius: radii.md,
-    padding: 12,
-    marginBottom: 20,
+    padding: spacing[3],
+    marginBottom: spacing[5],
   },
   details: {
-    fontSize: 12,
-    color: colors.status.error,
     fontFamily: 'monospace',
-  },
-  button: {
-    backgroundColor: colors.brand.primary,
-    borderRadius: radii.lg,
-    paddingVertical: 14,
-    paddingHorizontal: 32,
-    minWidth: 160,
-    alignItems: 'center',
-  },
-  buttonText: {
-    color: colors.text.inverse,
-    fontSize: 16,
-    fontWeight: '600',
   },
 });

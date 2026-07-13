@@ -1,8 +1,7 @@
 import React from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { View, Text } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { AQUACARE_COLORS } from '@/constants/colors';
+import { IconButton } from '@/components/ui';
 
 /**
  * Props pour le composant DashboardHeader
@@ -74,43 +73,23 @@ export default function DashboardHeader({
         {/* Right Actions */}
         <View className="flex-row gap-3 items-center">
           {/* Notifications Bell */}
-          <TouchableOpacity
-            onPress={onNotificationsPress}
-            className="relative p-2 bg-white/20 rounded-lg"
+          <IconButton
+            icon="notifications-outline"
             accessibilityLabel={t('notificationsBell')}
-            accessibilityHint={
-              unreadCount > 0
-                ? `${unreadCount} ${t('unreadNotifications')}`
-                : t('noUnreadNotifications')
-            }
-            accessibilityRole="button"
-          >
-            <Ionicons name="notifications-outline" size={24} color={AQUACARE_COLORS.WHITE} />
-            {unreadCount > 0 && (
-              <View
-                className="absolute -top-1 -right-1 bg-error rounded-full items-center justify-center"
-                style={{
-                  minWidth: unreadCount > 9 ? 24 : 20,
-                  height: unreadCount > 9 ? 24 : 20,
-                  paddingHorizontal: unreadCount > 9 ? 4 : 2,
-                }}
-              >
-                <Text className="text-white text-xs font-semibold">
-                  {unreadCount > 99 ? '99+' : unreadCount}
-                </Text>
-              </View>
-            )}
-          </TouchableOpacity>
+            onPress={onNotificationsPress}
+            variant="ghost"
+            tone="inverse"
+            badge={unreadCount}
+          />
 
           {/* Settings */}
-          <TouchableOpacity
-            onPress={onSettingsPress}
-            className="p-2 bg-white/20 rounded-lg"
+          <IconButton
+            icon="settings-outline"
             accessibilityLabel={t('settingsButton')}
-            accessibilityRole="button"
-          >
-            <Ionicons name="settings-outline" size={24} color={AQUACARE_COLORS.WHITE} />
-          </TouchableOpacity>
+            onPress={onSettingsPress}
+            variant="ghost"
+            tone="inverse"
+          />
         </View>
       </View>
     </View>

@@ -47,11 +47,12 @@ export function Button({ label, onPress, variant = 'primary', size = 'medium', l
       testID={testID}
       style={({ pressed }) => [styles.base, { minHeight: heights[size], backgroundColor: backgrounds[variant] }, variant === 'outline' && styles.outline, fullWidth && styles.fullWidth, (inactive || pressed) && { opacity: inactive ? opacity.disabled : opacity.pressed }, style]}
     >
-      {loading ? <ActivityIndicator color={iconColor} /> : <View style={styles.content}>
+      <View style={[styles.content, loading && styles.loadingContent]}>
         {iconLeft ? <Ionicons name={iconLeft} size={sizing.iconMedium} color={iconColor} /> : null}
         <AppText variant={size === 'small' ? 'label' : 'button'} color={textColors[variant]} style={iconLeft || iconRight ? styles.labelWithIcon : undefined}>{label}</AppText>
         {iconRight ? <Ionicons name={iconRight} size={sizing.iconMedium} color={iconColor} /> : null}
-      </View>}
+      </View>
+      {loading ? <ActivityIndicator style={styles.loader} color={iconColor} /> : null}
     </Pressable>
   );
 }
@@ -59,5 +60,8 @@ export function Button({ label, onPress, variant = 'primary', size = 'medium', l
 const styles = StyleSheet.create({
   base: { alignItems: 'center', justifyContent: 'center', borderRadius: radii.lg, paddingHorizontal: spacing[4] },
   fullWidth: { alignSelf: 'stretch' }, outline: { borderWidth: 1, borderColor: colors.brand.primary },
-  content: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }, labelWithIcon: { marginHorizontal: spacing[2] },
+  content: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
+  loadingContent: { opacity: 0 },
+  loader: { position: 'absolute' },
+  labelWithIcon: { marginHorizontal: spacing[2] },
 });

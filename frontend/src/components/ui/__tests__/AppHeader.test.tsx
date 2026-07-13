@@ -12,4 +12,14 @@ describe('AppHeader', () => {
     fireEvent.press(getByLabelText('Go back'));
     expect(onBack).toHaveBeenCalledTimes(1);
   });
+
+  it('renders the surface variant without a navigation header dependency', () => {
+    const { getByText } = render(
+      <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 320, height: 640 }, insets: { top: 20, left: 0, right: 0, bottom: 0 } }}>
+        <AppHeader title="Surface header" variant="surface" />
+      </SafeAreaProvider>,
+    );
+
+    expect(getByText('Surface header')).toBeTruthy();
+  });
 });

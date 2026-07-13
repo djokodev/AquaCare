@@ -1603,4 +1603,6 @@
   designSystemOpenSelection: 'Open selection',
   designSystemOptionOne: 'First option',
   designSystemOptionTwo: 'Second option',
+  languageFrench: 'French',
+  languageEnglish: 'English',
 };

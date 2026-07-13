@@ -220,7 +220,7 @@ function ProfileNavigator() {
         component={SettingsScreen}
         options={{ title: t('settings') }}
       />
-      {__DEV__ ? <ProfileStack.Screen name="DesignSystemGallery" component={DesignSystemGalleryScreen} options={{ title: t('designSystemGallery') }} /> : null}
+      {__DEV__ ? <ProfileStack.Screen name="DesignSystemGallery" component={DesignSystemGalleryScreen} options={{ headerShown: false }} /> : null}
     </ProfileStack.Navigator>
   );
 }
