@@ -3,7 +3,8 @@ import { StyleSheet, TextInput, View, type TextInputProps } from 'react-native';
 import { FormField } from './FormField';
 import { colors, radii, sizing, spacing, typography } from '@/theme';
 interface TextFieldProps extends TextInputProps {
-  label: string;
+  /** Omit when a surrounding FormField already supplies the accessible label. */
+  label?: string;
   required?: boolean;
   hint?: string;
   error?: string;
@@ -23,23 +24,31 @@ export function TextField({
   style,
   ...props
 }: TextFieldProps) {
-  return (
-    <FormField label={label} required={required} hint={hint} error={error}>
+  const input = (
       <View style={[styles.inputContainer, multiline && styles.multiline, error && styles.error, !editable && styles.disabled]}>
         {prefix}
         <TextInput
           {...props}
           editable={editable}
           multiline={multiline}
-          accessibilityLabel={label}
-          accessibilityState={{ disabled: !editable }}
+          accessibilityLabel={label ?? props.accessibilityLabel}
+          accessibilityState={
+            editable
+              ? props.accessibilityState
+              : { ...props.accessibilityState, disabled: true }
+          }
           placeholderTextColor={colors.text.muted}
           style={[styles.input, multiline && styles.multilineInput, style]}
         />
         {suffix}
       </View>
-    </FormField>
   );
+
+  return label ? (
+    <FormField label={label} required={required} hint={hint} error={error}>
+      {input}
+    </FormField>
+  ) : input;
 }
 
 const styles = StyleSheet.create({

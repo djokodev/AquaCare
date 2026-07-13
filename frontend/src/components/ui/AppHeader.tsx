@@ -12,9 +12,10 @@ interface AppHeaderProps {
   onBack?: () => void;
   backLabel?: string;
   rightAction?: React.ReactNode;
+  backTestID?: string;
 }
 
-export function AppHeader({ title, subtitle, variant = 'brand', onBack, backLabel, rightAction }: AppHeaderProps) {
+export function AppHeader({ title, subtitle, variant = 'brand', onBack, backLabel, rightAction, backTestID }: AppHeaderProps) {
   const insets = useSafeAreaInsets();
   const brand = variant === 'brand';
   const textColor = brand ? 'inverse' : 'primary';
@@ -27,6 +28,7 @@ export function AppHeader({ title, subtitle, variant = 'brand', onBack, backLabe
             icon="arrow-back"
             accessibilityLabel={backLabel ?? title}
             onPress={onBack}
+            testID={backTestID}
             variant={brand ? 'ghost' : 'surface'}
             tone={brand ? 'inverse' : 'default'}
           />

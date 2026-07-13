@@ -13,6 +13,7 @@ interface IconButtonProps {
   disabled?: boolean;
   badge?: number;
   style?: StyleProp<ViewStyle>;
+  testID?: string;
 }
 
 export function IconButton({
@@ -24,6 +25,7 @@ export function IconButton({
   disabled = false,
   badge,
   style,
+  testID,
 }: IconButtonProps) {
   const danger = variant === 'danger';
   const surface = variant === 'surface';
@@ -37,6 +39,7 @@ export function IconButton({
 
   return (
     <Pressable
+      testID={testID}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
       accessibilityState={{ disabled }}
