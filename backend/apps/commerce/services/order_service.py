@@ -13,6 +13,7 @@ from decimal import Decimal
 from typing import TYPE_CHECKING, TypedDict
 
 from aquaculture.services.cycle_store_application_service import CycleStoreApplicationService
+from django.conf import settings
 from django.db import IntegrityError, transaction
 from django.db.models import Count, QuerySet, Sum
 from django.utils import timezone
@@ -176,6 +177,7 @@ class OrderService(BaseCommerceService):
         production_cycle = OrderService._resolve_order_cycle(user, production_cycle_id)
 
         delivery_address_data = OrderService._build_delivery_address_snapshot(user)
+        OrderService._validate_delivery_snapshot(delivery_method, delivery_address_data)
         order = OrderService._create_order_with_retry(
             user=user,
             delivery_method=delivery_method,
@@ -293,10 +295,22 @@ class OrderService(BaseCommerceService):
                 unit_price=line.unit_price,
                 quantity=line.quantity,
                 line_total=line.line_total,
+                product_brand_snapshot=line.product.brand,
+                product_species_snapshot=line.product.species,
+                product_phase_snapshot=line.product.phase or '',
+                product_pellet_size_mm_snapshot=line.product.pellet_size_mm,
+                product_package_weight_kg_snapshot=line.product.package_weight_kg,
             )
             for line in prepared_items.lines
         ]
         OrderItem.objects.bulk_create(order_items)
+
+    @staticmethod
+    def _validate_delivery_snapshot(delivery_method, delivery_address_data):
+        if delivery_method == 'home' and any(not delivery_address_data[field].strip() for field in (
+            'delivery_name', 'delivery_phone', 'delivery_region', 'delivery_city', 'delivery_full_address',
+        )):
+            raise InvalidOrderError("Informations de livraison à domicile incomplètes")
 
     @staticmethod
     def _notify_order_created(order: Order) -> None:
@@ -376,6 +390,10 @@ class OrderService(BaseCommerceService):
                     synced_at=None if created_offline else timezone.now(),
                     # Snapshot adresse
                     **delivery_address_data,
+                    farm_name_snapshot=user.farm_profile.farm_name or '',
+                    document_schema_version='1.0',
+                    issuer_snapshot=dict(settings.ORDER_DOCUMENT_ISSUER),
+                    fulfilment_partner_snapshot=dict(settings.ORDER_DOCUMENT_FULFILMENT_PARTNER),
                     # Montants
                     subtotal=subtotal,
                     delivery_fee=delivery_fee,

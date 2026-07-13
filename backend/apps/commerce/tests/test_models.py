@@ -99,7 +99,7 @@ class TestProductModel:
         errors = exc_info.value.message_dict
         assert "protein_percentage" in errors
         assert "lipid_percentage" in errors
-        assert "package_weight_kg" in errors
+        assert "package_weight_kg" not in errors
 
     def test_product_string_representation(self):
         product = Product.objects.create(

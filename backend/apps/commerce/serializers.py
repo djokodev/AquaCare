@@ -44,9 +44,9 @@ class OrderItemSerializer(serializers.ModelSerializer):
 
     Affiche snapshot produit au moment de la commande.
     """
-    product_brand = serializers.CharField(source='product.brand', read_only=True)
+    product_brand = serializers.CharField(source='product_brand_snapshot', read_only=True)
     product_package_weight = serializers.IntegerField(
-        source='product.package_weight_kg',
+        source='product_package_weight_kg_snapshot',
         read_only=True
     )
 

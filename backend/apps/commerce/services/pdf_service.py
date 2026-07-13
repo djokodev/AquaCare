@@ -1,12 +1,16 @@
-"""
-Service de generation de PDF pour les commandes.
+"""Immutable, bilingual operational order-document generation."""
 
-Genere des bons de commande professionnels au format PDF
-pour transmission aux prestataires AquaCare.
-"""
+from __future__ import annotations
+
+import base64
 import inspect
 import logging
+from dataclasses import dataclass
+from datetime import datetime
+from decimal import Decimal
 from importlib import metadata
+from pathlib import Path
+from typing import Any
 
 from django.conf import settings
 from django.template.loader import render_to_string
@@ -14,115 +18,296 @@ from django.utils import timezone
 
 logger = logging.getLogger(__name__)
 
-# Guard pour éviter d'appliquer le patch plusieurs fois
+SUPPORTED_ORDER_DOCUMENT_LANGUAGES = frozenset({"fr", "en"})
+DOCUMENT_SCHEMA_VERSION = "1.0"
 _pdf_patched = False
 
 
-def _ensure_pdf_dependencies():
-    """
-    Vérifie et corrige à chaud la compatibilité WeasyPrint / pydyf.
+@dataclass(frozen=True)
+class OrderDocumentPayload:
+    """Template-ready immutable representation of an order."""
 
-    Contexte : certaines distributions fournissent pydyf avec un __init__ sans
-    arguments, ce qui déclenche l'erreur « PDF.__init__() takes 1 positional
-    argument but 3 were given » lorsque WeasyPrint appelle pydyf.PDF(version, identifier).
-    On applique un shim de compatibilité si nécessaire.
+    language_code: str
+    labels: dict[str, str]
+    order: dict[str, Any]
+    issuer: dict[str, Any]
+    partner: dict[str, Any]
+    customer: dict[str, Any]
+    delivery: dict[str, Any]
+    lines: list[dict[str, Any]]
+    totals: dict[str, Any]
+    generated_at: str
+    logo_data_uri: str | None
 
-    Le guard _pdf_patched garantit que le patch n'est appliqué qu'une seule fois,
-    évitant les conflits en cas d'appels concurrents.
-    """
+
+def _ensure_pdf_dependencies() -> None:
+    """Apply the existing WeasyPrint/pydyf compatibility shim once."""
     global _pdf_patched
     if _pdf_patched:
         return
-
-    # Lazy import to avoid loading WeasyPrint at Django startup
     import pydyf
 
     try:
-        pydyf_version = metadata.version("pydyf")
-    except metadata.PackageNotFoundError as exc:  # pragma: no cover - dépend du runtime
-        raise RuntimeError(
-            "Dépendance pydyf introuvable. Installez pydyf (>=0.11) et WeasyPrint."
-        ) from exc
+        metadata.version("pydyf")
+    except metadata.PackageNotFoundError as exc:  # pragma: no cover - runtime dependency
+        raise RuntimeError("Dépendance pydyf introuvable. Installez pydyf et WeasyPrint.") from exc
+    if len(inspect.signature(pydyf.PDF.__init__).parameters) == 1:
+        original_pdf = pydyf.PDF
 
-    sig = inspect.signature(pydyf.PDF.__init__)
-    needs_patch = len(sig.parameters) == 1  # seulement `self`
-
-    stream_class = pydyf.Stream
-    if hasattr(stream_class, 'set_text_matrix'):
-        stream_class.text_matrix = stream_class.set_text_matrix
-    if hasattr(stream_class, 'set_matrix'):
-        stream_class.transform = stream_class.set_matrix
-
-    if needs_patch:
-        original_pdf_class = pydyf.PDF
-
-        class CompatiblePDF(original_pdf_class):  # type: ignore[misc]
-            def __init__(self, version="1.7", identifier=None, *args, **kwargs):
-                """
-                Accept signature moderne (version, identifier) tout en réutilisant
-                l'implémentation existante de pydyf.
-                """
+        class CompatiblePDF(original_pdf):  # type: ignore[misc]
+            def __init__(
+                self, version: str = "1.7", identifier: bytes | None = None, *args: Any, **kwargs: Any
+            ) -> None:
                 super().__init__()
-                # WeasyPrint 61.x consulte pdf.version plus loin
-                self.version = (
-                    version if isinstance(version, (bytes, bytearray)) else str(version).encode()
-                )
+                self.version = version.encode() if isinstance(version, str) else version
                 self.identifier = identifier
 
         pydyf.PDF = CompatiblePDF  # type: ignore[assignment]
-        logger.warning(
-            "Shim de compatibilité appliqué pour pydyf %s (signature héritée sans arguments).",
-            pydyf_version,
-        )
-
+    if hasattr(pydyf.Stream, "set_text_matrix"):
+        pydyf.Stream.text_matrix = pydyf.Stream.set_text_matrix
+    if hasattr(pydyf.Stream, "set_matrix"):
+        pydyf.Stream.transform = pydyf.Stream.set_matrix
     _pdf_patched = True
 
 
-def generate_order_pdf(order):
-    """
-    Genere un PDF pour une commande.
+class OrderDocumentService:
+    """Build and render order documents without reading live customer or product data."""
 
-    Args:
-        order: Instance Order avec items
-
-    Returns:
-        bytes: Contenu PDF binaire
-
-    Raises:
-        Exception: Si generation echoue
-    """
-    # Lazy import to avoid loading WeasyPrint at Django startup
-    from weasyprint import HTML
-
-    _ensure_pdf_dependencies()
-
-    try:
-        # Preparer le contexte pour le template
-        context = {
-            'order': order,
-            'items': order.items.select_related('product').all(),
-            'user': order.user,
-            'farm': order.farm_profile,
-            'aquacare_color': '#059669',
-            'generated_at': timezone.now(),
-            'delivery_method_display': order.get_delivery_method_display(),
-            'pickup_location_display': (
-                order.get_pickup_location_display() if order.pickup_location else None
+    _LABELS = {
+        "fr": {
+            "title": "Bon de commande",
+            "order_number": "Numéro de commande",
+            "issue_date": "Date d’émission",
+            "cycle": "Cycle concerné",
+            "issued_by": "Émis par",
+            "operational_partner": "Partenaire opérationnel",
+            "customer": "Client à livrer",
+            "delivery_information": "Informations de livraison",
+            "delivery_method": "Mode de livraison",
+            "region": "Région",
+            "city": "Ville",
+            "address": "Adresse complète",
+            "pickup_location": "Point de retrait",
+            "ordered_items": "Articles commandés",
+            "brand": "Marque",
+            "product": "Produit",
+            "species": "Espèce",
+            "pellet_size": "Granulométrie",
+            "package": "Conditionnement",
+            "quantity": "Quantité",
+            "line_weight": "Poids total",
+            "unit_price": "Prix unitaire",
+            "amount": "Montant",
+            "summary": "Récapitulatif",
+            "total_bags": "Nombre total de sacs",
+            "total_weight": "Poids total à livrer",
+            "subtotal": "Sous-total",
+            "delivery_fee": "Frais de livraison",
+            "grand_total": "Total général",
+            "operational_note": "Note opérationnelle",
+            "contact": "Contact AquaCare",
+            "generated_by": "Généré par AquaCare",
+            "document_version": "Version documentaire",
+            "page": "Page",
+            "not_provided": "Non renseigné",
+            "home": "Livraison à domicile",
+            "pickup": "Retrait en point de vente",
+            "kg": "kg",
+            "bags": "sacs",
+            "bag": "sac",
+            "clarification": (
+                "Pour toute clarification concernant cette commande, contactez AquaCare au +237 652 260 368."
             ),
-        }
+        },
+        "en": {
+            "title": "Purchase order",
+            "order_number": "Order number",
+            "issue_date": "Issue date",
+            "cycle": "Related production cycle",
+            "issued_by": "Issued by",
+            "operational_partner": "Operational partner",
+            "customer": "Customer to deliver to",
+            "delivery_information": "Delivery information",
+            "delivery_method": "Delivery method",
+            "region": "Region",
+            "city": "City",
+            "address": "Full address",
+            "pickup_location": "Pickup location",
+            "ordered_items": "Ordered items",
+            "brand": "Brand",
+            "product": "Product",
+            "species": "Species",
+            "pellet_size": "Pellet size",
+            "package": "Package",
+            "quantity": "Quantity",
+            "line_weight": "Total weight",
+            "unit_price": "Unit price",
+            "amount": "Amount",
+            "summary": "Summary",
+            "total_bags": "Total bags",
+            "total_weight": "Total weight to deliver",
+            "subtotal": "Subtotal",
+            "delivery_fee": "Delivery fee",
+            "grand_total": "Grand total",
+            "operational_note": "Operational note",
+            "contact": "AquaCare contact",
+            "generated_by": "Generated by AquaCare",
+            "document_version": "Document version",
+            "page": "Page",
+            "not_provided": "Not provided",
+            "home": "Home delivery",
+            "pickup": "Pickup at sales point",
+            "kg": "kg",
+            "bags": "bags",
+            "bag": "bag",
+            "clarification": "For any clarification regarding this order, contact AquaCare at +237 652 260 368.",
+        },
+    }
 
-        # Rendre le template HTML
-        html_string = render_to_string('commerce/order_pdf.html', context)
+    @classmethod
+    def build_payload(
+        cls, order: Any, language_code: str = "fr", generated_at: datetime | None = None
+    ) -> OrderDocumentPayload:
+        if language_code not in SUPPORTED_ORDER_DOCUMENT_LANGUAGES:
+            raise ValueError("Unsupported order document language")
+        labels = cls._LABELS[language_code]
+        missing = labels["not_provided"]
+        generated_at = generated_at or timezone.now()
+        lines = []
+        total_bags = 0
+        total_weight = Decimal("0")
+        has_unknown_weight = False
+        for item in order.items.all():
+            package_weight = item.product_package_weight_kg_snapshot
+            line_weight = Decimal(package_weight) * item.quantity if package_weight else None
+            total_bags += item.quantity
+            if line_weight is None:
+                has_unknown_weight = True
+            else:
+                total_weight += line_weight
+            lines.append(
+                {
+                    "brand": cls._display_catalog_value(item.product_brand_snapshot, missing),
+                    "name": cls._value(item.product_name, missing),
+                    "species": cls._display_catalog_value(item.product_species_snapshot, missing),
+                    "pellet_size": cls._weight(item.product_pellet_size_mm_snapshot, "mm", missing),
+                    "package_weight": cls._weight(package_weight, labels["kg"], missing),
+                    "quantity": item.quantity,
+                    "line_weight": cls._weight(line_weight, labels["kg"], missing),
+                    "unit_price": cls._money(item.unit_price),
+                    "line_total": cls._money(item.line_total),
+                }
+            )
+        partner = dict(order.fulfilment_partner_snapshot or {})
+        issuer = dict(order.issuer_snapshot or {})
+        return OrderDocumentPayload(
+            language_code=language_code,
+            labels=labels,
+            order={
+                "number": order.order_number,
+                "issued_at": cls._date(order.created_at, language_code),
+                "cycle": cls._value(getattr(order.production_cycle, "cycle_name", None), missing),
+                "has_cycle": bool(getattr(order.production_cycle, "cycle_name", None)),
+                "schema_version": order.document_schema_version or DOCUMENT_SCHEMA_VERSION,
+            },
+            issuer={"name": cls._value(issuer.get("name"), missing), "phone": cls._value(issuer.get("phone"), missing)},
+            partner={
+                "name": cls._value(partner.get("name"), missing),
+                "role": cls._value(partner.get(f"role_{language_code}"), missing),
+                "address": cls._value(partner.get("address"), missing),
+                "hours": cls._value(partner.get(f"hours_{language_code}"), missing),
+                "phones": partner.get("phones") or [missing],
+                "emails": partner.get("emails") or [missing],
+            },
+            customer={
+                "name": cls._value(order.delivery_name, missing),
+                "phone": cls._format_phone(order.delivery_phone, missing),
+                "farm": cls._value(order.farm_name_snapshot, missing),
+            },
+            delivery={
+                "method": labels.get(order.delivery_method, missing),
+                "region": cls._display_location_value(order.delivery_region, missing),
+                "city": cls._display_location_value(order.delivery_city, missing),
+                "address": cls._value(order.delivery_full_address, missing),
+                "pickup": cls._value(order.get_pickup_location_display() if order.pickup_location else None, missing),
+                "is_pickup": order.delivery_method == "pickup",
+            },
+            lines=lines,
+            totals={
+                "bags": total_bags,
+                "weight": cls._weight(None if has_unknown_weight else total_weight, labels["kg"], missing),
+                "bags_display": f"{total_bags} {labels['bag'] if total_bags == 1 else labels['bags']}",
+                "subtotal": cls._money(order.subtotal),
+                "delivery_fee": cls._money(order.delivery_fee),
+                "total": cls._money(order.total),
+            },
+            generated_at=cls._date(generated_at, language_code),
+            logo_data_uri=cls._logo_data_uri(),
+        )
 
-        # Generer le PDF depuis HTML (base_url pour ressources locales/static)
-        pdf_bytes = HTML(
-            string=html_string,
-            base_url=str(settings.BASE_DIR)
-        ).write_pdf()
+    @staticmethod
+    def _value(value: Any, missing: str) -> str:
+        return str(value).strip() if value is not None and str(value).strip() else missing
 
-        logger.info(f"PDF genere pour commande {order.order_number}")
-        return pdf_bytes
+    @staticmethod
+    def _weight(value: Any, unit: str, missing: str) -> str:
+        return f"{value:g} {unit}" if value not in (None, 0, "") else missing
 
-    except Exception as e:
-        logger.error(f"Echec generation PDF commande {order.order_number}: {e}")
-        raise
+    @staticmethod
+    def _display_catalog_value(value: Any, missing: str) -> str:
+        raw = OrderDocumentService._value(value, missing)
+        return raw.upper() if raw.lower() == "dibaq" else raw.capitalize() if raw in {"tilapia", "catfish"} else raw
+
+    @staticmethod
+    def _display_location_value(value: Any, missing: str) -> str:
+        raw = OrderDocumentService._value(value, missing)
+        return raw.capitalize() if raw.islower() and raw != missing else raw
+
+    @staticmethod
+    def _format_phone(value: Any, missing: str) -> str:
+        raw = OrderDocumentService._value(value, missing)
+        digits = "".join(char for char in raw if char.isdigit())
+        if digits.startswith("237") and len(digits) == 12:
+            return f"+237 {digits[3:6]} {digits[6:9]} {digits[9:]}"
+        return raw
+
+    @staticmethod
+    def _money(value: Decimal) -> str:
+        return f"{value:,.0f} FCFA".replace(",", " ")
+
+    @staticmethod
+    def _date(value: datetime, language_code: str) -> str:
+        return value.strftime("%d/%m/%Y %H:%M") if language_code == "fr" else value.strftime("%b %d, %Y %I:%M %p")
+
+    @staticmethod
+    def _logo_data_uri() -> str | None:
+        logo = Path(settings.BASE_DIR) / "apps/aquaculture/static/aquaculture/images/logo.png"
+        if not logo.is_file():
+            logger.warning("AquaCare order document logo is unavailable")
+            return None
+        return "data:image/png;base64," + base64.b64encode(logo.read_bytes()).decode("ascii")
+
+    @classmethod
+    def render_html(cls, order: Any, language_code: str = "fr") -> str:
+        return render_to_string("commerce/order_pdf.html", {"document": cls.build_payload(order, language_code)})
+
+    @classmethod
+    def generate_pdf(cls, order: Any, language_code: str = "fr") -> bytes:
+        from weasyprint import HTML
+
+        _ensure_pdf_dependencies()
+        try:
+            return HTML(string=cls.render_html(order, language_code), base_url=str(settings.BASE_DIR)).write_pdf()
+        except Exception:
+            logger.error("Order document generation failed for %s", getattr(order, "order_number", "unknown"))
+            raise
+
+    @staticmethod
+    def filename(order: Any, language_code: str) -> str:
+        prefix = "bon-commande" if language_code == "fr" else "purchase-order"
+        return f"{prefix}-AquaCare-{order.order_number}-{language_code}.pdf"
+
+
+def generate_order_pdf(order: Any, language_code: str = "fr") -> bytes:
+    """Backward-compatible order PDF entry point."""
+    return OrderDocumentService.generate_pdf(order, language_code)

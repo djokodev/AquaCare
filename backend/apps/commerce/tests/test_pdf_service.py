@@ -16,6 +16,7 @@ from commerce.services.pdf_service import (
     _ensure_pdf_dependencies,
     generate_order_pdf,
 )
+from django.utils import timezone
 
 
 def _weasyprint_runtime_available() -> bool:
@@ -133,12 +134,22 @@ def test_generate_order_pdf_logs_and_reraises_on_failure(monkeypatch):
 
     order = SimpleNamespace(
         order_number="ORD-FAIL-0001",
-        items=SimpleNamespace(select_related=lambda *_args, **_kwargs: SimpleNamespace(all=lambda: [])),
-        user=SimpleNamespace(),
-        farm_profile=SimpleNamespace(),
+        items=SimpleNamespace(all=lambda: []),
         pickup_location="",
-        get_delivery_method_display=lambda: "Livraison à domicile",
+        delivery_method="home",
+        delivery_name="Test User",
+        delivery_phone="+237600000001",
+        delivery_region="Littoral",
+        delivery_city="Douala",
+        delivery_full_address="Douala",
+        farm_name_snapshot="Ferme test",
+        issuer_snapshot={},
+        fulfilment_partner_snapshot={},
+        document_schema_version="1.0",
+        created_at=timezone.now(),
+        production_cycle=None,
         get_pickup_location_display=lambda: "Ndokoti",
+        subtotal=Decimal("0"), delivery_fee=Decimal("0"), total=Decimal("0"),
     )
 
     html_instance = Mock()

@@ -208,6 +208,23 @@ SIMPLE_JWT = {
 LANGUAGE_CODE = "fr-fr"
 TIME_ZONE = "Africa/Douala"
 
+# Order-document identities are operational data, not template constants.  They
+# are copied to an Order at creation time so historic documents stay immutable.
+ORDER_DOCUMENT_ISSUER = {
+    "name": "AquaCare",
+    "phone": "+237 652 260 368",
+}
+ORDER_DOCUMENT_FULFILMENT_PARTNER = {
+    "name": "MaveCameroun",
+    "role_fr": "Partenaire de préparation et de livraison",
+    "role_en": "Fulfilment and delivery partner",
+    "address": "Port autonome de Douala, face à DANGOTE CEMENT",
+    "hours_fr": "Lundi au vendredi, 09:00–17:00",
+    "hours_en": "Monday to Friday, 9:00 AM–5:00 PM",
+    "phones": ["+237 686 528 904", "+237 657 983 215"],
+    "emails": ["customerservice@mavecam.cm", "info@mavecam.cm"],
+}
+
 LANGUAGES = [
     ("fr", "Français"),
     ("en", "English"),

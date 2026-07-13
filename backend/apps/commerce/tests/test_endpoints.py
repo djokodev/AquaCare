@@ -32,7 +32,10 @@ class TestProductEndpoints:
             first_name="Test",
             last_name="User",
             age_group="26_35",
-            region="littoral"
+            region="littoral",
+            department="wouri",
+            city="Douala",
+            neighborhood="Bonamoussadi",
         )
 
         # Créer profil ferme
@@ -278,7 +281,10 @@ class TestOrderEndpoints:
             first_name="Test",
             last_name="User",
             age_group="26_35",
-            region="littoral"
+            region="littoral",
+            department="wouri",
+            city="Douala",
+            neighborhood="Bonamoussadi",
         )
 
         # Créer profil ferme
