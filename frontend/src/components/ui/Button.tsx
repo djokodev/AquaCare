@@ -46,19 +46,24 @@ export function Button({ label, onPress, variant = 'primary', size = 'medium', l
       disabled={inactive}
       onPress={onPress}
       testID={testID}
-      style={({ pressed }) => [styles.base, { minHeight: heights[size], backgroundColor: backgrounds[variant] }, variant === 'outline' && styles.outline, inactive && styles.disabled, fullWidth && styles.fullWidth, pressed && styles.pressed, style]}
+      style={[styles.pressable, fullWidth && styles.fullWidth]}
     >
-      <View style={[styles.content, loading && styles.loadingContent]}>
-        {iconLeft ? <Ionicons name={iconLeft} size={sizing.iconMedium} color={iconColor} /> : null}
-        <AppText variant={size === 'small' ? 'label' : 'button'} color={textColor} style={iconLeft || iconRight ? styles.labelWithIcon : undefined}>{label}</AppText>
-        {iconRight ? <Ionicons name={iconRight} size={sizing.iconMedium} color={iconColor} /> : null}
-      </View>
-      {loading ? <ActivityIndicator style={styles.loader} color={iconColor} /> : null}
+      {({ pressed }) => (
+        <View style={[styles.base, { minHeight: heights[size], backgroundColor: backgrounds[variant] }, variant === 'outline' && styles.outline, inactive && styles.disabled, pressed && styles.pressed, style]}>
+          <View style={[styles.content, loading && styles.loadingContent]}>
+            {iconLeft ? <Ionicons name={iconLeft} size={sizing.iconMedium} color={iconColor} /> : null}
+            <AppText variant={size === 'small' ? 'label' : 'button'} color={textColor} style={iconLeft || iconRight ? styles.labelWithIcon : undefined}>{label}</AppText>
+            {iconRight ? <Ionicons name={iconRight} size={sizing.iconMedium} color={iconColor} /> : null}
+          </View>
+          {loading ? <ActivityIndicator style={styles.loader} color={iconColor} /> : null}
+        </View>
+      )}
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
+  pressable: { alignSelf: 'flex-start' },
   base: { alignItems: 'center', justifyContent: 'center', borderRadius: radii.lg, paddingHorizontal: spacing[4] },
   fullWidth: { alignSelf: 'stretch' }, outline: { borderWidth: 1, borderColor: colors.brand.primary },
   content: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },

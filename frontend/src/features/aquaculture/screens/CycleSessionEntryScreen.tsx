@@ -132,7 +132,6 @@ export default function CycleSessionEntryScreen({ navigation, route }: Props) {
   const header = (
     <AppHeader
       title={t('sessionCycleTitle')}
-      subtitle={activeCycles.length > 1 ? t('sessionCycleDescription') : undefined}
       onBack={showBackToDashboard ? handleBackToDashboard : undefined}
       backLabel={t('backToDashboard')}
       titleAlignment="left"
