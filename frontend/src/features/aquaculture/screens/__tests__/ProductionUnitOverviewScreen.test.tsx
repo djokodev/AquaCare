@@ -133,9 +133,9 @@ describe('features/aquaculture/screens/ProductionUnitOverviewScreen', () => {
       expect(getByText('productionUnitConsumedFeed')).toBeTruthy();
       expect(getByText('productionUnitEstimatedBiomass')).toBeTruthy();
       expect(getByText('productionUnitDashboardTitle')).toBeTruthy();
-      expect(getByText('dailyLog')).toBeTruthy();
-      expect(getByText('sanitaryLog')).toBeTruthy();
-      expect(getAllByText('feedingPlan').length).toBeGreaterThanOrEqual(1);
+      expect(getByText('dailyLogCompact')).toBeTruthy();
+      expect(getByText('sanitaryLogCompact')).toBeTruthy();
+      expect(getByText('feedingPlanCompact')).toBeTruthy();
       expect(getByText('viewAllActions')).toBeTruthy();
       expect(queryByText('productionUnitReportAction')).toBeNull();
       expect(queryByText('notifications')).toBeNull();
@@ -154,7 +154,7 @@ describe('features/aquaculture/screens/ProductionUnitOverviewScreen', () => {
       expect(mockGetProductionUnitDashboard).toHaveBeenCalledTimes(2);
     });
 
-    fireEvent.press(getByText('dailyLog'));
+    fireEvent.press(getByText('dailyLogCompact'));
     expect(navigation.navigate).toHaveBeenCalledWith('DailyLog', {
       cycleId: 'cycle-1',
       cycleUnitAllocationId: 'allocation-1',
@@ -162,7 +162,7 @@ describe('features/aquaculture/screens/ProductionUnitOverviewScreen', () => {
       productionUnitName: 'Bac 1',
     });
 
-    fireEvent.press(getByText('feedingPlan'));
+    fireEvent.press(getByText('feedingPlanCompact'));
     expect(navigation.navigate).toHaveBeenCalledWith('FeedingPlan', {
       cycleId: 'cycle-1',
       cycleUnitAllocationId: 'allocation-1',
@@ -175,7 +175,7 @@ describe('features/aquaculture/screens/ProductionUnitOverviewScreen', () => {
     await waitFor(() => {
       expect(getByText('productionUnitSanitaryLogAction')).toBeTruthy();
       expect(getAllByText('productionUnitLogHistoryAction').length).toBeGreaterThanOrEqual(1);
-      expect(getAllByText('feedingPlan').length).toBeGreaterThanOrEqual(2);
+      expect(getByText('feedingPlan')).toBeTruthy();
       expect(getByText('productionUnitReportAction')).toBeTruthy();
       expect(queryByText('notifications')).toBeNull();
       expect(queryByText('reports')).toBeNull();

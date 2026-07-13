@@ -727,6 +727,9 @@ const styles = StyleSheet.create({
     marginTop: spacing[3],
   },
   actionLabel: { flex: 1, marginRight: spacing[3] },
-  inactiveSessionCard: { borderColor: colors.brand.primary },
+  inactiveSessionCard: {
+    backgroundColor: colors.surface.disabled,
+    borderColor: colors.border.default,
+  },
   sessionName: { marginTop: spacing[1] },
 });
