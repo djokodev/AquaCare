@@ -10,8 +10,6 @@ import {
   FlatList,
   StyleSheet,
   Dimensions,
-  TouchableOpacity,
-  Text,
   NativeSyntheticEvent,
   NativeScrollEvent,
   Alert,
@@ -24,8 +22,8 @@ import SlideIndicators from '../components/SlideIndicators';
 import OnboardingButton from '../components/OnboardingButton';
 import OnboardingService from '../services/onboardingService';
 import { OnboardingSlideData } from '../types/onboarding';
-import { AQUACARE_COLORS } from '@/constants/colors';
-import { AQUACARE_TYPOGRAPHY } from '@/constants/typography';
+import { AppText, Button } from '@/components/ui';
+import { colors, sizing, spacing } from '@/theme';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -201,20 +199,11 @@ export default function OnboardingScreen({ onCompleted }: OnboardingScreenProps)
         {/* Header avec bouton "Ignorer" (slides 1-4 uniquement) */}
         {!isLastSlide && (
           <View style={styles.header}>
-            <TouchableOpacity
-              onPress={handleSkip}
-              disabled={isProcessing}
-              style={styles.skipButton}
-              accessible={true}
-              accessibilityRole="button"
-              accessibilityLabel={t('onboardingSkip')}
-            >
-              <Text style={styles.skipText}>{t('onboardingSkip')}</Text>
-            </TouchableOpacity>
+            <Button label={t('onboardingSkip')} onPress={handleSkip} variant="ghost" disabled={isProcessing} fullWidth={false} />
 
-            <Text style={styles.pageIndicator}>
+            <AppText variant="helper" color="muted" style={styles.pageIndicator}>
               {currentIndex + 1}/{SLIDES.length}
-            </Text>
+            </AppText>
           </View>
         )}
 
@@ -262,47 +251,34 @@ export default function OnboardingScreen({ onCompleted }: OnboardingScreenProps)
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: AQUACARE_COLORS.WHITE,
+    backgroundColor: colors.surface.card,
   },
 
   container: {
     flex: 1,
-    backgroundColor: AQUACARE_COLORS.WHITE,
+    backgroundColor: colors.surface.card,
   },
 
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 12,
+    paddingHorizontal: spacing[5],
+    paddingVertical: spacing[3],
   },
 
   headerPlaceholder: {
-    height: 52,
-  },
-
-  skipButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-  },
-
-  skipText: {
-    ...AQUACARE_TYPOGRAPHY.bodyStrong,
-    color: AQUACARE_COLORS.GREEN_PRIMARY,
+    height: sizing.controlLarge,
   },
 
   pageIndicator: {
-    ...AQUACARE_TYPOGRAPHY.small,
-    color: AQUACARE_COLORS.GRAY_LIGHT,
     fontWeight: '500',
   },
 
   footer: {
-    paddingBottom: 40,
-    paddingTop: 20,
+    paddingBottom: spacing[10],
+    paddingTop: spacing[5],
     alignItems: 'center',
-    backgroundColor: AQUACARE_COLORS.WHITE,
+    backgroundColor: colors.surface.card,
   },
 });

@@ -13,7 +13,7 @@ import Animated, {
   Easing,
 } from 'react-native-reanimated';
 import { SlideIndicatorsProps } from '../types/onboarding';
-import { AQUACARE_COLORS } from '@/constants/colors';
+import { colors, radii, spacing } from '@/theme';
 
 /**
  * Composant dot individuel animé
@@ -37,7 +37,7 @@ function AnimatedDot({ isActive }: { isActive: boolean }) {
     <Animated.View
       style={[
         styles.dot,
-        { backgroundColor: isActive ? AQUACARE_COLORS.GREEN_PRIMARY : AQUACARE_COLORS.GRAY_LIGHT },
+        { backgroundColor: isActive ? colors.brand.primary : colors.text.muted },
         animatedStyle,
       ]}
     />
@@ -66,13 +66,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginVertical: 24,
-    height: 16, // Hauteur fixe pour éviter layout shift
+    marginVertical: spacing[6],
+    height: spacing[4], // Hauteur fixe pour éviter layout shift
   },
 
   dot: {
-    height: 8,
-    borderRadius: 4,
-    marginHorizontal: 4,
+    height: spacing[2],
+    borderRadius: radii.sm,
+    marginHorizontal: spacing[1],
   },
 });
