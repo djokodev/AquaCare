@@ -7,12 +7,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
   StyleSheet,
   Alert,
-  ActivityIndicator,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,7 +16,16 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { RouteProp } from '@react-navigation/native';
 import { useDispatch, useSelector } from 'react-redux';
 
-import { AQUACARE_COLORS } from '@/constants/colors';
+import {
+  AppText,
+  Button,
+  Card,
+  Divider,
+  ErrorState,
+  InlineAlert,
+  LoadingState,
+  Screen,
+} from '@/components/ui';
 import { RootStackParamList } from '@/navigation/MainNavigator';
 import { AppDispatch, RootState } from '@/store/store';
 import {
@@ -49,6 +54,7 @@ import {
 } from '@/features/aquaculture/services/firstCycleLaunchService';
 import { parseApiError } from '@/utils/errorParser';
 import { formatAquacultureErrorWithAction } from '@/features/aquaculture/utils/aquacultureErrorPresenter';
+import { colors, spacing } from '@/theme';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'CycleSimulation'>;
 type RouteType = RouteProp<RootStackParamList, 'CycleSimulation'>;
@@ -213,21 +219,21 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
 
   if (simLoading && !currentResult) {
     return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color={AQUACARE_COLORS.GREEN_PRIMARY} />
-        <Text style={styles.loadingText}>{t('simulationLoading')}</Text>
-      </View>
+      <Screen style={styles.centered}>
+        <LoadingState message={t('simulationLoading')} />
+      </Screen>
     );
   }
 
   if (!currentResult) {
     return (
-      <View style={styles.centered}>
-        <Text style={styles.errorText}>{t('simulationErrorRetry')}</Text>
-        <TouchableOpacity onPress={recalculate}>
-          <Text style={styles.retryLink}>{t('retry')}</Text>
-        </TouchableOpacity>
-      </View>
+      <Screen style={styles.centered}>
+        <ErrorState
+          message={t('simulationErrorRetry')}
+          actionLabel={t('retry')}
+          onAction={() => void recalculate()}
+        />
+      </Screen>
     );
   }
 
@@ -239,14 +245,14 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
   const annualProjectionAquacareFee = currentResult.annual_projection_aquacare_fee_fcfa;
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <Screen scroll style={styles.content}>
       <View style={styles.header}>
-        <Ionicons name="analytics-outline" size={32} color={AQUACARE_COLORS.GREEN_PRIMARY} />
-        <Text style={styles.title}>{t('simulationSubtitle')}</Text>
+        <Ionicons name="analytics-outline" size={32} color={colors.brand.primary} />
+        <AppText variant="cardTitle" style={styles.title}>{t('simulationSubtitle')}</AppText>
       </View>
 
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>{t('simulationCycleSummaryTitle')}</Text>
+      <Card variant="elevated" style={styles.card}>
+        <AppText variant="bodyStrong">{t('simulationCycleSummaryTitle')}</AppText>
         <MetricRow label={t('simulationCycleProduction')} value={formatKg(cycleProductionKg)} highlight />
         <MetricRow label={t('simulationCycleRevenue')} value={formatFCFA(cycleRevenue)} />
         <MetricRow
@@ -269,7 +275,7 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
           value={`- ${formatFCFA(cycleAquacareFee)}`}
           negative
         />
-        <View style={styles.separator} />
+        <Divider />
         <MetricRow
           label={t('simulationCycleTotalCost')}
           value={formatFCFA(cycleTotalCost)}
@@ -285,10 +291,10 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
           value={formatPercent(cycleRoi)}
           highlight
         />
-      </View>
+      </Card>
 
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>{t('simulationCycleTechnicalTitle')}</Text>
+      <Card variant="elevated" style={styles.card}>
+        <AppText variant="bodyStrong">{t('simulationCycleTechnicalTitle')}</AppText>
         <MetricRow label={t('simulationSpecies')} value={speciesLabel} />
         <MetricRow label={t('simulationFingerlingsCount')} value={fingerlingsCountLabel} />
         <MetricRow
@@ -336,7 +342,7 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
               }
             />
             {!hasProductionUnitAllocations ? (
-              <Text style={styles.hintText}>{t('simulationDensityByUnitNote')}</Text>
+              <AppText variant="helper" color="muted">{t('simulationDensityByUnitNote')}</AppText>
             ) : null}
           </>
         ) : legacyStockingDensityCheck ? (
@@ -377,16 +383,17 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
           label={t('simulationFeedBags')}
           value={t('myFeedSacks', { count: currentResult.feed_bags_per_cycle })}
         />
-      </View>
+      </Card>
 
       {formData.productionUnitAllocations?.length ? (
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>{t('simulationAllocationByUnitTitle')}</Text>
-          <Text style={styles.hintText}>{t('simulationAllocationByUnitDescription')}</Text>
+        <Card variant="elevated" style={styles.card}>
+          <AppText variant="bodyStrong">{t('simulationAllocationByUnitTitle')}</AppText>
+          <AppText variant="helper" color="muted">{t('simulationAllocationByUnitDescription')}</AppText>
           {productionUnitAllocationsPreview?.global_error && (
-            <Text style={styles.allocationErrorText}>
-              {t(productionUnitAllocationsPreview.global_error)}
-            </Text>
+            <InlineAlert
+              tone="error"
+              message={t(productionUnitAllocationsPreview.global_error)}
+            />
           )}
           <View style={styles.allocationSummaryList}>
             {formData.productionUnits.map((unit, index) => {
@@ -413,21 +420,21 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
 
               return (
                 <View key={unit.local_id} style={styles.allocationSummaryRow}>
-                  <Text style={styles.allocationSummaryLabel}>{unit.name}</Text>
-                  <Text style={styles.allocationSummaryValue}>
+                  <AppText variant="label" style={styles.allocationSummaryLabel}>{unit.name}</AppText>
+                  <AppText variant="helper" color="muted" style={styles.allocationSummaryValue}>
                     {allocationLabel}
                     {densityLabel ? ` · ${densityLabel}` : ''}
                     {productionLabel}
-                  </Text>
+                  </AppText>
                 </View>
               );
             })}
           </View>
-        </View>
+        </Card>
       ) : null}
 
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>{t('simulationAnnualProjectionTitle')}</Text>
+      <Card variant="elevated" style={styles.card}>
+        <AppText variant="bodyStrong">{t('simulationAnnualProjectionTitle')}</AppText>
         <MetricRow
           label={t('simulationCyclesPerYear')}
           value={cyclesPerYear.toString()}
@@ -453,35 +460,24 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
           label={t('simulationAnnualProjectionAquacareFee')}
           value={formatFCFA(annualProjectionAquacareFee)}
         />
-      </View>
+      </Card>
 
-      <Text style={styles.hintText}>
+      <AppText variant="helper" color="muted">
         {t('simulationOtherCostsInfo')}
-      </Text>
+      </AppText>
 
-      <TouchableOpacity
-        style={styles.modifyBtn}
+      <Button
+        label={t('simulationModifyBtn')}
         onPress={() => navigation.goBack()}
-        activeOpacity={0.7}
-      >
-        <Text style={styles.modifyBtnText}>{t('simulationModifyBtn')}</Text>
-      </TouchableOpacity>
+        variant="ghost"
+      />
 
-      <TouchableOpacity
-        style={[styles.launchBtn, launching && styles.launchBtnDisabled]}
+      <Button
+        label={launchButtonLabel}
         onPress={handleLaunchFirstCycle}
-        disabled={launching}
-        activeOpacity={0.8}
-      >
-        {launching ? (
-          <ActivityIndicator color={AQUACARE_COLORS.WHITE} />
-        ) : (
-          <Text style={styles.launchBtnText}>{launchButtonLabel}</Text>
-        )}
-      </TouchableOpacity>
-
-      <View style={{ height: 48 }} />
-    </ScrollView>
+        loading={launching}
+      />
+    </Screen>
   );
 }
 
@@ -500,178 +496,32 @@ function MetricRow({
 }) {
   return (
     <View style={metricStyles.row}>
-      <Text style={metricStyles.label}>{label}</Text>
-      <Text
-        style={[
-          metricStyles.value,
-          highlight && metricStyles.valueHighlight,
-          negative && metricStyles.valueNegative,
-          large && metricStyles.valueLarge,
-        ]}
+      <AppText variant="helper" color="muted" style={metricStyles.label}>{label}</AppText>
+      <AppText
+        variant={large ? 'bodyStrong' : 'label'}
+        color={negative ? 'error' : highlight ? 'link' : 'primary'}
+        style={metricStyles.value}
       >
         {value}
-      </Text>
+      </AppText>
     </View>
   );
 }
 
 const metricStyles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 6,
-    gap: 12,
-  },
-  label: {
-    fontSize: 13,
-    color: AQUACARE_COLORS.GRAY_LIGHT,
-    flex: 1,
-    flexWrap: 'wrap',
-  },
-  value: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: AQUACARE_COLORS.GRAY_DARK,
-    textAlign: 'right',
-    maxWidth: '55%',
-  },
-  valueHighlight: {
-    color: AQUACARE_COLORS.GREEN_PRIMARY,
-  },
-  valueNegative: {
-    color: AQUACARE_COLORS.ERROR,
-  },
-  valueLarge: {
-    fontSize: 17,
-    fontWeight: '700',
-  },
+  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: spacing[1], gap: spacing[3] },
+  label: { flex: 1, flexWrap: 'wrap' },
+  value: { textAlign: 'right', maxWidth: '55%' },
 });
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: AQUACARE_COLORS.CREAM,
-  },
-  content: {
-    padding: 16,
-  },
-  centered: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 12,
-    backgroundColor: AQUACARE_COLORS.CREAM,
-  },
-  loadingText: {
-    color: AQUACARE_COLORS.GRAY_LIGHT,
-    fontSize: 15,
-  },
-  errorText: {
-    color: AQUACARE_COLORS.GRAY_LIGHT,
-    fontSize: 15,
-  },
-  retryLink: {
-    color: AQUACARE_COLORS.GREEN_PRIMARY,
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  header: {
-    alignItems: 'center',
-    paddingVertical: 20,
-    gap: 8,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: AQUACARE_COLORS.GRAY_DARK,
-    textAlign: 'center',
-  },
-  subtitle: {
-    fontSize: 13,
-    color: AQUACARE_COLORS.GRAY_LIGHT,
-    textAlign: 'center',
-    lineHeight: 18,
-  },
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  cardTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: AQUACARE_COLORS.GRAY_DARK,
-    marginBottom: 12,
-  },
-  separator: {
-    height: 1,
-    backgroundColor: '#e2e8f0',
-    marginVertical: 8,
-  },
-  hintText: {
-    marginTop: 8,
-    fontSize: 12,
-    lineHeight: 18,
-    color: AQUACARE_COLORS.GRAY_LIGHT,
-  },
-  allocationErrorText: {
-    marginTop: 8,
-    fontSize: 12,
-    lineHeight: 18,
-    color: AQUACARE_COLORS.ERROR,
-    fontWeight: '600',
-  },
-  allocationSummaryList: {
-    gap: 10,
-    marginTop: 12,
-  },
-  allocationSummaryRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  allocationSummaryLabel: {
-    flex: 1,
-    fontSize: 13,
-    color: AQUACARE_COLORS.GRAY_DARK,
-    fontWeight: '600',
-  },
-  allocationSummaryValue: {
-    flex: 1,
-    fontSize: 13,
-    color: AQUACARE_COLORS.GRAY_LIGHT,
-    textAlign: 'right',
-  },
-  modifyBtn: {
-    paddingVertical: 14,
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  modifyBtnText: {
-    color: AQUACARE_COLORS.GRAY_LIGHT,
-    fontSize: 15,
-    fontWeight: '500',
-  },
-  launchBtn: {
-    backgroundColor: AQUACARE_COLORS.GREEN_PRIMARY,
-    borderRadius: 12,
-    paddingVertical: 16,
-    alignItems: 'center',
-  },
-  launchBtnDisabled: {
-    opacity: 0.6,
-  },
-  launchBtnText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '700',
-    letterSpacing: 0.3,
-  },
+  centered: { justifyContent: 'center' },
+  content: { padding: spacing[4], gap: spacing[3] },
+  header: { alignItems: 'center', paddingVertical: spacing[3], gap: spacing[2] },
+  title: { textAlign: 'center' },
+  card: { gap: spacing[2] },
+  allocationSummaryList: { gap: spacing[2], marginTop: spacing[2] },
+  allocationSummaryRow: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing[3] },
+  allocationSummaryLabel: { flex: 1 },
+  allocationSummaryValue: { flex: 1, textAlign: 'right' },
 });
