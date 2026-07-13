@@ -15,7 +15,7 @@ export default function LoadingScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.content}>
-        <Image source={require('../../../../assets/icon.png')} style={styles.logo} accessibilityLabel={t('appName')} />
+        <Image source={require('../../../../assets/brand/aquacare-logo.png')} style={styles.logo} accessibilityLabel={t('appName')} />
         
         <ActivityIndicator size="large" color={colors.brand.primary} style={styles.spinner} />
         <AppText color="muted">{t('loading')}</AppText>
@@ -35,9 +35,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  logo: { width: sizing.avatarLarge * 2, height: sizing.avatarLarge * 2, borderRadius: sizing.avatarLarge / 2, marginBottom: spacing[10] },
+  logo: { width: sizing.avatarLarge * 2, height: 108, resizeMode: 'contain', marginBottom: spacing[10] },
   spinner: {
     marginBottom: spacing[5],
   },
 });
-
