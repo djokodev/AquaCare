@@ -8,6 +8,7 @@ import { useSelector } from 'react-redux';
 jest.mock('@/features/aquaculture/services/aquacultureService', () => ({
   aquacultureService: {
     getReports: jest.fn(),
+    getCycleUnitAllocations: jest.fn(),
     generateReport: jest.fn(),
     deleteReport: jest.fn(),
   },
@@ -39,11 +40,13 @@ describe('features/aquaculture/screens/ReportsScreen', () => {
   } as any;
 
   const mockGetReports = aquacultureService.getReports as jest.Mock;
+  const mockGetAllocations = aquacultureService.getCycleUnitAllocations as jest.Mock;
   const mockGenerateReport = aquacultureService.generateReport as jest.Mock;
   const mockUseSelector = useSelector as unknown as jest.Mock;
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockGetAllocations.mockResolvedValue([]);
     mockUseSelector.mockImplementation((selector: (state: any) => unknown) =>
       selector({
         aquaculture: {
@@ -92,7 +95,7 @@ describe('features/aquaculture/screens/ReportsScreen', () => {
     await waitFor(() => {
       expect(mockGenerateReport).toHaveBeenCalledWith({
         report_type: 'weekly',
-        scope: 'cycle',
+        scope_type: 'cycle',
         cycle_id: 'cycle-1',
       });
     });
@@ -121,7 +124,7 @@ describe('features/aquaculture/screens/ReportsScreen', () => {
       ));
       await waitFor(() => expect(mockGenerateReport).toHaveBeenCalledWith({
         report_type: reportType,
-        scope: 'cycle',
+        scope_type: 'cycle',
         cycle_id: 'cycle-1',
       }));
     }
@@ -136,6 +139,17 @@ describe('features/aquaculture/screens/ReportsScreen', () => {
       })
     );
     mockGetReports.mockResolvedValue([]);
+    mockGetAllocations.mockResolvedValue([
+      {
+        id: 'allocation-1',
+        cycle: 'cycle-1',
+        production_unit: 'unit-1',
+        production_unit_name: 'Bac 1',
+        production_unit_type: 'tank',
+        production_unit_display_dimension: '3 m³',
+        status_display: 'Actif',
+      },
+    ]);
     mockGenerateReport.mockResolvedValue({ id: 'report-3' });
 
     const { getByText } = render(
@@ -166,8 +180,7 @@ describe('features/aquaculture/screens/ReportsScreen', () => {
     await waitFor(() => {
       expect(mockGenerateReport).toHaveBeenCalledWith({
         report_type: 'weekly',
-        scope: 'unit',
-        cycle_id: 'cycle-1',
+        scope_type: 'unit',
         cycle_unit_allocation_id: 'allocation-1',
       });
     });
@@ -202,5 +215,40 @@ describe('features/aquaculture/screens/ReportsScreen', () => {
     });
 
     expect(mockGetReports).not.toHaveBeenCalled();
+  });
+
+  it('permet de sélectionner une allocation du cycle et envoie son identifiant canonique', async () => {
+    mockGetReports.mockResolvedValue([]);
+    mockGetAllocations.mockResolvedValue([
+      {
+        id: 'allocation-2',
+        cycle: 'cycle-1',
+        production_unit: 'unit-2',
+        production_unit_name: 'Bassin B',
+        production_unit_type: 'pond',
+        production_unit_display_dimension: '12 m²',
+        status_display: 'Actif',
+      },
+    ]);
+    mockGenerateReport.mockResolvedValue({ id: 'report-unit' });
+
+    const { getByText } = render(
+      <ReportsScreen
+        navigation={navigation}
+        route={{ key: 'Reports', name: 'Reports', params: { scope: 'cycle', cycleId: 'cycle-1' } } as any}
+      />
+    );
+
+    await waitFor(() => expect(getByText('Bassin B')).toBeTruthy());
+    fireEvent.press(getByText('Bassin B'));
+    fireEvent.press(getByText('reportGenerationDaily'));
+
+    await waitFor(() => {
+      expect(mockGenerateReport).toHaveBeenCalledWith({
+        report_type: 'daily',
+        scope_type: 'unit',
+        cycle_unit_allocation_id: 'allocation-2',
+      });
+    });
   });
 });

@@ -8,7 +8,7 @@ import { useSelector } from 'react-redux';
 
 import { RootStackParamList } from '@/navigation/MainNavigator';
 import { AQUACARE_COLORS } from '@/constants/colors';
-import { ProductionReport, ReportScopeType, ReportType } from '@/types/aquaculture';
+import { CycleUnitAllocation, ProductionReport, ReportScopeType, ReportType } from '@/types/aquaculture';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
 import { parseApiError } from '@/utils/errorParser';
 import { formatAquacultureErrorWithAction } from '@/features/aquaculture/utils/aquacultureErrorPresenter';
@@ -31,19 +31,30 @@ export default function ReportsScreen({ navigation, route }: ReportsScreenProps)
   const currentCycle = useSelector((state: RootState) => state.aquaculture.currentCycle);
   const routeParams = route.params;
 
-  const reportScope = routeParams?.scope ?? (routeParams?.cycleUnitAllocationId ? 'unit' : 'cycle');
   const resolvedCycleId = routeParams?.cycleId ?? currentCycle?.id ?? undefined;
-  const resolvedCycleUnitAllocationId = routeParams?.cycleUnitAllocationId;
-  const resolvedProductionUnitId = routeParams?.productionUnitId;
-
-  const hasValidUnitContext = Boolean(
-    resolvedCycleId && resolvedCycleUnitAllocationId && resolvedProductionUnitId
+  const initialScope: ReportScopeType = routeParams?.scope === 'unit' ? 'unit' : 'cycle';
+  const [allocations, setAllocations] = useState<CycleUnitAllocation[]>([]);
+  const [allocationLoading, setAllocationLoading] = useState(Boolean(resolvedCycleId));
+  const [selectedScope, setSelectedScope] = useState<ReportScopeType>(initialScope);
+  const [selectedAllocationId, setSelectedAllocationId] = useState(
+    routeParams?.cycleUnitAllocationId ?? ''
   );
-  const hasValidCycleContext = Boolean(resolvedCycleId);
-  const canGenerateReports = reportScope === 'unit' ? hasValidUnitContext : hasValidCycleContext;
+  const [allocationError, setAllocationError] = useState(false);
 
-  const scopeTitle = reportScope === 'unit' ? t('reportUnitTitle') : t('reportCycleTitle');
-  const scopeError = reportScope === 'unit'
+  const selectedAllocation = useMemo(
+    () => allocations.find((allocation) => allocation.id === selectedAllocationId) ?? null,
+    [allocations, selectedAllocationId]
+  );
+  const reportScope: ReportScopeType = selectedScope === 'unit' && selectedAllocation ? 'unit' : 'cycle';
+  const resolvedCycleUnitAllocationId = selectedAllocation?.id;
+  const hasValidUnitContext = Boolean(resolvedCycleId && resolvedCycleUnitAllocationId);
+  const hasValidCycleContext = Boolean(resolvedCycleId);
+  const canGenerateReports = selectedScope === 'unit'
+    ? hasValidUnitContext
+    : hasValidCycleContext;
+
+  const scopeTitle = selectedScope === 'unit' ? t('reportUnitTitle') : t('reportCycleTitle');
+  const scopeError = selectedScope === 'unit'
     ? t('incompleteUnitContext')
     : t('reportContextIncompleteError');
 
@@ -56,6 +67,50 @@ export default function ReportsScreen({ navigation, route }: ReportsScreenProps)
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  const loadAllocations = useCallback(async () => {
+    if (!resolvedCycleId) {
+      setAllocations([]);
+      setAllocationLoading(false);
+      setSelectedScope('cycle');
+      setSelectedAllocationId('');
+      return;
+    }
+
+    setAllocationLoading(true);
+    setAllocationError(false);
+    try {
+      const data = await aquacultureService.getCycleUnitAllocations(resolvedCycleId);
+      setAllocations(data);
+      const requestedAllocationId = routeParams?.cycleUnitAllocationId;
+      const requestedAllocation = data.find((allocation) => allocation.id === requestedAllocationId);
+      if (requestedAllocation) {
+        setSelectedAllocationId(requestedAllocation.id);
+        setSelectedScope(initialScope);
+      } else {
+        if (initialScope === 'unit' && requestedAllocationId) {
+          setAllocationError(true);
+          setSelectedAllocationId('');
+          setSelectedScope('cycle');
+        } else if (initialScope === 'unit') {
+          setSelectedAllocationId('');
+          setSelectedScope('unit');
+        }
+      }
+    } catch (error: unknown) {
+      logger.error('Erreur chargement allocations de rapport:', error);
+      setAllocations([]);
+      setSelectedAllocationId('');
+      setSelectedScope(initialScope === 'unit' ? 'unit' : 'cycle');
+      setAllocationError(initialScope === 'unit');
+    } finally {
+      setAllocationLoading(false);
+    }
+  }, [initialScope, resolvedCycleId, routeParams?.cycleUnitAllocationId]);
+
+  useEffect(() => {
+    void loadAllocations();
+  }, [loadAllocations]);
+
   const stopPolling = useCallback(() => {
     if (pollRef.current) {
       clearInterval(pollRef.current);
@@ -66,19 +121,19 @@ export default function ReportsScreen({ navigation, route }: ReportsScreenProps)
   const reportFilters = useMemo(() => {
     if (reportScope === 'unit' && hasValidUnitContext) {
       return {
-        scope: 'unit' as ReportScopeType,
+        scope_type: 'unit' as ReportScopeType,
         cycle_id: resolvedCycleId,
         cycle_unit_allocation_id: resolvedCycleUnitAllocationId,
       };
     }
     if (reportScope === 'cycle' && hasValidCycleContext) {
       return {
-        scope: 'cycle' as ReportScopeType,
+        scope_type: 'cycle' as ReportScopeType,
         cycle_id: resolvedCycleId,
       };
     }
     if (currentCycle?.id) {
-      return { scope: 'cycle' as ReportScopeType, cycle_id: currentCycle.id };
+      return { scope_type: 'cycle' as ReportScopeType, cycle_id: currentCycle.id };
     }
     return undefined;
   }, [
@@ -91,12 +146,15 @@ export default function ReportsScreen({ navigation, route }: ReportsScreenProps)
   ]);
 
   const loadReports = useCallback(async () => {
-    if (reportScope === 'unit' && !hasValidUnitContext) {
+    if (allocationLoading) {
+      return [];
+    }
+    if (selectedScope === 'unit' && !hasValidUnitContext) {
       setError(scopeError);
       setLoading(false);
       return [];
     }
-    if (reportScope === 'cycle' && !hasValidCycleContext && !currentCycle?.id) {
+    if (selectedScope === 'cycle' && !hasValidCycleContext && !currentCycle?.id) {
       setError(scopeError);
       setLoading(false);
       return [];
@@ -114,7 +172,7 @@ export default function ReportsScreen({ navigation, route }: ReportsScreenProps)
     } finally {
       setLoading(false);
     }
-  }, [currentCycle?.id, hasValidCycleContext, hasValidUnitContext, reportFilters, reportScope, scopeError, t]);
+  }, [allocationLoading, currentCycle?.id, hasValidCycleContext, hasValidUnitContext, reportFilters, reportScope, scopeError, selectedScope, t]);
 
   const startPollingIfPending = useCallback((data: ProductionReport[]) => {
     const hasPending = data.some((r) => r.status === 'pending');
@@ -172,14 +230,17 @@ export default function ReportsScreen({ navigation, route }: ReportsScreenProps)
     try {
       setGeneratingType(reportType);
       setInfoMessage(null);
-      const payload: Parameters<typeof aquacultureService.generateReport>[0] = {
-        report_type: reportType,
-        scope: reportScope,
-        cycle_id: resolvedCycleId,
-      };
-      if (reportScope === 'unit') {
-        payload.cycle_unit_allocation_id = resolvedCycleUnitAllocationId;
-      }
+      const payload = reportScope === 'unit'
+        ? {
+            report_type: reportType,
+            scope_type: 'unit' as const,
+            cycle_unit_allocation_id: resolvedCycleUnitAllocationId as string,
+          }
+        : {
+            report_type: reportType,
+            scope_type: 'cycle' as const,
+            cycle_id: resolvedCycleId as string,
+          };
       await aquacultureService.generateReport(payload);
       setInfoMessage(t('reportGenerating'));
       const data = await loadReports();
@@ -241,6 +302,64 @@ export default function ReportsScreen({ navigation, route }: ReportsScreenProps)
         <Ionicons name="arrow-back" size={24} color={AQUACARE_COLORS.WHITE} />
       </TouchableOpacity>
       <Text className="text-xl font-bold text-white">{scopeTitle}</Text>
+    </View>
+  );
+
+  const getUnitTypeLabel = (unitType?: string) => {
+    if (unitType === 'pond') return t('productionUnitTypePond');
+    if (unitType === 'cage') return t('productionUnitTypeCage');
+    return t('productionUnitTypeTank');
+  };
+
+  const renderScopeSelector = () => (
+    <View className="bg-white border border-gray-200 rounded-xl p-4 mb-3">
+      <Text className="text-base font-bold text-gray-dark mb-3">{t('reportScope')}</Text>
+      <TouchableOpacity
+        className={`border rounded-lg p-3 mb-2 ${reportScope === 'cycle' ? 'border-aquacare-primary bg-green-50' : 'border-gray-200'}`}
+        onPress={() => setSelectedScope('cycle')}
+        accessibilityRole="radio"
+        accessibilityState={{ selected: reportScope === 'cycle' }}
+      >
+        <Text className="text-sm font-semibold text-gray-dark">{t('fullCycle')}</Text>
+      </TouchableOpacity>
+
+      {allocationLoading && (
+        <View className="flex-row items-center py-2">
+          <ActivityIndicator size="small" color={AQUACARE_COLORS.GREEN_PRIMARY} />
+          <Text className="text-sm text-gray-light ml-2">{t('loading')}</Text>
+        </View>
+      )}
+
+      {allocations.map((allocation) => {
+        const isSelected = reportScope === 'unit' && selectedAllocationId === allocation.id;
+        const details = [
+          getUnitTypeLabel(allocation.production_unit_type),
+          allocation.production_unit_display_dimension,
+          allocation.status_display,
+        ].filter(Boolean).join(' · ');
+        return (
+          <TouchableOpacity
+            key={allocation.id}
+            className={`border rounded-lg p-3 mb-2 ${isSelected ? 'border-aquacare-primary bg-green-50' : 'border-gray-200'}`}
+            onPress={() => {
+              setSelectedAllocationId(allocation.id);
+              setSelectedScope('unit');
+            }}
+            accessibilityRole="radio"
+            accessibilityState={{ selected: isSelected }}
+          >
+            <Text className="text-sm font-semibold text-gray-dark">{allocation.production_unit_name}</Text>
+            {details && <Text className="text-xs text-gray-light mt-1">{details}</Text>}
+          </TouchableOpacity>
+        );
+      })}
+
+      {!allocationLoading && allocations.length === 0 && (
+        <Text className="text-sm text-gray-light">{t('noProductionUnitsAvailable')}</Text>
+      )}
+      {allocationError && (
+        <Text className="text-sm text-error mt-1">{t('selectedProductionUnitUnavailable')}</Text>
+      )}
     </View>
   );
 
@@ -310,6 +429,7 @@ export default function ReportsScreen({ navigation, route }: ReportsScreenProps)
   const renderListHeader = useCallback(
     () => (
       <View className="px-4 py-4">
+        {renderScopeSelector()}
         {canGenerateReports ? (
           <>
             <Text className="text-base font-bold text-gray-dark mb-3">{t('generateReport')}</Text>
@@ -396,7 +516,7 @@ export default function ReportsScreen({ navigation, route }: ReportsScreenProps)
         </View>
       </View>
     ),
-    [canGenerateReports, error, generatingType, handleGenerateReport, infoMessage, scopeError, selectedType, t]
+    [allocationError, allocationLoading, allocations, canGenerateReports, error, generatingType, handleGenerateReport, infoMessage, reportScope, scopeError, selectedAllocationId, selectedType, t]
   );
 
   const renderEmptyState = useCallback(

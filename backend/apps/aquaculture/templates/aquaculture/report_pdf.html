@@ -24,11 +24,26 @@
   {% with scope_type=payload.report_meta.scope_type|default:'cycle' %}
   {% if logo_data_uri %}<img class="logo" src="{{ logo_data_uri }}" alt="" />{% endif %}
   <div class="header">
-    <h1>{{ labels.report_title }}</h1>
+    <h1>{{ report_heading }}</h1>
     <div class="pill">{% if scope_type == 'unit' %}{{ labels.unit_report }}{% else %}{{ labels.cycle_report }}{% endif %}</div>
     <table class="meta"><tr><td><strong>{{ labels.farm }}:</strong> {{ payload.farm.farm_name|default:empty_value_label }}</td><td><strong>{{ labels.report_type }}:</strong> {{ report_type_label }}</td></tr>
     <tr><td><strong>{{ labels.period_covered }}:</strong> {{ period_label }}</td><td><strong>{{ labels.generated_on }}:</strong> {{ generated_at_display }}</td></tr></table>
   </div>
+
+  {% if scope_type == 'unit' and payload.cycles %}
+  {% with section=payload.cycles.0 %}
+  <section class="header avoid-break">
+    <h2>{{ labels.production_unit }}</h2>
+    <table class="meta">
+      <tr><td><strong>{{ labels.production_unit }}:</strong> {{ section.unit.production_unit_name|default:empty_value_label }}</td><td><strong>{{ labels.unit_type }}:</strong> {{ section.unit.production_unit_type_display|default:empty_value_label }}</td></tr>
+      <tr><td><strong>{{ labels.dimension }}:</strong> {{ section.unit.production_unit_dimension|default:empty_value_label }}</td><td><strong>{{ labels.capacity }}:</strong> {% if section.unit.production_unit_recommended_capacity is None %}{{ empty_value_label }}{% else %}{{ section.unit.production_unit_recommended_capacity }}{% endif %}</td></tr>
+      <tr><td><strong>{{ labels.current_fish_count }}:</strong> {% if section.current_metrics.current_count is None %}{{ empty_value_label }}{% else %}{{ section.current_metrics.current_count }}{% endif %}</td><td><strong>{{ labels.density }}:</strong> {% if section.unit.density is None %}{{ empty_value_label }}{% else %}{{ section.unit.density|floatformat:2 }} / {{ section.unit.production_unit_capacity_density_unit|default:empty_value_label }}{% endif %}</td></tr>
+      <tr><td><strong>{{ labels.cycle }}:</strong> {{ section.cycle.cycle_name|default:empty_value_label }}</td><td><strong>{{ labels.species }}:</strong> {{ section.cycle.species_display|default:empty_value_label }}</td></tr>
+      <tr><td><strong>{{ labels.cycle_status }}:</strong> {{ section.cycle.status_display|default:empty_value_label }}</td><td><strong>{{ labels.allocation_status }}:</strong> {{ section.unit.allocation_status_display|default:empty_value_label }}</td></tr>
+    </table>
+  </section>
+  {% endwith %}
+  {% endif %}
 
   {% if scope_type != 'unit' %}
   <section class="avoid-break"><h2>{{ labels.cycle_dashboard }}</h2><table class="cards"><tr>

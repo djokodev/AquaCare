@@ -421,11 +421,11 @@ describe('features/aquaculture/services/aquacultureService', () => {
     const result = await aquacultureService.getReports({
       report_type: 'daily',
       status: 'draft',
-      scope: 'cycle',
+      scope_type: 'cycle',
     });
 
     expect(result).toEqual([report]);
-    expect(mockApi.get).toHaveBeenCalledWith('/aquaculture/reports/?report_type=daily&status=draft&scope=cycle');
+    expect(mockApi.get).toHaveBeenCalledWith('/aquaculture/reports/?report_type=daily&status=draft&scope_type=cycle');
   });
 
   it('ajoute cycle_id dans le filtre des rapports quand fourni', async () => {
@@ -440,13 +440,13 @@ describe('features/aquaculture/services/aquacultureService', () => {
     mockApi.get.mockResolvedValueOnce({ data: { results: [] } } as never);
 
     await aquacultureService.getReports({
-      scope: 'unit',
+      scope_type: 'unit',
       cycle_id: 'cycle-session-1',
       cycle_unit_allocation_id: 'allocation-1',
     });
 
     expect(mockApi.get).toHaveBeenCalledWith(
-      '/aquaculture/reports/?scope=unit&cycle_id=cycle-session-1&cycle_unit_allocation_id=allocation-1'
+      '/aquaculture/reports/?scope_type=unit&cycle_id=cycle-session-1&cycle_unit_allocation_id=allocation-1'
     );
   });
 
@@ -456,8 +456,7 @@ describe('features/aquaculture/services/aquacultureService', () => {
 
     await aquacultureService.generateReport({
       report_type: 'weekly',
-      scope: 'unit',
-      cycle_id: 'cycle-1',
+      scope_type: 'unit',
       cycle_unit_allocation_id: 'allocation-1',
     });
     await aquacultureService.validateReport('report-1');
@@ -472,8 +471,7 @@ describe('features/aquaculture/services/aquacultureService', () => {
       '/aquaculture/reports/generate/',
       {
         report_type: 'weekly',
-        scope: 'unit',
-        cycle_id: 'cycle-1',
+        scope_type: 'unit',
         cycle_unit_allocation_id: 'allocation-1',
       }
     );

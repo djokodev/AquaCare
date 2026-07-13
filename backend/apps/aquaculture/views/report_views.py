@@ -28,6 +28,7 @@ from ..serializers import (
 )
 from ..services import (
     GenerateReportCommand,
+    InaccessibleReportUnitScopeError,
     InvalidReportCycleScopeError,
     InvalidReportScopeError,
     InvalidReportUnitScopeError,
@@ -71,11 +72,18 @@ logger = logging.getLogger(__name__)
                 description='Filtrer les rapports sur un cycle de session spécifique (UUID)'
             ),
             OpenApiParameter(
+                name='scope_type',
+                type=OpenApiTypes.STR,
+                location=OpenApiParameter.QUERY,
+                enum=['cycle', 'unit'],
+                description='Filtrer les rapports par portée (nom canonique)',
+            ),
+            OpenApiParameter(
                 name='scope',
                 type=OpenApiTypes.STR,
                 location=OpenApiParameter.QUERY,
                 enum=['cycle', 'unit'],
-                description='Filtrer les rapports par portée'
+                description='Alias rétrocompatible de scope_type',
             ),
             OpenApiParameter(
                 name='cycle_unit_allocation_id',
@@ -155,7 +163,13 @@ class ProductionReportViewSet(viewsets.ReadOnlyModelViewSet):
             queryset = queryset.filter(status=status_filter)
 
         cycle_id = self._normalize_uuid_query_param(self.request.query_params.get('cycle_id'), 'cycle_id')
-        scope = self.request.query_params.get('scope')
+        scope_type = self.request.query_params.get('scope_type')
+        legacy_scope = self.request.query_params.get('scope')
+        if scope_type and legacy_scope and scope_type != legacy_scope:
+            raise ValidationError({'scope_type': _('scope_type et scope doivent désigner la même portée.')})
+        scope = scope_type or legacy_scope
+        if scope and scope not in {'cycle', 'unit'}:
+            raise ValidationError({'scope_type': _('Portée de rapport inconnue.')})
         cycle_unit_allocation_id = self._normalize_uuid_query_param(
             self.request.query_params.get('cycle_unit_allocation_id'),
             'cycle_unit_allocation_id',
@@ -204,6 +218,26 @@ class ProductionReportViewSet(viewsets.ReadOnlyModelViewSet):
             "Retourne 202 Accepted. Poller GET /reports/{id}/ pour vérifier quand status='draft'."
         ),
         request=GenerateReportSerializer,
+        examples=[
+            OpenApiExample(
+                'Rapport de cycle',
+                value={
+                    'report_type': 'weekly',
+                    'scope_type': 'cycle',
+                    'cycle_id': '11111111-1111-4111-8111-111111111111',
+                },
+                request_only=True,
+            ),
+            OpenApiExample(
+                'Rapport par unité',
+                value={
+                    'report_type': 'weekly',
+                    'scope_type': 'unit',
+                    'cycle_unit_allocation_id': '22222222-2222-4222-8222-222222222222',
+                },
+                request_only=True,
+            ),
+        ],
         responses={202: ProductionReportDetailSerializer},
     )
     @action(detail=False, methods=['post'], throttle_classes=[AquacultureReportActionThrottle])
@@ -217,12 +251,12 @@ class ProductionReportViewSet(viewsets.ReadOnlyModelViewSet):
                 GenerateReportCommand(
                     report_type=serializer.validated_data['report_type'],
                     reference_date=serializer.validated_data.get('reference_date'),
-                    scope=serializer.validated_data.get('scope', 'cycle'),
                     cycle_id=(
                         str(serializer.validated_data['cycle_id'])
                         if serializer.validated_data.get('cycle_id')
                         else None
                     ),
+                    scope_type=serializer.validated_data.get('scope_type', 'cycle'),
                     cycle_unit_allocation_id=(
                         str(serializer.validated_data['cycle_unit_allocation_id'])
                         if serializer.validated_data.get('cycle_unit_allocation_id')
@@ -230,6 +264,8 @@ class ProductionReportViewSet(viewsets.ReadOnlyModelViewSet):
                     ),
                 ),
             )
+        except InaccessibleReportUnitScopeError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_404_NOT_FOUND)
         except (InvalidReportCycleScopeError, InvalidReportUnitScopeError, InvalidReportScopeError) as exc:
             return Response(
                 {'detail': str(exc)},

@@ -1,6 +1,6 @@
 # Cycle report data lineage
 
-Version: `1.2.4`
+Version: `1.3.0`
 
 This document defines the backend sources used by cycle and unit PDF reports. A
 report is a historical snapshot: values that describe the stock, biomass,
@@ -19,6 +19,18 @@ the mutable current dashboard state.
 | `CURRENT_MUTABLE_STATE` | Current model field; not used for historical reconstruction except documented legacy fallback. |
 
 ## Generation and scope rules
+
+- Manual generation accepts the canonical `scope_type` values `cycle` and
+  `unit`. The historical `scope` input remains an alias for compatibility.
+  A cycle report requires `cycle_id` and no allocation; a unit report requires
+  `cycle_unit_allocation_id`, which is resolved to one allocation in the
+  authenticated farm. A mismatched cycle or inaccessible allocation returns an
+  opaque not-found response.
+- Unit payloads include allocation identity, allocation status, unit dimension,
+  recommended capacity, and current density. The `cycle_wide_data` metadata
+  explicitly records that cycle-only facts are omitted from unit reports.
+  Global logs, global sanitary events, cycle costs, and unscoped feeding plans
+  are never repartitioned between units.
 
 - Automatic daily, weekly, and monthly schedulers dispatch one task per active
   cycle. Each task passes `farm_id`, `cycle_id`, `scope_type="cycle"`, and the

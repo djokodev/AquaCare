@@ -13,6 +13,7 @@ import {
   CycleStore,
   CycleStoreManualStockPayload,
   ProductionReport,
+  ReportScope,
   ReportType,
   SyncPayload,
   SyncResponse,
@@ -198,6 +199,7 @@ class AquacultureService {
     report_type?: ReportType;
     status?: 'draft' | 'validated';
     scope?: ReportScopeType;
+    scope_type?: ReportScopeType;
     cycle_id?: string;
     cycle_unit_allocation_id?: string;
   }): Promise<ProductionReport[]> {
@@ -209,7 +211,9 @@ class AquacultureService {
       if (params?.status) {
         query.append('status', params.status);
       }
-      if (params?.scope) {
+      if (params?.scope_type) {
+        query.append('scope_type', params.scope_type);
+      } else if (params?.scope) {
         query.append('scope', params.scope);
       }
       if (params?.cycle_id) {
@@ -243,10 +247,7 @@ class AquacultureService {
   async generateReport(payload: {
     report_type: ReportType;
     reference_date?: string;
-    scope?: ReportScopeType;
-    cycle_id?: string;
-    cycle_unit_allocation_id?: string;
-  }): Promise<ProductionReport> {
+  } & ReportScope): Promise<ProductionReport> {
     try {
       const response = await apiService.post<ProductionReport>(
         `${this.baseUrl}/reports/generate/`,

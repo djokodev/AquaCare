@@ -248,7 +248,7 @@ class TestReportServicePayloadAndPdfTemplate:
 
         assert payload["cycle_dashboard"]["resolved_cycle_duration_days"] == 150
         assert payload["cycle_dashboard"]["cycle_duration_source"] == "configured"
-        assert payload["calculation_metadata"]["data_lineage_version"] == "1.2.4"
+        assert payload["calculation_metadata"]["data_lineage_version"] == "1.3.0"
 
     def test_legacy_report_payload_exposes_species_fallback_source(self):
         farm_profile = FarmProfileFactory()
@@ -697,6 +697,86 @@ class TestReportServicePayloadAndPdfTemplate:
         assert "280 000 FCFA" in html
         assert "322 000 FCFA" in html
         assert "Coût total" in html
+
+    @pytest.mark.django_db
+    def test_unit_pdf_uses_shared_template_and_unit_identity(self):
+        farm_profile = FarmProfileFactory(farm_name="Ferme unité")
+        cycle = ProductionCycleFactory(
+            farm_profile=farm_profile,
+            cycle_name="Cycle Clarias juillet",
+            status="active",
+            start_date=date(2026, 7, 1),
+            species="clarias",
+        )
+        unit = ProductionUnit.objects.create(
+            farm_profile=farm_profile,
+            name="Bassin A / Nord",
+            unit_type="tank",
+            volume_m3="12.00",
+        )
+        allocation = CycleUnitAllocation.objects.create(
+            cycle=cycle,
+            production_unit=unit,
+            initial_fish_count=1000,
+            current_fish_count=950,
+            initial_biomass_kg="10.00",
+            current_biomass_kg="9.50",
+        )
+        report = _create_report(
+            farm_profile=farm_profile,
+            report_type="weekly",
+            period_start=date(2026, 7, 13),
+            period_end=date(2026, 7, 19),
+            scope_object_id=allocation.id,
+        )
+        payload = ReportService._build_payload(
+            farm_profile=farm_profile,
+            report_type="weekly",
+            period_start=date(2026, 7, 13),
+            period_end=date(2026, 7, 19),
+            scope_type="unit",
+            scope_object_id=str(allocation.id),
+        )
+        context = ReportService._build_pdf_context(
+            report=report,
+            payload=payload,
+            generated_at=timezone.localtime(timezone.now()),
+            language_code="fr",
+        )
+        html = render_to_string("aquaculture/report_pdf.html", context)
+        try:
+            pdf_bytes = ReportService._render_pdf(
+                report=report,
+                payload=payload,
+                generated_at=timezone.localtime(timezone.now()),
+                language_code="fr",
+            )
+        except OSError as exc:
+            pytest.skip(f"WeasyPrint runtime libraries unavailable: {exc}")
+
+        assert "Rapport hebdomadaire — Bassin A / Nord" in html
+        assert "Cycle Clarias juillet" in html
+        assert "Bac" in html
+        assert "Comparaison par unité" not in html
+        assert "bassin_a_nord" in ReportService._build_report_filename(
+            report_type="weekly",
+            farm_profile_id=str(farm_profile.id),
+            period_start=date(2026, 7, 13),
+            period_end=date(2026, 7, 19),
+            scope_type="unit",
+            scope_object_id=str(allocation.id),
+            scope_name=unit.name,
+        )
+        assert "/" not in ReportService._build_report_filename(
+            report_type="weekly",
+            farm_profile_id=str(farm_profile.id),
+            period_start=date(2026, 7, 13),
+            period_end=date(2026, 7, 19),
+            scope_type="unit",
+            scope_object_id=str(allocation.id),
+            scope_name=unit.name,
+        )
+        assert pdf_bytes.startswith(b"%PDF")
 
     def test_pdf_template_distinguishes_zero_from_missing_values(self):
         farm_profile = FarmProfileFactory(farm_name="Ferme valeurs")

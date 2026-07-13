@@ -30,6 +30,10 @@ class InvalidReportUnitScopeError(InvalidReportScopeError):
     """L'allocation d'unité fournie pour un rapport est invalide ou inaccessible."""
 
 
+class InaccessibleReportUnitScopeError(InvalidReportUnitScopeError):
+    """Une allocation existe peut-être, mais n'est pas accessible à l'utilisateur."""
+
+
 class MissingReportEmailError(ValueError):
     """L'utilisateur n'a pas d'adresse email disponible pour l'envoi du rapport."""
 
@@ -39,14 +43,28 @@ class InvalidReportPeriodError(InvalidReportScopeError):
 
 
 @dataclass(frozen=True)
+class ReportScope:
+    """Portée validée et prête à être transmise au moteur de rapport."""
+
+    scope_type: Literal["cycle", "unit"]
+    cycle: ProductionCycle
+    allocation: CycleUnitAllocation | None = None
+
+    @property
+    def production_unit(self):
+        return self.allocation.production_unit if self.allocation else None
+
+
+@dataclass(frozen=True)
 class GenerateReportCommand:
     """Commande applicative de demande de generation de rapport."""
 
     report_type: str
     reference_date: date | None = None
-    scope: Literal["cycle", "unit"] = "cycle"
+    scope: Literal["cycle", "unit"] | None = None
     cycle_id: str | None = None
     cycle_unit_allocation_id: str | None = None
+    scope_type: Literal["cycle", "unit"] | None = None
 
 
 @dataclass(frozen=True)
@@ -148,21 +166,60 @@ class ReportApplicationService:
             )
 
     @staticmethod
-    def _ensure_active_unit_scope(user, cycle_unit_allocation_id: str | None) -> CycleUnitAllocation:
+    def _ensure_active_unit_scope(
+        user,
+        cycle_unit_allocation_id: str | None,
+        cycle_id: str | None = None,
+    ) -> CycleUnitAllocation:
         if not cycle_unit_allocation_id:
             raise InvalidReportUnitScopeError(_("Contexte d'unité incomplet."))
 
-        allocation = CycleUnitAllocation.objects.select_related(
-            "cycle",
-            "production_unit",
-            "cycle__farm_profile",
-        ).filter(
-            id=cycle_unit_allocation_id,
-            cycle__farm_profile=user.farm_profile,
-        ).first()
+        try:
+            allocation_queryset = CycleUnitAllocation.objects.select_related(
+                "cycle",
+                "production_unit",
+                "cycle__farm_profile",
+            ).filter(
+                id=cycle_unit_allocation_id,
+                cycle__farm_profile=user.farm_profile,
+                production_unit__farm_profile=user.farm_profile,
+            )
+            if cycle_id:
+                allocation_queryset = allocation_queryset.filter(cycle_id=cycle_id)
+            allocation = allocation_queryset.first()
+        except (DjangoValidationError, TypeError, ValueError):
+            allocation = None
         if allocation is None or allocation.cycle.status != "active":
-            raise InvalidReportUnitScopeError(_("Allocation d'unité introuvable ou inactif."))
+            raise InaccessibleReportUnitScopeError(
+                _("Allocation d'unité introuvable ou inaccessible.")
+            )
         return allocation
+
+    @staticmethod
+    def resolve_report_scope(
+        user,
+        *,
+        scope_type: Literal["cycle", "unit"],
+        cycle_id: str | None = None,
+        cycle_unit_allocation_id: str | None = None,
+    ) -> ReportScope:
+        """Résout une portée dans la ferme de l'utilisateur connecté."""
+        if scope_type == "unit":
+            allocation = ReportApplicationService._ensure_active_unit_scope(
+                user,
+                cycle_unit_allocation_id,
+                cycle_id,
+            )
+            return ReportScope(
+                scope_type="unit",
+                cycle=allocation.cycle,
+                allocation=allocation,
+            )
+
+        return ReportScope(
+            scope_type="cycle",
+            cycle=ReportApplicationService._ensure_active_cycle_scope(user, cycle_id),
+        )
 
     @staticmethod
     def _set_scope_in_payload(
@@ -205,23 +262,31 @@ class ReportApplicationService:
                 raise InvalidReportPeriodError(
                     _("La période demandée doit être entièrement terminée avant de générer le rapport.")
                 )
-        scope = command.scope or "cycle"
+        if command.scope and command.scope_type and command.scope != command.scope_type:
+            raise InvalidReportScopeError(_("Les portées fournies sont incohérentes."))
+        scope = command.scope_type or command.scope or "cycle"
         cycle_id = command.cycle_id
         cycle_unit_allocation_id = command.cycle_unit_allocation_id
 
+        resolved_scope = ReportApplicationService.resolve_report_scope(
+            user,
+            scope_type=scope,
+            cycle_id=cycle_id,
+            cycle_unit_allocation_id=cycle_unit_allocation_id,
+        )
         if scope == "unit":
-            allocation = ReportApplicationService._ensure_active_unit_scope(user, cycle_unit_allocation_id)
+            allocation = resolved_scope.allocation
+            assert allocation is not None
             ReportApplicationService._ensure_period_covers_cycle(
-                allocation.cycle,
+                resolved_scope.cycle,
                 period_end,
                 ReportService._resolve_language_code(user),
             )
-            cycle_id = str(allocation.cycle_id)
+            cycle_id = str(resolved_scope.cycle.id)
             cycle_unit_allocation_id = str(allocation.id)
         else:
-            cycle = ReportApplicationService._ensure_active_cycle_scope(user, cycle_id)
             ReportApplicationService._ensure_period_covers_cycle(
-                cycle,
+                resolved_scope.cycle,
                 period_end,
                 ReportService._resolve_language_code(user),
             )
