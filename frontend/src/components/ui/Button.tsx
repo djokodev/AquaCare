@@ -36,8 +36,8 @@ const heights: Record<ButtonSize, number> = { small: sizing.controlSmall, medium
 export function Button({ label, onPress, variant = 'primary', size = 'medium', loading = false, disabled = false, fullWidth = true, iconLeft, iconRight, accessibilityHint, style, testID }: ButtonProps) {
   const inactive = disabled || loading;
   const disabledVisual = disabled && !loading;
-  const textColor = disabledVisual ? 'primary' : textColors[variant];
-  const iconColor = textColor === 'inverse' ? colors.text.inverse : textColor === 'primary' ? colors.text.primary : colors.text.link;
+  const textColor = disabledVisual ? 'disabled' : textColors[variant];
+  const iconColor = textColor === 'inverse' ? colors.text.inverse : textColor === 'disabled' ? colors.text.disabled : colors.text.link;
   return (
     <Pressable
       accessibilityRole="button"
@@ -68,7 +68,7 @@ const styles = StyleSheet.create({
   base: { alignItems: 'center', justifyContent: 'center', borderRadius: radii.lg, paddingHorizontal: spacing[4] },
   fullWidth: { alignSelf: 'stretch' }, outline: { borderWidth: 1, borderColor: colors.brand.primary },
   content: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
-  disabled: { backgroundColor: colors.surface.card, borderWidth: 1, borderColor: colors.brand.primary, opacity: 1 },
+  disabled: { backgroundColor: colors.surface.disabled, borderWidth: 1, borderColor: colors.border.default, opacity: 1 },
   pressed: { opacity: opacity.pressed },
   loadingContent: { opacity: 0 },
   loader: { position: 'absolute' },
