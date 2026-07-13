@@ -9,7 +9,6 @@ import {
   View,
   Text,
   ScrollView,
-  TextInput,
   TouchableOpacity,
   StyleSheet,
   Alert,
@@ -27,6 +26,17 @@ import { useAuth } from '@/hooks/useAuth';
 import { createClientUuid } from '@/utils/clientUuid';
 import { AQUACARE_COLORS } from '@/constants/colors';
 import { sharedTextInputStyles } from '@/components/common/inputStyles';
+import {
+  AppHeader,
+  AppText,
+  Button,
+  Card,
+  FormField,
+  InlineAlert,
+  SegmentedControl,
+  TextField,
+} from '@/components/ui';
+import { colors, spacing } from '@/theme';
 import { RootStackParamList } from '@/navigation/MainNavigator';
 import { AppDispatch, RootState } from '@/store/store';
 import { runCycleSimulation } from '@/features/aquaculture/store/farmSetupSlice';
@@ -114,6 +124,11 @@ interface BulkUnitDraftState {
 }
 
 type BulkUnitDraftErrors = Partial<Record<'count', string>> & ProductionUnitDraftErrors;
+
+/** Keeps the existing labelled form layout while standardising the input surface. */
+function SetupTextField({ style: _style, placeholderTextColor: _placeholderTextColor, ...props }: TextInputProps) {
+  return <TextField {...props} />;
+}
 
 const getDefaultSingleDraft = (): UnitDraftState => ({
   name: '',
@@ -712,21 +727,7 @@ export default function CreateFarmScreen({ navigation }: Props) {
       style={{ flex: 1 }}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <View className="bg-aquacare-primary flex-row items-center pt-14 pb-4 px-4">
-        <TouchableOpacity
-          testID="createFarmBackButton"
-          className="w-10 items-start justify-center"
-          onPress={handleGoBack}
-          accessibilityRole="button"
-          accessibilityLabel={t('back')}
-        >
-          <Ionicons name="arrow-back" size={24} color={AQUACARE_COLORS.WHITE} />
-        </TouchableOpacity>
-        <Text className="flex-1 text-center text-xl font-bold text-white">
-          {t('createFarmTitle')}
-        </Text>
-        <View className="w-10" />
-      </View>
+      <AppHeader title={t('createFarmTitle')} onBack={handleGoBack} backLabel={t('back')} backTestID="createFarmBackButton" />
 
     <ScrollView
       ref={scrollViewRef}
@@ -734,17 +735,10 @@ export default function CreateFarmScreen({ navigation }: Props) {
       contentContainerStyle={styles.content}
       keyboardShouldPersistTaps="handled"
     >
-      <View className="bg-white p-4 rounded-lg flex-row items-center mb-6 gap-3 border border-gray-200">
-        <Ionicons name="business" size={20} color={AQUACARE_COLORS.GREEN_PRIMARY} />
-        <View className="flex-1">
-          <Text className="text-xs uppercase tracking-wide text-gray-light mb-1">
-            {t('currentFarm')}
-          </Text>
-          <Text className="text-base font-semibold text-gray-dark">
-            {farmProfile?.farm_name || t('farmNotDefined')}
-          </Text>
-        </View>
-      </View>
+      <Card variant="outlined" style={{ marginBottom: spacing[5] }}>
+        <AppText variant="caption" color="muted">{t('currentFarm')}</AppText>
+        <AppText variant="cardTitle">{farmProfile?.farm_name || t('farmNotDefined')}</AppText>
+      </Card>
 
       <FieldLabel label={t('createFarmSpeciesLabel')} required />
       <View style={styles.chipRow}>
@@ -778,7 +772,7 @@ export default function CreateFarmScreen({ navigation }: Props) {
         <Text style={styles.formCardDescription}>{t('createFarmAddUnitDescription')}</Text>
 
         <FieldLabel label={t('createFarmUnitNameLabel')} required />
-        <TextInput
+        <SetupTextField
           style={[styles.input, singleUnitErrors.name && styles.inputError]}
           placeholder={t('createFarmUnitNamePlaceholder')}
           placeholderTextColor={AQUACARE_COLORS.GRAY_LIGHT}
@@ -808,7 +802,7 @@ export default function CreateFarmScreen({ navigation }: Props) {
           singleDraftUsesSurface ? (
             <>
               <FieldLabel label={t('createFarmUnitSurfaceLabel')} required />
-              <TextInput
+              <SetupTextField
                 style={[styles.input, singleUnitErrors.surface_m2 && styles.inputError]}
                 keyboardType="numeric"
                 placeholder={t('createFarmUnitSurfacePlaceholder')}
@@ -825,7 +819,7 @@ export default function CreateFarmScreen({ navigation }: Props) {
           ) : (
             <>
               <FieldLabel label={t('createFarmUnitVolumeLabel')} required />
-              <TextInput
+              <SetupTextField
                 style={[styles.input, singleUnitErrors.volume_m3 && styles.inputError]}
                 keyboardType="numeric"
                 placeholder={t('createFarmUnitVolumePlaceholder')}
@@ -842,14 +836,8 @@ export default function CreateFarmScreen({ navigation }: Props) {
           )
         ) : null}
 
-        <TouchableOpacity style={styles.primaryMiniBtn} onPress={handleSaveSingleUnit} activeOpacity={0.8}>
-          <Text style={styles.primaryMiniBtnText}>
-            {editingUnitId ? t('createFarmSaveUnitBtn') : `+ ${t('createFarmAddUnitBtn')}`}
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.linkBtn} onPress={resetSingleUnitDraft} activeOpacity={0.8}>
-          <Text style={styles.linkBtnText}>{t('cancel')}</Text>
-        </TouchableOpacity>
+        <Button label={editingUnitId ? t('createFarmSaveUnitBtn') : `+ ${t('createFarmAddUnitBtn')}`} onPress={handleSaveSingleUnit} />
+        <Button label={t('cancel')} variant="ghost" onPress={resetSingleUnitDraft} />
       </View>
 
       <View style={styles.formCard}>
@@ -874,7 +862,7 @@ export default function CreateFarmScreen({ navigation }: Props) {
         ) : null}
 
         <FieldLabel label={t('createFarmBulkUnitCountLabel')} required />
-        <TextInput
+        <SetupTextField
           style={[styles.input, bulkUnitErrors.count && styles.inputError]}
           keyboardType="numeric"
           placeholder={t('createFarmBulkUnitCountPlaceholder')}
@@ -887,7 +875,7 @@ export default function CreateFarmScreen({ navigation }: Props) {
         {bulkUnitErrors.count && <Text style={styles.inlineError}>{t(bulkUnitErrors.count)}</Text>}
 
         <FieldLabel label={t('createFarmUnitBaseNameLabel')} />
-        <TextInput
+        <SetupTextField
           style={styles.input}
           placeholder={t('createFarmUnitBaseNamePlaceholder')}
           placeholderTextColor={AQUACARE_COLORS.GRAY_LIGHT}
@@ -899,7 +887,7 @@ export default function CreateFarmScreen({ navigation }: Props) {
           bulkDraftUsesSurface ? (
             <>
               <FieldLabel label={t('createFarmUnitSurfaceLabel')} required />
-              <TextInput
+              <SetupTextField
                 style={[styles.input, bulkUnitErrors.surface_m2 && styles.inputError]}
                 keyboardType="numeric"
                 placeholder={t('createFarmUnitSurfacePlaceholder')}
@@ -916,7 +904,7 @@ export default function CreateFarmScreen({ navigation }: Props) {
           ) : (
             <>
               <FieldLabel label={t('createFarmUnitVolumeLabel')} required />
-              <TextInput
+              <SetupTextField
                 style={[styles.input, bulkUnitErrors.volume_m3 && styles.inputError]}
                 keyboardType="numeric"
                 placeholder={t('createFarmUnitVolumePlaceholder')}
@@ -933,12 +921,8 @@ export default function CreateFarmScreen({ navigation }: Props) {
           )
         ) : null}
 
-        <TouchableOpacity style={styles.secondaryMiniBtn} onPress={handleSaveBulkUnits} activeOpacity={0.8}>
-          <Text style={styles.secondaryMiniBtnText}>+ {t('createFarmAddUnitsIdenticalBtn')}</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.linkBtn} onPress={resetBulkUnitDraft} activeOpacity={0.8}>
-          <Text style={styles.linkBtnText}>{t('cancel')}</Text>
-        </TouchableOpacity>
+        <Button label={`+ ${t('createFarmAddUnitsIdenticalBtn')}`} variant="outline" onPress={handleSaveBulkUnits} />
+        <Button label={t('cancel')} variant="ghost" onPress={resetBulkUnitDraft} />
       </View>
 
       <View style={styles.unitsList}>
@@ -967,22 +951,8 @@ export default function CreateFarmScreen({ navigation }: Props) {
                 </View>
 
                 <View style={styles.unitCardActions}>
-                  <TouchableOpacity
-                    style={styles.unitActionBtn}
-                    onPress={() => handleEditUnit(unit)}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={styles.unitActionBtnText}>{t('createFarmEditUnitAction')}</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.unitActionBtn, styles.unitDeleteBtn]}
-                    onPress={() => handleDeleteUnit(unit.local_id)}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={[styles.unitActionBtnText, styles.unitDeleteBtnText]}>
-                      {t('createFarmDeleteUnitAction')}
-                    </Text>
-                  </TouchableOpacity>
+                  <Button label={t('createFarmEditUnitAction')} variant="outline" size="small" fullWidth={false} onPress={() => handleEditUnit(unit)} />
+                  <Button label={t('createFarmDeleteUnitAction')} variant="danger" size="small" fullWidth={false} onPress={() => handleDeleteUnit(unit.local_id)} />
                 </View>
               </View>
             );
@@ -1003,7 +973,7 @@ export default function CreateFarmScreen({ navigation }: Props) {
       )}
 
       <FieldLabel label={t('createFarmFingerlingsLabel')} />
-      <TextInput
+      <SetupTextField
         style={styles.input}
         placeholder={t('createFarmFingerlingsPlaceholder')}
         placeholderTextColor={AQUACARE_COLORS.GRAY_LIGHT}
@@ -1013,7 +983,7 @@ export default function CreateFarmScreen({ navigation }: Props) {
       />
 
       <FieldLabel label={t('createFarmFingerlingsCountLabel')} required />
-      <TextInput
+      <SetupTextField
         style={[
           styles.input,
           fingerlingsCoherence?.level === 'error' && styles.inputError,
@@ -1092,15 +1062,7 @@ export default function CreateFarmScreen({ navigation }: Props) {
           )}
 
           {recommendedAllocations !== null && (
-            <TouchableOpacity
-              style={styles.secondaryMiniBtn}
-              onPress={resetRecommendedAllocations}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.secondaryMiniBtnText}>
-                {t('createFarmProductionUnitAllocationResetBtn')}
-              </Text>
-            </TouchableOpacity>
+            <Button label={t('createFarmProductionUnitAllocationResetBtn')} variant="outline" onPress={resetRecommendedAllocations} />
           )}
 
           <View style={styles.allocationUnitsList}>
@@ -1144,7 +1106,7 @@ export default function CreateFarmScreen({ navigation }: Props) {
                     label={t('createFarmProductionUnitAssignedFishLabel')}
                     required
                   />
-                  <TextInput
+                  <SetupTextField
                     style={[styles.input, allocationError && styles.inputError]}
                     keyboardType="numeric"
                     placeholder={t('createFarmProductionUnitAssignedFishPlaceholder')}
@@ -1180,7 +1142,7 @@ export default function CreateFarmScreen({ navigation }: Props) {
       )}
 
       <FieldLabel label={t('createFarmCycleProductionLabel')} />
-      <TextInput
+      <SetupTextField
         testID="createFarmCycleProductionPreview"
         style={[styles.input, styles.readonlyInput]}
         editable={false}
@@ -1195,7 +1157,7 @@ export default function CreateFarmScreen({ navigation }: Props) {
       <Text style={styles.readonlyHelper}>{t('createFarmCycleProductionHelper')}</Text>
 
       <FieldLabel label={t('createFarmStartDateLabel')} />
-      <TextInput
+      <SetupTextField
         style={styles.input}
         placeholder={t('createFarmStartDatePlaceholder')}
         placeholderTextColor={AQUACARE_COLORS.GRAY_LIGHT}
@@ -1204,7 +1166,7 @@ export default function CreateFarmScreen({ navigation }: Props) {
       />
 
       <FieldLabel label={t('createFarmCycleDurationLabel')} required />
-      <TextInput
+      <SetupTextField
         testID="createFarmCycleDurationInput"
         style={[styles.input, cycleDurationErrorKey && styles.inputError]}
         keyboardType="number-pad"
@@ -1230,7 +1192,7 @@ export default function CreateFarmScreen({ navigation }: Props) {
       )}
 
       <FieldLabel label={t('createFarmSellingPriceLabel')} />
-      <TextInput
+      <SetupTextField
         style={styles.input}
         keyboardType="numeric"
         placeholder={t('createFarmSellingPricePlaceholder')}
@@ -1240,7 +1202,7 @@ export default function CreateFarmScreen({ navigation }: Props) {
       />
 
       <FieldLabel label={t('createFarmHarvestWeightLabel')} />
-      <TextInput
+      <SetupTextField
         style={styles.input}
         keyboardType="numeric"
         placeholder={t('createFarmHarvestWeightPlaceholder')}
@@ -1250,7 +1212,7 @@ export default function CreateFarmScreen({ navigation }: Props) {
       />
 
       <FieldLabel label={t('createFarmSurvivalRateLabel')} />
-      <TextInput
+      <SetupTextField
         style={styles.input}
         keyboardType="numeric"
         placeholder={t('createFarmSurvivalRatePlaceholder')}
@@ -1260,18 +1222,12 @@ export default function CreateFarmScreen({ navigation }: Props) {
       />
 
       {/* CTA */}
-      <TouchableOpacity
-        style={[styles.ctaBtn, simLoading && styles.ctaBtnDisabled]}
+      <Button
+        testID="createFarmSimulateButton"
+        label={t('createFarmSimulateBtn')}
         onPress={handleSimulate}
-        disabled={simLoading}
-        activeOpacity={0.8}
-      >
-        {simLoading ? (
-          <ActivityIndicator color={AQUACARE_COLORS.WHITE} />
-        ) : (
-          <Text style={styles.ctaBtnText}>{t('createFarmSimulateBtn')}</Text>
-        )}
-      </TouchableOpacity>
+        loading={simLoading}
+      />
 
       <View style={{ height: 40 }} />
     </ScrollView>
@@ -1284,18 +1240,18 @@ export default function CreateFarmScreen({ navigation }: Props) {
 function SectionTitle({ label, icon }: { label: string; icon: string }) {
   return (
     <View style={styles.sectionTitle}>
-      <Ionicons name={icon as any} size={18} color={AQUACARE_COLORS.GREEN_PRIMARY} />
-      <Text style={styles.sectionTitleText}>{label}</Text>
+      <Ionicons name={icon as keyof typeof Ionicons.glyphMap} size={18} color={colors.brand.primary} />
+      <AppText variant="sectionTitle">{label}</AppText>
     </View>
   );
 }
 
 function FieldLabel({ label, required }: { label: string; required?: boolean }) {
   return (
-    <Text style={styles.fieldLabel}>
+    <AppText variant="label" style={styles.fieldLabel}>
       {label}
-      {required && <Text style={{ color: AQUACARE_COLORS.ERROR }}> *</Text>}
-    </Text>
+      {required && <AppText variant="label" color="error"> *</AppText>}
+    </AppText>
   );
 }
 
@@ -1309,13 +1265,13 @@ function Chip({
   onPress: () => void;
 }) {
   return (
-    <TouchableOpacity
-      style={[styles.chip, selected && styles.chipSelected]}
+    <Button
+      label={label}
+      variant={selected ? 'primary' : 'outline'}
+      size="small"
+      fullWidth={false}
       onPress={onPress}
-      activeOpacity={0.7}
-    >
-      <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{label}</Text>
-    </TouchableOpacity>
+    />
   );
 }
 
