@@ -36,7 +36,7 @@ describe("features/main/components/MetricCard", () => {
       <MetricCard value="106 jours" label="Durée" />,
     );
 
-    expect(getByText("106 jours")).toBeTruthy();
-    expect(getByText(" jours")).toBeTruthy();
+    expect(getByText("106")).toBeTruthy();
+    expect(getByText("jours")).toBeTruthy();
   });
 });

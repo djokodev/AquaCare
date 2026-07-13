@@ -41,8 +41,8 @@ import {
   Button,
   Card,
   ErrorState,
+  InteractiveCard,
   LoadingState,
-  SelectableCard,
 } from "@/components/ui";
 import { colors, spacing } from "@/theme";
 import { calculateDashboardBusinessMetrics } from "../utils/dashboardCalculations";
@@ -61,12 +61,11 @@ function DashboardActionCard({
   testID,
 }: DashboardActionCardProps) {
   return (
-    <SelectableCard
+    <InteractiveCard
       testID={testID}
       accessibilityLabel={label}
       onPress={onPress}
       disabled={disabled}
-      layout="row"
       primaryBorder
       style={styles.actionCard}
     >
@@ -82,7 +81,7 @@ function DashboardActionCard({
         size={20}
         color={disabled ? colors.text.muted : colors.brand.primary}
       />
-    </SelectableCard>
+    </InteractiveCard>
   );
 }
 
@@ -493,50 +492,63 @@ export default function DashboardScreen({ navigation }: any) {
 
         {sessionCycle ? (
           <View className="px-5 pb-1">
-            <SelectableCard
-              testID="session-active-cycle-card"
-              accessibilityLabel={sessionCycle.cycle_name}
-              disabled={!canSwitchCycle}
-              layout="row"
-              primaryBorder
-              onPress={() =>
-                navigation.navigate("CycleSessionEntry", {
-                  showBackToDashboard: true,
-                })
-              }
-              style={styles.sessionCard}
-            >
-              <View className="flex-1 mr-3">
-                <AppText
-                  className={`text-xs font-semibold uppercase tracking-wide ${
-                    canSwitchCycle ? "text-gray-light" : "text-gray-light/80"
-                  }`}
-                >
+            {canSwitchCycle ? (
+              <InteractiveCard
+                testID="session-active-cycle-card"
+                accessibilityLabel={sessionCycle.cycle_name}
+                primaryBorder
+                onPress={() =>
+                  navigation.navigate("CycleSessionEntry", {
+                    showBackToDashboard: true,
+                  })
+                }
+                style={styles.sessionCard}
+              >
+                <View className="flex-1 mr-3">
+                  <AppText
+                    className={`text-xs font-semibold uppercase tracking-wide ${
+                      canSwitchCycle ? "text-gray-light" : "text-gray-light/80"
+                    }`}
+                  >
+                    {t("sessionActiveCycleLabel")}
+                  </AppText>
+                  <AppText variant="bodyStrong" style={{ marginTop: 4 }}>
+                    {sessionCycle.cycle_name}
+                  </AppText>
+                  {canSwitchCycle ? (
+                    <AppText
+                      variant="helper"
+                      color="link"
+                      style={{ marginTop: 4 }}
+                    >
+                      {t("changeSessionCycle", {
+                        defaultValue: "Changer de cycle",
+                      })}
+                    </AppText>
+                  ) : null}
+                </View>
+                <Ionicons
+                  name="chevron-forward"
+                  size={20}
+                  color={
+                    canSwitchCycle ? colors.brand.primary : colors.text.muted
+                  }
+                />
+              </InteractiveCard>
+            ) : (
+              <Card
+                testID="session-active-cycle-card"
+                variant="outlined"
+                style={[styles.sessionCard, styles.inactiveSessionCard]}
+              >
+                <AppText variant="overline" color="muted">
                   {t("sessionActiveCycleLabel")}
                 </AppText>
-                <AppText variant="bodyStrong" style={{ marginTop: 4 }}>
+                <AppText variant="bodyStrong" style={styles.sessionName}>
                   {sessionCycle.cycle_name}
                 </AppText>
-                {canSwitchCycle ? (
-                  <AppText
-                    variant="helper"
-                    color="link"
-                    style={{ marginTop: 4 }}
-                  >
-                    {t("changeSessionCycle", {
-                      defaultValue: "Changer de cycle",
-                    })}
-                  </AppText>
-                ) : null}
-              </View>
-              <Ionicons
-                name="chevron-forward"
-                size={20}
-                color={
-                  canSwitchCycle ? colors.brand.primary : colors.text.muted
-                }
-              />
-            </SelectableCard>
+              </Card>
+            )}
           </View>
         ) : null}
 
@@ -699,4 +711,6 @@ const styles = StyleSheet.create({
     marginTop: spacing[3],
   },
   actionLabel: { flex: 1, marginRight: spacing[3] },
+  inactiveSessionCard: { borderColor: colors.brand.primary },
+  sessionName: { marginTop: spacing[1] },
 });

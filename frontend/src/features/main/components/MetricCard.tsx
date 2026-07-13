@@ -15,14 +15,22 @@ const MetricCard: React.FC<MetricCardProps> = ({ value, label, subtitle }) => {
 
   return (
     <Card variant="outlined" style={styles.card}>
-      <AppText variant="metric" numberOfLines={2}>
-        {unitMatch ? unitMatch[1] : metricValue}
+      <View style={styles.valueRow}>
+        <AppText
+          variant="metric"
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.75}
+          style={styles.metricValue}
+        >
+          {unitMatch ? unitMatch[1] : metricValue}
+        </AppText>
         {unitMatch ? (
-          <AppText variant="caption" color="muted">
-            {unitMatch[2]}
+          <AppText variant="caption" color="muted" style={styles.unit}>
+            {unitMatch[2].trim()}
           </AppText>
         ) : null}
-      </AppText>
+      </View>
       <AppText variant="caption" color="muted">
         {label}
       </AppText>
@@ -39,4 +47,11 @@ export default React.memo(MetricCard);
 
 const styles = StyleSheet.create({
   card: { flex: 1, minWidth: "45%", gap: spacing[1] },
+  valueRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    flexWrap: "nowrap",
+  },
+  metricValue: { flexShrink: 1 },
+  unit: { marginLeft: spacing[1] },
 });

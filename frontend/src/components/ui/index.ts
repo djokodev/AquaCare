@@ -1,7 +1,7 @@
 export { AppText } from './AppText';
 export { Button } from './Button';
 export { IconButton } from './IconButton';
-export { Card, SelectableCard } from './Card';
+export { Card, InteractiveCard, SelectableCard } from './Card';
 export { Badge } from './Badge';
 export { Divider } from './Divider';
 export { AppHeader } from './AppHeader';
