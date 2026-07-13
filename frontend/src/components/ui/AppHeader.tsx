@@ -13,9 +13,10 @@ interface AppHeaderProps {
   backLabel?: string;
   rightAction?: React.ReactNode;
   backTestID?: string;
+  titleAlignment?: 'center' | 'left';
 }
 
-export function AppHeader({ title, subtitle, variant = 'brand', onBack, backLabel, rightAction, backTestID }: AppHeaderProps) {
+export function AppHeader({ title, subtitle, variant = 'brand', onBack, backLabel, rightAction, backTestID, titleAlignment = 'center' }: AppHeaderProps) {
   const insets = useSafeAreaInsets();
   const brand = variant === 'brand';
   const textColor = brand ? 'inverse' : 'primary';
@@ -32,14 +33,14 @@ export function AppHeader({ title, subtitle, variant = 'brand', onBack, backLabe
             variant={brand ? 'ghost' : 'surface'}
             tone={brand ? 'inverse' : 'default'}
           />
-        ) : <View style={styles.placeholder} />}
-        <View style={styles.titleContainer}>
+        ) : titleAlignment === 'center' ? <View style={styles.placeholder} /> : null}
+        <View style={[styles.titleContainer, titleAlignment === 'left' && styles.leftTitleContainer]}>
           <AppText variant="cardTitle" color={textColor} numberOfLines={2} accessibilityRole="header">
             {title}
           </AppText>
           {subtitle ? <AppText variant="caption" color={brand ? 'inverse' : 'muted'} numberOfLines={1}>{subtitle}</AppText> : null}
         </View>
-        {rightAction ?? <View style={styles.placeholder} />}
+        {rightAction ?? (titleAlignment === 'center' ? <View style={styles.placeholder} /> : null)}
       </View>
     </View>
   );
@@ -51,4 +52,5 @@ const styles = StyleSheet.create({
   row: { minHeight: sizing.controlMedium, flexDirection: 'row', alignItems: 'center' },
   placeholder: { width: sizing.touchTargetMinimum },
   titleContainer: { flex: 1, marginHorizontal: spacing[2] },
+  leftTitleContainer: { marginHorizontal: 0 },
 });

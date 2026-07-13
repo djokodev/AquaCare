@@ -135,6 +135,7 @@ export default function CycleSessionEntryScreen({ navigation, route }: Props) {
       subtitle={activeCycles.length > 1 ? t('sessionCycleDescription') : undefined}
       onBack={showBackToDashboard ? handleBackToDashboard : undefined}
       backLabel={t('backToDashboard')}
+      titleAlignment="left"
     />
   );
 
@@ -200,6 +201,7 @@ export default function CycleSessionEntryScreen({ navigation, route }: Props) {
             label={t('sessionCycleConfirm')}
             onPress={handleConfirm}
             disabled={!selectedCycleId}
+            style={styles.confirmButton}
           />
         </View>
       </Screen>
@@ -220,4 +222,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing[4],
     paddingVertical: spacing[3],
   },
+  confirmButton: { backgroundColor: colors.brand.primary },
 });

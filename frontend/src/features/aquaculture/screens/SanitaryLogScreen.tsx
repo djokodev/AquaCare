@@ -372,12 +372,12 @@ export default function SanitaryLogScreen({ navigation, route }: SanitaryLogScre
               return (
                 <View key={type.value} style={{ width: '31%', marginRight: '2%', marginBottom: 8 }}>
                   <TouchableOpacity
-                    className={`p-3 rounded-lg border items-center ${
+                    className={`min-h-[80px] p-3 rounded-lg border items-center justify-center ${
                       isSelected ? 'bg-aquacare-primary border-aquacare-primary' : 'bg-white border-gray-200'
                     }`}
                     onPress={() => setFormData((prev) => ({ ...prev, event_type: type.value }))}
                   >
-                    <Text className={`text-xs text-center mt-2 ${isSelected ? 'text-white' : 'text-gray-dark'}`}>
+                    <Text className={`text-xs text-center ${isSelected ? 'text-white' : 'text-gray-dark'}`}>
                       {t(type.labelKey)}
                     </Text>
                   </TouchableOpacity>

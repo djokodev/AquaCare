@@ -35,7 +35,8 @@ const heights: Record<ButtonSize, number> = { small: sizing.controlSmall, medium
 
 export function Button({ label, onPress, variant = 'primary', size = 'medium', loading = false, disabled = false, fullWidth = true, iconLeft, iconRight, accessibilityHint, style, testID }: ButtonProps) {
   const inactive = disabled || loading;
-  const iconColor = textColors[variant] === 'inverse' ? colors.text.inverse : colors.text.link;
+  const textColor = inactive ? 'disabled' : textColors[variant];
+  const iconColor = textColor === 'inverse' ? colors.text.inverse : textColor === 'disabled' ? colors.text.disabled : colors.text.link;
   return (
     <Pressable
       accessibilityRole="button"
@@ -45,11 +46,11 @@ export function Button({ label, onPress, variant = 'primary', size = 'medium', l
       disabled={inactive}
       onPress={onPress}
       testID={testID}
-      style={({ pressed }) => [styles.base, { minHeight: heights[size], backgroundColor: backgrounds[variant] }, variant === 'outline' && styles.outline, fullWidth && styles.fullWidth, (inactive || pressed) && { opacity: inactive ? opacity.disabled : opacity.pressed }, style]}
+      style={({ pressed }) => [styles.base, { minHeight: heights[size], backgroundColor: backgrounds[variant] }, variant === 'outline' && styles.outline, inactive && styles.disabled, fullWidth && styles.fullWidth, pressed && styles.pressed, style]}
     >
       <View style={[styles.content, loading && styles.loadingContent]}>
         {iconLeft ? <Ionicons name={iconLeft} size={sizing.iconMedium} color={iconColor} /> : null}
-        <AppText variant={size === 'small' ? 'label' : 'button'} color={textColors[variant]} style={iconLeft || iconRight ? styles.labelWithIcon : undefined}>{label}</AppText>
+        <AppText variant={size === 'small' ? 'label' : 'button'} color={textColor} style={iconLeft || iconRight ? styles.labelWithIcon : undefined}>{label}</AppText>
         {iconRight ? <Ionicons name={iconRight} size={sizing.iconMedium} color={iconColor} /> : null}
       </View>
       {loading ? <ActivityIndicator style={styles.loader} color={iconColor} /> : null}
@@ -61,6 +62,8 @@ const styles = StyleSheet.create({
   base: { alignItems: 'center', justifyContent: 'center', borderRadius: radii.lg, paddingHorizontal: spacing[4] },
   fullWidth: { alignSelf: 'stretch' }, outline: { borderWidth: 1, borderColor: colors.brand.primary },
   content: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
+  disabled: { backgroundColor: colors.surface.disabled, opacity: 1 },
+  pressed: { opacity: opacity.pressed },
   loadingContent: { opacity: 0 },
   loader: { position: 'absolute' },
   labelWithIcon: { marginHorizontal: spacing[2] },
