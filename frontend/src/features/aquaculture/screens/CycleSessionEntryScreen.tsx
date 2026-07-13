@@ -200,7 +200,7 @@ export default function CycleSessionEntryScreen({ navigation, route }: Props) {
             label={t('sessionCycleConfirm')}
             onPress={handleConfirm}
             disabled={!selectedCycleId}
-            style={styles.confirmButton}
+            variant={selectedCycleId ? 'primary' : 'outline'}
           />
         </View>
       </Screen>
@@ -221,5 +221,4 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing[4],
     paddingVertical: spacing[3],
   },
-  confirmButton: { backgroundColor: colors.brand.primary },
 });

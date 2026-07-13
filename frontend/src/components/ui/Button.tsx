@@ -35,8 +35,9 @@ const heights: Record<ButtonSize, number> = { small: sizing.controlSmall, medium
 
 export function Button({ label, onPress, variant = 'primary', size = 'medium', loading = false, disabled = false, fullWidth = true, iconLeft, iconRight, accessibilityHint, style, testID }: ButtonProps) {
   const inactive = disabled || loading;
-  const textColor = inactive ? 'disabled' : textColors[variant];
-  const iconColor = textColor === 'inverse' ? colors.text.inverse : textColor === 'disabled' ? colors.text.disabled : colors.text.link;
+  const disabledVisual = disabled && !loading;
+  const textColor = disabledVisual ? 'primary' : textColors[variant];
+  const iconColor = textColor === 'inverse' ? colors.text.inverse : textColor === 'primary' ? colors.text.primary : colors.text.link;
   return (
     <Pressable
       accessibilityRole="button"
@@ -49,7 +50,7 @@ export function Button({ label, onPress, variant = 'primary', size = 'medium', l
       style={[styles.pressable, fullWidth && styles.fullWidth]}
     >
       {({ pressed }) => (
-        <View style={[styles.base, { minHeight: heights[size], backgroundColor: backgrounds[variant] }, variant === 'outline' && styles.outline, inactive && styles.disabled, pressed && styles.pressed, style]}>
+        <View style={[styles.base, { minHeight: heights[size], backgroundColor: backgrounds[variant] }, variant === 'outline' && styles.outline, style, disabledVisual && styles.disabled, pressed && styles.pressed]}>
           <View style={[styles.content, loading && styles.loadingContent]}>
             {iconLeft ? <Ionicons name={iconLeft} size={sizing.iconMedium} color={iconColor} /> : null}
             <AppText variant={size === 'small' ? 'label' : 'button'} color={textColor} style={iconLeft || iconRight ? styles.labelWithIcon : undefined}>{label}</AppText>
@@ -67,7 +68,7 @@ const styles = StyleSheet.create({
   base: { alignItems: 'center', justifyContent: 'center', borderRadius: radii.lg, paddingHorizontal: spacing[4] },
   fullWidth: { alignSelf: 'stretch' }, outline: { borderWidth: 1, borderColor: colors.brand.primary },
   content: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
-  disabled: { backgroundColor: colors.surface.disabled, opacity: 1 },
+  disabled: { backgroundColor: colors.surface.card, borderWidth: 1, borderColor: colors.brand.primary, opacity: 1 },
   pressed: { opacity: opacity.pressed },
   loadingContent: { opacity: 0 },
   loader: { position: 'absolute' },
