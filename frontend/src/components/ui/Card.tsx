@@ -71,7 +71,7 @@ const styles = StyleSheet.create({
     borderRadius: radii.lg,
     padding: spacing[4],
   },
-  outlined: { borderWidth: 1, borderColor: colors.border.subtle },
+  outlined: { borderWidth: 1, borderColor: colors.border.default },
   selected: {
     backgroundColor: colors.surface.selected,
     borderColor: colors.border.focus,

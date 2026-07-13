@@ -492,9 +492,9 @@ export default function DashboardScreen({ navigation }: any) {
         {sessionCycle ? (
           <View className="px-5 pb-1">
             <SelectableCard
-            testID="session-active-cycle-card"
-            accessibilityLabel={sessionCycle.cycle_name}
-            disabled={!canSwitchCycle}
+              testID="session-active-cycle-card"
+              accessibilityLabel={sessionCycle.cycle_name}
+              disabled={!canSwitchCycle}
               onPress={() =>
                 navigation.navigate("CycleSessionEntry", {
                   showBackToDashboard: true,
@@ -690,11 +690,19 @@ export default function DashboardScreen({ navigation }: any) {
 }
 
 const styles = StyleSheet.create({
-  sessionCard: { marginBottom: spacing[1] },
+  sessionCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: spacing[1],
+    borderColor: colors.brand.primary,
+  },
   actionCard: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
     marginTop: spacing[3],
+    borderColor: colors.brand.primary,
   },
   actionLabel: { flex: 1, marginRight: spacing[3] },
 });
