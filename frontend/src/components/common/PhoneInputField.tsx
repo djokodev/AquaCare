@@ -1,8 +1,9 @@
-import React from 'react';
-import { View, Text, TextInput } from 'react-native';
-import { useTranslation } from 'react-i18next';
-import { formatCameroonPhone } from '@/utils/phoneFormatter';
-import { sharedTextInputStyles } from '@/components/common/inputStyles';
+import React from "react";
+import { StyleSheet, TextInput, View } from "react-native";
+import { useTranslation } from "react-i18next";
+import { formatCameroonPhone } from "@/utils/phoneFormatter";
+import { AppText, FormField } from "@/components/ui";
+import { colors, radii, sizing, spacing, typography } from "@/theme";
 
 interface PhoneInputFieldProps {
   value: string;
@@ -27,30 +28,57 @@ export default function PhoneInputField({
 }: PhoneInputFieldProps) {
   const { t } = useTranslation();
 
-  const displayLabel = label ?? t('phoneNumber');
+  const displayLabel = label ?? t("phoneNumber");
 
   return (
-    <View className="mb-4">
-      <Text className="text-base font-medium text-gray-dark mb-2">
-        {displayLabel}{required ? ' *' : ''}
-      </Text>
-      <View className={`flex-row items-center h-12 border rounded-lg bg-white px-3 ${error ? 'border-error' : 'border-gray-300'}`}>
-        <View style={[sharedTextInputStyles.prefixContainer, { marginRight: 8 }]}>
-          <Text style={sharedTextInputStyles.prefixText}>+237</Text>
+    <FormField
+      label={displayLabel}
+      required={required}
+      hint={hint}
+      error={error ? t(error, { defaultValue: error }) : undefined}
+    >
+      <View style={[styles.inputContainer, error && styles.error]}>
+        <View style={styles.prefixContainer}>
+          <AppText variant="bodyStrong">+237</AppText>
         </View>
         <TextInput
-          className="flex-1 text-base text-gray-dark"
-          style={[sharedTextInputStyles.base, { flex: 1, paddingHorizontal: 0 }]}
-          value={value.replace('+237', '')}
+          accessibilityLabel={displayLabel}
+          accessibilityHint={hint}
+          style={styles.input}
+          value={value.replace("+237", "")}
           onChangeText={(raw) => onChange(formatCameroonPhone(raw))}
-          placeholder={t('placeholderPhoneExample')}
+          placeholder={t("placeholderPhoneExample")}
           keyboardType="phone-pad"
           maxLength={9}
           autoComplete="tel"
         />
       </View>
-      {hint && !error ? <Text className="text-xs text-gray-light mt-1">{hint}</Text> : null}
-      {error ? <Text className="text-sm text-error mt-1">{t(error, { defaultValue: error })}</Text> : null}
-    </View>
+    </FormField>
   );
 }
+
+const styles = StyleSheet.create({
+  inputContainer: {
+    minHeight: sizing.inputHeight,
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: colors.border.default,
+    borderRadius: radii.md,
+    backgroundColor: colors.surface.card,
+    paddingHorizontal: spacing[3],
+  },
+  prefixContainer: {
+    marginRight: spacing[2],
+    paddingRight: spacing[2],
+    borderRightWidth: 1,
+    borderRightColor: colors.border.subtle,
+  },
+  input: {
+    flex: 1,
+    ...typography.body,
+    color: colors.text.primary,
+    paddingVertical: 0,
+  },
+  error: { borderColor: colors.status.error },
+});
