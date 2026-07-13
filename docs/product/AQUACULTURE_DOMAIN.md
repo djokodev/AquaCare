@@ -43,6 +43,28 @@ Direct `POST /api/aquaculture/cycles/` is deprecated and disabled for new cycles
 
 The modern `NewCycleScreen` uses one online launch request with a stable UUID for retries. It does not create an isolated modern cycle offline; the incomplete form stays in memory. The legacy synchronization fallback remains available only for compatibility with older flows.
 
+## Production reports
+
+Reports reuse one backend pipeline for daily, weekly, and monthly periods. A
+cycle report is scoped by `ProductionCycle` and aggregates all allocations in
+that cycle. A unit report is scoped by `CycleUnitAllocation`, not only by the
+physical `ProductionUnit`; this preserves the cycle context when a physical
+unit is reused later.
+
+Manual generation uses `scope_type=cycle` with `cycle_id`, or
+`scope_type=unit` with `cycle_unit_allocation_id`. The backend resolves both
+the farm and the allocation and rejects an allocation from another cycle or
+farm opaquely. Legacy clients may continue sending `scope` as an alias.
+
+Unit reports contain only allocation-linked logs, mortalities, weights,
+sanitary events, harvests, stock, biomass, survival, FCR, capacity, and
+density. Cycle-wide logs, global sanitary events, cycle costs, and unscoped
+feeding plans are omitted from unit reports rather than being divided between
+units. Cycle reports retain their existing multi-unit comparison and
+cycle-wide sections. The mobile report screen loads its options from the
+selected cycle's allocations and keeps the full-cycle option available for
+legacy cycles without allocations.
+
 ## Constants and references
 
 - `backend/apps/aquaculture/constants.py`

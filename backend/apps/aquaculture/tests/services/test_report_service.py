@@ -3,10 +3,11 @@ Tests unitaires ciblés pour ReportService (emails + rendu template PDF).
 """
 
 from datetime import date, datetime
+from decimal import Decimal
 from unittest.mock import patch
 
 import pytest
-from aquaculture.models import CycleUnitAllocation, ProductionReport, ProductionUnit
+from aquaculture.models import CycleLog, CycleUnitAllocation, ProductionReport, ProductionUnit
 from aquaculture.services.report_service import ReportService, UnresolvableLegacyReportScopeError
 from aquaculture.services.report_visuals import build_donut_svg, build_growth_svg
 from django.core import mail
@@ -16,6 +17,37 @@ from django.utils import timezone
 from django.utils.translation import override
 
 from tests.fixtures.factories import FarmProfileFactory, ProductionCycleFactory, UserFactory
+
+
+@pytest.mark.parametrize(
+    ("cycle_name", "language_code", "expected"),
+    [
+        ("Cycle Clarias normal", "fr", "Clarias normal"),
+        ("  Cycle Clarias normal  ", "fr", "Clarias normal"),
+        ("Production cycle Clarias normal", "en", "Clarias normal"),
+        ("Clarias juillet", "fr", "Clarias juillet"),
+        ("Mon premier cycle", "fr", "Mon premier cycle"),
+        ("", "fr", None),
+        (None, "en", None),
+    ],
+)
+def test_clean_cycle_name_for_report_display(cycle_name, language_code, expected):
+    assert ReportService.clean_cycle_name_for_report_display(cycle_name, language_code) == expected
+
+
+@pytest.mark.parametrize(
+    ("status", "language_code", "expected"),
+    [
+        ("active", "fr", "En production"),
+        ("harvested", "fr", "Récoltée"),
+        ("inactive", "fr", "Inactive"),
+        ("active", "en", "In production"),
+        ("harvested", "en", "Harvested"),
+        ("inactive", "en", "Inactive"),
+    ],
+)
+def test_report_unit_status_labels(status, language_code, expected):
+    assert ReportService.get_report_unit_status_label(status, language_code) == expected
 
 
 def _create_report(
@@ -36,6 +68,71 @@ def _create_report(
         scope_object_id=scope_object_id,
         payload=payload or {},
     )
+
+
+def _unit_chart_payload(
+    growth_chart,
+    cost_svg="<svg id='cost-breakdown-svg'></svg>",
+    density_unit="poissons/m³",
+):
+    growth_chart = {
+        **growth_chart,
+        "points": [
+            {**point, "label": point.get("label") or point.get("legend_label")}
+            for point in growth_chart.get("points", [])
+        ],
+    }
+    return {
+        "report_meta": {"scope_type": "unit"},
+        "farm": {"farm_name": "Ferme Revue Finale"},
+        "summary": {
+            "cycle_count": 1,
+            "initial_fish_count": 1000,
+            "estimated_current_fish_count": 900,
+            "total_mortality_count": 10,
+            "mortality_rate_pct": 1,
+            "total_feed_consumed_kg": 12,
+            "estimated_current_biomass_kg": 61.2,
+        },
+        "growth_chart": growth_chart,
+        "cost_breakdown": {
+            "total_fcfa": 322000,
+            "items": [{"key": "feed", "amount_fcfa": 322000, "percentage": 100}],
+            "svg": cost_svg,
+        },
+        "cycles": [{
+            "cycle": {
+                "cycle_name": "Cycle Clarias normal",
+                "species_display": "Silure",
+                "start_date_display": "01/06/2026",
+                "days_active": 30,
+            },
+            "unit": {
+                "production_unit_name": "Bassin A",
+                "production_unit_capacity_density_unit": density_unit,
+                "density": 75,
+            },
+            "current_metrics": {
+                "current_count": 900,
+                "current_average_weight": 68,
+                "current_biomass": 61.2,
+                "fcr": 1.2,
+                "survival_rate": 90,
+            },
+            "cumulative_metrics": {},
+            "period_metrics": {
+                "log_count": 1,
+                "total_feed": 12,
+                "total_mortality": 1,
+                "average_temperature": 28,
+                "average_oxygen": 5,
+                "average_ph": 7,
+            },
+            "logs": [],
+            "sanitary_logs": [],
+        }],
+        "units": [],
+    }
 
 
 @pytest.mark.django_db
@@ -248,7 +345,7 @@ class TestReportServicePayloadAndPdfTemplate:
 
         assert payload["cycle_dashboard"]["resolved_cycle_duration_days"] == 150
         assert payload["cycle_dashboard"]["cycle_duration_source"] == "configured"
-        assert payload["calculation_metadata"]["data_lineage_version"] == "1.2.4"
+        assert payload["calculation_metadata"]["data_lineage_version"] == "1.3.0"
 
     def test_legacy_report_payload_exposes_species_fallback_source(self):
         farm_profile = FarmProfileFactory()
@@ -343,6 +440,165 @@ class TestReportServicePayloadAndPdfTemplate:
         assert payload["cycles"][0]["cycle"]["id"] == str(scoped_cycle.id)
         assert payload["report_meta"]["cycle_scope_id"] == str(scoped_cycle.id)
         assert payload["report_meta"]["cycle_scope_name"] == scoped_cycle.cycle_name
+
+    def test_cycle_pdf_keeps_plural_unit_details_and_comparison(self):
+        farm_profile = FarmProfileFactory()
+        cycle = ProductionCycleFactory(farm_profile=farm_profile, status="active")
+        unit = ProductionUnit.objects.create(
+            farm_profile=farm_profile,
+            name="Bassin cycle",
+            unit_type="tank",
+            volume_m3="3.00",
+        )
+        CycleUnitAllocation.objects.create(
+            cycle=cycle,
+            production_unit=unit,
+            initial_fish_count=900,
+            current_fish_count=900,
+            initial_biomass_kg="9.00",
+            current_biomass_kg="9.00",
+        )
+        payload = ReportService._build_payload(
+            farm_profile=farm_profile,
+            report_type="daily",
+            period_start=date(2026, 7, 12),
+            period_end=date(2026, 7, 12),
+            scope_type="cycle",
+            scope_object_id=str(cycle.id),
+            cycle_id=str(cycle.id),
+        )
+        report = _create_report(
+            farm_profile=farm_profile,
+            report_type="daily",
+            period_start=date(2026, 7, 12),
+            period_end=date(2026, 7, 12),
+            scope_object_id=cycle.id,
+        )
+        context = ReportService._build_pdf_context(
+            report=report,
+            payload=payload,
+            generated_at=timezone.localtime(timezone.now()),
+            language_code="fr",
+        )
+        html = render_to_string("aquaculture/report_pdf.html", context)
+
+        assert "Détail des unités de production" in html
+        assert "Détail de l'unité de production" not in html
+        assert "Comparaison par unité" in html
+
+    @pytest.mark.parametrize(
+        ('unit_type', 'dimension_kwargs', 'expected_dimension_unit', 'expected_density_unit'),
+        [
+            ('tank', {'volume_m3': '12.00'}, 'm³', 'poissons/m³'),
+            ('cage', {'volume_m3': '12.00'}, 'm³', 'poissons/m³'),
+            ('pond', {'surface_m2': '150.00'}, 'm²', 'poissons/m²'),
+        ],
+    )
+    def test_unit_payload_separates_dimension_and_density_units(
+        self,
+        unit_type,
+        dimension_kwargs,
+        expected_dimension_unit,
+        expected_density_unit,
+    ):
+        farm_profile = FarmProfileFactory()
+        cycle = ProductionCycleFactory(farm_profile=farm_profile, status='active')
+        unit = ProductionUnit.objects.create(
+            farm_profile=farm_profile,
+            name=f'Unité {unit_type}',
+            unit_type=unit_type,
+            **dimension_kwargs,
+        )
+        allocation = CycleUnitAllocation.objects.create(
+            cycle=cycle,
+            production_unit=unit,
+            initial_fish_count=1000,
+            current_fish_count=950,
+            initial_biomass_kg='10.00',
+            current_biomass_kg='9.50',
+        )
+
+        payload = ReportService._build_payload(
+            farm_profile=farm_profile,
+            report_type='daily',
+            period_start=date(2026, 7, 19),
+            period_end=date(2026, 7, 19),
+            scope_type='unit',
+            scope_object_id=str(allocation.id),
+        )
+        unit_payload = payload['cycles'][0]['unit']
+
+        assert unit_payload['production_unit_dimension_unit'] == expected_dimension_unit
+        assert unit_payload['production_unit_capacity_density_unit'] == expected_density_unit
+        assert unit_payload['production_unit_dimension_unit'] not in {'poissons/m²', 'poissons/m³'}
+
+        farm_profile.user.language_preference = 'en'
+        farm_profile.user.save(update_fields=['language_preference'])
+        english_payload = ReportService._build_payload(
+            farm_profile=farm_profile,
+            report_type='daily',
+            period_start=date(2026, 7, 19),
+            period_end=date(2026, 7, 19),
+            scope_type='unit',
+            scope_object_id=str(allocation.id),
+        )
+        assert english_payload['cycles'][0]['unit']['production_unit_capacity_density_unit'] == (
+            expected_density_unit.replace('poissons', 'fish')
+        )
+
+    def test_pond_report_uses_surface_when_legacy_volume_is_also_present(self):
+        farm_profile = FarmProfileFactory()
+        cycle = ProductionCycleFactory(farm_profile=farm_profile, status='active')
+        unit = ProductionUnit.objects.create(
+            farm_profile=farm_profile,
+            name='Étang legacy',
+            unit_type='pond',
+            surface_m2=Decimal('120.00'),
+        )
+        ProductionUnit.objects.filter(id=unit.id).update(volume_m3=Decimal('3.00'))
+        unit.refresh_from_db()
+        allocation = CycleUnitAllocation.objects.create(
+            cycle=cycle,
+            production_unit=unit,
+            initial_fish_count=600,
+            current_fish_count=600,
+            initial_biomass_kg='6.00',
+            current_biomass_kg='6.00',
+        )
+        payload = ReportService._build_payload(
+            farm_profile=farm_profile,
+            report_type='daily',
+            period_start=date(2026, 7, 19),
+            period_end=date(2026, 7, 19),
+            scope_type='unit',
+            scope_object_id=str(allocation.id),
+        )
+        unit_payload = payload['cycles'][0]['unit']
+
+        assert unit_payload['production_unit_dimension_value'] == 120.0
+        assert unit_payload['production_unit_dimension_unit'] == 'm²'
+        assert unit_payload['production_unit_capacity_density_unit'] == 'poissons/m²'
+        assert unit_payload['density'] == 5.0
+
+        report = _create_report(
+            farm_profile=farm_profile,
+            report_type='daily',
+            period_start=date(2026, 7, 19),
+            period_end=date(2026, 7, 19),
+            scope_object_id=allocation.id,
+        )
+        context = ReportService._build_pdf_context(
+            report=report,
+            payload=payload,
+            generated_at=timezone.localtime(timezone.now()),
+            language_code='fr',
+        )
+        html = render_to_string('aquaculture/report_pdf.html', context)
+
+        assert '120,00 m²' in html
+        assert '5,00 poissons/m²' in html
+        assert '200,00 poissons/m²' not in html
+        assert '3.00 m²' not in html
 
     def test_generate_all_active_cycles_skips_cycles_started_after_period_end(self):
         farm_profile = FarmProfileFactory()
@@ -691,12 +947,293 @@ class TestReportServicePayloadAndPdfTemplate:
 
         assert "Rapport du cycle" in html
         assert "Portée" not in html
+        assert "Évolution du poids moyen hebdomadaire" in html
         assert "<svg" in html
         assert "<rect" in html
         assert "<path" in html or "<circle" in html
         assert "280 000 FCFA" in html
         assert "322 000 FCFA" in html
         assert "Coût total" in html
+
+    @pytest.mark.django_db
+    def test_unit_pdf_uses_shared_template_and_unit_identity(self):
+        farm_profile = FarmProfileFactory(farm_name="Ferme unité")
+        cycle = ProductionCycleFactory(
+            farm_profile=farm_profile,
+            cycle_name="Cycle Clarias juillet",
+            status="active",
+            start_date=date(2026, 7, 1),
+            species="clarias",
+        )
+        unit = ProductionUnit.objects.create(
+            farm_profile=farm_profile,
+            name="Bassin A / Nord",
+            unit_type="tank",
+            volume_m3="12.00",
+        )
+        allocation = CycleUnitAllocation.objects.create(
+            cycle=cycle,
+            production_unit=unit,
+            initial_fish_count=1000,
+            current_fish_count=950,
+            initial_biomass_kg="10.00",
+            current_biomass_kg="9.50",
+        )
+        CycleLog.objects.create(
+            cycle=cycle,
+            cycle_unit_allocation=allocation,
+            log_date=date(2026, 7, 19),
+            mortality_count=50,
+        )
+        report = _create_report(
+            farm_profile=farm_profile,
+            report_type="weekly",
+            period_start=date(2026, 7, 13),
+            period_end=date(2026, 7, 19),
+            scope_object_id=allocation.id,
+        )
+        payload = ReportService._build_payload(
+            farm_profile=farm_profile,
+            report_type="weekly",
+            period_start=date(2026, 7, 13),
+            period_end=date(2026, 7, 19),
+            scope_type="unit",
+            scope_object_id=str(allocation.id),
+        )
+        context = ReportService._build_pdf_context(
+            report=report,
+            payload=payload,
+            generated_at=timezone.localtime(timezone.now()),
+            language_code="fr",
+        )
+        html = render_to_string("aquaculture/report_pdf.html", context)
+
+        assert "Rapport hebdomadaire — Bassin A / Nord" in html
+        assert "Informations sur l&#x27;unité" in html
+        assert "Cycle de production:</strong> Clarias juillet" in html
+        assert "Cycle Clarias juillet" not in html
+        assert "Bac" in html
+        assert "12,00 m³" in html
+        assert "3 600 poissons" in html
+        assert "79,17 poissons/m³" in html
+        assert "Espèce:</strong> Silure" in html
+        assert "Statut dans ce cycle:</strong> En production" in html
+        assert "Détail de l&#x27;unité de production" in html
+        assert "Détail des unités de production" not in html
+        assert "État du cycle" not in html
+        assert "État de l&#x27;allocation" not in html
+        assert "Cycle:</strong>" not in html
+        assert " / poissons/m³" not in html
+        assert "Comparaison par unité" not in html
+
+        try:
+            pdf_bytes = ReportService._render_pdf(
+                report=report,
+                payload=payload,
+                generated_at=timezone.localtime(timezone.now()),
+                language_code="fr",
+            )
+        except OSError as exc:
+            pytest.skip(f"WeasyPrint runtime libraries unavailable: {exc}")
+
+        assert "bassin_a_nord" in ReportService._build_report_filename(
+            report_type="weekly",
+            farm_profile_id=str(farm_profile.id),
+            period_start=date(2026, 7, 13),
+            period_end=date(2026, 7, 19),
+            scope_type="unit",
+            scope_object_id=str(allocation.id),
+            scope_name=unit.name,
+        )
+        assert "/" not in ReportService._build_report_filename(
+            report_type="weekly",
+            farm_profile_id=str(farm_profile.id),
+            period_start=date(2026, 7, 13),
+            period_end=date(2026, 7, 19),
+            scope_type="unit",
+            scope_object_id=str(allocation.id),
+            scope_name=unit.name,
+        )
+        assert pdf_bytes.startswith(b"%PDF")
+
+        farm_profile.user.language_preference = 'en'
+        farm_profile.user.save(update_fields=['language_preference'])
+        english_payload = ReportService._build_payload(
+            farm_profile=farm_profile,
+            report_type="weekly",
+            period_start=date(2026, 7, 13),
+            period_end=date(2026, 7, 19),
+            scope_type="unit",
+            scope_object_id=str(allocation.id),
+        )
+        english_context = ReportService._build_pdf_context(
+            report=report,
+            payload=english_payload,
+            generated_at=timezone.localtime(timezone.now()),
+            language_code="en",
+        )
+        with override("en"):
+            english_html = render_to_string("aquaculture/report_pdf.html", english_context)
+        assert "Production unit information" in english_html
+        assert "Production cycle:</strong> Clarias juillet" in english_html
+        assert "Status in this cycle:</strong> In production" in english_html
+        assert "Recommended capacity:</strong> 3,600 fish" in english_html
+        assert "Informations sur l'unité" not in english_html
+        assert "État de l&#x27;allocation" not in english_html
+        assert "79.17 fish/m³" in english_html
+        assert " / fish/m³" not in english_html
+
+    @pytest.mark.parametrize(
+        ("report_type", "growth_chart"),
+        [
+            ("daily", {
+                "state": "chart",
+                "points": [{"legend_label": "S1", "value_g": 26}],
+                "svg": "<svg id='growth-chart-svg'></svg>",
+            }),
+        ],
+    )
+    def test_unit_daily_never_renders_growth_or_cost_charts(self, report_type, growth_chart):
+        farm_profile = FarmProfileFactory(farm_name="Ferme Revue Finale")
+        report = _create_report(
+            farm_profile=farm_profile,
+            report_type=report_type,
+            period_start=date(2026, 6, 30),
+            period_end=date(2026, 6, 30),
+        )
+        context = ReportService._build_pdf_context(
+            report=report,
+            payload=_unit_chart_payload(growth_chart),
+            generated_at=timezone.localtime(timezone.now()),
+            language_code="fr",
+        )
+        html = render_to_string("aquaculture/report_pdf.html", context)
+
+        assert "Évolution du poids moyen de l’unité" not in html
+        assert "growth-chart-svg" not in html
+        assert "Répartition estimée des coûts engagés à ce jour" not in html
+        assert "cost-breakdown-svg" not in html
+
+    def test_unit_weekly_first_point_shows_guidance_without_chart(self):
+        farm_profile = FarmProfileFactory(farm_name="Ferme Revue Finale")
+        report = _create_report(
+            farm_profile=farm_profile,
+            report_type="weekly",
+            period_start=date(2026, 6, 22),
+            period_end=date(2026, 6, 28),
+        )
+        context = ReportService._build_pdf_context(
+            report=report,
+            payload=_unit_chart_payload({
+                "state": "first_point",
+                "points": [{"legend_label": "S4", "value_g": 68}],
+                "svg": "",
+            }),
+            generated_at=timezone.localtime(timezone.now()),
+            language_code="fr",
+        )
+        html = render_to_string("aquaculture/report_pdf.html", context)
+
+        assert "Évolution du poids moyen de l’unité" in html
+        assert "Première période de suivi : poids moyen de 68,0 g." in html
+        assert "Une deuxième période est nécessaire pour afficher une évolution." in html
+        assert "growth-chart-svg" not in html
+        assert "cost-breakdown-svg" not in html
+
+    def test_unit_weekly_renders_growth_chart_only_with_two_points(self):
+        farm_profile = FarmProfileFactory(farm_name="Ferme Revue Finale")
+        report = _create_report(
+            farm_profile=farm_profile,
+            report_type="weekly",
+            period_start=date(2026, 6, 22),
+            period_end=date(2026, 6, 28),
+        )
+        points = [
+            {"legend_label": "S3", "value_g": 54},
+            {"legend_label": "S4", "value_g": 68},
+        ]
+        context = ReportService._build_pdf_context(
+            report=report,
+            payload=_unit_chart_payload({
+                "state": "chart",
+                "points": points,
+                "svg": "<svg id='growth-chart-svg'></svg>",
+            }),
+            generated_at=timezone.localtime(timezone.now()),
+            language_code="fr",
+        )
+        html = render_to_string("aquaculture/report_pdf.html", context)
+
+        assert "Évolution du poids moyen de l’unité" in html
+        assert "growth-chart-svg" in html
+        assert "S3: 54,0 g" in html
+        assert "S4: 68,0 g" in html
+        assert "cost-breakdown-svg" not in html
+        assert "Répartition estimée des coûts engagés à ce jour" not in html
+
+    def test_unit_monthly_renders_all_growth_points_and_hides_costs(self):
+        farm_profile = FarmProfileFactory(farm_name="Ferme Revue Finale")
+        report = _create_report(
+            farm_profile=farm_profile,
+            report_type="monthly",
+            period_start=date(2026, 6, 1),
+            period_end=date(2026, 6, 30),
+        )
+        points = [
+            {"legend_label": "S1 — 01–07 juin", "value_g": 26},
+            {"legend_label": "S2 — 08–14 juin", "value_g": 40},
+            {"legend_label": "S3 — 15–21 juin", "value_g": 54},
+            {"legend_label": "S4 — 22–28 juin", "value_g": 68},
+            {"legend_label": "S5 — 29–30 juin", "value_g": 77},
+        ]
+        context = ReportService._build_pdf_context(
+            report=report,
+            payload=_unit_chart_payload({
+                "state": "chart",
+                "points": points,
+                "svg": "<svg id='growth-chart-svg'></svg>",
+            }),
+            generated_at=timezone.localtime(timezone.now()),
+            language_code="fr",
+        )
+        html = render_to_string("aquaculture/report_pdf.html", context)
+
+        assert "Évolution du poids moyen de l’unité" in html
+        assert "growth-chart-svg" in html
+        for point in points:
+            assert point["legend_label"] in html
+        assert "26,0 g" in html
+        assert "77,0 g" in html
+        assert "Répartition estimée des coûts engagés à ce jour" not in html
+        assert "cost-breakdown-svg" not in html
+
+    def test_unit_growth_labels_are_translated_in_english(self):
+        farm_profile = FarmProfileFactory(farm_name="Final Review Farm")
+        report = _create_report(
+            farm_profile=farm_profile,
+            report_type="weekly",
+            period_start=date(2026, 6, 22),
+            period_end=date(2026, 6, 28),
+        )
+        context = ReportService._build_pdf_context(
+            report=report,
+            payload=_unit_chart_payload({
+                "state": "first_point",
+                "points": [{"legend_label": "S4", "value_g": 68}],
+                "svg": "",
+            }, density_unit="fish/m³"),
+            generated_at=timezone.localtime(timezone.now()),
+            language_code="en",
+        )
+        with override("en"):
+            html = render_to_string("aquaculture/report_pdf.html", context)
+
+        assert "Production unit average weight trend" in html
+        assert "First monitoring period: average weight 68.0 g." in html
+        assert "A second period is required to display a trend." in html
+        assert "Évolution du poids moyen de l’unité" not in html
+        assert "fish/m³" in html or "fish/m3" in html
+        assert "cost-breakdown-svg" not in html
 
     def test_pdf_template_distinguishes_zero_from_missing_values(self):
         farm_profile = FarmProfileFactory(farm_name="Ferme valeurs")

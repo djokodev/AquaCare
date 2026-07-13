@@ -13,6 +13,9 @@ from __future__ import annotations
 import base64
 import inspect
 import logging
+import re
+import unicodedata
+from copy import deepcopy
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from importlib import metadata
@@ -27,11 +30,17 @@ from django.db.models import Prefetch, Q
 from django.template.loader import render_to_string
 from django.utils import timezone
 from django.utils.formats import date_format
+from django.utils.text import slugify
 from django.utils.translation import gettext as _
 from django.utils.translation import override
 
 from ..constants import DEFAULT_FEED_PRICE_PER_KG, ECONOMIC_DEFAULTS_BY_SPECIES
 from ..domain.cycle_duration import get_default_cycle_duration_days
+from ..domain.production_units import (
+    get_production_unit_density_unit,
+    get_production_unit_dimension_unit,
+    get_production_unit_dimension_value,
+)
 from ..models import (
     CycleLog,
     CycleUnitAllocation,
@@ -56,7 +65,7 @@ from .report_visuals import (
 
 logger = logging.getLogger(__name__)
 
-REPORT_DATA_LINEAGE_VERSION = "1.2.4"
+REPORT_DATA_LINEAGE_VERSION = "1.3.0"
 
 
 class UnresolvableLegacyReportScopeError(ValueError):
@@ -243,6 +252,7 @@ class PDFContext(TypedDict):
     empty_value_label: str
     scope_label: str
     scope_name: str | None
+    report_heading: str
 
 
 class ReportService(BaseService):
@@ -308,10 +318,17 @@ class ReportService(BaseService):
         period_end: date,
         scope_type: str,
         scope_object_id: str | None,
+        scope_name: str | None = None,
     ) -> str:
         filename_parts = [f"report_{report_type}", str(farm_profile_id)]
         if scope_type:
             filename_parts.append(scope_type)
+        if scope_type == "unit" and scope_name:
+            normalized_name = unicodedata.normalize("NFKD", scope_name).encode("ascii", "ignore").decode("ascii")
+            safe_name = slugify(normalized_name).replace("-", "_")
+            safe_name = re.sub(r"[^a-zA-Z0-9_]+", "", safe_name)[:80].strip("_")
+            if safe_name:
+                filename_parts.append(safe_name)
         if scope_object_id:
             filename_parts.append(scope_object_id)
         filename_parts.extend([period_start.isoformat(), period_end.isoformat()])
@@ -460,6 +477,7 @@ class ReportService(BaseService):
             period_end=period_end,
             scope_type=scope_type,
             scope_object_id=effective_scope_object_id,
+            scope_name=(payload.get("report_meta", {}) or {}).get("scope_name"),
         )
         return ReportService._apply_generated_report_content(
             report,
@@ -759,6 +777,18 @@ class ReportService(BaseService):
             harvest_data_complete=stock_snapshot["harvest_data_complete"],
         )
         unit_name = allocation.production_unit.name
+        dimension_value = get_production_unit_dimension_value(
+            allocation.production_unit.unit_type,
+            volume_m3=allocation.production_unit.volume_m3,
+            surface_m2=allocation.production_unit.surface_m2,
+        )
+        current_count_value = stock_snapshot["estimated_current_fish_count"]
+        dimension_float = ReportService._to_float(dimension_value)
+        density = (
+            ReportService._to_float(current_count_value) / dimension_float
+            if dimension_float and dimension_float > 0
+            else None
+        )
         planned_price = ReportService._to_float(allocation.cycle.planned_selling_price_per_kg_fcfa)
         effective_selling_price = planned_price or ReportService._default_selling_price_for_species(
             allocation.cycle.species
@@ -788,8 +818,22 @@ class ReportService(BaseService):
                     allocation.production_unit, "get_unit_type_display", language_code
                 ),
                 "production_unit_dimension": allocation.production_unit.display_dimension,
+                "production_unit_dimension_value": ReportService._to_float(dimension_value),
+                "production_unit_dimension_unit": get_production_unit_dimension_unit(
+                    allocation.production_unit.unit_type
+                ),
+                "production_unit_recommended_capacity": allocation.production_unit.recommended_capacity,
+                "production_unit_capacity_density_unit": get_production_unit_density_unit(
+                    allocation.production_unit.unit_type,
+                    language_code=language_code,
+                ),
+                "density": round(density, 2) if density is not None else None,
                 "initial_fish_count": allocation.initial_fish_count,
                 "initial_biomass_kg": ReportService._to_float(allocation.initial_biomass_kg),
+                "allocation_status": allocation.status,
+                "allocation_status_display": ReportService._localized_display(
+                    allocation, "get_status_display", language_code
+                ),
                 "planned_survival_rate_pct": ReportService._to_float(allocation.expected_survival_rate_pct),
                 "harvested_fish_count": stock_snapshot["harvested_fish_count"],
                 "harvested_biomass_kg": ReportService._to_float(stock_snapshot["harvested_biomass_kg"]),
@@ -1818,6 +1862,7 @@ class ReportService(BaseService):
         )
         feeding_plans = list(
             cycle.feeding_plans.filter(
+                cycle_unit_allocation=allocation,
                 start_date__lte=period_end,
                 end_date__gte=period_start,
             ).order_by("week_number")
@@ -1915,6 +1960,11 @@ class ReportService(BaseService):
             },
             "cycles": [section],
             "units": [ReportService._build_unit_comparison_snapshot(section)],
+            "cycle_wide_data": {
+                "policy": "omitted_from_unit_report",
+                "included": False,
+                "reason": "Only data explicitly linked to the selected allocation is shown.",
+            },
         }
 
     @staticmethod
@@ -1929,6 +1979,8 @@ class ReportService(BaseService):
         allow_historical_scope: bool = False,
     ) -> ReportPayload:
         """Construit le snapshot JSON complet utilisé pour le PDF."""
+        if scope_type not in {"cycle", "unit"}:
+            raise ValueError(_("Portée de rapport inconnue."))
         if scope_object_id is None and cycle_id:
             scope_object_id = cycle_id
         if scope_type == "unit":
@@ -2553,6 +2605,37 @@ class ReportService(BaseService):
         return en_text if language_code == "en" else fr_text
 
     @staticmethod
+    def clean_cycle_name_for_report_display(
+        cycle_name: str | None,
+        language_code: str,
+    ) -> str | None:
+        """Nettoie un préfixe générique uniquement pour l'affichage du rapport."""
+        del language_code
+        if cycle_name is None:
+            return None
+        original = cycle_name.strip()
+        if not original:
+            return None
+        cleaned = re.sub(
+            r"^(?:production\s+cycle|cycle)\s+",
+            "",
+            original,
+            count=1,
+            flags=re.IGNORECASE,
+        ).strip()
+        return cleaned or original
+
+    @staticmethod
+    def get_report_unit_status_label(status: str | None, language_code: str) -> str | None:
+        """Retourne le libellé métier du statut d'une unité dans son cycle."""
+        labels = {
+            "active": ReportService._pick_text(language_code, "En production", "In production"),
+            "harvested": ReportService._pick_text(language_code, "Récoltée", "Harvested"),
+            "inactive": ReportService._pick_text(language_code, "Inactive", "Inactive"),
+        }
+        return labels.get(status, status or None)
+
+    @staticmethod
     def _get_report_type_label(report_type: str, language_code: str) -> str:
         labels = {
             "daily": ReportService._pick_text(language_code, "Journalier", "Daily"),
@@ -2814,6 +2897,9 @@ class ReportService(BaseService):
                 "weekly_sanitary": "Sanitary activities",
                 "species": "Species",
                 "growth_chart_title": "Weekly average weight evolution",
+                "unit_growth_chart_title": "Production unit average weight trend",
+                "unit_growth_first_point": "First monitoring period: average weight",
+                "unit_growth_first_point_followup": "A second period is required to display a trend.",
                 "weight_axis": "Average weight (g)",
                 "cost_breakdown_title": "Estimated production cost breakdown to date",
                 "cost_total_to_date": "Estimated production cost to date",
@@ -2822,7 +2908,20 @@ class ReportService(BaseService):
                 "cost_other": "Other estimated costs",
                 "insufficient_cost_data": "Insufficient cost data to display the breakdown.",
                 "production_unit": "Production unit",
+                "production_unit_information": "Production unit information",
                 "production_unit_details": "Production unit details",
+                "production_unit_details_unit": "Production unit details",
+                "cycle": "Cycle",
+                "production_cycle": "Production cycle",
+                "cycle_status": "Cycle status",
+                "allocation_status": "Allocation status",
+                "status_in_cycle": "Status in this cycle",
+                "in_production": "In production",
+                "fish_count_unit": "fish",
+                "unit_type": "Unit type",
+                "dimension": "Dimension",
+                "capacity": "Recommended capacity",
+                "density": "Current density",
                 "dashboard": "Dashboard",
                 "status_and_period_activity": "Current status and period activity",
                 "active_events": "active sanitary events",
@@ -2967,6 +3066,9 @@ class ReportService(BaseService):
             "weekly_sanitary": "Activités sanitaires",
             "species": "Espèce",
             "growth_chart_title": "Évolution du poids moyen hebdomadaire",
+            "unit_growth_chart_title": "Évolution du poids moyen de l’unité",
+            "unit_growth_first_point": "Première période de suivi : poids moyen de",
+            "unit_growth_first_point_followup": "Une deuxième période est nécessaire pour afficher une évolution.",
             "weight_axis": "Poids moyen (g)",
             "cost_breakdown_title": "Répartition estimée des coûts engagés à ce jour",
             "cost_total_to_date": "Coût total estimé à ce jour",
@@ -2975,7 +3077,20 @@ class ReportService(BaseService):
             "cost_other": "Autres charges estimées",
             "insufficient_cost_data": "Données de coûts insuffisantes pour afficher la répartition.",
             "production_unit": "Unité",
+            "production_unit_information": "Informations sur l'unité",
             "production_unit_details": "Détail des unités de production",
+            "production_unit_details_unit": "Détail de l'unité de production",
+            "cycle": "Cycle",
+            "production_cycle": "Cycle de production",
+            "cycle_status": "État du cycle",
+            "allocation_status": "État de l'allocation",
+            "status_in_cycle": "Statut dans ce cycle",
+            "in_production": "En production",
+            "fish_count_unit": "poissons",
+            "unit_type": "Type d'unité",
+            "dimension": "Dimension",
+            "capacity": "Capacité recommandée",
+            "density": "Densité actuelle",
             "dashboard": "Tableau de bord",
             "status_and_period_activity": "État et activité de la période",
             "current_status": "État actuel",
@@ -3106,14 +3221,42 @@ class ReportService(BaseService):
         if isinstance(report_meta, dict):
             scope_label = str(report_meta.get("scope_label") or "")
             scope_name = report_meta.get("scope_name")
+        scope_type = str(report_meta.get("scope_type") or report.scope_type or "cycle")
+        pdf_payload = deepcopy(payload)
+        production_cycle_name = None
+        if isinstance(pdf_payload, dict):
+            for section in pdf_payload.get("cycles", []) or []:
+                cycle_data = section.get("cycle", {}) if isinstance(section, dict) else {}
+                unit_data = section.get("unit", {}) if isinstance(section, dict) else {}
+                if isinstance(cycle_data, dict):
+                    cycle_data["cycle_name_display"] = ReportService.clean_cycle_name_for_report_display(
+                        cycle_data.get("cycle_name"),
+                        language_code,
+                    )
+                    if production_cycle_name is None:
+                        production_cycle_name = cycle_data.get("cycle_name_display")
+                if isinstance(unit_data, dict):
+                    unit_data["status_in_cycle_display"] = ReportService.get_report_unit_status_label(
+                        unit_data.get("allocation_status"),
+                        language_code,
+                    )
+        report_type_label = ReportService._get_report_type_label(report.report_type, language_code)
+        if scope_type == "unit" and scope_name:
+            report_heading = ReportService._pick_text(
+                language_code,
+                f"Rapport {report_type_label.lower()} — {scope_name}",
+                f"{report_type_label} report — {scope_name}",
+            )
+        else:
+            report_heading = ReportService._build_pdf_labels(language_code)["report_title"]
         return {
             "report": report,
-            "payload": payload,
+            "payload": pdf_payload,
             "generated_at": generated_at,
             "language_code": language_code,
             "brand_color": "#059669",
             "labels": ReportService._build_pdf_labels(language_code),
-            "report_type_label": ReportService._get_report_type_label(report.report_type, language_code),
+            "report_type_label": report_type_label,
             "period_label": ReportService._format_report_period_label(
                 report_type=report.report_type,
                 period_start=report.period_start,
@@ -3125,6 +3268,8 @@ class ReportService(BaseService):
             "empty_value_label": ReportService._pick_text(language_code, "Non renseigné", "Not provided"),
             "scope_label": scope_label,
             "scope_name": scope_name,
+            "report_heading": report_heading,
+            "production_cycle_name": production_cycle_name,
             "logo_data_uri": ReportService._resolve_logo_data_uri(),
         }
 

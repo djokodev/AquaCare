@@ -12,6 +12,17 @@ export type CycleStatus = "planned" | "active" | "harvested" | "cancelled";
 export type ReportType = "daily" | "weekly" | "monthly";
 export type ReportStatus = "draft" | "validated" | "pending";
 export type ReportScopeType = "cycle" | "unit";
+export type ReportScope =
+  | {
+      scope_type: "cycle";
+      cycle_id: string;
+      cycle_unit_allocation_id?: never;
+    }
+  | {
+      scope_type: "unit";
+      cycle_unit_allocation_id: string;
+      cycle_id?: string;
+    };
 export type EmailReportStatus = "not_sent" | "sent" | "failed";
 export type WhatsAppReportStatus = "not_shared" | "shared";
 export type SanitaryEventType =
@@ -416,8 +427,8 @@ export interface CycleUnitAllocation {
   production_unit_name?: string;
   production_unit_type?: ProductionUnitType;
   production_unit_display_dimension?: string | null;
-  production_unit_capacity_density_unit?: string | null;
   production_unit_recommended_capacity?: number | null;
+  production_unit_capacity_density_unit?: string | null;
   survival_rate_pct?: number | null;
   created_at: string;
   updated_at: string;

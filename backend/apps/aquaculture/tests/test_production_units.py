@@ -4,12 +4,52 @@ from datetime import date
 from decimal import Decimal
 
 import pytest
+from aquaculture.domain import (
+    get_production_unit_density_unit,
+    get_production_unit_dimension_unit,
+    get_production_unit_dimension_value,
+)
 from aquaculture.models import CycleUnitAllocation, ProductionCycle, ProductionUnit
 from aquaculture.serializers import CycleUnitAllocationSerializer, ProductionUnitSerializer
 from django.core.exceptions import ValidationError
 from django.db.models.deletion import ProtectedError
 from django.urls import reverse
 from rest_framework import status
+
+
+@pytest.mark.parametrize(
+    ('unit_type', 'dimension_unit', 'density_unit_fr', 'density_unit_en'),
+    [
+        ('tank', 'm³', 'poissons/m³', 'fish/m³'),
+        ('cage', 'm³', 'poissons/m³', 'fish/m³'),
+        ('pond', 'm²', 'poissons/m²', 'fish/m²'),
+    ],
+)
+def test_production_unit_report_units_are_distinct_and_localized(
+    unit_type,
+    dimension_unit,
+    density_unit_fr,
+    density_unit_en,
+):
+    assert get_production_unit_dimension_unit(unit_type) == dimension_unit
+    assert get_production_unit_density_unit(unit_type, language_code='fr') == density_unit_fr
+    assert get_production_unit_density_unit(unit_type, language_code='en') == density_unit_en
+
+
+@pytest.mark.parametrize(
+    ('unit_type', 'dimension_kwargs', 'expected_value'),
+    [
+        ('pond', {'surface_m2': Decimal('120.00'), 'volume_m3': Decimal('3.00')}, Decimal('120.00')),
+        ('tank', {'surface_m2': Decimal('500.00'), 'volume_m3': Decimal('12.00')}, Decimal('12.00')),
+        ('cage', {'surface_m2': Decimal('200.00'), 'volume_m3': Decimal('8.00')}, Decimal('8.00')),
+    ],
+)
+def test_production_unit_dimension_value_uses_canonical_type(
+    unit_type,
+    dimension_kwargs,
+    expected_value,
+):
+    assert get_production_unit_dimension_value(unit_type, **dimension_kwargs) == expected_value
 
 
 @pytest.mark.django_db

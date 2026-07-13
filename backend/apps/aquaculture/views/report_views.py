@@ -12,10 +12,16 @@ from django.http import FileResponse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from drf_spectacular.types import OpenApiTypes
-from drf_spectacular.utils import OpenApiExample, OpenApiParameter, extend_schema, extend_schema_view
+from drf_spectacular.utils import (
+    OpenApiExample,
+    OpenApiParameter,
+    OpenApiResponse,
+    extend_schema,
+    extend_schema_view,
+)
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.request import Request
 from rest_framework.response import Response
 
@@ -28,6 +34,7 @@ from ..serializers import (
 )
 from ..services import (
     GenerateReportCommand,
+    InaccessibleReportUnitScopeError,
     InvalidReportCycleScopeError,
     InvalidReportScopeError,
     InvalidReportUnitScopeError,
@@ -47,7 +54,8 @@ logger = logging.getLogger(__name__)
         summary="Lister les rapports de production",
         description="""
         Retourne les rapports (journaliers, hebdomadaires, mensuels) de la ferme
-        de l'utilisateur authentifié.
+        de l'utilisateur authentifié. Pour une portée unitaire, l'allocation doit
+        appartenir à la ferme et au cycle fourni lorsque cycle_id est présent.
         """,
         parameters=[
             OpenApiParameter(
@@ -68,23 +76,48 @@ logger = logging.getLogger(__name__)
                 name='cycle_id',
                 type=OpenApiTypes.STR,
                 location=OpenApiParameter.QUERY,
-                description='Filtrer les rapports sur un cycle de session spécifique (UUID)'
+                description=(
+                    'Filtrer les rapports sur un cycle de session spécifique (UUID). '
+                    'Pour scope_type=unit, ce cycle doit être celui de l’allocation.'
+                )
+            ),
+            OpenApiParameter(
+                name='scope_type',
+                type=OpenApiTypes.STR,
+                location=OpenApiParameter.QUERY,
+                enum=['cycle', 'unit'],
+                description='Filtrer les rapports par portée (nom canonique)',
             ),
             OpenApiParameter(
                 name='scope',
                 type=OpenApiTypes.STR,
                 location=OpenApiParameter.QUERY,
                 enum=['cycle', 'unit'],
-                description='Filtrer les rapports par portée'
+                description='Alias rétrocompatible de scope_type',
             ),
             OpenApiParameter(
                 name='cycle_unit_allocation_id',
                 type=OpenApiTypes.STR,
                 location=OpenApiParameter.QUERY,
-                description='Filtrer les rapports sur une allocation d’unité spécifique (UUID)'
+                description=(
+                    'Obligatoire pour scope_type=unit. Si cycle_id est fourni, '
+                    'l’allocation doit lui appartenir.'
+                )
             ),
         ],
-        responses={200: ProductionReportListSerializer(many=True)},
+        responses={
+            200: ProductionReportListSerializer(many=True),
+            400: OpenApiResponse(description='Paramètres de portée invalides.'),
+            404: OpenApiResponse(
+                description='Allocation inconnue, inaccessible ou liée à un autre cycle.',
+                examples=[
+                    OpenApiExample(
+                        'Allocation unitaire inaccessible',
+                        value={'detail': "Allocation d’unité introuvable ou inaccessible."},
+                    ),
+                ],
+            ),
+        },
     ),
     retrieve=extend_schema(
         summary="Détail d'un rapport",
@@ -155,7 +188,13 @@ class ProductionReportViewSet(viewsets.ReadOnlyModelViewSet):
             queryset = queryset.filter(status=status_filter)
 
         cycle_id = self._normalize_uuid_query_param(self.request.query_params.get('cycle_id'), 'cycle_id')
-        scope = self.request.query_params.get('scope')
+        scope_type = self.request.query_params.get('scope_type')
+        legacy_scope = self.request.query_params.get('scope')
+        if scope_type and legacy_scope and scope_type != legacy_scope:
+            raise ValidationError({'scope_type': _('scope_type et scope doivent désigner la même portée.')})
+        scope = scope_type or legacy_scope
+        if scope and scope not in {'cycle', 'unit'}:
+            raise ValidationError({'scope_type': _('Portée de rapport inconnue.')})
         cycle_unit_allocation_id = self._normalize_uuid_query_param(
             self.request.query_params.get('cycle_unit_allocation_id'),
             'cycle_unit_allocation_id',
@@ -164,9 +203,17 @@ class ProductionReportViewSet(viewsets.ReadOnlyModelViewSet):
         if scope == 'unit':
             if not cycle_unit_allocation_id:
                 raise ValidationError({'cycle_unit_allocation_id': _('Contexte d’unité incomplet.')})
+            try:
+                resolved_scope = ReportApplicationService.resolve_report_listing_unit_scope(
+                    self.request.user,
+                    cycle_id=cycle_id,
+                    cycle_unit_allocation_id=cycle_unit_allocation_id,
+                )
+            except InaccessibleReportUnitScopeError as exc:
+                raise NotFound(str(exc)) from exc
             queryset = queryset.filter(
                 scope_type='unit',
-                scope_object_id=cycle_unit_allocation_id,
+                scope_object_id=str(resolved_scope.allocation.id),
             )
         elif scope == 'cycle':
             if not cycle_id:
@@ -201,10 +248,59 @@ class ProductionReportViewSet(viewsets.ReadOnlyModelViewSet):
         summary="Générer un rapport à la demande (asynchrone)",
         description=(
             "Crée un rapport avec status='pending' et lance la génération PDF en arrière-plan. "
-            "Retourne 202 Accepted. Poller GET /reports/{id}/ pour vérifier quand status='draft'."
+            "Retourne 202 Accepted. Poller GET /reports/{id}/ pour vérifier quand status='draft'. "
+            "Une portée unitaire exige cycle_unit_allocation_id; cycle_id est optionnel, "
+            "mais doit correspondre à l’allocation s’il est fourni."
         ),
         request=GenerateReportSerializer,
-        responses={202: ProductionReportDetailSerializer},
+        examples=[
+            OpenApiExample(
+                'Rapport de cycle',
+                value={
+                    'report_type': 'weekly',
+                    'scope_type': 'cycle',
+                    'cycle_id': '11111111-1111-4111-8111-111111111111',
+                },
+                request_only=True,
+            ),
+            OpenApiExample(
+                'Rapport par unité',
+                value={
+                    'report_type': 'weekly',
+                    'scope_type': 'unit',
+                    'cycle_unit_allocation_id': '22222222-2222-4222-8222-222222222222',
+                },
+                request_only=True,
+            ),
+        ],
+        responses={
+            202: OpenApiResponse(
+                response=ProductionReportDetailSerializer,
+                description='Rapport pending créé ou réutilisé.',
+            ),
+            400: OpenApiResponse(
+                description='Combinaison de portée invalide, cycle inactif ou période invalide.',
+                examples=[
+                    OpenApiExample(
+                        'Allocation requise',
+                        value={
+                            'cycle_unit_allocation_id': [
+                                "L'allocation de cycle est requise pour un rapport d'unité."
+                            ]
+                        },
+                    ),
+                ],
+            ),
+            404: OpenApiResponse(
+                description='Allocation inconnue ou inaccessible.',
+                examples=[
+                    OpenApiExample(
+                        'Allocation inaccessible',
+                        value={'detail': "Allocation d’unité introuvable ou inaccessible."},
+                    ),
+                ],
+            ),
+        },
     )
     @action(detail=False, methods=['post'], throttle_classes=[AquacultureReportActionThrottle])
     def generate(self, request: Request) -> Response:
@@ -217,12 +313,12 @@ class ProductionReportViewSet(viewsets.ReadOnlyModelViewSet):
                 GenerateReportCommand(
                     report_type=serializer.validated_data['report_type'],
                     reference_date=serializer.validated_data.get('reference_date'),
-                    scope=serializer.validated_data.get('scope', 'cycle'),
                     cycle_id=(
                         str(serializer.validated_data['cycle_id'])
                         if serializer.validated_data.get('cycle_id')
                         else None
                     ),
+                    scope_type=serializer.validated_data.get('scope_type', 'cycle'),
                     cycle_unit_allocation_id=(
                         str(serializer.validated_data['cycle_unit_allocation_id'])
                         if serializer.validated_data.get('cycle_unit_allocation_id')
@@ -230,6 +326,8 @@ class ProductionReportViewSet(viewsets.ReadOnlyModelViewSet):
                     ),
                 ),
             )
+        except InaccessibleReportUnitScopeError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_404_NOT_FOUND)
         except (InvalidReportCycleScopeError, InvalidReportUnitScopeError, InvalidReportScopeError) as exc:
             return Response(
                 {'detail': str(exc)},

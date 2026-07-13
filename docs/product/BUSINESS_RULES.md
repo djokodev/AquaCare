@@ -35,6 +35,20 @@
 - Selling prices are resolved server-side when absent: 2,000 FCFA/kg for Clarias and 2,800 FCFA/kg for Tilapia. Zero and negative prices are invalid.
 - A custom duration survives species changes and is used consistently by simulation, annual projections, persistence, reports, and time remaining.
 
+## Report scope and attribution
+
+- `ProductionUnit` is the reusable physical asset; `CycleUnitAllocation` is the
+  canonical report scope for that asset's use in one cycle.
+- `scope_type=cycle` requires a cycle and excludes an allocation identifier;
+  `scope_type=unit` requires a `cycle_unit_allocation_id`. Unknown scope values
+  and invalid combinations are rejected.
+- Allocation and cycle resolution is tenant-scoped to the authenticated farm.
+  Foreign, mismatched, or inaccessible allocations return an opaque 404 and
+  never reveal the owning farm or cycle.
+- Unit reports use only facts explicitly related to the selected allocation.
+  Cycle-wide facts are omitted and are never allocated proportionally between
+  units. Cycle reports preserve their aggregate calculations and comparisons.
+
 ## What to avoid
 
 - Frontend-only business truth.

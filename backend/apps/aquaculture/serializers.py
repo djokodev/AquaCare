@@ -1509,6 +1509,7 @@ class ProductionReportListSerializer(serializers.ModelSerializer):
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     farm_name = serializers.CharField(source='farm_profile.farm_name', read_only=True)
     cycle_scope_id = serializers.SerializerMethodField()
+    cycle_scope_name = serializers.SerializerMethodField()
     scope_name = serializers.SerializerMethodField()
     scope_label = serializers.SerializerMethodField()
 
@@ -1530,6 +1531,7 @@ class ProductionReportListSerializer(serializers.ModelSerializer):
             'status',
             'status_display',
             'cycle_scope_id',
+            'cycle_scope_name',
             'generated_at',
             'validated_at',
             'email_status',
@@ -1558,6 +1560,14 @@ class ProductionReportListSerializer(serializers.ModelSerializer):
         if not isinstance(report_meta, dict):
             return None
         return report_meta.get('scope_name') or report_meta.get('cycle_scope_name')
+
+    def get_cycle_scope_name(self, obj: ProductionReport) -> str | None:
+        if not isinstance(obj.payload, dict):
+            return None
+        report_meta = obj.payload.get('report_meta')
+        if not isinstance(report_meta, dict):
+            return None
+        return report_meta.get('cycle_scope_name')
 
     def get_scope_label(self, obj: ProductionReport) -> str | None:
         if not isinstance(obj.payload, dict):
@@ -1613,12 +1623,28 @@ class GenerateReportSerializer(serializers.Serializer):
 
     report_type = serializers.ChoiceField(choices=['daily', 'weekly', 'monthly'])
     reference_date = serializers.DateField(required=False)
-    scope = serializers.ChoiceField(choices=['cycle', 'unit'], required=False)
+    scope_type = serializers.ChoiceField(
+        choices=['cycle', 'unit'],
+        required=False,
+        help_text="Portée canonique du rapport: cycle ou unit.",
+    )
+    scope = serializers.ChoiceField(
+        choices=['cycle', 'unit'],
+        required=False,
+        write_only=True,
+        help_text="Alias rétrocompatible de scope_type.",
+    )
     cycle_id = serializers.UUIDField(required=False)
     cycle_unit_allocation_id = serializers.UUIDField(required=False)
 
     def validate(self, attrs):
-        scope = attrs.get('scope')
+        scope_type = attrs.get('scope_type')
+        legacy_scope = attrs.get('scope')
+        if scope_type and legacy_scope and scope_type != legacy_scope:
+            raise serializers.ValidationError({
+                'scope_type': _("scope_type et scope doivent désigner la même portée."),
+            })
+        scope = scope_type or legacy_scope or 'cycle'
         cycle_id = attrs.get('cycle_id')
         cycle_unit_allocation_id = attrs.get('cycle_unit_allocation_id')
 
@@ -1627,6 +1653,8 @@ class GenerateReportSerializer(serializers.Serializer):
                 raise serializers.ValidationError(
                     {'cycle_unit_allocation_id': _("L'allocation de cycle est requise pour un rapport d'unité.")}
                 )
+            attrs.pop('scope', None)
+            attrs['scope_type'] = 'unit'
             return attrs
 
         if scope == 'cycle':
@@ -1634,20 +1662,17 @@ class GenerateReportSerializer(serializers.Serializer):
                 raise serializers.ValidationError(
                     {'cycle_id': _("Le cycle est obligatoire pour générer ce rapport.")}
                 )
+            if cycle_unit_allocation_id:
+                raise serializers.ValidationError({
+                    'cycle_unit_allocation_id': _(
+                        "Une allocation ne peut pas être fournie pour un rapport de cycle."
+                    ),
+                })
+            attrs.pop('scope', None)
+            attrs['scope_type'] = 'cycle'
             return attrs
 
-        if cycle_unit_allocation_id and not cycle_id:
-            raise serializers.ValidationError(
-                {'cycle_id': _("Le cycle associé à l'allocation est requis.")}
-            )
-
-        if not cycle_id:
-            raise serializers.ValidationError(
-                {'cycle_id': _("Le cycle est requis pour générer un rapport.")}
-            )
-
-        attrs['scope'] = 'cycle'
-        return attrs
+        raise serializers.ValidationError({'scope_type': _("Portée de rapport inconnue.")})
 
 
 class SanitaryResolutionSerializer(serializers.Serializer):

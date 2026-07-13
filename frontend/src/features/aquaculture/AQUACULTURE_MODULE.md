@@ -216,9 +216,19 @@ Flux:
 Reports rule:
 
 1. Les rapports existants sont maintenant scope-aware.
-2. Un rapport d'unite explique une seule unite de production.
-3. Un rapport de cycle agrege tous les faits des unites du cycle.
-4. Les rapports ne creent pas de faits, ils resument les logs deja enregistres par les unites.
+2. `scope_type=cycle` utilise le cycle complet; `scope_type=unit` utilise un
+   `cycle_unit_allocation_id`, jamais un simple `production_unit_id`.
+3. `ReportsScreen` charge les allocations du cycle sélectionné et propose
+   `Cycle complet` ou chaque unité disponible. La sélection est conservée pour
+   daily, weekly et monthly.
+4. Un rapport d'unite explique une seule unite de production et masque les
+   comparaisons multi-unités.
+5. Un rapport de cycle agrege tous les faits des unites du cycle et conserve
+   la compatibilité des cycles legacy sans allocation.
+6. Les données globales du cycle et les plans sans allocation sont omis d'un
+   rapport unitaire; aucune valeur globale n'est répartie artificiellement.
+7. Les rapports ne creent pas de faits, ils resument les logs deja enregistres
+   par les unites.
 
 ## API Consommee
 
