@@ -11,7 +11,7 @@ export interface MetricCardProps {
 
 const MetricCard: React.FC<MetricCardProps> = ({ value, label, subtitle }) => {
   const metricValue = String(value);
-  const unitMatch = metricValue.match(/^(.*?)(\s+(?:FCFA|jours|days))$/u);
+  const unitMatch = metricValue.match(/^(.*?)(\s+(?:FCFA|jours|days|kg))$/iu);
 
   return (
     <Card variant="outlined" style={styles.card}>
@@ -26,7 +26,7 @@ const MetricCard: React.FC<MetricCardProps> = ({ value, label, subtitle }) => {
           {unitMatch ? unitMatch[1] : metricValue}
         </AppText>
         {unitMatch ? (
-          <AppText variant="caption" color="muted" style={styles.unit}>
+          <AppText variant="caption" color="link" style={styles.unit}>
             {unitMatch[2].trim()}
           </AppText>
         ) : null}
