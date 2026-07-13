@@ -1,9 +1,9 @@
-import React, { useMemo } from 'react';
-import { View, TouchableOpacity } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { useTranslation } from 'react-i18next';
-import { AppText, Card, Divider } from '@/components/ui';
-import { colors, spacing } from '@/theme';
+import React, { useMemo } from "react";
+import { View, TouchableOpacity } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { useTranslation } from "react-i18next";
+import { AppText, Card, Divider } from "@/components/ui";
+import { colors, spacing } from "@/theme";
 
 /**
  * Props pour le composant QuickActionsPreview
@@ -34,7 +34,7 @@ interface QuickActionsPreviewProps {
   /**
    * Définit si l'aperçu est affiché pour un cycle global ou une unité.
    */
-  scope?: 'cycle' | 'unit';
+  scope?: "cycle" | "unit";
 
   /**
    * Contexte unitaire pour les actions scoppées.
@@ -64,12 +64,12 @@ interface SuggestedAction {
 }
 
 const hasValidProductionUnitContext = (
-  productionUnitContext: QuickActionsPreviewProps['productionUnitContext']
+  productionUnitContext: QuickActionsPreviewProps["productionUnitContext"],
 ): boolean =>
   Boolean(
     productionUnitContext?.cycleId &&
-      productionUnitContext?.cycleUnitAllocationId &&
-      productionUnitContext?.productionUnitId
+    productionUnitContext?.cycleUnitAllocationId &&
+    productionUnitContext?.productionUnitId,
   );
 
 /**
@@ -97,7 +97,7 @@ export default function QuickActionsPreview({
   hasActiveCycles,
   unreadCount,
   navigation,
-  scope = 'cycle',
+  scope = "cycle",
   productionUnitContext,
   hideGlobalCycleOperationalActions = false,
 }: QuickActionsPreviewProps) {
@@ -108,33 +108,35 @@ export default function QuickActionsPreview({
    * Retourne les 3 actions les plus pertinentes selon le contexte utilisateur
    */
   const suggestedActions = useMemo((): SuggestedAction[] => {
-    const isValidUnitContext = hasValidProductionUnitContext(productionUnitContext);
+    const isValidUnitContext = hasValidProductionUnitContext(
+      productionUnitContext,
+    );
 
-    if (scope === 'unit') {
+    if (scope === "unit") {
       if (!isValidUnitContext) {
         return [];
       }
 
       return [
         {
-          icon: 'create',
+          icon: "create",
           color: colors.brand.light,
-          label: t('dailyLog'),
-          route: 'DailyLog',
+          label: t("dailyLogCompact"),
+          route: "DailyLog",
           params: productionUnitContext,
         },
         {
-          icon: 'warning-outline',
+          icon: "warning-outline",
           color: colors.status.error,
-          label: t('sanitaryLog'),
-          route: 'SanitaryLog',
+          label: t("sanitaryLogCompact"),
+          route: "SanitaryLog",
           params: productionUnitContext,
         },
         {
-          icon: 'restaurant-outline',
+          icon: "restaurant-outline",
           color: colors.status.info,
-          label: t('feedingPlan'),
-          route: 'FeedingPlan',
+          label: t("feedingPlanCompact"),
+          route: "FeedingPlan",
           params: productionUnitContext,
         },
       ];
@@ -146,64 +148,71 @@ export default function QuickActionsPreview({
     if (hasActiveCycles && !hideGlobalCycleOperationalActions) {
       // Si cycles actifs → prioriser saisie quotidienne
       actions.push({
-        icon: 'create',
+        icon: "create",
         color: colors.brand.light,
-        label: t('dailyLog'),
-        route: 'DailyLog',
+        label: t("dailyLogCompact"),
+        route: "DailyLog",
       });
     } else if (hasActiveCycles) {
       actions.push({
-        icon: 'document-text-outline',
+        icon: "document-text-outline",
         color: colors.legacy.blue,
-        label: t('reports'),
-        route: 'Reports',
-        params: { scope: 'cycle' },
+        label: t("reports"),
+        route: "Reports",
+        params: { scope: "cycle" },
       });
     } else {
       // Si aucun cycle → prioriser création
       actions.push({
-        icon: 'add-circle',
+        icon: "add-circle",
         color: colors.brand.primary,
-        label: t('startNewCycle'),
-        route: 'CreateFarm',
+        label: t("startNewCycle"),
+        route: "CreateFarm",
       });
     }
 
     // Suggestion 2 : Toujours suggérer catalogue commerce
     actions.push({
-      icon: 'storefront-outline',
+      icon: "storefront-outline",
       color: colors.brand.primary,
-      label: t('productCatalog'),
-      route: 'ProductCatalog',
+      label: t("productCatalog"),
+      route: "ProductCatalog",
     });
 
     // Suggestion 3 : Notifications si non lues, sinon rapports
     if (unreadCount > 0) {
       actions.push({
-        icon: 'notifications-outline',
+        icon: "notifications-outline",
         color: colors.status.warning,
-        label: `${t('notifications')} (${unreadCount})`,
-        route: 'Notifications',
+        label: `${t("notifications")} (${unreadCount})`,
+        route: "Notifications",
       });
     } else if (!hideGlobalCycleOperationalActions || !hasActiveCycles) {
       actions.push({
-        icon: 'document-text-outline',
+        icon: "document-text-outline",
         color: colors.legacy.blue,
-        label: t('reports'),
-        route: 'Reports',
-        params: { scope: 'cycle' },
+        label: t("reports"),
+        route: "Reports",
+        params: { scope: "cycle" },
       });
     } else {
       actions.push({
-        icon: 'notifications-outline',
+        icon: "notifications-outline",
         color: colors.status.warning,
-        label: t('notifications'),
-        route: 'Notifications',
+        label: t("notifications"),
+        route: "Notifications",
       });
     }
 
     return actions.slice(0, 3); // Toujours max 3 suggestions
-  }, [hasActiveCycles, unreadCount, t, scope, productionUnitContext, hideGlobalCycleOperationalActions]);
+  }, [
+    hasActiveCycles,
+    unreadCount,
+    t,
+    scope,
+    productionUnitContext,
+    hideGlobalCycleOperationalActions,
+  ]);
 
   return (
     <View className="px-5 py-5">
@@ -220,12 +229,26 @@ export default function QuickActionsPreview({
                 className="w-10 h-10 rounded-full items-center justify-center"
                 style={{ backgroundColor: `${action.color}20` }}
               >
-                <Ionicons name={action.icon as any} size={20} color={action.color} />
+                <Ionicons
+                  name={action.icon as any}
+                  size={20}
+                  color={action.color}
+                />
               </View>
-              <AppText variant="bodyStrong" style={styles.actionLabel}>
+              <AppText
+                variant="body"
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.85}
+                style={styles.actionLabel}
+              >
                 {action.label}
               </AppText>
-              <Ionicons name="chevron-forward" size={20} color={colors.text.muted} />
+              <Ionicons
+                name="chevron-forward"
+                size={20}
+                color={colors.text.muted}
+              />
             </TouchableOpacity>
             {index < suggestedActions.length - 1 ? <Divider /> : null}
           </React.Fragment>
@@ -237,10 +260,18 @@ export default function QuickActionsPreview({
           onPress={onOpenSheet}
           activeOpacity={0.7}
         >
-          <AppText variant="bodyStrong" color="link" style={styles.viewAllLabel}>
-            {t('viewAllActions')}
+          <AppText
+            variant="bodyStrong"
+            color="link"
+            style={styles.viewAllLabel}
+          >
+            {t("viewAllActions")}
           </AppText>
-          <Ionicons name="chevron-down" size={20} color={colors.brand.primary} />
+          <Ionicons
+            name="chevron-down"
+            size={20}
+            color={colors.brand.primary}
+          />
         </TouchableOpacity>
       </Card>
     </View>
@@ -248,7 +279,12 @@ export default function QuickActionsPreview({
 }
 
 const styles = {
-  card: { padding: 0, overflow: 'hidden' as const },
-  actionLabel: { flex: 1, marginLeft: spacing[3] },
+  card: { padding: 0, overflow: "hidden" as const },
+  actionLabel: {
+    flex: 1,
+    flexShrink: 1,
+    marginLeft: spacing[3],
+    marginRight: spacing[2],
+  },
   viewAllLabel: { marginRight: spacing[2] },
 };

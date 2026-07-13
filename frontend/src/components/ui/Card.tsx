@@ -76,6 +76,7 @@ export function SelectableCard({
     >
       {({ pressed }) => (
         <View
+          testID={testID ? `${testID}-surface` : undefined}
           style={[
             styles.card,
             styles.outlined,
@@ -115,8 +116,10 @@ export function InteractiveCard({
     >
       {({ pressed }) => (
         <View
+          testID={testID ? `${testID}-surface` : undefined}
           style={[
             styles.card,
+            styles.outlined,
             styles.row,
             styles.interactive,
             primaryBorder && styles.primaryBorder,

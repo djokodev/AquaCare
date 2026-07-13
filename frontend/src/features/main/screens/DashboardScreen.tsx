@@ -109,7 +109,7 @@ export default function DashboardScreen({ navigation }: any) {
   >(null);
   const [refreshing, setRefreshing] = useState(false);
 
-  const { dashboardData, loading, error, currentCycle } = useSelector(
+  const { dashboardData, cycles, loading, error, currentCycle } = useSelector(
     (state: RootState) => state.aquaculture,
   );
   const { unreadCount } = useSelector(
@@ -163,13 +163,25 @@ export default function DashboardScreen({ navigation }: any) {
     [ordersList],
   );
 
-  const activeCycles = dashboardData?.active_cycles || [];
-  const canSwitchCycle = activeCycles.length > 1;
+  const dashboardCycles = dashboardData?.active_cycles ?? [];
+  const availableSessionCycles = useMemo(
+    () => cycles.filter((cycle) => cycle.status === "active"),
+    [cycles],
+  );
+  const canSwitchCycle = availableSessionCycles.length > 1;
+  const activeCycles = dashboardCycles;
   const currentCycleInList = currentCycle
     ? activeCycles.find((cycle) => cycle.id === currentCycle.id)
     : undefined;
   const primaryActiveCycle = currentCycleInList || activeCycles[0] || null;
-  const sessionCycle = currentCycleInList || primaryActiveCycle;
+  const currentSessionCycle = currentCycle
+    ? availableSessionCycles.find((cycle) => cycle.id === currentCycle.id)
+    : undefined;
+  const sessionCycle =
+    currentSessionCycle ??
+    availableSessionCycles[0] ??
+    dashboardCycles[0] ??
+    null;
   const primaryCycleHasProductionUnits = Boolean(
     primaryActiveCycle?.infrastructure_type &&
     primaryActiveCycle.infrastructure_type.length > 0,
@@ -297,16 +309,16 @@ export default function DashboardScreen({ navigation }: any) {
   ]);
 
   useEffect(() => {
-    if (activeCycles.length === 0) {
+    if (availableSessionCycles.length === 0) {
       if (currentCycle) {
         dispatch(clearCurrentCycle());
       }
       return;
     }
 
-    if (activeCycles.length === 1) {
-      if (currentCycle?.id !== activeCycles[0].id) {
-        dispatch(setCurrentCycle(activeCycles[0]));
+    if (availableSessionCycles.length === 1) {
+      if (currentCycle?.id !== availableSessionCycles[0].id) {
+        dispatch(setCurrentCycle(availableSessionCycles[0]));
       }
       return;
     }
@@ -316,7 +328,7 @@ export default function DashboardScreen({ navigation }: any) {
     } else if (currentCycleInList.id !== currentCycle?.id) {
       dispatch(setCurrentCycle(currentCycleInList));
     }
-  }, [activeCycles, currentCycle, currentCycleInList, dispatch]);
+  }, [availableSessionCycles, currentCycle, dispatch]);
 
   const openCycleHarvestModal = useCallback(() => {
     if (!sessionCycle) {
@@ -637,18 +649,22 @@ export default function DashboardScreen({ navigation }: any) {
             {primaryActiveCycle && (
               <>
                 <DashboardActionCard
+                  testID="dashboard-action-production-units"
                   label={t("productionUnitsDashboardCta")}
                   onPress={handleProductionUnitsPress}
                 />
                 <DashboardActionCard
+                  testID="dashboard-action-store"
                   label={t("storeTitle")}
                   onPress={handleStorePress}
                 />
                 <DashboardActionCard
+                  testID="dashboard-action-report"
                   label={t("reportCycleTitle")}
                   onPress={handleCycleReportPress}
                 />
                 <DashboardActionCard
+                  testID="dashboard-action-create-cycle"
                   label={t("createNewCycleDashboardTitle")}
                   onPress={() => navigation.navigate("CreateFarm")}
                 />
