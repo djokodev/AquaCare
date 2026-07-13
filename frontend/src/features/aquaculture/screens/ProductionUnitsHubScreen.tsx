@@ -28,19 +28,6 @@ interface Props {
   route: RouteType;
 }
 
-const getProductionUnitTypeLabelKey = (unitType?: string | null): string => {
-  if (unitType === 'pond') {
-    return 'productionUnitTypePond';
-  }
-  if (unitType === 'cage') {
-    return 'productionUnitTypeCage';
-  }
-  if (unitType === 'tank') {
-    return 'productionUnitTypeTank';
-  }
-  return 'productionUnitsUnknownType';
-};
-
 const formatCount = (value: number, locale: string): string =>
   new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }).format(value);
 
@@ -55,18 +42,16 @@ function UnitCard({
   onOpen: () => void;
   t: (key: string, options?: Record<string, unknown>) => string;
 }) {
-  const unitTypeLabel = t(getProductionUnitTypeLabelKey(allocation.production_unit_type));
   const dimension = allocation.production_unit_display_dimension?.trim();
   const title = allocation.production_unit_name?.trim() || t('productionUnitsUnknownUnit');
-  const typeLine = dimension ? `${unitTypeLabel} · ${dimension}` : unitTypeLabel;
 
   return (
     <View style={styles.card}>
       <View style={styles.cardHeader}>
         <View style={styles.cardHeaderText}>
           <Text style={styles.cardTitle}>{title}</Text>
-          <Text style={styles.cardSubtitle}>{typeLine}</Text>
         </View>
+        {dimension ? <Text style={styles.cardDimension}>{dimension}</Text> : null}
       </View>
 
       <View style={styles.statRow}>
@@ -326,7 +311,7 @@ const styles = StyleSheet.create({
   },
   cardHeader: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
     gap: 12,
   },
@@ -338,11 +323,11 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: AQUACARE_COLORS.GRAY_DARK,
   },
-  cardSubtitle: {
-    marginTop: 4,
+  cardDimension: {
     fontSize: 13,
     color: AQUACARE_COLORS.GRAY_LIGHT,
     lineHeight: 18,
+    marginLeft: 12,
   },
   statRow: {
     flexDirection: 'row',

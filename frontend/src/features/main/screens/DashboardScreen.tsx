@@ -228,6 +228,7 @@ export default function DashboardScreen({ navigation }: any) {
     void Promise.all([
       loadFarmProfile(),
       dispatch(fetchDashboardData(undefined)),
+      dispatch(fetchProductionCycles()),
       dispatch(fetchNotifications({ cycleId: currentCycle?.id })),
       dispatch(fetchOrders()),
     ]).finally(() => {

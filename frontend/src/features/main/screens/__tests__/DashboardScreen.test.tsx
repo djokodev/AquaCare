@@ -8,7 +8,12 @@ import DashboardScreen from "../DashboardScreen";
 import { ProductionCycle } from "@/types/aquaculture";
 import { offlineService } from "@/services/offlineService";
 import { aquacultureService } from "@/features/aquaculture/services/aquacultureService";
-import { fetchDashboardData } from "@/features/aquaculture/store/aquacultureSlice";
+import {
+  fetchDashboardData,
+  fetchProductionCycles,
+} from "@/features/aquaculture/store/aquacultureSlice";
+import { fetchNotifications } from "@/features/notifications/store/notificationSlice";
+import { fetchOrders } from "@/features/commerce/store/commerceSlice";
 import { colors } from "@/theme";
 
 const mockDispatch = jest.fn();
@@ -54,6 +59,19 @@ jest.mock("@/features/aquaculture/store/aquacultureSlice", () => ({
   })),
 }));
 
+jest.mock("@/features/notifications/store/notificationSlice", () => ({
+  fetchNotifications: jest.fn((params: unknown) => ({
+    type: "notifications/fetch",
+    payload: params,
+  })),
+}));
+
+jest.mock("@/features/commerce/store/commerceSlice", () => ({
+  confirmOrderReceipt: jest.fn(),
+  fetchOrderStatistics: jest.fn(),
+  fetchOrders: jest.fn(() => ({ type: "commerce/fetchOrders" })),
+}));
+
 jest.mock("@/features/aquaculture/services/aquacultureService", () => ({
   aquacultureService: {
     getCycleDashboard: jest.fn(),
@@ -95,6 +113,9 @@ describe("features/main/screens/DashboardScreen", () => {
   const mockGetCycleDashboard =
     aquacultureService.getCycleDashboard as jest.Mock;
   const mockFetchDashboardData = fetchDashboardData as unknown as jest.Mock;
+  const mockFetchProductionCycles = fetchProductionCycles as unknown as jest.Mock;
+  const mockFetchNotifications = fetchNotifications as unknown as jest.Mock;
+  const mockFetchOrders = fetchOrders as unknown as jest.Mock;
   const navigation = {
     navigate: jest.fn(),
   } as any;
@@ -346,6 +367,12 @@ describe("features/main/screens/DashboardScreen", () => {
       <DashboardScreen navigation={navigation} />,
     );
 
+    mockLoadProfile.mockClear();
+    mockFetchDashboardData.mockClear();
+    mockFetchProductionCycles.mockClear();
+    mockFetchNotifications.mockClear();
+    mockFetchOrders.mockClear();
+
     const scrollView = UNSAFE_getByType(ScrollView);
 
     await act(async () => {
@@ -356,7 +383,13 @@ describe("features/main/screens/DashboardScreen", () => {
       expect(mockLoadProfile).toHaveBeenCalledTimes(1);
     });
 
+    expect(mockLoadProfile).toHaveBeenCalledTimes(1);
     expect(mockFetchDashboardData).toHaveBeenCalledWith(undefined);
+    expect(mockFetchProductionCycles).toHaveBeenCalledTimes(1);
+    expect(mockFetchNotifications).toHaveBeenCalledWith({
+      cycleId: cycleA.id,
+    });
+    expect(mockFetchOrders).toHaveBeenCalled();
   });
 
   it("ouvre le flux de creation de cycle depuis le dashboard", async () => {

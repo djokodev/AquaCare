@@ -171,7 +171,10 @@ describe('features/aquaculture/screens/ProductionUnitsHubScreen', () => {
       expect(queryByText('productionUnitsHubSubtitle')).toBeNull();
       expect(getByText('3 unités')).toBeTruthy();
       expect(getByText('Bac 1')).toBeTruthy();
+      expect(getByText('3 m³')).toBeTruthy();
+      expect(queryByText('productionUnitTypeTank · 3 m³')).toBeNull();
       expect(getByText('Étang principal')).toBeTruthy();
+      expect(getAllByText('120 m²').length).toBe(2);
       expect(getByText('Étang 1')).toBeTruthy();
       expect(queryByText('Cycle Clarias 2026-06-29')).toBeNull();
       expect(getAllByText('productionUnitsCurrentFishCount').length).toBe(3);
