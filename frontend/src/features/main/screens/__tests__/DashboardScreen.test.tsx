@@ -1,5 +1,5 @@
 import React from "react";
-import { Alert } from "react-native";
+import { Alert, StyleSheet } from "react-native";
 import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 import { ScrollView } from "react-native";
 import { useDispatch, useSelector } from "react-redux";
@@ -9,6 +9,7 @@ import { ProductionCycle } from "@/types/aquaculture";
 import { offlineService } from "@/services/offlineService";
 import { aquacultureService } from "@/features/aquaculture/services/aquacultureService";
 import { fetchDashboardData } from "@/features/aquaculture/store/aquacultureSlice";
+import { colors } from "@/theme";
 
 const mockDispatch = jest.fn();
 const mockLoadProfile = jest.fn();
@@ -227,6 +228,31 @@ describe("features/main/screens/DashboardScreen", () => {
     fireEvent.press(getByTestId("session-active-cycle-card"));
     expect(navigation.navigate).toHaveBeenCalledWith("CycleSessionEntry", {
       showBackToDashboard: true,
+    });
+  });
+
+  it("rend les quatre actions du dashboard avec une surface interactive bordée", () => {
+    const { getByTestId } = render(
+      <DashboardScreen navigation={navigation} />,
+    );
+
+    [
+      "dashboard-action-production-units",
+      "dashboard-action-store",
+      "dashboard-action-report",
+      "dashboard-action-create-cycle",
+    ].forEach((testID) => {
+      const style = StyleSheet.flatten(
+        getByTestId(`${testID}-surface`).props.style,
+      );
+
+      expect(style.borderWidth).toBe(1);
+      expect(style.borderColor).toBe(colors.brand.primary);
+      expect(style.backgroundColor).toBe(colors.surface.card);
+      expect(style.flexDirection).toBe("row");
+      expect(style.alignItems).toBe("center");
+      expect(style.justifyContent).toBe("space-between");
+      expect(style.minHeight).toBeGreaterThanOrEqual(56);
     });
   });
 

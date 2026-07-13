@@ -1,7 +1,8 @@
 import React from 'react';
 import { fireEvent, render } from '@testing-library/react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Button, Card, EmptyState, ErrorState, IconButton, SelectionModal, TextField } from '..';
+import { StyleSheet } from 'react-native';
+import { Button, Card, EmptyState, ErrorState, IconButton, InteractiveCard, SelectionModal, TextField } from '..';
 import { colors } from '@/theme';
 import tokens from '@/theme/tokens.json';
 
@@ -53,5 +54,30 @@ describe('shared design system components', () => {
     expect(getByText('Error')).toBeTruthy();
     fireEvent.press(getByText('Create')); fireEvent.press(getByText('Retry')); fireEvent.press(getByLabelText('One'));
     expect(onRetry).toHaveBeenCalledTimes(2); expect(onSelect).toHaveBeenCalledWith('one');
+  });
+
+  it('applies the outlined visual surface to interactive cards', () => {
+    const { getByTestId } = render(
+      <InteractiveCard
+        testID="dashboard-action"
+        accessibilityLabel="Open dashboard action"
+        primaryBorder
+        onPress={jest.fn()}
+      >
+        <Button label="Open" onPress={jest.fn()} />
+      </InteractiveCard>,
+    );
+
+    const style = StyleSheet.flatten(
+      getByTestId('dashboard-action-surface').props.style,
+    );
+
+    expect(style.borderWidth).toBe(1);
+    expect(style.borderColor).toBe(colors.brand.primary);
+    expect(style.backgroundColor).toBe(colors.surface.card);
+    expect(style.flexDirection).toBe('row');
+    expect(style.alignItems).toBe('center');
+    expect(style.justifyContent).toBe('space-between');
+    expect(style.minHeight).toBeGreaterThanOrEqual(56);
   });
 });
