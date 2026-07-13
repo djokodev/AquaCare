@@ -254,6 +254,10 @@ def test_rendered_html_hides_internal_metadata_and_contact_role():
     assert "Ancien rôle" not in html
     assert "Partenaire de préparation et de livraison" not in html
     assert "Fulfilment and delivery partner" not in html
+    assert "Adresse figée" not in html
+    assert "09:00–17:00" not in html
+    assert "PARTENAIRE OPÉRATIONNEL" not in html
+    assert "PARTENAIRE" in html
     assert "Contact AquaCare" not in html
     assert "Pour toute clarification concernant cette commande, contactez AquaCare au +237 655 444 333." in html
     assert "AquaCare | ORD-SNAPSHOT-0001 | Page" in html

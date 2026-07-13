@@ -19,7 +19,7 @@
   </header>
   <div class="grid identity-grid avoid-break">
     <section class="card"><h2>{{ document.labels.issued_by }}</h2><p><strong>{{ document.issuer.name }}</strong></p></section>
-    <section class="card"><h2>{{ document.labels.operational_partner }}</h2><p><strong>{{ document.partner.name }}</strong></p><p>{{ document.partner.address }}</p><p>{{ document.partner.hours }}</p><p>{% for phone in document.partner.phones %}{{ phone }}{% if not forloop.last %}, {% endif %}{% endfor %}</p><p>{% for email in document.partner.emails %}{{ email }}{% if not forloop.last %}, {% endif %}{% endfor %}</p></section>
+    <section class="card"><h2>{{ document.labels.operational_partner }}</h2><p><strong>{{ document.partner.name }}</strong></p><p>{% for phone in document.partner.phones %}{{ phone }}{% if not forloop.last %}, {% endif %}{% endfor %}</p><p>{% for email in document.partner.emails %}{{ email }}{% if not forloop.last %}, {% endif %}{% endfor %}</p></section>
   </div>
   <div class="grid avoid-break">
     <section class="card"><h2>{{ document.labels.customer }}</h2><p><strong>{{ document.customer.name }}</strong></p><p>{{ document.customer.phone }}</p><p>{{ document.customer.farm }}</p></section>

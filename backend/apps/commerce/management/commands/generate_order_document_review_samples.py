@@ -7,11 +7,13 @@ from pathlib import Path
 from shutil import rmtree, which
 
 from accounts.models import User
+from aquaculture.models import ProductionCycle
 from commerce.models import Product
 from commerce.services.order_service import OrderService
 from commerce.services.pdf_service import OrderDocumentService
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
+from django.utils import timezone
 
 
 class Command(BaseCommand):
@@ -19,6 +21,9 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument("--output", default="tmp/order-document-review")
+        parser.add_argument(
+            "--example-output", default="tmp/order-document-example-two-dibaq"
+        )
 
     def handle(self, *args, **options):
         output_dir = Path(options["output"])
@@ -62,6 +67,9 @@ class Command(BaseCommand):
                         raise CommandError(f"{stem}: expected {expected} pages, got {pages}")
                     page_label = pages if pages is not None else "unverified"
                     self.stdout.write(f"{stem}: {expected_lines} lines, {page_label} pages")
+            self._generate_two_product_example(
+                user, products, Path(options["example_output"])
+            )
             transaction.set_rollback(True)
         self.stdout.write(self.style.SUCCESS(f"Generated review samples in {output_dir}"))
 
@@ -88,12 +96,51 @@ class Command(BaseCommand):
         ]
 
     @staticmethod
-    def _order(user, products, delivery_method):
+    def _order(user, products, delivery_method, quantities=None, production_cycle=None):
         return OrderService.create_order(
             user,
-            [{"product_id": str(product.id), "quantity": index % 4 + 1} for index, product in enumerate(products)],
+            [
+                {
+                    "product_id": str(product.id),
+                    "quantity": quantities[index] if quantities else index % 4 + 1,
+                }
+                for index, product in enumerate(products)
+            ],
             delivery_method, "ndokoti" if delivery_method == "pickup" else None,
+            str(production_cycle.id) if production_cycle else None,
         )
+
+    def _generate_two_product_example(self, user, products, output_dir):
+        output_dir.mkdir(parents=True, exist_ok=True)
+        self._reset_output_directory(output_dir)
+        cycle = ProductionCycle.objects.create(
+            farm_profile=user.farm_profile,
+            cycle_name="Cycle de démonstration DIBAQ",
+            species="tilapia",
+            pond_identifier="Bassin A1",
+            pond_surface_m2=Decimal("120"),
+            start_date=timezone.localdate(),
+            initial_count=1200,
+            initial_average_weight=Decimal("5"),
+            initial_biomass=Decimal("6"),
+            current_count=1100,
+            current_average_weight=Decimal("150"),
+            current_biomass=Decimal("165"),
+            status="active",
+        )
+        order = self._order(
+            user,
+            products[:2],
+            "home",
+            quantities=[2, 5],
+            production_cycle=cycle,
+        )
+        for language in ("fr", "en"):
+            pdf_path = output_dir / f"two-dibaq-products-{language}.pdf"
+            pdf_path.write_bytes(OrderDocumentService.generate_pdf(order, language))
+            pages = self._render_pages(pdf_path, output_dir / f"two-dibaq-products-{language}")
+            page_label = pages if pages is not None else "unverified"
+            self.stdout.write(f"two-dibaq-products-{language}: 2 lines, {page_label} pages")
 
     @staticmethod
     def _reset_output_directory(output_dir):

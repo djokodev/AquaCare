@@ -24,7 +24,7 @@ def backfill_order_document_snapshots(apps, schema_editor):
     """Use migration-era models only; tolerate anomalous legacy relations."""
     Order = apps.get_model("commerce", "Order")
     OrderItem = apps.get_model("commerce", "OrderItem")
-    for order in Order.objects.select_related("farm_profile").iterator():
+    for order in Order.objects.select_related("farm_profile", "production_cycle").iterator():
         farm = getattr(order, "farm_profile", None)
         Order.objects.filter(pk=order.pk).update(
             farm_name_snapshot=getattr(farm, "farm_name", "") or "",
