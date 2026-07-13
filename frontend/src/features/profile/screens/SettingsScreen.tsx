@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { View, Text, ScrollView, TouchableOpacity, Alert } from "react-native";
 import { useTranslation } from "react-i18next";
 import { Ionicons } from "@expo/vector-icons";
+import type { StackNavigationProp } from '@react-navigation/stack';
 import * as SecureStore from "expo-secure-store";
 
 import { useAuth } from "@/hooks/useAuth";
@@ -11,8 +12,13 @@ import logger from "@/utils/logger";
 import config from "@/config/environment";
 import Constants from "expo-constants";
 import OnboardingService from "@/features/onboarding/services/onboardingService";
+import type { ProfileStackParamList } from '@/navigation/MainNavigator';
 
-export default function SettingsScreen() {
+interface SettingsScreenProps {
+  navigation?: StackNavigationProp<ProfileStackParamList>;
+}
+
+export default function SettingsScreen({ navigation }: SettingsScreenProps) {
   const { t, i18n } = useTranslation();
   const { user, updateProfile, logout, deleteAccount } = useAuth();
   const [isDeleting, setIsDeleting] = useState(false);
@@ -195,7 +201,7 @@ export default function SettingsScreen() {
           </View>
         </TouchableOpacity>
 
-        {__DEV__ && (
+        {__DEV__ && navigation && (
           <TouchableOpacity
             className="bg-white flex-row items-center p-4 rounded-xl border border-gray-200 mt-3"
             onPress={handleResetOnboarding}
@@ -206,6 +212,20 @@ export default function SettingsScreen() {
             <View className="ml-3 flex-1">
               <Text className="text-base font-semibold text-aquacare-primary">{t("onboardingResetAction")}</Text>
               <Text className="text-xs text-gray-500 mt-0.5">{t("onboardingResetHint")}</Text>
+            </View>
+          </TouchableOpacity>
+        )}
+        {__DEV__ && (
+          <TouchableOpacity
+            className="bg-white flex-row items-center p-4 rounded-xl border border-gray-200 mt-3"
+            onPress={() => navigation?.navigate('DesignSystemGallery')}
+            accessibilityRole="button"
+            accessibilityLabel={t('designSystemGallery')}
+          >
+            <Ionicons name="color-palette-outline" size={20} color={AQUACARE_COLORS.GREEN_PRIMARY} />
+            <View className="ml-3 flex-1">
+              <Text className="text-base font-semibold text-aquacare-primary">{t('designSystemGallery')}</Text>
+              <Text className="text-xs text-gray-500 mt-0.5">{t('designSystemGalleryHint')}</Text>
             </View>
           </TouchableOpacity>
         )}

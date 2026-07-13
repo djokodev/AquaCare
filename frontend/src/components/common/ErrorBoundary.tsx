@@ -1,6 +1,7 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import { colors, radii, shadows, spacing } from '@/theme';
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -84,38 +85,34 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f8fafc',
-    padding: 24,
+    backgroundColor: colors.surface.page,
+    padding: spacing[6],
   },
   card: {
-    backgroundColor: '#ffffff',
-    borderRadius: 12,
+    backgroundColor: colors.surface.card,
+    borderRadius: radii.lg,
     padding: 32,
     alignItems: 'center',
     width: '100%',
     maxWidth: 400,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+    ...shadows.medium,
   },
   icon: {
     fontSize: 48,
-    color: '#dc2626',
+    color: colors.status.error,
     marginBottom: 16,
     fontWeight: 'bold',
   },
   title: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#1e293b',
+    color: colors.text.primary,
     marginBottom: 8,
     textAlign: 'center',
   },
   message: {
     fontSize: 14,
-    color: '#64748b',
+    color: colors.text.muted,
     textAlign: 'center',
     marginBottom: 20,
     lineHeight: 20,
@@ -123,26 +120,26 @@ const styles = StyleSheet.create({
   detailsContainer: {
     maxHeight: 120,
     width: '100%',
-    backgroundColor: '#fef2f2',
-    borderRadius: 8,
+    backgroundColor: colors.status.errorSurface,
+    borderRadius: radii.md,
     padding: 12,
     marginBottom: 20,
   },
   details: {
     fontSize: 12,
-    color: '#991b1b',
+    color: colors.status.error,
     fontFamily: 'monospace',
   },
   button: {
-    backgroundColor: '#059669',
-    borderRadius: 12,
+    backgroundColor: colors.brand.primary,
+    borderRadius: radii.lg,
     paddingVertical: 14,
     paddingHorizontal: 32,
     minWidth: 160,
     alignItems: 'center',
   },
   buttonText: {
-    color: '#ffffff',
+    color: colors.text.inverse,
     fontSize: 16,
     fontWeight: '600',
   },

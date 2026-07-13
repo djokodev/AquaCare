@@ -4,9 +4,9 @@ import LoadingScreen from '../LoadingScreen';
 
 describe('features/main/screens/LoadingScreen', () => {
   it('affiche le branding et le texte de chargement', () => {
-    const { getAllByText, getByText } = render(<LoadingScreen />);
+    const { getByLabelText, getByText } = render(<LoadingScreen />);
 
-    expect(getAllByText('AquaCare').length).toBeGreaterThanOrEqual(1);
+    expect(getByLabelText('appName')).toBeTruthy();
     expect(getByText('loading')).toBeTruthy();
   });
 });
