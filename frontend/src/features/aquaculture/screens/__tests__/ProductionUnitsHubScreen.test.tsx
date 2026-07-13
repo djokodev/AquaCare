@@ -1,8 +1,11 @@
 import React from 'react';
+import { Ionicons } from '@expo/vector-icons';
+import { StyleSheet } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 import ProductionUnitsHubScreen from '../ProductionUnitsHubScreen';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
+import { colors } from '@/theme';
 
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -158,13 +161,14 @@ describe('features/aquaculture/screens/ProductionUnitsHubScreen', () => {
       ],
     });
 
-    const { getByText, getAllByText, queryByText } = render(
+    const { getByText, getAllByText, getByTestId, queryByText, UNSAFE_getAllByType } = render(
       <ProductionUnitsHubScreen navigation={navigation} route={route} />
     );
 
     await waitFor(() => {
       expect(queryByText('productionUnitsHubTitle')).toBeNull();
-      expect(getByText('productionUnitsHubSubtitle')).toBeTruthy();
+      expect(queryByText('productionUnitsActiveCycleLabel')).toBeNull();
+      expect(queryByText('productionUnitsHubSubtitle')).toBeNull();
       expect(getByText('3 unités')).toBeTruthy();
       expect(getByText('Bac 1')).toBeTruthy();
       expect(getByText('Étang principal')).toBeTruthy();
@@ -173,6 +177,19 @@ describe('features/aquaculture/screens/ProductionUnitsHubScreen', () => {
       expect(getAllByText('productionUnitsCurrentFishCount').length).toBe(3);
       expect(getAllByText('productionUnitsOpenUnit').length).toBe(3);
     });
+
+    const openButtonStyle = StyleSheet.flatten(
+      getByTestId('production-unit-open-allocation-1-surface').props.style,
+    );
+    expect(openButtonStyle.borderWidth).toBe(1);
+    expect(openButtonStyle.borderColor).toBe(colors.brand.primary);
+    expect(openButtonStyle.backgroundColor).toBe(colors.surface.card);
+    expect(openButtonStyle.minHeight).toBeGreaterThanOrEqual(56);
+    expect(
+      UNSAFE_getAllByType(Ionicons).some(
+        (icon) => icon.props.name === 'layers-outline',
+      ),
+    ).toBe(false);
 
     fireEvent.press(getAllByText('productionUnitsOpenUnit')[0]);
 
@@ -218,7 +235,7 @@ describe('features/aquaculture/screens/ProductionUnitsHubScreen', () => {
     });
 
     await waitFor(() => {
-      expect(getByText('productionUnitsHubSubtitle')).toBeTruthy();
+      expect(queryByText('productionUnitsHubSubtitle')).toBeNull();
       expect(getByText('0 unités')).toBeTruthy();
       expect(queryByText('productionUnitsHubTitle')).toBeNull();
     });
@@ -306,7 +323,6 @@ describe('features/aquaculture/screens/ProductionUnitsHubScreen', () => {
     );
 
     await waitFor(() => {
-      expect(getByText('productionUnitsHubSubtitle')).toBeTruthy();
       expect(getByText('1 unités')).toBeTruthy();
     });
 

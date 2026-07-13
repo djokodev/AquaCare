@@ -17,6 +17,8 @@ import { AQUACARE_COLORS } from '@/constants/colors';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
 import { RootStackParamList } from '@/navigation/MainNavigator';
 import type { CycleDashboard, CycleUnitAllocation } from '@/types/aquaculture';
+import { AppText, InteractiveCard } from '@/components/ui';
+import { colors, radii, spacing } from '@/theme';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'ProductionUnitsHub'>;
 type RouteType = RouteProp<RootStackParamList, 'ProductionUnitsHub'>;
@@ -65,9 +67,6 @@ function UnitCard({
           <Text style={styles.cardTitle}>{title}</Text>
           <Text style={styles.cardSubtitle}>{typeLine}</Text>
         </View>
-        <View style={styles.cardIcon}>
-          <Ionicons name="layers-outline" size={18} color={AQUACARE_COLORS.GREEN_PRIMARY} />
-        </View>
       </View>
 
       <View style={styles.statRow}>
@@ -75,10 +74,20 @@ function UnitCard({
         <Text style={styles.statValue}>{formatCount(allocation.current_fish_count, locale)}</Text>
       </View>
 
-      <TouchableOpacity style={styles.openButton} onPress={onOpen}>
-        <Text style={styles.openButtonText}>{t('productionUnitsOpenUnit')}</Text>
-        <Ionicons name="chevron-forward" size={16} color={AQUACARE_COLORS.GREEN_PRIMARY} />
-      </TouchableOpacity>
+      <InteractiveCard
+        testID={`production-unit-open-${allocation.id}`}
+        accessibilityLabel={t('productionUnitsOpenUnit')}
+        primaryBorder
+        onPress={onOpen}
+        style={styles.openButton}
+      >
+        <View style={styles.openButtonLabel}>
+          <AppText variant="bodyStrong" color="link">
+            {t('productionUnitsOpenUnit')}
+          </AppText>
+        </View>
+        <Ionicons name="chevron-forward" size={20} color={colors.brand.primary} />
+      </InteractiveCard>
     </View>
   );
 }
@@ -180,11 +189,6 @@ export default function ProductionUnitsHubScreen({ navigation, route }: Props) {
       }
     >
       <View style={styles.hero}>
-        <View style={styles.heroBadge}>
-          <Ionicons name="grid-outline" size={16} color={AQUACARE_COLORS.WHITE} />
-          <Text style={styles.heroBadgeText}>{t('productionUnitsActiveCycleLabel')}</Text>
-        </View>
-        <Text style={styles.subtitle}>{t('productionUnitsHubSubtitle')}</Text>
         <Text style={styles.summaryText}>
           {t('productionUnitsCount', { count: totalAllocations })}
         </Text>
@@ -264,31 +268,8 @@ const styles = StyleSheet.create({
   hero: {
     marginBottom: 16,
   },
-  heroBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: AQUACARE_COLORS.GREEN_PRIMARY,
-    marginBottom: 12,
-  },
-  heroBadgeText: {
-    color: AQUACARE_COLORS.WHITE,
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 0.2,
-  },
-  subtitle: {
-    marginTop: 8,
-    fontSize: 15,
-    color: AQUACARE_COLORS.GRAY_DARK,
-    lineHeight: 22,
-  },
   summaryText: {
-    marginTop: 8,
+    marginTop: 0,
     fontSize: 13,
     fontWeight: '700',
     color: AQUACARE_COLORS.GRAY_DARK,
@@ -363,14 +344,6 @@ const styles = StyleSheet.create({
     color: AQUACARE_COLORS.GRAY_LIGHT,
     lineHeight: 18,
   },
-  cardIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: `${AQUACARE_COLORS.GREEN_PRIMARY}15`,
-  },
   statRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -388,19 +361,12 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   openButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    borderRadius: 14,
-    backgroundColor: AQUACARE_COLORS.WHITE,
-    borderWidth: 1.5,
-    borderColor: AQUACARE_COLORS.GREEN_PRIMARY,
-    paddingVertical: 12,
+    borderRadius: radii.lg,
+    paddingVertical: spacing[3],
+    paddingHorizontal: spacing[4],
   },
-  openButtonText: {
-    color: AQUACARE_COLORS.GREEN_PRIMARY,
-    fontSize: 14,
-    fontWeight: '700',
+  openButtonLabel: {
+    flex: 1,
+    alignItems: 'center',
   },
 });
