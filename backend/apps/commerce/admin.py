@@ -25,7 +25,7 @@ from django.utils.html import escape, format_html, mark_safe
 from django.utils.translation import gettext_lazy as _
 
 from .models import Order, OrderItem, Product
-from .services.pdf_service import generate_order_pdf
+from .services.pdf_service import OrderDocumentService, generate_order_pdf
 
 logger = logging.getLogger(__name__)
 
@@ -224,7 +224,7 @@ class OrderAdmin(CommerceSecuredAdmin):
     inlines = [OrderItemInline]
     date_hierarchy = 'created_at'
     ordering = ['-created_at']
-    actions = ['generate_pdf_action']
+    actions = ['generate_pdf_fr_action', 'generate_pdf_en_action']
 
     fieldsets = (
         (_('Récapitulatif'), {
@@ -290,18 +290,29 @@ class OrderAdmin(CommerceSecuredAdmin):
         ]
         return custom + urls
 
+    def has_order_document_permission(self, request, obj=None):
+        return request.user.is_superuser or request.user.groups.filter(name=RBACConstants.GROUP_COMMERCE).exists()
+
+    @staticmethod
+    def _document_language(request):
+        language_code = request.GET.get('language', 'fr')
+        return language_code if language_code in {'fr', 'en'} else None
+
     def view_pdf_view(self, request, object_id):
         """Ouvre le bon de commande PDF directement dans le navigateur."""
         order = self.get_object(request, object_id)
         if order is None:
             return HttpResponse("Commande introuvable.", status=404)
-        if not self.has_view_permission(request, order):
+        language_code = self._document_language(request)
+        if language_code is None:
+            return HttpResponse("Langue invalide.", status=400)
+        if not self.has_order_document_permission(request, order):
             return HttpResponse("Accès refusé.", status=403)
         try:
-            pdf_bytes = generate_order_pdf(order)
+            pdf_bytes = generate_order_pdf(order, language_code)
             response = HttpResponse(pdf_bytes, content_type='application/pdf')
             response['Content-Disposition'] = (
-                f'inline; filename="commande_{order.order_number}.pdf"'
+                f'inline; filename="{OrderDocumentService.filename(order, language_code)}"'
             )
             return response
         except Exception as exc:
@@ -317,13 +328,16 @@ class OrderAdmin(CommerceSecuredAdmin):
         order = self.get_object(request, object_id)
         if order is None:
             return HttpResponse("Commande introuvable.", status=404)
-        if not self.has_view_permission(request, order):
+        language_code = self._document_language(request)
+        if language_code is None:
+            return HttpResponse("Langue invalide.", status=400)
+        if not self.has_order_document_permission(request, order):
             return HttpResponse("Accès refusé.", status=403)
         try:
-            pdf_bytes = generate_order_pdf(order)
+            pdf_bytes = generate_order_pdf(order, language_code)
             response = HttpResponse(pdf_bytes, content_type='application/pdf')
             response['Content-Disposition'] = (
-                f'attachment; filename="commande_{order.order_number}.pdf"'
+                f'attachment; filename="{OrderDocumentService.filename(order, language_code)}"'
             )
             return response
         except Exception as exc:
@@ -357,10 +371,27 @@ class OrderAdmin(CommerceSecuredAdmin):
             ).exists()
 
             if not is_commerce:
-                if 'generate_pdf_action' in actions:
-                    del actions['generate_pdf_action']
+                actions.pop('generate_pdf_fr_action', None)
+                actions.pop('generate_pdf_en_action', None)
 
         return actions
+
+    def get_list_display(self, request):
+        fields = list(super().get_list_display(request))
+        if not self.has_order_document_permission(request):
+            fields.remove('pdf_download_link')
+        return fields
+
+    def get_fieldsets(self, request, obj=None):
+        fieldsets = super().get_fieldsets(request, obj)
+        if self.has_order_document_permission(request):
+            return fieldsets
+        filtered = []
+        for title, options in fieldsets:
+            fields = tuple(field for field in options.get('fields', ()) if field != 'pdf_download_link')
+            if fields:
+                filtered.append((title, {**options, 'fields': fields}))
+        return filtered
 
     def has_add_permission(self, request):
         """Empeche creation commande via admin (doit passer par API)."""
@@ -512,7 +543,7 @@ class OrderAdmin(CommerceSecuredAdmin):
     order_summary_display.short_description = _('Aperçu de la commande')
 
     def pdf_download_link(self, obj):
-        """Boutons Visualiser + Télécharger le bon de commande PDF."""
+        """Boutons PDF français et anglais."""
         if not obj.pk:
             return "—"
         view_url = reverse('admin:commerce_order_view_pdf', args=[obj.pk])
@@ -522,9 +553,14 @@ class OrderAdmin(CommerceSecuredAdmin):
             'text-decoration:none;font-weight:bold;font-size:13px;'
         )
         return format_html(
-            '<a href="{}" target="_blank" style="{}background:#3b82f6;color:white;">👁 Visualiser</a>'
+            '<a href="{}?language=fr" target="_blank" style="{}background:#3b82f6;color:white;">Visualiser FR</a>'
             '&nbsp;&nbsp;'
-            '<a href="{}" style="{}background:#059669;color:white;">📄 Télécharger</a>',
+            '<a href="{}?language=fr" style="{}background:#059669;color:white;">Télécharger FR</a>'
+            '&nbsp;&nbsp;'
+            '<a href="{}?language=en" target="_blank" style="{}background:#3b82f6;color:white;">Visualiser EN</a>'
+            '&nbsp;&nbsp;'
+            '<a href="{}?language=en" style="{}background:#059669;color:white;">Télécharger EN</a>',
+            view_url, btn_base, download_url, btn_base,
             view_url, btn_base, download_url, btn_base,
         )
     pdf_download_link.short_description = _('Bon de commande PDF')
@@ -599,14 +635,11 @@ class OrderAdmin(CommerceSecuredAdmin):
 
     # --- Actions securisees ---
 
-    @admin.action(description=_("Generer PDF des commandes selectionnees"))
-    def generate_pdf_action(self, request, queryset):
+    def _generate_pdf_zip(self, request, queryset, language_code):
         """Genere PDF pour commandes selectionnees (max 10). Commerce only."""
         # Verifier permission
-        if not request.user.is_superuser:
-            if not request.user.groups.filter(name=RBACConstants.GROUP_COMMERCE).exists():
-                messages.error(request, _("Vous n'avez pas la permission de generer des PDF."))
-                return
+        if not self.has_order_document_permission(request):
+            return HttpResponse("Accès refusé.", status=403)
 
         count = queryset.count()
 
@@ -621,9 +654,10 @@ class OrderAdmin(CommerceSecuredAdmin):
         if count == 1:
             order = queryset.first()
             try:
-                pdf_bytes = generate_order_pdf(order)
+                pdf_bytes = generate_order_pdf(order, language_code)
                 response = HttpResponse(pdf_bytes, content_type='application/pdf')
-                response['Content-Disposition'] = f'attachment; filename="commande_{order.order_number}.pdf"'
+                filename = OrderDocumentService.filename(order, language_code)
+                response['Content-Disposition'] = f'attachment; filename="{filename}"'
 
                 # Audit
                 self.log_action(request, order, CHANGE, message="PDF bon de commande genere")
@@ -651,9 +685,9 @@ class OrderAdmin(CommerceSecuredAdmin):
             zip_buffer = io.BytesIO()
             with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
                 for order in queryset:
-                    pdf_bytes = generate_order_pdf(order)
+                    pdf_bytes = generate_order_pdf(order, language_code)
                     zip_file.writestr(
-                        f"commande_{order.order_number}.pdf",
+                        OrderDocumentService.filename(order, language_code),
                         pdf_bytes
                     )
                     # Audit
@@ -661,7 +695,12 @@ class OrderAdmin(CommerceSecuredAdmin):
 
             zip_buffer.seek(0)
             response = FileResponse(zip_buffer, content_type='application/zip')
-            response['Content-Disposition'] = 'attachment; filename="commandes_aquacare.zip"'
+            filename = (
+                'bons-commande-aquacare-fr.zip'
+                if language_code == 'fr'
+                else 'purchase-orders-aquacare-en.zip'
+            )
+            response['Content-Disposition'] = f'attachment; filename="{filename}"'
 
             messages.success(
                 request,
@@ -678,6 +717,14 @@ class OrderAdmin(CommerceSecuredAdmin):
                 request,
                 _("Erreur interne lors de la génération de l'archive ZIP.")
             )
+
+    @admin.action(description=_("Générer les bons de commande en français"))
+    def generate_pdf_fr_action(self, request, queryset):
+        return self._generate_pdf_zip(request, queryset, 'fr')
+
+    @admin.action(description=_("Generate purchase orders in English"))
+    def generate_pdf_en_action(self, request, queryset):
+        return self._generate_pdf_zip(request, queryset, 'en')
 
     def changelist_view(self, request, extra_context=None):
         from common.models import AdminViewState

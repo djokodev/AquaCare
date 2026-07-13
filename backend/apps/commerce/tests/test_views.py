@@ -28,7 +28,11 @@ class TestProductViewSet:
             password="testpass123",
             first_name="Test",
             last_name="User",
-            age_group="26_35"
+            age_group="26_35",
+            region="littoral",
+            department="wouri",
+            city="Douala",
+            neighborhood="Bonamoussadi",
         )
 
     @pytest.fixture
@@ -48,7 +52,7 @@ class TestProductViewSet:
     def test_products(self):
         Product.objects.create(
             name="TILAPIA 3MM 20KG",
-            brand="aller_aqua",
+            brand="dibaq",
             species="tilapia",
             phase="grossissement",
             pellet_size_mm=Decimal("3.0"),
@@ -90,7 +94,7 @@ class TestProductViewSet:
     def test_recommended_product_success(self, authenticated_client, test_products):
         Product.objects.create(
             name="TILAPIA 1MM 20KG",
-            brand="aller_aqua",
+            brand="dibaq",
             species="tilapia",
             phase="alevinage",
             pellet_size_mm=Decimal("1.0"),
@@ -219,7 +223,11 @@ class TestOrderViewSet:
             password="testpass123",
             first_name="Test",
             last_name="User",
-            age_group="26_35"
+            age_group="26_35",
+            region="littoral",
+            department="wouri",
+            city="Douala",
+            neighborhood="Bonamoussadi",
         )
 
     @pytest.fixture
@@ -236,7 +244,7 @@ class TestOrderViewSet:
     def test_product(self):
         return Product.objects.create(
             name="Test Product Order",
-            brand="aller_aqua",
+            brand="dibaq",
             species="tilapia",
             phase="grossissement",
             pellet_size_mm=Decimal("3.0"),

@@ -24,3 +24,6 @@ The commerce domain covers feed products, catalogue browsing, cart behavior, ord
 - Keep backend controlled values authoritative.
 - Align catalogue, order statuses, and delivery choices with the backend constants.
 - Preserve compatibility with existing product and fixture data.
+- Order documents are internal operational documents. Their delivery, farm,
+  catalogue, issuer, and fulfilment-partner values are snapshots and must not
+  be rebuilt from live records. Mobile users do not receive a PDF endpoint.

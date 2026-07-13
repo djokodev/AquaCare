@@ -125,7 +125,7 @@ class Product(models.Model):
     # Conditionnement et prix
     package_weight_kg = models.PositiveIntegerField(
         _('Poids conditionnement (kg)'),
-        help_text=_('Poids d\'un sac (15, 20 ou 25 kg selon produit)')
+        help_text=_('Poids d\'un sac en kilogrammes')
     )
     price_per_package = models.DecimalField(
         _('Prix par sac (FCFA)'),
@@ -174,11 +174,9 @@ class Product(models.Model):
         if self.lipid_percentage and (self.lipid_percentage < 1 or self.lipid_percentage > 20):
             errors['lipid_percentage'] = _("Le taux de lipides doit être entre 1% et 20%")
 
-        # Valider poids package (1, 20 ou 25 kg standard AquaCare)
+        # The catalogue evolves: any strictly positive bag weight is valid.
         if self.package_weight_kg is not None and self.package_weight_kg <= 0:
             errors['package_weight_kg'] = _("Le poids du conditionnement doit être supérieur à 0")
-        elif self.package_weight_kg and self.package_weight_kg not in [1, 20, 25]:
-            errors['package_weight_kg'] = _("Le poids du conditionnement doit être 1, 20 ou 25 kg")
 
         # Valider prix cohérent
         if self.price_per_package and self.price_per_package <= 0:
@@ -318,6 +316,17 @@ class Order(models.Model):
     delivery_full_address = models.TextField(
         _('Adresse complète'),
         help_text=_('Adresse complète de livraison (région, département, ville, quartier)')
+    )
+    farm_name_snapshot = models.CharField(_('Nom de ferme figé'), max_length=200, blank=True, default='')
+    document_schema_version = models.CharField(_('Version documentaire'), max_length=20, default='1.0')
+    issuer_snapshot = models.JSONField(_('Émetteur figé'), default=dict)
+    fulfilment_partner_snapshot = models.JSONField(_('Partenaire figé'), default=dict)
+    production_cycle_name_snapshot = models.CharField(_('Nom du cycle figé'), max_length=200, blank=True, default='')
+    pickup_location_display_fr_snapshot = models.CharField(
+        _('Libellé français du point de retrait figé'), max_length=100, blank=True, default=''
+    )
+    pickup_location_display_en_snapshot = models.CharField(
+        _('Libellé anglais du point de retrait figé'), max_length=100, blank=True, default=''
     )
 
     # Montants (calculés automatiquement, immutables après création)
@@ -483,6 +492,15 @@ class OrderItem(models.Model):
         decimal_places=2,
         validators=[MinValueValidator(Decimal('0.01'))],
         help_text=_('Total de la ligne = prix unitaire × quantité')
+    )
+    product_brand_snapshot = models.CharField(_('Marque figée'), max_length=50, blank=True, default='')
+    product_species_snapshot = models.CharField(_('Espèce figée'), max_length=20, blank=True, default='')
+    product_phase_snapshot = models.CharField(_('Phase figée'), max_length=30, blank=True, default='')
+    product_pellet_size_mm_snapshot = models.DecimalField(
+        _('Granulométrie figée (mm)'), max_digits=4, decimal_places=2, null=True, blank=True
+    )
+    product_package_weight_kg_snapshot = models.PositiveIntegerField(
+        _('Poids conditionnement figé (kg)'), null=True, blank=True
     )
 
     def __str__(self):

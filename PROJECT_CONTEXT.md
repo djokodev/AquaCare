@@ -37,6 +37,8 @@ Current stack:
 - React Native UI must not hardcode visible copy.
 - Expo compatibility matters for all frontend dependencies.
 - Backend code should keep business logic in services and domain helpers.
+- Order documents are admin-only operational artifacts. Their document inputs
+  are immutable snapshots; no mobile PDF delivery is provided.
 - Path-specific rules live in `backend/AGENTS.md` and `frontend/AGENTS.md`.
 
 ## Product and business context
