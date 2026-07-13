@@ -22,6 +22,7 @@ from commerce.services import (
     ProductService,
     RecommendedProductQuery,
 )
+from commerce.services.pdf_service import OrderDocumentService
 from django.utils import timezone
 
 
@@ -33,7 +34,7 @@ class TestProductService:
     def tilapia_products(self):
         Product.objects.create(
             name="ALLER AQUA TILAPIA 1MM 20KG",
-            brand="aller_aqua",
+            brand="dibaq",
             species="tilapia",
             phase="alevinage",
             pellet_size_mm=Decimal("1.0"),
@@ -44,7 +45,7 @@ class TestProductService:
         )
         Product.objects.create(
             name="ALLER AQUA TILAPIA 3MM 20KG",
-            brand="aller_aqua",
+            brand="dibaq",
             species="tilapia",
             phase="grossissement",
             pellet_size_mm=Decimal("3.0"),
@@ -82,7 +83,7 @@ class TestProductService:
     def test_get_products_by_ids_raises_not_available_for_missing_or_unavailable_product(self, tilapia_products):
         unavailable_product = Product.objects.create(
             name="ALLER AQUA TILAPIA 5MM 20KG",
-            brand="aller_aqua",
+            brand="dibaq",
             species="tilapia",
             phase="grossissement",
             pellet_size_mm=Decimal("5.0"),
@@ -132,7 +133,7 @@ class TestProductService:
 
     def test_filter_by_phase_and_brand(self, tilapia_products):
         phase_products = ProductService.filter_by_phase("grossissement", species="tilapia")
-        brand_products = ProductService.filter_by_brand("aller_aqua")
+        brand_products = ProductService.filter_by_brand("dibaq")
 
         assert phase_products.count() == 1
         assert phase_products.first().phase == "grossissement"
@@ -220,7 +221,7 @@ class TestCatalogApplicationService:
     def tilapia_products(self):
         Product.objects.create(
             name="ALLER AQUA TILAPIA 1MM 20KG",
-            brand="aller_aqua",
+            brand="dibaq",
             species="tilapia",
             phase="alevinage",
             pellet_size_mm=Decimal("1.0"),
@@ -231,7 +232,7 @@ class TestCatalogApplicationService:
         )
         Product.objects.create(
             name="ALLER AQUA TILAPIA 3MM 20KG",
-            brand="aller_aqua",
+            brand="dibaq",
             species="tilapia",
             phase="grossissement",
             pellet_size_mm=Decimal("3.0"),
@@ -290,7 +291,7 @@ class TestOrderService:
     def test_product(self):
         return Product.objects.create(
             name="Product 1",
-            brand="aller_aqua",
+            brand="dibaq",
             species="tilapia",
             phase="grossissement",
             pellet_size_mm=Decimal("3.0"),
@@ -335,7 +336,7 @@ class TestOrderService:
     ):
         product_one = Product.objects.create(
             name="Product 2",
-            brand="aller_aqua",
+            brand="dibaq",
             species="tilapia",
             phase="grossissement",
             pellet_size_mm=Decimal("4.0"),
@@ -436,6 +437,48 @@ class TestOrderService:
         )
 
         assert order.production_cycle_id == cycle.id
+
+    def test_order_document_snapshots_remain_immutable(self, test_user, test_farm, test_product):
+        original_farm_name = test_farm.farm_name
+        cycle = ProductionCycle.objects.create(
+            farm_profile=test_farm,
+            cycle_name="Cycle au moment de la commande",
+            species="tilapia",
+            pond_identifier="Pond SNAP",
+            pond_surface_m2=Decimal("120.0"),
+            start_date=timezone.now().date(),
+            initial_count=1000,
+            initial_average_weight=Decimal("5.0"),
+            initial_biomass=Decimal("5.0"),
+            current_count=950,
+            current_average_weight=Decimal("50.0"),
+            current_biomass=Decimal("47.5"),
+            status="active",
+        )
+        order = OrderService.create_order(
+            user=test_user,
+            items_data=[{"product_id": str(test_product.id), "quantity": 1}],
+            delivery_method="pickup",
+            pickup_location="ndokoti",
+            production_cycle_id=str(cycle.id),
+        )
+
+        test_farm.farm_name = "Ferme modifiée"
+        test_farm.save(update_fields=["farm_name"])
+        cycle.cycle_name = "Cycle modifié"
+        cycle.save(update_fields=["cycle_name"])
+        test_product.name = "Produit modifié"
+        test_product.brand = "dibaq"
+        test_product.save(update_fields=["name", "brand"])
+        order.refresh_from_db()
+        order.items.first().refresh_from_db()
+
+        assert order.farm_name_snapshot == original_farm_name
+        assert order.production_cycle_name_snapshot == "Cycle au moment de la commande"
+        assert order.pickup_location_display_snapshot == "Marché Ndokoti"
+        assert order.items.first().product_name == "Product 1"
+        payload = OrderDocumentService.build_payload(order, "fr")
+        assert payload.order["cycle"] == "Cycle au moment de la commande"
 
     def test_create_order_rejects_foreign_production_cycle(self, test_user, test_farm, test_product):
         other_user = User.objects.create_user(
@@ -563,7 +606,7 @@ class TestOrderApplicationService:
     def test_product(self):
         return Product.objects.create(
             name="Order App Product",
-            brand="aller_aqua",
+            brand="dibaq",
             species="tilapia",
             phase="grossissement",
             pellet_size_mm=Decimal("3.0"),
@@ -709,7 +752,7 @@ class TestFeedingSuggestionService:
     ):
         Product.objects.create(
             name="TILAPIA 3MM TEST 20KG",
-            brand="aller_aqua",
+            brand="dibaq",
             species="tilapia",
             phase="pre_grossissement",
             pellet_size_mm=Decimal("3.0"),
@@ -754,7 +797,7 @@ class TestFeedingSuggestionService:
 
         Product.objects.create(
             name="CATFISH 3MM TEST 20KG",
-            brand="aller_aqua",
+            brand="dibaq",
             species="catfish",
             phase="pre_grossissement",
             pellet_size_mm=Decimal("3.0"),

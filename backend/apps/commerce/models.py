@@ -125,7 +125,7 @@ class Product(models.Model):
     # Conditionnement et prix
     package_weight_kg = models.PositiveIntegerField(
         _('Poids conditionnement (kg)'),
-        help_text=_('Poids d\'un sac (15, 20 ou 25 kg selon produit)')
+        help_text=_('Poids d\'un sac en kilogrammes')
     )
     price_per_package = models.DecimalField(
         _('Prix par sac (FCFA)'),
@@ -321,6 +321,10 @@ class Order(models.Model):
     document_schema_version = models.CharField(_('Version documentaire'), max_length=20, default='1.0')
     issuer_snapshot = models.JSONField(_('Émetteur figé'), default=dict)
     fulfilment_partner_snapshot = models.JSONField(_('Partenaire figé'), default=dict)
+    production_cycle_name_snapshot = models.CharField(_('Nom du cycle figé'), max_length=200, blank=True, default='')
+    pickup_location_display_snapshot = models.CharField(
+        _('Libellé du point de retrait figé'), max_length=100, blank=True, default=''
+    )
 
     # Montants (calculés automatiquement, immutables après création)
     subtotal = models.DecimalField(

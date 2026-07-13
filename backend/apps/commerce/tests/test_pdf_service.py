@@ -3,16 +3,19 @@ Tests de generation PDF pour les commandes.
 """
 import ctypes.util
 import inspect
+from datetime import datetime
 from decimal import Decimal
 from importlib import metadata
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
+from zoneinfo import ZoneInfo
 
 import pydyf
 import pytest
 from accounts.models import User
 from commerce.models import Order, OrderItem, Product
 from commerce.services.pdf_service import (
+    OrderDocumentService,
     _ensure_pdf_dependencies,
     generate_order_pdf,
 )
@@ -49,7 +52,7 @@ def test_generate_order_pdf_returns_bytes():
     farm.save()
     product = Product.objects.create(
         name="ALLER AQUA TILAPIA 3MM 20KG",
-        brand="aller_aqua",
+        brand="dibaq",
         species="tilapia",
         phase="grossissement",
         pellet_size_mm=Decimal("3.0"),
@@ -165,3 +168,87 @@ def test_generate_order_pdf_logs_and_reraises_on_failure(monkeypatch):
                     generate_order_pdf(order)
 
     logger_error.assert_called_once()
+
+
+def _payload_order(*, phone="+237 699 000 001", delivery_method="pickup"):
+    item = SimpleNamespace(
+        product_brand_snapshot="dibaq",
+        product_name="Snapshot Feed",
+        product_species_snapshot="catfish",
+        product_pellet_size_mm_snapshot=Decimal("3"),
+        product_package_weight_kg_snapshot=None,
+        quantity=2,
+        unit_price=Decimal("18000"),
+        line_total=Decimal("36000"),
+    )
+    return SimpleNamespace(
+        order_number="ORD-SNAPSHOT-0001",
+        items=SimpleNamespace(all=lambda: [item]),
+        delivery_method=delivery_method,
+        delivery_name="Amina Njoya",
+        delivery_phone="+237699000001",
+        delivery_region="littoral",
+        delivery_city="Douala",
+        delivery_full_address="Douala, Bonamoussadi",
+        pickup_location="ndokoti",
+        pickup_location_display_snapshot="Marché Ndokoti figé",
+        farm_name_snapshot="Ferme figée",
+        production_cycle_name_snapshot="Cycle figé",
+        document_schema_version="1.0",
+        issuer_snapshot={"name": "AquaCare", "phone": phone},
+        fulfilment_partner_snapshot={
+            "name": "MaveCameroun",
+            "address": "Adresse figée",
+            "hours_fr": "09:00–17:00",
+            "hours_en": "9:00 AM–5:00 PM",
+            "phones": ["+237 600 000 000"],
+            "emails": ["contact@example.com"],
+            "role_fr": "Ancien rôle",
+            "role_en": "Legacy role",
+        },
+        created_at=datetime(2026, 7, 13, 10, 0, tzinfo=ZoneInfo("UTC")),
+        production_cycle=SimpleNamespace(cycle_name="LIVE CYCLE MUST NOT APPEAR"),
+        get_pickup_location_display=lambda: "LIVE PICKUP MUST NOT APPEAR",
+        subtotal=Decimal("36000"),
+        delivery_fee=Decimal("3000"),
+        total=Decimal("39000"),
+    )
+
+
+def test_payload_uses_snapshots_and_issuer_phone_for_clarification():
+    order = _payload_order(phone="+237 677 123 456")
+
+    french = OrderDocumentService.build_payload(order, "fr")
+    english = OrderDocumentService.build_payload(order, "en")
+
+    assert french.order["cycle"] == "Cycle figé"
+    assert french.delivery["pickup"] == "Marché Ndokoti figé"
+    assert french.lines[0]["species"] == "Silure (Catfish)"
+    assert "+237 677 123 456" in french.labels["clarification"]
+    assert "+237 677 123 456" in english.labels["clarification"]
+    assert english.labels["clarification"].startswith("For any clarification")
+    assert "LIVE CYCLE" not in french.order["cycle"]
+    assert "LIVE PICKUP" not in french.delivery["pickup"]
+    assert french.totals["weight"] == "Non renseigné"
+
+
+def test_payload_localizes_species_and_dates_in_africa_douala():
+    order = _payload_order(delivery_method="home")
+    with timezone.override("Africa/Douala"):
+        french = OrderDocumentService.build_payload(order, "fr")
+        english = OrderDocumentService.build_payload(order, "en")
+
+    assert french.order["issued_at"] == "13/07/2026 11:00"
+    assert english.order["issued_at"] == "Jul 13, 2026 11:00 AM"
+    assert french.lines[0]["species"] == "Silure (Catfish)"
+    assert OrderDocumentService._display_species("mixed", "fr", "missing") == "Mixte"
+    assert OrderDocumentService._display_species("mixed", "en", "missing") == "Mixed"
+
+
+def test_rendered_html_hides_internal_metadata_and_contact_role():
+    html = OrderDocumentService.render_html(_payload_order(phone="+237 655 444 333"), "fr")
+
+    assert "Version documentaire" not in html
+    assert "Ancien rôle" not in html
+    assert "Contact AquaCare" not in html
+    assert "Pour toute clarification concernant cette commande, contactez AquaCare au +237 655 444 333." in html

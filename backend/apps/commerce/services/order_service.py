@@ -18,6 +18,7 @@ from django.db import IntegrityError, transaction
 from django.db.models import Count, QuerySet, Sum
 from django.utils import timezone
 
+from ..constants import PICKUP_LOCATION_CHOICES
 from ..domain.calculators import DeliveryFeeCalculator, OrderTotalCalculator
 from ..domain.exceptions import InvalidOrderError
 from ..domain.validators import DeliveryMethod, OrderItemPayload, OrderValidator
@@ -177,7 +178,7 @@ class OrderService(BaseCommerceService):
         production_cycle = OrderService._resolve_order_cycle(user, production_cycle_id)
 
         delivery_address_data = OrderService._build_delivery_address_snapshot(user)
-        OrderService._validate_delivery_snapshot(delivery_method, delivery_address_data)
+        OrderService._validate_delivery_snapshot(delivery_method, delivery_address_data, user)
         order = OrderService._create_order_with_retry(
             user=user,
             delivery_method=delivery_method,
@@ -306,10 +307,16 @@ class OrderService(BaseCommerceService):
         OrderItem.objects.bulk_create(order_items)
 
     @staticmethod
-    def _validate_delivery_snapshot(delivery_method, delivery_address_data):
-        if delivery_method == 'home' and any(not delivery_address_data[field].strip() for field in (
-            'delivery_name', 'delivery_phone', 'delivery_region', 'delivery_city', 'delivery_full_address',
-        )):
+    def _validate_delivery_snapshot(delivery_method, delivery_address_data, user):
+        if delivery_method == 'home' and (
+            any(
+                not str(delivery_address_data.get(field) or '').strip()
+                for field in (
+                    'delivery_name', 'delivery_phone', 'delivery_region', 'delivery_city', 'delivery_full_address',
+                )
+            )
+            or not (user.neighborhood or '').strip()
+        ):
             raise InvalidOrderError("Informations de livraison à domicile incomplètes")
 
     @staticmethod
@@ -394,6 +401,10 @@ class OrderService(BaseCommerceService):
                     document_schema_version='1.0',
                     issuer_snapshot=dict(settings.ORDER_DOCUMENT_ISSUER),
                     fulfilment_partner_snapshot=dict(settings.ORDER_DOCUMENT_FULFILMENT_PARTNER),
+                    production_cycle_name_snapshot=(production_cycle.cycle_name if production_cycle else ''),
+                    pickup_location_display_snapshot=(
+                        dict(PICKUP_LOCATION_CHOICES).get(pickup_location, '') if pickup_location else ''
+                    ),
                     # Montants
                     subtotal=subtotal,
                     delivery_fee=delivery_fee,

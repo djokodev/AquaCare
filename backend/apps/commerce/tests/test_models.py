@@ -18,7 +18,7 @@ class TestProductModel:
         """Test creation produit avec donnees valides."""
         product = Product.objects.create(
             name="ALLER AQUA TILAPIA 3MM 20KG",
-            brand="aller_aqua",
+            brand="dibaq",
             species="tilapia",
             phase="grossissement",
             pellet_size_mm=Decimal("3.0"),
@@ -29,7 +29,7 @@ class TestProductModel:
         )
 
         assert product.name == "ALLER AQUA TILAPIA 3MM 20KG"
-        assert product.brand == "aller_aqua"
+        assert product.brand == "dibaq"
         assert product.species == "tilapia"
         assert product.is_available is True
 
@@ -37,7 +37,7 @@ class TestProductModel:
         """Test calcul automatique prix au kg."""
         product = Product.objects.create(
             name="Test Product",
-            brand="aller_aqua",
+            brand="dibaq",
             species="tilapia",
             phase="grossissement",
             pellet_size_mm=Decimal("3.0"),
@@ -52,7 +52,7 @@ class TestProductModel:
         """Test validation prix negatif interdit."""
         product = Product(
             name="Test Product",
-            brand="aller_aqua",
+            brand="dibaq",
             species="tilapia",
             phase="grossissement",
             pellet_size_mm=Decimal("3.0"),
@@ -68,7 +68,7 @@ class TestProductModel:
         """Test validation poids zero interdit."""
         product = Product(
             name="Test Product",
-            brand="aller_aqua",
+            brand="dibaq",
             species="tilapia",
             phase="grossissement",
             pellet_size_mm=Decimal("3.0"),
@@ -83,7 +83,7 @@ class TestProductModel:
     def test_product_rejects_invalid_macronutrients_and_package_weight(self):
         product = Product(
             name="Produit invalide",
-            brand="aller_aqua",
+            brand="dibaq",
             species="tilapia",
             phase="grossissement",
             pellet_size_mm=Decimal("0.1"),
@@ -104,7 +104,7 @@ class TestProductModel:
     def test_product_string_representation(self):
         product = Product.objects.create(
             name="ALLER AQUA TILAPIA 3MM 20KG",
-            brand="aller_aqua",
+            brand="dibaq",
             species="tilapia",
             phase="grossissement",
             pellet_size_mm=Decimal("3.0"),
@@ -143,7 +143,7 @@ class TestOrderModel:
     def test_product(self):
         return Product.objects.create(
             name="Test Product",
-            brand="aller_aqua",
+            brand="dibaq",
             species="tilapia",
             phase="grossissement",
             pellet_size_mm=Decimal("3.0"),

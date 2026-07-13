@@ -376,6 +376,23 @@ class OrderAdmin(CommerceSecuredAdmin):
 
         return actions
 
+    def get_list_display(self, request):
+        fields = list(super().get_list_display(request))
+        if not self.has_order_document_permission(request):
+            fields.remove('pdf_download_link')
+        return fields
+
+    def get_fieldsets(self, request, obj=None):
+        fieldsets = super().get_fieldsets(request, obj)
+        if self.has_order_document_permission(request):
+            return fieldsets
+        filtered = []
+        for title, options in fieldsets:
+            fields = tuple(field for field in options.get('fields', ()) if field != 'pdf_download_link')
+            if fields:
+                filtered.append((title, {**options, 'fields': fields}))
+        return filtered
+
     def has_add_permission(self, request):
         """Empeche creation commande via admin (doit passer par API)."""
         return False
@@ -526,7 +543,7 @@ class OrderAdmin(CommerceSecuredAdmin):
     order_summary_display.short_description = _('Aperçu de la commande')
 
     def pdf_download_link(self, obj):
-        """Boutons Visualiser + Télécharger le bon de commande PDF."""
+        """Boutons PDF français et anglais."""
         if not obj.pk:
             return "—"
         view_url = reverse('admin:commerce_order_view_pdf', args=[obj.pk])
@@ -536,9 +553,14 @@ class OrderAdmin(CommerceSecuredAdmin):
             'text-decoration:none;font-weight:bold;font-size:13px;'
         )
         return format_html(
-            '<a href="{}" target="_blank" style="{}background:#3b82f6;color:white;">👁 Visualiser</a>'
+            '<a href="{}?language=fr" target="_blank" style="{}background:#3b82f6;color:white;">Visualiser FR</a>'
             '&nbsp;&nbsp;'
-            '<a href="{}" style="{}background:#059669;color:white;">📄 Télécharger</a>',
+            '<a href="{}?language=fr" style="{}background:#059669;color:white;">Télécharger FR</a>'
+            '&nbsp;&nbsp;'
+            '<a href="{}?language=en" target="_blank" style="{}background:#3b82f6;color:white;">Visualiser EN</a>'
+            '&nbsp;&nbsp;'
+            '<a href="{}?language=en" style="{}background:#059669;color:white;">Télécharger EN</a>',
+            view_url, btn_base, download_url, btn_base,
             view_url, btn_base, download_url, btn_base,
         )
     pdf_download_link.short_description = _('Bon de commande PDF')

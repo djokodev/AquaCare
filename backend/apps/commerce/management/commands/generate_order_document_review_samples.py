@@ -4,7 +4,7 @@ from __future__ import annotations
 import subprocess
 from decimal import Decimal
 from pathlib import Path
-from shutil import which
+from shutil import rmtree, which
 
 from accounts.models import User
 from commerce.models import Product
@@ -97,7 +97,8 @@ class Command(BaseCommand):
     @staticmethod
     def _render_pages(pdf_path, page_dir):
         if which("pdftoppm"):
-            page_dir.mkdir(exist_ok=True)
+            rmtree(page_dir, ignore_errors=True)
+            page_dir.mkdir(parents=True, exist_ok=True)
             subprocess.run(["pdftoppm", "-png", str(pdf_path), str(page_dir / "page")], check=True, capture_output=True)
             return len(list(page_dir.glob("page-*.png")))
         return None

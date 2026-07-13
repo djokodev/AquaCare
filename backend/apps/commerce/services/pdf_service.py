@@ -115,9 +115,6 @@ class OrderDocumentService:
             "kg": "kg",
             "bags": "sacs",
             "bag": "sac",
-            "clarification": (
-                "Pour toute clarification concernant cette commande, contactez AquaCare au +237 652 260 368."
-            ),
         },
         "en": {
             "title": "Purchase order",
@@ -160,7 +157,6 @@ class OrderDocumentService:
             "kg": "kg",
             "bags": "bags",
             "bag": "bag",
-            "clarification": "For any clarification regarding this order, contact AquaCare at +237 652 260 368.",
         },
     }
 
@@ -170,7 +166,7 @@ class OrderDocumentService:
     ) -> OrderDocumentPayload:
         if language_code not in SUPPORTED_ORDER_DOCUMENT_LANGUAGES:
             raise ValueError("Unsupported order document language")
-        labels = cls._LABELS[language_code]
+        labels = dict(cls._LABELS[language_code])
         missing = labels["not_provided"]
         generated_at = generated_at or timezone.now()
         lines = []
@@ -178,7 +174,7 @@ class OrderDocumentService:
         total_weight = Decimal("0")
         has_unknown_weight = False
         for item in order.items.all():
-            package_weight = item.product_package_weight_kg_snapshot
+            package_weight = getattr(item, "product_package_weight_kg_snapshot", None)
             line_weight = Decimal(package_weight) * item.quantity if package_weight else None
             total_bags += item.quantity
             if line_weight is None:
@@ -187,10 +183,12 @@ class OrderDocumentService:
                 total_weight += line_weight
             lines.append(
                 {
-                    "brand": cls._display_catalog_value(item.product_brand_snapshot, missing),
+                    "brand": cls._display_catalog_value(getattr(item, "product_brand_snapshot", ""), missing),
                     "name": cls._value(item.product_name, missing),
-                    "species": cls._display_catalog_value(item.product_species_snapshot, missing),
-                    "pellet_size": cls._weight(item.product_pellet_size_mm_snapshot, "mm", missing),
+                    "species": cls._display_species(
+                        getattr(item, "product_species_snapshot", ""), language_code, missing
+                    ),
+                    "pellet_size": cls._weight(getattr(item, "product_pellet_size_mm_snapshot", None), "mm", missing),
                     "package_weight": cls._weight(package_weight, labels["kg"], missing),
                     "quantity": item.quantity,
                     "line_weight": cls._weight(line_weight, labels["kg"], missing),
@@ -200,20 +198,25 @@ class OrderDocumentService:
             )
         partner = dict(order.fulfilment_partner_snapshot or {})
         issuer = dict(order.issuer_snapshot or {})
+        issuer_phone = cls._format_phone(issuer.get("phone"), missing)
+        labels["clarification"] = (
+            f"Pour toute clarification concernant cette commande, contactez AquaCare au {issuer_phone}."
+            if language_code == "fr"
+            else f"For any clarification regarding this order, contact AquaCare at {issuer_phone}."
+        )
         return OrderDocumentPayload(
             language_code=language_code,
             labels=labels,
             order={
                 "number": order.order_number,
                 "issued_at": cls._date(order.created_at, language_code),
-                "cycle": cls._value(getattr(order.production_cycle, "cycle_name", None), missing),
-                "has_cycle": bool(getattr(order.production_cycle, "cycle_name", None)),
-                "schema_version": order.document_schema_version or DOCUMENT_SCHEMA_VERSION,
+                "cycle": cls._value(getattr(order, "production_cycle_name_snapshot", ""), missing),
+                "has_cycle": bool(getattr(order, "production_cycle_name_snapshot", "")),
+                "schema_version": getattr(order, "document_schema_version", None) or DOCUMENT_SCHEMA_VERSION,
             },
-            issuer={"name": cls._value(issuer.get("name"), missing), "phone": cls._value(issuer.get("phone"), missing)},
+            issuer={"name": cls._value(issuer.get("name"), missing), "phone": issuer_phone},
             partner={
                 "name": cls._value(partner.get("name"), missing),
-                "role": cls._value(partner.get(f"role_{language_code}"), missing),
                 "address": cls._value(partner.get("address"), missing),
                 "hours": cls._value(partner.get(f"hours_{language_code}"), missing),
                 "phones": partner.get("phones") or [missing],
@@ -229,7 +232,7 @@ class OrderDocumentService:
                 "region": cls._display_location_value(order.delivery_region, missing),
                 "city": cls._display_location_value(order.delivery_city, missing),
                 "address": cls._value(order.delivery_full_address, missing),
-                "pickup": cls._value(order.get_pickup_location_display() if order.pickup_location else None, missing),
+                "pickup": cls._value(getattr(order, "pickup_location_display_snapshot", ""), missing),
                 "is_pickup": order.delivery_method == "pickup",
             },
             lines=lines,
@@ -259,6 +262,13 @@ class OrderDocumentService:
         return raw.upper() if raw.lower() == "dibaq" else raw.capitalize() if raw in {"tilapia", "catfish"} else raw
 
     @staticmethod
+    def _display_species(value: Any, language_code: str, missing: str) -> str:
+        return {
+            "fr": {"tilapia": "Tilapia", "catfish": "Silure (Catfish)", "mixed": "Mixte"},
+            "en": {"tilapia": "Tilapia", "catfish": "Catfish", "mixed": "Mixed"},
+        }[language_code].get(str(value).lower(), missing)
+
+    @staticmethod
     def _display_location_value(value: Any, missing: str) -> str:
         raw = OrderDocumentService._value(value, missing)
         return raw.capitalize() if raw.islower() and raw != missing else raw
@@ -277,7 +287,10 @@ class OrderDocumentService:
 
     @staticmethod
     def _date(value: datetime, language_code: str) -> str:
-        return value.strftime("%d/%m/%Y %H:%M") if language_code == "fr" else value.strftime("%b %d, %Y %I:%M %p")
+        local_value = timezone.localtime(value)
+        if language_code == "fr":
+            return local_value.strftime("%d/%m/%Y %H:%M")
+        return local_value.strftime("%b %d, %Y %I:%M %p")
 
     @staticmethod
     def _logo_data_uri() -> str | None:
