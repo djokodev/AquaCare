@@ -1,6 +1,6 @@
 import React from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { StyleSheet } from 'react-native';
+import { ScrollView, StyleSheet } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 import ProductionUnitsHubScreen from '../ProductionUnitsHubScreen';
@@ -321,7 +321,7 @@ describe('features/aquaculture/screens/ProductionUnitsHubScreen', () => {
         allocations: [],
       });
 
-    const { getByTestId, getByText } = render(
+    const { UNSAFE_getByType, getByText } = render(
       <ProductionUnitsHubScreen navigation={navigation} route={route} />
     );
 
@@ -330,7 +330,7 @@ describe('features/aquaculture/screens/ProductionUnitsHubScreen', () => {
     });
 
     act(() => {
-      getByTestId('production-units-hub-scroll').props.refreshControl.props.onRefresh();
+      UNSAFE_getByType(ScrollView).props.refreshControl.props.onRefresh();
     });
 
     await waitFor(() => {
