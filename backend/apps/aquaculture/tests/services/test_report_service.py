@@ -19,6 +19,37 @@ from django.utils.translation import override
 from tests.fixtures.factories import FarmProfileFactory, ProductionCycleFactory, UserFactory
 
 
+@pytest.mark.parametrize(
+    ("cycle_name", "language_code", "expected"),
+    [
+        ("Cycle Clarias normal", "fr", "Clarias normal"),
+        ("  Cycle Clarias normal  ", "fr", "Clarias normal"),
+        ("Production cycle Clarias normal", "en", "Clarias normal"),
+        ("Clarias juillet", "fr", "Clarias juillet"),
+        ("Mon premier cycle", "fr", "Mon premier cycle"),
+        ("", "fr", None),
+        (None, "en", None),
+    ],
+)
+def test_clean_cycle_name_for_report_display(cycle_name, language_code, expected):
+    assert ReportService.clean_cycle_name_for_report_display(cycle_name, language_code) == expected
+
+
+@pytest.mark.parametrize(
+    ("status", "language_code", "expected"),
+    [
+        ("active", "fr", "En production"),
+        ("harvested", "fr", "Récoltée"),
+        ("inactive", "fr", "Inactive"),
+        ("active", "en", "In production"),
+        ("harvested", "en", "Harvested"),
+        ("inactive", "en", "Inactive"),
+    ],
+)
+def test_report_unit_status_labels(status, language_code, expected):
+    assert ReportService.get_report_unit_status_label(status, language_code) == expected
+
+
 def _create_report(
     farm_profile,
     report_type="daily",
@@ -345,6 +376,51 @@ class TestReportServicePayloadAndPdfTemplate:
         assert payload["report_meta"]["cycle_scope_id"] == str(scoped_cycle.id)
         assert payload["report_meta"]["cycle_scope_name"] == scoped_cycle.cycle_name
 
+    def test_cycle_pdf_keeps_plural_unit_details_and_comparison(self):
+        farm_profile = FarmProfileFactory()
+        cycle = ProductionCycleFactory(farm_profile=farm_profile, status="active")
+        unit = ProductionUnit.objects.create(
+            farm_profile=farm_profile,
+            name="Bassin cycle",
+            unit_type="tank",
+            volume_m3="3.00",
+        )
+        CycleUnitAllocation.objects.create(
+            cycle=cycle,
+            production_unit=unit,
+            initial_fish_count=900,
+            current_fish_count=900,
+            initial_biomass_kg="9.00",
+            current_biomass_kg="9.00",
+        )
+        payload = ReportService._build_payload(
+            farm_profile=farm_profile,
+            report_type="daily",
+            period_start=date(2026, 7, 12),
+            period_end=date(2026, 7, 12),
+            scope_type="cycle",
+            scope_object_id=str(cycle.id),
+            cycle_id=str(cycle.id),
+        )
+        report = _create_report(
+            farm_profile=farm_profile,
+            report_type="daily",
+            period_start=date(2026, 7, 12),
+            period_end=date(2026, 7, 12),
+            scope_object_id=cycle.id,
+        )
+        context = ReportService._build_pdf_context(
+            report=report,
+            payload=payload,
+            generated_at=timezone.localtime(timezone.now()),
+            language_code="fr",
+        )
+        html = render_to_string("aquaculture/report_pdf.html", context)
+
+        assert "Détail des unités de production" in html
+        assert "Détail de l'unité de production" not in html
+        assert "Comparaison par unité" in html
+
     @pytest.mark.parametrize(
         ('unit_type', 'dimension_kwargs', 'expected_dimension_unit', 'expected_density_unit'),
         [
@@ -454,7 +530,7 @@ class TestReportServicePayloadAndPdfTemplate:
         )
         html = render_to_string('aquaculture/report_pdf.html', context)
 
-        assert '120.00 m²' in html
+        assert '120,00 m²' in html
         assert '5,00 poissons/m²' in html
         assert '200,00 poissons/m²' not in html
         assert '3.00 m²' not in html
@@ -867,10 +943,20 @@ class TestReportServicePayloadAndPdfTemplate:
         html = render_to_string("aquaculture/report_pdf.html", context)
 
         assert "Rapport hebdomadaire — Bassin A / Nord" in html
-        assert "Cycle Clarias juillet" in html
+        assert "Informations sur l&#x27;unité" in html
+        assert "Cycle de production:</strong> Clarias juillet" in html
+        assert "Cycle Clarias juillet" not in html
         assert "Bac" in html
-        assert "12.00 m³" in html
+        assert "12,00 m³" in html
+        assert "3 600 poissons" in html
         assert "79,17 poissons/m³" in html
+        assert "Espèce:</strong> Silure" in html
+        assert "Statut dans ce cycle:</strong> En production" in html
+        assert "Détail de l&#x27;unité de production" in html
+        assert "Détail des unités de production" not in html
+        assert "État du cycle" not in html
+        assert "État de l&#x27;allocation" not in html
+        assert "Cycle:</strong>" not in html
         assert " / poissons/m³" not in html
         assert "Comparaison par unité" not in html
 
@@ -922,6 +1008,12 @@ class TestReportServicePayloadAndPdfTemplate:
         )
         with override("en"):
             english_html = render_to_string("aquaculture/report_pdf.html", english_context)
+        assert "Production unit information" in english_html
+        assert "Production cycle:</strong> Clarias juillet" in english_html
+        assert "Status in this cycle:</strong> In production" in english_html
+        assert "Recommended capacity:</strong> 3,600 fish" in english_html
+        assert "Informations sur l'unité" not in english_html
+        assert "État de l&#x27;allocation" not in english_html
         assert "79.17 fish/m³" in english_html
         assert " / fish/m³" not in english_html
 

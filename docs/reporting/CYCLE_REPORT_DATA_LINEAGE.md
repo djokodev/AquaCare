@@ -34,6 +34,9 @@ the mutable current dashboard state.
   is the physical unit (`m²` for ponds, `m³` for tanks and cages), while
   `production_unit_capacity_density_unit` is the localized density unit
   (`poissons/m²` or `poissons/m³` in French, `fish/m²` or `fish/m³` in English).
+  The PDF keeps `cycle_name` and `allocation_status` unchanged in storage and
+  applies only report-specific display formatting: a cleaned cycle heading and
+  métier labels such as `En production`/`In production`.
   The `cycle_wide_data` metadata
   explicitly records that cycle-only facts are omitted from unit reports.
   Global logs, global sanitary events, cycle costs, and unscoped feeding plans

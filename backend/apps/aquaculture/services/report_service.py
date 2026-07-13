@@ -15,6 +15,7 @@ import inspect
 import logging
 import re
 import unicodedata
+from copy import deepcopy
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from importlib import metadata
@@ -2604,6 +2605,37 @@ class ReportService(BaseService):
         return en_text if language_code == "en" else fr_text
 
     @staticmethod
+    def clean_cycle_name_for_report_display(
+        cycle_name: str | None,
+        language_code: str,
+    ) -> str | None:
+        """Nettoie un préfixe générique uniquement pour l'affichage du rapport."""
+        del language_code
+        if cycle_name is None:
+            return None
+        original = cycle_name.strip()
+        if not original:
+            return None
+        cleaned = re.sub(
+            r"^(?:production\s+cycle|cycle)\s+",
+            "",
+            original,
+            count=1,
+            flags=re.IGNORECASE,
+        ).strip()
+        return cleaned or original
+
+    @staticmethod
+    def get_report_unit_status_label(status: str | None, language_code: str) -> str | None:
+        """Retourne le libellé métier du statut d'une unité dans son cycle."""
+        labels = {
+            "active": ReportService._pick_text(language_code, "En production", "In production"),
+            "harvested": ReportService._pick_text(language_code, "Récoltée", "Harvested"),
+            "inactive": ReportService._pick_text(language_code, "Inactive", "Inactive"),
+        }
+        return labels.get(status, status or None)
+
+    @staticmethod
     def _get_report_type_label(report_type: str, language_code: str) -> str:
         labels = {
             "daily": ReportService._pick_text(language_code, "Journalier", "Daily"),
@@ -2873,10 +2905,16 @@ class ReportService(BaseService):
                 "cost_other": "Other estimated costs",
                 "insufficient_cost_data": "Insufficient cost data to display the breakdown.",
                 "production_unit": "Production unit",
+                "production_unit_information": "Production unit information",
                 "production_unit_details": "Production unit details",
+                "production_unit_details_unit": "Production unit details",
                 "cycle": "Cycle",
+                "production_cycle": "Production cycle",
                 "cycle_status": "Cycle status",
                 "allocation_status": "Allocation status",
+                "status_in_cycle": "Status in this cycle",
+                "in_production": "In production",
+                "fish_count_unit": "fish",
                 "unit_type": "Unit type",
                 "dimension": "Dimension",
                 "capacity": "Recommended capacity",
@@ -3033,10 +3071,16 @@ class ReportService(BaseService):
             "cost_other": "Autres charges estimées",
             "insufficient_cost_data": "Données de coûts insuffisantes pour afficher la répartition.",
             "production_unit": "Unité",
+            "production_unit_information": "Informations sur l'unité",
             "production_unit_details": "Détail des unités de production",
+            "production_unit_details_unit": "Détail de l'unité de production",
             "cycle": "Cycle",
+            "production_cycle": "Cycle de production",
             "cycle_status": "État du cycle",
             "allocation_status": "État de l'allocation",
+            "status_in_cycle": "Statut dans ce cycle",
+            "in_production": "En production",
+            "fish_count_unit": "poissons",
             "unit_type": "Type d'unité",
             "dimension": "Dimension",
             "capacity": "Capacité recommandée",
@@ -3172,6 +3216,24 @@ class ReportService(BaseService):
             scope_label = str(report_meta.get("scope_label") or "")
             scope_name = report_meta.get("scope_name")
         scope_type = str(report_meta.get("scope_type") or report.scope_type or "cycle")
+        pdf_payload = deepcopy(payload)
+        production_cycle_name = None
+        if isinstance(pdf_payload, dict):
+            for section in pdf_payload.get("cycles", []) or []:
+                cycle_data = section.get("cycle", {}) if isinstance(section, dict) else {}
+                unit_data = section.get("unit", {}) if isinstance(section, dict) else {}
+                if isinstance(cycle_data, dict):
+                    cycle_data["cycle_name_display"] = ReportService.clean_cycle_name_for_report_display(
+                        cycle_data.get("cycle_name"),
+                        language_code,
+                    )
+                    if production_cycle_name is None:
+                        production_cycle_name = cycle_data.get("cycle_name_display")
+                if isinstance(unit_data, dict):
+                    unit_data["status_in_cycle_display"] = ReportService.get_report_unit_status_label(
+                        unit_data.get("allocation_status"),
+                        language_code,
+                    )
         report_type_label = ReportService._get_report_type_label(report.report_type, language_code)
         if scope_type == "unit" and scope_name:
             report_heading = ReportService._pick_text(
@@ -3183,7 +3245,7 @@ class ReportService(BaseService):
             report_heading = ReportService._build_pdf_labels(language_code)["report_title"]
         return {
             "report": report,
-            "payload": payload,
+            "payload": pdf_payload,
             "generated_at": generated_at,
             "language_code": language_code,
             "brand_color": "#059669",
@@ -3201,6 +3263,7 @@ class ReportService(BaseService):
             "scope_label": scope_label,
             "scope_name": scope_name,
             "report_heading": report_heading,
+            "production_cycle_name": production_cycle_name,
             "logo_data_uri": ReportService._resolve_logo_data_uri(),
         }
 
