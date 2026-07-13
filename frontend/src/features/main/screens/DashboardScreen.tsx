@@ -66,6 +66,8 @@ function DashboardActionCard({
       accessibilityLabel={label}
       onPress={onPress}
       disabled={disabled}
+      layout="row"
+      primaryBorder
       style={styles.actionCard}
     >
       <AppText
@@ -495,6 +497,8 @@ export default function DashboardScreen({ navigation }: any) {
               testID="session-active-cycle-card"
               accessibilityLabel={sessionCycle.cycle_name}
               disabled={!canSwitchCycle}
+              layout="row"
+              primaryBorder
               onPress={() =>
                 navigation.navigate("CycleSessionEntry", {
                   showBackToDashboard: true,
@@ -690,19 +694,9 @@ export default function DashboardScreen({ navigation }: any) {
 }
 
 const styles = StyleSheet.create({
-  sessionCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: spacing[1],
-    borderColor: colors.brand.primary,
-  },
+  sessionCard: { marginBottom: spacing[1] },
   actionCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
     marginTop: spacing[3],
-    borderColor: colors.brand.primary,
   },
   actionLabel: { flex: 1, marginRight: spacing[3] },
 });

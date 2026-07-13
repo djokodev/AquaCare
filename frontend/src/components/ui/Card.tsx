@@ -19,6 +19,8 @@ interface SelectableCardProps extends CardProps {
   disabled?: boolean;
   accessibilityLabel: string;
   testID?: string;
+  layout?: "row" | "column";
+  primaryBorder?: boolean;
 }
 
 export function Card({ children, variant = "default", style }: CardProps) {
@@ -44,6 +46,8 @@ export function SelectableCard({
   accessibilityLabel,
   style,
   testID,
+  layout = "column",
+  primaryBorder = false,
 }: SelectableCardProps) {
   return (
     <Pressable
@@ -56,6 +60,8 @@ export function SelectableCard({
       style={({ pressed }) => [
         styles.card,
         styles.outlined,
+        layout === "row" && styles.row,
+        primaryBorder && styles.primaryBorder,
         selected && styles.selected,
         (pressed || disabled) && { opacity: disabled ? 0.5 : 0.8 },
         style,
@@ -72,6 +78,12 @@ const styles = StyleSheet.create({
     padding: spacing[4],
   },
   outlined: { borderWidth: 1, borderColor: colors.border.default },
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  primaryBorder: { borderColor: colors.brand.primary },
   selected: {
     backgroundColor: colors.surface.selected,
     borderColor: colors.border.focus,
