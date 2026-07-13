@@ -66,6 +66,18 @@ export default function ReportsScreen({ navigation, route }: ReportsScreenProps)
   const [error, setError] = useState<string | null>(null);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const previousCycleIdRef = useRef<string | undefined>(undefined);
+
+  useEffect(() => {
+    const previousCycleId = previousCycleIdRef.current;
+    if (previousCycleId && previousCycleId !== resolvedCycleId) {
+      setSelectedScope('cycle');
+      setSelectedAllocationId('');
+      setAllocations([]);
+      setAllocationError(false);
+    }
+    previousCycleIdRef.current = resolvedCycleId;
+  }, [resolvedCycleId]);
 
   const loadAllocations = useCallback(async () => {
     if (!resolvedCycleId) {
@@ -234,6 +246,7 @@ export default function ReportsScreen({ navigation, route }: ReportsScreenProps)
         ? {
             report_type: reportType,
             scope_type: 'unit' as const,
+            cycle_id: resolvedCycleId as string,
             cycle_unit_allocation_id: resolvedCycleUnitAllocationId as string,
           }
         : {
@@ -381,7 +394,14 @@ export default function ReportsScreen({ navigation, route }: ReportsScreenProps)
                 : t('reportTypeMonthly')}
             </Text>
             <Text className="text-xs text-gray-light mt-1">
-              {report.scope_label || (report.scope_type === 'unit' ? t('reportUnitTitle') : t('reportCycleTitle'))}
+              {(() => {
+                const scopeIdentity = report.scope_name?.trim();
+                const fallbackLabel = report.scope_type === 'unit'
+                  ? t('reportUnitTitle')
+                  : t('reportCycleTitle');
+                const scopeLabel = report.scope_label?.trim() || fallbackLabel;
+                return scopeIdentity ? `${scopeIdentity} · ${scopeLabel}` : scopeLabel;
+              })()}
             </Text>
           </View>
           <View className="flex-row items-center">

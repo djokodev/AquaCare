@@ -27,7 +27,11 @@ the mutable current dashboard state.
   authenticated farm. A mismatched cycle or inaccessible allocation returns an
   opaque not-found response.
 - Unit payloads include allocation identity, allocation status, unit dimension,
-  recommended capacity, and current density. The `cycle_wide_data` metadata
+  recommended capacity, and current density. `production_unit_dimension_unit`
+  is the physical unit (`m²` for ponds, `m³` for tanks and cages), while
+  `production_unit_capacity_density_unit` is the localized density unit
+  (`poissons/m²` or `poissons/m³` in French, `fish/m²` or `fish/m³` in English).
+  The `cycle_wide_data` metadata
   explicitly records that cycle-only facts are omitted from unit reports.
   Global logs, global sanitary events, cycle costs, and unscoped feeding plans
   are never repartitioned between units.
@@ -88,7 +92,8 @@ the mutable current dashboard state.
 | Weekly summary | `cycles[].weekly_activity` | Period logs and sanitary events | `ReportService._build_weekly_activity()` | `PERIOD_ONLY` | Weekly count/sums/averages; sanitary activity includes declaration or resolution in the week, once per event per week | Empty | A situation may create one activity in its declaration week and another in its resolution week | monthly tests |
 | Observations | `cycles[].logs[].observations` | Daily log | `CycleLog.observations` | `PERIOD_ONLY` | Direct field | Empty label | Direct field | template tests |
 | Symptoms/treatment/medication/dosage/duration | `*.sanitary_logs[]` | Sanitary event | `SanitaryLog` fields | `PERIOD_ONLY` | Direct fields | Empty label | Nullable legacy fields | sanitary tests |
-| Unit type/dimension | `cycles[].unit.production_unit_type_display`, `production_unit_dimension` | Production unit | `ProductionUnit` | `STATIC` | Localized choice and display dimension | Empty label | No unit for legacy | unit tests |
+| Unit type/dimension | `cycles[].unit.production_unit_type_display`, `production_unit_dimension`, `production_unit_dimension_unit` | Production unit | `ProductionUnit`, production-unit domain helpers | `STATIC` | Dimension value plus `m²` for ponds or `m³` for tanks/cages | Empty label | No unit for legacy | unit tests |
+| Unit density unit | `cycles[].unit.production_unit_capacity_density_unit` | Production unit type | Production-unit domain helper | `STATIC` | Localized `poissons/m²`, `poissons/m³`, `fish/m²` or `fish/m³` | Empty label | No unit for legacy | unit/PDF tests |
 | Period sanitary events | `cycles[].sanitary_logs` | Sanitary logs created/resolved in bounds | `SanitaryLog.event_date`, `resolution_date` | `PERIOD_ONLY` | Event date or resolution date in period | Empty message | Global legacy events included separately | sanitary tests |
 | Active sanitary events | `active_sanitary_logs`, active counts | Sanitary logs at period end | `_is_sanitary_event_active_as_of()` | `AS_OF_PERIOD_END` | Event before end and unresolved, or resolution after end | Resolved legacy row stays resolved | Global null allocation separated | sanitary tests |
 | Resolution date | `resolution_date`, `resolution_date_display` | Sanitary log | `SanitaryLog.resolution_date` | `STATIC` | Direct field/display | Empty label | Nullable legacy field | sanitary/template tests |

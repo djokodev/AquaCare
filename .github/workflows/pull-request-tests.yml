@@ -204,6 +204,36 @@ jobs:
             exit 1
           fi
 
+      - name: Run PostgreSQL report scope tests
+        working-directory: ./backend
+        env:
+          DJANGO_SETTINGS_MODULE: aquacare_api.settings.development
+          POSTGRES_DB: aquacare_ci
+          POSTGRES_USER: aquacare
+          POSTGRES_PASSWORD: aquacare
+          POSTGRES_HOST: 127.0.0.1
+          POSTGRES_PORT: 5432
+          REDIS_CACHE_URL: redis://127.0.0.1:6379/1
+          CELERY_BROKER_URL: redis://127.0.0.1:6379/0
+          CELERY_RESULT_BACKEND: redis://127.0.0.1:6379/0
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libcairo2 \
+            libgdk-pixbuf-2.0-0 \
+            libglib2.0-0 \
+            libpango-1.0-0 \
+            libpangoft2-1.0-0
+          report_output="$(pytest -n 0 \
+            apps/aquaculture/tests/test_reports.py \
+            apps/aquaculture/tests/services/test_report_service.py \
+            apps/aquaculture/tests/services/test_report_application_service.py -q)"
+          echo "$report_output"
+          if echo "$report_output" | grep -qi skipped; then
+            echo "PostgreSQL report tests must not be skipped"
+            exit 1
+          fi
+
 
   all-checks-passed:
     name: All Checks Passed

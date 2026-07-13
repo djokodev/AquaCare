@@ -35,6 +35,10 @@ from django.utils.translation import override
 
 from ..constants import DEFAULT_FEED_PRICE_PER_KG, ECONOMIC_DEFAULTS_BY_SPECIES
 from ..domain.cycle_duration import get_default_cycle_duration_days
+from ..domain.production_units import (
+    get_production_unit_density_unit,
+    get_production_unit_dimension_unit,
+)
 from ..models import (
     CycleLog,
     CycleUnitAllocation,
@@ -813,16 +817,13 @@ class ReportService(BaseService):
                 ),
                 "production_unit_dimension": allocation.production_unit.display_dimension,
                 "production_unit_dimension_value": ReportService._to_float(dimension_value),
-                "production_unit_dimension_unit": (
-                    str(allocation.production_unit.capacity_density_unit)
-                    if allocation.production_unit.capacity_density_unit
-                    else None
+                "production_unit_dimension_unit": get_production_unit_dimension_unit(
+                    allocation.production_unit.unit_type
                 ),
                 "production_unit_recommended_capacity": allocation.production_unit.recommended_capacity,
-                "production_unit_capacity_density_unit": (
-                    str(allocation.production_unit.capacity_density_unit)
-                    if allocation.production_unit.capacity_density_unit
-                    else None
+                "production_unit_capacity_density_unit": get_production_unit_density_unit(
+                    allocation.production_unit.unit_type,
+                    language_code=language_code,
                 ),
                 "density": round(density, 2) if density is not None else None,
                 "initial_fish_count": allocation.initial_fish_count,

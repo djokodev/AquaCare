@@ -30,13 +30,35 @@ def normalize_production_unit_type(unit_type: object | None) -> str | None:
     return PRODUCTION_UNIT_TYPE_ALIASES.get(normalized, normalized)
 
 
-def get_production_unit_density_unit(unit_type: str | None) -> str | None:
+def get_production_unit_density_unit(
+    unit_type: str | None,
+    *,
+    language_code: str | None = None,
+) -> str | None:
     """Retourne l'unité de densité utilisée pour une unité de production."""
     normalized = normalize_production_unit_type(unit_type)
     if normalized == 'pond':
+        if language_code == 'en':
+            return 'fish/m²'
+        if language_code == 'fr':
+            return 'poissons/m²'
         return _('poissons/m²')
     if normalized in {'tank', 'cage'}:
+        if language_code == 'en':
+            return 'fish/m³'
+        if language_code == 'fr':
+            return 'poissons/m³'
         return _('poissons/m³')
+    return None
+
+
+def get_production_unit_dimension_unit(unit_type: str | None) -> str | None:
+    """Retourne l'unité physique de dimension principale d'une unité."""
+    normalized = normalize_production_unit_type(unit_type)
+    if normalized == 'pond':
+        return 'm²'
+    if normalized in {'tank', 'cage'}:
+        return 'm³'
     return None
 
 

@@ -4,7 +4,7 @@ from datetime import date, timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
-from aquaculture.models import ProductionReport
+from aquaculture.models import CycleUnitAllocation, ProductionReport, ProductionUnit
 from aquaculture.services import (
     GenerateReportCommand,
     InvalidReportCycleScopeError,
@@ -172,6 +172,15 @@ class TestReportApplicationService:
             )
 
         assert report.status == "pending"
+        assert report.payload["report_meta"] == {
+            "scope_type": "cycle",
+            "scope_object_id": str(cycle.id),
+            "cycle_scope_id": str(cycle.id),
+            "cycle_unit_allocation_id": None,
+            "cycle_scope_name": cycle.cycle_name,
+            "scope_name": cycle.cycle_name,
+            "scope_label": "Rapport du cycle",
+        }
         mock_dispatch.assert_called_once_with(report)
 
     def test_request_report_generation_supports_unit_scope(self):
@@ -182,8 +191,6 @@ class TestReportApplicationService:
             status="active",
             start_date=timezone.localdate() - timedelta(days=2),
         )
-        from aquaculture.models import CycleUnitAllocation, ProductionUnit
-
         unit = ProductionUnit.objects.create(
             farm_profile=farm_profile,
             name="Bac 1",
@@ -212,6 +219,15 @@ class TestReportApplicationService:
         assert report.status == "pending"
         assert report.scope_type == "unit"
         assert str(report.scope_object_id) == str(allocation.id)
+        assert report.payload["report_meta"] == {
+            "scope_type": "unit",
+            "scope_object_id": str(allocation.id),
+            "cycle_scope_id": str(cycle.id),
+            "cycle_unit_allocation_id": str(allocation.id),
+            "cycle_scope_name": cycle.cycle_name,
+            "scope_name": unit.name,
+            "scope_label": "Rapport de l’unité",
+        }
         mock_dispatch.assert_called_once_with(report)
 
     def test_prepare_report_download_returns_pending_when_status_is_pending(self):

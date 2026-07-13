@@ -4,12 +4,35 @@ from datetime import date
 from decimal import Decimal
 
 import pytest
+from aquaculture.domain import (
+    get_production_unit_density_unit,
+    get_production_unit_dimension_unit,
+)
 from aquaculture.models import CycleUnitAllocation, ProductionCycle, ProductionUnit
 from aquaculture.serializers import CycleUnitAllocationSerializer, ProductionUnitSerializer
 from django.core.exceptions import ValidationError
 from django.db.models.deletion import ProtectedError
 from django.urls import reverse
 from rest_framework import status
+
+
+@pytest.mark.parametrize(
+    ('unit_type', 'dimension_unit', 'density_unit_fr', 'density_unit_en'),
+    [
+        ('tank', 'm³', 'poissons/m³', 'fish/m³'),
+        ('cage', 'm³', 'poissons/m³', 'fish/m³'),
+        ('pond', 'm²', 'poissons/m²', 'fish/m²'),
+    ],
+)
+def test_production_unit_report_units_are_distinct_and_localized(
+    unit_type,
+    dimension_unit,
+    density_unit_fr,
+    density_unit_en,
+):
+    assert get_production_unit_dimension_unit(unit_type) == dimension_unit
+    assert get_production_unit_density_unit(unit_type, language_code='fr') == density_unit_fr
+    assert get_production_unit_density_unit(unit_type, language_code='en') == density_unit_en
 
 
 @pytest.mark.django_db

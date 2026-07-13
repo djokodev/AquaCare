@@ -54,6 +54,16 @@ class ReportScope:
     def production_unit(self):
         return self.allocation.production_unit if self.allocation else None
 
+    @property
+    def cycle_name(self) -> str:
+        return self.cycle.cycle_name
+
+    @property
+    def scope_name(self) -> str:
+        if self.scope_type == "unit" and self.production_unit:
+            return self.production_unit.name
+        return self.cycle_name
+
 
 @dataclass(frozen=True)
 class GenerateReportCommand:
@@ -166,10 +176,12 @@ class ReportApplicationService:
             )
 
     @staticmethod
-    def _ensure_active_unit_scope(
+    def _ensure_unit_scope(
         user,
         cycle_unit_allocation_id: str | None,
         cycle_id: str | None = None,
+        *,
+        require_active: bool = True,
     ) -> CycleUnitAllocation:
         if not cycle_unit_allocation_id:
             raise InvalidReportUnitScopeError(_("Contexte d'unité incomplet."))
@@ -189,11 +201,24 @@ class ReportApplicationService:
             allocation = allocation_queryset.first()
         except (DjangoValidationError, TypeError, ValueError):
             allocation = None
-        if allocation is None or allocation.cycle.status != "active":
+        if allocation is None or (require_active and allocation.cycle.status != "active"):
             raise InaccessibleReportUnitScopeError(
                 _("Allocation d'unité introuvable ou inaccessible.")
             )
         return allocation
+
+    @staticmethod
+    def _ensure_active_unit_scope(
+        user,
+        cycle_unit_allocation_id: str | None,
+        cycle_id: str | None = None,
+    ) -> CycleUnitAllocation:
+        return ReportApplicationService._ensure_unit_scope(
+            user,
+            cycle_unit_allocation_id,
+            cycle_id,
+            require_active=True,
+        )
 
     @staticmethod
     def resolve_report_scope(
@@ -222,6 +247,26 @@ class ReportApplicationService:
         )
 
     @staticmethod
+    def resolve_report_listing_unit_scope(
+        user,
+        *,
+        cycle_id: str | None = None,
+        cycle_unit_allocation_id: str | None = None,
+    ) -> ReportScope:
+        """Résout une portée unitaire de lecture sans exiger un cycle actif."""
+        allocation = ReportApplicationService._ensure_unit_scope(
+            user,
+            cycle_unit_allocation_id,
+            cycle_id,
+            require_active=False,
+        )
+        return ReportScope(
+            scope_type="unit",
+            cycle=allocation.cycle,
+            allocation=allocation,
+        )
+
+    @staticmethod
     def _set_scope_in_payload(
         report: ProductionReport,
         *,
@@ -229,23 +274,32 @@ class ReportApplicationService:
         scope_object_id: str | None,
         cycle_id: str | None = None,
         cycle_unit_allocation_id: str | None = None,
+        cycle_scope_name: str | None = None,
+        scope_name: str | None = None,
+        scope_label: str | None = None,
     ) -> ProductionReport:
         """Stocke la portée du rapport dans payload.report_meta avant la tâche async."""
         if not scope_object_id and not cycle_id and not cycle_unit_allocation_id:
             return report
         payload = report.payload if isinstance(report.payload, dict) else {}
         report_meta = dict(payload.get("report_meta", {}) or {})
-        if (
-            report_meta.get("scope_type") == scope
-            and str(report_meta.get("scope_object_id") or "") == str(scope_object_id or "")
-        ):
-            return report
-        report_meta["scope_type"] = scope
-        report_meta["scope_object_id"] = scope_object_id
-        report_meta["cycle_scope_id"] = cycle_id or (scope_object_id if scope == "cycle" else None)
-        report_meta["cycle_unit_allocation_id"] = cycle_unit_allocation_id
-        report.payload = {**payload, "report_meta": report_meta}
-        report.save(update_fields=["payload", "updated_at"])
+        metadata = {
+            "scope_type": scope,
+            "scope_object_id": scope_object_id,
+            "cycle_scope_id": cycle_id or (scope_object_id if scope == "cycle" else None),
+            "cycle_unit_allocation_id": cycle_unit_allocation_id,
+            "cycle_scope_name": cycle_scope_name,
+            "scope_name": scope_name,
+            "scope_label": scope_label,
+        }
+        changed = False
+        for key, value in metadata.items():
+            if key not in report_meta or report_meta.get(key) != value:
+                report_meta[key] = value
+                changed = True
+        if changed:
+            report.payload = {**payload, "report_meta": report_meta}
+            report.save(update_fields=["payload", "updated_at"])
         return report
 
     @staticmethod
@@ -291,6 +345,9 @@ class ReportApplicationService:
                 ReportService._resolve_language_code(user),
             )
 
+        language_code = ReportService._resolve_language_code(user)
+        scope_label = ReportService._resolve_scope_label(scope, language_code)
+
         report, _created = ProductionReport.objects.get_or_create(
             farm_profile=user.farm_profile,
             report_type=command.report_type,
@@ -307,6 +364,9 @@ class ReportApplicationService:
             scope_object_id=cycle_unit_allocation_id if scope == "unit" else cycle_id,
             cycle_id=cycle_id,
             cycle_unit_allocation_id=cycle_unit_allocation_id,
+            cycle_scope_name=resolved_scope.cycle_name,
+            scope_name=resolved_scope.scope_name,
+            scope_label=scope_label,
         )
         ReportApplicationService._dispatch_generation(report)
         return report

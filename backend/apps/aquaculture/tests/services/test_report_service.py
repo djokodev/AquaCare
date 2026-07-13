@@ -6,7 +6,7 @@ from datetime import date, datetime
 from unittest.mock import patch
 
 import pytest
-from aquaculture.models import CycleUnitAllocation, ProductionReport, ProductionUnit
+from aquaculture.models import CycleLog, CycleUnitAllocation, ProductionReport, ProductionUnit
 from aquaculture.services.report_service import ReportService, UnresolvableLegacyReportScopeError
 from aquaculture.services.report_visuals import build_donut_svg, build_growth_svg
 from django.core import mail
@@ -343,6 +343,66 @@ class TestReportServicePayloadAndPdfTemplate:
         assert payload["cycles"][0]["cycle"]["id"] == str(scoped_cycle.id)
         assert payload["report_meta"]["cycle_scope_id"] == str(scoped_cycle.id)
         assert payload["report_meta"]["cycle_scope_name"] == scoped_cycle.cycle_name
+
+    @pytest.mark.parametrize(
+        ('unit_type', 'dimension_kwargs', 'expected_dimension_unit', 'expected_density_unit'),
+        [
+            ('tank', {'volume_m3': '12.00'}, 'm³', 'poissons/m³'),
+            ('cage', {'volume_m3': '12.00'}, 'm³', 'poissons/m³'),
+            ('pond', {'surface_m2': '150.00'}, 'm²', 'poissons/m²'),
+        ],
+    )
+    def test_unit_payload_separates_dimension_and_density_units(
+        self,
+        unit_type,
+        dimension_kwargs,
+        expected_dimension_unit,
+        expected_density_unit,
+    ):
+        farm_profile = FarmProfileFactory()
+        cycle = ProductionCycleFactory(farm_profile=farm_profile, status='active')
+        unit = ProductionUnit.objects.create(
+            farm_profile=farm_profile,
+            name=f'Unité {unit_type}',
+            unit_type=unit_type,
+            **dimension_kwargs,
+        )
+        allocation = CycleUnitAllocation.objects.create(
+            cycle=cycle,
+            production_unit=unit,
+            initial_fish_count=1000,
+            current_fish_count=950,
+            initial_biomass_kg='10.00',
+            current_biomass_kg='9.50',
+        )
+
+        payload = ReportService._build_payload(
+            farm_profile=farm_profile,
+            report_type='daily',
+            period_start=date(2026, 7, 19),
+            period_end=date(2026, 7, 19),
+            scope_type='unit',
+            scope_object_id=str(allocation.id),
+        )
+        unit_payload = payload['cycles'][0]['unit']
+
+        assert unit_payload['production_unit_dimension_unit'] == expected_dimension_unit
+        assert unit_payload['production_unit_capacity_density_unit'] == expected_density_unit
+        assert unit_payload['production_unit_dimension_unit'] not in {'poissons/m²', 'poissons/m³'}
+
+        farm_profile.user.language_preference = 'en'
+        farm_profile.user.save(update_fields=['language_preference'])
+        english_payload = ReportService._build_payload(
+            farm_profile=farm_profile,
+            report_type='daily',
+            period_start=date(2026, 7, 19),
+            period_end=date(2026, 7, 19),
+            scope_type='unit',
+            scope_object_id=str(allocation.id),
+        )
+        assert english_payload['cycles'][0]['unit']['production_unit_capacity_density_unit'] == (
+            expected_density_unit.replace('poissons', 'fish')
+        )
 
     def test_generate_all_active_cycles_skips_cycles_started_after_period_end(self):
         farm_profile = FarmProfileFactory()
@@ -722,6 +782,12 @@ class TestReportServicePayloadAndPdfTemplate:
             initial_biomass_kg="10.00",
             current_biomass_kg="9.50",
         )
+        CycleLog.objects.create(
+            cycle=cycle,
+            cycle_unit_allocation=allocation,
+            log_date=date(2026, 7, 19),
+            mortality_count=50,
+        )
         report = _create_report(
             farm_profile=farm_profile,
             report_type="weekly",
@@ -744,6 +810,15 @@ class TestReportServicePayloadAndPdfTemplate:
             language_code="fr",
         )
         html = render_to_string("aquaculture/report_pdf.html", context)
+
+        assert "Rapport hebdomadaire — Bassin A / Nord" in html
+        assert "Cycle Clarias juillet" in html
+        assert "Bac" in html
+        assert "12.00 m³" in html
+        assert "79,17 poissons/m³" in html
+        assert " / poissons/m³" not in html
+        assert "Comparaison par unité" not in html
+
         try:
             pdf_bytes = ReportService._render_pdf(
                 report=report,
@@ -754,10 +829,6 @@ class TestReportServicePayloadAndPdfTemplate:
         except OSError as exc:
             pytest.skip(f"WeasyPrint runtime libraries unavailable: {exc}")
 
-        assert "Rapport hebdomadaire — Bassin A / Nord" in html
-        assert "Cycle Clarias juillet" in html
-        assert "Bac" in html
-        assert "Comparaison par unité" not in html
         assert "bassin_a_nord" in ReportService._build_report_filename(
             report_type="weekly",
             farm_profile_id=str(farm_profile.id),
@@ -777,6 +848,27 @@ class TestReportServicePayloadAndPdfTemplate:
             scope_name=unit.name,
         )
         assert pdf_bytes.startswith(b"%PDF")
+
+        farm_profile.user.language_preference = 'en'
+        farm_profile.user.save(update_fields=['language_preference'])
+        english_payload = ReportService._build_payload(
+            farm_profile=farm_profile,
+            report_type="weekly",
+            period_start=date(2026, 7, 13),
+            period_end=date(2026, 7, 19),
+            scope_type="unit",
+            scope_object_id=str(allocation.id),
+        )
+        english_context = ReportService._build_pdf_context(
+            report=report,
+            payload=english_payload,
+            generated_at=timezone.localtime(timezone.now()),
+            language_code="en",
+        )
+        with override("en"):
+            english_html = render_to_string("aquaculture/report_pdf.html", english_context)
+        assert "79.17 fish/m³" in english_html
+        assert " / fish/m³" not in english_html
 
     def test_pdf_template_distinguishes_zero_from_missing_values(self):
         farm_profile = FarmProfileFactory(farm_name="Ferme valeurs")

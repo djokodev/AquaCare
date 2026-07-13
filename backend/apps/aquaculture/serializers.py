@@ -1509,6 +1509,7 @@ class ProductionReportListSerializer(serializers.ModelSerializer):
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     farm_name = serializers.CharField(source='farm_profile.farm_name', read_only=True)
     cycle_scope_id = serializers.SerializerMethodField()
+    cycle_scope_name = serializers.SerializerMethodField()
     scope_name = serializers.SerializerMethodField()
     scope_label = serializers.SerializerMethodField()
 
@@ -1530,6 +1531,7 @@ class ProductionReportListSerializer(serializers.ModelSerializer):
             'status',
             'status_display',
             'cycle_scope_id',
+            'cycle_scope_name',
             'generated_at',
             'validated_at',
             'email_status',
@@ -1558,6 +1560,14 @@ class ProductionReportListSerializer(serializers.ModelSerializer):
         if not isinstance(report_meta, dict):
             return None
         return report_meta.get('scope_name') or report_meta.get('cycle_scope_name')
+
+    def get_cycle_scope_name(self, obj: ProductionReport) -> str | None:
+        if not isinstance(obj.payload, dict):
+            return None
+        report_meta = obj.payload.get('report_meta')
+        if not isinstance(report_meta, dict):
+            return None
+        return report_meta.get('cycle_scope_name')
 
     def get_scope_label(self, obj: ProductionReport) -> str | None:
         if not isinstance(obj.payload, dict):
