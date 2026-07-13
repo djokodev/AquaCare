@@ -1,124 +1,30 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useDispatch, useSelector } from 'react-redux';
 import { StackNavigationProp } from '@react-navigation/stack';
 
-import { AppDispatch, RootState } from '@/store/store';
-import { RootStackParamList } from '@/navigation/MainNavigator';
+import {
+  AppHeader,
+  AppText,
+  Button,
+  Card,
+  EmptyState,
+  ErrorState,
+  LoadingState,
+  Screen,
+} from '@/components/ui';
 import {
   clearCurrentCycle,
   fetchDashboardData,
   fetchProductionCycles,
   setCurrentCycle,
 } from '@/features/aquaculture/store/aquacultureSlice';
+import CyclePicker from '@/features/aquaculture/components/CyclePicker';
+import { RootStackParamList } from '@/navigation/MainNavigator';
+import { AppDispatch, RootState } from '@/store/store';
+import { colors, spacing } from '@/theme';
 import { ProductionCycle } from '@/types/aquaculture';
-import { AQUACARE_COLORS } from '@/constants/colors';
-import { AQUACARE_TYPOGRAPHY } from '@/constants/typography';
-import CyclePicker from '../components/CyclePicker';
-
-// ── Welcome screen styles ────────────────────────────────────────────────────
-const welcomeStyles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f8fafc',
-    paddingHorizontal: 24,
-    justifyContent: 'center',
-  },
-  hero: {
-    alignItems: 'center',
-    marginBottom: 28,
-  },
-  iconCircle: {
-    width: 104,
-    height: 104,
-    borderRadius: 52,
-    backgroundColor: '#ecfdf5',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 20,
-  },
-  title: {
-    ...AQUACARE_TYPOGRAPHY.h2,
-    color: AQUACARE_COLORS.GRAY_DARK,
-    textAlign: 'center',
-    marginBottom: 4,
-  },
-  subtitle: {
-    ...AQUACARE_TYPOGRAPHY.smallStrong,
-    color: AQUACARE_COLORS.GREEN_PRIMARY,
-    textAlign: 'center',
-    marginBottom: 12,
-  },
-  body: {
-    ...AQUACARE_TYPOGRAPHY.small,
-    color: AQUACARE_COLORS.GRAY_LIGHT,
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  featuresCard: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 28,
-    gap: 14,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  featureRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  featureIconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#ecfdf5',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  featureText: {
-    ...AQUACARE_TYPOGRAPHY.small,
-    fontWeight: '500',
-    color: AQUACARE_COLORS.GRAY_DARK,
-  },
-  ctaBtn: {
-    backgroundColor: AQUACARE_COLORS.GREEN_PRIMARY,
-    borderRadius: 14,
-    paddingVertical: 17,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    shadowColor: AQUACARE_COLORS.GREEN_PRIMARY,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  ctaBtnText: {
-    ...AQUACARE_TYPOGRAPHY.button,
-    color: AQUACARE_COLORS.WHITE,
-  },
-  backButton: {
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 18,
-    paddingVertical: 8,
-    paddingRight: 8,
-  },
-  backButtonText: {
-    ...AQUACARE_TYPOGRAPHY.smallStrong,
-    color: AQUACARE_COLORS.WHITE,
-  },
-});
 
 type CycleSessionEntryNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -136,8 +42,10 @@ interface Props {
 
 export default function CycleSessionEntryScreen({ navigation, route }: Props) {
   const dispatch = useDispatch<AppDispatch>();
-  const isAuthenticated = useSelector((state: RootState) => state.auth.isAuthenticated);
-  const allCycles = useSelector((state: RootState) => state.aquaculture.cycles) || [];
+  const isAuthenticated = useSelector(
+    (state: RootState) => state.auth.isAuthenticated,
+  );
+  const allCycles = useSelector((state: RootState) => state.aquaculture.cycles) ?? [];
   const { t } = useTranslation();
   const isMounted = useRef(true);
   const showBackToDashboard = route.params?.showBackToDashboard === true;
@@ -169,168 +77,147 @@ export default function CycleSessionEntryScreen({ navigation, route }: Props) {
       setActiveCycles(cycles);
       setSelectedCycleId(null);
     },
-    [dispatch, navigation]
+    [dispatch, navigation],
   );
 
   const loadCycles = useCallback(async () => {
-    if (!isMounted.current || !isAuthenticated) return;
+    if (!isMounted.current || !isAuthenticated) {
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
-    const result = await dispatch(fetchDashboardData({ forceAllCycles: true, lightweight: true }));
+    const result = await dispatch(
+      fetchDashboardData({ forceAllCycles: true, lightweight: true }),
+    );
 
-    if (!isMounted.current) return;
+    if (!isMounted.current) {
+      return;
+    }
 
     if (fetchDashboardData.fulfilled.match(result)) {
-      const cycles = result.payload.active_cycles || [];
-      handleEntryLogic(cycles);
+      handleEntryLogic(result.payload.active_cycles ?? []);
       void dispatch(fetchProductionCycles());
-      // Set loading=false after handleEntryLogic in same microtask to minimize intermediate renders
-      if (isMounted.current) setLoading(false);
-    } else {
-      if (isMounted.current && isAuthenticated) {
-        setError((result.payload as string) || 'sessionCycleLoadError');
-        setLoading(false);
-      }
+      setLoading(false);
+      return;
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+
+    setError((result.payload as string) || 'sessionCycleLoadError');
+    setLoading(false);
   }, [dispatch, handleEntryLogic, isAuthenticated]);
 
   useEffect(() => {
-    loadCycles();
+    void loadCycles();
   }, [loadCycles]);
 
+  const handleBackToDashboard = () => {
+    navigation.navigate('MainTabs');
+  };
+
   const handleConfirm = () => {
-    if (!selectedCycleId) return;
+    if (!selectedCycleId) {
+      return;
+    }
+
     const selectedCycle = activeCycles.find((cycle) => cycle.id === selectedCycleId);
-    if (!selectedCycle) return;
+    if (!selectedCycle) {
+      return;
+    }
+
     dispatch(setCurrentCycle(selectedCycle));
     navigation.replace('MainTabs');
   };
 
+  const header = (
+    <AppHeader
+      title={t('sessionCycleTitle')}
+      subtitle={activeCycles.length > 1 ? t('sessionCycleDescription') : undefined}
+      onBack={showBackToDashboard ? handleBackToDashboard : undefined}
+      backLabel={t('backToDashboard')}
+    />
+  );
+
   if (loading) {
     return (
-      <View className="flex-1 bg-cream items-center justify-center px-6">
-        {showBackToDashboard ? (
-          <TouchableOpacity
-            style={{
-              position: 'absolute',
-              top: 58,
-              left: 24,
-              zIndex: 10,
-              backgroundColor: '#ecfdf5',
-              borderRadius: 999,
-              paddingHorizontal: 12,
-              paddingVertical: 6,
-            }}
-            onPress={() => navigation.navigate('MainTabs')}
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <Ionicons name="arrow-back" size={18} color={AQUACARE_COLORS.GREEN_PRIMARY} />
-              <Text style={[welcomeStyles.backButtonText, { color: AQUACARE_COLORS.GREEN_PRIMARY }]}>
-                {t('backToDashboard')}
-              </Text>
-            </View>
-          </TouchableOpacity>
-        ) : null}
-        <ActivityIndicator size="large" color={AQUACARE_COLORS.GREEN_PRIMARY} />
-        <Text className="text-base text-gray-light mt-3">{t('sessionCycleLoading')}</Text>
+      <View style={styles.root}>
+        {header}
+        <Screen style={styles.stateScreen}>
+          <LoadingState message={t('sessionCycleLoading')} />
+        </Screen>
       </View>
     );
   }
 
   if (error) {
     return (
-      <View className="flex-1 bg-cream items-center justify-center px-6">
-        {showBackToDashboard ? (
-          <TouchableOpacity
-            style={{
-              position: 'absolute',
-              top: 58,
-              left: 24,
-              zIndex: 10,
-              backgroundColor: '#ecfdf5',
-              borderRadius: 999,
-              paddingHorizontal: 12,
-              paddingVertical: 6,
-            }}
-            onPress={() => navigation.navigate('MainTabs')}
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <Ionicons name="arrow-back" size={18} color={AQUACARE_COLORS.GREEN_PRIMARY} />
-              <Text style={[welcomeStyles.backButtonText, { color: AQUACARE_COLORS.GREEN_PRIMARY }]}>
-                {t('backToDashboard')}
-              </Text>
-            </View>
-          </TouchableOpacity>
-        ) : null}
-        <Ionicons name="alert-circle-outline" size={48} color={AQUACARE_COLORS.ERROR} />
-        <Text className="text-base text-error text-center mt-3 mb-5">{error}</Text>
-        <TouchableOpacity className="bg-aquacare-primary px-6 py-3 rounded-lg" onPress={loadCycles}>
-          <Text className="text-white font-semibold text-base">{t('retry')}</Text>
-        </TouchableOpacity>
+      <View style={styles.root}>
+        {header}
+        <Screen style={styles.stateScreen}>
+          <ErrorState
+            message={t(error)}
+            actionLabel={t('retry')}
+            onAction={() => void loadCycles()}
+          />
+        </Screen>
       </View>
     );
   }
 
-  // 0 active cycles — CTA only
   if (activeCycles.length === 0) {
     return (
-      <View style={welcomeStyles.container}>
-        {showBackToDashboard ? (
-          <TouchableOpacity style={welcomeStyles.backButton} onPress={() => navigation.navigate('MainTabs')}>
-            <Ionicons name="arrow-back" size={18} color={AQUACARE_COLORS.GREEN_PRIMARY} />
-            <Text style={[welcomeStyles.backButtonText, { color: AQUACARE_COLORS.GREEN_PRIMARY }]}>
-              {t('backToDashboard')}
-            </Text>
-          </TouchableOpacity>
-        ) : null}
-        <TouchableOpacity
-          style={welcomeStyles.ctaBtn}
-          onPress={() => navigation.replace('CreateFarm')}
-          activeOpacity={0.85}
-        >
-          <Text style={welcomeStyles.ctaBtnText}>{t('welcomeScreenCta')}</Text>
-          <Ionicons name="arrow-forward" size={20} color="#fff" />
-        </TouchableOpacity>
+      <View style={styles.root}>
+        {header}
+        <Screen style={styles.stateScreen}>
+          <Card variant="elevated" style={styles.welcomeCard}>
+            <EmptyState
+              title={t('welcomeScreenTitle')}
+              message={t('sessionNoCyclesHint')}
+              actionLabel={t('welcomeScreenCta')}
+              onAction={() => navigation.replace('CreateFarm')}
+            />
+            <AppText variant="caption" color="muted" style={styles.welcomeBody}>
+              {t('welcomeScreenBody')}
+            </AppText>
+          </Card>
+        </Screen>
       </View>
     );
   }
 
-  // 2+ cycles — show picker
   return (
-    <View className="flex-1 bg-cream">
-      <View className="bg-aquacare-primary px-5 pt-16 pb-6">
-        {showBackToDashboard ? (
-          <TouchableOpacity style={welcomeStyles.backButton} onPress={() => navigation.navigate('MainTabs')}>
-            <Ionicons name="arrow-back" size={18} color={AQUACARE_COLORS.WHITE} />
-            <Text style={welcomeStyles.backButtonText}>{t('backToDashboard')}</Text>
-          </TouchableOpacity>
-        ) : null}
-        <Text className="text-2xl font-bold text-white mb-2">{t('sessionCycleTitle')}</Text>
-        <Text className="text-sm text-white/90">{t('sessionCycleDescription')}</Text>
-      </View>
-
-      <View className="flex-1 px-4 py-4">
+    <View style={styles.root}>
+      {header}
+      <Screen style={styles.pickerScreen}>
         <CyclePicker
           cycles={activeCycles}
           selectedCycleId={selectedCycleId}
           onSelectCycle={setSelectedCycleId}
           rankingCycles={allCycles}
         />
-      </View>
-
-      <View className="px-4 py-4 border-t border-gray-200 bg-white">
-        <TouchableOpacity
-          className={`rounded-lg py-3 items-center ${
-            selectedCycleId ? 'bg-aquacare-primary' : 'bg-gray-300'
-          }`}
-          onPress={handleConfirm}
-          disabled={!selectedCycleId}
-        >
-          <Text className="text-white text-base font-semibold">{t('sessionCycleConfirm')}</Text>
-        </TouchableOpacity>
-      </View>
+        <View style={styles.footer}>
+          <Button
+            label={t('sessionCycleConfirm')}
+            onPress={handleConfirm}
+            disabled={!selectedCycleId}
+          />
+        </View>
+      </Screen>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: colors.surface.page },
+  stateScreen: { justifyContent: 'center' },
+  welcomeCard: { gap: spacing[3] },
+  welcomeBody: { textAlign: 'center' },
+  pickerScreen: { paddingBottom: 0 },
+  footer: {
+    borderTopWidth: 1,
+    borderTopColor: colors.border.subtle,
+    marginHorizontal: -spacing[4],
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[3],
+  },
+});
