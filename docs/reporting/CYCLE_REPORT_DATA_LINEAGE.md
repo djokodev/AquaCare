@@ -27,7 +27,10 @@ the mutable current dashboard state.
   authenticated farm. A mismatched cycle or inaccessible allocation returns an
   opaque not-found response.
 - Unit payloads include allocation identity, allocation status, unit dimension,
-  recommended capacity, and current density. `production_unit_dimension_unit`
+  recommended capacity, and current density. `production_unit_dimension_value`
+  is resolved from the canonical unit type (`surface_m2` for ponds,
+  `volume_m3` for tanks and cages), so legacy non-canonical values do not
+  influence the report. `production_unit_dimension_unit`
   is the physical unit (`m²` for ponds, `m³` for tanks and cages), while
   `production_unit_capacity_density_unit` is the localized density unit
   (`poissons/m²` or `poissons/m³` in French, `fish/m²` or `fish/m³` in English).

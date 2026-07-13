@@ -294,6 +294,8 @@ class ReportApplicationService:
         }
         changed = False
         for key, value in metadata.items():
+            if key in {"cycle_scope_name", "scope_name", "scope_label"} and value is None and report_meta.get(key):
+                continue
             if key not in report_meta or report_meta.get(key) != value:
                 report_meta[key] = value
                 changed = True
@@ -386,43 +388,56 @@ class ReportApplicationService:
                     "because its original cycle cannot be identified.",
                 )
             )
+        language_code = ReportService._resolve_language_code(report.farm_profile.user)
+        cycle_scope_name: str | None = None
+        scope_name: str | None = None
+        scope_label = ReportService._resolve_scope_label(scope, language_code)
+        cycle_unit_allocation_id: str | None = None
+
         if scope == "cycle":
-            scope_is_valid = ProductionCycle.objects.filter(
+            cycle = ProductionCycle.objects.filter(
                 id=scope_object_id,
                 farm_profile=report.farm_profile,
-            ).exists()
+            ).first()
+            scope_is_valid = cycle is not None
+            if scope_is_valid:
+                cycle_scope_id = str(cycle.id)
+                cycle_scope_name = cycle.cycle_name
+                scope_name = cycle.cycle_name
         else:
-            scope_is_valid = CycleUnitAllocation.objects.filter(
+            allocation = CycleUnitAllocation.objects.select_related(
+                "cycle",
+                "production_unit",
+                "cycle__farm_profile",
+                "production_unit__farm_profile",
+            ).filter(
                 id=scope_object_id,
                 cycle__farm_profile=report.farm_profile,
-            ).exists()
+                production_unit__farm_profile=report.farm_profile,
+            ).first()
+            scope_is_valid = allocation is not None
+            if scope_is_valid:
+                cycle_scope_id = str(allocation.cycle_id)
+                cycle_unit_allocation_id = str(allocation.id)
+                cycle_scope_name = allocation.cycle.cycle_name
+                scope_name = allocation.production_unit.name
         if not scope_is_valid:
             raise InvalidReportScopeError(_("La portée historique du rapport est introuvable ou inaccessible."))
 
-        cycle_scope_id = (
-            scope_object_id
-            if scope == "cycle"
-            else ReportApplicationService._extract_cycle_scope_id(report)
-        )
-        report = ReportApplicationService._set_pending_status(report)
         if str(report.scope_object_id or "") != str(scope_object_id):
             report.scope_object_id = scope_object_id
             report.save(update_fields=["scope_object_id", "updated_at"])
         ReportApplicationService._set_scope_in_payload(
             report,
             scope=scope,
-            scope_object_id=(
-                scope_object_id
-            ),
+            scope_object_id=scope_object_id,
             cycle_id=cycle_scope_id,
-            cycle_unit_allocation_id=(
-                scope_object_id
-                if scope == "unit"
-                else (report.payload.get("report_meta", {}) or {}).get("cycle_unit_allocation_id")
-                if isinstance(report.payload, dict)
-                else None
-            ),
+            cycle_unit_allocation_id=cycle_unit_allocation_id,
+            cycle_scope_name=cycle_scope_name,
+            scope_name=scope_name,
+            scope_label=scope_label,
         )
+        report = ReportApplicationService._set_pending_status(report)
         ReportApplicationService._dispatch_generation(
             report,
             restore_validation=was_validated,

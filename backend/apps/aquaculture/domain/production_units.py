@@ -62,6 +62,21 @@ def get_production_unit_dimension_unit(unit_type: str | None) -> str | None:
     return None
 
 
+def get_production_unit_dimension_value(
+    unit_type: str | None,
+    *,
+    volume_m3: Decimal | None = None,
+    surface_m2: Decimal | None = None,
+) -> Decimal | None:
+    """Retourne la valeur de dimension canonique selon le type d'unité."""
+    normalized = normalize_production_unit_type(unit_type)
+    if normalized == 'pond':
+        return surface_m2
+    if normalized in {'tank', 'cage'}:
+        return volume_m3
+    return None
+
+
 def get_production_unit_dimension_label(unit_type: str | None) -> str | None:
     """Retourne le label de dimension principal de l'unité."""
     normalized = normalize_production_unit_type(unit_type)
@@ -79,12 +94,15 @@ def get_production_unit_dimension_display(
     surface_m2: Decimal | None = None,
 ) -> str | None:
     """Retourne une représentation lisible de la dimension principale."""
-    normalized = normalize_production_unit_type(unit_type)
-    if normalized == 'pond' and surface_m2 is not None:
-        return f"{surface_m2} m²"
-    if normalized in {'tank', 'cage'} and volume_m3 is not None:
-        return f"{volume_m3} m³"
-    return None
+    dimension_value = get_production_unit_dimension_value(
+        unit_type,
+        volume_m3=volume_m3,
+        surface_m2=surface_m2,
+    )
+    dimension_unit = get_production_unit_dimension_unit(unit_type)
+    if dimension_value is None or dimension_unit is None:
+        return None
+    return f"{dimension_value} {dimension_unit}"
 
 
 def get_production_unit_capacity(

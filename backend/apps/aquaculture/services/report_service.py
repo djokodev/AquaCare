@@ -38,6 +38,7 @@ from ..domain.cycle_duration import get_default_cycle_duration_days
 from ..domain.production_units import (
     get_production_unit_density_unit,
     get_production_unit_dimension_unit,
+    get_production_unit_dimension_value,
 )
 from ..models import (
     CycleLog,
@@ -775,16 +776,16 @@ class ReportService(BaseService):
             harvest_data_complete=stock_snapshot["harvest_data_complete"],
         )
         unit_name = allocation.production_unit.name
-        dimension_value = (
-            allocation.production_unit.volume_m3
-            if allocation.production_unit.volume_m3 is not None
-            else allocation.production_unit.surface_m2
+        dimension_value = get_production_unit_dimension_value(
+            allocation.production_unit.unit_type,
+            volume_m3=allocation.production_unit.volume_m3,
+            surface_m2=allocation.production_unit.surface_m2,
         )
         current_count_value = stock_snapshot["estimated_current_fish_count"]
         dimension_float = ReportService._to_float(dimension_value)
         density = (
             ReportService._to_float(current_count_value) / dimension_float
-            if dimension_float
+            if dimension_float and dimension_float > 0
             else None
         )
         planned_price = ReportService._to_float(allocation.cycle.planned_selling_price_per_kg_fcfa)

@@ -3,6 +3,7 @@ Tests unitaires ciblés pour ReportService (emails + rendu template PDF).
 """
 
 from datetime import date, datetime
+from decimal import Decimal
 from unittest.mock import patch
 
 import pytest
@@ -403,6 +404,60 @@ class TestReportServicePayloadAndPdfTemplate:
         assert english_payload['cycles'][0]['unit']['production_unit_capacity_density_unit'] == (
             expected_density_unit.replace('poissons', 'fish')
         )
+
+    def test_pond_report_uses_surface_when_legacy_volume_is_also_present(self):
+        farm_profile = FarmProfileFactory()
+        cycle = ProductionCycleFactory(farm_profile=farm_profile, status='active')
+        unit = ProductionUnit.objects.create(
+            farm_profile=farm_profile,
+            name='Étang legacy',
+            unit_type='pond',
+            surface_m2=Decimal('120.00'),
+        )
+        ProductionUnit.objects.filter(id=unit.id).update(volume_m3=Decimal('3.00'))
+        unit.refresh_from_db()
+        allocation = CycleUnitAllocation.objects.create(
+            cycle=cycle,
+            production_unit=unit,
+            initial_fish_count=600,
+            current_fish_count=600,
+            initial_biomass_kg='6.00',
+            current_biomass_kg='6.00',
+        )
+        payload = ReportService._build_payload(
+            farm_profile=farm_profile,
+            report_type='daily',
+            period_start=date(2026, 7, 19),
+            period_end=date(2026, 7, 19),
+            scope_type='unit',
+            scope_object_id=str(allocation.id),
+        )
+        unit_payload = payload['cycles'][0]['unit']
+
+        assert unit_payload['production_unit_dimension_value'] == 120.0
+        assert unit_payload['production_unit_dimension_unit'] == 'm²'
+        assert unit_payload['production_unit_capacity_density_unit'] == 'poissons/m²'
+        assert unit_payload['density'] == 5.0
+
+        report = _create_report(
+            farm_profile=farm_profile,
+            report_type='daily',
+            period_start=date(2026, 7, 19),
+            period_end=date(2026, 7, 19),
+            scope_object_id=allocation.id,
+        )
+        context = ReportService._build_pdf_context(
+            report=report,
+            payload=payload,
+            generated_at=timezone.localtime(timezone.now()),
+            language_code='fr',
+        )
+        html = render_to_string('aquaculture/report_pdf.html', context)
+
+        assert '120.00 m²' in html
+        assert '5,00 poissons/m²' in html
+        assert '200,00 poissons/m²' not in html
+        assert '3.00 m²' not in html
 
     def test_generate_all_active_cycles_skips_cycles_started_after_period_end(self):
         farm_profile = FarmProfileFactory()
