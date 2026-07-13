@@ -9,4 +9,5 @@ export { Screen } from './Screen';
 export { FormField } from './FormField';
 export { TextField } from './TextField';
 export { SelectionModal, type SelectionOption } from './SelectionModal';
+export { SegmentedControl, type SegmentedControlOption } from './SegmentedControl';
 export { LoadingState, EmptyState, ErrorState, InlineAlert } from './States';

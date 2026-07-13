@@ -10,6 +10,7 @@ import logger from '@/utils/logger';
 import PhoneInputField from '@/components/common/PhoneInputField';
 import AuthErrorBlock from '@/components/common/AuthErrorBlock';
 import { sharedTextInputStyles } from '@/components/common/inputStyles';
+import { Button, Card, SegmentedControl } from '@/components/ui';
 import { REGIONS, AGE_GROUPS, LEGAL_STATUS_OPTIONS } from '@/constants/registration';
 import {
   hasValidationErrors,
@@ -90,39 +91,10 @@ export default function RegisterScreen({ navigation }: Props) {
           <Text className="text-base text-gray-light text-center">{t('createAccount')}</Text>
         </View>
 
-        <View className="bg-white p-5 rounded-2xl">
+        <Card variant="elevated" style={{ gap: 16 }}>
           <View className="mb-4">
             <Text className="text-base font-medium text-gray-dark mb-2">{t('accountType')}</Text>
-            <View className="flex-row bg-cream rounded-lg">
-              <TouchableOpacity
-                className={`flex-1 py-3 items-center rounded-lg ${
-                  formData.account_type === 'individual' ? 'bg-aquacare-primary' : ''
-                }`}
-                onPress={() => updateField('account_type', 'individual')}
-              >
-                <Text
-                  className={`text-sm font-semibold ${
-                    formData.account_type === 'individual' ? 'text-white' : 'text-gray-light'
-                  }`}
-                >
-                  {t('individual')}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                className={`flex-1 py-3 items-center rounded-lg ${
-                  formData.account_type === 'company' ? 'bg-aquacare-primary' : ''
-                }`}
-                onPress={() => updateField('account_type', 'company')}
-              >
-                <Text
-                  className={`text-sm font-semibold ${
-                    formData.account_type === 'company' ? 'text-white' : 'text-gray-light'
-                  }`}
-                >
-                  {t('company')}
-                </Text>
-              </TouchableOpacity>
-            </View>
+            <SegmentedControl value={formData.account_type} options={[{ value: 'individual', label: t('individual') }, { value: 'company', label: t('company') }]} onChange={(accountType) => updateField('account_type', accountType)} />
           </View>
 
           <PhoneInputField
@@ -276,15 +248,7 @@ export default function RegisterScreen({ navigation }: Props) {
 
           <AuthErrorBlock error={error} />
 
-          <TouchableOpacity
-            className={`py-4 rounded-lg items-center mb-4 ${isLoading ? 'bg-aquacare-primary/70' : 'bg-aquacare-primary'}`}
-            onPress={handleRegister}
-            disabled={isLoading}
-          >
-            <Text className="text-white text-base font-semibold">
-              {isLoading ? t('loading') : t('signUp')}
-            </Text>
-          </TouchableOpacity>
+          <Button label={t('signUp')} onPress={handleRegister} loading={isLoading} />
 
           <View className="flex-row justify-center items-center">
             <Text className="text-sm text-gray-light">{t('haveAccount')}</Text>
@@ -292,7 +256,7 @@ export default function RegisterScreen({ navigation }: Props) {
               <Text className="text-sm font-semibold text-aquacare-primary">{t('signIn')}</Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </Card>
       </ScrollView>
     </KeyboardAvoidingView>
   );
