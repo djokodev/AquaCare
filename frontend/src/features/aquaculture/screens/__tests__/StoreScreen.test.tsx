@@ -14,7 +14,9 @@ const mockFetchCycleFeedStatus = jest.fn((cycleId: string) => ({
   type: 'aquaculture/fetchCycleFeedStatus',
   payload: cycleId,
 }));
+const mockT = (key: string) => key;
 let mockState: any;
+let mockRouteParams: { cycleId?: string };
 const mockUseEffect = React.useEffect;
 
 jest.mock('@react-navigation/native', () => ({
@@ -23,9 +25,7 @@ jest.mock('@react-navigation/native', () => ({
     goBack: mockGoBack,
   }),
   useRoute: () => ({
-    params: {
-      cycleId: 'cycle-1',
-    },
+    params: mockRouteParams,
   }),
   useFocusEffect: (callback: () => void) => mockUseEffect(() => callback(), [callback]),
 }));
@@ -48,7 +48,7 @@ jest.mock('@/features/aquaculture/services/aquacultureService', () => ({
 
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string) => key,
+    t: mockT,
     i18n: {
       language: 'fr',
     },
@@ -62,6 +62,7 @@ jest.mock('react-native-safe-area-context', () => ({
 describe('StoreScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockRouteParams = { cycleId: 'cycle-1' };
     jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
     mockState = {
       aquaculture: {
@@ -225,5 +226,77 @@ describe('StoreScreen', () => {
       expect(getByText('storePendingOrdersEmptyTitle')).toBeTruthy();
       expect(getByText('storePendingOrdersEmptyDescription')).toBeTruthy();
     });
+  });
+
+  it('affiche une validation lorsque le formulaire de stock est vide', async () => {
+    const { getAllByText } = render(<StoreScreen />);
+
+    await waitFor(() => expect(getAllByText('storeManualSubmit')).toHaveLength(1));
+    fireEvent.press(getAllByText('storeManualSubmit')[0]);
+    fireEvent.press(getAllByText('storeManualSubmit')[1]);
+
+    expect(Alert.alert).toHaveBeenCalledWith('error', 'storeManualValidationError');
+    expect(mockDeclareCycleStoreManualStock).not.toHaveBeenCalled();
+  });
+
+  it('empeche la double soumission du stock manuel', async () => {
+    let resolveSubmission: (() => void) | undefined;
+    mockDeclareCycleStoreManualStock.mockReturnValue(
+      new Promise<void>((resolve) => {
+        resolveSubmission = resolve;
+      })
+    );
+    const { getAllByText, getByPlaceholderText } = render(<StoreScreen />);
+
+    await waitFor(() => expect(getAllByText('storeManualSubmit')).toHaveLength(1));
+    fireEvent.press(getAllByText('storeManualSubmit')[0]);
+    fireEvent.changeText(getByPlaceholderText('storeManualLabelPlaceholder'), 'Aliment starter');
+    fireEvent.changeText(getByPlaceholderText('storeManualQuantityPlaceholder'), '50');
+    fireEvent.changeText(getByPlaceholderText('storeManualTotalCostPlaceholder'), '75000');
+    fireEvent.changeText(getByPlaceholderText('storeManualDatePlaceholder'), '2026-07-14');
+
+    fireEvent.press(getAllByText('storeManualSubmit')[1]);
+    fireEvent.press(getAllByText('storeManualSubmit')[1]);
+
+    expect(mockDeclareCycleStoreManualStock).toHaveBeenCalledTimes(1);
+    resolveSubmission?.();
+  });
+
+  it('conserve le magasin visible après une erreur de refresh', async () => {
+    const { getByLabelText, getByText } = render(<StoreScreen />);
+
+    await waitFor(() => expect(getByText('ORD-001')).toBeTruthy());
+    mockGetCycleStore.mockRejectedValue(new Error('network refresh failed'));
+    fireEvent.press(getByLabelText('refresh'));
+
+    await waitFor(() => expect(getByText('network refresh failed')).toBeTruthy());
+    expect(getByText('ORD-001')).toBeTruthy();
+    expect(mockGetCycleStore).toHaveBeenCalledTimes(2);
+    expect(mockFetchCycleFeedStatus).toHaveBeenCalledTimes(2);
+  });
+
+  it('permet un retry après une erreur initiale', async () => {
+    mockGetCycleStore.mockRejectedValue(new Error('initial failure'));
+    const { getByText } = render(<StoreScreen />);
+
+    await waitFor(() => expect(getByText('initial failure')).toBeTruthy());
+    mockGetCycleStore.mockResolvedValue({
+      cycle_id: 'cycle-1',
+      summary: { manual_feed_kg: '50', received_order_feed_kg: '20', total_feed_added_kg: '70', feed_consumed_kg: '10', estimated_feed_remaining_kg: '60', feed_expenses_fcfa: '105000', pending_orders_count: 1, pending_order_amount_fcfa: '30000', pending_order_feed_kg: '20', stock_tracking_started_at: null },
+      status: 'ok',
+      pending_orders: [],
+      stock_tracking_started_at: null,
+    });
+    fireEvent.press(getByText('retry'));
+    await waitFor(() => expect(getByText('storePendingOrdersEmptyTitle')).toBeTruthy());
+  });
+
+  it('affiche un état approprié sans cycle de session', async () => {
+    mockRouteParams = {};
+    mockState.aquaculture.currentCycle = null;
+    const { getByText } = render(<StoreScreen />);
+
+    await waitFor(() => expect(getByText('storeNoCycleSelected')).toBeTruthy());
+    expect(mockGetCycleStore).not.toHaveBeenCalled();
   });
 });

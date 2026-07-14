@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   View,
   ScrollView,
@@ -39,6 +39,7 @@ import { AppDispatch, RootState } from '@/store/store';
 import { CycleStore } from '@/types/aquaculture';
 import { formatCurrency, formatNumber } from '@/utils';
 import { sanitizeUserFacingErrorMessage } from '@/utils/errorParser';
+import { getOrderStatusLabelKey } from '@/features/commerce/utils/orderStatus';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'Store'>;
 
@@ -123,9 +124,10 @@ export default function StoreScreen() {
   const [totalCostFcfa, setTotalCostFcfa] = useState('');
   const [entryDate, setEntryDate] = useState(todayIsoDate());
   const [note, setNote] = useState('');
+  const submissionLock = useRef(false);
   const storeNavigationParams = cycleId ? { cycleId, source: 'store' as const } : undefined;
 
-  const loadStore = useCallback(async () => {
+  const loadStore = useCallback(async (preserveVisibleStore = false) => {
     if (!cycleId) {
       setStore(null);
       setError(t('storeNoCycleSelected'));
@@ -141,11 +143,12 @@ export default function StoreScreen() {
       const payload = await aquacultureService.getCycleStore(cycleId);
       setStore(payload);
     } catch (caughtError) {
-      setStore(null);
+      if (!preserveVisibleStore) {
+        setStore(null);
+      }
       setError(extractErrorMessage(caughtError, t('storeLoadError')));
     } finally {
       setLoading(false);
-      setRefreshing(false);
     }
   }, [cycleId, t]);
 
@@ -159,10 +162,17 @@ export default function StoreScreen() {
   );
 
   const handleRefresh = async () => {
+    if (loading || refreshing) {
+      return;
+    }
     setRefreshing(true);
-    await loadStore();
-    if (cycleId) {
-      dispatch(fetchCycleFeedStatus(cycleId));
+    try {
+      await Promise.all([
+        loadStore(true),
+        cycleId ? dispatch(fetchCycleFeedStatus(cycleId)) : Promise.resolve(),
+      ]);
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -188,6 +198,9 @@ export default function StoreScreen() {
   };
 
   const handleSubmitManualStock = async () => {
+    if (submitting || submissionLock.current) {
+      return;
+    }
     if (!cycleId) {
       Alert.alert(t('error'), t('storeNoCycleSelected'));
       return;
@@ -199,6 +212,7 @@ export default function StoreScreen() {
     }
 
     try {
+      submissionLock.current = true;
       setSubmitting(true);
       await aquacultureService.declareCycleStoreManualStock(cycleId, {
         label: label.trim(),
@@ -215,6 +229,7 @@ export default function StoreScreen() {
     } catch (caughtError) {
       Alert.alert(t('error'), extractErrorMessage(caughtError, t('storeManualSubmitError')));
     } finally {
+      submissionLock.current = false;
       setSubmitting(false);
     }
   };
@@ -245,7 +260,7 @@ export default function StoreScreen() {
             tone="inverse"
             accessibilityLabel={t('refresh')}
             onPress={handleRefresh}
-            disabled={refreshing}
+            disabled={loading || refreshing}
           />
         }
       />
@@ -294,7 +309,7 @@ export default function StoreScreen() {
                   </View>
                   <View style={styles.orderAmount}>
                     <AppText variant="label" color="link">{formatCurrency(toNumber(order.total_fcfa))}</AppText>
-                    <Badge label={order.status} tone="info" />
+                    <Badge label={t(getOrderStatusLabelKey(order.status))} tone="info" />
                   </View>
                 </View>
               </Card>
@@ -331,9 +346,9 @@ export default function StoreScreen() {
                   <TextField label={t('storeManualDate')} value={entryDate} onChangeText={setEntryDate} placeholder={t('storeManualDatePlaceholder')} />
                   <TextField label={t('storeManualNote')} value={note} onChangeText={setNote} placeholder={t('storeManualNotePlaceholder')} multiline textAlignVertical="top" />
                   <Divider />
-                  <View style={styles.formRow}>
-                    <View style={styles.flex}><Button label={t('cancel')} variant="outline" onPress={() => setManualModalVisible(false)} disabled={submitting} /></View>
-                    <View style={styles.flex}><Button label={t('storeManualSubmit')} onPress={handleSubmitManualStock} loading={submitting} disabled={submitting} /></View>
+                  <View style={styles.formActions}>
+                    <Button label={t('storeManualSubmit')} onPress={handleSubmitManualStock} loading={submitting} disabled={submitting} />
+                    <Button label={t('cancel')} variant="ghost" onPress={() => setManualModalVisible(false)} disabled={submitting} />
                   </View>
                 </View>
               </ScrollView>
@@ -363,4 +378,5 @@ const styles = StyleSheet.create({
   modalHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing[3], marginBottom: spacing[4] },
   form: { gap: spacing[3], paddingBottom: spacing[2] },
   formRow: { flexDirection: 'row', gap: spacing[3] },
+  formActions: { gap: spacing[2] },
 });
