@@ -17,7 +17,7 @@ import {
 } from '@/features/notifications/store/notificationSlice';
 import { Notification } from '@/types/notifications';
 import { RootStackParamList } from '@/navigation/MainNavigator';
-import { AppHeader, AppText, Badge, Button, Card, EmptyState, ErrorState, IconButton, LoadingState, SegmentedControl } from '@/components/ui';
+import { AppHeader, AppText, Button, Card, EmptyState, ErrorState, IconButton, InlineAlert, LoadingState, SegmentedControl } from '@/components/ui';
 import { colors, spacing } from '@/theme';
 
 const NOTIFICATION_COLORS = {
@@ -48,56 +48,6 @@ interface NotificationsScreenProps {
 interface ErrorWithMessage {
   message?: string;
 }
-
-type NotificationCycleContext =
-  | {
-      kind: 'name';
-      value: string;
-    }
-  | {
-      kind: 'tag';
-      value: string;
-    }
-  | null;
-
-const getNotificationMetadataString = (
-  metadata: Record<string, unknown>,
-  keys: string[]
-): string | null => {
-  for (const key of keys) {
-    const value = metadata[key];
-    if (typeof value === 'string' && value.trim().length > 0) {
-      return value.trim();
-    }
-  }
-  return null;
-};
-
-const resolveNotificationCycleContext = (metadata: Record<string, unknown>): NotificationCycleContext => {
-  const cycleName = getNotificationMetadataString(metadata, [
-    'cycle_name',
-    'cycleName',
-    'cycle_label',
-    'cycleLabel',
-    'production_cycle_name',
-    'productionCycleName',
-  ]);
-  if (cycleName) {
-    return { kind: 'name', value: cycleName };
-  }
-
-  const cycleId = getNotificationMetadataString(metadata, [
-    'cycle_id',
-    'cycleId',
-    'production_cycle_id',
-    'productionCycleId',
-  ]);
-  if (cycleId) {
-    return { kind: 'tag', value: cycleId.slice(0, 8) };
-  }
-
-  return null;
-};
 
 export default function NotificationsScreen({ navigation }: NotificationsScreenProps) {
   const { t, i18n } = useTranslation();
@@ -306,10 +256,9 @@ export default function NotificationsScreen({ navigation }: NotificationsScreenP
       const iconName = getNotificationIcon(notification.notification_type);
       const color = getNotificationColor(notification.notification_type);
       const surfaceColor = getNotificationSurface(notification.notification_type);
-      const cycleContext = resolveNotificationCycleContext(notification.metadata || {});
 
       return (
-        <Card variant={notification.is_read ? 'outlined' : 'selected'} style={styles.notificationCard}>
+        <Card variant="outlined" style={styles.notificationCard}>
           <View style={styles.notificationRow}>
             <View style={[styles.iconSurface, { backgroundColor: surfaceColor }]}>
               <Ionicons name={iconName} size={24} color={color} />
@@ -318,9 +267,6 @@ export default function NotificationsScreen({ navigation }: NotificationsScreenP
               <AppText variant="bodyStrong" color={notification.is_read ? 'primary' : 'link'}>{notification.title}</AppText>
               <AppText variant="body" color="muted" style={styles.message}>{notification.message}</AppText>
 
-              {cycleContext ? (
-                <Badge tone="brand" label={cycleContext.kind === 'name' ? t('notificationCycleContext', { cycleName: cycleContext.value }) : t('notificationCycleTag', { cycleTag: cycleContext.value })} />
-              ) : null}
               <View style={styles.metaRow}>
                 <AppText variant="caption" color="muted">{formatRelativeDate(notification.scheduled_for)}</AppText>
                 <AppText variant="caption" style={{ color }}>{t(`notificationType_${notification.notification_type}`, notification.notification_type)}</AppText>
@@ -329,7 +275,7 @@ export default function NotificationsScreen({ navigation }: NotificationsScreenP
           </View>
           <View style={styles.actions}>
             <Button label={notification.is_read ? t('read') : t('markAsRead')} variant="ghost" size="small" fullWidth={false} disabled={notification.is_read} onPress={() => handleMarkAsRead(notification)} />
-            <Button label={t('deleteNotification')} variant="ghost" size="small" fullWidth={false} iconLeft="trash-outline" onPress={() => handleDeleteNotification(notification)} />
+            <IconButton icon="trash-outline" variant="danger" tone="danger" accessibilityLabel={t('deleteNotification')} onPress={() => handleDeleteNotification(notification)} />
           </View>
         </Card>
       );
@@ -340,6 +286,7 @@ export default function NotificationsScreen({ navigation }: NotificationsScreenP
   const renderListHeader = useCallback(
     () => (
       <View style={styles.listHeader}>
+        {error && notifications.length > 0 ? <InlineAlert tone="error" message={t(error)} /> : null}
         <Card variant="outlined" style={styles.metrics}>
           <View style={styles.metric}>
             <AppText variant="metric" color="link">{totalNotifications}</AppText>
@@ -359,7 +306,7 @@ export default function NotificationsScreen({ navigation }: NotificationsScreenP
         <AppText variant="sectionTitle">{t('notificationsList')} ({sortedNotifications.length})</AppText>
       </View>
     ),
-    [selectedFilter, sortedNotifications.length, t, totalNotifications, unreadCount]
+    [error, notifications.length, selectedFilter, sortedNotifications.length, t, totalNotifications, unreadCount]
   );
 
   const renderEmptyList = useCallback(
@@ -372,7 +319,7 @@ export default function NotificationsScreen({ navigation }: NotificationsScreenP
 
   const renderHeader = () => <AppHeader title={t('notifications')} subtitle={unreadCount > 0 ? `${unreadCount} ${t('unread')}` : undefined} onBack={() => navigation.goBack()} backLabel={t('back')} rightAction={<View style={styles.headerActions}>{unreadCount > 0 ? <IconButton icon="checkmark-done" tone="inverse" variant="ghost" accessibilityLabel={t('markAllAsRead')} onPress={handleMarkAllAsRead} /> : null}{readNotificationsCount > 0 ? <IconButton icon="trash" tone="inverse" variant="ghost" accessibilityLabel={t('deleteAllRead')} onPress={handleDeleteAllRead} /> : null}</View>} />;
 
-  if (error) {
+  if (error && notifications.length === 0) {
     return (
       <View className="flex-1 bg-cream">
         {renderHeader()}
@@ -406,11 +353,11 @@ const styles = StyleSheet.create({
   metrics: { flexDirection: 'row', justifyContent: 'space-around' },
   metric: { flex: 1, alignItems: 'center', gap: spacing[1] },
   center: { textAlign: 'center' },
-  notificationCard: { gap: spacing[3], marginBottom: spacing[3] },
+  notificationCard: { gap: spacing[3], marginBottom: spacing[3], backgroundColor: colors.surface.card, borderColor: colors.border.default },
   notificationRow: { flexDirection: 'row', gap: spacing[3] },
   iconSurface: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
   message: { marginVertical: spacing[2] },
   metaRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing[2], marginTop: spacing[2] },
-  actions: { flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border.subtle, paddingTop: spacing[2] },
+  actions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border.subtle, paddingTop: spacing[2] },
   headerActions: { flexDirection: 'row' },
 });

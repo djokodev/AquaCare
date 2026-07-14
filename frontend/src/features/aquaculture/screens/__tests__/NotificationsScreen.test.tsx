@@ -1,12 +1,15 @@
 import React from 'react';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
-import { AppState } from 'react-native';
+import { Alert, AppState } from 'react-native';
 import NotificationsScreen from '../NotificationsScreen';
 import { useDispatch, useSelector } from 'react-redux';
 import {
   fetchNotifications,
   fetchNotificationsSilent,
   markNotificationAsRead,
+  markAllNotificationsAsRead,
+  deleteNotification,
+  deleteAllReadNotifications,
 } from '@/features/notifications/store/notificationSlice';
 import { Notification } from '@/types/notifications';
 
@@ -28,6 +31,7 @@ jest.mock('@/features/notifications/store/notificationSlice', () => ({
   fetchNotifications: jest.fn(() => ({ type: 'notifications/fetch' })),
   fetchNotificationsSilent: jest.fn(() => ({ type: 'notifications/fetchSilent' })),
   markNotificationAsRead: jest.fn((id: string) => ({ type: 'notifications/markRead', payload: id })),
+  markAllNotificationsAsRead: jest.fn(() => ({ type: 'notifications/markAllRead' })),
   deleteNotification: jest.fn((id: string) => ({ type: 'notifications/delete', payload: id })),
   deleteAllReadNotifications: jest.fn(() => ({ type: 'notifications/deleteAllRead' })),
 }));
@@ -125,7 +129,14 @@ describe('features/aquaculture/screens/NotificationsScreen', () => {
     expect(queryByText('Notif non lue')).toBeNull();
   });
 
-  it('affiche le contexte du cycle dans une notification', () => {
+  it('conserve les données lors d une erreur de refresh', () => {
+    setSelectorState({ notifications: [makeNotification({ title: 'Notification conservée' })], loading: false, error: 'loadError', unreadCount: 1 });
+    const screen = render(<NotificationsScreen navigation={navigation} />);
+    expect(screen.getByText('Notification conservée')).toBeTruthy();
+    expect(screen.getByText('loadError')).toBeTruthy();
+  });
+
+  it('masque le contexte du cycle dans une notification', () => {
     setSelectorState({
       notifications: [
         makeNotification({
@@ -139,9 +150,9 @@ describe('features/aquaculture/screens/NotificationsScreen', () => {
       unreadCount: 1,
     });
 
-    const { getByText } = render(<NotificationsScreen navigation={navigation} />);
+    const { queryByText } = render(<NotificationsScreen navigation={navigation} />);
 
-    expect(getByText('notificationCycleContext')).toBeTruthy();
+    expect(queryByText('notificationCycleContext')).toBeNull();
   });
 
   it('marque une notification non lue comme lue', async () => {
@@ -159,6 +170,27 @@ describe('features/aquaculture/screens/NotificationsScreen', () => {
       expect(markNotificationAsRead).toHaveBeenCalledWith('n1');
       expect(mockDispatch).toHaveBeenCalled();
     });
+  });
+
+  it('marque tout comme lu et supprime les notifications', async () => {
+    jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
+    setSelectorState({ notifications: [makeNotification({ id: 'n1', is_read: false }), makeNotification({ id: 'n2', is_read: true })], loading: false, error: null, unreadCount: 1 });
+    const screen = render(<NotificationsScreen navigation={navigation} />);
+
+    fireEvent.press(screen.getByLabelText('markAllAsRead'));
+    let alertCall = (Alert.alert as jest.Mock).mock.calls.at(-1);
+    await alertCall[2].find((action: { text: string }) => action.text === 'confirm').onPress();
+    expect(markAllNotificationsAsRead).toHaveBeenCalledWith({ cycleId: 'cycle-1' });
+
+    fireEvent.press(screen.getAllByLabelText('deleteNotification')[0]);
+    alertCall = (Alert.alert as jest.Mock).mock.calls.at(-1);
+    await alertCall[2].find((action: { text: string }) => action.text === 'confirm').onPress();
+    expect(deleteNotification).toHaveBeenCalledWith('n1');
+
+    fireEvent.press(screen.getByLabelText('deleteAllRead'));
+    alertCall = (Alert.alert as jest.Mock).mock.calls.at(-1);
+    await alertCall[2].find((action: { text: string }) => action.text === 'confirm').onPress();
+    expect(deleteAllReadNotifications).toHaveBeenCalledWith({ cycleId: 'cycle-1' });
   });
 
   it('charge et rafraichit les notifications selon le cycle de session', () => {
