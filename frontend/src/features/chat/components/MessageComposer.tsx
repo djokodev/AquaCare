@@ -9,12 +9,9 @@ import React, { useState } from 'react';
 import {
   View,
   TextInput,
-  TouchableOpacity,
   Image,
-  Text,
   StyleSheet,
   Alert,
-  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -29,16 +26,9 @@ import {
   MAX_MESSAGE_LENGTH,
 } from '../domain/constants';
 import type { MediaType } from '../types/chat';
-import { AQUACARE_COLORS } from '@/constants/colors';
-import { AQUACARE_TYPOGRAPHY } from '@/constants/typography';
 import { sharedTextInputStyles } from '@/components/common/inputStyles';
-
-/**
- * AquaCare Design System Colors
- */
-const CHAT_COLORS = {
-  BORDER_GRAY: '#e2e8f0',
-};
+import { AppText, IconButton } from '@/components/ui';
+import { colors, radii, typography } from '@/theme';
 
 interface MediaFile {
   uri: string;
@@ -227,10 +217,10 @@ export function MessageComposer({
       {/* Offline indicator */}
       {offlinePendingCount > 0 && (
         <View style={styles.offlineBanner}>
-          <Ionicons name="cloud-offline-outline" size={16} color={AQUACARE_COLORS.GRAY_LIGHT} />
-          <Text style={styles.offlineText}>
+          <Ionicons name="cloud-offline-outline" size={16} color={colors.text.muted} />
+          <AppText variant="caption" color="muted">
             {t('chatOfflinePending', { count: offlinePendingCount })}
-          </Text>
+          </AppText>
         </View>
       )}
 
@@ -242,35 +232,31 @@ export function MessageComposer({
           )}
           {mediaType === 'video' && (
             <View style={styles.previewVideo}>
-              <Ionicons name="play-circle-outline" size={48} color={AQUACARE_COLORS.WHITE} />
-              <Text style={styles.videoText}>{t('chatVideoSelected')}</Text>
+              <Ionicons name="play-circle-outline" size={48} color={colors.text.inverse} />
+              <AppText variant="caption" color="inverse">{t('chatVideoSelected')}</AppText>
             </View>
           )}
-          <TouchableOpacity
+          <IconButton
             onPress={removeMedia}
+            icon="close-circle"
+            variant="danger"
+            accessibilityLabel={t('close')}
             style={styles.removeMediaButton}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="close-circle" size={24} color={AQUACARE_COLORS.ERROR} />
-          </TouchableOpacity>
+          />
         </View>
       )}
 
       {/* Input area */}
       <View style={styles.inputContainer}>
         {/* Media button */}
-        <TouchableOpacity
+        <IconButton
           onPress={showMediaPicker}
+          icon="image-outline"
+          accessibilityLabel={t('chatSelectMedia')}
+          variant="ghost"
           style={styles.mediaButton}
           disabled={disabled || sending}
-          activeOpacity={0.7}
-        >
-          <Ionicons
-            name="image-outline"
-            size={24}
-            color={disabled ? AQUACARE_COLORS.GRAY_LIGHT : AQUACARE_COLORS.GREEN_PRIMARY}
-          />
-        </TouchableOpacity>
+        />
 
         {/* Text input */}
         <TextInput
@@ -278,7 +264,7 @@ export function MessageComposer({
           value={content}
           onChangeText={setContent}
           placeholder={t('chatPlaceholder')}
-          placeholderTextColor={AQUACARE_COLORS.GRAY_LIGHT}
+          placeholderTextColor={colors.text.muted}
           multiline
           maxLength={MAX_MESSAGE_LENGTH}
           editable={!disabled && !sending}
@@ -286,34 +272,22 @@ export function MessageComposer({
         />
 
         {/* Send button */}
-        <TouchableOpacity
+        <IconButton
           onPress={handleSend}
-          style={[
-            styles.sendButton,
-            canSend ? styles.sendButtonActive : styles.sendButtonDisabled,
-          ]}
+          icon="send"
+          accessibilityLabel={t('chatSendMessage')}
+          tone="inverse"
+          style={[styles.sendButton, canSend ? styles.sendButtonActive : styles.sendButtonDisabled]}
           disabled={!canSend}
-          activeOpacity={0.7}
-        >
-          {sending ? (
-            <ActivityIndicator size="small" color={AQUACARE_COLORS.WHITE} />
-          ) : (
-            <Ionicons name="send" size={20} color={AQUACARE_COLORS.WHITE} />
-          )}
-        </TouchableOpacity>
+        />
       </View>
 
       {/* Character count */}
       {isNearLimit && (
         <View style={styles.characterCountContainer}>
-          <Text
-            style={[
-              styles.characterCount,
-              characterCount >= MAX_MESSAGE_LENGTH && styles.characterCountError,
-            ]}
-          >
+          <AppText variant="caption" style={characterCount >= MAX_MESSAGE_LENGTH ? styles.characterCountError : styles.characterCount}>
             {characterCount}/{MAX_MESSAGE_LENGTH}
-          </Text>
+          </AppText>
         </View>
       )}
     </View>
@@ -322,9 +296,9 @@ export function MessageComposer({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: AQUACARE_COLORS.WHITE,
+    backgroundColor: colors.surface.card,
     borderTopWidth: 1,
-    borderTopColor: CHAT_COLORS.BORDER_GRAY,
+    borderTopColor: colors.border.subtle,
     paddingBottom: 8,
   },
   offlineBanner: {
@@ -333,11 +307,7 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: 12,
     paddingVertical: 6,
-    backgroundColor: AQUACARE_COLORS.CREAM,
-  },
-  offlineText: {
-    ...AQUACARE_TYPOGRAPHY.caption,
-    color: AQUACARE_COLORS.GRAY_LIGHT,
+    backgroundColor: colors.surface.page,
   },
   mediaPreview: {
     marginHorizontal: 12,
@@ -347,27 +317,21 @@ const styles = StyleSheet.create({
   previewImage: {
     width: 120,
     height: 90,
-    borderRadius: 8,
+    borderRadius: radii.md,
   },
   previewVideo: {
     width: 120,
     height: 90,
-    borderRadius: 8,
-    backgroundColor: AQUACARE_COLORS.GRAY_DARK,
+    borderRadius: radii.md,
+    backgroundColor: colors.text.primary,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  videoText: {
-    ...AQUACARE_TYPOGRAPHY.caption,
-    color: AQUACARE_COLORS.WHITE,
-    marginTop: 4,
   },
   removeMediaButton: {
     position: 'absolute',
     top: -8,
     right: -8,
-    backgroundColor: AQUACARE_COLORS.WHITE,
-    borderRadius: 12,
+    backgroundColor: colors.surface.card,
   },
   inputContainer: {
     flexDirection: 'row',
@@ -384,11 +348,11 @@ const styles = StyleSheet.create({
     minHeight: 40,
     maxHeight: 100,
     flex: 1,
-    backgroundColor: AQUACARE_COLORS.CREAM,
-    borderRadius: 20,
+    backgroundColor: colors.surface.page,
+    borderRadius: radii.full,
     paddingHorizontal: 16,
     paddingVertical: 10,
-    ...AQUACARE_TYPOGRAPHY.small,
+    ...typography.body,
   },
   sendButton: {
     width: 40,
@@ -398,10 +362,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   sendButtonActive: {
-    backgroundColor: AQUACARE_COLORS.GREEN_PRIMARY,
+    backgroundColor: colors.brand.primary,
   },
   sendButtonDisabled: {
-    backgroundColor: AQUACARE_COLORS.GRAY_LIGHT,
+    backgroundColor: colors.surface.disabled,
   },
   characterCountContainer: {
     alignItems: 'flex-end',
@@ -409,10 +373,9 @@ const styles = StyleSheet.create({
     paddingTop: 4,
   },
   characterCount: {
-    ...AQUACARE_TYPOGRAPHY.caption,
-    color: AQUACARE_COLORS.GRAY_LIGHT,
+    color: colors.text.muted,
   },
   characterCountError: {
-    color: AQUACARE_COLORS.ERROR,
+    color: colors.status.error,
   },
 });

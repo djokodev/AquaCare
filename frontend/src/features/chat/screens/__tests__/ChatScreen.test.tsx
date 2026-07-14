@@ -1,5 +1,5 @@
 import React from 'react';
-import { Alert, AppState, TouchableOpacity } from 'react-native';
+import { Alert, AppState } from 'react-native';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import { useFocusEffect } from '@react-navigation/native';
@@ -146,9 +146,9 @@ describe('features/chat/screens/ChatScreen', () => {
   });
 
   it('envoie un message texte avec état offline', async () => {
-    const { getByPlaceholderText, UNSAFE_getAllByType } = render(<ChatScreen />);
+    const { getByPlaceholderText, getByLabelText } = render(<ChatScreen />);
     fireEvent.changeText(getByPlaceholderText('chatPlaceholder'), 'Salut support');
-    fireEvent.press(UNSAFE_getAllByType(TouchableOpacity)[1]);
+    fireEvent.press(getByLabelText('chatSendMessage'));
 
     await waitFor(() => {
       expect(sendTextMessage).toHaveBeenCalledWith({
@@ -238,9 +238,9 @@ describe('features/chat/screens/ChatScreen', () => {
       return { type: `${action?.type || 'unknown'}/fulfilled` };
     });
 
-    const { getByPlaceholderText, UNSAFE_getAllByType } = render(<ChatScreen />);
+    const { getByPlaceholderText, getByLabelText } = render(<ChatScreen />);
     fireEvent.changeText(getByPlaceholderText('chatPlaceholder'), 'Message test');
-    fireEvent.press(UNSAFE_getAllByType(TouchableOpacity)[1]);
+    fireEvent.press(getByLabelText('chatSendMessage'));
 
     await waitFor(() => {
       expect(alertSpy).toHaveBeenCalledWith('chatSendError', 'chatSendErrorGeneric');

@@ -1,6 +1,6 @@
 import React from 'react';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
-import { Alert, TouchableOpacity } from 'react-native';
+import { Alert } from 'react-native';
 import * as estimators from '../../domain/estimators';
 import { MessageComposer } from '../MessageComposer';
 
@@ -18,23 +18,6 @@ jest.mock('expo-image-picker', () => ({
     Videos: 'Videos',
   },
 }));
-
-function getButtons(screen: ReturnType<typeof render>) {
-  return screen.UNSAFE_getAllByType(TouchableOpacity);
-}
-
-function findButtonByIconName(
-  screen: ReturnType<typeof render>,
-  iconName: string
-) {
-  return getButtons(screen).find((button) => {
-    const children = Array.isArray(button.props.children)
-      ? button.props.children
-      : [button.props.children];
-
-    return children.some((child: any) => child?.props?.name === iconName);
-  });
-}
 
 describe('features/chat/components/MessageComposer', () => {
   beforeEach(() => {
@@ -58,7 +41,7 @@ describe('features/chat/components/MessageComposer', () => {
     const screen = render(<MessageComposer onSendMessage={onSendMessage} />);
 
     fireEvent.changeText(screen.getByPlaceholderText('chatPlaceholder'), 'Bonjour');
-    fireEvent.press(getButtons(screen)[1]);
+    fireEvent.press(screen.getByLabelText('chatSendMessage'));
 
     await waitFor(() => {
       expect(onSendMessage).toHaveBeenCalledWith('Bonjour', undefined, 'none');
@@ -72,7 +55,7 @@ describe('features/chat/components/MessageComposer', () => {
     const screen = render(<MessageComposer onSendMessage={onSendMessage} />);
 
     fireEvent.changeText(screen.getByPlaceholderText('chatPlaceholder'), 'Message');
-    fireEvent.press(getButtons(screen)[1]);
+    fireEvent.press(screen.getByLabelText('chatSendMessage'));
 
     await waitFor(() => {
       expect(alertSpy).toHaveBeenCalledWith('chatSendError', 'boom');
@@ -89,7 +72,7 @@ describe('features/chat/components/MessageComposer', () => {
     const screen = render(<MessageComposer onSendMessage={onSendMessage} />);
 
     fireEvent.changeText(screen.getByPlaceholderText('chatPlaceholder'), 'Texte');
-    fireEvent.press(getButtons(screen)[1]);
+    fireEvent.press(screen.getByLabelText('chatSendMessage'));
 
     expect(alertSpy).toHaveBeenCalledWith('chatMessageError', 'chatMessageEmpty');
     expect(onSendMessage).not.toHaveBeenCalled();
@@ -114,18 +97,18 @@ describe('features/chat/components/MessageComposer', () => {
 
     const screen = render(<MessageComposer onSendMessage={jest.fn()} />);
 
-    fireEvent.press(getButtons(screen)[0]);
+    fireEvent.press(screen.getByLabelText('chatSelectMedia'));
     const pickerOptions = alertSpy.mock.calls[0][2] as Array<{ onPress?: () => void }>;
     await act(async () => {
       await pickerOptions[0].onPress?.();
     });
 
-    const removeButton = findButtonByIconName(screen, 'close-circle');
+    const removeButton = screen.queryByLabelText('close');
     expect(removeButton).toBeDefined();
 
     fireEvent.press(removeButton!);
     await waitFor(() => {
-      expect(findButtonByIconName(screen, 'close-circle')).toBeUndefined();
+      expect(screen.queryByLabelText('close')).toBeNull();
     });
   });
 
@@ -147,7 +130,7 @@ describe('features/chat/components/MessageComposer', () => {
     });
 
     const screen = render(<MessageComposer onSendMessage={jest.fn()} />);
-    fireEvent.press(getButtons(screen)[0]);
+    fireEvent.press(screen.getByLabelText('chatSelectMedia'));
     let pickerOptions = alertSpy.mock.calls[0][2] as Array<{ onPress?: () => void }>;
     await act(async () => {
       await pickerOptions[0].onPress?.();
@@ -158,7 +141,7 @@ describe('features/chat/components/MessageComposer', () => {
     mockRequestMediaLibraryPermissionsAsync.mockResolvedValueOnce({
       status: 'denied',
     });
-    fireEvent.press(getButtons(screen)[0]);
+    fireEvent.press(screen.getByLabelText('chatSelectMedia'));
     pickerOptions = alertSpy.mock.calls[alertSpy.mock.calls.length - 1][2] as Array<{
       onPress?: () => void;
     }>;
@@ -190,7 +173,7 @@ describe('features/chat/components/MessageComposer', () => {
       ],
     });
 
-    fireEvent.press(getButtons(screen)[0]);
+    fireEvent.press(screen.getByLabelText('chatSelectMedia'));
     let pickerOptions = alertSpy.mock.calls[0][2] as Array<{ onPress?: () => void }>;
     await act(async () => {
       await pickerOptions[1].onPress?.();
@@ -210,7 +193,7 @@ describe('features/chat/components/MessageComposer', () => {
         },
       ],
     });
-    fireEvent.press(getButtons(screen)[0]);
+    fireEvent.press(screen.getByLabelText('chatSelectMedia'));
     pickerOptions = alertSpy.mock.calls[alertSpy.mock.calls.length - 1][2] as Array<{
       onPress?: () => void;
     }>;

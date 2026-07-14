@@ -11,17 +11,14 @@ import {
   FlatList,
   RefreshControl,
   StyleSheet,
-  Text,
   Modal,
   Alert,
   ActivityIndicator,
   KeyboardAvoidingView,
-  TouchableOpacity,
   Image,
   Platform,
   AppState,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 import { useDispatch, useSelector } from 'react-redux';
@@ -50,8 +47,8 @@ import { MessageBubble } from '../components/MessageBubble';
 import { MessageComposer } from '../components/MessageComposer';
 import type { Conversation, Message, MediaType } from '../types/chat';
 import { AUTO_REFRESH_INTERVAL_MS } from '../domain/constants';
-import { AQUACARE_COLORS } from '@/constants/colors';
-import { AQUACARE_TYPOGRAPHY } from '@/constants/typography';
+import { AppText, EmptyState, ErrorState, IconButton, LoadingState } from '@/components/ui';
+import { colors, shadows, spacing } from '@/theme';
 
 /**
  * AquaCare Design System Colors
@@ -345,29 +342,18 @@ export function ChatScreen() {
   const renderEmptyState = useCallback(() => {
     if (conversationLoading || messagesLoading) {
       return (
-        <View style={styles.emptyContainer}>
-          <ActivityIndicator size="large" color={AQUACARE_COLORS.GREEN_PRIMARY} />
-          <Text style={styles.emptyText}>{t('loading')}</Text>
-        </View>
+        <LoadingState message={t('loading')} />
       );
     }
 
     if (conversationError || messagesError) {
       return (
-        <View style={styles.emptyContainer}>
-          <Text style={styles.errorText}>
-            {formatError(conversationError || messagesError)}
-          </Text>
-          <Text style={styles.emptySubtext}>{t('chatErrorRetry')}</Text>
-        </View>
+        <ErrorState title={formatError(conversationError || messagesError) ?? t('error')} message={t('chatErrorRetry')} />
       );
     }
 
     return (
-      <View style={styles.emptyContainer}>
-        <Text style={styles.emptyText}>{t('chatEmptyState')}</Text>
-        <Text style={styles.emptySubtext}>{t('chatEmptyStateDescription')}</Text>
-      </View>
+      <EmptyState title={t('chatEmptyState')} message={t('chatEmptyStateDescription')} />
     );
   }, [
     conversationError,
@@ -385,10 +371,10 @@ export function ChatScreen() {
     if (syncingOffline && offlineQueueCount > 0) {
       return (
         <View style={styles.syncBanner}>
-          <ActivityIndicator size="small" color={AQUACARE_COLORS.GREEN_PRIMARY} />
-          <Text style={styles.syncText}>
+          <ActivityIndicator size="small" color={colors.brand.primary} />
+          <AppText variant="caption">
             {t('chatSyncingOffline', { count: offlineQueueCount })}
-          </Text>
+          </AppText>
         </View>
       );
     }
@@ -438,8 +424,8 @@ export function ChatScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            tintColor={AQUACARE_COLORS.GREEN_PRIMARY}
-            colors={[AQUACARE_COLORS.GREEN_PRIMARY]}
+            tintColor={colors.brand.primary}
+            colors={[colors.brand.primary]}
           />
         }
         onContentSizeChange={() => {
@@ -463,13 +449,14 @@ export function ChatScreen() {
       />
 
       {showScrollToBottom && (
-        <TouchableOpacity
+        <IconButton
           onPress={() => flatListRef.current?.scrollToEnd({ animated: true })}
-          style={styles.scrollToBottomButton}
+          icon="arrow-down"
+          variant="surface"
+          tone="inverse"
           accessibilityLabel={t('chatScrollToBottom')}
-        >
-          <Ionicons name="arrow-down" size={20} color={AQUACARE_COLORS.WHITE} />
-        </TouchableOpacity>
+          style={styles.scrollToBottomButton}
+        />
       )}
 
       {/* Fullscreen image preview */}
@@ -479,10 +466,8 @@ export function ChatScreen() {
         animationType="fade"
         onRequestClose={() => setImagePreviewUrl(null)}
       >
-        <TouchableOpacity
+        <View
           style={styles.previewOverlay}
-          activeOpacity={1}
-          onPress={() => setImagePreviewUrl(null)}
         >
           {imagePreviewUrl && (
             <Image
@@ -491,7 +476,8 @@ export function ChatScreen() {
               resizeMode="contain"
             />
           )}
-        </TouchableOpacity>
+          <IconButton icon="close" tone="inverse" variant="ghost" accessibilityLabel={t('close')} onPress={() => setImagePreviewUrl(null)} style={styles.previewClose} />
+        </View>
       </Modal>
     </KeyboardAvoidingView>
   );
@@ -500,11 +486,11 @@ export function ChatScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: AQUACARE_COLORS.CREAM,
+    backgroundColor: colors.surface.page,
   },
   previewOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.9)',
+    backgroundColor: colors.overlay.strong,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -514,63 +500,24 @@ const styles = StyleSheet.create({
   },
   messagesList: {
     flexGrow: 1,
-    paddingVertical: 12,
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 32,
-    paddingVertical: 64,
-  },
-  emptyText: {
-    ...AQUACARE_TYPOGRAPHY.bodyStrong,
-    color: AQUACARE_COLORS.GRAY_DARK,
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  emptySubtext: {
-    ...AQUACARE_TYPOGRAPHY.small,
-    color: AQUACARE_COLORS.GRAY_LIGHT,
-    textAlign: 'center',
-  },
-  errorText: {
-    ...AQUACARE_TYPOGRAPHY.small,
-    color: AQUACARE_COLORS.ERROR,
-    textAlign: 'center',
-    marginBottom: 8,
+    paddingVertical: spacing[3],
   },
   syncBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    backgroundColor: AQUACARE_COLORS.WHITE,
-    marginBottom: 8,
-  },
-  syncText: {
-    ...AQUACARE_TYPOGRAPHY.caption,
-    fontSize: 13,
-    lineHeight: 18,
-    color: AQUACARE_COLORS.GRAY_DARK,
-    fontWeight: '500',
+    gap: spacing[2],
+    paddingVertical: spacing[2],
+    paddingHorizontal: spacing[4],
+    backgroundColor: colors.surface.card,
+    marginBottom: spacing[2],
   },
   scrollToBottomButton: {
     position: 'absolute',
-    right: 16,
+    right: spacing[4],
     bottom: 96,
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: AQUACARE_COLORS.GREEN_PRIMARY,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-    elevation: 4,
+    backgroundColor: colors.brand.primary,
+    ...shadows.medium,
   },
+  previewClose: { position: 'absolute', top: spacing[6], right: spacing[4] },
 });

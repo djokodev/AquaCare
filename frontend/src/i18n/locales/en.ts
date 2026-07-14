@@ -1,4 +1,6 @@
 ﻿export const en = {
+  chatSendMessage: 'Send message',
+
   // Navigation
   login: 'Login',
   register: 'Register',
