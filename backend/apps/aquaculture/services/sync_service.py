@@ -18,16 +18,17 @@ from datetime import date, datetime
 from typing import Any
 
 from django.core.exceptions import ValidationError
-from django.db import transaction
+from django.db import models, transaction
 from django.utils import timezone
 from rest_framework.exceptions import APIException
 
 from ..domain.validators import validate_cycle_unit_allocation_context
-from ..models import CycleLog, CycleUnitAllocation, FeedingPlan, ProductionCycle, SanitaryLog
+from ..models import CalibrationOperation, CalibrationTank, CycleLog, CycleUnitAllocation, FeedingPlan, ProductionCycle, SanitaryLog
 from .analytics_service import AnalyticsService
 from .base import BaseService
 from .cycle_service import ProductionCycleService
 from .sanitary_service import SanitaryService
+from .calibration_service import CalibrationService
 
 # ── Sync flag (threading.local) ──────────────────────────────────────────────
 # Permet aux signals post_save de CycleLog de détecter qu'un sync offline
@@ -231,6 +232,8 @@ class SyncService(BaseService):
                 'cycle_logs': 0,
                 'cycle_logs_updated': 0,
                 'sanitary_logs': 0,
+                'calibration_tanks': 0,
+                'calibration_operations': 0,
             },
             'errors': [],
             'server_updates': {},
@@ -659,7 +662,8 @@ class SyncService(BaseService):
     @staticmethod
     def get_server_updates(
         user,
-        last_sync: str | None = None
+        last_sync: str | None = None,
+        include_calibration: bool = False,
     ) -> dict[str, Any]:
         """
         Récupère les mises à jour serveur depuis la dernière synchronisation.
@@ -682,6 +686,8 @@ class SyncService(BaseService):
                 }
         """
         from ..serializers import (
+            CalibrationOperationSerializer,
+            CalibrationTankSerializer,
             CycleLogSerializer,
             FeedingPlanSerializer,
             ProductionCycleSerializer,
@@ -724,6 +730,17 @@ class SyncService(BaseService):
         if last_sync_dt:
             sanitary_query = sanitary_query.filter(created_at__gt=last_sync_dt)
 
+        calibration_tanks_data = []
+        calibration_operations_data = []
+        if include_calibration:
+            tanks_query = CalibrationTank.objects.filter(farm_profile__user=user)
+            operations_query = CalibrationOperation.objects.filter(source_cycle__farm_profile__user=user)
+            if last_sync_dt:
+                tanks_query = tanks_query.filter(updated_at__gt=last_sync_dt)
+                operations_query = operations_query.filter(created_at__gt=last_sync_dt)
+            calibration_tanks_data = CalibrationTankSerializer(tanks_query, many=True).data
+            calibration_operations_data = CalibrationOperationSerializer(operations_query, many=True).data
+
         # Serialize data
         cycle_logs_data = CycleLogSerializer(logs_query, many=True).data
 
@@ -734,6 +751,8 @@ class SyncService(BaseService):
             'logs': cycle_logs_data,
             'feeding_plans': FeedingPlanSerializer(plans_query, many=True).data,
             'sanitary_logs': SanitaryLogSerializer(sanitary_query, many=True).data,
+            'calibration_tanks': calibration_tanks_data,
+            'calibration_operations': calibration_operations_data,
             'sync_timestamp': timezone.now().isoformat()
         }
 
@@ -789,6 +808,41 @@ class SyncService(BaseService):
                     result=cycles_result,
                 )
 
+            for tank_data in sync_data.get('calibration_tanks', []):
+                _, created = CalibrationTank.objects.get_or_create(
+                    client_uuid=tank_data.get('client_uuid'),
+                    defaults={
+                        'farm_profile': user.farm_profile,
+                        'name': tank_data['name'],
+                        'volume_m3': tank_data['volume_m3'],
+                        'is_active': tank_data.get('is_active', True),
+                        'created_offline': True,
+                        'synced_at': timezone.now(),
+                    },
+                )
+                sync_result['processed']['calibration_tanks'] += int(created)
+
+            operations = sorted(sync_data.get('calibration_operations', []), key=lambda item: item['calibrated_at'])
+            for operation_data in operations:
+                source = ProductionCycle.objects.filter(
+                    pk=operation_data.get('source_cycle'), farm_profile__user=user
+                ).first()
+                tank = CalibrationTank.objects.filter(farm_profile__user=user).filter(
+                    models.Q(pk=operation_data.get('destination_tank'))
+                    | models.Q(client_uuid=operation_data.get('destination_tank_client_uuid'))
+                ).first()
+                if source and tank:
+                    _, _, created = CalibrationService.calibrate(
+                        source_cycle=source,
+                        destination_tank=tank,
+                        user=user,
+                        **{
+                            key: value for key, value in operation_data.items()
+                            if key not in {'source_cycle', 'destination_tank', 'destination_tank_client_uuid'}
+                        },
+                    )
+                    sync_result['processed']['calibration_operations'] += int(created)
+
             cycle_logs = sync_data.get('cycle_logs', [])
             if cycle_logs:
                 logs_result = SyncService.sync_cycle_logs(user, cycle_logs)
@@ -809,7 +863,13 @@ class SyncService(BaseService):
                 )
 
             last_sync = sync_data.get('last_sync')
-            sync_result['server_updates'] = SyncService.get_server_updates(user, last_sync)
+            sync_result['server_updates'] = SyncService.get_server_updates(
+                user,
+                last_sync,
+                include_calibration=(
+                    'calibration_tanks' in sync_data or 'calibration_operations' in sync_data
+                ),
+            )
             return SyncService._finalize_full_sync_status(sync_result)
 
         except Exception:
@@ -893,7 +953,7 @@ class SyncService(BaseService):
             return errors
 
         # Vérifier types des listes
-        for field in ['new_cycles', 'cycle_logs', 'sanitary_logs']:
+        for field in ['new_cycles', 'cycle_logs', 'sanitary_logs', 'calibration_tanks', 'calibration_operations']:
             if field in sync_data:
                 if not isinstance(sync_data[field], list):
                     errors.append(f"Le champ '{field}' doit être une liste")

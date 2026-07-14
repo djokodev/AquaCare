@@ -14,6 +14,7 @@ from .production_unit_views import CycleUnitAllocationViewSet, ProductionUnitVie
 from .report_views import ProductionReportViewSet
 from .sanitary_views import SanitaryLogViewSet
 from .sync_views import SyncView
+from .calibration_views import CalibrationOperationViewSet, CalibrationTankViewSet
 
 __all__ = [
     'ProductionCycleViewSet',
@@ -29,4 +30,6 @@ __all__ = [
     'ProductionReportViewSet',
     'DashboardView',
     'SyncView',
+    'CalibrationTankViewSet',
+    'CalibrationOperationViewSet',
 ]

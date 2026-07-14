@@ -1,0 +1,19 @@
+import React, { useEffect, useMemo, useState } from 'react';
+import { Alert, StyleSheet, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
+import type { StackScreenProps } from '@react-navigation/stack';
+import { AppText, Button, Card, Screen, TextField } from '@/components/ui';
+import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
+import { offlineService } from '@/services/offlineService';
+import type { RootStackParamList } from '@/navigation/MainNavigator';
+import { spacing } from '@/theme';
+import type { CalibrationTank, ProductionCycle } from '@/types/aquaculture';
+type Props = StackScreenProps<RootStackParamList, 'CalibrateCycle'>;
+export default function CalibrateCycleScreen({ route, navigation }: Props) {
+  const { t } = useTranslation(); const [source, setSource] = useState<ProductionCycle>(); const [tanks, setTanks] = useState<CalibrationTank[]>([]); const [tankId, setTankId] = useState(''); const [count, setCount] = useState(''); const [weight, setWeight] = useState(''); const [saving, setSaving] = useState(false);
+  useEffect(() => { void Promise.all([aquacultureService.getProductionCycle(route.params.sourceCycleId), aquacultureService.getCalibrationTanks()]).then(([cycle, nextTanks]) => { setSource(cycle); setTanks(nextTanks.filter((tank) => tank.is_active)); setTankId(nextTanks.find((tank) => tank.is_active)?.id ?? ''); }); }, [route.params.sourceCycleId]);
+  const preview = useMemo(() => { const c = Number(count); const w = Number(weight); if (!source || !c || !w) return null; const biomass = c * w / 1000; return { count: source.current_count - c, biomass: source.current_biomass - biomass, transferred: biomass }; }, [count, source, weight]);
+  const submit = async () => { if (!source || !tankId || !preview) return; setSaving(true); const payload = { client_uuid: aquacultureService.prepareOfflineData({}).client_uuid, destination_tank: tankId, calibrated_at: new Date().toISOString(), transferred_count: Number(count), transferred_average_weight_g: Number(weight) }; try { const result = await aquacultureService.calibrateCycle(source.id, payload); Alert.alert(t('calibrationSuccess'), t('calibrationSuccessMessage', { count: result.destination_cycle.current_count })); navigation.goBack(); } catch (error) { const networkError = !(error as { response?: unknown })?.response; if (networkError) { await offlineService.saveCalibrationOperationOffline(source.id, payload); Alert.alert(t('calibrationPending'), t('calibrationPendingMessage')); navigation.goBack(); } else { Alert.alert(t('error'), t('calibrationError')); } } finally { setSaving(false); } };
+  return <Screen scroll><View style={styles.content}><AppText variant="screenTitle">{t('gradeFish')}</AppText><TextField label={t('sourceUnit')} value={source?.cycle_name ?? ''} editable={false} />{!tanks.length ? <><AppText>{t('noCalibrationTanksAvailable')}</AppText><Button label={t('createCalibrationTank')} onPress={() => navigation.navigate('CalibrationTanks')} /></> : <><AppText variant="bodyStrong">{t('destinationTank')}</AppText>{tanks.map((tank) => <Button key={tank.id} label={tank.name} variant={tank.id === tankId ? 'primary' : 'outline'} onPress={() => setTankId(tank.id)} />)}<TextField label={t('transferredFish')} value={count} onChangeText={setCount} keyboardType="number-pad" /><TextField label={t('averageWeightGrams')} value={weight} onChangeText={setWeight} keyboardType="decimal-pad" />{preview ? <Card><AppText>{t('transferredBiomassValue', { biomass: preview.transferred.toFixed(2) })}</AppText><AppText>{t('sourceAfterValue', { count: preview.count, biomass: preview.biomass.toFixed(2) })}</AppText></Card> : null}<Button label={t('confirmCalibration')} onPress={() => void submit()} loading={saving} disabled={!preview || preview.count <= 0 || preview.biomass <= 0} /></>}</View></Screen>;
+}
+const styles = StyleSheet.create({ content: { gap: spacing[4] } });

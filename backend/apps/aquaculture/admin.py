@@ -27,6 +27,8 @@ from django.utils.html import escape, format_html, mark_safe
 from django.utils.translation import gettext_lazy as _
 
 from .models import (
+    CalibrationOperation,
+    CalibrationTank,
     CycleLog,
     CycleMetrics,
     CycleUnitAllocation,
@@ -40,6 +42,26 @@ from .models import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+@admin.register(CalibrationTank)
+class CalibrationTankAdmin(admin.ModelAdmin):
+    list_display = ('name', 'farm_profile', 'volume_m3', 'is_active', 'created_at')
+    list_filter = ('is_active',)
+    search_fields = ('name', 'farm_profile__farm_name')
+
+
+@admin.register(CalibrationOperation)
+class CalibrationOperationAdmin(admin.ModelAdmin):
+    list_display = ('calibrated_at', 'source_cycle', 'destination_cycle', 'transferred_count', 'transferred_biomass_kg')
+    readonly_fields = [field.name for field in CalibrationOperation._meta.fields]
+    list_select_related = ('source_cycle', 'destination_cycle')
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 class AquacultureSecuredAdmin(SecuredModelAdmin):

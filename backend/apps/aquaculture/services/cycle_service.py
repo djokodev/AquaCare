@@ -19,7 +19,7 @@ Architecture :
 """
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any, TypedDict
 
@@ -332,15 +332,39 @@ class ProductionCycleService(BaseService):
         if cycle.unit_allocations.exists():
             return ProductionCycleService._recalculate_cycle_metrics_from_allocations(cycle)
 
-        # 1. Reset aux valeurs initiales
-        cycle.current_count = cycle.initial_count
+        # Les sessions de calibrage rejouent leurs entrées depuis zéro afin de ne
+        # jamais compter deux fois le premier mouvement.
+        cycle.current_count = 0 if cycle.unit_type == 'calibration' else cycle.initial_count
         cycle.current_average_weight = cycle.initial_average_weight
+        cycle.current_biomass = Decimal('0') if cycle.unit_type == 'calibration' else cycle.initial_biomass
         cycle.total_feed_consumed = Decimal('0')
 
-        # 2. Replay tous les logs chronologiquement
-        logs = cycle.logs.order_by('log_date', 'created_at')
-
+        logs = list(cycle.logs.order_by('log_date', 'created_at', 'id'))
+        incoming = list(cycle.calibration_operations_in.order_by('calibrated_at', 'created_at', 'id'))
+        outgoing = list(cycle.calibration_operations_out.order_by('calibrated_at', 'created_at', 'id'))
+        events = []
         for log in logs:
+            event_at = timezone.make_aware(datetime.combine(log.log_date, getattr(log, 'log_time', None) or time.min))
+            events.append((event_at, log.created_at, str(log.id), 'log', log))
+        events.extend((op.calibrated_at, op.created_at, str(op.id), 'in', op) for op in incoming)
+        events.extend((op.calibrated_at, op.created_at, str(op.id), 'out', op) for op in outgoing)
+
+        for _event_at, _created_at, _event_id, event_type, event in sorted(events, key=lambda item: item[:3]):
+            if event_type == 'in':
+                cycle.current_count += event.transferred_count
+                cycle.current_biomass += event.transferred_biomass_kg
+                cycle.current_average_weight = (
+                    cycle.current_biomass * Decimal('1000') / cycle.current_count
+                ).quantize(Decimal('0.01'))
+                continue
+            if event_type == 'out':
+                cycle.current_count -= event.transferred_count
+                cycle.current_biomass -= event.transferred_biomass_kg
+                cycle.current_average_weight = (
+                    cycle.current_biomass * Decimal('1000') / cycle.current_count
+                ).quantize(Decimal('0.01'))
+                continue
+            log = event
             # Mise à jour mortalité
             if log.mortality_count:
                 cycle.current_count = max(0, cycle.current_count - log.mortality_count)
@@ -348,24 +372,28 @@ class ProductionCycleService(BaseService):
             # Mise à jour poids moyen (prendre le dernier enregistré)
             if log.average_weight:
                 cycle.current_average_weight = log.average_weight
+                cycle.current_biomass = AquacultureCalculator.calculate_biomass(
+                    cycle.current_count, cycle.current_average_weight
+                )
 
             # Cumul aliment distribué
             if log.feed_quantity:
                 cycle.total_feed_consumed += log.feed_quantity
 
         # 3. Recalcul métriques dérivées
-        cycle.current_biomass = AquacultureCalculator.calculate_biomass(
-            cycle.current_count,
-            cycle.current_average_weight
-        )
-
-        cycle.survival_rate = AquacultureCalculator.calculate_survival_rate(
-            cycle.initial_count,
-            cycle.current_count
+        total_in_count = sum(op.transferred_count for op in incoming)
+        total_in_biomass = sum((op.transferred_biomass_kg for op in incoming), Decimal('0'))
+        total_out_count = sum(op.transferred_count for op in outgoing)
+        total_out_biomass = sum((op.transferred_biomass_kg for op in outgoing), Decimal('0'))
+        total_stocked_count = total_in_count if cycle.unit_type == 'calibration' else cycle.initial_count + total_in_count
+        total_stocked_biomass = total_in_biomass if cycle.unit_type == 'calibration' else cycle.initial_biomass + total_in_biomass
+        cycle.survival_rate = (
+            (Decimal(cycle.current_count + total_out_count) / Decimal(total_stocked_count) * Decimal('100')).quantize(Decimal('0.01'))
+            if total_stocked_count else None
         )
 
         # Calcul FCR si gain de poids positif
-        weight_gain = cycle.current_biomass - cycle.initial_biomass
+        weight_gain = cycle.current_biomass + total_out_biomass - total_stocked_biomass
         if weight_gain > 0 and cycle.total_feed_consumed > 0:
             cycle.fcr = AquacultureCalculator.calculate_fcr(
                 cycle.total_feed_consumed,
@@ -380,7 +408,7 @@ class ProductionCycleService(BaseService):
             "metrics_recalculated",
             {
                 "cycle_id": str(cycle.id),
-                "logs_processed": logs.count(),
+                "logs_processed": len(logs),
                 "current_biomass": float(cycle.current_biomass)
             },
             level='debug'

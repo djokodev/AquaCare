@@ -9,6 +9,7 @@ import { Notification as NotificationPayload } from "./notifications";
 
 export type Species = "tilapia" | "clarias";
 export type CycleStatus = "planned" | "active" | "harvested" | "cancelled";
+export type ProductionCycleUnitType = "standard" | "calibration";
 export type ReportType = "daily" | "weekly" | "monthly";
 export type ReportStatus = "draft" | "validated" | "pending";
 export type ReportScopeType = "cycle" | "unit";
@@ -42,8 +43,17 @@ export interface ProductionCycle {
   cycle_name: string;
   species: Species;
   pond_identifier: string;
-  pond_surface_m2: number;
+  pond_surface_m2?: number | null;
   pond_volume_m3?: number;
+  unit_type?: ProductionCycleUnitType;
+  unit_type_display?: string;
+  calibration_tank?: string | null;
+  calibration_tank_name?: string | null;
+  is_calibration_unit?: boolean;
+  total_stocked_count?: number;
+  total_stocked_biomass?: number;
+  total_transferred_out_count?: number;
+  total_transferred_out_biomass?: number;
   infrastructure_type?: string[];
 
   // Donnees initiales
@@ -111,6 +121,67 @@ export interface ProductionCycle {
   synced_at?: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface CalibrationTank {
+  id: string;
+  client_uuid?: string;
+  farm_profile: string;
+  name: string;
+  volume_m3: number;
+  is_active: boolean;
+  is_occupied: boolean;
+  active_session?: ProductionCycle | null;
+  created_offline?: boolean;
+  synced_at?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CalibrationOperation {
+  id: string;
+  client_uuid: string;
+  source_cycle: string;
+  destination_cycle: string;
+  source_cycle_name?: string;
+  destination_cycle_name?: string;
+  calibrated_at: string;
+  transferred_count: number;
+  transferred_average_weight_g: number;
+  transferred_biomass_kg: number;
+  size_category?: 'small' | 'medium' | 'large' | 'other' | '';
+  notes?: string;
+  created_offline?: boolean;
+}
+
+export interface CalibrationRequest {
+  client_uuid: string;
+  destination_tank?: string;
+  destination_tank_client_uuid?: string;
+  calibrated_at: string;
+  transferred_count: number;
+  transferred_average_weight_g?: number;
+  sample_count?: number;
+  sample_total_weight_g?: number;
+  size_category?: 'small' | 'medium' | 'large' | 'other' | '';
+  notes?: string;
+  created_offline?: boolean;
+}
+
+export interface CalibrationResponse {
+  operation: CalibrationOperation;
+  source_cycle: ProductionCycle;
+  destination_cycle: ProductionCycle;
+  warnings: Array<'weight_difference' | 'high_density'>;
+  idempotent_replay: boolean;
+}
+
+export interface CreateCalibrationTankForm {
+  client_uuid?: string;
+  name: string;
+  volume_m3: number;
+  is_active?: boolean;
+  created_offline?: boolean;
 }
 
 export interface PartialHarvest {
@@ -615,12 +686,14 @@ export interface SyncPayload {
   cycle_logs: Partial<CycleLog>[];
   sanitary_logs: Partial<SanitaryLog>[];
   new_cycles: CreateCycleForm[];
+  calibration_tanks?: CreateCalibrationTankForm[];
+  calibration_operations?: CalibrationRequest[];
   last_sync?: string;
   device_id: string;
 }
 
 export interface SyncError {
-  type: "cycle" | "cycle_log" | "sanitary_log" | "general";
+  type: "cycle" | "cycle_log" | "sanitary_log" | "calibration_tank" | "calibration_operation" | "general";
   data?: unknown;
   error: string;
   errors?: Record<string, string[]>;

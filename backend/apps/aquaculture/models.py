@@ -17,7 +17,8 @@ from django.contrib.postgres.indexes import GinIndex
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
-from django.db.models import Prefetch, Q
+from django.db.models import DecimalField, IntegerField, OuterRef, Prefetch, Q, Subquery, Sum, Value
+from django.db.models.functions import Coalesce
 from django.utils.translation import gettext_lazy as _
 
 from .constants import (
@@ -41,7 +42,14 @@ class ProductionCycleQuerySet(models.QuerySet):
     """QuerySet optimisé pour les cycles de production."""
 
     def for_api(self):
-        return self.select_related('farm_profile', 'farm_profile__production_plan', 'metrics')
+        incoming = CalibrationOperation.objects.filter(destination_cycle=OuterRef('pk')).values('destination_cycle')
+        outgoing = CalibrationOperation.objects.filter(source_cycle=OuterRef('pk')).values('source_cycle')
+        return self.select_related('farm_profile', 'farm_profile__production_plan', 'metrics', 'calibration_tank').annotate(
+            calibration_in_count=Coalesce(Subquery(incoming.annotate(total=Sum('transferred_count')).values('total')), Value(0), output_field=IntegerField()),
+            calibration_in_biomass=Coalesce(Subquery(incoming.annotate(total=Sum('transferred_biomass_kg')).values('total')), Value(Decimal('0')), output_field=DecimalField()),
+            calibration_out_count=Coalesce(Subquery(outgoing.annotate(total=Sum('transferred_count')).values('total')), Value(0), output_field=IntegerField()),
+            calibration_out_biomass=Coalesce(Subquery(outgoing.annotate(total=Sum('transferred_biomass_kg')).values('total')), Value(Decimal('0')), output_field=DecimalField()),
+        )
 
     def for_statistics(self):
         return self.for_api().prefetch_related(
@@ -682,6 +690,39 @@ class CycleFeedStockEntry(models.Model):
         return f"{self.cycle.cycle_name} - {self.label} ({self.quantity_kg} kg)"
 
 
+class CalibrationTank(models.Model):
+    """Bac physique dédié aux opérations de calibrage."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    client_uuid = models.UUIDField(unique=True, null=True, blank=True)
+    farm_profile = models.ForeignKey(
+        'accounts.FarmProfile', on_delete=models.CASCADE, related_name='calibration_tanks'
+    )
+    name = models.CharField(max_length=120)
+    volume_m3 = models.DecimalField(
+        max_digits=10, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))]
+    )
+    is_active = models.BooleanField(default=True)
+    created_offline = models.BooleanField(default=False)
+    synced_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['name']
+        constraints = [
+            models.UniqueConstraint(fields=['farm_profile', 'name'], name='uniq_calibration_tank_name_farm'),
+            models.CheckConstraint(condition=Q(volume_m3__gt=0), name='calibration_tank_volume_gt_zero'),
+        ]
+        indexes = [
+            models.Index(fields=['farm_profile', 'is_active'], name='aq_cal_tank_farm_active_idx'),
+            models.Index(fields=['client_uuid'], name='aq_cal_tank_client_idx'),
+        ]
+
+    def __str__(self):
+        return self.name
+
+
 class ProductionCycle(models.Model):
     """
     Modèle représentant un cycle complet de production aquacole (60-180 jours).
@@ -703,8 +744,28 @@ class ProductionCycle(models.Model):
             models.Index(fields=['species', 'status']),
             models.Index(fields=['created_offline', 'synced_at'], name='aquaculture_created_7d7f63_idx'),
         ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['calibration_tank'],
+                condition=Q(status='active', calibration_tank__isnull=False),
+                name='uniq_active_cycle_per_calibration_tank',
+            ),
+            models.CheckConstraint(
+                condition=(Q(unit_type='standard', calibration_tank__isnull=True) | Q(unit_type='calibration', calibration_tank__isnull=False)),
+                name='cycle_calibration_tank_matches_type',
+            ),
+        ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    UNIT_TYPE_CHOICES = [('standard', _('Standard')), ('calibration', _('Bac de calibrage'))]
+    unit_type = models.CharField(max_length=20, choices=UNIT_TYPE_CHOICES, default='standard')
+    calibration_tank = models.ForeignKey(
+        CalibrationTank,
+        on_delete=models.PROTECT,
+        related_name='sessions',
+        null=True,
+        blank=True,
+    )
     client_uuid = models.UUIDField(
         unique=True,
         null=True,
@@ -961,6 +1022,52 @@ class ProductionCycle(models.Model):
         if self.pond_volume_m3 and self.current_biomass:
             return self.current_biomass / self.pond_volume_m3
         return None
+
+    @property
+    def is_calibration_unit(self):
+        return self.unit_type == 'calibration'
+
+
+class CalibrationOperation(models.Model):
+    """Mouvement immuable de stock vivant vers un bac de calibrage."""
+
+    SIZE_CHOICES = [('small', _('Petit')), ('medium', _('Moyen')), ('large', _('Grand')), ('other', _('Autre'))]
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    client_uuid = models.UUIDField(unique=True)
+    source_cycle = models.ForeignKey(ProductionCycle, on_delete=models.PROTECT, related_name='calibration_operations_out')
+    destination_cycle = models.ForeignKey(ProductionCycle, on_delete=models.PROTECT, related_name='calibration_operations_in')
+    calibrated_at = models.DateTimeField()
+    transferred_count = models.PositiveIntegerField()
+    transferred_average_weight_g = models.DecimalField(max_digits=8, decimal_places=2)
+    transferred_biomass_kg = models.DecimalField(max_digits=10, decimal_places=2)
+    sample_count = models.PositiveIntegerField(null=True, blank=True)
+    sample_total_weight_g = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    size_category = models.CharField(max_length=20, choices=SIZE_CHOICES, blank=True)
+    notes = models.CharField(max_length=1000, blank=True)
+    created_by = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True, blank=True)
+    created_offline = models.BooleanField(default=False)
+    synced_at = models.DateTimeField(null=True, blank=True)
+    source_count_before = models.PositiveIntegerField()
+    source_count_after = models.PositiveIntegerField()
+    source_average_weight_before_g = models.DecimalField(max_digits=8, decimal_places=2)
+    source_average_weight_after_g = models.DecimalField(max_digits=8, decimal_places=2)
+    source_biomass_before_kg = models.DecimalField(max_digits=10, decimal_places=2)
+    source_biomass_after_kg = models.DecimalField(max_digits=10, decimal_places=2)
+    destination_count_before = models.PositiveIntegerField()
+    destination_count_after = models.PositiveIntegerField()
+    destination_average_weight_before_g = models.DecimalField(max_digits=8, decimal_places=2)
+    destination_average_weight_after_g = models.DecimalField(max_digits=8, decimal_places=2)
+    destination_biomass_before_kg = models.DecimalField(max_digits=10, decimal_places=2)
+    destination_biomass_after_kg = models.DecimalField(max_digits=10, decimal_places=2)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-calibrated_at', '-created_at']
+        indexes = [
+            models.Index(fields=['source_cycle', 'calibrated_at'], name='aq_cal_op_source_date_idx'),
+            models.Index(fields=['destination_cycle', 'calibrated_at'], name='aq_cal_op_dest_date_idx'),
+            models.Index(fields=['client_uuid'], name='aq_cal_op_client_idx'),
+        ]
 
 
 class CycleLog(models.Model):

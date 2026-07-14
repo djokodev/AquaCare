@@ -19,6 +19,8 @@ from .views import (
     ProductionUnitViewSet,
     SanitaryLogViewSet,
     SyncView,
+    CalibrationTankViewSet,
+    CalibrationOperationViewSet,
 )
 
 app_name = 'aquaculture'
@@ -33,6 +35,8 @@ router.register(r'nutritional-guides', NutritionalGuideViewSet, basename='nutrit
 router.register(r'production-units', ProductionUnitViewSet, basename='production-unit')
 router.register(r'cycle-unit-allocations', CycleUnitAllocationViewSet, basename='cycle-unit-allocation')
 router.register(r'reports', ProductionReportViewSet, basename='production-report')
+router.register(r'calibration-tanks', CalibrationTankViewSet, basename='calibration-tank')
+router.register(r'calibration-operations', CalibrationOperationViewSet, basename='calibration-operation')
 # router.register(r'notifications', NotificationViewSet, basename='notification')  # Moved to /api/notifications/
 
 urlpatterns = [

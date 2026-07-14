@@ -248,6 +248,10 @@ export default function QuickActionsSheet({
     if (!hasValidCycleContext(cycleContext)) {
       return [
         {
+          id: 'calibrationTanks', labelKey: 'calibrationTanksTitle', icon: 'cube-outline',
+          iconColor: AQUACARE_COLORS.GREEN_PRIMARY, route: 'CalibrationTanks', category: 'aquaculture',
+        },
+        {
           id: 'dailyLog',
           labelKey: 'dailyLog',
           icon: 'create',
@@ -277,6 +281,15 @@ export default function QuickActionsSheet({
 
     if (hideGlobalCycleOperationalActions) {
       return [
+        {
+          id: 'calibrationTanks', labelKey: 'calibrationTanksTitle', icon: 'cube-outline',
+          iconColor: AQUACARE_COLORS.GREEN_PRIMARY, route: 'CalibrationTanks', category: 'aquaculture',
+        },
+        {
+          id: 'calibrate', labelKey: 'gradeFish', icon: 'git-compare-outline',
+          iconColor: AQUACARE_COLORS.INFO, route: 'CalibrateCycle', category: 'aquaculture',
+          params: { sourceCycleId: cycleContext.cycleId },
+        },
         {
           id: 'notifications',
           labelKey: 'notifications',
@@ -313,6 +326,15 @@ export default function QuickActionsSheet({
     }
 
     return [
+      {
+        id: 'calibrationTanks', labelKey: 'calibrationTanksTitle', icon: 'cube-outline',
+        iconColor: AQUACARE_COLORS.GREEN_PRIMARY, route: 'CalibrationTanks', category: 'aquaculture',
+      },
+      {
+        id: 'calibrate', labelKey: 'gradeFish', icon: 'git-compare-outline',
+        iconColor: AQUACARE_COLORS.INFO, route: 'CalibrateCycle', category: 'aquaculture',
+        params: { sourceCycleId: cycleContext.cycleId },
+      },
       {
         id: 'dailyLog',
         labelKey: 'dailyLog',

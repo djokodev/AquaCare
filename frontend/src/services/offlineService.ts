@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { API_CONFIG } from '@/constants/api';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
-import { CreateCycleForm, DailyLogForm, SanitaryLogForm, SyncPayload } from '@/types/aquaculture';
+import { CalibrationRequest, CreateCalibrationTankForm, CreateCycleForm, DailyLogForm, SanitaryLogForm, SyncPayload } from '@/types/aquaculture';
 import logger from '@/utils/logger';
 
 interface OfflineCycleLog {
@@ -28,6 +28,9 @@ interface OfflineSanitaryLog {
   synced: boolean;
 }
 
+export interface OfflineCalibrationTank { id: string; tankData: CreateCalibrationTankForm; timestamp: number; synced: boolean; }
+export interface OfflineCalibrationOperation { id: string; sourceCycleId: string; operationData: CalibrationRequest; timestamp: number; synced: boolean; }
+
 interface SyncCounter {
   success: number;
   failed: number;
@@ -47,12 +50,39 @@ const STORAGE_KEYS = {
   OFFLINE_CYCLE_LOGS: 'aquacare_offline_cycle_logs',
   OFFLINE_NEW_CYCLES: 'aquacare_offline_new_cycles',
   OFFLINE_SANITARY_LOGS: 'aquacare_offline_sanitary_logs',
+  OFFLINE_CALIBRATION_TANKS: 'aquacare_offline_calibration_tanks',
+  OFFLINE_CALIBRATION_OPERATIONS: 'aquacare_offline_calibration_operations',
   LAST_SYNC: 'aquacare_last_sync',
 };
 
 class OfflineService {
   private static readonly BULK_SYNC_DEVICE_ID = 'mobile-offline-sync';
   private syncPromise: Promise<OfflineSyncResult> | null = null;
+
+  async saveCalibrationTankOffline(tankData: CreateCalibrationTankForm): Promise<string> {
+    const id = this.generateOfflineId();
+    const item: OfflineCalibrationTank = { id, tankData: { ...tankData, client_uuid: tankData.client_uuid ?? this.generateClientUUID(), created_offline: true }, timestamp: Date.now(), synced: false };
+    await this.persist(STORAGE_KEYS.OFFLINE_CALIBRATION_TANKS, [...await this.getOfflineCalibrationTanks(), item]);
+    return id;
+  }
+
+  async getOfflineCalibrationTanks(): Promise<OfflineCalibrationTank[]> {
+    return this.readList(STORAGE_KEYS.OFFLINE_CALIBRATION_TANKS, 'Erreur lecture bacs de calibrage offline');
+  }
+
+  async saveCalibrationOperationOffline(sourceCycleId: string, operationData: CalibrationRequest): Promise<string> {
+    const id = this.generateOfflineId();
+    const item: OfflineCalibrationOperation = { id, sourceCycleId, operationData: { ...operationData, client_uuid: operationData.client_uuid || this.generateClientUUID(), created_offline: true }, timestamp: Date.now(), synced: false };
+    const current = await this.getOfflineCalibrationOperations();
+    if (!current.some((entry) => entry.operationData.client_uuid === item.operationData.client_uuid)) {
+      await this.persist(STORAGE_KEYS.OFFLINE_CALIBRATION_OPERATIONS, [...current, item]);
+    }
+    return id;
+  }
+
+  async getOfflineCalibrationOperations(): Promise<OfflineCalibrationOperation[]> {
+    return this.readList(STORAGE_KEYS.OFFLINE_CALIBRATION_OPERATIONS, 'Erreur lecture calibrages offline');
+  }
 
   async saveCycleLogOffline(cycleId: string, logData: DailyLogForm): Promise<string> {
     try {
@@ -261,11 +291,13 @@ class OfflineService {
     const pendingCycleLogs = await this.getPendingSyncLogs();
     const pendingNewCycles = (await this.getOfflineNewCycles()).filter((cycle) => !cycle.synced);
     const pendingSanitaryLogs = (await this.getOfflineSanitaryLogs()).filter((log) => !log.synced);
+    const pendingCalibrationTanks = (await this.getOfflineCalibrationTanks()).filter((item) => !item.synced);
+    const pendingCalibrationOperations = (await this.getOfflineCalibrationOperations()).filter((item) => !item.synced);
 
     if (
       pendingCycleLogs.length === 0 &&
       pendingNewCycles.length === 0 &&
-      pendingSanitaryLogs.length === 0
+      pendingSanitaryLogs.length === 0 && pendingCalibrationTanks.length === 0 && pendingCalibrationOperations.length === 0
     ) {
       return {
         success: 0,
@@ -320,6 +352,8 @@ class OfflineService {
     pendingSanitaryLogs: OfflineSanitaryLog[]
   ): Promise<OfflineSyncResult | null> {
     const lastSyncDate = await this.getLastSyncDate();
+    const pendingCalibrationTanks = (await this.getOfflineCalibrationTanks()).filter((item) => !item.synced);
+    const pendingCalibrationOperations = (await this.getOfflineCalibrationOperations()).filter((item) => !item.synced);
     const payload: SyncPayload = {
       cycle_logs: pendingCycleLogs.map((log) => ({
         ...log.logData,
@@ -335,6 +369,8 @@ class OfflineService {
         };
       }),
       new_cycles: pendingNewCycles.map((cycle) => cycle.cycleData),
+      calibration_tanks: pendingCalibrationTanks.map((item) => item.tankData),
+      calibration_operations: pendingCalibrationOperations.map((item) => ({ ...item.operationData, source_cycle: item.sourceCycleId } as CalibrationRequest & { source_cycle: string })),
       device_id: OfflineService.BULK_SYNC_DEVICE_ID,
       ...(lastSyncDate ? { last_sync: lastSyncDate.toISOString() } : {}),
     };
@@ -349,6 +385,8 @@ class OfflineService {
         this.markLogsAsSynced(pendingCycleLogs.map((log) => log.id)),
         this.markNewCyclesAsSynced(pendingNewCycles.map((cycle) => cycle.id)),
         this.markSanitaryLogsAsSynced(pendingSanitaryLogs.map((log) => log.id)),
+        this.persist(STORAGE_KEYS.OFFLINE_CALIBRATION_TANKS, []),
+        this.persist(STORAGE_KEYS.OFFLINE_CALIBRATION_OPERATIONS, []),
       ]);
       await this.touchLastSync();
 
@@ -454,22 +492,28 @@ class OfflineService {
     const pendingCycleLogs = await this.hasPendingSync();
     const pendingNewCycles = (await this.getOfflineNewCycles()).some((cycle) => !cycle.synced);
     const pendingSanitaryLogs = (await this.getOfflineSanitaryLogs()).some((log) => !log.synced);
+    const pendingCalibrationTanks = (await this.getOfflineCalibrationTanks()).some((item) => !item.synced);
+    const pendingCalibrationOperations = (await this.getOfflineCalibrationOperations()).some((item) => !item.synced);
 
-    return pendingCycleLogs || pendingNewCycles || pendingSanitaryLogs;
+    return pendingCycleLogs || pendingNewCycles || pendingSanitaryLogs || pendingCalibrationTanks || pendingCalibrationOperations;
   }
 
   async getTotalPendingCount(): Promise<number> {
     const pendingCycleLogs = await this.getPendingCount();
     const pendingNewCycles = (await this.getOfflineNewCycles()).filter((cycle) => !cycle.synced).length;
     const pendingSanitaryLogs = (await this.getOfflineSanitaryLogs()).filter((log) => !log.synced).length;
+    const pendingCalibrationTanks = (await this.getOfflineCalibrationTanks()).filter((item) => !item.synced).length;
+    const pendingCalibrationOperations = (await this.getOfflineCalibrationOperations()).filter((item) => !item.synced).length;
 
-    return pendingCycleLogs + pendingNewCycles + pendingSanitaryLogs;
+    return pendingCycleLogs + pendingNewCycles + pendingSanitaryLogs + pendingCalibrationTanks + pendingCalibrationOperations;
   }
 
   async resetOfflineData(): Promise<void> {
     await AsyncStorage.removeItem(STORAGE_KEYS.OFFLINE_CYCLE_LOGS);
     await AsyncStorage.removeItem(STORAGE_KEYS.OFFLINE_NEW_CYCLES);
     await AsyncStorage.removeItem(STORAGE_KEYS.OFFLINE_SANITARY_LOGS);
+    await AsyncStorage.removeItem(STORAGE_KEYS.OFFLINE_CALIBRATION_TANKS);
+    await AsyncStorage.removeItem(STORAGE_KEYS.OFFLINE_CALIBRATION_OPERATIONS);
     await AsyncStorage.removeItem(STORAGE_KEYS.LAST_SYNC);
     logger.log('Donnees offline reinitialisees');
   }

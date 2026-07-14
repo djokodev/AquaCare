@@ -29,6 +29,10 @@ Current stack:
 
 ## Major technical decisions
 
+### Calibration tanks and grading transfers
+
+A calibration tank is a persistent physical farm asset. Its first grading arrival creates a specialized `ProductionCycle`; later arrivals reuse the single active session for that tank. `CalibrationOperation` records immutable, idempotent live-stock movements with server snapshots. Stock replay includes incoming transfers, daily logs and outgoing transfers in business-time order, uses weighted biomass calculations, and keeps transferred fish out of mortality and growth figures. The API exposes tank CRUD, read-only operation history and `POST /aquaculture/cycles/{id}/calibrate/`. Mobile storage and bulk sync support offline-created tanks and operations through `client_uuid`. This first version excludes free editing or deletion of confirmed movements, full historical cost allocation and full-unit transfers.
+
 - Offline-first behavior is a core product constraint.
 - UUID primary keys are used where offline-created data needs safe synchronization.
 - `client_uuid` deduplication is required for retry-safe creation paths where supported.

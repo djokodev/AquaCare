@@ -17,8 +17,8 @@ from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 
-from ..domain.exceptions import FeedingPlanGenerationError
-from ..models import ProductionCycle
+from ..domain.exceptions import BusinessRuleViolation, FeedingPlanGenerationError
+from ..models import CalibrationTank, ProductionCycle
 from ..serializers import (
     CycleComparisonSerializer,
     CycleDashboardSerializer,
@@ -31,6 +31,8 @@ from ..serializers import (
     PartialHarvestResponseSerializer,
     PartialHarvestSerializer,
     ProductionCycleSerializer,
+    CalibrationOperationSerializer,
+    CalibrationRequestSerializer,
 )
 from ..services import (
     CycleDashboardService,
@@ -41,6 +43,7 @@ from ..services import (
     ProductionCycleApplicationService,
 )
 from ..services.cycle_feed_service import CycleFeedService
+from ..services.calibration_service import CalibrationService
 
 logger = logging.getLogger(__name__)
 
@@ -189,6 +192,38 @@ class ProductionCycleViewSet(viewsets.ModelViewSet):
 
         # Update serializer instance with created cycle
         serializer.instance = cycle
+
+    @action(detail=True, methods=['post'], url_path='calibrate')
+    def calibrate(self, request, pk=None):
+        source = self.get_object()
+        serializer = CalibrationRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        tank_query = CalibrationTank.objects.filter(farm_profile__user=request.user)
+        tank = (
+            tank_query.filter(pk=data['destination_tank']).first()
+            if data.get('destination_tank')
+            else tank_query.filter(client_uuid=data['destination_tank_client_uuid']).first()
+        )
+        if tank is None:
+            return Response({'detail': _('Bac de calibrage introuvable.')}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            operation, warnings, created = CalibrationService.calibrate(
+                source_cycle=source,
+                destination_tank=tank,
+                user=request.user,
+                **{key: value for key, value in data.items() if key not in {'destination_tank', 'destination_tank_client_uuid'}},
+            )
+        except BusinessRuleViolation as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        payload = {
+            'operation': CalibrationOperationSerializer(operation).data,
+            'source_cycle': ProductionCycleSerializer(operation.source_cycle, context={'request': request}).data,
+            'destination_cycle': ProductionCycleSerializer(operation.destination_cycle, context={'request': request}).data,
+            'warnings': warnings,
+            'idempotent_replay': not created,
+        }
+        return Response(payload, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
     
     @extend_schema(
         summary="Finaliser un cycle (récolte)",
