@@ -931,9 +931,9 @@
   alarmSetFor: 'Alarm set for {{time}}',
   alarmPermissionDenied: 'Notification permission denied. Enable it in settings.',
   alarmScheduleError: 'Error scheduling alarms.',
-  feedingAlarmTitle: '🐟 AquaCare — Feeding',
-  feedingAlarmBody: '{{cycleName}}: {{time}} — distribute feed ration',
-  feedingAlarmBodySnooze: 'Feeding reminder — it is time to act.',
+  feedingAlarmTitle: 'AquaCare, Feeding',
+  feedingAlarmBody: '{{cycleName}}: {{time}}, distribute feed ration',
+  feedingAlarmBodySnooze: 'Feeding reminder, it is time to act.',
   alarmActionFeedNow: 'Feed now',
   alarmActionSnooze10m: 'Remind in 10m',
 

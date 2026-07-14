@@ -930,9 +930,9 @@ export const fr = {
   alarmSetFor: 'Alarme programmée à {{time}}',
   alarmPermissionDenied: 'Permission notifications refusée. Activez-la dans les paramètres.',
   alarmScheduleError: 'Erreur lors de la programmation des alarmes.',
-  feedingAlarmTitle: '🐟 AquaCare — Nourrissage',
-  feedingAlarmBody: '{{cycleName}} : {{time}} — distribuez la ration',
-  feedingAlarmBodySnooze: 'Rappel nourrissage — il est temps d\'agir.',
+  feedingAlarmTitle: 'AquaCare, Nourrissage',
+  feedingAlarmBody: '{{cycleName}} : {{time}}, distribuez la ration',
+  feedingAlarmBodySnooze: 'Rappel nourrissage, il est temps d\'agir.',
   alarmActionFeedNow: 'Je nourris',
   alarmActionSnooze10m: 'Rappeler 10 min',
 

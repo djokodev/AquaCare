@@ -67,7 +67,7 @@ def post_log_async_tasks(log_id: str) -> None:
             NotificationService.create_notification(
                 user=user,
                 notification_type='mortality_alert',
-                title=f"Alerte mortalite - {cycle.cycle_name}",
+                title=f"Alerte mortalite, {cycle.cycle_name}",
                 message=message,
                 content_object=cycle,
                 metadata={
@@ -109,7 +109,7 @@ def post_log_async_tasks(log_id: str) -> None:
                 NotificationService.create_notification(
                     user=user,
                     notification_type='sampling_reminder',
-                    title=f"Échantillonnage hebdomadaire - {cycle.cycle_name}",
+                    title=f"Échantillonnage hebdomadaire, {cycle.cycle_name}",
                     message="Effectuer une pesée pour suivre la croissance (minimum 20 poissons).",
                     content_object=cycle,
                     metadata={'cycle_id': str(cycle.id)},

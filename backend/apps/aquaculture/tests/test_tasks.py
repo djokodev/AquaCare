@@ -81,7 +81,9 @@ class TestPostLogAsyncTasks:
 
         assert mortality_call['notification_type'] == 'mortality_alert'
         assert mortality_call['priority'] == 'urgent'
+        assert mortality_call['title'] == f'Alerte mortalite, {cycle.cycle_name}'
         assert sampling_call['notification_type'] == 'sampling_reminder'
+        assert sampling_call['title'] == f'Échantillonnage hebdomadaire, {cycle.cycle_name}'
         assert sampling_call['scheduled_for'].date() == log.log_date + timedelta(days=7)
         mock_env_alerts.assert_called_once_with(log)
         mock_update_metrics.assert_called_once_with(cycle, new_log=log)

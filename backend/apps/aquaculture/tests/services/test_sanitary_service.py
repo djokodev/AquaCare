@@ -50,7 +50,8 @@ class TestSanitaryServiceCreateLog:
         notifications = Notification.objects.filter(
             content_type=ContentType.objects.get_for_model(SanitaryLog),
             object_id=sanitary_log.id,
-            notification_type='alert'
+            notification_type='alert',
+            title=f'🚨 Alerte sanitaire, {cycle.cycle_name}',
         )
         assert notifications.exists()
 
@@ -229,7 +230,8 @@ class TestSanitaryServiceAnalysis:
             object_id=log.id,
             notification_type='ticket_resolved'
         )
-        assert resolution_notifications.exists()
+        resolution_notification = resolution_notifications.get()
+        assert resolution_notification.title == f'Problème résolu, {cycle.cycle_name}'
 
     def test_resolve_event_without_notes(self):
         """Résolution sans notes doit fonctionner."""
