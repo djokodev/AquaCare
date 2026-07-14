@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, Modal, ScrollView, StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useDispatch, useSelector } from 'react-redux';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppDispatch, RootState } from '@/store/store';
 import { harvestCycle, harvestCycleUnitAllocation } from '@/features/aquaculture/store/aquacultureSlice';
@@ -67,6 +68,7 @@ export default function HarvestModal({
   onUnitHarvestSuccess,
 }: HarvestModalProps) {
   const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
   const dispatch = useDispatch<AppDispatch>();
   const farmProfile = useSelector((state: RootState) => state.auth.farmProfile);
   const cycles = useSelector((state: RootState) => state.aquaculture.cycles);
@@ -174,7 +176,12 @@ export default function HarvestModal({
             <IconButton icon="close" variant="ghost" accessibilityLabel={t('close')} onPress={onClose} disabled={loading} testID="harvest-close" />
           </View>
 
-          <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
+          <ScrollView
+            style={styles.scroll}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.content}
+          >
             <InlineAlert
               tone="info"
               message={isUnitScope
@@ -204,9 +211,27 @@ export default function HarvestModal({
             </Card>
           </ScrollView>
 
-          <View style={styles.actions}>
-            <Button label={t('cancel')} variant="outline" onPress={onClose} disabled={loading} style={styles.cancel} />
-            <Button label={isUnitScope ? t('confirmUnitHarvest') : t('confirmHarvest')} iconLeft="cut-outline" onPress={() => void handleSubmit()} loading={loading} style={styles.submit} testID="harvest-submit" />
+          <View
+            testID="harvest-actions"
+            style={[styles.actions, { paddingBottom: Math.max(insets.bottom, spacing[10]) }]}
+          >
+            <Button
+              label={t('cancel')}
+              variant="outline"
+              onPress={onClose}
+              disabled={loading}
+              fullWidth={false}
+              containerStyle={styles.cancel}
+            />
+            <Button
+              label={isUnitScope ? t('confirmUnitHarvest') : t('confirmHarvest')}
+              iconLeft="cut-outline"
+              onPress={() => void handleSubmit()}
+              loading={loading}
+              fullWidth={false}
+              containerStyle={styles.submit}
+              testID="harvest-submit"
+            />
           </View>
         </View>
       </View>
@@ -220,13 +245,14 @@ function MetricRow({ label, value, accent = false }: { label: string; value: str
 
 const styles = StyleSheet.create({
   overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: colors.overlay.default },
-  sheet: { maxHeight: '90%', backgroundColor: colors.surface.card, borderTopLeftRadius: radii.xl, borderTopRightRadius: radii.xl, paddingTop: spacing[4], paddingBottom: spacing[4] },
+  sheet: { maxHeight: '90%', flexShrink: 1, backgroundColor: colors.surface.card, borderTopLeftRadius: radii.xl, borderTopRightRadius: radii.xl, paddingTop: spacing[4] },
   header: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', paddingHorizontal: spacing[4], marginBottom: spacing[3] },
   headerText: { flex: 1, gap: spacing[1] },
+  scroll: { flexShrink: 1 },
   content: { gap: spacing[3], paddingHorizontal: spacing[4], paddingBottom: spacing[4] },
   section: { gap: spacing[3] },
   metricRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing[3] },
-  actions: { flexDirection: 'row', gap: spacing[2], paddingHorizontal: spacing[4], paddingTop: spacing[3], borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border.subtle },
+  actions: { flexShrink: 0, flexDirection: 'row', alignItems: 'center', gap: spacing[2], paddingHorizontal: spacing[4], paddingTop: spacing[3], borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border.subtle, backgroundColor: colors.surface.card },
   cancel: { flex: 1 },
   submit: { flex: 2 },
 });

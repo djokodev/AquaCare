@@ -375,7 +375,7 @@ export default function SanitaryLogScreen({ navigation, route }: SanitaryLogScre
                     accessibilityLabel={t(type.labelKey)}
                     onPress={() => setFormData((prev) => ({ ...prev, event_type: type.value }))}
                   >
-                    <AppText variant="label" color={isSelected ? 'inverse' : 'primary'} style={{ textAlign: 'center' }}>
+                    <AppText variant="label" color="primary" style={{ textAlign: 'center' }}>
                       {t(type.labelKey)}
                     </AppText>
                   </SelectableCard>

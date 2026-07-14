@@ -221,10 +221,12 @@ export default function QuickActionsPreview({
         {suggestedActions.map((action, index) => (
           <React.Fragment key={action.route}>
             <Pressable
+              className="flex-row items-center"
               accessibilityRole="button"
               accessibilityLabel={action.label}
               onPress={() => navigation.navigate(action.route, action.params)}
-              style={({ pressed }) => [styles.action, pressed && styles.pressed]}
+              android_ripple={{ color: colors.surface.selected }}
+              style={styles.action}
             >
               <View
                 className="w-10 h-10 rounded-full items-center justify-center"
@@ -257,10 +259,12 @@ export default function QuickActionsPreview({
 
         {/* View All Button */}
         <Pressable
+          className="flex-row items-center justify-center"
           accessibilityRole="button"
           accessibilityLabel={t('viewAllActions')}
           onPress={onOpenSheet}
-          style={({ pressed }) => [styles.viewAll, pressed && styles.pressed]}
+          android_ripple={{ color: colors.surface.selected }}
+          style={styles.viewAll}
         >
           <AppText
             variant="bodyStrong"
@@ -285,7 +289,6 @@ const styles = StyleSheet.create({
   action: { minHeight: 56, flexDirection: 'row', alignItems: 'center', padding: spacing[4] },
   actionIcon: { backgroundColor: colors.brand.subtle },
   viewAll: { minHeight: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: spacing[4], backgroundColor: colors.surface.page, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border.subtle },
-  pressed: { opacity: 0.8 },
   actionLabel: {
     flex: 1,
     flexShrink: 1,

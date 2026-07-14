@@ -1,5 +1,6 @@
 import React from "react";
-import { render } from "@testing-library/react-native";
+import { fireEvent, render } from "@testing-library/react-native";
+import { StyleSheet } from "react-native";
 
 import QuickActionsPreview from "../QuickActionsPreview";
 
@@ -47,9 +48,10 @@ describe("features/main/components/QuickActionsPreview", () => {
   });
 
   it("affiche Plan d alimentation en mode unite", () => {
-    const { getByText } = render(
+    const onOpenSheet = jest.fn();
+    const { getByLabelText, getByText } = render(
       <QuickActionsPreview
-        onOpenSheet={jest.fn()}
+        onOpenSheet={onOpenSheet}
         hasActiveCycles
         unreadCount={0}
         navigation={navigation}
@@ -59,6 +61,22 @@ describe("features/main/components/QuickActionsPreview", () => {
     );
 
     expect(getByText("feedingPlanCompact")).toBeTruthy();
+
+    const action = getByLabelText("dailyLogCompact");
+    const viewAll = getByLabelText("viewAllActions");
+
+    expect(StyleSheet.flatten(action.props.style)).toMatchObject({
+      flexDirection: "row",
+      alignItems: "center",
+    });
+    expect(StyleSheet.flatten(viewAll.props.style)).toMatchObject({
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+    });
+
+    fireEvent.press(viewAll);
+    expect(onOpenSheet).toHaveBeenCalledTimes(1);
   });
 
   it("masque les actions globales opérationnelles pour un cycle avec unités", () => {
