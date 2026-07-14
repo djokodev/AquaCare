@@ -976,6 +976,7 @@
   bag: 'bag',
   bags: 'bags',
   kg: 'kg',
+  kgPerDay: 'kg/day',
 
   // Commerce - Product Catalog
   productCatalog: 'View feed products',

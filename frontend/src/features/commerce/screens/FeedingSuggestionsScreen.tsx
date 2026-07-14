@@ -17,9 +17,10 @@ import { AppDispatch, RootState } from '@/store/store';
 import { fetchFeedingSuggestions, addToCart } from '@/features/commerce/store/commerceSlice';
 import { CycleSuggestion, FeedingPhase, SuggestedProduct } from '@/types/commerce';
 import { RootStackParamList } from '@/navigation/MainNavigator';
-import { AppHeader, AppText, Button, Card, EmptyState, ErrorState, IconButton, InlineAlert, LoadingState } from '@/components/ui';
-import { colors, spacing } from '@/theme';
+import { AppHeader, AppText, Badge, Button, Card, Divider, EmptyState, ErrorState, IconButton, InlineAlert, LoadingState } from '@/components/ui';
+import { colors, opacity, sizing, spacing } from '@/theme';
 import { getProductDisplayName } from '@/features/commerce/utils/productPresentation';
+import MetricCard from '@/features/main/components/MetricCard';
 
 type NavigationProp = StackNavigationProp<RootStackParamList>;
 
@@ -79,6 +80,14 @@ export default function FeedingSuggestionsScreen() {
     }));
   }, []);
 
+  const getPhaseLabel = useCallback((phaseName: string) => {
+    const directTranslation = t(phaseName);
+    if (directTranslation !== phaseName) return directTranslation;
+    const nestedKey = `phase.${phaseName}`;
+    const nestedTranslation = t(nestedKey);
+    return nestedTranslation !== nestedKey ? nestedTranslation : phaseName;
+  }, [t]);
+
   const handleAddToCart = useCallback((productId: string, quantity: number) => {
     const product = products.items.find((p) => p.id === productId);
     if (!product) {
@@ -125,25 +134,25 @@ export default function FeedingSuggestionsScreen() {
 
     return (
       <Card variant="outlined" style={styles.sectionCard}>
-        <View className="flex-row items-center mb-3 gap-2">
+        <View style={styles.sectionHeading}>
           <Ionicons name="analytics-outline" size={24} color={scoreColor} />
-          <AppText className="text-base font-bold text-gray-dark">{t('dataQuality')}</AppText>
+          <AppText variant="cardTitle">{t('dataQuality')}</AppText>
         </View>
-        <View className="flex-row gap-4">
-          <View className="items-center px-4">
-            <AppText className="text-2xl font-bold" style={{ color: scoreColor }}>
+        <View style={styles.confidenceContent}>
+          <View style={styles.confidenceScore}>
+            <AppText variant="metric" style={{ color: scoreColor }}>
               {confidence_score}%
             </AppText>
-            <AppText className="text-xs text-gray-light mt-1">{t('confidenceScore')}</AppText>
+            <AppText variant="caption" color="muted">{t('confidenceScore')}</AppText>
           </View>
-          <View className="flex-1 justify-center gap-1">
-            <AppText className="text-sm text-gray-dark">
+          <View style={styles.analysisDetails}>
+            <AppText variant="caption">
               {t('cyclesAnalyzed')}: {cycles_with_data}/{total_cycles}
             </AppText>
-            <AppText className="text-sm text-gray-dark">
+            <AppText variant="caption">
               {t('analysisPeriod')}: {suggestionsData.analysis.analysis_period_days} {t('days')}
             </AppText>
-            <AppText className="text-sm text-gray-dark">
+            <AppText variant="caption">
               {t('safetyBuffer')}: +{suggestionsData.analysis.safety_buffer_days} {t('days')}
             </AppText>
           </View>
@@ -156,18 +165,18 @@ export default function FeedingSuggestionsScreen() {
     const totalPrice = suggestedProduct.total_price;
 
     return (
-      <Card key={suggestedProduct.product_id} style={styles.productCard}>
-        <View className="flex-1 mr-3">
-          <AppText className="text-xs text-gray-light font-semibold mb-1">{suggestedProduct.brand.toUpperCase()}</AppText>
-          <AppText className="text-sm text-gray-dark mb-1" numberOfLines={2}>
+      <Card key={suggestedProduct.product_id} variant="outlined" style={styles.productCard}>
+        <View style={styles.flex}>
+          <AppText variant="caption" color="muted">{suggestedProduct.brand.toUpperCase()}</AppText>
+          <AppText numberOfLines={2}>
             {getProductDisplayName(suggestedProduct.product_name, t('catfish'))}
           </AppText>
-          <AppText className="text-xs text-gray-light">
-            {suggestedProduct.quantity_bags} {t('bags')} - {suggestedProduct.total_kg}kg
+          <AppText variant="caption" color="muted">
+            {suggestedProduct.quantity_bags} {t('bags')} · {suggestedProduct.total_kg} kg
           </AppText>
         </View>
-        <View className="items-end justify-between">
-          <AppText className="text-sm font-semibold text-aquacare-primary">
+        <View style={styles.productActions}>
+          <AppText variant="label" color="link">
             {totalPrice.toLocaleString()} FCFA
           </AppText>
           <IconButton
@@ -185,24 +194,27 @@ export default function FeedingSuggestionsScreen() {
     const totalBags = phase.products.reduce((sum, p) => sum + p.quantity_bags, 0);
 
     return (
-      <View key={index} className="bg-cream rounded-lg p-3 mb-3">
+      <Card key={index} variant="outlined" style={styles.phaseCard}>
         <Pressable
-          className="flex-row justify-between items-center"
+          accessibilityRole="button"
+          accessibilityLabel={`${getPhaseLabel(phase.phase_name)}, ${t(isExpanded ? 'collapseActions' : 'details')}`}
+          accessibilityState={{ expanded: isExpanded }}
           onPress={() => togglePhaseExpansion(cycleId, index)}
+          style={({ pressed }) => [styles.expandableControl, pressed && styles.pressed]}
         >
-          <View className="flex-row items-center flex-1 gap-3">
-            <View className="w-10 h-10 bg-white rounded-full items-center justify-center">
+          <View style={styles.expandableHeading}>
+            <View style={styles.phaseIcon}>
               <Ionicons name="fast-food-outline" size={20} color={colors.brand.primary} />
             </View>
-            <View>
-              <AppText className="text-sm font-semibold text-gray-dark">{phase.phase_name}</AppText>
-              <AppText className="text-xs text-gray-light">
-                {phase.pellet_size_mm}mm - {phase.weight_range_g[0]}-{phase.weight_range_g[1]}g
+            <View style={styles.flex}>
+              <AppText variant="label">{getPhaseLabel(phase.phase_name)}</AppText>
+              <AppText variant="caption" color="muted">
+                {phase.pellet_size_mm} mm · {phase.weight_range_g[0]}-{phase.weight_range_g[1]} g
               </AppText>
             </View>
           </View>
-          <View className="items-end gap-1">
-            <AppText className="text-sm font-semibold text-aquacare-primary">
+          <View style={styles.expandableTrailing}>
+            <AppText variant="label" color="link">
               {phase.total_price.toLocaleString()} FCFA
             </AppText>
             <Ionicons
@@ -213,30 +225,28 @@ export default function FeedingSuggestionsScreen() {
           </View>
         </Pressable>
 
-        <View className="flex-row mt-3 gap-4">
-          <View className="flex-row items-center gap-1">
+        <View style={styles.phaseMeta}>
+          <View style={styles.metaItem}>
             <Ionicons name="calendar-outline" size={14} color={colors.text.muted} />
-            <AppText className="text-xs text-gray-light">{phase.days_coverage} {t('days')}</AppText>
+            <AppText variant="caption" color="muted">{phase.days_coverage} {t('days')}</AppText>
           </View>
-          <View className="flex-row items-center gap-1">
+          <View style={styles.metaItem}>
             <Ionicons name="scale-outline" size={14} color={colors.text.muted} />
-            <AppText className="text-xs text-gray-light">{phase.estimated_need_kg}kg</AppText>
+            <AppText variant="caption" color="muted">{phase.estimated_need_kg} kg</AppText>
           </View>
-          <View className="flex-row items-center gap-1">
-            <Ionicons name="cube-outline" size={14} color={colors.text.muted} />
-            <AppText className="text-xs text-gray-light">{totalBags} {t('bags')}</AppText>
-          </View>
+          <Badge label={`${totalBags} ${t('bags')}`} />
         </View>
 
         {isExpanded && (
           <View style={styles.expandedSection}>
-            <AppText className="text-xs font-semibold text-gray-dark mb-2">{t('recommendedProducts')}</AppText>
+            <Divider />
+            <AppText variant="label">{t('recommendedProducts')}</AppText>
             {phase.products.map((product) => renderSuggestedProduct(product))}
           </View>
         )}
-      </View>
+      </Card>
     );
-  }, [expandedPhaseIndex, renderSuggestedProduct, t, togglePhaseExpansion]);
+  }, [expandedPhaseIndex, getPhaseLabel, renderSuggestedProduct, t, togglePhaseExpansion]);
 
   const renderCycleSuggestion = useCallback(({ item: cycle }: { item: CycleSuggestion }) => {
     const isExpanded = expandedCycleId === cycle.cycle_id;
@@ -244,16 +254,19 @@ export default function FeedingSuggestionsScreen() {
     return (
       <Card variant="outlined" style={styles.cycleCard}>
         <Pressable
-          className="flex-row items-center justify-between"
+          accessibilityRole="button"
+          accessibilityLabel={`${cycle.cycle_name}, ${t(isExpanded ? 'collapseActions' : 'details')}`}
+          accessibilityState={{ expanded: isExpanded }}
           onPress={() => toggleCycleExpansion(cycle.cycle_id)}
+          style={({ pressed }) => [styles.expandableControl, pressed && styles.pressed]}
         >
-          <View className="flex-row items-center flex-1 gap-3">
+          <View style={styles.expandableHeading}>
             <Ionicons name="water-outline" size={28} color={colors.brand.primary} />
-            <View className="flex-1">
-              <AppText className="text-base font-bold text-gray-dark">{cycle.cycle_name}</AppText>
-              <AppText className="text-sm text-aquacare-primary">{t(cycle.species)}</AppText>
-              <AppText className="text-xs text-gray-light mt-1">
-                {t('currentPhase')}: {cycle.current_phase} - {cycle.current_avg_weight_g}g - {cycle.days_remaining} {t('daysRemaining')}
+            <View style={styles.flex}>
+              <AppText variant="cardTitle">{cycle.cycle_name}</AppText>
+              <Badge label={t(cycle.species)} tone="success" />
+              <AppText variant="caption" color="muted">
+                {t('currentPhase')}: {getPhaseLabel(cycle.current_phase)} · {cycle.current_avg_weight_g} g · {cycle.days_remaining} {t('daysRemaining')}
               </AppText>
             </View>
           </View>
@@ -264,49 +277,37 @@ export default function FeedingSuggestionsScreen() {
           />
         </Pressable>
 
-        <View className="flex-row flex-wrap bg-cream rounded-lg p-3 mt-3 gap-3">
-          <View className="flex-1 min-w-[45%] items-center">
-            <AppText className="text-xs text-gray-light">{t('totalNeeded')}</AppText>
-            <AppText className="text-sm font-bold text-gray-dark">{cycle.summary.total_needed_kg}kg</AppText>
-          </View>
-          <View className="flex-1 min-w-[45%] items-center">
-            <AppText className="text-xs text-gray-light">{t('totalBags')}</AppText>
-            <AppText className="text-sm font-bold text-gray-dark">{cycle.summary.total_bags}</AppText>
-          </View>
-          <View className="flex-1 min-w-[45%] items-center">
-            <AppText className="text-xs text-gray-light">{t('totalCost')}</AppText>
-            <AppText className="text-sm font-bold text-aquacare-primary">
-              {cycle.summary.total_price.toLocaleString()} FCFA
-            </AppText>
-          </View>
-          <View className="flex-1 min-w-[45%] items-center">
-            <AppText className="text-xs text-gray-light">{t('coverage')}</AppText>
-            <AppText className="text-sm font-bold text-gray-dark">{cycle.summary.coverage_days} {t('days')}</AppText>
-          </View>
+        <View style={styles.metricGrid}>
+          <MetricCard value={`${cycle.summary.total_needed_kg} kg`} label={t('totalNeeded')} />
+          <MetricCard value={cycle.summary.total_bags} label={t('totalBags')} />
+          <MetricCard value={`${cycle.summary.total_price.toLocaleString()} FCFA`} label={t('totalCost')} />
+          <MetricCard value={`${cycle.summary.coverage_days} ${t('days')}`} label={t('coverage')} />
         </View>
 
         <Button label={t('addAllToCart')} iconLeft="cart" onPress={() => handleAddCycleToCart(cycle)} style={styles.buttonSpacing} />
 
         {isExpanded && (
-          <View className="mt-4">
-            <AppText className="text-sm font-bold text-gray-dark mb-3">{t('feedingPhases')}</AppText>
+          <View style={styles.cyclePhases}>
+            <Divider />
+            <AppText variant="cardTitle">{t('feedingPhases')}</AppText>
             {cycle.phases.map((phase, index) => renderFeedingPhase(phase, cycle.cycle_id, index))}
           </View>
         )}
       </Card>
     );
-  }, [expandedCycleId, handleAddCycleToCart, renderFeedingPhase, t, toggleCycleExpansion]);
+  }, [expandedCycleId, getPhaseLabel, handleAddCycleToCart, renderFeedingPhase, t, toggleCycleExpansion]);
 
   const renderListHeader = useCallback(
     () =>
       suggestionCycles.length > 0 ? (
         <>
+          {error ? <InlineAlert tone="error" message={error} /> : null}
           <InlineAlert tone="info" message={t('suggestionsInfoBanner')} />
 
           {renderConfidenceScore()}
         </>
       ) : null,
-    [renderConfidenceScore, suggestionCycles.length, t]
+    [error, renderConfidenceScore, suggestionCycles.length, t]
   );
 
   const renderEmptyState = useCallback(
@@ -318,13 +319,13 @@ export default function FeedingSuggestionsScreen() {
 
   return (
     <View style={styles.screen}>
-      <AppHeader title={t('feedingSuggestions')} subtitle={t('intelligentRecommendations')} onBack={() => navigation.goBack()} backLabel={t('back')} rightAction={<IconButton icon="cart-outline" accessibilityLabel={`${t('cart')} ${cartItemsCount}`} badge={cartItemsCount} onPress={() => navigation.navigate('Cart')} />} />
+      <AppHeader title={t('feedingSuggestions')} subtitle={t('intelligentRecommendations')} onBack={() => navigation.goBack()} backLabel={t('back')} rightAction={<IconButton icon="cart-outline" variant="ghost" tone="inverse" accessibilityLabel={`${t('cart')} ${cartItemsCount}`} badge={cartItemsCount} onPress={() => navigation.navigate('Cart')} />} />
 
       {!currentCycle?.id ? (
         <EmptyState title={t('sessionCycleNotSelected')} message={t('sessionCyclePickerDescription')} actionLabel={t('sessionCycleConfirm')} onAction={() => navigation.navigate('CycleSessionEntry', { showBackToDashboard: true })} />
       ) : loading && !refreshing ? (
         <LoadingState message={t('analyzingCycles')} />
-      ) : error ? (
+      ) : error && suggestionCycles.length === 0 ? (
         <ErrorState title={error} actionLabel={t('retry')} onAction={() =>
               farmProfile?.id &&
               currentCycle?.id &&
@@ -361,9 +362,25 @@ export default function FeedingSuggestionsScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.surface.page },
   content: { padding: spacing[4], paddingBottom: spacing[6] },
+  expandableControl: { minHeight: sizing.touchTargetMinimum, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing[3] },
+  pressed: { opacity: opacity.pressed },
   sectionCard: { marginBottom: spacing[4] },
-  productCard: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing[2] },
-  expandedSection: { marginTop: spacing[3], paddingTop: spacing[3], borderTopWidth: 1, borderTopColor: colors.border.default },
-  cycleCard: { marginBottom: spacing[4] },
+  sectionHeading: { flexDirection: 'row', alignItems: 'center', gap: spacing[2], marginBottom: spacing[3] },
+  confidenceContent: { flexDirection: 'row', gap: spacing[4] },
+  confidenceScore: { alignItems: 'center', paddingHorizontal: spacing[4] },
+  analysisDetails: { flex: 1, justifyContent: 'center', gap: spacing[1] },
+  flex: { flex: 1 },
+  productCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing[3], marginBottom: spacing[2] },
+  productActions: { alignItems: 'flex-end', justifyContent: 'space-between' },
+  expandedSection: { gap: spacing[2] },
+  cycleCard: { marginBottom: spacing[4], gap: spacing[3] },
+  phaseCard: { marginBottom: spacing[3], gap: spacing[3] },
+  expandableHeading: { flexDirection: 'row', alignItems: 'center', flex: 1, gap: spacing[3] },
+  expandableTrailing: { alignItems: 'flex-end', gap: spacing[1] },
+  phaseIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surface.page, alignItems: 'center', justifyContent: 'center' },
+  phaseMeta: { flexDirection: 'row', alignItems: 'center', gap: spacing[3] },
+  metaItem: { flexDirection: 'row', alignItems: 'center', gap: spacing[1] },
+  metricGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },
+  cyclePhases: { gap: spacing[3] },
   buttonSpacing: { marginTop: spacing[3] },
 });

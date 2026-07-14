@@ -23,7 +23,7 @@ import { fetchProducts, applyFilters, addToCart } from '@/features/commerce/stor
 import { Product, ProductSpecies } from '@/types/commerce';
 import { PRODUCT_SPECIES } from '@/domain/commerce/constants';
 import type { RootStackParamList } from '@/navigation/MainNavigator';
-import { AppHeader, AppText, Button, EmptyState, ErrorState, IconButton, LoadingState, SegmentedControl, TextField } from '@/components/ui';
+import { AppHeader, AppText, Button, EmptyState, ErrorState, IconButton, InlineAlert, LoadingState, SegmentedControl, TextField } from '@/components/ui';
 import { colors, spacing } from '@/theme';
 import { ProductCard } from '@/features/commerce/components/ProductCard';
 import { getProductDisplayName } from '@/features/commerce/utils/productPresentation';
@@ -152,14 +152,15 @@ export default function ProductCatalogScreen() {
         />
         {searchQuery || selectedSpecies ? <Button label={t('resetFilters')} variant="ghost" size="small" onPress={handleResetFilters} /> : null}
       </View>
-      {loading && !refreshing ? <LoadingState message={t('loading')} /> : null}
-      {error && !loading ? <ErrorState message={error} actionLabel={t('retry')} onAction={() => dispatch(fetchProducts(filters))} /> : null}
-      {!loading && !error ? (
+      {loading && !refreshing && productsList.length === 0 ? <LoadingState message={t('loading')} /> : null}
+      {error && productsList.length === 0 && !loading ? <ErrorState message={error} actionLabel={t('retry')} onAction={() => dispatch(fetchProducts(filters))} /> : null}
+      {productsList.length > 0 || (!loading && !error) ? (
         <FlatList
           data={productsList}
           renderItem={renderProductCard}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.list}
+          ListHeaderComponent={error && productsList.length > 0 ? <InlineAlert tone="error" message={error} /> : null}
           ListEmptyComponent={<EmptyState title={t('noProductsFound')} message={t('tryDifferentFilters')} actionLabel={t('resetFilters')} onAction={handleResetFilters} />}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.brand.primary} />}
           showsVerticalScrollIndicator={false}

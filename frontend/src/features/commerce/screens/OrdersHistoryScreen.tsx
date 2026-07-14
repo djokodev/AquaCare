@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, FlatList, RefreshControl, StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
@@ -10,7 +10,7 @@ import { confirmOrderReceipt, fetchOrders, fetchOrderStatistics } from '@/featur
 import { getOrderStatusLabelKey } from '@/features/commerce/utils/orderStatus';
 import { Order } from '@/types/commerce';
 import { RootStackParamList } from '@/navigation/MainNavigator';
-import { AppHeader, AppText, Badge, Button, Card, Divider, EmptyState, ErrorState, IconButton, LoadingState } from '@/components/ui';
+import { AppHeader, AppText, Badge, Button, Card, Divider, EmptyState, ErrorState, IconButton, InlineAlert, LoadingState } from '@/components/ui';
 import { colors, spacing } from '@/theme';
 import MetricCard from '@/features/main/components/MetricCard';
 import { getProductDisplayName } from '@/features/commerce/utils/productPresentation';
@@ -25,6 +25,7 @@ export default function OrdersHistoryScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   const [confirmingOrderId, setConfirmingOrderId] = useState<string | null>(null);
+  const confirmingOrderRef = useRef<string | null>(null);
 
   const loadOrders = useCallback(async () => {
     await Promise.all([dispatch(fetchOrders()), dispatch(fetchOrderStatistics())]);
@@ -52,13 +53,18 @@ export default function OrdersHistoryScreen() {
     Alert.alert(t('confirmReceiptTitle'), t('confirmReceiptMessage', { orderNumber: order.order_number }), [
       { text: t('cancel'), style: 'cancel' },
       { text: t('confirm'), onPress: async () => {
+        if (confirmingOrderRef.current) return;
         try {
+          confirmingOrderRef.current = order.id;
           setConfirmingOrderId(order.id);
           await dispatch(confirmOrderReceipt(order.id)).unwrap();
           await loadOrders();
           Alert.alert(t('success'), t('confirmReceiptSuccess'));
         } catch { Alert.alert(t('error'), t('confirmReceiptError')); }
-        finally { setConfirmingOrderId(null); }
+        finally {
+          confirmingOrderRef.current = null;
+          setConfirmingOrderId(null);
+        }
       } },
     ]);
   }, [dispatch, loadOrders, t]);
@@ -76,6 +82,7 @@ export default function OrdersHistoryScreen() {
           <IconButton
             icon={expanded ? 'chevron-up' : 'chevron-down'}
             accessibilityLabel={t(expanded ? 'collapseActions' : 'details')}
+            accessibilityState={{ expanded }}
             onPress={() => setExpandedOrderId(expanded ? null : order.id)}
             variant="ghost"
           />
@@ -131,22 +138,27 @@ export default function OrdersHistoryScreen() {
     );
   }, [expandedOrderId, confirmingOrderId, formatDateTime, handleConfirmReceipt, t]);
 
-  const listHeader = statistics ? (
-    <Card variant="outlined" style={styles.statistics}>
-      <AppText variant="sectionTitle">{t('orderStatistics')}</AppText>
-      <View style={styles.metricGrid}>
-        <Metric value={statistics.total_orders} label={t('totalOrders')} />
-        <Metric value={Number(statistics.total_spent).toLocaleString()} label={t('totalSpent')} />
-        <Metric value={sacksToReceive} label={t('sacksToReceive')} />
-        <Metric value={statistics.total_bags_ordered} label={t('totalBags')} />
-      </View>
-    </Card>
-  ) : null;
+  const listHeader = (
+    <View style={styles.listHeader}>
+      {error && items.length > 0 ? <InlineAlert tone="error" message={error} /> : null}
+      {statistics ? (
+        <Card variant="outlined" style={styles.statistics}>
+          <AppText variant="sectionTitle">{t('orderStatistics')}</AppText>
+          <View style={styles.metricGrid}>
+            <Metric value={statistics.total_orders} label={t('totalOrders')} />
+            <Metric value={Number(statistics.total_spent).toLocaleString()} label={t('totalSpent')} />
+            <Metric value={sacksToReceive} label={t('sacksToReceive')} />
+            <Metric value={statistics.total_bags_ordered} label={t('totalBags')} />
+          </View>
+        </Card>
+      ) : null}
+    </View>
+  );
 
   return (
     <View style={styles.screen}>
       <AppHeader title={t('ordersHistory')} subtitle={`${items.length} ${t(items.length > 1 ? 'orders' : 'order')}`} onBack={() => navigation.goBack()} backLabel={t('back')} />
-      {loading && !refreshing ? <LoadingState message={t('loading')} /> : error && items.length === 0 ? (
+      {loading && !refreshing && items.length === 0 ? <LoadingState message={t('loading')} /> : error && items.length === 0 ? (
         <ErrorState title={error} actionLabel={t('retry')} onAction={loadOrders} />
       ) : (
         <FlatList
@@ -181,5 +193,6 @@ const styles = StyleSheet.create({
   details: { gap: spacing[3] },
   address: { backgroundColor: colors.surface.selected, gap: spacing[1] },
   statistics: { marginBottom: spacing[4], gap: spacing[3] },
+  listHeader: { gap: spacing[3] },
   metricGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },
 });

@@ -18,9 +18,10 @@ import { CYCLE_SIMULATION_DEFAULTS } from '@/domain/commerce/constants';
 import { RootStackParamList } from '@/navigation/MainNavigator';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
 import { aggregatePhasesByName, DisplayPhase } from '../utils/aggregatePhases';
-import { AppHeader, AppText, Button, Card, InlineAlert, LoadingState, SegmentedControl, TextField } from '@/components/ui';
+import { AppHeader, AppText, Button, Card, Divider, InlineAlert, LoadingState, SegmentedControl, TextField } from '@/components/ui';
 import { colors, spacing } from '@/theme';
 import { getProductDisplayName } from '@/features/commerce/utils/productPresentation';
+import MetricCard from '@/features/main/components/MetricCard';
 
 type NavigationProp = StackNavigationProp<RootStackParamList>;
 type ScreenRouteProp = RouteProp<RootStackParamList, 'CycleSimulator'>;
@@ -310,54 +311,54 @@ export default function CycleSimulatorScreen() {
 
     return (
       <Card key={index} variant="outlined" style={styles.phaseCard}>
-        <View className="flex-row items-center mb-3 gap-3">
-          <View className="w-10 h-10 bg-cream rounded-full items-center justify-center">
+        <View style={styles.phaseHeading}>
+          <View style={styles.phaseIcon}>
             <Ionicons name="fast-food" size={20} color={colors.brand.primary} />
           </View>
-          <View className="flex-1">
-            <AppText className="text-sm font-bold text-gray-dark">{getPhaseLabel(phase.phase_name)}</AppText>
-            <AppText className="text-xs text-gray-light">
+          <View style={styles.flex}>
+            <AppText variant="bodyStrong">{getPhaseLabel(phase.phase_name)}</AppText>
+            <AppText variant="caption" color="muted">
               {t('days')} {phase.days_range[0]}-{phase.days_range[1]} | {phase.pellet_size_label}mm | {phase.weight_range_g[0]}-{phase.weight_range_g[1]}g
             </AppText>
           </View>
         </View>
 
-        <View className="flex-row bg-cream rounded-lg p-3 mb-3 gap-4">
-          <View className="flex-1 items-center">
-            <AppText className="text-xs text-gray-light">{t('duration')}</AppText>
-            <AppText className="text-sm font-semibold text-gray-dark">{phase.duration_days} {t('days')}</AppText>
+        <Card style={styles.phaseMetrics}>
+          <View style={styles.phaseMetric}>
+            <AppText variant="caption" color="muted">{t('duration')}</AppText>
+            <AppText variant="label">{phase.duration_days} {t('days')}</AppText>
           </View>
-          <View className="flex-1 items-center">
-            <AppText className="text-xs text-gray-light">{t('consumption')}</AppText>
-            <AppText className="text-sm font-semibold text-gray-dark">{phase.total_consumption_kg}kg</AppText>
+          <View style={styles.phaseMetric}>
+            <AppText variant="caption" color="muted">{t('consumption')}</AppText>
+            <AppText variant="label">{phase.total_consumption_kg} kg</AppText>
           </View>
-          <View className="flex-1 items-center">
-            <AppText className="text-xs text-gray-light">{t('dailyAverage')}</AppText>
-            <AppText className="text-sm font-semibold text-gray-dark">{phase.daily_avg_kg.toFixed(1)}kg/j</AppText>
+          <View style={styles.phaseMetric}>
+            <AppText variant="caption" color="muted">{t('dailyAverage')}</AppText>
+            <AppText variant="label">{phase.daily_avg_kg.toFixed(1)} {t('kgPerDay')}</AppText>
           </View>
-        </View>
+        </Card>
 
-        <View className="flex-row justify-between items-center mb-3">
-          <AppText className="text-sm font-semibold text-gray-dark">
+        <View style={styles.summaryRow}>
+          <AppText variant="label">
             {totalBags} {t(totalBags > 1 ? 'bags' : 'bag')}
           </AppText>
-          <AppText className="text-base font-bold text-aquacare-primary">
+          <AppText variant="cardTitle" color="link">
             {Number(phase.total_price).toLocaleString()} FCFA
           </AppText>
         </View>
 
-        <View className="bg-cream rounded-lg p-3 gap-2 mb-3">
+        <Card style={styles.productList}>
           {phase.products.map((product, pIndex) => (
-            <View key={pIndex} className="flex-row justify-between items-center">
-              <AppText className="flex-1 text-sm text-gray-dark mr-2" numberOfLines={1}>
+            <View key={pIndex} style={styles.summaryRow}>
+              <AppText style={styles.flex} numberOfLines={1}>
                 {getProductDisplayName(product.product_name, t('catfish'))}
               </AppText>
-              <AppText className="text-sm font-semibold text-gray-light">
-                {product.quantity_bags}x {product.package_weight_kg}kg
+              <AppText variant="label" color="muted">
+                {product.quantity_bags}x {product.package_weight_kg} kg
               </AppText>
             </View>
           ))}
-        </View>
+        </Card>
 
         <Button label={t('addPhaseToCart')} variant="outline" size="small" onPress={() => handleAddPhaseToCart(phase)} />
       </Card>
@@ -369,11 +370,11 @@ export default function CycleSimulatorScreen() {
       <AppHeader title={t('cycleSimulator')} subtitle={t('predictROI')} onBack={() => navigation.goBack()} backLabel={t('back')} />
 
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
-        <Card style={styles.parametersCard}>
-          <AppText className="text-lg font-bold text-gray-dark mb-3">{t('simulationParameters')}</AppText>
+        <Card variant="outlined" style={styles.parametersCard}>
+          <AppText variant="sectionTitle">{t('simulationParameters')}</AppText>
 
-          <View className="mb-4">
-            <AppText className="text-sm font-semibold text-gray-dark mb-2">{t('species')} *</AppText>
+          <View style={styles.fieldGroup}>
+            <AppText variant="label">{t('species')} *</AppText>
             <SegmentedControl
               value={species}
               onChange={(value) => handleSpeciesChange(value as 'tilapia' | 'catfish')}
@@ -381,10 +382,10 @@ export default function CycleSimulatorScreen() {
             />
           </View>
 
-          <View className="mb-4">
-            <AppText className="text-sm font-semibold text-gray-dark mb-2">{t('initialFishCount')} *</AppText>
+          <View style={styles.fieldGroup}>
             <TextField
-              className="border border-gray-light rounded-lg px-3 py-3 text-base text-gray-dark"
+              label={t('initialFishCount')}
+              required
               value={initialFishCount}
               onChangeText={setInitialFishCount}
               keyboardType="numeric"
@@ -392,10 +393,9 @@ export default function CycleSimulatorScreen() {
             />
           </View>
 
-          <View className="mb-4">
-            <AppText className="text-sm font-semibold text-gray-dark mb-2">{t('simulationInitialWeight')} (g)</AppText>
+          <View style={styles.fieldGroup}>
             <TextField
-              className="border border-gray-light rounded-lg px-3 py-3 text-base text-gray-dark"
+              label={`${t('simulationInitialWeight')} (g)`}
               value={initialWeightG}
               onChangeText={setInitialWeightG}
               keyboardType="numeric"
@@ -403,10 +403,9 @@ export default function CycleSimulatorScreen() {
             />
           </View>
 
-          <View className="mb-4">
-            <AppText className="text-sm font-semibold text-gray-dark mb-2">{t('targetWeight')} (g)</AppText>
+          <View style={styles.fieldGroup}>
             <TextField
-              className="border border-gray-light rounded-lg px-3 py-3 text-base text-gray-dark"
+              label={`${t('targetWeight')} (g)`}
               value={targetWeightG}
               onChangeText={setTargetWeightG}
               keyboardType="numeric"
@@ -414,10 +413,9 @@ export default function CycleSimulatorScreen() {
             />
           </View>
 
-          <View className="mb-4">
-            <AppText className="text-sm font-semibold text-gray-dark mb-2">{t('cycleDuration')} ({t('days')})</AppText>
+          <View style={styles.fieldGroup}>
             <TextField
-              className="border border-gray-light rounded-lg px-3 py-3 text-base text-gray-dark"
+              label={`${t('cycleDuration')} (${t('days')})`}
               value={cycleDurationDays}
               onChangeText={setCycleDurationDays}
               keyboardType="numeric"
@@ -425,10 +423,9 @@ export default function CycleSimulatorScreen() {
             />
           </View>
 
-          <View className="mb-4">
-            <AppText className="text-sm font-semibold text-gray-dark mb-2">{t('survivalRate')} (%)</AppText>
+          <View style={styles.fieldGroup}>
             <TextField
-              className="border border-gray-light rounded-lg px-3 py-3 text-base text-gray-dark"
+              label={`${t('survivalRate')} (%)`}
               value={survivalRate}
               onChangeText={setSurvivalRate}
               keyboardType="numeric"
@@ -436,10 +433,9 @@ export default function CycleSimulatorScreen() {
             />
           </View>
 
-          <View className="mb-4">
-            <AppText className="text-sm font-semibold text-gray-dark mb-2">{t('preEstimatedSellingPrice')}</AppText>
+          <View style={styles.fieldGroup}>
             <TextField
-              className="border border-gray-light rounded-lg px-3 py-3 text-base text-gray-dark"
+              label={t('preEstimatedSellingPrice')}
               value={sellingPricePerKg}
               onChangeText={setSellingPricePerKg}
               keyboardType="numeric"
@@ -447,21 +443,19 @@ export default function CycleSimulatorScreen() {
             />
           </View>
 
-          <View className="flex-row gap-3 mb-4">
-            <View className="flex-1">
-              <AppText className="text-sm font-semibold text-gray-dark mb-2">{t('fingerlingsCostFcfa')}</AppText>
+          <View style={styles.costFields}>
+            <View style={styles.flex}>
               <TextField
-                className="border border-gray-light rounded-lg px-3 py-3 text-base text-gray-dark"
+                label={t('fingerlingsCostFcfa')}
                 value={fingerlingsCost}
                 onChangeText={setFingerlingsCost}
                 keyboardType="numeric"
                 placeholder="0"
               />
             </View>
-            <View className="flex-1">
-              <AppText className="text-sm font-semibold text-gray-dark mb-2">{t('otherOperationalCosts')}</AppText>
+            <View style={styles.flex}>
               <TextField
-                className="border border-gray-light rounded-lg px-3 py-3 text-base text-gray-dark"
+                label={t('otherOperationalCosts')}
                 value={otherCosts}
                 onChangeText={setOtherCosts}
                 keyboardType="numeric"
@@ -470,7 +464,7 @@ export default function CycleSimulatorScreen() {
             </View>
           </View>
 
-          <View className="flex-row gap-3">
+          <View style={styles.actionRow}>
             <Button label={t('simulate')} iconLeft="analytics" loading={loading} onPress={handleLaunchSimulation} />
             {simulationResult ? <Button label={t('reset')} variant="outline" fullWidth={false} iconLeft="refresh" onPress={handleReset} /> : null}
           </View>
@@ -480,91 +474,33 @@ export default function CycleSimulatorScreen() {
           )}
         </Card>
 
-        {error && (
-          <View className="bg-white px-4 py-4 mb-2 items-center gap-3">
-            <Ionicons name="alert-circle-outline" size={32} color={colors.status.error} />
-            <AppText className="text-sm text-center" style={{ color: colors.status.error }}>{error}</AppText>
-          </View>
-        )}
+        {error ? <View style={styles.screenAlert}><InlineAlert tone="error" message={error} /></View> : null}
 
         {simulationResult && (
-          <View className="px-4 py-4">
-            <AppText className="text-lg font-bold text-gray-dark mb-3">{t('simulationResults')}</AppText>
+          <View style={styles.results}>
+            <AppText variant="sectionTitle">{t('simulationResults')}</AppText>
 
-            <View className="flex-row flex-wrap gap-3 mb-4">
-              <View className="flex-1 min-w-[45%] bg-white rounded-xl p-4 items-center">
-                <Ionicons name="scale-outline" size={24} color={colors.brand.primary} />
-                <AppText className="text-lg font-bold text-aquacare-primary mt-2">
-                  {simulationResult.summary.total_feed_kg.toLocaleString()}kg
-                </AppText>
-                <AppText className="text-xs text-gray-light mt-1 text-center">{t('totalFeed')}</AppText>
-              </View>
-              <View className="flex-1 min-w-[45%] bg-white rounded-xl p-4 items-center">
-                <Ionicons name="wallet-outline" size={24} color={colors.brand.primary} />
-                <AppText className="text-lg font-bold text-aquacare-primary mt-2">
-                  {simulationResult.summary.total_cost_fcfa.toLocaleString()}
-                </AppText>
-                <AppText className="text-xs text-gray-light mt-1 text-center">{t('totalCosts')}</AppText>
-              </View>
-              <View className="flex-1 min-w-[45%] bg-white rounded-xl p-4 items-center">
-                <Ionicons name="trending-up-outline" size={24} color={colors.brand.primary} />
-                <AppText className="text-lg font-bold text-aquacare-primary mt-2">
-                  {simulationResult.summary.estimated_fcr.toFixed(1)}
-                </AppText>
-                <AppText className="text-xs text-gray-light mt-1 text-center">{t('estimatedFCR')}</AppText>
-              </View>
-              <View className="flex-1 min-w-[45%] bg-white rounded-xl p-4 items-center">
-                <Ionicons name="heart-outline" size={24} color={colors.brand.primary} />
-                <AppText className="text-lg font-bold text-aquacare-primary mt-2">
-                  {(simulationResult.summary.survival_rate * 100).toFixed(0)}%
-                </AppText>
-                <AppText className="text-xs text-gray-light mt-1 text-center">{t('survivalRate')}</AppText>
-              </View>
+            <View style={styles.metricGrid}>
+              <MetricCard value={`${simulationResult.summary.total_feed_kg.toLocaleString()} kg`} label={t('totalFeed')} />
+              <MetricCard value={`${simulationResult.summary.total_cost_fcfa.toLocaleString()} FCFA`} label={t('totalCosts')} />
+              <MetricCard value={simulationResult.summary.estimated_fcr.toFixed(1)} label={t('estimatedFCR')} />
+              <MetricCard value={`${(simulationResult.summary.survival_rate * 100).toFixed(0)}%`} label={t('survivalRate')} />
             </View>
 
             <Card variant="outlined" style={styles.resultCard}>
-              <AppText className="text-base font-bold text-gray-dark mb-3">{t('roi')}</AppText>
-              <View className="gap-3">
-                <View className="flex-row justify-between items-center">
-                  <AppText className="text-sm text-gray-light">{t('feedCost')}</AppText>
-                  <AppText className="text-sm font-semibold text-gray-dark">
-                    {simulationResult.summary.feed_cost_fcfa.toLocaleString()} FCFA
-                  </AppText>
-                </View>
-                <View className="flex-row justify-between items-center">
-                  <AppText className="text-sm text-gray-light">{t('fingerlingsCostFcfa')}</AppText>
-                  <AppText className="text-sm font-semibold text-gray-dark">
-                    {simulationResult.summary.fingerlings_cost_fcfa.toLocaleString()} FCFA
-                  </AppText>
-                </View>
-                <View className="flex-row justify-between items-center">
-                  <AppText className="text-sm text-gray-light">{t('otherOperationalCosts')}</AppText>
-                  <AppText className="text-sm font-semibold text-gray-dark">
-                    {simulationResult.summary.other_costs_fcfa.toLocaleString()} FCFA
-                  </AppText>
-                </View>
-                <View className="flex-row justify-between items-center">
-                  <AppText className="text-sm text-gray-light">{t('estimatedRevenue')}</AppText>
-                  <AppText className="text-sm font-semibold text-gray-dark">
-                    {simulationResult.summary.estimated_revenue_fcfa.toLocaleString()} FCFA
-                  </AppText>
-                </View>
-                <View className="flex-row justify-between items-center">
-                  <AppText className="text-sm text-gray-light">{t('estimatedProfit')}</AppText>
-                  <AppText className="text-sm font-semibold text-gray-dark">
-                    {simulationResult.summary.estimated_profit_fcfa.toLocaleString()} FCFA
-                  </AppText>
-                </View>
-                <View className="flex-row justify-between items-center">
-                  <AppText className="text-sm text-gray-light">{t('roiPercentage')}</AppText>
+              <AppText variant="cardTitle">{t('roi')}</AppText>
+              <View style={styles.summaryRows}>
+                <SummaryRow label={t('feedCost')} value={`${simulationResult.summary.feed_cost_fcfa.toLocaleString()} FCFA`} />
+                <SummaryRow label={t('fingerlingsCostFcfa')} value={`${simulationResult.summary.fingerlings_cost_fcfa.toLocaleString()} FCFA`} />
+                <SummaryRow label={t('otherOperationalCosts')} value={`${simulationResult.summary.other_costs_fcfa.toLocaleString()} FCFA`} />
+                <Divider />
+                <SummaryRow label={t('estimatedRevenue')} value={`${simulationResult.summary.estimated_revenue_fcfa.toLocaleString()} FCFA`} />
+                <SummaryRow label={t('estimatedProfit')} value={`${simulationResult.summary.estimated_profit_fcfa.toLocaleString()} FCFA`} />
+                <View style={styles.summaryRow}>
+                  <AppText color="muted">{t('roiPercentage')}</AppText>
                   <AppText
-                    className="text-2xl font-bold"
-                    style={{
-                      color:
-                        simulationResult.summary.roi_percentage > 0
-                          ? colors.status.success
-                          : colors.status.error,
-                    }}
+                    variant="metric"
+                    color={simulationResult.summary.roi_percentage > 0 ? 'success' : 'error'}
                   >
                     {simulationResult.summary.roi_percentage > 0 ? '+' : ''}
                     {simulationResult.summary.roi_percentage.toFixed(1)}%
@@ -576,17 +512,17 @@ export default function CycleSimulatorScreen() {
             <Card variant="outlined" style={styles.networkCard}>
               <Ionicons name="storefront-outline" size={24} color={colors.brand.primary} style={{ marginTop: 2 }} />
               <View className="flex-1">
-                <AppText className="text-sm font-bold text-gray-dark mb-1">{t('buyerNetworkTitle')}</AppText>
-                <AppText className="text-xs text-gray-light mb-3">{t('buyerNetworkROINote')}</AppText>
+                <AppText variant="bodyStrong">{t('buyerNetworkTitle')}</AppText>
+                <AppText variant="caption" color="muted">{t('buyerNetworkROINote')}</AppText>
                 <Button label={t('buyerNetworkCTA')} size="small" onPress={() => navigation.navigate('Chat')} />
               </View>
             </Card>
 
-            <View className="flex-row items-center mb-3 mt-2 gap-2">
+            <View style={styles.sectionHeading}>
               <Ionicons name="cart-outline" size={20} color={colors.brand.primary} />
-              <AppText className="text-base font-bold text-gray-dark">{t('buyFeedSection')}</AppText>
+              <AppText variant="cardTitle">{t('buyFeedSection')}</AppText>
             </View>
-            <AppText className="text-xs text-gray-light mb-3">{t('feedingPhases')}</AppText>
+            <AppText variant="caption" color="muted">{t('feedingPhases')}</AppText>
             {displayPhases.map((phase, index) => renderPhaseCard(phase, index))}
 
             <Button label={t('addAllToCart')} iconLeft="cart" onPress={handleAddAllToCart} />
@@ -603,9 +539,33 @@ export default function CycleSimulatorScreen() {
   );
 }
 
+function SummaryRow({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.summaryRow}>
+      <AppText color="muted">{label}</AppText>
+      <AppText variant="bodyStrong">{value}</AppText>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
-  phaseCard: { marginBottom: spacing[3] },
+  flex: { flex: 1 },
+  fieldGroup: { gap: spacing[2] },
+  costFields: { flexDirection: 'row', gap: spacing[3] },
+  actionRow: { flexDirection: 'row', gap: spacing[3] },
+  screenAlert: { paddingHorizontal: spacing[4] },
+  results: { padding: spacing[4], gap: spacing[4] },
+  metricGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[3] },
+  summaryRows: { gap: spacing[3] },
+  summaryRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing[3] },
+  sectionHeading: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
+  phaseCard: { marginBottom: spacing[3], gap: spacing[3] },
+  phaseHeading: { flexDirection: 'row', alignItems: 'center', gap: spacing[3] },
+  phaseIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface.page },
+  phaseMetrics: { flexDirection: 'row', gap: spacing[2] },
+  phaseMetric: { flex: 1, alignItems: 'center', gap: spacing[1] },
+  productList: { gap: spacing[2] },
   parametersCard: { margin: spacing[4], gap: spacing[3] },
-  resultCard: { marginBottom: spacing[4] },
-  networkCard: { marginBottom: spacing[4], flexDirection: 'row', alignItems: 'flex-start', gap: spacing[3] },
+  resultCard: { gap: spacing[3] },
+  networkCard: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing[3] },
 });

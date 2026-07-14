@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Pressable, StyleSheet, View, type AccessibilityState, type StyleProp, type ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, opacity, radii, sizing } from '@/theme';
 import { AppText } from './AppText';
@@ -12,6 +12,7 @@ interface IconButtonProps {
   tone?: 'default' | 'inverse' | 'danger';
   disabled?: boolean;
   badge?: number;
+  accessibilityState?: AccessibilityState;
   style?: StyleProp<ViewStyle>;
   testID?: string;
 }
@@ -24,6 +25,7 @@ export function IconButton({
   tone = 'default',
   disabled = false,
   badge,
+  accessibilityState,
   style,
   testID,
 }: IconButtonProps) {
@@ -42,7 +44,7 @@ export function IconButton({
       testID={testID}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
-      accessibilityState={{ disabled }}
+      accessibilityState={{ ...accessibilityState, disabled }}
       disabled={disabled}
       onPress={onPress}
       style={({ pressed }) => [

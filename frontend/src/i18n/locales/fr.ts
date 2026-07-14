@@ -976,6 +976,7 @@ export const fr = {
   bag: 'sac',
   bags: 'sacs',
   kg: 'kg',
+  kgPerDay: 'kg/j',
 
   // Commerce - Product Catalog
   productCatalog: 'Voir les aliments',
