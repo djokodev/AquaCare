@@ -3,6 +3,7 @@ ViewSets DRF et vues API pour le module aquaculture.
 
 Re-exporte tous les ViewSets pour maintenir la compatibilité avec urls.py.
 """
+from .calibration_views import CalibrationOperationViewSet, CalibrationTankViewSet
 from .cycle_launch_views import CycleLaunchView
 from .cycle_views import ProductionCycleViewSet
 from .dashboard_views import DashboardView
@@ -14,7 +15,6 @@ from .production_unit_views import CycleUnitAllocationViewSet, ProductionUnitVie
 from .report_views import ProductionReportViewSet
 from .sanitary_views import SanitaryLogViewSet
 from .sync_views import SyncView
-from .calibration_views import CalibrationOperationViewSet, CalibrationTankViewSet
 
 __all__ = [
     'ProductionCycleViewSet',

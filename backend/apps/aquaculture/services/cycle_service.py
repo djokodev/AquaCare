@@ -385,10 +385,18 @@ class ProductionCycleService(BaseService):
         total_in_biomass = sum((op.transferred_biomass_kg for op in incoming), Decimal('0'))
         total_out_count = sum(op.transferred_count for op in outgoing)
         total_out_biomass = sum((op.transferred_biomass_kg for op in outgoing), Decimal('0'))
-        total_stocked_count = total_in_count if cycle.unit_type == 'calibration' else cycle.initial_count + total_in_count
-        total_stocked_biomass = total_in_biomass if cycle.unit_type == 'calibration' else cycle.initial_biomass + total_in_biomass
+        total_stocked_count = (
+            total_in_count if cycle.unit_type == 'calibration' else cycle.initial_count + total_in_count
+        )
+        total_stocked_biomass = (
+            total_in_biomass if cycle.unit_type == 'calibration' else cycle.initial_biomass + total_in_biomass
+        )
         cycle.survival_rate = (
-            (Decimal(cycle.current_count + total_out_count) / Decimal(total_stocked_count) * Decimal('100')).quantize(Decimal('0.01'))
+            (
+                Decimal(cycle.current_count + total_out_count)
+                / Decimal(total_stocked_count)
+                * Decimal('100')
+            ).quantize(Decimal('0.01'))
             if total_stocked_count else None
         )
 

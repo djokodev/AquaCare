@@ -20,6 +20,8 @@ from rest_framework.response import Response
 from ..domain.exceptions import BusinessRuleViolation, FeedingPlanGenerationError
 from ..models import CalibrationTank, ProductionCycle
 from ..serializers import (
+    CalibrationOperationSerializer,
+    CalibrationRequestSerializer,
     CycleComparisonSerializer,
     CycleDashboardSerializer,
     CycleHarvestResponseSerializer,
@@ -31,8 +33,6 @@ from ..serializers import (
     PartialHarvestResponseSerializer,
     PartialHarvestSerializer,
     ProductionCycleSerializer,
-    CalibrationOperationSerializer,
-    CalibrationRequestSerializer,
 )
 from ..services import (
     CycleDashboardService,
@@ -42,8 +42,8 @@ from ..services import (
     PartialHarvestCommand,
     ProductionCycleApplicationService,
 )
-from ..services.cycle_feed_service import CycleFeedService
 from ..services.calibration_service import CalibrationService
+from ..services.cycle_feed_service import CycleFeedService
 
 logger = logging.getLogger(__name__)
 
@@ -212,14 +212,21 @@ class ProductionCycleViewSet(viewsets.ModelViewSet):
                 source_cycle=source,
                 destination_tank=tank,
                 user=request.user,
-                **{key: value for key, value in data.items() if key not in {'destination_tank', 'destination_tank_client_uuid'}},
+                **{
+                    key: value
+                    for key, value in data.items()
+                    if key not in {'destination_tank', 'destination_tank_client_uuid'}
+                },
             )
         except BusinessRuleViolation as exc:
             return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         payload = {
             'operation': CalibrationOperationSerializer(operation).data,
             'source_cycle': ProductionCycleSerializer(operation.source_cycle, context={'request': request}).data,
-            'destination_cycle': ProductionCycleSerializer(operation.destination_cycle, context={'request': request}).data,
+            'destination_cycle': ProductionCycleSerializer(
+                operation.destination_cycle,
+                context={'request': request},
+            ).data,
             'warnings': warnings,
             'idempotent_replay': not created,
         }

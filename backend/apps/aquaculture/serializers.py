@@ -327,7 +327,8 @@ class ProductionCycleSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'client_uuid', 'farm_profile', 'cycle_name', 'species', 'species_display',
             'unit_type', 'unit_type_display', 'calibration_tank', 'calibration_tank_name', 'is_calibration_unit',
-            'total_stocked_count', 'total_stocked_biomass', 'total_transferred_out_count', 'total_transferred_out_biomass',
+            'total_stocked_count', 'total_stocked_biomass', 'total_transferred_out_count',
+            'total_transferred_out_biomass',
             'pond_identifier', 'pond_surface_m2', 'pond_volume_m3', 'infrastructure_type',
             'start_date', 'initial_count', 'initial_average_weight', 'initial_biomass',
             'target_harvest_weight_g', 'planned_cycle_duration_days', 'planned_harvest_date', 'planned_feed_bags',
@@ -665,7 +666,9 @@ class CalibrationTankSerializer(serializers.ModelSerializer):
         model = CalibrationTank
         fields = ['id', 'client_uuid', 'farm_profile', 'name', 'volume_m3', 'is_active', 'is_occupied',
                   'active_session', 'created_offline', 'synced_at', 'created_at', 'updated_at']
-        read_only_fields = ['id', 'farm_profile', 'is_occupied', 'active_session', 'synced_at', 'created_at', 'updated_at']
+        read_only_fields = [
+            'id', 'farm_profile', 'is_occupied', 'active_session', 'synced_at', 'created_at', 'updated_at',
+        ]
         extra_kwargs = {'client_uuid': {'validators': []}}
 
     def get_is_occupied(self, obj):

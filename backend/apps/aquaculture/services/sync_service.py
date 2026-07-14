@@ -23,12 +23,20 @@ from django.utils import timezone
 from rest_framework.exceptions import APIException
 
 from ..domain.validators import validate_cycle_unit_allocation_context
-from ..models import CalibrationOperation, CalibrationTank, CycleLog, CycleUnitAllocation, FeedingPlan, ProductionCycle, SanitaryLog
+from ..models import (
+    CalibrationOperation,
+    CalibrationTank,
+    CycleLog,
+    CycleUnitAllocation,
+    FeedingPlan,
+    ProductionCycle,
+    SanitaryLog,
+)
 from .analytics_service import AnalyticsService
 from .base import BaseService
+from .calibration_service import CalibrationService
 from .cycle_service import ProductionCycleService
 from .sanitary_service import SanitaryService
-from .calibration_service import CalibrationService
 
 # ── Sync flag (threading.local) ──────────────────────────────────────────────
 # Permet aux signals post_save de CycleLog de détecter qu'un sync offline

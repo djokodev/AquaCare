@@ -44,11 +44,29 @@ class ProductionCycleQuerySet(models.QuerySet):
     def for_api(self):
         incoming = CalibrationOperation.objects.filter(destination_cycle=OuterRef('pk')).values('destination_cycle')
         outgoing = CalibrationOperation.objects.filter(source_cycle=OuterRef('pk')).values('source_cycle')
-        return self.select_related('farm_profile', 'farm_profile__production_plan', 'metrics', 'calibration_tank').annotate(
-            calibration_in_count=Coalesce(Subquery(incoming.annotate(total=Sum('transferred_count')).values('total')), Value(0), output_field=IntegerField()),
-            calibration_in_biomass=Coalesce(Subquery(incoming.annotate(total=Sum('transferred_biomass_kg')).values('total')), Value(Decimal('0')), output_field=DecimalField()),
-            calibration_out_count=Coalesce(Subquery(outgoing.annotate(total=Sum('transferred_count')).values('total')), Value(0), output_field=IntegerField()),
-            calibration_out_biomass=Coalesce(Subquery(outgoing.annotate(total=Sum('transferred_biomass_kg')).values('total')), Value(Decimal('0')), output_field=DecimalField()),
+        return self.select_related(
+            'farm_profile', 'farm_profile__production_plan', 'metrics', 'calibration_tank'
+        ).annotate(
+            calibration_in_count=Coalesce(
+                Subquery(incoming.annotate(total=Sum('transferred_count')).values('total')),
+                Value(0),
+                output_field=IntegerField(),
+            ),
+            calibration_in_biomass=Coalesce(
+                Subquery(incoming.annotate(total=Sum('transferred_biomass_kg')).values('total')),
+                Value(Decimal('0')),
+                output_field=DecimalField(),
+            ),
+            calibration_out_count=Coalesce(
+                Subquery(outgoing.annotate(total=Sum('transferred_count')).values('total')),
+                Value(0),
+                output_field=IntegerField(),
+            ),
+            calibration_out_biomass=Coalesce(
+                Subquery(outgoing.annotate(total=Sum('transferred_biomass_kg')).values('total')),
+                Value(Decimal('0')),
+                output_field=DecimalField(),
+            ),
         )
 
     def for_statistics(self):
@@ -751,7 +769,10 @@ class ProductionCycle(models.Model):
                 name='uniq_active_cycle_per_calibration_tank',
             ),
             models.CheckConstraint(
-                condition=(Q(unit_type='standard', calibration_tank__isnull=True) | Q(unit_type='calibration', calibration_tank__isnull=False)),
+                condition=(
+                    Q(unit_type='standard', calibration_tank__isnull=True)
+                    | Q(unit_type='calibration', calibration_tank__isnull=False)
+                ),
                 name='cycle_calibration_tank_matches_type',
             ),
         ]
@@ -1034,7 +1055,11 @@ class CalibrationOperation(models.Model):
     SIZE_CHOICES = [('small', _('Petit')), ('medium', _('Moyen')), ('large', _('Grand')), ('other', _('Autre'))]
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     client_uuid = models.UUIDField(unique=True)
-    source_cycle = models.ForeignKey(ProductionCycle, on_delete=models.PROTECT, related_name='calibration_operations_out')
+    source_cycle = models.ForeignKey(
+        ProductionCycle,
+        on_delete=models.PROTECT,
+        related_name='calibration_operations_out',
+    )
     source_cycle_unit_allocation = models.ForeignKey(
         CycleUnitAllocation,
         on_delete=models.PROTECT,
@@ -1042,7 +1067,11 @@ class CalibrationOperation(models.Model):
         null=True,
         blank=True,
     )
-    destination_cycle = models.ForeignKey(ProductionCycle, on_delete=models.PROTECT, related_name='calibration_operations_in')
+    destination_cycle = models.ForeignKey(
+        ProductionCycle,
+        on_delete=models.PROTECT,
+        related_name='calibration_operations_in',
+    )
     calibrated_at = models.DateTimeField()
     transferred_count = models.PositiveIntegerField()
     transferred_average_weight_g = models.DecimalField(max_digits=8, decimal_places=2)
