@@ -1013,7 +1013,7 @@ export const fr = {
   free: 'Gratuit',
   total: 'Total',
   freeDeliveryApplied: 'Livraison gratuite appliquée !',
-  freeDeliveryEncouragement: 'Plus que {{remaining}} sac(s) pour la livraison gratuite !',
+  freeDeliveryEncouragement: 'Encore {{remaining}} sacs, livraison gratuite.',
   confirmOrder: 'Confirmer la commande',
   confirmOrderMessage: 'Confirmer la commande de {{bags}} sac(s) pour {{total}} FCFA ?',
   emptyCartError: 'Votre panier est vide',
@@ -1554,7 +1554,7 @@ export const fr = {
   storeViewOrders: 'Mes commandes',
   storeOrderCycleNeed: 'Commander selon le besoin du cycle',
   storeManualFormTitle: 'Déclarer un stock manuel',
-  storeManualFormDescription: 'Ajoutez un achat ou un dépôt qui n\'est pas encore lié à une commande.',
+  storeManualFormDescription: 'Achat ou dépôt hors commande.',
   storeManualLabel: 'Nom de l\'aliment',
   storeManualLabelPlaceholder: 'Ex: Aliment starter 20kg',
   storeManualQuantity: 'Quantité (kg)',
@@ -1584,7 +1584,7 @@ export const fr = {
 
   // ── Commander par phase ──────────────────────────────────────────────────
   feedPhasesTitle: 'Commander par phase',
-  feedPhasesSubtitle: 'Basé sur votre simulation. Commandez phase par phase ou tout d\'un coup.',
+  feedPhasesSubtitle: 'Commandez selon votre simulation.',
   feedPhaseOrderBtn: 'Commander cette phase',
   feedPhaseOrderAllBtn: 'Tout commander',
   feedPhaseRecommended: '{{count}} sacs recommandés',

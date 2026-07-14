@@ -305,7 +305,6 @@ export default function StoreScreen() {
                 <View style={styles.orderHeader}>
                   <View style={styles.flex}>
                     <AppText variant="label">{order.order_number}</AppText>
-                    <AppText variant="helper" color="muted">{t('storePendingOrdersFeedEquivalent')} {formatNumber(toNumber(order.estimated_feed_kg), t('kg'), 2)}</AppText>
                   </View>
                   <View style={styles.orderAmount}>
                     <AppText variant="label" color="link">{formatCurrency(toNumber(order.total_fcfa))}</AppText>

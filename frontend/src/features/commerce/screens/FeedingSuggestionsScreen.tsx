@@ -19,6 +19,7 @@ import { CycleSuggestion, FeedingPhase, SuggestedProduct } from '@/types/commerc
 import { RootStackParamList } from '@/navigation/MainNavigator';
 import { AppHeader, AppText, Button, Card, EmptyState, ErrorState, IconButton, InlineAlert, LoadingState } from '@/components/ui';
 import { colors, spacing } from '@/theme';
+import { getProductDisplayName } from '@/features/commerce/utils/productPresentation';
 
 type NavigationProp = StackNavigationProp<RootStackParamList>;
 
@@ -159,7 +160,7 @@ export default function FeedingSuggestionsScreen() {
         <View className="flex-1 mr-3">
           <AppText className="text-xs text-gray-light font-semibold mb-1">{suggestedProduct.brand.toUpperCase()}</AppText>
           <AppText className="text-sm text-gray-dark mb-1" numberOfLines={2}>
-            {suggestedProduct.product_name}
+            {getProductDisplayName(suggestedProduct.product_name, t('catfish'))}
           </AppText>
           <AppText className="text-xs text-gray-light">
             {suggestedProduct.quantity_bags} {t('bags')} - {suggestedProduct.total_kg}kg
@@ -171,7 +172,7 @@ export default function FeedingSuggestionsScreen() {
           </AppText>
           <IconButton
             icon="cart-outline"
-            accessibilityLabel={`${t('addToCart')} ${suggestedProduct.product_name}`}
+            accessibilityLabel={`${t('addToCart')} ${getProductDisplayName(suggestedProduct.product_name, t('catfish'))}`}
             onPress={() => handleAddToCart(suggestedProduct.product_id, suggestedProduct.quantity_bags)}
           />
         </View>

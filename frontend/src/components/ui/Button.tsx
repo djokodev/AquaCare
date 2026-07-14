@@ -19,6 +19,7 @@ interface ButtonProps {
   iconRight?: keyof typeof Ionicons.glyphMap;
   accessibilityHint?: string;
   style?: StyleProp<ViewStyle>;
+  containerStyle?: StyleProp<ViewStyle>;
   testID?: string;
 }
 
@@ -33,7 +34,7 @@ const textColors: Record<ButtonVariant, 'inverse' | 'link'> = {
 };
 const heights: Record<ButtonSize, number> = { small: sizing.controlSmall, medium: sizing.controlMedium, large: sizing.controlLarge };
 
-export function Button({ label, onPress, variant = 'primary', size = 'medium', loading = false, disabled = false, fullWidth = true, iconLeft, iconRight, accessibilityHint, style, testID }: ButtonProps) {
+export function Button({ label, onPress, variant = 'primary', size = 'medium', loading = false, disabled = false, fullWidth = true, iconLeft, iconRight, accessibilityHint, style, containerStyle, testID }: ButtonProps) {
   const inactive = disabled || loading;
   const disabledVisual = disabled && !loading;
   const textColor = disabledVisual ? 'disabled' : textColors[variant];
@@ -47,7 +48,7 @@ export function Button({ label, onPress, variant = 'primary', size = 'medium', l
       disabled={inactive}
       onPress={onPress}
       testID={testID}
-      style={[styles.pressable, fullWidth && styles.fullWidth]}
+      style={[styles.pressable, fullWidth && styles.fullWidth, containerStyle]}
     >
       {({ pressed }) => (
         <View style={[styles.base, { minHeight: heights[size], backgroundColor: backgrounds[variant] }, variant === 'outline' && styles.outline, style, disabledVisual && styles.disabled, pressed && styles.pressed]}>

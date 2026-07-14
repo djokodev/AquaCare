@@ -26,6 +26,7 @@ import logger from '@/utils/logger';
 import { RootStackParamList } from '@/navigation/MainNavigator';
 import { RouteProp, useRoute } from '@react-navigation/native';
 import { getProductBrandAsset } from '@/features/commerce/utils/productBrandAssets';
+import { getProductDisplayName } from '@/features/commerce/utils/productPresentation';
 import { sanitizeUserFacingErrorMessage } from '@/utils/errorParser';
 import {
   AppHeader,
@@ -241,7 +242,7 @@ export default function CartScreen() {
           <View style={styles.brandAsset}><Image source={getProductBrandAsset(product.brand)} style={styles.image} resizeMode="contain" /></View>
           <View style={styles.flex}>
             <AppText variant="caption" color="muted">{product.brand.toUpperCase()}</AppText>
-            <AppText variant="bodyStrong" numberOfLines={2}>{product.name}</AppText>
+            <AppText variant="bodyStrong" numberOfLines={2}>{getProductDisplayName(product.name, t('catfish'))}</AppText>
             <AppText variant="caption" color="muted">
               {product.pellet_size_mm}mm · {product.package_weight_kg}kg
               {product.protein_percentage ? ` · ${product.protein_percentage}% ${t('protein')}` : ''}
@@ -277,7 +278,6 @@ export default function CartScreen() {
               onPress={() => handleDeliveryMethodChange(method.value)}
             >
               <AppText variant="bodyStrong" color={delivery_method === method.value ? 'link' : 'primary'}>{t(method.labelKey)}</AppText>
-              {delivery_method === method.value ? <Badge label={t('selected')} tone="success" /> : null}
             </SelectableCard>
           ))}
         </View>
@@ -300,7 +300,7 @@ export default function CartScreen() {
           <SummaryRow label={t('deliveryFee')} value={Number(deliveryPreview.delivery_fee) === 0 ? t('free') : `${Number(deliveryPreview.delivery_fee).toLocaleString()} FCFA`} />
           {deliveryPreview.free_delivery_threshold_reached ? <InlineAlert tone="success" message={t('freeDeliveryApplied')} /> : null}
           {user?.region?.trim().toLowerCase() === 'littoral' && delivery_method === 'home' && !deliveryPreview.free_delivery_threshold_reached && deliveryPreview.total_bags < FREE_DELIVERY_THRESHOLD ? (
-            <InlineAlert tone="info" message={t('freeDeliveryEncouragement', { remaining: FREE_DELIVERY_THRESHOLD - deliveryPreview.total_bags })} />
+            <InlineAlert compact tone="info" message={t('freeDeliveryEncouragement', { remaining: FREE_DELIVERY_THRESHOLD - deliveryPreview.total_bags })} />
           ) : null}
           <Divider />
           <SummaryRow label={t('total')} value={`${Number(deliveryPreview.total).toLocaleString()} FCFA`} prominent />
@@ -317,7 +317,7 @@ export default function CartScreen() {
         subtitle={cartItems.length > 0 ? `${cartItems.length} ${t(cartItems.length > 1 ? 'products' : 'product')}` : undefined}
         onBack={() => navigation.goBack()}
         backLabel={t('back')}
-        rightAction={cartItems.length > 0 ? <IconButton icon="trash-outline" accessibilityLabel={t('clear')} variant="danger" onPress={handleClearCart} /> : undefined}
+        rightAction={cartItems.length > 0 ? <IconButton icon="trash-outline" accessibilityLabel={t('clear')} variant="ghost" tone="inverse" onPress={handleClearCart} /> : undefined}
       />
       {cartItems.length === 0 ? (
         <EmptyState title={t('emptyCart')} message={t('emptyCartDescription')} actionLabel={t('browseCatalog')} onAction={handleBackToCatalog} />

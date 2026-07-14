@@ -12,6 +12,8 @@ import { Order } from '@/types/commerce';
 import { RootStackParamList } from '@/navigation/MainNavigator';
 import { AppHeader, AppText, Badge, Button, Card, Divider, EmptyState, ErrorState, IconButton, LoadingState } from '@/components/ui';
 import { colors, spacing } from '@/theme';
+import MetricCard from '@/features/main/components/MetricCard';
+import { getProductDisplayName } from '@/features/commerce/utils/productPresentation';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'OrdersHistory'>;
 
@@ -99,7 +101,7 @@ export default function OrdersHistoryScreen() {
               <View key={`${line.product_name}-${line.quantity}`} style={styles.rowBetween}>
                 <View style={styles.flex}>
                   <AppText variant="caption" color="muted">{line.product_brand.toUpperCase()}</AppText>
-                  <AppText numberOfLines={2}>{line.product_name}</AppText>
+                  <AppText numberOfLines={2}>{getProductDisplayName(line.product_name, t('catfish'))}</AppText>
                   <AppText variant="caption" color="muted">{line.product_package_weight}kg · {line.quantity}x</AppText>
                 </View>
                 <AppText variant="bodyStrong" color="link">{Number(line.line_total).toLocaleString()} FCFA</AppText>
@@ -166,7 +168,7 @@ function AmountRow({ label, value, strong = false }: { label: string; value: str
 }
 
 function Metric({ value, label }: { value: string | number; label: string }) {
-  return <Card style={styles.metric}><AppText variant="sectionTitle" color="link">{value}</AppText><AppText variant="caption" color="muted">{label}</AppText></Card>;
+  return <MetricCard value={value} label={label} />;
 }
 
 const styles = StyleSheet.create({
@@ -180,5 +182,4 @@ const styles = StyleSheet.create({
   address: { backgroundColor: colors.surface.selected, gap: spacing[1] },
   statistics: { marginBottom: spacing[4], gap: spacing[3] },
   metricGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },
-  metric: { width: '48%', backgroundColor: colors.surface.selected },
 });

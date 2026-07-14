@@ -24,6 +24,7 @@ import {
   LoadingState,
 } from '@/components/ui';
 import { colors, spacing } from '@/theme';
+import { getProductDisplayName } from '@/features/commerce/utils/productPresentation';
 
 type Props = StackScreenProps<RootStackParamList, 'CycleFeedPhases'>;
 
@@ -136,6 +137,8 @@ export default function CycleFeedPhasesScreen({ navigation, route }: Props) {
         rightAction={
           <IconButton
             icon="cart-outline"
+            variant="ghost"
+            tone="inverse"
             accessibilityLabel={`${t('cart')} ${cartItemsCount}`}
             badge={cartItemsCount}
             onPress={() => navigation.navigate('Cart', { cycleId })}
@@ -152,7 +155,7 @@ export default function CycleFeedPhasesScreen({ navigation, route }: Props) {
       ) : (
         <>
           <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-            <InlineAlert message={t('feedPhasesSubtitle')} tone="info" />
+            <InlineAlert compact message={t('feedPhasesSubtitle')} tone="info" />
             {phases.map((phase, phaseIndex) => (
               <Card key={`${phase.phase_name}-${phaseIndex}`} variant="outlined" style={styles.phaseCard}>
                 <View style={styles.rowBetween}>
@@ -172,12 +175,9 @@ export default function CycleFeedPhasesScreen({ navigation, route }: Props) {
                       <Divider />
                       <View style={styles.productRow}>
                         <View style={styles.flex}>
-                          <AppText variant="bodyStrong" numberOfLines={1}>{product.product_name}</AppText>
+                          <AppText variant="bodyStrong" numberOfLines={1}>{getProductDisplayName(product.product_name, t('catfish'))}</AppText>
                           <AppText variant="caption" color="muted">
                             {product.package_weight_kg}kg · {Math.round(product.unit_price).toLocaleString()} FCFA/{t('bag')}
-                          </AppText>
-                          <AppText variant="caption" color="link">
-                            {t('feedPhaseRecommended', { count: product.quantity_bags })}
                           </AppText>
                         </View>
                         <View style={styles.quantityRow}>
@@ -225,7 +225,7 @@ export default function CycleFeedPhasesScreen({ navigation, route }: Props) {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.surface.page },
   content: { padding: spacing[4], paddingBottom: spacing[16], gap: spacing[3] },
-  phaseCard: { borderLeftWidth: 4, borderLeftColor: colors.brand.primary },
+  phaseCard: {},
   rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing[3] },
   phaseMeta: { marginTop: spacing[1], marginBottom: spacing[3] },
   flex: { flex: 1 },

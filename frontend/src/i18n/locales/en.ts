@@ -1013,7 +1013,7 @@
   free: 'Free',
   total: 'Total',
   freeDeliveryApplied: 'Free delivery applied!',
-  freeDeliveryEncouragement: 'Only {{remaining}} bag(s) left for free delivery!',
+  freeDeliveryEncouragement: 'Only {{remaining}} bags for free delivery.',
   confirmOrder: 'Confirm order',
   confirmOrderMessage: 'Confirm order of {{bags}} bag(s) for {{total}} FCFA?',
   emptyCartError: 'Your cart is empty',
@@ -1552,7 +1552,7 @@
   storeViewOrders: 'My orders',
   storeOrderCycleNeed: 'Order based on cycle need',
   storeManualFormTitle: 'Declare manual stock',
-  storeManualFormDescription: 'Add a purchase or drop-off that is not linked to an order yet.',
+  storeManualFormDescription: 'Purchase or drop-off outside an order.',
   storeManualLabel: 'Feed name',
   storeManualLabelPlaceholder: 'Ex: Starter feed 20kg',
   storeManualQuantity: 'Quantity (kg)',
@@ -1582,7 +1582,7 @@
 
   // ── Order by phase ───────────────────────────────────────────────────────
   feedPhasesTitle: 'Order by phase',
-  feedPhasesSubtitle: 'Based on your simulation. Order phase by phase or all at once.',
+  feedPhasesSubtitle: 'Order according to your simulation.',
   feedPhaseOrderBtn: 'Order this phase',
   feedPhaseOrderAllBtn: 'Order all',
   feedPhaseRecommended: '{{count}} bags recommended',

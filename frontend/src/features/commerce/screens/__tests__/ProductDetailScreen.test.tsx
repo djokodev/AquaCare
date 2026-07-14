@@ -6,7 +6,6 @@ import ProductDetailScreen from '../ProductDetailScreen';
 
 const mockNavigate = jest.fn();
 const mockGoBack = jest.fn();
-const mockSetParams = jest.fn();
 const mockDispatch = jest.fn();
 let mockState: any;
 
@@ -14,7 +13,6 @@ jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({
     navigate: mockNavigate,
     goBack: mockGoBack,
-    setParams: mockSetParams,
   }),
   useRoute: () => ({
     params: {
@@ -73,10 +71,11 @@ describe('ProductDetailScreen', () => {
     };
   });
 
-  it('affiche le produit et permet d ajouter au panier', async () => {
-    const { findByText, getByText } = render(<ProductDetailScreen />);
+  it('affiche le produit, permet de saisir une quantité et de l ajouter au panier', async () => {
+    const { findByText, getByText, getByLabelText } = render(<ProductDetailScreen />);
 
     expect(await findByText('Feed Grower')).toBeTruthy();
+    fireEvent.changeText(getByLabelText('quantity'), '4');
     fireEvent.press(getByText('addToCart'));
 
     expect(Alert.alert).toHaveBeenCalledWith(
@@ -105,12 +104,10 @@ describe('ProductDetailScreen', () => {
     });
   });
 
-  it('permet de changer vers un produit similaire', async () => {
-    const { findByText, getByText } = render(<ProductDetailScreen />);
+  it('ne rend pas de produits similaires', async () => {
+    const { findByText, queryByText } = render(<ProductDetailScreen />);
 
     await findByText('Feed Grower');
-    fireEvent.press(getByText('Feed Finisher'));
-
-    expect(mockSetParams).toHaveBeenCalledWith({ productId: 'prod-2' });
+    expect(queryByText('Feed Finisher')).toBeNull();
   });
 });

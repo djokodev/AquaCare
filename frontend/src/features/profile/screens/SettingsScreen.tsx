@@ -2,23 +2,15 @@ import React, { useState, useEffect } from "react";
 import { View, Text, ScrollView, TouchableOpacity, Alert } from "react-native";
 import { useTranslation } from "react-i18next";
 import { Ionicons } from "@expo/vector-icons";
-import type { StackNavigationProp } from '@react-navigation/stack';
 import * as SecureStore from "expo-secure-store";
 
 import { useAuth } from "@/hooks/useAuth";
 import { STORAGE_KEYS } from "@/constants/api";
 import { AQUACARE_COLORS } from "@/constants/colors";
 import logger from "@/utils/logger";
-import config from "@/config/environment";
-import Constants from "expo-constants";
 import OnboardingService from "@/features/onboarding/services/onboardingService";
-import type { ProfileStackParamList } from '@/navigation/MainNavigator';
 
-interface SettingsScreenProps {
-  navigation?: StackNavigationProp<ProfileStackParamList>;
-}
-
-export default function SettingsScreen({ navigation }: SettingsScreenProps) {
+export default function SettingsScreen() {
   const { t, i18n } = useTranslation();
   const { user, updateProfile, logout, deleteAccount } = useAuth();
   const [isDeleting, setIsDeleting] = useState(false);
@@ -171,25 +163,6 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
       </View>
 
       <View className="px-5 py-4">
-        <Text className="text-lg font-bold text-gray-dark mb-3">{t("appInfoSection")}</Text>
-        <View className="bg-white rounded-xl overflow-hidden">
-          {[
-            { label: t("appInfoEnvironment"), value: config.environment },
-            { label: t("appInfoApiUrl"), value: config.apiUrl },
-            { label: t("appInfoVersion"), value: Constants.expoConfig?.version ?? "1.0.0" },
-          ].map((row, index, arr) => (
-            <View
-              key={row.label}
-              className={`flex-row items-center justify-between px-4 py-3 ${index < arr.length - 1 ? "border-b border-gray-100" : ""}`}
-            >
-              <Text className="text-sm text-gray-500">{row.label}</Text>
-              <Text className="text-sm font-medium text-gray-dark max-w-[60%] text-right" numberOfLines={1}>{row.value}</Text>
-            </View>
-          ))}
-        </View>
-      </View>
-
-      <View className="px-5 py-4">
         <Text className="text-lg font-bold text-gray-dark mb-3">{t("accountManagement")}</Text>
         <TouchableOpacity
           className="bg-white flex-row items-center p-4 rounded-xl border border-gray-200 opacity-100"
@@ -215,20 +188,6 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
             <View className="ml-3 flex-1">
               <Text className="text-base font-semibold text-aquacare-primary">{t("onboardingResetAction")}</Text>
               <Text className="text-xs text-gray-500 mt-0.5">{t("onboardingResetHint")}</Text>
-            </View>
-          </TouchableOpacity>
-        )}
-        {__DEV__ && (
-          <TouchableOpacity
-            className="bg-white flex-row items-center p-4 rounded-xl border border-gray-200 mt-3"
-            onPress={() => navigation?.navigate('DesignSystemGallery')}
-            accessibilityRole="button"
-            accessibilityLabel={t('designSystemGallery')}
-          >
-            <Ionicons name="color-palette-outline" size={20} color={AQUACARE_COLORS.GREEN_PRIMARY} />
-            <View className="ml-3 flex-1">
-              <Text className="text-base font-semibold text-aquacare-primary">{t('designSystemGallery')}</Text>
-              <Text className="text-xs text-gray-500 mt-0.5">{t('designSystemGalleryHint')}</Text>
             </View>
           </TouchableOpacity>
         )}

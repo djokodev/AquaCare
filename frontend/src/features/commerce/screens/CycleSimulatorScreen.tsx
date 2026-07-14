@@ -20,6 +20,7 @@ import { aquacultureService } from '@/features/aquaculture/services/aquacultureS
 import { aggregatePhasesByName, DisplayPhase } from '../utils/aggregatePhases';
 import { AppHeader, AppText, Button, Card, InlineAlert, LoadingState, SegmentedControl, TextField } from '@/components/ui';
 import { colors, spacing } from '@/theme';
+import { getProductDisplayName } from '@/features/commerce/utils/productPresentation';
 
 type NavigationProp = StackNavigationProp<RootStackParamList>;
 type ScreenRouteProp = RouteProp<RootStackParamList, 'CycleSimulator'>;
@@ -349,7 +350,7 @@ export default function CycleSimulatorScreen() {
           {phase.products.map((product, pIndex) => (
             <View key={pIndex} className="flex-row justify-between items-center">
               <AppText className="flex-1 text-sm text-gray-dark mr-2" numberOfLines={1}>
-                {product.product_name}
+                {getProductDisplayName(product.product_name, t('catfish'))}
               </AppText>
               <AppText className="text-sm font-semibold text-gray-light">
                 {product.quantity_bags}x {product.package_weight_kg}kg

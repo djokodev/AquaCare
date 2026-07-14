@@ -40,7 +40,7 @@ export function EmptyState({
         </AppText>
       ) : null}
       {actionLabel && onAction ? (
-        <Button label={actionLabel} onPress={onAction} fullWidth={false} />
+        <Button label={actionLabel} onPress={onAction} fullWidth={false} containerStyle={styles.centerAction} />
       ) : null}
     </View>
   );
@@ -71,6 +71,7 @@ export function ErrorState({
           onPress={onAction}
           variant="outline"
           fullWidth={false}
+          containerStyle={styles.centerAction}
         />
       ) : null}
     </View>
@@ -80,8 +81,10 @@ export function InlineAlert({
   tone = "info",
   title,
   message,
+  compact = false,
 }: Pick<StateProps, "title" | "message"> & {
   tone?: "info" | "success" | "warning" | "error";
+  compact?: boolean;
 }) {
   const backgrounds = {
     info: colors.status.infoSurface,
@@ -96,12 +99,12 @@ export function InlineAlert({
     error: "alert-circle-outline",
   } as const;
   return (
-    <Card style={[styles.alert, { backgroundColor: backgrounds[tone] }]}>
-      <View style={styles.alertRow}>
+    <Card style={[styles.alert, compact && styles.compactAlert, { backgroundColor: backgrounds[tone] }]}>
+      <View style={[styles.alertRow, compact && styles.compactAlertRow]}>
         <Ionicons name={icon[tone]} size={20} color={colors.status[tone]} />
         <View style={styles.alertText}>
           {title ? <AppText variant="label">{title}</AppText> : null}
-          {message ? <AppText variant="helper">{message}</AppText> : null}
+          {message ? <AppText variant="helper" numberOfLines={compact ? 1 : undefined} adjustsFontSizeToFit={compact} minimumFontScale={0.85}>{message}</AppText> : null}
         </View>
       </View>
     </Card>
@@ -117,7 +120,10 @@ const styles = StyleSheet.create({
   },
   compact: { minHeight: 120 },
   center: { textAlign: "center" },
+  centerAction: { alignSelf: "center" },
   alert: { padding: spacing[3] },
   alertRow: { flexDirection: "row", alignItems: "flex-start", gap: spacing[2] },
   alertText: { flex: 1, gap: spacing[1] },
+  compactAlert: { paddingVertical: spacing[2] },
+  compactAlertRow: { alignItems: "center" },
 });

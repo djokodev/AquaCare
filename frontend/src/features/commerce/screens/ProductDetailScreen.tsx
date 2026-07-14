@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, FlatList, Image, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, Image, ScrollView, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -11,8 +11,9 @@ import { fetchProductDetail, addToCart } from '@/features/commerce/store/commerc
 import { Product } from '@/types/commerce';
 import { RootStackParamList } from '@/navigation/MainNavigator';
 import { getProductBrandAsset } from '@/features/commerce/utils/productBrandAssets';
-import { AppHeader, AppText, Badge, Button, Card, Divider, ErrorState, IconButton, InteractiveCard, LoadingState } from '@/components/ui';
+import { AppHeader, AppText, Badge, Button, Card, Divider, ErrorState, IconButton, LoadingState, TextField } from '@/components/ui';
 import { colors, radii, sizing, spacing } from '@/theme';
+import { getProductDisplayName } from '@/features/commerce/utils/productPresentation';
 
 type RouteParams = { ProductDetail: { productId: string; cycleId?: string; source?: 'store' } };
 type NavigationProp = StackNavigationProp<RootStackParamList, 'ProductDetail'>;
@@ -27,6 +28,7 @@ export default function ProductDetailScreen() {
   const { products, cart } = useSelector((state: RootState) => state.commerce);
   const [product, setProduct] = useState<Product | null>(null);
   const [quantity, setQuantity] = useState(1);
+  const [quantityInput, setQuantityInput] = useState('1');
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -47,7 +49,17 @@ export default function ProductDetailScreen() {
   useEffect(() => { void loadProduct(); }, [loadProduct]);
 
   const cartItemsCount = useMemo(() => cart.items.reduce((sum, item) => sum + item.quantity, 0), [cart.items]);
-  const similarProducts = useMemo(() => product ? products.items.filter((item) => item.species === product.species && item.id !== product.id && item.is_available).slice(0, 3) : [], [product, products.items]);
+  const displayName = product ? getProductDisplayName(product.name, t('catfish')) : '';
+  const updateQuantity = (nextQuantity: number) => {
+    const validQuantity = Math.max(1, nextQuantity);
+    setQuantity(validQuantity);
+    setQuantityInput(String(validQuantity));
+  };
+  const handleQuantityInput = (value: string) => {
+    const numericValue = value.replace(/\D/gu, '');
+    setQuantityInput(numericValue);
+    if (numericValue) updateQuantity(Number.parseInt(numericValue, 10));
+  };
   const handleAddToCart = () => {
     if (!product) return;
     dispatch(addToCart({ product, quantity }));
@@ -65,9 +77,8 @@ export default function ProductDetailScreen() {
             <Card style={styles.hero}>
               <View style={styles.imageWrap}><Image source={getProductBrandAsset(product.brand)} style={styles.image} resizeMode="contain" /></View>
               <AppText variant="caption" color="muted">{product.brand.toUpperCase()}</AppText>
-              <AppText variant="screenTitle">{product.name}</AppText>
+              <AppText variant="screenTitle">{displayName}</AppText>
               <View style={styles.badges}>
-                <Badge label={t(product.species)} tone="info" />
                 <Badge label={`${product.pellet_size_mm} mm`} tone="info" />
                 {product.phase ? <Badge label={t(product.phase)} tone="success" /> : null}
               </View>
@@ -79,10 +90,9 @@ export default function ProductDetailScreen() {
             {product.protein_percentage !== null || product.lipid_percentage !== null ? <Card variant="outlined" style={styles.section}><AppText variant="sectionTitle">{t('nutritionalComposition')}</AppText><View style={styles.nutrients}>{product.protein_percentage !== null ? <Nutrient label={t('protein')} value={`${product.protein_percentage}%`} icon="nutrition" /> : null}{product.lipid_percentage !== null ? <Nutrient label={t('lipids')} value={`${product.lipid_percentage}%`} icon="water" /> : null}</View></Card> : null}
             <Card variant="outlined" style={styles.section}>
               <AppText variant="sectionTitle">{t('quantity')}</AppText>
-              <View style={styles.stepper}><IconButton icon="remove" variant="surface" accessibilityLabel={t('decreaseQuantity')} onPress={() => setQuantity((value) => Math.max(1, value - 1))} disabled={quantity === 1} /><View style={styles.quantity}><AppText variant="metric">{quantity}</AppText><AppText variant="caption" color="muted">{t(quantity > 1 ? 'bags' : 'bag')}</AppText></View><IconButton icon="add" variant="surface" accessibilityLabel={t('increaseQuantity')} onPress={() => setQuantity((value) => value + 1)} /></View>
+              <View style={styles.stepper}><IconButton icon="remove" variant="surface" accessibilityLabel={t('decreaseQuantity')} onPress={() => updateQuantity(quantity - 1)} disabled={quantity === 1} /><View style={styles.quantity}><TextField value={quantityInput} onChangeText={handleQuantityInput} onBlur={() => { if (!quantityInput) setQuantityInput(String(quantity)); }} keyboardType="number-pad" accessibilityLabel={t('quantity')} style={styles.quantityInput} /><AppText variant="caption" color="muted">{t(quantity > 1 ? 'bags' : 'bag')}</AppText></View><IconButton icon="add" variant="surface" accessibilityLabel={t('increaseQuantity')} onPress={() => updateQuantity(quantity + 1)} /></View>
               <Divider /><AppText variant="caption" color="muted">{t('total')}</AppText><AppText variant="metric" color="link">{(Number(product.price_per_package) * quantity).toLocaleString()} FCFA</AppText>
             </Card>
-            {similarProducts.length ? <View style={styles.similar}><AppText variant="sectionTitle">{t('similarProducts')}</AppText><FlatList horizontal data={similarProducts} keyExtractor={(item) => item.id} contentContainerStyle={styles.similarList} renderItem={({ item }) => <InteractiveCard style={styles.similarCard} accessibilityLabel={item.name} onPress={() => navigation.setParams({ productId: item.id } as never)}><View style={styles.similarContent}><Image source={getProductBrandAsset(item.brand)} style={styles.similarImage} resizeMode="contain" /><AppText variant="caption" color="muted">{item.brand.toUpperCase()}</AppText><AppText variant="label" numberOfLines={2}>{item.name}</AppText><AppText variant="label" color="link">{Number(item.price_per_package).toLocaleString()} FCFA</AppText></View></InteractiveCard>} showsHorizontalScrollIndicator={false} /></View> : null}
           </ScrollView>
           {product.is_available ? <View style={styles.cta}><Button label={t('addToCart')} iconLeft="cart" size="large" onPress={handleAddToCart} /></View> : null}
         </>
@@ -96,5 +106,5 @@ function Nutrient({ label, value, icon }: { label: string; value: string; icon: 
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.surface.page }, content: { padding: spacing[4], gap: spacing[4], paddingBottom: 112 }, hero: { alignItems: 'center', gap: spacing[2] }, imageWrap: { width: 176, height: 176, borderRadius: radii.full, backgroundColor: colors.surface.page, alignItems: 'center', justifyContent: 'center' }, image: { width: 112, height: 112 }, badges: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: spacing[2] }, section: { gap: spacing[3] }, nutrients: { flexDirection: 'row', gap: spacing[3] }, nutrient: { flex: 1, alignItems: 'center', gap: spacing[1], padding: spacing[3], backgroundColor: colors.surface.page, borderRadius: radii.lg }, stepper: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing[4] }, quantity: { minWidth: 80, alignItems: 'center' }, similar: { gap: spacing[3] }, similarList: { gap: spacing[3] }, similarCard: { width: 168, minHeight: 160, padding: spacing[3] }, similarContent: { flex: 1, gap: spacing[2] }, similarImage: { width: 72, height: 72, alignSelf: 'center' }, cta: { padding: spacing[4], borderTopWidth: 1, borderTopColor: colors.border.subtle, backgroundColor: colors.surface.card },
+  root: { flex: 1, backgroundColor: colors.surface.page }, content: { padding: spacing[4], gap: spacing[4], paddingBottom: 112 }, hero: { alignItems: 'center', gap: spacing[2] }, imageWrap: { width: 176, height: 176, borderRadius: radii.full, backgroundColor: colors.surface.page, alignItems: 'center', justifyContent: 'center' }, image: { width: 112, height: 112 }, badges: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: spacing[2] }, section: { gap: spacing[3] }, nutrients: { flexDirection: 'row', gap: spacing[3] }, nutrient: { flex: 1, alignItems: 'center', gap: spacing[1], padding: spacing[3], backgroundColor: colors.surface.page, borderRadius: radii.lg }, stepper: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing[4] }, quantity: { width: 88, alignItems: 'center', gap: spacing[1] }, quantityInput: { textAlign: 'center' }, cta: { padding: spacing[4], borderTopWidth: 1, borderTopColor: colors.border.subtle, backgroundColor: colors.surface.card },
 });

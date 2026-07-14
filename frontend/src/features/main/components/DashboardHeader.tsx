@@ -33,7 +33,6 @@ interface DashboardHeaderProps {
  *
  * Affiche :
  * - Greeting personnalisé avec le nom de l'utilisateur
- * - Sous-titre "Heureux de vous revoir"
  * - 2 boutons d'action à droite :
  *   1. Cloche notifications avec badge count
  *   2. Bouton Settings
@@ -64,10 +63,9 @@ export default function DashboardHeader({
       {/* Greeting Row */}
       <View className="flex-row justify-between items-start">
         <View className="flex-1 mr-4">
-          <AppText variant="screenTitle" color="inverse" style={{ marginBottom: 4 }}>
+          <AppText variant="screenTitle" color="inverse">
             {t('hello')}, {firstName}!
           </AppText>
-          <AppText variant="body" color="inverse">{t('welcomeBoard')}</AppText>
         </View>
 
         {/* Right Actions */}

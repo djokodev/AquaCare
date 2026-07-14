@@ -26,6 +26,7 @@ import type { RootStackParamList } from '@/navigation/MainNavigator';
 import { AppHeader, AppText, Button, EmptyState, ErrorState, IconButton, LoadingState, SegmentedControl, TextField } from '@/components/ui';
 import { colors, spacing } from '@/theme';
 import { ProductCard } from '@/features/commerce/components/ProductCard';
+import { getProductDisplayName } from '@/features/commerce/utils/productPresentation';
 
 export default function ProductCatalogScreen() {
   const { t } = useTranslation();
@@ -117,8 +118,9 @@ export default function ProductCatalogScreen() {
   const renderProductCard = ({ item }: { item: Product }) => (
     <ProductCard
       product={item}
+      displayName={getProductDisplayName(item.name, t('catfish'))}
       proteinLabel={t('protein')}
-      quickAddLabel={`${t('addToCart')} ${item.name}`}
+      quickAddLabel={`${t('addToCart')} ${getProductDisplayName(item.name, t('catfish'))}`}
       onPress={() => handleProductPress(item)}
       onQuickAdd={() => handleQuickAddToCart(item)}
     />
