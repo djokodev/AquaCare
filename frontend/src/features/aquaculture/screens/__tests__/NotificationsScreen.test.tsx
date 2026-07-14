@@ -20,6 +20,10 @@ jest.mock('@react-navigation/native', () => ({
   useRoute: jest.fn(() => ({ params: { cycleId: 'cycle-1' } })),
 }));
 
+jest.mock('react-native-safe-area-context', () => ({
+  useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
+}));
+
 jest.mock('@/features/notifications/store/notificationSlice', () => ({
   fetchNotifications: jest.fn(() => ({ type: 'notifications/fetch' })),
   fetchNotificationsSilent: jest.fn(() => ({ type: 'notifications/fetchSilent' })),
