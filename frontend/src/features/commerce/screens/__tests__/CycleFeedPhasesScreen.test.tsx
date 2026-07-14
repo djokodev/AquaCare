@@ -70,4 +70,33 @@ describe('CycleFeedPhasesScreen', () => {
     fireEvent.press(getByText('retry'));
     await waitFor(() => expect(load).toHaveBeenCalledTimes(2));
   });
+
+  it('affiche le loading puis l etat vide', async () => {
+    let resolveLoad: ((value: { feeding_phases: Array<typeof phase> }) => void) | undefined;
+    jest.spyOn(aquacultureService, 'getCycleFeedPhases').mockImplementation(() => new Promise((resolve) => { resolveLoad = resolve; }));
+    const loading = render(<CycleFeedPhasesScreen {...props} />);
+    expect(loading.getByText('loading')).toBeTruthy();
+    resolveLoad?.({ feeding_phases: [] });
+    expect(await loading.findByText('feedPhasesEmpty')).toBeTruthy();
+  });
+
+  it('gere plusieurs phases, produits et quantites independantes', async () => {
+    const secondProduct = { ...phase.products[0], product_id: 'p2', product_name: 'Grower', quantity_bags: 1 };
+    const thirdProduct = { ...secondProduct, product_id: 'p3', product_name: 'Finisher' };
+    const secondPhase = { ...phase, phase_name: 'grossissement', products: [thirdProduct], total_bags: 1 };
+    jest.spyOn(aquacultureService, 'getCycleFeedPhases').mockResolvedValue({
+      feeding_phases: [{ ...phase, products: [phase.products[0], secondProduct] }, secondPhase],
+    });
+    mockCartQuantity = 3;
+    const { findByText, getAllByLabelText, getByLabelText } = render(<CycleFeedPhasesScreen {...props} />);
+
+    expect(await findByText('Starter')).toBeTruthy();
+    expect(await findByText('Grower')).toBeTruthy();
+    expect(await findByText('Finisher')).toBeTruthy();
+    expect(getByLabelText('cart 3')).toBeTruthy();
+    expect(getAllByLabelText('decreaseQuantity')[1].props.accessibilityState.disabled).toBe(true);
+    fireEvent.press(getAllByLabelText('increaseQuantity')[0]);
+    fireEvent.press(getAllByLabelText('increaseQuantity')[1]);
+    expect(mockDispatch).not.toHaveBeenCalled();
+  });
 });

@@ -4,6 +4,9 @@ import { Alert } from 'react-native';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 
 import CycleSimulatorScreen from '../CycleSimulatorScreen';
+import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
+import { fr } from '@/i18n/locales/fr';
+import { en } from '@/i18n/locales/en';
 
 const mockNavigate = jest.fn();
 const mockGoBack = jest.fn();
@@ -232,5 +235,46 @@ describe('CycleSimulatorScreen', () => {
     await waitFor(() => {
       expect(mockNavigate).toHaveBeenCalledWith('Cart');
     });
+  });
+
+  it('affiche l erreur avec la primitive partagee et localise l unite quotidienne', () => {
+    mockState.commerce.simulation.error = 'simulation failed';
+    mockState.commerce.simulation.result = simulationResult;
+    const { getByText } = render(<CycleSimulatorScreen />);
+
+    expect(getByText('simulation failed')).toBeTruthy();
+    expect(getByText(/kgPerDay/)).toBeTruthy();
+    expect(fr.kgPerDay).toBe('kg/j');
+    expect(en.kgPerDay).toBe('kg/day');
+  });
+
+  it('ajoute une phase et reset la simulation', () => {
+    mockState.commerce.simulation.result = simulationResult;
+    const { getByText } = render(<CycleSimulatorScreen />);
+
+    fireEvent.press(getByText('addPhaseToCart'));
+    expect(mockDispatch).toHaveBeenCalledWith(expect.objectContaining({ payload: expect.objectContaining({ quantity: 28 }) }));
+    fireEvent.press(getByText('reset'));
+    expect(mockDispatch).toHaveBeenCalled();
+  });
+
+  it('met a jour le cycle et affiche le succes puis une erreur', async () => {
+    mockState.aquaculture.currentCycle = {
+      id: 'cycle-session', status: 'active', species: 'tilapia', initial_count: 1000,
+      initial_average_weight: 5, target_harvest_weight_g: 300,
+      planned_cycle_duration_days: 120, expected_survival_rate_pct: 85,
+      planned_selling_price_per_kg_fcfa: 2500, fingerlings_cost_fcfa: 0,
+      other_operational_costs_fcfa: 0,
+    };
+    const patchCycle = jest.spyOn(aquacultureService, 'patchProductionCycle').mockResolvedValue(mockState.aquaculture.currentCycle);
+    const { getByText } = render(<CycleSimulatorScreen />);
+
+    fireEvent.press(getByText('updateCycleParameters'));
+    await waitFor(() => expect(Alert.alert).toHaveBeenCalledWith('success', 'cycleParametersUpdated'));
+    expect(patchCycle).toHaveBeenCalledWith('cycle-session', expect.any(Object));
+
+    patchCycle.mockRejectedValueOnce(new Error('network'));
+    fireEvent.press(getByText('updateCycleParameters'));
+    await waitFor(() => expect(Alert.alert).toHaveBeenCalledWith('error', 'cycleParametersUpdateError'));
   });
 });
