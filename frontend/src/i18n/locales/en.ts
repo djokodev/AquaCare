@@ -88,6 +88,9 @@
   goodMorning: "Good morning",
   goodAfternoon: "Good afternoon",
   goodEvening: "Good evening",
+  dashboardGreetingCasual: "Hi",
+  dashboardGreetingLate: "Hey",
+  dashboardGreetingWithName: "{{greeting}}, {{name}}!",
 
   // Messages
   welcomeMessage: 'Welcome to AquaCare',

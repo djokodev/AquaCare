@@ -3,6 +3,7 @@ import { StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppText, IconButton } from '@/components/ui';
+import { getDashboardGreetingKey } from '@/features/main/utils/dashboardGreeting';
 import { colors, spacing } from '@/theme';
 
 /**
@@ -60,6 +61,7 @@ export default function DashboardHeader({
 
   // Extraire le prénom (premier mot) pour éviter les noms trop longs
   const firstName = displayName.split(' ')[0];
+  const greeting = t(getDashboardGreetingKey(new Date().getHours()));
 
   return (
     <View style={[styles.header, { paddingTop: insets.top + spacing[3] }]}>
@@ -67,7 +69,7 @@ export default function DashboardHeader({
       <View className="flex-row justify-between items-start">
         <View className="flex-1 mr-4">
           <AppText variant="screenTitle" color="inverse">
-            {t('hello')}, {firstName}!
+            {t('dashboardGreetingWithName', { greeting, name: firstName })}
           </AppText>
         </View>
 

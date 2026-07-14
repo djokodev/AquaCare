@@ -87,6 +87,9 @@ export const fr = {
   goodMorning: "Bonjour",
   goodAfternoon: "Bon après-midi",
   goodEvening: "Bonsoir",
+  dashboardGreetingCasual: "Salut",
+  dashboardGreetingLate: "Hey",
+  dashboardGreetingWithName: "{{greeting}}, {{name}} !",
 
   // Messages
   welcomeMessage: 'Bienvenue sur AquaCare',
