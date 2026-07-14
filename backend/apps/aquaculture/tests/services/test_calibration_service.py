@@ -8,10 +8,13 @@ from decimal import Decimal
 import pytest
 from aquaculture.domain.exceptions import BusinessRuleViolation
 from aquaculture.models import CalibrationOperation, CycleUnitAllocation, ProductionUnit
-from aquaculture.services.calibration_service import CalibrationIdempotencyConflict, CalibrationService
+from aquaculture.services.calibration_service import (
+    CalibrationIdempotencyConflict,
+    CalibrationService,
+)
 from aquaculture.services.cycle_service import ProductionCycleService
-from django.utils import timezone
 from django.db import connection
+from django.utils import timezone
 
 
 @pytest.mark.django_db

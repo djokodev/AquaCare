@@ -22,8 +22,10 @@ from typing import Any, cast
 
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.utils.translation import gettext_lazy as _
-from notifications.serializers import NotificationSerializer as GlobalNotificationSerializer
 from drf_spectacular.utils import extend_schema_field
+from notifications.serializers import (
+    NotificationSerializer as GlobalNotificationSerializer,
+)
 from rest_framework import serializers
 from rest_framework.request import Request
 
