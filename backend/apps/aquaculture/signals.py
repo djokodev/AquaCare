@@ -107,7 +107,7 @@ def create_cycle_metrics(sender, instance, created, **kwargs):
             NotificationService.create_notification(
                 user=instance.farm_profile.user,
                 notification_type='sampling_reminder',
-                title=f"Échantillonnage - {instance.cycle_name}",
+                title=f"Échantillonnage, {instance.cycle_name}",
                 message="Planifiez la première pesée pour suivre la croissance.",
                 content_object=instance,
                 metadata={'cycle_id': str(instance.id)},
@@ -132,7 +132,7 @@ def check_cycle_completion(sender, instance, **kwargs):
         NotificationService.create_notification(
             user=instance.farm_profile.user,
             notification_type='cycle_milestone',
-            title=f"Cycle terminé - {instance.cycle_name}",
+            title=f"Cycle terminé, {instance.cycle_name}",
             message=(
                 f"Félicitations ! Cycle {instance.cycle_name} récolté. "
                 f"Taux de survie: {float(instance.survival_rate or 0):.1f}%, FCR: {float(instance.fcr or 0):.2f}."

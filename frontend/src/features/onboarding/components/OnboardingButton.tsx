@@ -5,14 +5,8 @@
  */
 
 import React from 'react';
-import {
-  TouchableOpacity,
-  Text,
-  StyleSheet,
-} from 'react-native';
 import { OnboardingButtonProps } from '../types/onboarding';
-import { AQUACARE_COLORS } from '@/constants/colors';
-import { AQUACARE_TYPOGRAPHY } from '@/constants/typography';
+import { Button } from '@/components/ui';
 
 /**
  * Bouton primaire AquaCare pour onboarding
@@ -23,55 +17,5 @@ export default function OnboardingButton({
   onPress,
   disabled = false,
 }: OnboardingButtonProps) {
-  return (
-    <TouchableOpacity
-      style={[
-        styles.button,
-        disabled && styles.buttonDisabled,
-      ]}
-      onPress={onPress}
-      disabled={disabled}
-      activeOpacity={0.8}
-      accessible={true}
-      accessibilityRole="button"
-      accessibilityLabel={title}
-      accessibilityState={{ disabled }}
-    >
-      <Text style={styles.buttonText}>{title}</Text>
-    </TouchableOpacity>
-  );
+  return <Button label={title} onPress={onPress} disabled={disabled} size="large" />;
 }
-
-const styles = StyleSheet.create({
-  button: {
-    backgroundColor: AQUACARE_COLORS.GREEN_PRIMARY,
-    paddingVertical: 16,
-    paddingHorizontal: 48,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: 200,
-
-    // Shadow iOS
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-
-    // Shadow Android
-    elevation: 4,
-  },
-
-  buttonDisabled: {
-    backgroundColor: '#9CA3AF', // Gris neutre
-    opacity: 0.6,
-  },
-
-  buttonText: {
-    ...AQUACARE_TYPOGRAPHY.button,
-    color: AQUACARE_COLORS.WHITE,
-  },
-});

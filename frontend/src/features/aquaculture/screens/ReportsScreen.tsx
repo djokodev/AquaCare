@@ -1,13 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, TouchableOpacity, ActivityIndicator, FlatList, RefreshControl, Alert } from 'react-native';
+import { View, FlatList, RefreshControl, Alert, StyleSheet } from 'react-native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RouteProp, useFocusEffect } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
-import { Ionicons } from '@expo/vector-icons';
 import { useSelector } from 'react-redux';
 
 import { RootStackParamList } from '@/navigation/MainNavigator';
-import { AQUACARE_COLORS } from '@/constants/colors';
 import { CycleUnitAllocation, ProductionReport, ReportScopeType, ReportType } from '@/types/aquaculture';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
 import { parseApiError } from '@/utils/errorParser';
@@ -15,6 +13,8 @@ import { formatAquacultureErrorWithAction } from '@/features/aquaculture/utils/a
 import { formatDate, formatDateTime } from '@/utils';
 import { RootState } from '@/store/store';
 import logger from '@/utils/logger';
+import { AppHeader, AppText, Button, Card, EmptyState, ErrorState, IconButton, InlineAlert, LoadingState, SelectableCard, SegmentedControl, Screen } from '@/components/ui';
+import { colors, spacing } from '@/theme';
 
 type ReportsScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Reports'>;
 type ReportsScreenRouteProp = RouteProp<RootStackParamList, 'Reports'>;
@@ -292,12 +292,6 @@ export default function ReportsScreen({ navigation, route }: ReportsScreenProps)
     );
   }, [canGenerateReports, loadReports, reportScope, resolvedCycleId, resolvedCycleUnitAllocationId, scopeError, t]);
 
-  const getStatusStyle = (reportStatus: string) => {
-    if (reportStatus === 'validated') return 'text-aquacare-primary';
-    if (reportStatus === 'pending') return 'text-warning';
-    return 'text-gray-light';
-  };
-
   const getStatusLabel = (reportStatus: string) => {
     if (reportStatus === 'validated') return t('reportStatusValidated');
     if (reportStatus === 'pending') return t('reportStatusPending');
@@ -309,15 +303,6 @@ export default function ReportsScreen({ navigation, route }: ReportsScreenProps)
   );
   const reportHistoryFilters = ['all', ...REPORT_TYPES] as const;
 
-  const renderHeader = () => (
-    <View className="bg-aquacare-primary flex-row items-center pt-14 pb-4 px-4">
-      <TouchableOpacity className="mr-4" onPress={() => navigation.goBack()}>
-        <Ionicons name="arrow-back" size={24} color={AQUACARE_COLORS.WHITE} />
-      </TouchableOpacity>
-      <Text className="text-xl font-bold text-white">{scopeTitle}</Text>
-    </View>
-  );
-
   const getUnitTypeLabel = (unitType?: string) => {
     if (unitType === 'pond') return t('productionUnitTypePond');
     if (unitType === 'cage') return t('productionUnitTypeCage');
@@ -325,22 +310,21 @@ export default function ReportsScreen({ navigation, route }: ReportsScreenProps)
   };
 
   const renderScopeSelector = () => (
-    <View className="bg-white border border-gray-200 rounded-xl p-4 mb-3">
-      <Text className="text-base font-bold text-gray-dark mb-3">{t('reportScope')}</Text>
-      <TouchableOpacity
-        className={`border rounded-lg p-3 mb-2 ${reportScope === 'cycle' ? 'border-aquacare-primary bg-green-50' : 'border-gray-200'}`}
+    <Card variant="outlined" style={styles.scopeCard}>
+      <AppText variant="sectionTitle" style={{ marginBottom: spacing[3] }}>{t('reportScope')}</AppText>
+      <SelectableCard
+        style={styles.scopeOption}
+        layout="row"
+        selected={reportScope === 'cycle'}
+        primaryBorder={reportScope === 'cycle'}
+        accessibilityLabel={t('fullCycle')}
         onPress={() => setSelectedScope('cycle')}
-        accessibilityRole="radio"
-        accessibilityState={{ selected: reportScope === 'cycle' }}
       >
-        <Text className="text-sm font-semibold text-gray-dark">{t('fullCycle')}</Text>
-      </TouchableOpacity>
+        <AppText variant="label">{t('fullCycle')}</AppText>
+      </SelectableCard>
 
       {allocationLoading && (
-        <View className="flex-row items-center py-2">
-          <ActivityIndicator size="small" color={AQUACARE_COLORS.GREEN_PRIMARY} />
-          <Text className="text-sm text-gray-light ml-2">{t('loading')}</Text>
-        </View>
+        <LoadingState message={t('loading')} compact />
       )}
 
       {allocations.map((allocation) => {
@@ -351,49 +335,52 @@ export default function ReportsScreen({ navigation, route }: ReportsScreenProps)
           allocation.status_display,
         ].filter(Boolean).join(' · ');
         return (
-          <TouchableOpacity
+          <SelectableCard
             key={allocation.id}
-            className={`border rounded-lg p-3 mb-2 ${isSelected ? 'border-aquacare-primary bg-green-50' : 'border-gray-200'}`}
+            style={styles.scopeOption}
+            selected={isSelected}
+            primaryBorder={isSelected}
+            layout="row"
+            accessibilityLabel={allocation.production_unit_name ?? t('productionUnitsUnknownUnit')}
             onPress={() => {
               setSelectedAllocationId(allocation.id);
               setSelectedScope('unit');
             }}
-            accessibilityRole="radio"
-            accessibilityState={{ selected: isSelected }}
           >
-            <Text className="text-sm font-semibold text-gray-dark">{allocation.production_unit_name}</Text>
-            {details && <Text className="text-xs text-gray-light mt-1">{details}</Text>}
-          </TouchableOpacity>
+            <View style={{ flex: 1 }}>
+              <AppText variant="label">{allocation.production_unit_name}</AppText>
+              {details && <AppText variant="caption" color="muted">{details}</AppText>}
+            </View>
+          </SelectableCard>
         );
       })}
 
       {!allocationLoading && allocations.length === 0 && (
-        <Text className="text-sm text-gray-light">{t('noProductionUnitsAvailable')}</Text>
+        <AppText variant="caption" color="muted">{t('noProductionUnitsAvailable')}</AppText>
       )}
       {allocationError && (
-        <Text className="text-sm text-error mt-1">{t('selectedProductionUnitUnavailable')}</Text>
+        <AppText variant="helper" color="error">{t('selectedProductionUnitUnavailable')}</AppText>
       )}
-    </View>
+    </Card>
   );
 
   const renderReportItem = useCallback(
     ({ item: report }: { item: ProductionReport }) => (
-      <TouchableOpacity
-        className="bg-white rounded-xl p-4 mb-3 mx-4 border border-gray-200 shadow-sm"
-        accessibilityRole="button"
+      <SelectableCard
+        style={styles.reportCard}
         accessibilityLabel={t('openReportDetails')}
         onPress={() => navigation.navigate('ReportDetail', { reportId: report.id })}
       >
-        <View className="flex-row items-center justify-between">
-          <View className="flex-1 mr-3">
-            <Text className="text-sm font-bold text-gray-dark">
+        <View style={styles.reportTopRow}>
+          <View style={styles.reportIdentity}>
+            <AppText variant="label">
             {report.report_type === 'daily'
               ? t('reportTypeDaily')
               : report.report_type === 'weekly'
                 ? t('reportTypeWeekly')
                 : t('reportTypeMonthly')}
-            </Text>
-            <Text className="text-xs text-gray-light mt-1">
+            </AppText>
+            <AppText variant="caption" color="muted" style={{ marginTop: spacing[1] }}>
               {(() => {
                 const scopeIdentity = report.scope_name?.trim();
                 const fallbackLabel = report.scope_type === 'unit'
@@ -402,138 +389,93 @@ export default function ReportsScreen({ navigation, route }: ReportsScreenProps)
                 const scopeLabel = report.scope_label?.trim() || fallbackLabel;
                 return scopeIdentity ? `${scopeIdentity} · ${scopeLabel}` : scopeLabel;
               })()}
-            </Text>
+            </AppText>
           </View>
-          <View className="flex-row items-center">
-            <Text className={`text-xs font-semibold mr-3 ${getStatusStyle(report.status)}`}>
-              {getStatusLabel(report.status)}
-            </Text>
-            <Ionicons name="chevron-forward" size={18} color={AQUACARE_COLORS.GRAY_LIGHT} />
-            <TouchableOpacity
+          <View style={styles.reportStatusColumn}>
+            <AppText variant="label" color={report.status === 'validated' ? 'link' : report.status === 'pending' ? 'warning' : 'muted'}>{getStatusLabel(report.status)}</AppText>
+            <IconButton
+              icon="trash-outline"
+              variant="danger"
+              accessibilityLabel={t('reportDeleteAction')}
               onPress={() => handleDeleteReport(report)}
-              className="ml-3"
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <Ionicons name="trash-outline" size={16} color={AQUACARE_COLORS.ERROR} />
-            </TouchableOpacity>
+            />
           </View>
         </View>
 
-        <View className="mt-3 pt-3 border-t border-gray-100 flex-row items-center justify-between">
-          <Text className="text-xs text-gray-light">{t('openReportDetails')}</Text>
-          <Ionicons name="arrow-forward" size={14} color={AQUACARE_COLORS.GREEN_PRIMARY} />
+        <View style={styles.reportDetailsRow}>
+          <View style={{ flex: 1 }}>
+            <AppText variant="label" color="link">{t('openReportDetails')}</AppText>
+            {report.generated_at && <AppText variant="caption" color="muted" style={{ marginTop: spacing[1] }}>{formatDateTime(report.generated_at, reportLocale)}</AppText>}
+          </View>
+          <AppText variant="body" color="link">→</AppText>
         </View>
 
-        {report.generated_at && (
-          <Text className="text-xs text-gray-light mt-1">
-            {formatDateTime(report.generated_at, reportLocale)}
-          </Text>
-        )}
-        <Text className="text-xs text-gray-light mt-1">
+        <AppText variant="caption" color="muted" style={{ marginTop: spacing[1] }}>
           {t('reportPeriodLabel')}: {formatReportPeriod(report)}
-        </Text>
+        </AppText>
 
-        <View className="flex-row mt-2">
-          <Text className="text-xs text-gray-light mr-4">
+        <View style={styles.deliveryStatusRow}>
+          <AppText variant="caption" color="muted">
             {t('email')}: {report.email_status === 'sent' ? t('sent') : report.email_status === 'failed' ? t('failed') : t('notSent')}
-          </Text>
-          <Text className="text-xs text-gray-light">
+          </AppText>
+          <AppText variant="caption" color="muted">
             {t('whatsAppLabel')}: {report.whatsapp_status === 'shared' ? t('shared') : t('notShared')}
-          </Text>
+          </AppText>
         </View>
-      </TouchableOpacity>
+      </SelectableCard>
     ),
     [formatDateTime, formatReportPeriod, handleDeleteReport, navigation, reportLocale, t]
   );
 
   const renderListHeader = useCallback(
     () => (
-      <View className="px-4 py-4">
+      <View style={{ padding: spacing[4], gap: spacing[3] }}>
         {renderScopeSelector()}
         {canGenerateReports ? (
           <>
-            <Text className="text-base font-bold text-gray-dark mb-3">{t('generateReport')}</Text>
+            <AppText variant="sectionTitle">{t('generateReport')}</AppText>
 
-            <View className="flex-row flex-wrap justify-between">
+            <View style={{ flexDirection: 'row', gap: spacing[2] }}>
               {REPORT_TYPES.map((reportType) => (
-                <TouchableOpacity
+                <Button
                   key={reportType}
-                  className="w-[32%] bg-white border border-gray-200 rounded-xl p-3 items-center mb-3"
+                  variant="outline"
+                  size="small"
+                  fullWidth={false}
                   onPress={() => handleGenerateReport(reportType)}
                   disabled={Boolean(generatingType)}
-                  accessibilityRole="button"
-                  accessibilityState={{ disabled: Boolean(generatingType) }}
-                  accessibilityLabel={reportType === 'daily'
+                  loading={generatingType === reportType}
+                  label={reportType === 'daily'
                     ? t('reportGenerationDaily')
                     : reportType === 'weekly'
                       ? t('reportGenerationWeekly')
                       : t('reportGenerationMonthly')}
-                >
-                  {generatingType === reportType ? (
-                    <ActivityIndicator color={AQUACARE_COLORS.GREEN_PRIMARY} />
-                  ) : (
-                    <Text className="text-lg font-bold text-aquacare-primary">
-                      {reportType === 'daily'
-                        ? t('reportGenerationDailyShort')
-                        : reportType === 'weekly'
-                          ? t('reportGenerationWeeklyShort')
-                          : t('reportGenerationMonthlyShort')}
-                    </Text>
-                  )}
-                  <Text className="text-xs font-semibold text-gray-dark mt-2 text-center">
-                    {reportType === 'daily'
-                      ? t('reportGenerationDaily')
-                      : reportType === 'weekly'
-                        ? t('reportGenerationWeekly')
-                        : t('reportGenerationMonthly')}
-                  </Text>
-                </TouchableOpacity>
+                />
               ))}
             </View>
           </>
         ) : (
-          <View className="bg-white border border-gray-200 rounded-xl p-4 mb-3">
-            <Text className="text-sm text-gray-dark">{scopeError}</Text>
-          </View>
+          <InlineAlert tone="warning" message={scopeError} />
         )}
 
         {infoMessage && (
-          <View className="bg-green-50 border border-aquacare-primary rounded-lg p-3 mb-3">
-            <Text className="text-sm text-aquacare-primary">{infoMessage}</Text>
-          </View>
+          <InlineAlert tone="success" message={infoMessage} />
         )}
 
         {error && (
-          <View className="bg-white border border-error rounded-lg p-3 mb-3">
-            <Text className="text-sm text-error">{error}</Text>
-          </View>
+          <InlineAlert tone="error" message={error} />
         )}
 
-        <Text className="text-base font-bold text-gray-dark mb-3">{t('reportHistory')}</Text>
+        <AppText variant="sectionTitle">{t('reportHistory')}</AppText>
 
-        <View className="flex-row mb-3">
-          {reportHistoryFilters.map((type) => (
-            <TouchableOpacity
-              key={type}
-              className={`px-3 py-2 rounded-full border mr-2 ${
-                selectedType === type
-                  ? 'bg-aquacare-primary border-aquacare-primary'
-                  : 'bg-white border-gray-200'
-              }`}
-              onPress={() => setSelectedType(type)}
-            >
-              <Text className={`text-xs ${selectedType === type ? 'text-white' : 'text-gray-dark'}`}>
-                {type === 'all'
-                  ? t('all')
-                  : type === 'daily'
-                    ? t('reportGenerationDailyShort')
-                    : type === 'weekly'
-                      ? t('reportGenerationWeeklyShort')
-                      : t('reportGenerationMonthlyShort')}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+        <SegmentedControl
+          value={selectedType}
+          onChange={setSelectedType}
+          options={reportHistoryFilters.map((type) => ({
+            value: type,
+            label: type === 'all' ? t('all') : type === 'daily' ? t('reportGenerationDailyShort') : type === 'weekly' ? t('reportGenerationWeeklyShort') : t('reportGenerationMonthlyShort'),
+          }))}
+        />
       </View>
     ),
     [allocationError, allocationLoading, allocations, canGenerateReports, error, generatingType, handleGenerateReport, infoMessage, reportScope, scopeError, selectedAllocationId, selectedType, t]
@@ -541,40 +483,44 @@ export default function ReportsScreen({ navigation, route }: ReportsScreenProps)
 
   const renderEmptyState = useCallback(
     () => (
-      <View className="bg-white rounded-xl p-5 items-center mx-4">
-        <Ionicons name="documents-outline" size={44} color={AQUACARE_COLORS.GRAY_LIGHT} />
-        <Text className="text-base font-semibold text-gray-dark mt-3">{t('noReportsYet')}</Text>
-        <Text className="text-sm text-gray-light text-center mt-1">{t('generateFirstReportHint')}</Text>
-      </View>
+      <EmptyState title={t('noReportsYet')} message={t('generateFirstReportHint')} />
     ),
     [t]
   );
 
   if (loading) {
-    return (
-      <View className="flex-1 bg-cream">
-        {renderHeader()}
-        <View className="flex-1 items-center justify-center">
-          <ActivityIndicator size="large" color={AQUACARE_COLORS.GREEN_PRIMARY} />
-          <Text className="mt-3 text-gray-dark">{t('loading')}</Text>
-        </View>
-      </View>
-    );
+    return <View style={styles.root}><AppHeader title={scopeTitle} onBack={() => navigation.goBack()} backLabel={t('back')} /><Screen style={styles.stateScreen}><LoadingState message={t('loading')} /></Screen></View>;
   }
 
   return (
-    <View className="flex-1 bg-cream">
-      {renderHeader()}
-
+    <View style={styles.root}>
+      <AppHeader title={scopeTitle} onBack={() => navigation.goBack()} backLabel={t('back')} />
+      <Screen style={styles.listScreen}>
       <FlatList
         data={filteredReports}
         keyExtractor={(item) => item.id}
         renderItem={renderReportItem}
         ListHeaderComponent={renderListHeader}
         ListEmptyComponent={renderEmptyState}
-        contentContainerStyle={{ paddingBottom: 16 }}
+        contentContainerStyle={styles.listContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       />
+      </Screen>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: colors.surface.page },
+  stateScreen: { justifyContent: 'center' },
+  listScreen: { padding: 0 },
+  listContent: { paddingBottom: spacing[4] },
+  scopeCard: { gap: spacing[2] },
+  scopeOption: { marginBottom: spacing[2] },
+  reportCard: { marginHorizontal: spacing[4], marginBottom: spacing[3], gap: spacing[2] },
+  reportTopRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing[3] },
+  reportIdentity: { flex: 1 },
+  reportStatusColumn: { alignItems: 'flex-end', gap: spacing[2] },
+  reportDetailsRow: { marginTop: spacing[2], paddingTop: spacing[3], borderTopWidth: 1, borderTopColor: colors.border.subtle, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing[3] },
+  deliveryStatusRow: { flexDirection: 'row', marginTop: spacing[2], justifyContent: 'space-between', gap: spacing[2] },
+});

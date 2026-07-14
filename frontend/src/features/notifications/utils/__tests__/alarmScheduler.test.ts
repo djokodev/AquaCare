@@ -1,4 +1,6 @@
 import * as Notifications from 'expo-notifications';
+import { en } from '@/i18n/locales/en';
+import { fr } from '@/i18n/locales/fr';
 
 import {
   FEEDING_ALARM_ACTION_FEED_NOW,
@@ -50,6 +52,13 @@ describe('alarmScheduler', () => {
     expect(formatMealTime({ hour: 17, minute: 5 })).toBe('17h05');
   });
 
+  it('utilise une ponctuation lisible sans icone poisson', () => {
+    expect(fr.feedingAlarmTitle).toBe('AquaCare, Nourrissage');
+    expect(fr.feedingAlarmBody).toBe('{{cycleName}} : {{time}}, distribuez la ration');
+    expect(en.feedingAlarmTitle).toBe('AquaCare, Feeding');
+    expect(en.feedingAlarmBody).toBe('{{cycleName}}: {{time}}, distribute feed ration');
+  });
+
   it('planifie les alarmes locales avec relances sur 2 minutes', async () => {
     const result = await scheduleFeedingAlarms(
       {
@@ -70,6 +79,14 @@ describe('alarmScheduler', () => {
     expect(result.ids).toHaveLength(FEEDING_ALARM_RELAUNCH_SECONDS.length);
     expect(mockNotifications.scheduleNotificationAsync).toHaveBeenCalledTimes(
       FEEDING_ALARM_RELAUNCH_SECONDS.length
+    );
+    expect(mockNotifications.scheduleNotificationAsync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        content: expect.objectContaining({
+          title: 'Titre',
+          body: 'Cycle A @ 13h00',
+        }),
+      })
     );
   });
 

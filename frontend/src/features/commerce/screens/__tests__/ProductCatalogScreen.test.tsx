@@ -1,5 +1,5 @@
 import React from 'react';
-import { Alert } from 'react-native';
+import { Alert, RefreshControl } from 'react-native';
 import { fireEvent, render } from '@testing-library/react-native';
 import { NavigationContext, NavigationRouteContext } from '@react-navigation/core';
 
@@ -14,6 +14,10 @@ let mockRouteParams: any;
 jest.mock('react-redux', () => ({
   useDispatch: () => mockDispatch,
   useSelector: (selector: any) => selector(mockState),
+}));
+
+jest.mock('react-native-safe-area-context', () => ({
+  useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 }));
 
 describe('ProductCatalogScreen', () => {
@@ -113,6 +117,7 @@ describe('ProductCatalogScreen', () => {
   });
 
   it('affiche l etat erreur et relance le chargement', () => {
+    mockState.commerce.products.items = [];
     mockState.commerce.products.error = 'boom';
     const { getByText } = renderScreen();
 
@@ -121,10 +126,48 @@ describe('ProductCatalogScreen', () => {
     expect(mockDispatch).toHaveBeenCalled();
   });
 
+  it('conserve les produits lors d une erreur de refresh', () => {
+    mockState.commerce.products.error = 'boom';
+    const { getByText, queryByText } = renderScreen();
+
+    expect(getByText('Feed Starter')).toBeTruthy();
+    expect(getByText('boom')).toBeTruthy();
+    expect(queryByText('retry')).toBeNull();
+  });
+
+  it('recherche, filtre puis reset les filtres', () => {
+    const { getByLabelText, getByText } = renderScreen();
+
+    fireEvent.changeText(getByLabelText('searchProducts'), 'starter');
+    fireEvent(getByLabelText('searchProducts'), 'submitEditing');
+    fireEvent.press(getByLabelText('tilapia'));
+    fireEvent.press(getByText('resetFilters'));
+
+    expect(mockDispatch).toHaveBeenCalled();
+  });
+
+  it('ajoute rapidement sans ouvrir le detail', () => {
+    const { getByLabelText } = renderScreen();
+
+    fireEvent.press(getByLabelText('addToCart Feed Starter'));
+
+    expect(mockDispatch).toHaveBeenCalledWith(expect.objectContaining({ type: 'commerce/addToCart' }));
+    expect(mockNavigate).not.toHaveBeenCalledWith('ProductDetail', expect.anything());
+  });
+
+  it('rafraichit le catalogue et expose le compteur panier', async () => {
+    const { getByLabelText, UNSAFE_getByType } = renderScreen();
+
+    expect(getByLabelText('cart 2')).toBeTruthy();
+    await UNSAFE_getByType(RefreshControl).props.onRefresh();
+
+    expect(mockDispatch).toHaveBeenCalled();
+  });
+
   it('conserve le contexte Magasin quand on ouvre le panier depuis le catalogue', () => {
     const { getByLabelText } = renderScreen();
 
-    fireEvent.press(getByLabelText('cart'));
+    fireEvent.press(getByLabelText('cart 2'));
 
     expect(mockNavigate).toHaveBeenCalledWith('Cart', {
       cycleId: 'cycle-store',

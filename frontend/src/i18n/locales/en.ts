@@ -1,4 +1,8 @@
 ﻿export const en = {
+  chatSendMessage: 'Send message',
+  chatOpenImage: 'Open image',
+  chatOpenImageHint: 'Displays the image full screen',
+
   // Navigation
   login: 'Login',
   register: 'Register',
@@ -84,6 +88,9 @@
   goodMorning: "Good morning",
   goodAfternoon: "Good afternoon",
   goodEvening: "Good evening",
+  dashboardGreetingCasual: "Hi",
+  dashboardGreetingLate: "Hey",
+  dashboardGreetingWithName: "{{greeting}}, {{name}}!",
 
   // Messages
   welcomeMessage: 'Welcome to AquaCare',
@@ -190,6 +197,7 @@
   reportDeleteConfirmMsg: 'This action cannot be undone.',
   reportDeleteSuccess: 'Report deleted',
   reportDeleteError: 'Error while deleting',
+  reportDeleteAction: 'Delete',
   reportTypeDaily: 'Daily report',
   reportTypeWeekly: 'Weekly report',
   reportTypeMonthly: 'Monthly report',
@@ -231,6 +239,9 @@
   actions: 'Actions',
   cycles: 'Cycles',
   dailyLog: 'Record my daily data',
+  dailyLogCompact: 'Daily entry',
+  sanitaryLogCompact: 'Health monitoring',
+  feedingPlanCompact: 'Feeding plan',
   sanitaryLog: 'Report a health problem',
   productionUnitReportAction: 'Unit report',
   reportLatestUnitLogs: 'Latest unit entries',
@@ -923,9 +934,9 @@
   alarmSetFor: 'Alarm set for {{time}}',
   alarmPermissionDenied: 'Notification permission denied. Enable it in settings.',
   alarmScheduleError: 'Error scheduling alarms.',
-  feedingAlarmTitle: '🐟 AquaCare — Feeding',
-  feedingAlarmBody: '{{cycleName}}: {{time}} — distribute feed ration',
-  feedingAlarmBodySnooze: 'Feeding reminder — it is time to act.',
+  feedingAlarmTitle: 'AquaCare, Feeding',
+  feedingAlarmBody: '{{cycleName}}: {{time}}, distribute feed ration',
+  feedingAlarmBodySnooze: 'Feeding reminder, it is time to act.',
   alarmActionFeedNow: 'Feed now',
   alarmActionSnooze10m: 'Remind in 10m',
 
@@ -972,6 +983,7 @@
   bag: 'bag',
   bags: 'bags',
   kg: 'kg',
+  kgPerDay: 'kg/day',
 
   // Commerce - Product Catalog
   productCatalog: 'View feed products',
@@ -989,6 +1001,8 @@
   // Commerce - Cart
   cart: 'Cart',
   emptyCart: 'Empty cart',
+  decreaseQuantity: 'Decrease quantity',
+  increaseQuantity: 'Increase quantity',
   emptyCartDescription: 'Your cart is empty. Browse our catalog to add products.',
   browseCatalog: 'Browse catalog',
   myProducts: 'My products',
@@ -1007,7 +1021,7 @@
   free: 'Free',
   total: 'Total',
   freeDeliveryApplied: 'Free delivery applied!',
-  freeDeliveryEncouragement: 'Only {{remaining}} bag(s) left for free delivery!',
+  freeDeliveryEncouragement: 'Only {{remaining}} bags for free delivery.',
   confirmOrder: 'Confirm order',
   confirmOrderMessage: 'Confirm order of {{bags}} bag(s) for {{total}} FCFA?',
   emptyCartError: 'Your cart is empty',
@@ -1546,7 +1560,7 @@
   storeViewOrders: 'My orders',
   storeOrderCycleNeed: 'Order based on cycle need',
   storeManualFormTitle: 'Declare manual stock',
-  storeManualFormDescription: 'Add a purchase or drop-off that is not linked to an order yet.',
+  storeManualFormDescription: 'Purchase or drop-off outside an order.',
   storeManualLabel: 'Feed name',
   storeManualLabelPlaceholder: 'Ex: Starter feed 20kg',
   storeManualQuantity: 'Quantity (kg)',
@@ -1576,7 +1590,7 @@
 
   // ── Order by phase ───────────────────────────────────────────────────────
   feedPhasesTitle: 'Order by phase',
-  feedPhasesSubtitle: 'Based on your simulation. Order phase by phase or all at once.',
+  feedPhasesSubtitle: 'Order according to your simulation.',
   feedPhaseOrderBtn: 'Order this phase',
   feedPhaseOrderAllBtn: 'Order all',
   feedPhaseRecommended: '{{count}} bags recommended',
@@ -1585,4 +1599,24 @@
   feedPhasesLoadError: 'Unable to load feeding phases.',
   feedPhasesEmpty: 'No feeding phases available for this cycle.',
   feedPhaseAddedToCart: 'Added to cart',
+  appName: 'AquaCare',
+  stagingBuild: '⚠ TEST BUILD — STAGING',
+  validationRequiredMessage: 'This field is required.',
+  designSystemGallery: 'Design system gallery',
+  designSystemGalleryHint: 'Preview AquaCare components.',
+  designSystemColors: 'Colors',
+  designSystemButtons: 'Buttons',
+  designSystemFields: 'Fields',
+  designSystemCards: 'Cards and states',
+  designSystemCardDescription: 'An example of harmonized card content.',
+  designSystemSelectableCard: 'Selectable card',
+  designSystemAlertTitle: 'Information',
+  designSystemAlertMessage: 'Shared components use the same tokens.',
+  designSystemEmptyMessage: 'This example presents an empty state.',
+  designSystemErrorMessage: 'This example presents an error state.',
+  designSystemOpenSelection: 'Open selection',
+  designSystemOptionOne: 'First option',
+  designSystemOptionTwo: 'Second option',
+  languageFrench: 'French',
+  languageEnglish: 'English',
 };

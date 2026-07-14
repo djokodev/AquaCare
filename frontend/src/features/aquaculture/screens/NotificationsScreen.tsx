@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AppState, View, Text, FlatList, TouchableOpacity, ActivityIndicator, RefreshControl, Alert } from 'react-native';
+import { AppState, View, FlatList, RefreshControl, Alert, StyleSheet } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp, useRoute } from '@react-navigation/native';
@@ -17,15 +17,25 @@ import {
 } from '@/features/notifications/store/notificationSlice';
 import { Notification } from '@/types/notifications';
 import { RootStackParamList } from '@/navigation/MainNavigator';
-import { AQUACARE_COLORS } from '@/constants/colors';
+import { AppHeader, AppText, Button, Card, EmptyState, ErrorState, IconButton, InlineAlert, LoadingState, SegmentedControl } from '@/components/ui';
+import { colors, spacing } from '@/theme';
 
 const NOTIFICATION_COLORS = {
-  feeding_reminder: AQUACARE_COLORS.INFO,
-  sampling_reminder: AQUACARE_COLORS.WARNING,
-  treatment_reminder: AQUACARE_COLORS.ERROR,
-  cycle_milestone: AQUACARE_COLORS.SUCCESS,
-  alert: AQUACARE_COLORS.ERROR,
-  new_message: AQUACARE_COLORS.SUCCESS,
+  feeding_reminder: colors.status.info,
+  sampling_reminder: colors.status.warning,
+  treatment_reminder: colors.status.error,
+  cycle_milestone: colors.status.success,
+  alert: colors.status.error,
+  new_message: colors.status.success,
+};
+
+const NOTIFICATION_SURFACES = {
+  feeding_reminder: colors.status.infoSurface,
+  sampling_reminder: colors.status.warningSurface,
+  treatment_reminder: colors.status.errorSurface,
+  cycle_milestone: colors.status.successSurface,
+  alert: colors.status.errorSurface,
+  new_message: colors.status.successSurface,
 };
 
 type NotificationsScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Notifications'>;
@@ -38,56 +48,6 @@ interface NotificationsScreenProps {
 interface ErrorWithMessage {
   message?: string;
 }
-
-type NotificationCycleContext =
-  | {
-      kind: 'name';
-      value: string;
-    }
-  | {
-      kind: 'tag';
-      value: string;
-    }
-  | null;
-
-const getNotificationMetadataString = (
-  metadata: Record<string, unknown>,
-  keys: string[]
-): string | null => {
-  for (const key of keys) {
-    const value = metadata[key];
-    if (typeof value === 'string' && value.trim().length > 0) {
-      return value.trim();
-    }
-  }
-  return null;
-};
-
-const resolveNotificationCycleContext = (metadata: Record<string, unknown>): NotificationCycleContext => {
-  const cycleName = getNotificationMetadataString(metadata, [
-    'cycle_name',
-    'cycleName',
-    'cycle_label',
-    'cycleLabel',
-    'production_cycle_name',
-    'productionCycleName',
-  ]);
-  if (cycleName) {
-    return { kind: 'name', value: cycleName };
-  }
-
-  const cycleId = getNotificationMetadataString(metadata, [
-    'cycle_id',
-    'cycleId',
-    'production_cycle_id',
-    'productionCycleId',
-  ]);
-  if (cycleId) {
-    return { kind: 'tag', value: cycleId.slice(0, 8) };
-  }
-
-  return null;
-};
 
 export default function NotificationsScreen({ navigation }: NotificationsScreenProps) {
   const { t, i18n } = useTranslation();
@@ -201,7 +161,11 @@ export default function NotificationsScreen({ navigation }: NotificationsScreenP
   };
 
   const getNotificationColor = (type: string) => {
-    return NOTIFICATION_COLORS[type as keyof typeof NOTIFICATION_COLORS] || AQUACARE_COLORS.INFO;
+    return NOTIFICATION_COLORS[type as keyof typeof NOTIFICATION_COLORS] || colors.status.info;
+  };
+
+  const getNotificationSurface = (type: string) => {
+    return NOTIFICATION_SURFACES[type as keyof typeof NOTIFICATION_SURFACES] || colors.status.infoSurface;
   };
 
   const handleMarkAsRead = async (notification: Notification) => {
@@ -291,187 +255,75 @@ export default function NotificationsScreen({ navigation }: NotificationsScreenP
     ({ item: notification }: { item: Notification }) => {
       const iconName = getNotificationIcon(notification.notification_type);
       const color = getNotificationColor(notification.notification_type);
-      const cycleContext = resolveNotificationCycleContext(notification.metadata || {});
+      const surfaceColor = getNotificationSurface(notification.notification_type);
 
       return (
-        <View
-          className={`bg-white rounded-xl p-4 mb-3 ${!notification.is_read ? 'border-l-4 border-l-aquacare-primary bg-[#f0fdf4]' : ''}`}
-        >
-          <View className="flex-row">
-            <View className="w-12 h-12 rounded-full items-center justify-center mr-3" style={{ backgroundColor: `${color}20` }}>
+        <Card variant="outlined" style={styles.notificationCard}>
+          <View style={styles.notificationRow}>
+            <View style={[styles.iconSurface, { backgroundColor: surfaceColor }]}>
               <Ionicons name={iconName} size={24} color={color} />
             </View>
+            <View style={styles.flex}>
+              <AppText variant="bodyStrong" color={notification.is_read ? 'primary' : 'link'}>{notification.title}</AppText>
+              <AppText variant="body" color="muted" style={styles.message}>{notification.message}</AppText>
 
-            <View className="flex-1">
-              <View className="flex-row items-center mb-1">
-                <Text className={`text-base font-semibold flex-1 ${!notification.is_read ? 'text-aquacare-primary' : 'text-gray-dark'}`}>
-                  {notification.title}
-                </Text>
-              </View>
-
-              <Text className="text-sm text-gray-light mb-2 leading-5">{notification.message}</Text>
-
-              {cycleContext ? (
-                <View className="self-start flex-row items-center rounded-full bg-[#f0fdf4] px-2 py-1 mb-2">
-                  <Ionicons
-                    name="pricetag-outline"
-                    size={12}
-                    color={AQUACARE_COLORS.GREEN_PRIMARY}
-                  />
-                  <Text className="text-[11px] font-semibold text-aquacare-primary ml-1">
-                    {cycleContext.kind === 'name'
-                      ? t('notificationCycleContext', { cycleName: cycleContext.value })
-                      : t('notificationCycleTag', { cycleTag: cycleContext.value })}
-                  </Text>
-                </View>
-              ) : null}
-
-              <View className="flex-row justify-between items-center">
-                <Text className="text-xs text-gray-light">{formatRelativeDate(notification.scheduled_for)}</Text>
-                <Text className="text-xs font-semibold" style={{ color }}>
-                  {t(`notificationType_${notification.notification_type}`, notification.notification_type)}
-                </Text>
+              <View style={styles.metaRow}>
+                <AppText variant="caption" color="muted">{formatRelativeDate(notification.scheduled_for)}</AppText>
+                <AppText variant="caption" style={{ color }}>{t(`notificationType_${notification.notification_type}`, notification.notification_type)}</AppText>
               </View>
             </View>
           </View>
-
-          <View className="flex-row justify-between items-center pt-3 mt-2 border-t border-slate-100">
-            <TouchableOpacity
-              className="px-3 py-2 rounded-md bg-success/10"
-              onPress={() => handleMarkAsRead(notification)}
-            >
-              <Text className="text-xs font-semibold text-success">
-                {notification.is_read ? t('read') : t('markAsRead')}
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              className="px-3 py-2 rounded-md bg-error/10 flex-row items-center"
-              onPress={() => handleDeleteNotification(notification)}
-            >
-              <Ionicons name="trash-outline" size={16} color={AQUACARE_COLORS.ERROR} />
-              <Text className="ml-2 text-xs font-semibold text-error">{t('deleteNotification')}</Text>
-            </TouchableOpacity>
+          <View style={styles.actions}>
+            <Button label={notification.is_read ? t('read') : t('markAsRead')} variant="ghost" size="small" fullWidth={false} disabled={notification.is_read} onPress={() => handleMarkAsRead(notification)} />
+            <IconButton icon="trash-outline" variant="danger" tone="danger" accessibilityLabel={t('deleteNotification')} onPress={() => handleDeleteNotification(notification)} />
           </View>
-        </View>
+        </Card>
       );
     },
-    [t]
+    [t, i18n.language]
   );
 
   const renderListHeader = useCallback(
     () => (
-      <>
-        <View className="bg-white mx-4 mt-4 mb-4 p-4 rounded-xl flex-row justify-around">
-          <View className="items-center">
-            <Text className="text-2xl font-bold text-aquacare-primary">{totalNotifications}</Text>
-            <Text className="text-xs text-gray-light text-center">{t('totalNotifications')}</Text>
+      <View style={styles.listHeader}>
+        {error && notifications.length > 0 ? <InlineAlert tone="error" message={t(error)} /> : null}
+        <Card variant="outlined" style={styles.metrics}>
+          <View style={styles.metric}>
+            <AppText variant="metric" color="link">{totalNotifications}</AppText>
+            <AppText variant="caption" color="muted" style={styles.center}>{t('totalNotifications')}</AppText>
           </View>
-          <View className="items-center">
-            <Text className="text-2xl font-bold text-warning">{unreadCount}</Text>
-            <Text className="text-xs text-gray-light text-center">{t('unreadNotifications')}</Text>
+          <View style={styles.metric}>
+            <AppText variant="metric" color="warning">{unreadCount}</AppText>
+            <AppText variant="caption" color="muted" style={styles.center}>{t('unreadNotifications')}</AppText>
           </View>
-        </View>
-
-        <View className="bg-white mx-4 mb-4 p-4 rounded-xl">
-          <Text className="text-base font-bold text-gray-dark mb-3">{t('filterNotifications')}</Text>
-          <View className="flex-row justify-around">
-            {(['all', 'unread', 'read'] as const).map((filter) => (
-              <TouchableOpacity
-                key={filter}
-                className={`px-4 py-2 rounded-full border ${
-                  selectedFilter === filter ? 'bg-aquacare-primary border-aquacare-primary' : 'bg-cream border-gray-light'
-                }`}
-                onPress={() => setSelectedFilter(filter)}
-              >
-                <Text className={`text-sm font-medium ${selectedFilter === filter ? 'text-white' : 'text-gray-dark'}`}>
-                  {filter === 'all' ? t('allNotifications') : filter === 'unread' ? t('unread') : t('read')}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-
-        <View className="px-4">
-          <Text className="text-lg font-bold text-gray-dark mb-4">
-            {t('notificationsList')} ({sortedNotifications.length})
-          </Text>
-        </View>
-      </>
+        </Card>
+        <AppText variant="label">{t('filterNotifications')}</AppText>
+        <SegmentedControl value={selectedFilter} options={[
+          { value: 'all', label: t('allNotifications') },
+          { value: 'unread', label: t('unread') },
+          { value: 'read', label: t('read') },
+        ]} onChange={(value) => setSelectedFilter(value as typeof selectedFilter)} />
+        <AppText variant="sectionTitle">{t('notificationsList')} ({sortedNotifications.length})</AppText>
+      </View>
     ),
-    [selectedFilter, sortedNotifications.length, t, totalNotifications, unreadCount]
+    [error, notifications.length, selectedFilter, sortedNotifications.length, t, totalNotifications, unreadCount]
   );
 
   const renderEmptyList = useCallback(
     () => {
-      if (loading) {
-        return (
-          <View className="items-center py-10">
-            <ActivityIndicator size="large" color={AQUACARE_COLORS.GREEN_PRIMARY} />
-            <Text className="text-sm text-gray-light mt-3">{t('loading')}</Text>
-          </View>
-        );
-      }
-
-      return (
-        <View className="items-center py-10 px-4">
-          <Ionicons name="notifications-outline" size={64} color={AQUACARE_COLORS.GRAY_LIGHT} />
-          <Text className="text-lg font-bold text-gray-dark mt-3">
-            {selectedFilter === 'unread'
-              ? t('noUnreadNotifications')
-              : selectedFilter === 'read'
-                ? t('noReadNotifications')
-                : t('noNotifications')}
-          </Text>
-          <Text className="text-sm text-gray-light text-center mt-1">{t('notificationsWillAppear')}</Text>
-        </View>
-      );
+      if (loading) return <LoadingState message={t('loading')} />;
+      return <EmptyState title={selectedFilter === 'unread' ? t('noUnreadNotifications') : selectedFilter === 'read' ? t('noReadNotifications') : t('noNotifications')} message={t('notificationsWillAppear')} />;
     },
     [loading, selectedFilter, t]
   );
 
-  const renderHeader = () => (
-    <View className="bg-aquacare-primary flex-row items-center pt-14 pb-4 px-4">
-      <TouchableOpacity className="mr-4" onPress={() => navigation.goBack()}>
-        <Ionicons name="arrow-back" size={24} color={AQUACARE_COLORS.WHITE} />
-      </TouchableOpacity>
-      <View className="flex-1 flex-row items-center">
-        <Text className="text-xl font-bold text-white mr-2">{t('notifications')}</Text>
-        {unreadCount > 0 && (
-          <View className="bg-error rounded-full px-2 py-0.5 min-w-[24px] items-center">
-            <Text className="text-white text-xs font-bold">{unreadCount}</Text>
-          </View>
-        )}
-      </View>
-      <View className="flex-row items-center gap-2">
-        {unreadCount > 0 && (
-          <TouchableOpacity className="p-2 bg-white/20 rounded-md" onPress={handleMarkAllAsRead}>
-            <Ionicons name="checkmark-done" size={20} color={AQUACARE_COLORS.WHITE} />
-          </TouchableOpacity>
-        )}
-        {readNotificationsCount > 0 && (
-          <TouchableOpacity className="p-2 bg-white/20 rounded-md" onPress={handleDeleteAllRead}>
-            <Ionicons name="trash" size={20} color={AQUACARE_COLORS.WHITE} />
-          </TouchableOpacity>
-        )}
-      </View>
-    </View>
-  );
+  const renderHeader = () => <AppHeader title={t('notifications')} subtitle={unreadCount > 0 ? `${unreadCount} ${t('unread')}` : undefined} onBack={() => navigation.goBack()} backLabel={t('back')} rightAction={<View style={styles.headerActions}>{unreadCount > 0 ? <IconButton icon="checkmark-done" tone="inverse" variant="ghost" accessibilityLabel={t('markAllAsRead')} onPress={handleMarkAllAsRead} /> : null}{readNotificationsCount > 0 ? <IconButton icon="trash" tone="inverse" variant="ghost" accessibilityLabel={t('deleteAllRead')} onPress={handleDeleteAllRead} /> : null}</View>} />;
 
-  if (error) {
+  if (error && notifications.length === 0) {
     return (
       <View className="flex-1 bg-cream">
         {renderHeader()}
-        <View className="flex-1 items-center justify-center p-6">
-          <Ionicons name="alert-circle" size={48} color={AQUACARE_COLORS.ERROR} />
-          <Text className="text-lg text-error text-center mt-3">{error ? t(error) : ''}</Text>
-          <TouchableOpacity
-            className="mt-4 bg-aquacare-primary px-5 py-3 rounded-lg"
-            onPress={() => dispatch(fetchNotifications({ cycleId: effectiveCycleId }))}
-          >
-            <Text className="text-white text-base font-semibold">{t('retry')}</Text>
-          </TouchableOpacity>
-        </View>
+        <ErrorState title={error ? t(error) : t('error')} actionLabel={t('retry')} onAction={() => dispatch(fetchNotifications({ cycleId: effectiveCycleId }))} />
       </View>
     );
   }
@@ -486,10 +338,26 @@ export default function NotificationsScreen({ navigation }: NotificationsScreenP
         renderItem={renderNotificationItem}
         ListHeaderComponent={renderListHeader}
         ListEmptyComponent={renderEmptyList}
-        contentContainerStyle={{ paddingBottom: 16, paddingHorizontal: 16 }}
+        contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={loading} onRefresh={onRefresh} />}
+        refreshControl={<RefreshControl refreshing={loading} onRefresh={onRefresh} tintColor={colors.brand.primary} />}
       />
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  flex: { flex: 1 },
+  content: { padding: spacing[4], paddingBottom: spacing[6], gap: spacing[3] },
+  listHeader: { gap: spacing[3], marginBottom: spacing[1] },
+  metrics: { flexDirection: 'row', justifyContent: 'space-around' },
+  metric: { flex: 1, alignItems: 'center', gap: spacing[1] },
+  center: { textAlign: 'center' },
+  notificationCard: { gap: spacing[3], marginBottom: spacing[3], backgroundColor: colors.surface.card, borderColor: colors.border.default },
+  notificationRow: { flexDirection: 'row', gap: spacing[3] },
+  iconSurface: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
+  message: { marginVertical: spacing[2] },
+  metaRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing[2], marginTop: spacing[2] },
+  actions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border.subtle, paddingTop: spacing[2] },
+  headerActions: { flexDirection: 'row' },
+});

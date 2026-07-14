@@ -1,15 +1,6 @@
 import React, { useState, useEffect } from "react";
-import {
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  TextInput,
-  Alert,
-  ActivityIndicator,
-} from "react-native";
+import { Alert, View } from "react-native";
 import { useTranslation } from "react-i18next";
-import { Ionicons } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { useDispatch } from "react-redux";
 
@@ -22,8 +13,21 @@ import {
   buildAdditionalCycleLaunchRequest,
   validateAdditionalCycleLaunch,
 } from "@/features/aquaculture/services/additionalCycleLaunchService";
-import { AQUACARE_COLORS } from "@/constants/colors";
-import { sharedTextInputStyles } from "@/components/common/inputStyles";
+import {
+  AppHeader,
+  AppText,
+  Button,
+  Card,
+  EmptyState,
+  ErrorState,
+  InlineAlert,
+  LoadingState,
+  Screen,
+  SegmentedControl,
+  SelectableCard,
+  TextField,
+} from "@/components/ui";
+import { spacing } from "@/theme";
 import {
   estimateBiomass,
   estimateDensityWithUnit,
@@ -275,507 +279,85 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
     }
   };
 
+  const numberSuffix = (label: string) => (
+    <AppText variant="caption" color="link">{label}</AppText>
+  );
+
   return (
-    <ScrollView className="flex-1 bg-cream">
-      <View className="bg-aquacare-primary flex-row items-center pt-14 pb-4 px-4">
-        <TouchableOpacity
-          testID="newCycleBackButton"
-          className="mr-4"
-          onPress={handleGoBack}
-          accessibilityRole="button"
-          accessibilityLabel={t("back")}
-        >
-          <Ionicons name="arrow-back" size={24} color={AQUACARE_COLORS.WHITE} />
-        </TouchableOpacity>
-        <Text className="text-xl font-bold text-white">
-          {t("newCycleTitle")}
-        </Text>
-      </View>
-
-      <View className="p-4">
-        <View className="bg-white p-4 rounded-lg flex-row items-center mb-6 gap-3 border border-gray-200">
-          <Ionicons
-            name="business"
-            size={20}
-            color={AQUACARE_COLORS.GREEN_PRIMARY}
-          />
-          <Text className="text-base font-semibold text-gray-dark">
-            {farmProfile?.farm_name || t("farmNotDefined")}
-          </Text>
-        </View>
-
-        <View className="mb-6">
-          <Text className="text-base font-bold text-gray-dark mb-3">
-            {t("speciesSelection")} {t("requiredField")}
-          </Text>
-          <View className="gap-2">
-            {SPECIES_OPTIONS.map((species) => (
-              <TouchableOpacity
-                key={species.value}
-                className={`p-4 rounded-lg border flex-row items-center justify-between ${
-                  formData.species === species.value
-                    ? "bg-aquacare-primary border-aquacare-primary"
-                    : "bg-white border-gray-200"
-                }`}
-                onPress={() => applyEconomicDefaults(species.value)}
-              >
-                <View className="flex-1 mr-2">
-                  <Text
-                    className={`text-base font-semibold ${
-                      formData.species === species.value
-                        ? "text-white"
-                        : "text-gray-dark"
-                    }`}
-                  >
-                    {t(species.labelKey)}
-                  </Text>
-                  <Text
-                    className={`text-sm ${
-                      formData.species === species.value
-                        ? "text-white"
-                        : "text-gray-light"
-                    }`}
-                  >
-                    {species.durationDays} {t("days")}
-                  </Text>
-                </View>
-                {formData.species === species.value && (
-                  <Ionicons
-                    name="checkmark-circle"
-                    size={20}
-                    color={AQUACARE_COLORS.WHITE}
-                  />
-                )}
-              </TouchableOpacity>
-            ))}
+    <View style={{ flex: 1 }}>
+      <AppHeader title={t("newCycleTitle")} onBack={handleGoBack} backLabel={t("back")} />
+      <Screen scroll scrollProps={{ contentContainerStyle: { padding: spacing[4] } }}>
+        <View style={{ gap: spacing[5] }}>
+          <Card variant="outlined"><AppText variant="cardTitle">{farmProfile?.farm_name || t("farmNotDefined")}</AppText></Card>
+          <View style={{ gap: spacing[3] }}>
+            <AppText variant="sectionTitle">{t("speciesSelection")}</AppText>
+            <SegmentedControl
+              value={formData.species as "clarias" | "tilapia"}
+              options={SPECIES_OPTIONS.map(({ value, labelKey }) => ({ value, label: t(labelKey) }))}
+              onChange={applyEconomicDefaults}
+            />
           </View>
-        </View>
-
-        <View className="mb-6">
-          <Text className="text-base font-bold text-gray-dark mb-3">
-            {t("newCycleSelectUnitsTitle")}
-          </Text>
-          <Text className="text-sm text-gray-light mb-3">
-            {t("newCycleSelectUnitsDescription")}
-          </Text>
-
-          {loadingUnits ? (
-            <View className="bg-white p-4 rounded-lg items-center">
-              <ActivityIndicator color={AQUACARE_COLORS.GREEN_PRIMARY} />
-              <Text className="text-sm text-gray-light mt-2">
-                {t("productionUnitsLoading")}
-              </Text>
-            </View>
-          ) : unitsLoadError ? (
-            <View className="bg-white p-4 rounded-lg border border-red-200">
-              <Text className="text-sm text-red-600">
-                {t("productionUnitsLoadError")}
-              </Text>
-              <Text className="text-sm text-gray-light mt-1">
-                {t("cycleLaunchNetworkRetry")}
-              </Text>
-            </View>
-          ) : availableUnits.length === 0 ? (
-            <View className="bg-white p-4 rounded-lg border border-gray-200">
-              <Text className="text-sm text-gray-light">
-                {t("newCycleNoExistingUnits")}
-              </Text>
-            </View>
-          ) : (
-            availableUnits.map((unit) => {
+          <View style={{ gap: spacing[3] }}>
+            <AppText variant="sectionTitle">{t("newCycleSelectUnitsTitle")}</AppText>
+            <AppText color="muted">{t("newCycleSelectUnitsDescription")}</AppText>
+            {loadingUnits ? <LoadingState compact message={t("productionUnitsLoading")} /> : null}
+            {unitsLoadError ? <ErrorState compact message={t("productionUnitsLoadError")} /> : null}
+            {!loadingUnits && !unitsLoadError && availableUnits.length === 0 ? <EmptyState compact message={t("newCycleNoExistingUnits")} /> : null}
+            {!loadingUnits && !unitsLoadError ? availableUnits.map((unit) => {
               const selected = selectedUnitIds.includes(unit.id);
-              const unitTypeKey =
-                unit.unit_type === "pond"
-                  ? "productionUnitTypePond"
-                  : unit.unit_type === "cage"
-                    ? "productionUnitTypeCage"
-                    : "productionUnitTypeTank";
-              const dimension =
-                unit.display_dimension ||
-                getProductionUnitDisplayDimension(unit);
-              const capacity =
-                unit.recommended_capacity ?? getProductionUnitCapacity(unit);
+              const unitTypeKey = unit.unit_type === "pond" ? "productionUnitTypePond" : unit.unit_type === "cage" ? "productionUnitTypeCage" : "productionUnitTypeTank";
+              const dimension = unit.display_dimension || getProductionUnitDisplayDimension(unit);
+              const capacity = unit.recommended_capacity ?? getProductionUnitCapacity(unit);
               const allocation = allocationsByUnitId[unit.id] ?? "";
-              const numericAllocation = parseFormNumber(allocation);
               const densityUnit = getProductionUnitDensityUnit(unit);
-              const dimensionValue =
-                unit.unit_type === "pond" ? unit.surface_m2 : unit.volume_m3;
-              const density =
-                dimensionValue && numericAllocation > 0
-                  ? (numericAllocation / dimensionValue).toFixed(2)
-                  : null;
-
+              const dimensionValue = unit.unit_type === "pond" ? unit.surface_m2 : unit.volume_m3;
+              const numericAllocation = parseFormNumber(allocation);
+              const density = dimensionValue && numericAllocation > 0 ? (numericAllocation / dimensionValue).toFixed(2) : null;
               return (
-                <View
-                  key={unit.id}
-                  className="bg-white rounded-lg border border-gray-200 p-3 mb-3"
-                >
-                  <TouchableOpacity
-                    testID={`newCycleUnit-${unit.id}`}
-                    className="flex-row items-center"
-                    onPress={() => toggleUnit(unit)}
-                    accessibilityRole="checkbox"
-                    accessibilityState={{ checked: selected }}
-                  >
-                    <Ionicons
-                      name={selected ? "checkbox" : "square-outline"}
-                      size={22}
-                      color={
-                        selected
-                          ? AQUACARE_COLORS.GREEN_PRIMARY
-                          : AQUACARE_COLORS.GRAY_LIGHT
-                      }
-                    />
-                    <View className="ml-3 flex-1">
-                      <Text className="text-base font-semibold text-gray-dark">
-                        {unit.name}
-                      </Text>
-                      <Text className="text-sm text-gray-light">
-                        {t(unitTypeKey)}
-                        {dimension ? ` · ${dimension}` : ""}
-                      </Text>
-                      <Text className="text-xs text-gray-light">
-                        {t("createFarmUnitCapacityLabel", {
-                          count: capacity ?? 0,
-                        })}
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-
-                  {selected ? (
-                    <View className="mt-3">
-                      <Text className="text-sm font-medium text-gray-dark mb-1">
-                        {t("createFarmProductionUnitAssignedFishLabel")}
-                      </Text>
-                      <TextInput
-                        testID={`newCycleAllocation-${unit.id}`}
-                        className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-base text-gray-dark"
-                        style={sharedTextInputStyles.base}
-                        value={allocation}
-                        onChangeText={(value) =>
-                          setAllocationsByUnitId((current) => ({
-                            ...current,
-                            [unit.id]: value,
-                          }))
-                        }
-                        placeholder={t(
-                          "createFarmProductionUnitAssignedFishPlaceholder",
-                        )}
-                        keyboardType="numeric"
-                      />
-                      {density && densityUnit ? (
-                        <Text className="text-xs text-gray-light mt-1">
-                          {t("createFarmProductionUnitDensityLabel")}: {density}{" "}
-                          {densityUnit}
-                        </Text>
-                      ) : null}
-                    </View>
-                  ) : null}
+                <View key={unit.id} style={{ gap: spacing[2] }}>
+                  <SelectableCard testID={`newCycleUnit-${unit.id}`} selected={selected} onPress={() => toggleUnit(unit)} accessibilityLabel={unit.name} primaryBorder>
+                    <AppText variant="cardTitle">{unit.name}</AppText>
+                    <AppText color="muted">{t(unitTypeKey)}{dimension ? ` · ${dimension}` : ""}</AppText>
+                    <AppText variant="helper" color="muted">{t("createFarmUnitCapacityLabel", { count: capacity ?? 0 })}</AppText>
+                  </SelectableCard>
+                  {selected ? <Card variant="outlined">
+                    <TextField testID={`newCycleAllocation-${unit.id}`} label={t("createFarmProductionUnitAssignedFishLabel")} value={allocation} onChangeText={(value) => setAllocationsByUnitId((current) => ({ ...current, [unit.id]: value }))} placeholder={t("createFarmProductionUnitAssignedFishPlaceholder")} keyboardType="numeric" />
+                    {density && densityUnit ? <AppText variant="helper" color="muted">{t("createFarmProductionUnitDensityLabel")}: {density} {densityUnit}</AppText> : null}
+                  </Card> : null}
                 </View>
               );
-            })
-          )}
+            }) : null}
+          </View>
+          <View style={{ gap: spacing[3] }}>
+            <AppText variant="sectionTitle">{t("initialStocking")}</AppText>
+            <TextField testID="newCycleInitialCount" label={t("initialCount")} required value={formData.initial_count} onChangeText={(value) => setFormData((prev) => ({ ...prev, initial_count: value }))} placeholder={t("exampleValuePlaceholder", { value: 1000 })} keyboardType="numeric" />
+            <TextField testID="newCycleInitialWeight" label={t("initialWeight")} required value={formData.initial_average_weight} onChangeText={(value) => setFormData((prev) => ({ ...prev, initial_average_weight: value }))} placeholder={t("exampleValuePlaceholder", { value: 10 })} keyboardType="numeric" suffix={numberSuffix("g")} />
+            <TextField label={t("startDate")} required value={formData.start_date} onChangeText={(value) => setFormData((prev) => ({ ...prev, start_date: value }))} placeholder={t("dateFormatPlaceholder")} />
+            <TextField testID="newCycleName" label={t("cycleName")} value={formData.cycle_name} onChangeText={(value) => setFormData((prev) => ({ ...prev, cycle_name: value }))} placeholder={t("cycleNamePlaceholder")} />
+          </View>
+          <View style={{ gap: spacing[3] }}>
+            <AppText variant="sectionTitle">{t("economicProjectionTitle")}</AppText>
+            <TextField testID="newCycleTargetWeight" label={t("targetWeight")} required value={formData.target_harvest_weight_g} onChangeText={(value) => setFormData((prev) => ({ ...prev, target_harvest_weight_g: value }))} placeholder={t("exampleValuePlaceholder", { value: formData.species === "clarias" ? 400 : 300 })} keyboardType="numeric" suffix={numberSuffix("g")} />
+            <TextField testID="newCycleDuration" label={t("cycleDuration")} required value={formData.planned_cycle_duration_days} onChangeText={(value) => setFormData((prev) => ({ ...prev, planned_cycle_duration_days: value }))} placeholder={t("exampleValuePlaceholder", { value: formData.species === "clarias" ? 150 : 120 })} keyboardType="numeric" suffix={numberSuffix(t("days"))} />
+            <TextField testID="newCycleSurvival" label={t("survivalRate")} required value={formData.expected_survival_rate_pct} onChangeText={(value) => setFormData((prev) => ({ ...prev, expected_survival_rate_pct: value }))} placeholder={t("exampleValuePlaceholder", { value: 85 })} keyboardType="numeric" suffix={numberSuffix("%")} />
+            <TextField testID="newCycleSellingPrice" label={t("preEstimatedSellingPrice")} hint={t("buyerNetworkSellingPriceHint")} value={formData.planned_selling_price_per_kg_fcfa} onChangeText={(value) => setFormData((prev) => ({ ...prev, planned_selling_price_per_kg_fcfa: value }))} placeholder={t("exampleValuePlaceholder", { value: formData.species === "clarias" ? ECONOMIC_DEFAULTS.clarias.planned_selling_price_per_kg_fcfa : ECONOMIC_DEFAULTS.tilapia.planned_selling_price_per_kg_fcfa })} keyboardType="numeric" suffix={numberSuffix("FCFA")} />
+            <TextField label={t("fingerlingsCostFcfa")} value={formData.fingerlings_cost_fcfa} onChangeText={(value) => setFormData((prev) => ({ ...prev, fingerlings_cost_fcfa: value }))} placeholder={t("zeroValuePlaceholder")} keyboardType="numeric" suffix={numberSuffix("FCFA")} />
+            <TextField label={t("otherOperationalCosts")} value={formData.other_operational_costs_fcfa} onChangeText={(value) => setFormData((prev) => ({ ...prev, other_operational_costs_fcfa: value }))} placeholder={t("zeroValuePlaceholder")} keyboardType="numeric" suffix={numberSuffix("FCFA")} />
+          </View>
+          {formData.initial_count && formData.initial_average_weight ? (() => {
+            const density = estimateDensityValue();
+            const expectedDuration = formData.planned_cycle_duration_days || getSelectedSpecies()?.durationDays;
+            return <Card variant="outlined" style={{ gap: spacing[2] }}>
+              <AppText variant="sectionTitle">{t("autoCalculations")}</AppText>
+              <AppText color="muted">{t("initialBiomass")}: <AppText color="link">{estimateInitialBiomass()} kg</AppText></AppText>
+              {formData.pond_surface_m2 || formData.pond_volume_m3 ? <AppText color="muted">{t("initialDensity")}: <AppText color="link">{density.value} {density.unit}</AppText></AppText> : null}
+              {expectedDuration ? <AppText color="muted">{t("expectedDuration")}: <AppText color="link">{expectedDuration} {t("days")}</AppText></AppText> : null}
+            </Card>;
+          })() : null}
+          {!isFormValid ? <InlineAlert tone="info" message={validationErrorKey ? t(validationErrorKey) : undefined} /> : null}
+          <Button testID="newCycleSubmit" label={t("createCycle")} onPress={handleSave} disabled={!isFormValid} loading={saving} iconLeft="checkmark" />
         </View>
-
-        <View className="mb-6">
-          <Text className="text-base font-bold text-gray-dark mb-3">
-            {t("initialStocking")}
-          </Text>
-
-          <View className="flex-row gap-3">
-            <View className="flex-1 mb-4">
-              <Text className="text-sm font-medium text-gray-dark mb-2">
-                {t("initialCount")} {t("requiredField")}
-              </Text>
-              <TextInput
-                testID="newCycleInitialCount"
-                className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
-                style={sharedTextInputStyles.base}
-                value={formData.initial_count}
-                onChangeText={(value) =>
-                  setFormData((prev) => ({ ...prev, initial_count: value }))
-                }
-                placeholder={t("exampleValuePlaceholder", { value: 1000 })}
-                keyboardType="numeric"
-              />
-            </View>
-
-            <View className="flex-1 mb-4">
-              <Text className="text-sm font-medium text-gray-dark mb-2">
-                {t("initialWeight")} {t("requiredField")}
-              </Text>
-              <TextInput
-                testID="newCycleInitialWeight"
-                className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
-                style={sharedTextInputStyles.base}
-                value={formData.initial_average_weight}
-                onChangeText={(value) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    initial_average_weight: value,
-                  }))
-                }
-                placeholder={t("exampleValuePlaceholder", { value: 10 })}
-                keyboardType="numeric"
-              />
-            </View>
-          </View>
-
-          <View className="mb-4">
-            <Text className="text-sm font-medium text-gray-dark mb-2">
-              {t("startDate")} {t("requiredField")}
-            </Text>
-            <TextInput
-              className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
-              style={sharedTextInputStyles.base}
-              value={formData.start_date}
-              onChangeText={(value) =>
-                setFormData((prev) => ({ ...prev, start_date: value }))
-              }
-              placeholder={t("dateFormatPlaceholder")}
-            />
-          </View>
-
-          <View className="mb-4">
-            <Text className="text-sm font-medium text-gray-dark mb-2">
-              {t("cycleName")}
-            </Text>
-            <TextInput
-              className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
-              style={sharedTextInputStyles.base}
-              testID="newCycleName"
-              value={formData.cycle_name}
-              onChangeText={(value) =>
-                setFormData((prev) => ({ ...prev, cycle_name: value }))
-              }
-              placeholder={t("cycleNamePlaceholder")}
-            />
-          </View>
-        </View>
-
-        <View className="mb-6">
-          <Text className="text-base font-bold text-gray-dark mb-3">
-            {t("economicProjectionTitle")}
-          </Text>
-
-          <View className="flex-row gap-3">
-            <View className="flex-1 mb-4">
-              <Text className="text-sm font-medium text-gray-dark mb-2">
-                {t("targetWeight")} (g) {t("requiredField")}
-              </Text>
-              <TextInput
-                testID="newCycleTargetWeight"
-                className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
-                style={sharedTextInputStyles.base}
-                value={formData.target_harvest_weight_g}
-                onChangeText={(value) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    target_harvest_weight_g: value,
-                  }))
-                }
-                placeholder={t("exampleValuePlaceholder", {
-                  value: formData.species === "clarias" ? 400 : 300,
-                })}
-                keyboardType="numeric"
-              />
-            </View>
-
-            <View className="flex-1 mb-4">
-              <Text className="text-sm font-medium text-gray-dark mb-2">
-                {t("cycleDuration")} ({t("days")}) {t("requiredField")}
-              </Text>
-              <TextInput
-                testID="newCycleDuration"
-                className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
-                style={sharedTextInputStyles.base}
-                value={formData.planned_cycle_duration_days}
-                onChangeText={(value) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    planned_cycle_duration_days: value,
-                  }))
-                }
-                placeholder={t("exampleValuePlaceholder", {
-                  value: formData.species === "clarias" ? 150 : 120,
-                })}
-                keyboardType="numeric"
-              />
-            </View>
-          </View>
-
-          <View className="flex-row gap-3">
-            <View className="flex-1 mb-4">
-              <Text className="text-sm font-medium text-gray-dark mb-2">
-                {t("survivalRate")} (%) {t("requiredField")}
-              </Text>
-              <TextInput
-                testID="newCycleSurvival"
-                className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
-                style={sharedTextInputStyles.base}
-                value={formData.expected_survival_rate_pct}
-                onChangeText={(value) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    expected_survival_rate_pct: value,
-                  }))
-                }
-                placeholder={t("exampleValuePlaceholder", { value: 85 })}
-                keyboardType="numeric"
-              />
-            </View>
-
-            <View className="flex-1 mb-4">
-              <Text className="text-sm font-medium text-gray-dark mb-2">
-                {t("preEstimatedSellingPrice")}
-              </Text>
-              <TextInput
-                testID="newCycleSellingPrice"
-                className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
-                style={sharedTextInputStyles.base}
-                value={formData.planned_selling_price_per_kg_fcfa}
-                onChangeText={(value) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    planned_selling_price_per_kg_fcfa: value,
-                  }))
-                }
-                placeholder={t("exampleValuePlaceholder", {
-                  value:
-                    formData.species === "clarias"
-                      ? ECONOMIC_DEFAULTS.clarias
-                          .planned_selling_price_per_kg_fcfa
-                      : ECONOMIC_DEFAULTS.tilapia
-                          .planned_selling_price_per_kg_fcfa,
-                })}
-                keyboardType="numeric"
-              />
-              <Text
-                style={{
-                  fontSize: 11,
-                  color: AQUACARE_COLORS.GREEN_PRIMARY,
-                  marginTop: 4,
-                }}
-              >
-                {t("buyerNetworkSellingPriceHint")}
-              </Text>
-            </View>
-          </View>
-
-          <View className="flex-row gap-3">
-            <View className="flex-1 mb-4">
-              <Text className="text-sm font-medium text-gray-dark mb-2">
-                {t("fingerlingsCostFcfa")}
-              </Text>
-              <TextInput
-                className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
-                style={sharedTextInputStyles.base}
-                value={formData.fingerlings_cost_fcfa}
-                onChangeText={(value) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    fingerlings_cost_fcfa: value,
-                  }))
-                }
-                placeholder={t("zeroValuePlaceholder")}
-                keyboardType="numeric"
-              />
-            </View>
-
-            <View className="flex-1 mb-4">
-              <Text className="text-sm font-medium text-gray-dark mb-2">
-                {t("otherOperationalCosts")}
-              </Text>
-              <TextInput
-                className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
-                style={sharedTextInputStyles.base}
-                value={formData.other_operational_costs_fcfa}
-                onChangeText={(value) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    other_operational_costs_fcfa: value,
-                  }))
-                }
-                placeholder={t("zeroValuePlaceholder")}
-                keyboardType="numeric"
-              />
-            </View>
-          </View>
-        </View>
-
-        {formData.initial_count && formData.initial_average_weight
-          ? (() => {
-              const density = estimateDensityValue();
-              const selectedSpecies = getSelectedSpecies();
-              const expectedDuration =
-                formData.planned_cycle_duration_days ||
-                selectedSpecies?.durationDays;
-
-              return (
-                <View className="mb-6">
-                  <Text className="text-base font-bold text-gray-dark mb-3">
-                    {t("autoCalculations")}
-                  </Text>
-                  <View className="bg-white p-4 rounded-lg border border-green-200">
-                    <View className="flex-row justify-between mb-2">
-                      <Text className="text-sm text-gray-light">
-                        {t("initialBiomass")} :
-                      </Text>
-                      <Text className="text-sm font-semibold text-aquacare-primary">
-                        {estimateInitialBiomass()} kg
-                      </Text>
-                    </View>
-
-                    {(formData.pond_surface_m2 || formData.pond_volume_m3) && (
-                      <View className="flex-row justify-between mb-2">
-                        <Text className="text-sm text-gray-light">
-                          {t("initialDensity")} :
-                        </Text>
-                        <Text className="text-sm font-semibold text-aquacare-primary">
-                          {density.value} {density.unit}
-                        </Text>
-                      </View>
-                    )}
-
-                    {expectedDuration && (
-                      <View className="flex-row justify-between">
-                        <Text className="text-sm text-gray-light">
-                          {t("expectedDuration")} :
-                        </Text>
-                        <Text className="text-sm font-semibold text-aquacare-primary">
-                          {expectedDuration} {t("days")}
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-                </View>
-              );
-            })()
-          : null}
-
-        <TouchableOpacity
-          className={`bg-aquacare-primary flex-row items-center justify-center py-4 rounded-lg mt-4 gap-2 ${
-            !isFormValid || saving ? "opacity-60" : ""
-          }`}
-          onPress={handleSave}
-          disabled={!isFormValid || saving}
-        >
-          {saving ? (
-            <ActivityIndicator size="small" color={AQUACARE_COLORS.WHITE} />
-          ) : (
-            <>
-              <Ionicons
-                name="checkmark"
-                size={20}
-                color={AQUACARE_COLORS.WHITE}
-              />
-              <Text className="text-white text-base font-semibold">
-                {t("createCycle")}
-              </Text>
-            </>
-          )}
-        </TouchableOpacity>
-      </View>
-    </ScrollView>
+      </Screen>
+    </View>
   );
 }

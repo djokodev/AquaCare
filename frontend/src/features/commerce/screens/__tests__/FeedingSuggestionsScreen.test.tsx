@@ -1,5 +1,6 @@
 import React from 'react';
-import { Alert } from 'react-native';
+jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }) }));
+import { Alert, RefreshControl } from 'react-native';
 import { fireEvent, render } from '@testing-library/react-native';
 
 import FeedingSuggestionsScreen from '../FeedingSuggestionsScreen';
@@ -117,10 +118,14 @@ describe('FeedingSuggestionsScreen', () => {
   });
 
   it('affiche les suggestions, details phase et ajout cycle au panier', () => {
-    const { getByText } = render(<FeedingSuggestionsScreen />);
+    const { getByLabelText, getByText } = render(<FeedingSuggestionsScreen />);
 
-    fireEvent.press(getByText('Cycle Tilapia'));
-    fireEvent.press(getByText('Phase 1'));
+    expect(getByLabelText('Cycle Tilapia, details').props.accessibilityState.expanded).toBe(false);
+    fireEvent.press(getByLabelText('Cycle Tilapia, details'));
+    expect(getByLabelText('Cycle Tilapia, collapseActions').props.accessibilityState.expanded).toBe(true);
+    expect(getByLabelText('Phase 1, details').props.accessibilityState.expanded).toBe(false);
+    fireEvent.press(getByLabelText('Phase 1, details'));
+    expect(getByLabelText('Phase 1, collapseActions').props.accessibilityState.expanded).toBe(true);
     expect(getByText('recommendedProducts')).toBeTruthy();
 
     fireEvent.press(getByText('addAllToCart'));
@@ -129,6 +134,31 @@ describe('FeedingSuggestionsScreen', () => {
       'cycleProductsAddedToCart',
       expect.any(Array)
     );
+  });
+
+  it('ajoute un produit et signale un produit absent', () => {
+    const { getByLabelText } = render(<FeedingSuggestionsScreen />);
+    fireEvent.press(getByLabelText('Cycle Tilapia, details'));
+    fireEvent.press(getByLabelText('Phase 1, details'));
+    fireEvent.press(getByLabelText('addToCart Feed Smart'));
+    expect(mockDispatch).toHaveBeenCalled();
+
+    mockState.commerce.products.items = [];
+    const missing = render(<FeedingSuggestionsScreen />);
+    fireEvent.press(missing.getByLabelText('Cycle Tilapia, details'));
+    fireEvent.press(missing.getByLabelText('Phase 1, details'));
+    fireEvent.press(missing.getByLabelText('addToCart Feed Smart'));
+    expect(Alert.alert).toHaveBeenCalledWith('error', 'productNotFound');
+  });
+
+  it('rafraichit et conserve les suggestions en cas d erreur', async () => {
+    mockState.commerce.suggestions.error = 'refresh failed';
+    const { getByText, UNSAFE_getByType } = render(<FeedingSuggestionsScreen />);
+
+    expect(getByText('Cycle Tilapia')).toBeTruthy();
+    expect(getByText('refresh failed')).toBeTruthy();
+    await UNSAFE_getByType(RefreshControl).props.onRefresh();
+    expect(mockDispatch).toHaveBeenCalled();
   });
 
   it('affiche l etat vide et redirige vers nouveau cycle', () => {

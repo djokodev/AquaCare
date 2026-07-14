@@ -1,11 +1,21 @@
 import React from 'react';
-import { Alert } from 'react-native';
+import { Alert, StyleSheet } from 'react-native';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import SanitaryLogScreen from '../SanitaryLogScreen';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
 import { offlineService } from '@/services/offlineService';
 import { useDispatch, useSelector } from 'react-redux';
 import { ProductionCycle } from '@/types/aquaculture';
+import { colors } from '@/theme';
+
+jest.mock('react-native-safe-area-context', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+  return {
+    SafeAreaView: ({ children, ...props }: any) => <View {...props}>{children}</View>,
+    useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
+  };
+});
 
 jest.mock('react-redux', () => ({
   useDispatch: jest.fn(),
@@ -264,6 +274,10 @@ describe('features/aquaculture/screens/SanitaryLogScreen', () => {
     expect(getByPlaceholderText('symptomsPlaceholder')).toBeTruthy();
 
     fireEvent.press(getByText('sanitaryEventTreatment'));
+    const selectedTreatment = getByText('sanitaryEventTreatment');
+    expect(StyleSheet.flatten(selectedTreatment.props.style)).toMatchObject({
+      color: colors.text.primary,
+    });
     expect(getByText('treatmentFieldsInfo')).toBeTruthy();
     expect(getByText('treatmentApplied')).toBeTruthy();
 

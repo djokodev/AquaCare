@@ -1,13 +1,13 @@
 ﻿import React from 'react';
 import {
   View,
-  Text,
+  Image,
   ActivityIndicator,
   StyleSheet,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { AQUACARE_COLORS } from '@/constants/colors';
-import { AQUACARE_TYPOGRAPHY } from '@/constants/typography';
+import { AppText } from '@/components/ui';
+import { colors, sizing, spacing } from '@/theme';
 
 export default function LoadingScreen() {
   const { t } = useTranslation();
@@ -15,14 +15,10 @@ export default function LoadingScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.content}>
-        {/* Logo placeholder */}
-        <View style={styles.logo}>
-          <Text style={styles.logoText}>AquaCare</Text>
-          <Text style={styles.logoSubText}>AquaCare</Text>
-        </View>
+        <Image source={require('../../../../assets/brand/aquacare-logo.png')} style={styles.logo} accessibilityLabel={t('appName')} />
         
-        <ActivityIndicator size="large" color={AQUACARE_COLORS.GREEN_PRIMARY} style={styles.spinner} />
-        <Text style={styles.loadingText}>{t('loading')}</Text>
+        <ActivityIndicator size="large" color={colors.brand.primary} style={styles.spinner} />
+        <AppText color="muted">{t('loading')}</AppText>
       </View>
     </View>
   );
@@ -31,7 +27,7 @@ export default function LoadingScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: AQUACARE_COLORS.WHITE,
+    backgroundColor: colors.surface.card,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -39,28 +35,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  logo: {
-    alignItems: 'center',
-    marginBottom: 40,
-  },
-  logoText: {
-    ...AQUACARE_TYPOGRAPHY.h1,
-    color: AQUACARE_COLORS.GREEN_PRIMARY,
-    letterSpacing: 1,
-  },
-  logoSubText: {
-    ...AQUACARE_TYPOGRAPHY.h4,
-    fontWeight: '500',
-    color: AQUACARE_COLORS.GRAY_LIGHT,
-    marginTop: 4,
-  },
+  logo: { width: sizing.avatarLarge * 2, height: 108, resizeMode: 'contain', marginBottom: spacing[10] },
   spinner: {
-    marginBottom: 20,
-  },
-  loadingText: {
-    ...AQUACARE_TYPOGRAPHY.body,
-    color: AQUACARE_COLORS.GRAY_LIGHT,
+    marginBottom: spacing[5],
   },
 });
-
-

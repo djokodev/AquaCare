@@ -348,7 +348,7 @@ class SanitaryService(BaseService):
         NotificationService.create_notification(
             user=sanitary_log.cycle.farm_profile.user,
             notification_type='ticket_resolved',
-            title=_("Problème résolu - %(cycle_name)s") % {'cycle_name': sanitary_log.cycle.cycle_name},
+            title=_("Problème résolu, %(cycle_name)s") % {'cycle_name': sanitary_log.cycle.cycle_name},
             message=_(
                 "Le problème %(event_type)s du %(event_date)s a été marqué comme résolu."
             ) % {
@@ -515,19 +515,19 @@ class SanitaryService(BaseService):
         cycle = sanitary_log.cycle
 
         if severity == 'critical':
-            title = _("🚨 Alerte sanitaire - %(cycle_name)s") % {'cycle_name': cycle.cycle_name}
+            title = _("🚨 Alerte sanitaire, %(cycle_name)s") % {'cycle_name': cycle.cycle_name}
             message = _("Problème %(event_type)s détecté. Intervention recommandée rapidement.") % {
                 'event_type': sanitary_log.get_event_type_display().lower()
             }
             notification_type = 'alert'
         elif severity == 'warning':
-            title = _("⚠️ Attention sanitaire - %(cycle_name)s") % {'cycle_name': cycle.cycle_name}
+            title = _("⚠️ Attention sanitaire, %(cycle_name)s") % {'cycle_name': cycle.cycle_name}
             message = _("Problème %(event_type)s signalé. Surveillance recommandée.") % {
                 'event_type': sanitary_log.get_event_type_display().lower()
             }
             notification_type = 'alert'
         else:
-            title = _("📋 Événement sanitaire - %(cycle_name)s") % {'cycle_name': cycle.cycle_name}
+            title = _("📋 Événement sanitaire, %(cycle_name)s") % {'cycle_name': cycle.cycle_name}
             message = _("Événement %(event_type)s enregistré.") % {
                 'event_type': sanitary_log.get_event_type_display().lower()
             }
@@ -559,7 +559,7 @@ class SanitaryService(BaseService):
         NotificationService.create_notification(
             user=cycle.farm_profile.user,
             notification_type='mortality_alert',
-            title=_("ALERTE CRITIQUE - %(cycle_name)s") % {'cycle_name': cycle.cycle_name},
+            title=_("ALERTE CRITIQUE, %(cycle_name)s") % {'cycle_name': cycle.cycle_name},
             message=_(
                 "%(percentage).1f%% de l'effectif affecté (%(count)d poissons).\n"
                 "Type: %(event_type)s\n"

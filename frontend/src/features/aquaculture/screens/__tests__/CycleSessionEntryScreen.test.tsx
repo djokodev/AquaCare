@@ -15,6 +15,16 @@ jest.mock('react-redux', () => ({
   useSelector: jest.fn(),
 }));
 
+jest.mock('react-native-safe-area-context', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+
+  return {
+    SafeAreaView: ({ children, ...props }: any) => <View {...props}>{children}</View>,
+    useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
+  };
+});
+
 describe('features/aquaculture/screens/CycleSessionEntryScreen', () => {
   const mockDispatch = jest.fn();
   const navigation = {
@@ -103,6 +113,39 @@ describe('features/aquaculture/screens/CycleSessionEntryScreen', () => {
     });
   });
 
+  it('affiche le chargement puis une erreur relançable', async () => {
+    const failedAction = fetchDashboardData.rejected(
+      new Error('network error'),
+      'req-id',
+      undefined,
+      'sessionCycleLoadError',
+    );
+    mockDispatch.mockImplementation((action: unknown) => {
+      if (typeof action === 'function') {
+        return Promise.resolve(failedAction);
+      }
+      return action;
+    });
+
+    const { getByText } = render(
+      <CycleSessionEntryScreen navigation={navigation} route={route} />,
+    );
+
+    expect(getByText('sessionCycleLoading')).toBeTruthy();
+
+    await waitFor(() => {
+      expect(getByText('sessionCycleLoadError')).toBeTruthy();
+    });
+
+    fireEvent.press(getByText('retry'));
+
+    await waitFor(() => {
+      expect(mockDispatch).toHaveBeenCalledWith(
+        expect.any(Function),
+      );
+    });
+  });
+
   it('auto-selectionne le cycle unique et redirige', async () => {
     mockDashboardDispatchResult(
       fetchDashboardData.fulfilled(
@@ -149,7 +192,7 @@ describe('features/aquaculture/screens/CycleSessionEntryScreen', () => {
       )
     );
 
-    const { getByText } = render(<CycleSessionEntryScreen navigation={navigation} route={route} />);
+    const { getByText, getByTestId } = render(<CycleSessionEntryScreen navigation={navigation} route={route} />);
 
     // Capture references inside waitFor to avoid race condition on state flush
     let cycleBEl: ReturnType<typeof getByText>;
@@ -161,6 +204,7 @@ describe('features/aquaculture/screens/CycleSessionEntryScreen', () => {
     });
 
     fireEvent.press(cycleBEl!);
+    expect(getByTestId('cycle-picker-cycle-b').props.accessibilityState.selected).toBe(true);
     fireEvent.press(confirmEl!);
 
     await waitFor(() => {
@@ -199,15 +243,15 @@ describe('features/aquaculture/screens/CycleSessionEntryScreen', () => {
       )
     );
 
-    const { getByText } = render(
+    const { getByLabelText } = render(
       <CycleSessionEntryScreen navigation={navigationWithBack} route={routeWithBack} />
     );
 
     await waitFor(() => {
-      expect(getByText('backToDashboard')).toBeTruthy();
+      expect(getByLabelText('backToDashboard')).toBeTruthy();
     });
 
-    fireEvent.press(getByText('backToDashboard'));
+    fireEvent.press(getByLabelText('backToDashboard'));
 
     expect(navigationWithBack.navigate).toHaveBeenCalledWith('MainTabs');
   });

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, TextInput, Alert, ActivityIndicator, Image } from 'react-native';
+import { View, Alert, Image, StyleSheet } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp } from '@react-navigation/native';
@@ -10,8 +10,6 @@ import { fetchDashboardData, setCurrentCycle } from '@/features/aquaculture/stor
 import { ReactNativeUploadFile, SanitaryLogForm, SanitaryEventType } from '@/types/aquaculture';
 import { RootStackParamList } from '@/navigation/MainNavigator';
 import * as ImagePicker from 'expo-image-picker';
-import { AQUACARE_COLORS } from '@/constants/colors';
-import { sharedTextInputStyles } from '@/components/common/inputStyles';
 import logger from '@/utils/logger';
 import { getApiErrorMessage, parseApiError } from '@/utils/errorParser';
 import CycleSelector from '@/components/common/CycleSelector';
@@ -20,6 +18,8 @@ import {
   createSanitaryLogWithOfflineFallback,
   runSilentOfflineSync,
 } from '@/features/aquaculture/services/aquacultureWorkflowService';
+import { AppHeader, AppText, Button, Card, IconButton, InlineAlert, Screen, SelectableCard, TextField } from '@/components/ui';
+import { colors, spacing } from '@/theme';
 
 type VisibleSanitaryEventType = 'disease' | 'treatment' | 'abnormal_mortality' | 'other';
 
@@ -328,27 +328,23 @@ export default function SanitaryLogScreen({ navigation, route }: SanitaryLogScre
 
   if (sessionScopedCycles.length === 0) {
     return (
-      <View className="flex-1 items-center justify-center bg-cream px-5">
-        <Ionicons name="medical-outline" size={64} color={AQUACARE_COLORS.GRAY_LIGHT} />
-        <Text className="text-lg font-bold text-gray-dark mt-4">{t('noActiveCycles')}</Text>
-        <Text className="text-sm text-gray-light text-center mt-2 mb-6">{t('createCycleToStart')}</Text>
-        <TouchableOpacity className="bg-aquacare-primary px-5 py-3 rounded-lg" onPress={() => navigation.navigate('CreateFarm')}>
-          <Text className="text-white text-base font-semibold">{t('createCycle')}</Text>
-        </TouchableOpacity>
+      <View style={styles.root}>
+        <AppHeader title={t('sanitaryLogTitle')} onBack={() => navigation.goBack()} backLabel={t('back')} />
+        <Screen style={styles.emptyScreen}>
+          <Ionicons name="medical-outline" size={64} color={colors.text.muted} />
+          <AppText variant="cardTitle" style={{ marginTop: spacing[4] }}>{t('noActiveCycles')}</AppText>
+          <AppText variant="body" color="muted" style={{ marginTop: spacing[2], marginBottom: spacing[6], textAlign: 'center' }}>{t('createCycleToStart')}</AppText>
+          <Button label={t('createCycle')} onPress={() => navigation.navigate('CreateFarm')} fullWidth={false} />
+        </Screen>
       </View>
     );
   }
 
   return (
-    <ScrollView className="flex-1 bg-cream">
-      <View className="bg-aquacare-primary flex-row items-center pt-14 pb-4 px-4">
-        <TouchableOpacity className="mr-4" onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color={AQUACARE_COLORS.WHITE} />
-        </TouchableOpacity>
-        <Text className="text-xl font-bold text-white">{t('sanitaryLogTitle')}</Text>
-      </View>
-
-      <View className="p-4">
+    <View style={styles.root}>
+      <AppHeader title={t('sanitaryLogTitle')} onBack={() => navigation.goBack()} backLabel={t('back')} />
+      <Screen scroll style={styles.scrollContent}>
+      <View style={{ gap: spacing[5] }}>
         <CycleSelector
           cycles={sessionScopedCycles}
           selectedCycleId={selectedCycle}
@@ -364,120 +360,82 @@ export default function SanitaryLogScreen({ navigation, route }: SanitaryLogScre
           displayMode="cycle_name"
         />
 
-        <View className="mb-6">
-          <Text className="text-base font-bold text-gray-dark mb-3">{t('eventType')}</Text>
-          <View className="flex-row flex-wrap">
+        <Card>
+          <AppText variant="sectionTitle" style={{ marginBottom: spacing[4] }}>{t('eventType')}</AppText>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] }}>
             {SANITARY_EVENT_TYPES.map((type) => {
               const isSelected = formData.event_type === type.value;
               return (
-                <View key={type.value} style={{ width: '31%', marginRight: '2%', marginBottom: 8 }}>
-                  <TouchableOpacity
-                    className={`p-3 rounded-lg border items-center ${
-                      isSelected ? 'bg-aquacare-primary border-aquacare-primary' : 'bg-white border-gray-200'
-                    }`}
+                <View key={type.value} style={{ width: '48%' }}>
+                  <SelectableCard
+                    testID={`sanitary-event-${type.value}`}
+                    selected={isSelected}
+                    primaryBorder={isSelected}
+                    layout="column"
+                    accessibilityLabel={t(type.labelKey)}
                     onPress={() => setFormData((prev) => ({ ...prev, event_type: type.value }))}
                   >
-                    <Text className={`text-xs text-center mt-2 ${isSelected ? 'text-white' : 'text-gray-dark'}`}>
+                    <AppText variant="label" color="primary" style={{ textAlign: 'center' }}>
                       {t(type.labelKey)}
-                    </Text>
-                  </TouchableOpacity>
+                    </AppText>
+                  </SelectableCard>
                 </View>
               );
             })}
           </View>
 
           {selectedEventLayout.infoMessageKey ? (
-            <View
-              className={`flex-row items-center p-3 mt-4 rounded-lg border ${
-                selectedEventLayout.infoMessageKey === 'treatmentFieldsInfo'
-                  ? 'bg-[#f0fdf4] border-green-200'
-                  : 'bg-[#eff6ff] border-blue-200'
-              }`}
-            >
-              <Ionicons
-                name={selectedEventLayout.infoMessageKey === 'treatmentFieldsInfo' ? 'medical' : 'information-circle'}
-                size={16}
-                color={
-                  selectedEventLayout.infoMessageKey === 'treatmentFieldsInfo'
-                    ? AQUACARE_COLORS.GREEN_PRIMARY
-                    : AQUACARE_COLORS.BLUE
-                }
-              />
-              <Text
-                className={`ml-2 text-sm flex-1 ${
-                  selectedEventLayout.infoMessageKey === 'treatmentFieldsInfo' ? 'text-green-700' : 'text-blue-700'
-                }`}
-              >
-                {selectedEventLayout.infoMessageKey ? t(selectedEventLayout.infoMessageKey) : ''}
-              </Text>
-            </View>
+            <InlineAlert
+              tone={selectedEventLayout.infoMessageKey === 'treatmentFieldsInfo' ? 'success' : 'info'}
+              message={t(selectedEventLayout.infoMessageKey)}
+            />
           ) : null}
-        </View>
+        </Card>
 
-        <View className="mb-6">
-          <Text className="text-base font-bold text-gray-dark mb-3">{t('details')}</Text>
+        <Card>
+          <AppText variant="sectionTitle" style={{ marginBottom: spacing[4] }}>{t('details')}</AppText>
 
-          <View className="mb-4">
-            <Text className="text-sm font-medium text-gray-dark mb-2">
-              {t(selectedEventLayout.firstFieldLabelKey)}
-            </Text>
-            <TextInput
-              className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark h-20"
-              style={sharedTextInputStyles.multilineCompact}
+          <TextField
+              label={t(selectedEventLayout.firstFieldLabelKey)}
               value={formData.symptoms}
               onChangeText={(value) => setFormData((prev) => ({ ...prev, symptoms: value }))}
               placeholder={t(selectedEventLayout.firstFieldPlaceholderKey)}
               multiline
               numberOfLines={3}
-            />
-          </View>
+          />
 
-          <View className="mb-4">
-            <Text className="text-sm font-medium text-gray-dark mb-2">
-              {t(selectedEventLayout.countFieldLabelKey)}
-            </Text>
-            <TextInput
-              className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
-              style={sharedTextInputStyles.base}
+          <TextField
+              label={t(selectedEventLayout.countFieldLabelKey)}
               value={formData.affected_count}
               onChangeText={(value) => setFormData((prev) => ({ ...prev, affected_count: value }))}
               placeholder={t(selectedEventLayout.countFieldPlaceholderKey)}
               keyboardType="numeric"
-            />
-          </View>
+          />
 
           {selectedEventLayout.showTreatmentFields && (
             <>
-              <View className="mb-4">
-                <Text className="text-sm font-medium text-gray-dark mb-2">{t('treatmentApplied')}</Text>
-                <TextInput
-                  className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark h-20"
-                  style={sharedTextInputStyles.multilineCompact}
+              <TextField
+                  label={t('treatmentApplied')}
                   value={formData.treatment_applied}
                   onChangeText={(value) => setFormData((prev) => ({ ...prev, treatment_applied: value }))}
                   placeholder={t('treatmentAppliedPlaceholder')}
                   multiline
                   numberOfLines={3}
-                />
-              </View>
+              />
 
-              <View className="flex-row mb-4">
-                <View className="flex-1" style={{ marginRight: 12 }}>
-                  <Text className="text-sm font-medium text-gray-dark mb-2">{t('medicationUsed')}</Text>
-                  <TextInput
-                    className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
-              style={sharedTextInputStyles.base}
+              <View style={{ flexDirection: 'row', gap: spacing[3] }}>
+                <View style={{ flex: 1 }}>
+                  <TextField
+                    label={t('medicationUsed')}
                     value={formData.medication_used}
                     onChangeText={(value) => setFormData((prev) => ({ ...prev, medication_used: value }))}
                     placeholder={t('exampleMedication')}
                   />
                 </View>
 
-                <View className="flex-1">
-                  <Text className="text-sm font-medium text-gray-dark mb-2">{t('dosage')}</Text>
-                  <TextInput
-                    className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
-              style={sharedTextInputStyles.base}
+                <View style={{ flex: 1 }}>
+                  <TextField
+                    label={t('dosage')}
                     value={formData.dosage}
                     onChangeText={(value) => setFormData((prev) => ({ ...prev, dosage: value }))}
                     placeholder={t('exampleDosage')}
@@ -485,70 +443,48 @@ export default function SanitaryLogScreen({ navigation, route }: SanitaryLogScre
                 </View>
               </View>
 
-              <View className="mb-4">
-                <Text className="text-sm font-medium text-gray-dark mb-2">{t('treatmentDurationDays')}</Text>
-                <TextInput
-                  className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
-              style={sharedTextInputStyles.base}
+              <TextField
+                  label={t('treatmentDurationDays')}
                   value={formData.treatment_duration_days}
                   onChangeText={(value) => setFormData((prev) => ({ ...prev, treatment_duration_days: value }))}
                   placeholder={t('exampleTreatmentDuration')}
                   keyboardType="numeric"
-                />
-              </View>
+              />
             </>
           )}
 
-          <View className="mb-4">
-            <Text className="text-sm font-medium text-gray-dark mb-2">{t('additionalComments')}</Text>
-            <TextInput
-              className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark h-20"
-              style={sharedTextInputStyles.multilineCompact}
+          <TextField
+              label={t('additionalComments')}
               value={formData.comments}
               onChangeText={(value) => setFormData((prev) => ({ ...prev, comments: value }))}
               placeholder={t('commentsPlaceholder')}
               multiline
               numberOfLines={3}
-            />
-          </View>
-        </View>
+          />
+        </Card>
 
-        <View className="mb-6">
-          <Text className="text-base font-bold text-gray-dark mb-3">{t('photo')}</Text>
+        <Card>
+          <AppText variant="sectionTitle" style={{ marginBottom: spacing[4] }}>{t('photo')}</AppText>
 
           {!formData.photo ? (
-            <TouchableOpacity
-              className="bg-white border-2 border-dashed border-aquacare-primary rounded-lg p-5 items-center justify-center flex-row mb-4"
-              onPress={chooseImageSource}
-            >
-              <Ionicons name="camera" size={24} color={AQUACARE_COLORS.GREEN_PRIMARY} style={{ marginRight: 8 }} />
-              <Text className="text-aquacare-primary text-base font-semibold">{t('addPhoto')}</Text>
-            </TouchableOpacity>
+            <Button label={t('addPhoto')} onPress={chooseImageSource} variant="outline" iconLeft="camera" />
           ) : (
-            <View className="relative mt-3">
-              <Image source={{ uri: formData.photo }} className="w-full h-52 rounded-lg bg-cream" />
-              <TouchableOpacity className="absolute top-2 right-2 bg-white rounded-full shadow p-1" onPress={removePhoto}>
-                <Ionicons name="close-circle" size={24} color={AQUACARE_COLORS.ERROR} />
-              </TouchableOpacity>
+            <View style={{ position: 'relative' }}>
+              <Image source={{ uri: formData.photo }} style={{ width: '100%', height: 208, borderRadius: 12, backgroundColor: colors.surface.page }} />
+              <IconButton icon="close-circle" accessibilityLabel={t('removePhoto')} onPress={removePhoto} variant="surface" tone="danger" style={{ position: 'absolute', top: spacing[2], right: spacing[2] }} />
             </View>
           )}
-        </View>
+        </Card>
 
-        <TouchableOpacity
-          className={`bg-aquacare-primary flex-row items-center justify-center py-4 rounded-lg mt-2 ${saving ? 'opacity-60' : ''}`}
-          onPress={handleSave}
-          disabled={saving}
-        >
-          {saving ? (
-            <ActivityIndicator size="small" color={AQUACARE_COLORS.WHITE} />
-          ) : (
-            <>
-              <Ionicons name="checkmark" size={20} color={AQUACARE_COLORS.WHITE} style={{ marginRight: 8 }} />
-              <Text className="text-white text-base font-semibold">{t('save')}</Text>
-            </>
-          )}
-        </TouchableOpacity>
+        <Button label={t('save')} onPress={handleSave} disabled={saving} loading={saving} iconLeft="checkmark" />
       </View>
-    </ScrollView>
+      </Screen>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: colors.surface.page },
+  emptyScreen: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing[5] },
+  scrollContent: { paddingTop: spacing[4], paddingBottom: spacing[6] },
+});

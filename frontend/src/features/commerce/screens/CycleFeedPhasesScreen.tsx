@@ -1,271 +1,220 @@
-/**
- * CycleFeedPhasesScreen — "Commander par phase"
- *
- * Affiche les phases d'alimentation simulées pour le cycle actif,
- * avec les produits recommandés par phase (Aller Aqua / DIBAQ selon simulation).
- * Permet de commander une phase à la fois ou tout d'un coup.
- *
- * Note : les produits viennent directement de CycleSimulationService — aucune
- * dépendance sur le catalogue Redux (les marques peuvent différer).
- */
-import React, { useCallback, useEffect, useState } from 'react';
-import {
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  ActivityIndicator,
-  StyleSheet,
-  Alert,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { useTranslation } from 'react-i18next';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 import { StackScreenProps } from '@react-navigation/stack';
 import { useDispatch, useSelector } from 'react-redux';
+import { useTranslation } from 'react-i18next';
 
-import { AppDispatch, RootState } from '@/store/store';
-import { addToCart } from '@/features/commerce/store/commerceSlice';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
+import { addToCart } from '@/features/commerce/store/commerceSlice';
+import { RootStackParamList } from '@/navigation/MainNavigator';
+import { AppDispatch, RootState } from '@/store/store';
 import { FeedPhase, FeedPhaseProduct } from '@/types/aquaculture';
 import { Product, ProductBrand } from '@/types/commerce';
-import { AQUACARE_COLORS } from '@/constants/colors';
-import { AQUACARE_TYPOGRAPHY } from '@/constants/typography';
-import { RootStackParamList } from '@/navigation/MainNavigator';
+import {
+  AppHeader,
+  AppText,
+  Badge,
+  Button,
+  Card,
+  Divider,
+  EmptyState,
+  ErrorState,
+  IconButton,
+  InlineAlert,
+  LoadingState,
+} from '@/components/ui';
+import { colors, spacing } from '@/theme';
+import { getProductDisplayName } from '@/features/commerce/utils/productPresentation';
 
 type Props = StackScreenProps<RootStackParamList, 'CycleFeedPhases'>;
 
-/** Construit un objet Product minimal depuis les données de simulation pour l'ajout au panier. */
-function buildProductForCart(p: FeedPhaseProduct): Product {
+function buildProductForCart(product: FeedPhaseProduct): Product {
   return {
-    id: p.product_id,
-    brand: p.brand as ProductBrand,
-    name: p.product_name,
+    id: product.product_id,
+    brand: product.brand as ProductBrand,
+    name: product.product_name,
     species: 'tilapia',
     phase: null,
     pellet_size_mm: '',
     protein_percentage: null,
     lipid_percentage: null,
-    package_weight_kg: p.package_weight_kg,
-    price_per_package: String(Math.round(p.unit_price)),
-    price_per_kg: String(Math.round(p.unit_price / (p.package_weight_kg || 1))),
+    package_weight_kg: product.package_weight_kg,
+    price_per_package: String(Math.round(product.unit_price)),
+    price_per_kg: String(Math.round(product.unit_price / (product.package_weight_kg || 1))),
     is_available: true,
     created_at: '',
     updated_at: '',
   };
 }
 
-/** Génère un label de phase unique en ajoutant le granulé si plusieurs phases ont le même nom. */
-function phaseLabel(phase: FeedPhase, allPhases: FeedPhase[], t: (k: string) => string): string {
-  const sameNameCount = allPhases.filter((ph) => ph.phase_name === phase.phase_name).length;
-  const base = t(phase.phase_name as 'alevinage' | 'pre_grossissement' | 'grossissement');
-  if (sameNameCount > 1) {
-    return `${base} · ${phase.pellet_size_mm}mm`;
-  }
-  return base;
+function phaseLabel(phase: FeedPhase, phases: FeedPhase[], translate: (key: string) => string): string {
+  const base = translate(phase.phase_name);
+  return phases.filter((item) => item.phase_name === phase.phase_name).length > 1
+    ? `${base} · ${phase.pellet_size_mm}mm`
+    : base;
 }
 
 export default function CycleFeedPhasesScreen({ navigation, route }: Props) {
   const { t } = useTranslation();
   const dispatch = useDispatch<AppDispatch>();
   const { cycleId } = route.params;
-
-  const cartItemsCount = useSelector((s: RootState) =>
-    s.commerce.cart.items.reduce((sum, item) => sum + item.quantity, 0)
+  const cartItemsCount = useSelector((state: RootState) =>
+    state.commerce.cart.items.reduce((sum, item) => sum + item.quantity, 0)
   );
-
   const [phases, setPhases] = useState<FeedPhase[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [quantities, setQuantities] = useState<Record<string, number>>({});
 
-  useEffect(() => {
-    loadPhases();
-  }, [cycleId]);
-
-  const loadPhases = async () => {
+  const loadPhases = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
       const result = await aquacultureService.getCycleFeedPhases(cycleId);
       setPhases(result.feeding_phases);
-      const init: Record<string, number> = {};
-      for (const phase of result.feeding_phases) {
-        for (const p of phase.products) {
-          init[p.product_id] = p.quantity_bags;
-        }
-      }
-      setQuantities(init);
+      const initialQuantities: Record<string, number> = {};
+      result.feeding_phases.forEach((phase) =>
+        phase.products.forEach((product) => {
+          initialQuantities[product.product_id] = product.quantity_bags;
+        })
+      );
+      setQuantities(initialQuantities);
     } catch {
-      setError(t('feedPhasesLoadError'));
+      setError('feedPhasesLoadError');
     } finally {
       setLoading(false);
     }
-  };
+  }, [cycleId]);
 
-  const handleQuantityChange = (productId: string, delta: number) => {
-    setQuantities((prev) => ({
-      ...prev,
-      [productId]: Math.max(1, (prev[productId] ?? 1) + delta),
+  useEffect(() => {
+    void loadPhases();
+  }, [loadPhases]);
+
+  const handleQuantityChange = useCallback((productId: string, delta: number) => {
+    setQuantities((current) => ({
+      ...current,
+      [productId]: Math.max(1, (current[productId] ?? 1) + delta),
     }));
-  };
+  }, []);
 
-  const handleAddPhaseToCart = useCallback(
+  const addPhaseToCart = useCallback(
     (phase: FeedPhase) => {
-      for (const p of phase.products) {
+      phase.products.forEach((product) =>
         dispatch(
-          addToCart({ product: buildProductForCart(p), quantity: quantities[p.product_id] ?? p.quantity_bags })
-        );
-      }
+          addToCart({
+            product: buildProductForCart(product),
+            quantity: quantities[product.product_id] ?? product.quantity_bags,
+          })
+        )
+      );
       Alert.alert(t('success'), t('feedPhaseAddedToCart'), [{ text: t('ok') }]);
     },
     [dispatch, quantities, t]
   );
 
   const handleOrderAll = useCallback(() => {
-    for (const phase of phases) {
-      for (const p of phase.products) {
+    phases.forEach((phase) =>
+      phase.products.forEach((product) =>
         dispatch(
-          addToCart({ product: buildProductForCart(p), quantity: quantities[p.product_id] ?? p.quantity_bags })
-        );
-      }
-    }
+          addToCart({
+            product: buildProductForCart(product),
+            quantity: quantities[product.product_id] ?? product.quantity_bags,
+          })
+        )
+      )
+    );
     navigation.navigate('Cart', { cycleId });
-  }, [cycleId, dispatch, phases, quantities, navigation]);
+  }, [cycleId, dispatch, navigation, phases, quantities]);
 
-  const totalBags = phases.reduce((sum, ph) => sum + ph.total_bags, 0);
-
-  const renderPhaseCard = (phase: FeedPhase, index: number) => {
-    const label = phaseLabel(phase, phases, t);
-
-    return (
-      <View key={index} style={styles.phaseCard}>
-        {/* Phase header */}
-        <View style={styles.phaseHeader}>
-          <Text style={styles.phaseName}>{label}</Text>
-          <View style={styles.phaseBadge}>
-            <Text style={styles.phaseBadgeText}>{phase.total_bags} sacs</Text>
-          </View>
-        </View>
-
-        <Text style={styles.phaseSub}>
-          {phase.duration_days}j · {t('feedPhasePellet', { size: phase.pellet_size_mm })}
-        </Text>
-
-        {/* Products */}
-        {phase.products.map((p) => renderProductRow(p, phase))}
-
-        {/* Commander cette phase */}
-        <TouchableOpacity
-          style={styles.phaseOrderBtn}
-          onPress={() => handleAddPhaseToCart(phase)}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="cart-outline" size={15} color="#fff" style={{ marginRight: 5 }} />
-          <Text style={styles.phaseOrderBtnText}>{t('feedPhaseOrderBtn')}</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  };
-
-  const renderProductRow = (p: FeedPhaseProduct, _phase: FeedPhase) => {
-    const qty = quantities[p.product_id] ?? p.quantity_bags;
-
-    return (
-      <View key={p.product_id} style={styles.productRow}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.productName} numberOfLines={1}>
-            {p.product_name}
-          </Text>
-          <Text style={styles.productSub}>
-            {p.package_weight_kg}kg · {Math.round(p.unit_price).toLocaleString()} FCFA/sac
-          </Text>
-          <Text style={styles.productRecommended}>
-            {t('feedPhaseRecommended', { count: p.quantity_bags })}
-          </Text>
-        </View>
-
-        <View style={styles.qtyControl}>
-          <TouchableOpacity
-            style={styles.qtyBtn}
-            onPress={() => handleQuantityChange(p.product_id, -1)}
-          >
-            <Ionicons name="remove" size={14} color={AQUACARE_COLORS.GREEN_PRIMARY} />
-          </TouchableOpacity>
-          <Text style={styles.qtyValue}>{qty}</Text>
-          <TouchableOpacity
-            style={styles.qtyBtn}
-            onPress={() => handleQuantityChange(p.product_id, 1)}
-          >
-            <Ionicons name="add" size={14} color={AQUACARE_COLORS.GREEN_PRIMARY} />
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-  };
+  const totalBags = useMemo(() => phases.reduce((sum, phase) => sum + phase.total_bags, 0), [phases]);
 
   return (
-    <View style={{ flex: 1, backgroundColor: AQUACARE_COLORS.CREAM }}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerBack}>
-          <Ionicons name="arrow-back" size={24} color={AQUACARE_COLORS.GRAY_DARK} />
-        </TouchableOpacity>
-        <View style={{ flex: 1, alignItems: 'center' }}>
-          <Text style={styles.headerTitle}>{t('feedPhasesTitle')}</Text>
-        </View>
-        <TouchableOpacity style={styles.headerCart} onPress={() => navigation.navigate('Cart', { cycleId })}>
-          <Ionicons name="cart-outline" size={26} color={AQUACARE_COLORS.GREEN_PRIMARY} />
-          {cartItemsCount > 0 && (
-            <View style={styles.cartBadge}>
-              <Text style={styles.cartBadgeText}>{cartItemsCount}</Text>
-            </View>
-          )}
-        </TouchableOpacity>
-      </View>
+    <View style={styles.screen}>
+      <AppHeader
+        title={t('feedPhasesTitle')}
+        onBack={() => navigation.goBack()}
+        backLabel={t('back')}
+        rightAction={
+          <IconButton
+            icon="cart-outline"
+            variant="ghost"
+            tone="inverse"
+            accessibilityLabel={`${t('cart')} ${cartItemsCount}`}
+            badge={cartItemsCount}
+            onPress={() => navigation.navigate('Cart', { cycleId })}
+          />
+        }
+      />
 
       {loading ? (
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-          <ActivityIndicator size="large" color={AQUACARE_COLORS.GREEN_PRIMARY} />
-          <Text style={{ marginTop: 10, color: AQUACARE_COLORS.GRAY_LIGHT }}>{t('loading')}</Text>
-        </View>
+        <LoadingState message={t('loading')} />
       ) : error ? (
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-          <Ionicons name="alert-circle-outline" size={48} color={AQUACARE_COLORS.ERROR} />
-          <Text style={{ marginTop: 10, color: AQUACARE_COLORS.ERROR, textAlign: 'center' }}>
-            {error}
-          </Text>
-          <TouchableOpacity style={[styles.phaseOrderBtn, { marginTop: 16, alignSelf: 'center', paddingHorizontal: 24 }]} onPress={loadPhases}>
-            <Text style={styles.phaseOrderBtnText}>{t('retry')}</Text>
-          </TouchableOpacity>
-        </View>
+        <ErrorState title={t(error)} actionLabel={t('retry')} onAction={loadPhases} />
       ) : phases.length === 0 ? (
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-          <Ionicons name="restaurant-outline" size={64} color={AQUACARE_COLORS.GRAY_LIGHT} />
-          <Text style={{ marginTop: 12, fontSize: 16, color: AQUACARE_COLORS.GRAY_DARK, textAlign: 'center' }}>
-            {t('feedPhasesEmpty')}
-          </Text>
-        </View>
+        <EmptyState title={t('feedPhasesEmpty')} />
       ) : (
         <>
-          <ScrollView
-            contentContainerStyle={{ padding: 12, paddingBottom: 100 }}
-            showsVerticalScrollIndicator={false}
-          >
-            {/* Info banner */}
-            <View style={styles.infoBanner}>
-              <Ionicons name="information-circle-outline" size={16} color={AQUACARE_COLORS.GREEN_PRIMARY} />
-              <Text style={styles.infoText}>{t('feedPhasesSubtitle')}</Text>
-            </View>
+          <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+            <InlineAlert compact message={t('feedPhasesSubtitle')} tone="info" />
+            {phases.map((phase, phaseIndex) => (
+              <Card key={`${phase.phase_name}-${phaseIndex}`} variant="outlined" style={styles.phaseCard}>
+                <View style={styles.rowBetween}>
+                  <AppText variant="sectionTitle" style={styles.flex}>
+                    {phaseLabel(phase, phases, t)}
+                  </AppText>
+                  <Badge label={`${phase.total_bags} ${t('bags')}`} tone="success" />
+                </View>
+                <AppText color="muted" style={styles.phaseMeta}>
+                  {phase.duration_days} {t('days')} · {t('feedPhasePellet', { size: phase.pellet_size_mm })}
+                </AppText>
 
-            {phases.map((phase, i) => renderPhaseCard(phase, i))}
+                {phase.products.map((product) => {
+                  const quantity = quantities[product.product_id] ?? product.quantity_bags;
+                  return (
+                    <View key={product.product_id}>
+                      <Divider />
+                      <View style={styles.productRow}>
+                        <View style={styles.flex}>
+                          <AppText variant="bodyStrong" numberOfLines={1}>{getProductDisplayName(product.product_name, t('catfish'))}</AppText>
+                          <AppText variant="caption" color="muted">
+                            {product.package_weight_kg}kg · {Math.round(product.unit_price).toLocaleString()} FCFA/{t('bag')}
+                          </AppText>
+                        </View>
+                        <View style={styles.quantityRow}>
+                          <IconButton
+                            icon="remove"
+                            accessibilityLabel={t('decreaseQuantity')}
+                            variant="surface"
+                            disabled={quantity <= 1}
+                            onPress={() => handleQuantityChange(product.product_id, -1)}
+                          />
+                          <AppText variant="bodyStrong" style={styles.quantity}>{quantity}</AppText>
+                          <IconButton
+                            icon="add"
+                            accessibilityLabel={t('increaseQuantity')}
+                            variant="surface"
+                            onPress={() => handleQuantityChange(product.product_id, 1)}
+                          />
+                        </View>
+                      </View>
+                    </View>
+                  );
+                })}
+                <Button
+                  label={t('feedPhaseOrderBtn')}
+                  iconLeft="cart-outline"
+                  onPress={() => addPhaseToCart(phase)}
+                  style={styles.phaseButton}
+                />
+              </Card>
+            ))}
           </ScrollView>
-
-          {/* Bottom sticky — Tout commander */}
-          <View style={styles.stickyBar}>
-            <TouchableOpacity style={styles.orderAllBtn} onPress={handleOrderAll} activeOpacity={0.85}>
-              <Ionicons name="cart" size={18} color="#fff" style={{ marginRight: 8 }} />
-              <Text style={styles.orderAllText}>{t('feedPhaseOrderAllBtn')}</Text>
-            </TouchableOpacity>
+          <View style={styles.footer}>
+            <Button
+              label={`${t('feedPhaseOrderAllBtn')} · ${totalBags} ${t('bags')}`}
+              iconLeft="cart"
+              onPress={handleOrderAll}
+            />
           </View>
         </>
       )}
@@ -274,189 +223,15 @@ export default function CycleFeedPhasesScreen({ navigation, route }: Props) {
 }
 
 const styles = StyleSheet.create({
-  header: {
-    backgroundColor: '#fff',
-    paddingTop: 56,
-    paddingBottom: 14,
-    paddingHorizontal: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  headerBack: { width: 36 },
-  headerTitle: {
-    ...AQUACARE_TYPOGRAPHY.h4,
-    color: AQUACARE_COLORS.GRAY_DARK,
-  },
-  headerCart: { width: 36, alignItems: 'flex-end', position: 'relative' },
-  cartBadge: {
-    position: 'absolute',
-    top: -6,
-    right: -4,
-    backgroundColor: '#dc2626',
-    borderRadius: 8,
-    minWidth: 16,
-    height: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 3,
-  },
-  cartBadgeText: {
-    ...AQUACARE_TYPOGRAPHY.caption,
-    color: AQUACARE_COLORS.WHITE,
-    fontWeight: '700',
-  },
-  infoBanner: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    backgroundColor: '#ecfdf5',
-    borderRadius: 10,
-    padding: 10,
-    marginBottom: 12,
-    gap: 8,
-  },
-  infoText: {
-    flex: 1,
-    ...AQUACARE_TYPOGRAPHY.caption,
-    color: '#065f46',
-  },
-  phaseCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 12,
-    borderLeftWidth: 4,
-    borderLeftColor: AQUACARE_COLORS.GREEN_PRIMARY,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  phaseHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 2,
-  },
-  phaseName: {
-    ...AQUACARE_TYPOGRAPHY.smallStrong,
-    fontWeight: '700',
-    color: AQUACARE_COLORS.GRAY_DARK,
-    flex: 1,
-    marginRight: 8,
-  },
-  phaseSub: {
-    ...AQUACARE_TYPOGRAPHY.caption,
-    color: AQUACARE_COLORS.GRAY_LIGHT,
-    marginBottom: 10,
-  },
-  phaseBadge: {
-    backgroundColor: '#ecfdf5',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 20,
-  },
-  phaseBadgeText: {
-    ...AQUACARE_TYPOGRAPHY.caption,
-    fontWeight: '700',
-    color: AQUACARE_COLORS.GREEN_PRIMARY,
-  },
-  productRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#f1f5f9',
-    gap: 10,
-  },
-  productName: {
-    ...AQUACARE_TYPOGRAPHY.caption,
-    fontSize: 13,
-    lineHeight: 18,
-    fontWeight: '600',
-    color: AQUACARE_COLORS.GRAY_DARK,
-  },
-  productSub: {
-    ...AQUACARE_TYPOGRAPHY.caption,
-    fontSize: 12,
-    lineHeight: 16,
-    color: AQUACARE_COLORS.GRAY_LIGHT,
-    marginTop: 1,
-  },
-  productRecommended: {
-    ...AQUACARE_TYPOGRAPHY.caption,
-    fontSize: 12,
-    lineHeight: 16,
-    color: AQUACARE_COLORS.GREEN_PRIMARY,
-    marginTop: 2,
-  },
-  qtyControl: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 8,
-    overflow: 'hidden',
-  },
-  qtyBtn: {
-    width: 30,
-    height: 30,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#f8fafc',
-  },
-  qtyValue: {
-    width: 34,
-    textAlign: 'center',
-    ...AQUACARE_TYPOGRAPHY.smallStrong,
-    fontWeight: '700',
-    color: AQUACARE_COLORS.GRAY_DARK,
-  },
-  phaseOrderBtn: {
-    marginTop: 12,
-    backgroundColor: AQUACARE_COLORS.GREEN_PRIMARY,
-    borderRadius: 8,
-    paddingVertical: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  phaseOrderBtnText: {
-    ...AQUACARE_TYPOGRAPHY.smallStrong,
-    color: AQUACARE_COLORS.WHITE,
-  },
-  stickyBar: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: '#fff',
-    padding: 12,
-    paddingBottom: 28,
-    borderTopWidth: 1,
-    borderTopColor: '#e2e8f0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 8,
-  },
-  orderAllBtn: {
-    backgroundColor: AQUACARE_COLORS.GREEN_DARK,
-    borderRadius: 10,
-    paddingVertical: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  orderAllText: {
-    ...AQUACARE_TYPOGRAPHY.bodyStrong,
-    color: AQUACARE_COLORS.WHITE,
-    fontWeight: '700',
-  },
+  screen: { flex: 1, backgroundColor: colors.surface.page },
+  content: { padding: spacing[4], paddingBottom: spacing[16], gap: spacing[3] },
+  phaseCard: {},
+  rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing[3] },
+  phaseMeta: { marginTop: spacing[1], marginBottom: spacing[3] },
+  flex: { flex: 1 },
+  productRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[3], paddingVertical: spacing[3] },
+  quantityRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[1] },
+  quantity: { minWidth: 28, textAlign: 'center' },
+  phaseButton: { marginTop: spacing[3] },
+  footer: { padding: spacing[4], backgroundColor: colors.surface.card, borderTopWidth: 1, borderTopColor: colors.border.subtle },
 });

@@ -1,17 +1,12 @@
 import React, { useState } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   Modal,
-  TouchableOpacity,
-  TextInput,
   ScrollView,
   Alert,
-  ActivityIndicator,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { Ionicons } from '@expo/vector-icons';
 import { useDispatch } from 'react-redux';
 import { AppDispatch } from '@/store/store';
 import {
@@ -19,9 +14,9 @@ import {
   createPartialHarvestForUnit,
 } from '@/features/aquaculture/store/aquacultureSlice';
 import { CycleUnitAllocation, PartialHarvestData, ProductionCycle } from '@/types/aquaculture';
-import { AQUACARE_COLORS as COLORS } from '@/constants/colors';
 import { getApiErrorMessage } from '@/utils/errorParser';
-import { sharedTextInputStyles } from '@/components/common/inputStyles';
+import { AppText, Button, IconButton, TextField } from '@/components/ui';
+import { colors, radii, spacing } from '@/theme';
 
 type HarvestScope = 'cycle' | 'unit';
 
@@ -192,125 +187,103 @@ export default function PartialHarvestModal({
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.headerText}>
-              <Text style={styles.title}>
+              <AppText variant="cardTitle">
                 {isUnitScope ? t('partialHarvestUnitTitleWithName', { unitName }) : t('partialHarvestTitle')}
-              </Text>
-              <Text style={styles.subtitle}>
+              </AppText>
+              <AppText variant="caption" color="muted">
                 {isUnitScope ? t('partialHarvestUnitSubtitle') : cycle?.cycle_name}
-              </Text>
+              </AppText>
             </View>
-            <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-              <Ionicons name="close" size={24} color={COLORS.GRAY_DARK} />
-            </TouchableOpacity>
+            <IconButton icon="close" accessibilityLabel={t('close')} onPress={onClose} variant="surface" />
           </View>
 
           <ScrollView showsVerticalScrollIndicator={false} style={styles.body}>
             {/* Info disponible */}
             <View style={styles.infoRow}>
-              <Text style={styles.infoText}>
-                {isUnitScope ? t('fishAvailableInThisUnit') : t('remainingFish')} : <Text style={styles.infoBold}>{availableFishCount}</Text>
-              </Text>
+              <AppText variant="body">
+                {isUnitScope ? t('fishAvailableInThisUnit') : t('remainingFish')} : <AppText variant="bodyStrong">{availableFishCount}</AppText>
+              </AppText>
             </View>
 
             {/* Date */}
-            <Text style={styles.label}>{t('harvestDate')}</Text>
-            <TextInput
-              style={styles.input}
+            <TextField
+              label={t('harvestDate')}
               value={formData.harvest_date}
               onChangeText={(v) => handleChange('harvest_date', v)}
               placeholder={t('dateFormatPlaceholder')}
-              placeholderTextColor={COLORS.GRAY_LIGHT}
             />
 
             {/* Nombre à récolter */}
-            <Text style={styles.label}>{t('countHarvested')}</Text>
-            <TextInput
-              style={styles.input}
+            <TextField
+              label={t('countHarvested')}
               value={formData.count_harvested > 0 ? String(formData.count_harvested) : ''}
               onChangeText={(v) => handleChange('count_harvested', v)}
               keyboardType="numeric"
               placeholder={t('maxValuePlaceholder', { max: availableFishCount })}
-              placeholderTextColor={COLORS.GRAY_LIGHT}
             />
 
             {/* Poids moyen */}
-            <Text style={styles.label}>{t('averageWeightG')}</Text>
-            <TextInput
-              style={styles.input}
+            <TextField
+              label={t('averageWeightG')}
               value={formData.average_weight_g > 0 ? String(formData.average_weight_g) : ''}
               onChangeText={(v) => handleChange('average_weight_g', v)}
               keyboardType="numeric"
               placeholder={t('exampleAverageWeightG')}
-              placeholderTextColor={COLORS.GRAY_LIGHT}
             />
 
             {/* Prix de vente (optionnel) */}
-            <Text style={styles.label}>{t('salePriceFcfa')} ({t('optional')})</Text>
-            <TextInput
-              style={styles.input}
+            <TextField
+              label={`${t('salePriceFcfa')} (${t('optional')})`}
               value={formData.sale_price_fcfa_per_kg ? String(formData.sale_price_fcfa_per_kg) : ''}
               onChangeText={(v) => handleChange('sale_price_fcfa_per_kg', v)}
               keyboardType="numeric"
               placeholder={t('exampleSalePriceFcfa')}
-              placeholderTextColor={COLORS.GRAY_LIGHT}
             />
 
             {/* Notes */}
-            <Text style={styles.label}>{t('harvestNotes')} ({t('optional')})</Text>
-            <TextInput
-              style={[styles.input, styles.inputMultiline]}
+            <TextField
+              label={`${t('harvestNotes')} (${t('optional')})`}
               value={formData.notes}
               onChangeText={(v) => setFormData(prev => ({ ...prev, notes: v }))}
               multiline
               numberOfLines={3}
               placeholder={t('partialHarvestNotesPlaceholder')}
-              placeholderTextColor={COLORS.GRAY_LIGHT}
             />
 
             {/* Récap calculé */}
             {formData.count_harvested > 0 && (
               <View style={styles.recap}>
-                <Text style={styles.recapTitle}>{t('harvestSummary')}</Text>
+                <AppText variant="sectionTitle">{t('harvestSummary')}</AppText>
                 <View style={styles.recapRow}>
-                  <Text style={styles.recapLabel}>{t('totalHarvestedWeight')}</Text>
-                  <Text style={styles.recapValue}>{totalWeightKg.toFixed(2)} kg</Text>
+                  <AppText variant="caption" color="muted">{t('totalHarvestedWeight')}</AppText>
+                  <AppText variant="label">{totalWeightKg.toFixed(2)} kg</AppText>
                 </View>
                 {estimatedRevenue !== null && (
                   <View style={styles.recapRow}>
-                    <Text style={styles.recapLabel}>{t('estimatedValue')}</Text>
-                    <Text style={[styles.recapValue, { color: COLORS.GREEN_PRIMARY }]}>
+                    <AppText variant="caption" color="muted">{t('estimatedValue')}</AppText>
+                    <AppText variant="label" color="link">
                       {Math.round(estimatedRevenue).toLocaleString()} FCFA
-                    </Text>
+                    </AppText>
                   </View>
                 )}
                 <View style={styles.recapRow}>
-                  <Text style={styles.recapLabel}>{isUnitScope ? t('fishAvailableInThisUnit') : t('remainingFish')}</Text>
-                  <Text style={[
-                    styles.recapValue,
-                    { color: remainingFish < 0 ? COLORS.ERROR : COLORS.GRAY_DARK }
-                  ]}>
+                  <AppText variant="caption" color="muted">{isUnitScope ? t('fishAvailableInThisUnit') : t('remainingFish')}</AppText>
+                  <AppText variant="label" color={remainingFish < 0 ? 'error' : 'primary'}>
                     {remainingFish < 0 ? '⚠ ' : ''}{Math.max(0, remainingFish)}
-                  </Text>
+                  </AppText>
                 </View>
               </View>
             )}
           </ScrollView>
 
           {/* Bouton */}
-          <TouchableOpacity
-            style={[styles.submitBtn, loading && styles.submitBtnDisabled]}
+          <Button
+            label={t('confirmPartialHarvest')}
             onPress={handleSubmit}
             disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color={COLORS.WHITE} />
-            ) : (
-              <>
-                <Ionicons name="cut-outline" size={20} color={COLORS.WHITE} />
-                <Text style={styles.submitBtnText}>{t('confirmPartialHarvest')}</Text>
-              </>
-            )}
-          </TouchableOpacity>
+            loading={loading}
+            iconLeft="cut-outline"
+          />
         </View>
       </View>
     </Modal>
@@ -318,137 +291,12 @@ export default function PartialHarvestModal({
 }
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
-  },
-  container: {
-    backgroundColor: COLORS.WHITE,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 32,
-    maxHeight: '90%',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 16,
-  },
-  headerText: {
-    flex: 1,
-    paddingRight: 12,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: COLORS.GRAY_DARK,
-    flexShrink: 1,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: COLORS.GRAY_LIGHT,
-    marginTop: 2,
-    flexShrink: 1,
-  },
-  closeBtn: {
-    width: 32,
-    height: 32,
-    marginLeft: 4,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  body: {
-    flexGrow: 0,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: COLORS.CREAM,
-    padding: 10,
-    borderRadius: 8,
-    marginBottom: 16,
-  },
-  infoText: {
-    fontSize: 14,
-    color: COLORS.GRAY_DARK,
-  },
-  infoBold: {
-    fontWeight: 'bold',
-    color: COLORS.GREEN_PRIMARY,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.GRAY_DARK,
-    marginBottom: 6,
-    marginTop: 12,
-  },
-  input: {
-    ...sharedTextInputStyles.base,
-    borderWidth: 1,
-    borderColor: COLORS.GRAY_LIGHT,
-    borderRadius: 8,
-    color: COLORS.GRAY_DARK,
-    backgroundColor: COLORS.CREAM,
-  },
-  inputMultiline: {
-    ...sharedTextInputStyles.multilineCompact,
-    height: 80,
-  },
-  recap: {
-    backgroundColor: COLORS.CREAM,
-    borderRadius: 12,
-    padding: 14,
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  recapTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.GREEN_PRIMARY,
-    marginBottom: 10,
-  },
-  recapRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 6,
-  },
-  recapLabel: {
-    fontSize: 14,
-    color: COLORS.GRAY_LIGHT,
-  },
-  recapValue: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.GRAY_DARK,
-  },
-  submitBtn: {
-    backgroundColor: COLORS.GREEN_PRIMARY,
-    borderRadius: 12,
-    paddingVertical: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    marginTop: 16,
-    shadowColor: COLORS.GREEN_PRIMARY,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  submitBtnDisabled: {
-    opacity: 0.6,
-  },
-  submitBtnText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.WHITE,
-  },
+  overlay: { flex: 1, backgroundColor: colors.overlay.default, justifyContent: 'flex-end' },
+  container: { backgroundColor: colors.surface.card, borderTopLeftRadius: radii.xl, borderTopRightRadius: radii.xl, padding: spacing[4], paddingBottom: spacing[5], maxHeight: '90%' },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: spacing[3] },
+  headerText: { flex: 1, paddingRight: spacing[3], gap: spacing[1] },
+  body: { flexGrow: 0 },
+  infoRow: { backgroundColor: colors.surface.page, padding: spacing[3], borderRadius: radii.md, marginBottom: spacing[4] },
+  recap: { backgroundColor: colors.surface.selected, borderRadius: radii.lg, padding: spacing[3], marginTop: spacing[3], marginBottom: spacing[2], gap: spacing[2] },
+  recapRow: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing[3] },
 });

@@ -1,21 +1,37 @@
-﻿import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
-import { useTranslation } from 'react-i18next';
-import { StackNavigationProp } from '@react-navigation/stack';
-import { AuthStackParamList } from '@/navigation/AuthNavigator';
-import { useAuth } from '@/hooks/useAuth';
-import { LoginRequest } from '@/features/auth/types/auth';
-import logger from '@/utils/logger';
-import PhoneInputField from '@/components/common/PhoneInputField';
-import AuthErrorBlock from '@/components/common/AuthErrorBlock';
-import { sharedTextInputStyles } from '@/components/common/inputStyles';
+﻿import React, { useState } from "react";
+import {
+  View,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
+  StyleSheet,
+} from "react-native";
+import { useTranslation } from "react-i18next";
+import { StackNavigationProp } from "@react-navigation/stack";
+import { AuthStackParamList } from "@/navigation/AuthNavigator";
+import { useAuth } from "@/hooks/useAuth";
+import { LoginRequest } from "@/features/auth/types/auth";
+import logger from "@/utils/logger";
+import PhoneInputField from "@/components/common/PhoneInputField";
+import AuthErrorBlock from "@/components/common/AuthErrorBlock";
+import {
+  AppText,
+  Button,
+  Card,
+  SegmentedControl,
+  TextField,
+} from "@/components/ui";
+import { spacing } from "@/theme";
 import {
   hasValidationErrors,
   validateLoginForm,
   type LoginValidationErrors,
-} from '@/features/auth/domain/accountValidation';
+} from "@/features/auth/domain/accountValidation";
 
-type LoginScreenNavigationProp = StackNavigationProp<AuthStackParamList, 'Login'>;
+type LoginScreenNavigationProp = StackNavigationProp<
+  AuthStackParamList,
+  "Login"
+>;
 
 interface Props {
   navigation: LoginScreenNavigationProp;
@@ -26,9 +42,9 @@ export default function LoginScreen({ navigation }: Props) {
   const { login, isLoading, error, fieldErrors, clearAuthError } = useAuth();
 
   const [formData, setFormData] = useState({
-    loginName: '',
-    phoneNumber: '',
-    password: '',
+    loginName: "",
+    phoneNumber: "",
+    password: "",
   });
   const [isPhoneMode, setIsPhoneMode] = useState(false);
   const [errors, setErrors] = useState<LoginValidationErrors>({});
@@ -58,13 +74,13 @@ export default function LoginScreen({ navigation }: Props) {
       await login(credentials);
       // Navigation is handled by AppNavigator after auth state changes
     } catch (err) {
-      logger.error('Login error:', err);
+      logger.error("Login error:", err);
     }
   };
 
   const toggleMode = () => {
     setIsPhoneMode(!isPhoneMode);
-    setFormData({ loginName: '', phoneNumber: '', password: '' });
+    setFormData({ loginName: "", phoneNumber: "", password: "" });
     setErrors({});
     clearAuthError();
   };
@@ -72,7 +88,7 @@ export default function LoginScreen({ navigation }: Props) {
   const updateField = (field: keyof typeof formData, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
     if (errors[field]) {
-      setErrors((prev) => ({ ...prev, [field]: '' }));
+      setErrors((prev) => ({ ...prev, [field]: "" }));
     }
     if (error) {
       clearAuthError();
@@ -86,105 +102,97 @@ export default function LoginScreen({ navigation }: Props) {
   };
   const phoneFieldError = errors.phoneNumber || backendFieldErrors.phoneNumber;
 
-  const renderError = (field: keyof typeof errors) => {
-    const message = errors[field] || backendFieldErrors[field];
-    return message ? (
-      <Text className="text-sm text-error mt-1">{t(message, { defaultValue: message })}</Text>
-    ) : null;
-  };
-
   return (
     <KeyboardAvoidingView
       className="flex-1 bg-cream"
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
-      <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }} className="px-5">
-        <View className="items-center mb-10">
-          <Text className="text-2xl font-bold text-aquacare-primary text-center">{t('welcomeMessage')}</Text>
+      <ScrollView contentContainerStyle={styles.content} className="px-5">
+        <View style={styles.hero}>
+          <AppText variant="screenTitle" color="link" style={styles.centered}>
+            {t("welcomeMessage")}
+          </AppText>
         </View>
 
-        <View className="bg-white p-5 rounded-2xl">
-          <Text className="text-xl font-bold text-gray-dark mb-5 text-center">{t('login')}</Text>
+        <Card variant="elevated" style={styles.card}>
+          <AppText variant="sectionTitle" style={styles.centered}>
+            {t("login")}
+          </AppText>
 
-          <View className="flex-row bg-cream rounded-lg mb-5">
-            <TouchableOpacity
-              className={`flex-1 py-3 items-center rounded-lg ${!isPhoneMode ? 'bg-aquacare-primary' : ''}`}
-              onPress={() => !isPhoneMode || toggleMode()}
-            >
-              <Text className={`text-sm font-semibold ${!isPhoneMode ? 'text-white' : 'text-gray-light'}`}>
-                {t('loginName')}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              className={`flex-1 py-3 items-center rounded-lg ${isPhoneMode ? 'bg-aquacare-primary' : ''}`}
-              onPress={() => isPhoneMode || toggleMode()}
-            >
-              <Text className={`text-sm font-semibold ${isPhoneMode ? 'text-white' : 'text-gray-light'}`}>
-                {t('phoneNumber')}
-              </Text>
-            </TouchableOpacity>
-          </View>
+          <SegmentedControl
+            value={isPhoneMode ? "phone" : "login"}
+            options={[
+              { value: "login", label: t("loginName") },
+              { value: "phone", label: t("phoneNumber") },
+            ]}
+            onChange={(next) => {
+              if ((next === "phone") !== isPhoneMode) toggleMode();
+            }}
+          />
 
           {!isPhoneMode ? (
-            <View className="mb-4">
-              <Text className="text-base font-medium text-gray-dark mb-2">{t('loginName')}</Text>
-              <TextInput
-                className={`border border-gray-300 rounded-lg px-3 h-12 text-base bg-white ${
-                  errors.loginName ? 'border-error' : ''
-                }`}
-                style={sharedTextInputStyles.base}
-                value={formData.loginName}
-                onChangeText={(value) => updateField('loginName', value)}
-                placeholder={t('placeholderLoginName')}
-                autoCapitalize="words"
-                autoComplete="name"
-              />
-              {renderError('loginName')}
-            </View>
+            <TextField
+              label={t("loginName")}
+              value={formData.loginName}
+              onChangeText={(value) => updateField("loginName", value)}
+              placeholder={t("placeholderLoginName")}
+              autoCapitalize="words"
+              autoComplete="name"
+              error={errors.loginName || backendFieldErrors.loginName}
+            />
           ) : (
             <PhoneInputField
               value={formData.phoneNumber}
-              onChange={(formatted) => updateField('phoneNumber', formatted)}
+              onChange={(formatted) => updateField("phoneNumber", formatted)}
               error={phoneFieldError}
             />
           )}
 
-          <View className="mb-4">
-            <Text className="text-base font-medium text-gray-dark mb-2">{t('password')}</Text>
-            <TextInput
-              className={`border border-gray-300 rounded-lg px-3 h-12 text-base bg-white ${
-                errors.password ? 'border-error' : ''
-              }`}
-              style={sharedTextInputStyles.base}
-              value={formData.password}
-              onChangeText={(value) => updateField('password', value)}
-              placeholder="********"
-              secureTextEntry
-              autoComplete="password"
-            />
-            {renderError('password')}
-          </View>
+          <TextField
+            label={t("password")}
+            value={formData.password}
+            onChangeText={(value) => updateField("password", value)}
+            placeholder="********"
+            secureTextEntry
+            autoComplete="password"
+            error={errors.password || backendFieldErrors.password}
+          />
 
           <AuthErrorBlock error={error} />
 
-          <TouchableOpacity
-            className={`py-4 rounded-lg items-center mb-4 ${isLoading ? 'bg-aquacare-primary/70' : 'bg-aquacare-primary'}`}
+          <Button
+            label={t("signIn")}
             onPress={handleLogin}
-            disabled={isLoading}
-          >
-            <Text className="text-white text-base font-semibold">
-              {isLoading ? t('loading') : t('signIn')}
-            </Text>
-          </TouchableOpacity>
+            loading={isLoading}
+          />
 
-          <View className="flex-row justify-center items-center">
-            <Text className="text-sm text-gray-light">{t('noAccount')}</Text>
-            <TouchableOpacity onPress={() => navigation.navigate('Register')}>
-              <Text className="text-sm font-semibold text-aquacare-primary">{t('signUp')}</Text>
-            </TouchableOpacity>
+          <View style={styles.footer}>
+            <AppText variant="helper" color="muted">
+              {t("noAccount")}
+            </AppText>
+            <Button
+              label={t("signUp")}
+              onPress={() => navigation.navigate("Register")}
+              variant="ghost"
+              size="small"
+              fullWidth={false}
+            />
           </View>
-        </View>
+        </Card>
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
+
+const styles = StyleSheet.create({
+  content: { flexGrow: 1, justifyContent: "center" },
+  hero: { alignItems: "center", marginBottom: spacing[10] },
+  card: { gap: spacing[4] },
+  centered: { textAlign: "center" },
+  footer: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: spacing[1],
+  },
+});

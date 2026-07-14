@@ -1,10 +1,14 @@
 import React from 'react';
-import { Alert } from 'react-native';
+import { Alert, StyleSheet } from 'react-native';
 import { fireEvent, render } from '@testing-library/react-native';
 import { useDispatch, useSelector } from 'react-redux';
 
 import HarvestModal from '../HarvestModal';
 import PartialHarvestModal from '../PartialHarvestModal';
+
+jest.mock('react-native-safe-area-context', () => ({
+  useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 34, left: 0 }),
+}));
 
 const mockState = {
   auth: {
@@ -125,7 +129,7 @@ describe('components/modals harvest flows', () => {
   });
 
   it('shows the unit name in the full harvest modal header', () => {
-    const { getByText, queryByText } = render(
+    const { getByLabelText, getByTestId, getByText, queryByText } = render(
       <HarvestModal
         visible
         onClose={jest.fn()}
@@ -152,6 +156,12 @@ describe('components/modals harvest flows', () => {
     expect(getByText('Harvest Bac 1')).toBeTruthy();
     expect(getByText('This action will close this production unit.')).toBeTruthy();
     expect(queryByText('productionUnitSummary')).toBeNull();
+    expect(StyleSheet.flatten(getByTestId('harvest-actions').props.style)).toMatchObject({
+      paddingBottom: 40,
+      alignItems: 'center',
+    });
+    expect(StyleSheet.flatten(getByLabelText('cancel').props.style)).toMatchObject({ flex: 1 });
+    expect(StyleSheet.flatten(getByTestId('harvest-submit').props.style)).toMatchObject({ flex: 2 });
   });
 
   it('blocks a partial harvest that would empty the unit', () => {

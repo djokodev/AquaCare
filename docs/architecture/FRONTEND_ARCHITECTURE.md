@@ -4,8 +4,8 @@
 
 - `frontend/package.json`, current Expo and React Native versions.
 - `frontend/src/config/environment.ts`, runtime API selection.
-- `frontend/src/constants/colors.ts`, color tokens.
-- `frontend/src/constants/typography.ts`, typography tokens.
+- `frontend/src/theme/tokens.json`, shared primitive design tokens for TypeScript and Tailwind.
+- `frontend/src/theme/`, semantic design tokens and Navigation theme; legacy constants remain compatibility exports.
 - `frontend/src/i18n/locales/fr.ts`, `frontend/src/i18n/locales/en.ts`, UI copy.
 
 ## Structure

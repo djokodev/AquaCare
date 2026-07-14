@@ -1,106 +1,133 @@
-import React from 'react';
-import { Alert } from 'react-native';
-import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
-import { ScrollView } from 'react-native';
-import { useDispatch, useSelector } from 'react-redux';
+import React from "react";
+import { Alert, StyleSheet } from "react-native";
+import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
+import { ScrollView } from "react-native";
+import { useDispatch, useSelector } from "react-redux";
 
-import DashboardScreen from '../DashboardScreen';
-import { ProductionCycle } from '@/types/aquaculture';
-import { offlineService } from '@/services/offlineService';
-import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
-import { fetchDashboardData } from '@/features/aquaculture/store/aquacultureSlice';
+import DashboardScreen from "../DashboardScreen";
+import { ProductionCycle } from "@/types/aquaculture";
+import { offlineService } from "@/services/offlineService";
+import { aquacultureService } from "@/features/aquaculture/services/aquacultureService";
+import {
+  fetchDashboardData,
+  fetchProductionCycles,
+} from "@/features/aquaculture/store/aquacultureSlice";
+import { fetchNotifications } from "@/features/notifications/store/notificationSlice";
+import { fetchOrders } from "@/features/commerce/store/commerceSlice";
+import { colors } from "@/theme";
 
 const mockDispatch = jest.fn();
 const mockLoadProfile = jest.fn();
 
-jest.mock('react-redux', () => ({
+jest.mock("react-redux", () => ({
   useDispatch: jest.fn(),
   useSelector: jest.fn(),
 }));
 
-jest.mock('react-i18next', () => ({
+jest.mock("react-i18next", () => ({
   useTranslation: () => ({
     t: (key: string, options?: Record<string, unknown>) => {
-      if (key === 'cycleDashboardTitle') {
-        return 'Dashboard du cycle';
+      if (key === "cycleDashboardTitle") {
+        return "Dashboard du cycle";
       }
-      if (key === 'productionUnitsCount') {
+      if (key === "productionUnitsCount") {
         return `${options?.count} unités`;
       }
       return key;
     },
     i18n: {
-      language: 'fr',
+      language: "fr",
     },
   }),
   initReactI18next: {
-    type: '3rdParty',
+    type: "3rdParty",
     init: jest.fn(),
   },
 }));
 
-jest.mock('@/features/aquaculture/store/aquacultureSlice', () => ({
-  clearCurrentCycle: jest.fn(() => ({ type: 'aquaculture/clearCurrentCycle' })),
-  fetchDashboardData: jest.fn(() => ({ type: 'aquaculture/fetchDashboardData' })),
-  fetchProductionCycles: jest.fn(() => ({ type: 'aquaculture/fetchProductionCycles' })),
+jest.mock("@/features/aquaculture/store/aquacultureSlice", () => ({
+  clearCurrentCycle: jest.fn(() => ({ type: "aquaculture/clearCurrentCycle" })),
+  fetchDashboardData: jest.fn(() => ({
+    type: "aquaculture/fetchDashboardData",
+  })),
+  fetchProductionCycles: jest.fn(() => ({
+    type: "aquaculture/fetchProductionCycles",
+  })),
   setCurrentCycle: jest.fn((cycle: unknown) => ({
-    type: 'aquaculture/setCurrentCycle',
+    type: "aquaculture/setCurrentCycle",
     payload: cycle,
   })),
 }));
 
-jest.mock('@/features/aquaculture/services/aquacultureService', () => ({
+jest.mock("@/features/notifications/store/notificationSlice", () => ({
+  fetchNotifications: jest.fn((params: unknown) => ({
+    type: "notifications/fetch",
+    payload: params,
+  })),
+}));
+
+jest.mock("@/features/commerce/store/commerceSlice", () => ({
+  confirmOrderReceipt: jest.fn(),
+  fetchOrderStatistics: jest.fn(),
+  fetchOrders: jest.fn(() => ({ type: "commerce/fetchOrders" })),
+}));
+
+jest.mock("@/features/aquaculture/services/aquacultureService", () => ({
   aquacultureService: {
     getCycleDashboard: jest.fn(),
   },
 }));
 
-jest.mock('@react-navigation/native', () => ({
+jest.mock("@react-navigation/native", () => ({
   useFocusEffect: (callback: () => void) => callback(),
 }));
 
-jest.mock('@/hooks/useAuth', () => ({
+jest.mock("@/hooks/useAuth", () => ({
   useAuth: () => ({
-    displayName: 'Jean Test',
+    displayName: "Jean Test",
     loadProfile: mockLoadProfile,
     loadFarmProfile: mockLoadProfile,
   }),
 }));
 
-jest.mock('@/services/offlineService', () => ({
+jest.mock("@/services/offlineService", () => ({
   offlineService: {
     hasAnyPendingSync: jest.fn(),
     syncAllOfflineData: jest.fn(),
   },
 }));
 
-jest.mock('@/features/main/components/DashboardHeader', () => ({
+jest.mock("@/features/main/components/DashboardHeader", () => ({
   __esModule: true,
   default: () => null,
 }));
 
-jest.mock('@/components/modals/HarvestModal', () => ({
+jest.mock("@/components/modals/HarvestModal", () => ({
   __esModule: true,
   default: () => null,
 }));
 
-describe('features/main/screens/DashboardScreen', () => {
+describe("features/main/screens/DashboardScreen", () => {
   const mockUseSelector = useSelector as unknown as jest.Mock;
   const mockOffline = offlineService as jest.Mocked<typeof offlineService>;
-  const mockGetCycleDashboard = aquacultureService.getCycleDashboard as jest.Mock;
+  const mockGetCycleDashboard =
+    aquacultureService.getCycleDashboard as jest.Mock;
   const mockFetchDashboardData = fetchDashboardData as unknown as jest.Mock;
+  const mockFetchProductionCycles = fetchProductionCycles as unknown as jest.Mock;
+  const mockFetchNotifications = fetchNotifications as unknown as jest.Mock;
+  const mockFetchOrders = fetchOrders as unknown as jest.Mock;
   const navigation = {
     navigate: jest.fn(),
   } as any;
 
   const cycleA: ProductionCycle = {
-    id: 'cycle-a',
-    farm_profile: 'farm-1',
-    cycle_name: 'Cycle A',
-    species: 'tilapia',
-    pond_identifier: 'P1',
+    id: "cycle-a",
+    farm_profile: "farm-1",
+    cycle_name: "Cycle A",
+    species: "tilapia",
+    pond_identifier: "P1",
     pond_surface_m2: 100,
-    start_date: '2026-01-01',
+    start_date: "2026-01-01",
     initial_count: 1000,
     initial_average_weight: 10,
     initial_biomass: 10,
@@ -109,40 +136,46 @@ describe('features/main/screens/DashboardScreen', () => {
     current_biomass: 108,
     total_feed_consumed: 120,
     survival_rate: 88,
-    status: 'active',
-    created_at: '2026-01-01T00:00:00.000Z',
-    updated_at: '2026-01-01T00:00:00.000Z',
+    status: "active",
+    created_at: "2026-01-01T00:00:00.000Z",
+    updated_at: "2026-01-01T00:00:00.000Z",
   };
 
   const cycleB: ProductionCycle = {
     ...cycleA,
-    id: 'cycle-b',
-    cycle_name: 'Cycle B',
-    pond_identifier: 'P2',
+    id: "cycle-b",
+    cycle_name: "Cycle B",
+    pond_identifier: "P2",
   };
 
   const cycleWithUnits: ProductionCycle = {
     ...cycleA,
-    id: 'cycle-unit',
-    cycle_name: 'Cycle Unit',
-    pond_identifier: 'Bac 1',
-    infrastructure_type: ['tank', 'pond'],
+    id: "cycle-unit",
+    cycle_name: "Cycle Unit",
+    pond_identifier: "Bac 1",
+    infrastructure_type: ["tank", "pond"],
   };
 
   const archivedCycle: ProductionCycle = {
     ...cycleA,
-    id: 'cycle-archived',
-    cycle_name: 'Archived Cycle',
-    status: 'harvested',
+    id: "cycle-archived",
+    cycle_name: "Archived Cycle",
+    status: "harvested",
   };
 
   beforeEach(() => {
     jest.clearAllMocks();
-    mockDispatch.mockImplementation(() => ({ unwrap: jest.fn().mockResolvedValue({}) }));
+    mockDispatch.mockImplementation(() => ({
+      unwrap: jest.fn().mockResolvedValue({}),
+    }));
     mockLoadProfile.mockResolvedValue(undefined);
     (useDispatch as unknown as jest.Mock).mockReturnValue(mockDispatch);
     mockOffline.hasAnyPendingSync.mockResolvedValue(false);
-    mockOffline.syncAllOfflineData.mockResolvedValue({ success: 0, failed: 0, details: {} as any });
+    mockOffline.syncAllOfflineData.mockResolvedValue({
+      success: 0,
+      failed: 0,
+      details: {} as any,
+    });
     mockGetCycleDashboard.mockResolvedValue({
       summary: {
         total_allocations: 3,
@@ -183,38 +216,99 @@ describe('features/main/screens/DashboardScreen', () => {
             error: null,
           },
         },
-      })
+      }),
     );
   });
 
-  it('permet de rouvrir le selecteur de cycle depuis le dashboard', async () => {
-    const { getByText, queryByText } = render(<DashboardScreen navigation={navigation} />);
+  it("garde le sélecteur disponible quand le dashboard est scoped mais deux cycles sont actifs", async () => {
+    mockUseSelector.mockImplementation((selector: (state: any) => unknown) =>
+      selector({
+        aquaculture: {
+          dashboardData: { ...({ active_cycles: [cycleA] } as any) },
+          cycles: [cycleA, cycleB, archivedCycle],
+          loading: {
+            dashboard: false,
+            cycles: false,
+            logs: false,
+            sync: false,
+          },
+          error: null,
+          currentCycle: cycleA,
+        },
+        notifications: { unreadCount: 0 },
+        commerce: {
+          orders: { items: [], statistics: null, loading: false, error: null },
+        },
+      }),
+    );
 
-    expect(getByText('Dashboard du cycle')).toBeTruthy();
-    expect(getByText('dashboardEstimatedMarketValue')).toBeTruthy();
-    expect(getByText('dashboardFeedCostConsumed')).toBeTruthy();
-    expect(getByText('dashboardTimeRemainingCycle')).toBeTruthy();
-    expect(getByText('dashboardDirectProductionCost')).toBeTruthy();
-    expect(getByText('sessionActiveCycleLabel')).toBeTruthy();
-    expect(getByText('Cycle A')).toBeTruthy();
-    expect(queryByText('Cycle A #1')).toBeNull();
-    expect(queryByText('Cycle B #2')).toBeNull();
-    await waitFor(() => {
-      expect(getByText('storeTitle')).toBeTruthy();
-      expect(getByText('createNewCycleDashboardTitle')).toBeTruthy();
-      expect(queryByText('storeDashboardSubtitle')).toBeNull();
-    });
-
-    fireEvent.press(getByText('storeTitle'));
-    expect(navigation.navigate).toHaveBeenCalledWith('Store', { cycleId: cycleA.id });
-
-    fireEvent.press(getByText('changeSessionCycle'));
-    expect(navigation.navigate).toHaveBeenCalledWith('CycleSessionEntry', {
+    const { getByTestId, getByText } = render(
+      <DashboardScreen navigation={navigation} />,
+    );
+    expect(getByText("changeSessionCycle")).toBeTruthy();
+    fireEvent.press(getByTestId("session-active-cycle-card"));
+    expect(navigation.navigate).toHaveBeenCalledWith("CycleSessionEntry", {
       showBackToDashboard: true,
     });
   });
 
-  it('desactive la session active quand un seul cycle est disponible', async () => {
+  it("rend les quatre actions du dashboard avec une surface interactive bordée", () => {
+    const { getByTestId } = render(
+      <DashboardScreen navigation={navigation} />,
+    );
+
+    [
+      "dashboard-action-production-units",
+      "dashboard-action-store",
+      "dashboard-action-report",
+      "dashboard-action-create-cycle",
+    ].forEach((testID) => {
+      const style = StyleSheet.flatten(
+        getByTestId(`${testID}-surface`).props.style,
+      );
+
+      expect(style.borderWidth).toBe(1);
+      expect(style.borderColor).toBe(colors.brand.primary);
+      expect(style.backgroundColor).toBe(colors.surface.card);
+      expect(style.flexDirection).toBe("row");
+      expect(style.alignItems).toBe("center");
+      expect(style.justifyContent).toBe("space-between");
+      expect(style.minHeight).toBeGreaterThanOrEqual(56);
+    });
+  });
+
+  it("permet de rouvrir le selecteur de cycle depuis le dashboard", async () => {
+    const { getByText, queryByText } = render(
+      <DashboardScreen navigation={navigation} />,
+    );
+
+    expect(getByText("Dashboard du cycle")).toBeTruthy();
+    expect(getByText("dashboardEstimatedMarketValue")).toBeTruthy();
+    expect(getByText("dashboardFeedCostConsumed")).toBeTruthy();
+    expect(getByText("dashboardTimeRemainingCycle")).toBeTruthy();
+    expect(getByText("dashboardDirectProductionCost")).toBeTruthy();
+    expect(getByText("sessionActiveCycleLabel")).toBeTruthy();
+    expect(getByText("Cycle A")).toBeTruthy();
+    expect(queryByText("Cycle A #1")).toBeNull();
+    expect(queryByText("Cycle B #2")).toBeNull();
+    await waitFor(() => {
+      expect(getByText("storeTitle")).toBeTruthy();
+      expect(getByText("createNewCycleDashboardTitle")).toBeTruthy();
+      expect(queryByText("storeDashboardSubtitle")).toBeNull();
+    });
+
+    fireEvent.press(getByText("storeTitle"));
+    expect(navigation.navigate).toHaveBeenCalledWith("Store", {
+      cycleId: cycleA.id,
+    });
+
+    fireEvent.press(getByText("changeSessionCycle"));
+    expect(navigation.navigate).toHaveBeenCalledWith("CycleSessionEntry", {
+      showBackToDashboard: true,
+    });
+  });
+
+  it("desactive la session active quand un seul cycle est disponible", async () => {
     mockUseSelector.mockImplementation((selector: (state: any) => unknown) =>
       selector({
         aquaculture: {
@@ -229,7 +323,7 @@ describe('features/main/screens/DashboardScreen', () => {
             current_feeding_plans: [],
             pending_notifications: [],
           },
-          cycles: [cycleA, cycleB, archivedCycle],
+          cycles: [cycleA, archivedCycle],
           loading: {
             dashboard: false,
             cycles: false,
@@ -250,24 +344,34 @@ describe('features/main/screens/DashboardScreen', () => {
             error: null,
           },
         },
-      })
+      }),
     );
 
-    const { getByTestId, getByText, queryByText } = render(<DashboardScreen navigation={navigation} />);
+    const { getByTestId, getByText, queryByText } = render(
+      <DashboardScreen navigation={navigation} />,
+    );
 
-    const sessionCard = getByTestId('session-active-cycle-card');
+    const sessionCard = getByTestId("session-active-cycle-card");
 
-    expect(getByText('sessionActiveCycleLabel')).toBeTruthy();
-    expect(getByText('Cycle A')).toBeTruthy();
-    expect(queryByText('changeSessionCycle')).toBeNull();
+    expect(getByText("sessionActiveCycleLabel")).toBeTruthy();
+    expect(getByText("Cycle A")).toBeTruthy();
+    expect(queryByText("changeSessionCycle")).toBeNull();
 
     fireEvent.press(sessionCard);
 
     expect(navigation.navigate).not.toHaveBeenCalled();
   });
 
-  it('rafraichit aussi le profil ferme lors du pull-to-refresh', async () => {
-    const { UNSAFE_getByType } = render(<DashboardScreen navigation={navigation} />);
+  it("rafraichit aussi le profil ferme lors du pull-to-refresh", async () => {
+    const { UNSAFE_getByType } = render(
+      <DashboardScreen navigation={navigation} />,
+    );
+
+    mockLoadProfile.mockClear();
+    mockFetchDashboardData.mockClear();
+    mockFetchProductionCycles.mockClear();
+    mockFetchNotifications.mockClear();
+    mockFetchOrders.mockClear();
 
     const scrollView = UNSAFE_getByType(ScrollView);
 
@@ -279,34 +383,40 @@ describe('features/main/screens/DashboardScreen', () => {
       expect(mockLoadProfile).toHaveBeenCalledTimes(1);
     });
 
+    expect(mockLoadProfile).toHaveBeenCalledTimes(1);
     expect(mockFetchDashboardData).toHaveBeenCalledWith(undefined);
+    expect(mockFetchProductionCycles).toHaveBeenCalledTimes(1);
+    expect(mockFetchNotifications).toHaveBeenCalledWith({
+      cycleId: cycleA.id,
+    });
+    expect(mockFetchOrders).toHaveBeenCalled();
   });
 
-  it('ouvre le flux de creation de cycle depuis le dashboard', async () => {
+  it("ouvre le flux de creation de cycle depuis le dashboard", async () => {
     const { getByText } = render(<DashboardScreen navigation={navigation} />);
 
     await waitFor(() => {
-      expect(getByText('createNewCycleDashboardTitle')).toBeTruthy();
+      expect(getByText("createNewCycleDashboardTitle")).toBeTruthy();
     });
 
-    fireEvent.press(getByText('createNewCycleDashboardTitle'));
+    fireEvent.press(getByText("createNewCycleDashboardTitle"));
 
-    expect(navigation.navigate).toHaveBeenCalledWith('CreateFarm');
+    expect(navigation.navigate).toHaveBeenCalledWith("CreateFarm");
   });
 
-  it('affiche un CTA vers les unites en production pour le cycle actif', async () => {
+  it("affiche un CTA vers les unites en production pour le cycle actif", async () => {
     const { getByText } = render(<DashboardScreen navigation={navigation} />);
 
-    expect(getByText('productionUnitsDashboardCta')).toBeTruthy();
+    expect(getByText("productionUnitsDashboardCta")).toBeTruthy();
 
-    fireEvent.press(getByText('productionUnitsDashboardCta'));
+    fireEvent.press(getByText("productionUnitsDashboardCta"));
 
-    expect(navigation.navigate).toHaveBeenCalledWith('ProductionUnitsHub', {
+    expect(navigation.navigate).toHaveBeenCalledWith("ProductionUnitsHub", {
       cycleId: cycleA.id,
     });
   });
 
-  it('masque les actions operationnelles pour un cycle avec unites', async () => {
+  it("masque les actions operationnelles pour un cycle avec unites", async () => {
     mockUseSelector.mockImplementation((selector: (state: any) => unknown) =>
       selector({
         aquaculture: {
@@ -342,32 +452,34 @@ describe('features/main/screens/DashboardScreen', () => {
             error: null,
           },
         },
-      })
+      }),
     );
 
-    const { getByText, queryByText } = render(<DashboardScreen navigation={navigation} />);
+    const { getByText, queryByText } = render(
+      <DashboardScreen navigation={navigation} />,
+    );
 
     await waitFor(() => {
-      expect(getByText('Dashboard du cycle')).toBeTruthy();
-      expect(getByText('dashboardEstimatedMarketValue')).toBeTruthy();
-      expect(getByText('dashboardDirectProductionCost')).toBeTruthy();
-      expect(getByText('dashboardEstimatedCurrentFish')).toBeTruthy();
-      expect(getByText('dashboardTimeRemainingCycle')).toBeTruthy();
-      expect(getByText('sessionActiveCycleLabel')).toBeTruthy();
-      expect(getByText('Cycle Unit')).toBeTruthy();
-      expect(getByText('productionUnitsDashboardCta')).toBeTruthy();
-      expect(getByText('reportCycleTitle')).toBeTruthy();
-      expect(getByText('storeTitle')).toBeTruthy();
-      expect(queryByText('viewAllActions')).toBeNull();
-      expect(queryByText('storeDashboardSubtitle')).toBeNull();
+      expect(getByText("Dashboard du cycle")).toBeTruthy();
+      expect(getByText("dashboardEstimatedMarketValue")).toBeTruthy();
+      expect(getByText("dashboardDirectProductionCost")).toBeTruthy();
+      expect(getByText("dashboardEstimatedCurrentFish")).toBeTruthy();
+      expect(getByText("dashboardTimeRemainingCycle")).toBeTruthy();
+      expect(getByText("sessionActiveCycleLabel")).toBeTruthy();
+      expect(getByText("Cycle Unit")).toBeTruthy();
+      expect(getByText("productionUnitsDashboardCta")).toBeTruthy();
+      expect(getByText("reportCycleTitle")).toBeTruthy();
+      expect(getByText("storeTitle")).toBeTruthy();
+      expect(queryByText("viewAllActions")).toBeNull();
+      expect(queryByText("storeDashboardSubtitle")).toBeNull();
     });
 
-    fireEvent.press(getByText('reportCycleTitle'));
-    expect(navigation.navigate).toHaveBeenCalledWith('Reports', {
-      scope: 'cycle',
+    fireEvent.press(getByText("reportCycleTitle"));
+    expect(navigation.navigate).toHaveBeenCalledWith("Reports", {
+      scope: "cycle",
       cycleId: cycleWithUnits.id,
     });
 
-    expect(mockGetCycleDashboard).toHaveBeenCalledWith('cycle-unit');
+    expect(mockGetCycleDashboard).toHaveBeenCalledWith("cycle-unit");
   });
 });

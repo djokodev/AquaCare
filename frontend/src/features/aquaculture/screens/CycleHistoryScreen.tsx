@@ -1,237 +1,53 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, RefreshControl } from 'react-native';
+import { FlatList, RefreshControl, StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { Ionicons } from '@expo/vector-icons';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useDispatch, useSelector } from 'react-redux';
+
+import { AppHeader, AppText, Card, EmptyState, LoadingState, Screen, SegmentedControl } from '@/components/ui';
 import { AppDispatch, RootState } from '@/store/store';
 import { fetchProductionCycles } from '@/features/aquaculture/store/aquacultureSlice';
 import { ProductionCycle } from '@/types/aquaculture';
 import { RootStackParamList } from '@/navigation/MainNavigator';
-import { AQUACARE_COLORS } from '@/constants/colors';
+import { colors, spacing } from '@/theme';
 import { formatNumber, formatPercentage, formatDate, formatDaysSince } from '@/utils';
 
-type CycleHistoryScreenNavigationProp = StackNavigationProp<RootStackParamList, 'CycleHistory'>;
+type NavigationProp = StackNavigationProp<RootStackParamList, 'CycleHistory'>;
+interface Props { navigation: NavigationProp; }
+type Filter = 'all' | 'clarias' | 'tilapia';
 
-interface CycleHistoryScreenProps {
-  navigation: CycleHistoryScreenNavigationProp;
-}
-
-export default function CycleHistoryScreen({ navigation }: CycleHistoryScreenProps) {
+export default function CycleHistoryScreen({ navigation }: Props) {
   const { t } = useTranslation();
   const dispatch = useDispatch<AppDispatch>();
-
-  const [selectedFilter, setSelectedFilter] = useState<'all' | 'clarias' | 'tilapia'>('all');
-
+  const [selectedFilter, setSelectedFilter] = useState<Filter>('all');
   const { cycles, loading } = useSelector((state: RootState) => state.aquaculture);
-
-  useEffect(() => {
-    dispatch(fetchProductionCycles());
-  }, [dispatch]);
-
-  const onRefresh = React.useCallback(() => {
-    dispatch(fetchProductionCycles());
-  }, [dispatch]);
-
-  const sortedCycles = useMemo(
-    () =>
-      [...cycles]
-        .filter((cycle) => cycle.status === 'harvested')
-        .filter((cycle) => (selectedFilter === 'all' ? true : cycle.species === selectedFilter))
-        .sort((a, b) => {
-          if (!a.end_date || !b.end_date) return 0;
-          return new Date(b.end_date).getTime() - new Date(a.end_date).getTime();
-        }),
-    [cycles, selectedFilter]
-  );
-
-  const getDurationInDays = (startDate: string, endDate: string): number => {
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    return Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
-  };
-
-  const getPerformanceColor = (survivalRate: number | null | undefined, fcr: number | null | undefined) => {
-    const survival = survivalRate || 0;
-    const fcrValue = fcr || 999;
-
-    if (survival >= 85 && fcrValue <= 1.8) return AQUACARE_COLORS.SUCCESS;
-    if (survival >= 75 && fcrValue <= 2.2) return AQUACARE_COLORS.WARNING;
-    return AQUACARE_COLORS.ERROR;
-  };
-
-  const getPerformanceText = (survivalRate: number | null | undefined, fcr: number | null | undefined) => {
-    const survival = survivalRate || 0;
-    const fcrValue = fcr || 999;
-
-    if (survival >= 85 && fcrValue <= 1.8) return t('performanceExcellent');
-    if (survival >= 75 && fcrValue <= 2.2) return t('performanceGood');
-    return t('performanceImprove');
-  };
-
+  useEffect(() => { void dispatch(fetchProductionCycles()); }, [dispatch]);
+  const onRefresh = useCallback(() => { void dispatch(fetchProductionCycles()); }, [dispatch]);
+  const sortedCycles = useMemo(() => [...cycles].filter((cycle) => cycle.status === 'harvested').filter((cycle) => selectedFilter === 'all' || cycle.species === selectedFilter).sort((a, b) => !a.end_date || !b.end_date ? 0 : new Date(b.end_date).getTime() - new Date(a.end_date).getTime()), [cycles, selectedFilter]);
   const { totalCycles, avgSurvival, avgFCR, totalBiomass } = useMemo(() => {
     const count = sortedCycles.length;
-    return {
-      totalCycles: count,
-      avgSurvival: count > 0
-        ? sortedCycles.reduce((sum, c) => sum + (c.survival_rate || 0), 0) / count
-        : 0,
-      avgFCR: count > 0
-        ? sortedCycles.reduce((sum, c) => sum + (c.fcr || 0), 0) / count
-        : 0,
-      totalBiomass: sortedCycles.reduce((sum, c) => sum + (c.final_biomass || 0), 0),
-    };
+    return { totalCycles: count, avgSurvival: count ? sortedCycles.reduce((sum, cycle) => sum + (cycle.survival_rate || 0), 0) / count : 0, avgFCR: count ? sortedCycles.reduce((sum, cycle) => sum + (cycle.fcr || 0), 0) / count : 0, totalBiomass: sortedCycles.reduce((sum, cycle) => sum + (cycle.final_biomass || 0), 0) };
   }, [sortedCycles]);
-
-  const renderCycleCard = useCallback(({ item: cycle }: { item: ProductionCycle }) => {
-    const duration = cycle.end_date ? getDurationInDays(cycle.start_date, cycle.end_date) : 0;
-    const performanceColor = getPerformanceColor(cycle.survival_rate, cycle.fcr);
-    const performanceText = getPerformanceText(cycle.survival_rate, cycle.fcr);
+  const performanceLabel = (cycle: ProductionCycle) => {
+    const survival = cycle.survival_rate || 0;
+    const fcr = cycle.fcr || 999;
+    return survival >= 85 && fcr <= 1.8 ? t('performanceExcellent') : survival >= 75 && fcr <= 2.2 ? t('performanceGood') : t('performanceImprove');
+  };
+  const renderCycle = useCallback(({ item: cycle }: { item: ProductionCycle }) => {
+    const duration = cycle.end_date ? Math.floor((new Date(cycle.end_date).getTime() - new Date(cycle.start_date).getTime()) / 86400000) : 0;
     const speciesLabel = cycle.species === 'clarias' ? t('clariasSpeciesFull') : t('tilapia');
-
-    return (
-      <View className="bg-white rounded-xl p-4 mb-3">
-        <View className="flex-row justify-between items-start mb-3">
-          <View className="flex-1 mr-3">
-            <Text className="text-base font-bold text-gray-dark" numberOfLines={1}>{cycle.cycle_name}</Text>
-            <Text className="text-sm text-gray-light" numberOfLines={1}>
-              {speciesLabel} | {cycle.pond_identifier}
-            </Text>
-            <Text className="text-xs text-gray-light" numberOfLines={1}>
-              {formatDate(cycle.start_date)} - {cycle.end_date ? formatDate(cycle.end_date) : formatDaysSince(cycle.start_date)} | {duration} {t('days')}
-            </Text>
-          </View>
-          <View className="items-end">
-            <Text className="text-xs font-bold" style={{ color: performanceColor }}>
-              {performanceText}
-            </Text>
-          </View>
-        </View>
-
-        <View className="flex-row justify-between pt-3 border-t border-cream">
-          <View className="items-center flex-1">
-            <Text className="text-sm font-bold text-gray-dark">{formatPercentage(cycle.survival_rate)}</Text>
-            <Text className="text-xs text-gray-light">{t('survival')}</Text>
-          </View>
-          <View className="items-center flex-1">
-            <Text className="text-sm font-bold text-gray-dark">{cycle.fcr ? cycle.fcr.toFixed(2) : '0.00'}</Text>
-            <Text className="text-xs text-gray-light">FCR</Text>
-          </View>
-          <View className="items-center flex-1">
-            <Text className="text-sm font-bold text-gray-dark">{formatNumber(cycle.final_biomass, 'kg')}</Text>
-            <Text className="text-xs text-gray-light">{t('finalBiomass')}</Text>
-          </View>
-          <View className="items-center flex-1">
-            <Text className="text-sm font-bold text-gray-dark">
-              {cycle.final_average_weight ? `${cycle.final_average_weight}g` : '0g'}
-            </Text>
-            <Text className="text-xs text-gray-light">{t('finalWeight')}</Text>
-          </View>
-        </View>
-      </View>
-    );
+    return <Card variant="outlined" style={styles.cycleCard}>
+      <View style={styles.cycleHeading}><View style={styles.cycleCopy}><AppText variant="label" numberOfLines={1}>{cycle.cycle_name}</AppText><AppText color="muted" numberOfLines={1}>{speciesLabel} · {cycle.pond_identifier}</AppText><AppText variant="caption" color="muted" numberOfLines={1}>{formatDate(cycle.start_date)} · {cycle.end_date ? formatDate(cycle.end_date) : formatDaysSince(cycle.start_date)} · {duration} {t('days')}</AppText></View><AppText variant="caption" color={cycle.survival_rate && cycle.survival_rate >= 85 ? 'success' : cycle.survival_rate && cycle.survival_rate >= 75 ? 'warning' : 'error'}>{performanceLabel(cycle)}</AppText></View>
+      <View style={styles.metrics}><View style={styles.metric}><AppText variant="label">{formatPercentage(cycle.survival_rate)}</AppText><AppText variant="caption" color="muted">{t('survival')}</AppText></View><View style={styles.metric}><AppText variant="label">{cycle.fcr ? cycle.fcr.toFixed(2) : '0.00'}</AppText><AppText variant="caption" color="muted">FCR</AppText></View><View style={styles.metric}><AppText variant="label">{formatNumber(cycle.final_biomass, 'kg')}</AppText><AppText variant="caption" color="muted">{t('finalBiomass')}</AppText></View><View style={styles.metric}><AppText variant="label">{cycle.final_average_weight ? `${cycle.final_average_weight}g` : '0g'}</AppText><AppText variant="caption" color="muted">{t('finalWeight')}</AppText></View></View>
+    </Card>;
   }, [t]);
-
-  const renderListHeader = useCallback(
-    () => (
-      <>
-        <View className="bg-white mx-4 my-4 p-4 rounded-xl">
-          <Text className="text-lg font-bold text-gray-dark mb-4">{t('historySummary')}</Text>
-
-          <View className="flex-row flex-wrap justify-between">
-            <View className="w-[48%] items-center bg-cream p-3 rounded-lg mb-2">
-              <Text className="text-xl font-bold text-black mb-1">{totalCycles}</Text>
-              <Text className="text-xs text-gray-light text-center">{t('completedCycles')}</Text>
-            </View>
-
-            <View className="w-[48%] items-center bg-cream p-3 rounded-lg mb-2">
-              <Text className="text-xl font-bold text-black mb-1">{formatPercentage(avgSurvival)}</Text>
-              <Text className="text-xs text-gray-light text-center">{t('avgSurvival')}</Text>
-            </View>
-
-            <View className="w-[48%] items-center bg-cream p-3 rounded-lg mb-2">
-              <Text className="text-xl font-bold text-black mb-1">{avgFCR > 0 ? avgFCR.toFixed(2) : '0'}</Text>
-              <Text className="text-xs text-gray-light text-center">{t('avgFCR')}</Text>
-            </View>
-
-            <View className="w-[48%] items-center bg-cream p-3 rounded-lg mb-2">
-              <Text className="text-xl font-bold text-black mb-1">{formatNumber(totalBiomass, 'kg')}</Text>
-              <Text className="text-xs text-gray-light text-center">{t('totalHarvested')}</Text>
-            </View>
-          </View>
-        </View>
-
-        <View className="bg-white mx-4 mb-4 p-4 rounded-xl">
-          <Text className="text-base font-bold text-gray-dark mb-3">{t('filterBySpecies')}</Text>
-
-          <View className="flex-row justify-around">
-            {(['all', 'clarias', 'tilapia'] as const).map((filter) => (
-              <TouchableOpacity
-                key={filter}
-                className={`px-4 py-2 rounded-full border ${
-                  selectedFilter === filter
-                    ? 'bg-aquacare-primary border-aquacare-primary'
-                    : 'bg-cream border-gray-light'
-                }`}
-                onPress={() => setSelectedFilter(filter)}
-              >
-                <Text className={`text-sm font-medium ${selectedFilter === filter ? 'text-white' : 'text-gray-dark'}`}>
-                  {filter === 'all' ? t('allSpecies') : filter === 'clarias' ? t('clarias') : t('tilapia')}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-
-        <View className="px-4">
-          <Text className="text-lg font-bold text-gray-dark mb-4">
-            {t('harvestedCycles')} ({sortedCycles.length})
-          </Text>
-        </View>
-      </>
-    ),
-    [avgFCR, avgSurvival, selectedFilter, sortedCycles.length, t, totalBiomass, totalCycles]
-  );
-
-  const renderEmptyState = useCallback(
-    () => (
-      <View className="items-center py-10 px-4">
-        {loading.cycles ? (
-          <>
-            <ActivityIndicator size="large" color={AQUACARE_COLORS.GREEN_PRIMARY} />
-            <Text className="text-base text-gray-light mt-3">{t('loading')}</Text>
-          </>
-        ) : (
-          <>
-            <Ionicons name="fish-outline" size={64} color={AQUACARE_COLORS.GRAY_LIGHT} />
-            <Text className="text-xl font-bold text-gray-dark mt-4 mb-2">{t('noHarvestedCycles')}</Text>
-            <Text className="text-sm text-gray-light text-center">{t('completeCycleToSeeHistory')}</Text>
-          </>
-        )}
-      </View>
-    ),
-    [loading.cycles, t]
-  );
-
-  return (
-    <View className="flex-1 bg-cream">
-      <View className="bg-aquacare-primary flex-row items-center pt-14 pb-4 px-4">
-        <TouchableOpacity className="mr-4" onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color={AQUACARE_COLORS.WHITE} />
-        </TouchableOpacity>
-        <Text className="text-xl font-bold text-white flex-1">{t('cycleHistory')}</Text>
-      </View>
-
-      <FlatList
-        data={sortedCycles}
-        keyExtractor={(item) => item.id}
-        renderItem={renderCycleCard}
-        ListHeaderComponent={renderListHeader}
-        ListEmptyComponent={renderEmptyState}
-        contentContainerStyle={{ paddingBottom: 16 }}
-        refreshControl={<RefreshControl refreshing={loading.cycles} onRefresh={onRefresh} />}
-        showsVerticalScrollIndicator={false}
-      />
-    </View>
-  );
+  const header = <AppHeader title={t('cycleHistory')} onBack={() => navigation.goBack()} backLabel={t('back')} />;
+  if (loading.cycles && cycles.length === 0) return <View style={styles.root}>{header}<Screen style={styles.center}><LoadingState message={t('loading')} /></Screen></View>;
+  return <View style={styles.root}>{header}<FlatList data={sortedCycles} keyExtractor={(item) => item.id} renderItem={renderCycle} ListHeaderComponent={<View style={styles.listHeader}><Card variant="outlined" style={styles.summary}><AppText variant="sectionTitle">{t('historySummary')}</AppText><View style={styles.summaryGrid}><Metric label={t('completedCycles')} value={String(totalCycles)} /><Metric label={t('avgSurvival')} value={formatPercentage(avgSurvival)} /><Metric label={t('avgFCR')} value={avgFCR > 0 ? avgFCR.toFixed(2) : '0'} /><Metric label={t('totalHarvested')} value={formatNumber(totalBiomass, 'kg')} /></View></Card><Card variant="outlined" style={styles.filter}><AppText variant="label">{t('filterBySpecies')}</AppText><SegmentedControl<Filter> value={selectedFilter} options={[{ value: 'all', label: t('allSpecies') }, { value: 'clarias', label: t('clarias') }, { value: 'tilapia', label: t('tilapia') }]} onChange={setSelectedFilter} /></Card><AppText variant="sectionTitle" style={styles.resultTitle}>{t('harvestedCycles')} ({sortedCycles.length})</AppText></View>} ListEmptyComponent={<EmptyState title={t('noHarvestedCycles')} message={t('completeCycleToSeeHistory')} compact />} contentContainerStyle={styles.list} refreshControl={<RefreshControl refreshing={loading.cycles} onRefresh={onRefresh} />} showsVerticalScrollIndicator={false} /></View>;
 }
+
+function Metric({ label, value }: { label: string; value: string }) { return <View style={styles.summaryMetric}><AppText variant="cardTitle">{value}</AppText><AppText variant="caption" color="muted" style={styles.centerText}>{label}</AppText></View>; }
+
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: colors.surface.page }, center: { justifyContent: 'center' }, list: { padding: spacing[4], gap: spacing[3] }, listHeader: { gap: spacing[3], marginBottom: spacing[1] }, summary: { gap: spacing[3] }, summaryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] }, summaryMetric: { width: '48%', alignItems: 'center', backgroundColor: colors.surface.page, borderRadius: spacing[2], padding: spacing[3] }, centerText: { textAlign: 'center' }, filter: { gap: spacing[3] }, resultTitle: { marginTop: spacing[1] }, cycleCard: { gap: spacing[3] }, cycleHeading: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: spacing[2] }, cycleCopy: { flex: 1, gap: spacing[1] }, metrics: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: colors.border.subtle, paddingTop: spacing[3] }, metric: { flex: 1, alignItems: 'center', gap: spacing[1] },
+});

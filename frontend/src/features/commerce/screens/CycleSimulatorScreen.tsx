@@ -1,12 +1,9 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   View,
-  Text,
   ScrollView,
-  TextInput,
-  TouchableOpacity,
-  ActivityIndicator,
   Alert,
+  StyleSheet,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
@@ -17,12 +14,14 @@ import { useDispatch, useSelector } from 'react-redux';
 import { AppDispatch, RootState } from '@/store/store';
 import { fetchCycleSimulation, resetSimulation, addToCart, fetchProducts } from '@/features/commerce/store/commerceSlice';
 import { CycleSimulationParams } from '@/types/commerce';
-import { AQUACARE_COLORS } from '@/constants/colors';
-import { sharedTextInputStyles } from '@/components/common/inputStyles';
 import { CYCLE_SIMULATION_DEFAULTS } from '@/domain/commerce/constants';
 import { RootStackParamList } from '@/navigation/MainNavigator';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
 import { aggregatePhasesByName, DisplayPhase } from '../utils/aggregatePhases';
+import { AppHeader, AppText, Button, Card, Divider, InlineAlert, LoadingState, SegmentedControl, TextField } from '@/components/ui';
+import { colors, spacing } from '@/theme';
+import { getProductDisplayName } from '@/features/commerce/utils/productPresentation';
+import MetricCard from '@/features/main/components/MetricCard';
 
 type NavigationProp = StackNavigationProp<RootStackParamList>;
 type ScreenRouteProp = RouteProp<RootStackParamList, 'CycleSimulator'>;
@@ -311,124 +310,82 @@ export default function CycleSimulatorScreen() {
     const totalBags = phase.products.reduce((sum, product) => sum + product.quantity_bags, 0);
 
     return (
-      <View key={index} className="bg-white rounded-xl p-4 mb-3">
-        <View className="flex-row items-center mb-3 gap-3">
-          <View className="w-10 h-10 bg-cream rounded-full items-center justify-center">
-            <Ionicons name="fast-food" size={20} color={AQUACARE_COLORS.GREEN_PRIMARY} />
+      <Card key={index} variant="outlined" style={styles.phaseCard}>
+        <View style={styles.phaseHeading}>
+          <View style={styles.phaseIcon}>
+            <Ionicons name="fast-food" size={20} color={colors.brand.primary} />
           </View>
-          <View className="flex-1">
-            <Text className="text-sm font-bold text-gray-dark">{getPhaseLabel(phase.phase_name)}</Text>
-            <Text className="text-xs text-gray-light">
+          <View style={styles.flex}>
+            <AppText variant="bodyStrong">{getPhaseLabel(phase.phase_name)}</AppText>
+            <AppText variant="caption" color="muted">
               {t('days')} {phase.days_range[0]}-{phase.days_range[1]} | {phase.pellet_size_label}mm | {phase.weight_range_g[0]}-{phase.weight_range_g[1]}g
-            </Text>
+            </AppText>
           </View>
         </View>
 
-        <View className="flex-row bg-cream rounded-lg p-3 mb-3 gap-4">
-          <View className="flex-1 items-center">
-            <Text className="text-xs text-gray-light">{t('duration')}</Text>
-            <Text className="text-sm font-semibold text-gray-dark">{phase.duration_days} {t('days')}</Text>
+        <Card style={styles.phaseMetrics}>
+          <View style={styles.phaseMetric}>
+            <AppText variant="caption" color="muted">{t('duration')}</AppText>
+            <AppText variant="label">{phase.duration_days} {t('days')}</AppText>
           </View>
-          <View className="flex-1 items-center">
-            <Text className="text-xs text-gray-light">{t('consumption')}</Text>
-            <Text className="text-sm font-semibold text-gray-dark">{phase.total_consumption_kg}kg</Text>
+          <View style={styles.phaseMetric}>
+            <AppText variant="caption" color="muted">{t('consumption')}</AppText>
+            <AppText variant="label">{phase.total_consumption_kg} kg</AppText>
           </View>
-          <View className="flex-1 items-center">
-            <Text className="text-xs text-gray-light">{t('dailyAverage')}</Text>
-            <Text className="text-sm font-semibold text-gray-dark">{phase.daily_avg_kg.toFixed(1)}kg/j</Text>
+          <View style={styles.phaseMetric}>
+            <AppText variant="caption" color="muted">{t('dailyAverage')}</AppText>
+            <AppText variant="label">{phase.daily_avg_kg.toFixed(1)} {t('kgPerDay')}</AppText>
           </View>
-        </View>
+        </Card>
 
-        <View className="flex-row justify-between items-center mb-3">
-          <Text className="text-sm font-semibold text-gray-dark">
+        <View style={styles.summaryRow}>
+          <AppText variant="label">
             {totalBags} {t(totalBags > 1 ? 'bags' : 'bag')}
-          </Text>
-          <Text className="text-base font-bold text-aquacare-primary">
+          </AppText>
+          <AppText variant="cardTitle" color="link">
             {Number(phase.total_price).toLocaleString()} FCFA
-          </Text>
+          </AppText>
         </View>
 
-        <View className="bg-cream rounded-lg p-3 gap-2 mb-3">
+        <Card style={styles.productList}>
           {phase.products.map((product, pIndex) => (
-            <View key={pIndex} className="flex-row justify-between items-center">
-              <Text className="flex-1 text-sm text-gray-dark mr-2" numberOfLines={1}>
-                {product.product_name}
-              </Text>
-              <Text className="text-sm font-semibold text-gray-light">
-                {product.quantity_bags}x {product.package_weight_kg}kg
-              </Text>
+            <View key={pIndex} style={styles.summaryRow}>
+              <AppText style={styles.flex} numberOfLines={1}>
+                {getProductDisplayName(product.product_name, t('catfish'))}
+              </AppText>
+              <AppText variant="label" color="muted">
+                {product.quantity_bags}x {product.package_weight_kg} kg
+              </AppText>
             </View>
           ))}
-        </View>
+        </Card>
 
-        <TouchableOpacity
-          className="bg-cream border border-aquacare-primary rounded-lg py-2 items-center"
-          onPress={() => handleAddPhaseToCart(phase)}
-        >
-          <Text className="text-aquacare-primary font-semibold text-sm">{t('addPhaseToCart')}</Text>
-        </TouchableOpacity>
-      </View>
+        <Button label={t('addPhaseToCart')} variant="outline" size="small" onPress={() => handleAddPhaseToCart(phase)} />
+      </Card>
     );
   };
 
   return (
     <View className="flex-1 bg-cream">
-      <View className="bg-white px-5 pt-16 pb-5 flex-row items-center shadow">
-        <TouchableOpacity onPress={() => navigation.goBack()} className="w-10">
-          <Ionicons name="arrow-back" size={24} color={AQUACARE_COLORS.GRAY_DARK} />
-        </TouchableOpacity>
-        <View className="flex-1 items-center">
-          <Text className="text-xl font-bold text-gray-dark">{t('cycleSimulator')}</Text>
-          <Text className="text-xs text-gray-light mt-1">{t('predictROI')}</Text>
-        </View>
-        <View className="w-10" />
-      </View>
+      <AppHeader title={t('cycleSimulator')} subtitle={t('predictROI')} onBack={() => navigation.goBack()} backLabel={t('back')} />
 
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
-        <View className="bg-white px-4 py-4 mb-2">
-          <Text className="text-lg font-bold text-gray-dark mb-3">{t('simulationParameters')}</Text>
+        <Card variant="outlined" style={styles.parametersCard}>
+          <AppText variant="sectionTitle">{t('simulationParameters')}</AppText>
 
-          <View className="mb-4">
-            <Text className="text-sm font-semibold text-gray-dark mb-2">{t('species')} *</Text>
-            <View className="flex-row gap-3">
-              <TouchableOpacity
-                className={`flex-1 flex-row items-center justify-center py-3 rounded-lg border-2 gap-2 ${
-                  species === 'tilapia' ? 'bg-aquacare-primary border-aquacare-primary' : 'border-gray-light'
-                }`}
-                onPress={() => handleSpeciesChange('tilapia')}
-              >
-                <Ionicons
-                  name="fish"
-                  size={20}
-                  color={species === 'tilapia' ? AQUACARE_COLORS.WHITE : AQUACARE_COLORS.GRAY_DARK}
-                />
-                <Text className={`text-sm font-semibold ${species === 'tilapia' ? 'text-white' : 'text-gray-dark'}`}>
-                  {t('tilapia')}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                className={`flex-1 flex-row items-center justify-center py-3 rounded-lg border-2 gap-2 ${
-                  species === 'catfish' ? 'bg-aquacare-primary border-aquacare-primary' : 'border-gray-light'
-                }`}
-                onPress={() => handleSpeciesChange('catfish')}
-              >
-                <Ionicons
-                  name="fish"
-                  size={20}
-                  color={species === 'catfish' ? AQUACARE_COLORS.WHITE : AQUACARE_COLORS.GRAY_DARK}
-                />
-                <Text className={`text-sm font-semibold ${species === 'catfish' ? 'text-white' : 'text-gray-dark'}`}>
-                  {t('catfish')}
-                </Text>
-              </TouchableOpacity>
-            </View>
+          <View style={styles.fieldGroup}>
+            <AppText variant="label">{t('species')} *</AppText>
+            <SegmentedControl
+              value={species}
+              onChange={(value) => handleSpeciesChange(value as 'tilapia' | 'catfish')}
+              options={[{ value: 'tilapia', label: t('tilapia') }, { value: 'catfish', label: t('catfish') }]}
+            />
           </View>
 
-          <View className="mb-4">
-            <Text className="text-sm font-semibold text-gray-dark mb-2">{t('initialFishCount')} *</Text>
-            <TextInput
-              className="border border-gray-light rounded-lg px-3 py-3 text-base text-gray-dark"
-              style={sharedTextInputStyles.base}
+          <View style={styles.fieldGroup}>
+            <TextField
+              label={t('initialFishCount')}
+              required
               value={initialFishCount}
               onChangeText={setInitialFishCount}
               keyboardType="numeric"
@@ -436,11 +393,9 @@ export default function CycleSimulatorScreen() {
             />
           </View>
 
-          <View className="mb-4">
-            <Text className="text-sm font-semibold text-gray-dark mb-2">{t('simulationInitialWeight')} (g)</Text>
-            <TextInput
-              className="border border-gray-light rounded-lg px-3 py-3 text-base text-gray-dark"
-              style={sharedTextInputStyles.base}
+          <View style={styles.fieldGroup}>
+            <TextField
+              label={`${t('simulationInitialWeight')} (g)`}
               value={initialWeightG}
               onChangeText={setInitialWeightG}
               keyboardType="numeric"
@@ -448,11 +403,9 @@ export default function CycleSimulatorScreen() {
             />
           </View>
 
-          <View className="mb-4">
-            <Text className="text-sm font-semibold text-gray-dark mb-2">{t('targetWeight')} (g)</Text>
-            <TextInput
-              className="border border-gray-light rounded-lg px-3 py-3 text-base text-gray-dark"
-              style={sharedTextInputStyles.base}
+          <View style={styles.fieldGroup}>
+            <TextField
+              label={`${t('targetWeight')} (g)`}
               value={targetWeightG}
               onChangeText={setTargetWeightG}
               keyboardType="numeric"
@@ -460,11 +413,9 @@ export default function CycleSimulatorScreen() {
             />
           </View>
 
-          <View className="mb-4">
-            <Text className="text-sm font-semibold text-gray-dark mb-2">{t('cycleDuration')} ({t('days')})</Text>
-            <TextInput
-              className="border border-gray-light rounded-lg px-3 py-3 text-base text-gray-dark"
-              style={sharedTextInputStyles.base}
+          <View style={styles.fieldGroup}>
+            <TextField
+              label={`${t('cycleDuration')} (${t('days')})`}
               value={cycleDurationDays}
               onChangeText={setCycleDurationDays}
               keyboardType="numeric"
@@ -472,11 +423,9 @@ export default function CycleSimulatorScreen() {
             />
           </View>
 
-          <View className="mb-4">
-            <Text className="text-sm font-semibold text-gray-dark mb-2">{t('survivalRate')} (%)</Text>
-            <TextInput
-              className="border border-gray-light rounded-lg px-3 py-3 text-base text-gray-dark"
-              style={sharedTextInputStyles.base}
+          <View style={styles.fieldGroup}>
+            <TextField
+              label={`${t('survivalRate')} (%)`}
               value={survivalRate}
               onChangeText={setSurvivalRate}
               keyboardType="numeric"
@@ -484,11 +433,9 @@ export default function CycleSimulatorScreen() {
             />
           </View>
 
-          <View className="mb-4">
-            <Text className="text-sm font-semibold text-gray-dark mb-2">{t('preEstimatedSellingPrice')}</Text>
-            <TextInput
-              className="border border-gray-light rounded-lg px-3 py-3 text-base text-gray-dark"
-              style={sharedTextInputStyles.base}
+          <View style={styles.fieldGroup}>
+            <TextField
+              label={t('preEstimatedSellingPrice')}
               value={sellingPricePerKg}
               onChangeText={setSellingPricePerKg}
               keyboardType="numeric"
@@ -496,23 +443,19 @@ export default function CycleSimulatorScreen() {
             />
           </View>
 
-          <View className="flex-row gap-3 mb-4">
-            <View className="flex-1">
-              <Text className="text-sm font-semibold text-gray-dark mb-2">{t('fingerlingsCostFcfa')}</Text>
-              <TextInput
-                className="border border-gray-light rounded-lg px-3 py-3 text-base text-gray-dark"
-              style={sharedTextInputStyles.base}
+          <View style={styles.costFields}>
+            <View style={styles.flex}>
+              <TextField
+                label={t('fingerlingsCostFcfa')}
                 value={fingerlingsCost}
                 onChangeText={setFingerlingsCost}
                 keyboardType="numeric"
                 placeholder="0"
               />
             </View>
-            <View className="flex-1">
-              <Text className="text-sm font-semibold text-gray-dark mb-2">{t('otherOperationalCosts')}</Text>
-              <TextInput
-                className="border border-gray-light rounded-lg px-3 py-3 text-base text-gray-dark"
-              style={sharedTextInputStyles.base}
+            <View style={styles.flex}>
+              <TextField
+                label={t('otherOperationalCosts')}
                 value={otherCosts}
                 onChangeText={setOtherCosts}
                 keyboardType="numeric"
@@ -521,179 +464,108 @@ export default function CycleSimulatorScreen() {
             </View>
           </View>
 
-          <View className="flex-row gap-3">
-            <TouchableOpacity
-              className={`flex-1 flex-row items-center justify-center py-3 rounded-lg gap-2 ${
-                loading ? 'bg-aquacare-primary/60' : 'bg-aquacare-primary'
-              }`}
-              onPress={handleLaunchSimulation}
-              disabled={loading}
-            >
-              {loading ? (
-                <ActivityIndicator size="small" color={AQUACARE_COLORS.WHITE} />
-              ) : (
-                <Ionicons name="analytics" size={20} color={AQUACARE_COLORS.WHITE} />
-              )}
-              <Text className="text-white text-base font-semibold">{t('simulate')}</Text>
-            </TouchableOpacity>
-            {simulationResult && (
-              <TouchableOpacity
-                className="bg-cream px-4 rounded-lg items-center justify-center"
-                onPress={handleReset}
-              >
-                <Ionicons name="refresh" size={20} color={AQUACARE_COLORS.GRAY_DARK} />
-              </TouchableOpacity>
-            )}
+          <View style={styles.actionRow}>
+            <Button label={t('simulate')} iconLeft="analytics" loading={loading} onPress={handleLaunchSimulation} />
+            {simulationResult ? <Button label={t('reset')} variant="outline" fullWidth={false} iconLeft="refresh" onPress={handleReset} /> : null}
           </View>
 
           {effectiveCycleId && (
-            <TouchableOpacity
-              className={`mt-3 rounded-lg py-3 items-center ${savingCycleParams ? 'bg-gray-200' : 'bg-cream border border-aquacare-primary'}`}
-              onPress={handleUpdateCycleParameters}
-              disabled={savingCycleParams}
-            >
-              {savingCycleParams ? (
-                <ActivityIndicator size="small" color={AQUACARE_COLORS.GREEN_PRIMARY} />
-              ) : (
-                <Text className="text-aquacare-primary font-semibold">{t('updateCycleParameters')}</Text>
-              )}
-            </TouchableOpacity>
+            <Button label={t('updateCycleParameters')} variant="outline" loading={savingCycleParams} onPress={handleUpdateCycleParameters} />
           )}
-        </View>
+        </Card>
 
-        {error && (
-          <View className="bg-white px-4 py-4 mb-2 items-center gap-3">
-            <Ionicons name="alert-circle-outline" size={32} color={AQUACARE_COLORS.ERROR} />
-            <Text className="text-sm text-center" style={{ color: AQUACARE_COLORS.ERROR }}>{error}</Text>
-          </View>
-        )}
+        {error ? <View style={styles.screenAlert}><InlineAlert tone="error" message={error} /></View> : null}
 
         {simulationResult && (
-          <View className="px-4 py-4">
-            <Text className="text-lg font-bold text-gray-dark mb-3">{t('simulationResults')}</Text>
+          <View style={styles.results}>
+            <AppText variant="sectionTitle">{t('simulationResults')}</AppText>
 
-            <View className="flex-row flex-wrap gap-3 mb-4">
-              <View className="flex-1 min-w-[45%] bg-white rounded-xl p-4 items-center">
-                <Ionicons name="scale-outline" size={24} color={AQUACARE_COLORS.GREEN_PRIMARY} />
-                <Text className="text-lg font-bold text-aquacare-primary mt-2">
-                  {simulationResult.summary.total_feed_kg.toLocaleString()}kg
-                </Text>
-                <Text className="text-xs text-gray-light mt-1 text-center">{t('totalFeed')}</Text>
-              </View>
-              <View className="flex-1 min-w-[45%] bg-white rounded-xl p-4 items-center">
-                <Ionicons name="wallet-outline" size={24} color={AQUACARE_COLORS.GREEN_PRIMARY} />
-                <Text className="text-lg font-bold text-aquacare-primary mt-2">
-                  {simulationResult.summary.total_cost_fcfa.toLocaleString()}
-                </Text>
-                <Text className="text-xs text-gray-light mt-1 text-center">{t('totalCosts')}</Text>
-              </View>
-              <View className="flex-1 min-w-[45%] bg-white rounded-xl p-4 items-center">
-                <Ionicons name="trending-up-outline" size={24} color={AQUACARE_COLORS.GREEN_PRIMARY} />
-                <Text className="text-lg font-bold text-aquacare-primary mt-2">
-                  {simulationResult.summary.estimated_fcr.toFixed(1)}
-                </Text>
-                <Text className="text-xs text-gray-light mt-1 text-center">{t('estimatedFCR')}</Text>
-              </View>
-              <View className="flex-1 min-w-[45%] bg-white rounded-xl p-4 items-center">
-                <Ionicons name="heart-outline" size={24} color={AQUACARE_COLORS.GREEN_PRIMARY} />
-                <Text className="text-lg font-bold text-aquacare-primary mt-2">
-                  {(simulationResult.summary.survival_rate * 100).toFixed(0)}%
-                </Text>
-                <Text className="text-xs text-gray-light mt-1 text-center">{t('survivalRate')}</Text>
-              </View>
+            <View style={styles.metricGrid}>
+              <MetricCard value={`${simulationResult.summary.total_feed_kg.toLocaleString()} kg`} label={t('totalFeed')} />
+              <MetricCard value={`${simulationResult.summary.total_cost_fcfa.toLocaleString()} FCFA`} label={t('totalCosts')} />
+              <MetricCard value={simulationResult.summary.estimated_fcr.toFixed(1)} label={t('estimatedFCR')} />
+              <MetricCard value={`${(simulationResult.summary.survival_rate * 100).toFixed(0)}%`} label={t('survivalRate')} />
             </View>
 
-            <View className="bg-white rounded-xl p-4 mb-4">
-              <Text className="text-base font-bold text-gray-dark mb-3">{t('roi')}</Text>
-              <View className="gap-3">
-                <View className="flex-row justify-between items-center">
-                  <Text className="text-sm text-gray-light">{t('feedCost')}</Text>
-                  <Text className="text-sm font-semibold text-gray-dark">
-                    {simulationResult.summary.feed_cost_fcfa.toLocaleString()} FCFA
-                  </Text>
-                </View>
-                <View className="flex-row justify-between items-center">
-                  <Text className="text-sm text-gray-light">{t('fingerlingsCostFcfa')}</Text>
-                  <Text className="text-sm font-semibold text-gray-dark">
-                    {simulationResult.summary.fingerlings_cost_fcfa.toLocaleString()} FCFA
-                  </Text>
-                </View>
-                <View className="flex-row justify-between items-center">
-                  <Text className="text-sm text-gray-light">{t('otherOperationalCosts')}</Text>
-                  <Text className="text-sm font-semibold text-gray-dark">
-                    {simulationResult.summary.other_costs_fcfa.toLocaleString()} FCFA
-                  </Text>
-                </View>
-                <View className="flex-row justify-between items-center">
-                  <Text className="text-sm text-gray-light">{t('estimatedRevenue')}</Text>
-                  <Text className="text-sm font-semibold text-gray-dark">
-                    {simulationResult.summary.estimated_revenue_fcfa.toLocaleString()} FCFA
-                  </Text>
-                </View>
-                <View className="flex-row justify-between items-center">
-                  <Text className="text-sm text-gray-light">{t('estimatedProfit')}</Text>
-                  <Text className="text-sm font-semibold text-gray-dark">
-                    {simulationResult.summary.estimated_profit_fcfa.toLocaleString()} FCFA
-                  </Text>
-                </View>
-                <View className="flex-row justify-between items-center">
-                  <Text className="text-sm text-gray-light">{t('roiPercentage')}</Text>
-                  <Text
-                    className="text-2xl font-bold"
-                    style={{
-                      color:
-                        simulationResult.summary.roi_percentage > 0
-                          ? AQUACARE_COLORS.SUCCESS
-                          : AQUACARE_COLORS.ERROR,
-                    }}
+            <Card variant="outlined" style={styles.resultCard}>
+              <AppText variant="cardTitle">{t('roi')}</AppText>
+              <View style={styles.summaryRows}>
+                <SummaryRow label={t('feedCost')} value={`${simulationResult.summary.feed_cost_fcfa.toLocaleString()} FCFA`} />
+                <SummaryRow label={t('fingerlingsCostFcfa')} value={`${simulationResult.summary.fingerlings_cost_fcfa.toLocaleString()} FCFA`} />
+                <SummaryRow label={t('otherOperationalCosts')} value={`${simulationResult.summary.other_costs_fcfa.toLocaleString()} FCFA`} />
+                <Divider />
+                <SummaryRow label={t('estimatedRevenue')} value={`${simulationResult.summary.estimated_revenue_fcfa.toLocaleString()} FCFA`} />
+                <SummaryRow label={t('estimatedProfit')} value={`${simulationResult.summary.estimated_profit_fcfa.toLocaleString()} FCFA`} />
+                <View style={styles.summaryRow}>
+                  <AppText color="muted">{t('roiPercentage')}</AppText>
+                  <AppText
+                    variant="metric"
+                    color={simulationResult.summary.roi_percentage > 0 ? 'success' : 'error'}
                   >
                     {simulationResult.summary.roi_percentage > 0 ? '+' : ''}
                     {simulationResult.summary.roi_percentage.toFixed(1)}%
-                  </Text>
+                  </AppText>
                 </View>
               </View>
-            </View>
+            </Card>
 
-            <View className="bg-white rounded-xl p-4 mb-4 flex-row items-start gap-3 border border-aquacare-primary/30">
-              <Ionicons name="storefront-outline" size={24} color={AQUACARE_COLORS.GREEN_PRIMARY} style={{ marginTop: 2 }} />
+            <Card variant="outlined" style={styles.networkCard}>
+              <Ionicons name="storefront-outline" size={24} color={colors.brand.primary} style={{ marginTop: 2 }} />
               <View className="flex-1">
-                <Text className="text-sm font-bold text-gray-dark mb-1">{t('buyerNetworkTitle')}</Text>
-                <Text className="text-xs text-gray-light mb-3">{t('buyerNetworkROINote')}</Text>
-                <TouchableOpacity
-                  className="bg-aquacare-primary rounded-lg py-2 items-center"
-                  onPress={() => navigation.navigate('Chat')}
-                >
-                  <Text className="text-white text-xs font-semibold">{t('buyerNetworkCTA')}</Text>
-                </TouchableOpacity>
+                <AppText variant="bodyStrong">{t('buyerNetworkTitle')}</AppText>
+                <AppText variant="caption" color="muted">{t('buyerNetworkROINote')}</AppText>
+                <Button label={t('buyerNetworkCTA')} size="small" onPress={() => navigation.navigate('Chat')} />
               </View>
-            </View>
+            </Card>
 
-            <View className="flex-row items-center mb-3 mt-2 gap-2">
-              <Ionicons name="cart-outline" size={20} color={AQUACARE_COLORS.GREEN_PRIMARY} />
-              <Text className="text-base font-bold text-gray-dark">{t('buyFeedSection')}</Text>
+            <View style={styles.sectionHeading}>
+              <Ionicons name="cart-outline" size={20} color={colors.brand.primary} />
+              <AppText variant="cardTitle">{t('buyFeedSection')}</AppText>
             </View>
-            <Text className="text-xs text-gray-light mb-3">{t('feedingPhases')}</Text>
+            <AppText variant="caption" color="muted">{t('feedingPhases')}</AppText>
             {displayPhases.map((phase, index) => renderPhaseCard(phase, index))}
 
-            <TouchableOpacity
-              className="bg-aquacare-primary flex-row items-center justify-center py-4 rounded-lg gap-2 mt-3"
-              onPress={handleAddAllToCart}
-            >
-              <Ionicons name="cart" size={20} color={AQUACARE_COLORS.WHITE} />
-              <Text className="text-white text-base font-semibold">{t('addAllToCart')}</Text>
-            </TouchableOpacity>
+            <Button label={t('addAllToCart')} iconLeft="cart" onPress={handleAddAllToCart} />
           </View>
         )}
       </ScrollView>
 
       {loading && (
         <View className="absolute inset-0 bg-black/10 items-center justify-center">
-          <View className="bg-white px-4 py-3 rounded-lg flex-row items-center gap-3">
-            <ActivityIndicator size="small" color={AQUACARE_COLORS.GREEN_PRIMARY} />
-            <Text className="text-base text-gray-dark">{t('loading')}</Text>
-          </View>
+          <Card><LoadingState compact message={t('loading')} /></Card>
         </View>
       )}
     </View>
   );
 }
+
+function SummaryRow({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.summaryRow}>
+      <AppText color="muted">{label}</AppText>
+      <AppText variant="bodyStrong">{value}</AppText>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  flex: { flex: 1 },
+  fieldGroup: { gap: spacing[2] },
+  costFields: { flexDirection: 'row', gap: spacing[3] },
+  actionRow: { flexDirection: 'row', gap: spacing[3] },
+  screenAlert: { paddingHorizontal: spacing[4] },
+  results: { padding: spacing[4], gap: spacing[4] },
+  metricGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[3] },
+  summaryRows: { gap: spacing[3] },
+  summaryRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing[3] },
+  sectionHeading: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
+  phaseCard: { marginBottom: spacing[3], gap: spacing[3] },
+  phaseHeading: { flexDirection: 'row', alignItems: 'center', gap: spacing[3] },
+  phaseIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface.page },
+  phaseMetrics: { flexDirection: 'row', gap: spacing[2] },
+  phaseMetric: { flex: 1, alignItems: 'center', gap: spacing[1] },
+  productList: { gap: spacing[2] },
+  parametersCard: { margin: spacing[4], gap: spacing[3] },
+  resultCard: { gap: spacing[3] },
+  networkCard: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing[3] },
+});

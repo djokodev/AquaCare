@@ -1,8 +1,9 @@
-import React, { useMemo } from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { useTranslation } from 'react-i18next';
-import { AQUACARE_COLORS } from '@/constants/colors';
+import React, { useMemo } from "react";
+import { Pressable, StyleSheet, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { useTranslation } from "react-i18next";
+import { AppText, Card, Divider } from "@/components/ui";
+import { colors, spacing } from "@/theme";
 
 /**
  * Props pour le composant QuickActionsPreview
@@ -33,7 +34,7 @@ interface QuickActionsPreviewProps {
   /**
    * Définit si l'aperçu est affiché pour un cycle global ou une unité.
    */
-  scope?: 'cycle' | 'unit';
+  scope?: "cycle" | "unit";
 
   /**
    * Contexte unitaire pour les actions scoppées.
@@ -63,12 +64,12 @@ interface SuggestedAction {
 }
 
 const hasValidProductionUnitContext = (
-  productionUnitContext: QuickActionsPreviewProps['productionUnitContext']
+  productionUnitContext: QuickActionsPreviewProps["productionUnitContext"],
 ): boolean =>
   Boolean(
     productionUnitContext?.cycleId &&
-      productionUnitContext?.cycleUnitAllocationId &&
-      productionUnitContext?.productionUnitId
+    productionUnitContext?.cycleUnitAllocationId &&
+    productionUnitContext?.productionUnitId,
   );
 
 /**
@@ -96,7 +97,7 @@ export default function QuickActionsPreview({
   hasActiveCycles,
   unreadCount,
   navigation,
-  scope = 'cycle',
+  scope = "cycle",
   productionUnitContext,
   hideGlobalCycleOperationalActions = false,
 }: QuickActionsPreviewProps) {
@@ -107,33 +108,35 @@ export default function QuickActionsPreview({
    * Retourne les 3 actions les plus pertinentes selon le contexte utilisateur
    */
   const suggestedActions = useMemo((): SuggestedAction[] => {
-    const isValidUnitContext = hasValidProductionUnitContext(productionUnitContext);
+    const isValidUnitContext = hasValidProductionUnitContext(
+      productionUnitContext,
+    );
 
-    if (scope === 'unit') {
+    if (scope === "unit") {
       if (!isValidUnitContext) {
         return [];
       }
 
       return [
         {
-          icon: 'create',
-          color: AQUACARE_COLORS.GREEN_LIGHT,
-          label: t('dailyLog'),
-          route: 'DailyLog',
+          icon: "create",
+          color: colors.brand.light,
+          label: t("dailyLogCompact"),
+          route: "DailyLog",
           params: productionUnitContext,
         },
         {
-          icon: 'warning-outline',
-          color: AQUACARE_COLORS.ERROR,
-          label: t('sanitaryLog'),
-          route: 'SanitaryLog',
+          icon: "warning-outline",
+          color: colors.status.error,
+          label: t("sanitaryLogCompact"),
+          route: "SanitaryLog",
           params: productionUnitContext,
         },
         {
-          icon: 'restaurant-outline',
-          color: AQUACARE_COLORS.INFO,
-          label: t('feedingPlan'),
-          route: 'FeedingPlan',
+          icon: "restaurant-outline",
+          color: colors.status.info,
+          label: t("feedingPlanCompact"),
+          route: "FeedingPlan",
           params: productionUnitContext,
         },
       ];
@@ -145,103 +148,152 @@ export default function QuickActionsPreview({
     if (hasActiveCycles && !hideGlobalCycleOperationalActions) {
       // Si cycles actifs → prioriser saisie quotidienne
       actions.push({
-        icon: 'create',
-        color: AQUACARE_COLORS.GREEN_LIGHT,
-        label: t('dailyLog'),
-        route: 'DailyLog',
+        icon: "create",
+        color: colors.brand.light,
+        label: t("dailyLogCompact"),
+        route: "DailyLog",
       });
     } else if (hasActiveCycles) {
       actions.push({
-        icon: 'document-text-outline',
-        color: AQUACARE_COLORS.BLUE,
-        label: t('reports'),
-        route: 'Reports',
-        params: { scope: 'cycle' },
+        icon: "document-text-outline",
+        color: colors.legacy.blue,
+        label: t("reports"),
+        route: "Reports",
+        params: { scope: "cycle" },
       });
     } else {
       // Si aucun cycle → prioriser création
       actions.push({
-        icon: 'add-circle',
-        color: AQUACARE_COLORS.GREEN_PRIMARY,
-        label: t('startNewCycle'),
-        route: 'CreateFarm',
+        icon: "add-circle",
+        color: colors.brand.primary,
+        label: t("startNewCycle"),
+        route: "CreateFarm",
       });
     }
 
     // Suggestion 2 : Toujours suggérer catalogue commerce
     actions.push({
-      icon: 'storefront-outline',
-      color: AQUACARE_COLORS.GREEN_PRIMARY,
-      label: t('productCatalog'),
-      route: 'ProductCatalog',
+      icon: "storefront-outline",
+      color: colors.brand.primary,
+      label: t("productCatalog"),
+      route: "ProductCatalog",
     });
 
     // Suggestion 3 : Notifications si non lues, sinon rapports
     if (unreadCount > 0) {
       actions.push({
-        icon: 'notifications-outline',
-        color: AQUACARE_COLORS.WARNING,
-        label: `${t('notifications')} (${unreadCount})`,
-        route: 'Notifications',
+        icon: "notifications-outline",
+        color: colors.status.warning,
+        label: `${t("notifications")} (${unreadCount})`,
+        route: "Notifications",
       });
     } else if (!hideGlobalCycleOperationalActions || !hasActiveCycles) {
       actions.push({
-        icon: 'document-text-outline',
-        color: AQUACARE_COLORS.BLUE,
-        label: t('reports'),
-        route: 'Reports',
-        params: { scope: 'cycle' },
+        icon: "document-text-outline",
+        color: colors.legacy.blue,
+        label: t("reports"),
+        route: "Reports",
+        params: { scope: "cycle" },
       });
     } else {
       actions.push({
-        icon: 'notifications-outline',
-        color: AQUACARE_COLORS.WARNING,
-        label: t('notifications'),
-        route: 'Notifications',
+        icon: "notifications-outline",
+        color: colors.status.warning,
+        label: t("notifications"),
+        route: "Notifications",
       });
     }
 
     return actions.slice(0, 3); // Toujours max 3 suggestions
-  }, [hasActiveCycles, unreadCount, t, scope, productionUnitContext, hideGlobalCycleOperationalActions]);
+  }, [
+    hasActiveCycles,
+    unreadCount,
+    t,
+    scope,
+    productionUnitContext,
+    hideGlobalCycleOperationalActions,
+  ]);
 
   return (
     <View className="px-5 py-5">
       {/* Suggested Actions Preview */}
-      <View className="bg-white rounded-xl shadow-sm overflow-hidden">
+      <Card variant="elevated" style={styles.card}>
         {suggestedActions.map((action, index) => (
-          <TouchableOpacity
-            key={action.route}
-            className={`flex-row items-center p-4 ${
-              index < suggestedActions.length - 1 ? 'border-b border-gray-100' : ''
-            }`}
-            onPress={() => navigation.navigate(action.route, action.params)}
-            activeOpacity={0.7}
-          >
-            <View
-              className="w-10 h-10 rounded-full items-center justify-center"
-              style={{ backgroundColor: `${action.color}20` }}
+          <React.Fragment key={action.route}>
+            <Pressable
+              className="flex-row items-center"
+              accessibilityRole="button"
+              accessibilityLabel={action.label}
+              onPress={() => navigation.navigate(action.route, action.params)}
+              android_ripple={{ color: colors.surface.selected }}
+              style={styles.action}
             >
-              <Ionicons name={action.icon as any} size={20} color={action.color} />
-            </View>
-            <Text className="text-base font-medium text-gray-dark ml-3 flex-1">
-              {action.label}
-            </Text>
-            <Ionicons name="chevron-forward" size={20} color={AQUACARE_COLORS.GRAY_LIGHT} />
-          </TouchableOpacity>
+              <View
+                className="w-10 h-10 rounded-full items-center justify-center"
+                style={styles.actionIcon}
+              >
+                <Ionicons
+                  name={action.icon as any}
+                  size={20}
+                  color={action.color}
+                />
+              </View>
+              <AppText
+                variant="body"
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.85}
+                style={styles.actionLabel}
+              >
+                {action.label}
+              </AppText>
+              <Ionicons
+                name="chevron-forward"
+                size={20}
+                color={colors.text.muted}
+              />
+            </Pressable>
+            {index < suggestedActions.length - 1 ? <Divider /> : null}
+          </React.Fragment>
         ))}
 
         {/* View All Button */}
-        <TouchableOpacity
-          className="flex-row items-center justify-center p-4 bg-gray-50 border-t border-gray-100"
+        <Pressable
+          className="flex-row items-center justify-center"
+          accessibilityRole="button"
+          accessibilityLabel={t('viewAllActions')}
           onPress={onOpenSheet}
-          activeOpacity={0.7}
+          android_ripple={{ color: colors.surface.selected }}
+          style={styles.viewAll}
         >
-          <Text className="text-base font-semibold text-aquacare-primary mr-2">
-            {t('viewAllActions')}
-          </Text>
-          <Ionicons name="chevron-down" size={20} color={AQUACARE_COLORS.GREEN_PRIMARY} />
-        </TouchableOpacity>
-      </View>
+          <AppText
+            variant="bodyStrong"
+            color="link"
+            style={styles.viewAllLabel}
+          >
+            {t("viewAllActions")}
+          </AppText>
+          <Ionicons
+            name="chevron-down"
+            size={20}
+            color={colors.brand.primary}
+          />
+        </Pressable>
+      </Card>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  card: { padding: 0, overflow: "hidden" as const },
+  action: { minHeight: 56, flexDirection: 'row', alignItems: 'center', padding: spacing[4] },
+  actionIcon: { backgroundColor: colors.brand.subtle },
+  viewAll: { minHeight: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: spacing[4], backgroundColor: colors.surface.page, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border.subtle },
+  actionLabel: {
+    flex: 1,
+    flexShrink: 1,
+    marginLeft: spacing[3],
+    marginRight: spacing[2],
+  },
+  viewAllLabel: { marginRight: spacing[2] },
+});

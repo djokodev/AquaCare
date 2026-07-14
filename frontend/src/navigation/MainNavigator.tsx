@@ -5,13 +5,14 @@ import type { NavigatorScreenParams } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 
-import { AQUACARE_COLORS } from '@/constants/colors';
+import { colors } from '@/theme';
 import { useNotificationsPolling } from '@/features/notifications/hooks/useNotificationsPolling';
 import DashboardScreen from '@/features/main/screens/DashboardScreen';
 import FarmMapScreen from '@/features/profile/screens/FarmMapScreen';
 import FarmProfileScreen from '@/features/profile/screens/FarmProfileScreen';
 import ProfileScreen from '@/features/profile/screens/ProfileScreen';
 import SettingsScreen from '@/features/profile/screens/SettingsScreen';
+import DesignSystemGalleryScreen from '@/features/dev/screens/DesignSystemGalleryScreen';
 
 // Aquaculture Screens
 import CycleSimulationScreen from '@/features/aquaculture/screens/CycleSimulationScreen';
@@ -186,6 +187,7 @@ export type ProfileStackParamList = {
   ProfileMain: undefined;
   FarmProfile: undefined;
   Settings: undefined;
+  DesignSystemGallery: undefined;
 };
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
@@ -198,8 +200,8 @@ function ProfileNavigator() {
   return (
     <ProfileStack.Navigator
       screenOptions={{
-        headerStyle: { backgroundColor: AQUACARE_COLORS.GREEN_PRIMARY },
-        headerTintColor: AQUACARE_COLORS.WHITE,
+        headerStyle: { backgroundColor: colors.brand.primary },
+        headerTintColor: colors.text.inverse,
         headerTitleStyle: { fontWeight: 'bold' },
       }}
     >
@@ -218,6 +220,7 @@ function ProfileNavigator() {
         component={SettingsScreen}
         options={{ title: t('settings') }}
       />
+      {__DEV__ ? <ProfileStack.Screen name="DesignSystemGallery" component={DesignSystemGalleryScreen} options={{ headerShown: false }} /> : null}
     </ProfileStack.Navigator>
   );
 }
@@ -243,8 +246,8 @@ function MainTabNavigator() {
 
           return <Ionicons name={iconName} size={size} color={color} />;
         },
-        tabBarActiveTintColor: AQUACARE_COLORS.GREEN_PRIMARY,
-        tabBarInactiveTintColor: AQUACARE_COLORS.GRAY_LIGHT,
+        tabBarActiveTintColor: colors.brand.primary,
+        tabBarInactiveTintColor: colors.text.muted,
         headerShown: false,
       })}
     >
@@ -261,8 +264,8 @@ function MainTabNavigator() {
         options={{
           tabBarLabel: t('chatTitle'),
           headerShown: true,
-          headerStyle: { backgroundColor: AQUACARE_COLORS.GREEN_PRIMARY },
-          headerTintColor: AQUACARE_COLORS.WHITE,
+          headerStyle: { backgroundColor: colors.brand.primary },
+          headerTintColor: colors.text.inverse,
           headerTitleStyle: { fontWeight: 'bold' },
           headerTitle: t('chatTitle'),
         }}
@@ -339,8 +342,8 @@ export default function MainNavigator() {
         component={StatisticsScreen}
         options={{
           headerShown: false, // Header personnalisÃ© dans le composant
-          headerStyle: { backgroundColor: AQUACARE_COLORS.GREEN_PRIMARY },
-          headerTintColor: AQUACARE_COLORS.WHITE,
+          headerStyle: { backgroundColor: colors.brand.primary },
+          headerTintColor: colors.text.inverse,
           headerTitleStyle: { fontWeight: 'bold' },
           headerTitle: t('statisticsNavTitle')
         }}
@@ -391,8 +394,8 @@ export default function MainNavigator() {
         component={ProductionUnitsHubScreen}
         options={{
           headerShown: true,
-          headerStyle: { backgroundColor: AQUACARE_COLORS.GREEN_PRIMARY },
-          headerTintColor: AQUACARE_COLORS.WHITE,
+          headerStyle: { backgroundColor: colors.brand.primary },
+          headerTintColor: colors.text.inverse,
           headerTitleStyle: { fontWeight: 'bold' },
           title: t('productionUnitsHubTitle'),
         }}
@@ -402,8 +405,8 @@ export default function MainNavigator() {
         component={ProductionUnitOverviewScreen}
         options={{
           headerShown: true,
-          headerStyle: { backgroundColor: AQUACARE_COLORS.GREEN_PRIMARY },
-          headerTintColor: AQUACARE_COLORS.WHITE,
+          headerStyle: { backgroundColor: colors.brand.primary },
+          headerTintColor: colors.text.inverse,
           headerTitleStyle: { fontWeight: 'bold' },
           title: t('productionUnitDashboardTitle'),
         }}
@@ -414,8 +417,8 @@ export default function MainNavigator() {
         component={ChatScreen}
         options={{
           headerShown: true,
-          headerStyle: { backgroundColor: AQUACARE_COLORS.GREEN_PRIMARY },
-          headerTintColor: AQUACARE_COLORS.WHITE,
+          headerStyle: { backgroundColor: colors.brand.primary },
+          headerTintColor: colors.text.inverse,
           headerTitleStyle: { fontWeight: 'bold' },
           title: t('chatTitle'),
         }}
@@ -426,8 +429,8 @@ export default function MainNavigator() {
         component={FarmMapScreen}
         options={{
           headerShown: true,
-          headerStyle: { backgroundColor: AQUACARE_COLORS.GREEN_PRIMARY },
-          headerTintColor: AQUACARE_COLORS.WHITE,
+          headerStyle: { backgroundColor: colors.brand.primary },
+          headerTintColor: colors.text.inverse,
           headerTitleStyle: { fontWeight: 'bold' },
           title: t('farmMapNavTitle'),
           headerBackTitle: t('profile'),
@@ -446,8 +449,8 @@ export default function MainNavigator() {
         component={CycleSimulationScreen}
         options={{
           headerShown: true,
-          headerStyle: { backgroundColor: AQUACARE_COLORS.GREEN_PRIMARY },
-          headerTintColor: AQUACARE_COLORS.WHITE,
+          headerStyle: { backgroundColor: colors.brand.primary },
+          headerTintColor: colors.text.inverse,
           headerTitleStyle: { fontWeight: 'bold' },
           title: t('simulationNavTitle'),
         }}
@@ -457,8 +460,8 @@ export default function MainNavigator() {
         component={PostHarvestConsolidationScreen}
         options={{
           headerShown: true,
-          headerStyle: { backgroundColor: AQUACARE_COLORS.GREEN_PRIMARY },
-          headerTintColor: AQUACARE_COLORS.WHITE,
+          headerStyle: { backgroundColor: colors.brand.primary },
+          headerTintColor: colors.text.inverse,
           headerTitleStyle: { fontWeight: 'bold' },
           title: t('consolidationTitle'),
           headerLeft: () => null,
