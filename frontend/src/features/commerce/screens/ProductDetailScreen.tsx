@@ -1,17 +1,5 @@
-﻿/**
- * ProductDetailScreen - Details Produit AquaCare (NativeWind)
- */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  View,
-  Text,
-  ScrollView,
-  FlatList,
-  TouchableOpacity,
-  Image,
-  ActivityIndicator,
-  Alert,
-} from 'react-native';
+import { Alert, FlatList, Image, ScrollView, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -21,18 +9,12 @@ import { useDispatch, useSelector } from 'react-redux';
 import { AppDispatch, RootState } from '@/store/store';
 import { fetchProductDetail, addToCart } from '@/features/commerce/store/commerceSlice';
 import { Product } from '@/types/commerce';
-import { AQUACARE_COLORS } from '@/constants/colors';
 import { RootStackParamList } from '@/navigation/MainNavigator';
 import { getProductBrandAsset } from '@/features/commerce/utils/productBrandAssets';
+import { AppHeader, AppText, Badge, Button, Card, Divider, ErrorState, IconButton, InteractiveCard, LoadingState } from '@/components/ui';
+import { colors, radii, sizing, spacing } from '@/theme';
 
-type RouteParams = {
-  ProductDetail: {
-    productId: string;
-    cycleId?: string;
-    source?: 'store';
-  };
-};
-
+type RouteParams = { ProductDetail: { productId: string; cycleId?: string; source?: 'store' } };
 type NavigationProp = StackNavigationProp<RootStackParamList, 'ProductDetail'>;
 
 export default function ProductDetailScreen() {
@@ -40,263 +22,79 @@ export default function ProductDetailScreen() {
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<RouteProp<RouteParams, 'ProductDetail'>>();
   const dispatch = useDispatch<AppDispatch>();
-
   const { productId } = route.params;
-  const cartNavigationParams = route.params.cycleId
-    ? { cycleId: route.params.cycleId, source: 'store' as const }
-    : undefined;
-
+  const cartNavigationParams = route.params.cycleId ? { cycleId: route.params.cycleId, source: 'store' as const } : undefined;
   const { products, cart } = useSelector((state: RootState) => state.commerce);
-  const { items: allProducts } = products;
-
   const [product, setProduct] = useState<Product | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const loadProduct = async () => {
-      setIsLoading(true);
-      try {
-        const existingProduct = allProducts.find((p) => p.id === productId);
-        if (existingProduct) {
-          setProduct(existingProduct);
-        } else {
-          const result = await dispatch(fetchProductDetail(productId)).unwrap();
-          setProduct(result);
-        }
-      } catch (error) {
-        Alert.alert(t('error'), t('productLoadError'));
-      } finally {
-        setIsLoading(false);
-      }
-    };
+  const loadProduct = useCallback(async () => {
+    setIsLoading(true);
+    setLoadError(null);
+    try {
+      const existingProduct = products.items.find((item) => item.id === productId);
+      setProduct(existingProduct ?? await dispatch(fetchProductDetail(productId)).unwrap());
+    } catch {
+      setLoadError(t('productLoadError'));
+      Alert.alert(t('error'), t('productLoadError'));
+    } finally {
+      setIsLoading(false);
+    }
+  }, [dispatch, productId, products.items, t]);
 
-    loadProduct();
-  }, [allProducts, dispatch, productId, t]);
+  useEffect(() => { void loadProduct(); }, [loadProduct]);
 
+  const cartItemsCount = useMemo(() => cart.items.reduce((sum, item) => sum + item.quantity, 0), [cart.items]);
+  const similarProducts = useMemo(() => product ? products.items.filter((item) => item.species === product.species && item.id !== product.id && item.is_available).slice(0, 3) : [], [product, products.items]);
   const handleAddToCart = () => {
     if (!product) return;
-
     dispatch(addToCart({ product, quantity }));
-    Alert.alert(
-      t('success'),
-      t('productAddedToCartWithQuantity', { quantity, name: product.name }),
-      [
-        {
-          text: t('viewCart'),
-          onPress: () => navigation.navigate('Cart', cartNavigationParams),
-        },
-        { text: t('continueShopping') },
-      ]
-    );
+    Alert.alert(t('success'), t('productAddedToCartWithQuantity', { quantity, name: product.name }), [{ text: t('viewCart'), onPress: () => navigation.navigate('Cart', cartNavigationParams) }, { text: t('continueShopping') }]);
   };
-
-  const handleIncrement = () => setQuantity((prev) => prev + 1);
-  const handleDecrement = () => {
-    if (quantity > 1) setQuantity((prev) => prev - 1);
-  };
-
-  const similarProducts = useMemo(() => {
-    if (!product) return [];
-    return allProducts
-      .filter((p) => p.species === product.species && p.id !== product.id && p.is_available)
-      .slice(0, 3);
-  }, [allProducts, product]);
-
-  const cartItemsCount = useMemo(
-    () => cart.items.reduce((sum, item) => sum + item.quantity, 0),
-    [cart.items]
-  );
-
-  const renderSimilarProduct = useCallback(
-    ({ item: similarProduct }: { item: Product }) => (
-      <TouchableOpacity
-        className="w-36 bg-cream rounded-xl p-3 mr-3"
-        onPress={() => navigation.setParams({ productId: similarProduct.id } as never)}
-      >
-        <View className="w-full h-24 bg-white rounded-lg items-center justify-center mb-2">
-          <Image
-            source={getProductBrandAsset(similarProduct.brand)}
-            className="w-14 h-14"
-            resizeMode="contain"
-          />
-        </View>
-        <Text className="text-xs text-gray-light font-semibold mb-1">
-          {similarProduct.brand.toUpperCase()}
-        </Text>
-        <Text className="text-sm text-gray-dark font-semibold mb-2 min-h-[36px]" numberOfLines={2}>
-          {similarProduct.name}
-        </Text>
-        <Text className="text-sm font-bold text-aquacare-primary">
-          {parseFloat(similarProduct.price_per_package).toLocaleString()} FCFA
-        </Text>
-      </TouchableOpacity>
-    ),
-    [navigation]
-  );
-
-  if (isLoading || !product) {
-    return (
-      <View className="flex-1 bg-cream">
-        <View className="bg-white px-5 pt-16 pb-5 flex-row items-center justify-between shadow">
-          <TouchableOpacity onPress={() => navigation.goBack()} className="w-10">
-            <Ionicons name="arrow-back" size={24} color={AQUACARE_COLORS.GRAY_DARK} />
-          </TouchableOpacity>
-          <Text className="text-lg font-bold text-gray-dark">{t('productDetails')}</Text>
-          <View className="w-10" />
-        </View>
-        <View className="flex-1 items-center justify-center">
-          <ActivityIndicator size="large" color={AQUACARE_COLORS.GREEN_PRIMARY} />
-          <Text className="mt-3 text-base text-gray-light">{t('loading')}</Text>
-        </View>
-      </View>
-    );
-  }
-
-  const pricePerPackage = parseFloat(product.price_per_package);
-  const pricePerKg = parseFloat(product.price_per_kg);
-  const totalPrice = pricePerPackage * quantity;
 
   return (
-    <View className="flex-1 bg-cream">
-      <View className="bg-white px-5 pt-16 pb-5 flex-row items-center justify-between shadow">
-        <TouchableOpacity onPress={() => navigation.goBack()} className="w-10">
-          <Ionicons name="arrow-back" size={24} color={AQUACARE_COLORS.GRAY_DARK} />
-        </TouchableOpacity>
-        <Text className="text-lg font-bold text-gray-dark">{t('productDetails')}</Text>
-        <TouchableOpacity onPress={() => navigation.navigate('Cart', cartNavigationParams)} className="relative" accessibilityLabel={t('cart')}>
-          <Ionicons name="cart-outline" size={24} color={AQUACARE_COLORS.GREEN_PRIMARY} />
-          {cartItemsCount > 0 && (
-            <View className="absolute -top-2 -right-2 bg-[#dc2626] rounded-full min-w-[20px] h-5 justify-center items-center px-1">
-              <Text className="text-white text-xs font-bold">{cartItemsCount}</Text>
-            </View>
-          )}
-        </TouchableOpacity>
-      </View>
-
-      <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
-      <View className="bg-white items-center py-10">
-        <View className="w-48 h-48 bg-cream rounded-full items-center justify-center">
-          <Image
-            source={getProductBrandAsset(product.brand)}
-            className="w-28 h-28"
-            resizeMode="contain"
-          />
-        </View>
-      </View>
-
-        <View className="bg-white px-5 py-5 mt-2">
-          <Text className="text-xs text-gray-light font-semibold mb-1">{product.brand.toUpperCase()}</Text>
-          <Text className="text-2xl font-bold text-gray-dark mb-4">{product.name}</Text>
-
-          <View className="flex-row flex-wrap gap-2 mb-5">
-            <View className="bg-cream px-3 py-2 rounded-xl">
-              <Text className="text-sm text-gray-dark font-semibold">{t(product.species)}</Text>
-            </View>
-            <View className="bg-cream px-3 py-2 rounded-xl">
-              <Text className="text-sm text-gray-dark font-semibold">{product.pellet_size_mm}mm</Text>
-            </View>
-            {product.phase && (
-              <View className="flex-row items-center bg-cream px-3 py-2 rounded-xl gap-2">
-                <Ionicons name="water" size={16} color={AQUACARE_COLORS.GREEN_PRIMARY} />
-                <Text className="text-sm text-gray-dark font-semibold">{t(product.phase)}</Text>
+    <View style={styles.root}>
+      <AppHeader title={t('productDetails')} onBack={() => navigation.goBack()} backLabel={t('back')} rightAction={<IconButton icon="cart-outline" variant="ghost" tone="inverse" accessibilityLabel={`${t('cart')} ${cartItemsCount}`} badge={cartItemsCount} onPress={() => navigation.navigate('Cart', cartNavigationParams)} />} />
+      {isLoading ? <LoadingState message={t('loading')} /> : null}
+      {!isLoading && loadError ? <ErrorState message={loadError} actionLabel={t('retry')} onAction={loadProduct} /> : null}
+      {!isLoading && product ? (
+        <>
+          <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+            <Card style={styles.hero}>
+              <View style={styles.imageWrap}><Image source={getProductBrandAsset(product.brand)} style={styles.image} resizeMode="contain" /></View>
+              <AppText variant="caption" color="muted">{product.brand.toUpperCase()}</AppText>
+              <AppText variant="screenTitle">{product.name}</AppText>
+              <View style={styles.badges}>
+                <Badge label={t(product.species)} tone="info" />
+                <Badge label={`${product.pellet_size_mm} mm`} tone="info" />
+                {product.phase ? <Badge label={t(product.phase)} tone="success" /> : null}
               </View>
-            )}
-          </View>
-
-          <View className="pt-4 border-t border-[#f1f5f9]">
-            <Text className="text-sm text-gray-light mb-1">{t('pricePerBag')}</Text>
-            <Text className="text-2xl font-bold text-aquacare-primary mb-1">
-              {pricePerPackage.toLocaleString()} FCFA
-            </Text>
-            <Text className="text-sm text-gray-light">
-              {pricePerKg.toLocaleString()} FCFA/kg - {product.package_weight_kg}kg
-            </Text>
-          </View>
-        </View>
-
-        {product.protein_percentage && product.lipid_percentage && (
-          <View className="bg-white px-5 py-5 mt-2">
-            <Text className="text-lg font-bold text-gray-dark mb-4">{t('nutritionalComposition')}</Text>
-            <View className="flex-row gap-4">
-              <View className="flex-1 bg-cream rounded-xl p-5 items-center">
-                <Ionicons name="nutrition" size={24} color={AQUACARE_COLORS.GREEN_PRIMARY} />
-                <Text className="text-2xl font-bold text-aquacare-primary mt-2">
-                  {product.protein_percentage}%
-                </Text>
-                <Text className="text-xs text-gray-light mt-1">{t('protein')}</Text>
-              </View>
-              <View className="flex-1 bg-cream rounded-xl p-5 items-center">
-                <Ionicons name="water" size={24} color={AQUACARE_COLORS.GREEN_PRIMARY} />
-                <Text className="text-2xl font-bold text-aquacare-primary mt-2">
-                  {product.lipid_percentage}%
-                </Text>
-                <Text className="text-xs text-gray-light mt-1">{t('lipids')}</Text>
-              </View>
-            </View>
-          </View>
-        )}
-
-        <View className="bg-white px-5 py-5 mt-2">
-          <Text className="text-lg font-bold text-gray-dark mb-3">{t('quantity')}</Text>
-          <View className="flex-row items-center justify-center gap-5 mb-4">
-            <TouchableOpacity
-              className={`w-12 h-12 rounded-full items-center justify-center ${
-                quantity === 1 ? 'bg-cream' : 'bg-aquacare-primary'
-              }`}
-              onPress={handleDecrement}
-              disabled={quantity === 1}
-            >
-              <Ionicons
-                name="remove"
-                size={24}
-                color={quantity === 1 ? AQUACARE_COLORS.GRAY_LIGHT : AQUACARE_COLORS.WHITE}
-              />
-            </TouchableOpacity>
-            <View className="items-center min-w-[80px]">
-              <Text className="text-2xl font-bold text-gray-dark">{quantity}</Text>
-              <Text className="text-sm text-gray-light mt-1">
-                {t(quantity > 1 ? 'bags' : 'bag')}
-              </Text>
-            </View>
-            <TouchableOpacity
-              className="w-12 h-12 rounded-full items-center justify-center bg-aquacare-primary"
-              onPress={handleIncrement}
-            >
-              <Ionicons name="add" size={24} color={AQUACARE_COLORS.WHITE} />
-            </TouchableOpacity>
-          </View>
-          <Text className="text-sm text-gray-light text-center mb-1">{t('total')}</Text>
-          <Text className="text-2xl font-bold text-aquacare-primary text-center">
-            {totalPrice.toLocaleString()} FCFA
-          </Text>
-        </View>
-
-        {similarProducts.length > 0 && (
-          <View className="bg-white px-5 py-5 mt-2 mb-24">
-            <Text className="text-lg font-bold text-gray-dark mb-4">{t('similarProducts')}</Text>
-            <FlatList
-              horizontal
-              data={similarProducts}
-              keyExtractor={(item) => item.id}
-              renderItem={renderSimilarProduct}
-              showsHorizontalScrollIndicator={false}
-            />
-          </View>
-        )}
-      </ScrollView>
-
-      {product.is_available && (
-        <View className="absolute bottom-0 left-0 right-0 bg-white p-4 shadow">
-          <TouchableOpacity
-            className="bg-aquacare-primary flex-row items-center justify-center py-4 rounded-lg gap-3"
-            onPress={handleAddToCart}
-          >
-            <Ionicons name="cart" size={24} color={AQUACARE_COLORS.WHITE} />
-            <Text className="text-white text-lg font-bold">{t('addToCart')}</Text>
-          </TouchableOpacity>
-        </View>
-      )}
+              <Divider />
+              <AppText variant="caption" color="muted">{t('pricePerBag')}</AppText>
+              <AppText variant="metric" color="link">{Number(product.price_per_package).toLocaleString()} FCFA</AppText>
+              <AppText variant="helper" color="muted">{Number(product.price_per_kg).toLocaleString()} FCFA/kg · {product.package_weight_kg} kg</AppText>
+            </Card>
+            {product.protein_percentage !== null || product.lipid_percentage !== null ? <Card variant="outlined" style={styles.section}><AppText variant="sectionTitle">{t('nutritionalComposition')}</AppText><View style={styles.nutrients}>{product.protein_percentage !== null ? <Nutrient label={t('protein')} value={`${product.protein_percentage}%`} icon="nutrition" /> : null}{product.lipid_percentage !== null ? <Nutrient label={t('lipids')} value={`${product.lipid_percentage}%`} icon="water" /> : null}</View></Card> : null}
+            <Card variant="outlined" style={styles.section}>
+              <AppText variant="sectionTitle">{t('quantity')}</AppText>
+              <View style={styles.stepper}><IconButton icon="remove" variant="surface" accessibilityLabel={t('decreaseQuantity')} onPress={() => setQuantity((value) => Math.max(1, value - 1))} disabled={quantity === 1} /><View style={styles.quantity}><AppText variant="metric">{quantity}</AppText><AppText variant="caption" color="muted">{t(quantity > 1 ? 'bags' : 'bag')}</AppText></View><IconButton icon="add" variant="surface" accessibilityLabel={t('increaseQuantity')} onPress={() => setQuantity((value) => value + 1)} /></View>
+              <Divider /><AppText variant="caption" color="muted">{t('total')}</AppText><AppText variant="metric" color="link">{(Number(product.price_per_package) * quantity).toLocaleString()} FCFA</AppText>
+            </Card>
+            {similarProducts.length ? <View style={styles.similar}><AppText variant="sectionTitle">{t('similarProducts')}</AppText><FlatList horizontal data={similarProducts} keyExtractor={(item) => item.id} contentContainerStyle={styles.similarList} renderItem={({ item }) => <InteractiveCard style={styles.similarCard} accessibilityLabel={item.name} onPress={() => navigation.setParams({ productId: item.id } as never)}><View style={styles.similarContent}><Image source={getProductBrandAsset(item.brand)} style={styles.similarImage} resizeMode="contain" /><AppText variant="caption" color="muted">{item.brand.toUpperCase()}</AppText><AppText variant="label" numberOfLines={2}>{item.name}</AppText><AppText variant="label" color="link">{Number(item.price_per_package).toLocaleString()} FCFA</AppText></View></InteractiveCard>} showsHorizontalScrollIndicator={false} /></View> : null}
+          </ScrollView>
+          {product.is_available ? <View style={styles.cta}><Button label={t('addToCart')} iconLeft="cart" size="large" onPress={handleAddToCart} /></View> : null}
+        </>
+      ) : null}
     </View>
   );
 }
+
+function Nutrient({ label, value, icon }: { label: string; value: string; icon: keyof typeof Ionicons.glyphMap }) {
+  return <View style={styles.nutrient}><Ionicons name={icon} size={sizing.iconMedium} color={colors.brand.primary} /><AppText variant="metric" color="link">{value}</AppText><AppText variant="caption" color="muted">{label}</AppText></View>;
+}
+
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: colors.surface.page }, content: { padding: spacing[4], gap: spacing[4], paddingBottom: 112 }, hero: { alignItems: 'center', gap: spacing[2] }, imageWrap: { width: 176, height: 176, borderRadius: radii.full, backgroundColor: colors.surface.page, alignItems: 'center', justifyContent: 'center' }, image: { width: 112, height: 112 }, badges: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: spacing[2] }, section: { gap: spacing[3] }, nutrients: { flexDirection: 'row', gap: spacing[3] }, nutrient: { flex: 1, alignItems: 'center', gap: spacing[1], padding: spacing[3], backgroundColor: colors.surface.page, borderRadius: radii.lg }, stepper: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing[4] }, quantity: { minWidth: 80, alignItems: 'center' }, similar: { gap: spacing[3] }, similarList: { gap: spacing[3] }, similarCard: { width: 168, minHeight: 160, padding: spacing[3] }, similarContent: { flex: 1, gap: spacing[2] }, similarImage: { width: 72, height: 72, alignSelf: 'center' }, cta: { padding: spacing[4], borderTopWidth: 1, borderTopColor: colors.border.subtle, backgroundColor: colors.surface.card },
+});
