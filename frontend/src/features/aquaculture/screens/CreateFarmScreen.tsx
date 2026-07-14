@@ -7,14 +7,13 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
-  Text,
   Pressable,
   ScrollView,
   StyleSheet,
   Alert,
   Platform,
   KeyboardAvoidingView,
-  type TextInputProps,
+  type AccessibilityState,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
@@ -23,8 +22,6 @@ import { useDispatch, useSelector } from 'react-redux';
 
 import { useAuth } from '@/hooks/useAuth';
 import { createClientUuid } from '@/utils/clientUuid';
-import { AQUACARE_COLORS } from '@/constants/colors';
-import { sharedTextInputStyles } from '@/components/common/inputStyles';
 import {
   AppHeader,
   AppText,
@@ -120,11 +117,6 @@ interface BulkUnitDraftState {
 }
 
 type BulkUnitDraftErrors = Partial<Record<'count', string>> & ProductionUnitDraftErrors;
-
-/** Keeps the existing labelled form layout while standardising the input surface. */
-function SetupTextField({ style: _style, placeholderTextColor: _placeholderTextColor, ...props }: TextInputProps) {
-  return <TextField {...props} />;
-}
 
 const getDefaultSingleDraft = (): UnitDraftState => ({
   name: '',
@@ -754,8 +746,8 @@ export default function CreateFarmScreen({ navigation }: Props) {
 
       {form.productionUnits.length === 0 && (
         <View style={styles.noticeBadge}>
-          <Ionicons name="alert-circle-outline" size={16} color={AQUACARE_COLORS.WARNING} />
-          <Text style={styles.noticeText}>{t('createFarmAtLeastOneUnitError')}</Text>
+          <Ionicons name="alert-circle-outline" size={16} color={colors.status.warning} />
+          <AppText variant="helper" color="warning" style={styles.noticeText}>{t('createFarmAtLeastOneUnitError')}</AppText>
         </View>
       )}
 
@@ -763,20 +755,19 @@ export default function CreateFarmScreen({ navigation }: Props) {
         style={styles.formCard}
         onLayout={(event) => setSingleFormOffsetY(event.nativeEvent.layout.y)}
       >
-        <Text style={styles.formCardTitle}>
+        <AppText variant="cardTitle" style={styles.formCardTitle}>
           {editingUnitId ? t('createFarmEditUnitTitle') : t('createFarmAddUnitTitle')}
-        </Text>
-        <Text style={styles.formCardDescription}>{t('createFarmAddUnitDescription')}</Text>
+        </AppText>
+        <AppText variant="helper" color="muted" style={styles.formCardDescription}>{t('createFarmAddUnitDescription')}</AppText>
 
         <FieldLabel label={t('createFarmUnitNameLabel')} required />
-        <SetupTextField
-          style={[styles.input, singleUnitErrors.name && styles.inputError]}
+        <TextField
+          error={singleUnitErrors.name ? t(singleUnitErrors.name) : undefined}
           placeholder={t('createFarmUnitNamePlaceholder')}
-          placeholderTextColor={AQUACARE_COLORS.GRAY_LIGHT}
           value={singleUnitDraft.name}
           onChangeText={(value) => setSingleUnitDraft((prev) => ({ ...prev, name: value }))}
         />
-        {singleUnitErrors.name && <Text style={styles.inlineError}>{t(singleUnitErrors.name)}</Text>}
+        {singleUnitErrors.name && <AppText variant="helper" color="error" style={styles.inlineError}>{t(singleUnitErrors.name)}</AppText>}
 
         <FieldLabel label={t('createFarmUnitTypeLabel')} required />
         <View style={styles.chipRow}>
@@ -790,44 +781,42 @@ export default function CreateFarmScreen({ navigation }: Props) {
           ))}
         </View>
         {singleUnitErrors.unit_type ? (
-          <Text style={styles.inlineError}>{t(singleUnitErrors.unit_type)}</Text>
+          <AppText variant="helper" color="error" style={styles.inlineError}>{t(singleUnitErrors.unit_type)}</AppText>
         ) : !singleUnitDraft.unit_type ? (
-          <Text style={styles.unitTypeHint}>{t('createFarmNoUnitTypeSelected')}</Text>
+          <AppText variant="helper" color="muted" style={styles.unitTypeHint}>{t('createFarmNoUnitTypeSelected')}</AppText>
         ) : null}
 
         {singleUnitDraft.unit_type ? (
           singleDraftUsesSurface ? (
             <>
               <FieldLabel label={t('createFarmUnitSurfaceLabel')} required />
-              <SetupTextField
-                style={[styles.input, singleUnitErrors.surface_m2 && styles.inputError]}
+              <TextField
+                error={singleUnitErrors.surface_m2 ? t(singleUnitErrors.surface_m2) : undefined}
                 keyboardType="numeric"
                 placeholder={t('createFarmUnitSurfacePlaceholder')}
-                placeholderTextColor={AQUACARE_COLORS.GRAY_LIGHT}
                 value={singleUnitDraft.surface_m2}
                 onChangeText={(value) =>
                   setSingleUnitDraft((prev) => ({ ...prev, surface_m2: value }))
                 }
               />
               {singleUnitErrors.surface_m2 && (
-                <Text style={styles.inlineError}>{t(singleUnitErrors.surface_m2)}</Text>
+                <AppText variant="helper" color="error" style={styles.inlineError}>{t(singleUnitErrors.surface_m2)}</AppText>
               )}
             </>
           ) : (
             <>
               <FieldLabel label={t('createFarmUnitVolumeLabel')} required />
-              <SetupTextField
-                style={[styles.input, singleUnitErrors.volume_m3 && styles.inputError]}
+              <TextField
+                error={singleUnitErrors.volume_m3 ? t(singleUnitErrors.volume_m3) : undefined}
                 keyboardType="numeric"
                 placeholder={t('createFarmUnitVolumePlaceholder')}
-                placeholderTextColor={AQUACARE_COLORS.GRAY_LIGHT}
                 value={singleUnitDraft.volume_m3}
                 onChangeText={(value) =>
                   setSingleUnitDraft((prev) => ({ ...prev, volume_m3: value }))
                 }
               />
               {singleUnitErrors.volume_m3 && (
-                <Text style={styles.inlineError}>{t(singleUnitErrors.volume_m3)}</Text>
+                <AppText variant="helper" color="error" style={styles.inlineError}>{t(singleUnitErrors.volume_m3)}</AppText>
               )}
             </>
           )
@@ -840,8 +829,8 @@ export default function CreateFarmScreen({ navigation }: Props) {
       </View>
 
       <View style={styles.formCard}>
-        <Text style={styles.formCardTitle}>{t('createFarmAddUnitsIdenticalTitle')}</Text>
-        <Text style={styles.formCardDescription}>{t('createFarmAddUnitsIdenticalDescription')}</Text>
+        <AppText variant="cardTitle" style={styles.formCardTitle}>{t('createFarmAddUnitsIdenticalTitle')}</AppText>
+        <AppText variant="helper" color="muted" style={styles.formCardDescription}>{t('createFarmAddUnitsIdenticalDescription')}</AppText>
 
         <FieldLabel label={t('createFarmUnitTypeLabel')} required />
         <View style={styles.chipRow}>
@@ -855,29 +844,26 @@ export default function CreateFarmScreen({ navigation }: Props) {
           ))}
         </View>
         {bulkUnitErrors.unit_type ? (
-          <Text style={styles.inlineError}>{t(bulkUnitErrors.unit_type)}</Text>
+          <AppText variant="helper" color="error" style={styles.inlineError}>{t(bulkUnitErrors.unit_type)}</AppText>
         ) : !bulkUnitDraft.unit_type ? (
-          <Text style={styles.unitTypeHint}>{t('createFarmNoUnitTypeSelected')}</Text>
+          <AppText variant="helper" color="muted" style={styles.unitTypeHint}>{t('createFarmNoUnitTypeSelected')}</AppText>
         ) : null}
 
         <FieldLabel label={t('createFarmBulkUnitCountLabel')} required />
-        <SetupTextField
-          style={[styles.input, bulkUnitErrors.count && styles.inputError]}
+        <TextField
+          error={bulkUnitErrors.count ? t(bulkUnitErrors.count) : undefined}
           keyboardType="numeric"
           placeholder={t('createFarmBulkUnitCountPlaceholder')}
-          placeholderTextColor={AQUACARE_COLORS.GRAY_LIGHT}
           value={bulkUnitDraft.count}
           onChangeText={(value) =>
             setBulkUnitDraft((prev) => ({ ...prev, count: sanitizePositiveIntegerInput(value) }))
           }
         />
-        {bulkUnitErrors.count && <Text style={styles.inlineError}>{t(bulkUnitErrors.count)}</Text>}
+        {bulkUnitErrors.count && <AppText variant="helper" color="error" style={styles.inlineError}>{t(bulkUnitErrors.count)}</AppText>}
 
         <FieldLabel label={t('createFarmUnitBaseNameLabel')} />
-        <SetupTextField
-          style={styles.input}
+        <TextField
           placeholder={t('createFarmUnitBaseNamePlaceholder')}
-          placeholderTextColor={AQUACARE_COLORS.GRAY_LIGHT}
           value={bulkUnitDraft.base_name}
           onChangeText={(value) => setBulkUnitDraft((prev) => ({ ...prev, base_name: value }))}
         />
@@ -886,35 +872,33 @@ export default function CreateFarmScreen({ navigation }: Props) {
           bulkDraftUsesSurface ? (
             <>
               <FieldLabel label={t('createFarmUnitSurfaceLabel')} required />
-              <SetupTextField
-                style={[styles.input, bulkUnitErrors.surface_m2 && styles.inputError]}
+              <TextField
+                error={bulkUnitErrors.surface_m2 ? t(bulkUnitErrors.surface_m2) : undefined}
                 keyboardType="numeric"
                 placeholder={t('createFarmUnitSurfacePlaceholder')}
-                placeholderTextColor={AQUACARE_COLORS.GRAY_LIGHT}
                 value={bulkUnitDraft.surface_m2}
                 onChangeText={(value) =>
                   setBulkUnitDraft((prev) => ({ ...prev, surface_m2: value }))
                 }
               />
               {bulkUnitErrors.surface_m2 && (
-                <Text style={styles.inlineError}>{t(bulkUnitErrors.surface_m2)}</Text>
+                <AppText variant="helper" color="error" style={styles.inlineError}>{t(bulkUnitErrors.surface_m2)}</AppText>
               )}
             </>
           ) : (
             <>
               <FieldLabel label={t('createFarmUnitVolumeLabel')} required />
-              <SetupTextField
-                style={[styles.input, bulkUnitErrors.volume_m3 && styles.inputError]}
+              <TextField
+                error={bulkUnitErrors.volume_m3 ? t(bulkUnitErrors.volume_m3) : undefined}
                 keyboardType="numeric"
                 placeholder={t('createFarmUnitVolumePlaceholder')}
-                placeholderTextColor={AQUACARE_COLORS.GRAY_LIGHT}
                 value={bulkUnitDraft.volume_m3}
                 onChangeText={(value) =>
                   setBulkUnitDraft((prev) => ({ ...prev, volume_m3: value }))
                 }
               />
               {bulkUnitErrors.volume_m3 && (
-                <Text style={styles.inlineError}>{t(bulkUnitErrors.volume_m3)}</Text>
+                <AppText variant="helper" color="error" style={styles.inlineError}>{t(bulkUnitErrors.volume_m3)}</AppText>
               )}
             </>
           )
@@ -936,17 +920,17 @@ export default function CreateFarmScreen({ navigation }: Props) {
               <View key={unit.local_id} style={styles.unitCard}>
                 <View style={styles.unitCardHeader}>
                   <View style={styles.unitCardHeaderText}>
-                    <Text style={styles.unitCardTitle}>{unit.name}</Text>
-                    <Text style={styles.unitCardMeta}>
+                    <AppText variant="cardTitle" style={styles.unitCardTitle}>{unit.name}</AppText>
+                    <AppText variant="helper" color="muted" style={styles.unitCardMeta}>
                       {t(getUnitTypeLabelKey(unit.unit_type))}{" "}
                       {displayDimension ? `• ${displayDimension}` : ''}
-                    </Text>
+                    </AppText>
                     {capacity !== null && (
-                      <Text style={styles.unitCardMeta}>
+                      <AppText variant="helper" color="muted" style={styles.unitCardMeta}>
                         {String(t('createFarmUnitCapacityLabel', {
                           count: formatNumber(Math.round(capacity)),
                         } as any))}
-                      </Text>
+                      </AppText>
                     )}
                   </View>
                 </View>
@@ -963,35 +947,29 @@ export default function CreateFarmScreen({ navigation }: Props) {
 
       {totalRecommendedCapacity !== null && (
         <View style={styles.capacityBadge}>
-          <Ionicons name="checkmark-circle" size={16} color={AQUACARE_COLORS.GREEN_PRIMARY} />
-          <Text style={styles.capacityText}>
+          <Ionicons name="checkmark-circle" size={16} color={colors.brand.primary} />
+          <AppText variant="helper" style={styles.capacityText}>
             {t('createFarmRecommendedCapacityLabel')} :{' '}
-            <Text style={styles.capacityValue}>
+            <AppText variant="helper" color="link" style={styles.capacityValue}>
               {formatNumber(totalRecommendedCapacity)} {t('productionUnitFingerlingsUnit')}
-            </Text>
-          </Text>
+            </AppText>
+          </AppText>
         </View>
       )}
 
       <FieldLabel label={t('createFarmFingerlingsLabel')} />
-      <SetupTextField
-        style={styles.input}
+      <TextField
         placeholder={t('createFarmFingerlingsPlaceholder')}
-        placeholderTextColor={AQUACARE_COLORS.GRAY_LIGHT}
         keyboardType="numeric"
         value={form.fingerlingsPrice}
         onChangeText={v => setField('fingerlingsPrice', v)}
       />
 
       <FieldLabel label={t('createFarmFingerlingsCountLabel')} required />
-      <SetupTextField
-        style={[
-          styles.input,
-          fingerlingsCoherence?.level === 'error' && styles.inputError,
-        ]}
+      <TextField
+        error={fingerlingsCoherence?.level === 'error' ? t('error') : undefined}
         keyboardType="numeric"
         placeholder={fingerlingsCountPlaceholder}
-        placeholderTextColor={AQUACARE_COLORS.GRAY_LIGHT}
         value={form.fingerlingsCount}
         onChangeText={v => setField('fingerlingsCount', sanitizePositiveIntegerInput(v))}
       />
@@ -1000,10 +978,11 @@ export default function CreateFarmScreen({ navigation }: Props) {
           styles.coherenceBadge,
           stockingDensityCheck.isOk ? styles.coherenceBadgeOk : styles.coherenceBadgeError,
         ]}>
-          <Text style={[
-            styles.coherenceText,
-            stockingDensityCheck.isOk ? styles.coherenceTextOk : styles.coherenceTextError,
-          ]}>
+          <AppText
+            variant="helper"
+            color={stockingDensityCheck.isOk ? 'link' : 'error'}
+            style={styles.coherenceText}
+          >
             {stockingDensityCheck.isOk
               ? t('createFarmStockingDensityOk', {
                   density: formatNumber(Math.round(stockingDensityCheck.density)),
@@ -1015,7 +994,7 @@ export default function CreateFarmScreen({ navigation }: Props) {
                   max: formatNumber(stockingDensityCheck.max),
                 })
             }
-          </Text>
+          </AppText>
         </View>
       )}
       {fingerlingsCoherence && (
@@ -1025,12 +1004,11 @@ export default function CreateFarmScreen({ navigation }: Props) {
           fingerlingsCapacityStatus?.level === 'warn' && styles.coherenceBadgeWarn,
           fingerlingsCapacityStatus?.level === 'error' && styles.coherenceBadgeError,
         ]}>
-          <Text style={[
-            styles.coherenceText,
-            fingerlingsCapacityStatus?.level === 'ok' && styles.coherenceTextOk,
-            fingerlingsCapacityStatus?.level === 'warn' && styles.coherenceTextWarn,
-            fingerlingsCapacityStatus?.level === 'error' && styles.coherenceTextError,
-          ]}>
+          <AppText
+            variant="helper"
+            style={styles.coherenceText}
+            color={fingerlingsCapacityStatus?.level === 'error' ? 'error' : fingerlingsCapacityStatus?.level === 'ok' ? 'link' : 'secondary'}
+          >
             {fingerlingsCapacityStatus
               ? t(
                   fingerlingsCapacityStatus.key,
@@ -1039,7 +1017,7 @@ export default function CreateFarmScreen({ navigation }: Props) {
                     : {}
                 )
               : t('createFarmCapacityConsistent')}
-          </Text>
+          </AppText>
         </View>
       )}
 
@@ -1049,16 +1027,16 @@ export default function CreateFarmScreen({ navigation }: Props) {
             label={t('createFarmProductionUnitAllocationSectionTitle')}
             icon="layers-outline"
           />
-          <Text style={styles.sectionDescription}>
+          <AppText variant="helper" color="muted" style={styles.sectionDescription}>
             {t('createFarmProductionUnitAllocationSectionDescription')}
-          </Text>
+          </AppText>
 
           {allocationValidation?.global_error && (
             <View style={styles.allocationNoticeBadge}>
-              <Ionicons name="alert-circle-outline" size={16} color={AQUACARE_COLORS.ERROR} />
-              <Text style={styles.allocationNoticeText}>
+              <Ionicons name="alert-circle-outline" size={16} color={colors.status.error} />
+              <AppText variant="helper" color="error" style={styles.allocationNoticeText}>
                 {t(allocationValidation.global_error)}
-              </Text>
+              </AppText>
             </View>
           )}
 
@@ -1087,19 +1065,19 @@ export default function CreateFarmScreen({ navigation }: Props) {
                 <View key={unit.local_id} style={styles.allocationUnitCard}>
                   <View style={styles.unitCardHeader}>
                     <View style={styles.unitCardHeaderText}>
-                      <Text style={styles.unitCardTitle}>{unit.name}</Text>
-                      <Text style={styles.unitCardMeta}>
+                      <AppText variant="cardTitle" style={styles.unitCardTitle}>{unit.name}</AppText>
+                      <AppText variant="helper" color="muted" style={styles.unitCardMeta}>
                         {t(getUnitTypeLabelKey(unit.unit_type))}{" "}
                         {getProductionUnitDisplayDimension(unit)
                           ? `• ${getProductionUnitDisplayDimension(unit)}`
                           : ''}
-                      </Text>
-                      <Text style={styles.unitCardMeta}>
+                      </AppText>
+                      <AppText variant="helper" color="muted" style={styles.unitCardMeta}>
                         {t('createFarmProductionUnitRecommendedCapacityLabel')} :{' '}
                         {status.recommended_capacity !== null
                           ? `${formatNumber(Math.round(status.recommended_capacity))} ${t('productionUnitFingerlingsUnit')}`
                           : '—'}
-                      </Text>
+                      </AppText>
                     </View>
                   </View>
 
@@ -1107,33 +1085,32 @@ export default function CreateFarmScreen({ navigation }: Props) {
                     label={t('createFarmProductionUnitAssignedFishLabel')}
                     required
                   />
-                  <SetupTextField
-                    style={[styles.input, allocationError && styles.inputError]}
+                  <TextField
+                    error={allocationError ? t(allocationError) : undefined}
                     keyboardType="numeric"
                     placeholder={t('createFarmProductionUnitAssignedFishPlaceholder')}
-                    placeholderTextColor={AQUACARE_COLORS.GRAY_LIGHT}
                     value={allocationValue}
                     onChangeText={(value) =>
                       handleAllocationChange(unit.local_id, sanitizePositiveIntegerInput(value))
                     }
                   />
                   {allocationError && (
-                    <Text style={styles.inlineError}>{t(allocationError)}</Text>
+                    <AppText variant="helper" color="error" style={styles.inlineError}>{t(allocationError)}</AppText>
                   )}
 
                   <View style={styles.allocationMetrics}>
-                    <Text style={styles.allocationMetric}>
+                    <AppText variant="helper" color="muted" style={styles.allocationMetric}>
                       {t('createFarmProductionUnitDensityLabel')} :{' '}
                       {status.density !== null && allocationDensityLabel
                         ? `${formatNumber(status.density)} ${allocationDensityLabel}`
                         : '—'}
-                    </Text>
-                    <Text style={styles.allocationMetric}>
+                    </AppText>
+                    <AppText variant="helper" color="muted" style={styles.allocationMetric}>
                       {t('createFarmProductionUnitEstimatedProductionLabel')} :{' '}
                       {status.estimated_production_kg !== null
                         ? `${formatKgEstimate(status.estimated_production_kg)} kg`
                         : '—'}
-                    </Text>
+                    </AppText>
                   </View>
                 </View>
               );
@@ -1143,9 +1120,8 @@ export default function CreateFarmScreen({ navigation }: Props) {
       )}
 
       <FieldLabel label={t('createFarmCycleProductionLabel')} />
-      <SetupTextField
+      <TextField
         testID="createFarmCycleProductionPreview"
-        style={[styles.input, styles.readonlyInput]}
         editable={false}
         selectTextOnFocus={false}
         value={
@@ -1155,24 +1131,21 @@ export default function CreateFarmScreen({ navigation }: Props) {
         }
         numberOfLines={1}
       />
-      <Text style={styles.readonlyHelper}>{t('createFarmCycleProductionHelper')}</Text>
+      <AppText variant="helper" color="muted" style={styles.readonlyHelper}>{t('createFarmCycleProductionHelper')}</AppText>
 
       <FieldLabel label={t('createFarmStartDateLabel')} />
-      <SetupTextField
-        style={styles.input}
+      <TextField
         placeholder={t('createFarmStartDatePlaceholder')}
-        placeholderTextColor={AQUACARE_COLORS.GRAY_LIGHT}
         value={form.startDate}
         onChangeText={v => setField('startDate', v)}
       />
 
       <FieldLabel label={t('createFarmCycleDurationLabel')} required />
-      <SetupTextField
+      <TextField
         testID="createFarmCycleDurationInput"
-        style={[styles.input, cycleDurationErrorKey && styles.inputError]}
+        error={cycleDurationErrorKey ? t(cycleDurationErrorKey === 'required' ? 'required' : cycleDurationErrorKey) : undefined}
         keyboardType="number-pad"
         placeholder={t(form.species === 'clarias' ? 'createFarmCycleDurationClariasPlaceholder' : 'createFarmCycleDurationTilapiaPlaceholder')}
-        placeholderTextColor={AQUACARE_COLORS.GRAY_LIGHT}
         value={form.cycleDuration}
         onChangeText={v => setField('cycleDuration', sanitizePositiveIntegerInput(v))}
         accessibilityLabel={t('createFarmCycleDurationLabel')}
@@ -1181,43 +1154,37 @@ export default function CreateFarmScreen({ navigation }: Props) {
           text: cycleDurationAccessibilityText,
         }}
         accessibilityState={
-          { invalid: Boolean(cycleDurationErrorKey) } as unknown as TextInputProps['accessibilityState']
+          { invalid: Boolean(cycleDurationErrorKey) } as AccessibilityState
         }
         accessibilityLiveRegion="polite"
       />
-      <Text style={styles.readonlyHelper}>{t('createFarmCycleDurationHint')}</Text>
+      <AppText variant="helper" color="muted" style={styles.readonlyHelper}>{t('createFarmCycleDurationHint')}</AppText>
       {cycleDurationErrorKey && (
-        <Text style={styles.inlineError} accessibilityLiveRegion="polite">
+        <AppText variant="helper" color="error" style={styles.inlineError} accessibilityLiveRegion="polite">
           {t(cycleDurationErrorKey === 'required' ? 'required' : cycleDurationErrorKey)}
-        </Text>
+        </AppText>
       )}
 
       <FieldLabel label={t('createFarmSellingPriceLabel')} />
-      <SetupTextField
-        style={styles.input}
+      <TextField
         keyboardType="numeric"
         placeholder={t('createFarmSellingPricePlaceholder')}
-        placeholderTextColor={AQUACARE_COLORS.GRAY_LIGHT}
         value={form.sellingPrice}
         onChangeText={v => setField('sellingPrice', v)}
       />
 
       <FieldLabel label={t('createFarmHarvestWeightLabel')} />
-      <SetupTextField
-        style={styles.input}
+      <TextField
         keyboardType="numeric"
         placeholder={t('createFarmHarvestWeightPlaceholder')}
-        placeholderTextColor={AQUACARE_COLORS.GRAY_LIGHT}
         value={form.harvestWeight}
         onChangeText={v => setField('harvestWeight', v)}
       />
 
       <FieldLabel label={t('createFarmSurvivalRateLabel')} />
-      <SetupTextField
-        style={styles.input}
+      <TextField
         keyboardType="numeric"
         placeholder={t('createFarmSurvivalRatePlaceholder')}
-        placeholderTextColor={AQUACARE_COLORS.GRAY_LIGHT}
         value={form.survivalRate}
         onChangeText={v => setField('survivalRate', v)}
       />
@@ -1294,7 +1261,7 @@ function Chip({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: AQUACARE_COLORS.CREAM,
+    backgroundColor: colors.surface.page,
   },
   content: {
     padding: 16,
@@ -1326,23 +1293,6 @@ const styles = StyleSheet.create({
     marginTop: spacing[3],
     backgroundColor: colors.brand.primary,
   },
-  header: {
-    alignItems: 'center',
-    paddingVertical: 24,
-    gap: 8,
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: AQUACARE_COLORS.GRAY_DARK,
-    textAlign: 'center',
-  },
-  subtitle: {
-    fontSize: 14,
-    color: AQUACARE_COLORS.GRAY_LIGHT,
-    textAlign: 'center',
-    lineHeight: 20,
-  },
   sectionTitle: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1350,19 +1300,14 @@ const styles = StyleSheet.create({
     marginTop: 24,
     marginBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
+    borderBottomColor: colors.border.subtle,
     paddingBottom: 8,
-  },
-  sectionTitleText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: AQUACARE_COLORS.GREEN_DARK,
   },
   sectionDescription: {
     marginBottom: 12,
     fontSize: 13,
     lineHeight: 18,
-    color: AQUACARE_COLORS.GRAY_LIGHT,
+    color: colors.text.muted,
   },
   noticeBadge: {
     flexDirection: 'row',
@@ -1372,78 +1317,41 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderRadius: 10,
-    backgroundColor: '#fffbeb',
+    backgroundColor: colors.status.warningSurface,
     borderLeftWidth: 3,
-    borderLeftColor: AQUACARE_COLORS.WARNING,
+    borderLeftColor: colors.status.warning,
   },
   noticeText: {
     flex: 1,
     fontSize: 13,
     lineHeight: 18,
-    color: '#92400e',
+    color: colors.text.secondary,
   },
   formCard: {
     marginBottom: 16,
     padding: 14,
     borderRadius: 16,
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface.card,
     borderWidth: 1,
-    borderColor: '#dbe4ee',
+    borderColor: colors.border.subtle,
   },
   formCardTitle: {
     fontSize: 15,
     fontWeight: '700',
-    color: AQUACARE_COLORS.GRAY_DARK,
+    color: colors.text.primary,
   },
   formCardDescription: {
     marginTop: 4,
     marginBottom: 8,
     fontSize: 12,
     lineHeight: 17,
-    color: AQUACARE_COLORS.GRAY_LIGHT,
+    color: colors.text.muted,
   },
   inlineError: {
     marginTop: 6,
     fontSize: 12,
     lineHeight: 16,
-    color: AQUACARE_COLORS.ERROR,
-  },
-  primaryMiniBtn: {
-    marginTop: 14,
-    borderRadius: 12,
-    backgroundColor: AQUACARE_COLORS.GREEN_PRIMARY,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  primaryMiniBtnText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  secondaryMiniBtn: {
-    marginTop: 14,
-    borderRadius: 12,
-    backgroundColor: '#ecfdf5',
-    paddingVertical: 12,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: AQUACARE_COLORS.GREEN_PRIMARY,
-  },
-  secondaryMiniBtnText: {
-    color: AQUACARE_COLORS.GREEN_PRIMARY,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  linkBtn: {
-    marginTop: 8,
-    alignSelf: 'center',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-  },
-  linkBtnText: {
-    color: AQUACARE_COLORS.GREEN_PRIMARY,
-    fontSize: 13,
-    fontWeight: '600',
+    color: colors.status.error,
   },
   unitsList: {
     gap: 12,
@@ -1451,9 +1359,9 @@ const styles = StyleSheet.create({
   },
   unitCard: {
     borderRadius: 16,
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface.card,
     borderWidth: 1,
-    borderColor: '#dbe4ee',
+    borderColor: colors.border.subtle,
     padding: 14,
   },
   unitCardHeader: {
@@ -1468,49 +1376,28 @@ const styles = StyleSheet.create({
   unitCardTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: AQUACARE_COLORS.GRAY_DARK,
+    color: colors.text.primary,
   },
   unitCardMeta: {
     fontSize: 12,
     lineHeight: 16,
-    color: AQUACARE_COLORS.GRAY_LIGHT,
+    color: colors.text.muted,
   },
   unitTypeHint: {
     marginTop: 8,
     fontSize: 12,
     lineHeight: 16,
-    color: AQUACARE_COLORS.GRAY_LIGHT,
+    color: colors.text.muted,
   },
   unitCardActions: {
     flexDirection: 'row',
     gap: 10,
     marginTop: 14,
   },
-  unitActionBtn: {
-    flex: 1,
-    borderRadius: 10,
-    paddingVertical: 10,
-    alignItems: 'center',
-    backgroundColor: '#ecfdf5',
-    borderWidth: 1,
-    borderColor: AQUACARE_COLORS.GREEN_PRIMARY,
-  },
-  unitDeleteBtn: {
-    backgroundColor: '#fef2f2',
-    borderColor: AQUACARE_COLORS.ERROR,
-  },
-  unitActionBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: AQUACARE_COLORS.GREEN_PRIMARY,
-  },
-  unitDeleteBtnText: {
-    color: AQUACARE_COLORS.ERROR,
-  },
   fieldLabel: {
     fontSize: 14,
     fontWeight: '500',
-    color: AQUACARE_COLORS.GRAY_DARK,
+    color: colors.text.primary,
     marginBottom: 6,
     marginTop: 12,
   },
@@ -1519,38 +1406,6 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 8,
     marginBottom: 4,
-  },
-  chip: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1.5,
-    borderColor: '#cbd5e1',
-    backgroundColor: '#fff',
-  },
-  chipSelected: {
-    borderColor: AQUACARE_COLORS.GREEN_PRIMARY,
-    backgroundColor: '#ecfdf5',
-  },
-  chipText: {
-    fontSize: 13,
-    color: AQUACARE_COLORS.GRAY_LIGHT,
-    fontWeight: '500',
-  },
-  chipTextSelected: {
-    color: AQUACARE_COLORS.GREEN_PRIMARY,
-    fontWeight: '600',
-  },
-  input: {
-    ...sharedTextInputStyles.base,
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#cbd5e1',
-    borderRadius: 8,
-    color: AQUACARE_COLORS.GRAY_DARK,
-  },
-  inputError: {
-    borderColor: AQUACARE_COLORS.ERROR,
   },
   formActions: {
     gap: spacing[2],
@@ -1564,48 +1419,38 @@ const styles = StyleSheet.create({
     borderLeftWidth: 3,
   },
   coherenceBadgeOk: {
-    backgroundColor: '#ecfdf5',
-    borderLeftColor: AQUACARE_COLORS.GREEN_PRIMARY,
+    backgroundColor: colors.status.successSurface,
+    borderLeftColor: colors.brand.primary,
   },
   coherenceBadgeWarn: {
-    backgroundColor: '#fffbeb',
-    borderLeftColor: AQUACARE_COLORS.WARNING,
+    backgroundColor: colors.status.warningSurface,
+    borderLeftColor: colors.status.warning,
   },
   coherenceBadgeError: {
-    backgroundColor: '#fef2f2',
-    borderLeftColor: AQUACARE_COLORS.ERROR,
+    backgroundColor: colors.status.errorSurface,
+    borderLeftColor: colors.status.error,
   },
   coherenceText: {
     fontSize: 12,
     lineHeight: 17,
-  },
-  coherenceTextOk: {
-    color: AQUACARE_COLORS.GREEN_DARK,
-  },
-  coherenceTextWarn: {
-    color: '#92400e',
-  },
-  coherenceTextError: {
-    color: AQUACARE_COLORS.ERROR,
-    fontWeight: '600',
   },
   capacityBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     marginTop: 8,
-    backgroundColor: '#ecfdf5',
+    backgroundColor: colors.status.successSurface,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 8,
   },
   capacityText: {
     fontSize: 13,
-    color: AQUACARE_COLORS.GRAY_DARK,
+    color: colors.text.primary,
   },
   capacityValue: {
     fontWeight: '700',
-    color: AQUACARE_COLORS.GREEN_PRIMARY,
+    color: colors.brand.primary,
   },
   allocationNoticeBadge: {
     flexDirection: 'row',
@@ -1615,15 +1460,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderRadius: 10,
-    backgroundColor: '#fef2f2',
+    backgroundColor: colors.status.errorSurface,
     borderLeftWidth: 3,
-    borderLeftColor: AQUACARE_COLORS.ERROR,
+    borderLeftColor: colors.status.error,
   },
   allocationNoticeText: {
     flex: 1,
     fontSize: 13,
     lineHeight: 18,
-    color: '#991b1b',
+    color: colors.status.error,
   },
   allocationUnitsList: {
     gap: 12,
@@ -1631,9 +1476,9 @@ const styles = StyleSheet.create({
   },
   allocationUnitCard: {
     borderRadius: 16,
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface.card,
     borderWidth: 1,
-    borderColor: '#dbe4ee',
+    borderColor: colors.border.subtle,
     padding: 14,
   },
   allocationMetrics: {
@@ -1643,34 +1488,13 @@ const styles = StyleSheet.create({
   allocationMetric: {
     fontSize: 12,
     lineHeight: 17,
-    color: AQUACARE_COLORS.GRAY_LIGHT,
-  },
-  readonlyInput: {
-    backgroundColor: '#f8fafc',
-    color: AQUACARE_COLORS.GRAY_DARK,
-    borderColor: '#dbe4ee',
+    color: colors.text.muted,
   },
   readonlyHelper: {
     marginTop: 6,
     marginBottom: 4,
     fontSize: 12,
-    color: AQUACARE_COLORS.GRAY_LIGHT,
+    color: colors.text.muted,
     lineHeight: 17,
-  },
-  ctaBtn: {
-    backgroundColor: AQUACARE_COLORS.GREEN_PRIMARY,
-    borderRadius: 12,
-    paddingVertical: 16,
-    alignItems: 'center',
-    marginTop: 32,
-  },
-  ctaBtnDisabled: {
-    opacity: 0.6,
-  },
-  ctaBtnText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '700',
-    letterSpacing: 0.3,
   },
 });
