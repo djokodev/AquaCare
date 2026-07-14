@@ -13,7 +13,7 @@ import { formatAquacultureErrorWithAction } from '@/features/aquaculture/utils/a
 import { formatDate, formatDateTime } from '@/utils';
 import { RootState } from '@/store/store';
 import logger from '@/utils/logger';
-import { AppHeader, AppText, Button, Card, EmptyState, ErrorState, InlineAlert, LoadingState, SelectableCard, SegmentedControl, Screen } from '@/components/ui';
+import { AppHeader, AppText, Button, Card, EmptyState, ErrorState, IconButton, InlineAlert, LoadingState, SelectableCard, SegmentedControl, Screen } from '@/components/ui';
 import { colors, spacing } from '@/theme';
 
 type ReportsScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Reports'>;
@@ -310,9 +310,10 @@ export default function ReportsScreen({ navigation, route }: ReportsScreenProps)
   };
 
   const renderScopeSelector = () => (
-    <Card variant="outlined">
+    <Card variant="outlined" style={styles.scopeCard}>
       <AppText variant="sectionTitle" style={{ marginBottom: spacing[3] }}>{t('reportScope')}</AppText>
       <SelectableCard
+        style={styles.scopeOption}
         layout="row"
         selected={reportScope === 'cycle'}
         primaryBorder={reportScope === 'cycle'}
@@ -336,6 +337,7 @@ export default function ReportsScreen({ navigation, route }: ReportsScreenProps)
         return (
           <SelectableCard
             key={allocation.id}
+            style={styles.scopeOption}
             selected={isSelected}
             primaryBorder={isSelected}
             layout="row"
@@ -365,12 +367,12 @@ export default function ReportsScreen({ navigation, route }: ReportsScreenProps)
   const renderReportItem = useCallback(
     ({ item: report }: { item: ProductionReport }) => (
       <SelectableCard
-        style={{ marginHorizontal: spacing[4], marginBottom: spacing[3] }}
+        style={styles.reportCard}
         accessibilityLabel={t('openReportDetails')}
         onPress={() => navigation.navigate('ReportDetail', { reportId: report.id })}
       >
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <View style={{ flex: 1, marginRight: spacing[3] }}>
+        <View style={styles.reportTopRow}>
+          <View style={styles.reportIdentity}>
             <AppText variant="label">
             {report.report_type === 'daily'
               ? t('reportTypeDaily')
@@ -389,36 +391,30 @@ export default function ReportsScreen({ navigation, route }: ReportsScreenProps)
               })()}
             </AppText>
           </View>
-          <View style={{ alignItems: 'flex-end', gap: spacing[1] }}>
-            <AppText variant="caption" color={report.status === 'validated' ? 'link' : report.status === 'pending' ? 'warning' : 'muted'}>
-              {getStatusLabel(report.status)}
-            </AppText>
-            <AppText variant="body" color="link">›</AppText>
-            <Button
-              variant="ghost"
-              size="small"
-              fullWidth={false}
-              label={t('reportDeleteAction')}
+          <View style={styles.reportStatusColumn}>
+            <AppText variant="label" color={report.status === 'validated' ? 'link' : report.status === 'pending' ? 'warning' : 'muted'}>{getStatusLabel(report.status)}</AppText>
+            <IconButton
+              icon="trash-outline"
+              variant="danger"
+              accessibilityLabel={t('reportDeleteAction')}
               onPress={() => handleDeleteReport(report)}
             />
           </View>
         </View>
 
-        <View style={{ marginTop: spacing[3], paddingTop: spacing[3], borderTopWidth: 1, borderTopColor: colors.border.subtle, flexDirection: 'row', justifyContent: 'space-between' }}>
-          <AppText variant="caption" color="muted">{t('openReportDetails')}</AppText>
-          <AppText variant="caption" color="link">→</AppText>
+        <View style={styles.reportDetailsRow}>
+          <View style={{ flex: 1 }}>
+            <AppText variant="label" color="link">{t('openReportDetails')}</AppText>
+            {report.generated_at && <AppText variant="caption" color="muted" style={{ marginTop: spacing[1] }}>{formatDateTime(report.generated_at, reportLocale)}</AppText>}
+          </View>
+          <AppText variant="body" color="link">→</AppText>
         </View>
 
-        {report.generated_at && (
-          <AppText variant="caption" color="muted" style={{ marginTop: spacing[1] }}>
-            {formatDateTime(report.generated_at, reportLocale)}
-          </AppText>
-        )}
         <AppText variant="caption" color="muted" style={{ marginTop: spacing[1] }}>
           {t('reportPeriodLabel')}: {formatReportPeriod(report)}
         </AppText>
 
-        <View style={{ flexDirection: 'row', marginTop: spacing[2], gap: spacing[4] }}>
+        <View style={styles.deliveryStatusRow}>
           <AppText variant="caption" color="muted">
             {t('email')}: {report.email_status === 'sent' ? t('sent') : report.email_status === 'failed' ? t('failed') : t('notSent')}
           </AppText>
@@ -519,4 +515,12 @@ const styles = StyleSheet.create({
   stateScreen: { justifyContent: 'center' },
   listScreen: { padding: 0 },
   listContent: { paddingBottom: spacing[4] },
+  scopeCard: { gap: spacing[2] },
+  scopeOption: { marginBottom: spacing[2] },
+  reportCard: { marginHorizontal: spacing[4], marginBottom: spacing[3], gap: spacing[2] },
+  reportTopRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing[3] },
+  reportIdentity: { flex: 1 },
+  reportStatusColumn: { alignItems: 'flex-end', gap: spacing[2] },
+  reportDetailsRow: { marginTop: spacing[2], paddingTop: spacing[3], borderTopWidth: 1, borderTopColor: colors.border.subtle, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing[3] },
+  deliveryStatusRow: { flexDirection: 'row', marginTop: spacing[2], justifyContent: 'space-between', gap: spacing[2] },
 });

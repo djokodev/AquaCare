@@ -356,17 +356,15 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
                 keyboardType="numeric"
               />
             </View>
-
-            <View style={{ flex: 1 }}>
-              <TextField
-                label={t('dissolvedOxygen')}
-                value={formData.dissolved_oxygen}
-                onChangeText={(value) => setFormData((prev) => ({ ...prev, dissolved_oxygen: value }))}
-                placeholder={t('dissolvedOxygenPlaceholder')}
-                keyboardType="numeric"
-              />
-            </View>
           </View>
+
+          <TextField
+            label={t('dissolvedOxygen')}
+            value={formData.dissolved_oxygen}
+            onChangeText={(value) => setFormData((prev) => ({ ...prev, dissolved_oxygen: value }))}
+            placeholder={t('dissolvedOxygenPlaceholder')}
+            keyboardType="numeric"
+          />
 
           <View style={{ flexDirection: 'row', gap: spacing[3] }}>
             <View style={{ flex: 1 }}>

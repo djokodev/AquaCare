@@ -21,7 +21,7 @@ import { formatDate } from '@/utils';
 import logger from '@/utils/logger';
 import { parseApiError } from '@/utils/errorParser';
 import { formatAquacultureErrorWithAction } from '@/features/aquaculture/utils/aquacultureErrorPresenter';
-import { AppHeader, AppText, Badge, Button, Card, Divider, EmptyState, ErrorState, InlineAlert, LoadingState, Screen } from '@/components/ui';
+import { AppHeader, AppText, Badge, Button, Card, Divider, EmptyState, ErrorState, LoadingState, Screen } from '@/components/ui';
 import { colors, spacing } from '@/theme';
 
 type ReportDetailScreenNavigationProp = StackNavigationProp<RootStackParamList, 'ReportDetail'>;
@@ -360,36 +360,37 @@ export default function ReportDetailScreen({ navigation, route }: ReportDetailSc
           </Card>) : <EmptyState message={t('noUnitSanitaryLogs')} compact />}
         </Card> : null}
         <Card style={styles.sectionCard}>
-          <InlineAlert tone="info" message={t('actions')} />
-          <Button
-            variant="outline"
-            label={t('regenerateReport')}
-            onPress={() => report && runAction('regenerate', () => aquacultureService.regenerateReport(report.id))}
-            disabled={Boolean(actionLoading)}
-            loading={actionLoading === 'regenerate'}
-            iconLeft="refresh-outline"
-          />
-          <Button
-            label={t('validateReport')}
-            onPress={() => report && runAction('validate', () => aquacultureService.validateReport(report.id))}
-            disabled={Boolean(actionLoading) || report?.status === 'validated'}
-            loading={actionLoading === 'validate'}
-            iconLeft="checkmark-done-outline"
-          />
-          <Button
-            label={t('sendByEmail')}
-            onPress={handleEmailAction}
-            disabled={Boolean(actionLoading)}
-            loading={actionLoading === 'email'}
-            iconLeft="mail-outline"
-          />
-          <Button
-            label={t('shareOnWhatsApp')}
-            onPress={handleShareWhatsApp}
-            disabled={Boolean(actionLoading)}
-            loading={actionLoading === 'whatsapp'}
-            iconLeft="logo-whatsapp"
-          />
+          <View style={styles.actionButtons}>
+            <Button
+              variant="outline"
+              label={t('regenerateReport')}
+              onPress={() => report && runAction('regenerate', () => aquacultureService.regenerateReport(report.id))}
+              disabled={Boolean(actionLoading)}
+              loading={actionLoading === 'regenerate'}
+              iconLeft="refresh-outline"
+            />
+            <Button
+              label={t('validateReport')}
+              onPress={() => report && runAction('validate', () => aquacultureService.validateReport(report.id))}
+              disabled={Boolean(actionLoading) || report?.status === 'validated'}
+              loading={actionLoading === 'validate'}
+              iconLeft="checkmark-done-outline"
+            />
+            <Button
+              label={t('sendByEmail')}
+              onPress={handleEmailAction}
+              disabled={Boolean(actionLoading)}
+              loading={actionLoading === 'email'}
+              iconLeft="mail-outline"
+            />
+            <Button
+              label={t('shareOnWhatsApp')}
+              onPress={handleShareWhatsApp}
+              disabled={Boolean(actionLoading)}
+              loading={actionLoading === 'whatsapp'}
+              iconLeft="logo-whatsapp"
+            />
+          </View>
         </Card>
       </View>;
     },
@@ -456,4 +457,5 @@ const styles = StyleSheet.create({
   metric: { width: '46%', gap: spacing[1] },
   comparisonCard: { gap: spacing[1] },
   eventCard: { gap: spacing[1], backgroundColor: colors.surface.page },
+  actionButtons: { gap: spacing[2] },
 });

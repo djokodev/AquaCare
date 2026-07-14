@@ -334,21 +334,19 @@ export default function FeedingPlanScreen({ navigation, route }: FeedingPlanScre
         <Card style={styles.planCard}>
           <View style={{ gap: spacing[4] }}>
           <AppText variant="sectionTitle" style={{ marginBottom: spacing[3] }}>{t('feedingPlans')}</AppText>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing[2] }}>
-            <View style={{ flex: 1 }}><InlineAlert tone={alarmStatus === 'active' ? 'success' : alarmStatus === 'permission_denied' ? 'error' : alarmStatus === 'error' ? 'warning' : 'info'} message={alarmStatus === 'active' ? t('alarmsStatusActive') : t('alarmsStatusPending')} /></View>
-            <Button label={generatingPlan ? t('generating') : t('generateFeedingPlanShort')} onPress={generateFeedingPlan} disabled={generatingPlan} loading={generatingPlan} iconLeft="refresh" size="small" fullWidth={false} />
-          </View>
+          <Button label={generatingPlan ? t('generating') : t('generateFeedingPlanShort')} onPress={generateFeedingPlan} disabled={generatingPlan} loading={generatingPlan} iconLeft="refresh" />
 
-          {alarmInfo && (
-            <InlineAlert tone={alarmStatus === 'active' ? 'success' : alarmStatus === 'permission_denied' ? 'error' : alarmStatus === 'error' ? 'warning' : 'info'} message={alarmInfo} />
-          )}
+          <InlineAlert
+            tone={alarmStatus === 'active' ? 'success' : alarmStatus === 'permission_denied' ? 'error' : alarmStatus === 'error' ? 'warning' : 'info'}
+            message={alarmInfo ?? (alarmStatus === 'active' ? t('alarmsStatusActive') : t('alarmsStatusPending'))}
+          />
 
           {error ? (
             <ErrorState message={error} actionLabel={t('retry')} onAction={() => void loadData('refresh')} compact />
           ) : null}
 
           {displayedFeedingPlans.length === 0 ? (
-            <EmptyState title={t('noUnitFeedingPlans')} message={t('createUnitFeedingPlan')} compact />
+            <EmptyState title={t('noUnitFeedingPlans')} compact />
           ) : (
             displayedFeedingPlans.map((plan) => {
               const recommendedFeed = formatMetricText(plan.recommended_feed_type || plan.recommended_feed);
