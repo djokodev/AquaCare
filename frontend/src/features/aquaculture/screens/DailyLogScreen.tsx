@@ -251,18 +251,22 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
 
   if (sessionScopedCycles.length === 0) {
     return (
-      <Screen style={{ alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing[5] }}>
-        <Ionicons name="fish-outline" size={64} color={colors.text.muted} />
-        <AppText variant="cardTitle" style={{ marginTop: spacing[4] }}>{t('noActiveCycles')}</AppText>
-        <AppText variant="body" color="muted" style={{ marginTop: spacing[2], marginBottom: spacing[6], textAlign: 'center' }}>{t('createCycleToStart')}</AppText>
-        <Button label={t('createCycle')} onPress={() => navigation.navigate('CreateFarm')} fullWidth={false} />
-      </Screen>
+      <View style={{ flex: 1, backgroundColor: colors.surface.page }}>
+        <AppHeader title={t('dailyLogTitle')} onBack={() => navigation.goBack()} backLabel={t('back')} />
+        <Screen style={{ alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing[5] }}>
+          <Ionicons name="fish-outline" size={64} color={colors.text.muted} />
+          <AppText variant="cardTitle" style={{ marginTop: spacing[4] }}>{t('noActiveCycles')}</AppText>
+          <AppText variant="body" color="muted" style={{ marginTop: spacing[2], marginBottom: spacing[6], textAlign: 'center' }}>{t('createCycleToStart')}</AppText>
+          <Button label={t('createCycle')} onPress={() => navigation.navigate('CreateFarm')} fullWidth={false} />
+        </Screen>
+      </View>
     );
   }
 
   return (
-    <Screen scroll>
+    <View style={{ flex: 1, backgroundColor: colors.surface.page }}>
       <AppHeader title={t('dailyLogTitle')} onBack={() => navigation.goBack()} backLabel={t('back')} />
+      <Screen scroll>
 
       <View style={{ gap: spacing[5] }}>
         {unitAllocationId ? (
@@ -460,6 +464,7 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
         estimatedBiomass={rewardData.estimatedBiomass}
         stockValue={rewardData.stockValue}
       />
-    </Screen>
+      </Screen>
+    </View>
   );
 }

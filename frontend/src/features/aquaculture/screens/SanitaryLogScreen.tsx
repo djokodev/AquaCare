@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Alert, Image } from 'react-native';
+import { View, Alert, Image, StyleSheet } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp } from '@react-navigation/native';
@@ -328,19 +328,22 @@ export default function SanitaryLogScreen({ navigation, route }: SanitaryLogScre
 
   if (sessionScopedCycles.length === 0) {
     return (
-      <Screen style={{ alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing[5] }}>
-        <Ionicons name="medical-outline" size={64} color={colors.text.muted} />
-        <AppText variant="cardTitle" style={{ marginTop: spacing[4] }}>{t('noActiveCycles')}</AppText>
-        <AppText variant="body" color="muted" style={{ marginTop: spacing[2], marginBottom: spacing[6], textAlign: 'center' }}>{t('createCycleToStart')}</AppText>
-        <Button label={t('createCycle')} onPress={() => navigation.navigate('CreateFarm')} fullWidth={false} />
-      </Screen>
+      <View style={styles.root}>
+        <AppHeader title={t('sanitaryLogTitle')} onBack={() => navigation.goBack()} backLabel={t('back')} />
+        <Screen style={styles.emptyScreen}>
+          <Ionicons name="medical-outline" size={64} color={colors.text.muted} />
+          <AppText variant="cardTitle" style={{ marginTop: spacing[4] }}>{t('noActiveCycles')}</AppText>
+          <AppText variant="body" color="muted" style={{ marginTop: spacing[2], marginBottom: spacing[6], textAlign: 'center' }}>{t('createCycleToStart')}</AppText>
+          <Button label={t('createCycle')} onPress={() => navigation.navigate('CreateFarm')} fullWidth={false} />
+        </Screen>
+      </View>
     );
   }
 
   return (
-    <Screen scroll>
+    <View style={styles.root}>
       <AppHeader title={t('sanitaryLogTitle')} onBack={() => navigation.goBack()} backLabel={t('back')} />
-
+      <Screen scroll style={styles.scrollContent}>
       <View style={{ gap: spacing[5] }}>
         <CycleSelector
           cycles={sessionScopedCycles}
@@ -363,7 +366,7 @@ export default function SanitaryLogScreen({ navigation, route }: SanitaryLogScre
             {SANITARY_EVENT_TYPES.map((type) => {
               const isSelected = formData.event_type === type.value;
               return (
-                <View key={type.value} style={{ width: '31%' }}>
+                <View key={type.value} style={{ width: '48%' }}>
                   <SelectableCard
                     testID={`sanitary-event-${type.value}`}
                     selected={isSelected}
@@ -475,6 +478,13 @@ export default function SanitaryLogScreen({ navigation, route }: SanitaryLogScre
 
         <Button label={t('save')} onPress={handleSave} disabled={saving} loading={saving} iconLeft="checkmark" />
       </View>
-    </Screen>
+      </Screen>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: colors.surface.page },
+  emptyScreen: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing[5] },
+  scrollContent: { paddingTop: spacing[4], paddingBottom: spacing[6] },
+});

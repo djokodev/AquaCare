@@ -14,9 +14,9 @@ import {
   createPartialHarvestForUnit,
 } from '@/features/aquaculture/store/aquacultureSlice';
 import { CycleUnitAllocation, PartialHarvestData, ProductionCycle } from '@/types/aquaculture';
-import { AQUACARE_COLORS as COLORS } from '@/constants/colors';
 import { getApiErrorMessage } from '@/utils/errorParser';
 import { AppText, Button, IconButton, TextField } from '@/components/ui';
+import { colors, radii, spacing } from '@/theme';
 
 type HarvestScope = 'cycle' | 'unit';
 
@@ -291,125 +291,12 @@ export default function PartialHarvestModal({
 }
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
-  },
-  container: {
-    backgroundColor: COLORS.WHITE,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 32,
-    maxHeight: '90%',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 16,
-  },
-  headerText: {
-    flex: 1,
-    paddingRight: 12,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: COLORS.GRAY_DARK,
-    flexShrink: 1,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: COLORS.GRAY_LIGHT,
-    marginTop: 2,
-    flexShrink: 1,
-  },
-  closeBtn: {
-    width: 32,
-    height: 32,
-    marginLeft: 4,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  body: {
-    flexGrow: 0,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: COLORS.CREAM,
-    padding: 10,
-    borderRadius: 8,
-    marginBottom: 16,
-  },
-  infoText: {
-    fontSize: 14,
-    color: COLORS.GRAY_DARK,
-  },
-  infoBold: {
-    fontWeight: 'bold',
-    color: COLORS.GREEN_PRIMARY,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.GRAY_DARK,
-    marginBottom: 6,
-    marginTop: 12,
-  },
-  recap: {
-    backgroundColor: COLORS.CREAM,
-    borderRadius: 12,
-    padding: 14,
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  recapTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.GREEN_PRIMARY,
-    marginBottom: 10,
-  },
-  recapRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 6,
-  },
-  recapLabel: {
-    fontSize: 14,
-    color: COLORS.GRAY_LIGHT,
-  },
-  recapValue: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.GRAY_DARK,
-  },
-  submitBtn: {
-    backgroundColor: COLORS.GREEN_PRIMARY,
-    borderRadius: 12,
-    paddingVertical: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    marginTop: 16,
-    shadowColor: COLORS.GREEN_PRIMARY,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  submitBtnDisabled: {
-    opacity: 0.6,
-  },
-  submitBtnText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.WHITE,
-  },
+  overlay: { flex: 1, backgroundColor: colors.overlay.default, justifyContent: 'flex-end' },
+  container: { backgroundColor: colors.surface.card, borderTopLeftRadius: radii.xl, borderTopRightRadius: radii.xl, padding: spacing[4], paddingBottom: spacing[5], maxHeight: '90%' },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: spacing[3] },
+  headerText: { flex: 1, paddingRight: spacing[3], gap: spacing[1] },
+  body: { flexGrow: 0 },
+  infoRow: { backgroundColor: colors.surface.page, padding: spacing[3], borderRadius: radii.md, marginBottom: spacing[4] },
+  recap: { backgroundColor: colors.surface.selected, borderRadius: radii.lg, padding: spacing[3], marginTop: spacing[3], marginBottom: spacing[2], gap: spacing[2] },
+  recapRow: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing[3] },
 });

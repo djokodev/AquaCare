@@ -3,6 +3,7 @@ import {
   Alert,
   RefreshControl,
   ScrollView,
+  StyleSheet,
   View,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
@@ -318,22 +319,23 @@ export default function FeedingPlanScreen({ navigation, route }: FeedingPlanScre
     : t('feedingPlanUnitTitleFallback');
 
   if (loading) {
-    return <Screen><AppHeader title={headerTitle} onBack={() => navigation.goBack()} backLabel={t('back')} /><LoadingState message={t('loading')} /></Screen>;
+    return <View style={styles.root}><AppHeader title={headerTitle} onBack={() => navigation.goBack()} backLabel={t('back')} /><Screen style={styles.stateScreen}><LoadingState message={t('loading')} /></Screen></View>;
   }
 
   if (!hasValidUnitContext) {
-    return <Screen><AppHeader title={headerTitle} onBack={() => navigation.goBack()} backLabel={t('back')} /><ErrorState message={t('feedingPlanUnitContextIncompleteError')} /></Screen>;
+    return <View style={styles.root}><AppHeader title={headerTitle} onBack={() => navigation.goBack()} backLabel={t('back')} /><Screen style={styles.stateScreen}><ErrorState message={t('feedingPlanUnitContextIncompleteError')} /></Screen></View>;
   }
 
   return (
-    <Screen>
+    <View style={styles.root}>
       <AppHeader title={headerTitle} onBack={() => navigation.goBack()} backLabel={t('back')} />
-
-      <ScrollView refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />} contentContainerStyle={{ gap: spacing[4] }}>
-        <Card>
+      <Screen style={styles.screenContent}>
+      <ScrollView refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />} contentContainerStyle={styles.scrollContent}>
+        <Card style={styles.planCard}>
+          <View style={{ gap: spacing[4] }}>
           <AppText variant="sectionTitle" style={{ marginBottom: spacing[3] }}>{t('feedingPlans')}</AppText>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing[2] }}>
-            <InlineAlert tone={alarmStatus === 'active' ? 'success' : alarmStatus === 'permission_denied' ? 'error' : alarmStatus === 'error' ? 'warning' : 'info'} message={alarmStatus === 'active' ? t('alarmsStatusActive') : t('alarmsStatusPending')} />
+            <View style={{ flex: 1 }}><InlineAlert tone={alarmStatus === 'active' ? 'success' : alarmStatus === 'permission_denied' ? 'error' : alarmStatus === 'error' ? 'warning' : 'info'} message={alarmStatus === 'active' ? t('alarmsStatusActive') : t('alarmsStatusPending')} /></View>
             <Button label={generatingPlan ? t('generating') : t('generateFeedingPlanShort')} onPress={generateFeedingPlan} disabled={generatingPlan} loading={generatingPlan} iconLeft="refresh" size="small" fullWidth={false} />
           </View>
 
@@ -427,8 +429,18 @@ export default function FeedingPlanScreen({ navigation, route }: FeedingPlanScre
               );
             })
           )}
+          </View>
         </Card>
       </ScrollView>
-    </Screen>
+      </Screen>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: colors.surface.page },
+  stateScreen: { justifyContent: 'center' },
+  screenContent: { padding: 0 },
+  scrollContent: { padding: spacing[4], paddingBottom: spacing[6] },
+  planCard: { gap: spacing[4] },
+});

@@ -1,18 +1,20 @@
-import React, { useEffect, useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  Modal,
-  TouchableOpacity,
-  ScrollView,
-  ActivityIndicator,
-} from 'react-native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Modal, ScrollView, StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { Ionicons } from '@expo/vector-icons';
+
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
 import { PartialHarvest, ProductionCycle } from '@/types/aquaculture';
-import { AQUACARE_COLORS as COLORS } from '@/constants/colors';
+import {
+  AppText,
+  Badge,
+  Card,
+  Divider,
+  EmptyState,
+  ErrorState,
+  IconButton,
+  LoadingState,
+} from '@/components/ui';
+import { colors, radii, spacing } from '@/theme';
 
 interface PartialHarvestHistoryModalProps {
   visible: boolean;
@@ -20,242 +22,167 @@ interface PartialHarvestHistoryModalProps {
   cycle: ProductionCycle | null;
 }
 
-export default function PartialHarvestHistoryModal({ visible, onClose, cycle }: PartialHarvestHistoryModalProps) {
+export default function PartialHarvestHistoryModal({
+  visible,
+  onClose,
+  cycle,
+}: PartialHarvestHistoryModalProps) {
   const { t } = useTranslation();
   const [harvests, setHarvests] = useState<PartialHarvest[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+
+  const loadHarvests = useCallback(async () => {
+    if (!cycle) return;
+
+    setLoading(true);
+    setLoadError(false);
+    try {
+      setHarvests(await aquacultureService.getPartialHarvests(cycle.id));
+    } catch {
+      setHarvests([]);
+      setLoadError(true);
+    } finally {
+      setLoading(false);
+    }
+  }, [cycle]);
 
   useEffect(() => {
     if (visible && cycle) {
-      setLoading(true);
-      aquacultureService.getPartialHarvests(cycle.id)
-        .then(setHarvests)
-        .catch(() => setHarvests([]))
-        .finally(() => setLoading(false));
+      void loadHarvests();
     }
-  }, [visible, cycle]);
+  }, [visible, cycle, loadHarvests]);
+
+  const totals = useMemo(() => ({
+    fish: harvests.reduce((sum, harvest) => sum + harvest.count_harvested, 0),
+    weight: harvests.reduce((sum, harvest) => sum + Number(harvest.total_weight_kg), 0),
+    revenue: harvests.reduce((sum, harvest) => sum + (harvest.estimated_revenue_fcfa || 0), 0),
+  }), [harvests]);
 
   if (!cycle) return null;
-
-  const totalFishHarvested = harvests.reduce((sum, h) => sum + h.count_harvested, 0);
-  const totalWeightKg = harvests.reduce((sum, h) => sum + Number(h.total_weight_kg), 0);
-  const totalRevenue = harvests.reduce((sum, h) => sum + (h.estimated_revenue_fcfa || 0), 0);
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.overlay}>
-        <View style={styles.container}>
+        <View style={styles.sheet}>
           <View style={styles.header}>
-            <View>
-              <Text style={styles.title}>{t('partialHarvestHistory')}</Text>
-              <Text style={styles.subtitle}>{cycle.cycle_name}</Text>
+            <View style={styles.headerText}>
+              <AppText variant="screenTitle">{t('partialHarvestHistory')}</AppText>
+              <AppText variant="body" color="muted">{cycle.cycle_name}</AppText>
             </View>
-            <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-              <Ionicons name="close" size={24} color={COLORS.GRAY_DARK} />
-            </TouchableOpacity>
+            <IconButton
+              icon="close"
+              variant="ghost"
+              accessibilityLabel={t('close')}
+              onPress={onClose}
+              testID="partial-harvest-history-close"
+            />
           </View>
 
-          {loading ? (
-            <ActivityIndicator color={COLORS.GREEN_PRIMARY} style={styles.loader} />
-          ) : harvests.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Ionicons name="receipt-outline" size={48} color={COLORS.GRAY_LIGHT} />
-              <Text style={styles.emptyText}>{t('noPartialHarvests')}</Text>
-            </View>
-          ) : (
+          {loading ? <LoadingState message={t('loading')} compact /> : null}
+          {!loading && loadError ? (
+            <ErrorState
+              message={t('aquacultureErrorRetry')}
+              actionLabel={t('retry')}
+              onAction={() => void loadHarvests()}
+              compact
+            />
+          ) : null}
+          {!loading && !loadError && harvests.length === 0 ? (
+            <EmptyState message={t('noPartialHarvests')} compact />
+          ) : null}
+          {!loading && !loadError && harvests.length > 0 ? (
             <>
-              <View style={styles.summaryRow}>
-                <View style={styles.summaryItem}>
-                  <Text style={styles.summaryValue}>{totalFishHarvested}</Text>
-                  <Text style={styles.summaryLabel}>{t('totalFishHarvested')}</Text>
-                </View>
+              <Card variant="outlined" style={styles.summary}>
+                <SummaryMetric value={String(totals.fish)} label={t('totalFishHarvested')} />
                 <View style={styles.summaryDivider} />
-                <View style={styles.summaryItem}>
-                  <Text style={styles.summaryValue}>{totalWeightKg.toFixed(1)} kg</Text>
-                  <Text style={styles.summaryLabel}>{t('totalWeight')}</Text>
-                </View>
-                {totalRevenue > 0 && (
+                <SummaryMetric value={`${totals.weight.toFixed(1)} kg`} label={t('totalWeight')} />
+                {totals.revenue > 0 ? (
                   <>
                     <View style={styles.summaryDivider} />
-                    <View style={styles.summaryItem}>
-                      <Text style={[styles.summaryValue, { color: COLORS.GREEN_PRIMARY }]}>
-                        {Math.round(totalRevenue).toLocaleString()}
-                      </Text>
-                      <Text style={styles.summaryLabel}>{t('totalRevenue')} (FCFA)</Text>
-                    </View>
+                    <SummaryMetric
+                      value={Math.round(totals.revenue).toLocaleString()}
+                      label={`${t('totalRevenue')} (FCFA)`}
+                      emphasis
+                    />
                   </>
-                )}
-              </View>
+                ) : null}
+              </Card>
 
-              <ScrollView showsVerticalScrollIndicator={false} style={styles.list}>
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.list}>
                 {harvests.map((harvest, index) => (
-                  <View key={harvest.id} style={styles.card}>
+                  <Card key={harvest.id} variant="outlined" style={styles.harvestCard}>
                     <View style={styles.cardHeader}>
-                      <View style={styles.cardBadge}>
-                        <Text style={styles.cardBadgeText}>#{harvests.length - index}</Text>
-                      </View>
-                      <Text style={styles.cardDate}>{harvest.harvest_date}</Text>
+                      <Badge label={`#${harvests.length - index}`} tone="brand" />
+                      <AppText variant="label">{harvest.harvest_date}</AppText>
                     </View>
-                    <View style={styles.cardRow}>
-                      <Text style={styles.cardLabel}>{t('countHarvested')}</Text>
-                      <Text style={styles.cardValue}>{harvest.count_harvested}</Text>
-                    </View>
-                    <View style={styles.cardRow}>
-                      <Text style={styles.cardLabel}>{t('totalHarvestedWeight')}</Text>
-                      <Text style={styles.cardValue}>{Number(harvest.total_weight_kg).toFixed(2)} kg</Text>
-                    </View>
-                    {harvest.estimated_revenue_fcfa != null && harvest.estimated_revenue_fcfa > 0 && (
-                      <View style={styles.cardRow}>
-                        <Text style={styles.cardLabel}>{t('estimatedValue')}</Text>
-                        <Text style={[styles.cardValue, { color: COLORS.GREEN_PRIMARY }]}>
-                          {Math.round(harvest.estimated_revenue_fcfa).toLocaleString()} FCFA
-                        </Text>
-                      </View>
-                    )}
-                    {harvest.notes ? (
-                      <Text style={styles.cardNotes}>{harvest.notes}</Text>
+                    <MetricRow label={t('countHarvested')} value={String(harvest.count_harvested)} />
+                    <MetricRow
+                      label={t('totalHarvestedWeight')}
+                      value={`${Number(harvest.total_weight_kg).toFixed(2)} kg`}
+                    />
+                    {harvest.estimated_revenue_fcfa != null && harvest.estimated_revenue_fcfa > 0 ? (
+                      <MetricRow
+                        label={t('estimatedValue')}
+                        value={`${Math.round(harvest.estimated_revenue_fcfa).toLocaleString()} FCFA`}
+                        emphasis
+                      />
                     ) : null}
-                  </View>
+                    {harvest.notes ? (
+                      <>
+                        <Divider />
+                        <AppText variant="helper" color="muted">{harvest.notes}</AppText>
+                      </>
+                    ) : null}
+                  </Card>
                 ))}
               </ScrollView>
             </>
-          )}
+          ) : null}
         </View>
       </View>
     </Modal>
   );
 }
 
+function SummaryMetric({ value, label, emphasis = false }: { value: string; label: string; emphasis?: boolean }) {
+  return (
+    <View style={styles.summaryMetric}>
+      <AppText variant="cardTitle" color={emphasis ? 'link' : 'primary'} style={styles.summaryValue}>{value}</AppText>
+      <AppText variant="caption" color="muted" style={styles.summaryLabel}>{label}</AppText>
+    </View>
+  );
+}
+
+function MetricRow({ label, value, emphasis = false }: { label: string; value: string; emphasis?: boolean }) {
+  return (
+    <View style={styles.metricRow}>
+      <AppText variant="helper" color="muted">{label}</AppText>
+      <AppText variant="label" color={emphasis ? 'link' : 'primary'}>{value}</AppText>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
-  },
-  container: {
-    backgroundColor: COLORS.WHITE,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 32,
+  overlay: { flex: 1, backgroundColor: colors.overlay.default, justifyContent: 'flex-end' },
+  sheet: {
+    backgroundColor: colors.surface.card,
+    borderTopLeftRadius: radii.xl,
+    borderTopRightRadius: radii.xl,
     maxHeight: '85%',
+    paddingHorizontal: spacing[4],
+    paddingTop: spacing[4],
+    paddingBottom: spacing[4],
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 16,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: COLORS.GRAY_DARK,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: COLORS.GRAY_LIGHT,
-    marginTop: 2,
-  },
-  closeBtn: {
-    padding: 4,
-  },
-  loader: {
-    marginVertical: 40,
-  },
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: 40,
-    gap: 12,
-  },
-  emptyText: {
-    fontSize: 14,
-    color: COLORS.GRAY_LIGHT,
-    textAlign: 'center',
-  },
-  summaryRow: {
-    flexDirection: 'row',
-    backgroundColor: '#f0fdf4',
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 16,
-    alignItems: 'center',
-    justifyContent: 'space-around',
-  },
-  summaryItem: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  summaryValue: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: COLORS.GRAY_DARK,
-  },
-  summaryLabel: {
-    fontSize: 11,
-    color: COLORS.GRAY_LIGHT,
-    marginTop: 2,
-    textAlign: 'center',
-  },
-  summaryDivider: {
-    width: 1,
-    height: 32,
-    backgroundColor: '#d1fae5',
-  },
-  list: {
-    flexGrow: 0,
-  },
-  card: {
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 10,
-    backgroundColor: COLORS.CREAM,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 10,
-  },
-  cardBadge: {
-    backgroundColor: COLORS.GREEN_PRIMARY,
-    borderRadius: 12,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-  },
-  cardBadgeText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: COLORS.WHITE,
-  },
-  cardDate: {
-    fontSize: 13,
-    color: COLORS.GRAY_DARK,
-    fontWeight: '500',
-  },
-  cardRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 4,
-  },
-  cardLabel: {
-    fontSize: 13,
-    color: COLORS.GRAY_LIGHT,
-  },
-  cardValue: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.GRAY_DARK,
-  },
-  cardNotes: {
-    fontSize: 12,
-    color: COLORS.GRAY_LIGHT,
-    fontStyle: 'italic',
-    marginTop: 6,
-    borderTopWidth: 1,
-    borderTopColor: '#e2e8f0',
-    paddingTop: 6,
-  },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: spacing[3] },
+  headerText: { flex: 1, gap: spacing[1] },
+  summary: { flexDirection: 'row', alignItems: 'stretch', padding: spacing[3], marginBottom: spacing[3], gap: spacing[2] },
+  summaryMetric: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  summaryDivider: { width: StyleSheet.hairlineWidth, backgroundColor: colors.border.subtle },
+  summaryValue: { textAlign: 'center' },
+  summaryLabel: { textAlign: 'center', marginTop: spacing[1] },
+  list: { gap: spacing[2], paddingBottom: spacing[2] },
+  harvestCard: { gap: spacing[2] },
+  cardHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
+  metricRow: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing[3] },
 });

@@ -49,7 +49,7 @@ export default function DailyLogDetailScreen({ navigation, route }: Props) {
   return (
     <View style={styles.root}>
       {header}
-      <Screen scroll scrollProps={{ contentContainerStyle: styles.content }}>
+      <Screen scroll style={styles.content}>
         <Card variant="outlined" style={styles.summary}>
           <AppText variant="cardTitle" color="link">{detailDate}</AppText>
           <AppText color="muted">{unitName}</AppText>

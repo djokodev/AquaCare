@@ -1,10 +1,10 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import {
   View,
-  Text,
   FlatList,
   RefreshControl,
   Alert,
+  StyleSheet,
 } from 'react-native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RouteProp, useFocusEffect } from '@react-navigation/native';
@@ -21,7 +21,8 @@ import { formatDate } from '@/utils';
 import logger from '@/utils/logger';
 import { parseApiError } from '@/utils/errorParser';
 import { formatAquacultureErrorWithAction } from '@/features/aquaculture/utils/aquacultureErrorPresenter';
-import { AppHeader, Button, Card, ErrorState, InlineAlert, LoadingState, Screen } from '@/components/ui';
+import { AppHeader, AppText, Badge, Button, Card, Divider, EmptyState, ErrorState, InlineAlert, LoadingState, Screen } from '@/components/ui';
+import { colors, spacing } from '@/theme';
 
 type ReportDetailScreenNavigationProp = StackNavigationProp<RootStackParamList, 'ReportDetail'>;
 type ReportDetailScreenRouteProp = RouteProp<RootStackParamList, 'ReportDetail'>;
@@ -307,203 +308,58 @@ export default function ReportDetailScreen({ navigation, route }: ReportDetailSc
   );
   const latestSanitaryLogs = cycles[0]?.sanitary_logs?.slice(0, 3) ?? [];
 
-  const renderCycleSection = useCallback(
-    ({ item: section, index }: { item: ReportCycleData; index: number }) => (
-      <View
-        key={section.unit?.id || section.cycle?.id || index}
-        className="mx-4 mb-3 rounded-xl border border-gray-100 bg-white p-4"
-      >
-        <Text className="text-sm font-semibold text-gray-dark">
-          {section.unit?.production_unit_name || section.cycle?.cycle_name || t('cycle')}
-        </Text>
-        <Text className="text-xs text-gray-light">
-          {section.unit?.production_unit_type_display || section.cycle?.species_display || ''}
-          {section.unit?.production_unit_dimension ? ` · ${section.unit.production_unit_dimension}` : ''}
-        </Text>
-        <Text className="text-xs text-gray-dark mt-1">
-          {t('reportEstimatedFishCount')}: {section.current_metrics?.current_count || 0} | {t('reportFeedConsumed')}:{' '}
-          {(section.period_metrics?.total_feed || 0).toFixed(2)} kg | {t('reportCumulativeMortality')}:{' '}
-          {section.period_metrics?.total_mortality || 0}
-        </Text>
-      </View>
-    ),
-    [t]
-  );
-
   const renderListHeader = useCallback(
-    () => (
-      <View className="p-4">
-        <View className="bg-white rounded-xl p-4 mb-4">
-          <Text className="text-base font-bold text-gray-dark">
-            {report?.report_type === 'daily'
-              ? t('reportTypeDaily')
-              : report?.report_type === 'weekly'
-                ? t('reportTypeWeekly')
-                : t('reportTypeMonthly')}
-          </Text>
-          <Text className="text-sm text-aquacare-primary mt-1">{scopeLabel}</Text>
-          <View className="flex-row justify-between mt-1">
-            <Text className="text-xs text-gray-light w-[48%]">
-              {report?.period_start === report?.period_end
-                ? formatDate(report?.period_start ?? '')
-                : `${formatDate(report?.period_start ?? '')} - ${formatDate(report?.period_end ?? '')}`}
-            </Text>
-            <Text className={`text-xs font-semibold w-[48%] text-right ${report?.status === 'validated' ? 'text-aquacare-primary' : report?.status === 'pending' ? 'text-warning' : 'text-gray-light'}`}>
-              {report?.status === 'validated' ? t('reportStatusValidated') : report?.status === 'pending' ? t('reportStatusPending') : t('reportStatusDraft')}
-            </Text>
-          </View>
-          <View className="flex-row justify-between mt-2">
-            <Text className="text-xs text-gray-dark w-[48%]">
-              {t('email')}: {report?.email_status === 'sent' ? t('sent') : report?.email_status === 'failed' ? t('failed') : t('notSent')}
-            </Text>
-            <Text className="text-xs text-gray-dark w-[48%] text-right">
-              {t('whatsAppLabel')}: {report?.whatsapp_status === 'shared' ? t('shared') : t('notShared')}
-            </Text>
-          </View>
-        </View>
-
-        <View className="bg-white rounded-xl p-4 mb-4">
-          <Text className="text-base font-bold text-gray-dark mb-3">
-            {scopeType === 'unit' ? t('reportSummaryUnit') : t('reportSummaryCycle')}
-          </Text>
-          <View className="flex-row flex-wrap justify-between">
-            <View className="w-[48%] mb-2">
-              <Text className="text-xs text-gray-light">
-                {scopeType === 'unit' ? t('reportUnitTitle') : t('reportCycleTitle')}
-              </Text>
-              <Text className="text-sm font-semibold text-gray-dark">
-                {summary.scope_name || summary.cycle_name || reportMetaScopeName || t('notProvided')}
-              </Text>
-            </View>
-            <View className="w-[48%] mb-2">
-              <Text className="text-xs text-gray-light">{t('reportInitialFishCount')}</Text>
-              <Text className="text-sm font-semibold text-gray-dark">{summary.initial_fish_count || 0}</Text>
-            </View>
-            <View className="w-[48%] mb-2">
-              <Text className="text-xs text-gray-light">{t('reportEstimatedFishCount')}</Text>
-              <Text className="text-sm font-semibold text-gray-dark">{summary.estimated_current_fish_count || 0}</Text>
-            </View>
-            <View className="w-[48%] mb-2">
-              <Text className="text-xs text-gray-light">{t('reportCumulativeMortality')}</Text>
-              <Text className="text-sm font-semibold text-gray-dark">{summary.total_mortality_count || 0}</Text>
-            </View>
-            <View className="w-[48%] mb-2">
-              <Text className="text-xs text-gray-light">{t('reportMortalityRate')}</Text>
-              <Text className="text-sm font-semibold text-gray-dark">
-                {summary.mortality_rate_pct !== undefined && summary.mortality_rate_pct !== null
-                  ? `${summary.mortality_rate_pct}%`
-                  : t('notProvided')}
-              </Text>
-            </View>
-            <View className="w-[48%] mb-2">
-              <Text className="text-xs text-gray-light">{t('reportFeedConsumed')}</Text>
-              <Text className="text-sm font-semibold text-gray-dark">
-                {(summary.total_feed_consumed_kg ?? summary.total_feed ?? 0).toFixed(2)} kg
-              </Text>
-            </View>
-            <View className="w-[48%] mb-2">
-              <Text className="text-xs text-gray-light">{t('reportEstimatedBiomass')}</Text>
-              <Text className="text-sm font-semibold text-gray-dark">
-                {(summary.estimated_current_biomass_kg || 0).toFixed(2)} kg
-              </Text>
-            </View>
-            <View className="w-[48%] mb-2">
-              <Text className="text-xs text-gray-light">
-                {scopeType === 'unit' ? t('reportLastAverageWeight') : t('reportUnitsTrackedToday')}
-              </Text>
-              <Text className="text-sm font-semibold text-gray-dark">
-                {scopeType === 'unit'
-                  ? (cycles[0]?.current_metrics?.current_average_weight !== null &&
-                      cycles[0]?.current_metrics?.current_average_weight !== undefined
-                      ? `${cycles[0].current_metrics.current_average_weight} g`
-                      : t('notProvided'))
-                  : (summary.units_with_today_log_count || 0)}
-              </Text>
-            </View>
-            <View className="w-[48%] mb-2">
-              <Text className="text-xs text-gray-light">
-                {scopeType === 'unit' ? t('reportActiveSanitaryEvents') : t('reportUnitsMissingToday')}
-              </Text>
-              <Text className="text-sm font-semibold text-gray-dark">
-                {scopeType === 'unit'
-                  ? (summary.active_sanitary_events_count || 0)
-                  : (summary.units_missing_today_log_count || 0)}
-              </Text>
-            </View>
-            {scopeType === 'cycle' ? (
-              <View className="w-[48%] mb-2">
-                <Text className="text-xs text-gray-light">{t('reportActiveSanitaryEvents')}</Text>
-                <Text className="text-sm font-semibold text-gray-dark">
-                  {summary.active_sanitary_events_count || 0}
-                </Text>
-              </View>
-            ) : null}
-          </View>
-        </View>
-
-        {scopeType === 'cycle' ? (
-          <View className="bg-white rounded-xl p-4 mb-4">
-            <Text className="text-base font-bold text-gray-dark mb-3">
-              {t('reportComparisonByUnit')}
-            </Text>
-            {cycles.length ? (
-              cycles.map((section, index) => renderCycleSection({ item: section, index }))
-            ) : (
-              <Text className="text-sm text-gray-light">{t('noReportDataAvailable')}</Text>
-            )}
-          </View>
-        ) : null}
-
-        {scopeType === 'cycle' && cycles.length === 0 ? (
-          <View className="bg-white rounded-xl p-4 mb-4">
-            <Text className="text-sm text-gray-dark">{t('noUnitsInThisCycle')}</Text>
-            <Text className="text-xs text-gray-light mt-1">{t('noReportDataAvailable')}</Text>
-          </View>
-        ) : null}
-
-        {scopeType === 'unit' ? (
-          <View className="bg-white rounded-xl p-4 mb-4">
-            <Text className="text-base font-bold text-gray-dark mb-3">{t('reportLatestSanitaryEvents')}</Text>
-            {latestSanitaryLogs.length ? (
-              latestSanitaryLogs.map((event) => (
-                <View key={event.id} className="mb-2 rounded-lg bg-cream p-3">
-                  <Text className="text-sm font-semibold text-gray-dark">{event.event_date}</Text>
-                  <Text className="text-xs text-gray-light mt-1">
-                    {t('reportSanitaryEventType')}: {event.event_type_display || t('sanitaryLog')}
-                  </Text>
-                  <Text className="text-xs text-gray-light">
-                    {t('reportSanitaryAffectedCount')}: {event.affected_count ?? 0}
-                  </Text>
-                  <Text className="text-xs text-gray-light">
-                    {t('reportSanitarySymptoms')}: {event.symptoms || t('notProvided')}
-                  </Text>
-                  <Text className="text-xs text-gray-light">
-                    {t('reportSanitaryTreatmentApplied')}: {event.treatment_applied || t('notProvided')}
-                  </Text>
-                  <Text className="text-xs text-gray-light">
-                    {t('reportSanitaryMedicationUsed')}: {event.medication_used || t('notProvided')}
-                  </Text>
-                  <Text className="text-xs text-gray-light">
-                    {t('reportSanitaryDosage')}: {event.dosage || t('notProvided')}
-                  </Text>
-                  <Text className="text-xs text-gray-light">
-                    {t('reportSanitaryTreatmentDuration')}: {event.treatment_duration_days ? t('daysCount', { count: event.treatment_duration_days }) : t('notProvided')}
-                  </Text>
-                  <Text className="text-xs text-gray-light">
-                    {t('reportSanitaryEventStatus')}: {event.resolved ? t('reportSanitaryEventResolved') : t('reportSanitaryEventActive')}
-                  </Text>
-                  <Text className="text-xs text-gray-light">
-                    {t('reportSanitaryObservations')}: {event.observations || t('notProvided')}
-                  </Text>
-                </View>
-              ))
-            ) : (
-              <Text className="text-sm text-gray-light">{t('noUnitSanitaryLogs')}</Text>
-            )}
-          </View>
-        ) : null}
-
-        <Card>
+    () => {
+      const reportType = report?.report_type === 'daily' ? t('reportTypeDaily') : report?.report_type === 'weekly' ? t('reportTypeWeekly') : t('reportTypeMonthly');
+      const statusLabel = report?.status === 'validated' ? t('reportStatusValidated') : report?.status === 'pending' ? t('reportStatusPending') : t('reportStatusDraft');
+      const statusTone = report?.status === 'validated' ? 'success' : report?.status === 'pending' ? 'warning' : 'neutral';
+      const metrics = [
+        [scopeType === 'unit' ? t('reportUnitTitle') : t('reportCycleTitle'), summary.scope_name || summary.cycle_name || reportMetaScopeName || t('notProvided')],
+        [t('reportInitialFishCount'), String(summary.initial_fish_count || 0)],
+        [t('reportEstimatedFishCount'), String(summary.estimated_current_fish_count || 0)],
+        [t('reportCumulativeMortality'), String(summary.total_mortality_count || 0)],
+        [t('reportMortalityRate'), summary.mortality_rate_pct != null ? `${summary.mortality_rate_pct}%` : t('notProvided')],
+        [t('reportFeedConsumed'), `${(summary.total_feed_consumed_kg ?? summary.total_feed ?? 0).toFixed(2)} kg`],
+        [t('reportEstimatedBiomass'), `${(summary.estimated_current_biomass_kg || 0).toFixed(2)} kg`],
+        [scopeType === 'unit' ? t('reportLastAverageWeight') : t('reportUnitsTrackedToday'), scopeType === 'unit' && cycles[0]?.current_metrics?.current_average_weight != null ? `${cycles[0].current_metrics.current_average_weight} g` : String(summary.units_with_today_log_count || 0)],
+        [scopeType === 'unit' ? t('reportActiveSanitaryEvents') : t('reportUnitsMissingToday'), String(scopeType === 'unit' ? summary.active_sanitary_events_count || 0 : summary.units_missing_today_log_count || 0)],
+      ];
+      return <View style={styles.headerContent}>
+        <Card variant="outlined" style={styles.sectionCard}>
+          <View style={styles.titleRow}><AppText variant="cardTitle">{reportType}</AppText><Badge label={statusLabel} tone={statusTone} /></View>
+          <AppText variant="body" color="link">{scopeLabel}</AppText>
+          <AppText variant="helper" color="muted">{report?.period_start === report?.period_end ? formatDate(report?.period_start ?? '') : `${formatDate(report?.period_start ?? '')} - ${formatDate(report?.period_end ?? '')}`}</AppText>
+          <Divider />
+          <View style={styles.statusRow}><AppText variant="helper">{t('email')}: {report?.email_status === 'sent' ? t('sent') : report?.email_status === 'failed' ? t('failed') : t('notSent')}</AppText><AppText variant="helper">{t('whatsAppLabel')}: {report?.whatsapp_status === 'shared' ? t('shared') : t('notShared')}</AppText></View>
+        </Card>
+        <Card variant="outlined" style={styles.sectionCard}>
+          <AppText variant="cardTitle">{scopeType === 'unit' ? t('reportSummaryUnit') : t('reportSummaryCycle')}</AppText>
+          <View style={styles.metricGrid}>{metrics.map(([label, value]) => <ReportMetric key={label} label={label} value={value} />)}</View>
+        </Card>
+        {scopeType === 'cycle' ? <Card variant="outlined" style={styles.sectionCard}>
+          <AppText variant="cardTitle">{t('reportComparisonByUnit')}</AppText>
+          {cycles.length ? cycles.map((section, index) => <Card key={section.unit?.id || section.cycle?.id || index} variant="outlined" style={styles.comparisonCard}>
+            <AppText variant="label">{section.unit?.production_unit_name || section.cycle?.cycle_name || t('cycle')}</AppText>
+            <AppText variant="helper" color="muted">{section.unit?.production_unit_type_display || section.cycle?.species_display || ''}{section.unit?.production_unit_dimension ? ` · ${section.unit.production_unit_dimension}` : ''}</AppText>
+            <AppText variant="helper">{t('reportEstimatedFishCount')}: {section.current_metrics?.current_count || 0} · {t('reportFeedConsumed')}: {(section.period_metrics?.total_feed || 0).toFixed(2)} kg · {t('reportCumulativeMortality')}: {section.period_metrics?.total_mortality || 0}</AppText>
+          </Card>) : <EmptyState message={t('noReportDataAvailable')} compact />}
+        </Card> : null}
+        {scopeType === 'unit' ? <Card variant="outlined" style={styles.sectionCard}>
+          <AppText variant="cardTitle">{t('reportLatestSanitaryEvents')}</AppText>
+          {latestSanitaryLogs.length ? latestSanitaryLogs.map((event) => <Card key={event.id} variant="outlined" style={styles.eventCard}>
+            <View style={styles.titleRow}><AppText variant="label">{event.event_date}</AppText><Badge label={event.resolved ? t('reportSanitaryEventResolved') : t('reportSanitaryEventActive')} tone={event.resolved ? 'success' : 'warning'} /></View>
+            <AppText variant="helper" color="muted">{t('reportSanitaryEventType')}: {event.event_type_display || t('sanitaryLog')}</AppText>
+            <AppText variant="helper" color="muted">{t('reportSanitaryAffectedCount')}: {event.affected_count ?? 0}</AppText>
+            <AppText variant="helper" color="muted">{t('reportSanitarySymptoms')}: {event.symptoms || t('notProvided')}</AppText>
+            <AppText variant="helper" color="muted">{t('reportSanitaryTreatmentApplied')}: {event.treatment_applied || t('notProvided')}</AppText>
+            <AppText variant="helper" color="muted">{t('reportSanitaryMedicationUsed')}: {event.medication_used || t('notProvided')}</AppText>
+            <AppText variant="helper" color="muted">{t('reportSanitaryDosage')}: {event.dosage || t('notProvided')}</AppText>
+            <AppText variant="helper" color="muted">{t('reportSanitaryTreatmentDuration')}: {event.treatment_duration_days ? t('daysCount', { count: event.treatment_duration_days }) : t('notProvided')}</AppText>
+            <AppText variant="helper" color="muted">{t('reportSanitaryEventStatus')}: {event.resolved ? t('reportSanitaryEventResolved') : t('reportSanitaryEventActive')}</AppText>
+            <AppText variant="helper" color="muted">{t('reportSanitaryObservations')}: {event.observations || t('notProvided')}</AppText>
+          </Card>) : <EmptyState message={t('noUnitSanitaryLogs')} compact />}
+        </Card> : null}
+        <Card style={styles.sectionCard}>
           <InlineAlert tone="info" message={t('actions')} />
           <Button
             variant="outline"
@@ -535,8 +391,8 @@ export default function ReportDetailScreen({ navigation, route }: ReportDetailSc
             iconLeft="logo-whatsapp"
           />
         </Card>
-      </View>
-    ),
+      </View>;
+    },
     [
       actionLoading,
       cycles,
@@ -550,39 +406,54 @@ export default function ReportDetailScreen({ navigation, route }: ReportDetailSc
       scopeType,
       summary,
       t,
-      renderCycleSection,
     ]
   );
 
-  const renderEmptyCycles = useCallback(
-    () => (
-      <View className="mx-4 rounded-xl bg-white p-5 items-center">
-        <Text className="text-sm text-gray-light">{t('noData')}</Text>
-      </View>
-    ),
-    [t]
-  );
-
   if (loading) {
-    return <Screen><AppHeader title={t('reportDetailTitle')} onBack={() => navigation.goBack()} backLabel={t('back')} /><LoadingState message={t('loading')} /></Screen>;
+    return <View style={styles.root}><AppHeader title={t('reportDetailTitle')} onBack={() => navigation.goBack()} backLabel={t('back')} /><Screen style={styles.stateScreen}><LoadingState message={t('loading')} /></Screen></View>;
   }
 
   if (!report) {
-    return <Screen><AppHeader title={t('reportDetailTitle')} onBack={() => navigation.goBack()} backLabel={t('back')} /><ErrorState message={error || t('reportLoadError')} /></Screen>;
+    return <View style={styles.root}><AppHeader title={t('reportDetailTitle')} onBack={() => navigation.goBack()} backLabel={t('back')} /><Screen style={styles.stateScreen}><ErrorState message={error || t('reportLoadError')} /></Screen></View>;
   }
 
   return (
-    <Screen>
+    <View style={styles.root}>
       {renderHeader()}
-
+      <Screen style={styles.listScreen}>
       <FlatList
         data={[]}
         keyExtractor={() => ''}
         renderItem={() => null}
         ListHeaderComponent={renderListHeader}
-        contentContainerStyle={{ paddingBottom: 24 }}
+        contentContainerStyle={styles.listContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       />
-    </Screen>
+      </Screen>
+    </View>
   );
 }
+
+function ReportMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.metric}>
+      <AppText variant="caption" color="muted">{label}</AppText>
+      <AppText variant="label">{value}</AppText>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: colors.surface.page },
+  stateScreen: { justifyContent: 'center' },
+  listScreen: { padding: 0 },
+  listContent: { paddingBottom: spacing[6] },
+  headerContent: { padding: spacing[4], gap: spacing[3] },
+  sectionCard: { gap: spacing[3] },
+  titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing[2] },
+  statusRow: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing[2] },
+  metricGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[3] },
+  metric: { width: '46%', gap: spacing[1] },
+  comparisonCard: { gap: spacing[1] },
+  eventCard: { gap: spacing[1], backgroundColor: colors.surface.page },
+});

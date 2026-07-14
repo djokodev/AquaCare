@@ -190,6 +190,7 @@
   reportDeleteConfirmMsg: 'This action cannot be undone.',
   reportDeleteSuccess: 'Report deleted',
   reportDeleteError: 'Error while deleting',
+  reportDeleteAction: 'Delete',
   reportTypeDaily: 'Daily report',
   reportTypeWeekly: 'Weekly report',
   reportTypeMonthly: 'Monthly report',

@@ -29,9 +29,13 @@ export function SegmentedControl<T extends string>({ value, options, onChange, d
             accessibilityState={{ selected, disabled }}
             disabled={disabled}
             onPress={() => onChange(option.value)}
-            style={({ pressed }) => [styles.option, selected && styles.selected, (pressed || disabled) && { opacity: disabled ? opacity.disabled : opacity.pressed }]}
+            style={styles.pressable}
           >
-            <AppText variant="label" color={selected ? 'inverse' : 'muted'}>{option.label}</AppText>
+            {({ pressed }) => (
+              <View style={[styles.option, selected && styles.selected, (pressed || disabled) && { opacity: disabled ? opacity.disabled : opacity.pressed }]}>
+                <AppText variant="label" color={selected ? 'inverse' : 'muted'}>{option.label}</AppText>
+              </View>
+            )}
           </Pressable>
         );
       })}
@@ -41,6 +45,7 @@ export function SegmentedControl<T extends string>({ value, options, onChange, d
 
 const styles = StyleSheet.create({
   container: { flexDirection: 'row', backgroundColor: colors.surface.page, borderRadius: radii.lg, padding: spacing[1] },
-  option: { flex: 1, minHeight: sizing.touchTargetMinimum, alignItems: 'center', justifyContent: 'center', borderRadius: radii.md, paddingHorizontal: spacing[2] },
+  pressable: { flex: 1 },
+  option: { minHeight: sizing.touchTargetMinimum, alignItems: 'center', justifyContent: 'center', borderRadius: radii.md, paddingHorizontal: spacing[2] },
   selected: { backgroundColor: colors.brand.primary },
 });

@@ -833,8 +833,10 @@ export default function CreateFarmScreen({ navigation }: Props) {
           )
         ) : null}
 
-        <Button label={editingUnitId ? t('createFarmSaveUnitBtn') : `+ ${t('createFarmAddUnitBtn')}`} onPress={handleSaveSingleUnit} />
-        <Button label={t('cancel')} variant="ghost" onPress={resetSingleUnitDraft} />
+        <View style={styles.formActions}>
+          <Button label={editingUnitId ? t('createFarmSaveUnitBtn') : `+ ${t('createFarmAddUnitBtn')}`} onPress={handleSaveSingleUnit} />
+          <Button label={t('cancel')} variant="ghost" onPress={resetSingleUnitDraft} />
+        </View>
       </View>
 
       <View style={styles.formCard}>
@@ -918,8 +920,10 @@ export default function CreateFarmScreen({ navigation }: Props) {
           )
         ) : null}
 
-        <Button label={`+ ${t('createFarmAddUnitsIdenticalBtn')}`} variant="outline" onPress={handleSaveBulkUnits} />
-        <Button label={t('cancel')} variant="ghost" onPress={resetBulkUnitDraft} />
+        <View style={styles.formActions}>
+          <Button label={`+ ${t('createFarmAddUnitsIdenticalBtn')}`} onPress={handleSaveBulkUnits} />
+          <Button label={t('cancel')} variant="ghost" onPress={resetBulkUnitDraft} />
+        </View>
       </View>
 
       <View style={styles.unitsList}>
@@ -1268,15 +1272,19 @@ function Chip({
       accessibilityLabel={label}
       accessibilityState={{ selected }}
       onPress={onPress}
-      style={({ pressed }) => [
-        styles.choiceChip,
-        selected && styles.choiceChipSelected,
-        pressed && styles.choiceChipPressed,
-      ]}
+      style={styles.choiceChipPressable}
     >
-      <AppText variant="label" color={selected ? 'inverse' : 'link'}>
-        {label}
-      </AppText>
+      {({ pressed }) => (
+        <View style={[
+          styles.choiceChip,
+          selected && styles.choiceChipSelected,
+          pressed && styles.choiceChipPressed,
+        ]}>
+          <AppText variant="label" color={selected ? 'inverse' : 'link'}>
+            {label}
+          </AppText>
+        </View>
+      )}
     </Pressable>
   );
 }
@@ -1304,6 +1312,9 @@ const styles = StyleSheet.create({
     borderRadius: radii.lg,
     backgroundColor: colors.surface.card,
     paddingHorizontal: spacing[3],
+  },
+  choiceChipPressable: {
+    alignSelf: 'flex-start',
   },
   choiceChipSelected: {
     backgroundColor: colors.brand.primary,
@@ -1540,6 +1551,10 @@ const styles = StyleSheet.create({
   },
   inputError: {
     borderColor: AQUACARE_COLORS.ERROR,
+  },
+  formActions: {
+    gap: spacing[2],
+    marginTop: spacing[3],
   },
   coherenceBadge: {
     marginTop: 6,

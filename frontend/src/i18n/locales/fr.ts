@@ -190,6 +190,7 @@ export const fr = {
   reportDeleteConfirmMsg: 'Cette action est irréversible.',
   reportDeleteSuccess: 'Rapport supprimé',
   reportDeleteError: 'Erreur lors de la suppression',
+  reportDeleteAction: 'Supprimer',
   reportTypeDaily: 'Rapport journalier',
   reportTypeWeekly: 'Rapport hebdomadaire',
   reportTypeMonthly: 'Rapport mensuel',

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, FlatList, RefreshControl, Alert } from 'react-native';
+import { View, FlatList, RefreshControl, Alert, StyleSheet } from 'react-native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RouteProp, useFocusEffect } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
@@ -398,7 +398,7 @@ export default function ReportsScreen({ navigation, route }: ReportsScreenProps)
               variant="ghost"
               size="small"
               fullWidth={false}
-              label={t('delete')}
+              label={t('reportDeleteAction')}
               onPress={() => handleDeleteReport(report)}
             />
           </View>
@@ -493,22 +493,30 @@ export default function ReportsScreen({ navigation, route }: ReportsScreenProps)
   );
 
   if (loading) {
-    return <Screen><AppHeader title={scopeTitle} onBack={() => navigation.goBack()} backLabel={t('back')} /><LoadingState message={t('loading')} /></Screen>;
+    return <View style={styles.root}><AppHeader title={scopeTitle} onBack={() => navigation.goBack()} backLabel={t('back')} /><Screen style={styles.stateScreen}><LoadingState message={t('loading')} /></Screen></View>;
   }
 
   return (
-    <Screen>
+    <View style={styles.root}>
       <AppHeader title={scopeTitle} onBack={() => navigation.goBack()} backLabel={t('back')} />
-
+      <Screen style={styles.listScreen}>
       <FlatList
         data={filteredReports}
         keyExtractor={(item) => item.id}
         renderItem={renderReportItem}
         ListHeaderComponent={renderListHeader}
         ListEmptyComponent={renderEmptyState}
-        contentContainerStyle={{ paddingBottom: 16 }}
+        contentContainerStyle={styles.listContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       />
-    </Screen>
+      </Screen>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: colors.surface.page },
+  stateScreen: { justifyContent: 'center' },
+  listScreen: { padding: 0 },
+  listContent: { paddingBottom: spacing[4] },
+});

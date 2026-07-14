@@ -1,9 +1,7 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
@@ -13,10 +11,10 @@ import { StackScreenProps } from '@react-navigation/stack';
 import { AppDispatch, RootState } from '@/store/store';
 import { createProductionCycle } from '@/features/aquaculture/store/aquacultureSlice';
 import { RootStackParamList } from '@/navigation/MainNavigator';
-import { AQUACARE_COLORS } from '@/constants/colors';
 import { parseApiError } from '@/utils/errorParser';
 import { formatAquacultureErrorWithAction } from '@/features/aquaculture/utils/aquacultureErrorPresenter';
-import { AppHeader, Button, Card, LoadingState, Screen, TextField } from '@/components/ui';
+import { AppHeader, AppText, Badge, Button, Card, InlineAlert, LoadingState, Screen, TextField } from '@/components/ui';
+import { colors, radii, spacing } from '@/theme';
 
 type Props = StackScreenProps<RootStackParamList, 'PostHarvestConsolidation'>;
 
@@ -121,7 +119,7 @@ export default function PostHarvestConsolidationScreen({ route, navigation }: Pr
   // ── Barre de progression ─────────────────────────────────────────────────────
   const progressPct = annualTargetKg > 0 ? Math.min(100, (actualProductionKg / annualTargetKg) * 100) : 0;
   const isOnTarget = actualProductionKg >= plannedPerCycleKg * 0.9;
-  const gapBadgeColor = isOnTarget ? AQUACARE_COLORS.SUCCESS : AQUACARE_COLORS.WARNING;
+  const gapBadgeTone = isOnTarget ? 'success' : 'warning';
 
   // ── Lancer le cycle suivant ──────────────────────────────────────────────────
   const handleLaunch = useCallback(async () => {
@@ -177,86 +175,78 @@ export default function PostHarvestConsolidationScreen({ route, navigation }: Pr
   ]);
 
   if (!harvestedCycle) {
-    return <Screen><LoadingState /></Screen>;
+    return <View style={styles.root}><AppHeader title={t('consolidationTitle')} onBack={() => navigation.goBack()} backLabel={t('back')} /><Screen style={styles.loading}><LoadingState /></Screen></View>;
   }
 
   return (
-    <Screen scroll>
+    <View style={styles.root}>
+      <AppHeader title={t('consolidationTitle')} onBack={() => navigation.goBack()} backLabel={t('back')} />
+      <Screen scroll style={styles.content}>
 
       {/* ── Section 1 : Bilan cycle récolté ───────────────────────────────── */}
-      <View style={styles.billingCard}>
-        <Text style={styles.sectionTitle}>
+      <Card variant="outlined" style={[styles.billingCard, { backgroundColor: colors.status.successSurface }]}>
+        <AppText variant="cardTitle">
           {t('consolidationCycle1Results', { num: harvestedThisYear })}
-        </Text>
+        </AppText>
 
         <View style={styles.comparisonRow}>
           <View style={styles.comparisonItem}>
-            <Text style={styles.comparisonLabel}>{t('consolidationPlanned')}</Text>
-            <Text style={styles.comparisonValueNeutral}>
+            <AppText variant="helper" color="muted">{t('consolidationPlanned')}</AppText>
+            <AppText variant="cardTitle">
               {plannedPerCycleKg > 0 ? `${formatKg(plannedPerCycleKg)} kg` : '—'}
-            </Text>
+            </AppText>
           </View>
-          <Ionicons name="arrow-forward" size={20} color={AQUACARE_COLORS.GRAY_LIGHT} />
+          <Ionicons name="arrow-forward" size={20} color={colors.text.muted} />
           <View style={styles.comparisonItem}>
-            <Text style={styles.comparisonLabel}>{t('consolidationActual')}</Text>
-            <Text style={[styles.comparisonValueActual, { color: gapBadgeColor }]}>
+            <AppText variant="helper" color="muted">{t('consolidationActual')}</AppText>
+            <AppText variant="cardTitle" color={isOnTarget ? 'success' : 'warning'}>
               {formatKg(actualProductionKg)} kg
-            </Text>
+            </AppText>
           </View>
         </View>
 
         <View style={styles.metricsRow}>
           {harvestedCycle.survival_rate != null && (
-            <View style={styles.metricChip}>
-              <Ionicons name="fish" size={16} color={AQUACARE_COLORS.GREEN_PRIMARY} />
-              <Text style={styles.metricChipText}>
-                {parseFloat(String(harvestedCycle.survival_rate)).toFixed(1)}% survie
-              </Text>
-            </View>
+            <Badge label={`${parseFloat(String(harvestedCycle.survival_rate)).toFixed(1)}% ${t('consolidationSurvivalLabel')}`} tone="brand" />
           )}
           {harvestedCycle.fcr != null && (
-            <View style={styles.metricChip}>
-              <Ionicons name="leaf" size={16} color={AQUACARE_COLORS.GREEN_PRIMARY} />
-              <Text style={styles.metricChipText}>
-                FCR {parseFloat(String(harvestedCycle.fcr)).toFixed(2)}
-              </Text>
-            </View>
+            <Badge label={`FCR ${parseFloat(String(harvestedCycle.fcr)).toFixed(2)}`} tone="brand" />
           )}
         </View>
-      </View>
+      </Card>
 
       {/* ── Section 2 : Progression annuelle ──────────────────────────────── */}
-      <View style={styles.progressCard}>
-        <Text style={styles.sectionTitle}>{t('consolidationAnnualProgress')}</Text>
+      <Card variant="outlined" style={styles.progressCard}>
+        <AppText variant="cardTitle">{t('consolidationAnnualProgress')}</AppText>
 
         <View style={styles.progressBar}>
           <View style={[styles.progressFill, { width: `${progressPct}%` as any }]} />
         </View>
-        <Text style={styles.progressLabel}>
+        <AppText variant="helper" color="muted">
           {formatKg(actualProductionKg)} / {formatKg(annualTargetKg)} kg
           {' '}({progressPct.toFixed(0)}%)
-        </Text>
+        </AppText>
 
         <View style={styles.remainingBadge}>
-          <Ionicons name="flag-outline" size={16} color={AQUACARE_COLORS.GREEN_DARK} />
-          <Text style={styles.remainingText}>
+          <Ionicons name="flag-outline" size={16} color={colors.text.link} />
+          <AppText variant="helper" color="link">
             {t('consolidationRemainingTarget', { kg: formatKg(remainingKg) })}
-          </Text>
+          </AppText>
         </View>
-      </View>
+      </Card>
 
       {/* ── Section 3 : Paramètres ajustés cycle suivant ──────────────────── */}
       <Card style={styles.formCard}>
-        <Text style={styles.sectionTitle}>
+        <AppText variant="cardTitle">
           {t('consolidationAdjustedParams', { num: nextCycleNum })}
-        </Text>
+        </AppText>
 
         {/* Repos inter-cycle */}
         <View style={styles.infoRow}>
-          <Ionicons name="time-outline" size={16} color={AQUACARE_COLORS.GRAY_LIGHT} />
-          <Text style={styles.infoText}>
+          <Ionicons name="time-outline" size={16} color={colors.text.muted} />
+          <AppText variant="helper" color="muted">
             {t('consolidationInterCycleRest', { days: restDays })}
-          </Text>
+          </AppText>
         </View>
 
         {/* Alevins */}
@@ -303,12 +293,12 @@ export default function PostHarvestConsolidationScreen({ route, navigation }: Pr
 
         {/* Infra en lecture seule */}
         <View style={styles.readonlyRow}>
-          <Text style={styles.readonlyLabel}>{t('infrastructureType')}</Text>
-          <Text style={styles.readonlyValue}>
+          <AppText variant="helper" color="muted">{t('infrastructureType')}</AppText>
+          <AppText variant="label">
             {harvestedCycle.pond_identifier}
             {surfaceM2 > 0 ? ` · ${surfaceM2} m²` : ''}
             {volumeM3 > 0 ? ` · ${volumeM3} m³` : ''}
-          </Text>
+          </AppText>
         </View>
       </Card>
 
@@ -328,224 +318,25 @@ export default function PostHarvestConsolidationScreen({ route, navigation }: Pr
         disabled={launching}
       />
 
-    </Screen>
+      </Screen>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: AQUACARE_COLORS.CREAM,
-  },
-  content: {
-    padding: 16,
-    paddingBottom: 40,
-  },
-  centered: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-
-  // Cards
-  billingCard: {
-    backgroundColor: '#ecfdf5',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#a7f3d0',
-  },
-  progressCard: {
-    backgroundColor: AQUACARE_COLORS.WHITE,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  formCard: {
-    backgroundColor: AQUACARE_COLORS.WHITE,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: AQUACARE_COLORS.GRAY_DARK,
-    marginBottom: 12,
-  },
-
-  // Comparison row
-  comparisonRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-around',
-    marginBottom: 12,
-  },
-  comparisonItem: {
-    alignItems: 'center',
-  },
-  comparisonLabel: {
-    fontSize: 12,
-    color: AQUACARE_COLORS.GRAY_LIGHT,
-    marginBottom: 4,
-  },
-  comparisonValueNeutral: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: AQUACARE_COLORS.GRAY_DARK,
-  },
-  comparisonValueActual: {
-    fontSize: 18,
-    fontWeight: '700',
-  },
-
-  // Metrics chips
-  metricsRow: {
-    flexDirection: 'row',
-    gap: 8,
-    flexWrap: 'wrap',
-  },
-  metricChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: AQUACARE_COLORS.WHITE,
-    borderRadius: 20,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    gap: 4,
-    borderWidth: 1,
-    borderColor: '#a7f3d0',
-  },
-  metricChipText: {
-    fontSize: 13,
-    color: AQUACARE_COLORS.GRAY_DARK,
-    fontWeight: '500',
-  },
-
-  // Progress
-  progressBar: {
-    height: 10,
-    backgroundColor: '#e2e8f0',
-    borderRadius: 5,
-    marginBottom: 6,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: AQUACARE_COLORS.GREEN_PRIMARY,
-    borderRadius: 5,
-  },
-  progressLabel: {
-    fontSize: 13,
-    color: AQUACARE_COLORS.GRAY_LIGHT,
-    marginBottom: 10,
-  },
-  remainingBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#ecfdf5',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  remainingText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: AQUACARE_COLORS.GREEN_DARK,
-  },
-
-  // Info row
-  infoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 14,
-  },
-  infoText: {
-    fontSize: 13,
-    color: AQUACARE_COLORS.GRAY_LIGHT,
-    fontStyle: 'italic',
-  },
-
-  // Form
-  inputGroup: {
-    marginBottom: 14,
-  },
-  inputLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: AQUACARE_COLORS.GRAY_DARK,
-    marginBottom: 2,
-  },
-  inputHint: {
-    fontSize: 12,
-    color: AQUACARE_COLORS.GRAY_LIGHT,
-    fontStyle: 'italic',
-    marginBottom: 6,
-  },
-  readonlyRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 10,
-    borderTopWidth: 1,
-    borderTopColor: AQUACARE_COLORS.CREAM,
-    marginTop: 4,
-  },
-  readonlyLabel: {
-    fontSize: 13,
-    color: AQUACARE_COLORS.GRAY_LIGHT,
-  },
-  readonlyValue: {
-    fontSize: 13,
-    color: AQUACARE_COLORS.GRAY_DARK,
-    fontWeight: '500',
-  },
-
-  // Buttons
-  launchButton: {
-    flexDirection: 'row',
-    backgroundColor: AQUACARE_COLORS.GREEN_PRIMARY,
-    borderRadius: 12,
-    paddingVertical: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3,
-  },
-  launchButtonText: {
-    color: AQUACARE_COLORS.WHITE,
-    fontSize: 17,
-    fontWeight: '700',
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  skipButton: {
-    alignItems: 'center',
-    paddingVertical: 12,
-  },
-  skipButtonText: {
-    fontSize: 14,
-    color: AQUACARE_COLORS.GRAY_LIGHT,
-    textDecorationLine: 'underline',
-  },
+  root: { flex: 1, backgroundColor: colors.surface.page },
+  loading: { justifyContent: 'center' },
+  content: { gap: spacing[3], paddingTop: spacing[4], paddingBottom: spacing[6] },
+  billingCard: { gap: spacing[3] },
+  progressCard: { gap: spacing[2] },
+  formCard: { gap: spacing[2] },
+  comparisonRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around' },
+  comparisonItem: { alignItems: 'center', gap: spacing[1] },
+  metricsRow: { flexDirection: 'row', gap: spacing[2], flexWrap: 'wrap' },
+  progressBar: { height: 10, backgroundColor: colors.surface.disabled, borderRadius: radii.full, overflow: 'hidden' },
+  progressFill: { height: '100%', backgroundColor: colors.brand.primary, borderRadius: radii.full },
+  remainingBadge: { flexDirection: 'row', alignItems: 'center', gap: spacing[2], backgroundColor: colors.surface.selected, borderRadius: radii.md, padding: spacing[2] },
+  infoRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
+  inputGroup: { marginBottom: spacing[1] },
+  readonlyRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing[3], paddingTop: spacing[3], borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border.subtle },
 });
