@@ -1,5 +1,5 @@
 ﻿import React, { useEffect, useMemo, useState } from "react";
-import { View, Text, ScrollView, TouchableOpacity, TextInput, Alert, Modal } from "react-native";
+import { View, Text, ScrollView, TouchableOpacity, Alert } from "react-native";
 import { useTranslation } from "react-i18next";
 import { Ionicons } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
@@ -11,7 +11,8 @@ import LocationSelector from "@/components/common/LocationSelector";
 import { getAccountErrorMessage } from "@/features/auth/utils/accountsErrorPresenter";
 import { useProfileEditor } from "@/features/profile/hooks/useProfileEditor";
 import { getCertificationPresentation } from "@/features/profile/utils/accountProfilePresentation";
-import { sharedTextInputStyles } from "@/components/common/inputStyles";
+import { ProfileInfoRow } from '@/features/profile/components/ProfileInfoRow';
+import { SelectionModal } from '@/components/ui';
 
 type ProfileScreenNavigationProp = StackNavigationProp<ProfileStackParamList, "ProfileMain">;
 
@@ -122,35 +123,34 @@ export default function ProfileScreen({ navigation }: Props) {
           </TouchableOpacity>
         </View>
         <View className="bg-white rounded-xl p-4">
-          <InfoRow label={t("phoneNumber") || ""} value={user.phone_number} editable={false} />
-          <InfoRow
+          <ProfileInfoRow label={t("phoneNumber") || ""} value={user.phone_number} />
+          <ProfileInfoRow
             label={t("email") || ""}
             value={isEditing ? undefined : user.email || t("notProvided")}
             editable={isEditing}
             onChangeText={(value) => updateEditField("email", value)}
             inputValue={editData.email}
             placeholder={t("yourEmail") || ""}
-            isEmail
+            selectable
           />
 
           {isIndividual ? (
             <>
-              <InfoRow label={t("firstName") || ""} value={user.first_name || t("notProvided")} editable={false} />
-              <InfoRow label={t("lastName") || ""} value={user.last_name || t("notProvided")} editable={false} />
-              {user.age_group && <InfoRow label={t("ageGroup") || ""} value={user.age_group} editable={false} />}
+              <ProfileInfoRow label={t("firstName") || ""} value={user.first_name || t("notProvided")} />
+              <ProfileInfoRow label={t("lastName") || ""} value={user.last_name || t("notProvided")} />
+              {user.age_group && <ProfileInfoRow label={t("ageGroup") || ""} value={user.age_group} />}
             </>
           ) : (
             <>
-              <InfoRow
+              <ProfileInfoRow
                 label={t("businessName") || ""}
                 value={user.business_name || t("notProvided")}
-                editable={false}
               />
               {user.legal_status && (
-                <InfoRow label={t("legalStatus") || ""} value={user.legal_status} editable={false} />
+                <ProfileInfoRow label={t("legalStatus") || ""} value={user.legal_status} />
               )}
               {user.promoter_name && (
-                <InfoRow label={t("promoterName") || ""} value={user.promoter_name} editable={false} />
+                <ProfileInfoRow label={t("promoterName") || ""} value={user.promoter_name} />
               )}
             </>
           )}
@@ -161,13 +161,13 @@ export default function ProfileScreen({ navigation }: Props) {
       <View className="px-5 py-3">
         <Text className="text-lg font-bold text-gray-dark mb-3">{t("location")}</Text>
         <View className="bg-white rounded-xl p-4">
-          {user.region && <InfoRow label={t("region") || ""} value={user.region} editable={false} />}
+          {user.region && <ProfileInfoRow label={t("region") || ""} value={user.region} />}
           <LocationSelector value={locationData} onChange={setLocationData} userRegion={user?.region} editable={isEditing} />
 
           {isEditing ? (
             <TouchableOpacity
               className={`flex-row items-center justify-between px-4 py-3 mt-3 rounded-xl border ${
-                editData.intervention_zone ? "border-aquacare-primary bg-[#f0fdf4]" : "border-gray-200 bg-white"
+                editData.intervention_zone ? "border-aquacare-primary bg-aquacare-selected" : "border-gray-200 bg-white"
               }`}
               onPress={() => setShowInterventionZoneModal(true)}
             >
@@ -182,14 +182,13 @@ export default function ProfileScreen({ navigation }: Props) {
               <Ionicons name="chevron-forward" size={16} color={AQUACARE_COLORS.GRAY_LIGHT} />
             </TouchableOpacity>
           ) : (
-            <InfoRow
+            <ProfileInfoRow
               label={t("interventionZone") || ""}
               value={
                 user.intervention_zone
                   ? t(INTERVENTION_ZONES.find((z) => z.value === user.intervention_zone)?.labelKey || "notProvided")
                   : t("notProvided")
               }
-              editable={false}
             />
           )}
         </View>
@@ -198,17 +197,15 @@ export default function ProfileScreen({ navigation }: Props) {
       <View className="px-5 py-3">
         <Text className="text-lg font-bold text-gray-dark mb-3">{t("preferences")}</Text>
         <View className="bg-white rounded-xl p-4">
-          <InfoRow
+          <ProfileInfoRow
             icon="language"
             label={t("preferredLanguage") || ""}
             value={user.language_preference === "fr" ? t("french") : t("english")}
-            editable={false}
           />
-          <InfoRow
+          <ProfileInfoRow
             icon="shield-checkmark"
             label={t("accountVerified") || ""}
             value={user.is_verified ? t("yes") : t("no")}
-            editable={false}
           />
         </View>
       </View>
@@ -243,102 +240,19 @@ export default function ProfileScreen({ navigation }: Props) {
         </TouchableOpacity>
       </View>
 
-      <Modal
+      <SelectionModal
         visible={showInterventionZoneModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowInterventionZoneModal(false)}
-      >
-        <View className="flex-1 bg-black/50 justify-end">
-          <View className="bg-white rounded-t-2xl max-h-[80%] pb-5">
-            <View className="flex-row items-center justify-between px-5 py-4 border-b border-slate-100">
-              <Text className="text-lg font-bold text-gray-dark">{t("selectInterventionZone")}</Text>
-              <TouchableOpacity onPress={() => setShowInterventionZoneModal(false)} className="p-1">
-                <Ionicons name="close" size={24} color={AQUACARE_COLORS.GRAY_DARK} />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView className="max-h-96 min-h-56">
-              {INTERVENTION_ZONES.map((zone) => (
-                <TouchableOpacity
-                  key={zone.value}
-                  className={`flex-row items-center justify-between px-5 py-4 border-b border-slate-50 ${
-                    editData.intervention_zone === zone.value ? "bg-[#f0fdf4]" : "bg-white"
-                  }`}
-                  onPress={() => {
-                    updateEditField("intervention_zone", zone.value);
-                    setShowInterventionZoneModal(false);
-                  }}
-                >
-                  <Text
-                    className={`text-base flex-1 ${
-                      editData.intervention_zone === zone.value ? "text-green-dark font-semibold" : "text-gray-dark"
-                    }`}
-                  >
-                    {t(zone.labelKey)}
-                  </Text>
-                  {editData.intervention_zone === zone.value && (
-                    <Ionicons name="checkmark" size={20} color={AQUACARE_COLORS.GREEN_PRIMARY} />
-                  )}
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
+        title={t('selectInterventionZone')}
+        options={INTERVENTION_ZONES.map((zone) => ({ value: zone.value, label: t(zone.labelKey) }))}
+        selectedValue={editData.intervention_zone}
+        onSelect={(value) => {
+          updateEditField('intervention_zone', value);
+          setShowInterventionZoneModal(false);
+        }}
+        onClose={() => setShowInterventionZoneModal(false)}
+        closeLabel={t('close')}
+        emptyLabel={t('notProvided')}
+      />
     </ScrollView>
-  );
-}
-
-interface InfoRowProps {
-  icon?: keyof typeof Ionicons.glyphMap;
-  label: string;
-  value?: string;
-  editable: boolean;
-  onChangeText?: (text: string) => void;
-  inputValue?: string;
-  placeholder?: string;
-  keyboardType?: "default" | "numeric";
-  isEmail?: boolean;
-}
-
-function InfoRow({
-  icon,
-  label,
-  value,
-  editable,
-  onChangeText,
-  inputValue,
-  placeholder,
-  keyboardType = "default",
-  isEmail = false,
-}: InfoRowProps) {
-  return (
-    <View className="flex-row justify-between items-center py-3 border-b border-slate-100">
-      <View className="flex-row items-center flex-1 mr-3">
-        {icon && <Ionicons name={icon} size={20} color={AQUACARE_COLORS.GRAY_LIGHT} />}
-        <Text className={`text-sm text-gray-light ${icon ? "ml-3" : ""} flex-1`}>{label}</Text>
-      </View>
-      {editable ? (
-        <TextInput
-          className="border border-gray-300 rounded-md px-2 text-right text-gray-dark flex-1"
-          style={[sharedTextInputStyles.compactSmall, { flex: 1 }]}
-          value={inputValue}
-          onChangeText={onChangeText}
-          placeholder={placeholder}
-          keyboardType={keyboardType}
-          autoCapitalize="words"
-        />
-      ) : (
-        <Text
-          className="text-sm text-gray-dark font-medium flex-1 min-w-0 text-right"
-          selectable={isEmail}
-          numberOfLines={1}
-          ellipsizeMode={isEmail ? "middle" : "tail"}
-        >
-          {value}
-        </Text>
-      )}
-    </View>
   );
 }

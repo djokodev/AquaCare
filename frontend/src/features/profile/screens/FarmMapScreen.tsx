@@ -1,8 +1,6 @@
 import React from 'react';
 import {
   StyleSheet,
-  Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import MapView, { Marker, UrlTile } from 'react-native-maps';
@@ -11,7 +9,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
 
-import { AQUACARE_COLORS } from '@/constants/colors';
+import { AppText, Button, Card, EmptyState } from '@/components/ui';
+import { colors, shadows, spacing } from '@/theme';
 import { useAuth } from '@/hooks/useAuth';
 import type { RootStackParamList } from '@/navigation/MainNavigator';
 
@@ -29,19 +28,7 @@ const FarmMapScreen: React.FC = () => {
   if (!hasLocation) {
     return (
       <View style={styles.container}>
-        <View style={styles.emptyState}>
-          <Ionicons name="location-outline" size={56} color={AQUACARE_COLORS.GREEN_PRIMARY} />
-          <Text style={styles.emptyTitle}>{t('farmNoLocation')}</Text>
-          <Text style={styles.emptySubtitle}>
-            {t('farmNoLocationHint')}
-          </Text>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-          >
-            <Text style={styles.backButtonText}>{t('farmBackToProfile')}</Text>
-          </TouchableOpacity>
-        </View>
+        <EmptyState title={t('farmNoLocation')} message={t('farmNoLocationHint')} actionLabel={t('farmBackToProfile')} onAction={() => navigation.goBack()} />
       </View>
     );
   }
@@ -67,29 +54,26 @@ const FarmMapScreen: React.FC = () => {
           coordinate={{ latitude, longitude }}
           title={farmProfile?.farm_name ?? t('myFarm')}
           description={farmProfile?.location_address ?? ''}
-          pinColor={AQUACARE_COLORS.GREEN_PRIMARY}
+          pinColor={colors.brand.primary}
         />
       </MapView>
 
-      <View style={styles.infoCard}>
+      <Card style={styles.infoCard}>
         <View style={styles.infoRow}>
-          <Ionicons name="location" size={18} color={AQUACARE_COLORS.GREEN_PRIMARY} />
+          <Ionicons name="location" size={18} color={colors.brand.primary} />
           <View style={styles.infoText}>
-            <Text style={styles.farmName}>{farmProfile?.farm_name}</Text>
+            <AppText variant="bodyStrong">{farmProfile?.farm_name}</AppText>
             {farmProfile?.location_address ? (
-              <Text style={styles.address}>{farmProfile.location_address}</Text>
+              <AppText variant="caption" color="muted">{farmProfile.location_address}</AppText>
             ) : null}
-            <Text style={styles.coords}>
+            <AppText variant="caption" color="muted" style={styles.coords}>
               {latitude.toFixed(6)}, {longitude.toFixed(6)}
-            </Text>
+            </AppText>
           </View>
         </View>
 
-        <TouchableOpacity style={styles.infoBackButton} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={18} color={AQUACARE_COLORS.GREEN_PRIMARY} />
-          <Text style={styles.infoBackButtonText}>{t('back')}</Text>
-        </TouchableOpacity>
-      </View>
+        <Button label={t('back')} variant="outline" iconLeft="arrow-back" onPress={() => navigation.goBack()} />
+      </Card>
     </View>
   );
 };
@@ -97,89 +81,28 @@ const FarmMapScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: AQUACARE_COLORS.CREAM,
+    backgroundColor: colors.surface.page,
   },
   map: {
     flex: 1,
   },
   infoCard: {
-    backgroundColor: 'white',
-    padding: 16,
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    shadowColor: AQUACARE_COLORS.GRAY_DARK,
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 4,
-    gap: 12,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+    gap: spacing[3],
+    ...shadows.medium,
   },
   infoRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 10,
+    gap: spacing[3],
   },
   infoText: {
     flex: 1,
   },
-  farmName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: AQUACARE_COLORS.GRAY_DARK,
-  },
-  address: {
-    fontSize: 13,
-    color: AQUACARE_COLORS.GRAY_LIGHT,
-    marginTop: 2,
-  },
   coords: {
-    fontSize: 12,
-    color: AQUACARE_COLORS.GRAY_LIGHT,
-    marginTop: 2,
+    marginTop: spacing[1],
     fontFamily: 'monospace',
-  },
-  infoBackButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: AQUACARE_COLORS.GREEN_PRIMARY,
-  },
-  infoBackButtonText: {
-    color: AQUACARE_COLORS.GREEN_PRIMARY,
-    fontWeight: '600',
-    fontSize: 15,
-  },
-  emptyState: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 32,
-    gap: 12,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: AQUACARE_COLORS.GRAY_DARK,
-    textAlign: 'center',
-  },
-  emptySubtitle: {
-    fontSize: 14,
-    color: AQUACARE_COLORS.GRAY_LIGHT,
-    textAlign: 'center',
-  },
-  backButton: {
-    marginTop: 8,
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-  },
-  backButtonText: {
-    color: AQUACARE_COLORS.GREEN_PRIMARY,
-    fontSize: 14,
-    fontWeight: '500',
   },
 });
 

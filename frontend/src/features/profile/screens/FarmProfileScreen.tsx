@@ -1,5 +1,5 @@
 ﻿import React, { useCallback, useMemo, useRef, useState } from "react";
-import { Alert, Linking, RefreshControl, ScrollView, Text, TouchableOpacity, TextInput, View } from "react-native";
+import { Alert, Linking, RefreshControl, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { useTranslation } from "react-i18next";
 import { Ionicons } from "@expo/vector-icons";
@@ -13,7 +13,8 @@ import { useFarmLocation } from "@/hooks/useFarmLocation";
 import { getAccountErrorMessage } from "@/features/auth/utils/accountsErrorPresenter";
 import { useFarmProfileEditor } from "@/features/profile/hooks/useFarmProfileEditor";
 import { formatFarmName, getCertificationPresentation } from "@/features/profile/utils/accountProfilePresentation";
-import { sharedTextInputStyles } from "@/components/common/inputStyles";
+import { ProfileInfoRow } from '@/features/profile/components/ProfileInfoRow';
+import { InlineAlert } from '@/components/ui';
 import type { ProductionUnit } from "@/types/aquaculture";
 
 type NavigationProp = StackNavigationProp<RootStackParamList>;
@@ -200,7 +201,7 @@ export default function FarmProfileScreen() {
           </TouchableOpacity>
         </View>
         <View className="bg-white rounded-xl p-4">
-          <FarmInfoRow
+          <ProfileInfoRow
             label={t("farmName") || ""}
             value={isEditing ? undefined : formatFarmName(farmProfile.farm_name) || t("notProvided")}
             editable={isEditing}
@@ -208,22 +209,19 @@ export default function FarmProfileScreen() {
             inputValue={editData.farm_name?.toString()}
             placeholder={t("farmNamePlaceholder") || ""}
           />
-          <FarmInfoRow
+          <ProfileInfoRow
             label={t("totalPonds") || ""}
             value={activeProductionUnits.length.toString()}
-            editable={false}
           />
-          <FarmInfoRow
+          <ProfileInfoRow
             label={t("surfaceTotal") || ""}
             value={totalSurfaceM2 > 0 ? `${totalSurfaceM2} m²` : t("notProvided")}
-            editable={false}
           />
-          <FarmInfoRow
+          <ProfileInfoRow
             label={t("volumeTotal") || ""}
             value={totalVolumeM3 > 0 ? `${totalVolumeM3} m³` : t("notProvided")}
-            editable={false}
           />
-          <FarmInfoRow
+          <ProfileInfoRow
             label={t("waterSource") || ""}
             value={isEditing ? undefined : farmProfile.water_source || t("notProvided")}
             editable={isEditing}
@@ -303,55 +301,7 @@ export default function FarmProfileScreen() {
         </View>
       )}
 
-      {error && (
-        <View className="mx-5 mb-5 p-4 bg-[#fef2f2] rounded-lg border-l-4 border-l-error">
-          <Text className="text-error text-sm">{getAccountErrorMessage(error, t)}</Text>
-        </View>
-      )}
+      {error ? <View className="mx-5 mb-5"><InlineAlert tone="error" message={getAccountErrorMessage(error, t)} /></View> : null}
     </ScrollView>
-  );
-}
-
-interface FarmInfoRowProps {
-  icon?: keyof typeof Ionicons.glyphMap;
-  label: string;
-  value?: string;
-  editable: boolean;
-  onChangeText?: (text: string) => void;
-  inputValue?: string;
-  placeholder?: string;
-  keyboardType?: "default" | "numeric";
-}
-
-function FarmInfoRow({
-  icon,
-  label,
-  value,
-  editable,
-  onChangeText,
-  inputValue,
-  placeholder,
-  keyboardType = "default",
-}: FarmInfoRowProps) {
-  return (
-    <View className="flex-row justify-between items-center py-3 border-b border-slate-100">
-      <View className="flex-row items-center flex-1 mr-3">
-        {icon && <Ionicons name={icon} size={20} color={AQUACARE_COLORS.GRAY_LIGHT} />}
-        <Text className={`text-sm text-gray-light ${icon ? "ml-3" : ""} flex-1`}>{label}</Text>
-      </View>
-      {editable ? (
-        <TextInput
-          className="border border-gray-300 rounded-md px-2 text-right text-gray-dark flex-1"
-          style={[sharedTextInputStyles.compactSmall, { flex: 1 }]}
-          value={inputValue}
-          onChangeText={onChangeText}
-          placeholder={placeholder}
-          keyboardType={keyboardType}
-          autoCapitalize="words"
-        />
-      ) : (
-        <Text className="text-sm text-gray-dark font-medium flex-1 text-right">{value}</Text>
-      )}
-    </View>
   );
 }
