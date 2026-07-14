@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import { View, TouchableOpacity } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import { AppText, Card, Divider } from "@/components/ui";
@@ -220,14 +220,15 @@ export default function QuickActionsPreview({
       <Card variant="elevated" style={styles.card}>
         {suggestedActions.map((action, index) => (
           <React.Fragment key={action.route}>
-            <TouchableOpacity
-              className="flex-row items-center p-4"
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={action.label}
               onPress={() => navigation.navigate(action.route, action.params)}
-              activeOpacity={0.7}
+              style={({ pressed }) => [styles.action, pressed && styles.pressed]}
             >
               <View
                 className="w-10 h-10 rounded-full items-center justify-center"
-                style={{ backgroundColor: `${action.color}20` }}
+                style={styles.actionIcon}
               >
                 <Ionicons
                   name={action.icon as any}
@@ -249,16 +250,17 @@ export default function QuickActionsPreview({
                 size={20}
                 color={colors.text.muted}
               />
-            </TouchableOpacity>
+            </Pressable>
             {index < suggestedActions.length - 1 ? <Divider /> : null}
           </React.Fragment>
         ))}
 
         {/* View All Button */}
-        <TouchableOpacity
-          className="flex-row items-center justify-center p-4 bg-gray-50 border-t border-gray-100"
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t('viewAllActions')}
           onPress={onOpenSheet}
-          activeOpacity={0.7}
+          style={({ pressed }) => [styles.viewAll, pressed && styles.pressed]}
         >
           <AppText
             variant="bodyStrong"
@@ -272,14 +274,18 @@ export default function QuickActionsPreview({
             size={20}
             color={colors.brand.primary}
           />
-        </TouchableOpacity>
+        </Pressable>
       </Card>
     </View>
   );
 }
 
-const styles = {
+const styles = StyleSheet.create({
   card: { padding: 0, overflow: "hidden" as const },
+  action: { minHeight: 56, flexDirection: 'row', alignItems: 'center', padding: spacing[4] },
+  actionIcon: { backgroundColor: colors.brand.subtle },
+  viewAll: { minHeight: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: spacing[4], backgroundColor: colors.surface.page, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border.subtle },
+  pressed: { opacity: 0.8 },
   actionLabel: {
     flex: 1,
     flexShrink: 1,
@@ -287,4 +293,4 @@ const styles = {
     marginRight: spacing[2],
   },
   viewAllLabel: { marginRight: spacing[2] },
-};
+});

@@ -1,7 +1,9 @@
 import React from 'react';
-import { View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppText, IconButton } from '@/components/ui';
+import { colors, spacing } from '@/theme';
 
 /**
  * Props pour le composant DashboardHeader
@@ -54,12 +56,13 @@ export default function DashboardHeader({
   onSettingsPress,
 }: DashboardHeaderProps) {
   const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
 
   // Extraire le prénom (premier mot) pour éviter les noms trop longs
   const firstName = displayName.split(' ')[0];
 
   return (
-    <View className="bg-aquacare-primary px-5 pt-16 pb-5">
+    <View style={[styles.header, { paddingTop: insets.top + spacing[3] }]}>
       {/* Greeting Row */}
       <View className="flex-row justify-between items-start">
         <View className="flex-1 mr-4">
@@ -93,3 +96,7 @@ export default function DashboardHeader({
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  header: { backgroundColor: colors.brand.primary, paddingHorizontal: spacing[5], paddingBottom: spacing[5] },
+});
