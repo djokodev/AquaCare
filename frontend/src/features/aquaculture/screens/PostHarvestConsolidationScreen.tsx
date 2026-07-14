@@ -2,16 +2,12 @@ import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
-import { sharedTextInputStyles } from '@/components/common/inputStyles';
 import { useDispatch, useSelector } from 'react-redux';
 import { StackScreenProps } from '@react-navigation/stack';
 import { AppDispatch, RootState } from '@/store/store';
@@ -20,6 +16,7 @@ import { RootStackParamList } from '@/navigation/MainNavigator';
 import { AQUACARE_COLORS } from '@/constants/colors';
 import { parseApiError } from '@/utils/errorParser';
 import { formatAquacultureErrorWithAction } from '@/features/aquaculture/utils/aquacultureErrorPresenter';
+import { AppHeader, Button, Card, LoadingState, Screen, TextField } from '@/components/ui';
 
 type Props = StackScreenProps<RootStackParamList, 'PostHarvestConsolidation'>;
 
@@ -180,15 +177,11 @@ export default function PostHarvestConsolidationScreen({ route, navigation }: Pr
   ]);
 
   if (!harvestedCycle) {
-    return (
-      <View style={styles.centered}>
-        <ActivityIndicator color={AQUACARE_COLORS.GREEN_PRIMARY} />
-      </View>
-    );
+    return <Screen><LoadingState /></Screen>;
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <Screen scroll>
 
       {/* ── Section 1 : Bilan cycle récolté ───────────────────────────────── */}
       <View style={styles.billingCard}>
@@ -253,7 +246,7 @@ export default function PostHarvestConsolidationScreen({ route, navigation }: Pr
       </View>
 
       {/* ── Section 3 : Paramètres ajustés cycle suivant ──────────────────── */}
-      <View style={styles.formCard}>
+      <Card style={styles.formCard}>
         <Text style={styles.sectionTitle}>
           {t('consolidationAdjustedParams', { num: nextCycleNum })}
         </Text>
@@ -268,10 +261,9 @@ export default function PostHarvestConsolidationScreen({ route, navigation }: Pr
 
         {/* Alevins */}
         <View style={styles.inputGroup}>
-          <Text style={styles.inputLabel}>{t('consolidationFingerlingsLabel')}</Text>
-          <Text style={styles.inputHint}>{t('consolidationRecommendedFingerlings')}</Text>
-          <TextInput
-            style={styles.textInput}
+          <TextField
+            label={t('consolidationFingerlingsLabel')}
+            hint={t('consolidationRecommendedFingerlings')}
             value={fingerlings}
             onChangeText={setFingerlings}
             keyboardType="numeric"
@@ -280,12 +272,9 @@ export default function PostHarvestConsolidationScreen({ route, navigation }: Pr
 
         {/* Taux de survie */}
         <View style={styles.inputGroup}>
-          <Text style={styles.inputLabel}>{t('consolidationSurvivalLabel')}</Text>
-          <Text style={styles.inputHint}>
-            {t('consolidationSurvivalAdjusted', { pct: Math.round(actualSurvivalRate) })}
-          </Text>
-          <TextInput
-            style={styles.textInput}
+          <TextField
+            label={t('consolidationSurvivalLabel')}
+            hint={t('consolidationSurvivalAdjusted', { pct: Math.round(actualSurvivalRate) })}
             value={survivalRate}
             onChangeText={setSurvivalRate}
             keyboardType="numeric"
@@ -294,9 +283,8 @@ export default function PostHarvestConsolidationScreen({ route, navigation }: Pr
 
         {/* Date de départ */}
         <View style={styles.inputGroup}>
-          <Text style={styles.inputLabel}>{t('consolidationStartDateLabel')}</Text>
-          <TextInput
-            style={styles.textInput}
+          <TextField
+            label={t('consolidationStartDateLabel')}
             value={startDate}
             onChangeText={setStartDate}
             placeholder={t('dateFormatPlaceholder')}
@@ -305,9 +293,8 @@ export default function PostHarvestConsolidationScreen({ route, navigation }: Pr
 
         {/* Prix de vente */}
         <View style={styles.inputGroup}>
-          <Text style={styles.inputLabel}>{t('consolidationSellingPriceLabel')}</Text>
-          <TextInput
-            style={styles.textInput}
+          <TextField
+            label={t('consolidationSellingPriceLabel')}
             value={sellingPrice}
             onChangeText={setSellingPrice}
             keyboardType="numeric"
@@ -323,36 +310,25 @@ export default function PostHarvestConsolidationScreen({ route, navigation }: Pr
             {volumeM3 > 0 ? ` · ${volumeM3} m³` : ''}
           </Text>
         </View>
-      </View>
+      </Card>
 
       {/* ── CTA ───────────────────────────────────────────────────────────── */}
-      <TouchableOpacity
-        style={[styles.launchButton, launching && styles.buttonDisabled]}
+      <Button
+        label={t('consolidationStartNextCycle', { num: nextCycleNum })}
         onPress={handleLaunch}
         disabled={launching}
-        activeOpacity={0.8}
-      >
-        {launching ? (
-          <ActivityIndicator color={AQUACARE_COLORS.WHITE} />
-        ) : (
-          <>
-            <Text style={styles.launchButtonText}>
-              {t('consolidationStartNextCycle', { num: nextCycleNum })}
-            </Text>
-            <Ionicons name="arrow-forward" size={20} color={AQUACARE_COLORS.WHITE} />
-          </>
-        )}
-      </TouchableOpacity>
+        loading={launching}
+        iconRight="arrow-forward"
+      />
 
-      <TouchableOpacity
-        style={styles.skipButton}
+      <Button
+        variant="ghost"
+        label={t('consolidationSkip')}
         onPress={() => navigation.navigate('MainTabs')}
         disabled={launching}
-      >
-        <Text style={styles.skipButtonText}>{t('consolidationSkip')}</Text>
-      </TouchableOpacity>
+      />
 
-    </ScrollView>
+    </Screen>
   );
 }
 
@@ -519,14 +495,6 @@ const styles = StyleSheet.create({
     color: AQUACARE_COLORS.GRAY_LIGHT,
     fontStyle: 'italic',
     marginBottom: 6,
-  },
-  textInput: {
-    ...sharedTextInputStyles.base,
-    borderWidth: 1,
-    borderColor: '#cbd5e1',
-    borderRadius: 8,
-    backgroundColor: AQUACARE_COLORS.WHITE,
-    color: AQUACARE_COLORS.GRAY_DARK,
   },
   readonlyRow: {
     flexDirection: 'row',

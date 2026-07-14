@@ -1,19 +1,14 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   RefreshControl,
   ScrollView,
-  Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 
-import { AQUACARE_COLORS } from '@/constants/colors';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
 import { useLocalFeedingAlarms } from '@/features/notifications/hooks/useLocalFeedingAlarms';
 import { RootStackParamList } from '@/navigation/MainNavigator';
@@ -22,6 +17,8 @@ import { formatDate, formatNumber, formatPercentage } from '@/utils';
 import logger from '@/utils/logger';
 import { parseApiError } from '@/utils/errorParser';
 import { formatAquacultureErrorWithAction } from '@/features/aquaculture/utils/aquacultureErrorPresenter';
+import { AppHeader, AppText, Button, Card, EmptyState, ErrorState, InlineAlert, LoadingState, Screen } from '@/components/ui';
+import { colors, spacing } from '@/theme';
 
 type FeedingPlanScreenNavigationProp = StackNavigationProp<RootStackParamList, 'FeedingPlan'>;
 type FeedingPlanScreenRouteProp = RouteProp<RootStackParamList, 'FeedingPlan'>;
@@ -43,20 +40,20 @@ interface StatSectionProps {
 
 function StatRow({ label, value }: StatRowProps) {
   return (
-    <View className="w-full rounded-xl bg-white border border-gray-100 px-4 py-3">
-      <Text className="text-xs font-semibold uppercase tracking-wide text-gray-light">{label}</Text>
-      <Text className="mt-1 text-base font-semibold text-gray-dark" numberOfLines={2}>
+    <Card variant="outlined" style={{ padding: spacing[3] }}>
+      <AppText variant="caption" color="muted">{label}</AppText>
+      <AppText variant="body" style={{ marginTop: spacing[1] }} numberOfLines={2}>
         {value}
-      </Text>
-    </View>
+      </AppText>
+    </Card>
   );
 }
 
 function StatSection({ title, items }: StatSectionProps) {
   return (
-    <View className="w-full">
-      <Text className="text-sm font-bold text-gray-dark mb-3">{title}</Text>
-      <View className="gap-3">
+    <View>
+      <AppText variant="sectionTitle" style={{ marginBottom: spacing[3] }}>{title}</AppText>
+      <View style={{ gap: spacing[3] }}>
         {items.map((item) => (
           <StatRow key={item.label} label={item.label} value={item.value} />
         ))}
@@ -316,155 +313,40 @@ export default function FeedingPlanScreen({ navigation, route }: FeedingPlanScre
 
   const locale = i18n.language?.startsWith('fr') ? 'fr-FR' : 'en-US';
 
-  const renderHeader = () => (
-    <View className="bg-aquacare-primary flex-row items-center pt-14 pb-4 px-4">
-      <TouchableOpacity className="mr-4" onPress={() => navigation.goBack()}>
-        <Ionicons name="arrow-back" size={24} color={AQUACARE_COLORS.WHITE} />
-      </TouchableOpacity>
-      <Text className="text-xl font-bold text-white flex-1" numberOfLines={1}>
-        {productionUnitName ? t('feedingPlanUnitTitle', { unitName: productionUnitName }) : t('feedingPlanUnitTitleFallback')}
-      </Text>
-    </View>
-  );
+  const headerTitle = productionUnitName
+    ? t('feedingPlanUnitTitle', { unitName: productionUnitName })
+    : t('feedingPlanUnitTitleFallback');
 
   if (loading) {
-    return (
-      <View className="flex-1 bg-cream">
-        {renderHeader()}
-        <View className="flex-1 items-center justify-center p-10">
-          <ActivityIndicator size="large" color={AQUACARE_COLORS.GREEN_PRIMARY} />
-          <Text className="text-base text-gray-light mt-3">{t('loading')}</Text>
-        </View>
-      </View>
-    );
+    return <Screen><AppHeader title={headerTitle} onBack={() => navigation.goBack()} backLabel={t('back')} /><LoadingState message={t('loading')} /></Screen>;
   }
 
   if (!hasValidUnitContext) {
-    return (
-      <View className="flex-1 bg-cream">
-        {renderHeader()}
-        <View className="flex-1 items-center justify-center px-6 py-20">
-          <Ionicons name="alert-circle-outline" size={64} color={AQUACARE_COLORS.ERROR} />
-          <Text className="text-xl font-bold text-gray-dark mt-4 text-center">
-            {t('feedingPlanUnitContextIncompleteError')}
-          </Text>
-        </View>
-      </View>
-    );
+    return <Screen><AppHeader title={headerTitle} onBack={() => navigation.goBack()} backLabel={t('back')} /><ErrorState message={t('feedingPlanUnitContextIncompleteError')} /></Screen>;
   }
 
   return (
-    <View className="flex-1 bg-cream">
-      {renderHeader()}
+    <Screen>
+      <AppHeader title={headerTitle} onBack={() => navigation.goBack()} backLabel={t('back')} />
 
-      <ScrollView refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
-        <View className="bg-white mx-4 mb-6 p-4 rounded-xl">
-          <View className="mb-4">
-            <Text className="text-lg font-bold text-gray-dark mb-3">{t('feedingPlans')}</Text>
-            <View className="flex-row items-center">
-              <View
-                className={`flex-row items-center flex-1 mr-2 px-3 py-2 rounded-lg ${
-                  alarmStatus === 'active'
-                    ? 'bg-[#ecfdf3]'
-                    : alarmStatus === 'permission_denied'
-                      ? 'bg-[#fef2f2]'
-                      : alarmStatus === 'error'
-                        ? 'bg-[#fff7ed]'
-                        : 'bg-cream'
-                }`}
-              >
-                <Ionicons
-                  name={alarmStatus === 'active' ? 'notifications' : 'notifications-off'}
-                  size={16}
-                  color={
-                    alarmStatus === 'active'
-                      ? AQUACARE_COLORS.GREEN_PRIMARY
-                      : alarmStatus === 'permission_denied'
-                        ? '#dc2626'
-                        : AQUACARE_COLORS.GRAY_LIGHT
-                  }
-                />
-                <Text
-                  className={`text-xs font-semibold ml-2 ${
-                    alarmStatus === 'active'
-                      ? 'text-aquacare-primary'
-                      : alarmStatus === 'permission_denied'
-                        ? 'text-[#b91c1c]'
-                        : 'text-gray-light'
-                  }`}
-                  numberOfLines={1}
-                >
-                  {alarmStatus === 'active' ? t('alarmsStatusActive') : t('alarmsStatusPending')}
-                </Text>
-              </View>
-
-              <TouchableOpacity
-                className={`flex-row items-center justify-center px-4 py-2 rounded-lg bg-aquacare-primary min-w-[160px] ${
-                  generatingPlan ? 'opacity-60' : ''
-                }`}
-                onPress={generateFeedingPlan}
-                disabled={generatingPlan}
-              >
-                {generatingPlan ? (
-                  <ActivityIndicator size="small" color={AQUACARE_COLORS.WHITE} />
-                ) : (
-                  <Ionicons name="refresh" size={16} color={AQUACARE_COLORS.WHITE} />
-                )}
-                <Text className="text-white text-sm font-semibold ml-2">
-                  {generatingPlan ? t('generating') : t('generateFeedingPlanShort')}
-                </Text>
-              </TouchableOpacity>
-            </View>
+      <ScrollView refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />} contentContainerStyle={{ gap: spacing[4] }}>
+        <Card>
+          <AppText variant="sectionTitle" style={{ marginBottom: spacing[3] }}>{t('feedingPlans')}</AppText>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing[2] }}>
+            <InlineAlert tone={alarmStatus === 'active' ? 'success' : alarmStatus === 'permission_denied' ? 'error' : alarmStatus === 'error' ? 'warning' : 'info'} message={alarmStatus === 'active' ? t('alarmsStatusActive') : t('alarmsStatusPending')} />
+            <Button label={generatingPlan ? t('generating') : t('generateFeedingPlanShort')} onPress={generateFeedingPlan} disabled={generatingPlan} loading={generatingPlan} iconLeft="refresh" size="small" fullWidth={false} />
           </View>
 
           {alarmInfo && (
-            <View
-              className={`rounded-lg p-3 mb-4 border ${
-                alarmStatus === 'active'
-                  ? 'bg-[#ecfdf3] border-[#86efac]'
-                  : alarmStatus === 'permission_denied'
-                    ? 'bg-[#fef2f2] border-[#fca5a5]'
-                    : alarmStatus === 'error'
-                      ? 'bg-[#fff7ed] border-[#fdba74]'
-                      : 'bg-cream border-[#e2e8f0]'
-              }`}
-            >
-              <Text
-                className={`text-xs ${
-                  alarmStatus === 'active'
-                    ? 'text-aquacare-primary'
-                    : alarmStatus === 'permission_denied'
-                      ? 'text-[#b91c1c]'
-                      : alarmStatus === 'error'
-                        ? 'text-[#c2410c]'
-                        : 'text-gray-light'
-                }`}
-              >
-                {alarmInfo}
-              </Text>
-            </View>
+            <InlineAlert tone={alarmStatus === 'active' ? 'success' : alarmStatus === 'permission_denied' ? 'error' : alarmStatus === 'error' ? 'warning' : 'info'} message={alarmInfo} />
           )}
 
           {error ? (
-            <View className="rounded-xl bg-[#fef2f2] border border-[#fecaca] p-4 mb-4">
-              <Text className="text-sm text-[#b91c1c]">{error}</Text>
-              <TouchableOpacity
-                className="mt-3 self-start rounded-lg bg-aquacare-primary px-4 py-2"
-                onPress={() => {
-                  void loadData('refresh');
-                }}
-              >
-                <Text className="text-white font-semibold">{t('retry')}</Text>
-              </TouchableOpacity>
-            </View>
+            <ErrorState message={error} actionLabel={t('retry')} onAction={() => void loadData('refresh')} compact />
           ) : null}
 
           {displayedFeedingPlans.length === 0 ? (
-            <View className="items-center py-10">
-              <Ionicons name="restaurant-outline" size={48} color={AQUACARE_COLORS.GRAY_LIGHT} />
-              <Text className="text-base font-bold text-gray-dark mt-3">{t('noUnitFeedingPlans')}</Text>
-              <Text className="text-sm text-gray-light text-center mt-1">{t('createUnitFeedingPlan')}</Text>
-            </View>
+            <EmptyState title={t('noUnitFeedingPlans')} message={t('createUnitFeedingPlan')} compact />
           ) : (
             displayedFeedingPlans.map((plan) => {
               const recommendedFeed = formatMetricText(plan.recommended_feed_type || plan.recommended_feed);
@@ -488,32 +370,28 @@ export default function FeedingPlanScreen({ navigation, route }: FeedingPlanScre
               })();
 
               return (
-                <View key={plan.id} testID="feeding-plan-card" className="bg-cream rounded-lg p-4 mb-3">
-                  <View className="mb-4">
-                    <View className="flex-row items-start justify-between gap-3">
-                      <View className="flex-1">
-                        <Text className="text-base font-bold text-gray-dark">
+                <Card key={plan.id} testID="feeding-plan-card" variant="outlined" style={{ backgroundColor: colors.surface.page }}>
+                  <View style={{ marginBottom: spacing[4] }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing[3] }}>
+                      <View style={{ flex: 1 }}>
+                        <AppText variant="bodyStrong">
                           {t('feedingPlanCurrentWeekLabel')} · {t('week')} {plan.week_number}
-                        </Text>
-                        <Text className="text-sm text-gray-light mt-1">
+                        </AppText>
+                        <AppText variant="caption" color="muted" style={{ marginTop: spacing[1] }}>
                           {formatDate(plan.start_date, locale)} - {formatDate(plan.end_date, locale)}
-                        </Text>
+                        </AppText>
                       </View>
                     </View>
-                    <Text className="text-sm font-semibold text-aquacare-primary mt-2">
+                    <AppText variant="label" color="link" style={{ marginTop: spacing[2] }}>
                       {plan.scope_label || t('feedingPlanUnitTitle', { unitName: unitLabel })}
-                    </Text>
+                    </AppText>
                   </View>
 
                   {hasInsufficientRationData ? (
-                    <View className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 mb-4">
-                      <Text className="text-xs text-amber-800">
-                        {t('feedingPlanInsufficientDataWarning')}
-                      </Text>
-                    </View>
+                    <InlineAlert tone="warning" message={t('feedingPlanInsufficientDataWarning')} />
                   ) : null}
 
-                  <View className="gap-4">
+                  <View style={{ gap: spacing[4] }}>
                     <StatSection
                       title={t('feedingPlanRecommendationSection')}
                       items={[
@@ -545,12 +423,12 @@ export default function FeedingPlanScreen({ navigation, route }: FeedingPlanScre
                       ]}
                     />
                   </View>
-                </View>
+                </Card>
               );
             })
           )}
-        </View>
+        </Card>
       </ScrollView>
-    </View>
+    </Screen>
   );
 }

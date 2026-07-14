@@ -4,6 +4,15 @@ import { render, waitFor } from '@testing-library/react-native';
 import ReportDetailScreen from '../ReportDetailScreen';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
 
+jest.mock('react-native-safe-area-context', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+  return {
+    SafeAreaView: ({ children, ...props }: any) => <View {...props}>{children}</View>,
+    useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
+  };
+});
+
 jest.mock('@/features/aquaculture/services/aquacultureService', () => ({
   aquacultureService: {
     getReport: jest.fn(),

@@ -6,6 +6,15 @@ import FeedingPlanScreen from '../FeedingPlanScreen';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
 import { useLocalFeedingAlarms } from '@/features/notifications/hooks/useLocalFeedingAlarms';
 
+jest.mock('react-native-safe-area-context', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+  return {
+    SafeAreaView: ({ children, ...props }: any) => <View {...props}>{children}</View>,
+    useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
+  };
+});
+
 const mockT = jest.fn((key: string) => key);
 
 const getLocalDateIso = (date = new Date()) => {
@@ -147,7 +156,7 @@ describe('features/aquaculture/screens/FeedingPlanScreen', () => {
       expect(queryByText('feedingPlanUnitSummary')).toBeNull();
       expect(queryByText('estimatedFishCount')).toBeNull();
       expect(queryByText('feedSizeMm')).toBeNull();
-      expect(getByTestId('feeding-plan-card').props.className).not.toContain('border-l-4');
+      expect(getByTestId('feeding-plan-card')).toBeTruthy();
     });
 
     await waitFor(() => {

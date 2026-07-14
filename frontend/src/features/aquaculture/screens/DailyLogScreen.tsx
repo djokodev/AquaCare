@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, TextInput, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, Alert } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp } from '@react-navigation/native';
@@ -9,12 +9,12 @@ import { RootState, AppDispatch } from '@/store/store';
 import { fetchDashboardData, setCurrentCycle } from '@/features/aquaculture/store/aquacultureSlice';
 import { DailyLogForm } from '@/types/aquaculture';
 import { RootStackParamList } from '@/navigation/MainNavigator';
-import { AQUACARE_COLORS } from '@/constants/colors';
 import { estimateAverageWeight } from '@/domain/aquaculture/estimators';
 import { calculateStockValue, calculateEstimatedBiomass } from '@/constants/aquaculture';
 import SuccessRewardModal from '@/components/modals/SuccessRewardModal';
 import CycleSelector from '@/components/common/CycleSelector';
-import { sharedTextInputStyles } from '@/components/common/inputStyles';
+import { AppHeader, AppText, Button, Card, Screen, TextField } from '@/components/ui';
+import { colors, spacing } from '@/theme';
 import { getApiErrorMessage, parseApiError } from '@/utils/errorParser';
 import { formatAquacultureErrorWithAction } from '@/features/aquaculture/utils/aquacultureErrorPresenter';
 import {
@@ -251,34 +251,27 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
 
   if (sessionScopedCycles.length === 0) {
     return (
-      <View className="flex-1 items-center justify-center bg-cream px-5">
-        <Ionicons name="fish-outline" size={64} color={AQUACARE_COLORS.GRAY_LIGHT} />
-        <Text className="text-lg font-bold text-gray-dark mt-4">{t('noActiveCycles')}</Text>
-        <Text className="text-sm text-gray-light text-center mt-2 mb-6">{t('createCycleToStart')}</Text>
-        <TouchableOpacity className="bg-aquacare-primary px-5 py-3 rounded-lg" onPress={() => navigation.navigate('CreateFarm')}>
-          <Text className="text-white text-base font-semibold">{t('createCycle')}</Text>
-        </TouchableOpacity>
-      </View>
+      <Screen style={{ alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing[5] }}>
+        <Ionicons name="fish-outline" size={64} color={colors.text.muted} />
+        <AppText variant="cardTitle" style={{ marginTop: spacing[4] }}>{t('noActiveCycles')}</AppText>
+        <AppText variant="body" color="muted" style={{ marginTop: spacing[2], marginBottom: spacing[6], textAlign: 'center' }}>{t('createCycleToStart')}</AppText>
+        <Button label={t('createCycle')} onPress={() => navigation.navigate('CreateFarm')} fullWidth={false} />
+      </Screen>
     );
   }
 
   return (
-    <ScrollView className="flex-1 bg-cream">
-      <View className="bg-aquacare-primary flex-row items-center pt-14 pb-4 px-4">
-        <TouchableOpacity className="mr-4" onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color={AQUACARE_COLORS.WHITE} />
-        </TouchableOpacity>
-        <Text className="text-xl font-bold text-white">{t('dailyLogTitle')}</Text>
-      </View>
+    <Screen scroll>
+      <AppHeader title={t('dailyLogTitle')} onBack={() => navigation.goBack()} backLabel={t('back')} />
 
-      <View className="p-4">
+      <View style={{ gap: spacing[5] }}>
         {unitAllocationId ? (
-          <View className="mb-6 rounded-2xl border border-green-200 bg-white p-4">
-            <Text className="text-sm font-semibold text-aquacare-primary mb-1">
+          <Card variant="outlined">
+            <AppText variant="label" color="link" style={{ marginBottom: spacing[1] }}>
               {selectedCycleData?.cycle_name || t('sessionCycleNotSelected')}
-            </Text>
-            <Text className="text-sm text-gray-light">{t('dailyLogUnitContextLabel', { unitName })}</Text>
-          </View>
+            </AppText>
+            <AppText variant="body" color="muted">{t('dailyLogUnitContextLabel', { unitName })}</AppText>
+          </Card>
         ) : (
           <CycleSelector
             cycles={sessionScopedCycles}
@@ -294,15 +287,13 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
           />
         )}
 
-        <View className="mb-6">
-          <Text className="text-base font-bold text-gray-dark mb-3">{t('dailyRecommendedSection')}</Text>
+        <Card>
+          <AppText variant="sectionTitle" style={{ marginBottom: spacing[4] }}>{t('dailyRecommendedSection')}</AppText>
 
-          <View className="flex-row gap-3">
-            <View className="flex-1 mb-4">
-              <Text className="text-sm font-medium text-gray-dark mb-2">{t('mortality')}</Text>
-              <TextInput
-                className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
-              style={sharedTextInputStyles.base}
+          <View style={{ flexDirection: 'row', gap: spacing[3] }}>
+            <View style={{ flex: 1 }}>
+              <TextField
+                label={t('mortality')}
                 value={formData.mortality_count}
                 onChangeText={(value) => setFormData((prev) => ({ ...prev, mortality_count: value }))}
                 placeholder={t('mortalityPlaceholder')}
@@ -310,11 +301,9 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
               />
             </View>
 
-            <View className="flex-1 mb-4">
-              <Text className="text-sm font-medium text-gray-dark mb-2">{t('mortalityReason')}</Text>
-              <TextInput
-                className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
-              style={sharedTextInputStyles.base}
+            <View style={{ flex: 1 }}>
+              <TextField
+                label={t('mortalityReason')}
                 value={formData.mortality_reason}
                 onChangeText={(value) => setFormData((prev) => ({ ...prev, mortality_reason: value }))}
                 placeholder={t('mortalityReasonPlaceholder')}
@@ -322,12 +311,10 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
             </View>
           </View>
 
-          <View className="flex-row gap-3">
-            <View className="flex-1 mb-4">
-              <Text className="text-sm font-medium text-gray-dark mb-2">{t('feedQuantity')}</Text>
-              <TextInput
-                className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
-              style={sharedTextInputStyles.base}
+          <View style={{ flexDirection: 'row', gap: spacing[3] }}>
+            <View style={{ flex: 1 }}>
+              <TextField
+                label={t('feedQuantity')}
                 value={formData.feed_quantity}
                 onChangeText={(value) => setFormData((prev) => ({ ...prev, feed_quantity: value }))}
                 placeholder={t('feedQuantityPlaceholder')}
@@ -335,11 +322,9 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
               />
             </View>
 
-            <View className="flex-1 mb-4">
-              <Text className="text-sm font-medium text-gray-dark mb-2">{t('feedType')}</Text>
-              <TextInput
-                className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
-              style={sharedTextInputStyles.base}
+            <View style={{ flex: 1 }}>
+              <TextField
+                label={t('feedType')}
                 value={formData.feed_type}
                 onChangeText={(value) => setFormData((prev) => ({ ...prev, feed_type: value }))}
                 placeholder={t('feedTypePlaceholder')}
@@ -347,11 +332,9 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
             </View>
           </View>
 
-          <View className="mb-4">
-            <Text className="text-sm font-medium text-gray-dark mb-2">{t('feedSizeMm')}</Text>
-            <TextInput
-              className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
-              style={sharedTextInputStyles.base}
+          <View>
+            <TextField
+              label={t('feedSizeMm')}
               value={formData.feed_size_mm}
               onChangeText={(value) => setFormData((prev) => ({ ...prev, feed_size_mm: value }))}
               placeholder={t('feedSizeMmPlaceholder')}
@@ -359,12 +342,10 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
             />
           </View>
 
-          <View className="flex-row gap-3">
-            <View className="flex-1 mb-4">
-              <Text className="text-sm font-medium text-gray-dark mb-2">{t('waterTemperatureUnit')}</Text>
-              <TextInput
-                className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
-              style={sharedTextInputStyles.base}
+          <View style={{ flexDirection: 'row', gap: spacing[3] }}>
+            <View style={{ flex: 1 }}>
+              <TextField
+                label={t('waterTemperatureUnit')}
                 value={formData.water_temperature}
                 onChangeText={(value) => setFormData((prev) => ({ ...prev, water_temperature: value }))}
                 placeholder={t('waterTemperaturePlaceholder')}
@@ -372,11 +353,9 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
               />
             </View>
 
-            <View className="flex-1 mb-4">
-              <Text className="text-sm font-medium text-gray-dark mb-2">{t('dissolvedOxygen')}</Text>
-              <TextInput
-                className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
-              style={sharedTextInputStyles.base}
+            <View style={{ flex: 1 }}>
+              <TextField
+                label={t('dissolvedOxygen')}
                 value={formData.dissolved_oxygen}
                 onChangeText={(value) => setFormData((prev) => ({ ...prev, dissolved_oxygen: value }))}
                 placeholder={t('dissolvedOxygenPlaceholder')}
@@ -385,12 +364,10 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
             </View>
           </View>
 
-          <View className="flex-row gap-3">
-            <View className="flex-1 mb-4">
-              <Text className="text-sm font-medium text-gray-dark mb-2">{t('phLevel')}</Text>
-              <TextInput
-                className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
-              style={sharedTextInputStyles.base}
+          <View style={{ flexDirection: 'row', gap: spacing[3] }}>
+            <View style={{ flex: 1 }}>
+              <TextField
+                label={t('phLevel')}
                 value={formData.ph_level}
                 onChangeText={(value) => setFormData((prev) => ({ ...prev, ph_level: value }))}
                 placeholder={t('phLevelPlaceholder')}
@@ -398,11 +375,9 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
               />
             </View>
 
-            <View className="flex-1 mb-4">
-              <Text className="text-sm font-medium text-gray-dark mb-2">{t('ammoniaLevel')}</Text>
-              <TextInput
-                className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
-              style={sharedTextInputStyles.base}
+            <View style={{ flex: 1 }}>
+              <TextField
+                label={t('ammoniaLevel')}
                 value={formData.ammonia_level}
                 onChangeText={(value) => setFormData((prev) => ({ ...prev, ammonia_level: value }))}
                 placeholder={t('ammoniaLevelPlaceholder')}
@@ -411,22 +386,18 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
             </View>
           </View>
 
-          <View className="mb-4">
-            <Text className="text-sm font-medium text-gray-dark mb-2">{t('feedingTimes')}</Text>
-            <TextInput
-              className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
-              style={sharedTextInputStyles.base}
+          <View>
+            <TextField
+              label={t('feedingTimes')}
               value={formData.feeding_times}
               onChangeText={(value) => setFormData((prev) => ({ ...prev, feeding_times: value }))}
               placeholder={t('feedingTimesPlaceholder')}
             />
           </View>
 
-          <View className="mb-4">
-            <Text className="text-sm font-medium text-gray-dark mb-2">{t('observations')}</Text>
-            <TextInput
-              className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark h-24"
-              style={[sharedTextInputStyles.multiline, { height: 96 }]}
+          <View>
+            <TextField
+              label={t('observations')}
               value={formData.observations}
               onChangeText={(value) => setFormData((prev) => ({ ...prev, observations: value }))}
               placeholder={t('observationsPlaceholder')}
@@ -435,14 +406,12 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
             />
           </View>
 
-          <Text className="text-base font-bold text-gray-dark mb-3 mt-1">{t('weeklyRecommendedSection')}</Text>
+          <AppText variant="sectionTitle" style={{ marginTop: spacing[1], marginBottom: spacing[4] }}>{t('weeklyRecommendedSection')}</AppText>
 
-          <View className="flex-row gap-3">
-            <View className="flex-1 mb-4">
-              <Text className="text-sm font-medium text-gray-dark mb-2">{t('sampleCount')}</Text>
-              <TextInput
-                className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
-              style={sharedTextInputStyles.base}
+          <View style={{ flexDirection: 'row', gap: spacing[3] }}>
+            <View style={{ flex: 1 }}>
+              <TextField
+                label={t('sampleCount')}
                 value={formData.sample_count}
                 onChangeText={(value) => setFormData((prev) => ({ ...prev, sample_count: value }))}
                 placeholder={t('exampleAffectedCount')}
@@ -450,11 +419,9 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
               />
             </View>
 
-            <View className="flex-1 mb-4">
-              <Text className="text-sm font-medium text-gray-dark mb-2">{t('sampleWeight')}</Text>
-              <TextInput
-                className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
-              style={sharedTextInputStyles.base}
+            <View style={{ flex: 1 }}>
+              <TextField
+                label={t('sampleWeight')}
                 value={formData.sample_total_weight}
                 onChangeText={(value) => setFormData((prev) => ({ ...prev, sample_total_weight: value }))}
                 placeholder={t('sampleWeightPlaceholder')}
@@ -462,7 +429,7 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
               />
             </View>
           </View>
-        </View>
+        </Card>
 
         {formData.sample_count && formData.sample_total_weight && (() => {
           const sampleWeight = parseOptionalNumber(formData.sample_total_weight) || 0;
@@ -470,32 +437,19 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
           const avgWeight = estimateAverageWeight(sampleWeight, sampleCount);
 
           return (
-            <View className="mb-6">
-              <Text className="text-base font-bold text-gray-dark mb-3">{t('autoCalculations')}</Text>
-              <View className="bg-white p-4 rounded-lg border border-green-200">
-                <View className="flex-row justify-between mb-2">
-                  <Text className="text-sm text-gray-light">{t('averageWeight')} :</Text>
-                  <Text className="text-sm font-semibold text-aquacare-primary">{avgWeight.toFixed(1)} g</Text>
+            <View>
+              <AppText variant="sectionTitle" style={{ marginBottom: spacing[4] }}>{t('autoCalculations')}</AppText>
+              <Card variant="outlined">
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <AppText variant="caption" color="muted">{t('averageWeight')} :</AppText>
+                  <AppText variant="caption" color="link">{avgWeight.toFixed(1)} g</AppText>
                 </View>
-              </View>
+              </Card>
             </View>
           );
         })()}
 
-        <TouchableOpacity
-          className={`bg-aquacare-primary flex-row items-center justify-center py-4 rounded-lg mt-4 gap-2 ${saving ? 'opacity-60' : ''}`}
-          onPress={handleSave}
-          disabled={saving}
-        >
-          {saving ? (
-            <ActivityIndicator size="small" color={AQUACARE_COLORS.WHITE} />
-          ) : (
-            <>
-              <Ionicons name="checkmark" size={20} color={AQUACARE_COLORS.WHITE} />
-              <Text className="text-white text-base font-semibold">{t('save')}</Text>
-            </>
-          )}
-        </TouchableOpacity>
+        <Button label={t('save')} onPress={handleSave} disabled={saving} loading={saving} iconLeft="checkmark" />
       </View>
 
       <SuccessRewardModal
@@ -506,6 +460,6 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
         estimatedBiomass={rewardData.estimatedBiomass}
         stockValue={rewardData.stockValue}
       />
-    </ScrollView>
+    </Screen>
   );
 }

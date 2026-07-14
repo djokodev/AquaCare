@@ -25,6 +25,7 @@ import { formatDate } from '@/utils';
 import logger from '@/utils/logger';
 import { parseApiError } from '@/utils/errorParser';
 import { formatAquacultureErrorWithAction } from '@/features/aquaculture/utils/aquacultureErrorPresenter';
+import { AppHeader, Button, Card, ErrorState, LoadingState, Screen } from '@/components/ui';
 
 type ReportDetailScreenNavigationProp = StackNavigationProp<RootStackParamList, 'ReportDetail'>;
 type ReportDetailScreenRouteProp = RouteProp<RootStackParamList, 'ReportDetail'>;
@@ -286,14 +287,7 @@ export default function ReportDetailScreen({ navigation, route }: ReportDetailSc
     }
   };
 
-  const renderHeader = () => (
-    <View className="bg-aquacare-primary flex-row items-center pt-14 pb-4 px-4">
-      <TouchableOpacity className="mr-4" onPress={() => navigation.goBack()}>
-        <Ionicons name="arrow-back" size={24} color={AQUACARE_COLORS.WHITE} />
-      </TouchableOpacity>
-      <Text className="text-xl font-bold text-white">{t('reportDetailTitle')}</Text>
-    </View>
-  );
+  const renderHeader = () => <AppHeader title={t('reportDetailTitle')} onBack={() => navigation.goBack()} backLabel={t('back')} />;
 
   const payload = useMemo(
     () => ((report?.payload || {}) as Record<string, unknown>),
@@ -615,31 +609,15 @@ export default function ReportDetailScreen({ navigation, route }: ReportDetailSc
   );
 
   if (loading) {
-    return (
-      <View className="flex-1 bg-cream">
-        {renderHeader()}
-        <View className="flex-1 items-center justify-center">
-          <ActivityIndicator size="large" color={AQUACARE_COLORS.GREEN_PRIMARY} />
-          <Text className="mt-3 text-gray-dark">{t('loading')}</Text>
-        </View>
-      </View>
-    );
+    return <Screen><AppHeader title={t('reportDetailTitle')} onBack={() => navigation.goBack()} backLabel={t('back')} /><LoadingState message={t('loading')} /></Screen>;
   }
 
   if (!report) {
-    return (
-      <View className="flex-1 bg-cream">
-        {renderHeader()}
-        <View className="flex-1 items-center justify-center px-6">
-          <Ionicons name="alert-circle" size={46} color={AQUACARE_COLORS.ERROR} />
-          <Text className="text-base text-error mt-3 text-center">{error || t('reportLoadError')}</Text>
-        </View>
-      </View>
-    );
+    return <Screen><AppHeader title={t('reportDetailTitle')} onBack={() => navigation.goBack()} backLabel={t('back')} /><ErrorState message={error || t('reportLoadError')} /></Screen>;
   }
 
   return (
-    <View className="flex-1 bg-cream">
+    <Screen>
       {renderHeader()}
 
       <FlatList
@@ -650,6 +628,6 @@ export default function ReportDetailScreen({ navigation, route }: ReportDetailSc
         contentContainerStyle={{ paddingBottom: 24 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       />
-    </View>
+    </Screen>
   );
 }
