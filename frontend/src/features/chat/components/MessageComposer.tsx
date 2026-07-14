@@ -8,7 +8,6 @@
 import React, { useState } from 'react';
 import {
   View,
-  TextInput,
   Image,
   StyleSheet,
   Alert,
@@ -26,9 +25,8 @@ import {
   MAX_MESSAGE_LENGTH,
 } from '../domain/constants';
 import type { MediaType } from '../types/chat';
-import { sharedTextInputStyles } from '@/components/common/inputStyles';
-import { AppText, IconButton } from '@/components/ui';
-import { colors, radii, typography } from '@/theme';
+import { AppText, IconButton, MultilineTextField } from '@/components/ui';
+import { colors, radii, sizing, spacing } from '@/theme';
 
 interface MediaFile {
   uri: string;
@@ -254,18 +252,14 @@ export function MessageComposer({
           icon="image-outline"
           accessibilityLabel={t('chatSelectMedia')}
           variant="ghost"
-          style={styles.mediaButton}
           disabled={disabled || sending}
         />
 
         {/* Text input */}
-        <TextInput
-          style={styles.textInput}
+        <MultilineTextField
           value={content}
           onChangeText={setContent}
           placeholder={t('chatPlaceholder')}
-          placeholderTextColor={colors.text.muted}
-          multiline
           maxLength={MAX_MESSAGE_LENGTH}
           editable={!disabled && !sending}
           returnKeyType="default"
@@ -299,29 +293,29 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface.card,
     borderTopWidth: 1,
     borderTopColor: colors.border.subtle,
-    paddingBottom: 8,
+    paddingBottom: spacing[2],
   },
   offlineBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    gap: spacing[2],
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2],
     backgroundColor: colors.surface.page,
   },
   mediaPreview: {
-    marginHorizontal: 12,
-    marginTop: 12,
+    marginHorizontal: spacing[3],
+    marginTop: spacing[3],
     position: 'relative',
   },
   previewImage: {
-    width: 120,
-    height: 90,
+    width: sizing.avatarLarge * 2,
+    height: sizing.inputHeight * 2,
     borderRadius: radii.md,
   },
   previewVideo: {
-    width: 120,
-    height: 90,
+    width: sizing.avatarLarge * 2,
+    height: sizing.inputHeight * 2,
     borderRadius: radii.md,
     backgroundColor: colors.text.primary,
     justifyContent: 'center',
@@ -329,35 +323,21 @@ const styles = StyleSheet.create({
   },
   removeMediaButton: {
     position: 'absolute',
-    top: -8,
-    right: -8,
+    top: -spacing[2],
+    right: -spacing[2],
     backgroundColor: colors.surface.card,
   },
   inputContainer: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
-    paddingHorizontal: 12,
-    paddingTop: 12,
-    gap: 8,
-  },
-  mediaButton: {
-    padding: 8,
-  },
-  textInput: {
-    ...sharedTextInputStyles.multiline,
-    minHeight: 40,
-    maxHeight: 100,
-    flex: 1,
-    backgroundColor: colors.surface.page,
-    borderRadius: radii.full,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    ...typography.body,
+    alignItems: 'center',
+    paddingHorizontal: spacing[3],
+    paddingTop: spacing[3],
+    gap: spacing[2],
   },
   sendButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: sizing.touchTargetMinimum,
+    height: sizing.touchTargetMinimum,
+    borderRadius: radii.full,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -369,8 +349,8 @@ const styles = StyleSheet.create({
   },
   characterCountContainer: {
     alignItems: 'flex-end',
-    paddingHorizontal: 16,
-    paddingTop: 4,
+    paddingHorizontal: spacing[4],
+    paddingTop: spacing[1],
   },
   characterCount: {
     color: colors.text.muted,

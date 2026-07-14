@@ -47,7 +47,7 @@ import { MessageBubble } from '../components/MessageBubble';
 import { MessageComposer } from '../components/MessageComposer';
 import type { Conversation, Message, MediaType } from '../types/chat';
 import { AUTO_REFRESH_INTERVAL_MS } from '../domain/constants';
-import { AppText, EmptyState, ErrorState, IconButton, LoadingState } from '@/components/ui';
+import { AppText, EmptyState, ErrorState, IconButton, InlineAlert, LoadingState } from '@/components/ui';
 import { colors, shadows, spacing } from '@/theme';
 
 /**
@@ -319,6 +319,15 @@ export function ChatScreen() {
     [t]
   );
 
+  const handleRetryInitialLoad = useCallback(async () => {
+    const conversationResult = await dispatch(fetchConversation());
+    if (conversationResult.meta.requestStatus === 'fulfilled' && conversationResult.payload) {
+      const conversationId = (conversationResult.payload as Conversation).id;
+      await dispatch(fetchMessages({ conversationId, page: 1 }));
+      await syncOfflineMessagesIfOnline(conversationId);
+    }
+  }, [dispatch, syncOfflineMessagesIfOnline]);
+
   /**
    * Render message item
    */
@@ -348,7 +357,7 @@ export function ChatScreen() {
 
     if (conversationError || messagesError) {
       return (
-        <ErrorState title={formatError(conversationError || messagesError) ?? t('error')} message={t('chatErrorRetry')} />
+        <ErrorState title={formatError(conversationError || messagesError) ?? t('error')} message={t('chatErrorRetry')} actionLabel={t('retry')} onAction={() => void handleRetryInitialLoad()} />
       );
     }
 
@@ -359,6 +368,7 @@ export function ChatScreen() {
     conversationError,
     conversationLoading,
     formatError,
+    handleRetryInitialLoad,
     messagesError,
     messagesLoading,
     t,
@@ -368,18 +378,21 @@ export function ChatScreen() {
    * Render list header (sync status)
    */
   const renderListHeader = useCallback(() => {
-    if (syncingOffline && offlineQueueCount > 0) {
-      return (
+    const visibleError = messages.length > 0 ? formatError(messagesError || conversationError) : null;
+    return (
+      <View style={styles.listHeader}>
+        {visibleError ? <InlineAlert tone="error" message={visibleError} /> : null}
+        {syncingOffline && offlineQueueCount > 0 ? (
         <View style={styles.syncBanner}>
           <ActivityIndicator size="small" color={colors.brand.primary} />
           <AppText variant="caption">
             {t('chatSyncingOffline', { count: offlineQueueCount })}
           </AppText>
         </View>
-      );
-    }
-    return null;
-  }, [offlineQueueCount, syncingOffline, t]);
+        ) : null}
+      </View>
+    );
+  }, [conversationError, formatError, messages.length, messagesError, offlineQueueCount, syncingOffline, t]);
 
   const handleScroll = useCallback(({ nativeEvent }: { nativeEvent: any }) => {
     const { contentOffset, contentSize, layoutMeasurement } = nativeEvent;
@@ -512,6 +525,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface.card,
     marginBottom: spacing[2],
   },
+  listHeader: { gap: spacing[2] },
   scrollToBottomButton: {
     position: 'absolute',
     right: spacing[4],

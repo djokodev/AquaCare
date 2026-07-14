@@ -1,5 +1,7 @@
 export const fr = {
   chatSendMessage: 'Envoyer le message',
+  chatOpenImage: "Ouvrir l'image",
+  chatOpenImageHint: "Affiche l'image en plein écran",
   // Navigation
   login: 'Connexion',
   register: "S'inscrire",

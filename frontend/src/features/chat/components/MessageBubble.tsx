@@ -101,6 +101,10 @@ export function MessageBubble({ message, onImagePress }: MessageBubbleProps) {
         <TouchableOpacity
           onPress={() => onImagePress && onImagePress(message.media_url!)}
           activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel={t('chatOpenImage')}
+          accessibilityHint={t('chatOpenImageHint')}
+          hitSlop={spacing[2]}
         >
           <Image
             source={{ uri: message.media_url }}

@@ -1,5 +1,7 @@
 ﻿export const en = {
   chatSendMessage: 'Send message',
+  chatOpenImage: 'Open image',
+  chatOpenImageHint: 'Displays the image full screen',
 
   // Navigation
   login: 'Login',

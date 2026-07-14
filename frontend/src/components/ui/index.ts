@@ -8,6 +8,7 @@ export { AppHeader } from './AppHeader';
 export { Screen } from './Screen';
 export { FormField } from './FormField';
 export { TextField } from './TextField';
+export { MultilineTextField } from './MultilineTextField';
 export { SelectionModal, type SelectionOption } from './SelectionModal';
 export { SegmentedControl, type SegmentedControlOption } from './SegmentedControl';
 export { LoadingState, EmptyState, ErrorState, InlineAlert } from './States';

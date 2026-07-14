@@ -145,6 +145,23 @@ describe('features/chat/screens/ChatScreen', () => {
     expect(getByText('chatFetchConversationError')).toBeTruthy();
   });
 
+  it('relance le chargement initial depuis erreur', async () => {
+    mockState.chat.conversation = null;
+    mockState.chat.conversationError = 'chatFetchConversationError';
+    const screen = render(<ChatScreen />);
+    const callsBeforeRetry = (fetchConversation as unknown as jest.Mock).mock.calls.length;
+    fireEvent.press(screen.getByText('retry'));
+    await waitFor(() => expect(fetchConversation).toHaveBeenCalledTimes(callsBeforeRetry + 1));
+  });
+
+  it('conserve les messages visibles pendant une erreur de refresh', () => {
+    mockState.chat.messages = [{ id: 'msg-visible', conversation: 'conv-1', sender_type: 'admin', content: 'Message conservé', media_type: 'none', media_url: null, is_read: false, created_offline: false, created_at: '2026-02-22T10:00:00Z', updated_at: '2026-02-22T10:00:00Z' }];
+    mockState.chat.messagesError = 'chatFetchMessagesError';
+    const screen = render(<ChatScreen />);
+    expect(screen.getByText('Message conservé')).toBeTruthy();
+    expect(screen.getByText('chatFetchMessagesError')).toBeTruthy();
+  });
+
   it('envoie un message texte avec état offline', async () => {
     const { getByPlaceholderText, getByLabelText } = render(<ChatScreen />);
     fireEvent.changeText(getByPlaceholderText('chatPlaceholder'), 'Salut support');
