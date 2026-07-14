@@ -49,6 +49,34 @@ describe('features/chat/components/MessageComposer', () => {
     expect(screen.queryByDisplayValue('Bonjour')).toBeNull();
   });
 
+  it('empêche deux envois pendant une requête en attente', async () => {
+    let resolveSend: (() => void) | undefined;
+    const pendingSend = new Promise<void>((resolve) => {
+      resolveSend = resolve;
+    });
+    const onSendMessage = jest.fn(() => pendingSend);
+    const screen = render(<MessageComposer onSendMessage={onSendMessage} />);
+
+    fireEvent.changeText(screen.getByPlaceholderText('chatPlaceholder'), 'Bonjour');
+    const sendButton = screen.getByLabelText('chatSendMessage');
+
+    await act(async () => {
+      fireEvent.press(sendButton);
+      fireEvent.press(sendButton);
+    });
+
+    expect(onSendMessage).toHaveBeenCalledTimes(1);
+    expect(screen.getByLabelText('chatSendMessage').props.accessibilityState).toMatchObject({
+      busy: true,
+      disabled: true,
+    });
+
+    await act(async () => {
+      resolveSend?.();
+      await pendingSend;
+    });
+  });
+
   it('affiche une erreur si l’envoi échoue', async () => {
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
     const onSendMessage = jest.fn().mockRejectedValue(new Error('boom'));

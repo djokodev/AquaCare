@@ -5,7 +5,7 @@
  * Supports text + media (image/video) with validation
  */
 
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View,
   Image,
@@ -52,6 +52,7 @@ export function MessageComposer({
   const [mediaFile, setMediaFile] = useState<MediaFile | null>(null);
   const [mediaType, setMediaType] = useState<MediaType>('none');
   const [sending, setSending] = useState(false);
+  const sendingRef = useRef(false);
 
   /**
    * Request media library permissions
@@ -179,6 +180,8 @@ export function MessageComposer({
    * Send message
    */
   const handleSend = async () => {
+    if (sendingRef.current || disabled) return;
+
     // Validate content
     const validation = validateMessageContent(content);
     if (!validation.isValid) {
@@ -189,6 +192,7 @@ export function MessageComposer({
       return;
     }
 
+    sendingRef.current = true;
     setSending(true);
 
     try {
@@ -202,6 +206,7 @@ export function MessageComposer({
       const message = error instanceof Error ? error.message : t('chatSendErrorGeneric');
       Alert.alert(t('chatSendError'), message);
     } finally {
+      sendingRef.current = false;
       setSending(false);
     }
   };
@@ -273,6 +278,7 @@ export function MessageComposer({
           tone="inverse"
           style={[styles.sendButton, canSend ? styles.sendButtonActive : styles.sendButtonDisabled]}
           disabled={!canSend}
+          accessibilityState={{ busy: sending }}
         />
       </View>
 
