@@ -1,4 +1,5 @@
 import React from 'react';
+jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }) }));
 import { render, fireEvent } from '@testing-library/react-native';
 import OrdersHistoryScreen from '../OrdersHistoryScreen';
 
@@ -76,12 +77,12 @@ describe('OrdersHistoryScreen', () => {
   });
 
   it('affiche le prefixe i18n du point de retrait sans branding hardcode', () => {
-    const { getByText, queryByText } = render(<OrdersHistoryScreen />);
+    const { getByLabelText, getByText, queryByText } = render(<OrdersHistoryScreen />);
 
     expect(getByText('sacksToReceive')).toBeTruthy();
     expect(queryByText('averageOrder')).toBeNull();
 
-    fireEvent.press(getByText('ORD-001'));
+    fireEvent.press(getByLabelText('details'));
 
     expect(getByText('pickupLocationPrefix Ndokoti')).toBeTruthy();
     expect(queryByText(/AquaCare/i)).toBeNull();
