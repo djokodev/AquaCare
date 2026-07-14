@@ -16,6 +16,10 @@ jest.mock('react-redux', () => ({
   useSelector: (selector: any) => selector(mockState),
 }));
 
+jest.mock('react-native-safe-area-context', () => ({
+  useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
+}));
+
 describe('ProductCatalogScreen', () => {
   const product = {
     id: 'prod-1',
@@ -124,7 +128,7 @@ describe('ProductCatalogScreen', () => {
   it('conserve le contexte Magasin quand on ouvre le panier depuis le catalogue', () => {
     const { getByLabelText } = renderScreen();
 
-    fireEvent.press(getByLabelText('cart'));
+    fireEvent.press(getByLabelText('cart 2'));
 
     expect(mockNavigate).toHaveBeenCalledWith('Cart', {
       cycleId: 'cycle-store',
