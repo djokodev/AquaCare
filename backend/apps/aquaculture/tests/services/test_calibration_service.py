@@ -6,7 +6,7 @@ import pytest
 from django.utils import timezone
 
 from aquaculture.domain.exceptions import BusinessRuleViolation
-from aquaculture.models import CalibrationOperation, CalibrationTank
+from aquaculture.models import CalibrationOperation, CalibrationTank, CycleUnitAllocation, ProductionUnit
 from aquaculture.services.calibration_service import CalibrationService
 
 
@@ -79,3 +79,40 @@ class TestCalibrationService:
         assert CalibrationOperation.objects.count() == 1
         first.destination_cycle.refresh_from_db()
         assert first.destination_cycle.current_count == 200
+
+    def test_calibration_from_unit_debits_only_selected_allocation(self, production_cycle):
+        source = self.setup_source(production_cycle)
+        unit = ProductionUnit.objects.create(
+            farm_profile=source.farm_profile,
+            name='Cage 1',
+            unit_type='cage',
+            volume_m3=Decimal('10'),
+        )
+        allocation = CycleUnitAllocation.objects.create(
+            cycle=source,
+            production_unit=unit,
+            initial_fish_count=400,
+            current_fish_count=400,
+            initial_biomass_kg=Decimal('40'),
+            current_biomass_kg=Decimal('40'),
+        )
+        tank = CalibrationTank.objects.create(
+            farm_profile=source.farm_profile,
+            name='Bac A',
+            volume_m3=10,
+        )
+
+        operation, _, _ = self.calibrate(
+            source,
+            tank,
+            source_cycle_unit_allocation=allocation.id,
+            transferred_count=100,
+            transferred_average_weight_g=Decimal('120'),
+        )
+
+        allocation.refresh_from_db()
+        source.refresh_from_db()
+        assert operation.source_cycle_unit_allocation_id == allocation.id
+        assert allocation.current_fish_count == 300
+        assert allocation.current_biomass_kg == Decimal('28.00')
+        assert source.current_count == 300

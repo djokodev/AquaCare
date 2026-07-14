@@ -88,6 +88,15 @@ describe('features/aquaculture/screens/CreateFarmScreen', () => {
     expect(getByText('createFarmTitle')).toBeTruthy();
   });
 
+  it('permet de préparer les bacs de calibrage sans perdre le formulaire', () => {
+    const { getByText } = render(<CreateFarmScreen navigation={navigation} />);
+
+    expect(getByText('prepareCalibrationTanks')).toBeTruthy();
+    fireEvent.press(getByText('manageCalibrationTanks'));
+
+    expect(navigation.navigate).toHaveBeenCalledWith('CalibrationTanks');
+  });
+
   it('permet de revenir au dashboard via la fleche de retour', () => {
     const { getByTestId } = render(<CreateFarmScreen navigation={navigation} />);
 

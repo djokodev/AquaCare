@@ -1189,6 +1189,17 @@ export default function CreateFarmScreen({ navigation }: Props) {
         onChangeText={v => setField('survivalRate', v)}
       />
 
+      <Card variant="outlined" style={styles.calibrationPreparationCard}>
+        <AppText variant="cardTitle">{t('prepareCalibrationTanks')}</AppText>
+        <AppText color="muted">{t('prepareCalibrationTanksDescription')}</AppText>
+        <Button
+          label={t('manageCalibrationTanks')}
+          variant="outline"
+          iconLeft="cube-outline"
+          onPress={() => navigation.navigate('CalibrationTanks')}
+        />
+      </Card>
+
       {/* CTA */}
       <Button
         testID="createFarmSimulateButton"
@@ -1292,6 +1303,10 @@ const styles = StyleSheet.create({
   simulateButton: {
     marginTop: spacing[3],
     backgroundColor: colors.brand.primary,
+  },
+  calibrationPreparationCard: {
+    marginTop: spacing[5],
+    gap: spacing[3],
   },
   sectionTitle: {
     flexDirection: 'row',

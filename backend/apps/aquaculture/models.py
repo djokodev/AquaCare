@@ -1035,6 +1035,13 @@ class CalibrationOperation(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     client_uuid = models.UUIDField(unique=True)
     source_cycle = models.ForeignKey(ProductionCycle, on_delete=models.PROTECT, related_name='calibration_operations_out')
+    source_cycle_unit_allocation = models.ForeignKey(
+        CycleUnitAllocation,
+        on_delete=models.PROTECT,
+        related_name='calibration_operations_out',
+        null=True,
+        blank=True,
+    )
     destination_cycle = models.ForeignKey(ProductionCycle, on_delete=models.PROTECT, related_name='calibration_operations_in')
     calibrated_at = models.DateTimeField()
     transferred_count = models.PositiveIntegerField()

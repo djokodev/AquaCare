@@ -1651,4 +1651,7 @@
   calibrationError: 'The grading operation could not be saved.',
   calibrationPending: 'Grading pending',
   calibrationPendingMessage: 'The operation will be sent when the connection returns.',
+  prepareCalibrationTanks: 'Prepare calibration tanks',
+  prepareCalibrationTanksDescription: 'Optional. Create them now or later when grading fish.',
+  manageCalibrationTanks: 'Create or manage tanks',
 };

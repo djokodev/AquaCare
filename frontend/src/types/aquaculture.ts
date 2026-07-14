@@ -142,6 +142,7 @@ export interface CalibrationOperation {
   id: string;
   client_uuid: string;
   source_cycle: string;
+  source_cycle_unit_allocation?: string | null;
   destination_cycle: string;
   source_cycle_name?: string;
   destination_cycle_name?: string;
@@ -158,6 +159,7 @@ export interface CalibrationRequest {
   client_uuid: string;
   destination_tank?: string;
   destination_tank_client_uuid?: string;
+  source_cycle_unit_allocation?: string;
   calibrated_at: string;
   transferred_count: number;
   transferred_average_weight_g?: number;

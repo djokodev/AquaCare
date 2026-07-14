@@ -44,6 +44,8 @@ interface QuickActionsPreviewProps {
     cycleUnitAllocationId: string;
     productionUnitId: string;
     productionUnitName: string;
+    currentFishCount?: number;
+    currentBiomassKg?: number;
   };
 
   /**

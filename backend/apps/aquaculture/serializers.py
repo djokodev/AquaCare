@@ -699,6 +699,7 @@ class CalibrationOperationSerializer(serializers.ModelSerializer):
 class CalibrationRequestSerializer(serializers.Serializer):
     client_uuid = serializers.UUIDField()
     source_cycle = serializers.UUIDField(required=False)
+    source_cycle_unit_allocation = serializers.UUIDField(required=False)
     destination_tank = serializers.UUIDField(required=False)
     destination_tank_client_uuid = serializers.UUIDField(required=False)
     calibrated_at = serializers.DateTimeField()

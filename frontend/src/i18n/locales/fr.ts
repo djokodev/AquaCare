@@ -1652,4 +1652,7 @@ export const fr = {
   calibrationError: 'Le calibrage n’a pas pu être enregistré.',
   calibrationPending: 'Calibrage en attente',
   calibrationPendingMessage: 'L’opération sera envoyée dès le retour de la connexion.',
+  prepareCalibrationTanks: 'Préparer des bacs de calibrage',
+  prepareCalibrationTanksDescription: 'Facultatif. Créez-les maintenant ou plus tard, au moment du calibrage.',
+  manageCalibrationTanks: 'Créer ou gérer les bacs',
 };

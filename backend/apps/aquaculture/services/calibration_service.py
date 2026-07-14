@@ -9,7 +9,7 @@ from notifications.services import NotificationService
 
 from ..domain.calibration import WEIGHT_DIFFERENCE_WARNING_THRESHOLD, StockState, biomass_for, transfer
 from ..domain.exceptions import BusinessRuleViolation
-from ..models import CalibrationOperation, CalibrationTank, ProductionCycle
+from ..models import CalibrationOperation, CalibrationTank, CycleUnitAllocation, ProductionCycle
 
 
 class CalibrationService:
@@ -17,7 +17,7 @@ class CalibrationService:
     @transaction.atomic
     def calibrate(*, source_cycle, destination_tank, user, client_uuid, calibrated_at, transferred_count,
                   transferred_average_weight_g=None, sample_count=None, sample_total_weight_g=None,
-                  size_category='', notes='', created_offline=False):
+                  size_category='', notes='', created_offline=False, source_cycle_unit_allocation=None):
         existing = CalibrationOperation.objects.select_related('source_cycle', 'destination_cycle').filter(client_uuid=client_uuid).first()
         if existing:
             if existing.source_cycle.farm_profile.user_id != user.id:
@@ -25,6 +25,15 @@ class CalibrationService:
             return existing, [], False
 
         source = ProductionCycle.objects.select_for_update().select_related('farm_profile').get(pk=source_cycle.pk)
+        source_allocation = None
+        if source_cycle_unit_allocation:
+            source_allocation = CycleUnitAllocation.objects.select_for_update().select_related('production_unit').filter(
+                pk=source_cycle_unit_allocation,
+                cycle=source,
+                status=CycleUnitAllocation.STATUS_ACTIVE,
+            ).first()
+            if source_allocation is None:
+                raise BusinessRuleViolation(_('Cette unité source est introuvable ou inactive.'))
         tank = CalibrationTank.objects.select_for_update().get(pk=destination_tank.pk)
         if source.farm_profile.user_id != user.id or tank.farm_profile_id != source.farm_profile_id:
             raise BusinessRuleViolation(_('La source et le bac doivent appartenir à votre ferme.'))
@@ -34,7 +43,9 @@ class CalibrationService:
             raise BusinessRuleViolation(_('Ce bac de calibrage est inactif.'))
         if calibrated_at.date() < source.start_date or calibrated_at > timezone.now() + timedelta(minutes=10):
             raise BusinessRuleViolation(_('La date du calibrage est invalide.'))
-        if transferred_count <= 0 or transferred_count >= source.current_count:
+        source_count = source_allocation.current_fish_count if source_allocation else source.current_count
+        source_biomass = source_allocation.current_biomass_kg if source_allocation else source.current_biomass
+        if transferred_count <= 0 or transferred_count >= source_count:
             raise BusinessRuleViolation(_('Le nombre transféré doit être positif et laisser des poissons dans la source.'))
         if sample_count is not None or sample_total_weight_g is not None:
             if not sample_count or not sample_total_weight_g or sample_count <= 0 or sample_total_weight_g <= 0:
@@ -53,7 +64,7 @@ class CalibrationService:
 
         transferred_average_weight_g = Decimal(transferred_average_weight_g)
         transferred_biomass = biomass_for(transferred_count, transferred_average_weight_g)
-        if transferred_biomass >= source.current_biomass:
+        if transferred_biomass >= source_biomass:
             raise BusinessRuleViolation(_('La biomasse transférée dépasse la biomasse disponible.'))
 
         if destination is None:
@@ -71,13 +82,14 @@ class CalibrationService:
                 fingerlings_cost_fcfa=Decimal('0'), other_operational_costs_fcfa=Decimal('0'),
             )
 
-        source_before = StockState(source.current_count, source.current_biomass)
+        source_before = StockState(source_count, source_biomass)
         destination_before = StockState(destination.current_count, destination.current_biomass)
         source_after, destination_after, transferred_biomass = transfer(
             source_before, destination_before, transferred_count, transferred_average_weight_g
         )
         operation = CalibrationOperation.objects.create(
-            client_uuid=client_uuid, source_cycle=source, destination_cycle=destination, calibrated_at=calibrated_at,
+            client_uuid=client_uuid, source_cycle=source, source_cycle_unit_allocation=source_allocation,
+            destination_cycle=destination, calibrated_at=calibrated_at,
             transferred_count=transferred_count, transferred_average_weight_g=transferred_average_weight_g,
             transferred_biomass_kg=transferred_biomass, sample_count=sample_count,
             sample_total_weight_g=sample_total_weight_g, size_category=size_category, notes=notes,
@@ -91,7 +103,22 @@ class CalibrationService:
             destination_biomass_before_kg=destination_before.biomass_kg,
             destination_biomass_after_kg=destination_after.biomass_kg,
         )
-        source.current_count, source.current_biomass, source.current_average_weight = source_after.count, source_after.biomass_kg, source_after.average_weight_g
+        if source_allocation:
+            source_allocation.current_fish_count = source_after.count
+            source_allocation.current_biomass_kg = source_after.biomass_kg
+            source_allocation.save(update_fields=['current_fish_count', 'current_biomass_kg', 'updated_at'])
+            source.current_count = sum(
+                source.unit_allocations.filter(status=CycleUnitAllocation.STATUS_ACTIVE).values_list('current_fish_count', flat=True)
+            )
+            source.current_biomass = sum(
+                source.unit_allocations.filter(status=CycleUnitAllocation.STATUS_ACTIVE).values_list('current_biomass_kg', flat=True),
+                Decimal('0'),
+            )
+            source.current_average_weight = (
+                source.current_biomass * Decimal('1000') / source.current_count
+            ).quantize(Decimal('0.01'))
+        else:
+            source.current_count, source.current_biomass, source.current_average_weight = source_after.count, source_after.biomass_kg, source_after.average_weight_g
         destination.current_count, destination.current_biomass, destination.current_average_weight = destination_after.count, destination_after.biomass_kg, destination_after.average_weight_g
         source.save(update_fields=['current_count', 'current_biomass', 'current_average_weight', 'updated_at'])
         destination.save(update_fields=['current_count', 'current_biomass', 'current_average_weight', 'updated_at'])
@@ -103,7 +130,11 @@ class CalibrationService:
         NotificationService.create_notification(
             user=user, notification_type='alert', title=_('Calibrage effectué'),
             message=_('%(count)s poissons ont été transférés de %(source)s vers %(tank)s. Le bac contient maintenant %(total)s poissons.') % {
-                'count': transferred_count, 'source': source.pond_identifier, 'tank': tank.name, 'total': destination.current_count},
+                'count': transferred_count,
+                'source': source_allocation.production_unit.name if source_allocation else source.pond_identifier,
+                'tank': tank.name,
+                'total': destination.current_count,
+            },
             content_object=destination, metadata={'calibration_operation_id': str(operation.id)}, channels=['in_app'],
         )
         transaction.on_commit(cache.clear)

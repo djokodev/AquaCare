@@ -186,7 +186,13 @@ export type RootStackParamList = {
   };
   CalibrationTanks: undefined;
   CalibrationTankDetail: { tankId: string };
-  CalibrateCycle: { sourceCycleId: string };
+  CalibrateCycle: {
+    sourceCycleId: string;
+    sourceCycleUnitAllocationId?: string;
+    sourceUnitName?: string;
+    sourceCurrentCount?: number;
+    sourceCurrentBiomassKg?: number;
+  };
 };
 
 export type ProfileStackParamList = {
