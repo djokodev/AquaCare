@@ -1,16 +1,13 @@
 import React, { useCallback, useState } from 'react';
 import {
   View,
-  Text,
   ScrollView,
-  TouchableOpacity,
-  ActivityIndicator,
   RefreshControl,
   Modal,
-  TextInput,
   Alert,
   KeyboardAvoidingView,
   Platform,
+  StyleSheet,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp, useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
@@ -18,8 +15,22 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { useDispatch, useSelector } from 'react-redux';
 import { useTranslation } from 'react-i18next';
 
-import { AQUACARE_COLORS } from '@/constants/colors';
-import { sharedTextInputStyles } from '@/components/common/inputStyles';
+import {
+  AppHeader,
+  AppText,
+  Badge,
+  Button,
+  Card,
+  Divider,
+  EmptyState,
+  ErrorState,
+  IconButton,
+  InlineAlert,
+  InteractiveCard,
+  LoadingState,
+  TextField,
+} from '@/components/ui';
+import { colors, spacing } from '@/theme';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
 import { fetchCycleFeedStatus } from '@/features/aquaculture/store/aquacultureSlice';
 import DashboardMetricCard from '@/features/main/components/MetricCard';
@@ -213,300 +224,143 @@ export default function StoreScreen() {
       ? formatNumber(cycleFeedStatus.bags_remaining_to_order, t('bags'), 0)
       : '-';
 
-  return (
-    <View className="flex-1 bg-cream">
-      <View className="bg-white px-5 pt-16 pb-5 flex-row items-center justify-between shadow">
-        <TouchableOpacity onPress={() => navigation.goBack()} className="w-10">
-          <Ionicons name="arrow-back" size={24} color={AQUACARE_COLORS.GRAY_DARK} />
-        </TouchableOpacity>
-        <View className="flex-1 items-center px-3">
-          <Text className="text-2xl font-bold text-gray-dark">{t('storeTitle')}</Text>
-        </View>
-        <TouchableOpacity onPress={handleRefresh} className="w-10 items-end">
-          <Ionicons name="refresh-outline" size={24} color={AQUACARE_COLORS.GREEN_PRIMARY} />
-        </TouchableOpacity>
-      </View>
+  const actionRows = [
+    { label: t('storeManualSubmit'), onPress: openManualModal },
+    { label: t('storeViewProducts'), onPress: handleOpenProducts },
+    { label: t('storeViewCart'), onPress: handleOpenCart },
+    { label: t('storeViewOrders'), onPress: handleOpenOrders },
+    { label: t('storeOrderCycleNeed'), onPress: handleOrderCycleNeed },
+  ];
 
-      {loading && !store ? (
-        <View className="flex-1 items-center justify-center">
-          <ActivityIndicator size="large" color={AQUACARE_COLORS.GREEN_PRIMARY} />
-          <Text className="mt-3 text-base text-gray-light">{t('loading')}</Text>
-        </View>
-      ) : error && !store ? (
-        <View className="flex-1 items-center justify-center px-8">
-          <Ionicons name="alert-circle-outline" size={52} color={AQUACARE_COLORS.ERROR} />
-          <Text className="text-center text-base text-[#991b1b] mt-3">{error}</Text>
-          <TouchableOpacity
-            className="mt-5 bg-aquacare-primary px-6 py-3 rounded-lg"
+  return (
+    <View style={styles.root}>
+      <AppHeader
+        title={t('storeTitle')}
+        onBack={() => navigation.goBack()}
+        backLabel={t('back')}
+        rightAction={
+          <IconButton
+            icon="refresh-outline"
+            variant="ghost"
+            tone="inverse"
+            accessibilityLabel={t('refresh')}
             onPress={handleRefresh}
-          >
-            <Text className="text-white text-base font-semibold">{t('retry')}</Text>
-          </TouchableOpacity>
-        </View>
+            disabled={refreshing}
+          />
+        }
+      />
+      {loading && !store ? (
+        <LoadingState message={t('loading')} />
+      ) : error && !store ? (
+        <ErrorState message={error} actionLabel={t('retry')} onAction={handleRefresh} />
       ) : (
         <ScrollView
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
-          }
-          contentContainerStyle={{ padding: 16, paddingBottom: 24 }}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
+          {error ? <InlineAlert tone="error" message={error} /> : null}
           {store ? (
             <>
-              <View className="bg-white rounded-xl p-4 mb-4">
-                <Text className="text-lg font-bold text-gray-dark mb-3">
-                  {t('storeStatusTitle')}
-                </Text>
-                <View className="flex-row flex-wrap gap-3">
-                  <DashboardMetricCard
-                    value={formatNumber(toNumber(store.summary.estimated_feed_remaining_kg), t('kg'), 2)}
-                    label={t('storeFeedRemaining')}
-                  />
-                  <DashboardMetricCard
-                    value={formatNumber(toNumber(store.summary.feed_consumed_kg), t('kg'), 2)}
-                    label={t('storeFeedConsumed')}
-                  />
-                  <DashboardMetricCard
-                    value={formatCurrency(toNumber(store.summary.feed_expenses_fcfa))}
-                    label={t('storeFeedExpenses')}
-                  />
-                  <DashboardMetricCard
-                    value={remainingToOrderValue}
-                    label={t('storeNeedRemaining')}
-                  />
+              <Card variant="outlined" style={styles.section}>
+                <AppText variant="sectionTitle">{t('storeStatusTitle')}</AppText>
+                <View style={styles.metrics}>
+                  <DashboardMetricCard value={formatNumber(toNumber(store.summary.estimated_feed_remaining_kg), t('kg'), 2)} label={t('storeFeedRemaining')} />
+                  <DashboardMetricCard value={formatNumber(toNumber(store.summary.feed_consumed_kg), t('kg'), 2)} label={t('storeFeedConsumed')} />
+                  <DashboardMetricCard value={formatCurrency(toNumber(store.summary.feed_expenses_fcfa))} label={t('storeFeedExpenses')} />
+                  <DashboardMetricCard value={remainingToOrderValue} label={t('storeNeedRemaining')} />
                 </View>
-              </View>
-
-              {store?.summary.stock_tracking_started_at ? (
-                <Text className="text-xs text-gray-light mb-4">
+              </Card>
+              {store.summary.stock_tracking_started_at ? (
+                <AppText variant="caption" color="muted" style={styles.tracking}>
                   {t('storeTrackingSince')}{' '}
-                  {new Date(store.summary.stock_tracking_started_at).toLocaleDateString(
-                    i18n.language?.startsWith('fr') ? 'fr-FR' : 'en-US'
-                  )}
-                </Text>
+                  {new Date(store.summary.stock_tracking_started_at).toLocaleDateString(i18n.language?.startsWith('fr') ? 'fr-FR' : 'en-US')}
+                </AppText>
               ) : null}
             </>
           ) : null}
-
-          <View className="bg-white rounded-2xl p-4 border border-[#dbe3d9] mb-4">
-            <View className="flex-row items-center justify-between mb-3">
-              <Text className="text-base font-bold text-gray-dark">{t('storePendingOrdersTitle')}</Text>
-              <View className="rounded-full bg-cream px-3 py-1">
-                <Text className="text-xs font-semibold text-aquacare-primary">
-                  {store ? formatNumber(store.summary.pending_orders_count, undefined, 0) : '0'}
-                </Text>
-              </View>
+          <Card variant="outlined" style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <AppText variant="cardTitle">{t('storePendingOrdersTitle')}</AppText>
+              <Badge label={store ? formatNumber(store.summary.pending_orders_count, undefined, 0) : '0'} tone="info" />
             </View>
-
-            {store?.pending_orders.length ? (
-              <View className="gap-3">
-                {store.pending_orders.map((order) => (
-                  <View
-                    key={order.id}
-                    className="rounded-xl border border-[#edf4ea] bg-cream/40 p-3"
-                  >
-                    <View className="flex-row items-start justify-between gap-3">
-                      <View className="flex-1">
-                        <Text className="text-sm font-semibold text-gray-dark">
-                          {order.order_number}
-                        </Text>
-                        <Text className="text-xs text-gray-light mt-1">
-                          {t('storePendingOrdersFeedEquivalent')}{' '}
-                          {formatNumber(toNumber(order.estimated_feed_kg), t('kg'), 2)}
-                        </Text>
-                      </View>
-                      <View className="items-end">
-                        <Text className="text-sm font-semibold text-aquacare-primary">
-                          {formatCurrency(toNumber(order.total_fcfa))}
-                        </Text>
-                        <Text className="text-xs text-gray-light mt-1">{order.status}</Text>
-                      </View>
-                    </View>
+            {store?.pending_orders.length ? store.pending_orders.map((order) => (
+              <Card key={order.id} variant="outlined" style={styles.orderCard}>
+                <View style={styles.orderHeader}>
+                  <View style={styles.flex}>
+                    <AppText variant="label">{order.order_number}</AppText>
+                    <AppText variant="helper" color="muted">{t('storePendingOrdersFeedEquivalent')} {formatNumber(toNumber(order.estimated_feed_kg), t('kg'), 2)}</AppText>
                   </View>
-                ))}
-              </View>
-            ) : (
-              <View className="rounded-xl border border-dashed border-[#d7e3d5] bg-[#f8fbf8] p-4">
-                <Text className="text-sm font-semibold text-gray-dark">
-                  {t('storePendingOrdersEmptyTitle')}
-                </Text>
-                <Text className="text-xs text-gray-light mt-1">
-                  {t('storePendingOrdersEmptyDescription')}
-                </Text>
-              </View>
-            )}
-          </View>
-
-          <View className="bg-white rounded-2xl p-4 border border-[#dbe3d9]">
-            <View className="gap-3">
-              <TouchableOpacity
-                className="flex-row items-center justify-between rounded-xl border border-[#dbe3d9] bg-white px-4 py-4"
-                onPress={openManualModal}
-              >
-                <Text className="flex-1 mr-3 text-base font-bold text-aquacare-primary">
-                  {t('storeManualSubmit')}
-                </Text>
-                <Ionicons name="chevron-forward" size={20} color={AQUACARE_COLORS.GREEN_PRIMARY} />
-              </TouchableOpacity>
-              <TouchableOpacity
-                className="flex-row items-center justify-between rounded-xl border border-[#dbe3d9] bg-white px-4 py-4"
-                onPress={handleOpenProducts}
-              >
-                <Text className="flex-1 mr-3 text-base font-bold text-aquacare-primary">
-                  {t('storeViewProducts')}
-                </Text>
-                <Ionicons name="chevron-forward" size={20} color={AQUACARE_COLORS.GREEN_PRIMARY} />
-              </TouchableOpacity>
-              <TouchableOpacity
-                className="flex-row items-center justify-between rounded-xl border border-[#dbe3d9] bg-white px-4 py-4"
-                onPress={handleOpenCart}
-              >
-                <Text className="flex-1 mr-3 text-base font-bold text-aquacare-primary">
-                  {t('storeViewCart')}
-                </Text>
-                <Ionicons name="chevron-forward" size={20} color={AQUACARE_COLORS.GREEN_PRIMARY} />
-              </TouchableOpacity>
-              <TouchableOpacity
-                className="flex-row items-center justify-between rounded-xl border border-[#dbe3d9] bg-white px-4 py-4"
-                onPress={handleOpenOrders}
-              >
-                <Text className="flex-1 mr-3 text-base font-bold text-aquacare-primary">
-                  {t('storeViewOrders')}
-                </Text>
-                <Ionicons name="chevron-forward" size={20} color={AQUACARE_COLORS.GREEN_PRIMARY} />
-              </TouchableOpacity>
-              <TouchableOpacity
-                className="flex-row items-center justify-between rounded-xl border border-[#dbe3d9] bg-white px-4 py-4"
-                onPress={handleOrderCycleNeed}
-              >
-                <Text className="flex-1 mr-3 text-base font-bold text-aquacare-primary">
-                  {t('storeOrderCycleNeed')}
-                </Text>
-                <Ionicons name="chevron-forward" size={20} color={AQUACARE_COLORS.GREEN_PRIMARY} />
-              </TouchableOpacity>
-            </View>
+                  <View style={styles.orderAmount}>
+                    <AppText variant="label" color="link">{formatCurrency(toNumber(order.total_fcfa))}</AppText>
+                    <Badge label={order.status} tone="info" />
+                  </View>
+                </View>
+              </Card>
+            )) : <EmptyState compact title={t('storePendingOrdersEmptyTitle')} message={t('storePendingOrdersEmptyDescription')} />}
+          </Card>
+          <View style={styles.actionList}>
+            {actionRows.map((action) => (
+              <InteractiveCard key={action.label} onPress={action.onPress} accessibilityLabel={action.label} primaryBorder>
+                <AppText variant="bodyStrong" color="link">{action.label}</AppText>
+                <Ionicons name="chevron-forward" size={20} color={colors.brand.primary} />
+              </InteractiveCard>
+            ))}
           </View>
         </ScrollView>
       )}
-
-      <Modal
-        visible={manualModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setManualModalVisible(false)}
-      >
-        <View className="flex-1 bg-black/40 justify-end">
-          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-            <View className="bg-white rounded-t-3xl p-5">
-              <View className="flex-row items-start justify-between mb-4">
-                <View className="flex-1 mr-3">
-                  <Text className="text-xl font-bold text-gray-dark">{t('storeManualFormTitle')}</Text>
-                  <Text className="text-sm text-gray-light mt-1">
-                    {t('storeManualFormDescription')}
-                  </Text>
+      <Modal visible={manualModalVisible} transparent animationType="slide" onRequestClose={() => !submitting && setManualModalVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.keyboardView}>
+            <Card style={styles.modalCard}>
+              <View style={styles.modalHeader}>
+                <View style={styles.flex}>
+                  <AppText variant="sectionTitle">{t('storeManualFormTitle')}</AppText>
+                  <AppText variant="helper" color="muted">{t('storeManualFormDescription')}</AppText>
                 </View>
-                <TouchableOpacity onPress={() => setManualModalVisible(false)}>
-                  <Ionicons name="close" size={24} color={AQUACARE_COLORS.GRAY_DARK} />
-                </TouchableOpacity>
+                <IconButton icon="close" variant="surface" accessibilityLabel={t('close')} onPress={() => setManualModalVisible(false)} disabled={submitting} />
               </View>
-
-              <ScrollView showsVerticalScrollIndicator={false}>
-                <View className="mb-3">
-                  <Text className="text-sm font-semibold text-gray-dark mb-2">{t('storeManualLabel')}</Text>
-                  <TextInput
-                    className="bg-cream rounded-xl px-4 py-3 text-base text-gray-dark"
-                    style={sharedTextInputStyles.base}
-                    value={label}
-                    onChangeText={setLabel}
-                    placeholder={t('storeManualLabelPlaceholder')}
-                    placeholderTextColor={AQUACARE_COLORS.GRAY_LIGHT}
-                  />
-                </View>
-
-                <View className="flex-row gap-3 mb-3">
-                  <View className="flex-1">
-                    <Text className="text-sm font-semibold text-gray-dark mb-2">
-                      {t('storeManualQuantity')}
-                    </Text>
-                    <TextInput
-                      className="bg-cream rounded-xl px-4 py-3 text-base text-gray-dark"
-                    style={sharedTextInputStyles.base}
-                      value={quantityKg}
-                      onChangeText={setQuantityKg}
-                      keyboardType="decimal-pad"
-                      placeholder={t('storeManualQuantityPlaceholder')}
-                      placeholderTextColor={AQUACARE_COLORS.GRAY_LIGHT}
-                    />
+              <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+                <View style={styles.form}>
+                  <TextField label={t('storeManualLabel')} value={label} onChangeText={setLabel} placeholder={t('storeManualLabelPlaceholder')} />
+                  <View style={styles.formRow}>
+                    <View style={styles.flex}><TextField label={t('storeManualQuantity')} value={quantityKg} onChangeText={setQuantityKg} keyboardType="decimal-pad" placeholder={t('storeManualQuantityPlaceholder')} /></View>
+                    <View style={styles.flex}><TextField label={t('storeManualTotalCost')} value={totalCostFcfa} onChangeText={setTotalCostFcfa} keyboardType="decimal-pad" placeholder={t('storeManualTotalCostPlaceholder')} /></View>
                   </View>
-                  <View className="flex-1">
-                    <Text className="text-sm font-semibold text-gray-dark mb-2">
-                      {t('storeManualTotalCost')}
-                    </Text>
-                    <TextInput
-                      className="bg-cream rounded-xl px-4 py-3 text-base text-gray-dark"
-                    style={sharedTextInputStyles.base}
-                      value={totalCostFcfa}
-                      onChangeText={setTotalCostFcfa}
-                      keyboardType="decimal-pad"
-                      placeholder={t('storeManualTotalCostPlaceholder')}
-                      placeholderTextColor={AQUACARE_COLORS.GRAY_LIGHT}
-                    />
+                  <TextField label={t('storeManualDate')} value={entryDate} onChangeText={setEntryDate} placeholder={t('storeManualDatePlaceholder')} />
+                  <TextField label={t('storeManualNote')} value={note} onChangeText={setNote} placeholder={t('storeManualNotePlaceholder')} multiline textAlignVertical="top" />
+                  <Divider />
+                  <View style={styles.formRow}>
+                    <View style={styles.flex}><Button label={t('cancel')} variant="outline" onPress={() => setManualModalVisible(false)} disabled={submitting} /></View>
+                    <View style={styles.flex}><Button label={t('storeManualSubmit')} onPress={handleSubmitManualStock} loading={submitting} disabled={submitting} /></View>
                   </View>
-                </View>
-
-                <View className="mb-3">
-                  <Text className="text-sm font-semibold text-gray-dark mb-2">{t('storeManualDate')}</Text>
-                  <TextInput
-                    className="bg-cream rounded-xl px-4 py-3 text-base text-gray-dark"
-                    style={sharedTextInputStyles.base}
-                    value={entryDate}
-                    onChangeText={setEntryDate}
-                    placeholder={t('storeManualDatePlaceholder')}
-                    placeholderTextColor={AQUACARE_COLORS.GRAY_LIGHT}
-                  />
-                </View>
-
-                <View className="mb-4">
-                  <Text className="text-sm font-semibold text-gray-dark mb-2">{t('storeManualNote')}</Text>
-                  <TextInput
-                    className="bg-cream rounded-xl px-4 py-3 text-base text-gray-dark min-h-[96px]"
-                    style={[sharedTextInputStyles.multiline, { minHeight: 96 }]}
-                    value={note}
-                    onChangeText={setNote}
-                    placeholder={t('storeManualNotePlaceholder')}
-                    placeholderTextColor={AQUACARE_COLORS.GRAY_LIGHT}
-                    multiline
-                    textAlignVertical="top"
-                  />
-                </View>
-
-                <View className="flex-row gap-3">
-                  <TouchableOpacity
-                    className="flex-1 rounded-xl border border-gray-300 px-4 py-3 items-center"
-                    onPress={() => setManualModalVisible(false)}
-                    disabled={submitting}
-                  >
-                    <Text className="text-sm font-semibold text-gray-dark">{t('cancel')}</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    className={`flex-1 rounded-xl px-4 py-3 items-center ${
-                      submitting ? 'bg-gray-300' : 'bg-aquacare-primary'
-                    }`}
-                    onPress={handleSubmitManualStock}
-                    disabled={submitting}
-                  >
-                    {submitting ? (
-                      <ActivityIndicator size="small" color={AQUACARE_COLORS.WHITE} />
-                    ) : (
-                      <Text className="text-sm font-semibold text-white">{t('storeManualSubmit')}</Text>
-                    )}
-                  </TouchableOpacity>
                 </View>
               </ScrollView>
-            </View>
+            </Card>
           </KeyboardAvoidingView>
         </View>
       </Modal>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: colors.surface.page },
+  content: { padding: spacing[4], paddingBottom: spacing[6], gap: spacing[4] },
+  section: { gap: spacing[3] },
+  metrics: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[3] },
+  tracking: { marginTop: -spacing[2] },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  orderCard: { padding: spacing[3] },
+  orderHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing[3] },
+  orderAmount: { alignItems: 'flex-end', gap: spacing[1] },
+  actionList: { gap: spacing[3] },
+  flex: { flex: 1 },
+  modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: colors.overlay.default },
+  keyboardView: { maxHeight: '92%' },
+  modalCard: { borderBottomLeftRadius: 0, borderBottomRightRadius: 0, padding: spacing[5], maxHeight: '100%' },
+  modalHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing[3], marginBottom: spacing[4] },
+  form: { gap: spacing[3], paddingBottom: spacing[2] },
+  formRow: { flexDirection: 'row', gap: spacing[3] },
+});

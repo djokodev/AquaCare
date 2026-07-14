@@ -55,6 +55,10 @@ jest.mock('react-i18next', () => ({
   }),
 }));
 
+jest.mock('react-native-safe-area-context', () => ({
+  useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
+}));
+
 describe('StoreScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
