@@ -115,13 +115,16 @@ class AquacultureService {
   }
 
   async getCalibrationOperations(tankId?: string): Promise<CalibrationOperation[]> {
-    const query = tankId ? `?tank_id=${encodeURIComponent(tankId)}` : '';
+    const query = tankId ? `?unit_id=${encodeURIComponent(tankId)}` : '';
     const response = await apiService.get<ListResponse<CalibrationOperation>>(`${this.baseUrl}/calibration-operations/${query}`);
     return extractResults(response.data);
   }
 
-  async calibrateCycle(sourceCycleId: string, payload: CalibrationRequest): Promise<CalibrationResponse> {
-    const response = await apiService.post<CalibrationResponse>(`${this.baseUrl}/cycles/${sourceCycleId}/calibrate/`, payload);
+  async calibrateAllocation(sourceAllocationId: string, payload: CalibrationRequest): Promise<CalibrationResponse> {
+    const response = await apiService.post<CalibrationResponse>(
+      `${this.baseUrl}/cycle-unit-allocations/${sourceAllocationId}/calibrate/`,
+      payload,
+    );
     return response.data;
   }
 
@@ -425,6 +428,7 @@ class AquacultureService {
   async getProductionUnits(params?: {
     status?: ProductionUnitStatus;
     unitType?: ProductionUnitType;
+    purpose?: 'production' | 'calibration';
   }): Promise<ProductionUnit[]> {
     try {
       const query = new URLSearchParams();
@@ -433,6 +437,9 @@ class AquacultureService {
       }
       if (params?.unitType) {
         query.append('unit_type', params.unitType);
+      }
+      if (params?.purpose) {
+        query.append('purpose', params.purpose);
       }
 
       const queryString = query.toString();

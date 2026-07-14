@@ -31,7 +31,17 @@ Current stack:
 
 ### Calibration tanks and grading transfers
 
-A calibration tank is a persistent physical farm asset. Its first grading arrival creates a specialized `ProductionCycle`; later arrivals reuse the single active session for that tank. `CalibrationOperation` records immutable, idempotent live-stock movements with server snapshots. Stock replay includes incoming transfers, daily logs and outgoing transfers in business-time order, uses weighted biomass calculations, and keeps transferred fish out of mortality and growth figures. The API exposes tank CRUD, read-only operation history and `POST /aquaculture/cycles/{id}/calibrate/`. Mobile storage and bulk sync support offline-created tanks and operations through `client_uuid`. This first version excludes free editing or deletion of confirmed movements, full historical cost allocation and full-unit transfers.
+A calibration tank reuses the existing physical `ProductionUnit` aggregate. `unit_type` remains the physical shape (`tank`, `pond`, `cage`), while `purpose` distinguishes `production` from `calibration`; calibration units must be tanks with a positive volume and no surface. There is no parallel `CalibrationTank` database model. The `/calibration-tanks/` API is a filtered compatibility facade over `ProductionUnit`.
+
+Grading starts from one precise `CycleUnitAllocation`. The first arrival into an empty calibration unit creates a `ProductionCycle(cycle_kind="calibration")` and a zero-initialized destination allocation. Later arrivals reuse its single active allocation. `CalibrationOperation` is an immutable ledger movement between `source_allocation` and `destination_allocation`, with before/after snapshots and idempotent `client_uuid` replay. The canonical endpoint is `POST /aquaculture/cycle-unit-allocations/{id}/calibrate/`; the cycle endpoint is only a compatibility adapter when exactly one active source allocation exists.
+
+Allocation stock is replayed in deterministic business-time order from incoming movements, unit logs, outgoing movements, partial harvests and final state. Mortality preserves the previous average weight and recomputes biomass. Cycle survival and FCR recognize live transfers and harvested stock, so an arrival is not growth and a departure is not mortality. Backdated offline movements replay later snapshots transactionally.
+
+Cycle launch optionally accepts `calibration_units`; these physical units are created atomically but remain empty and unallocated. Bulk sync normalizes UUID, datetime and decimal values, resolves allocations and units by server ID or client UUID, returns per-item errors, and always includes calibration server updates during full sync. The mobile queue marks only confirmed items as synchronized and includes calibration tanks and operations in unit fallback results.
+
+Migration `aquaculture.0032_calibration_allocations` replaces the unmerged experimental 0032/0033 migrations. Local branches that applied the old versions must migrate aquaculture back to 0031 before applying the new 0032. The migration uses a two-second lock timeout, concurrent indexes on existing tables and a two-phase check constraint. No production migration is performed from a development workspace.
+
+Confirmed movements cannot be edited or deleted. Mixing species, transferring an entire source allocation and redistributing historical costs remain out of scope.
 
 - Offline-first behavior is a core product constraint.
 - UUID primary keys are used where offline-created data needs safe synchronization.

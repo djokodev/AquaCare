@@ -10,6 +10,7 @@ from typing import Any
 from accounts.models import FarmProfile
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import IntegrityError, transaction
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from ..constants import ECONOMIC_DEFAULTS_BY_SPECIES
@@ -448,6 +449,27 @@ class CycleLaunchApplicationService:
                         status="active",
                     )
                 )
+
+        for calibration_unit in payload.get('calibration_units', []):
+            existing_calibration_unit = ProductionUnit.objects.filter(
+                client_uuid=calibration_unit['client_uuid']
+            ).first()
+            if existing_calibration_unit is not None:
+                if existing_calibration_unit.farm_profile_id != updated_farm.id:
+                    raise CycleLaunchIdempotencyConflict()
+                continue
+            ProductionUnit.objects.create(
+                client_uuid=calibration_unit['client_uuid'],
+                farm_profile=updated_farm,
+                name=calibration_unit['name'],
+                unit_type='tank',
+                purpose=ProductionUnit.PURPOSE_CALIBRATION,
+                volume_m3=calibration_unit['volume_m3'],
+                surface_m2=None,
+                status='active',
+                created_offline=payload['cycle'].get('created_offline', False),
+                synced_at=timezone.now() if payload['cycle'].get('created_offline', False) else None,
+            )
 
         units_by_local_id = {
             unit_data["local_id"]: unit

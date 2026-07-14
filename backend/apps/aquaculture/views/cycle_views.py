@@ -18,16 +18,19 @@ from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 
 from ..domain.exceptions import BusinessRuleViolation, FeedingPlanGenerationError
-from ..models import CalibrationTank, ProductionCycle
+from ..models import CalibrationOperation, CycleUnitAllocation, ProductionCycle, ProductionUnit
 from ..serializers import (
     CalibrationOperationSerializer,
     CalibrationRequestSerializer,
+    CalibrationResponseSerializer,
+    CalibrationTankSerializer,
     CycleComparisonSerializer,
     CycleDashboardSerializer,
     CycleHarvestResponseSerializer,
     CycleStatisticsSerializer,
     CycleStoreManualStockSerializer,
     CycleStoreSerializer,
+    CycleUnitAllocationSerializer,
     HarvestSerializer,
     PartialHarvestReadSerializer,
     PartialHarvestResponseSerializer,
@@ -193,38 +196,84 @@ class ProductionCycleViewSet(viewsets.ModelViewSet):
         # Update serializer instance with created cycle
         serializer.instance = cycle
 
+    @extend_schema(
+        summary="Adaptateur de calibrage depuis un cycle",
+        description=(
+            "Délègue à l'allocation active unique. Retourne source_allocation_required "
+            "lorsque le cycle possède plusieurs allocations actives."
+        ),
+        request=CalibrationRequestSerializer,
+        responses={200: CalibrationResponseSerializer, 201: CalibrationResponseSerializer, 400: OpenApiTypes.OBJECT},
+    )
     @action(detail=True, methods=['post'], url_path='calibrate')
     def calibrate(self, request, pk=None):
         source = self.get_object()
         serializer = CalibrationRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
-        tank_query = CalibrationTank.objects.filter(farm_profile__user=request.user)
+        allocation_query = source.unit_allocations.filter(status=CycleUnitAllocation.STATUS_ACTIVE)
+        source_allocation = None
+        if data.get('source_allocation_id'):
+            source_allocation = allocation_query.filter(pk=data['source_allocation_id']).first()
+        elif data.get('source_allocation_client_uuid'):
+            source_allocation = allocation_query.filter(client_uuid=data['source_allocation_client_uuid']).first()
+        elif allocation_query.count() == 1:
+            source_allocation = allocation_query.first()
+        elif allocation_query.count() > 1:
+            return Response(
+                {'code': 'source_allocation_required', 'detail': _('Sélectionnez l’unité source du calibrage.')},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if source_allocation is None:
+            return Response(
+                {'code': 'source_allocation_not_found', 'detail': _('Allocation source introuvable.')},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        tank_query = ProductionUnit.objects.filter(
+            farm_profile__user=request.user,
+            purpose=ProductionUnit.PURPOSE_CALIBRATION,
+        )
         tank = (
-            tank_query.filter(pk=data['destination_tank']).first()
-            if data.get('destination_tank')
-            else tank_query.filter(client_uuid=data['destination_tank_client_uuid']).first()
+            tank_query.filter(pk=data['destination_production_unit_id']).first()
+            if data.get('destination_production_unit_id')
+            else tank_query.filter(client_uuid=data['destination_production_unit_client_uuid']).first()
         )
         if tank is None:
             return Response({'detail': _('Bac de calibrage introuvable.')}, status=status.HTTP_404_NOT_FOUND)
         try:
             operation, warnings, created = CalibrationService.calibrate(
-                source_cycle=source,
-                destination_tank=tank,
+                source_allocation=source_allocation,
+                destination_production_unit=tank,
                 user=request.user,
                 **{
                     key: value
                     for key, value in data.items()
-                    if key not in {'destination_tank', 'destination_tank_client_uuid'}
+                    if key not in {
+                        'source_allocation_id',
+                        'source_allocation_client_uuid',
+                        'destination_production_unit_id',
+                        'destination_production_unit_client_uuid',
+                    }
                 },
             )
         except BusinessRuleViolation as exc:
             return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        operation = CalibrationOperation.objects.select_related(
+            'source_allocation__cycle',
+            'source_allocation__production_unit',
+            'destination_allocation__cycle',
+            'destination_allocation__production_unit',
+        ).get(pk=operation.pk)
+        source_cycle = ProductionCycle.objects.for_api().get(pk=operation.source_allocation.cycle_id)
+        destination_cycle = ProductionCycle.objects.for_api().get(pk=operation.destination_allocation.cycle_id)
         payload = {
             'operation': CalibrationOperationSerializer(operation).data,
-            'source_cycle': ProductionCycleSerializer(operation.source_cycle, context={'request': request}).data,
-            'destination_cycle': ProductionCycleSerializer(
-                operation.destination_cycle,
+            'source_allocation': CycleUnitAllocationSerializer(operation.source_allocation).data,
+            'destination_allocation': CycleUnitAllocationSerializer(operation.destination_allocation).data,
+            'source_cycle': ProductionCycleSerializer(source_cycle, context={'request': request}).data,
+            'destination_cycle': ProductionCycleSerializer(destination_cycle, context={'request': request}).data,
+            'destination_tank': CalibrationTankSerializer(
+                operation.destination_allocation.production_unit,
                 context={'request': request},
             ).data,
             'warnings': warnings,

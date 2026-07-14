@@ -9,7 +9,7 @@ import { Notification as NotificationPayload } from "./notifications";
 
 export type Species = "tilapia" | "clarias";
 export type CycleStatus = "planned" | "active" | "harvested" | "cancelled";
-export type ProductionCycleUnitType = "standard" | "calibration";
+export type ProductionCycleKind = "standard" | "calibration";
 export type ReportType = "daily" | "weekly" | "monthly";
 export type ReportStatus = "draft" | "validated" | "pending";
 export type ReportScopeType = "cycle" | "unit";
@@ -45,10 +45,8 @@ export interface ProductionCycle {
   pond_identifier: string;
   pond_surface_m2?: number | null;
   pond_volume_m3?: number;
-  unit_type?: ProductionCycleUnitType;
-  unit_type_display?: string;
-  calibration_tank?: string | null;
-  calibration_tank_name?: string | null;
+  cycle_kind?: ProductionCycleKind;
+  cycle_kind_display?: string;
   is_calibration_unit?: boolean;
   total_stocked_count?: number;
   total_stocked_biomass?: number;
@@ -132,6 +130,9 @@ export interface CalibrationTank {
   is_active: boolean;
   is_occupied: boolean;
   active_session?: ProductionCycle | null;
+  active_allocation?: CycleUnitAllocation | null;
+  allocations?: CycleUnitAllocation[];
+  pending_sync?: boolean;
   created_offline?: boolean;
   synced_at?: string;
   created_at: string;
@@ -141,11 +142,12 @@ export interface CalibrationTank {
 export interface CalibrationOperation {
   id: string;
   client_uuid: string;
-  source_cycle: string;
-  source_cycle_unit_allocation?: string | null;
-  destination_cycle: string;
+  source_allocation: string;
+  destination_allocation: string;
   source_cycle_name?: string;
+  source_unit_name?: string;
   destination_cycle_name?: string;
+  destination_unit_name?: string;
   calibrated_at: string;
   transferred_count: number;
   transferred_average_weight_g: number;
@@ -157,9 +159,10 @@ export interface CalibrationOperation {
 
 export interface CalibrationRequest {
   client_uuid: string;
-  destination_tank?: string;
-  destination_tank_client_uuid?: string;
-  source_cycle_unit_allocation?: string;
+  source_allocation_id?: string;
+  source_allocation_client_uuid?: string;
+  destination_production_unit_id?: string;
+  destination_production_unit_client_uuid?: string;
   calibrated_at: string;
   transferred_count: number;
   transferred_average_weight_g?: number;
@@ -172,8 +175,11 @@ export interface CalibrationRequest {
 
 export interface CalibrationResponse {
   operation: CalibrationOperation;
+  source_allocation: CycleUnitAllocation;
+  destination_allocation: CycleUnitAllocation;
   source_cycle: ProductionCycle;
   destination_cycle: ProductionCycle;
+  destination_tank: CalibrationTank;
   warnings: Array<'weight_difference' | 'high_density'>;
   idempotent_replay: boolean;
 }
@@ -366,6 +372,8 @@ export interface ProductionUnit {
   farm_profile: string;
   name: string;
   unit_type: ProductionUnitType;
+  purpose?: "production" | "calibration";
+  purpose_display?: string;
   volume_m3?: number | null;
   surface_m2?: number | null;
   status?: ProductionUnitStatus;
@@ -400,6 +408,12 @@ export interface CycleLaunchAllocationInput {
   fish_count: number;
 }
 
+export interface CycleLaunchCalibrationUnitInput {
+  client_uuid: string;
+  name: string;
+  volume_m3: number;
+}
+
 export interface CycleLaunchRequest {
   launch_uuid: string;
   launch_kind: "initial_setup" | "additional_cycle";
@@ -426,6 +440,7 @@ export interface CycleLaunchRequest {
   };
   production_units: CycleLaunchUnitInput[];
   allocations: CycleLaunchAllocationInput[];
+  calibration_units?: CycleLaunchCalibrationUnitInput[];
 }
 
 export interface CycleLaunchResponse {
@@ -709,6 +724,8 @@ export interface SyncResponse {
     cycle_logs: number;
     cycle_logs_updated?: number;
     sanitary_logs: number;
+    calibration_tanks: number;
+    calibration_operations: number;
   };
   errors: SyncError[];
   server_updates: {
@@ -716,6 +733,8 @@ export interface SyncResponse {
     cycle_logs: CycleLog[];
     feeding_plans: FeedingPlan[];
     sanitary_logs?: SanitaryLog[];
+    calibration_tanks?: CalibrationTank[];
+    calibration_operations?: CalibrationOperation[];
     sync_timestamp?: string;
   };
   device_id?: string;

@@ -140,6 +140,7 @@ describe("features/aquaculture/screens/NewCycleScreen", () => {
     await waitFor(() =>
       expect(mockService.getProductionUnits).toHaveBeenCalledWith({
         status: "active",
+        purpose: "production",
       }),
     );
     fillValidForm(getByTestId, getByText);

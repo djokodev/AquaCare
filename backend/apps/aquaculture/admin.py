@@ -28,7 +28,6 @@ from django.utils.translation import gettext_lazy as _
 
 from .models import (
     CalibrationOperation,
-    CalibrationTank,
     CycleLog,
     CycleMetrics,
     CycleUnitAllocation,
@@ -42,26 +41,6 @@ from .models import (
 )
 
 logger = logging.getLogger(__name__)
-
-
-@admin.register(CalibrationTank)
-class CalibrationTankAdmin(admin.ModelAdmin):
-    list_display = ('name', 'farm_profile', 'volume_m3', 'is_active', 'created_at')
-    list_filter = ('is_active',)
-    search_fields = ('name', 'farm_profile__farm_name')
-
-
-@admin.register(CalibrationOperation)
-class CalibrationOperationAdmin(admin.ModelAdmin):
-    list_display = ('calibrated_at', 'source_cycle', 'destination_cycle', 'transferred_count', 'transferred_biomass_kg')
-    readonly_fields = [field.name for field in CalibrationOperation._meta.fields]
-    list_select_related = ('source_cycle', 'destination_cycle')
-
-    def has_add_permission(self, request):
-        return False
-
-    def has_delete_permission(self, request, obj=None):
-        return False
 
 
 class AquacultureSecuredAdmin(SecuredModelAdmin):
@@ -173,6 +152,35 @@ class SanitaryLogInline(admin.TabularInline):
     readonly_fields = fields
 
     def has_add_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(CalibrationOperation)
+class CalibrationOperationAdmin(AquacultureSecuredAdmin):
+    """Historique strictement immuable des mouvements de calibrage."""
+
+    list_display = (
+        'calibrated_at',
+        'source_allocation',
+        'destination_allocation',
+        'transferred_count',
+        'transferred_biomass_kg',
+    )
+    readonly_fields = [field.name for field in CalibrationOperation._meta.fields]
+    list_select_related = (
+        'source_allocation__cycle',
+        'source_allocation__production_unit',
+        'destination_allocation__cycle',
+        'destination_allocation__production_unit',
+    )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
         return False
 
 

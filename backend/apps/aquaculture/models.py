@@ -18,7 +18,7 @@ from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.db.models import DecimalField, IntegerField, OuterRef, Prefetch, Q, Subquery, Sum, Value
-from django.db.models.functions import Coalesce
+from django.db.models.functions import Coalesce, Lower
 from django.utils.translation import gettext_lazy as _
 
 from .constants import (
@@ -42,11 +42,13 @@ class ProductionCycleQuerySet(models.QuerySet):
     """QuerySet optimisé pour les cycles de production."""
 
     def for_api(self):
-        incoming = CalibrationOperation.objects.filter(destination_cycle=OuterRef('pk')).values('destination_cycle')
-        outgoing = CalibrationOperation.objects.filter(source_cycle=OuterRef('pk')).values('source_cycle')
-        return self.select_related(
-            'farm_profile', 'farm_profile__production_plan', 'metrics', 'calibration_tank'
-        ).annotate(
+        incoming = CalibrationOperation.objects.filter(destination_allocation__cycle=OuterRef('pk')).values(
+            'destination_allocation__cycle'
+        )
+        outgoing = CalibrationOperation.objects.filter(source_allocation__cycle=OuterRef('pk')).values(
+            'source_allocation__cycle'
+        )
+        return self.select_related('farm_profile', 'farm_profile__production_plan', 'metrics').annotate(
             calibration_in_count=Coalesce(
                 Subquery(incoming.annotate(total=Sum('transferred_count')).values('total')),
                 Value(0),
@@ -337,6 +339,13 @@ class ProductionUnit(models.Model):
         ('archived', _('Archivé')),
     ]
 
+    PURPOSE_PRODUCTION = 'production'
+    PURPOSE_CALIBRATION = 'calibration'
+    PURPOSE_CHOICES = [
+        (PURPOSE_PRODUCTION, _('Production')),
+        (PURPOSE_CALIBRATION, _('Calibration')),
+    ]
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     client_uuid = models.UUIDField(
         unique=True,
@@ -361,6 +370,13 @@ class ProductionUnit(models.Model):
         choices=UNIT_TYPE_CHOICES,
         verbose_name=_("Type d'unité"),
     )
+    purpose = models.CharField(
+        max_length=20,
+        choices=PURPOSE_CHOICES,
+        default=PURPOSE_PRODUCTION,
+        db_default=PURPOSE_PRODUCTION,
+        verbose_name=_("Usage de l'unité"),
+    )
     volume_m3 = models.DecimalField(
         max_digits=10,
         decimal_places=2,
@@ -383,6 +399,8 @@ class ProductionUnit(models.Model):
         default='active',
         verbose_name=_("Statut"),
     )
+    created_offline = models.BooleanField(default=False, verbose_name=_("Créée hors ligne"))
+    synced_at = models.DateTimeField(null=True, blank=True, verbose_name=_("Synchronisée le"))
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     objects = ProductionUnitQuerySet.as_manager()
@@ -396,10 +414,39 @@ class ProductionUnit(models.Model):
         indexes = [
             models.Index(fields=['farm_profile', 'status']),
             models.Index(fields=['farm_profile', 'unit_type']),
+            models.Index(fields=['farm_profile', 'purpose', 'status'], name='aq_unit_farm_purpose_idx'),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    Q(purpose='production')
+                    | Q(
+                        purpose='calibration',
+                        unit_type='tank',
+                        volume_m3__gt=0,
+                        surface_m2__isnull=True,
+                    )
+                ),
+                name='unit_calibration_requires_tank_volume',
+            ),
+            models.UniqueConstraint(
+                Lower('name'),
+                'farm_profile',
+                condition=Q(purpose='calibration'),
+                name='uniq_calibration_unit_name_farm_ci',
+            ),
         ]
 
     def __str__(self):
         return f"{self.name} - {self.get_unit_type_display()}"
+
+    @property
+    def is_active(self):
+        return self.status == 'active'
+
+    @is_active.setter
+    def is_active(self, value):
+        self.status = 'active' if value else 'inactive'
 
     @property
     def recommended_capacity(self):
@@ -426,6 +473,13 @@ class ProductionUnit(models.Model):
 
     def clean(self):
         self.unit_type = normalize_production_unit_type(self.unit_type) or self.unit_type
+        if self.purpose == self.PURPOSE_CALIBRATION:
+            if self.unit_type != 'tank':
+                raise ValidationError({'unit_type': _("Un bac de calibrage doit être de type bac.")})
+            if self.volume_m3 is None or self.volume_m3 <= 0:
+                raise ValidationError({'volume_m3': _("Le volume du bac de calibrage doit être positif.")})
+            if self.surface_m2 is not None:
+                raise ValidationError({'surface_m2': _("La surface ne s'applique pas à un bac de calibrage.")})
         validate_production_unit_dimensions(
             self.unit_type,
             volume_m3=self.volume_m3,
@@ -556,7 +610,12 @@ class CycleUnitAllocation(models.Model):
             models.UniqueConstraint(
                 fields=['cycle', 'production_unit'],
                 name='uniq_cycle_production_unit_allocation',
-            )
+            ),
+            models.UniqueConstraint(
+                fields=['production_unit'],
+                condition=Q(status='active'),
+                name='uniq_active_allocation_per_unit',
+            ),
         ]
         indexes = [
             models.Index(fields=['cycle']),
@@ -708,39 +767,6 @@ class CycleFeedStockEntry(models.Model):
         return f"{self.cycle.cycle_name} - {self.label} ({self.quantity_kg} kg)"
 
 
-class CalibrationTank(models.Model):
-    """Bac physique dédié aux opérations de calibrage."""
-
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    client_uuid = models.UUIDField(unique=True, null=True, blank=True)
-    farm_profile = models.ForeignKey(
-        'accounts.FarmProfile', on_delete=models.CASCADE, related_name='calibration_tanks'
-    )
-    name = models.CharField(max_length=120)
-    volume_m3 = models.DecimalField(
-        max_digits=10, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))]
-    )
-    is_active = models.BooleanField(default=True)
-    created_offline = models.BooleanField(default=False)
-    synced_at = models.DateTimeField(null=True, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        ordering = ['name']
-        constraints = [
-            models.UniqueConstraint(fields=['farm_profile', 'name'], name='uniq_calibration_tank_name_farm'),
-            models.CheckConstraint(condition=Q(volume_m3__gt=0), name='calibration_tank_volume_gt_zero'),
-        ]
-        indexes = [
-            models.Index(fields=['farm_profile', 'is_active'], name='aq_cal_tank_farm_active_idx'),
-            models.Index(fields=['client_uuid'], name='aq_cal_tank_client_idx'),
-        ]
-
-    def __str__(self):
-        return self.name
-
-
 class ProductionCycle(models.Model):
     """
     Modèle représentant un cycle complet de production aquacole (60-180 jours).
@@ -762,30 +788,19 @@ class ProductionCycle(models.Model):
             models.Index(fields=['species', 'status']),
             models.Index(fields=['created_offline', 'synced_at'], name='aquaculture_created_7d7f63_idx'),
         ]
-        constraints = [
-            models.UniqueConstraint(
-                fields=['calibration_tank'],
-                condition=Q(status='active', calibration_tank__isnull=False),
-                name='uniq_active_cycle_per_calibration_tank',
-            ),
-            models.CheckConstraint(
-                condition=(
-                    Q(unit_type='standard', calibration_tank__isnull=True)
-                    | Q(unit_type='calibration', calibration_tank__isnull=False)
-                ),
-                name='cycle_calibration_tank_matches_type',
-            ),
-        ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    UNIT_TYPE_CHOICES = [('standard', _('Standard')), ('calibration', _('Bac de calibrage'))]
-    unit_type = models.CharField(max_length=20, choices=UNIT_TYPE_CHOICES, default='standard')
-    calibration_tank = models.ForeignKey(
-        CalibrationTank,
-        on_delete=models.PROTECT,
-        related_name='sessions',
-        null=True,
-        blank=True,
+    CYCLE_KIND_STANDARD = 'standard'
+    CYCLE_KIND_CALIBRATION = 'calibration'
+    CYCLE_KIND_CHOICES = [
+        (CYCLE_KIND_STANDARD, _('Standard')),
+        (CYCLE_KIND_CALIBRATION, _('Calibration')),
+    ]
+    cycle_kind = models.CharField(
+        max_length=20,
+        choices=CYCLE_KIND_CHOICES,
+        default=CYCLE_KIND_STANDARD,
+        db_default=CYCLE_KIND_STANDARD,
     )
     client_uuid = models.UUIDField(
         unique=True,
@@ -1046,7 +1061,7 @@ class ProductionCycle(models.Model):
 
     @property
     def is_calibration_unit(self):
-        return self.unit_type == 'calibration'
+        return self.cycle_kind == self.CYCLE_KIND_CALIBRATION
 
 
 class CalibrationOperation(models.Model):
@@ -1055,20 +1070,13 @@ class CalibrationOperation(models.Model):
     SIZE_CHOICES = [('small', _('Petit')), ('medium', _('Moyen')), ('large', _('Grand')), ('other', _('Autre'))]
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     client_uuid = models.UUIDField(unique=True)
-    source_cycle = models.ForeignKey(
-        ProductionCycle,
-        on_delete=models.PROTECT,
-        related_name='calibration_operations_out',
-    )
-    source_cycle_unit_allocation = models.ForeignKey(
+    source_allocation = models.ForeignKey(
         CycleUnitAllocation,
         on_delete=models.PROTECT,
         related_name='calibration_operations_out',
-        null=True,
-        blank=True,
     )
-    destination_cycle = models.ForeignKey(
-        ProductionCycle,
+    destination_allocation = models.ForeignKey(
+        CycleUnitAllocation,
         on_delete=models.PROTECT,
         related_name='calibration_operations_in',
     )
@@ -1100,8 +1108,8 @@ class CalibrationOperation(models.Model):
     class Meta:
         ordering = ['-calibrated_at', '-created_at']
         indexes = [
-            models.Index(fields=['source_cycle', 'calibrated_at'], name='aq_cal_op_source_date_idx'),
-            models.Index(fields=['destination_cycle', 'calibrated_at'], name='aq_cal_op_dest_date_idx'),
+            models.Index(fields=['source_allocation', 'calibrated_at'], name='aq_cal_op_source_date_idx'),
+            models.Index(fields=['destination_allocation', 'calibrated_at'], name='aq_cal_op_dest_date_idx'),
             models.Index(fields=['client_uuid'], name='aq_cal_op_client_idx'),
         ]
 

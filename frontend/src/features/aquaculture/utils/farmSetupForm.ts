@@ -18,6 +18,7 @@ import type {
   CycleSimulationInput,
   FarmSetupData,
 } from '@/features/aquaculture/types/farmSetup';
+import type { CycleLaunchCalibrationUnitInput } from '@/types/aquaculture';
 
 export type FarmSetupSpecies = 'tilapia' | 'clarias' | 'autre';
 export type FarmSetupInfraType = 'etang' | 'cage_flottante' | 'bac_hors_sol' | 'bac_en_sol';
@@ -40,6 +41,7 @@ export interface FarmSetupFormState {
   survivalRate: string;
   productionUnits: ProductionUnitDraft[];
   productionUnitAllocations: ProductionUnitFishAllocationDraft[];
+  calibrationUnits?: CycleLaunchCalibrationUnitInput[];
 }
 
 export type FarmSetupFormErrors = Partial<Record<keyof FarmSetupFormState, string>>;

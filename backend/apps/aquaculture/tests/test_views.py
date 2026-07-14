@@ -859,6 +859,9 @@ class TestCycleUnitAllocationDashboardViewSet:
     ):
         """Le dashboard doit refléter l'effectif restant réel de l'allocation."""
         allocation = create_cycle_unit_allocation(production_cycle, name='Bac partiel', volume_m3='3.00')
+        allocation.initial_biomass_kg = Decimal('270.00')
+        allocation.current_biomass_kg = Decimal('270.00')
+        allocation.save(update_fields=['initial_biomass_kg', 'current_biomass_kg', 'updated_at'])
         ProductionCycleService.partial_harvest_cycle_unit_allocation(
             allocation=allocation,
             harvest_date=date.today() - timedelta(days=1),

@@ -345,6 +345,8 @@ describe('features/aquaculture/store/aquacultureSlice', () => {
         cycles: 1,
         cycle_logs: 1,
         sanitary_logs: 1,
+        calibration_tanks: 0,
+        calibration_operations: 0,
       },
       errors: [],
       server_updates: {

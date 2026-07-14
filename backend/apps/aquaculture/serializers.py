@@ -23,6 +23,7 @@ from typing import Any, cast
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.utils.translation import gettext_lazy as _
 from notifications.serializers import NotificationSerializer as GlobalNotificationSerializer
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 from rest_framework.request import Request
 
@@ -57,7 +58,6 @@ from .domain.production_units import (
 )
 from .models import (
     CalibrationOperation,
-    CalibrationTank,
     CycleLog,
     CycleMetrics,
     CycleUnitAllocation,
@@ -90,6 +90,7 @@ class ProductionUnitSerializer(serializers.ModelSerializer):
     unit_type = ProductionUnitTypeField(choices=[choice[0] for choice in ProductionUnit.UNIT_TYPE_CHOICES])
     farm_name = serializers.CharField(source='farm_profile.farm_name', read_only=True)
     unit_type_display = serializers.CharField(source='get_unit_type_display', read_only=True)
+    purpose_display = serializers.CharField(source='get_purpose_display', read_only=True)
     recommended_capacity = serializers.SerializerMethodField()
     capacity_density_unit = serializers.SerializerMethodField()
     display_dimension = serializers.SerializerMethodField()
@@ -98,11 +99,14 @@ class ProductionUnitSerializer(serializers.ModelSerializer):
         model = ProductionUnit
         fields = [
             'id',
+            'client_uuid',
             'farm_profile',
             'farm_name',
             'name',
             'unit_type',
             'unit_type_display',
+            'purpose',
+            'purpose_display',
             'volume_m3',
             'surface_m2',
             'display_dimension',
@@ -117,6 +121,7 @@ class ProductionUnitSerializer(serializers.ModelSerializer):
             'farm_profile',
             'farm_name',
             'unit_type_display',
+            'purpose_display',
             'display_dimension',
             'capacity_density_unit',
             'recommended_capacity',
@@ -314,8 +319,7 @@ class ProductionCycleSerializer(serializers.ModelSerializer):
     species_display = serializers.CharField(source='get_species_display', read_only=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     farm_name = serializers.CharField(source='farm_profile.farm_name', read_only=True)
-    unit_type_display = serializers.CharField(source='get_unit_type_display', read_only=True)
-    calibration_tank_name = serializers.CharField(source='calibration_tank.name', read_only=True, allow_null=True)
+    cycle_kind_display = serializers.CharField(source='get_cycle_kind_display', read_only=True)
     is_calibration_unit = serializers.BooleanField(read_only=True)
     total_stocked_count = serializers.SerializerMethodField()
     total_stocked_biomass = serializers.SerializerMethodField()
@@ -326,7 +330,7 @@ class ProductionCycleSerializer(serializers.ModelSerializer):
         model = ProductionCycle
         fields = [
             'id', 'client_uuid', 'farm_profile', 'cycle_name', 'species', 'species_display',
-            'unit_type', 'unit_type_display', 'calibration_tank', 'calibration_tank_name', 'is_calibration_unit',
+            'cycle_kind', 'cycle_kind_display', 'is_calibration_unit',
             'total_stocked_count', 'total_stocked_biomass', 'total_transferred_out_count',
             'total_transferred_out_biomass',
             'pond_identifier', 'pond_surface_m2', 'pond_volume_m3', 'infrastructure_type',
@@ -363,11 +367,11 @@ class ProductionCycleSerializer(serializers.ModelSerializer):
 
     def get_total_stocked_count(self, obj):
         incoming = getattr(obj, 'calibration_in_count', 0)
-        return incoming if obj.unit_type == 'calibration' else obj.initial_count + incoming
+        return incoming if obj.cycle_kind == 'calibration' else obj.initial_count + incoming
 
     def get_total_stocked_biomass(self, obj):
         incoming = getattr(obj, 'calibration_in_biomass', Decimal('0'))
-        return incoming if obj.unit_type == 'calibration' else obj.initial_biomass + incoming
+        return incoming if obj.cycle_kind == 'calibration' else obj.initial_biomass + incoming
 
     def get_total_transferred_out_count(self, obj):
         return getattr(obj, 'calibration_out_count', 0)
@@ -659,29 +663,72 @@ class ProductionCycleSerializer(serializers.ModelSerializer):
 
 
 class CalibrationTankSerializer(serializers.ModelSerializer):
+    """Façade API des ProductionUnit dédiées au calibrage."""
+
     is_occupied = serializers.SerializerMethodField()
     active_session = serializers.SerializerMethodField()
+    active_allocation = serializers.SerializerMethodField()
+    allocations = serializers.SerializerMethodField()
+    is_active = serializers.BooleanField(required=False)
+    pending_sync = serializers.SerializerMethodField()
 
     class Meta:
-        model = CalibrationTank
-        fields = ['id', 'client_uuid', 'farm_profile', 'name', 'volume_m3', 'is_active', 'is_occupied',
-                  'active_session', 'created_offline', 'synced_at', 'created_at', 'updated_at']
+        model = ProductionUnit
+        fields = [
+            'id', 'client_uuid', 'farm_profile', 'name', 'volume_m3', 'is_active', 'is_occupied',
+            'active_session', 'active_allocation', 'allocations', 'pending_sync', 'created_offline', 'synced_at',
+            'created_at', 'updated_at',
+        ]
         read_only_fields = [
-            'id', 'farm_profile', 'is_occupied', 'active_session', 'synced_at', 'created_at', 'updated_at',
+            'id', 'farm_profile', 'is_occupied', 'active_session', 'active_allocation', 'allocations', 'pending_sync',
+            'synced_at', 'created_at', 'updated_at',
         ]
         extra_kwargs = {'client_uuid': {'validators': []}}
 
-    def get_is_occupied(self, obj):
-        return obj.sessions.filter(status='active').exists()
+    @extend_schema_field(serializers.BooleanField)
+    def get_is_occupied(self, obj) -> bool:
+        return any(allocation.status == CycleUnitAllocation.STATUS_ACTIVE for allocation in obj.cycle_allocations.all())
 
+    @extend_schema_field(ProductionCycleSerializer)
     def get_active_session(self, obj):
-        cycle = obj.sessions.filter(status='active').first()
+        allocation = next(
+            (
+                item
+                for item in obj.cycle_allocations.all()
+                if item.status == CycleUnitAllocation.STATUS_ACTIVE
+            ),
+            None,
+        )
+        cycle = allocation.cycle if allocation else None
         return ProductionCycleSerializer(cycle, context=self.context).data if cycle else None
 
+    @extend_schema_field(CycleUnitAllocationSerializer)
+    def get_active_allocation(self, obj):
+        allocation = next(
+            (item for item in obj.cycle_allocations.all() if item.status == CycleUnitAllocation.STATUS_ACTIVE),
+            None,
+        )
+        return CycleUnitAllocationSerializer(allocation, context=self.context).data if allocation else None
+
+    @extend_schema_field(CycleUnitAllocationSerializer(many=True))
+    def get_allocations(self, obj):
+        return CycleUnitAllocationSerializer(obj.cycle_allocations.all(), many=True, context=self.context).data
+
+    @extend_schema_field(serializers.BooleanField)
+    def get_pending_sync(self, obj) -> bool:
+        return obj.created_offline and obj.synced_at is None
+
     def validate(self, attrs):
-        farm = self.context['request'].user.farm_profile
+        request = self.context.get('request')
+        if request is None:
+            return attrs
+        farm = request.user.farm_profile
         name = attrs.get('name', getattr(self.instance, 'name', None))
-        duplicate = CalibrationTank.objects.filter(farm_profile=farm, name__iexact=name)
+        duplicate = ProductionUnit.objects.filter(
+            farm_profile=farm,
+            purpose=ProductionUnit.PURPOSE_CALIBRATION,
+            name__iexact=name,
+        )
         if self.instance:
             duplicate = duplicate.exclude(pk=self.instance.pk)
         if duplicate.exists():
@@ -690,8 +737,10 @@ class CalibrationTankSerializer(serializers.ModelSerializer):
 
 
 class CalibrationOperationSerializer(serializers.ModelSerializer):
-    source_cycle_name = serializers.CharField(source='source_cycle.cycle_name', read_only=True)
-    destination_cycle_name = serializers.CharField(source='destination_cycle.cycle_name', read_only=True)
+    source_cycle_name = serializers.CharField(source='source_allocation.cycle.cycle_name', read_only=True)
+    source_unit_name = serializers.CharField(source='source_allocation.production_unit.name', read_only=True)
+    destination_cycle_name = serializers.CharField(source='destination_allocation.cycle.cycle_name', read_only=True)
+    destination_unit_name = serializers.CharField(source='destination_allocation.production_unit.name', read_only=True)
 
     class Meta:
         model = CalibrationOperation
@@ -701,10 +750,10 @@ class CalibrationOperationSerializer(serializers.ModelSerializer):
 
 class CalibrationRequestSerializer(serializers.Serializer):
     client_uuid = serializers.UUIDField()
-    source_cycle = serializers.UUIDField(required=False)
-    source_cycle_unit_allocation = serializers.UUIDField(required=False)
-    destination_tank = serializers.UUIDField(required=False)
-    destination_tank_client_uuid = serializers.UUIDField(required=False)
+    source_allocation_id = serializers.UUIDField(required=False)
+    source_allocation_client_uuid = serializers.UUIDField(required=False)
+    destination_production_unit_id = serializers.UUIDField(required=False)
+    destination_production_unit_client_uuid = serializers.UUIDField(required=False)
     calibrated_at = serializers.DateTimeField()
     transferred_count = serializers.IntegerField(min_value=1)
     transferred_average_weight_g = serializers.DecimalField(max_digits=8, decimal_places=2, required=False)
@@ -715,13 +764,32 @@ class CalibrationRequestSerializer(serializers.Serializer):
     created_offline = serializers.BooleanField(required=False, default=False)
 
     def validate(self, attrs):
-        if not attrs.get('destination_tank') and not attrs.get('destination_tank_client_uuid'):
-            raise serializers.ValidationError({'destination_tank': _('Un bac destination est requis.')})
+        if not attrs.get('destination_production_unit_id') and not attrs.get(
+            'destination_production_unit_client_uuid'
+        ):
+            raise serializers.ValidationError({'destination_production_unit_id': _('Un bac destination est requis.')})
+        if attrs.get('sample_count') and attrs['sample_count'] > attrs['transferred_count']:
+            raise serializers.ValidationError({'sample_count': _("L'échantillon ne peut pas dépasser le transfert.")})
         if attrs.get('transferred_average_weight_g') is None and not (
             attrs.get('sample_count') and attrs.get('sample_total_weight_g')
         ):
             raise serializers.ValidationError(_('Indiquez un poids moyen ou un échantillon complet.'))
         return attrs
+
+
+class CalibrationResponseSerializer(serializers.Serializer):
+    """Réponse canonique après un calibrage ou son rejeu idempotent."""
+
+    operation = CalibrationOperationSerializer()
+    source_allocation = CycleUnitAllocationSerializer()
+    destination_allocation = CycleUnitAllocationSerializer()
+    source_cycle = ProductionCycleSerializer()
+    destination_cycle = ProductionCycleSerializer()
+    destination_tank = CalibrationTankSerializer()
+    warnings = serializers.ListField(
+        child=serializers.ChoiceField(choices=['weight_difference', 'high_density'])
+    )
+    idempotent_replay = serializers.BooleanField()
 
 
 class CycleLogSerializer(serializers.ModelSerializer):
@@ -883,6 +951,7 @@ class CycleLogSyncSerializer(CycleLogSerializer):
     """
     class Meta(CycleLogSerializer.Meta):
         list_serializer_class = BulkCycleLogSerializer
+        extra_kwargs = {'client_uuid': {'validators': []}}
 
 
 class BulkCycleLogRequestSerializer(serializers.Serializer):

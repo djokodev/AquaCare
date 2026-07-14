@@ -29,7 +29,7 @@ interface OfflineSanitaryLog {
 }
 
 export interface OfflineCalibrationTank { id: string; tankData: CreateCalibrationTankForm; timestamp: number; synced: boolean; }
-export interface OfflineCalibrationOperation { id: string; sourceCycleId: string; operationData: CalibrationRequest; timestamp: number; synced: boolean; }
+export interface OfflineCalibrationOperation { id: string; sourceAllocationId: string; operationData: CalibrationRequest; timestamp: number; synced: boolean; }
 
 interface SyncCounter {
   success: number;
@@ -40,6 +40,8 @@ interface OfflineSyncDetails {
   cycleLogs: SyncCounter;
   newCycles: SyncCounter;
   sanitaryLogs: SyncCounter;
+  calibrationTanks?: SyncCounter;
+  calibrationOperations?: SyncCounter;
 }
 
 interface OfflineSyncResult extends SyncCounter {
@@ -70,9 +72,9 @@ class OfflineService {
     return this.readList(STORAGE_KEYS.OFFLINE_CALIBRATION_TANKS, 'Erreur lecture bacs de calibrage offline');
   }
 
-  async saveCalibrationOperationOffline(sourceCycleId: string, operationData: CalibrationRequest): Promise<string> {
+  async saveCalibrationOperationOffline(sourceAllocationId: string, operationData: CalibrationRequest): Promise<string> {
     const id = this.generateOfflineId();
-    const item: OfflineCalibrationOperation = { id, sourceCycleId, operationData: { ...operationData, client_uuid: operationData.client_uuid || this.generateClientUUID(), created_offline: true }, timestamp: Date.now(), synced: false };
+    const item: OfflineCalibrationOperation = { id, sourceAllocationId, operationData: { ...operationData, source_allocation_id: operationData.source_allocation_id ?? sourceAllocationId, client_uuid: operationData.client_uuid || this.generateClientUUID(), created_offline: true }, timestamp: Date.now(), synced: false };
     const current = await this.getOfflineCalibrationOperations();
     if (!current.some((entry) => entry.operationData.client_uuid === item.operationData.client_uuid)) {
       await this.persist(STORAGE_KEYS.OFFLINE_CALIBRATION_OPERATIONS, [...current, item]);
@@ -306,6 +308,8 @@ class OfflineService {
           cycleLogs: { success: 0, failed: 0 },
           newCycles: { success: 0, failed: 0 },
           sanitaryLogs: { success: 0, failed: 0 },
+          calibrationTanks: { success: 0, failed: 0 },
+          calibrationOperations: { success: 0, failed: 0 },
         },
       };
     }
@@ -326,21 +330,29 @@ class OfflineService {
         cycleLogs: { success: 0, failed: 0 },
         newCycles: { success: 0, failed: 0 },
         sanitaryLogs: { success: 0, failed: 0 },
+        calibrationTanks: { success: 0, failed: 0 },
+        calibrationOperations: { success: 0, failed: 0 },
       },
     };
 
     results.details.cycleLogs = await this.syncOfflineLogs();
     results.details.newCycles = await this.syncOfflineNewCycles();
     results.details.sanitaryLogs = await this.syncOfflineSanitaryLogs();
+    results.details.calibrationTanks = await this.syncOfflineCalibrationTanks();
+    results.details.calibrationOperations = await this.syncOfflineCalibrationOperations();
 
     results.success =
       results.details.cycleLogs.success +
       results.details.newCycles.success +
-      results.details.sanitaryLogs.success;
+      results.details.sanitaryLogs.success +
+      (results.details.calibrationTanks?.success ?? 0) +
+      (results.details.calibrationOperations?.success ?? 0);
     results.failed =
       results.details.cycleLogs.failed +
       results.details.newCycles.failed +
-      results.details.sanitaryLogs.failed;
+      results.details.sanitaryLogs.failed +
+      (results.details.calibrationTanks?.failed ?? 0) +
+      (results.details.calibrationOperations?.failed ?? 0);
 
     await this.touchLastSync();
     return results;
@@ -370,7 +382,7 @@ class OfflineService {
       }),
       new_cycles: pendingNewCycles.map((cycle) => cycle.cycleData),
       calibration_tanks: pendingCalibrationTanks.map((item) => item.tankData),
-      calibration_operations: pendingCalibrationOperations.map((item) => ({ ...item.operationData, source_cycle: item.sourceCycleId } as CalibrationRequest & { source_cycle: string })),
+      calibration_operations: pendingCalibrationOperations.map((item) => item.operationData),
       device_id: OfflineService.BULK_SYNC_DEVICE_ID,
       ...(lastSyncDate ? { last_sync: lastSyncDate.toISOString() } : {}),
     };
@@ -385,15 +397,17 @@ class OfflineService {
         this.markLogsAsSynced(pendingCycleLogs.map((log) => log.id)),
         this.markNewCyclesAsSynced(pendingNewCycles.map((cycle) => cycle.id)),
         this.markSanitaryLogsAsSynced(pendingSanitaryLogs.map((log) => log.id)),
-        this.persist(STORAGE_KEYS.OFFLINE_CALIBRATION_TANKS, []),
-        this.persist(STORAGE_KEYS.OFFLINE_CALIBRATION_OPERATIONS, []),
+        this.markCalibrationTanksAsSynced(pendingCalibrationTanks.map((item) => item.id)),
+        this.markCalibrationOperationsAsSynced(pendingCalibrationOperations.map((item) => item.id)),
       ]);
       await this.touchLastSync();
 
       const cycleLogsSuccess = pendingCycleLogs.length;
       const newCyclesSuccess = pendingNewCycles.length;
       const sanitaryLogsSuccess = pendingSanitaryLogs.length;
-      const success = cycleLogsSuccess + newCyclesSuccess + sanitaryLogsSuccess;
+      const calibrationTanksSuccess = pendingCalibrationTanks.length;
+      const calibrationOperationsSuccess = pendingCalibrationOperations.length;
+      const success = cycleLogsSuccess + newCyclesSuccess + sanitaryLogsSuccess + calibrationTanksSuccess + calibrationOperationsSuccess;
 
       return {
         success,
@@ -402,6 +416,8 @@ class OfflineService {
           cycleLogs: { success: cycleLogsSuccess, failed: 0 },
           newCycles: { success: newCyclesSuccess, failed: 0 },
           sanitaryLogs: { success: sanitaryLogsSuccess, failed: 0 },
+          calibrationTanks: { success: calibrationTanksSuccess, failed: 0 },
+          calibrationOperations: { success: calibrationOperationsSuccess, failed: 0 },
         },
       };
     } catch (error) {
@@ -446,6 +462,58 @@ class OfflineService {
     }
 
     return { success, failed };
+  }
+
+  async syncOfflineCalibrationTanks(): Promise<SyncCounter> {
+    const pending = (await this.getOfflineCalibrationTanks()).filter((item) => !item.synced);
+    let success = 0;
+    let failed = 0;
+    for (const item of pending) {
+      try {
+        await aquacultureService.createCalibrationTank(item.tankData);
+        await this.markCalibrationTanksAsSynced([item.id]);
+        success += 1;
+      } catch (error) {
+        logger.error(`Erreur sync bac de calibrage ${item.id}:`, error);
+        failed += 1;
+      }
+    }
+    return { success, failed };
+  }
+
+  async syncOfflineCalibrationOperations(): Promise<SyncCounter> {
+    const pending = (await this.getOfflineCalibrationOperations()).filter((item) => !item.synced);
+    let success = 0;
+    let failed = 0;
+    for (const item of pending) {
+      try {
+        await aquacultureService.calibrateAllocation(item.sourceAllocationId, item.operationData);
+        await this.markCalibrationOperationsAsSynced([item.id]);
+        success += 1;
+      } catch (error) {
+        logger.error(`Erreur sync calibrage ${item.id}:`, error);
+        failed += 1;
+      }
+    }
+    return { success, failed };
+  }
+
+  private async markCalibrationTanksAsSynced(ids: string[]): Promise<void> {
+    const syncedIds = new Set(ids);
+    const items = await this.getOfflineCalibrationTanks();
+    await this.persist(
+      STORAGE_KEYS.OFFLINE_CALIBRATION_TANKS,
+      items.map((item) => (syncedIds.has(item.id) ? { ...item, synced: true } : item)),
+    );
+  }
+
+  private async markCalibrationOperationsAsSynced(ids: string[]): Promise<void> {
+    const syncedIds = new Set(ids);
+    const items = await this.getOfflineCalibrationOperations();
+    await this.persist(
+      STORAGE_KEYS.OFFLINE_CALIBRATION_OPERATIONS,
+      items.map((item) => (syncedIds.has(item.id) ? { ...item, synced: true } : item)),
+    );
   }
 
   async markNewCycleAsSynced(cycleId: string): Promise<void> {

@@ -53,7 +53,7 @@ from ..domain.exceptions import (
     OfflineSyncConflictError,
 )
 from ..domain.production_units import normalize_production_unit_type
-from ..models import CycleLog, CycleUnitAllocation, PartialHarvest, ProductionCycle
+from ..models import CalibrationOperation, CycleLog, CycleUnitAllocation, PartialHarvest, ProductionCycle
 from .base import BaseService
 
 if TYPE_CHECKING:
@@ -334,14 +334,18 @@ class ProductionCycleService(BaseService):
 
         # Les sessions de calibrage rejouent leurs entrées depuis zéro afin de ne
         # jamais compter deux fois le premier mouvement.
-        cycle.current_count = 0 if cycle.unit_type == 'calibration' else cycle.initial_count
+        cycle.current_count = 0 if cycle.cycle_kind == ProductionCycle.CYCLE_KIND_CALIBRATION else cycle.initial_count
         cycle.current_average_weight = cycle.initial_average_weight
-        cycle.current_biomass = Decimal('0') if cycle.unit_type == 'calibration' else cycle.initial_biomass
+        cycle.current_biomass = (
+            Decimal('0')
+            if cycle.cycle_kind == ProductionCycle.CYCLE_KIND_CALIBRATION
+            else cycle.initial_biomass
+        )
         cycle.total_feed_consumed = Decimal('0')
 
         logs = list(cycle.logs.order_by('log_date', 'created_at', 'id'))
-        incoming = list(cycle.calibration_operations_in.order_by('calibrated_at', 'created_at', 'id'))
-        outgoing = list(cycle.calibration_operations_out.order_by('calibrated_at', 'created_at', 'id'))
+        incoming = []
+        outgoing = []
         events = []
         for log in logs:
             event_at = timezone.make_aware(datetime.combine(log.log_date, getattr(log, 'log_time', None) or time.min))
@@ -372,9 +376,9 @@ class ProductionCycleService(BaseService):
             # Mise à jour poids moyen (prendre le dernier enregistré)
             if log.average_weight:
                 cycle.current_average_weight = log.average_weight
-                cycle.current_biomass = AquacultureCalculator.calculate_biomass(
-                    cycle.current_count, cycle.current_average_weight
-                )
+            cycle.current_biomass = AquacultureCalculator.calculate_biomass(
+                cycle.current_count, cycle.current_average_weight
+            )
 
             # Cumul aliment distribué
             if log.feed_quantity:
@@ -386,10 +390,14 @@ class ProductionCycleService(BaseService):
         total_out_count = sum(op.transferred_count for op in outgoing)
         total_out_biomass = sum((op.transferred_biomass_kg for op in outgoing), Decimal('0'))
         total_stocked_count = (
-            total_in_count if cycle.unit_type == 'calibration' else cycle.initial_count + total_in_count
+            total_in_count
+            if cycle.cycle_kind == ProductionCycle.CYCLE_KIND_CALIBRATION
+            else cycle.initial_count + total_in_count
         )
         total_stocked_biomass = (
-            total_in_biomass if cycle.unit_type == 'calibration' else cycle.initial_biomass + total_in_biomass
+            total_in_biomass
+            if cycle.cycle_kind == ProductionCycle.CYCLE_KIND_CALIBRATION
+            else cycle.initial_biomass + total_in_biomass
         )
         cycle.survival_rate = (
             (
@@ -874,50 +882,96 @@ class ProductionCycleService(BaseService):
 
     @staticmethod
     def recalculate_allocation_current_metrics(allocation: CycleUnitAllocation) -> CycleUnitAllocation:
-        """Recalcule l'état courant réel d'une allocation à partir de ses événements unitaires."""
-        locked_allocation = CycleUnitAllocation.objects.select_related(
+        """Rejoue chronologiquement le ledger vivant d'une allocation."""
+        locked_allocation = CycleUnitAllocation.objects.select_for_update().select_related(
             'cycle',
             'production_unit',
         ).get(id=allocation.id)
 
-        daily_logs = list(
-            locked_allocation.daily_logs.order_by('-log_date', '-created_at')
-        )
-        partial_harvests = list(
-            locked_allocation.unit_partial_harvests.order_by('-harvest_date', '-created_at')
-        )
-        calibration_operations = list(
-            locked_allocation.calibration_operations_out.order_by('calibrated_at', 'created_at', 'id')
-        )
+        def dated(value, fallback_time):
+            if isinstance(value, datetime):
+                return value
+            return timezone.make_aware(
+                datetime.combine(value, fallback_time),
+                timezone.get_current_timezone(),
+            )
 
-        if locked_allocation.status == CycleUnitAllocation.STATUS_HARVESTED:
+        events = []
+        for operation in locked_allocation.calibration_operations_in.all():
+            events.append((operation.calibrated_at, operation.created_at, str(operation.id), 'incoming', operation))
+        for operation in locked_allocation.calibration_operations_out.all():
+            events.append((operation.calibrated_at, operation.created_at, str(operation.id), 'outgoing', operation))
+        for log in locked_allocation.daily_logs.all():
+            events.append((dated(log.log_date, log.log_time or time.min), log.created_at, str(log.id), 'log', log))
+        for harvest in locked_allocation.unit_partial_harvests.all():
+            events.append(
+                (dated(harvest.harvest_date, harvest.created_at.timetz().replace(tzinfo=None)), harvest.created_at,
+                 str(harvest.id), 'partial_harvest', harvest)
+            )
+        events.sort(key=lambda item: (item[0], item[1], item[2]))
+
+        if locked_allocation.cycle.cycle_kind == ProductionCycle.CYCLE_KIND_CALIBRATION:
             current_fish_count = 0
             current_biomass_kg = Decimal('0.00')
         else:
-            total_mortality_count = sum((log.mortality_count or 0) for log in daily_logs)
-            total_partial_harvested = sum((harvest.count_harvested or 0) for harvest in partial_harvests)
-            total_transferred_count = sum(operation.transferred_count for operation in calibration_operations)
-            total_transferred_biomass = sum(
-                (operation.transferred_biomass_kg for operation in calibration_operations),
-                Decimal('0'),
-            )
-            count_before_transfers = max(
-                locked_allocation.initial_fish_count - total_mortality_count - total_partial_harvested,
-                0,
-            )
-            current_fish_count = max(
-                count_before_transfers - total_transferred_count,
-                0,
-            )
-            average_weight_g = ProductionCycleService._resolve_allocation_average_weight_g(
-                locked_allocation,
-                daily_logs=daily_logs,
-            )
-            biomass_before_transfers = AquacultureCalculator.calculate_biomass(
-                count_before_transfers,
-                average_weight_g,
-            )
-            current_biomass_kg = max(biomass_before_transfers - total_transferred_biomass, Decimal('0'))
+            current_fish_count = locked_allocation.initial_fish_count
+            current_biomass_kg = Decimal(str(locked_allocation.initial_biomass_kg))
+
+        for _event_datetime, _created_at, _event_id, event_type, event in events:
+            before_count = current_fish_count
+            before_biomass = current_biomass_kg
+            before_weight = (
+                before_biomass * Decimal('1000') / Decimal(before_count)
+                if before_count > 0
+                else Decimal('0')
+            ).quantize(Decimal('0.01'))
+
+            if event_type == 'incoming':
+                current_fish_count += event.transferred_count
+                current_biomass_kg += event.transferred_biomass_kg
+            elif event_type == 'outgoing':
+                current_fish_count -= event.transferred_count
+                current_biomass_kg -= event.transferred_biomass_kg
+            elif event_type == 'log':
+                current_fish_count -= event.mortality_count or 0
+                average_weight = Decimal(str(event.average_weight)) if event.average_weight is not None else before_weight
+                current_biomass_kg = AquacultureCalculator.calculate_biomass(current_fish_count, average_weight)
+            elif event_type == 'partial_harvest':
+                current_fish_count -= event.count_harvested
+                current_biomass_kg -= Decimal(str(event.total_weight_kg))
+
+            if current_fish_count < 0 or current_biomass_kg < 0:
+                raise BusinessRuleViolation(_("La chronologie de l'allocation produit un stock négatif."))
+            if current_fish_count == 0:
+                current_biomass_kg = Decimal('0')
+
+            after_weight = (
+                current_biomass_kg * Decimal('1000') / Decimal(current_fish_count)
+                if current_fish_count > 0
+                else Decimal('0')
+            ).quantize(Decimal('0.01'))
+            if event_type in {'incoming', 'outgoing'}:
+                prefix = 'destination' if event_type == 'incoming' else 'source'
+                setattr(event, f'{prefix}_count_before', before_count)
+                setattr(event, f'{prefix}_count_after', current_fish_count)
+                setattr(event, f'{prefix}_average_weight_before_g', before_weight)
+                setattr(event, f'{prefix}_average_weight_after_g', after_weight)
+                setattr(event, f'{prefix}_biomass_before_kg', before_biomass)
+                setattr(event, f'{prefix}_biomass_after_kg', current_biomass_kg)
+                event.save(
+                    update_fields=[
+                        f'{prefix}_count_before',
+                        f'{prefix}_count_after',
+                        f'{prefix}_average_weight_before_g',
+                        f'{prefix}_average_weight_after_g',
+                        f'{prefix}_biomass_before_kg',
+                        f'{prefix}_biomass_after_kg',
+                    ]
+                )
+
+        if locked_allocation.status == CycleUnitAllocation.STATUS_HARVESTED:
+            current_fish_count = 0
+            current_biomass_kg = Decimal('0')
 
         locked_allocation.current_fish_count = current_fish_count
         locked_allocation.current_biomass_kg = current_biomass_kg
@@ -980,17 +1034,63 @@ class ProductionCycleService(BaseService):
         else:
             cycle.current_average_weight = Decimal('0')
 
-        transferred_out_count = sum(
-            cycle.calibration_operations_out.values_list('transferred_count', flat=True)
-        )
-        transferred_out_biomass = sum(
-            cycle.calibration_operations_out.values_list('transferred_biomass_kg', flat=True),
+        incoming_operations = CalibrationOperation.objects.filter(destination_allocation__cycle=cycle)
+        outgoing_operations = CalibrationOperation.objects.filter(source_allocation__cycle=cycle)
+        transferred_in_count = sum(incoming_operations.values_list('transferred_count', flat=True))
+        transferred_in_biomass = sum(
+            incoming_operations.values_list('transferred_biomass_kg', flat=True),
             Decimal('0'),
         )
+        transferred_out_count = sum(outgoing_operations.values_list('transferred_count', flat=True))
+        transferred_out_biomass = sum(
+            outgoing_operations.values_list('transferred_biomass_kg', flat=True),
+            Decimal('0'),
+        )
+        partial_harvest_count = sum(
+            cycle.partial_harvests.values_list('count_harvested', flat=True)
+        )
+        partial_harvest_biomass = sum(
+            cycle.partial_harvests.values_list('total_weight_kg', flat=True),
+            Decimal('0'),
+        )
+        final_harvest_count = sum(
+            allocation.final_fish_count or 0
+            for allocation in allocations
+            if allocation.status == CycleUnitAllocation.STATUS_HARVESTED
+        )
+        final_harvest_biomass = sum(
+            (allocation.final_biomass_kg or Decimal('0') for allocation in allocations),
+            Decimal('0'),
+        )
+        allocation_initial_count = sum(allocation.initial_fish_count for allocation in allocations)
+        allocation_initial_biomass = sum(
+            (allocation.initial_biomass_kg for allocation in allocations),
+            Decimal('0'),
+        )
+        if cycle.cycle_kind == ProductionCycle.CYCLE_KIND_CALIBRATION:
+            introduced_count = transferred_in_count
+            introduced_biomass = transferred_in_biomass
+        else:
+            introduced_count = allocation_initial_count + transferred_in_count
+            introduced_biomass = allocation_initial_biomass + transferred_in_biomass
+        recognized_count = (
+            cycle.current_count
+            + transferred_out_count
+            + partial_harvest_count
+            + final_harvest_count
+        )
         cycle.survival_rate = (
-            Decimal(cycle.current_count + transferred_out_count) / Decimal(cycle.initial_count) * Decimal('100')
-        ).quantize(Decimal('0.01'))
-        weight_gain = cycle.current_biomass + transferred_out_biomass - cycle.initial_biomass
+            (Decimal(recognized_count) / Decimal(introduced_count) * Decimal('100')).quantize(Decimal('0.01'))
+            if introduced_count > 0
+            else None
+        )
+        recognized_biomass = (
+            cycle.current_biomass
+            + transferred_out_biomass
+            + partial_harvest_biomass
+            + final_harvest_biomass
+        )
+        weight_gain = recognized_biomass - introduced_biomass
         if weight_gain > 0 and cycle.total_feed_consumed > 0:
             cycle.fcr = AquacultureCalculator.calculate_fcr(
                 cycle.total_feed_consumed,

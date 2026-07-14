@@ -175,6 +175,14 @@ class CycleLaunchAllocationSerializer(serializers.Serializer):
         return value
 
 
+class CycleLaunchCalibrationUnitSerializer(serializers.Serializer):
+    """Bac de calibrage physique créé vide dans la transaction de lancement."""
+
+    client_uuid = serializers.UUIDField()
+    name = serializers.CharField(max_length=120, trim_whitespace=True)
+    volume_m3 = serializers.DecimalField(max_digits=10, decimal_places=2, min_value=Decimal('0.01'))
+
+
 class CycleLaunchRequestSerializer(serializers.Serializer):
     """Validates every structural launch invariant before any database write."""
 
@@ -184,6 +192,7 @@ class CycleLaunchRequestSerializer(serializers.Serializer):
     cycle = CycleLaunchCycleSerializer()
     production_units = CycleLaunchUnitSerializer(many=True, allow_empty=False)
     allocations = CycleLaunchAllocationSerializer(many=True, allow_empty=False)
+    calibration_units = CycleLaunchCalibrationUnitSerializer(many=True, required=False, default=list)
 
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
         units = attrs["production_units"]
@@ -191,6 +200,13 @@ class CycleLaunchRequestSerializer(serializers.Serializer):
         cycle = attrs["cycle"]
         plan = attrs.get("production_plan")
         launch_kind = attrs["launch_kind"]
+        calibration_units = attrs.get('calibration_units', [])
+
+        calibration_names = [item['name'].casefold() for item in calibration_units]
+        if len(calibration_names) != len(set(calibration_names)):
+            raise serializers.ValidationError(
+                {'calibration_units': _('Chaque bac de calibrage doit avoir un nom unique.')}
+            )
 
         if launch_kind == "initial_setup" and not plan:
             raise serializers.ValidationError(

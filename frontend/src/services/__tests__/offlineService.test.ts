@@ -7,6 +7,8 @@ jest.mock('@/features/aquaculture/services/aquacultureService', () => ({
     createCycleLog: jest.fn(),
     createProductionCycle: jest.fn(),
     createSanitaryLog: jest.fn(),
+    createCalibrationTank: jest.fn(),
+    calibrateAllocation: jest.fn(),
   },
 }));
 
@@ -186,6 +188,37 @@ describe('services/offlineService', () => {
 
     expect(await offlineService.hasAnyPendingSync()).toBe(true);
     expect(await offlineService.getTotalPendingCount()).toBe(3);
+  });
+
+  it('le fallback de calibrage marque seulement les éléments réussis', async () => {
+    await offlineService.saveCalibrationTankOffline({ name: 'Bac A', volume_m3: 10 });
+    await offlineService.saveCalibrationTankOffline({ name: 'Bac B', volume_m3: 8 });
+    await offlineService.saveCalibrationOperationOffline('allocation-1', {
+      client_uuid: 'operation-1',
+      source_allocation_id: 'allocation-1',
+      destination_production_unit_id: 'tank-1',
+      calibrated_at: new Date().toISOString(),
+      transferred_count: 100,
+      transferred_average_weight_g: 120,
+    });
+
+    mockAquaculture.createCalibrationTank
+      .mockResolvedValueOnce({ id: 'tank-a' } as any)
+      .mockRejectedValueOnce(new Error('KO'));
+    mockAquaculture.calibrateAllocation.mockResolvedValueOnce({ operation: { id: 'op-1' } } as any);
+
+    expect(await offlineService.syncOfflineCalibrationTanks()).toEqual({ success: 1, failed: 1 });
+    expect(await offlineService.syncOfflineCalibrationOperations()).toEqual({ success: 1, failed: 0 });
+
+    const tanks = await offlineService.getOfflineCalibrationTanks();
+    expect(tanks.filter((item) => item.synced)).toHaveLength(1);
+    expect(tanks.filter((item) => !item.synced)).toHaveLength(1);
+    const operations = await offlineService.getOfflineCalibrationOperations();
+    expect(operations[0].synced).toBe(true);
+    expect(mockAquaculture.calibrateAllocation).toHaveBeenCalledWith(
+      'allocation-1',
+      expect.objectContaining({ source_allocation_id: 'allocation-1' }),
+    );
   });
 
   it('getLastSyncDate et resetOfflineData fonctionnent', async () => {

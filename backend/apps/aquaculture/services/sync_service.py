@@ -18,18 +18,19 @@ from datetime import date, datetime
 from typing import Any
 
 from django.core.exceptions import ValidationError
-from django.db import models, transaction
+from django.db import IntegrityError, models, transaction
 from django.utils import timezone
 from rest_framework.exceptions import APIException
 
+from ..domain.exceptions import BusinessRuleViolation
 from ..domain.validators import validate_cycle_unit_allocation_context
 from ..models import (
     CalibrationOperation,
-    CalibrationTank,
     CycleLog,
     CycleUnitAllocation,
     FeedingPlan,
     ProductionCycle,
+    ProductionUnit,
     SanitaryLog,
 )
 from .analytics_service import AnalyticsService
@@ -217,9 +218,12 @@ class SyncService(BaseService):
         return allocation
 
     @staticmethod
-    def _parse_last_sync(last_sync: str | None) -> datetime | None:
+    def _parse_last_sync(last_sync: str | datetime | None) -> datetime | None:
         if not last_sync:
             return None
+
+        if isinstance(last_sync, datetime):
+            return timezone.make_aware(last_sync) if last_sync.tzinfo is None else last_sync
 
         try:
             last_sync_clean = last_sync.replace('Z', '+00:00')
@@ -741,8 +745,16 @@ class SyncService(BaseService):
         calibration_tanks_data = []
         calibration_operations_data = []
         if include_calibration:
-            tanks_query = CalibrationTank.objects.filter(farm_profile__user=user)
-            operations_query = CalibrationOperation.objects.filter(source_cycle__farm_profile__user=user)
+            tanks_query = ProductionUnit.objects.filter(
+                farm_profile__user=user,
+                purpose=ProductionUnit.PURPOSE_CALIBRATION,
+            ).prefetch_related('cycle_allocations__cycle')
+            operations_query = CalibrationOperation.objects.select_related(
+                'source_allocation__cycle',
+                'source_allocation__production_unit',
+                'destination_allocation__cycle',
+                'destination_allocation__production_unit',
+            ).filter(source_allocation__cycle__farm_profile__user=user)
             if last_sync_dt:
                 tanks_query = tanks_query.filter(updated_at__gt=last_sync_dt)
                 operations_query = operations_query.filter(created_at__gt=last_sync_dt)
@@ -817,39 +829,88 @@ class SyncService(BaseService):
                 )
 
             for tank_data in sync_data.get('calibration_tanks', []):
-                _, created = CalibrationTank.objects.get_or_create(
-                    client_uuid=tank_data.get('client_uuid'),
-                    defaults={
-                        'farm_profile': user.farm_profile,
-                        'name': tank_data['name'],
-                        'volume_m3': tank_data['volume_m3'],
-                        'is_active': tank_data.get('is_active', True),
-                        'created_offline': True,
-                        'synced_at': timezone.now(),
-                    },
-                )
-                sync_result['processed']['calibration_tanks'] += int(created)
+                client_uuid = tank_data.get('client_uuid')
+                try:
+                    existing = ProductionUnit.objects.filter(client_uuid=client_uuid).first()
+                    if existing and existing.farm_profile_id != user.farm_profile.id:
+                        sync_result['errors'].append({
+                            'type': 'calibration_tank',
+                            'client_uuid': str(client_uuid),
+                            'error': 'client_uuid_conflict',
+                        })
+                        continue
+                    if existing is None:
+                        ProductionUnit.objects.create(
+                            client_uuid=client_uuid,
+                            farm_profile=user.farm_profile,
+                            name=tank_data['name'],
+                            unit_type='tank',
+                            purpose=ProductionUnit.PURPOSE_CALIBRATION,
+                            volume_m3=tank_data['volume_m3'],
+                            surface_m2=None,
+                            status='active' if tank_data.get('is_active', True) else 'inactive',
+                            created_offline=True,
+                            synced_at=timezone.now(),
+                        )
+                    sync_result['processed']['calibration_tanks'] += 1
+                except (IntegrityError, KeyError, ValidationError) as exc:
+                    sync_result['errors'].append({
+                        'type': 'calibration_tank',
+                        'client_uuid': str(client_uuid),
+                        'error': 'invalid_calibration_tank',
+                        'detail': str(exc),
+                    })
 
             operations = sorted(sync_data.get('calibration_operations', []), key=lambda item: item['calibrated_at'])
             for operation_data in operations:
-                source = ProductionCycle.objects.filter(
-                    pk=operation_data.get('source_cycle'), farm_profile__user=user
+                source = CycleUnitAllocation.objects.filter(cycle__farm_profile__user=user).filter(
+                    models.Q(pk=operation_data.get('source_allocation_id'))
+                    | models.Q(client_uuid=operation_data.get('source_allocation_client_uuid'))
                 ).first()
-                tank = CalibrationTank.objects.filter(farm_profile__user=user).filter(
-                    models.Q(pk=operation_data.get('destination_tank'))
-                    | models.Q(client_uuid=operation_data.get('destination_tank_client_uuid'))
+                if source is None:
+                    sync_result['errors'].append({
+                        'type': 'calibration_operation',
+                        'client_uuid': str(operation_data.get('client_uuid')),
+                        'error': 'source_allocation_not_found',
+                    })
+                    continue
+                tank = ProductionUnit.objects.filter(
+                    farm_profile__user=user,
+                    purpose=ProductionUnit.PURPOSE_CALIBRATION,
+                ).filter(
+                    models.Q(pk=operation_data.get('destination_production_unit_id'))
+                    | models.Q(client_uuid=operation_data.get('destination_production_unit_client_uuid'))
                 ).first()
-                if source and tank:
-                    _, _, created = CalibrationService.calibrate(
-                        source_cycle=source,
-                        destination_tank=tank,
+                if tank is None:
+                    sync_result['errors'].append({
+                        'type': 'calibration_operation',
+                        'client_uuid': str(operation_data.get('client_uuid')),
+                        'error': 'destination_production_unit_not_found',
+                    })
+                    continue
+                try:
+                    CalibrationService.calibrate(
+                        source_allocation=source,
+                        destination_production_unit=tank,
                         user=user,
                         **{
                             key: value for key, value in operation_data.items()
-                            if key not in {'source_cycle', 'destination_tank', 'destination_tank_client_uuid'}
+                            if key not in {
+                                'source_allocation_id',
+                                'source_allocation_client_uuid',
+                                'destination_production_unit_id',
+                                'destination_production_unit_client_uuid',
+                            }
                         },
                     )
-                    sync_result['processed']['calibration_operations'] += int(created)
+                    sync_result['processed']['calibration_operations'] += 1
+                except (BusinessRuleViolation, IntegrityError, KeyError, ValidationError, ValueError) as exc:
+                    sync_result['errors'].append({
+                        'type': 'calibration_operation',
+                        'client_uuid': str(operation_data.get('client_uuid')),
+                        'error': 'invalid_calibration_operation',
+                        'detail': str(exc),
+                    })
 
             cycle_logs = sync_data.get('cycle_logs', [])
             if cycle_logs:
@@ -874,9 +935,7 @@ class SyncService(BaseService):
             sync_result['server_updates'] = SyncService.get_server_updates(
                 user,
                 last_sync,
-                include_calibration=(
-                    'calibration_tanks' in sync_data or 'calibration_operations' in sync_data
-                ),
+                include_calibration=True,
             )
             return SyncService._finalize_full_sync_status(sync_result)
 

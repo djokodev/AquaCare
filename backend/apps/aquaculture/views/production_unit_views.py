@@ -7,9 +7,14 @@ from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from ..domain.exceptions import BusinessRuleViolation
 from ..domain.production_units import normalize_production_unit_type
-from ..models import CycleUnitAllocation, ProductionUnit
+from ..models import CalibrationOperation, CycleUnitAllocation, ProductionCycle, ProductionUnit
 from ..serializers import (
+    CalibrationOperationSerializer,
+    CalibrationRequestSerializer,
+    CalibrationResponseSerializer,
+    CalibrationTankSerializer,
     CycleUnitAllocationHarvestResponseSerializer,
     CycleUnitAllocationPartialHarvestResponseSerializer,
     CycleUnitAllocationSerializer,
@@ -17,6 +22,7 @@ from ..serializers import (
     PartialHarvestSerializer,
     ProductionUnitDashboardSerializer,
     ProductionUnitSerializer,
+    ProductionCycleSerializer,
 )
 from ..services import (
     HarvestCycleCommand,
@@ -24,6 +30,7 @@ from ..services import (
     ProductionCycleApplicationService,
     ProductionUnitDashboardService,
 )
+from ..services.calibration_service import CalibrationService
 
 
 class ProductionUnitViewSet(viewsets.ModelViewSet):
@@ -45,6 +52,10 @@ class ProductionUnitViewSet(viewsets.ModelViewSet):
         if unit_type_filter:
             normalized_unit_type = normalize_production_unit_type(unit_type_filter) or unit_type_filter
             queryset = queryset.filter(unit_type=normalized_unit_type)
+
+        purpose_filter = self.request.query_params.get('purpose')
+        if purpose_filter:
+            queryset = queryset.filter(purpose=purpose_filter)
 
         return queryset
 
@@ -88,6 +99,69 @@ class CycleUnitAllocationViewSet(viewsets.ModelViewSet):
         payload = ProductionUnitDashboardService.build_dashboard_payload(allocation)
         serializer = ProductionUnitDashboardSerializer(payload, context={'request': request})
         return Response(serializer.data)
+
+    @extend_schema(
+        summary="Calibrer depuis une allocation précise",
+        request=CalibrationRequestSerializer,
+        responses={200: CalibrationResponseSerializer, 201: CalibrationResponseSerializer},
+    )
+    @action(detail=True, methods=['post'], url_path='calibrate')
+    def calibrate(self, request, pk=None):
+        source_allocation = self.get_object()
+        serializer = CalibrationRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        destination_query = ProductionUnit.objects.filter(
+            farm_profile__user=request.user,
+            purpose=ProductionUnit.PURPOSE_CALIBRATION,
+        )
+        destination = (
+            destination_query.filter(pk=data['destination_production_unit_id']).first()
+            if data.get('destination_production_unit_id')
+            else destination_query.filter(client_uuid=data['destination_production_unit_client_uuid']).first()
+        )
+        if destination is None:
+            return Response(
+                {'code': 'destination_production_unit_not_found', 'detail': _('Bac de calibrage introuvable.')},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        try:
+            operation, warnings, created = CalibrationService.calibrate(
+                source_allocation=source_allocation,
+                destination_production_unit=destination,
+                user=request.user,
+                **{
+                    key: value
+                    for key, value in data.items()
+                    if key not in {
+                        'source_allocation_id',
+                        'source_allocation_client_uuid',
+                        'destination_production_unit_id',
+                        'destination_production_unit_client_uuid',
+                    }
+                },
+            )
+        except BusinessRuleViolation as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        operation = CalibrationOperation.objects.select_related(
+            'source_allocation__cycle',
+            'source_allocation__production_unit',
+            'destination_allocation__cycle',
+            'destination_allocation__production_unit',
+        ).get(pk=operation.pk)
+        source_cycle = ProductionCycle.objects.for_api().get(pk=operation.source_allocation.cycle_id)
+        destination_cycle = ProductionCycle.objects.for_api().get(pk=operation.destination_allocation.cycle_id)
+        payload = {
+            'operation': CalibrationOperationSerializer(operation).data,
+            'source_allocation': CycleUnitAllocationSerializer(operation.source_allocation).data,
+            'destination_allocation': CycleUnitAllocationSerializer(operation.destination_allocation).data,
+            'source_cycle': ProductionCycleSerializer(source_cycle, context={'request': request}).data,
+            'destination_cycle': ProductionCycleSerializer(destination_cycle, context={'request': request}).data,
+            'destination_tank': CalibrationTankSerializer(destination, context={'request': request}).data,
+            'warnings': warnings,
+            'idempotent_replay': not created,
+        }
+        return Response(payload, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
 
     @extend_schema(
         summary="Récolter une allocation de cycle par unité",

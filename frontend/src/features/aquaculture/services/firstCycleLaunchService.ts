@@ -232,6 +232,9 @@ export const launchFirstCycle = async (
         fish_count: fishCount,
       };
     }),
+    ...(formData.calibrationUnits?.length
+      ? { calibration_units: formData.calibrationUnits }
+      : {}),
   };
 
   return aquacultureService.launchProductionCycle(payload);

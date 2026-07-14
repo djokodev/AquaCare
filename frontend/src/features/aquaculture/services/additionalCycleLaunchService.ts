@@ -1,6 +1,6 @@
 import { getProductionUnitCapacity } from "@/features/aquaculture/utils/productionUnits";
 import type { NewCycleData } from "@/features/aquaculture/utils/newCycleForm";
-import type { CycleLaunchRequest, ProductionUnit } from "@/types/aquaculture";
+import type { CycleLaunchCalibrationUnitInput, CycleLaunchRequest, ProductionUnit } from "@/types/aquaculture";
 
 export class AdditionalCycleLaunchError extends Error {
   translationKey: string;
@@ -17,6 +17,7 @@ interface AdditionalCycleLaunchInput {
   selectedUnits: ProductionUnit[];
   allocationsByUnitId: Record<string, string>;
   launchUuid: string;
+  calibrationUnits?: CycleLaunchCalibrationUnitInput[];
 }
 
 const toFiniteNumber = (value: string): number | undefined => {
@@ -38,6 +39,7 @@ export const validateAdditionalCycleLaunch = ({
   formData,
   selectedUnits,
   allocationsByUnitId,
+  calibrationUnits = [],
 }: Omit<AdditionalCycleLaunchInput, "launchUuid">): string | null => {
   if (!formData.species || !formData.start_date.trim()) {
     return "fillRequiredFields";
@@ -75,6 +77,13 @@ export const validateAdditionalCycleLaunch = ({
   if (selectedUnits.length === 0) {
     return "createFarmAtLeastOneUnitError";
   }
+  const calibrationNames = calibrationUnits.map((unit) => unit.name.trim().toLocaleLowerCase());
+  if (
+    calibrationUnits.some((unit) => !unit.name.trim() || !Number.isFinite(unit.volume_m3) || unit.volume_m3 <= 0) ||
+    new Set(calibrationNames).size !== calibrationNames.length
+  ) {
+    return "calibrationLaunchUnitsInvalid";
+  }
 
   const initialCount = toPositiveInteger(formData.initial_count) ?? 0;
   let totalAllocated = 0;
@@ -106,7 +115,7 @@ export const buildAdditionalCycleLaunchRequest = (
     throw new AdditionalCycleLaunchError(validationError);
   }
 
-  const { formData, selectedUnits, allocationsByUnitId, launchUuid } = input;
+  const { formData, selectedUnits, allocationsByUnitId, launchUuid, calibrationUnits = [] } = input;
   const sellingPrice = toFiniteNumber(
     formData.planned_selling_price_per_kg_fcfa,
   );
@@ -157,5 +166,6 @@ export const buildAdditionalCycleLaunchRequest = (
       production_unit_local_id: getUnitLocalId(unit),
       fish_count: toPositiveInteger(allocationsByUnitId[unit.id]) ?? 0,
     })),
+    ...(calibrationUnits.length ? { calibration_units: calibrationUnits } : {}),
   };
 };

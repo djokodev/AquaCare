@@ -138,6 +138,42 @@ def test_cycle_launch_creates_complete_aggregate_and_replays(auth_client, farm_p
 
 
 @pytest.mark.django_db
+def test_cycle_launch_creates_empty_calibration_units_atomically(auth_client, farm_profile):
+    payload = launch_payload()
+    tank_uuid = str(uuid4())
+    payload['calibration_units'] = [
+        {'client_uuid': tank_uuid, 'name': 'Bac de tri A', 'volume_m3': '10.00'},
+    ]
+
+    response = auth_client.post(
+        reverse('aquaculture:production_cycle_launch'),
+        payload,
+        format='json',
+    )
+
+    assert response.status_code == status.HTTP_201_CREATED
+    tank = ProductionUnit.objects.get(client_uuid=tank_uuid)
+    assert tank.farm_profile == farm_profile
+    assert tank.unit_type == 'tank'
+    assert tank.purpose == ProductionUnit.PURPOSE_CALIBRATION
+    assert tank.cycle_allocations.count() == 0
+    assert ProductionUnit.objects.filter(purpose=ProductionUnit.PURPOSE_PRODUCTION).count() == 2
+
+    invalid = launch_payload()
+    invalid['calibration_units'] = [
+        {'client_uuid': str(uuid4()), 'name': 'Doublon', 'volume_m3': '10.00'},
+        {'client_uuid': str(uuid4()), 'name': 'DOUBLON', 'volume_m3': '8.00'},
+    ]
+    rejected = auth_client.post(
+        reverse('aquaculture:production_cycle_launch'),
+        invalid,
+        format='json',
+    )
+    assert rejected.status_code == status.HTTP_400_BAD_REQUEST
+    assert ProductionCycle.objects.count() == 1
+
+
+@pytest.mark.django_db
 def test_cycle_launch_rolls_back_plan_cycle_units_and_allocations(
     auth_client,
     farm_profile,
