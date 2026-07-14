@@ -60,7 +60,7 @@ export default function ProfileScreen({ navigation }: Props) {
 
       <Section title={isIndividual ? t('personalInfo') : t('companyInfo')} action={<IconButton icon={isEditing ? 'close' : 'pencil'} accessibilityLabel={t(isEditing ? 'cancel' : 'edit')} variant="ghost" onPress={() => setIsEditing(!isEditing)} />}>
         <ProfileInfoRow label={t('phoneNumber')} value={user.phone_number} />
-        <ProfileInfoRow label={t('email')} value={isEditing ? undefined : user.email || t('notProvided')} editable={isEditing} onChangeText={(value) => updateEditField('email', value)} inputValue={editData.email} placeholder={t('yourEmail')} selectable />
+        <ProfileInfoRow label={t('email')} value={isEditing ? undefined : user.email || t('notProvided')} editable={isEditing} onChangeText={(value) => updateEditField('email', value)} inputValue={editData.email} placeholder={t('yourEmail')} keyboardType="email-address" autoCapitalize="none" autoCorrect={false} textContentType="emailAddress" selectable />
         {isIndividual ? <>
           <ProfileInfoRow label={t('firstName')} value={user.first_name || t('notProvided')} />
           <ProfileInfoRow label={t('lastName')} value={user.last_name || t('notProvided')} />

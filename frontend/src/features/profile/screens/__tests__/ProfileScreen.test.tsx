@@ -113,6 +113,19 @@ describe('features/profile/screens/ProfileScreen', () => {
     expect(navigation.navigate).toHaveBeenCalledWith('Settings');
   });
 
+  it('configure le champ email sans correction ni majuscule', () => {
+    (useProfileEditor as jest.Mock).mockReturnValue({ isEditing: true, setIsEditing, isSaving: false, editData: { email: 'jean@example.com', intervention_zone: 'coastal' }, updateEditField: jest.fn(), locationData: {}, setLocationData: jest.fn(), save });
+
+    const emailField = render(<ProfileScreen navigation={navigation} />).getByLabelText('email');
+
+    expect(emailField.props).toMatchObject({
+      keyboardType: 'email-address',
+      autoCapitalize: 'none',
+      autoCorrect: false,
+      textContentType: 'emailAddress',
+    });
+  });
+
   it('affiche erreur de sauvegarde et confirme logout', async () => {
     save.mockRejectedValue(new Error('save failed'));
     (useProfileEditor as jest.Mock).mockReturnValue({ isEditing: true, setIsEditing, isSaving: false, editData: { email: '', intervention_zone: '' }, updateEditField: jest.fn(), locationData: {}, setLocationData: jest.fn(), save });

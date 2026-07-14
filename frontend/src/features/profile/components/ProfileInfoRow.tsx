@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, View, type TextInputProps } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { AppText, TextField } from '@/components/ui';
@@ -13,11 +13,14 @@ interface ProfileInfoRowProps {
   onChangeText?: (text: string) => void;
   inputValue?: string;
   placeholder?: string;
-  keyboardType?: 'default' | 'numeric';
+  keyboardType?: TextInputProps['keyboardType'];
+  autoCapitalize?: TextInputProps['autoCapitalize'];
+  autoCorrect?: TextInputProps['autoCorrect'];
+  textContentType?: TextInputProps['textContentType'];
   selectable?: boolean;
 }
 
-export function ProfileInfoRow({ icon, label, value, editable = false, onChangeText, inputValue, placeholder, keyboardType = 'default', selectable = false }: ProfileInfoRowProps) {
+export function ProfileInfoRow({ icon, label, value, editable = false, onChangeText, inputValue, placeholder, keyboardType = 'default', autoCapitalize = 'words', autoCorrect, textContentType, selectable = false }: ProfileInfoRowProps) {
   return (
     <View style={styles.row}>
       <View style={styles.labelGroup}>
@@ -26,7 +29,7 @@ export function ProfileInfoRow({ icon, label, value, editable = false, onChangeT
       </View>
       {editable ? (
         <View style={styles.input}>
-          <TextField value={inputValue} onChangeText={onChangeText} placeholder={placeholder} keyboardType={keyboardType} autoCapitalize="words" accessibilityLabel={label} />
+          <TextField value={inputValue} onChangeText={onChangeText} placeholder={placeholder} keyboardType={keyboardType} autoCapitalize={autoCapitalize} autoCorrect={autoCorrect} textContentType={textContentType} accessibilityLabel={label} />
         </View>
       ) : (
         <AppText selectable={selectable} numberOfLines={selectable ? 2 : 1} style={styles.value}>{value}</AppText>
