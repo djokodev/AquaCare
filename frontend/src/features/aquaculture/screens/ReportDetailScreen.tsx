@@ -2,8 +2,6 @@ import React, { useCallback, useMemo, useState } from 'react';
 import {
   View,
   Text,
-  TouchableOpacity,
-  ActivityIndicator,
   FlatList,
   RefreshControl,
   Alert,
@@ -11,13 +9,11 @@ import {
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RouteProp, useFocusEffect } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
-import { Ionicons } from '@expo/vector-icons';
 import * as SecureStore from 'expo-secure-store';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 
 import { RootStackParamList } from '@/navigation/MainNavigator';
-import { AQUACARE_COLORS } from '@/constants/colors';
 import { STORAGE_KEYS } from '@/constants/api';
 import { ProductionReport } from '@/types/aquaculture';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
@@ -25,7 +21,7 @@ import { formatDate } from '@/utils';
 import logger from '@/utils/logger';
 import { parseApiError } from '@/utils/errorParser';
 import { formatAquacultureErrorWithAction } from '@/features/aquaculture/utils/aquacultureErrorPresenter';
-import { AppHeader, Button, Card, ErrorState, LoadingState, Screen } from '@/components/ui';
+import { AppHeader, Button, Card, ErrorState, InlineAlert, LoadingState, Screen } from '@/components/ui';
 
 type ReportDetailScreenNavigationProp = StackNavigationProp<RootStackParamList, 'ReportDetail'>;
 type ReportDetailScreenRouteProp = RouteProp<RootStackParamList, 'ReportDetail'>;
@@ -507,79 +503,38 @@ export default function ReportDetailScreen({ navigation, route }: ReportDetailSc
           </View>
         ) : null}
 
-        <View className="bg-white rounded-xl p-4 mb-6">
-          <Text className="text-base font-bold text-gray-dark mb-3">{t('actions')}</Text>
-
-          <TouchableOpacity
-            className="bg-cream border border-gray-200 rounded-lg p-3 mb-2 flex-row items-center justify-center"
+        <Card>
+          <InlineAlert tone="info" message={t('actions')} />
+          <Button
+            variant="outline"
+            label={t('regenerateReport')}
             onPress={() => report && runAction('regenerate', () => aquacultureService.regenerateReport(report.id))}
             disabled={Boolean(actionLoading)}
-          >
-            {actionLoading === 'regenerate' ? (
-              <ActivityIndicator color={AQUACARE_COLORS.GREEN_PRIMARY} />
-            ) : (
-              <>
-                <Ionicons name="refresh-outline" size={18} color={AQUACARE_COLORS.GREEN_PRIMARY} />
-                <Text className="text-sm font-semibold text-aquacare-primary ml-2">{t('regenerateReport')}</Text>
-              </>
-            )}
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            className={`rounded-lg p-3 mb-2 flex-row items-center justify-center ${
-              report?.status === 'validated'
-                ? 'bg-gray-100 border border-gray-200'
-                : 'bg-aquacare-primary'
-            }`}
+            loading={actionLoading === 'regenerate'}
+            iconLeft="refresh-outline"
+          />
+          <Button
+            label={t('validateReport')}
             onPress={() => report && runAction('validate', () => aquacultureService.validateReport(report.id))}
             disabled={Boolean(actionLoading) || report?.status === 'validated'}
-          >
-            {actionLoading === 'validate' ? (
-              <ActivityIndicator color={report?.status === 'validated' ? AQUACARE_COLORS.GRAY_LIGHT : AQUACARE_COLORS.WHITE} />
-            ) : (
-              <>
-                <Ionicons
-                  name={report?.status === 'validated' ? 'checkmark-circle' : 'checkmark-done-outline'}
-                  size={18}
-                  color={report?.status === 'validated' ? AQUACARE_COLORS.GREEN_PRIMARY : AQUACARE_COLORS.WHITE}
-                />
-                <Text className={`text-sm font-semibold ml-2 ${report?.status === 'validated' ? 'text-gray-400' : 'text-white'}`}>
-                  {t('validateReport')}
-                </Text>
-              </>
-            )}
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            className="bg-[#1d4ed8] rounded-lg p-3 mb-2 flex-row items-center justify-center"
+            loading={actionLoading === 'validate'}
+            iconLeft="checkmark-done-outline"
+          />
+          <Button
+            label={t('sendByEmail')}
             onPress={handleEmailAction}
             disabled={Boolean(actionLoading)}
-          >
-            {actionLoading === 'email' ? (
-              <ActivityIndicator color={AQUACARE_COLORS.WHITE} />
-            ) : (
-              <>
-                <Ionicons name="mail-outline" size={18} color={AQUACARE_COLORS.WHITE} />
-                <Text className="text-sm font-semibold text-white ml-2">{t('sendByEmail')}</Text>
-              </>
-            )}
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            className="bg-[#16a34a] rounded-lg p-3 flex-row items-center justify-center"
+            loading={actionLoading === 'email'}
+            iconLeft="mail-outline"
+          />
+          <Button
+            label={t('shareOnWhatsApp')}
             onPress={handleShareWhatsApp}
             disabled={Boolean(actionLoading)}
-          >
-            {actionLoading === 'whatsapp' ? (
-              <ActivityIndicator color={AQUACARE_COLORS.WHITE} />
-            ) : (
-              <>
-                <Ionicons name="logo-whatsapp" size={18} color={AQUACARE_COLORS.WHITE} />
-                <Text className="text-sm font-semibold text-white ml-2">{t('shareOnWhatsApp')}</Text>
-              </>
-            )}
-          </TouchableOpacity>
-        </View>
+            loading={actionLoading === 'whatsapp'}
+            iconLeft="logo-whatsapp"
+          />
+        </Card>
       </View>
     ),
     [
