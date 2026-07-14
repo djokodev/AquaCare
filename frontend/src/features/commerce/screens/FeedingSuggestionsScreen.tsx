@@ -1,12 +1,11 @@
 ﻿import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
-  Text,
   FlatList,
-  TouchableOpacity,
-  ActivityIndicator,
   RefreshControl,
   Alert,
+  Pressable,
+  StyleSheet,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
@@ -17,8 +16,9 @@ import { useDispatch, useSelector } from 'react-redux';
 import { AppDispatch, RootState } from '@/store/store';
 import { fetchFeedingSuggestions, addToCart } from '@/features/commerce/store/commerceSlice';
 import { CycleSuggestion, FeedingPhase, SuggestedProduct } from '@/types/commerce';
-import { AQUACARE_COLORS } from '@/constants/colors';
 import { RootStackParamList } from '@/navigation/MainNavigator';
+import { AppHeader, AppText, Button, Card, EmptyState, ErrorState, IconButton, InlineAlert, LoadingState } from '@/components/ui';
+import { colors, spacing } from '@/theme';
 
 type NavigationProp = StackNavigationProp<RootStackParamList>;
 
@@ -117,37 +117,37 @@ export default function FeedingSuggestionsScreen() {
     const { confidence_score, cycles_with_data, total_cycles } = suggestionsData.analysis;
     const scoreColor =
       confidence_score >= 80
-        ? AQUACARE_COLORS.SUCCESS
+        ? colors.status.success
         : confidence_score >= 60
-        ? AQUACARE_COLORS.WARNING
-        : AQUACARE_COLORS.ERROR;
+        ? colors.status.warning
+        : colors.status.error;
 
     return (
-      <View className="bg-white rounded-xl p-4 mb-4">
+      <Card variant="outlined" style={styles.sectionCard}>
         <View className="flex-row items-center mb-3 gap-2">
           <Ionicons name="analytics-outline" size={24} color={scoreColor} />
-          <Text className="text-base font-bold text-gray-dark">{t('dataQuality')}</Text>
+          <AppText className="text-base font-bold text-gray-dark">{t('dataQuality')}</AppText>
         </View>
         <View className="flex-row gap-4">
           <View className="items-center px-4">
-            <Text className="text-2xl font-bold" style={{ color: scoreColor }}>
+            <AppText className="text-2xl font-bold" style={{ color: scoreColor }}>
               {confidence_score}%
-            </Text>
-            <Text className="text-xs text-gray-light mt-1">{t('confidenceScore')}</Text>
+            </AppText>
+            <AppText className="text-xs text-gray-light mt-1">{t('confidenceScore')}</AppText>
           </View>
           <View className="flex-1 justify-center gap-1">
-            <Text className="text-sm text-gray-dark">
+            <AppText className="text-sm text-gray-dark">
               {t('cyclesAnalyzed')}: {cycles_with_data}/{total_cycles}
-            </Text>
-            <Text className="text-sm text-gray-dark">
+            </AppText>
+            <AppText className="text-sm text-gray-dark">
               {t('analysisPeriod')}: {suggestionsData.analysis.analysis_period_days} {t('days')}
-            </Text>
-            <Text className="text-sm text-gray-dark">
+            </AppText>
+            <AppText className="text-sm text-gray-dark">
               {t('safetyBuffer')}: +{suggestionsData.analysis.safety_buffer_days} {t('days')}
-            </Text>
+            </AppText>
           </View>
         </View>
-      </View>
+      </Card>
     );
   }, [suggestionsData?.analysis, t]);
 
@@ -155,28 +155,27 @@ export default function FeedingSuggestionsScreen() {
     const totalPrice = suggestedProduct.total_price;
 
     return (
-      <View key={suggestedProduct.product_id} className="flex-row justify-between bg-white p-3 rounded-lg mb-2">
+      <Card key={suggestedProduct.product_id} style={styles.productCard}>
         <View className="flex-1 mr-3">
-          <Text className="text-xs text-gray-light font-semibold mb-1">{suggestedProduct.brand.toUpperCase()}</Text>
-          <Text className="text-sm text-gray-dark mb-1" numberOfLines={2}>
+          <AppText className="text-xs text-gray-light font-semibold mb-1">{suggestedProduct.brand.toUpperCase()}</AppText>
+          <AppText className="text-sm text-gray-dark mb-1" numberOfLines={2}>
             {suggestedProduct.product_name}
-          </Text>
-          <Text className="text-xs text-gray-light">
+          </AppText>
+          <AppText className="text-xs text-gray-light">
             {suggestedProduct.quantity_bags} {t('bags')} - {suggestedProduct.total_kg}kg
-          </Text>
+          </AppText>
         </View>
         <View className="items-end justify-between">
-          <Text className="text-sm font-semibold text-aquacare-primary">
+          <AppText className="text-sm font-semibold text-aquacare-primary">
             {totalPrice.toLocaleString()} FCFA
-          </Text>
-          <TouchableOpacity
-            className="bg-aquacare-primary w-8 h-8 rounded-full items-center justify-center"
+          </AppText>
+          <IconButton
+            icon="cart-outline"
+            accessibilityLabel={`${t('addToCart')} ${suggestedProduct.product_name}`}
             onPress={() => handleAddToCart(suggestedProduct.product_id, suggestedProduct.quantity_bags)}
-          >
-            <Ionicons name="cart-outline" size={16} color={AQUACARE_COLORS.WHITE} />
-          </TouchableOpacity>
+          />
         </View>
-      </View>
+      </Card>
     );
   }, [handleAddToCart, t]);
 
@@ -186,52 +185,51 @@ export default function FeedingSuggestionsScreen() {
 
     return (
       <View key={index} className="bg-cream rounded-lg p-3 mb-3">
-        <TouchableOpacity
+        <Pressable
           className="flex-row justify-between items-center"
           onPress={() => togglePhaseExpansion(cycleId, index)}
-          activeOpacity={0.8}
         >
           <View className="flex-row items-center flex-1 gap-3">
             <View className="w-10 h-10 bg-white rounded-full items-center justify-center">
-              <Ionicons name="fast-food-outline" size={20} color={AQUACARE_COLORS.GREEN_PRIMARY} />
+              <Ionicons name="fast-food-outline" size={20} color={colors.brand.primary} />
             </View>
             <View>
-              <Text className="text-sm font-semibold text-gray-dark">{phase.phase_name}</Text>
-              <Text className="text-xs text-gray-light">
+              <AppText className="text-sm font-semibold text-gray-dark">{phase.phase_name}</AppText>
+              <AppText className="text-xs text-gray-light">
                 {phase.pellet_size_mm}mm - {phase.weight_range_g[0]}-{phase.weight_range_g[1]}g
-              </Text>
+              </AppText>
             </View>
           </View>
           <View className="items-end gap-1">
-            <Text className="text-sm font-semibold text-aquacare-primary">
+            <AppText className="text-sm font-semibold text-aquacare-primary">
               {phase.total_price.toLocaleString()} FCFA
-            </Text>
+            </AppText>
             <Ionicons
               name={isExpanded ? 'chevron-up' : 'chevron-down'}
               size={20}
-              color={AQUACARE_COLORS.GRAY_LIGHT}
+              color={colors.text.muted}
             />
           </View>
-        </TouchableOpacity>
+        </Pressable>
 
         <View className="flex-row mt-3 gap-4">
           <View className="flex-row items-center gap-1">
-            <Ionicons name="calendar-outline" size={14} color={AQUACARE_COLORS.GRAY_LIGHT} />
-            <Text className="text-xs text-gray-light">{phase.days_coverage} {t('days')}</Text>
+            <Ionicons name="calendar-outline" size={14} color={colors.text.muted} />
+            <AppText className="text-xs text-gray-light">{phase.days_coverage} {t('days')}</AppText>
           </View>
           <View className="flex-row items-center gap-1">
-            <Ionicons name="scale-outline" size={14} color={AQUACARE_COLORS.GRAY_LIGHT} />
-            <Text className="text-xs text-gray-light">{phase.estimated_need_kg}kg</Text>
+            <Ionicons name="scale-outline" size={14} color={colors.text.muted} />
+            <AppText className="text-xs text-gray-light">{phase.estimated_need_kg}kg</AppText>
           </View>
           <View className="flex-row items-center gap-1">
-            <Ionicons name="cube-outline" size={14} color={AQUACARE_COLORS.GRAY_LIGHT} />
-            <Text className="text-xs text-gray-light">{totalBags} {t('bags')}</Text>
+            <Ionicons name="cube-outline" size={14} color={colors.text.muted} />
+            <AppText className="text-xs text-gray-light">{totalBags} {t('bags')}</AppText>
           </View>
         </View>
 
         {isExpanded && (
-          <View className="mt-3 pt-3 border-t border-[#e5e7eb]">
-            <Text className="text-xs font-semibold text-gray-dark mb-2">{t('recommendedProducts')}</Text>
+          <View style={styles.expandedSection}>
+            <AppText className="text-xs font-semibold text-gray-dark mb-2">{t('recommendedProducts')}</AppText>
             {phase.products.map((product) => renderSuggestedProduct(product))}
           </View>
         )}
@@ -243,65 +241,58 @@ export default function FeedingSuggestionsScreen() {
     const isExpanded = expandedCycleId === cycle.cycle_id;
 
     return (
-      <View className="bg-white rounded-xl p-4 mb-4">
-        <TouchableOpacity
+      <Card variant="outlined" style={styles.cycleCard}>
+        <Pressable
           className="flex-row items-center justify-between"
           onPress={() => toggleCycleExpansion(cycle.cycle_id)}
-          activeOpacity={0.8}
         >
           <View className="flex-row items-center flex-1 gap-3">
-            <Ionicons name="water-outline" size={28} color={AQUACARE_COLORS.GREEN_PRIMARY} />
+            <Ionicons name="water-outline" size={28} color={colors.brand.primary} />
             <View className="flex-1">
-              <Text className="text-base font-bold text-gray-dark">{cycle.cycle_name}</Text>
-              <Text className="text-sm text-aquacare-primary">{t(cycle.species)}</Text>
-              <Text className="text-xs text-gray-light mt-1">
+              <AppText className="text-base font-bold text-gray-dark">{cycle.cycle_name}</AppText>
+              <AppText className="text-sm text-aquacare-primary">{t(cycle.species)}</AppText>
+              <AppText className="text-xs text-gray-light mt-1">
                 {t('currentPhase')}: {cycle.current_phase} - {cycle.current_avg_weight_g}g - {cycle.days_remaining} {t('daysRemaining')}
-              </Text>
+              </AppText>
             </View>
           </View>
           <Ionicons
             name={isExpanded ? 'chevron-up' : 'chevron-down'}
             size={24}
-            color={AQUACARE_COLORS.GRAY_LIGHT}
+            color={colors.text.muted}
           />
-        </TouchableOpacity>
+        </Pressable>
 
         <View className="flex-row flex-wrap bg-cream rounded-lg p-3 mt-3 gap-3">
           <View className="flex-1 min-w-[45%] items-center">
-            <Text className="text-xs text-gray-light">{t('totalNeeded')}</Text>
-            <Text className="text-sm font-bold text-gray-dark">{cycle.summary.total_needed_kg}kg</Text>
+            <AppText className="text-xs text-gray-light">{t('totalNeeded')}</AppText>
+            <AppText className="text-sm font-bold text-gray-dark">{cycle.summary.total_needed_kg}kg</AppText>
           </View>
           <View className="flex-1 min-w-[45%] items-center">
-            <Text className="text-xs text-gray-light">{t('totalBags')}</Text>
-            <Text className="text-sm font-bold text-gray-dark">{cycle.summary.total_bags}</Text>
+            <AppText className="text-xs text-gray-light">{t('totalBags')}</AppText>
+            <AppText className="text-sm font-bold text-gray-dark">{cycle.summary.total_bags}</AppText>
           </View>
           <View className="flex-1 min-w-[45%] items-center">
-            <Text className="text-xs text-gray-light">{t('totalCost')}</Text>
-            <Text className="text-sm font-bold text-aquacare-primary">
+            <AppText className="text-xs text-gray-light">{t('totalCost')}</AppText>
+            <AppText className="text-sm font-bold text-aquacare-primary">
               {cycle.summary.total_price.toLocaleString()} FCFA
-            </Text>
+            </AppText>
           </View>
           <View className="flex-1 min-w-[45%] items-center">
-            <Text className="text-xs text-gray-light">{t('coverage')}</Text>
-            <Text className="text-sm font-bold text-gray-dark">{cycle.summary.coverage_days} {t('days')}</Text>
+            <AppText className="text-xs text-gray-light">{t('coverage')}</AppText>
+            <AppText className="text-sm font-bold text-gray-dark">{cycle.summary.coverage_days} {t('days')}</AppText>
           </View>
         </View>
 
-        <TouchableOpacity
-          className="bg-aquacare-primary flex-row items-center justify-center py-3 rounded-lg mt-3 gap-2"
-          onPress={() => handleAddCycleToCart(cycle)}
-        >
-          <Ionicons name="cart" size={20} color={AQUACARE_COLORS.WHITE} />
-          <Text className="text-white text-base font-semibold">{t('addAllToCart')}</Text>
-        </TouchableOpacity>
+        <Button label={t('addAllToCart')} iconLeft="cart" onPress={() => handleAddCycleToCart(cycle)} style={styles.buttonSpacing} />
 
         {isExpanded && (
           <View className="mt-4">
-            <Text className="text-sm font-bold text-gray-dark mb-3">{t('feedingPhases')}</Text>
+            <AppText className="text-sm font-bold text-gray-dark mb-3">{t('feedingPhases')}</AppText>
             {cycle.phases.map((phase, index) => renderFeedingPhase(phase, cycle.cycle_id, index))}
           </View>
         )}
-      </View>
+      </Card>
     );
   }, [expandedCycleId, handleAddCycleToCart, renderFeedingPhase, t, toggleCycleExpansion]);
 
@@ -309,10 +300,7 @@ export default function FeedingSuggestionsScreen() {
     () =>
       suggestionCycles.length > 0 ? (
         <>
-          <View className="flex-row bg-[#dbeafe] p-3 rounded-lg mb-4 gap-3">
-            <Ionicons name="information-circle" size={24} color={AQUACARE_COLORS.INFO} />
-            <Text className="flex-1 text-sm text-aquacare-primary">{t('suggestionsInfoBanner')}</Text>
-          </View>
+          <InlineAlert tone="info" message={t('suggestionsInfoBanner')} />
 
           {renderConfidenceScore()}
         </>
@@ -322,70 +310,21 @@ export default function FeedingSuggestionsScreen() {
 
   const renderEmptyState = useCallback(
     () => (
-      <View className="py-16 items-center">
-        <Ionicons name="bulb-outline" size={100} color={AQUACARE_COLORS.GRAY_LIGHT} />
-        <Text className="mt-5 text-2xl font-bold text-gray-dark">{t('noSuggestionsYet')}</Text>
-        <Text className="mt-3 text-base text-gray-light text-center px-8">
-          {t('noSuggestionsDescription')}
-        </Text>
-        <TouchableOpacity
-          className="mt-6 bg-aquacare-primary flex-row items-center px-6 py-3 rounded-lg gap-2"
-          onPress={() => navigation.navigate('CreateFarm')}
-        >
-          <Ionicons name="add-circle-outline" size={20} color={AQUACARE_COLORS.WHITE} />
-          <Text className="text-white text-base font-semibold">{t('startNewCycle')}</Text>
-        </TouchableOpacity>
-      </View>
+      <EmptyState title={t('noSuggestionsYet')} message={t('noSuggestionsDescription')} actionLabel={t('startNewCycle')} onAction={() => navigation.navigate('CreateFarm')} />
     ),
     [navigation, t]
   );
 
   return (
-    <View className="flex-1 bg-cream">
-      <View className="bg-white px-5 pt-16 pb-5 flex-row items-center justify-between shadow">
-        <TouchableOpacity onPress={() => navigation.goBack()} className="w-10">
-          <Ionicons name="arrow-back" size={24} color={AQUACARE_COLORS.GRAY_DARK} />
-        </TouchableOpacity>
-        <View className="flex-1 items-center">
-          <Text className="text-xl font-bold text-gray-dark">{t('feedingSuggestions')}</Text>
-          <Text className="text-xs text-gray-light mt-1">{t('intelligentRecommendations')}</Text>
-        </View>
-        <TouchableOpacity onPress={() => navigation.navigate('Cart')} className="relative">
-          <Ionicons name="cart-outline" size={24} color={AQUACARE_COLORS.GREEN_PRIMARY} />
-          {cartItemsCount > 0 && (
-            <View className="absolute -top-2 -right-2 bg-[#dc2626] rounded-full min-w-[20px] h-5 items-center justify-center px-1">
-              <Text className="text-white text-xs font-bold">
-                {cartItemsCount}
-              </Text>
-            </View>
-          )}
-        </TouchableOpacity>
-      </View>
+    <View style={styles.screen}>
+      <AppHeader title={t('feedingSuggestions')} subtitle={t('intelligentRecommendations')} onBack={() => navigation.goBack()} backLabel={t('back')} rightAction={<IconButton icon="cart-outline" accessibilityLabel={`${t('cart')} ${cartItemsCount}`} badge={cartItemsCount} onPress={() => navigation.navigate('Cart')} />} />
 
       {!currentCycle?.id ? (
-        <View className="flex-1 items-center justify-center px-8">
-          <Ionicons name="information-circle-outline" size={48} color={AQUACARE_COLORS.WARNING} />
-          <Text className="mt-3 text-base text-gray-dark text-center">{t('sessionCycleNotSelected')}</Text>
-          <Text className="mt-2 text-sm text-gray-light text-center">{t('sessionCyclePickerDescription')}</Text>
-          <TouchableOpacity
-            className="mt-5 bg-aquacare-primary px-6 py-3 rounded-lg"
-            onPress={() => navigation.navigate('CycleSessionEntry', { showBackToDashboard: true })}
-          >
-            <Text className="text-white text-base font-semibold">{t('sessionCycleConfirm')}</Text>
-          </TouchableOpacity>
-        </View>
+        <EmptyState title={t('sessionCycleNotSelected')} message={t('sessionCyclePickerDescription')} actionLabel={t('sessionCycleConfirm')} onAction={() => navigation.navigate('CycleSessionEntry', { showBackToDashboard: true })} />
       ) : loading && !refreshing ? (
-        <View className="flex-1 items-center justify-center">
-          <ActivityIndicator size="large" color={AQUACARE_COLORS.GREEN_PRIMARY} />
-          <Text className="mt-3 text-base text-gray-light">{t('analyzingCycles')}</Text>
-        </View>
+        <LoadingState message={t('analyzingCycles')} />
       ) : error ? (
-        <View className="flex-1 items-center justify-center px-10 py-10">
-          <Ionicons name="alert-circle-outline" size={48} color={AQUACARE_COLORS.ERROR} />
-          <Text className="mt-3 text-base text-[#dc2626] text-center">{error}</Text>
-          <TouchableOpacity
-            className="mt-5 bg-aquacare-primary px-6 py-3 rounded-lg"
-            onPress={() =>
+        <ErrorState title={error} actionLabel={t('retry')} onAction={() =>
               farmProfile?.id &&
               currentCycle?.id &&
               dispatch(
@@ -394,11 +333,7 @@ export default function FeedingSuggestionsScreen() {
                   cycleId: currentCycle.id,
                 })
               )
-            }
-          >
-            <Text className="text-white text-base font-semibold">{t('retry')}</Text>
-          </TouchableOpacity>
-        </View>
+            } />
       ) : (
         <FlatList
           data={suggestionCycles}
@@ -406,13 +341,13 @@ export default function FeedingSuggestionsScreen() {
           renderItem={renderCycleSuggestion}
           ListHeaderComponent={renderListHeader}
           ListEmptyComponent={renderEmptyState}
-          contentContainerStyle={{ padding: 16, paddingBottom: 24 }}
+          contentContainerStyle={styles.content}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
               onRefresh={handleRefresh}
-              colors={[AQUACARE_COLORS.GREEN_PRIMARY]}
-              tintColor={AQUACARE_COLORS.GREEN_PRIMARY}
+              colors={[colors.brand.primary]}
+              tintColor={colors.brand.primary}
             />
           }
           showsVerticalScrollIndicator={false}
@@ -421,3 +356,13 @@ export default function FeedingSuggestionsScreen() {
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: colors.surface.page },
+  content: { padding: spacing[4], paddingBottom: spacing[6] },
+  sectionCard: { marginBottom: spacing[4] },
+  productCard: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing[2] },
+  expandedSection: { marginTop: spacing[3], paddingTop: spacing[3], borderTopWidth: 1, borderTopColor: colors.border.default },
+  cycleCard: { marginBottom: spacing[4] },
+  buttonSpacing: { marginTop: spacing[3] },
+});

@@ -993,6 +993,8 @@ export const fr = {
   // Commerce - Cart
   cart: 'Panier',
   emptyCart: 'Panier vide',
+  decreaseQuantity: 'Diminuer la quantité',
+  increaseQuantity: 'Augmenter la quantité',
   emptyCartDescription: 'Votre panier est vide. Parcourez notre catalogue pour ajouter des produits.',
   browseCatalog: 'Parcourir le catalogue',
   myProducts: 'Mes produits',

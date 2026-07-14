@@ -3,7 +3,7 @@ import { Image, Pressable, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { AppText, Badge, Card, IconButton } from '@/components/ui';
-import { colors, sizing, spacing } from '@/theme';
+import { colors, radii, sizing, spacing } from '@/theme';
 import type { Product } from '@/types/commerce';
 import { getProductBrandAsset } from '@/features/commerce/utils/productBrandAssets';
 
@@ -48,7 +48,7 @@ export function ProductCard({ product, proteinLabel, quickAddLabel, onPress, onQ
 const styles = StyleSheet.create({
   card: { flexDirection: 'row', alignItems: 'center', gap: spacing[3] },
   content: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing[3] },
-  imageWrap: { width: 80, height: 80, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface.page, borderRadius: spacing[2] },
+  imageWrap: { width: 80, height: 80, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface.page, borderRadius: radii.md },
   image: { width: 64, height: 64 },
   details: { flex: 1, gap: spacing[1] },
   brandRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },

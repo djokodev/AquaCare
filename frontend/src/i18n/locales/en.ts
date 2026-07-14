@@ -993,6 +993,8 @@
   // Commerce - Cart
   cart: 'Cart',
   emptyCart: 'Empty cart',
+  decreaseQuantity: 'Decrease quantity',
+  increaseQuantity: 'Increase quantity',
   emptyCartDescription: 'Your cart is empty. Browse our catalog to add products.',
   browseCatalog: 'Browse catalog',
   myProducts: 'My products',

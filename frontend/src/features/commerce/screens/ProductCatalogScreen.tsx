@@ -23,7 +23,7 @@ import { fetchProducts, applyFilters, addToCart } from '@/features/commerce/stor
 import { Product, ProductSpecies } from '@/types/commerce';
 import { PRODUCT_SPECIES } from '@/domain/commerce/constants';
 import type { RootStackParamList } from '@/navigation/MainNavigator';
-import { AppHeader, AppText, Button, EmptyState, ErrorState, IconButton, SegmentedControl, TextField } from '@/components/ui';
+import { AppHeader, AppText, Button, EmptyState, ErrorState, IconButton, LoadingState, SegmentedControl, TextField } from '@/components/ui';
 import { colors, spacing } from '@/theme';
 import { ProductCard } from '@/features/commerce/components/ProductCard';
 
@@ -150,7 +150,7 @@ export default function ProductCatalogScreen() {
         />
         {searchQuery || selectedSpecies ? <Button label={t('resetFilters')} variant="ghost" size="small" onPress={handleResetFilters} /> : null}
       </View>
-      {loading && !refreshing ? <View style={styles.state}><AppText color="muted">{t('loading')}</AppText></View> : null}
+      {loading && !refreshing ? <LoadingState message={t('loading')} /> : null}
       {error && !loading ? <ErrorState message={error} actionLabel={t('retry')} onAction={() => dispatch(fetchProducts(filters))} /> : null}
       {!loading && !error ? (
         <FlatList
@@ -171,5 +171,4 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.surface.page },
   filters: { gap: spacing[2], padding: spacing[4], backgroundColor: colors.surface.card, borderBottomWidth: 1, borderBottomColor: colors.border.subtle },
   list: { padding: spacing[4], gap: spacing[3], paddingBottom: spacing[6] },
-  state: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 });

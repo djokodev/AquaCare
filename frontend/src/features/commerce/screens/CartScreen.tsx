@@ -1,6 +1,5 @@
 ﻿import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, Alert, Image } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Alert, FlatList, Image, StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -17,7 +16,6 @@ import {
   createOrder,
 } from '@/features/commerce/store/commerceSlice';
 import { CartItem, DeliveryMethod, PickupLocation } from '@/types/commerce';
-import { AQUACARE_COLORS } from '@/constants/colors';
 import {
   DELIVERY_METHODS,
   FREE_DELIVERY_THRESHOLD,
@@ -29,6 +27,20 @@ import { RootStackParamList } from '@/navigation/MainNavigator';
 import { RouteProp, useRoute } from '@react-navigation/native';
 import { getProductBrandAsset } from '@/features/commerce/utils/productBrandAssets';
 import { sanitizeUserFacingErrorMessage } from '@/utils/errorParser';
+import {
+  AppHeader,
+  AppText,
+  Badge,
+  Button,
+  Card,
+  Divider,
+  EmptyState,
+  IconButton,
+  InlineAlert,
+  LoadingState,
+  SelectableCard,
+} from '@/components/ui';
+import { colors, radii, spacing } from '@/theme';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'Cart'>;
 type RoutePropType = RouteProp<RootStackParamList, 'Cart'>;
@@ -91,6 +103,7 @@ export default function CartScreen() {
   const { items: cartItems, delivery_method, pickup_location, deliveryPreview, previewLoading } = cart;
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const submittingRef = React.useRef(false);
 
   const cartItemsCount = useMemo(
     () => cartItems.reduce((sum, item) => sum + item.quantity, 0),
@@ -169,6 +182,8 @@ export default function CartScreen() {
         {
           text: t('confirm'),
           onPress: async () => {
+            if (submittingRef.current) return;
+            submittingRef.current = true;
             setIsSubmitting(true);
             try {
               const orderData = {
@@ -204,6 +219,7 @@ export default function CartScreen() {
               logger.warn('[CartScreen] Order error:', msg);
               Alert.alert(t('error'), msg);
             } finally {
+              submittingRef.current = false;
               setIsSubmitting(false);
             }
           },
@@ -218,265 +234,132 @@ export default function CartScreen() {
 
   const renderCartItem = useCallback(({ item }: { item: CartItem }) => {
     const { product, quantity } = item;
-    const lineTotal = parseFloat(product.price_per_package) * quantity;
-
+    const lineTotal = Number(product.price_per_package) * quantity;
     return (
-      <View className="bg-white rounded-xl p-4 mb-3">
-        <View className="w-14 h-14 bg-cream rounded-lg items-center justify-center mb-3">
-          <Image source={getProductBrandAsset(product.brand)} className="w-10 h-10" resizeMode="contain" />
+      <Card variant="outlined" style={styles.itemCard}>
+        <View style={styles.itemHeader}>
+          <View style={styles.brandAsset}><Image source={getProductBrandAsset(product.brand)} style={styles.image} resizeMode="contain" /></View>
+          <View style={styles.flex}>
+            <AppText variant="caption" color="muted">{product.brand.toUpperCase()}</AppText>
+            <AppText variant="bodyStrong" numberOfLines={2}>{product.name}</AppText>
+            <AppText variant="caption" color="muted">
+              {product.pellet_size_mm}mm · {product.package_weight_kg}kg
+              {product.protein_percentage ? ` · ${product.protein_percentage}% ${t('protein')}` : ''}
+            </AppText>
+          </View>
+          <IconButton icon="trash-outline" accessibilityLabel={`${t('remove')} ${product.name}`} variant="danger" onPress={() => handleRemoveItem(product.id, product.name)} />
         </View>
-
-        <View className="mb-3">
-          <Text className="text-xs text-gray-light font-semibold mb-1">{product.brand.toUpperCase()}</Text>
-          <Text className="text-base font-bold text-gray-dark mb-1" numberOfLines={2}>
-            {product.name}
-          </Text>
-          <Text className="text-xs text-gray-light mb-1">
-            {product.pellet_size_mm}mm - {product.package_weight_kg}kg
-            {product.protein_percentage && ` - ${product.protein_percentage}% ${t('protein')}`}
-          </Text>
-          <Text className="text-sm text-aquacare-primary font-semibold">
-            {parseFloat(product.price_per_package).toLocaleString()} FCFA / {t('bag')}
-          </Text>
+        <Divider />
+        <View style={styles.itemFooter}>
+          <View style={styles.quantityRow}>
+            <IconButton icon="remove" accessibilityLabel={t('decreaseQuantity')} disabled={quantity <= 1} onPress={() => handleUpdateQuantity(product.id, quantity - 1)} />
+            <AppText variant="bodyStrong" style={styles.quantity}>{quantity}</AppText>
+            <IconButton icon="add" accessibilityLabel={t('increaseQuantity')} onPress={() => handleUpdateQuantity(product.id, quantity + 1)} />
+          </View>
+          <AppText variant="cardTitle" color="link">{lineTotal.toLocaleString()} FCFA</AppText>
         </View>
-
-        <TouchableOpacity
-          className="absolute top-4 right-4"
-          onPress={() => handleRemoveItem(product.id, product.name)}
-        >
-          <Ionicons name="trash-outline" size={20} color={AQUACARE_COLORS.ERROR} />
-        </TouchableOpacity>
-
-        <View className="flex-row items-center justify-between mb-3">
-          <TouchableOpacity
-            className="p-1"
-            onPress={() => handleUpdateQuantity(product.id, Math.max(1, quantity - 1))}
-            disabled={quantity <= 1}
-          >
-            <Ionicons
-              name="remove-circle-outline"
-              size={28}
-              color={quantity <= 1 ? AQUACARE_COLORS.GRAY_LIGHT : AQUACARE_COLORS.GREEN_PRIMARY}
-            />
-          </TouchableOpacity>
-
-          <Text className="text-lg font-bold text-gray-dark min-w-[40px] text-center">{quantity}</Text>
-
-          <TouchableOpacity
-            className="p-1"
-            onPress={() => handleUpdateQuantity(product.id, quantity + 1)}
-          >
-            <Ionicons name="add-circle-outline" size={28} color={AQUACARE_COLORS.GREEN_PRIMARY} />
-          </TouchableOpacity>
-        </View>
-
-        <Text className="text-lg font-bold text-aquacare-primary text-right">{lineTotal.toLocaleString()} FCFA</Text>
-      </View>
+      </Card>
     );
   }, [handleRemoveItem, handleUpdateQuantity, t]);
 
-  const renderListHeader = useCallback(
-    () => (
-      <View className="px-4 py-4">
-        <Text className="text-lg font-bold text-gray-dark mb-3">{t('myProducts')}</Text>
-      </View>
-    ),
-    [t]
-  );
-
-  const renderListFooter = useCallback(
-    () => (
-      <>
-        <View className="bg-white px-4 py-4 mb-3">
-          <Text className="text-lg font-bold text-gray-dark mb-3">{t('deliveryMethod')}</Text>
-
+  const renderListFooter = useCallback(() => (
+    <View style={styles.footerContent}>
+      <Card variant="outlined" style={styles.sectionCard}>
+        <AppText variant="sectionTitle">{t('deliveryMethod')}</AppText>
+        <View style={styles.optionList}>
           {DELIVERY_METHODS.map((method) => (
-            <TouchableOpacity
+            <SelectableCard
               key={method.value}
-              className={`flex-row items-center p-4 rounded-lg border-2 mb-3 gap-3 ${
-                delivery_method === method.value ? 'border-aquacare-primary bg-cream' : 'border-gray-light'
-              }`}
+              selected={delivery_method === method.value}
+              primaryBorder
+              layout="row"
+              accessibilityLabel={t(method.labelKey)}
               onPress={() => handleDeliveryMethodChange(method.value)}
             >
-              <Ionicons
-                name={method.value === 'home' ? 'home-outline' : 'storefront-outline'}
-                size={24}
-                color={
-                  delivery_method === method.value
-                    ? AQUACARE_COLORS.GREEN_PRIMARY
-                    : AQUACARE_COLORS.GRAY_LIGHT
-                }
-              />
-              <Text
-                className={`flex-1 text-base ${
-                  delivery_method === method.value
-                    ? 'text-aquacare-primary font-semibold'
-                    : 'text-gray-dark'
-                }`}
-              >
-                {t(method.labelKey)}
-              </Text>
-              {delivery_method === method.value && (
-                <Ionicons name="checkmark-circle" size={24} color={AQUACARE_COLORS.GREEN_PRIMARY} />
-              )}
-            </TouchableOpacity>
+              <AppText variant="bodyStrong" color={delivery_method === method.value ? 'link' : 'primary'}>{t(method.labelKey)}</AppText>
+              {delivery_method === method.value ? <Badge label={t('selected')} tone="success" /> : null}
+            </SelectableCard>
           ))}
-
-          {delivery_method === 'pickup' && (
-            <View className="mt-2">
-              <SelectField
-                label={t('selectPickupPoint')}
-                value={pickup_location}
-                onChange={(value) => handlePickupLocationChange(value as PickupLocation)}
-                options={PICKUP_LOCATIONS.map((loc) => ({ label: loc.label, value: loc.value }))}
-                placeholder={t('selectOption')}
-                required
-              />
-            </View>
-          )}
         </View>
-
-        {previewLoading ? (
-          <View className="flex-row items-center justify-center p-5 gap-3">
-            <ActivityIndicator size="small" color={AQUACARE_COLORS.GREEN_PRIMARY} />
-            <Text className="text-sm text-gray-light">{t('calculatingFees')}</Text>
-          </View>
-        ) : deliveryPreview ? (
-          <View className="bg-white px-4 py-4 mb-3">
-            <Text className="text-lg font-bold text-gray-dark mb-3">{t('orderSummary')}</Text>
-
-            <View className="flex-row justify-between items-center mb-3">
-              <Text className="text-base text-gray-dark">{t('subtotal')}</Text>
-              <Text className="text-base font-semibold text-gray-dark">
-                {parseFloat(deliveryPreview.subtotal).toLocaleString()} FCFA
-              </Text>
-            </View>
-
-            <View className="flex-row justify-between items-center mb-3">
-              <Text className="text-base text-gray-dark">{t('deliveryFee')}</Text>
-              {parseFloat(deliveryPreview.delivery_fee) === 0 ? (
-                <Text className="text-base font-semibold text-aquacare-primary">{t('free')}</Text>
-              ) : (
-                <Text className="text-base font-semibold text-gray-dark">
-                  {parseFloat(deliveryPreview.delivery_fee).toLocaleString()} FCFA
-                </Text>
-              )}
-            </View>
-
-            {deliveryPreview.free_delivery_threshold_reached && (
-              <View className="flex-row items-center bg-cream p-3 rounded-lg gap-2 mb-3">
-                <Ionicons name="checkmark-circle" size={20} color={AQUACARE_COLORS.SUCCESS} />
-                <Text className="text-sm font-semibold text-aquacare-primary">
-                  {t('freeDeliveryApplied')}
-                </Text>
-              </View>
-            )}
-
-            {user?.region?.trim().toLowerCase() === 'littoral' &&
-              delivery_method === 'home' &&
-              !deliveryPreview.free_delivery_threshold_reached &&
-              deliveryPreview.total_bags < FREE_DELIVERY_THRESHOLD && (
-                <View className="flex-row items-center bg-[#e0f2fe] p-3 rounded-lg gap-2 mb-3">
-                  <Ionicons name="information-circle" size={20} color={AQUACARE_COLORS.INFO} />
-                  <Text className="flex-1 text-sm text-aquacare-primary">
-                    {t('freeDeliveryEncouragement', {
-                      remaining: FREE_DELIVERY_THRESHOLD - deliveryPreview.total_bags,
-                    })}
-                  </Text>
-                </View>
-              )}
-
-            <View className="h-px bg-gray-light my-3" />
-
-            <View className="flex-row justify-between items-center mb-2">
-              <Text className="text-lg font-bold text-gray-dark">{t('total')}</Text>
-              <Text className="text-xl font-bold text-aquacare-primary">
-                {parseFloat(deliveryPreview.total).toLocaleString()} FCFA
-              </Text>
-            </View>
-
-            <View className="flex-row items-center gap-2">
-              <Ionicons name="cube-outline" size={16} color={AQUACARE_COLORS.GRAY_LIGHT} />
-              <Text className="text-sm text-gray-light">
-                {deliveryPreview.total_bags} {t(deliveryPreview.total_bags > 1 ? 'bags' : 'bag')}
-              </Text>
-            </View>
-          </View>
+        {delivery_method === 'pickup' ? (
+          <SelectField
+            label={t('selectPickupPoint')}
+            value={pickup_location}
+            onChange={(value) => handlePickupLocationChange(value as PickupLocation)}
+            options={PICKUP_LOCATIONS.map((location) => ({ label: location.label, value: location.value }))}
+            placeholder={t('selectOption')}
+            required
+          />
         ) : null}
-      </>
-    ),
-    [
-      deliveryPreview,
-      delivery_method,
-      pickup_location,
-      previewLoading,
-      t,
-      user?.region,
-    ]
-  );
+      </Card>
 
-  if (cartItems.length === 0) {
-    return (
-      <View className="flex-1 bg-cream">
-        <View className="flex-1 justify-center items-center px-10">
-          <Ionicons name="cart-outline" size={100} color={AQUACARE_COLORS.GRAY_LIGHT} />
-          <Text className="mt-5 text-2xl font-bold text-gray-dark">{t('emptyCart')}</Text>
-          <Text className="mt-3 text-base text-gray-light text-center">{t('emptyCartDescription')}</Text>
-          <TouchableOpacity
-            className="mt-6 bg-aquacare-primary flex-row items-center px-6 py-3 rounded-lg gap-2"
-            onPress={handleBackToCatalog}
-          >
-            <Ionicons name="albums-outline" size={20} color={AQUACARE_COLORS.WHITE} />
-            <Text className="text-white text-base font-semibold">{t('browseCatalog')}</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-  }
+      {previewLoading ? <LoadingState compact message={t('calculatingFees')} /> : deliveryPreview ? (
+        <Card variant="outlined" style={styles.sectionCard}>
+          <AppText variant="sectionTitle">{t('orderSummary')}</AppText>
+          <SummaryRow label={t('subtotal')} value={`${Number(deliveryPreview.subtotal).toLocaleString()} FCFA`} />
+          <SummaryRow label={t('deliveryFee')} value={Number(deliveryPreview.delivery_fee) === 0 ? t('free') : `${Number(deliveryPreview.delivery_fee).toLocaleString()} FCFA`} />
+          {deliveryPreview.free_delivery_threshold_reached ? <InlineAlert tone="success" message={t('freeDeliveryApplied')} /> : null}
+          {user?.region?.trim().toLowerCase() === 'littoral' && delivery_method === 'home' && !deliveryPreview.free_delivery_threshold_reached && deliveryPreview.total_bags < FREE_DELIVERY_THRESHOLD ? (
+            <InlineAlert tone="info" message={t('freeDeliveryEncouragement', { remaining: FREE_DELIVERY_THRESHOLD - deliveryPreview.total_bags })} />
+          ) : null}
+          <Divider />
+          <SummaryRow label={t('total')} value={`${Number(deliveryPreview.total).toLocaleString()} FCFA`} prominent />
+          <AppText variant="caption" color="muted">{deliveryPreview.total_bags} {t(deliveryPreview.total_bags > 1 ? 'bags' : 'bag')}</AppText>
+        </Card>
+      ) : null}
+    </View>
+  ), [deliveryPreview, delivery_method, pickup_location, previewLoading, t, user?.region]);
 
   return (
-    <View className="flex-1 bg-cream">
-      <View className="bg-white px-5 pt-16 pb-5 flex-row items-center justify-between shadow">
-        <TouchableOpacity onPress={() => navigation.goBack()} className="w-10">
-          <Ionicons name="arrow-back" size={24} color={AQUACARE_COLORS.GRAY_DARK} />
-        </TouchableOpacity>
-        <View className="flex-1 items-center">
-          <Text className="text-2xl font-bold text-gray-dark">{t('cart')}</Text>
-          <Text className="text-sm text-gray-light mt-1">
-            {cartItems.length} {t(cartItems.length > 1 ? 'products' : 'product')}
-          </Text>
-        </View>
-        <TouchableOpacity onPress={handleClearCart}>
-          <Ionicons name="trash-outline" size={24} color={AQUACARE_COLORS.ERROR} />
-        </TouchableOpacity>
-      </View>
-
-      <FlatList
-        data={cartItems}
-        keyExtractor={(item) => item.product.id}
-        renderItem={renderCartItem}
-        ListHeaderComponent={renderListHeader}
-        ListFooterComponent={renderListFooter}
-        contentContainerStyle={{ paddingBottom: 16 }}
-        showsVerticalScrollIndicator={false}
+    <View style={styles.screen}>
+      <AppHeader
+        title={t('cart')}
+        subtitle={cartItems.length > 0 ? `${cartItems.length} ${t(cartItems.length > 1 ? 'products' : 'product')}` : undefined}
+        onBack={() => navigation.goBack()}
+        backLabel={t('back')}
+        rightAction={cartItems.length > 0 ? <IconButton icon="trash-outline" accessibilityLabel={t('clear')} variant="danger" onPress={handleClearCart} /> : undefined}
       />
-
-      <View className="bg-white p-4 shadow">
-        <TouchableOpacity
-          className={`flex-row items-center justify-center py-4 rounded-lg gap-3 ${
-            isSubmitting || !deliveryPreview ? 'bg-aquacare-primary/60' : 'bg-aquacare-primary'
-          }`}
-          onPress={handleConfirmOrder}
-          disabled={isSubmitting || !deliveryPreview}
-        >
-          {isSubmitting ? (
-            <ActivityIndicator size="small" color={AQUACARE_COLORS.WHITE} />
-          ) : (
-            <Ionicons name="checkmark-circle-outline" size={24} color={AQUACARE_COLORS.WHITE} />
-          )}
-          <Text className="text-white text-lg font-bold">{t('confirmOrder')}</Text>
-        </TouchableOpacity>
-      </View>
+      {cartItems.length === 0 ? (
+        <EmptyState title={t('emptyCart')} message={t('emptyCartDescription')} actionLabel={t('browseCatalog')} onAction={handleBackToCatalog} />
+      ) : (
+        <>
+          <FlatList
+            data={cartItems}
+            keyExtractor={(item) => item.product.id}
+            renderItem={renderCartItem}
+            ListHeaderComponent={<AppText variant="sectionTitle" style={styles.listTitle}>{t('myProducts')}</AppText>}
+            ListFooterComponent={renderListFooter}
+            contentContainerStyle={styles.list}
+            showsVerticalScrollIndicator={false}
+          />
+          <View style={styles.stickyFooter}>
+            <Button label={t('confirmOrder')} iconLeft="checkmark-circle-outline" loading={isSubmitting} disabled={!deliveryPreview} onPress={handleConfirmOrder} />
+          </View>
+        </>
+      )}
     </View>
   );
 }
+
+function SummaryRow({ label, value, prominent = false }: { label: string; value: string; prominent?: boolean }) {
+  return <View style={styles.summaryRow}><AppText variant={prominent ? 'bodyStrong' : 'body'}>{label}</AppText><AppText variant={prominent ? 'cardTitle' : 'bodyStrong'} color={prominent ? 'link' : 'primary'}>{value}</AppText></View>;
+}
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: colors.surface.page },
+  flex: { flex: 1 },
+  list: { padding: spacing[4], paddingBottom: spacing[6] },
+  listTitle: { marginBottom: spacing[3] },
+  itemCard: { marginBottom: spacing[3] },
+  itemHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing[3], marginBottom: spacing[3] },
+  brandAsset: { width: 56, height: 56, borderRadius: radii.md, backgroundColor: colors.surface.selected, alignItems: 'center', justifyContent: 'center' },
+  image: { width: 40, height: 40 },
+  itemFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: spacing[3] },
+  quantityRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[1] },
+  quantity: { minWidth: 28, textAlign: 'center' },
+  footerContent: { gap: spacing[3], marginTop: spacing[3] },
+  sectionCard: { gap: spacing[3] },
+  optionList: { gap: spacing[2] },
+  summaryRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing[3] },
+  stickyFooter: { padding: spacing[4], backgroundColor: colors.surface.card, borderTopWidth: 1, borderTopColor: colors.border.subtle },
+});
