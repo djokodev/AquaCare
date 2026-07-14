@@ -604,7 +604,7 @@ const styles = StyleSheet.create({
     ...AQUACARE_TYPOGRAPHY.small,
     color: AQUACARE_COLORS.GRAY_DARK,
     marginLeft: 12,
-    fontWeight: '500',
+    fontWeight: '400',
   },
   selectorLabelNoIcon: {
     marginLeft: 0,
@@ -703,4 +703,3 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 });
-

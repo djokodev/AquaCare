@@ -1,22 +1,22 @@
-import React, { useState, useEffect } from "react";
-import { View, ScrollView, TouchableOpacity, Alert, StyleSheet } from "react-native";
+import React, { useState, useEffect, useRef } from "react";
+import { View, ScrollView, Alert, StyleSheet } from "react-native";
 import { useTranslation } from "react-i18next";
 import { Ionicons } from "@expo/vector-icons";
 import * as SecureStore from "expo-secure-store";
 
 import { useAuth } from "@/hooks/useAuth";
 import { STORAGE_KEYS } from "@/constants/api";
-import { AQUACARE_COLORS } from "@/constants/colors";
 import logger from "@/utils/logger";
 import OnboardingService from "@/features/onboarding/services/onboardingService";
-import { AppText, Button, Card, SelectableCard } from '@/components/ui';
-import { spacing } from '@/theme';
+import { AppText, Button, Card, InteractiveCard, SelectableCard } from '@/components/ui';
+import { colors, spacing } from '@/theme';
 
 export default function SettingsScreen() {
   const { t, i18n } = useTranslation();
   const { user, updateProfile, logout, deleteAccount } = useAuth();
   const [isDeleting, setIsDeleting] = useState(false);
   const [isUpdatingLanguage, setIsUpdatingLanguage] = useState(false);
+  const languageUpdateInProgressRef = useRef(false);
   const [isResettingOnboarding, setIsResettingOnboarding] = useState(false);
   const [settings, setSettings] = useState({ language: i18n.language });
 
@@ -31,9 +31,10 @@ export default function SettingsScreen() {
   }, [i18n, settings.language]);
 
   const handleLanguageChange = async (newLanguage: "fr" | "en") => {
-    if (isUpdatingLanguage || settings.language === newLanguage) return;
+    if (languageUpdateInProgressRef.current || settings.language === newLanguage) return;
 
     const previousLanguage = settings.language as "fr" | "en";
+    languageUpdateInProgressRef.current = true;
     setIsUpdatingLanguage(true);
     try {
       setSettings((prev) => ({ ...prev, language: newLanguage }));
@@ -55,6 +56,7 @@ export default function SettingsScreen() {
         logger.warn("Erreur rollback langue:", rollbackError);
       }
     } finally {
+      languageUpdateInProgressRef.current = false;
       setIsUpdatingLanguage(false);
     }
   };
@@ -120,13 +122,13 @@ export default function SettingsScreen() {
   };
 
   return (
-    <ScrollView className="flex-1 bg-cream">
-      <View className="bg-aquacare-primary items-center pt-14 pb-6 px-5">
+    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+      <View style={styles.hero}>
         <AppText variant="screenTitle" color="inverse">{user?.display_name}</AppText>
         <AppText variant="caption" color="inverse">{user?.phone_number}</AppText>
       </View>
 
-      <View className="px-5 py-4">
+      <View style={styles.section}>
         <AppText variant="sectionTitle" style={styles.sectionTitle}>{t("language")}</AppText>
         {[
           { code: "fr", label: t('languageFrench') },
@@ -143,49 +145,53 @@ export default function SettingsScreen() {
           >
             <AppText variant="bodyStrong" color={settings.language === lang.code ? 'link' : 'primary'}>{lang.label}</AppText>
             {settings.language === lang.code && (
-              <Ionicons name="checkmark" size={20} color={AQUACARE_COLORS.GREEN_PRIMARY} />
+              <Ionicons name="checkmark" size={20} color={colors.brand.primary} />
             )}
           </SelectableCard>
         ))}            
       </View>
 
-      <View className="px-5 py-4">
+      <View style={styles.section}>
         <AppText variant="sectionTitle" style={styles.sectionTitle}>{t("about")}</AppText>
         <Card><AppText>{t("aboutSummary")}</AppText></Card>
       </View>
 
-      <View className="px-5 py-4">
+      <View style={styles.section}>
         <AppText variant="sectionTitle" style={styles.sectionTitle}>{t("accountManagement")}</AppText>
-        <TouchableOpacity
-          className="bg-white flex-row items-center p-4 rounded-xl border border-gray-200 opacity-100"
+        <InteractiveCard
+          accessibilityLabel={t('deleteAccount')}
           onPress={handleDeleteAccount}
           disabled={isDeleting}
-          style={{ opacity: isDeleting ? 0.5 : 1 }}
+          style={styles.actionCard}
         >
-          <Ionicons name="trash-outline" size={20} color={AQUACARE_COLORS.ERROR} />
-          <View className="ml-3 flex-1">
+          <View style={styles.actionContent}>
+            <Ionicons name="trash-outline" size={20} color={colors.status.error} />
+            <View style={styles.actionText}>
             <AppText variant="bodyStrong" color="error">{t("deleteAccount")}</AppText>
             <AppText variant="caption" color="muted">{t("deleteAccountDesc")}</AppText>
+            </View>
           </View>
-        </TouchableOpacity>
+        </InteractiveCard>
 
         {__DEV__ && (
-          <TouchableOpacity
-            className="bg-white flex-row items-center p-4 rounded-xl border border-gray-200 mt-3"
+          <InteractiveCard
+            accessibilityLabel={t('onboardingResetAction')}
             onPress={handleResetOnboarding}
             disabled={isResettingOnboarding}
-            style={{ opacity: isResettingOnboarding ? 0.5 : 1 }}
+            style={styles.resetCard}
           >
-            <Ionicons name="refresh-circle-outline" size={20} color={AQUACARE_COLORS.GREEN_PRIMARY} />
-            <View className="ml-3 flex-1">
+            <View style={styles.actionContent}>
+              <Ionicons name="refresh-circle-outline" size={20} color={colors.brand.primary} />
+              <View style={styles.actionText}>
               <AppText variant="bodyStrong" color="link">{t("onboardingResetAction")}</AppText>
               <AppText variant="caption" color="muted">{t("onboardingResetHint")}</AppText>
+              </View>
             </View>
-          </TouchableOpacity>
+          </InteractiveCard>
         )}
       </View>
 
-      <View className="px-5 pb-6">
+      <View style={styles.section}>
         <Button label={t('disconnect')} variant="danger" iconLeft="log-out" onPress={handleLogout} />
       </View>
     </ScrollView>
@@ -193,6 +199,14 @@ export default function SettingsScreen() {
 }
 
 const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: colors.surface.page },
+  content: { gap: spacing[4], paddingBottom: spacing[6] },
+  hero: { alignItems: 'center', gap: spacing[1], backgroundColor: colors.brand.primary, padding: spacing[5] },
+  section: { paddingHorizontal: spacing[4] },
   sectionTitle: { marginBottom: spacing[3] },
   languageCard: { marginBottom: spacing[2] },
+  actionCard: { justifyContent: 'flex-start' },
+  resetCard: { justifyContent: 'flex-start', marginTop: spacing[3] },
+  actionContent: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing[3] },
+  actionText: { flex: 1, gap: spacing[1] },
 });

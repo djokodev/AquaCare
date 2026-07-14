@@ -1,12 +1,11 @@
 ﻿import React, { useCallback, useMemo, useRef, useState } from "react";
-import { Alert, Linking, RefreshControl, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { Alert, Linking, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { useTranslation } from "react-i18next";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import type { RootStackParamList } from "@/navigation/MainNavigator";
 import type { StackNavigationProp } from "@react-navigation/stack";
-import { AQUACARE_COLORS } from "@/constants/colors";
 import { aquacultureService } from "@/features/aquaculture/services/aquacultureService";
 import { useAuth } from "@/hooks/useAuth";
 import { useFarmLocation } from "@/hooks/useFarmLocation";
@@ -14,7 +13,8 @@ import { getAccountErrorMessage } from "@/features/auth/utils/accountsErrorPrese
 import { useFarmProfileEditor } from "@/features/profile/hooks/useFarmProfileEditor";
 import { formatFarmName, getCertificationPresentation } from "@/features/profile/utils/accountProfilePresentation";
 import { ProfileInfoRow } from '@/features/profile/components/ProfileInfoRow';
-import { InlineAlert } from '@/components/ui';
+import { AppText, Button, Card, EmptyState, ErrorState, IconButton, InlineAlert, LoadingState } from '@/components/ui';
+import { colors, radii, spacing } from '@/theme';
 import type { ProductionUnit } from "@/types/aquaculture";
 
 type NavigationProp = StackNavigationProp<RootStackParamList>;
@@ -65,9 +65,7 @@ export default function FarmProfileScreen() {
     try {
       await Promise.all([
         loadFarmProfile(),
-        aquacultureService.getProductionUnits({ status: "active" }).then(setProductionUnits).catch(() => {
-          setProductionUnits([]);
-        }),
+        aquacultureService.getProductionUnits({ status: "active" }).then(setProductionUnits).catch(() => undefined),
       ]);
     } finally {
       refreshInProgressRef.current = false;
@@ -132,75 +130,21 @@ export default function FarmProfileScreen() {
     }
   };
 
-  if (isLoading) {
-    return (
-      <View className="flex-1 items-center justify-center bg-cream p-10">
-        <Text>{t("loading")}...</Text>
-      </View>
-    );
-  }
-
-  if (error && !farmProfile) {
-    return (
-      <View className="flex-1 items-center justify-center bg-cream p-10">
-        <Text className="text-error text-center">{t("error")}: {getAccountErrorMessage(error, t)}</Text>
-        <Text className="text-sm text-gray-light mt-2 text-center">{t("unableToLoadFarmProfile")}</Text>
-        <TouchableOpacity
-          className="bg-aquacare-primary px-6 py-3 rounded-lg mt-5"
-          onPress={() => refreshFarmProfile()}
-          disabled={isLoading}
-        >
-          <Text className="text-white text-base font-semibold">{isLoading ? t("loading") : t("retry")}</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
-
-  if (!farmProfile) {
-    return (
-      <View className="flex-1 items-center justify-center bg-cream p-8">
-        <Ionicons name="business-outline" size={64} color={AQUACARE_COLORS.GRAY_LIGHT} />
-        <Text className="text-lg font-bold text-gray-dark mt-4 text-center">{t("noFarmProfile")}</Text>
-        <Text className="text-sm text-gray-light mt-2 text-center">{t("loadingFarmProfile")}</Text>
-        <TouchableOpacity
-          className="bg-aquacare-primary px-6 py-3 rounded-lg mt-5"
-          onPress={() => refreshFarmProfile()}
-          disabled={isLoading}
-        >
-          <Text className="text-white text-base font-semibold">{isLoading ? t("loading") : t("reloadProfile")}</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
+  if (isLoading && !farmProfile) return <LoadingState message={t('loading')} />;
+  if (error && !farmProfile) return <ErrorState title={t('error')} message={`${getAccountErrorMessage(error, t)} ${t('unableToLoadFarmProfile')}`} actionLabel={t('retry')} onAction={() => void refreshFarmProfile()} />;
+  if (!farmProfile) return <EmptyState title={t('noFarmProfile')} message={t('loadingFarmProfile')} actionLabel={t('reloadProfile')} onAction={() => void refreshFarmProfile()} />;
 
   return (
-    <ScrollView
-      className="flex-1 bg-cream"
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={refreshFarmProfile} />
-      }
-    >
-      <View className="bg-aquacare-primary items-center pt-14 pb-6 px-5">
-        <View className="w-16 h-16 rounded-full bg-green-dark items-center justify-center mb-3">
-          <Ionicons name="business" size={32} color={AQUACARE_COLORS.WHITE} />
-        </View>
-        <Text className="text-2xl font-bold text-white mb-2 text-center">
-          {formatFarmName(farmProfile.farm_name) || t("myFarm")}
-        </Text>
-        <View className="flex-row items-center px-3 py-2 rounded-full" style={{ backgroundColor: certification.color }}>
-          <Ionicons name={certification.icon} size={16} color={AQUACARE_COLORS.WHITE} />
-          <Text className="text-sm font-semibold text-white ml-2">{certification.text}</Text>
-        </View>
+    <ScrollView style={styles.screen} contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refreshFarmProfile} tintColor={colors.brand.primary} />}>
+      <View style={styles.hero}>
+        <View style={styles.avatar}><Ionicons name="business" size={32} color={colors.text.inverse} /></View>
+        <AppText variant="screenTitle" color="inverse" style={styles.center}>{formatFarmName(farmProfile.farm_name) || t('myFarm')}</AppText>
+        <View style={[styles.certification, { backgroundColor: certification.color }]}><Ionicons name={certification.icon} size={16} color={colors.text.inverse} /><AppText variant="label" color="inverse">{certification.text}</AppText></View>
       </View>
 
-      <View className="px-5 py-5">
-        <View className="flex-row justify-between items-center mb-3">
-          <Text className="text-lg font-bold text-gray-dark">{t("farmInfo")}</Text>
-          <TouchableOpacity onPress={() => setIsEditing(!isEditing)} className="p-2">
-            <Ionicons name={isEditing ? "close" : "pencil"} size={20} color={AQUACARE_COLORS.GREEN_PRIMARY} />
-          </TouchableOpacity>
-        </View>
-        <View className="bg-white rounded-xl p-4">
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}><AppText variant="sectionTitle">{t('farmInfo')}</AppText><IconButton icon={isEditing ? 'close' : 'pencil'} accessibilityLabel={t(isEditing ? 'cancel' : 'edit')} variant="ghost" onPress={() => setIsEditing(!isEditing)} /></View>
+        <Card variant="outlined">
           <ProfileInfoRow
             label={t("farmName") || ""}
             value={isEditing ? undefined : formatFarmName(farmProfile.farm_name) || t("notProvided")}
@@ -229,79 +173,54 @@ export default function FarmProfileScreen() {
             inputValue={editData.water_source}
             placeholder={t("waterSourcePlaceholder") || ""}
           />
-        </View>
+        </Card>
       </View>
 
-      {/* Section GPS */}
-      <View className="px-5 py-4">
-        <Text className="text-lg font-bold text-gray-dark mb-3">{t('farmLocation')}</Text>
-        <View className="bg-white rounded-xl p-4">
+      <View style={styles.section}>
+        <AppText variant="sectionTitle">{t('farmLocation')}</AppText>
+        <Card variant="outlined" style={styles.locationCard}>
           {farmProfile.latitude && farmProfile.longitude ? (
             <>
-              <View className="flex-row items-start gap-3 mb-4">
-                <Ionicons name="checkmark-circle" size={20} color={AQUACARE_COLORS.GREEN_PRIMARY} />
-                <View className="flex-1">
-                  <Text className="text-sm font-medium text-aquacare-primary mb-1">
-                    {t('locationCaptureSuccess')}
-                  </Text>
-                  {farmProfile.location_address ? (
-                    <Text className="text-sm text-gray-dark">
-                      {farmProfile.location_address}
-                    </Text>
-                  ) : null}
+              <View style={styles.locationStatus}>
+                <Ionicons name="checkmark-circle" size={20} color={colors.brand.primary} />
+                <View style={styles.flex}>
+                  <AppText variant="label" color="link">{t('locationCaptureSuccess')}</AppText>
+                  {farmProfile.location_address ? <AppText>{farmProfile.location_address}</AppText> : null}
                 </View>
               </View>
-              <TouchableOpacity
-                className="py-3 rounded-lg border border-aquacare-primary items-center mb-3"
-                onPress={handleOpenMap}
-              >
-                <Text className="text-sm font-semibold text-aquacare-primary">{t('viewOnMap')}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                className="flex-row items-center justify-center gap-2 py-3 rounded-lg border border-gray-200"
-                onPress={handleLocateFarm}
-                disabled={locationStatus === 'requesting' || isSaving}
-              >
-                <Ionicons name="locate" size={16} color={AQUACARE_COLORS.GRAY_LIGHT} />
-                <Text className="text-sm text-gray-light">
-                  {locationStatus === 'requesting' || isSaving ? t('locatingFarm') : t('updateLocation')}
-                </Text>
-              </TouchableOpacity>
+              <Button label={t('viewOnMap')} variant="outline" onPress={handleOpenMap} />
+              <Button label={locationStatus === 'requesting' || isSaving ? t('locatingFarm') : t('updateLocation')} variant="ghost" iconLeft="locate" disabled={locationStatus === 'requesting' || isSaving} onPress={handleLocateFarm} />
             </>
           ) : (
             <>
-              <View className="items-center py-2 mb-3">
-                <Ionicons name="location-outline" size={32} color={AQUACARE_COLORS.GRAY_LIGHT} />
-                <Text className="text-sm text-gray-light mt-2 text-center">{t('farmNoLocation')}</Text>
+              <View style={styles.emptyLocation}>
+                <Ionicons name="location-outline" size={32} color={colors.text.muted} />
+                <AppText color="muted" style={styles.center}>{t('farmNoLocation')}</AppText>
               </View>
-              <TouchableOpacity
-                className="flex-row items-center justify-center gap-2 py-3 rounded-lg bg-aquacare-primary"
-                onPress={handleLocateFarm}
-                disabled={locationStatus === 'requesting' || isSaving}
-              >
-                <Ionicons name="locate" size={18} color="white" />
-                <Text className="text-sm font-semibold text-white">
-                  {locationStatus === 'requesting' || isSaving ? t('locatingFarm') : t('locateFarm')}
-                </Text>
-              </TouchableOpacity>
+              <Button label={locationStatus === 'requesting' || isSaving ? t('locatingFarm') : t('locateFarm')} iconLeft="locate" loading={locationStatus === 'requesting' || isSaving} onPress={handleLocateFarm} />
             </>
           )}
-        </View>
+        </Card>
       </View>
 
-      {isEditing && (
-        <View className="px-5 pb-5">
-          <TouchableOpacity
-            className={`py-4 rounded-lg items-center ${isSaving ? "bg-aquacare-primary/70" : "bg-aquacare-primary"}`}
-            onPress={handleSave}
-            disabled={isSaving}
-          >
-            <Text className="text-white text-base font-semibold">{isSaving ? t("saving") : t("saveChanges")}</Text>
-          </TouchableOpacity>
-        </View>
-      )}
+      {isEditing ? <View style={styles.section}><Button label={isSaving ? t('saving') : t('saveChanges')} loading={isSaving} onPress={handleSave} /></View> : null}
 
-      {error ? <View className="mx-5 mb-5"><InlineAlert tone="error" message={getAccountErrorMessage(error, t)} /></View> : null}
+      {error ? <View style={styles.section}><InlineAlert tone="error" message={getAccountErrorMessage(error, t)} /></View> : null}
     </ScrollView>
   );
 }
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: colors.surface.page },
+  content: { gap: spacing[4], paddingBottom: spacing[6] },
+  hero: { alignItems: 'center', gap: spacing[2], backgroundColor: colors.brand.primary, padding: spacing[5] },
+  avatar: { width: 64, height: 64, borderRadius: radii.full, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.brand.dark },
+  certification: { flexDirection: 'row', alignItems: 'center', gap: spacing[2], borderRadius: radii.full, paddingHorizontal: spacing[3], paddingVertical: spacing[2] },
+  center: { textAlign: 'center' },
+  section: { gap: spacing[2], paddingHorizontal: spacing[4] },
+  sectionHeader: { minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  locationCard: { gap: spacing[3] },
+  locationStatus: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing[3] },
+  emptyLocation: { alignItems: 'center', gap: spacing[2], paddingVertical: spacing[2] },
+  flex: { flex: 1, gap: spacing[1] },
+});

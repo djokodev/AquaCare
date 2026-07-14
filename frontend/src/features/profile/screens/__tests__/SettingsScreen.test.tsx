@@ -88,6 +88,24 @@ describe('features/profile/screens/SettingsScreen', () => {
     });
   });
 
+  it('rollback la langue sur erreur et bloque la double action', async () => {
+    let rejectUpdate: (reason?: unknown) => void = () => undefined;
+    mockUpdateProfile.mockReturnValue(new Promise((_resolve, reject) => { rejectUpdate = reject; }));
+    const screen = render(<SettingsScreen />);
+
+    fireEvent.press(screen.getByText('languageEnglish'));
+    await waitFor(() => expect(mockUpdateProfile).toHaveBeenCalledTimes(1));
+    fireEvent.press(screen.getByText('languageEnglish'));
+    expect(mockUpdateProfile).toHaveBeenCalledTimes(1);
+
+    rejectUpdate(new Error('network'));
+    await waitFor(() => {
+      expect(mockI18n.changeLanguage).toHaveBeenLastCalledWith('fr');
+      expect(SecureStore.setItemAsync).toHaveBeenLastCalledWith(STORAGE_KEYS.LANGUAGE, 'fr');
+      expect(Alert.alert).toHaveBeenCalledWith('error', 'languageChangeError');
+    });
+  });
+
   it('declenche logout quand l utilisateur confirme', () => {
     const { getByText } = render(<SettingsScreen />);
 

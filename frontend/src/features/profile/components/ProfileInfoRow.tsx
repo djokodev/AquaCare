@@ -22,7 +22,7 @@ export function ProfileInfoRow({ icon, label, value, editable = false, onChangeT
     <View style={styles.row}>
       <View style={styles.labelGroup}>
         {icon ? <Ionicons name={icon} size={18} color={colors.text.muted} /> : null}
-        <AppText variant="caption" color="muted" style={styles.label}>{label}</AppText>
+        <AppText variant="helper" color="muted" style={styles.label}>{label}</AppText>
       </View>
       {editable ? (
         <View style={styles.input}>

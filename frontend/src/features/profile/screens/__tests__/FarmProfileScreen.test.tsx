@@ -9,6 +9,9 @@ import { useAuth } from '@/hooks/useAuth';
 const mockNavigate = jest.fn();
 const mockLoadProfile = jest.fn();
 const mockUseEffect = React.useEffect;
+const mockSave = jest.fn();
+const mockSaveLocation = jest.fn();
+const mockRequestLocation = jest.fn();
 
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({
@@ -43,22 +46,22 @@ jest.mock('@/features/profile/hooks/useFarmProfileEditor', () => ({
     isSaving: false,
     editData: {},
     updateEditField: jest.fn(),
-    save: jest.fn().mockResolvedValue(undefined),
-    saveLocation: jest.fn().mockResolvedValue(undefined),
+    save: mockSave,
+    saveLocation: mockSaveLocation,
   }),
 }));
 
 jest.mock('@/hooks/useFarmLocation', () => ({
   useFarmLocation: () => ({
     status: 'idle',
-    requestLocation: jest.fn().mockResolvedValue(null),
+    requestLocation: mockRequestLocation,
   }),
 }));
 
 jest.mock('@/features/profile/utils/accountProfilePresentation', () => ({
   formatFarmName: (value: string) => value,
   getCertificationPresentation: () => ({
-    color: '#10b981',
+    color: jest.requireActual('@/theme').colors.brand.light,
     icon: 'checkmark-circle',
     text: 'certificationPending',
   }),
@@ -68,10 +71,6 @@ jest.mock('@/features/auth/utils/accountsErrorPresenter', () => ({
   getAccountErrorMessage: (error: unknown) => String(error),
 }));
 
-jest.mock('@/components/common/inputStyles', () => ({
-  sharedTextInputStyles: {},
-}));
-
 describe('features/profile/screens/FarmProfileScreen', () => {
   const mockUseAuth = useAuth as jest.Mock;
   const mockAquacultureService = aquacultureService as jest.Mocked<typeof aquacultureService>;
@@ -79,6 +78,9 @@ describe('features/profile/screens/FarmProfileScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockLoadProfile.mockResolvedValue(undefined);
+    mockSave.mockResolvedValue(undefined);
+    mockSaveLocation.mockResolvedValue(undefined);
+    mockRequestLocation.mockResolvedValue(null);
     mockUseAuth.mockReturnValue({
       farmProfile: {
         id: 'farm-1',
@@ -159,6 +161,21 @@ describe('features/profile/screens/FarmProfileScreen', () => {
     expect(mockAquacultureService.getProductionUnits).toHaveBeenCalledTimes(2);
   });
 
+  it('affiche loading, erreur et empty avec retry', () => {
+    mockUseAuth.mockReturnValue({ farmProfile: null, isLoading: true, error: null, updateFarm: jest.fn(), loadFarmProfile: mockLoadProfile });
+    const screen = render(<FarmProfileScreen />);
+    expect(screen.getByText('loading')).toBeTruthy();
+
+    mockUseAuth.mockReturnValue({ farmProfile: null, isLoading: false, error: 'boom', updateFarm: jest.fn(), loadFarmProfile: mockLoadProfile });
+    screen.rerender(<FarmProfileScreen />);
+    fireEvent.press(screen.getByText('retry'));
+    expect(mockLoadProfile).toHaveBeenCalled();
+
+    mockUseAuth.mockReturnValue({ farmProfile: null, isLoading: false, error: null, updateFarm: jest.fn(), loadFarmProfile: mockLoadProfile });
+    screen.rerender(<FarmProfileScreen />);
+    expect(screen.getByText('noFarmProfile')).toBeTruthy();
+  });
+
   it('affiche le badge de certification courant', async () => {
     const { getByText } = render(<FarmProfileScreen />);
 
@@ -193,6 +210,19 @@ describe('features/profile/screens/FarmProfileScreen', () => {
       expect(queryByText('99')).toBeNull();
       expect(queryByText('50')).toBeNull();
     });
+  });
+
+  it('capture la position et ouvre la carte', async () => {
+    mockRequestLocation.mockResolvedValue({ latitude: 4.05, longitude: 9.7, address: 'Douala' });
+    const screen = render(<FarmProfileScreen />);
+    fireEvent.press(screen.getByText('locateFarm'));
+    await waitFor(() => expect(mockSaveLocation).toHaveBeenCalledWith({ latitude: 4.05, longitude: 9.7, location_address: 'Douala' }));
+
+    const current = mockUseAuth.mock.results.at(-1)?.value;
+    mockUseAuth.mockReturnValue({ ...current, farmProfile: { ...current.farmProfile, latitude: 4.05, longitude: 9.7 } });
+    screen.rerender(<FarmProfileScreen />);
+    fireEvent.press(screen.getByText('viewOnMap'));
+    expect(mockNavigate).toHaveBeenCalledWith('FarmMap');
   });
 
   it("n'affiche plus la section des cycles en cours", async () => {
