@@ -198,7 +198,11 @@ class CalibrationService:
             if not sample_count or not sample_total_weight_g or sample_count > transferred_count:
                 raise BusinessRuleViolation(_('Les données d’échantillonnage sont invalides.'))
             sampled = (Decimal(sample_total_weight_g) / Decimal(sample_count)).quantize(Decimal('0.01'))
-            if direct is not None and direct > 0 and abs(direct - sampled) / sampled > WEIGHT_DIFFERENCE_WARNING_THRESHOLD:
+            if (
+                direct is not None
+                and direct > 0
+                and abs(direct - sampled) / sampled > WEIGHT_DIFFERENCE_WARNING_THRESHOLD
+            ):
                 raise BusinessRuleViolation(_('Le poids moyen et l’échantillon sont incohérents.'))
             direct = sampled
         if direct is None or direct <= 0:
@@ -206,8 +210,13 @@ class CalibrationService:
         return direct.quantize(Decimal('0.01'))
 
     @staticmethod
-    def _validate_context(*, source, destination_unit, user, calibrated_at, transferred_count, transferred_average_weight_g):
-        if source.cycle.farm_profile.user_id != user.id or destination_unit.farm_profile_id != source.cycle.farm_profile_id:
+    def _validate_context(
+        *, source, destination_unit, user, calibrated_at, transferred_count, transferred_average_weight_g
+    ):
+        if (
+            source.cycle.farm_profile.user_id != user.id
+            or destination_unit.farm_profile_id != source.cycle.farm_profile_id
+        ):
             raise BusinessRuleViolation(_('La source et le bac doivent appartenir à votre ferme.'))
         if source.status != CycleUnitAllocation.STATUS_ACTIVE or source.cycle.status != 'active':
             raise BusinessRuleViolation(_('Cette allocation source est inactive.'))
@@ -267,7 +276,16 @@ class CalibrationService:
         )
 
     @staticmethod
-    def _validate_replay(existing, *, user, source_allocation_id, destination_production_unit_id, calibrated_at, transferred_count, transferred_average_weight_g):
+    def _validate_replay(
+        existing,
+        *,
+        user,
+        source_allocation_id,
+        destination_production_unit_id,
+        calibrated_at,
+        transferred_count,
+        transferred_average_weight_g,
+    ):
         same_payload = all(
             [
                 existing.source_allocation.cycle.farm_profile.user_id == user.id,

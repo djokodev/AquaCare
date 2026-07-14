@@ -934,7 +934,11 @@ class ProductionCycleService(BaseService):
                 current_biomass_kg -= event.transferred_biomass_kg
             elif event_type == 'log':
                 current_fish_count -= event.mortality_count or 0
-                average_weight = Decimal(str(event.average_weight)) if event.average_weight is not None else before_weight
+                average_weight = (
+                    Decimal(str(event.average_weight))
+                    if event.average_weight is not None
+                    else before_weight
+                )
                 current_biomass_kg = AquacultureCalculator.calculate_biomass(current_fish_count, average_weight)
             elif event_type == 'partial_harvest':
                 current_fish_count -= event.count_harvested
