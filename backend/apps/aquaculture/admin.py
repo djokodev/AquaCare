@@ -35,6 +35,7 @@ from .models import (
     CycleMetrics,
     CycleUnitAllocation,
     FeedingPlan,
+    FinalHarvestOperation,
     NutritionalGuide,
     ProductionCycle,
     ProductionReport,
@@ -177,6 +178,36 @@ class CalibrationOperationAdmin(AquacultureSecuredAdmin):
         'source_allocation__production_unit',
         'destination_allocation__cycle',
         'destination_allocation__production_unit',
+    )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(FinalHarvestOperation)
+class FinalHarvestOperationAdmin(AquacultureSecuredAdmin):
+    """Expose les constats de récolte finale sans permettre leur mutation."""
+
+    list_display = (
+        'harvested_at',
+        'allocation',
+        'declared_fish_count',
+        'declared_biomass_kg',
+        'reconciliation_status',
+        'created_offline',
+    )
+    list_filter = ('reconciliation_status', 'created_offline')
+    readonly_fields = [field.name for field in FinalHarvestOperation._meta.fields]
+    list_select_related = (
+        'allocation__cycle',
+        'allocation__production_unit',
+        'created_by',
     )
 
     def has_add_permission(self, request):

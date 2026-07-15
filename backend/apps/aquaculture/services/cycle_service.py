@@ -19,6 +19,7 @@ Architecture :
 """
 from __future__ import annotations
 
+import uuid
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any, TypedDict
@@ -43,6 +44,7 @@ from ..domain.cycle_duration import (
     validate_cycle_duration_days,
 )
 from ..domain.exceptions import (
+    AllocationAlreadyFinallyHarvested,
     BusinessRuleViolation,
     CycleAlreadyHarvestedError,
     CycleNotActiveError,
@@ -53,8 +55,18 @@ from ..domain.exceptions import (
     OfflineSyncConflictError,
 )
 from ..domain.production_units import normalize_production_unit_type
-from ..models import CalibrationOperation, CycleLog, CycleUnitAllocation, PartialHarvest, ProductionCycle
+from ..models import (
+    CalibrationOperation,
+    CycleLog,
+    CycleUnitAllocation,
+    FinalHarvestOperation,
+    PartialHarvest,
+    ProductionCycle,
+    ProductionUnit,
+)
+from .allocation_ledger_service import AllocationLedgerService
 from .base import BaseService
+from .final_harvest_service import FinalHarvestService
 
 if TYPE_CHECKING:
     from accounts.models import FarmProfile
@@ -193,8 +205,12 @@ class ProductionCycleService(BaseService):
         harvest_date: date,
         final_count: int,
         final_average_weight: Decimal,
-        final_harvested_at: datetime | None = None,
-        harvest_notes: str = ""
+        final_harvested_at: datetime,
+        client_uuid: uuid.UUID | None = None,
+        harvest_notes: str = "",
+        total_harvested_weight: Decimal | None = None,
+        created_offline: bool = False,
+        allow_pending_reconciliation: bool = False,
     ) -> ProductionCycle:
         """
         Finalise un cycle de production avec calculs de métriques finales.
@@ -248,19 +264,35 @@ class ProductionCycleService(BaseService):
         )
         if active_allocations:
             current_total = sum(allocation.current_fish_count for allocation in active_allocations)
-            if final_count != current_total:
+            if client_uuid is None:
                 raise InvalidHarvestDataError(
-                    _("La récolte globale doit déclarer tout l'effectif des allocations actives.")
+                    _("Un UUID client est requis pour rendre la récolte finale idempotente.")
+                )
+            if len(active_allocations) > 1 and final_count != current_total:
+                raise InvalidHarvestDataError(
+                    _(
+                        "Une récolte globale incohérente doit être enregistrée unité par unité "
+                        "afin de réconcilier chaque stock physique."
+                    )
                 )
             harvested_cycle = cycle
             for allocation in active_allocations:
+                declared_count = (
+                    final_count if len(active_allocations) == 1 else allocation.current_fish_count
+                )
                 harvest_result = ProductionCycleService.harvest_cycle_unit_allocation(
                     allocation,
                     harvest_date=harvest_date,
                     final_harvested_at=final_harvested_at,
-                    final_count=allocation.current_fish_count,
+                    final_count=declared_count,
                     final_average_weight=final_average_weight,
+                    client_uuid=uuid.uuid5(client_uuid, str(allocation.pk)),
                     harvest_notes=harvest_notes,
+                    total_harvested_weight=(
+                        total_harvested_weight if len(active_allocations) == 1 else None
+                    ),
+                    created_offline=created_offline,
+                    allow_pending_reconciliation=allow_pending_reconciliation,
                 )
                 harvested_cycle = harvest_result[0]
             return harvested_cycle
@@ -658,11 +690,14 @@ class ProductionCycleService(BaseService):
             {"allocation_id": str(allocation.id), "count_harvested": count_harvested}
         )
 
+        # Ordre de verrouillage global : unité puis allocation.
+        ProductionUnit.objects.select_for_update().get(pk=allocation.production_unit_id)
         locked_allocation = CycleUnitAllocation.objects.select_for_update().select_related(
             'cycle__farm_profile__user',
             'production_unit',
         ).get(id=allocation.id)
         locked_cycle = locked_allocation.cycle
+        client_uuid = client_uuid or uuid.uuid4()
 
         if locked_cycle.status != 'active':
             raise CycleNotActiveError(
@@ -747,20 +782,51 @@ class ProductionCycleService(BaseService):
         harvest_date: date,
         final_count: int,
         final_average_weight: Decimal,
-        final_harvested_at: datetime | None = None,
+        final_harvested_at: datetime,
+        client_uuid: uuid.UUID | None = None,
         harvest_notes: str = "",
-    ) -> tuple[ProductionCycle, CycleUnitAllocation]:
+        total_harvested_weight: Decimal | None = None,
+        created_offline: bool = False,
+        allow_pending_reconciliation: bool = False,
+    ):
         """Finalise complètement une unité de production liée à un cycle."""
         ProductionCycleService.log_operation(
             "harvest_cycle_unit_allocation",
             {"allocation_id": str(allocation.id), "harvest_date": str(harvest_date)}
         )
 
+        # Ordre de verrouillage global : unité, allocation, événement final.
+        # Le calibrage suit le même ordre, ce qui évite un cycle d'attente
+        # lorsqu'une récolte et un transfert ciblent simultanément cette unité.
+        ProductionUnit.objects.select_for_update().get(pk=allocation.production_unit_id)
         locked_allocation = CycleUnitAllocation.objects.select_for_update().select_related(
             'cycle__farm_profile__user',
             'production_unit',
         ).get(id=allocation.id)
         locked_cycle = locked_allocation.cycle
+        client_uuid = client_uuid or uuid.uuid4()
+
+        final_biomass = (
+            Decimal(str(total_harvested_weight)).quantize(Decimal('0.01'))
+            if total_harvested_weight is not None
+            else AquacultureCalculator.calculate_biomass(final_count, final_average_weight)
+        )
+        existing_operation = FinalHarvestService.find_idempotent_replay(
+            client_uuid=client_uuid,
+            allocation=locked_allocation,
+            harvested_at=final_harvested_at,
+            declared_fish_count=final_count,
+            declared_average_weight_g=final_average_weight,
+            declared_biomass_kg=final_biomass,
+            notes=harvest_notes,
+            created_offline=created_offline,
+        )
+        if existing_operation is not None:
+            FinalHarvestService.assert_projection(existing_operation)
+            return locked_cycle, locked_allocation, existing_operation, False
+
+        if FinalHarvestOperation.objects.filter(allocation=locked_allocation).exists():
+            raise AllocationAlreadyFinallyHarvested()
 
         if locked_cycle.status != 'active':
             raise CycleNotActiveError(
@@ -784,39 +850,26 @@ class ProductionCycleService(BaseService):
             raise InvalidHarvestDataError(
                 _("Date de récolte ne peut être dans le futur")
             )
-        if final_harvested_at is not None:
-            if timezone.is_naive(final_harvested_at):
-                raise InvalidHarvestDataError(_("Le datetime de récolte doit inclure un fuseau horaire."))
-            local_harvest_date = timezone.localtime(final_harvested_at).date()
-            if local_harvest_date != harvest_date:
-                raise InvalidHarvestDataError(
-                    _("La date de récolte doit correspondre au datetime métier.")
-                )
-            if final_harvested_at > timezone.now() + timedelta(minutes=10):
-                raise InvalidHarvestDataError(_("Le datetime de récolte ne peut être dans le futur."))
-            cycle_started_at = timezone.make_aware(
-                datetime.combine(locked_cycle.start_date, time.min),
-                timezone.get_current_timezone(),
+        if final_harvested_at is None or timezone.is_naive(final_harvested_at):
+            raise InvalidHarvestDataError(_("Le datetime de récolte doit inclure un fuseau horaire."))
+        local_harvest_date = timezone.localtime(final_harvested_at).date()
+        if local_harvest_date != harvest_date:
+            raise InvalidHarvestDataError(
+                _("La date de récolte doit correspondre au datetime métier.")
             )
-            if final_harvested_at < cycle_started_at:
-                raise InvalidHarvestDataError(
-                    _("Le datetime de récolte ne peut être avant le début du cycle.")
-                )
+        if final_harvested_at > timezone.now():
+            raise InvalidHarvestDataError(_("Le datetime de récolte ne peut être dans le futur."))
+        cycle_started_at = AllocationLedgerService.session_started_at(locked_allocation)
+        if final_harvested_at < cycle_started_at:
+            raise InvalidHarvestDataError(
+                _("Le datetime de récolte ne peut être avant le début de la session.")
+            )
 
         if final_count < 0:
             raise InvalidHarvestDataError(_("Nombre final de poissons invalide"))
-        if locked_allocation.current_fish_count > 0 and final_count == 0:
+        if final_count == 0:
             raise InvalidHarvestDataError(
-                _("Le nombre final doit être strictement positif tant qu'il reste des poissons dans l'unité.")
-            )
-        if final_count > locked_allocation.current_fish_count:
-            raise InsufficientFishCountError(
-                _("Le nombre final (%(n)s) ne peut dépasser l'effectif actuel (%(c)s)")
-                % {'n': final_count, 'c': locked_allocation.current_fish_count}
-            )
-        if final_count != locked_allocation.current_fish_count:
-            raise InvalidHarvestDataError(
-                _("Une récolte complète doit déclarer tout l'effectif actuellement présent dans l'unité.")
+                _("Le nombre final doit être strictement positif.")
             )
 
         current_average_weight = ProductionCycleService._get_allocation_average_weight_g(locked_allocation)
@@ -838,8 +891,20 @@ class ProductionCycleService(BaseService):
                 % {'weight': final_average_weight, 'species': species, 'min': min_weight}
             )
 
-        final_biomass = AquacultureCalculator.calculate_biomass(final_count, final_average_weight)
         now = timezone.now()
+
+        operation, created = FinalHarvestService.create(
+            allocation=locked_allocation,
+            client_uuid=client_uuid,
+            harvested_at=final_harvested_at,
+            declared_fish_count=final_count,
+            declared_average_weight_g=final_average_weight,
+            declared_biomass_kg=final_biomass,
+            notes=harvest_notes,
+            created_by=locked_cycle.farm_profile.user,
+            created_offline=created_offline,
+            allow_pending_reconciliation=allow_pending_reconciliation,
+        )
 
         locked_allocation.final_fish_count = final_count
         locked_allocation.final_average_weight_g = final_average_weight
@@ -886,7 +951,9 @@ class ProductionCycleService(BaseService):
             level='info'
         )
 
-        return locked_cycle, locked_allocation
+        operation.allocation = locked_allocation
+        FinalHarvestService.assert_projection(operation)
+        return locked_cycle, locked_allocation, operation, created
 
     @staticmethod
     def _close_cycle_after_last_allocation_harvest(

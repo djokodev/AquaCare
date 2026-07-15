@@ -10,7 +10,7 @@ from django.utils.translation import gettext_lazy as _
 
 from ..domain.calculators import AquacultureCalculator
 from ..domain.exceptions import BusinessRuleViolation
-from ..models import CycleUnitAllocation, ProductionCycle
+from ..models import CycleUnitAllocation, FinalHarvestOperation, ProductionCycle
 
 
 class AllocationLedgerService:
@@ -57,6 +57,8 @@ class AllocationLedgerService:
         partial_harvests=None,
         incoming_operations=None,
         outgoing_operations=None,
+        include_final_harvest: bool = True,
+        strictly_before_as_of: bool = False,
     ) -> dict:
         events = []
         incoming_operations = (
@@ -87,6 +89,8 @@ class AllocationLedgerService:
                 harvest,
             ))
         if (
+            include_final_harvest
+            and
             allocation.status == CycleUnitAllocation.STATUS_HARVESTED
             and allocation.final_harvest_date is not None
         ):
@@ -95,12 +99,16 @@ class AllocationLedgerService:
             # metrics. It is never exposed by ``session_closed_at`` and can
             # therefore never resolve a historical calibration session.
             harvested_at = harvested_at or cls._at(allocation.final_harvest_date, time.max)
+            try:
+                final_event = allocation.final_harvest_operation
+            except FinalHarvestOperation.DoesNotExist:
+                final_event = allocation
             events.append((
                 harvested_at,
-                harvested_at,
-                str(allocation.id),
+                getattr(final_event, 'created_at', harvested_at),
+                str(final_event.id),
                 'final_harvest',
-                allocation,
+                final_event,
             ))
         events.sort(key=lambda item: (item[0], item[1], item[2]))
 
@@ -131,7 +139,9 @@ class AllocationLedgerService:
         applied_events = []
 
         for event_at, _created_at, event_id, event_type, event in events:
-            if cutoff is not None and event_at > cutoff:
+            if cutoff is not None and (
+                event_at > cutoff or (strictly_before_as_of and event_at >= cutoff)
+            ):
                 continue
             before_count = count
             before_biomass = biomass
@@ -172,13 +182,26 @@ class AllocationLedgerService:
                 partial_harvest_count += event.count_harvested
                 partial_harvest_biomass += Decimal(str(event.total_weight_kg))
             elif event_type == 'final_harvest':
-                declared_count = event.final_fish_count if event.final_fish_count is not None else before_count
-                if declared_count != before_count:
+                declared_count = getattr(event, 'declared_fish_count', None)
+                if declared_count is None:
+                    declared_count = event.final_fish_count if event.final_fish_count is not None else before_count
+                reconciliation_status = getattr(
+                    event,
+                    'reconciliation_status',
+                    FinalHarvestOperation.STATUS_RECONCILED,
+                )
+                if (
+                    reconciliation_status == FinalHarvestOperation.STATUS_RECONCILED
+                    and declared_count != before_count
+                ):
                     raise BusinessRuleViolation(
                         _("Une opération antidatée invalide l'effectif de la récolte finale enregistrée.")
                     )
                 final_harvest_count += declared_count
-                final_harvest_biomass += Decimal(str(event.final_biomass_kg or before_biomass))
+                declared_biomass = getattr(event, 'declared_biomass_kg', None)
+                if declared_biomass is None:
+                    declared_biomass = event.final_biomass_kg or before_biomass
+                final_harvest_biomass += Decimal(str(declared_biomass))
                 count = 0
                 biomass = Decimal('0.00')
 

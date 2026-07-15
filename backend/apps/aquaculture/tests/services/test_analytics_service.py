@@ -163,6 +163,8 @@ class TestAnalyticsServiceUpdateMetrics:
         ProductionCycleService.harvest_cycle_unit_allocation(
             destination,
             harvest_date=timezone.localdate(),
+            final_harvested_at=timezone.now(),
+            client_uuid=uuid.uuid4(),
             final_count=250,
             final_average_weight=Decimal('300.00'),
         )

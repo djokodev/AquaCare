@@ -778,7 +778,11 @@ class AnalyticsService(BaseService):
                 elif event_type == 'partial_harvest':
                     bucket['present_delta'] -= event.count_harvested
                 elif event_type == 'final_harvest':
-                    bucket['present_delta'] -= event.final_fish_count or 0
+                    bucket['present_delta'] -= (
+                        getattr(event, 'declared_fish_count', None)
+                        or getattr(event, 'final_fish_count', 0)
+                        or 0
+                    )
 
         introduced = initial_introduced
         biological_survivors = initial_introduced

@@ -230,6 +230,27 @@ export interface CycleUnitHarvestResponse {
   message: string;
   cycle: ProductionCycle;
   cycle_unit_allocation: CycleUnitAllocation;
+  final_harvest: FinalHarvestOperation;
+  idempotent_replay: boolean;
+}
+
+export interface FinalHarvestOperation {
+  id: string;
+  client_uuid: string;
+  allocation_id: string;
+  cycle_id: string;
+  harvested_at: string;
+  declared_fish_count: number;
+  declared_average_weight_g: string;
+  declared_biomass_kg: string;
+  notes: string;
+  reconciliation_status: 'pending' | 'reconciled';
+  computed_count_before_harvest?: number | null;
+  computed_biomass_before_harvest_kg?: string | null;
+  created_offline: boolean;
+  synced_at?: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface CycleUnitPartialHarvestResponse {
@@ -512,6 +533,8 @@ export interface CycleUnitAllocation {
   final_fish_count?: number | null;
   final_average_weight_g?: number | null;
   final_biomass_kg?: number | null;
+  final_harvest_reconciliation_status?: "pending" | "reconciled" | null;
+  final_harvest_computed_count?: number | null;
   expected_survival_rate_pct?: number | null;
   cycle_name?: string;
   production_unit_name?: string;
@@ -707,12 +730,13 @@ export interface SyncPayload {
   new_cycles: CreateCycleForm[];
   calibration_tanks?: CreateCalibrationTankForm[];
   calibration_operations?: CalibrationRequest[];
+  final_harvests?: HarvestData[];
   last_sync?: string;
   device_id: string;
 }
 
 export interface SyncError {
-  type: "cycle" | "cycle_log" | "sanitary_log" | "calibration_tank" | "calibration_operation" | "general";
+  type: "cycle" | "cycle_log" | "sanitary_log" | "calibration_tank" | "calibration_operation" | "final_harvest" | "general";
   data?: unknown;
   error: string;
   errors?: Record<string, string[]>;
@@ -728,6 +752,7 @@ export interface SyncResponse {
     sanitary_logs: number;
     calibration_tanks: number;
     calibration_operations: number;
+    final_harvests?: number;
   };
   errors: SyncError[];
   server_updates: {
@@ -737,6 +762,7 @@ export interface SyncResponse {
     sanitary_logs?: SanitaryLog[];
     calibration_tanks?: CalibrationTank[];
     calibration_operations?: CalibrationOperation[];
+    final_harvests?: FinalHarvestOperation[];
     sync_timestamp?: string;
   };
   device_id?: string;
@@ -815,12 +841,18 @@ export interface SanitaryLogForm {
 }
 
 export interface HarvestData {
+  client_uuid: string;
+  allocation_id?: string;
+  allocation_client_uuid?: string;
+  cycle_id?: string;
   harvest_date: string;
   final_harvested_at: string;
   final_count: number;
   final_average_weight: number;
   total_harvested_weight: number;
   harvest_notes?: string;
+  created_offline: boolean;
+  allow_pending_reconciliation?: boolean;
 }
 
 // =================== STATISTIQUES ===================

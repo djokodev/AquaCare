@@ -832,6 +832,7 @@ class ReportService(BaseService):
         effective_selling_price = planned_price or ReportService._default_selling_price_for_species(
             allocation.cycle.species
         )
+        final_harvest = getattr(allocation, 'final_harvest_operation', None)
 
         return {
             "cycle": {
@@ -881,6 +882,21 @@ class ReportService(BaseService):
                 "planned_survival_rate_pct": ReportService._to_float(allocation.expected_survival_rate_pct),
                 "harvested_fish_count": stock_snapshot["harvested_fish_count"],
                 "harvested_biomass_kg": ReportService._to_float(stock_snapshot["harvested_biomass_kg"]),
+                "final_harvest_reconciliation_status": (
+                    final_harvest.reconciliation_status if final_harvest else None
+                ),
+                "final_harvest_computed_count": (
+                    final_harvest.computed_count_before_harvest if final_harvest else None
+                ),
+                "final_harvest_reconciliation_warning": (
+                    ReportService._pick_text(
+                        language_code,
+                        "Récolte enregistrée — réconciliation de stock en attente",
+                        "Harvest saved — stock reconciliation pending",
+                    )
+                    if final_harvest and final_harvest.reconciliation_status == 'pending'
+                    else None
+                ),
             },
             "dashboard_metrics": {
                 "estimated_market_value_fcfa": round(

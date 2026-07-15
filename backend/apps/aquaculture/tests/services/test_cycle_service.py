@@ -10,6 +10,7 @@ Couvre :
 """
 from datetime import date, timedelta
 from decimal import Decimal
+from uuid import uuid4
 
 import pytest
 from aquaculture.domain.exceptions import (
@@ -20,6 +21,7 @@ from aquaculture.domain.exceptions import (
 )
 from aquaculture.models import CycleLog
 from aquaculture.services import ProductionCycleService
+from django.utils import timezone
 
 from tests.fixtures.factories import FarmProfileFactory
 
@@ -183,6 +185,8 @@ class TestProductionCycleService:
         harvested = ProductionCycleService.harvest_cycle(
             cycle=cycle,
             harvest_date=date.today(),
+            final_harvested_at=timezone.now(),
+            client_uuid=uuid4(),
             final_count=4850,  # 97% survie
             final_average_weight=Decimal('285.00'),
             harvest_notes='Excellente croissance'
@@ -216,6 +220,8 @@ class TestProductionCycleService:
             ProductionCycleService.harvest_cycle(
                 cycle=cycle,
                 harvest_date=date.today(),
+                final_harvested_at=timezone.now(),
+                client_uuid=uuid4(),
                 final_count=4850,
                 final_average_weight=Decimal('285.00'),
             )
@@ -232,6 +238,8 @@ class TestProductionCycleService:
             ProductionCycleService.harvest_cycle(
                 cycle=cycle,
                 harvest_date=invalid_date,
+                final_harvested_at=timezone.now(),
+                client_uuid=uuid4(),
                 final_count=4850,
                 final_average_weight=Decimal('285.00'),
             )
@@ -248,6 +256,8 @@ class TestProductionCycleService:
             ProductionCycleService.harvest_cycle(
                 cycle=cycle,
                 harvest_date=date.today(),
+                final_harvested_at=timezone.now(),
+                client_uuid=uuid4(),
                 final_count=4800,  # > 4500 actuel
                 final_average_weight=Decimal('285.00'),
             )
@@ -262,6 +272,8 @@ class TestProductionCycleService:
             ProductionCycleService.harvest_cycle(
                 cycle=cycle,
                 harvest_date=date.today(),
+                final_harvested_at=timezone.now(),
+                client_uuid=uuid4(),
                 final_count=4850,
                 final_average_weight=Decimal('150.00'),  # < 250g minimum clarias
             )

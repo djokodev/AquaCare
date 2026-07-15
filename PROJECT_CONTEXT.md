@@ -82,6 +82,42 @@ not use `CONCURRENTLY`, and they do not set a PostgreSQL `lock_timeout`.
 
 Confirmed movements cannot be edited or deleted. Mixing species, transferring an entire source allocation and redistributing historical costs remain out of scope.
 
+### Final harvest operations and reconciliation
+
+Migration `aquaculture.0035_final_harvest_operation` introduces the immutable,
+offline-first `FinalHarvestOperation` event. Its UUID and unique `client_uuid`
+make retries idempotent, while the one-to-one protected allocation relation
+guarantees one physical final harvest per session. `harvested_at` is the
+timezone-aware business instant; `CycleUnitAllocation.harvested_at` remains the
+technical server timestamp. The legacy final-harvest fields on the allocation
+are compatibility projections of the event.
+
+A final harvest is `reconciled` when the ledger immediately matches the declared
+physical count. With an explicit offline/reconciliation mode it may instead be
+stored as `pending`: the session is still physically closed, its current stock is
+zero, and the tank is free for a new, distinct session. Historical calibration
+events are valid only inside the half-open interval
+`session_started_at <= calibrated_at < final_harvested_at`. Events affecting a
+reconciled harvest are rolled back if they invalidate it. Events affecting a
+pending source or destination harvest are accepted only when they move its
+computed pre-harvest stock toward the declared stock, and automatically resolve
+the status when equality is reached.
+
+Frontend harvests keep their local date, local time, generated `client_uuid` and
+exact business datetime in `aquacare_offline_final_harvests`. Full sync combines
+calibration and final-harvest events in business-time order; delta sync exposes
+new harvests and pending-to-reconciled changes. Legacy same-day HTTP clients may
+have a datetime constructed by the serializer, but domain services always
+require an explicit aware datetime. A new arrival after a final harvest always
+opens or uses a later session and never reopens the closed one.
+
+Migration `0035` intentionally does not invent `FinalHarvestOperation` rows for
+legacy harvested allocations: older records do not contain a precise business
+time or a client idempotency UUID. They remain readable through the allocation
+snapshot fallback. Every harvest confirmed after `0035` creates the event first,
+then writes a guarded compatibility projection; later model saves cannot silently
+diverge those physical values from the immutable event.
+
 - Offline-first behavior is a core product constraint.
 - UUID primary keys are used where offline-created data needs safe synchronization.
 - `client_uuid` deduplication is required for retry-safe creation paths where supported.

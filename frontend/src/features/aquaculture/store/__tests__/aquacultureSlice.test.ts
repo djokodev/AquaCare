@@ -184,6 +184,8 @@ describe('features/aquaculture/store/aquacultureSlice', () => {
           final_count: 850,
           final_average_weight: 250,
           total_harvested_weight: 212.5,
+          client_uuid: '00000000-0000-4000-8000-000000000001',
+          created_offline: false,
         },
       }
     );

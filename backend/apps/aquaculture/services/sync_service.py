@@ -12,9 +12,11 @@ le mobile offline-first et le serveur backend :
 Architecture: Service Layer Pattern pour logique de sync complexe.
 """
 
+import logging
 import threading
 import uuid as _uuid
 from datetime import date, datetime
+from decimal import Decimal
 from typing import Any
 
 from django.core.exceptions import ValidationError
@@ -29,6 +31,7 @@ from ..models import (
     CycleLog,
     CycleUnitAllocation,
     FeedingPlan,
+    FinalHarvestOperation,
     ProductionCycle,
     ProductionUnit,
     SanitaryLog,
@@ -37,6 +40,7 @@ from .analytics_service import AnalyticsService
 from .base import BaseService
 from .calibration_service import CalibrationService
 from .cycle_service import ProductionCycleService
+from .integrity_error_service import translate_production_unit_integrity_error
 from .production_unit_service import ProductionUnitLifecycleService
 from .sanitary_service import SanitaryService
 
@@ -45,6 +49,7 @@ from .sanitary_service import SanitaryService
 # batch est en cours et de sauter le recalcul coûteux par log individuel.
 # Thread-safe avec Gunicorn sync workers.
 _sync_context = threading.local()
+logger = logging.getLogger(__name__)
 
 
 def mark_sync_in_progress(active: bool) -> None:
@@ -247,6 +252,7 @@ class SyncService(BaseService):
                 'sanitary_logs': 0,
                 'calibration_tanks': 0,
                 'calibration_operations': 0,
+                'final_harvests': 0,
             },
             'errors': [],
             'server_updates': {},
@@ -703,6 +709,7 @@ class SyncService(BaseService):
             CalibrationTankSerializer,
             CycleLogSerializer,
             FeedingPlanSerializer,
+            FinalHarvestOperationSerializer,
             ProductionCycleSerializer,
             SanitaryLogSerializer,
         )
@@ -745,6 +752,7 @@ class SyncService(BaseService):
 
         calibration_tanks_data = []
         calibration_operations_data = []
+        final_harvests_data = []
         if include_calibration:
             tanks_query = ProductionUnit.objects.filter(
                 farm_profile__user=user,
@@ -762,6 +770,9 @@ class SyncService(BaseService):
                 'destination_allocation__cycle',
                 'destination_allocation__production_unit',
             ).filter(source_allocation__cycle__farm_profile__user=user)
+            final_harvests_query = FinalHarvestOperation.objects.select_related(
+                'allocation__cycle',
+            ).filter(allocation__cycle__farm_profile__user=user)
             if last_sync_dt:
                 tanks_query = tanks_query.filter(
                     models.Q(updated_at__gt=last_sync_dt)
@@ -772,8 +783,14 @@ class SyncService(BaseService):
                     | models.Q(cycle_allocations__unit_partial_harvests__created_at__gt=last_sync_dt)
                 ).distinct()
                 operations_query = operations_query.filter(created_at__gt=last_sync_dt)
+                final_harvests_query = final_harvests_query.filter(
+                    models.Q(created_at__gt=last_sync_dt)
+                    | models.Q(updated_at__gt=last_sync_dt)
+                    | models.Q(synced_at__gt=last_sync_dt)
+                )
             calibration_tanks_data = CalibrationTankSerializer(tanks_query, many=True).data
             calibration_operations_data = CalibrationOperationSerializer(operations_query, many=True).data
+            final_harvests_data = FinalHarvestOperationSerializer(final_harvests_query, many=True).data
 
         # Serialize data
         cycle_logs_data = CycleLogSerializer(logs_query, many=True).data
@@ -787,6 +804,7 @@ class SyncService(BaseService):
             'sanitary_logs': SanitaryLogSerializer(sanitary_query, many=True).data,
             'calibration_tanks': calibration_tanks_data,
             'calibration_operations': calibration_operations_data,
+            'final_harvests': final_harvests_data,
             'sync_timestamp': timezone.now().isoformat()
         }
 
@@ -844,26 +862,38 @@ class SyncService(BaseService):
 
             for tank_data in sync_data.get('calibration_tanks', []):
                 client_uuid = tank_data.get('client_uuid')
+                idempotent_payload = {
+                    **tank_data,
+                    'status': 'active' if tank_data.get('is_active', True) else 'inactive',
+                    'purpose': ProductionUnit.PURPOSE_CALIBRATION,
+                    'unit_type': 'tank',
+                }
                 try:
                     existing = ProductionUnit.objects.filter(client_uuid=client_uuid).first()
                     if existing and existing.farm_profile_id != user.farm_profile.id:
                         sync_result['errors'].append({
                             'type': 'calibration_tank',
                             'client_uuid': str(client_uuid),
-                            'error': 'client_uuid_conflict',
+                            'code': 'production_unit_client_uuid_conflict',
+                            'field': 'client_uuid',
                         })
                         continue
                     if existing is not None:
-                        ProductionUnitLifecycleService.validate_idempotent_payload(
-                            existing,
-                            {
-                                **tank_data,
-                                'status': 'active' if tank_data.get('is_active', True) else 'inactive',
-                                'purpose': ProductionUnit.PURPOSE_CALIBRATION,
-                                'unit_type': 'tank',
-                            },
-                            user.farm_profile,
-                        )
+                        try:
+                            ProductionUnitLifecycleService.validate_idempotent_payload(
+                                existing,
+                                idempotent_payload,
+                                user.farm_profile,
+                            )
+                        except BusinessRuleViolation as exc:
+                            sync_result['errors'].append({
+                                'type': 'calibration_tank',
+                                'client_uuid': str(client_uuid),
+                                'code': 'production_unit_client_uuid_conflict',
+                                'field': 'client_uuid',
+                                'detail': str(exc.detail),
+                            })
+                            continue
                     if existing is None:
                         ProductionUnit.objects.create(
                             client_uuid=client_uuid,
@@ -878,16 +908,140 @@ class SyncService(BaseService):
                             synced_at=timezone.now(),
                         )
                     sync_result['processed']['calibration_tanks'] += 1
-                except (BusinessRuleViolation, IntegrityError, KeyError, ValidationError) as exc:
+                except IntegrityError as exc:
+                    replay = ProductionUnit.objects.filter(client_uuid=client_uuid).first()
+                    if replay is not None:
+                        try:
+                            ProductionUnitLifecycleService.validate_idempotent_payload(
+                                replay,
+                                idempotent_payload,
+                                user.farm_profile,
+                            )
+                        except BusinessRuleViolation as replay_exc:
+                            sync_result['errors'].append({
+                                'type': 'calibration_tank',
+                                'client_uuid': str(client_uuid),
+                                'code': 'production_unit_client_uuid_conflict',
+                                'field': 'client_uuid',
+                                'detail': str(replay_exc.detail),
+                            })
+                        else:
+                            sync_result['processed']['calibration_tanks'] += 1
+                    else:
+                        mapped = translate_production_unit_integrity_error(exc)
+                        sync_result['errors'].append({
+                            'type': 'calibration_tank',
+                            'client_uuid': str(client_uuid),
+                            **mapped,
+                        })
+                except (BusinessRuleViolation, KeyError, ValidationError) as exc:
                     sync_result['errors'].append({
                         'type': 'calibration_tank',
                         'client_uuid': str(client_uuid),
-                        'error': 'invalid_calibration_tank',
+                        'code': 'invalid_calibration_tank',
                         'detail': str(exc),
                     })
 
-            operations = sorted(sync_data.get('calibration_operations', []), key=lambda item: item['calibrated_at'])
-            for operation_data in operations:
+            def business_datetime(value):
+                if isinstance(value, datetime):
+                    parsed = value
+                else:
+                    parsed = datetime.fromisoformat(str(value).replace('Z', '+00:00'))
+                if timezone.is_naive(parsed):
+                    raise ValueError('Le datetime métier doit inclure un fuseau horaire.')
+                return parsed
+
+            event_stream = []
+            for event_type, datetime_field, kind_order, items in (
+                (
+                    'calibration_operation',
+                    'calibrated_at',
+                    1,
+                    sync_data.get('calibration_operations', []),
+                ),
+                (
+                    'final_harvest',
+                    'final_harvested_at',
+                    0,
+                    sync_data.get('final_harvests', []),
+                ),
+            ):
+                for item in items:
+                    try:
+                        event_stream.append((
+                            business_datetime(item[datetime_field]),
+                            kind_order,
+                            str(item.get('client_uuid', '')),
+                            event_type,
+                            item,
+                        ))
+                    except (KeyError, TypeError, ValueError) as exc:
+                        sync_result['errors'].append({
+                            'type': event_type,
+                            'client_uuid': str(
+                                item.get('client_uuid') if isinstance(item, dict) else None
+                            ),
+                            'code': f'invalid_{event_type}',
+                            'detail': str(exc),
+                        })
+            event_stream.sort(key=lambda item: (item[0], item[1], item[2]))
+
+            for _business_at, _kind_order, _client_order, event_type, operation_data in event_stream:
+                if event_type == 'final_harvest':
+                    allocation = CycleUnitAllocation.objects.filter(
+                        cycle__farm_profile__user=user,
+                    ).filter(
+                        models.Q(pk=operation_data.get('allocation_id'))
+                        | models.Q(client_uuid=operation_data.get('allocation_client_uuid'))
+                    ).first()
+                    if allocation is None:
+                        sync_result['errors'].append({
+                            'type': 'final_harvest',
+                            'client_uuid': str(operation_data.get('client_uuid')),
+                            'code': 'allocation_not_found',
+                        })
+                        continue
+                    try:
+                        harvest_date = operation_data['harvest_date']
+                        if not isinstance(harvest_date, date):
+                            harvest_date = date.fromisoformat(str(harvest_date))
+                        _cycle, _allocation, _operation, _created = (
+                            ProductionCycleService.harvest_cycle_unit_allocation(
+                                allocation=allocation,
+                                harvest_date=harvest_date,
+                                final_harvested_at=business_datetime(
+                                    operation_data['final_harvested_at']
+                                ),
+                                final_count=int(operation_data['final_count']),
+                                final_average_weight=Decimal(
+                                    str(operation_data['final_average_weight'])
+                                ),
+                                client_uuid=operation_data['client_uuid'],
+                                harvest_notes=operation_data.get('harvest_notes', ''),
+                                total_harvested_weight=Decimal(
+                                    str(operation_data['total_harvested_weight'])
+                                ),
+                                created_offline=operation_data.get('created_offline', True),
+                                allow_pending_reconciliation=True,
+                            )
+                        )
+                        sync_result['processed']['final_harvests'] += 1
+                    except APIException as exc:
+                        detail = exc.detail if isinstance(exc.detail, dict) else {'detail': exc.detail}
+                        sync_result['errors'].append({
+                            'type': 'final_harvest',
+                            'client_uuid': str(operation_data.get('client_uuid')),
+                            **detail,
+                        })
+                    except (KeyError, ValueError, TypeError) as exc:
+                        sync_result['errors'].append({
+                            'type': 'final_harvest',
+                            'client_uuid': str(operation_data.get('client_uuid')),
+                            'code': 'invalid_final_harvest',
+                            'detail': str(exc),
+                        })
+                    continue
+
                 source = CycleUnitAllocation.objects.filter(cycle__farm_profile__user=user).filter(
                     models.Q(pk=operation_data.get('source_allocation_id'))
                     | models.Q(client_uuid=operation_data.get('source_allocation_client_uuid'))
@@ -896,7 +1050,7 @@ class SyncService(BaseService):
                     sync_result['errors'].append({
                         'type': 'calibration_operation',
                         'client_uuid': str(operation_data.get('client_uuid')),
-                        'error': 'source_allocation_not_found',
+                        'code': 'source_allocation_not_found',
                     })
                     continue
                 tank = ProductionUnit.objects.filter(
@@ -910,7 +1064,7 @@ class SyncService(BaseService):
                     sync_result['errors'].append({
                         'type': 'calibration_operation',
                         'client_uuid': str(operation_data.get('client_uuid')),
-                        'error': 'destination_production_unit_not_found',
+                        'code': 'destination_production_unit_not_found',
                     })
                     continue
                 try:
@@ -918,9 +1072,11 @@ class SyncService(BaseService):
                         source_allocation=source,
                         destination_production_unit=tank,
                         user=user,
+                        calibrated_at=business_datetime(operation_data['calibrated_at']),
                         **{
                             key: value for key, value in operation_data.items()
                             if key not in {
+                                'calibrated_at',
                                 'source_allocation_id',
                                 'source_allocation_client_uuid',
                                 'destination_production_unit_id',
@@ -933,7 +1089,7 @@ class SyncService(BaseService):
                     sync_result['errors'].append({
                         'type': 'calibration_operation',
                         'client_uuid': str(operation_data.get('client_uuid')),
-                        'error': 'invalid_calibration_operation',
+                        'code': 'invalid_calibration_operation',
                         'detail': str(exc),
                     })
 
@@ -965,10 +1121,12 @@ class SyncService(BaseService):
             return SyncService._finalize_full_sync_status(sync_result)
 
         except Exception:
+            logger.exception('Unhandled full synchronization failure')
             sync_result['status'] = 'error'
             sync_result['errors'].append({
                 'type': 'general',
-                'error': 'Erreur critique de synchronisation'
+                'code': 'full_sync_failure',
+                'detail': 'Erreur critique de synchronisation',
             })
 
         return sync_result
@@ -1045,7 +1203,14 @@ class SyncService(BaseService):
             return errors
 
         # Vérifier types des listes
-        for field in ['new_cycles', 'cycle_logs', 'sanitary_logs', 'calibration_tanks', 'calibration_operations']:
+        for field in [
+            'new_cycles',
+            'cycle_logs',
+            'sanitary_logs',
+            'calibration_tanks',
+            'calibration_operations',
+            'final_harvests',
+        ]:
             if field in sync_data:
                 if not isinstance(sync_data[field], list):
                     errors.append(f"Le champ '{field}' doit être une liste")

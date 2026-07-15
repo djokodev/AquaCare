@@ -3,11 +3,20 @@ Tests unitaires pour SyncService.
 
 Coverage cible : >50%
 """
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
+from uuid import uuid4
 
 import pytest
-from aquaculture.models import CycleLog, CycleUnitAllocation, ProductionUnit, SanitaryLog
+from aquaculture.models import (
+    CycleLog,
+    CycleUnitAllocation,
+    FinalHarvestOperation,
+    ProductionUnit,
+    SanitaryLog,
+)
+from aquaculture.services.calibration_service import CalibrationService
+from aquaculture.services.cycle_service import ProductionCycleService
 from aquaculture.services.sync_service import SyncService
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
@@ -710,3 +719,238 @@ class TestSyncSanitaryLogs:
         assert len(result['errors']) == 0
         created_log = SanitaryLog.objects.get(cycle=cycle)
         assert created_log.cycle_unit_allocation_id == allocation.id
+
+    def test_full_sync_orders_calibration_before_final_harvest_and_replays(self):
+        from tests.fixtures.factories import FarmProfileFactory
+
+        user = UserFactory()
+        farm = FarmProfileFactory(user=user)
+        day = timezone.localdate() - timedelta(days=1)
+        cycle = ProductionCycleFactory(
+            farm_profile=farm,
+            start_date=day - timedelta(days=10),
+            initial_count=500,
+            current_count=500,
+            initial_average_weight=Decimal('100.00'),
+            current_average_weight=Decimal('100.00'),
+            initial_biomass=Decimal('50.00'),
+            current_biomass=Decimal('50.00'),
+            status='active',
+        )
+        source = create_cycle_unit_allocation(cycle, 'Source sync récolte')
+        source.initial_fish_count = 500
+        source.current_fish_count = 500
+        source.initial_biomass_kg = Decimal('50.00')
+        source.current_biomass_kg = Decimal('50.00')
+        source.save()
+        tank = ProductionUnit.objects.create(
+            farm_profile=farm,
+            name='Bac sync récolte',
+            unit_type='tank',
+            purpose=ProductionUnit.PURPOSE_CALIBRATION,
+            volume_m3=Decimal('5.00'),
+        )
+        calibration_uuid = uuid4()
+        harvest_uuid = uuid4()
+        calibration_at = timezone.make_aware(
+            datetime.combine(day, time.min)
+        ) + timedelta(hours=12)
+        harvest_at = calibration_at + timedelta(hours=6)
+        sync_data = {
+            'calibration_operations': [{
+                'client_uuid': str(calibration_uuid),
+                'source_allocation_id': str(source.id),
+                'destination_production_unit_id': str(tank.id),
+                'calibrated_at': calibration_at.isoformat(),
+                'transferred_count': 100,
+                'transferred_average_weight_g': '100.00',
+                'created_offline': True,
+            }],
+            'final_harvests': [{
+                'client_uuid': str(harvest_uuid),
+                'allocation_id': str(source.id),
+                'harvest_date': day.isoformat(),
+                'final_harvested_at': harvest_at.isoformat(),
+                'final_count': 400,
+                'final_average_weight': '300.00',
+                'total_harvested_weight': '120.00',
+                'created_offline': True,
+            }],
+        }
+
+        first = SyncService.perform_full_sync(user, sync_data)
+        replay = SyncService.perform_full_sync(user, sync_data)
+
+        operation = FinalHarvestOperation.objects.get(client_uuid=harvest_uuid)
+        assert first['status'] == 'success'
+        assert replay['status'] == 'success'
+        assert first['processed']['calibration_operations'] == 1
+        assert first['processed']['final_harvests'] == 1
+        assert replay['processed']['calibration_operations'] == 1
+        assert replay['processed']['final_harvests'] == 1
+        assert operation.reconciliation_status == FinalHarvestOperation.STATUS_RECONCILED
+        assert operation.computed_count_before_harvest == 400
+        assert FinalHarvestOperation.objects.count() == 1
+
+    def test_delta_sync_exposes_pending_harvest_reconciliation_update(self):
+        from tests.fixtures.factories import FarmProfileFactory
+
+        user = UserFactory()
+        farm = FarmProfileFactory(user=user)
+        day = timezone.localdate() - timedelta(days=1)
+        cycle = ProductionCycleFactory(
+            farm_profile=farm,
+            start_date=day - timedelta(days=10),
+            initial_count=500,
+            current_count=500,
+            initial_average_weight=Decimal('100.00'),
+            current_average_weight=Decimal('100.00'),
+            initial_biomass=Decimal('50.00'),
+            current_biomass=Decimal('50.00'),
+            status='active',
+        )
+        source = create_cycle_unit_allocation(cycle, 'Source delta récolte')
+        source.initial_fish_count = 500
+        source.current_fish_count = 500
+        source.initial_biomass_kg = Decimal('50.00')
+        source.current_biomass_kg = Decimal('50.00')
+        source.save()
+        tank = ProductionUnit.objects.create(
+            farm_profile=farm,
+            name='Bac delta récolte',
+            unit_type='tank',
+            purpose=ProductionUnit.PURPOSE_CALIBRATION,
+            volume_m3=Decimal('5.00'),
+        )
+        harvest_at = timezone.now() - timedelta(hours=1)
+        _cycle, _allocation, operation, _created = (
+            ProductionCycleService.harvest_cycle_unit_allocation(
+                source,
+                harvest_date=timezone.localdate(harvest_at),
+                final_harvested_at=harvest_at,
+                final_count=400,
+                final_average_weight=Decimal('300.00'),
+                client_uuid=uuid4(),
+                created_offline=True,
+                allow_pending_reconciliation=True,
+            )
+        )
+        assert operation.reconciliation_status == FinalHarvestOperation.STATUS_PENDING
+        since = timezone.now()
+        CalibrationService.calibrate(
+            source_allocation=source,
+            destination_production_unit=tank,
+            user=user,
+            client_uuid=uuid4(),
+            calibrated_at=harvest_at - timedelta(minutes=30),
+            transferred_count=100,
+            transferred_average_weight_g=Decimal('100.00'),
+            created_offline=True,
+        )
+
+        updates = SyncService.get_server_updates(
+            user,
+            last_sync=since.isoformat(),
+            include_calibration=True,
+        )
+
+        assert len(updates['final_harvests']) == 1
+        assert updates['final_harvests'][0]['reconciliation_status'] == 'reconciled'
+
+    def test_full_sync_rejects_calibration_exactly_at_final_harvest(self):
+        from tests.fixtures.factories import FarmProfileFactory
+
+        user = UserFactory()
+        farm = FarmProfileFactory(user=user)
+        day = timezone.localdate() - timedelta(days=1)
+        cycle = ProductionCycleFactory(
+            farm_profile=farm,
+            start_date=day - timedelta(days=10),
+            initial_count=500,
+            current_count=500,
+            initial_average_weight=Decimal('100.00'),
+            current_average_weight=Decimal('100.00'),
+            initial_biomass=Decimal('50.00'),
+            current_biomass=Decimal('50.00'),
+            status='active',
+        )
+        source = create_cycle_unit_allocation(cycle, 'Source borne récolte')
+        tank = ProductionUnit.objects.create(
+            farm_profile=farm,
+            name='Bac borne récolte',
+            unit_type='tank',
+            purpose=ProductionUnit.PURPOSE_CALIBRATION,
+            volume_m3=Decimal('5.00'),
+        )
+        harvested_at = timezone.make_aware(datetime.combine(day, time(hour=18)))
+
+        result = SyncService.perform_full_sync(user, {
+            'calibration_operations': [{
+                'client_uuid': str(uuid4()),
+                'source_allocation_id': str(source.id),
+                'destination_production_unit_id': str(tank.id),
+                'calibrated_at': harvested_at.isoformat(),
+                'transferred_count': 100,
+                'transferred_average_weight_g': '100.00',
+                'created_offline': True,
+            }],
+            'final_harvests': [{
+                'client_uuid': str(uuid4()),
+                'allocation_id': str(source.id),
+                'harvest_date': day.isoformat(),
+                'final_harvested_at': harvested_at.isoformat(),
+                'final_count': 400,
+                'final_average_weight': '300.00',
+                'total_harvested_weight': '120.00',
+                'created_offline': True,
+            }],
+        })
+
+        operation = FinalHarvestOperation.objects.get(allocation=source)
+        assert result['status'] == 'partial_success'
+        assert result['processed']['final_harvests'] == 1
+        assert result['processed']['calibration_operations'] == 0
+        assert operation.reconciliation_status == FinalHarvestOperation.STATUS_PENDING
+        assert source.calibration_operations_out.count() == 0
+
+    def test_full_sync_rejects_naive_datetime_without_losing_valid_items(self):
+        from tests.fixtures.factories import FarmProfileFactory
+
+        user = UserFactory()
+        farm = FarmProfileFactory(user=user)
+        day = timezone.localdate() - timedelta(days=1)
+        cycle = ProductionCycleFactory(
+            farm_profile=farm,
+            start_date=day - timedelta(days=10),
+            initial_count=500,
+            current_count=500,
+            initial_average_weight=Decimal('100.00'),
+            current_average_weight=Decimal('100.00'),
+            initial_biomass=Decimal('50.00'),
+            current_biomass=Decimal('50.00'),
+            status='active',
+        )
+        source = create_cycle_unit_allocation(cycle, 'Source datetime sync')
+        harvested_at = timezone.make_aware(datetime.combine(day, time(hour=18)))
+
+        result = SyncService.perform_full_sync(user, {
+            'calibration_operations': [{
+                'client_uuid': str(uuid4()),
+                'calibrated_at': f'{day.isoformat()}T12:00:00',
+            }],
+            'final_harvests': [{
+                'client_uuid': str(uuid4()),
+                'allocation_id': str(source.id),
+                'harvest_date': day.isoformat(),
+                'final_harvested_at': harvested_at.isoformat(),
+                'final_count': 500,
+                'final_average_weight': '300.00',
+                'total_harvested_weight': '150.00',
+                'created_offline': True,
+            }],
+        })
+
+        assert result['status'] == 'partial_success'
+        assert result['processed']['final_harvests'] == 1
+        assert result['errors'][0]['code'] == 'invalid_calibration_operation'
+        assert FinalHarvestOperation.objects.filter(allocation=source).count() == 1

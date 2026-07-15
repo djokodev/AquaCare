@@ -34,6 +34,10 @@ jest.mock('react-redux', () => ({
 }));
 
 jest.mock('react-i18next', () => ({
+  initReactI18next: {
+    type: '3rdParty',
+    init: jest.fn(),
+  },
   useTranslation: () => ({
     t: (key: string, options?: Record<string, unknown>) => {
       switch (key) {
@@ -85,6 +89,8 @@ jest.mock('react-i18next', () => ({
           return 'Count exceeds available fish';
         case 'harvestDateRequired':
           return 'Harvest date required';
+        case 'harvestDateInvalid':
+          return 'Harvest date or time is invalid';
         case 'fishAvailableInThisUnit':
           return 'Fish available in this unit';
         case 'thisActionWillCloseThisProductionUnit':
@@ -162,6 +168,40 @@ describe('components/modals harvest flows', () => {
     });
     expect(StyleSheet.flatten(getByLabelText('cancel').props.style)).toMatchObject({ flex: 1 });
     expect(StyleSheet.flatten(getByTestId('harvest-submit').props.style)).toMatchObject({ flex: 2 });
+  });
+
+  it('rejects an invalid local harvest date without dispatching', () => {
+    const dispatch = jest.fn();
+    mockUseDispatch.mockReturnValue(dispatch);
+    const { getByLabelText, getByText } = render(
+      <HarvestModal
+        visible
+        onClose={jest.fn()}
+        cycle={null}
+        scope="unit"
+        productionUnitContext={{
+          cycleId: 'cycle-1',
+          cycleUnitAllocationId: 'allocation-1',
+          productionUnitId: 'unit-1',
+          productionUnitName: 'Bac 1',
+        }}
+        unitAllocation={{
+          id: 'allocation-1',
+          cycle: 'cycle-1',
+          production_unit: 'unit-1',
+          initial_fish_count: 900,
+          current_fish_count: 900,
+          initial_biomass_kg: 9,
+          current_biomass_kg: 9,
+        } as never}
+      />
+    );
+
+    fireEvent.changeText(getByLabelText('Harvest date'), '2026-02-30');
+    fireEvent.press(getByText('confirmUnitHarvest'));
+
+    expect(Alert.alert).toHaveBeenCalledWith('Error', 'Harvest date or time is invalid');
+    expect(dispatch).not.toHaveBeenCalled();
   });
 
   it('blocks a partial harvest that would empty the unit', () => {

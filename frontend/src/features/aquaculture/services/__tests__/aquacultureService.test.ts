@@ -292,6 +292,9 @@ describe('features/aquaculture/services/aquacultureService', () => {
       final_harvested_at: '2026-05-01T12:00:00+01:00',
       final_count: 850,
       final_average_weight: 250,
+      client_uuid: '00000000-0000-4000-8000-000000000001',
+      total_harvested_weight: 212.5,
+      created_offline: false,
     });
 
     expect(result).toEqual(harvestResponse);
@@ -300,6 +303,9 @@ describe('features/aquaculture/services/aquacultureService', () => {
       final_harvested_at: '2026-05-01T12:00:00+01:00',
       final_count: 850,
       final_average_weight: 250,
+      client_uuid: '00000000-0000-4000-8000-000000000001',
+      total_harvested_weight: 212.5,
+      created_offline: false,
     });
   });
 

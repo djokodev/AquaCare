@@ -16,6 +16,7 @@ Architecture offline-first avec sérialiseurs bulk pour synchronisation mobile.
 """
 from __future__ import annotations
 
+import uuid
 from datetime import date, timedelta
 from decimal import Decimal
 from typing import Any, cast
@@ -67,6 +68,7 @@ from .models import (
     CycleMetrics,
     CycleUnitAllocation,
     FeedingPlan,
+    FinalHarvestOperation,
     NutritionalGuide,
     PartialHarvest,
     ProductionCycle,
@@ -199,6 +201,8 @@ class CycleUnitAllocationSerializer(serializers.ModelSerializer):
     )
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     survival_rate_pct = serializers.SerializerMethodField()
+    final_harvest_reconciliation_status = serializers.SerializerMethodField()
+    final_harvest_computed_count = serializers.SerializerMethodField()
 
     class Meta:
         model = CycleUnitAllocation
@@ -225,6 +229,8 @@ class CycleUnitAllocationSerializer(serializers.ModelSerializer):
             'final_fish_count',
             'final_average_weight_g',
             'final_biomass_kg',
+            'final_harvest_reconciliation_status',
+            'final_harvest_computed_count',
             'expected_survival_rate_pct',
             'survival_rate_pct',
             'created_at',
@@ -247,6 +253,8 @@ class CycleUnitAllocationSerializer(serializers.ModelSerializer):
             'final_fish_count',
             'final_average_weight_g',
             'final_biomass_kg',
+            'final_harvest_reconciliation_status',
+            'final_harvest_computed_count',
             'survival_rate_pct',
             'created_at',
             'updated_at',
@@ -254,6 +262,14 @@ class CycleUnitAllocationSerializer(serializers.ModelSerializer):
 
     def get_survival_rate_pct(self, obj):
         return float(obj.survival_rate_pct) if obj.survival_rate_pct is not None else None
+
+    def get_final_harvest_reconciliation_status(self, obj):
+        operation = getattr(obj, 'final_harvest_operation', None)
+        return operation.reconciliation_status if operation is not None else None
+
+    def get_final_harvest_computed_count(self, obj):
+        operation = getattr(obj, 'final_harvest_operation', None)
+        return operation.computed_count_before_harvest if operation is not None else None
 
     def validate(self, attrs):
         cycle = attrs.get('cycle') or getattr(self.instance, 'cycle', None)
@@ -1412,6 +1428,9 @@ class HarvestSerializer(serializers.Serializer):
         allow_blank=True,
         help_text="Notes sur la récolte"
     )
+    client_uuid = serializers.UUIDField(default=uuid.uuid4)
+    created_offline = serializers.BooleanField(default=False)
+    allow_pending_reconciliation = serializers.BooleanField(default=False)
 
     def validate_harvest_date(self, value):
         """Valide que la date de récolte est raisonnable."""
@@ -1559,6 +1578,27 @@ class CycleUnitAllocationHarvestResponseSerializer(serializers.Serializer):
     message = serializers.CharField()
     cycle = ProductionCycleSerializer()
     cycle_unit_allocation = CycleUnitAllocationSerializer()
+    final_harvest = serializers.DictField()
+    idempotent_replay = serializers.BooleanField()
+
+
+class FinalHarvestOperationSerializer(serializers.ModelSerializer):
+    """Contrat de lecture et de delta-sync d'une récolte finale."""
+
+    cycle_id = serializers.UUIDField(source='allocation.cycle_id', read_only=True)
+    allocation_id = serializers.UUIDField(read_only=True)
+
+    class Meta:
+        model = FinalHarvestOperation
+        fields = [
+            'id', 'client_uuid', 'allocation_id', 'cycle_id', 'harvested_at',
+            'declared_fish_count', 'declared_average_weight_g',
+            'declared_biomass_kg', 'notes', 'reconciliation_status',
+            'computed_count_before_harvest',
+            'computed_biomass_before_harvest_kg', 'created_offline',
+            'synced_at', 'created_at', 'updated_at',
+        ]
+        read_only_fields = fields
 
 
 class CycleUnitAllocationPartialHarvestResponseSerializer(serializers.Serializer):
@@ -1624,6 +1664,12 @@ class ProductionUnitDashboardSummarySerializer(serializers.Serializer):
     """Indicateurs opérationnels d'une allocation de cycle par unité."""
 
     estimated_current_fish_count = serializers.IntegerField()
+    final_harvest_reconciliation_status = serializers.ChoiceField(
+        choices=['pending', 'reconciled'],
+        required=False,
+        allow_null=True,
+    )
+    final_harvest_computed_count = serializers.IntegerField(required=False, allow_null=True)
     total_mortality_count = serializers.IntegerField()
     mortality_rate_pct = serializers.DecimalField(max_digits=6, decimal_places=2)
     total_feed_consumed_kg = serializers.DecimalField(max_digits=12, decimal_places=2)
@@ -1969,6 +2015,10 @@ class SyncRequestSerializer(serializers.Serializer):
     new_cycles = ProductionCycleSerializer(many=True, required=False)
     calibration_tanks = CalibrationTankSerializer(many=True, required=False)
     calibration_operations = CalibrationRequestSerializer(many=True, required=False)
+    final_harvests = serializers.ListField(
+        child=serializers.DictField(),
+        required=False,
+    )
     last_sync = serializers.DateTimeField(required=False)
     device_id = serializers.CharField(max_length=100, required=False)
     client_id = serializers.CharField(max_length=100, required=False, write_only=True)

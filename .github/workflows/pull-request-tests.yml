@@ -209,6 +209,24 @@ jobs:
             echo "Concurrent PostgreSQL calibration test was skipped"
             exit 1
           fi
+          name_output="$(pytest -n 0 \
+            apps/aquaculture/tests/test_production_unit_concurrency.py \
+            apps/aquaculture/tests/test_cycle_launch.py \
+            -q -k 'concurrent_name')"
+          echo "$name_output"
+          if echo "$name_output" | grep -qi skipped; then
+            echo "Concurrent PostgreSQL name collision test was skipped"
+            exit 1
+          fi
+          harvest_output="$(pytest -n 0 \
+            apps/aquaculture/tests/services/test_calibration_service.py \
+            apps/aquaculture/tests/services/test_sync_service.py \
+            -q -k 'final_harvest_pending or pending_harvest or final_harvest_idempotency or invalidating_final_harvest or full_sync_orders_calibration_before_final_harvest or full_sync_rejects_calibration_exactly_at_final_harvest or delta_sync_exposes_pending_harvest or full_sync_rejects_naive_datetime')"
+          echo "$harvest_output"
+          if echo "$harvest_output" | grep -qi skipped; then
+            echo "Critical final-harvest reconciliation test was skipped"
+            exit 1
+          fi
 
       - name: Run PostgreSQL report scope tests
         working-directory: ./backend

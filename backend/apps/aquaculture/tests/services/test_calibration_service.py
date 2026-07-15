@@ -4,10 +4,21 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, time, timedelta
 from decimal import Decimal
+from threading import Barrier
 
 import pytest
-from aquaculture.domain.exceptions import BusinessRuleViolation
-from aquaculture.models import CalibrationOperation, CycleUnitAllocation, ProductionUnit
+from aquaculture.domain.exceptions import (
+    AllocationAlreadyFinallyHarvested,
+    BusinessRuleViolation,
+    FinalHarvestIdempotencyConflict,
+    FinalHarvestStockMismatch,
+)
+from aquaculture.models import (
+    CalibrationOperation,
+    CycleUnitAllocation,
+    FinalHarvestOperation,
+    ProductionUnit,
+)
 from aquaculture.services.calibration_service import (
     CalibrationIdempotencyConflict,
     CalibrationService,
@@ -16,6 +27,7 @@ from aquaculture.services.cycle_service import ProductionCycleService
 from aquaculture.services.production_unit_stock_snapshot_service import (
     ProductionUnitStockSnapshotService,
 )
+from django.core.exceptions import ValidationError
 from django.db import connection
 from django.utils import timezone
 
@@ -200,19 +212,6 @@ class TestCalibrationService:
         destination = operation.destination_allocation
 
         ProductionCycleService.harvest_cycle_unit_allocation(
-            source,
-            harvest_date=timezone.localdate(),
-            final_harvested_at=timezone.now(),
-            final_count=800,
-            final_average_weight=Decimal('250.00'),
-        )
-        destination.refresh_from_db()
-        destination.cycle.refresh_from_db()
-        assert destination.status == CycleUnitAllocation.STATUS_ACTIVE
-        assert destination.current_fish_count == 200
-        assert destination.cycle.status == 'active'
-
-        ProductionCycleService.harvest_cycle_unit_allocation(
             destination,
             harvest_date=timezone.localdate(),
             final_harvested_at=timezone.now(),
@@ -227,12 +226,11 @@ class TestCalibrationService:
         assert destination.cycle.current_count == 0
         assert tank.status == 'active'
 
-        source.status = CycleUnitAllocation.STATUS_ACTIVE
-        source.current_fish_count = 800
-        source.current_biomass_kg = Decimal('50.00')
-        source.save(update_fields=['status', 'current_fish_count', 'current_biomass_kg'])
-        production_cycle.status = 'active'
-        production_cycle.save(update_fields=['status'])
+        source.refresh_from_db()
+        production_cycle.refresh_from_db()
+        assert source.status == CycleUnitAllocation.STATUS_ACTIVE
+        assert source.current_fish_count == 800
+        assert production_cycle.status == 'active'
         second_operation, _, _ = self.calibrate(
             source,
             tank,
@@ -435,6 +433,182 @@ class TestCalibrationService:
         assert tank.cycle_allocations.count() == 2
         assert tank.cycle_allocations.filter(status=CycleUnitAllocation.STATUS_ACTIVE).count() == 1
 
+    def test_destination_final_harvest_pending_then_reconciled(self, production_cycle):
+        day = timezone.localdate() - timedelta(days=1)
+        production_cycle.start_date = day
+        production_cycle.save(update_fields=['start_date'])
+        source = self.setup_source(production_cycle)
+        tank = self.create_tank(source)
+        first, _, _ = self.calibrate(source, tank, calibrated_at=self.at(day, 8))
+        destination = first.destination_allocation
+
+        _, _, final_harvest, _ = ProductionCycleService.harvest_cycle_unit_allocation(
+            destination,
+            harvest_date=day,
+            final_harvested_at=self.at(day, 18),
+            final_count=300,
+            final_average_weight=Decimal('300.00'),
+            client_uuid=uuid.uuid4(),
+            created_offline=True,
+            allow_pending_reconciliation=True,
+        )
+        assert final_harvest.reconciliation_status == FinalHarvestOperation.STATUS_PENDING
+        assert final_harvest.computed_count_before_harvest == 200
+
+        second, _, _ = self.calibrate(
+            source,
+            tank,
+            calibrated_at=self.at(day, 12),
+            transferred_count=100,
+            transferred_average_weight_g=Decimal('150.00'),
+            created_offline=True,
+        )
+        final_harvest.refresh_from_db()
+        destination.refresh_from_db()
+        assert second.destination_allocation_id == destination.id
+        assert final_harvest.computed_count_before_harvest == 300
+        assert final_harvest.reconciliation_status == FinalHarvestOperation.STATUS_RECONCILED
+        assert destination.current_fish_count == 0
+
+    def test_source_final_harvest_pending_then_reconciled(self, production_cycle):
+        day = timezone.localdate() - timedelta(days=1)
+        production_cycle.start_date = day
+        production_cycle.save(update_fields=['start_date'])
+        source = self.setup_source(production_cycle)
+        tank = self.create_tank(source)
+
+        _, _, final_harvest, _ = ProductionCycleService.harvest_cycle_unit_allocation(
+            source,
+            harvest_date=day,
+            final_harvested_at=self.at(day, 18),
+            final_count=900,
+            final_average_weight=Decimal('300.00'),
+            client_uuid=uuid.uuid4(),
+            created_offline=True,
+            allow_pending_reconciliation=True,
+        )
+        self.calibrate(
+            source,
+            tank,
+            calibrated_at=self.at(day, 12),
+            transferred_count=100,
+            transferred_average_weight_g=Decimal('100.00'),
+            created_offline=True,
+        )
+        final_harvest.refresh_from_db()
+        source.refresh_from_db()
+        assert final_harvest.computed_count_before_harvest == 900
+        assert final_harvest.reconciliation_status == FinalHarvestOperation.STATUS_RECONCILED
+        assert source.current_fish_count == 0
+
+    def test_pending_harvest_accepts_multiple_events_that_close_the_gap(self, production_cycle):
+        day = timezone.localdate() - timedelta(days=1)
+        production_cycle.start_date = day
+        production_cycle.save(update_fields=['start_date'])
+        source = self.setup_source(production_cycle)
+        tank = self.create_tank(source)
+        first, _, _ = self.calibrate(source, tank, calibrated_at=self.at(day, 8))
+        destination = first.destination_allocation
+        _, _, final_harvest, _ = ProductionCycleService.harvest_cycle_unit_allocation(
+            destination,
+            harvest_date=day,
+            final_harvested_at=self.at(day, 18),
+            final_count=300,
+            final_average_weight=Decimal('300.00'),
+            client_uuid=uuid.uuid4(),
+            created_offline=True,
+        )
+        self.calibrate(source, tank, calibrated_at=self.at(day, 12), transferred_count=50)
+        final_harvest.refresh_from_db()
+        assert final_harvest.computed_count_before_harvest == 250
+        assert final_harvest.reconciliation_status == FinalHarvestOperation.STATUS_PENDING
+        self.calibrate(source, tank, calibrated_at=self.at(day, 13), transferred_count=50)
+        final_harvest.refresh_from_db()
+        assert final_harvest.computed_count_before_harvest == 300
+        assert final_harvest.reconciliation_status == FinalHarvestOperation.STATUS_RECONCILED
+
+    def test_final_harvest_mismatch_requires_explicit_pending_mode(self, production_cycle):
+        source = self.setup_source(production_cycle)
+        with pytest.raises(FinalHarvestStockMismatch):
+            ProductionCycleService.harvest_cycle_unit_allocation(
+                source,
+                harvest_date=timezone.localdate(),
+                final_harvested_at=timezone.now(),
+                final_count=900,
+                final_average_weight=Decimal('300.00'),
+                client_uuid=uuid.uuid4(),
+            )
+
+    def test_final_harvest_idempotency_contract(self, production_cycle):
+        source = self.setup_source(production_cycle)
+        client_uuid = uuid.uuid4()
+        harvested_at = timezone.now()
+        first = ProductionCycleService.harvest_cycle_unit_allocation(
+            source,
+            harvest_date=timezone.localdate(),
+            final_harvested_at=harvested_at,
+            final_count=1000,
+            final_average_weight=Decimal('300.00'),
+            client_uuid=client_uuid,
+        )
+        second = ProductionCycleService.harvest_cycle_unit_allocation(
+            source,
+            harvest_date=timezone.localdate(),
+            final_harvested_at=harvested_at,
+            final_count=1000,
+            final_average_weight=Decimal('300.00'),
+            client_uuid=client_uuid,
+        )
+        assert first[2].id == second[2].id
+        assert second[3] is False
+        with pytest.raises(FinalHarvestIdempotencyConflict):
+            ProductionCycleService.harvest_cycle_unit_allocation(
+                source,
+                harvest_date=timezone.localdate(),
+                final_harvested_at=harvested_at,
+                final_count=999,
+                final_average_weight=Decimal('300.00'),
+                client_uuid=client_uuid,
+                created_offline=True,
+            )
+
+    def test_cycle_harvest_single_allocation_can_be_pending(self, production_cycle):
+        source = self.setup_source(production_cycle)
+        harvested_at = timezone.now() - timedelta(seconds=1)
+
+        harvested_cycle = ProductionCycleService.harvest_cycle(
+            source.cycle,
+            harvest_date=timezone.localdate(harvested_at),
+            final_harvested_at=harvested_at,
+            final_count=900,
+            final_average_weight=Decimal('300.00'),
+            client_uuid=uuid.uuid4(),
+            created_offline=True,
+            allow_pending_reconciliation=True,
+        )
+
+        operation = FinalHarvestOperation.objects.get(allocation=source)
+        assert harvested_cycle.status == 'harvested'
+        assert operation.reconciliation_status == FinalHarvestOperation.STATUS_PENDING
+        assert operation.computed_count_before_harvest == 1000
+
+    def test_final_harvest_projection_cannot_diverge_silently(self, production_cycle):
+        source = self.setup_source(production_cycle)
+        harvested_at = timezone.now() - timedelta(seconds=1)
+        ProductionCycleService.harvest_cycle_unit_allocation(
+            source,
+            harvest_date=timezone.localdate(harvested_at),
+            final_harvested_at=harvested_at,
+            final_count=1000,
+            final_average_weight=Decimal('300.00'),
+            client_uuid=uuid.uuid4(),
+        )
+        source.refresh_from_db()
+        source.final_fish_count = 999
+
+        with pytest.raises(ValidationError, match='projection'):
+            source.save()
+
 
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.skipif(connection.vendor != 'postgresql', reason='Concurrent row locks require PostgreSQL')
@@ -545,3 +719,157 @@ def test_concurrent_cross_transfers_follow_global_lock_order(production_cycle):
     assert all(created for _operation, _warnings, created in results)
     assert allocation_a.current_fish_count == 200
     assert allocation_b.current_fish_count == 200
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.skipif(connection.vendor != 'postgresql', reason='Concurrent row locks require PostgreSQL')
+def test_concurrent_final_harvest_and_calibration_reconcile_without_deadlock(production_cycle):
+    helper = TestCalibrationService()
+    day = timezone.localdate() - timedelta(days=1)
+    production_cycle.start_date = day
+    production_cycle.save(update_fields=['start_date'])
+    source = helper.setup_source(production_cycle)
+    tank = helper.create_tank(source)
+    first = helper.calibrate(source, tank, calibrated_at=helper.at(day, 8))[0]
+    destination = first.destination_allocation
+    barrier = Barrier(2)
+
+    def harvest_once():
+        connection.close()
+        try:
+            barrier.wait()
+            return ProductionCycleService.harvest_cycle_unit_allocation(
+                destination,
+                harvest_date=day,
+                final_harvested_at=helper.at(day, 18),
+                final_count=300,
+                final_average_weight=Decimal('300.00'),
+                client_uuid=uuid.uuid4(),
+                created_offline=True,
+                allow_pending_reconciliation=True,
+            )
+        finally:
+            connection.close()
+
+    def calibrate_once():
+        connection.close()
+        try:
+            barrier.wait()
+            return CalibrationService.calibrate(
+                source_allocation=source,
+                destination_production_unit=tank,
+                user=production_cycle.farm_profile.user,
+                client_uuid=uuid.uuid4(),
+                calibrated_at=helper.at(day, 12),
+                transferred_count=100,
+                transferred_average_weight_g=Decimal('150.00'),
+                created_offline=True,
+            )
+        finally:
+            connection.close()
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = [executor.submit(harvest_once), executor.submit(calibrate_once)]
+        [future.result(timeout=10) for future in futures]
+
+    destination.refresh_from_db()
+    final_harvest = FinalHarvestOperation.objects.get(allocation=destination)
+    assert final_harvest.reconciliation_status == FinalHarvestOperation.STATUS_RECONCILED
+    assert final_harvest.computed_count_before_harvest == 300
+    assert destination.current_fish_count == 0
+    assert CalibrationOperation.objects.count() == 2
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.skipif(connection.vendor != 'postgresql', reason='Concurrent row locks require PostgreSQL')
+def test_concurrent_final_harvests_create_exactly_one_operation(production_cycle):
+    helper = TestCalibrationService()
+    source = helper.setup_source(production_cycle)
+    harvested_at = timezone.now()
+    barrier = Barrier(2)
+
+    def harvest_once():
+        connection.close()
+        try:
+            barrier.wait()
+            ProductionCycleService.harvest_cycle_unit_allocation(
+                source,
+                harvest_date=timezone.localdate(harvested_at),
+                final_harvested_at=harvested_at,
+                final_count=1000,
+                final_average_weight=Decimal('300.00'),
+                client_uuid=uuid.uuid4(),
+            )
+            return 'created'
+        except AllocationAlreadyFinallyHarvested as exc:
+            return exc.default_code
+        finally:
+            connection.close()
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(executor.map(lambda _index: harvest_once(), range(2)))
+
+    assert sorted(results) == ['allocation_already_finally_harvested', 'created']
+    assert FinalHarvestOperation.objects.filter(allocation=source).count() == 1
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.skipif(connection.vendor != 'postgresql', reason='Concurrent row locks require PostgreSQL')
+def test_two_concurrent_calibrations_and_final_harvest_keep_all_events(production_cycle):
+    helper = TestCalibrationService()
+    day = timezone.localdate() - timedelta(days=1)
+    production_cycle.start_date = day
+    production_cycle.save(update_fields=['start_date'])
+    source = helper.setup_source(production_cycle)
+    tank = helper.create_tank(source)
+    destination = helper.calibrate(source, tank, calibrated_at=helper.at(day, 8))[0].destination_allocation
+    barrier = Barrier(3)
+
+    def calibrate_once(hour):
+        connection.close()
+        try:
+            barrier.wait()
+            return CalibrationService.calibrate(
+                source_allocation=source,
+                destination_production_unit=tank,
+                user=production_cycle.farm_profile.user,
+                client_uuid=uuid.uuid4(),
+                calibrated_at=helper.at(day, hour),
+                transferred_count=50,
+                transferred_average_weight_g=Decimal('150.00'),
+                created_offline=True,
+            )
+        finally:
+            connection.close()
+
+    def harvest_once():
+        connection.close()
+        try:
+            barrier.wait()
+            return ProductionCycleService.harvest_cycle_unit_allocation(
+                destination,
+                harvest_date=day,
+                final_harvested_at=helper.at(day, 18),
+                final_count=300,
+                final_average_weight=Decimal('300.00'),
+                client_uuid=uuid.uuid4(),
+                created_offline=True,
+                allow_pending_reconciliation=True,
+            )
+        finally:
+            connection.close()
+
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        futures = [
+            executor.submit(calibrate_once, 12),
+            executor.submit(calibrate_once, 13),
+            executor.submit(harvest_once),
+        ]
+        [future.result(timeout=15) for future in futures]
+
+    destination.refresh_from_db()
+    final_harvest = FinalHarvestOperation.objects.get(allocation=destination)
+    assert CalibrationOperation.objects.count() == 3
+    assert final_harvest.computed_count_before_harvest == 300
+    assert final_harvest.reconciliation_status == FinalHarvestOperation.STATUS_RECONCILED
+    assert destination.current_fish_count == 0

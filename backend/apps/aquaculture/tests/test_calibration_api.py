@@ -262,5 +262,5 @@ class TestCalibrationApi:
         assert response.data['errors'][0] == {
             'type': 'calibration_operation',
             'client_uuid': str(operation_client_uuid),
-            'error': 'source_allocation_not_found',
+            'code': 'source_allocation_not_found',
         }

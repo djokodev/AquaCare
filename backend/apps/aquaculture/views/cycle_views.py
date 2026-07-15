@@ -340,7 +340,15 @@ class ProductionCycleViewSet(viewsets.ModelViewSet):
                 final_harvested_at=serializer.validated_data['final_harvested_at'],
                 final_count=serializer.validated_data['final_count'],
                 final_average_weight=serializer.validated_data['final_average_weight'],
+                client_uuid=serializer.validated_data['client_uuid'],
                 harvest_notes=serializer.validated_data.get('harvest_notes', ''),
+                total_harvested_weight=serializer.validated_data.get(
+                    'total_harvested_weight'
+                ),
+                created_offline=serializer.validated_data['created_offline'],
+                allow_pending_reconciliation=serializer.validated_data[
+                    'allow_pending_reconciliation'
+                ],
             ),
         )
 

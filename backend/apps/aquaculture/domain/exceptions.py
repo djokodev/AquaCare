@@ -88,6 +88,49 @@ class InvalidHarvestDataError(BusinessRuleViolation):
     default_code = 'invalid_harvest_data'
 
 
+class FinalHarvestStockMismatch(AquacultureBusinessException):
+    """Le constat physique ne correspond pas encore au ledger serveur."""
+
+    default_code = 'final_harvest_stock_mismatch'
+
+    def __init__(self, *, computed_count: int, declared_count: int):
+        super().__init__({
+            'code': self.default_code,
+            'detail': _(
+                'Le stock physique déclaré ne correspond pas encore au ledger serveur.'
+            ),
+            'computed_count': computed_count,
+            'declared_count': declared_count,
+            'can_be_saved_pending_reconciliation': True,
+        })
+
+
+class FinalHarvestIdempotencyConflict(AquacultureBusinessException):
+    """Un UUID de récolte finale a été réutilisé avec un autre payload."""
+
+    status_code = status.HTTP_409_CONFLICT
+    default_code = 'final_harvest_idempotency_conflict'
+
+    def __init__(self):
+        super().__init__({
+            'code': self.default_code,
+            'detail': _('Cet UUID correspond à une autre récolte finale.'),
+        })
+
+
+class AllocationAlreadyFinallyHarvested(AquacultureBusinessException):
+    """Une allocation ne peut posséder qu'une récolte finale."""
+
+    status_code = status.HTTP_409_CONFLICT
+    default_code = 'allocation_already_finally_harvested'
+
+    def __init__(self):
+        super().__init__({
+            'code': self.default_code,
+            'detail': _('Cette allocation possède déjà une récolte finale.'),
+        })
+
+
 class InsufficientFishCountError(BusinessRuleViolation):
     """
     Mortalité ou retrait dépassant l'effectif disponible.

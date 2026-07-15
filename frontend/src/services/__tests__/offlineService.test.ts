@@ -9,6 +9,8 @@ jest.mock('@/features/aquaculture/services/aquacultureService', () => ({
     createSanitaryLog: jest.fn(),
     createCalibrationTank: jest.fn(),
     calibrateAllocation: jest.fn(),
+    harvestProductionUnitAllocation: jest.fn(),
+    harvestCycle: jest.fn(),
   },
 }));
 
@@ -233,7 +235,159 @@ describe('services/offlineService', () => {
     expect(await AsyncStorage.getItem('aquacare_offline_cycle_logs')).toBeNull();
     expect(await AsyncStorage.getItem('aquacare_offline_new_cycles')).toBeNull();
     expect(await AsyncStorage.getItem('aquacare_offline_sanitary_logs')).toBeNull();
+    expect(await AsyncStorage.getItem('aquacare_offline_final_harvests')).toBeNull();
     expect(await AsyncStorage.getItem('aquacare_last_sync')).toBeNull();
+  });
+
+  it('sauvegarde une récolte finale sans duplication et conserve son datetime métier', async () => {
+    const harvestData = {
+      client_uuid: '00000000-0000-4000-8000-000000000010',
+      harvest_date: '2026-07-14',
+      final_harvested_at: '2026-07-14T17:00:00.000Z',
+      final_count: 300,
+      final_average_weight: 300,
+      total_harvested_weight: 90,
+      harvest_notes: 'Récolte physique',
+      created_offline: false,
+    };
+
+    const firstId = await offlineService.saveFinalHarvestOffline('allocation-1', 'cycle-1', harvestData);
+    const secondId = await offlineService.saveFinalHarvestOffline('allocation-1', 'cycle-1', harvestData);
+    const items = await offlineService.getOfflineFinalHarvests();
+
+    expect(secondId).toBe(firstId);
+    expect(items).toHaveLength(1);
+    expect(items[0].harvestData.final_harvested_at).toBe('2026-07-14T17:00:00.000Z');
+    expect(items[0].harvestData.client_uuid).toBe(harvestData.client_uuid);
+    expect(items[0].harvestData.created_offline).toBe(true);
+    expect(items[0].synced).toBe(false);
+  });
+
+  it('rejette un même client_uuid local lorsque le payload de récolte diffère', async () => {
+    const harvestData = {
+      client_uuid: '00000000-0000-4000-8000-000000000014',
+      harvest_date: '2026-07-14',
+      final_harvested_at: '2026-07-14T17:00:00.000Z',
+      final_count: 300,
+      final_average_weight: 300,
+      total_harvested_weight: 90,
+      created_offline: true,
+    };
+    await offlineService.saveFinalHarvestOffline('allocation-1', 'cycle-1', harvestData);
+
+    await expect(offlineService.saveFinalHarvestOffline('allocation-1', 'cycle-1', {
+      ...harvestData,
+      final_count: 299,
+    })).rejects.toThrow('final_harvest_idempotency_conflict');
+    await expect(offlineService.getOfflineFinalHarvests()).resolves.toHaveLength(1);
+  });
+
+  it('ordonne le fallback calibrage et récolte selon leur datetime métier', async () => {
+    await offlineService.saveFinalHarvestOffline('allocation-1', 'cycle-1', {
+      client_uuid: '00000000-0000-4000-8000-000000000015',
+      harvest_date: '2026-07-14',
+      final_harvested_at: '2026-07-14T18:00:00.000Z',
+      final_count: 300,
+      final_average_weight: 300,
+      total_harvested_weight: 90,
+      created_offline: true,
+    });
+    await offlineService.saveCalibrationOperationOffline('allocation-1', {
+      client_uuid: '00000000-0000-4000-8000-000000000016',
+      source_allocation_id: 'allocation-1',
+      destination_production_unit_id: 'unit-2',
+      calibrated_at: '2026-07-14T12:00:00.000Z',
+      transferred_count: 100,
+      created_offline: true,
+    });
+    mockAquaculture.calibrateAllocation.mockResolvedValue({} as any);
+    mockAquaculture.harvestProductionUnitAllocation.mockResolvedValue({
+      final_harvest: { reconciliation_status: 'reconciled' },
+    } as any);
+
+    await expect(offlineService.syncAllOfflineData()).resolves.toEqual(expect.objectContaining({
+      success: 2,
+      failed: 0,
+    }));
+
+    expect(mockAquaculture.calibrateAllocation).toHaveBeenCalledTimes(1);
+    expect(mockAquaculture.harvestProductionUnitAllocation).toHaveBeenCalledTimes(1);
+    expect(mockAquaculture.calibrateAllocation.mock.invocationCallOrder[0]).toBeLessThan(
+      mockAquaculture.harvestProductionUnitAllocation.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('synchronise une récolte pending et ne marque pas une récolte en échec', async () => {
+    const base = {
+      client_uuid: '00000000-0000-4000-8000-000000000011',
+      harvest_date: '2026-07-14',
+      final_harvested_at: '2026-07-14T17:00:00.000Z',
+      final_count: 300,
+      final_average_weight: 300,
+      total_harvested_weight: 90,
+      created_offline: true,
+    };
+    await offlineService.saveFinalHarvestOffline('allocation-1', 'cycle-1', base);
+    await offlineService.saveFinalHarvestOffline('allocation-2', 'cycle-2', {
+      ...base,
+      client_uuid: '00000000-0000-4000-8000-000000000012',
+    });
+    mockAquaculture.harvestProductionUnitAllocation
+      .mockResolvedValueOnce({
+        final_harvest: { reconciliation_status: 'pending' },
+      } as any)
+      .mockRejectedValueOnce(new Error('offline'));
+
+    await expect(offlineService.syncOfflineFinalHarvests()).resolves.toEqual({
+      success: 1,
+      failed: 1,
+    });
+    const items = await offlineService.getOfflineFinalHarvests();
+    expect(items[0]).toEqual(expect.objectContaining({
+      synced: true,
+      serverAccepted: true,
+      reconciliationStatus: 'pending',
+    }));
+    expect(items[1].synced).toBe(false);
+
+    mockAquaculture.harvestProductionUnitAllocation.mockResolvedValueOnce({
+      final_harvest: { reconciliation_status: 'reconciled' },
+    } as any);
+    await expect(offlineService.syncOfflineFinalHarvests()).resolves.toEqual({
+      success: 1,
+      failed: 0,
+    });
+    expect(mockAquaculture.harvestProductionUnitAllocation).toHaveBeenCalledTimes(3);
+    expect(mockAquaculture.harvestProductionUnitAllocation.mock.calls[1][1].client_uuid).toBe(
+      mockAquaculture.harvestProductionUnitAllocation.mock.calls[2][1].client_uuid,
+    );
+  });
+
+  it('applique un delta serveur qui réconcilie une récolte déjà acceptée pending', async () => {
+    const clientUuid = '00000000-0000-4000-8000-000000000013';
+    await offlineService.saveFinalHarvestOffline('allocation-1', 'cycle-1', {
+      client_uuid: clientUuid,
+      harvest_date: '2026-07-14',
+      final_harvested_at: '2026-07-14T17:00:00.000Z',
+      final_count: 300,
+      final_average_weight: 300,
+      total_harvested_weight: 90,
+      created_offline: true,
+    });
+    const [saved] = await offlineService.getOfflineFinalHarvests();
+    await offlineService.markFinalHarvestAsSynced(saved.id, 'pending');
+
+    await offlineService.applyFinalHarvestServerUpdates([{
+      client_uuid: clientUuid,
+      reconciliation_status: 'reconciled',
+    } as any]);
+
+    const [updated] = await offlineService.getOfflineFinalHarvests();
+    expect(updated).toEqual(expect.objectContaining({
+      synced: true,
+      serverAccepted: true,
+      reconciliationStatus: 'reconciled',
+    }));
   });
 
   it('isOnline retourne true/false selon le fetch', async () => {

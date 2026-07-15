@@ -25,6 +25,7 @@ from ..serializers import (
     CycleUnitAllocationHarvestResponseSerializer,
     CycleUnitAllocationPartialHarvestResponseSerializer,
     CycleUnitAllocationSerializer,
+    FinalHarvestOperationSerializer,
     HarvestSerializer,
     PartialHarvestSerializer,
     ProductionCycleSerializer,
@@ -207,15 +208,25 @@ class CycleUnitAllocationViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        harvested_cycle, harvested_allocation = ProductionCycleApplicationService.harvest_cycle_unit_allocation(
+        harvested_cycle, harvested_allocation, final_harvest, created = (
+            ProductionCycleApplicationService.harvest_cycle_unit_allocation(
             allocation=allocation,
             command=HarvestCycleCommand(
                 harvest_date=serializer.validated_data['harvest_date'],
                 final_harvested_at=serializer.validated_data['final_harvested_at'],
                 final_count=serializer.validated_data['final_count'],
                 final_average_weight=serializer.validated_data['final_average_weight'],
+                client_uuid=serializer.validated_data['client_uuid'],
                 harvest_notes=serializer.validated_data.get('harvest_notes', ''),
+                total_harvested_weight=serializer.validated_data.get(
+                    'total_harvested_weight'
+                ),
+                created_offline=serializer.validated_data['created_offline'],
+                allow_pending_reconciliation=serializer.validated_data[
+                    'allow_pending_reconciliation'
+                ],
             ),
+            )
         )
 
         response_serializer = CycleUnitAllocationHarvestResponseSerializer(
@@ -223,6 +234,8 @@ class CycleUnitAllocationViewSet(viewsets.ModelViewSet):
                 'message': _('Unité récoltée avec succès'),
                 'cycle': harvested_cycle,
                 'cycle_unit_allocation': harvested_allocation,
+                'final_harvest': FinalHarvestOperationSerializer(final_harvest).data,
+                'idempotent_replay': not created,
             },
             context={'request': request},
         )

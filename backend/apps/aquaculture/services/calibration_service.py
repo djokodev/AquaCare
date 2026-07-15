@@ -17,6 +17,7 @@ from ..models import CalibrationOperation, CycleUnitAllocation, ProductionCycle,
 from ..tasks import invalidate_dashboard_cache
 from .allocation_ledger_service import AllocationLedgerService
 from .cycle_service import ProductionCycleService
+from .final_harvest_service import FinalHarvestService
 
 
 class CalibrationIdempotencyConflict(BusinessRuleViolation):
@@ -167,6 +168,8 @@ class CalibrationService:
 
         source = ProductionCycleService.recalculate_allocation_current_metrics(source)
         destination = ProductionCycleService.recalculate_allocation_current_metrics(destination)
+        FinalHarvestService.reconcile_after_historical_event(source)
+        FinalHarvestService.reconcile_after_historical_event(destination)
         ProductionCycleService._sync_cycle_current_metrics_from_allocations(source.cycle)
         destination_cycle = ProductionCycleService._sync_cycle_current_metrics_from_allocations(destination.cycle)
         ProductionCycleService._refresh_advanced_metrics(source.cycle)
@@ -216,6 +219,10 @@ class CalibrationService:
             intervals.append((started_at, closed_at, session))
 
         intervals.sort(key=lambda item: (item[0], str(item[2].pk)))
+        if any(closed_at == calibrated_at for _started_at, closed_at, _session in intervals):
+            raise BusinessRuleViolation(
+                _('Un calibrage ne peut pas avoir lieu exactement à l’heure de récolte finale.')
+            )
         for current, following in zip(intervals, intervals[1:], strict=False):
             current_closed_at = current[1]
             if current_closed_at is None or current_closed_at > following[0]:

@@ -19,6 +19,7 @@ from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.db.models import DecimalField, IntegerField, OuterRef, Prefetch, Q, Subquery, Sum, Value
 from django.db.models.functions import Coalesce, Lower
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from .constants import (
@@ -660,6 +661,27 @@ class CycleUnitAllocation(models.Model):
                 })
 
     def save(self, *args, **kwargs):
+        if self.pk and not self._state.adding:
+            try:
+                final_harvest = FinalHarvestOperation.objects.get(allocation_id=self.pk)
+            except FinalHarvestOperation.DoesNotExist:
+                final_harvest = None
+            if final_harvest is not None:
+                expected_projection = {
+                    'final_harvested_at': final_harvest.harvested_at,
+                    'final_harvest_date': timezone.localtime(final_harvest.harvested_at).date(),
+                    'final_fish_count': final_harvest.declared_fish_count,
+                    'final_average_weight_g': final_harvest.declared_average_weight_g,
+                    'final_biomass_kg': final_harvest.declared_biomass_kg,
+                    'final_harvest_notes': final_harvest.notes,
+                }
+                if any(
+                    getattr(self, field) != value
+                    for field, value in expected_projection.items()
+                ):
+                    raise ValidationError(
+                        _('La projection de récolte finale doit rester identique à son opération.')
+                    )
         self.full_clean()
         return super().save(*args, **kwargs)
 
@@ -1117,6 +1139,89 @@ class CalibrationOperation(models.Model):
             models.Index(fields=['destination_allocation', 'calibrated_at'], name='aq_cal_op_dest_date_idx'),
             models.Index(fields=['client_uuid'], name='aq_cal_op_client_idx'),
         ]
+
+
+class FinalHarvestOperation(models.Model):
+    """Événement physique immuable clôturant une allocation de production."""
+
+    STATUS_RECONCILED = 'reconciled'
+    STATUS_PENDING = 'pending'
+    RECONCILIATION_STATUS_CHOICES = [
+        (STATUS_RECONCILED, _('Réconciliée')),
+        (STATUS_PENDING, _('Réconciliation en attente')),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    client_uuid = models.UUIDField(unique=True)
+    allocation = models.OneToOneField(
+        CycleUnitAllocation,
+        on_delete=models.PROTECT,
+        related_name='final_harvest_operation',
+    )
+    harvested_at = models.DateTimeField()
+    declared_fish_count = models.PositiveIntegerField()
+    declared_average_weight_g = models.DecimalField(max_digits=8, decimal_places=2)
+    declared_biomass_kg = models.DecimalField(max_digits=10, decimal_places=2)
+    notes = models.TextField(blank=True, default='')
+    reconciliation_status = models.CharField(
+        max_length=20,
+        choices=RECONCILIATION_STATUS_CHOICES,
+    )
+    computed_count_before_harvest = models.PositiveIntegerField(null=True, blank=True)
+    computed_biomass_before_harvest_kg = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+    )
+    created_by = models.ForeignKey(
+        'accounts.User',
+        on_delete=models.PROTECT,
+        related_name='final_harvest_operations',
+    )
+    created_offline = models.BooleanField(default=False)
+    synced_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-harvested_at', '-created_at', '-id']
+        indexes = [
+            models.Index(
+                fields=['harvested_at', 'created_at'],
+                name='aq_final_harvest_dates_idx',
+            ),
+            models.Index(
+                fields=['reconciliation_status', 'created_at'],
+                name='aq_final_harvest_status_idx',
+            ),
+        ]
+
+    IMMUTABLE_FIELDS = (
+        'client_uuid',
+        'allocation_id',
+        'harvested_at',
+        'declared_fish_count',
+        'declared_average_weight_g',
+        'declared_biomass_kg',
+        'notes',
+        'created_by_id',
+        'created_offline',
+        'created_at',
+    )
+
+    def save(self, *args, **kwargs):
+        """Empêche toute mutation du constat physique après sa création."""
+        if self.pk and not self._state.adding:
+            previous = type(self).objects.filter(pk=self.pk).values(*self.IMMUTABLE_FIELDS).first()
+            if previous is not None and any(
+                previous[field] != getattr(self, field)
+                for field in self.IMMUTABLE_FIELDS
+            ):
+                raise ValidationError(
+                    _('Une récolte finale confirmée ne peut pas être modifiée.')
+                )
+        return super().save(*args, **kwargs)
 
 
 class CycleLog(models.Model):

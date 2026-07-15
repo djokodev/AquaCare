@@ -33,24 +33,45 @@ def translate_production_unit_integrity_error(error: IntegrityError) -> dict[str
             and 'aquaculture_production_unit.name' in message
         ))
     ):
-        return {'name': _('Une unité portant ce nom existe déjà dans cette ferme.')}
+        detail = _('Une unité portant ce nom existe déjà dans cette ferme.')
+        return {
+            'code': 'duplicate_production_unit_name',
+            'field': 'name',
+            'detail': detail,
+            'name': detail,
+        }
     if name in {'aquaculture_production_unit_client_uuid_key', 'aquaculture_production_unit_client_uuid_uniq'} or (
         name is None
         and 'unique constraint failed' in message
         and 'aquaculture_production_unit.client_uuid' in message
     ):
-        return {'client_uuid': _('Cet UUID client est déjà associé à une autre unité.')}
+        detail = _('Cet UUID client est déjà associé à une autre unité.')
+        return {
+            'code': 'production_unit_client_uuid_conflict',
+            'field': 'client_uuid',
+            'detail': detail,
+            'client_uuid': detail,
+        }
     if name == 'unit_calibration_requires_tank_volume' or (
         name is None and 'unit_calibration_requires_tank_volume' in message
     ):
-        return {'detail': _('Les données du bac de calibrage sont invalides.')}
+        return {
+            'code': 'invalid_calibration_tank',
+            'detail': _('Les données du bac de calibrage sont invalides.'),
+        }
     if name == 'uniq_active_allocation_per_unit' or (
         name is None and 'uniq_active_allocation_per_unit' in message
     ):
-        return {'detail': _('Cette unité est déjà occupée par une allocation active.')}
+        return {
+            'code': 'production_unit_already_occupied',
+            'detail': _('Cette unité est déjà occupée par une allocation active.'),
+        }
 
-    logger.warning(
+    logger.exception(
         'Unhandled production-unit integrity constraint',
-        extra={'constraint_name': name, 'error': str(error)},
+        extra={'constraint_name': name},
     )
-    return {'detail': _('Un conflit d’intégrité empêche cette opération. Réessayez.')}
+    return {
+        'code': 'integrity_conflict',
+        'detail': _('Un conflit d’intégrité empêche cette opération. Réessayez.'),
+    }

@@ -544,6 +544,11 @@ class AquacultureService {
       final_harvested_at: string;
       final_count: number;
       final_average_weight: number;
+      client_uuid: string;
+      total_harvested_weight: number;
+      harvest_notes?: string;
+      created_offline: boolean;
+      allow_pending_reconciliation?: boolean;
     }
   ): Promise<CycleHarvestResponse> {
     try {
@@ -565,7 +570,11 @@ class AquacultureService {
       final_harvested_at: string;
       final_count: number;
       final_average_weight: number;
+      client_uuid: string;
+      total_harvested_weight: number;
       harvest_notes?: string;
+      created_offline: boolean;
+      allow_pending_reconciliation?: boolean;
     }
   ): Promise<CycleUnitHarvestResponse> {
     try {
