@@ -155,6 +155,7 @@ export interface CalibrationOperation {
   size_category?: 'small' | 'medium' | 'large' | 'other' | '';
   notes?: string;
   created_offline?: boolean;
+  pending_sync?: boolean;
 }
 
 export interface CalibrationRequest {

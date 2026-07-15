@@ -24,14 +24,30 @@ export default function CalibrationTanksScreen({ navigation }: Props) {
 
   const load = useCallback(async () => {
     setLoading(true);
-    try {
-      setTanks(await aquacultureService.getCalibrationTanks());
-      setError(false);
-    } catch {
-      setError(true);
-    } finally {
-      setLoading(false);
-    }
+    const [serverResult, offlineResult] = await Promise.allSettled([
+      aquacultureService.getCalibrationTanks(),
+      offlineService.getOfflineCalibrationTanks(),
+    ]);
+    const serverTanks = serverResult.status === 'fulfilled' ? serverResult.value : [];
+    const pendingTanks: CalibrationTank[] = offlineResult.status === 'fulfilled'
+      ? offlineResult.value.filter((item) => !item.synced).map((item) => ({
+        id: item.id,
+        client_uuid: item.tankData.client_uuid,
+        farm_profile: '',
+        name: item.tankData.name,
+        volume_m3: item.tankData.volume_m3,
+        is_active: item.tankData.is_active ?? true,
+        is_occupied: false,
+        pending_sync: true,
+        created_offline: true,
+        created_at: new Date(item.timestamp).toISOString(),
+        updated_at: new Date(item.timestamp).toISOString(),
+      }))
+      : [];
+    const serverClientUuids = new Set(serverTanks.map((tank) => tank.client_uuid).filter(Boolean));
+    setTanks([...serverTanks, ...pendingTanks.filter((tank) => !serverClientUuids.has(tank.client_uuid))]);
+    setError(serverResult.status === 'rejected' && pendingTanks.length === 0);
+    setLoading(false);
   }, []);
   useEffect(() => {
     void load();

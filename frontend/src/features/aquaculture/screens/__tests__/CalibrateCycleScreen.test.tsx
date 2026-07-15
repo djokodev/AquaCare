@@ -29,7 +29,10 @@ jest.mock('@/features/aquaculture/services/aquacultureService', () => ({
 }));
 
 jest.mock('@/services/offlineService', () => ({
-  offlineService: { saveCalibrationOperationOffline: jest.fn() },
+  offlineService: {
+    getOfflineCalibrationTanks: jest.fn().mockResolvedValue([]),
+    saveCalibrationOperationOffline: jest.fn(),
+  },
 }));
 
 describe('CalibrateCycleScreen', () => {
@@ -112,5 +115,32 @@ describe('CalibrateCycleScreen', () => {
       'allocation-1',
       expect.objectContaining({ client_uuid: 'operation-uuid' }),
     ));
+  });
+
+  it('cible un bac pending avec son client_uuid', async () => {
+    service.getCalibrationTanks.mockResolvedValue([]);
+    (offlineService.getOfflineCalibrationTanks as jest.Mock).mockResolvedValueOnce([{
+      id: 'offline-tank',
+      tankData: { client_uuid: 'tank-client-uuid', name: 'Bac pending', volume_m3: 8 },
+      timestamp: Date.now(),
+      synced: false,
+    }]);
+    const { getByLabelText, getByText } = render(
+      <CalibrateCycleScreen navigation={navigation} route={route} />,
+    );
+    await waitFor(() => expect(getByText('Bac pending')).toBeTruthy());
+    fireEvent.changeText(getByLabelText('transferredFish'), '100');
+    fireEvent.changeText(getByLabelText('averageWeightGrams'), '120');
+    fireEvent.press(getByText('confirmCalibration'));
+    await waitFor(() => expect(service.calibrateAllocation).toHaveBeenCalledWith(
+      'allocation-1',
+      expect.objectContaining({
+        destination_production_unit_client_uuid: 'tank-client-uuid',
+      }),
+    ));
+    expect(service.calibrateAllocation).toHaveBeenCalledWith(
+      'allocation-1',
+      expect.not.objectContaining({ destination_production_unit_id: expect.anything() }),
+    );
   });
 });

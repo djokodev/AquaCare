@@ -47,21 +47,42 @@ export default function CalibrateCycleScreen({ route, navigation }: Props) {
 
   const loadData = useCallback(async () => {
     setLoading(true);
-    try {
-      const [cycle, nextTanks] = await Promise.all([
-        aquacultureService.getProductionCycle(route.params.sourceCycleId),
-        aquacultureService.getCalibrationTanks(),
-      ]);
-      const activeTanks = nextTanks.filter((tank) => tank.is_active);
-      setSource(cycle);
-      setTanks(activeTanks);
-      setTankId((current) => activeTanks.some((tank) => tank.id === current) ? current : activeTanks[0]?.id ?? '');
-      setLoadError(false);
-    } catch {
+    const [cycleResult, tanksResult, offlineResult] = await Promise.allSettled([
+      aquacultureService.getProductionCycle(route.params.sourceCycleId),
+      aquacultureService.getCalibrationTanks(),
+      offlineService.getOfflineCalibrationTanks(),
+    ]);
+    if (cycleResult.status === 'rejected') {
       setLoadError(true);
-    } finally {
       setLoading(false);
+      return;
     }
+    const serverTanks = tanksResult.status === 'fulfilled' ? tanksResult.value : [];
+    const pendingTanks: CalibrationTank[] = offlineResult.status === 'fulfilled'
+      ? offlineResult.value.filter((item) => !item.synced).map((item) => ({
+        id: item.id,
+        client_uuid: item.tankData.client_uuid,
+        farm_profile: '',
+        name: item.tankData.name,
+        volume_m3: item.tankData.volume_m3,
+        is_active: item.tankData.is_active ?? true,
+        is_occupied: false,
+        pending_sync: true,
+        created_offline: true,
+        created_at: new Date(item.timestamp).toISOString(),
+        updated_at: new Date(item.timestamp).toISOString(),
+      }))
+      : [];
+    const serverClientUuids = new Set(serverTanks.map((tank) => tank.client_uuid).filter(Boolean));
+    const activeTanks = [
+      ...serverTanks,
+      ...pendingTanks.filter((tank) => !serverClientUuids.has(tank.client_uuid)),
+    ].filter((tank) => tank.is_active);
+    setSource(cycleResult.value);
+    setTanks(activeTanks);
+    setTankId((current) => activeTanks.some((tank) => tank.id === current) ? current : activeTanks[0]?.id ?? '');
+    setLoadError(tanksResult.status === 'rejected' && activeTanks.length === 0);
+    setLoading(false);
   }, [route.params.sourceCycleId]);
 
   useEffect(() => {
@@ -74,9 +95,9 @@ export default function CalibrateCycleScreen({ route, navigation }: Props) {
     const directWeight = Number(weight.replace(',', '.'));
     const sampledCount = Number(sampleCount);
     const sampledWeight = Number(sampleWeight.replace(',', '.'));
-    const effectiveWeight = directWeight > 0
-      ? directWeight
-      : sampledCount > 0 && sampledWeight > 0 ? sampledWeight / sampledCount : 0;
+    const effectiveWeight = sampledCount > 0 && sampledWeight > 0
+      ? sampledWeight / sampledCount
+      : directWeight > 0 ? directWeight : 0;
     const tank = tanks.find((item) => item.id === tankId);
     if (!source || !tank || !transferredCount || !effectiveWeight) return null;
     const sourceCount = route.params.sourceCurrentCount ?? source.current_count;
@@ -120,10 +141,14 @@ export default function CalibrateCycleScreen({ route, navigation }: Props) {
       Alert.alert(t('error'), t('calibrationInvalidDate'));
       return;
     }
+    const destinationTank = tanks.find((tank) => tank.id === tankId);
+    if (!destinationTank) return;
     const payload: CalibrationRequest = {
       client_uuid: aquacultureService.prepareOfflineData({}).client_uuid,
       source_allocation_id: sourceAllocationId,
-      destination_production_unit_id: tankId,
+      ...(destinationTank.pending_sync
+        ? { destination_production_unit_client_uuid: destinationTank.client_uuid }
+        : { destination_production_unit_id: destinationTank.id }),
       calibrated_at: calibratedAt.toISOString(),
       transferred_count: Number(count),
       ...(Number(weight.replace(',', '.')) > 0 ? { transferred_average_weight_g: Number(weight.replace(',', '.')) } : {}),

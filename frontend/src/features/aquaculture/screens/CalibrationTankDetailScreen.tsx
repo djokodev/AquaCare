@@ -6,6 +6,7 @@ import type { StackScreenProps } from '@react-navigation/stack';
 import { AppText, Button, Card, EmptyState, ErrorState, LoadingState, Screen } from '@/components/ui';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
 import type { RootStackParamList } from '@/navigation/MainNavigator';
+import { offlineService } from '@/services/offlineService';
 import { spacing } from '@/theme';
 import type { CalibrationOperation, CalibrationTank } from '@/types/aquaculture';
 
@@ -21,12 +22,42 @@ export default function CalibrationTankDetailScreen({ route, navigation }: Props
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [nextTank, nextOperations] = await Promise.all([
+      const [nextTank, nextOperations, offlineOperations] = await Promise.all([
         aquacultureService.getCalibrationTank(route.params.tankId),
         aquacultureService.getCalibrationOperations(route.params.tankId),
+        offlineService.getOfflineCalibrationOperations(),
       ]);
       setTank(nextTank);
-      setOperations(nextOperations);
+      const serverClientUuids = new Set(nextOperations.map((operation) => operation.client_uuid));
+      const pendingOperations: CalibrationOperation[] = offlineOperations
+        .filter((item) => !item.synced)
+        .filter((item) => item.operationData.destination_production_unit_id === route.params.tankId)
+        .filter((item) => !serverClientUuids.has(item.operationData.client_uuid))
+        .map((item) => ({
+          id: item.id,
+          client_uuid: item.operationData.client_uuid,
+          source_allocation: item.sourceAllocationId,
+          destination_allocation: '',
+          source_unit_name: item.sourceAllocationId,
+          destination_unit_name: nextTank.name,
+          calibrated_at: item.operationData.calibrated_at,
+          transferred_count: item.operationData.transferred_count,
+          transferred_average_weight_g: item.operationData.transferred_average_weight_g ?? (
+            Number(item.operationData.sample_total_weight_g ?? 0) / Number(item.operationData.sample_count ?? 1)
+          ),
+          transferred_biomass_kg: (
+            item.operationData.transferred_count * (
+              item.operationData.transferred_average_weight_g ?? (
+                Number(item.operationData.sample_total_weight_g ?? 0) / Number(item.operationData.sample_count ?? 1)
+              )
+            ) / 1000
+          ),
+          size_category: item.operationData.size_category,
+          notes: item.operationData.notes,
+          created_offline: true,
+          pending_sync: true,
+        }));
+      setOperations([...nextOperations, ...pendingOperations]);
       setError(false);
     } catch {
       setError(true);
@@ -87,6 +118,7 @@ export default function CalibrationTankDetailScreen({ route, navigation }: Props
               })}</AppText>
               <AppText>{t('transferredBiomassValue', { biomass: operation.transferred_biomass_kg })}</AppText>
               <AppText>{new Date(operation.calibrated_at).toLocaleString()}</AppText>
+              {operation.pending_sync ? <AppText color="warning">{t('calibrationPending')}</AppText> : null}
             </Card>
           );
         })}
