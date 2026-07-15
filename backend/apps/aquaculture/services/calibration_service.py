@@ -5,6 +5,7 @@ from datetime import timedelta
 from decimal import Decimal
 
 from django.db import IntegrityError, transaction
+from django.db.models import Q
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from notifications.services import NotificationService
@@ -71,10 +72,18 @@ class CalibrationService:
             for unit in ProductionUnit.objects.select_for_update().filter(pk__in=unit_ids).order_by('pk')
         }
         destination_unit = locked_units[destination_production_unit.pk]
-        source = (
+        locked_allocations = list(
             CycleUnitAllocation.objects.select_for_update()
             .select_related('cycle__farm_profile', 'production_unit')
-            .get(pk=source_allocation.pk)
+            .prefetch_related('calibration_operations_in')
+            .filter(
+                Q(pk=source_allocation.pk)
+                | Q(production_unit=destination_unit)
+            )
+            .order_by('pk')
+        )
+        source = next(
+            allocation for allocation in locked_allocations if allocation.pk == source_allocation.pk
         )
         cls._validate_context(
             source=source,
@@ -85,13 +94,10 @@ class CalibrationService:
             transferred_average_weight_g=effective_weight,
         )
 
-        destination_sessions = list(
-            CycleUnitAllocation.objects.select_for_update()
-            .select_related('cycle', 'production_unit')
-            .prefetch_related('calibration_operations_in')
-            .filter(production_unit=destination_unit)
-            .order_by('cycle__start_date', 'created_at')
-        )
+        destination_sessions = [
+            allocation for allocation in locked_allocations
+            if allocation.production_unit_id == destination_unit.pk
+        ]
         destination = cls._resolve_destination_session(
             destination_sessions,
             calibrated_at=calibrated_at,
@@ -196,6 +202,13 @@ class CalibrationService:
         for session in destination_sessions:
             started_at = AllocationLedgerService.session_started_at(session)
             closed_at = AllocationLedgerService.session_closed_at(session)
+            if (
+                session.status == CycleUnitAllocation.STATUS_HARVESTED
+                and closed_at is None
+            ):
+                raise BusinessRuleViolation(_(
+                    "La session historique de ce bac ne peut pas être résolue sans heure de récolte métier."
+                ))
             if closed_at is not None and closed_at <= started_at:
                 raise BusinessRuleViolation(
                     _('La chronologie des sessions de ce bac est invalide.')
@@ -302,7 +315,17 @@ class CalibrationService:
             or destination_unit.farm_profile_id != source.cycle.farm_profile_id
         ):
             raise BusinessRuleViolation(_('La source et le bac doivent appartenir à votre ferme.'))
-        if source.status != CycleUnitAllocation.STATUS_ACTIVE or source.cycle.status != 'active':
+        if source.status == CycleUnitAllocation.STATUS_HARVESTED:
+            source_closed_at = AllocationLedgerService.session_closed_at(source)
+            if source_closed_at is None:
+                raise BusinessRuleViolation(_(
+                    "La session source historique ne peut pas être résolue sans heure de récolte métier."
+                ))
+            if calibrated_at >= source_closed_at:
+                raise BusinessRuleViolation(_(
+                    "Le calibrage doit être strictement antérieur à la clôture de la source."
+                ))
+        elif source.status != CycleUnitAllocation.STATUS_ACTIVE or source.cycle.status != 'active':
             raise BusinessRuleViolation(_('Cette allocation source est inactive.'))
         if source.production_unit.status != 'active' or destination_unit.status != 'active':
             raise BusinessRuleViolation(_('Les unités source et destination doivent être actives.'))

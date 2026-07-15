@@ -22,6 +22,7 @@ from typing import Any, cast
 
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db.models import Sum
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from drf_spectacular.utils import extend_schema_field
 from notifications.serializers import (
@@ -218,6 +219,7 @@ class CycleUnitAllocationSerializer(serializers.ModelSerializer):
             'status',
             'status_display',
             'harvested_at',
+            'final_harvested_at',
             'final_harvest_date',
             'final_harvest_notes',
             'final_fish_count',
@@ -239,6 +241,7 @@ class CycleUnitAllocationSerializer(serializers.ModelSerializer):
             'status',
             'status_display',
             'harvested_at',
+            'final_harvested_at',
             'final_harvest_date',
             'final_harvest_notes',
             'final_fish_count',
@@ -1381,7 +1384,14 @@ class HarvestSerializer(serializers.Serializer):
     """
     Sérialiseur pour les données de récolte d'un cycle.
     """
-    harvest_date = serializers.DateField(help_text="Date de récolte du cycle")
+    harvest_date = serializers.DateField(
+        required=False,
+        help_text="Date de récolte du cycle, compatible avec les anciens clients",
+    )
+    final_harvested_at = serializers.DateTimeField(
+        required=False,
+        help_text="Datetime métier avec timezone de la récolte finale",
+    )
     final_count = serializers.IntegerField(min_value=0, help_text="Nombre final de poissons récoltés")
     final_average_weight = serializers.DecimalField(
         max_digits=6,
@@ -1411,6 +1421,36 @@ class HarvestSerializer(serializers.Serializer):
         if value > date.today():
             raise serializers.ValidationError(_("Date de récolte ne peut être dans le futur"))
         return value
+
+    def validate(self, attrs):
+        harvest_date = attrs.get('harvest_date')
+        final_harvested_at = attrs.get('final_harvested_at')
+        if final_harvested_at is None:
+            if harvest_date is None:
+                raise serializers.ValidationError({
+                    'final_harvested_at': _("La date et l'heure métier de récolte sont requises."),
+                })
+            # Legacy clients remain usable only for a harvest recorded today.  A
+            # server timestamp must never fabricate the time of a backdated event.
+            if harvest_date != timezone.localdate():
+                raise serializers.ValidationError({
+                    'final_harvested_at': _(
+                        "La date et l'heure métier sont requises pour une récolte antidatée."
+                    ),
+                })
+            final_harvested_at = timezone.now()
+            attrs['final_harvested_at'] = final_harvested_at
+        if timezone.is_naive(final_harvested_at):
+            raise serializers.ValidationError({
+                'final_harvested_at': _("Le datetime de récolte doit inclure un fuseau horaire."),
+            })
+        local_harvest_date = timezone.localtime(final_harvested_at).date()
+        if harvest_date is not None and harvest_date != local_harvest_date:
+            raise serializers.ValidationError({
+                'harvest_date': _("La date de récolte doit correspondre au datetime métier."),
+            })
+        attrs['harvest_date'] = local_harvest_date
+        return attrs
 
 
 class PartialHarvestSerializer(serializers.Serializer):

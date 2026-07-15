@@ -135,9 +135,11 @@ class TestAnalyticsServiceUpdateMetrics:
         destination_curve = AnalyticsService._build_allocation_survival_curve(
             first.destination_allocation.cycle
         )
-        assert source_curve[-1]['count'] == 800
+        assert source_curve[-1]['count'] == 1000
+        assert source_curve[-1]['stock_count'] == 800
         assert source_curve[-1]['biological_survival_rate'] == 100.0
         assert destination_curve[-1]['count'] == 200
+        assert destination_curve[-1]['stock_count'] == 200
 
         CalibrationService.calibrate(
             source_allocation=source,
@@ -155,7 +157,8 @@ class TestAnalyticsServiceUpdateMetrics:
             average_weight_g=Decimal('250.00'),
         )
         curve_after_partial = AnalyticsService._build_allocation_survival_curve(destination.cycle)
-        assert [point['count'] for point in curve_after_partial][-3:] == [200, 300, 250]
+        assert [point['count'] for point in curve_after_partial][-3:] == [200, 300, 300]
+        assert [point['stock_count'] for point in curve_after_partial][-3:] == [200, 300, 250]
 
         ProductionCycleService.harvest_cycle_unit_allocation(
             destination,
@@ -164,7 +167,8 @@ class TestAnalyticsServiceUpdateMetrics:
             final_average_weight=Decimal('300.00'),
         )
         final_curve = AnalyticsService._build_allocation_survival_curve(destination.cycle)
-        assert final_curve[-1]['count'] == 0
+        assert final_curve[-1]['count'] == 300
+        assert final_curve[-1]['stock_count'] == 0
         assert final_curve[-1]['biological_survival_rate'] == 100.0
 
 

@@ -541,6 +541,7 @@ class AquacultureService {
     id: string,
     harvestData: {
       harvest_date: string;
+      final_harvested_at: string;
       final_count: number;
       final_average_weight: number;
     }
@@ -561,6 +562,7 @@ class AquacultureService {
     allocationId: string,
     harvestData: {
       harvest_date: string;
+      final_harvested_at: string;
       final_count: number;
       final_average_weight: number;
       harvest_notes?: string;

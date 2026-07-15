@@ -558,6 +558,12 @@ class CycleUnitAllocation(models.Model):
         blank=True,
         verbose_name=_("Récoltée le"),
     )
+    final_harvested_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name=_("Récolte finale effectuée le"),
+        help_text=_("Instant métier auquel la récolte finale a physiquement eu lieu."),
+    )
     final_harvest_date = models.DateField(
         null=True,
         blank=True,

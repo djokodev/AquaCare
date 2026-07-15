@@ -1,12 +1,12 @@
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import IntegrityError, transaction
 from django.db.models import Q
-from django.utils.translation import gettext_lazy as _
 from rest_framework import permissions, serializers, viewsets
 
 from ..domain.exceptions import BusinessRuleViolation
 from ..models import CalibrationOperation, ProductionUnit
 from ..serializers import CalibrationOperationSerializer, CalibrationTankSerializer
+from ..services.integrity_error_service import translate_production_unit_integrity_error
 from ..services.production_unit_service import ProductionUnitLifecycleService
 
 
@@ -49,19 +49,13 @@ class CalibrationTankViewSet(viewsets.ModelViewSet):
                     surface_m2=None,
                     status='active',
                 )
-        except (DjangoValidationError, IntegrityError) as exc:
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(exc.message_dict or exc.messages) from exc
+        except IntegrityError as exc:
             existing = ProductionUnit.objects.filter(client_uuid=client_uuid).first() if client_uuid else None
             if existing is None:
-                conflicting_name = ProductionUnit.objects.filter(
-                    farm_profile=farm_profile,
-                    name__iexact=serializer.validated_data['name'].strip(),
-                ).exists()
-                if conflicting_name:
-                    raise serializers.ValidationError(
-                        {'name': _("Une unité portant ce nom existe déjà dans cette ferme.")}
-                    ) from exc
                 raise serializers.ValidationError(
-                    {'detail': _("Le bac n'a pas pu être créé à cause d'un conflit concurrent.")}
+                    translate_production_unit_integrity_error(exc)
                 ) from exc
             try:
                 ProductionUnitLifecycleService.validate_idempotent_payload(
@@ -94,9 +88,7 @@ class CalibrationTankViewSet(viewsets.ModelViewSet):
         except DjangoValidationError as exc:
             raise serializers.ValidationError(exc.message_dict or exc.messages) from exc
         except IntegrityError as exc:
-            raise serializers.ValidationError(
-                {'name': _('Une unité portant ce nom existe déjà dans cette ferme.')}
-            ) from exc
+            raise serializers.ValidationError(translate_production_unit_integrity_error(exc)) from exc
 
     def perform_destroy(self, instance):
         try:

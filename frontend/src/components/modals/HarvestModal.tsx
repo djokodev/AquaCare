@@ -38,6 +38,11 @@ const toNumber = (value: number | string | null | undefined): number => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
+const localHarvestDate = (value: Date): string => {
+  const offset = value.getTimezoneOffset() * 60_000;
+  return new Date(value.getTime() - offset).toISOString().slice(0, 10);
+};
+
 const getAllocationInitialAverageWeight = (allocation: CycleUnitAllocation | null | undefined): number => {
   if (!allocation) return 0;
   if (allocation.initial_fish_count > 0 && allocation.initial_biomass_kg != null) {
@@ -80,7 +85,8 @@ export default function HarvestModal({
   const availableAverageWeight = isUnitScope ? getAllocationCurrentAverageWeight(unitAllocation) : cycle?.current_average_weight ?? 0;
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState<HarvestData>({
-    harvest_date: new Date().toISOString().split('T')[0],
+    harvest_date: localHarvestDate(new Date()),
+    final_harvested_at: new Date().toISOString(),
     final_count: availableFishCount,
     final_average_weight: availableAverageWeight,
     total_harvested_weight: 0,
@@ -103,7 +109,8 @@ export default function HarvestModal({
   useEffect(() => {
     if (!visible || (isUnitScope ? !unitAllocation : !cycle)) return;
     setFormData({
-      harvest_date: new Date().toISOString().split('T')[0],
+      harvest_date: localHarvestDate(new Date()),
+      final_harvested_at: new Date().toISOString(),
       final_count: availableFishCount,
       final_average_weight: availableAverageWeight,
       total_harvested_weight: 0,
@@ -118,6 +125,10 @@ export default function HarvestModal({
   const validateForm = () => {
     if (!formData.harvest_date) {
       Alert.alert(t('error'), t('harvestDateRequired'));
+      return false;
+    }
+    if (!formData.final_harvested_at || Number.isNaN(Date.parse(formData.final_harvested_at))) {
+      Alert.alert(t('error'), t('harvestDatetimeRequired'));
       return false;
     }
     if (formData.final_count <= 0) {
@@ -192,6 +203,9 @@ export default function HarvestModal({
               <AppText variant="cardTitle">{t('harvestData')}</AppText>
               <FormField label={t('harvestDate')} required>
                 <TextField value={formData.harvest_date} onChangeText={(value) => handleInputChange('harvest_date', value)} placeholder={t('dateFormatPlaceholder')} accessibilityLabel={t('harvestDate')} />
+              </FormField>
+              <FormField label={t('harvestDatetime')} required hint={t('harvestDatetimeHint')}>
+                <TextField value={formData.final_harvested_at} onChangeText={(value) => handleInputChange('final_harvested_at', value)} placeholder={t('harvestDatetimePlaceholder')} accessibilityLabel={t('harvestDatetime')} />
               </FormField>
               <FormField label={t('finalCount')} required>
                 <TextField value={String(formData.final_count)} onChangeText={(value) => handleInputChange('final_count', parseInt(value, 10) || 0)} keyboardType="numeric" placeholder={t('enterFinalCount')} accessibilityLabel={t('finalCount')} />

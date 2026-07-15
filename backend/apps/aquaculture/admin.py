@@ -42,6 +42,7 @@ from .models import (
     ReportDispatchLog,
     SanitaryLog,
 )
+from .services.integrity_error_service import translate_production_unit_integrity_error
 from .services.production_unit_service import ProductionUnitLifecycleService
 
 logger = logging.getLogger(__name__)
@@ -546,9 +547,8 @@ class ProductionUnitAdmin(AquacultureSecuredAdmin):
         try:
             super().save_model(request, obj, form, change)
         except IntegrityError as exc:
-            raise ValidationError(
-                _("Une unité portant ce nom existe déjà dans cette ferme.")
-            ) from exc
+            error = translate_production_unit_integrity_error(exc)
+            raise ValidationError(error) from exc
 
     def delete_model(self, request, obj):
         try:

@@ -8,7 +8,6 @@ from accounts.models import FarmProfile
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import IntegrityError
 from django.http import Http404
-from django.utils.translation import gettext_lazy as _
 from drf_spectacular.utils import OpenApiExample, OpenApiResponse, extend_schema
 from rest_framework import permissions, status
 from rest_framework.response import Response
@@ -19,6 +18,7 @@ from ..services.cycle_launch_application_service import (
     CycleLaunchApplicationService,
     CycleLaunchIdempotencyConflict,
 )
+from ..services.integrity_error_service import translate_production_unit_integrity_error
 from ..throttles import AquacultureProductionPlanSetupThrottle
 
 logger = logging.getLogger(__name__)
@@ -146,9 +146,7 @@ class CycleLaunchView(APIView):
         except IntegrityError as exc:
             from rest_framework.exceptions import ValidationError
 
-            raise ValidationError({
-                'name': _('Une unité portant ce nom existe déjà dans cette ferme.')
-            }) from exc
+            raise ValidationError(translate_production_unit_integrity_error(exc)) from exc
 
         response_serializer = CycleLaunchResponseSerializer(
             {

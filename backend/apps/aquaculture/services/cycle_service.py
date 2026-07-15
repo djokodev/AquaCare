@@ -193,6 +193,7 @@ class ProductionCycleService(BaseService):
         harvest_date: date,
         final_count: int,
         final_average_weight: Decimal,
+        final_harvested_at: datetime | None = None,
         harvest_notes: str = ""
     ) -> ProductionCycle:
         """
@@ -256,6 +257,7 @@ class ProductionCycleService(BaseService):
                 harvest_result = ProductionCycleService.harvest_cycle_unit_allocation(
                     allocation,
                     harvest_date=harvest_date,
+                    final_harvested_at=final_harvested_at,
                     final_count=allocation.current_fish_count,
                     final_average_weight=final_average_weight,
                     harvest_notes=harvest_notes,
@@ -314,6 +316,7 @@ class ProductionCycleService(BaseService):
         ProductionCycleService._finalize_cycle_unit_allocations_on_cycle_harvest(
             cycle=cycle,
             harvest_date=harvest_date,
+            final_harvested_at=final_harvested_at,
             final_average_weight=final_average_weight,
             harvest_notes=harvest_notes,
         )
@@ -744,6 +747,7 @@ class ProductionCycleService(BaseService):
         harvest_date: date,
         final_count: int,
         final_average_weight: Decimal,
+        final_harvested_at: datetime | None = None,
         harvest_notes: str = "",
     ) -> tuple[ProductionCycle, CycleUnitAllocation]:
         """Finalise complètement une unité de production liée à un cycle."""
@@ -780,6 +784,24 @@ class ProductionCycleService(BaseService):
             raise InvalidHarvestDataError(
                 _("Date de récolte ne peut être dans le futur")
             )
+        if final_harvested_at is not None:
+            if timezone.is_naive(final_harvested_at):
+                raise InvalidHarvestDataError(_("Le datetime de récolte doit inclure un fuseau horaire."))
+            local_harvest_date = timezone.localtime(final_harvested_at).date()
+            if local_harvest_date != harvest_date:
+                raise InvalidHarvestDataError(
+                    _("La date de récolte doit correspondre au datetime métier.")
+                )
+            if final_harvested_at > timezone.now() + timedelta(minutes=10):
+                raise InvalidHarvestDataError(_("Le datetime de récolte ne peut être dans le futur."))
+            cycle_started_at = timezone.make_aware(
+                datetime.combine(locked_cycle.start_date, time.min),
+                timezone.get_current_timezone(),
+            )
+            if final_harvested_at < cycle_started_at:
+                raise InvalidHarvestDataError(
+                    _("Le datetime de récolte ne peut être avant le début du cycle.")
+                )
 
         if final_count < 0:
             raise InvalidHarvestDataError(_("Nombre final de poissons invalide"))
@@ -823,6 +845,7 @@ class ProductionCycleService(BaseService):
         locked_allocation.final_average_weight_g = final_average_weight
         locked_allocation.final_biomass_kg = final_biomass
         locked_allocation.final_harvest_date = harvest_date
+        locked_allocation.final_harvested_at = final_harvested_at
         locked_allocation.final_harvest_notes = harvest_notes
         locked_allocation.harvested_at = now
         locked_allocation.status = CycleUnitAllocation.STATUS_HARVESTED
@@ -834,6 +857,7 @@ class ProductionCycleService(BaseService):
                 'final_average_weight_g',
                 'final_biomass_kg',
                 'final_harvest_date',
+                'final_harvested_at',
                 'final_harvest_notes',
                 'harvested_at',
                 'status',
@@ -1152,6 +1176,7 @@ class ProductionCycleService(BaseService):
         *,
         cycle: ProductionCycle,
         harvest_date: date,
+        final_harvested_at: datetime | None = None,
         final_average_weight: Decimal,
         harvest_notes: str = "",
     ) -> None:
@@ -1179,6 +1204,7 @@ class ProductionCycleService(BaseService):
                 current_average_weight,
             )
             allocation.final_harvest_date = harvest_date
+            allocation.final_harvested_at = final_harvested_at
             allocation.final_harvest_notes = harvest_notes
             allocation.harvested_at = now
             allocation.status = CycleUnitAllocation.STATUS_HARVESTED
@@ -1190,6 +1216,7 @@ class ProductionCycleService(BaseService):
                     'final_average_weight_g',
                     'final_biomass_kg',
                     'final_harvest_date',
+                    'final_harvested_at',
                     'final_harvest_notes',
                     'harvested_at',
                     'status',

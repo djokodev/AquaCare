@@ -506,6 +506,7 @@ export interface CycleUnitAllocation {
   status?: "active" | "harvested" | "inactive";
   status_display?: string;
   harvested_at?: string | null;
+  final_harvested_at?: string | null;
   final_harvest_date?: string | null;
   final_harvest_notes?: string | null;
   final_fish_count?: number | null;
@@ -815,6 +816,7 @@ export interface SanitaryLogForm {
 
 export interface HarvestData {
   harvest_date: string;
+  final_harvested_at: string;
   final_count: number;
   final_average_weight: number;
   total_harvested_weight: number;

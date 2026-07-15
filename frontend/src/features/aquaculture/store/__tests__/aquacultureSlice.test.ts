@@ -180,6 +180,7 @@ describe('features/aquaculture/store/aquacultureSlice', () => {
         id: 'cycle-1',
         harvestData: {
           harvest_date: '2026-05-01',
+          final_harvested_at: '2026-05-01T12:00:00+01:00',
           final_count: 850,
           final_average_weight: 250,
           total_harvested_weight: 212.5,

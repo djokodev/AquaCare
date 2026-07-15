@@ -38,14 +38,14 @@ class AllocationLedgerService:
         """Return the business closure datetime used by session interval resolution."""
         if allocation.status != CycleUnitAllocation.STATUS_HARVESTED:
             return None
-        if allocation.final_harvest_date is None:
-            raise BusinessRuleViolation(_("Une session récoltée doit avoir une date de clôture."))
-        recorded_at = allocation.harvested_at or cls._at(allocation.final_harvest_date, time.max)
-        local_recorded_at = timezone.localtime(recorded_at)
-        return cls._at(
-            allocation.final_harvest_date,
-            local_recorded_at.time().replace(tzinfo=None),
-        )
+        if allocation.final_harvested_at is not None:
+            return allocation.final_harvested_at
+        # Legacy rows only contain a date.  Their real closing hour is unknown;
+        # returning None prevents a fabricated technical/server timestamp from
+        # silently resolving a historical calibration to the wrong session.
+        if allocation.final_harvest_date is not None:
+            return None
+        raise BusinessRuleViolation(_("Une session récoltée doit avoir une date de clôture."))
 
     @classmethod
     def replay(
@@ -91,6 +91,10 @@ class AllocationLedgerService:
             and allocation.final_harvest_date is not None
         ):
             harvested_at = cls.session_closed_at(allocation)
+            # The end-of-day fallback is only used to rebuild aggregate legacy
+            # metrics. It is never exposed by ``session_closed_at`` and can
+            # therefore never resolve a historical calibration session.
+            harvested_at = harvested_at or cls._at(allocation.final_harvest_date, time.max)
             events.append((
                 harvested_at,
                 harvested_at,

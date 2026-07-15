@@ -202,6 +202,7 @@ class TestCalibrationService:
         ProductionCycleService.harvest_cycle_unit_allocation(
             source,
             harvest_date=timezone.localdate(),
+            final_harvested_at=timezone.now(),
             final_count=800,
             final_average_weight=Decimal('250.00'),
         )
@@ -214,6 +215,7 @@ class TestCalibrationService:
         ProductionCycleService.harvest_cycle_unit_allocation(
             destination,
             harvest_date=timezone.localdate(),
+            final_harvested_at=timezone.now(),
             final_count=200,
             final_average_weight=Decimal('250.00'),
         )
@@ -234,7 +236,7 @@ class TestCalibrationService:
         second_operation, _, _ = self.calibrate(
             source,
             tank,
-            calibrated_at=destination.harvested_at + timedelta(seconds=1),
+            calibrated_at=destination.final_harvested_at + timedelta(seconds=1),
             transferred_count=100,
         )
         assert second_operation.destination_allocation.cycle_id != destination.cycle_id
@@ -303,6 +305,7 @@ class TestCalibrationService:
         ProductionCycleService.harvest_cycle_unit_allocation(
             allocation=first.destination_allocation,
             harvest_date=timezone.localdate(),
+            final_harvested_at=timezone.now(),
             final_count=200,
             final_average_weight=Decimal('300.00'),
         )
@@ -312,7 +315,7 @@ class TestCalibrationService:
         second, _, _ = self.calibrate(
             source,
             tank,
-            calibrated_at=first.destination_allocation.harvested_at + timedelta(seconds=1),
+            calibrated_at=first.destination_allocation.final_harvested_at + timedelta(seconds=1),
             transferred_count=100,
             transferred_average_weight_g=Decimal('300.00'),
         )
@@ -332,22 +335,20 @@ class TestCalibrationService:
         ProductionCycleService.harvest_cycle_unit_allocation(
             destination,
             harvest_date=day,
+            final_harvested_at=self.at(day, 18),
             final_count=200,
             final_average_weight=Decimal('300.00'),
         )
-        destination.final_fish_count = 300
-        destination.harvested_at = self.at(day, 18)
-        destination.save(update_fields=['final_fish_count', 'harvested_at'])
+        with pytest.raises(BusinessRuleViolation):
+            self.calibrate(
+                source,
+                tank,
+                calibrated_at=self.at(day, 12),
+                transferred_count=100,
+                transferred_average_weight_g=Decimal('300.00'),
+            )
 
-        historical, _, _ = self.calibrate(
-            source,
-            tank,
-            calibrated_at=self.at(day, 12),
-            transferred_count=100,
-            transferred_average_weight_g=Decimal('300.00'),
-        )
-
-        assert historical.destination_allocation_id == destination.id
+        assert CalibrationOperation.objects.count() == 1
         assert tank.cycle_allocations.count() == 1
         assert tank.cycle_allocations.filter(status=CycleUnitAllocation.STATUS_ACTIVE).count() == 0
 
@@ -361,11 +362,10 @@ class TestCalibrationService:
         ProductionCycleService.harvest_cycle_unit_allocation(
             first.destination_allocation,
             harvest_date=day,
+            final_harvested_at=self.at(day, 18),
             final_count=200,
             final_average_weight=Decimal('300.00'),
         )
-        first.destination_allocation.harvested_at = self.at(day, 18)
-        first.destination_allocation.save(update_fields=['harvested_at'])
 
         later, _, _ = self.calibrate(
             source,
@@ -389,11 +389,10 @@ class TestCalibrationService:
         ProductionCycleService.harvest_cycle_unit_allocation(
             first.destination_allocation,
             harvest_date=day,
+            final_harvested_at=self.at(day, 18),
             final_count=200,
             final_average_weight=Decimal('300.00'),
         )
-        first.destination_allocation.harvested_at = self.at(day, 18)
-        first.destination_allocation.save(update_fields=['harvested_at'])
 
         with pytest.raises(BusinessRuleViolation):
             self.calibrate(
@@ -419,11 +418,10 @@ class TestCalibrationService:
         ProductionCycleService.harvest_cycle_unit_allocation(
             first.destination_allocation,
             harvest_date=day,
+            final_harvested_at=self.at(day, 18),
             final_count=200,
             final_average_weight=Decimal('300.00'),
         )
-        first.destination_allocation.harvested_at = self.at(day, 18)
-        first.destination_allocation.save(update_fields=['harvested_at'])
         later, _, _ = self.calibrate(source, tank, calibrated_at=self.at(day, 20), transferred_count=100)
 
         backdated, _, _ = self.calibrate(

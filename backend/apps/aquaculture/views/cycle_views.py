@@ -337,6 +337,7 @@ class ProductionCycleViewSet(viewsets.ModelViewSet):
             cycle=cycle,
             command=HarvestCycleCommand(
                 harvest_date=serializer.validated_data['harvest_date'],
+                final_harvested_at=serializer.validated_data['final_harvested_at'],
                 final_count=serializer.validated_data['final_count'],
                 final_average_weight=serializer.validated_data['final_average_weight'],
                 harvest_notes=serializer.validated_data.get('harvest_notes', ''),

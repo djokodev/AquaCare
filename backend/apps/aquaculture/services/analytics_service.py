@@ -750,7 +750,7 @@ class AnalyticsService(BaseService):
 
     @staticmethod
     def _build_allocation_survival_curve(cycle: ProductionCycle) -> list[dict]:
-        """Build the legacy curve as present stock, with biological survival explicit."""
+        """Build a backward-compatible biological survival curve plus stock data."""
         from .allocation_ledger_service import AllocationLedgerService
 
         changes: dict[datetime, dict[str, int]] = {}
@@ -793,16 +793,20 @@ class AnalyticsService(BaseService):
             biological_survivors = max(0, biological_survivors)
             present = max(0, present)
             stock_rate = float(present / introduced * 100) if introduced else 0.0
+            biological_rate = (
+                float(biological_survivors / introduced * 100)
+                if introduced else 0.0
+            )
             points.append({
                 'date': timezone.localtime(event_at).date().isoformat(),
                 'event_at': event_at.isoformat(),
-                'count': present,
-                'rate': stock_rate,
+                # count/rate are the historical public survival contract.
+                'count': biological_survivors,
+                'rate': biological_rate,
+                'biological_survival_count': biological_survivors,
+                'biological_survival_rate': biological_rate,
+                'stock_count': present,
                 'stock_remaining_rate': stock_rate,
-                'biological_survival_rate': (
-                    float(biological_survivors / introduced * 100)
-                    if introduced else 0.0
-                ),
                 'source': 'allocation_ledger',
             })
         return points

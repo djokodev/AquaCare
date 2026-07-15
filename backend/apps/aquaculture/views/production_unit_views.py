@@ -38,6 +38,7 @@ from ..services import (
     ProductionUnitDashboardService,
 )
 from ..services.calibration_service import CalibrationService
+from ..services.integrity_error_service import translate_production_unit_integrity_error
 from ..services.production_unit_service import ProductionUnitLifecycleService
 
 
@@ -74,9 +75,7 @@ class ProductionUnitViewSet(viewsets.ModelViewSet):
         except DjangoValidationError as exc:
             raise serializers.ValidationError(exc.message_dict or exc.messages) from exc
         except IntegrityError as exc:
-            raise serializers.ValidationError(
-                {'name': _('Une unité portant ce nom existe déjà dans cette ferme.')}
-            ) from exc
+            raise serializers.ValidationError(translate_production_unit_integrity_error(exc)) from exc
 
     @transaction.atomic
     def perform_update(self, serializer):
@@ -91,9 +90,7 @@ class ProductionUnitViewSet(viewsets.ModelViewSet):
         except DjangoValidationError as exc:
             raise serializers.ValidationError(exc.message_dict or exc.messages) from exc
         except IntegrityError as exc:
-            raise serializers.ValidationError(
-                {'name': _('Une unité portant ce nom existe déjà dans cette ferme.')}
-            ) from exc
+            raise serializers.ValidationError(translate_production_unit_integrity_error(exc)) from exc
 
     def perform_destroy(self, instance):
         try:
@@ -214,6 +211,7 @@ class CycleUnitAllocationViewSet(viewsets.ModelViewSet):
             allocation=allocation,
             command=HarvestCycleCommand(
                 harvest_date=serializer.validated_data['harvest_date'],
+                final_harvested_at=serializer.validated_data['final_harvested_at'],
                 final_count=serializer.validated_data['final_count'],
                 final_average_weight=serializer.validated_data['final_average_weight'],
                 harvest_notes=serializer.validated_data.get('harvest_notes', ''),

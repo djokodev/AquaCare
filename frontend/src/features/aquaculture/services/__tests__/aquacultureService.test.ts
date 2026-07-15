@@ -289,6 +289,7 @@ describe('features/aquaculture/services/aquacultureService', () => {
 
     const result = await aquacultureService.harvestCycle('cycle-1', {
       harvest_date: '2026-05-01',
+      final_harvested_at: '2026-05-01T12:00:00+01:00',
       final_count: 850,
       final_average_weight: 250,
     });
@@ -296,6 +297,7 @@ describe('features/aquaculture/services/aquacultureService', () => {
     expect(result).toEqual(harvestResponse);
     expect(mockApi.post).toHaveBeenCalledWith('/aquaculture/cycles/cycle-1/harvest/', {
       harvest_date: '2026-05-01',
+      final_harvested_at: '2026-05-01T12:00:00+01:00',
       final_count: 850,
       final_average_weight: 250,
     });

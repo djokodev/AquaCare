@@ -18,6 +18,7 @@ class HarvestCycleCommand:
     harvest_date: Any
     final_count: int
     final_average_weight: Decimal
+    final_harvested_at: Any = None
     harvest_notes: str = ""
 
 
@@ -54,6 +55,7 @@ class ProductionCycleApplicationService:
         return ProductionCycleService.harvest_cycle(
             cycle=cycle,
             harvest_date=command.harvest_date,
+            final_harvested_at=command.final_harvested_at,
             final_count=command.final_count,
             final_average_weight=command.final_average_weight,
             harvest_notes=command.harvest_notes,
@@ -102,6 +104,7 @@ class ProductionCycleApplicationService:
         return ProductionCycleService.harvest_cycle_unit_allocation(
             allocation=allocation,
             harvest_date=command.harvest_date,
+            final_harvested_at=command.final_harvested_at,
             final_count=command.final_count,
             final_average_weight=command.final_average_weight,
             harvest_notes=command.harvest_notes,
