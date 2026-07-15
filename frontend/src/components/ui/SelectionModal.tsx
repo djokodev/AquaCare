@@ -94,14 +94,16 @@ export function SelectionModal({
                         },
                       ]}
                     >
-                      <AppText variant="body" color={selected ? "link" : "primary"}>
-                        {item.label}
-                      </AppText>
-                      <Ionicons
-                        name={selected ? "checkmark-circle" : "chevron-forward"}
-                        size={20}
-                        color={selected ? colors.brand.primary : colors.text.muted}
-                      />
+                      <View style={styles.optionContent}>
+                        <AppText variant="body" color={selected ? "link" : "primary"}>
+                          {item.label}
+                        </AppText>
+                        <Ionicons
+                          name={selected ? "checkmark-circle" : "chevron-forward"}
+                          size={20}
+                          color={selected ? colors.brand.primary : colors.text.muted}
+                        />
+                      </View>
                     </Pressable>
                   );
                 }}
@@ -159,6 +161,7 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     backgroundColor: colors.surface.page,
   },
+  optionContent: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   listContent: { paddingBottom: spacing[3] },
   optionGap: { height: spacing[2] },
   selected: { backgroundColor: colors.surface.selected, borderColor: colors.brand.primary },

@@ -51,14 +51,16 @@ export default function SelectField({
           pressed && styles.pressed,
         ]}
       >
-        <AppText variant="body" color={selected ? "primary" : "muted"} style={styles.value}>
-          {selected?.label ?? placeholder ?? t("selectOption")}
-        </AppText>
-        <Ionicons
-          name="chevron-down"
-          size={sizing.iconMedium}
-          color={colors.text.muted}
-        />
+        <View style={styles.fieldContent}>
+          <AppText variant="body" color={selected ? "primary" : "muted"} style={styles.value}>
+            {selected?.label ?? placeholder ?? t("selectOption")}
+          </AppText>
+          <Ionicons
+            name="chevron-down"
+            size={sizing.iconMedium}
+            color={colors.text.muted}
+          />
+        </View>
       </Pressable>
       <SelectionModal
         visible={visible}
@@ -88,6 +90,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface.card,
     paddingHorizontal: spacing[4],
   },
+  fieldContent: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   value: { flex: 1, minHeight: 24 },
   expanded: { borderColor: colors.brand.primary, backgroundColor: colors.surface.selected },
   error: { borderColor: colors.status.error },
