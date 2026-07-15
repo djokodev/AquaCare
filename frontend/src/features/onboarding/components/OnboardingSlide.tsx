@@ -408,7 +408,7 @@ const styles = StyleSheet.create({
   },
 
   socialProofTitle: {
-    ...typography.sectionTitle,
+    ...typography.screenTitle,
     color: colors.text.primary,
     textAlign: 'center',
     marginBottom: spacing[4],
@@ -501,8 +501,8 @@ const styles = StyleSheet.create({
 
   // AquaCare highlighted in green
   appNameHighlight: {
+    ...typography.screenTitle,
     color: colors.brand.primary,
-    fontWeight: '700',
   },
 
   // Guarantee section (Slide 1)

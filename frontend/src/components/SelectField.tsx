@@ -50,7 +50,7 @@ export default function SelectField({
           pressed && styles.pressed,
         ]}
       >
-        <AppText color={selected ? "primary" : "muted"} style={styles.value}>
+        <AppText variant="body" color={selected ? "primary" : "muted"} style={styles.value}>
           {selected?.label ?? placeholder ?? t("selectOption")}
         </AppText>
         <Ionicons
@@ -85,8 +85,9 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     backgroundColor: colors.surface.card,
     paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2],
   },
-  value: { flex: 1 },
+  value: { flex: 1, minHeight: 24 },
   error: { borderColor: colors.status.error },
   disabled: { backgroundColor: colors.surface.disabled },
   pressed: { opacity: 0.8 },

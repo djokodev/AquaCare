@@ -153,7 +153,10 @@ export default function SettingsScreen() {
 
       <View style={styles.section}>
         <AppText variant="sectionTitle" style={styles.sectionTitle}>{t("about")}</AppText>
-        <Card><AppText>{t("aboutSummary")}</AppText></Card>
+        <Card>
+          <AppText>{t("aboutSummaryParagraph1")}</AppText>
+          <AppText style={styles.aboutParagraph}>{t("aboutSummaryParagraph2")}</AppText>
+        </Card>
       </View>
 
       <View style={styles.section}>
@@ -209,4 +212,5 @@ const styles = StyleSheet.create({
   resetCard: { justifyContent: 'flex-start', marginTop: spacing[3] },
   actionContent: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing[3] },
   actionText: { flex: 1, gap: spacing[1] },
+  aboutParagraph: { marginTop: spacing[3] },
 });

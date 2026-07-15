@@ -422,6 +422,8 @@ export const fr = {
   aboutPoint6Title: 'Mise en relation pour la vente',
   aboutPoint6Desc: 'Accès au réseau d\'acheteurs partenaires pour valoriser votre production.',
   aboutSummary: 'AquaCare vous aide à piloter votre élevage du premier alevin à la vente, avec une gestion quotidienne simplifiée, des données terrain centralisées, des rapports automatiques en un clic, une vision 360° même à distance et un accompagnement continu pour mieux décider, mieux produire et mieux valoriser chaque cycle.',
+  aboutSummaryParagraph1: 'AquaCare vous aide à piloter votre élevage du premier alevin à la vente, avec une gestion quotidienne simplifiée et des données terrain centralisées.',
+  aboutSummaryParagraph2: 'Profitez de rapports automatiques en un clic, d’une vision 360° même à distance et d’un accompagnement continu pour mieux décider, mieux produire et mieux valoriser chaque cycle.',
   // Legacy paragraph keys (kept for backward compatibility)
   aboutParagraphOne: 'AquaCare aide les pisciculteurs à mieux gérer leur ferme au quotidien.',
   aboutParagraphTwo: 'Nous facilitons la collecte de données terrain fiables et régulières, puis nous les transformons en rapports journaliers, hebdomadaires et mensuels pour donner aux promoteurs une vue 360 de leurs fermes, même à distance.',
@@ -1128,6 +1130,7 @@ export const fr = {
 
   // Onboarding
   onboardingSkip: 'Ignorer',
+  onboardingBack: 'Retour',
   onboardingNext: 'Suivant',
   onboardingStart: 'Commencer',
 

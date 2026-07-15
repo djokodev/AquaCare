@@ -1,6 +1,7 @@
 ﻿import React, { useState } from "react";
 import {
   View,
+  Image,
   ScrollView,
   KeyboardAvoidingView,
   Platform,
@@ -109,16 +110,15 @@ export default function LoginScreen({ navigation }: Props) {
     >
       <ScrollView contentContainerStyle={styles.content} className="px-5">
         <View style={styles.hero}>
-          <AppText variant="screenTitle" color="link" style={styles.centered}>
-            {t("welcomeMessage")}
-          </AppText>
+          <Image
+            source={require('../../../../assets/brand/aquacare-logo.png')}
+            style={styles.logo}
+            resizeMode="contain"
+            accessibilityLabel={t('appName')}
+          />
         </View>
 
         <Card variant="elevated" style={styles.card}>
-          <AppText variant="sectionTitle" style={styles.centered}>
-            {t("login")}
-          </AppText>
-
           <SegmentedControl
             value={isPhoneMode ? "phone" : "login"}
             options={[
@@ -187,6 +187,7 @@ export default function LoginScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   content: { flexGrow: 1, justifyContent: "center" },
   hero: { alignItems: "center", marginBottom: spacing[10] },
+  logo: { width: 220, height: 96 },
   card: { gap: spacing[4] },
   centered: { textAlign: "center" },
   footer: {

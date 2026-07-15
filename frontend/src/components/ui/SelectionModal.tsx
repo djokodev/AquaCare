@@ -70,6 +70,7 @@ export function SelectionModal({
             <FlatList
               data={options}
               keyExtractor={(item) => item.value}
+              contentContainerStyle={styles.listContent}
               ListEmptyComponent={
                 <View style={styles.state}>
                   <AppText color="muted">{emptyLabel}</AppText>
@@ -124,6 +125,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface.card,
     borderTopLeftRadius: radii.xxl,
     borderTopRightRadius: radii.xxl,
+    overflow: "hidden",
     ...shadows.large,
   },
   header: {
@@ -140,6 +142,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   option: {
+    width: "100%",
     minHeight: 52,
     flexDirection: "row",
     alignItems: "center",
@@ -147,6 +150,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing[5],
     paddingVertical: spacing[3],
   },
+  listContent: { paddingBottom: spacing[3] },
   selected: { backgroundColor: colors.surface.selected },
   state: {
     minHeight: 144,

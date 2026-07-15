@@ -423,6 +423,8 @@
   aboutPoint6Title: 'Sales network access',
   aboutPoint6Desc: 'Access our partner buyer network to maximize the value of your harvest.',
   aboutSummary: 'AquaCare helps you run your farm from fingerlings to sales with simpler day-to-day management, centralized field data, one-click automated reports, a 360° view even from a distance, and continuous support to make better decisions, improve production, and increase the value of every cycle.',
+  aboutSummaryParagraph1: 'AquaCare helps you run your farm from fingerlings to sales with simpler day-to-day management and centralized field data.',
+  aboutSummaryParagraph2: 'Get one-click automated reports, a 360° view even from a distance, and continuous support to make better decisions, improve production, and increase the value of every cycle.',
   // Legacy paragraph keys (kept for backward compatibility)
   aboutParagraphOne: 'AquaCare helps fish farmers manage their farms better every day: cycle planning, activity organization, and tracking of critical operations.',
   aboutParagraphTwo: 'We make field data collection consistent and reliable, then turn it into daily, weekly, and monthly reports so farm promoters can keep a full 360 view of their farms, even when they are off-site.',
@@ -1129,6 +1131,7 @@
 
   // Onboarding
   onboardingSkip: 'Skip',
+  onboardingBack: 'Back',
   onboardingNext: 'Next',
   onboardingStart: 'Get Started',
 
