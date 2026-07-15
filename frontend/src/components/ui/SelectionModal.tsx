@@ -67,47 +67,49 @@ export function SelectionModal({
               <ActivityIndicator color={colors.brand.primary} />
             </View>
           ) : (
-            <FlatList
-              data={options}
-              keyExtractor={(item) => item.value}
-              contentContainerStyle={styles.listContent}
-              ListEmptyComponent={
-                <View style={styles.state}>
-                  <AppText color="muted">{emptyLabel}</AppText>
-                </View>
-              }
-              renderItem={({ item }) => {
-                const selected = item.value === selectedValue;
-                return (
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={item.label}
-                    accessibilityState={{ selected, disabled: item.disabled }}
-                    disabled={item.disabled}
-                    onPress={() => onSelect(item.value)}
-                    style={({ pressed }) => [
-                      styles.option,
-                      selected && styles.selected,
-                      (pressed || item.disabled) && {
-                        opacity: item.disabled ? 0.5 : 0.8,
-                      },
-                    ]}
-                  >
-                    <AppText color={selected ? "link" : "primary"}>
-                      {item.label}
-                    </AppText>
-                    {selected ? (
-                      <Ionicons
-                        name="checkmark"
-                        size={20}
-                        color={colors.brand.primary}
-                      />
-                    ) : null}
-                  </Pressable>
-                );
-              }}
-              ItemSeparatorComponent={Divider}
-            />
+            <View style={styles.optionsContainer}>
+              <FlatList
+                data={options}
+                keyExtractor={(item) => item.value}
+                contentContainerStyle={styles.listContent}
+                ListEmptyComponent={
+                  <View style={styles.state}>
+                    <AppText color="muted">{emptyLabel}</AppText>
+                  </View>
+                }
+                renderItem={({ item }) => {
+                  const selected = item.value === selectedValue;
+                  return (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={item.label}
+                      accessibilityState={{ selected, disabled: item.disabled }}
+                      disabled={item.disabled}
+                      onPress={() => onSelect(item.value)}
+                      style={({ pressed }) => [
+                        styles.option,
+                        selected && styles.selected,
+                        (pressed || item.disabled) && {
+                          opacity: item.disabled ? 0.5 : 0.8,
+                        },
+                      ]}
+                    >
+                      <AppText variant="body" color={selected ? "link" : "primary"}>
+                        {item.label}
+                      </AppText>
+                      {selected ? (
+                        <Ionicons
+                          name="checkmark"
+                          size={20}
+                          color={colors.brand.primary}
+                        />
+                      ) : null}
+                    </Pressable>
+                  );
+                }}
+                ItemSeparatorComponent={Divider}
+              />
+            </View>
           )}
         </SafeAreaView>
       </View>
@@ -128,6 +130,11 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     ...shadows.large,
   },
+  optionsContainer: {
+    paddingHorizontal: spacing[5],
+    paddingBottom: spacing[5],
+    flexShrink: 1,
+  },
   header: {
     minHeight: 64,
     flexDirection: "row",
@@ -147,7 +154,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: spacing[5],
+    paddingHorizontal: 0,
     paddingVertical: spacing[3],
   },
   listContent: { paddingBottom: spacing[3] },
