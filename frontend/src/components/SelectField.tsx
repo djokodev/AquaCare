@@ -82,15 +82,15 @@ export default function SelectField({
 const styles = StyleSheet.create({
   fieldContainer: {
     width: "100%",
-    minHeight: sizing.inputHeight,
+    height: sizing.inputHeight,
     borderWidth: 1,
     borderColor: colors.border.strong,
     borderRadius: radii.md,
     backgroundColor: colors.surface.card,
     paddingHorizontal: spacing[4],
   },
-  pressable: { flex: 1, justifyContent: "center" },
-  fieldContent: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  pressable: { height: "100%", justifyContent: "center" },
+  fieldContent: { height: "100%", flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   value: { flex: 1, minHeight: 24 },
   expanded: { borderColor: colors.brand.primary, backgroundColor: colors.surface.selected },
   error: { borderColor: colors.status.error },
