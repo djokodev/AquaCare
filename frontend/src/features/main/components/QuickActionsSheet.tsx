@@ -167,21 +167,6 @@ export default function QuickActionsSheet({
 
       return [
         {
-          id: 'calibrateUnit',
-          labelKey: 'gradeFish',
-          icon: 'git-compare-outline',
-          iconColor: AQUACARE_COLORS.INFO,
-          route: 'CalibrateCycle',
-          category: 'aquaculture',
-          params: {
-            sourceCycleId: unitContext.cycleId,
-            sourceCycleUnitAllocationId: unitContext.cycleUnitAllocationId,
-            sourceUnitName: unitContext.productionUnitName,
-            sourceCurrentCount: unitContext.currentFishCount,
-            sourceCurrentBiomassKg: unitContext.currentBiomassKg,
-          },
-        },
-        {
           id: 'dailyLog',
           labelKey: 'productionUnitDailyLogAction',
           icon: 'create',
@@ -235,6 +220,21 @@ export default function QuickActionsSheet({
             cycleUnitAllocationId: unitContext.cycleUnitAllocationId,
             productionUnitId: unitContext.productionUnitId,
             productionUnitName: unitContext.productionUnitName,
+          },
+        },
+        {
+          id: 'calibrateUnit',
+          labelKey: 'gradeFish',
+          icon: 'git-compare-outline',
+          iconColor: AQUACARE_COLORS.INFO,
+          route: 'CalibrateCycle',
+          category: 'aquaculture',
+          params: {
+            sourceCycleId: unitContext.cycleId,
+            sourceCycleUnitAllocationId: unitContext.cycleUnitAllocationId,
+            sourceUnitName: unitContext.productionUnitName,
+            sourceCurrentCount: unitContext.currentFishCount,
+            sourceCurrentBiomassKg: unitContext.currentBiomassKg,
           },
         },
         ...(onPartialHarvestUnit
