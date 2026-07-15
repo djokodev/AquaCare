@@ -283,7 +283,6 @@ export default function StoreScreen() {
             <>
               <DashboardSection title={t('storeStatusTitle')} lastSyncedAt={lastSyncedAt}>
                 <DashboardHeroCard
-                  icon="bag-handle-outline"
                   label={t('storeEstimatedNeedToFinish')}
                   value={remainingToOrderValue}
                   unit={t('bags')}
@@ -291,7 +290,6 @@ export default function StoreScreen() {
                 />
                 <View style={styles.metrics}>
                   <DashboardMetricCard
-                    icon="cube-outline"
                     label={t('storeCurrentStock')}
                     value={formatDashboardNumber(store.summary.estimated_feed_remaining_kg, locale, { maximumFractionDigits: 1 })}
                     unit={t('kg')}
@@ -299,7 +297,6 @@ export default function StoreScreen() {
                     unavailableLabel={t('dashboardDataUnavailable')}
                   />
                   <DashboardMetricCard
-                    icon="nutrition-outline"
                     label={t('storeFeedAlreadyConsumed')}
                     value={formatDashboardNumber(store.summary.feed_consumed_kg, locale, { maximumFractionDigits: 1 })}
                     unit={t('kg')}
@@ -307,7 +304,6 @@ export default function StoreScreen() {
                     unavailableLabel={t('dashboardDataUnavailable')}
                   />
                   <DashboardMetricCard
-                    icon="receipt-outline"
                     label={t('storeRecordedFeedExpenses')}
                     value={formatDashboardCurrency(store.summary.feed_expenses_fcfa, locale)}
                     unit={t('dashboardDirectProductionCostUnit')}

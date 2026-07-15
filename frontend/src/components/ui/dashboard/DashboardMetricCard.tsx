@@ -1,5 +1,4 @@
-import { Ionicons } from '@expo/vector-icons';
-import React, { type ComponentProps } from 'react';
+import React from 'react';
 import { StyleSheet, View, type ViewStyle } from 'react-native';
 
 import { AppText } from '@/components/ui/AppText';
@@ -10,7 +9,6 @@ import { DASHBOARD_UNAVAILABLE_VALUE } from './formatters';
 export type DashboardTone = 'default' | 'success' | 'warning' | 'error' | 'info';
 
 interface DashboardMetricCardProps {
-  icon?: ComponentProps<typeof Ionicons>['name'];
   label: string;
   value: string | number | null | undefined;
   unit?: string;
@@ -21,12 +19,12 @@ interface DashboardMetricCardProps {
   style?: ViewStyle;
 }
 
-const toneColors: Record<DashboardTone, { icon: string; surface: string }> = {
-  default: { icon: colors.brand.dark, surface: colors.surface.card },
-  success: { icon: colors.status.success, surface: colors.status.successSurface },
-  warning: { icon: colors.status.warning, surface: colors.status.warningSurface },
-  error: { icon: colors.status.error, surface: colors.status.errorSurface },
-  info: { icon: colors.status.info, surface: colors.status.infoSurface },
+const toneColors: Record<DashboardTone, { surface: string }> = {
+  default: { surface: colors.surface.card },
+  success: { surface: colors.status.successSurface },
+  warning: { surface: colors.status.warningSurface },
+  error: { surface: colors.status.errorSurface },
+  info: { surface: colors.status.infoSurface },
 };
 
 function isUnavailable(value: DashboardMetricCardProps['value']): boolean {
@@ -35,7 +33,6 @@ function isUnavailable(value: DashboardMetricCardProps['value']): boolean {
 }
 
 export function DashboardMetricCard({
-  icon,
   label,
   value,
   unit,
@@ -58,7 +55,6 @@ export function DashboardMetricCard({
       testID="dashboard-metric-card"
     >
       <View accessible accessibilityLabel={announcement} style={styles.content}>
-        {icon ? <Ionicons name={icon} size={20} color={toneStyle.icon} importantForAccessibility="no" /> : null}
         <AppText variant="caption" color="muted">{label}</AppText>
         <View style={styles.valueRow}>
           <AppText variant="metric" style={styles.value}>{displayValue}</AppText>

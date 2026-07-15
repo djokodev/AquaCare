@@ -412,7 +412,6 @@ export default function DashboardScreen({ navigation }: any) {
             ) : (
               <>
                 <DashboardHeroCard
-                  icon="cash-outline"
                   label={t("dashboardEstimatedMarketValue")}
                   value={formatDashboardCurrency(
                     cycleSummary?.estimated_market_value_fcfa,
@@ -430,7 +429,6 @@ export default function DashboardScreen({ navigation }: any) {
                 />
                 <View style={styles.dashboardGrid}>
                   <DashboardMetricCard
-                    icon="receipt-outline"
                     label={t("dashboardDirectProductionCost")}
                     value={formatDashboardCurrency(
                       cycleSummary?.direct_production_cost_fcfa,
@@ -440,7 +438,6 @@ export default function DashboardScreen({ navigation }: any) {
                     unavailableLabel={t("dashboardDataUnavailable")}
                   />
                   <DashboardMetricCard
-                    icon="fish-outline"
                     label={t("dashboardEstimatedCurrentFish")}
                     value={formatDashboardNumber(
                       cycleSummary?.total_estimated_current_fish_count,
@@ -451,7 +448,6 @@ export default function DashboardScreen({ navigation }: any) {
                     unavailableLabel={t("dashboardDataUnavailable")}
                   />
                   <DashboardMetricCard
-                    icon="time-outline"
                     label={t("dashboardTimeRemainingCycle")}
                     value={formatDashboardNumber(
                       cycleSummary?.days_remaining,

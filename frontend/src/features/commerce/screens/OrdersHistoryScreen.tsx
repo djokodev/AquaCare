@@ -164,7 +164,6 @@ export default function OrdersHistoryScreen() {
       {statistics ? (
         <DashboardSection title={t('orderStatistics')} lastSyncedAt={lastSyncedAt}>
           <DashboardHeroCard
-            icon="wallet-outline"
             label={t('totalSpent')}
             value={formatDashboardCurrency(statistics.total_spent, locale)}
             unit={t('dashboardDirectProductionCostUnit')}
@@ -173,20 +172,17 @@ export default function OrdersHistoryScreen() {
           />
           <View style={styles.metricGrid}>
             <DashboardMetricCard
-              icon="receipt-outline"
               value={formatDashboardNumber(statistics.total_orders, locale, { maximumFractionDigits: 0 })}
               label={t('totalOrders')}
               unavailableLabel={t('dashboardDataUnavailable')}
             />
             <DashboardMetricCard
-              icon="time-outline"
               value={formatDashboardNumber(sacksToReceive, locale, { maximumFractionDigits: 0 })}
               label={t('sacksToReceive')}
               tone="warning"
               unavailableLabel={t('dashboardDataUnavailable')}
             />
             <DashboardMetricCard
-              icon="bag-handle-outline"
               value={formatDashboardNumber(statistics.total_bags_ordered, locale, { maximumFractionDigits: 0 })}
               label={t('totalBags')}
               tone="info"

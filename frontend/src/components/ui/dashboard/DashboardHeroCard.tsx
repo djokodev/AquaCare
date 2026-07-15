@@ -1,5 +1,4 @@
-import { Ionicons } from '@expo/vector-icons';
-import React, { type ComponentProps } from 'react';
+import React from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { AppText } from '@/components/ui/AppText';
@@ -9,7 +8,6 @@ import { DashboardProgress } from './DashboardProgress';
 import { DASHBOARD_UNAVAILABLE_VALUE } from './formatters';
 
 interface DashboardHeroCardProps {
-  icon?: ComponentProps<typeof Ionicons>['name'];
   label: string;
   value: string | number | null | undefined;
   unit?: string;
@@ -21,7 +19,6 @@ interface DashboardHeroCardProps {
 }
 
 export function DashboardHeroCard({
-  icon,
   label,
   value,
   unit,
@@ -40,10 +37,7 @@ export function DashboardHeroCard({
   return (
     <Card variant="outlined" style={styles.card} testID="dashboard-hero-card">
       <View accessible accessibilityLabel={announcement} style={styles.header}>
-        <View style={styles.labelRow}>
-          {icon ? <Ionicons name={icon} size={22} color={colors.brand.dark} importantForAccessibility="no" /> : null}
-          <AppText variant="overline" color="link" style={styles.label}>{label}</AppText>
-        </View>
+        <AppText variant="overline" color="link" style={styles.label}>{label}</AppText>
         <View style={styles.valueRow}>
           <AppText variant="display" style={styles.value}>{displayValue}</AppText>
           {!unavailable && unit ? <AppText variant="bodyStrong" color="link">{unit}</AppText> : null}
@@ -61,7 +55,6 @@ export function DashboardHeroCard({
 const styles = StyleSheet.create({
   card: { width: '100%', gap: spacing[4], backgroundColor: colors.brand.subtle, borderColor: colors.brand.light },
   header: { gap: spacing[2] },
-  labelRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
   label: { flex: 1 },
   valueRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', gap: spacing[2] },
   value: { flexShrink: 1 },

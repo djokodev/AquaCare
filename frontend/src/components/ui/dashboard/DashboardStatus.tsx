@@ -1,4 +1,3 @@
-import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
 
@@ -14,17 +13,16 @@ interface DashboardStatusProps {
 }
 
 const toneStyles = {
-  success: { icon: 'checkmark-circle' as const, color: colors.status.success, surface: colors.status.successSurface },
-  warning: { icon: 'warning' as const, color: colors.status.warning, surface: colors.status.warningSurface },
-  error: { icon: 'alert-circle' as const, color: colors.status.error, surface: colors.status.errorSurface },
-  info: { icon: 'information-circle' as const, color: colors.status.info, surface: colors.status.infoSurface },
+  success: { surface: colors.status.successSurface },
+  warning: { surface: colors.status.warningSurface },
+  error: { surface: colors.status.errorSurface },
+  info: { surface: colors.status.infoSurface },
 };
 
 export function DashboardStatus({ title, description, tone = 'info' }: DashboardStatusProps) {
   const selectedTone = toneStyles[tone];
   return (
     <Card variant="outlined" style={[styles.card, { backgroundColor: selectedTone.surface }]}>
-      <Ionicons name={selectedTone.icon} size={24} color={selectedTone.color} importantForAccessibility="no" />
       <View accessible accessibilityLabel={description ? `${title}. ${description}` : title} style={styles.copy}>
         <AppText variant="bodyStrong">{title}</AppText>
         {description ? <AppText variant="helper" color="muted">{description}</AppText> : null}
@@ -34,6 +32,6 @@ export function DashboardStatus({ title, description, tone = 'info' }: Dashboard
 }
 
 const styles = StyleSheet.create({
-  card: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing[3] },
+  card: { gap: spacing[1] },
   copy: { flex: 1, gap: spacing[1] },
 });

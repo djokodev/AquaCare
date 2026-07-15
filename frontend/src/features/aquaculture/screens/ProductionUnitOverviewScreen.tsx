@@ -1,4 +1,3 @@
-import { Ionicons } from '@expo/vector-icons';
 import { RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import React, { useCallback, useEffect, useLayoutEffect, useState } from 'react';
@@ -227,7 +226,6 @@ export default function ProductionUnitOverviewScreen({ navigation, route }: Prop
         lastSyncedAt={lastSyncedAt}
       >
         <DashboardHeroCard
-          icon="cash-outline"
           label={t('productionUnitEstimatedMarketValue')}
           value={formatDashboardCurrency(summary.estimated_market_value_fcfa, locale)}
           unit={t('dashboardDirectProductionCostUnit')}
@@ -242,7 +240,6 @@ export default function ProductionUnitOverviewScreen({ navigation, route }: Prop
         />
         <View style={styles.grid}>
           <DashboardMetricCard
-            icon="scale-outline"
             label={t('productionUnitEstimatedBiomass')}
             value={formatDashboardNumber(summary.estimated_current_biomass_kg, locale, { maximumFractionDigits: 1 })}
             unit={t('kg')}
@@ -251,13 +248,11 @@ export default function ProductionUnitOverviewScreen({ navigation, route }: Prop
             unavailableLabel={t('dashboardDataUnavailable')}
           />
           <DashboardMetricCard
-            icon="fish-outline"
             label={t('currentFish')}
             value={formatDashboardNumber(summary.estimated_current_fish_count, locale, { maximumFractionDigits: 0 })}
             unavailableLabel={t('dashboardDataUnavailable')}
           />
           <DashboardMetricCard
-            icon="remove-circle-outline"
             label={t('productionUnitCumulativeMortality')}
             value={formatDashboardNumber(summary.total_mortality_count, locale, { maximumFractionDigits: 0 })}
             tone={summary.total_mortality_count === 0 ? 'success' : 'warning'}
@@ -267,7 +262,6 @@ export default function ProductionUnitOverviewScreen({ navigation, route }: Prop
             unavailableLabel={t('dashboardDataUnavailable')}
           />
           <DashboardMetricCard
-            icon="nutrition-outline"
             label={t('productionUnitConsumedFeed')}
             value={formatDashboardNumber(summary.total_feed_consumed_kg, locale, { maximumFractionDigits: 1 })}
             unit={t('kg')}
