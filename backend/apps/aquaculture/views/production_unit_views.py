@@ -3,7 +3,7 @@ ViewSets DRF pour les unités de production et leurs allocations de cycle.
 """
 from django.utils.translation import gettext_lazy as _
 from drf_spectacular.utils import extend_schema
-from rest_framework import permissions, status, viewsets
+from rest_framework import permissions, serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
@@ -36,6 +36,7 @@ from ..services import (
     ProductionUnitDashboardService,
 )
 from ..services.calibration_service import CalibrationService
+from ..services.production_unit_service import ProductionUnitLifecycleService
 
 
 class ProductionUnitViewSet(viewsets.ModelViewSet):
@@ -68,8 +69,10 @@ class ProductionUnitViewSet(viewsets.ModelViewSet):
         serializer.save(farm_profile=self.request.user.farm_profile)
 
     def perform_destroy(self, instance):
-        instance.status = 'archived'
-        instance.save(update_fields=['status', 'updated_at'])
+        try:
+            ProductionUnitLifecycleService.delete(instance)
+        except BusinessRuleViolation as exc:
+            raise serializers.ValidationError({'detail': str(exc)}) from exc
 
 
 class CycleUnitAllocationViewSet(viewsets.ModelViewSet):

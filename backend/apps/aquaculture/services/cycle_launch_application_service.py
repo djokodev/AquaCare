@@ -20,7 +20,7 @@ from ..domain.cycle_launch_idempotency import (
     derive_allocation_client_uuid,
     derive_unit_client_uuid,
 )
-from ..domain.exceptions import AquacultureBusinessException, DataIntegrityError
+from ..domain.exceptions import AquacultureBusinessException, BusinessRuleViolation, DataIntegrityError
 from ..domain.production_units import (
     normalize_production_unit_type,
     validate_production_unit_capacity,
@@ -28,6 +28,7 @@ from ..domain.production_units import (
 from ..models import CycleUnitAllocation, ProductionCycle, ProductionUnit
 from .cycle_service import ProductionCycleService
 from .farm_production_plan_service import FarmProductionPlanService
+from .production_unit_service import ProductionUnitLifecycleService
 
 
 class CycleLaunchIdempotencyConflict(AquacultureBusinessException):
@@ -455,6 +456,19 @@ class CycleLaunchApplicationService:
                 client_uuid=calibration_unit['client_uuid']
             ).first()
             if existing_calibration_unit is not None:
+                try:
+                    ProductionUnitLifecycleService.validate_idempotent_payload(
+                        existing_calibration_unit,
+                        {
+                            **calibration_unit,
+                            'status': 'active',
+                            'purpose': ProductionUnit.PURPOSE_CALIBRATION,
+                            'unit_type': 'tank',
+                        },
+                        updated_farm,
+                    )
+                except BusinessRuleViolation as exc:
+                    raise CycleLaunchIdempotencyConflict() from exc
                 if existing_calibration_unit.farm_profile_id != updated_farm.id:
                     raise CycleLaunchIdempotencyConflict()
                 continue

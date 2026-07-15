@@ -12,7 +12,7 @@ from drf_spectacular.utils import (
     extend_schema,
     extend_schema_view,
 )
-from rest_framework import permissions, status, viewsets
+from rest_framework import permissions, serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
@@ -195,6 +195,13 @@ class ProductionCycleViewSet(viewsets.ModelViewSet):
 
         # Update serializer instance with created cycle
         serializer.instance = cycle
+
+    def perform_destroy(self, instance):
+        if instance.unit_allocations.exists() or instance.current_count > 0 or instance.current_biomass > 0:
+            raise serializers.ValidationError(
+                {'detail': _('Un cycle avec stock ou historique doit être clôturé par un service métier.')}
+            )
+        instance.delete()
 
     @extend_schema(
         summary="Adaptateur de calibrage depuis un cycle",

@@ -52,6 +52,7 @@ from .domain.cycle_duration import (
     get_default_cycle_duration_days,
     validate_cycle_duration_days,
 )
+from .domain.exceptions import BusinessRuleViolation
 from .domain.feed_phase_calculator import get_feed_phase
 from .domain.production_units import (
     normalize_production_unit_type,
@@ -74,6 +75,7 @@ from .models import (
 )
 from .services.cycle_service import ProductionCycleService
 from .services.farm_production_plan_service import FarmProductionPlanService
+from .services.production_unit_service import ProductionUnitLifecycleService
 
 
 class ProductionUnitTypeField(serializers.ChoiceField):
@@ -144,6 +146,18 @@ class ProductionUnitSerializer(serializers.ModelSerializer):
         unit_type = attrs.get('unit_type') or getattr(self.instance, 'unit_type', None)
         volume_m3 = attrs.get('volume_m3') if 'volume_m3' in attrs else getattr(self.instance, 'volume_m3', None)
         surface_m2 = attrs.get('surface_m2') if 'surface_m2' in attrs else getattr(self.instance, 'surface_m2', None)
+        request = self.context.get('request')
+        name = attrs.get('name', getattr(self.instance, 'name', None))
+
+        if request is not None and name:
+            duplicate = ProductionUnit.objects.filter(
+                farm_profile=request.user.farm_profile,
+                name__iexact=name.strip(),
+            )
+            if self.instance is not None:
+                duplicate = duplicate.exclude(pk=self.instance.pk)
+            if duplicate.exists():
+                raise serializers.ValidationError({'name': _("Une unité portant ce nom existe déjà.")})
 
         try:
             validate_production_unit_dimensions(
@@ -153,6 +167,12 @@ class ProductionUnitSerializer(serializers.ModelSerializer):
             )
         except DjangoValidationError as exc:
             raise serializers.ValidationError(exc.message_dict or exc.messages)
+
+        if self.instance is not None:
+            try:
+                ProductionUnitLifecycleService.validate_update(self.instance, attrs)
+            except BusinessRuleViolation as exc:
+                raise serializers.ValidationError({'detail': str(exc)}) from exc
 
         return attrs
 
@@ -355,7 +375,8 @@ class ProductionCycleSerializer(serializers.ModelSerializer):
         read_only_fields = [
             'id', 'farm_profile', 'initial_biomass', 'current_count', 'current_average_weight',
             'current_biomass', 'total_feed_consumed', 'survival_rate', 'fcr',
-            'synced_at', 'created_at', 'updated_at'
+            'cycle_kind', 'status', 'end_date', 'final_count', 'final_average_weight',
+            'final_biomass', 'synced_at', 'created_at', 'updated_at'
         ]
         extra_kwargs = {
             'client_uuid': {'validators': []},
@@ -735,6 +756,14 @@ class CalibrationTankSerializer(serializers.ModelSerializer):
             duplicate = duplicate.exclude(pk=self.instance.pk)
         if duplicate.exists():
             raise serializers.ValidationError({'name': _('Un bac portant ce nom existe déjà.')})
+        if self.instance is not None:
+            lifecycle_changes = dict(attrs)
+            if 'is_active' in lifecycle_changes:
+                lifecycle_changes['status'] = 'active' if lifecycle_changes.pop('is_active') else 'inactive'
+            try:
+                ProductionUnitLifecycleService.validate_update(self.instance, lifecycle_changes)
+            except BusinessRuleViolation as exc:
+                raise serializers.ValidationError({'detail': str(exc)}) from exc
         return attrs
 
 

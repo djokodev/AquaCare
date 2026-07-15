@@ -882,6 +882,13 @@ class AnalyticsService(BaseService):
                         'count': current_count,
                         'rate': float(survival_rate)
                     })
+                if cycle.unit_allocations.exists():
+                    survival_data.append({
+                        'date': timezone.localdate().isoformat(),
+                        'count': cycle.current_count,
+                        'rate': float(cycle.survival_rate or 0),
+                        'source': 'allocation_ledger',
+                    })
                 metrics.survival_curve_data = survival_data
 
                 feed_data = []

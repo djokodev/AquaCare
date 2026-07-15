@@ -432,8 +432,7 @@ class ProductionUnit(models.Model):
             models.UniqueConstraint(
                 Lower('name'),
                 'farm_profile',
-                condition=Q(purpose='calibration'),
-                name='uniq_calibration_unit_name_farm_ci',
+                name='uniq_production_unit_name_farm_ci',
             ),
         ]
 

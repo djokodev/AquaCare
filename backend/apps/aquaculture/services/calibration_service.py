@@ -9,7 +9,7 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from notifications.services import NotificationService
 
-from ..constants import OPTIMAL_PARAMETERS
+from ..constants import OPTIMAL_PARAMETERS, SAMPLING_TOLERANCE
 from ..domain.calibration import WEIGHT_DIFFERENCE_WARNING_THRESHOLD, biomass_for
 from ..domain.exceptions import BusinessRuleViolation
 from ..models import CalibrationOperation, CycleUnitAllocation, ProductionCycle, ProductionUnit
@@ -61,7 +61,15 @@ class CalibrationService:
             )
             return existing, cls._warnings_for(existing, effective_weight), False
 
-        destination_unit = ProductionUnit.objects.select_for_update().get(pk=destination_production_unit.pk)
+        unit_ids = sorted(
+            {source_allocation.production_unit_id, destination_production_unit.pk},
+            key=str,
+        )
+        locked_units = {
+            unit.pk: unit
+            for unit in ProductionUnit.objects.select_for_update().filter(pk__in=unit_ids).order_by('pk')
+        }
+        destination_unit = locked_units[destination_production_unit.pk]
         source = (
             CycleUnitAllocation.objects.select_for_update()
             .select_related('cycle__farm_profile', 'production_unit')
@@ -97,8 +105,8 @@ class CalibrationService:
             )
 
         transferred_biomass = biomass_for(transferred_count, effective_weight)
-        if transferred_biomass <= 0 or transferred_biomass >= source.current_biomass_kg:
-            raise BusinessRuleViolation(_('La biomasse transférée dépasse la biomasse disponible.'))
+        if transferred_biomass <= 0:
+            raise BusinessRuleViolation(_('La biomasse transférée doit être positive.'))
 
         operation_kwargs = {
             'client_uuid': client_uuid,
@@ -116,11 +124,13 @@ class CalibrationService:
             'created_offline': created_offline,
             'synced_at': timezone.now() if created_offline else None,
             'source_count_before': source.current_fish_count,
-            'source_count_after': source.current_fish_count - transferred_count,
+            # Valeurs provisoires non négatives : le replay chronologique ci-dessous
+            # les remplace par les snapshots officiels ou annule la transaction.
+            'source_count_after': max(0, source.current_fish_count - transferred_count),
             'source_average_weight_before_g': ProductionCycleService._get_allocation_average_weight_g(source),
             'source_average_weight_after_g': Decimal('0'),
             'source_biomass_before_kg': source.current_biomass_kg,
-            'source_biomass_after_kg': source.current_biomass_kg - transferred_biomass,
+            'source_biomass_after_kg': max(Decimal('0'), source.current_biomass_kg - transferred_biomass),
             'destination_count_before': destination.current_fish_count,
             'destination_count_after': destination.current_fish_count + transferred_count,
             'destination_average_weight_before_g': ProductionCycleService._get_allocation_average_weight_g(destination),
@@ -150,6 +160,8 @@ class CalibrationService:
         destination = ProductionCycleService.recalculate_allocation_current_metrics(destination)
         ProductionCycleService._sync_cycle_current_metrics_from_allocations(source.cycle)
         destination_cycle = ProductionCycleService._sync_cycle_current_metrics_from_allocations(destination.cycle)
+        ProductionCycleService._refresh_advanced_metrics(source.cycle)
+        ProductionCycleService._refresh_advanced_metrics(destination_cycle)
         operation.refresh_from_db()
         warnings = cls._warnings_for(operation, effective_weight)
 
@@ -201,7 +213,7 @@ class CalibrationService:
             if (
                 direct is not None
                 and direct > 0
-                and abs(direct - sampled) / sampled > WEIGHT_DIFFERENCE_WARNING_THRESHOLD
+                and abs(direct - sampled) / sampled > SAMPLING_TOLERANCE
             ):
                 raise BusinessRuleViolation(_('Le poids moyen et l’échantillon sont incohérents.'))
             direct = sampled
@@ -228,8 +240,8 @@ class CalibrationService:
             raise BusinessRuleViolation(_('Le volume du bac de calibrage doit être positif.'))
         if source.production_unit_id == destination_unit.id:
             raise BusinessRuleViolation(_('La source et la destination doivent être différentes.'))
-        if transferred_count <= 0 or transferred_count >= source.current_fish_count:
-            raise BusinessRuleViolation(_('Le transfert doit laisser des poissons dans la source.'))
+        if transferred_count <= 0:
+            raise BusinessRuleViolation(_('Le nombre de poissons transférés doit être positif.'))
         if transferred_average_weight_g <= 0:
             raise BusinessRuleViolation(_('Le poids moyen transféré doit être positif.'))
         if calibrated_at.date() < source.cycle.start_date or calibrated_at > timezone.now() + timedelta(minutes=10):

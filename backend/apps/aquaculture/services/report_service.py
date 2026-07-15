@@ -42,6 +42,7 @@ from ..domain.production_units import (
     get_production_unit_dimension_value,
 )
 from ..models import (
+    CalibrationOperation,
     CycleLog,
     CycleUnitAllocation,
     PartialHarvest,
@@ -256,6 +257,42 @@ class PDFContext(TypedDict):
 
 
 class ReportService(BaseService):
+    @staticmethod
+    def _build_calibration_movements(cycle: ProductionCycle) -> dict:
+        """Expose les entrées et sorties vivantes sans les assimiler à la croissance ou aux mortalités."""
+        operations = CalibrationOperation.objects.filter(
+            Q(source_allocation__cycle=cycle) | Q(destination_allocation__cycle=cycle)
+        ).select_related(
+            'source_allocation__cycle',
+            'source_allocation__production_unit',
+            'destination_allocation__cycle',
+            'destination_allocation__production_unit',
+        ).order_by('calibrated_at', 'created_at', 'id')
+        incoming = []
+        outgoing = []
+        for operation in operations:
+            item = {
+                'id': str(operation.id),
+                'client_uuid': str(operation.client_uuid),
+                'calibrated_at': operation.calibrated_at.isoformat(),
+                'count': operation.transferred_count,
+                'biomass_kg': ReportService._to_float(operation.transferred_biomass_kg),
+                'source_cycle_id': str(operation.source_allocation.cycle_id),
+                'source_unit': operation.source_allocation.production_unit.name,
+                'destination_cycle_id': str(operation.destination_allocation.cycle_id),
+                'destination_unit': operation.destination_allocation.production_unit.name,
+            }
+            (incoming if operation.destination_allocation.cycle_id == cycle.id else outgoing).append(item)
+        return {
+            'incoming': incoming,
+            'outgoing': outgoing,
+            'incoming_count': sum(item['count'] for item in incoming),
+            'outgoing_count': sum(item['count'] for item in outgoing),
+            'incoming_biomass_kg': round(sum(item['biomass_kg'] or 0 for item in incoming), 2),
+            'outgoing_biomass_kg': round(sum(item['biomass_kg'] or 0 for item in outgoing), 2),
+            'origins': sorted({item['source_unit'] for item in incoming}),
+        }
+
     """Service central des rapports de production."""
 
     @staticmethod
@@ -797,6 +834,8 @@ class ReportService(BaseService):
         return {
             "cycle": {
                 "id": str(cycle.id),
+                "cycle_kind": cycle.cycle_kind,
+                "calibration_movements": ReportService._build_calibration_movements(cycle),
                 "cycle_name": cycle.cycle_name,
                 "species": cycle.species,
                 "species_display": ReportService._report_species_display(cycle.species, language_code),
@@ -814,6 +853,7 @@ class ReportService(BaseService):
                 "production_unit_id": str(allocation.production_unit.id),
                 "production_unit_name": unit_name,
                 "production_unit_type": allocation.production_unit.unit_type,
+                "production_unit_purpose": allocation.production_unit.purpose,
                 "production_unit_type_display": ReportService._localized_display(
                     allocation.production_unit, "get_unit_type_display", language_code
                 ),
@@ -1521,6 +1561,8 @@ class ReportService(BaseService):
                     {
                         "cycle": {
                             "id": str(cycle.id),
+                            "cycle_kind": cycle.cycle_kind,
+                            "calibration_movements": ReportService._build_calibration_movements(cycle),
                             "cycle_name": cycle.cycle_name,
                             "species": cycle.species,
                             "species_display": ReportService._report_species_display(
@@ -2153,6 +2195,8 @@ class ReportService(BaseService):
                 {
                     "cycle": {
                         "id": str(cycle.id),
+                        "cycle_kind": cycle.cycle_kind,
+                        "calibration_movements": ReportService._build_calibration_movements(cycle),
                         "cycle_name": cycle.cycle_name,
                         "species": cycle.species,
                         "species_display": ReportService._report_species_display(

@@ -37,6 +37,7 @@ from .analytics_service import AnalyticsService
 from .base import BaseService
 from .calibration_service import CalibrationService
 from .cycle_service import ProductionCycleService
+from .production_unit_service import ProductionUnitLifecycleService
 from .sanitary_service import SanitaryService
 
 # ── Sync flag (threading.local) ──────────────────────────────────────────────
@@ -839,6 +840,17 @@ class SyncService(BaseService):
                             'error': 'client_uuid_conflict',
                         })
                         continue
+                    if existing is not None:
+                        ProductionUnitLifecycleService.validate_idempotent_payload(
+                            existing,
+                            {
+                                **tank_data,
+                                'status': 'active' if tank_data.get('is_active', True) else 'inactive',
+                                'purpose': ProductionUnit.PURPOSE_CALIBRATION,
+                                'unit_type': 'tank',
+                            },
+                            user.farm_profile,
+                        )
                     if existing is None:
                         ProductionUnit.objects.create(
                             client_uuid=client_uuid,
@@ -853,7 +865,7 @@ class SyncService(BaseService):
                             synced_at=timezone.now(),
                         )
                     sync_result['processed']['calibration_tanks'] += 1
-                except (IntegrityError, KeyError, ValidationError) as exc:
+                except (BusinessRuleViolation, IntegrityError, KeyError, ValidationError) as exc:
                     sync_result['errors'].append({
                         'type': 'calibration_tank',
                         'client_uuid': str(client_uuid),

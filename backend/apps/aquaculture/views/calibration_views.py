@@ -1,9 +1,12 @@
+from django.db import IntegrityError, transaction
 from django.db.models import Prefetch, Q
 from django.utils.translation import gettext_lazy as _
 from rest_framework import permissions, serializers, viewsets
 
+from ..domain.exceptions import BusinessRuleViolation
 from ..models import CalibrationOperation, CycleUnitAllocation, ProductionUnit
 from ..serializers import CalibrationOperationSerializer, CalibrationTankSerializer
+from ..services.production_unit_service import ProductionUnitLifecycleService
 
 
 class CalibrationTankViewSet(viewsets.ModelViewSet):
@@ -23,19 +26,63 @@ class CalibrationTankViewSet(viewsets.ModelViewSet):
         )
 
     def perform_create(self, serializer):
+        farm_profile = self.request.user.farm_profile
         client_uuid = serializer.validated_data.get("client_uuid")
         if client_uuid:
-            existing = self.get_queryset().filter(client_uuid=client_uuid).first()
+            existing = ProductionUnit.objects.filter(client_uuid=client_uuid).first()
             if existing:
+                try:
+                    ProductionUnitLifecycleService.validate_idempotent_payload(
+                        existing,
+                        {
+                            **serializer.validated_data,
+                            'status': 'active',
+                            'purpose': ProductionUnit.PURPOSE_CALIBRATION,
+                            'unit_type': 'tank',
+                        },
+                        farm_profile,
+                    )
+                except BusinessRuleViolation as exc:
+                    raise serializers.ValidationError({'detail': str(exc)}) from exc
                 serializer.instance = existing
                 return
-        serializer.save(
-            farm_profile=self.request.user.farm_profile,
-            unit_type='tank',
-            purpose=ProductionUnit.PURPOSE_CALIBRATION,
-            surface_m2=None,
-            status='active',
-        )
+        try:
+            with transaction.atomic():
+                serializer.save(
+                    farm_profile=farm_profile,
+                    unit_type='tank',
+                    purpose=ProductionUnit.PURPOSE_CALIBRATION,
+                    surface_m2=None,
+                    status='active',
+                )
+        except IntegrityError as exc:
+            existing = ProductionUnit.objects.filter(client_uuid=client_uuid).first() if client_uuid else None
+            if existing is None:
+                conflicting_name = ProductionUnit.objects.filter(
+                    farm_profile=farm_profile,
+                    name__iexact=serializer.validated_data['name'].strip(),
+                ).exists()
+                if conflicting_name:
+                    raise serializers.ValidationError(
+                        {'name': _("Une unité portant ce nom existe déjà dans cette ferme.")}
+                    ) from exc
+                raise serializers.ValidationError(
+                    {'detail': _("Le bac n'a pas pu être créé à cause d'un conflit concurrent.")}
+                ) from exc
+            try:
+                ProductionUnitLifecycleService.validate_idempotent_payload(
+                    existing,
+                    {
+                        **serializer.validated_data,
+                        'status': 'active',
+                        'purpose': ProductionUnit.PURPOSE_CALIBRATION,
+                        'unit_type': 'tank',
+                    },
+                    farm_profile,
+                )
+            except BusinessRuleViolation as conflict:
+                raise serializers.ValidationError({'detail': str(conflict)}) from exc
+            serializer.instance = existing
 
     def perform_update(self, serializer):
         instance = serializer.instance
@@ -49,11 +96,10 @@ class CalibrationTankViewSet(viewsets.ModelViewSet):
         serializer.save(status='active' if requested_active else 'inactive')
 
     def perform_destroy(self, instance):
-        if instance.cycle_allocations.filter(status=CycleUnitAllocation.STATUS_ACTIVE).exists():
-            raise serializers.ValidationError({'detail': _("Un bac occupé ne peut pas être supprimé.")})
-        if instance.cycle_allocations.exists():
-            raise serializers.ValidationError({'detail': _("Un bac ayant un historique doit être archivé.")})
-        instance.delete()
+        try:
+            ProductionUnitLifecycleService.delete(instance)
+        except BusinessRuleViolation as exc:
+            raise serializers.ValidationError({'detail': str(exc)}) from exc
 
 
 class CalibrationOperationViewSet(viewsets.ReadOnlyModelViewSet):
@@ -86,9 +132,19 @@ class CalibrationOperationViewSet(viewsets.ReadOnlyModelViewSet):
                 queryset = queryset.filter(source_allocation__cycle_id=cycle_id)
             elif direction == 'in':
                 queryset = queryset.filter(destination_allocation__cycle_id=cycle_id)
+            else:
+                queryset = queryset.filter(
+                    Q(source_allocation__cycle_id=cycle_id)
+                    | Q(destination_allocation__cycle_id=cycle_id)
+                )
         if allocation_id:
             if direction == 'out':
                 queryset = queryset.filter(source_allocation_id=allocation_id)
             elif direction == 'in':
                 queryset = queryset.filter(destination_allocation_id=allocation_id)
+            else:
+                queryset = queryset.filter(
+                    Q(source_allocation_id=allocation_id)
+                    | Q(destination_allocation_id=allocation_id)
+                )
         return queryset
