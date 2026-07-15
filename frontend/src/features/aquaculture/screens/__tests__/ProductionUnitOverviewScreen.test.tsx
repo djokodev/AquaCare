@@ -86,6 +86,8 @@ describe('features/aquaculture/screens/ProductionUnitOverviewScreen', () => {
         total_feed_consumed_kg: '6.50',
         latest_average_weight_g: '20.00',
         estimated_current_biomass_kg: '17.84',
+        biomass_data_available: true,
+        biomass_source: 'latest_weighing',
         estimated_market_value_fcfa: '35680.00',
         last_daily_log_date: '2026-06-28',
         days_since_last_log: 0,

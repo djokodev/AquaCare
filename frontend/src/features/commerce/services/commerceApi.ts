@@ -10,7 +10,6 @@ import {
   CycleSimulationParams,
   SimulationResult,
 } from '@/types/commerce';
-import { dashboardSyncService } from '@/services/dashboardSyncService';
 
 export const getProducts = async (filters?: ProductFilters) => {
   const response = await api.get<{ results: Product[] }>('/commerce/products/', {
@@ -53,7 +52,6 @@ export const simulateCycle = async (params: CycleSimulationParams) => {
 
 export const getOrders = async () => {
   const response = await api.get<Order[] | { results: Order[] }>('/commerce/orders/');
-  await dashboardSyncService.markSuccessful('orders');
   const payload = response.data as Order[] | { results: Order[] };
   return Array.isArray(payload) ? payload : payload.results;
 };
@@ -75,7 +73,6 @@ export const confirmOrderReceipt = async (orderId: string) => {
 
 export const getOrderStatistics = async () => {
   const response = await api.get<OrderStatistics>('/commerce/orders/statistics/');
-  await dashboardSyncService.markSuccessful('orders');
   return response.data;
 };
 

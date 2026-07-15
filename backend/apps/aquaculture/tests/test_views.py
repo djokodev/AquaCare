@@ -3397,6 +3397,7 @@ class TestCycleFeedStatus:
         response = auth_client.get(self._url(production_cycle.id))
 
         assert response.status_code == status.HTTP_200_OK
+        assert response.data['cycle_id'] == str(production_cycle.id)
         assert response.data['total_bags_needed'] == 0
         assert response.data['total_bags_ordered'] == 0
         assert response.data['bags_remaining_to_order'] == 0

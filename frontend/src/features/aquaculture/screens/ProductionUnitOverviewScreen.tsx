@@ -31,6 +31,7 @@ import { AppDispatch } from '@/store/store';
 import { colors, spacing } from '@/theme';
 import type { ProductionUnitDashboard } from '@/types/aquaculture';
 import { useDashboardSyncStatus } from '@/hooks/useDashboardSyncStatus';
+import { dashboardSyncService } from '@/services/dashboardSyncService';
 
 type NavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -42,15 +43,6 @@ interface Props {
   navigation: NavigationProp;
   route: RouteType;
 }
-
-const coerceNumber = (value: string | number | null | undefined): number | null => {
-  if (value === null || value === undefined) {
-    return null;
-  }
-
-  const coerced = typeof value === 'number' ? value : Number(value);
-  return Number.isFinite(coerced) ? coerced : null;
-};
 
 const hasValidProductionUnitContext = (
   cycleId: string,
@@ -114,6 +106,7 @@ export default function ProductionUnitOverviewScreen({ navigation, route }: Prop
         );
         setDashboard(result);
         setErrorKey(null);
+        await dashboardSyncService.markSuccessful('unit');
         await refreshLastSyncedAt();
       } catch {
         if (mode === 'initial') {
@@ -156,6 +149,7 @@ export default function ProductionUnitOverviewScreen({ navigation, route }: Prop
 
   const allocation = dashboard?.allocation ?? null;
   const summary = dashboard?.summary ?? null;
+  const biomassAvailable = summary?.biomass_data_available === true;
   const unitName = productionUnitName || allocation?.production_unit_name || t('productionUnitsUnknownUnit');
   const unitContext = hasUnitContext
     ? {
@@ -231,7 +225,7 @@ export default function ProductionUnitOverviewScreen({ navigation, route }: Prop
           unit={t('dashboardDirectProductionCostUnit')}
           helper={
             summary.estimated_market_value_fcfa == null
-              ? coerceNumber(summary.estimated_current_biomass_kg) === null
+              ? !biomassAvailable
                 ? t('dashboardAddWeighing')
                 : t('dashboardMissingSellingPrice')
               : t('productionUnitMarketValueHelper')
@@ -244,7 +238,7 @@ export default function ProductionUnitOverviewScreen({ navigation, route }: Prop
             value={formatDashboardNumber(summary.estimated_current_biomass_kg, locale, { maximumFractionDigits: 1 })}
             unit={t('kg')}
             tone="success"
-            helper={coerceNumber(summary.estimated_current_biomass_kg) === null ? t('dashboardAddWeighing') : undefined}
+            helper={!biomassAvailable ? t('dashboardAddWeighing') : undefined}
             unavailableLabel={t('dashboardDataUnavailable')}
           />
           <DashboardMetricCard

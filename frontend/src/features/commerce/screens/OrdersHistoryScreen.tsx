@@ -31,6 +31,7 @@ import {
 import { colors, spacing } from '@/theme';
 import { getProductDisplayName } from '@/features/commerce/utils/productPresentation';
 import { useDashboardSyncStatus } from '@/hooks/useDashboardSyncStatus';
+import { dashboardSyncService } from '@/services/dashboardSyncService';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'OrdersHistory'>;
 
@@ -47,11 +48,15 @@ export default function OrdersHistoryScreen() {
   const locale = i18n.language?.startsWith('fr') ? 'fr-FR' : 'en-US';
 
   const loadOrders = useCallback(async () => {
-    await Promise.all([dispatch(fetchOrders()), dispatch(fetchOrderStatistics())]);
+    await Promise.all([
+      dispatch(fetchOrders()).unwrap(),
+      dispatch(fetchOrderStatistics()).unwrap(),
+    ]);
+    await dashboardSyncService.markSuccessful('orders');
     await refreshLastSyncedAt();
   }, [dispatch, refreshLastSyncedAt]);
 
-  useEffect(() => { void loadOrders(); }, [loadOrders]);
+  useEffect(() => { void loadOrders().catch(() => undefined); }, [loadOrders]);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);

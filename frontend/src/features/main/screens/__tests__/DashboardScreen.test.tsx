@@ -288,10 +288,12 @@ describe("features/main/screens/DashboardScreen", () => {
     );
 
     expect(getByText("Dashboard du cycle")).toBeTruthy();
-    expect(getByText("dashboardEstimatedMarketValue")).toBeTruthy();
-    expect(getByText("currentFish")).toBeTruthy();
-    expect(getByText("dashboardTimeRemainingCycle")).toBeTruthy();
-    expect(getByText("dashboardDirectProductionCost")).toBeTruthy();
+    await waitFor(() => {
+      expect(getByText("dashboardEstimatedMarketValue")).toBeTruthy();
+      expect(getByText("currentFish")).toBeTruthy();
+      expect(getByText("dashboardTimeRemainingCycle")).toBeTruthy();
+      expect(getByText("dashboardDirectProductionCost")).toBeTruthy();
+    });
     expect(queryByText("sessionActiveCycleLabel")).toBeNull();
     expect(getByText("Cycle A")).toBeTruthy();
     expect(queryByText("Cycle A #1")).toBeNull();

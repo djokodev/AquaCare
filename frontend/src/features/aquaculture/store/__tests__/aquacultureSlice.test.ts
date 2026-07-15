@@ -11,6 +11,7 @@ import aquacultureReducer, {
   deleteProductionCycle,
   generateFeedingPlan,
   fetchDashboardData,
+  fetchCycleFeedStatus,
   fetchFeedingPlans,
   harvestCycle,
   synchronizeData,
@@ -468,6 +469,44 @@ describe('features/aquaculture/store/aquacultureSlice', () => {
 
     expect(action.type).toBe('aquaculture/fetchDashboardData/rejected');
     expect(action.payload).toBe('Service indisponible');
+  });
+
+  it('ignore les réponses feed obsolètes et refuse un cycle incohérent', () => {
+    const initial = aquacultureReducer(undefined, { type: '@@INIT' }) as AquacultureState;
+    const feedA = {
+      cycle_id: 'cycle-a',
+      total_bags_needed: 4,
+      total_feed_needed_kg: 100,
+      bags_by_product: [],
+      total_bags_ordered: 1,
+      total_feed_consumed_kg: 25,
+      bags_consumed_equivalent: 1,
+      bags_remaining_to_order: 3,
+    };
+    const feedB = { ...feedA, cycle_id: 'cycle-b', bags_remaining_to_order: 2 };
+
+    const pendingA = fetchCycleFeedStatus.pending('request-a', 'cycle-a');
+    const pendingB = fetchCycleFeedStatus.pending('request-b', 'cycle-b');
+    const afterA = aquacultureReducer(initial, pendingA);
+    const afterB = aquacultureReducer(afterA, pendingB);
+    const staleA = aquacultureReducer(
+      afterB,
+      fetchCycleFeedStatus.fulfilled(feedA, 'request-a', 'cycle-a'),
+    );
+
+    expect(staleA.cycleFeedStatus.data).toBeNull();
+    const currentB = aquacultureReducer(
+      staleA,
+      fetchCycleFeedStatus.fulfilled(feedB, 'request-b', 'cycle-b'),
+    );
+    expect(currentB.cycleFeedStatus.data?.cycle_id).toBe('cycle-b');
+
+    const mismatch = aquacultureReducer(
+      currentB,
+      fetchCycleFeedStatus.fulfilled(feedA, 'request-b', 'cycle-b'),
+    );
+    expect(mismatch.cycleFeedStatus.data?.cycle_id).toBe('cycle-b');
+    expect(mismatch.cycleFeedStatus.error).toBe('Cycle feed status response mismatch');
   });
 
   it('fetchDashboardData fallback sur error.message puis message par defaut', async () => {

@@ -3,10 +3,44 @@
 from __future__ import annotations
 
 from datetime import date
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
+from typing import Literal
 
 
 MONEY_QUANTIZE = Decimal("0.01")
+BiomassSource = Literal['latest_weighing', 'allocation_current', 'initial_stocking', 'harvested']
+
+
+def resolve_biomass_data(
+    *,
+    allocation_status: str,
+    current_fish_count: int,
+    current_biomass_kg: Decimal | None,
+    initial_biomass_kg: Decimal | None,
+    latest_average_weight_g: Decimal | None,
+) -> tuple[Decimal | None, bool, BiomassSource | None]:
+    """Resolve biomass and its provenance without treating a default zero as reliable."""
+    if allocation_status == 'harvested':
+        return Decimal('0.00'), True, 'harvested'
+
+    if latest_average_weight_g is not None:
+        biomass = (
+            Decimal(current_fish_count) * latest_average_weight_g / Decimal('1000')
+        ).quantize(MONEY_QUANTIZE, rounding=ROUND_HALF_UP)
+        return biomass, True, 'latest_weighing'
+
+    if current_biomass_kg is not None and current_biomass_kg > 0:
+        return current_biomass_kg.quantize(MONEY_QUANTIZE, rounding=ROUND_HALF_UP), True, 'allocation_current'
+
+    if (
+        current_biomass_kg is not None
+        and initial_biomass_kg is not None
+        and initial_biomass_kg > 0
+        and current_biomass_kg == initial_biomass_kg
+    ):
+        return initial_biomass_kg.quantize(MONEY_QUANTIZE, rounding=ROUND_HALF_UP), True, 'initial_stocking'
+
+    return None, False, None
 
 
 def estimate_market_value_fcfa(

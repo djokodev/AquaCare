@@ -107,6 +107,10 @@ Le résumé unitaire expose désormais `estimated_market_value_fcfa`, calculé a
 biomasse de l'allocation et le prix prévisionnel canonique du cycle. La valeur reste
 `null` lorsqu'un des deux intrants est inconnu.
 
+Le dashboard cycle expose `direct_production_cost_fcfa` selon la règle métier canonique :
+`feed_cost_fcfa + fingerlings_cost_fcfa`. Les autres charges opérationnelles
+(`other_operational_costs_fcfa`) restent volontairement exclues de cette métrique.
+
 ### CycleFeedStockEntry
 
 Modele: `aquaculture.models.CycleFeedStockEntry`
@@ -300,6 +304,11 @@ Le contrat `GET /api/aquaculture/cycles/{id}/dashboard/` ajoute au résumé
 `cycle_progress_pct` et `days_remaining`. Les estimations de valeur et la
 progression sont calculées dans le domaine backend ; `null` signale une donnée
 insuffisante et n'est jamais converti en zéro.
+
+Le contrat du dashboard d'allocation ajoute `biomass_data_available` et
+`biomass_source`. Une biomasse par défaut à zéro n'est pas considérée comme fiable
+pour une allocation active sans pesée ou preuve d'une valeur courante calculée.
+Une allocation récoltée retourne explicitement zéro avec la source `harvested`.
 
 ### 7. Sync Offline
 

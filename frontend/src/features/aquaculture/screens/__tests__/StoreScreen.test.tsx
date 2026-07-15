@@ -90,6 +90,9 @@ describe('StoreScreen', () => {
         },
       },
     };
+    mockDispatch.mockImplementation(() => ({
+      unwrap: jest.fn().mockResolvedValue(mockState.aquaculture.cycleFeedStatus.data),
+    }));
     mockGetCycleStore.mockResolvedValue({
       cycle_id: 'cycle-1',
       summary: {
@@ -213,6 +216,23 @@ describe('StoreScreen', () => {
     });
     const { getByText } = render(<StoreScreen />);
     await waitFor(() => expect(getByText('storeReplenishmentRequired')).toBeTruthy());
+  });
+
+  it('ignore le statut alimentaire d un autre cycle', async () => {
+    mockRouteParams = { cycleId: 'cycle-2' };
+    mockState.aquaculture.currentCycle = { id: 'cycle-2', cycle_name: 'Cycle B' };
+    mockState.aquaculture.cycleFeedStatus.data = {
+      ...mockState.aquaculture.cycleFeedStatus.data,
+      cycle_id: 'cycle-1',
+      bags_remaining_to_order: 8,
+    };
+    const { getByText, queryByText } = render(<StoreScreen />);
+
+    await waitFor(() => {
+      expect(getByText('storeEstimatedNeedToFinish')).toBeTruthy();
+      expect(getByText('—')).toBeTruthy();
+    });
+    expect(queryByText('storeReplenishmentRequired')).toBeNull();
   });
 
   it('affiche un etat vide quand aucun stock n est encore declare', async () => {

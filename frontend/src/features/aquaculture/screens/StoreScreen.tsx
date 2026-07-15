@@ -46,6 +46,7 @@ import { CycleStore } from '@/types/aquaculture';
 import { sanitizeUserFacingErrorMessage } from '@/utils/errorParser';
 import { getOrderStatusLabelKey } from '@/features/commerce/utils/orderStatus';
 import { useDashboardSyncStatus } from '@/hooks/useDashboardSyncStatus';
+import { dashboardSyncService } from '@/services/dashboardSyncService';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'Store'>;
 
@@ -140,8 +141,12 @@ export default function StoreScreen() {
     setError(null);
 
     try {
-      const payload = await aquacultureService.getCycleStore(cycleId);
+      const [payload] = await Promise.all([
+        aquacultureService.getCycleStore(cycleId),
+        dispatch(fetchCycleFeedStatus(cycleId)).unwrap(),
+      ]);
       setStore(payload);
+      await dashboardSyncService.markSuccessful('store');
       await refreshLastSyncedAt();
     } catch (caughtError) {
       if (!preserveVisibleStore) {
@@ -156,9 +161,6 @@ export default function StoreScreen() {
   useFocusEffect(
     useCallback(() => {
       void loadStore();
-      if (cycleId) {
-        dispatch(fetchCycleFeedStatus(cycleId));
-      }
     }, [loadStore, cycleId, dispatch])
   );
 
@@ -168,10 +170,7 @@ export default function StoreScreen() {
     }
     setRefreshing(true);
     try {
-      await Promise.all([
-        loadStore(true),
-        cycleId ? dispatch(fetchCycleFeedStatus(cycleId)) : Promise.resolve(),
-      ]);
+      await loadStore(true);
     } finally {
       setRefreshing(false);
     }
@@ -235,11 +234,12 @@ export default function StoreScreen() {
     }
   };
 
-  const remainingToOrderValue = cycleFeedStatus
-    ? formatDashboardNumber(cycleFeedStatus.bags_remaining_to_order, locale, { maximumFractionDigits: 0 })
+  const currentCycleFeedStatus = cycleFeedStatus?.cycle_id === cycleId ? cycleFeedStatus : null;
+  const remainingToOrderValue = currentCycleFeedStatus
+    ? formatDashboardNumber(currentCycleFeedStatus.bags_remaining_to_order, locale, { maximumFractionDigits: 0 })
     : null;
   const availableStockKg = parseDashboardNumber(store?.summary.estimated_feed_remaining_kg);
-  const remainingBags = parseDashboardNumber(cycleFeedStatus?.bags_remaining_to_order);
+  const remainingBags = parseDashboardNumber(currentCycleFeedStatus?.bags_remaining_to_order);
   const requiresReplenishment = availableStockKg === 0 && remainingBags !== null && remainingBags > 0;
 
   const actionRows = [

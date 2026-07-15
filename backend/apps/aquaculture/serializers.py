@@ -1714,6 +1714,12 @@ class ProductionUnitDashboardSummarySerializer(serializers.Serializer):
         required=False,
         allow_null=True,
     )
+    biomass_data_available = serializers.BooleanField()
+    biomass_source = serializers.ChoiceField(
+        choices=['latest_weighing', 'allocation_current', 'initial_stocking', 'harvested'],
+        required=False,
+        allow_null=True,
+    )
     estimated_market_value_fcfa = serializers.DecimalField(
         max_digits=16,
         decimal_places=2,

@@ -68,7 +68,7 @@ describe('OrdersHistoryScreen', () => {
     jest.clearAllMocks();
     mockDispatch.mockImplementation((action: { type?: string }) => action.type === 'confirmOrderReceipt'
       ? { unwrap: jest.fn().mockResolvedValue(createOrder('received')) }
-      : Promise.resolve(action));
+      : { unwrap: jest.fn().mockResolvedValue({}) });
     mockState = {
       commerce: {
         orders: {
@@ -146,7 +146,7 @@ describe('OrdersHistoryScreen', () => {
 
     mockDispatch.mockImplementation((action: { type?: string }) => action.type === 'confirmOrderReceipt'
       ? { unwrap: jest.fn().mockRejectedValue(new Error('failed')) }
-      : Promise.resolve(action));
+      : { unwrap: jest.fn().mockResolvedValue({}) });
     fireEvent.press(getByText('confirmReceiptAction'));
     await confirmAction?.();
     await waitFor(() => expect(Alert.alert).toHaveBeenCalledWith('error', 'confirmReceiptError'));

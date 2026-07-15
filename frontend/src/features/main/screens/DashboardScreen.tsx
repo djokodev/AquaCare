@@ -1,5 +1,6 @@
 ﻿import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { useFocusEffect } from "@react-navigation/native";
+import { useRef } from "react";
 import {
   View,
   ScrollView,
@@ -43,11 +44,13 @@ import {
   ErrorState,
   formatDashboardCurrency,
   formatDashboardNumber,
+  InlineAlert,
   InteractiveCard,
   LoadingState,
 } from "@/components/ui";
 import { colors, spacing } from "@/theme";
 import { useDashboardSyncStatus } from "@/hooks/useDashboardSyncStatus";
+import { dashboardSyncService } from "@/services/dashboardSyncService";
 
 interface DashboardActionCardProps {
   label: string;
@@ -111,6 +114,10 @@ export default function DashboardScreen({ navigation }: any) {
   >(null);
   const [currentCycleDashboard, setCurrentCycleDashboard] =
     useState<CycleDashboard | null>(null);
+  const [cycleDashboardLoading, setCycleDashboardLoading] = useState(false);
+  const [cycleDashboardRefreshing, setCycleDashboardRefreshing] = useState(false);
+  const [cycleDashboardError, setCycleDashboardError] = useState<string | null>(null);
+  const cycleDashboardRequestRef = useRef(0);
   const [refreshing, setRefreshing] = useState(false);
   const { lastSyncedAt, refreshLastSyncedAt } =
     useDashboardSyncStatus("cycle");
@@ -195,32 +202,63 @@ export default function DashboardScreen({ navigation }: any) {
   const cycleHasProductionUnits =
     primaryCycleHasProductionUnits || (currentCycleUnitCount ?? 0) > 0;
   const locale = i18n.language?.startsWith("fr") ? "fr-FR" : "en-US";
-  const loadCurrentCycleDashboard = useCallback(async () => {
-    if (!primaryActiveCycle) {
+  const primaryActiveCycleId = primaryActiveCycle?.id ?? null;
+  const loadCurrentCycleDashboard = useCallback(async (mode: "initial" | "refresh" = "initial") => {
+    const requestId = cycleDashboardRequestRef.current + 1;
+    cycleDashboardRequestRef.current = requestId;
+
+    if (!primaryActiveCycleId) {
       setCurrentCycleDashboard(null);
       setCurrentCycleUnitCount(null);
-      return;
+      setCycleDashboardError(null);
+      setCycleDashboardLoading(false);
+      setCycleDashboardRefreshing(false);
+      return false;
     }
-    const cycleDashboard = await aquacultureService.getCycleDashboard(
-      primaryActiveCycle.id,
-    );
-    setCurrentCycleDashboard(cycleDashboard);
-    setCurrentCycleUnitCount(cycleDashboard.summary.total_allocations);
-    await refreshLastSyncedAt();
-  }, [primaryActiveCycle, refreshLastSyncedAt]);
+
+    setCycleDashboardError(null);
+    if (mode === "refresh") {
+      setCycleDashboardRefreshing(true);
+    } else {
+      setCycleDashboardLoading(true);
+    }
+
+    try {
+      const cycleDashboard = await aquacultureService.getCycleDashboard(primaryActiveCycleId);
+      if (requestId !== cycleDashboardRequestRef.current) {
+        return false;
+      }
+      setCurrentCycleDashboard(cycleDashboard);
+      setCurrentCycleUnitCount(cycleDashboard.summary.total_allocations);
+      await dashboardSyncService.markSuccessful("cycle");
+      await refreshLastSyncedAt();
+      return true;
+    } catch {
+      if (requestId === cycleDashboardRequestRef.current) {
+        setCycleDashboardError("cycleDashboardLoadError");
+      }
+      return false;
+    } finally {
+      if (requestId === cycleDashboardRequestRef.current) {
+        setCycleDashboardLoading(false);
+        setCycleDashboardRefreshing(false);
+      }
+    }
+  }, [primaryActiveCycleId, refreshLastSyncedAt]);
 
   useEffect(() => {
     setCurrentCycleDashboard(null);
     setCurrentCycleUnitCount(null);
-    void loadCurrentCycleDashboard().catch(() => undefined);
-  }, [loadCurrentCycleDashboard]);
+    setCycleDashboardError(null);
+    void loadCurrentCycleDashboard();
+  }, [loadCurrentCycleDashboard, primaryActiveCycleId]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     void Promise.all([
       loadFarmProfile(),
       dispatch(fetchDashboardData(undefined)),
-      loadCurrentCycleDashboard(),
+      loadCurrentCycleDashboard("refresh"),
       dispatch(fetchProductionCycles()),
       dispatch(fetchNotifications({ cycleId: currentCycle?.id })),
       dispatch(fetchOrders()),
@@ -230,6 +268,9 @@ export default function DashboardScreen({ navigation }: any) {
   }, [currentCycle?.id, dispatch, loadCurrentCycleDashboard, loadFarmProfile]);
 
   const cycleSummary = currentCycleDashboard?.summary;
+  const cycleDashboardInitialLoading = Boolean(
+    primaryActiveCycleId && !cycleSummary && !cycleDashboardError,
+  );
 
   useEffect(() => {
     if (availableSessionCycles.length === 0) {
@@ -362,7 +403,7 @@ export default function DashboardScreen({ navigation }: any) {
         className="flex-1 bg-dashboard"
         refreshControl={
           <RefreshControl
-            refreshing={refreshing || loading.dashboard}
+            refreshing={refreshing || loading.dashboard || cycleDashboardRefreshing}
             onRefresh={onRefresh}
           />
         }
@@ -388,7 +429,7 @@ export default function DashboardScreen({ navigation }: any) {
       <ScrollView
         refreshControl={
           <RefreshControl
-            refreshing={refreshing || loading.dashboard}
+            refreshing={refreshing || loading.dashboard || cycleDashboardRefreshing}
             onRefresh={onRefresh}
           />
         }
@@ -404,13 +445,22 @@ export default function DashboardScreen({ navigation }: any) {
             title={t("cycleDashboardTitle")}
             lastSyncedAt={lastSyncedAt}
           >
-            {loading.dashboard && !cycleSummary ? (
+            {(cycleDashboardLoading || cycleDashboardInitialLoading) && !cycleSummary ? (
               <LoadingState
                 message={t("cycleDashboardLoading")}
                 compact
               />
+            ) : cycleDashboardError && !cycleSummary ? (
+              <ErrorState
+                message={t(cycleDashboardError)}
+                actionLabel={t("retry")}
+                onAction={() => void loadCurrentCycleDashboard("refresh")}
+              />
             ) : (
               <>
+                {cycleDashboardError ? (
+                  <InlineAlert tone="error" message={t(cycleDashboardError)} />
+                ) : null}
                 <DashboardHeroCard
                   label={t("dashboardEstimatedMarketValue")}
                   value={formatDashboardCurrency(

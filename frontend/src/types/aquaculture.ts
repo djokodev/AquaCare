@@ -569,6 +569,8 @@ export interface ProductionUnitDashboardSummary {
   total_feed_consumed_kg: string | number;
   latest_average_weight_g: string | number | null;
   estimated_current_biomass_kg: string | number | null;
+  biomass_data_available: boolean;
+  biomass_source: 'latest_weighing' | 'allocation_current' | 'initial_stocking' | 'harvested' | null;
   estimated_market_value_fcfa: string | number | null;
   last_daily_log_date: string | null;
   days_since_last_log: number | null;
@@ -959,6 +961,7 @@ export interface FeedProductStatus {
 }
 
 export interface CycleFeedStatus {
+  cycle_id: string;
   total_bags_needed: number;
   total_feed_needed_kg: number;
   bags_by_product: FeedProductStatus[];
@@ -1033,6 +1036,8 @@ export interface AquacultureState {
     data: CycleFeedStatus | null;
     loading: boolean;
     error: string | null;
+    requestedCycleId: string | null;
+    currentRequestId: string | null;
   };
 
   // Etat de chargement

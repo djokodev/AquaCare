@@ -38,6 +38,8 @@ const initialState: AquacultureState = {
     data: null,
     loading: false,
     error: null,
+    requestedCycleId: null,
+    currentRequestId: null,
   },
   loading: {
     dashboard: false,
@@ -670,15 +672,28 @@ export const aquacultureSlice = createSlice({
       .addCase(logoutUser.fulfilled, () => initialState)
       .addCase(logoutUser.rejected, () => initialState)
 
-      .addCase(fetchCycleFeedStatus.pending, (state) => {
+      .addCase(fetchCycleFeedStatus.pending, (state, action) => {
         state.cycleFeedStatus.loading = true;
         state.cycleFeedStatus.error = null;
+        state.cycleFeedStatus.requestedCycleId = action.meta.arg;
+        state.cycleFeedStatus.currentRequestId = action.meta.requestId;
       })
       .addCase(fetchCycleFeedStatus.fulfilled, (state, action) => {
+        if (action.meta.requestId !== state.cycleFeedStatus.currentRequestId) {
+          return;
+        }
+        if (action.payload.cycle_id !== state.cycleFeedStatus.requestedCycleId) {
+          state.cycleFeedStatus.loading = false;
+          state.cycleFeedStatus.error = 'Cycle feed status response mismatch';
+          return;
+        }
         state.cycleFeedStatus.loading = false;
         state.cycleFeedStatus.data = action.payload;
       })
       .addCase(fetchCycleFeedStatus.rejected, (state, action) => {
+        if (action.meta.requestId !== state.cycleFeedStatus.currentRequestId) {
+          return;
+        }
         state.cycleFeedStatus.loading = false;
         state.cycleFeedStatus.error = action.payload as string;
       });

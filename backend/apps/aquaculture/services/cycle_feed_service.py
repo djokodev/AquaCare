@@ -35,6 +35,7 @@ class ProductFeedStatus(TypedDict):
 
 
 class CycleFeedStatusResult(TypedDict):
+    cycle_id: str
     total_bags_needed: int
     total_feed_needed_kg: float
     bags_by_product: list[ProductFeedStatus]
@@ -84,6 +85,7 @@ class CycleFeedService:
         bags_remaining = max(0, total_bags_needed - total_bags_ordered)
 
         return {
+            "cycle_id": str(cycle.id),
             "total_bags_needed": total_bags_needed,
             "total_feed_needed_kg": round(total_feed_needed_kg, 2),
             "bags_by_product": list(bags_by_product.values()),

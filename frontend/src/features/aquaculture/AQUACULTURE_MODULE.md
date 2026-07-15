@@ -75,8 +75,11 @@ Les dashboards cycle et unité utilisent désormais les composants partagés de
 `components/ui/dashboard`. Le cycle met en avant la valeur marchande et la
 progression backend ; l'unité met en avant sa valeur marchande calculée avec le
 même prix canonique. Les cartes restent statiques, accessibles et sans animation
-décorative. Les récupérations réseau réussies persistent un timestamp de fraîcheur
-par domaine sans modifier les files offline.
+décorative. Les timestamps de fraîcheur ne sont écrits qu'après la réussite de
+l'orchestration complète du dashboard concerné ; une récupération API partielle ne
+peut donc pas annoncer une synchronisation globale. Le dashboard d'unité expose
+également la disponibilité et la provenance de sa biomasse pour distinguer une
+valeur zéro métier d'une valeur par défaut inconnue.
 
 ## Production unit integrity rule
 
