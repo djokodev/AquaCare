@@ -231,10 +231,20 @@ jobs:
           global_harvest_output="$(pytest -n 0 \
             apps/aquaculture/tests/test_views.py \
             apps/aquaculture/tests/services/test_sync_service.py \
-            -q -k 'global_harvest_retry_returns_pending_operation or global_harvest_multi_allocation_returns_all_operations or full_sync_final_harvest_by_cycle_id_is_pending_and_idempotent or full_sync_partial_success_lists_only_accepted_business_items')"
+            -q -k 'global_harvest_retry_returns_pending_operation or global_harvest_multi_allocation_returns_all_operations or global_harvest_child_operation_references or full_sync_partial_success_lists_only_accepted_business_items')"
           echo "$global_harvest_output"
           if echo "$global_harvest_output" | grep -qi skipped; then
             echo "Critical global-harvest test was skipped"
+            exit 1
+          fi
+          retry_output="$(pytest -n 0 \
+            apps/aquaculture/tests/test_views.py \
+            apps/aquaculture/tests/services/test_calibration_service.py \
+            apps/aquaculture/tests/services/test_sync_service.py \
+            -q -k 'online_then_offline_retry or concurrent_global_harvest_and_calibration or partial_success_confirms_all_accepted_collections or global_harvest_child_operation_references')"
+          echo "$retry_output"
+          if echo "$retry_output" | grep -qi skipped; then
+            echo "Critical harvest retry, concurrency, partial-success, or child-reference test was skipped"
             exit 1
           fi
 

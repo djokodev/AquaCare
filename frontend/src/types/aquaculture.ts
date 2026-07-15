@@ -743,7 +743,11 @@ export interface SyncPayload {
 export interface SyncError {
   type: "cycle" | "cycle_log" | "sanitary_log" | "calibration_tank" | "calibration_operation" | "final_harvest" | "general";
   data?: unknown;
-  error: string;
+  client_uuid?: string | null;
+  code?: string;
+  detail?: string | Record<string, unknown>;
+  error?: string;
+  field?: string;
   errors?: Record<string, string[]>;
 }
 
@@ -761,15 +765,23 @@ export interface SyncResponse {
   };
   errors: SyncError[];
   accepted?: {
+    cycles: string[];
+    cycle_logs: string[];
+    sanitary_logs: string[];
+    calibration_tanks: string[];
     calibration_operations: string[];
     final_harvests: string[];
   };
   items?: Array<{
-    type: 'calibration_operation' | 'final_harvest';
+    type: 'cycle' | 'cycle_log' | 'sanitary_log' | 'calibration_tank' |
+      'calibration_operation' | 'final_harvest';
     client_uuid: string;
     status: 'accepted';
+    server_id?: string;
     reconciliation_status?: 'pending' | 'reconciled';
     operation_id?: string;
+    operation_ids?: string[];
+    operation_client_uuids?: string[];
   }>;
   server_updates: {
     cycles: ProductionCycle[];

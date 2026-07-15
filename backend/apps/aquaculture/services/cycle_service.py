@@ -68,6 +68,7 @@ from ..models import (
     ProductionUnit,
 )
 from .allocation_ledger_service import AllocationLedgerService
+from .aquaculture_lock_service import AquacultureLockService
 from .base import BaseService
 from .final_harvest_service import FinalHarvestService
 
@@ -274,7 +275,10 @@ class ProductionCycleService(BaseService):
             {"cycle_id": str(cycle.id), "harvest_date": str(harvest_date)}
         )
 
-        cycle = ProductionCycle.objects.select_for_update().get(pk=cycle.pk)
+        lock_context = AquacultureLockService.lock_cycle_harvest_context(
+            cycle_id=cycle.pk,
+        )
+        cycle = lock_context.cycles[0]
 
         # Un retry arrive nécessairement après la clôture du cycle. Il faut donc
         # retrouver la commande avant de rejeter son statut harvested.
@@ -289,6 +293,7 @@ class ProductionCycleService(BaseService):
                 harvest_notes=harvest_notes,
                 total_harvested_weight=total_harvested_weight,
                 created_offline=created_offline,
+                locked_allocations=lock_context.allocations,
             )
             if replay is not None:
                 return replay
@@ -302,9 +307,11 @@ class ProductionCycleService(BaseService):
                 % {'status': cycle.get_status_display()}
             )
 
-        active_allocations = list(
-            cycle.unit_allocations.filter(status=CycleUnitAllocation.STATUS_ACTIVE).order_by('id')
-        )
+        active_allocations = [
+            allocation
+            for allocation in lock_context.allocations
+            if allocation.status == CycleUnitAllocation.STATUS_ACTIVE
+        ]
         if active_allocations:
             current_total = sum(allocation.current_fish_count for allocation in active_allocations)
             if client_uuid is None:
@@ -414,11 +421,14 @@ class ProductionCycleService(BaseService):
         harvest_notes: str,
         total_harvested_weight: Decimal | None,
         created_offline: bool,
+        locked_allocations: list[CycleUnitAllocation] | None = None,
     ) -> HarvestCycleResult | None:
         """Reconnaît et valide une commande globale déjà appliquée."""
-        allocations = list(
-            cycle.unit_allocations.select_related('final_harvest_operation').order_by('id')
-        )
+        allocations = locked_allocations
+        if allocations is None:
+            allocations = list(
+                cycle.unit_allocations.select_related('final_harvest_operation').order_by('id')
+            )
         if not allocations:
             # Les cycles historiques sans allocation ne possèdent aucun support
             # d'événement. Leur projection finale constitue donc la règle de
@@ -948,15 +958,12 @@ class ProductionCycleService(BaseService):
             {"allocation_id": str(allocation.id), "harvest_date": str(harvest_date)}
         )
 
-        # Ordre de verrouillage global : unité, allocation, événement final.
-        # Le calibrage suit le même ordre, ce qui évite un cycle d'attente
-        # lorsqu'une récolte et un transfert ciblent simultanément cette unité.
-        ProductionUnit.objects.select_for_update().get(pk=allocation.production_unit_id)
-        locked_allocation = CycleUnitAllocation.objects.select_for_update().select_related(
-            'cycle__farm_profile__user',
-            'production_unit',
-        ).get(id=allocation.id)
-        locked_cycle = locked_allocation.cycle
+        lock_context = AquacultureLockService.lock_cycle_harvest_context(
+            cycle_id=allocation.cycle_id,
+            allocation_ids=[allocation.pk],
+        )
+        locked_allocation = lock_context.allocations[0]
+        locked_cycle = lock_context.cycles[0]
         client_uuid = client_uuid or uuid.uuid4()
 
         final_biomass = (

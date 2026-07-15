@@ -955,7 +955,66 @@ class TestSyncSanitaryLogs:
         assert result['errors'][0]['code'] == 'invalid_calibration_operation'
         assert FinalHarvestOperation.objects.filter(allocation=source).count() == 1
 
-    def test_full_sync_final_harvest_by_cycle_id_is_pending_and_idempotent(self):
+    def test_global_harvest_child_operation_references_are_exposed_and_idempotent(self):
+        from tests.fixtures.factories import FarmProfileFactory
+
+        user = UserFactory()
+        farm = FarmProfileFactory(user=user)
+        day = timezone.localdate() - timedelta(days=1)
+        cycle = ProductionCycleFactory(
+            farm_profile=farm,
+            start_date=day - timedelta(days=10),
+            initial_count=1000,
+            current_count=1000,
+            initial_average_weight=Decimal('100.00'),
+            current_average_weight=Decimal('100.00'),
+            initial_biomass=Decimal('100.00'),
+            current_biomass=Decimal('100.00'),
+            status='active',
+        )
+        allocations = [
+            create_cycle_unit_allocation(cycle, 'Cycle scope harvest 1'),
+            create_cycle_unit_allocation(cycle, 'Cycle scope harvest 2'),
+        ]
+        client_uuid = uuid4()
+        harvested_at = timezone.make_aware(datetime.combine(day, time(hour=18)))
+        payload = {
+            'final_harvests': [{
+                'client_uuid': str(client_uuid),
+                'cycle_id': str(cycle.id),
+                'harvest_date': day.isoformat(),
+                'final_harvested_at': harvested_at.isoformat(),
+                'final_count': 1000,
+                'final_average_weight': '300.00',
+                'total_harvested_weight': '300.00',
+                'created_offline': True,
+            }],
+        }
+
+        first = SyncService.perform_full_sync(user, payload)
+        replay = SyncService.perform_full_sync(user, payload)
+
+        operations = list(FinalHarvestOperation.objects.order_by('allocation_id'))
+        assert first['status'] == 'success'
+        assert first['accepted']['final_harvests'] == [str(client_uuid)]
+        assert first['items'][0]['reconciliation_status'] == 'reconciled'
+        assert set(first['items'][0]['operation_ids']) == {
+            str(operation.id) for operation in operations
+        }
+        assert set(first['items'][0]['operation_client_uuids']) == {
+            str(operation.client_uuid) for operation in operations
+        }
+        assert replay['status'] == 'success'
+        assert replay['processed']['final_harvests'] == 1
+        assert replay['accepted']['final_harvests'] == [str(client_uuid)]
+        assert FinalHarvestOperation.objects.filter(allocation__in=allocations).count() == 2
+        assert all(
+            operation.reconciliation_status == FinalHarvestOperation.STATUS_RECONCILED
+            for operation in operations
+        )
+
+    def test_full_sync_partial_success_confirms_all_accepted_collections(self):
+        """Un échec isolé ne remet pas les cinq commandes valides en file."""
         from tests.fixtures.factories import FarmProfileFactory
 
         user = UserFactory()
@@ -972,34 +1031,95 @@ class TestSyncSanitaryLogs:
             current_biomass=Decimal('50.00'),
             status='active',
         )
-        allocation = create_cycle_unit_allocation(cycle, 'Cycle scope harvest')
-        client_uuid = uuid4()
+        allocation = create_cycle_unit_allocation(cycle, 'Récolte partial success')
+        uuids = {
+            key: uuid4()
+            for key in ('cycle', 'log', 'sanitary', 'tank', 'calibration', 'harvest')
+        }
         harvested_at = timezone.make_aware(datetime.combine(day, time(hour=18)))
-        payload = {
+
+        result = SyncService.perform_full_sync(user, {
+            'new_cycles': [{
+                'client_uuid': str(uuids['cycle']),
+                'cycle_name': 'Cycle accepté en lot',
+                'species': 'tilapia',
+                'pond_identifier': 'Bassin accepted',
+                'pond_surface_m2': '20.00',
+                'start_date': day.isoformat(),
+                'initial_count': 200,
+                'initial_average_weight': '10.00',
+            }],
+            'cycle_logs': [{
+                'client_uuid': str(uuids['log']),
+                'cycle': str(cycle.id),
+                'log_date': day.isoformat(),
+                'mortality_count': 0,
+            }],
+            'sanitary_logs': [{
+                'client_uuid': str(uuids['sanitary']),
+                'cycle': str(cycle.id),
+                'event_date': day.isoformat(),
+                'event_type': 'treatment',
+                'symptoms': 'Observation préventive suffisamment détaillée.',
+            }],
+            'calibration_tanks': [{
+                'client_uuid': str(uuids['tank']),
+                'name': 'Bac accepted partial',
+                'volume_m3': '5.00',
+            }],
+            'calibration_operations': [{
+                'client_uuid': str(uuids['calibration']),
+                'source_allocation_id': str(uuid4()),
+                'destination_production_unit_id': str(uuid4()),
+                'calibrated_at': (harvested_at - timedelta(hours=1)).isoformat(),
+                'transferred_count': 10,
+            }],
             'final_harvests': [{
-                'client_uuid': str(client_uuid),
-                'cycle_id': str(cycle.id),
+                'client_uuid': str(uuids['harvest']),
+                'allocation_id': str(allocation.id),
                 'harvest_date': day.isoformat(),
                 'final_harvested_at': harvested_at.isoformat(),
-                'final_count': 400,
+                'final_count': 500,
                 'final_average_weight': '300.00',
-                'total_harvested_weight': '120.00',
+                'total_harvested_weight': '150.00',
                 'created_offline': True,
             }],
+        })
+
+        assert result['status'] == 'partial_success'
+        assert result['accepted'] == {
+            'cycles': [str(uuids['cycle'])],
+            'cycle_logs': [str(uuids['log'])],
+            'sanitary_logs': [str(uuids['sanitary'])],
+            'calibration_tanks': [str(uuids['tank'])],
+            'calibration_operations': [],
+            'final_harvests': [str(uuids['harvest'])],
         }
+        assert result['processed'] == {
+            'cycles': 1,
+            'cycle_logs': 1,
+            'cycle_logs_updated': 0,
+            'sanitary_logs': 1,
+            'calibration_tanks': 1,
+            'calibration_operations': 0,
+            'final_harvests': 1,
+        }
+        assert {item['client_uuid'] for item in result['items']} == {
+            str(uuids[key]) for key in ('cycle', 'log', 'sanitary', 'tank', 'harvest')
+        }
+        assert result['errors'][0]['client_uuid'] == str(uuids['calibration'])
 
-        first = SyncService.perform_full_sync(user, payload)
-        replay = SyncService.perform_full_sync(user, payload)
+    def test_full_sync_does_not_accept_failed_items(self):
+        sync_result = SyncService._build_full_sync_response({})
+        SyncService._record_full_sync_accept(
+            sync_result,
+            accepted_key='cycle_logs',
+            item_type='cycle_log',
+            client_uuid=None,
+        )
 
-        operation = FinalHarvestOperation.objects.get(allocation=allocation)
-        assert first['status'] == 'success'
-        assert first['accepted']['final_harvests'] == [str(client_uuid)]
-        assert first['items'][0]['reconciliation_status'] == 'pending'
-        assert replay['status'] == 'success'
-        assert replay['processed']['final_harvests'] == 1
-        assert replay['accepted']['final_harvests'] == [str(client_uuid)]
-        assert FinalHarvestOperation.objects.filter(allocation=allocation).count() == 1
-        assert operation.reconciliation_status == FinalHarvestOperation.STATUS_PENDING
+        assert sync_result['accepted']['cycle_logs'] == []
+        assert sync_result['items'] == []
 
     def test_full_sync_partial_success_lists_only_accepted_business_items(self):
         from tests.fixtures.factories import FarmProfileFactory

@@ -15,6 +15,7 @@ from aquaculture.models import (
     CycleLog,
     CycleUnitAllocation,
     FeedingPlan,
+    FinalHarvestOperation,
     NutritionalGuide,
     ProductionCycle,
     ProductionReport,
@@ -234,7 +235,11 @@ class TestProductionCycleViewSet:
         assert production_cycle.final_count == 900
         assert production_cycle.final_average_weight == Decimal('280.00')
 
-    def test_global_harvest_retry_returns_pending_operation(self, auth_client, production_cycle):
+    def test_global_harvest_online_then_offline_retry_is_idempotent(
+        self,
+        auth_client,
+        production_cycle,
+    ):
         """Le retry global identique rejoue l'événement sans le recréer."""
         allocation = create_cycle_unit_allocation(production_cycle)
         client_uuid = uuid4()
@@ -246,12 +251,13 @@ class TestProductionCycleViewSet:
             'final_average_weight': '280.00',
             'harvest_notes': 'Constat offline',
             'client_uuid': str(client_uuid),
-            'created_offline': True,
+            'created_offline': False,
             'allow_pending_reconciliation': True,
         }
 
         first = auth_client.post(url, data, format='json')
-        replay = auth_client.post(url, data, format='json')
+        offline_retry = {**data, 'created_offline': True}
+        replay = auth_client.post(url, offline_retry, format='json')
 
         assert first.status_code == status.HTTP_200_OK
         assert first.data['reconciliation_status'] == 'pending'
@@ -261,8 +267,11 @@ class TestProductionCycleViewSet:
         assert replay.status_code == status.HTTP_200_OK
         assert replay.data['idempotent_replay'] is True
         assert replay.data['final_harvest']['id'] == first.data['final_harvest']['id']
+        operation = FinalHarvestOperation.objects.get(allocation=allocation)
+        assert operation.created_offline is False
+        assert FinalHarvestOperation.objects.filter(allocation=allocation).count() == 1
 
-        conflicting = {**data, 'final_count': 849}
+        conflicting = {**offline_retry, 'final_count': 849}
         conflict = auth_client.post(url, conflicting, format='json')
         assert conflict.status_code == status.HTTP_409_CONFLICT
         assert conflict.data['code'] == 'final_harvest_idempotency_conflict'
@@ -1080,6 +1089,48 @@ class TestCycleUnitAllocationHarvestActionsViewSet:
         assert allocation.final_fish_count == 900
         assert production_cycle.current_count == 0
         assert production_cycle.current_biomass == Decimal('0.00')
+
+    def test_unit_harvest_online_then_offline_retry_is_idempotent(
+        self,
+        auth_client,
+        production_cycle,
+    ):
+        allocation = create_cycle_unit_allocation(
+            production_cycle,
+            name='Bac retry online offline',
+        )
+        harvested_at = timezone.now() - timedelta(seconds=1)
+        client_uuid = uuid4()
+        url = reverse(
+            'aquaculture:cycle-unit-allocation-harvest',
+            kwargs={'pk': allocation.id},
+        )
+        payload = {
+            'harvest_date': timezone.localdate(harvested_at).isoformat(),
+            'final_harvested_at': harvested_at.isoformat(),
+            'final_count': 900,
+            'final_average_weight': '300.00',
+            'total_harvested_weight': '270.00',
+            'harvest_notes': 'Réponse perdue après commit',
+            'client_uuid': str(client_uuid),
+            'created_offline': False,
+        }
+
+        first = auth_client.post(url, payload, format='json')
+        retry = auth_client.post(
+            url,
+            {**payload, 'created_offline': True},
+            format='json',
+        )
+
+        assert first.status_code == status.HTTP_200_OK
+        assert retry.status_code == status.HTTP_200_OK
+        assert first.data['idempotent_replay'] is False
+        assert retry.data['idempotent_replay'] is True
+        assert retry.data['final_harvest']['id'] == first.data['final_harvest']['id']
+        operation = FinalHarvestOperation.objects.get(allocation=allocation)
+        assert operation.created_offline is False
+        assert operation.synced_at is None
 
     def test_harvest_allocation_rejects_zero_final_count_when_fish_remain(self, auth_client, production_cycle):
         allocation = create_cycle_unit_allocation(production_cycle, name='Bac zero interdit', volume_m3='3.00')

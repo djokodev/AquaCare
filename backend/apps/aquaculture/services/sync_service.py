@@ -82,6 +82,7 @@ class SyncService(BaseService):
             'updated': 0,
             'errors': [],
             'synced_ids': [],
+            'accepted_items': [],
         }
 
     @staticmethod
@@ -152,9 +153,18 @@ class SyncService(BaseService):
         *,
         key: str,
         synced_id: str,
+        item_type: str | None = None,
+        client_uuid: Any = None,
     ) -> None:
         result[key] += 1
         result['synced_ids'].append(synced_id)
+        if item_type and client_uuid:
+            result['accepted_items'].append({
+                'type': item_type,
+                'client_uuid': str(client_uuid),
+                'status': 'accepted',
+                'server_id': synced_id,
+            })
 
     @staticmethod
     def _total_processed(result: dict[str, Any]) -> int:
@@ -166,6 +176,7 @@ class SyncService(BaseService):
         *,
         processed_key: str,
         result: dict[str, Any],
+        accepted_key: str,
         include_updated_key: str | None = None,
     ) -> None:
         if include_updated_key:
@@ -174,6 +185,33 @@ class SyncService(BaseService):
         else:
             sync_result['processed'][processed_key] = SyncService._total_processed(result)
         sync_result['errors'].extend(result.get('errors', []))
+        accepted_items = result.get('accepted_items', [])
+        sync_result['accepted'][accepted_key].extend(
+            item['client_uuid'] for item in accepted_items
+        )
+        sync_result['items'].extend(accepted_items)
+
+    @staticmethod
+    def _record_full_sync_accept(
+        sync_result: dict[str, Any],
+        *,
+        accepted_key: str,
+        item_type: str,
+        client_uuid: Any,
+        **metadata: Any,
+    ) -> None:
+        """Confirme uniquement un item possédant un UUID client non ambigu."""
+        if not client_uuid:
+            return
+        normalized_uuid = str(client_uuid)
+        if normalized_uuid not in sync_result['accepted'][accepted_key]:
+            sync_result['accepted'][accepted_key].append(normalized_uuid)
+        sync_result['items'].append({
+            'type': item_type,
+            'client_uuid': normalized_uuid,
+            'status': 'accepted',
+            **metadata,
+        })
 
     @staticmethod
     def _build_sanitary_log_payload(log_data: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
@@ -259,6 +297,10 @@ class SyncService(BaseService):
             # replays). ``accepted`` lets clients acknowledge only the exact
             # offline items confirmed by a partial-success response.
             'accepted': {
+                'cycles': [],
+                'cycle_logs': [],
+                'sanitary_logs': [],
+                'calibration_tanks': [],
                 'calibration_operations': [],
                 'final_harvests': [],
             },
@@ -386,6 +428,8 @@ class SyncService(BaseService):
                             result,
                             key='updated',
                             synced_id=str(existing_log.id),
+                            item_type='cycle_log',
+                            client_uuid=client_uuid,
                         )
                     else:
                         log_create_data = {k: v for k, v in log_data.items() if k not in ['id', 'cycle']}
@@ -422,6 +466,8 @@ class SyncService(BaseService):
                             result,
                             key='created',
                             synced_id=str(new_log.id),
+                            item_type='cycle_log',
+                            client_uuid=client_uuid,
                         )
 
                 except (ValidationError, ValueError, TypeError) as exc:
@@ -561,6 +607,8 @@ class SyncService(BaseService):
                     result,
                     key='updated' if was_existing else 'created',
                     synced_id=str(new_log.id),
+                    item_type='sanitary_log',
+                    client_uuid=raw_client_uuid,
                 )
 
             except (ValidationError, ValueError, TypeError, APIException) as exc:
@@ -655,6 +703,8 @@ class SyncService(BaseService):
                     result,
                     key='updated' if existing_cycle else 'created',
                     synced_id=str(new_cycle.id),
+                    item_type='cycle',
+                    client_uuid=client_uuid,
                 )
                 if client_uuid:
                     existing_cycles_by_uuid[str(client_uuid)] = new_cycle
@@ -865,6 +915,7 @@ class SyncService(BaseService):
                 SyncService._merge_sync_step(
                     sync_result,
                     processed_key='cycles',
+                    accepted_key='cycles',
                     result=cycles_result,
                 )
 
@@ -902,8 +953,9 @@ class SyncService(BaseService):
                                 'detail': str(exc.detail),
                             })
                             continue
-                    if existing is None:
-                        ProductionUnit.objects.create(
+                    server_tank = existing
+                    if server_tank is None:
+                        server_tank = ProductionUnit.objects.create(
                             client_uuid=client_uuid,
                             farm_profile=user.farm_profile,
                             name=tank_data['name'],
@@ -916,6 +968,13 @@ class SyncService(BaseService):
                             synced_at=timezone.now(),
                         )
                     sync_result['processed']['calibration_tanks'] += 1
+                    SyncService._record_full_sync_accept(
+                        sync_result,
+                        accepted_key='calibration_tanks',
+                        item_type='calibration_tank',
+                        client_uuid=client_uuid,
+                        server_id=str(server_tank.id),
+                    )
                 except IntegrityError as exc:
                     replay = ProductionUnit.objects.filter(client_uuid=client_uuid).first()
                     if replay is not None:
@@ -935,6 +994,13 @@ class SyncService(BaseService):
                             })
                         else:
                             sync_result['processed']['calibration_tanks'] += 1
+                            SyncService._record_full_sync_accept(
+                                sync_result,
+                                accepted_key='calibration_tanks',
+                                item_type='calibration_tank',
+                                client_uuid=client_uuid,
+                                server_id=str(replay.id),
+                            )
                     else:
                         mapped = translate_production_unit_integrity_error(exc)
                         sync_result['errors'].append({
@@ -1066,26 +1132,26 @@ class SyncService(BaseService):
                                 )
                             )
                             reconciliation_status = operation.reconciliation_status
-                            operation_ids = [str(operation.id)]
+                            operations = [operation]
                         else:
                             harvest_result = ProductionCycleService.harvest_cycle(
                                 cycle=cycle,
                                 **common_harvest_data,
                             )
                             reconciliation_status = harvest_result.reconciliation_status
-                            operation_ids = [
-                                str(item.id) for item in harvest_result.operations
-                            ]
+                            operations = harvest_result.operations
                         sync_result['processed']['final_harvests'] += 1
-                        client_uuid = str(operation_data.get('client_uuid'))
-                        sync_result['accepted']['final_harvests'].append(client_uuid)
-                        sync_result['items'].append({
-                            'type': 'final_harvest',
-                            'client_uuid': client_uuid,
-                            'status': 'accepted',
-                            'reconciliation_status': reconciliation_status,
-                            'operation_ids': operation_ids,
-                        })
+                        SyncService._record_full_sync_accept(
+                            sync_result,
+                            accepted_key='final_harvests',
+                            item_type='final_harvest',
+                            client_uuid=operation_data.get('client_uuid'),
+                            reconciliation_status=reconciliation_status,
+                            operation_ids=[str(item.id) for item in operations],
+                            operation_client_uuids=[
+                                str(item.client_uuid) for item in operations
+                            ],
+                        )
                     except APIException as exc:
                         detail = exc.detail if isinstance(exc.detail, dict) else {'detail': exc.detail}
                         sync_result['errors'].append({
@@ -1145,14 +1211,13 @@ class SyncService(BaseService):
                         },
                     )
                     sync_result['processed']['calibration_operations'] += 1
-                    client_uuid = str(operation_data.get('client_uuid'))
-                    sync_result['accepted']['calibration_operations'].append(client_uuid)
-                    sync_result['items'].append({
-                        'type': 'calibration_operation',
-                        'client_uuid': client_uuid,
-                        'status': 'accepted',
-                        'operation_id': str(calibration.id),
-                    })
+                    SyncService._record_full_sync_accept(
+                        sync_result,
+                        accepted_key='calibration_operations',
+                        item_type='calibration_operation',
+                        client_uuid=operation_data.get('client_uuid'),
+                        operation_id=str(calibration.id),
+                    )
                 except (BusinessRuleViolation, IntegrityError, KeyError, ValidationError, ValueError) as exc:
                     sync_result['errors'].append({
                         'type': 'calibration_operation',
@@ -1167,6 +1232,7 @@ class SyncService(BaseService):
                 SyncService._merge_sync_step(
                     sync_result,
                     processed_key='cycle_logs',
+                    accepted_key='cycle_logs',
                     include_updated_key='cycle_logs_updated',
                     result=logs_result,
                 )
@@ -1177,6 +1243,7 @@ class SyncService(BaseService):
                 SyncService._merge_sync_step(
                     sync_result,
                     processed_key='sanitary_logs',
+                    accepted_key='sanitary_logs',
                     result=sanitary_result,
                 )
 

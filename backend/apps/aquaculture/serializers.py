@@ -2059,6 +2059,46 @@ class SyncRequestSerializer(serializers.Serializer):
         return attrs
 
 
+class SyncAcceptedSerializer(serializers.Serializer):
+    """UUID clients explicitement confirmés par collection."""
+
+    cycles = serializers.ListField(child=serializers.UUIDField())
+    cycle_logs = serializers.ListField(child=serializers.UUIDField())
+    sanitary_logs = serializers.ListField(child=serializers.UUIDField())
+    calibration_tanks = serializers.ListField(child=serializers.UUIDField())
+    calibration_operations = serializers.ListField(child=serializers.UUIDField())
+    final_harvests = serializers.ListField(child=serializers.UUIDField())
+
+
+class SyncAcceptedItemSerializer(serializers.Serializer):
+    """Résultat accepté par item pour les réponses partielles."""
+
+    type = serializers.ChoiceField(choices=[
+        'cycle',
+        'cycle_log',
+        'sanitary_log',
+        'calibration_tank',
+        'calibration_operation',
+        'final_harvest',
+    ])
+    client_uuid = serializers.UUIDField()
+    status = serializers.ChoiceField(choices=['accepted'])
+    server_id = serializers.UUIDField(required=False)
+    operation_id = serializers.UUIDField(required=False)
+    operation_ids = serializers.ListField(
+        child=serializers.UUIDField(),
+        required=False,
+    )
+    operation_client_uuids = serializers.ListField(
+        child=serializers.UUIDField(),
+        required=False,
+    )
+    reconciliation_status = serializers.ChoiceField(
+        choices=['pending', 'reconciled'],
+        required=False,
+    )
+
+
 class SyncResponseSerializer(serializers.Serializer):
     """
     Sérialiseur pour les réponses de synchronisation.
@@ -2067,8 +2107,8 @@ class SyncResponseSerializer(serializers.Serializer):
     timestamp = serializers.DateTimeField()
     processed = serializers.DictField()
     errors = serializers.ListField()
-    accepted = serializers.DictField()
-    items = serializers.ListField()
+    accepted = SyncAcceptedSerializer()
+    items = SyncAcceptedItemSerializer(many=True)
     server_updates = serializers.DictField()
 
 

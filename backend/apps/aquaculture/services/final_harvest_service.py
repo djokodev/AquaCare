@@ -59,7 +59,6 @@ class FinalHarvestService:
             existing.declared_average_weight_g == declared_average_weight_g,
             existing.declared_biomass_kg == declared_biomass_kg,
             existing.notes == notes,
-            existing.created_offline == created_offline,
         ])
         if not same_payload:
             raise FinalHarvestIdempotencyConflict()

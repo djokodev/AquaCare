@@ -122,6 +122,29 @@ at least one child is pending, otherwise it is `reconciled`. Historical cycles
 without allocations use their persisted final projection as an explicit legacy
 replay rule because they have no event on which to persist a command UUID.
 
+Harvest idempotency compares only the immutable physical payload: allocation,
+business harvest datetime, declared count, declared average weight, declared
+biomass and notes. `created_offline` is provenance metadata, not business data.
+This deliberately supports the mobile timeout case where an online command was
+committed with `created_offline=false`, its response was lost, then the same
+`client_uuid` and physical payload were retried from the offline queue with
+`created_offline=true`. A replay never rewrites the persisted provenance,
+`synced_at`, creation timestamp or creator.
+
+All harvest and calibration transactions use one canonical lock order to avoid
+cross-command deadlocks: production units by UUID, cycle allocations by UUID,
+existing final-harvest operations by UUID, then production cycles by UUID. The
+shared lock-context helper is used before global harvest, unit harvest and
+calibration mutations; PostgreSQL exercises global harvest and calibration on
+the same stock concurrently.
+
+For global commands, the mobile queue stores both the global command UUID and
+the server IDs and deterministic UUIDs of every child operation. Delta matching
+accepts a direct unit UUID, a stored child UUID or a stored child server ID. The
+global local status remains pending while any known child is pending and becomes
+reconciled only when every child is reconciled. Accepted pending commands remain
+local; cleanup removes only entries that are both synced and reconciled.
+
 Full sync resolves a final harvest by allocation when an allocation identifier
 is present, or by cycle when only `cycle_id` or `cycle_client_uuid` is present.
 A single-allocation cycle follows the global command path. A multi-allocation
@@ -131,6 +154,13 @@ client must harvest each unit explicitly. `processed.final_harvests` counts
 accepted commands, including idempotent replays. Partial-success responses expose
 accepted client UUIDs and per-item outcomes so the mobile client only removes
 confirmed queue entries and retains failed ones for retry.
+
+The `accepted` full-sync contract covers cycles, cycle logs, sanitary logs,
+calibration tanks, calibration operations and final harvests. `items` provides
+the corresponding client UUID and server reference when available. A command
+without a client UUID is never ambiguously acknowledged, and any command that
+produced an error is excluded. On `partial_success`, the client marks only these
+explicitly accepted UUIDs as synced and leaves every rejected item pending.
 
 Before an online harvest, the mobile client synchronizes only pending calibration
 events relevant to the target allocation or cycle and earlier than the harvest

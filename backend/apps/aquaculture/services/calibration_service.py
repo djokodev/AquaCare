@@ -16,6 +16,7 @@ from ..domain.exceptions import BusinessRuleViolation
 from ..models import CalibrationOperation, CycleUnitAllocation, ProductionCycle, ProductionUnit
 from ..tasks import invalidate_dashboard_cache
 from .allocation_ledger_service import AllocationLedgerService
+from .aquaculture_lock_service import AquacultureLockService
 from .cycle_service import ProductionCycleService
 from .final_harvest_service import FinalHarvestService
 
@@ -113,6 +114,20 @@ class CalibrationService:
                 first_count=transferred_count,
                 first_average_weight_g=effective_weight,
             )
+
+        # Ordre canonique partagé : unités, allocations, événements finaux,
+        # cycles. Les deux premières catégories sont déjà verrouillées ci-dessus.
+        AquacultureLockService.lock_final_harvest_operations(
+            [source.pk, destination.pk],
+        )
+        locked_cycles = {
+            cycle.pk: cycle
+            for cycle in AquacultureLockService.lock_cycles(
+                [source.cycle_id, destination.cycle_id],
+            )
+        }
+        source.cycle = locked_cycles[source.cycle_id]
+        destination.cycle = locked_cycles[destination.cycle_id]
 
         transferred_biomass = biomass_for(transferred_count, effective_weight)
         if transferred_biomass <= 0:

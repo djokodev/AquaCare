@@ -46,6 +46,10 @@ export interface OfflineFinalHarvest {
   synced: boolean;
   serverAccepted?: boolean;
   reconciliationStatus?: 'pending' | 'reconciled';
+  commandScope?: 'allocation' | 'cycle';
+  serverOperationIds?: string[];
+  serverOperationClientUuids?: string[];
+  serverOperationStatuses?: Record<string, 'pending' | 'reconciled'>;
 }
 
 interface SyncCounter {
@@ -87,8 +91,6 @@ const finalHarvestFingerprint = (data: HarvestData): string => JSON.stringify({
   final_average_weight: data.final_average_weight,
   total_harvested_weight: data.total_harvested_weight,
   harvest_notes: data.harvest_notes ?? '',
-  created_offline: data.created_offline,
-  allow_pending_reconciliation: data.allow_pending_reconciliation ?? false,
 });
 
 class OfflineService {
@@ -125,6 +127,7 @@ class OfflineService {
       harvestData: normalizedHarvestData,
       timestamp: Date.now(),
       synced: false,
+      commandScope: allocationId ? 'allocation' : 'cycle',
     };
     await this.persist(STORAGE_KEYS.OFFLINE_FINAL_HARVESTS, [...current, item]);
     return id;
@@ -144,16 +147,47 @@ class OfflineService {
   async markFinalHarvestAsSynced(
     id: string,
     reconciliationStatus: 'pending' | 'reconciled',
+    references?: {
+      operations?: FinalHarvestOperation[];
+      operationIds?: string[];
+      operationClientUuids?: string[];
+    },
   ): Promise<void> {
     const items = await this.getOfflineFinalHarvests();
     await this.persist(
       STORAGE_KEYS.OFFLINE_FINAL_HARVESTS,
-      items.map((item) => item.id === id ? {
-        ...item,
-        synced: true,
-        serverAccepted: true,
-        reconciliationStatus,
-      } : item),
+      items.map((item) => {
+        if (item.id !== id) return item;
+        const operations = references?.operations ?? [];
+        const serverOperationIds = Array.from(new Set([
+          ...(item.serverOperationIds ?? []),
+          ...(references?.operationIds ?? []),
+          ...operations.map((operation) => operation.id),
+        ]));
+        const serverOperationClientUuids = Array.from(new Set([
+          ...(item.serverOperationClientUuids ?? []),
+          ...(references?.operationClientUuids ?? []),
+          ...operations.map((operation) => operation.client_uuid),
+        ]));
+        const serverOperationStatuses = {
+          ...(item.serverOperationStatuses ?? {}),
+        };
+        for (const childUuid of serverOperationClientUuids) {
+          serverOperationStatuses[childUuid] = reconciliationStatus;
+        }
+        for (const operation of operations) {
+          serverOperationStatuses[operation.client_uuid] = operation.reconciliation_status;
+        }
+        return {
+          ...item,
+          synced: true,
+          serverAccepted: true,
+          reconciliationStatus,
+          serverOperationIds,
+          serverOperationClientUuids,
+          serverOperationStatuses,
+        };
+      }),
     );
   }
 
@@ -161,20 +195,45 @@ class OfflineService {
     operations: FinalHarvestOperation[],
   ): Promise<void> {
     if (operations.length === 0) return;
-    const byClientUuid = new Map(
-      operations.map((operation) => [operation.client_uuid, operation]),
-    );
     const items = await this.getOfflineFinalHarvests();
     await this.persist(
       STORAGE_KEYS.OFFLINE_FINAL_HARVESTS,
       items.map((item) => {
-        const operation = byClientUuid.get(item.harvestData.client_uuid);
-        return operation ? {
+        const relatedOperations = operations.filter((operation) =>
+          operation.client_uuid === item.harvestData.client_uuid ||
+          item.serverOperationIds?.includes(operation.id) ||
+          item.serverOperationClientUuids?.includes(operation.client_uuid),
+        );
+        if (relatedOperations.length === 0) return item;
+
+        const childUuids = item.serverOperationClientUuids ?? [];
+        if (childUuids.length === 0) {
+          return {
+            ...item,
+            synced: true,
+            serverAccepted: true,
+            reconciliationStatus: relatedOperations[0].reconciliation_status,
+          };
+        }
+        const serverOperationStatuses = {
+          ...(item.serverOperationStatuses ?? {}),
+        };
+        for (const childUuid of childUuids) {
+          serverOperationStatuses[childUuid] ??= 'pending';
+        }
+        for (const operation of relatedOperations) {
+          serverOperationStatuses[operation.client_uuid] = operation.reconciliation_status;
+        }
+        const reconciliationStatus = childUuids.every(
+          (childUuid) => serverOperationStatuses[childUuid] === 'reconciled',
+        ) ? 'reconciled' : 'pending';
+        return {
           ...item,
           synced: true,
           serverAccepted: true,
-          reconciliationStatus: operation.reconciliation_status,
-        } : item;
+          reconciliationStatus,
+          serverOperationStatuses,
+        };
       }),
     );
   }
@@ -193,10 +252,15 @@ class OfflineService {
           await this.markFinalHarvestAsSynced(
             item.id,
             response.final_harvest.reconciliation_status,
+            { operations: [response.final_harvest] },
           );
         } else {
           const response = await aquacultureService.harvestCycle(item.cycleId, item.harvestData);
-          await this.markFinalHarvestAsSynced(item.id, response.reconciliation_status);
+          await this.markFinalHarvestAsSynced(
+            item.id,
+            response.reconciliation_status,
+            { operations: response.final_harvests },
+          );
         }
         success += 1;
       } catch (error) {
@@ -209,7 +273,9 @@ class OfflineService {
 
   async cleanupSyncedFinalHarvests(): Promise<number> {
     const items = await this.getOfflineFinalHarvests();
-    const active = items.filter((item) => !item.synced);
+    const active = items.filter(
+      (item) => !item.synced || item.reconciliationStatus !== 'reconciled',
+    );
     await this.persist(STORAGE_KEYS.OFFLINE_FINAL_HARVESTS, active);
     return items.length - active.length;
   }
@@ -557,14 +623,38 @@ class OfflineService {
     try {
       const response = await aquacultureService.synchronize(payload);
       if (response.status === 'partial_success') {
+        const acceptedCycleUuids = new Set(response.accepted?.cycles ?? []);
+        const acceptedCycleLogUuids = new Set(response.accepted?.cycle_logs ?? []);
+        const acceptedSanitaryLogUuids = new Set(response.accepted?.sanitary_logs ?? []);
+        const acceptedTankUuids = new Set(response.accepted?.calibration_tanks ?? []);
         const acceptedCalibrationUuids = new Set(response.accepted?.calibration_operations ?? []);
         const acceptedFinalHarvestUuids = new Set(response.accepted?.final_harvests ?? []);
+        const acceptedCycleIds = pendingNewCycles
+          .filter((item) => item.cycleData.client_uuid != null &&
+            acceptedCycleUuids.has(item.cycleData.client_uuid))
+          .map((item) => item.id);
+        const acceptedCycleLogIds = pendingCycleLogs
+          .filter((item) => item.logData.client_uuid != null &&
+            acceptedCycleLogUuids.has(item.logData.client_uuid))
+          .map((item) => item.id);
+        const acceptedSanitaryLogIds = pendingSanitaryLogs
+          .filter((item) => item.sanitaryData.client_uuid != null &&
+            acceptedSanitaryLogUuids.has(item.sanitaryData.client_uuid))
+          .map((item) => item.id);
+        const acceptedTankIds = pendingCalibrationTanks
+          .filter((item) => item.tankData.client_uuid != null &&
+            acceptedTankUuids.has(item.tankData.client_uuid))
+          .map((item) => item.id);
         const acceptedCalibrationIds = pendingCalibrationOperations
           .filter((item) => acceptedCalibrationUuids.has(item.operationData.client_uuid))
           .map((item) => item.id);
-        await this.markCalibrationOperationsAsSynced(acceptedCalibrationIds);
-        await Promise.all(
-          pendingFinalHarvests
+        await Promise.all([
+          this.markNewCyclesAsSynced(acceptedCycleIds),
+          this.markLogsAsSynced(acceptedCycleLogIds),
+          this.markSanitaryLogsAsSynced(acceptedSanitaryLogIds),
+          this.markCalibrationTanksAsSynced(acceptedTankIds),
+          this.markCalibrationOperationsAsSynced(acceptedCalibrationIds),
+          ...pendingFinalHarvests
             .filter((item) => acceptedFinalHarvestUuids.has(item.harvestData.client_uuid))
             .map((item) => {
               const resultItem = response.items?.find(
@@ -574,29 +664,42 @@ class OfflineService {
               return this.markFinalHarvestAsSynced(
                 item.id,
                 resultItem?.reconciliation_status ?? 'pending',
+                {
+                  operationIds: resultItem?.operation_ids,
+                  operationClientUuids: resultItem?.operation_client_uuids,
+                },
               );
             }),
-        );
+        ]);
         await this.applyFinalHarvestServerUpdates(response.server_updates.final_harvests ?? []);
         await this.touchLastSync();
-        const calibrationFailures = response.errors.filter(
-          (error) => error.type === 'calibration_operation',
+        const failureCount = (type: string) => response.errors.filter(
+          (error) => error.type === type,
         ).length;
-        const finalHarvestFailures = response.errors.filter(
-          (error) => error.type === 'final_harvest',
-        ).length;
+        const cycleFailures = failureCount('cycle');
+        const cycleLogFailures = failureCount('cycle_log');
+        const sanitaryLogFailures = failureCount('sanitary_log');
+        const tankFailures = failureCount('calibration_tank');
+        const calibrationFailures = failureCount('calibration_operation');
+        const finalHarvestFailures = failureCount('final_harvest');
+        const cycleSuccess = acceptedCycleIds.length;
+        const cycleLogSuccess = acceptedCycleLogIds.length;
+        const sanitaryLogSuccess = acceptedSanitaryLogIds.length;
+        const tankSuccess = acceptedTankIds.length;
         const calibrationSuccess = acceptedCalibrationIds.length;
         const finalHarvestSuccess = pendingFinalHarvests.filter(
           (item) => acceptedFinalHarvestUuids.has(item.harvestData.client_uuid),
         ).length;
         return {
-          success: calibrationSuccess + finalHarvestSuccess,
-          failed: calibrationFailures + finalHarvestFailures,
+          success: cycleSuccess + cycleLogSuccess + sanitaryLogSuccess + tankSuccess +
+            calibrationSuccess + finalHarvestSuccess,
+          failed: cycleFailures + cycleLogFailures + sanitaryLogFailures + tankFailures +
+            calibrationFailures + finalHarvestFailures,
           details: {
-            cycleLogs: { success: 0, failed: 0 },
-            newCycles: { success: 0, failed: 0 },
-            sanitaryLogs: { success: 0, failed: 0 },
-            calibrationTanks: { success: 0, failed: 0 },
+            cycleLogs: { success: cycleLogSuccess, failed: cycleLogFailures },
+            newCycles: { success: cycleSuccess, failed: cycleFailures },
+            sanitaryLogs: { success: sanitaryLogSuccess, failed: sanitaryLogFailures },
+            calibrationTanks: { success: tankSuccess, failed: tankFailures },
             calibrationOperations: { success: calibrationSuccess, failed: calibrationFailures },
             finalHarvests: { success: finalHarvestSuccess, failed: finalHarvestFailures },
           },
@@ -620,6 +723,10 @@ class OfflineService {
           return this.markFinalHarvestAsSynced(
             item.id,
             resultItem?.reconciliation_status ?? 'pending',
+            {
+              operationIds: resultItem?.operation_ids,
+              operationClientUuids: resultItem?.operation_client_uuids,
+            },
           );
         }),
       ]);
@@ -811,6 +918,7 @@ class OfflineService {
           await this.markFinalHarvestAsSynced(
             operation.item.id,
             response.final_harvest.reconciliation_status,
+            { operations: [response.final_harvest] },
           );
           result.finalHarvests.success += 1;
         } else {
@@ -821,6 +929,7 @@ class OfflineService {
           await this.markFinalHarvestAsSynced(
             operation.item.id,
             response.reconciliation_status,
+            { operations: response.final_harvests },
           );
           result.finalHarvests.success += 1;
         }

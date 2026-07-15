@@ -782,6 +782,68 @@ def test_concurrent_final_harvest_and_calibration_reconcile_without_deadlock(pro
 
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.skipif(connection.vendor != 'postgresql', reason='Concurrent row locks require PostgreSQL')
+def test_concurrent_global_harvest_and_calibration_do_not_deadlock(production_cycle):
+    helper = TestCalibrationService()
+    day = timezone.localdate() - timedelta(days=1)
+    production_cycle.start_date = day
+    production_cycle.save(update_fields=['start_date'])
+    source = helper.setup_source(production_cycle)
+    tank = helper.create_tank(source, name='Bac concurrence récolte globale')
+    barrier = Barrier(2)
+
+    def harvest_once():
+        connection.close()
+        try:
+            barrier.wait(timeout=5)
+            return ProductionCycleService.harvest_cycle(
+                production_cycle,
+                harvest_date=day,
+                final_harvested_at=helper.at(day, 18),
+                final_count=900,
+                final_average_weight=Decimal('300.00'),
+                client_uuid=uuid.uuid4(),
+                created_offline=True,
+                allow_pending_reconciliation=True,
+            )
+        finally:
+            connection.close()
+
+    def calibrate_once():
+        connection.close()
+        try:
+            barrier.wait(timeout=5)
+            return CalibrationService.calibrate(
+                source_allocation=source,
+                destination_production_unit=tank,
+                user=production_cycle.farm_profile.user,
+                client_uuid=uuid.uuid4(),
+                calibrated_at=helper.at(day, 12),
+                transferred_count=100,
+                transferred_average_weight_g=Decimal('100.00'),
+                created_offline=True,
+            )
+        finally:
+            connection.close()
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = [executor.submit(harvest_once), executor.submit(calibrate_once)]
+        harvest_result = futures[0].result(timeout=15)
+        calibration_result = futures[1].result(timeout=15)
+
+    source.refresh_from_db()
+    final_harvest = FinalHarvestOperation.objects.get(allocation=source)
+    assert len(harvest_result.operations) == 1
+    assert calibration_result[2] is True
+    assert FinalHarvestOperation.objects.filter(allocation=source).count() == 1
+    assert CalibrationOperation.objects.filter(source_allocation=source).count() == 1
+    assert final_harvest.reconciliation_status == FinalHarvestOperation.STATUS_RECONCILED
+    assert final_harvest.computed_count_before_harvest == 900
+    assert source.current_fish_count == 0
+    assert source.current_fish_count >= 0
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.skipif(connection.vendor != 'postgresql', reason='Concurrent row locks require PostgreSQL')
 def test_concurrent_final_harvests_create_exactly_one_operation(production_cycle):
     helper = TestCalibrationService()
     source = helper.setup_source(production_cycle)
