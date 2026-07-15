@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, time, timedelta
+from datetime import timedelta
 from decimal import Decimal
 
 import pytest
@@ -58,7 +58,7 @@ class TestCalibrationService:
             'destination_production_unit': tank,
             'user': source.cycle.farm_profile.user,
             'client_uuid': uuid.uuid4(),
-            'calibrated_at': timezone.make_aware(datetime.combine(timezone.localdate(), time(9))),
+            'calibrated_at': timezone.now().replace(second=0, microsecond=0),
             'transferred_count': 200,
             'transferred_average_weight_g': Decimal('150.00'),
         }
@@ -139,12 +139,12 @@ class TestCalibrationService:
     def test_backdated_operation_replays_snapshots_and_current_stock(self, production_cycle):
         source = self.setup_source(production_cycle)
         tank = self.create_tank(source)
-        today_at_nine = timezone.make_aware(datetime.combine(timezone.localdate(), time(9)))
-        later, _, _ = self.calibrate(source, tank, calibrated_at=today_at_nine, transferred_count=100)
+        later_at = timezone.now().replace(second=0, microsecond=0)
+        later, _, _ = self.calibrate(source, tank, calibrated_at=later_at, transferred_count=100)
         earlier, _, _ = self.calibrate(
             source,
             tank,
-            calibrated_at=today_at_nine - timedelta(hours=1),
+            calibrated_at=later_at - timedelta(hours=1),
             transferred_count=200,
         )
 
@@ -156,6 +156,74 @@ class TestCalibrationService:
         assert later.source_count_before == 800
         assert later.source_count_after == 700
         assert source.current_fish_count == 700
+
+    def test_source_and_destination_harvests_are_autonomous_and_tank_is_reused(self, production_cycle):
+        source = self.setup_source(production_cycle)
+        tank = self.create_tank(source)
+        operation, _, _ = self.calibrate(
+            source,
+            tank,
+            transferred_count=200,
+            transferred_average_weight_g=Decimal('250.00'),
+        )
+        destination = operation.destination_allocation
+
+        ProductionCycleService.harvest_cycle_unit_allocation(
+            source,
+            harvest_date=timezone.localdate(),
+            final_count=800,
+            final_average_weight=Decimal('250.00'),
+        )
+        destination.refresh_from_db()
+        destination.cycle.refresh_from_db()
+        assert destination.status == CycleUnitAllocation.STATUS_ACTIVE
+        assert destination.current_fish_count == 200
+        assert destination.cycle.status == 'active'
+
+        ProductionCycleService.harvest_cycle_unit_allocation(
+            destination,
+            harvest_date=timezone.localdate(),
+            final_count=200,
+            final_average_weight=Decimal('250.00'),
+        )
+        destination.refresh_from_db()
+        destination.cycle.refresh_from_db()
+        tank.refresh_from_db()
+        assert destination.status == CycleUnitAllocation.STATUS_HARVESTED
+        assert destination.cycle.status == 'harvested'
+        assert destination.cycle.current_count == 0
+        assert tank.status == 'active'
+
+        source.status = CycleUnitAllocation.STATUS_ACTIVE
+        source.current_fish_count = 800
+        source.current_biomass_kg = Decimal('50.00')
+        source.save(update_fields=['status', 'current_fish_count', 'current_biomass_kg'])
+        production_cycle.status = 'active'
+        production_cycle.save(update_fields=['status'])
+        second_operation, _, _ = self.calibrate(source, tank, transferred_count=100)
+        assert second_operation.destination_allocation.cycle_id != destination.cycle_id
+
+    def test_partial_harvest_subtracts_actual_biomass_and_replays(self, production_cycle):
+        source = self.setup_source(production_cycle)
+        operation, _, _ = self.calibrate(
+            source,
+            self.create_tank(source),
+            transferred_count=200,
+            transferred_average_weight_g=Decimal('250.00'),
+        )
+        _, allocation, harvest = ProductionCycleService.partial_harvest_cycle_unit_allocation(
+            operation.destination_allocation,
+            harvest_date=timezone.localdate(),
+            count_harvested=10,
+            average_weight_g=Decimal('300.00'),
+        )
+        allocation.refresh_from_db()
+        assert harvest.total_weight_kg == Decimal('3.00')
+        assert allocation.current_fish_count == 190
+        assert allocation.current_biomass_kg == Decimal('47.00')
+        assert ProductionCycleService._get_allocation_average_weight_g(allocation).quantize(
+            Decimal('0.01')
+        ) == Decimal('247.37')
 
     def test_invalid_destination_and_cross_farm_are_rejected_atomically(
         self,
@@ -223,7 +291,7 @@ def test_concurrent_arrivals_create_one_active_calibration_session(production_cy
     helper = TestCalibrationService()
     source = helper.setup_source(production_cycle)
     tank = helper.create_tank(source)
-    calibrated_at = timezone.make_aware(datetime.combine(timezone.localdate(), time(9)))
+    calibrated_at = timezone.now().replace(second=0, microsecond=0)
 
     def calibrate_once(index):
         connection.close()
@@ -251,3 +319,78 @@ def test_concurrent_arrivals_create_one_active_calibration_session(production_cy
     destination.refresh_from_db()
     assert source.current_fish_count == 700
     assert destination.current_fish_count == 300
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.skipif(connection.vendor != 'postgresql', reason='Concurrent row locks require PostgreSQL')
+def test_concurrent_transfers_from_same_source_never_oversubscribe(production_cycle):
+    helper = TestCalibrationService()
+    source = helper.setup_source(production_cycle)
+    tanks = [helper.create_tank(source, name=f'Bac concurrent {index}') for index in range(2)]
+    calibrated_at = timezone.now().replace(second=0, microsecond=0)
+
+    def calibrate_once(index):
+        connection.close()
+        try:
+            CalibrationService.calibrate(
+                source_allocation=source,
+                destination_production_unit=tanks[index],
+                user=source.cycle.farm_profile.user,
+                client_uuid=uuid.uuid4(),
+                calibrated_at=calibrated_at + timedelta(seconds=index),
+                transferred_count=600,
+                transferred_average_weight_g=Decimal('100.00'),
+            )
+            return True
+        except BusinessRuleViolation:
+            return False
+        finally:
+            connection.close()
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(executor.map(calibrate_once, range(2)))
+
+    source.refresh_from_db()
+    assert results.count(True) == 1
+    assert CalibrationOperation.objects.count() == 1
+    assert source.current_fish_count == 400
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.skipif(connection.vendor != 'postgresql', reason='Concurrent row locks require PostgreSQL')
+def test_concurrent_cross_transfers_follow_global_lock_order(production_cycle):
+    helper = TestCalibrationService()
+    original_source = helper.setup_source(production_cycle)
+    tank_a = helper.create_tank(original_source, name='Bac croisé A')
+    tank_b = helper.create_tank(original_source, name='Bac croisé B')
+    allocation_a = helper.calibrate(original_source, tank_a, transferred_count=200)[0].destination_allocation
+    allocation_b = helper.calibrate(original_source, tank_b, transferred_count=200)[0].destination_allocation
+    calibrated_at = timezone.now().replace(second=0, microsecond=0) + timedelta(minutes=1)
+
+    def calibrate_once(source, destination, index):
+        connection.close()
+        try:
+            return CalibrationService.calibrate(
+                source_allocation=source,
+                destination_production_unit=destination,
+                user=production_cycle.farm_profile.user,
+                client_uuid=uuid.uuid4(),
+                calibrated_at=calibrated_at + timedelta(seconds=index),
+                transferred_count=50,
+                transferred_average_weight_g=Decimal('150.00'),
+            )
+        finally:
+            connection.close()
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = [
+            executor.submit(calibrate_once, allocation_a, tank_b, 0),
+            executor.submit(calibrate_once, allocation_b, tank_a, 1),
+        ]
+        results = [future.result(timeout=10) for future in futures]
+
+    allocation_a.refresh_from_db()
+    allocation_b.refresh_from_db()
+    assert all(created for _operation, _warnings, created in results)
+    assert allocation_a.current_fish_count == 200
+    assert allocation_b.current_fish_count == 200

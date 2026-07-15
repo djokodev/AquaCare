@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, time
 from decimal import Decimal
 
 import pytest
@@ -74,7 +73,7 @@ class TestCalibrationApi:
             {'name': 'Bac tri B', 'volume_m3': '10.00'},
             format='json',
         )
-        calibrated_at = timezone.make_aware(datetime.combine(timezone.localdate(), time(9)))
+        calibrated_at = timezone.now().replace(second=0, microsecond=0)
         payload = {
             'client_uuid': str(uuid.uuid4()),
             'source_allocation_id': str(source.id),
@@ -130,9 +129,7 @@ class TestCalibrationApi:
                     'client_uuid': str(operation_client_uuid),
                     'source_allocation_client_uuid': str(source.client_uuid),
                     'destination_production_unit_client_uuid': str(tank_client_uuid),
-                    'calibrated_at': timezone.make_aware(
-                        datetime.combine(timezone.localdate(), time(8))
-                    ).isoformat(),
+                    'calibrated_at': timezone.now().replace(second=0, microsecond=0).isoformat(),
                     'transferred_count': 100,
                     'transferred_average_weight_g': '120.00',
                     'created_offline': True,

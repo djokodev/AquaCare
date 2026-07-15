@@ -68,7 +68,7 @@ class TestPartialHarvestService:
         cycle = self._create_test_cycle()
         # cycle: 5000 poissons, poids moyen 15g → biomasse = 75 kg
         # On récolte 200 poissons à 350g (clarias mature)
-        # Nouvelle biomasse = (5000-200) * 15 / 1000 = 72 kg
+        # La biomasse réelle récoltée vaut 70 kg, il reste donc 5 kg.
 
         updated_cycle, _ = ProductionCycleService.partial_harvest_cycle(
             cycle=cycle,
@@ -77,8 +77,8 @@ class TestPartialHarvestService:
             average_weight_g=Decimal('350.00'),
         )
 
-        expected_biomass = Decimal('4800') * cycle.current_average_weight / Decimal('1000')
-        assert updated_cycle.current_biomass == expected_biomass
+        assert updated_cycle.current_biomass == Decimal('5.00')
+        assert updated_cycle.current_average_weight == Decimal('1.04')
 
     def test_multiple_partial_harvests_cumulate(self):
         """Plusieurs récoltes partielles diminuent le count cumulativement."""
