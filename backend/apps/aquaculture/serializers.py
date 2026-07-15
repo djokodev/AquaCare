@@ -749,13 +749,14 @@ class CalibrationTankSerializer(serializers.ModelSerializer):
         name = attrs.get('name', getattr(self.instance, 'name', None))
         duplicate = ProductionUnit.objects.filter(
             farm_profile=farm,
-            purpose=ProductionUnit.PURPOSE_CALIBRATION,
             name__iexact=name,
         )
         if self.instance:
             duplicate = duplicate.exclude(pk=self.instance.pk)
         if duplicate.exists():
-            raise serializers.ValidationError({'name': _('Un bac portant ce nom existe déjà.')})
+            raise serializers.ValidationError(
+                {'name': [_('Une unité portant ce nom existe déjà dans cette ferme.')]}
+            )
         if self.instance is not None:
             lifecycle_changes = dict(attrs)
             if 'is_active' in lifecycle_changes:

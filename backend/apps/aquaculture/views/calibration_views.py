@@ -1,10 +1,10 @@
 from django.db import IntegrityError, transaction
-from django.db.models import Prefetch, Q
+from django.db.models import Q
 from django.utils.translation import gettext_lazy as _
 from rest_framework import permissions, serializers, viewsets
 
 from ..domain.exceptions import BusinessRuleViolation
-from ..models import CalibrationOperation, CycleUnitAllocation, ProductionUnit
+from ..models import CalibrationOperation, ProductionUnit
 from ..serializers import CalibrationOperationSerializer, CalibrationTankSerializer
 from ..services.production_unit_service import ProductionUnitLifecycleService
 
@@ -14,15 +14,8 @@ class CalibrationTankViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        return ProductionUnit.objects.filter(
+        return ProductionUnitLifecycleService.calibration_tanks_for_api().filter(
             farm_profile__user=self.request.user,
-            purpose=ProductionUnit.PURPOSE_CALIBRATION,
-            unit_type='tank',
-        ).prefetch_related(
-            Prefetch(
-                'cycle_allocations',
-                queryset=CycleUnitAllocation.objects.select_related('cycle').order_by('-created_at'),
-            )
         )
 
     def perform_create(self, serializer):
@@ -84,16 +77,18 @@ class CalibrationTankViewSet(viewsets.ModelViewSet):
                 raise serializers.ValidationError({'detail': str(conflict)}) from exc
             serializer.instance = existing
 
+    @transaction.atomic
     def perform_update(self, serializer):
-        instance = serializer.instance
-        occupied = instance.cycle_allocations.filter(status=CycleUnitAllocation.STATUS_ACTIVE).exists()
-        requested_volume = serializer.validated_data.get('volume_m3', instance.volume_m3)
-        requested_active = serializer.validated_data.get('is_active', instance.status == 'active')
-        if occupied and requested_volume != instance.volume_m3:
-            raise serializers.ValidationError({'volume_m3': _("Le volume d'un bac occupé ne peut pas être modifié.")})
-        if occupied and requested_active is False:
-            raise serializers.ValidationError({'is_active': _("Un bac occupé ne peut pas être désactivé.")})
-        serializer.save(status='active' if requested_active else 'inactive')
+        instance = ProductionUnit.objects.select_for_update().get(pk=serializer.instance.pk)
+        changes = dict(serializer.validated_data)
+        requested_active = changes.pop('is_active', instance.status == 'active')
+        changes['status'] = 'active' if requested_active else 'inactive'
+        try:
+            ProductionUnitLifecycleService.validate_update(instance, changes)
+        except BusinessRuleViolation as exc:
+            raise serializers.ValidationError({'detail': str(exc)}) from exc
+        serializer.instance = instance
+        serializer.save(status=changes['status'])
 
     def perform_destroy(self, instance):
         try:

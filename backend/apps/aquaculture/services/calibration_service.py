@@ -84,18 +84,37 @@ class CalibrationService:
             transferred_average_weight_g=effective_weight,
         )
 
-        destination = (
+        destination_sessions = list(
             CycleUnitAllocation.objects.select_for_update()
             .select_related('cycle', 'production_unit')
-            .filter(
-                production_unit=destination_unit,
-                status=CycleUnitAllocation.STATUS_ACTIVE,
-            )
-            .first()
+            .filter(production_unit=destination_unit)
+            .order_by('cycle__start_date', 'created_at')
+        )
+        movement_date = calibrated_at.date()
+        destination = next(
+            (
+                session
+                for session in destination_sessions
+                if session.cycle.start_date <= movement_date
+                and (
+                    session.status == CycleUnitAllocation.STATUS_ACTIVE
+                    or session.final_harvest_date is None
+                    or movement_date < session.final_harvest_date
+                )
+            ),
+            None,
         )
         if destination is not None and destination.cycle.species != source.cycle.species:
             raise BusinessRuleViolation(_('Le bac contient déjà une autre espèce.'))
         if destination is None:
+            future_session = next(
+                (session for session in destination_sessions if session.cycle.start_date > movement_date),
+                None,
+            )
+            if future_session is not None:
+                raise BusinessRuleViolation(
+                    _('La date du calibrage chevauche une session ultérieure de ce bac.')
+                )
             destination = cls._create_destination_allocation(
                 source=source,
                 destination_unit=destination_unit,

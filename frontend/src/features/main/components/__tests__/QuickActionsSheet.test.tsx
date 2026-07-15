@@ -55,7 +55,7 @@ describe('features/main/components/QuickActionsSheet', () => {
     expect(getByText('feedingPlan')).toBeTruthy();
     expect(getByText('productionUnitReportAction')).toBeTruthy();
     expect(getByText('gradeFish')).toBeTruthy();
-    expect(getByText('calibrationTanksTitle')).toBeTruthy();
+    expect(queryByText('calibrationTanksTitle')).toBeNull();
     expect(queryByText('dailyLog')).toBeNull();
     expect(queryByText('sanitaryLog')).toBeNull();
     expect(queryByText('notifications')).toBeNull();

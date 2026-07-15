@@ -710,7 +710,7 @@ class SyncService(BaseService):
         last_sync_dt = SyncService._parse_last_sync(last_sync)
 
         # Get updated cycles (changed since last_sync)
-        cycles_query = ProductionCycle.objects.filter(
+        cycles_query = ProductionCycle.objects.for_api().filter(
             farm_profile__user=user
         ).select_related(
             'farm_profile__user',
@@ -749,7 +749,13 @@ class SyncService(BaseService):
             tanks_query = ProductionUnit.objects.filter(
                 farm_profile__user=user,
                 purpose=ProductionUnit.PURPOSE_CALIBRATION,
-            ).prefetch_related('cycle_allocations__cycle')
+            ).prefetch_related(
+                'cycle_allocations',
+                models.Prefetch(
+                    'cycle_allocations__cycle',
+                    queryset=ProductionCycle.objects.for_api(),
+                ),
+            )
             operations_query = CalibrationOperation.objects.select_related(
                 'source_allocation__cycle',
                 'source_allocation__production_unit',
@@ -757,7 +763,14 @@ class SyncService(BaseService):
                 'destination_allocation__production_unit',
             ).filter(source_allocation__cycle__farm_profile__user=user)
             if last_sync_dt:
-                tanks_query = tanks_query.filter(updated_at__gt=last_sync_dt)
+                tanks_query = tanks_query.filter(
+                    models.Q(updated_at__gt=last_sync_dt)
+                    | models.Q(cycle_allocations__updated_at__gt=last_sync_dt)
+                    | models.Q(cycle_allocations__cycle__updated_at__gt=last_sync_dt)
+                    | models.Q(cycle_allocations__calibration_operations_in__created_at__gt=last_sync_dt)
+                    | models.Q(cycle_allocations__calibration_operations_out__created_at__gt=last_sync_dt)
+                    | models.Q(cycle_allocations__unit_partial_harvests__created_at__gt=last_sync_dt)
+                ).distinct()
                 operations_query = operations_query.filter(created_at__gt=last_sync_dt)
             calibration_tanks_data = CalibrationTankSerializer(tanks_query, many=True).data
             calibration_operations_data = CalibrationOperationSerializer(operations_query, many=True).data

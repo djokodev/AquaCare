@@ -182,14 +182,6 @@ export default function QuickActionsSheet({
           },
         },
         {
-          id: 'calibrationTanksUnit',
-          labelKey: 'calibrationTanksTitle',
-          icon: 'cube-outline',
-          iconColor: AQUACARE_COLORS.GREEN_PRIMARY,
-          route: 'CalibrationTanks',
-          category: 'aquaculture',
-        },
-        {
           id: 'dailyLog',
           labelKey: 'productionUnitDailyLogAction',
           icon: 'create',

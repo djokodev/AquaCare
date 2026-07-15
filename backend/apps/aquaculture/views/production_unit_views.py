@@ -1,6 +1,7 @@
 """
 ViewSets DRF pour les unités de production et leurs allocations de cycle.
 """
+from django.db import transaction
 from django.utils.translation import gettext_lazy as _
 from drf_spectacular.utils import extend_schema
 from rest_framework import permissions, serializers, status, viewsets
@@ -67,6 +68,16 @@ class ProductionUnitViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(farm_profile=self.request.user.farm_profile)
+
+    @transaction.atomic
+    def perform_update(self, serializer):
+        locked = ProductionUnit.objects.select_for_update().get(pk=serializer.instance.pk)
+        try:
+            ProductionUnitLifecycleService.validate_update(locked, serializer.validated_data)
+        except BusinessRuleViolation as exc:
+            raise serializers.ValidationError({'detail': str(exc)}) from exc
+        serializer.instance = locked
+        serializer.save()
 
     def perform_destroy(self, instance):
         try:
@@ -159,6 +170,7 @@ class CycleUnitAllocationViewSet(viewsets.ModelViewSet):
         ).get(pk=operation.pk)
         source_cycle = ProductionCycle.objects.for_api().get(pk=operation.source_allocation.cycle_id)
         destination_cycle = ProductionCycle.objects.for_api().get(pk=operation.destination_allocation.cycle_id)
+        destination = ProductionUnitLifecycleService.calibration_tanks_for_api().get(pk=destination.pk)
         payload = {
             'operation': CalibrationOperationSerializer(operation).data,
             'source_allocation': CycleUnitAllocationSerializer(operation.source_allocation).data,

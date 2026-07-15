@@ -31,14 +31,20 @@ export default function CalibrationTankDetailScreen({ route, navigation }: Props
       const serverClientUuids = new Set(nextOperations.map((operation) => operation.client_uuid));
       const pendingOperations: CalibrationOperation[] = offlineOperations
         .filter((item) => !item.synced)
-        .filter((item) => item.operationData.destination_production_unit_id === route.params.tankId)
+        .filter((item) => (
+          item.operationData.destination_production_unit_id === route.params.tankId
+          || (
+            nextTank.client_uuid != null
+            && item.operationData.destination_production_unit_client_uuid === nextTank.client_uuid
+          )
+        ))
         .filter((item) => !serverClientUuids.has(item.operationData.client_uuid))
         .map((item) => ({
           id: item.id,
           client_uuid: item.operationData.client_uuid,
           source_allocation: item.sourceAllocationId,
           destination_allocation: '',
-          source_unit_name: item.sourceAllocationId,
+          source_unit_name: t('calibrationPendingSource'),
           destination_unit_name: nextTank.name,
           calibrated_at: item.operationData.calibrated_at,
           transferred_count: item.operationData.transferred_count,
@@ -64,7 +70,7 @@ export default function CalibrationTankDetailScreen({ route, navigation }: Props
     } finally {
       setLoading(false);
     }
-  }, [route.params.tankId]);
+  }, [route.params.tankId, t]);
 
   useEffect(() => { void load(); }, [load]);
   if (loading) return <LoadingState message={t('calibrationTanksLoading')} />;

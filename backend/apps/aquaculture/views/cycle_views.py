@@ -47,6 +47,7 @@ from ..services import (
 )
 from ..services.calibration_service import CalibrationService
 from ..services.cycle_feed_service import CycleFeedService
+from ..services.production_unit_service import ProductionUnitLifecycleService
 
 logger = logging.getLogger(__name__)
 
@@ -273,6 +274,9 @@ class ProductionCycleViewSet(viewsets.ModelViewSet):
         ).get(pk=operation.pk)
         source_cycle = ProductionCycle.objects.for_api().get(pk=operation.source_allocation.cycle_id)
         destination_cycle = ProductionCycle.objects.for_api().get(pk=operation.destination_allocation.cycle_id)
+        destination_tank = ProductionUnitLifecycleService.calibration_tanks_for_api().get(
+            pk=operation.destination_allocation.production_unit_id
+        )
         payload = {
             'operation': CalibrationOperationSerializer(operation).data,
             'source_allocation': CycleUnitAllocationSerializer(operation.source_allocation).data,
@@ -280,7 +284,7 @@ class ProductionCycleViewSet(viewsets.ModelViewSet):
             'source_cycle': ProductionCycleSerializer(source_cycle, context={'request': request}).data,
             'destination_cycle': ProductionCycleSerializer(destination_cycle, context={'request': request}).data,
             'destination_tank': CalibrationTankSerializer(
-                operation.destination_allocation.production_unit,
+                destination_tank,
                 context={'request': request},
             ).data,
             'warnings': warnings,

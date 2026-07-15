@@ -7,6 +7,22 @@ import django.db.models.deletion
 import django.db.models.functions.text
 from django.conf import settings
 from django.db import migrations, models
+from django.db.models import Count
+
+
+def audit_multiple_active_allocations(apps, schema_editor):
+    allocation = apps.get_model('aquaculture', 'CycleUnitAllocation')
+    duplicates = list(
+        allocation.objects.filter(status='active')
+        .values('production_unit_id')
+        .annotate(total=Count('id'))
+        .filter(total__gt=1)[:20]
+    )
+    if duplicates:
+        raise RuntimeError(
+            'A production unit may have only one active allocation. '
+            f'Close legacy duplicate allocations before retrying migration: {duplicates}'
+        )
 
 
 class Migration(migrations.Migration):
@@ -75,6 +91,7 @@ class Migration(migrations.Migration):
             model_name='productionunit',
             index=models.Index(fields=['farm_profile', 'purpose', 'status'], name='aq_unit_farm_purpose_idx'),
         ),
+        migrations.RunPython(audit_multiple_active_allocations, migrations.RunPython.noop),
         migrations.SeparateDatabaseAndState(
             database_operations=[
                 migrations.RunSQL(

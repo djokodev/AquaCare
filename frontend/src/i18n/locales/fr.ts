@@ -1695,6 +1695,7 @@ export const fr = {
   calibrationSuccessMessage: 'Le bac contient maintenant {{count}} poissons.',
   calibrationError: 'Le calibrage n’a pas pu être enregistré.',
   calibrationPending: 'Calibrage en attente',
+  calibrationPendingSource: 'Unité source (en attente de synchronisation)',
   calibrationPendingMessage: 'L’opération sera envoyée dès le retour de la connexion.',
   prepareCalibrationTanks: 'Préparer des bacs de calibrage',
   prepareCalibrationTanksDescription: 'Facultatif. Créez-les maintenant ou plus tard, au moment du calibrage.',
