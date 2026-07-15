@@ -87,7 +87,7 @@ export function SelectionModal({
                       disabled={item.disabled}
                       onPress={() => onSelect(item.value)}
                       style={({ pressed }) => [
-                        styles.option,
+                      styles.option,
                         selected && styles.selected,
                         (pressed || item.disabled) && {
                           opacity: item.disabled ? 0.5 : 0.8,
@@ -97,17 +97,15 @@ export function SelectionModal({
                       <AppText variant="body" color={selected ? "link" : "primary"}>
                         {item.label}
                       </AppText>
-                      {selected ? (
-                        <Ionicons
-                          name="checkmark"
-                          size={20}
-                          color={colors.brand.primary}
-                        />
-                      ) : null}
+                      <Ionicons
+                        name={selected ? "checkmark-circle" : "chevron-forward"}
+                        size={20}
+                        color={selected ? colors.brand.primary : colors.text.muted}
+                      />
                     </Pressable>
                   );
                 }}
-                ItemSeparatorComponent={Divider}
+                ItemSeparatorComponent={() => <View style={styles.optionGap} />}
               />
             </View>
           )}
@@ -150,15 +148,20 @@ const styles = StyleSheet.create({
   },
   option: {
     width: "100%",
-    minHeight: 52,
+    minHeight: 64,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 0,
+    paddingHorizontal: spacing[4],
     paddingVertical: spacing[3],
+    borderWidth: 1,
+    borderColor: colors.border.subtle,
+    borderRadius: radii.md,
+    backgroundColor: colors.surface.page,
   },
   listContent: { paddingBottom: spacing[3] },
-  selected: { backgroundColor: colors.surface.selected },
+  optionGap: { height: spacing[2] },
+  selected: { backgroundColor: colors.surface.selected, borderColor: colors.brand.primary },
   state: {
     minHeight: 144,
     alignItems: "center",

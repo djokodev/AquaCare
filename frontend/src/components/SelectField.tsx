@@ -45,6 +45,7 @@ export default function SelectField({
         onPress={() => setVisible(true)}
         style={({ pressed }) => [
           styles.field,
+          visible && styles.expanded,
           error && styles.error,
           disabled && styles.disabled,
           pressed && styles.pressed,
@@ -77,17 +78,18 @@ export default function SelectField({
 }
 const styles = StyleSheet.create({
   field: {
-    minHeight: sizing.controlMedium,
+    width: "100%",
+    minHeight: sizing.inputHeight,
     flexDirection: "row",
     alignItems: "center",
     borderWidth: 1,
-    borderColor: colors.border.default,
+    borderColor: colors.border.strong,
     borderRadius: radii.md,
     backgroundColor: colors.surface.card,
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[2],
+    paddingHorizontal: spacing[4],
   },
   value: { flex: 1, minHeight: 24 },
+  expanded: { borderColor: colors.brand.primary, backgroundColor: colors.surface.selected },
   error: { borderColor: colors.status.error },
   disabled: { backgroundColor: colors.surface.disabled },
   pressed: { opacity: 0.8 },
