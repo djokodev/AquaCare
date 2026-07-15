@@ -85,6 +85,7 @@ const styles = StyleSheet.create({
     paddingTop: 0,
     paddingBottom: 0,
     textAlignVertical: "center",
+    transform: [{ translateY: -3 }],
   },
   error: { borderColor: colors.status.error },
 });
