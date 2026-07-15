@@ -69,6 +69,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing[3],
   },
   prefixContainer: {
+    height: typography.body.lineHeight,
+    justifyContent: "center",
     marginRight: spacing[2],
     paddingRight: spacing[2],
     borderRightWidth: 1,
@@ -76,9 +78,13 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
+    height: typography.body.lineHeight,
     ...typography.body,
     color: colors.text.primary,
     paddingVertical: 0,
+    paddingTop: 0,
+    paddingBottom: 0,
+    textAlignVertical: "center",
   },
   error: { borderColor: colors.status.error },
 });
