@@ -67,7 +67,7 @@ describe('CalibrateCycleScreen', () => {
     jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
   });
 
-  it('garde le nom de l unité source à gauche et le centre verticalement', async () => {
+  it('garde le nom de l unité source à gauche et le centre visuellement en hauteur', async () => {
     const { getByLabelText, getByText } = render(
       <CalibrateCycleScreen navigation={navigation} route={route} />,
     );
@@ -77,6 +77,7 @@ describe('CalibrateCycleScreen', () => {
       expect.objectContaining({
         alignSelf: 'stretch',
         includeFontPadding: false,
+        paddingBottom: 4,
         textAlign: 'left',
         textAlignVertical: 'center',
       }),
