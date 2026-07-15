@@ -16,10 +16,10 @@ Utilisation dans views.py :
     @action(detail=True, methods=['post'])
     def harvest(self, request, pk=None):
         cycle = self.get_object()
-        harvested = ProductionCycleService.harvest_cycle(
+        harvest_result = ProductionCycleService.harvest_cycle(
             cycle, **serializer.validated_data
         )
-        return Response(...)
+        return Response({'cycle': harvest_result.cycle, ...})
 """
 from .analytics_service import AnalyticsService
 from .annual_simulation_service import (
@@ -37,7 +37,7 @@ from .cycle_launch_application_service import (
     CycleLaunchIdempotencyConflict,
     CycleLaunchResult,
 )
-from .cycle_service import ProductionCycleService
+from .cycle_service import HarvestCycleResult, ProductionCycleService
 from .cycle_store_application_service import CycleStoreApplicationService, DeclareManualStockCommand
 from .dashboard_application_service import DashboardApplicationService, InvalidDashboardCycleScopeError
 from .dashboard_service import DashboardService

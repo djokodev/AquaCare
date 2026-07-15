@@ -29,7 +29,14 @@ interface OfflineSanitaryLog {
 }
 
 export interface OfflineCalibrationTank { id: string; tankData: CreateCalibrationTankForm; timestamp: number; synced: boolean; }
-export interface OfflineCalibrationOperation { id: string; sourceAllocationId: string; operationData: CalibrationRequest; timestamp: number; synced: boolean; }
+export interface OfflineCalibrationOperation {
+  id: string;
+  sourceAllocationId: string;
+  cycleId?: string;
+  operationData: CalibrationRequest;
+  timestamp: number;
+  synced: boolean;
+}
 export interface OfflineFinalHarvest {
   id: string;
   allocationId: string;
@@ -188,8 +195,8 @@ class OfflineService {
             response.final_harvest.reconciliation_status,
           );
         } else {
-          await aquacultureService.harvestCycle(item.cycleId, item.harvestData);
-          await this.markFinalHarvestAsSynced(item.id, 'reconciled');
+          const response = await aquacultureService.harvestCycle(item.cycleId, item.harvestData);
+          await this.markFinalHarvestAsSynced(item.id, response.reconciliation_status);
         }
         success += 1;
       } catch (error) {
@@ -218,9 +225,13 @@ class OfflineService {
     return this.readList(STORAGE_KEYS.OFFLINE_CALIBRATION_TANKS, 'Erreur lecture bacs de calibrage offline');
   }
 
-  async saveCalibrationOperationOffline(sourceAllocationId: string, operationData: CalibrationRequest): Promise<string> {
+  async saveCalibrationOperationOffline(
+    sourceAllocationId: string,
+    operationData: CalibrationRequest,
+    cycleId?: string,
+  ): Promise<string> {
     const id = this.generateOfflineId();
-    const item: OfflineCalibrationOperation = { id, sourceAllocationId, operationData: { ...operationData, source_allocation_id: operationData.source_allocation_id ?? sourceAllocationId, client_uuid: operationData.client_uuid || this.generateClientUUID(), created_offline: true }, timestamp: Date.now(), synced: false };
+    const item: OfflineCalibrationOperation = { id, sourceAllocationId, cycleId, operationData: { ...operationData, source_allocation_id: operationData.source_allocation_id ?? sourceAllocationId, client_uuid: operationData.client_uuid || this.generateClientUUID(), created_offline: true }, timestamp: Date.now(), synced: false };
     const current = await this.getOfflineCalibrationOperations();
     if (!current.some((entry) => entry.operationData.client_uuid === item.operationData.client_uuid)) {
       await this.persist(STORAGE_KEYS.OFFLINE_CALIBRATION_OPERATIONS, [...current, item]);
@@ -545,6 +556,52 @@ class OfflineService {
 
     try {
       const response = await aquacultureService.synchronize(payload);
+      if (response.status === 'partial_success') {
+        const acceptedCalibrationUuids = new Set(response.accepted?.calibration_operations ?? []);
+        const acceptedFinalHarvestUuids = new Set(response.accepted?.final_harvests ?? []);
+        const acceptedCalibrationIds = pendingCalibrationOperations
+          .filter((item) => acceptedCalibrationUuids.has(item.operationData.client_uuid))
+          .map((item) => item.id);
+        await this.markCalibrationOperationsAsSynced(acceptedCalibrationIds);
+        await Promise.all(
+          pendingFinalHarvests
+            .filter((item) => acceptedFinalHarvestUuids.has(item.harvestData.client_uuid))
+            .map((item) => {
+              const resultItem = response.items?.find(
+                (result) => result.type === 'final_harvest' &&
+                  result.client_uuid === item.harvestData.client_uuid,
+              );
+              return this.markFinalHarvestAsSynced(
+                item.id,
+                resultItem?.reconciliation_status ?? 'pending',
+              );
+            }),
+        );
+        await this.applyFinalHarvestServerUpdates(response.server_updates.final_harvests ?? []);
+        await this.touchLastSync();
+        const calibrationFailures = response.errors.filter(
+          (error) => error.type === 'calibration_operation',
+        ).length;
+        const finalHarvestFailures = response.errors.filter(
+          (error) => error.type === 'final_harvest',
+        ).length;
+        const calibrationSuccess = acceptedCalibrationIds.length;
+        const finalHarvestSuccess = pendingFinalHarvests.filter(
+          (item) => acceptedFinalHarvestUuids.has(item.harvestData.client_uuid),
+        ).length;
+        return {
+          success: calibrationSuccess + finalHarvestSuccess,
+          failed: calibrationFailures + finalHarvestFailures,
+          details: {
+            cycleLogs: { success: 0, failed: 0 },
+            newCycles: { success: 0, failed: 0 },
+            sanitaryLogs: { success: 0, failed: 0 },
+            calibrationTanks: { success: 0, failed: 0 },
+            calibrationOperations: { success: calibrationSuccess, failed: calibrationFailures },
+            finalHarvests: { success: finalHarvestSuccess, failed: finalHarvestFailures },
+          },
+        };
+      }
       if (response.status !== 'success' || (response.errors?.length ?? 0) > 0) {
         return null;
       }
@@ -556,12 +613,13 @@ class OfflineService {
         this.markCalibrationTanksAsSynced(pendingCalibrationTanks.map((item) => item.id)),
         this.markCalibrationOperationsAsSynced(pendingCalibrationOperations.map((item) => item.id)),
         ...pendingFinalHarvests.map((item) => {
-          const serverOperation = response.server_updates.final_harvests?.find(
-            (operation) => operation.client_uuid === item.harvestData.client_uuid,
+          const resultItem = response.items?.find(
+            (result) => result.type === 'final_harvest' &&
+              result.client_uuid === item.harvestData.client_uuid,
           );
           return this.markFinalHarvestAsSynced(
             item.id,
-            serverOperation?.reconciliation_status ?? 'pending',
+            resultItem?.reconciliation_status ?? 'pending',
           );
         }),
       ]);
@@ -669,6 +727,41 @@ class OfflineService {
     return { success, failed };
   }
 
+  async syncRelevantCalibrationOperationsForHarvest(context: {
+    cycleId: string;
+    allocationId?: string;
+    productionUnitId?: string;
+    harvestedAt: string;
+  }): Promise<SyncCounter> {
+    const harvestedAt = Date.parse(context.harvestedAt);
+    const pending = (await this.getOfflineCalibrationOperations())
+      .filter((item) => !item.synced)
+      .filter((item) => {
+        const calibratedAt = Date.parse(item.operationData.calibrated_at);
+        if (Number.isFinite(harvestedAt) && Number.isFinite(calibratedAt) && calibratedAt >= harvestedAt) {
+          return false;
+        }
+        return item.cycleId === context.cycleId ||
+          (context.allocationId != null && item.sourceAllocationId === context.allocationId) ||
+          (context.productionUnitId != null &&
+            item.operationData.destination_production_unit_id === context.productionUnitId);
+      })
+      .sort((left, right) => Date.parse(left.operationData.calibrated_at) - Date.parse(right.operationData.calibrated_at));
+    let success = 0;
+    let failed = 0;
+    for (const item of pending) {
+      try {
+        await aquacultureService.calibrateAllocation(item.sourceAllocationId, item.operationData);
+        await this.markCalibrationOperationsAsSynced([item.id]);
+        success += 1;
+      } catch (error) {
+        logger.error(`Erreur sync calibrage pertinent ${item.id}:`, error);
+        failed += 1;
+      }
+    }
+    return { success, failed };
+  }
+
   private async syncOfflineBusinessOperations(): Promise<{
     calibrationOperations: SyncCounter;
     finalHarvests: SyncCounter;
@@ -721,11 +814,14 @@ class OfflineService {
           );
           result.finalHarvests.success += 1;
         } else {
-          await aquacultureService.harvestCycle(
+          const response = await aquacultureService.harvestCycle(
             operation.item.cycleId,
             operation.item.harvestData,
           );
-          await this.markFinalHarvestAsSynced(operation.item.id, 'reconciled');
+          await this.markFinalHarvestAsSynced(
+            operation.item.id,
+            response.reconciliation_status,
+          );
           result.finalHarvests.success += 1;
         }
       } catch (error) {

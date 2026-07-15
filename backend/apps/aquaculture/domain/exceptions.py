@@ -131,6 +131,21 @@ class AllocationAlreadyFinallyHarvested(AquacultureBusinessException):
         })
 
 
+class FinalHarvestRequiresAllocationBreakdown(AquacultureBusinessException):
+    """Une déclaration globale ne permet pas de répartir le stock physique."""
+
+    default_code = 'final_harvest_requires_allocation_breakdown'
+
+    def __init__(self):
+        super().__init__({
+            'code': self.default_code,
+            'detail': _(
+                'Cette récolte doit être déclarée unité par unité afin de '
+                'réconcilier chaque stock physique.'
+            ),
+        })
+
+
 class InsufficientFishCountError(BusinessRuleViolation):
     """
     Mortalité ou retrait dépassant l'effectif disponible.

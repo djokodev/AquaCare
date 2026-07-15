@@ -954,3 +954,100 @@ class TestSyncSanitaryLogs:
         assert result['processed']['final_harvests'] == 1
         assert result['errors'][0]['code'] == 'invalid_calibration_operation'
         assert FinalHarvestOperation.objects.filter(allocation=source).count() == 1
+
+    def test_full_sync_final_harvest_by_cycle_id_is_pending_and_idempotent(self):
+        from tests.fixtures.factories import FarmProfileFactory
+
+        user = UserFactory()
+        farm = FarmProfileFactory(user=user)
+        day = timezone.localdate() - timedelta(days=1)
+        cycle = ProductionCycleFactory(
+            farm_profile=farm,
+            start_date=day - timedelta(days=10),
+            initial_count=500,
+            current_count=500,
+            initial_average_weight=Decimal('100.00'),
+            current_average_weight=Decimal('100.00'),
+            initial_biomass=Decimal('50.00'),
+            current_biomass=Decimal('50.00'),
+            status='active',
+        )
+        allocation = create_cycle_unit_allocation(cycle, 'Cycle scope harvest')
+        client_uuid = uuid4()
+        harvested_at = timezone.make_aware(datetime.combine(day, time(hour=18)))
+        payload = {
+            'final_harvests': [{
+                'client_uuid': str(client_uuid),
+                'cycle_id': str(cycle.id),
+                'harvest_date': day.isoformat(),
+                'final_harvested_at': harvested_at.isoformat(),
+                'final_count': 400,
+                'final_average_weight': '300.00',
+                'total_harvested_weight': '120.00',
+                'created_offline': True,
+            }],
+        }
+
+        first = SyncService.perform_full_sync(user, payload)
+        replay = SyncService.perform_full_sync(user, payload)
+
+        operation = FinalHarvestOperation.objects.get(allocation=allocation)
+        assert first['status'] == 'success'
+        assert first['accepted']['final_harvests'] == [str(client_uuid)]
+        assert first['items'][0]['reconciliation_status'] == 'pending'
+        assert replay['status'] == 'success'
+        assert replay['processed']['final_harvests'] == 1
+        assert replay['accepted']['final_harvests'] == [str(client_uuid)]
+        assert FinalHarvestOperation.objects.filter(allocation=allocation).count() == 1
+        assert operation.reconciliation_status == FinalHarvestOperation.STATUS_PENDING
+
+    def test_full_sync_partial_success_lists_only_accepted_business_items(self):
+        from tests.fixtures.factories import FarmProfileFactory
+
+        user = UserFactory()
+        farm = FarmProfileFactory(user=user)
+        day = timezone.localdate() - timedelta(days=1)
+        cycle = ProductionCycleFactory(
+            farm_profile=farm,
+            start_date=day - timedelta(days=10),
+            initial_count=500,
+            current_count=500,
+            initial_average_weight=Decimal('100.00'),
+            current_average_weight=Decimal('100.00'),
+            initial_biomass=Decimal('50.00'),
+            current_biomass=Decimal('50.00'),
+            status='active',
+        )
+        create_cycle_unit_allocation(cycle, 'Partial success harvest')
+        harvest_uuid = uuid4()
+        calibration_uuid = uuid4()
+        harvested_at = timezone.make_aware(datetime.combine(day, time(hour=18)))
+
+        result = SyncService.perform_full_sync(user, {
+            'calibration_operations': [{
+                'client_uuid': str(calibration_uuid),
+                'source_allocation_id': str(uuid4()),
+                'destination_production_unit_id': str(uuid4()),
+                'calibrated_at': (harvested_at - timedelta(hours=1)).isoformat(),
+                'transferred_count': 10,
+                'transferred_average_weight_g': '100.00',
+                'created_offline': True,
+            }],
+            'final_harvests': [{
+                'client_uuid': str(harvest_uuid),
+                'cycle_id': str(cycle.id),
+                'harvest_date': day.isoformat(),
+                'final_harvested_at': harvested_at.isoformat(),
+                'final_count': 500,
+                'final_average_weight': '300.00',
+                'total_harvested_weight': '150.00',
+                'created_offline': True,
+            }],
+        })
+
+        assert result['status'] == 'partial_success'
+        assert result['accepted']['final_harvests'] == [str(harvest_uuid)]
+        assert result['accepted']['calibration_operations'] == []
+        assert result['processed']['final_harvests'] == 1
+        assert result['processed']['calibration_operations'] == 0
+        assert result['errors'][0]['client_uuid'] == str(calibration_uuid)

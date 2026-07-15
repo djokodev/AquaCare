@@ -169,7 +169,11 @@ export default function CalibrateCycleScreen({ route, navigation }: Props) {
     } catch (error) {
       const response = (error as { response?: { data?: { detail?: string } } }).response;
       if (!response) {
-        await offlineService.saveCalibrationOperationOffline(sourceAllocationId, payload);
+        await offlineService.saveCalibrationOperationOffline(
+          sourceAllocationId,
+          payload,
+          route.params.sourceCycleId,
+        );
         Alert.alert(t('calibrationPending'), t('calibrationPendingMessage'));
         navigation.goBack();
       } else {

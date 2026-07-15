@@ -211,6 +211,7 @@ jobs:
           fi
           name_output="$(pytest -n 0 \
             apps/aquaculture/tests/test_production_unit_concurrency.py \
+            apps/aquaculture/tests/test_concurrent_name_api.py \
             apps/aquaculture/tests/test_cycle_launch.py \
             -q -k 'concurrent_name')"
           echo "$name_output"
@@ -225,6 +226,15 @@ jobs:
           echo "$harvest_output"
           if echo "$harvest_output" | grep -qi skipped; then
             echo "Critical final-harvest reconciliation test was skipped"
+            exit 1
+          fi
+          global_harvest_output="$(pytest -n 0 \
+            apps/aquaculture/tests/test_views.py \
+            apps/aquaculture/tests/services/test_sync_service.py \
+            -q -k 'global_harvest_retry_returns_pending_operation or global_harvest_multi_allocation_returns_all_operations or full_sync_final_harvest_by_cycle_id_is_pending_and_idempotent or full_sync_partial_success_lists_only_accepted_business_items')"
+          echo "$global_harvest_output"
+          if echo "$global_harvest_output" | grep -qi skipped; then
+            echo "Critical global-harvest test was skipped"
             exit 1
           fi
 

@@ -20,6 +20,7 @@ Architecture :
 from __future__ import annotations
 
 import uuid
+from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any, TypedDict
@@ -48,6 +49,8 @@ from ..domain.exceptions import (
     BusinessRuleViolation,
     CycleAlreadyHarvestedError,
     CycleNotActiveError,
+    FinalHarvestIdempotencyConflict,
+    FinalHarvestRequiresAllocationBreakdown,
     InsufficientFishCountError,
     InvalidDateRangeError,
     InvalidDensityError,
@@ -93,6 +96,29 @@ class CycleCreatePayload(TypedDict, total=False):
     other_operational_costs_fcfa: Decimal
     created_offline: bool
     synced_at: Any
+
+
+@dataclass(frozen=True)
+class HarvestCycleResult:
+    """Résultat complet d'une commande de récolte globale."""
+
+    cycle: ProductionCycle
+    operations: list[FinalHarvestOperation]
+    idempotent_replay: bool
+
+    @property
+    def reconciliation_status(self) -> str:
+        """Agrège le statut des événements sans le faire deviner à la vue."""
+        if any(
+            operation.reconciliation_status == FinalHarvestOperation.STATUS_PENDING
+            for operation in self.operations
+        ):
+            return FinalHarvestOperation.STATUS_PENDING
+        return FinalHarvestOperation.STATUS_RECONCILED
+
+    def __getattr__(self, name):
+        """Préserve les anciens appels métier qui lisaient directement le cycle."""
+        return getattr(self.cycle, name)
 
 
 class ProductionCycleService(BaseService):
@@ -211,7 +237,7 @@ class ProductionCycleService(BaseService):
         total_harvested_weight: Decimal | None = None,
         created_offline: bool = False,
         allow_pending_reconciliation: bool = False,
-    ) -> ProductionCycle:
+    ) -> HarvestCycleResult:
         """
         Finalise un cycle de production avec calculs de métriques finales.
 
@@ -236,7 +262,8 @@ class ProductionCycleService(BaseService):
             harvest_notes: Notes optionnelles sur la récolte
 
         Returns:
-            ProductionCycle mis à jour avec status='harvested'
+            Résultat structuré contenant le cycle, les opérations finales et
+            l'indicateur de replay idempotent.
 
         Raises:
             CycleAlreadyHarvestedError: Si cycle déjà récolté
@@ -247,8 +274,24 @@ class ProductionCycleService(BaseService):
             {"cycle_id": str(cycle.id), "harvest_date": str(harvest_date)}
         )
 
-        # 1. Validation état du cycle
+        cycle = ProductionCycle.objects.select_for_update().get(pk=cycle.pk)
+
+        # Un retry arrive nécessairement après la clôture du cycle. Il faut donc
+        # retrouver la commande avant de rejeter son statut harvested.
         if cycle.status == 'harvested':
+            replay = ProductionCycleService._find_global_harvest_replay(
+                cycle=cycle,
+                harvest_date=harvest_date,
+                final_harvested_at=final_harvested_at,
+                final_count=final_count,
+                final_average_weight=final_average_weight,
+                client_uuid=client_uuid,
+                harvest_notes=harvest_notes,
+                total_harvested_weight=total_harvested_weight,
+                created_offline=created_offline,
+            )
+            if replay is not None:
+                return replay
             raise CycleAlreadyHarvestedError(
                 _("Ce cycle a déjà été récolté le %(date)s") % {'date': cycle.end_date}
             )
@@ -269,13 +312,10 @@ class ProductionCycleService(BaseService):
                     _("Un UUID client est requis pour rendre la récolte finale idempotente.")
                 )
             if len(active_allocations) > 1 and final_count != current_total:
-                raise InvalidHarvestDataError(
-                    _(
-                        "Une récolte globale incohérente doit être enregistrée unité par unité "
-                        "afin de réconcilier chaque stock physique."
-                    )
-                )
+                raise FinalHarvestRequiresAllocationBreakdown()
             harvested_cycle = cycle
+            operations = []
+            any_created = False
             for allocation in active_allocations:
                 declared_count = (
                     final_count if len(active_allocations) == 1 else allocation.current_fish_count
@@ -295,7 +335,13 @@ class ProductionCycleService(BaseService):
                     allow_pending_reconciliation=allow_pending_reconciliation,
                 )
                 harvested_cycle = harvest_result[0]
-            return harvested_cycle
+                operations.append(harvest_result[2])
+                any_created = any_created or harvest_result[3]
+            return HarvestCycleResult(
+                cycle=harvested_cycle,
+                operations=operations,
+                idempotent_replay=not any_created,
+            )
 
         # 2. Validation règles métier récolte
         ProductionCycleService._validate_harvest_business_rules(
@@ -354,7 +400,114 @@ class ProductionCycleService(BaseService):
         )
         ProductionCycleService._post_harvest_actions(cycle)
 
-        return cycle
+        return HarvestCycleResult(cycle=cycle, operations=[], idempotent_replay=False)
+
+    @staticmethod
+    def _find_global_harvest_replay(
+        *,
+        cycle: ProductionCycle,
+        harvest_date: date,
+        final_harvested_at: datetime,
+        final_count: int,
+        final_average_weight: Decimal,
+        client_uuid: uuid.UUID | None,
+        harvest_notes: str,
+        total_harvested_weight: Decimal | None,
+        created_offline: bool,
+    ) -> HarvestCycleResult | None:
+        """Reconnaît et valide une commande globale déjà appliquée."""
+        allocations = list(
+            cycle.unit_allocations.select_related('final_harvest_operation').order_by('id')
+        )
+        if not allocations:
+            # Les cycles historiques sans allocation ne possèdent aucun support
+            # d'événement. Leur projection finale constitue donc la règle de
+            # replay explicite (le client_uuid ne peut pas être persisté ici).
+            # The historical path never persisted ``total_harvested_weight``;
+            # its canonical projection has always been count × average weight.
+            expected_biomass = AquacultureCalculator.calculate_biomass(
+                final_count,
+                final_average_weight,
+            )
+            if all([
+                cycle.end_date == harvest_date,
+                cycle.final_count == final_count,
+                cycle.final_average_weight == final_average_weight,
+                cycle.final_biomass == expected_biomass,
+            ]):
+                return HarvestCycleResult(cycle=cycle, operations=[], idempotent_replay=True)
+            return None
+
+        if client_uuid is None:
+            return None
+
+        expected_uuid_by_allocation = {
+            allocation.pk: uuid.uuid5(client_uuid, str(allocation.pk))
+            for allocation in allocations
+        }
+        existing_by_uuid = {
+            operation.client_uuid: operation
+            for operation in FinalHarvestOperation.objects.select_related('allocation').filter(
+                client_uuid__in=expected_uuid_by_allocation.values(),
+            )
+        }
+        if not existing_by_uuid:
+            return None
+
+        # Une projection portant exactement le datetime de cette commande devait
+        # elle aussi avoir son événement enfant. Son absence est un conflit, pas
+        # un replay partiel.
+        concerned = [
+            allocation for allocation in allocations
+            if (
+                expected_uuid_by_allocation[allocation.pk] in existing_by_uuid
+                or allocation.final_harvested_at == final_harvested_at
+            )
+        ]
+        if len(concerned) != len(existing_by_uuid):
+            raise FinalHarvestIdempotencyConflict()
+
+        if len(concerned) == 1:
+            declared_counts = [final_count]
+        else:
+            operations = [
+                existing_by_uuid.get(expected_uuid_by_allocation[allocation.pk])
+                for allocation in concerned
+            ]
+            if any(operation is None for operation in operations):
+                raise FinalHarvestIdempotencyConflict()
+            declared_counts = [operation.declared_fish_count for operation in operations]
+            if sum(declared_counts) != final_count:
+                raise FinalHarvestIdempotencyConflict()
+
+        replayed_operations = []
+        for allocation, declared_count in zip(concerned, declared_counts, strict=True):
+            child_uuid = expected_uuid_by_allocation[allocation.pk]
+            declared_biomass = (
+                Decimal(str(total_harvested_weight)).quantize(Decimal('0.01'))
+                if len(concerned) == 1 and total_harvested_weight is not None
+                else AquacultureCalculator.calculate_biomass(declared_count, final_average_weight)
+            )
+            operation = FinalHarvestService.find_idempotent_replay(
+                client_uuid=child_uuid,
+                allocation=allocation,
+                harvested_at=final_harvested_at,
+                declared_fish_count=declared_count,
+                declared_average_weight_g=final_average_weight,
+                declared_biomass_kg=declared_biomass,
+                notes=harvest_notes,
+                created_offline=created_offline,
+            )
+            if operation is None:
+                raise FinalHarvestIdempotencyConflict()
+            FinalHarvestService.assert_projection(operation)
+            replayed_operations.append(operation)
+
+        return HarvestCycleResult(
+            cycle=cycle,
+            operations=replayed_operations,
+            idempotent_replay=True,
+        )
 
     @staticmethod
     @transaction.atomic

@@ -18,7 +18,12 @@ from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 
 from ..domain.exceptions import BusinessRuleViolation, FeedingPlanGenerationError
-from ..models import CalibrationOperation, CycleUnitAllocation, ProductionCycle, ProductionUnit
+from ..models import (
+    CalibrationOperation,
+    CycleUnitAllocation,
+    ProductionCycle,
+    ProductionUnit,
+)
 from ..serializers import (
     CalibrationOperationSerializer,
     CalibrationRequestSerializer,
@@ -333,7 +338,7 @@ class ProductionCycleViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        harvested_cycle = ProductionCycleApplicationService.harvest_cycle(
+        harvest_result = ProductionCycleApplicationService.harvest_cycle(
             cycle=cycle,
             command=HarvestCycleCommand(
                 harvest_date=serializer.validated_data['harvest_date'],
@@ -352,10 +357,15 @@ class ProductionCycleViewSet(viewsets.ModelViewSet):
             ),
         )
 
+        operations = harvest_result.operations
         response_serializer = CycleHarvestResponseSerializer(
             {
                 'message': _('Cycle récolté avec succès'),
-                'cycle': harvested_cycle,
+                'cycle': harvest_result.cycle,
+                'final_harvest': operations[0] if len(operations) == 1 else None,
+                'final_harvests': operations,
+                'reconciliation_status': harvest_result.reconciliation_status,
+                'idempotent_replay': harvest_result.idempotent_replay,
             },
             context={'request': request},
         )

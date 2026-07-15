@@ -284,6 +284,10 @@ describe('features/aquaculture/services/aquacultureService', () => {
     const harvestResponse: CycleHarvestResponse = {
       message: 'Cycle recolte avec succes',
       cycle: { ...cycle, status: 'harvested', end_date: '2026-05-01' },
+      final_harvest: null,
+      final_harvests: [],
+      reconciliation_status: 'reconciled',
+      idempotent_replay: false,
     };
     mockApi.post.mockResolvedValueOnce({ data: harvestResponse } as never);
 

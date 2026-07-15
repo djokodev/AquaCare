@@ -111,6 +111,33 @@ have a datetime constructed by the serializer, but domain services always
 require an explicit aware datetime. A new arrival after a final harvest always
 opens or uses a later session and never reopens the closed one.
 
+A global cycle harvest is also an idempotent command. Its mobile-generated UUID
+is a command UUID; each active allocation receives a deterministic child UUID,
+`uuid5(global_client_uuid, allocation_id)`. A complete identical replay returns
+the existing events, while a missing or incompatible child is a business
+conflict. The global endpoint preserves `message` and `cycle`, and additionally
+returns `final_harvest`, the complete `final_harvests` list, the aggregate
+`reconciliation_status`, and `idempotent_replay`. The aggregate is `pending` if
+at least one child is pending, otherwise it is `reconciled`. Historical cycles
+without allocations use their persisted final projection as an explicit legacy
+replay rule because they have no event on which to persist a command UUID.
+
+Full sync resolves a final harvest by allocation when an allocation identifier
+is present, or by cycle when only `cycle_id` or `cycle_client_uuid` is present.
+A single-allocation cycle follows the global command path. A multi-allocation
+cycle is accepted only when the declared count matches the current aggregate;
+otherwise the API returns `final_harvest_requires_allocation_breakdown` and the
+client must harvest each unit explicitly. `processed.final_harvests` counts
+accepted commands, including idempotent replays. Partial-success responses expose
+accepted client UUIDs and per-item outcomes so the mobile client only removes
+confirmed queue entries and retains failed ones for retry.
+
+Before an online harvest, the mobile client synchronizes only pending calibration
+events relevant to the target allocation or cycle and earlier than the harvest
+instant; unrelated cycles do not block the command. Allocation responses expose
+the ledger-derived, timezone-aware `session_started_at`, which the form uses as
+the exact lower business-time bound while keeping the backend authoritative.
+
 Migration `0035` intentionally does not invent `FinalHarvestOperation` rows for
 legacy harvested allocations: older records do not contain a precise business
 time or a client idempotency UUID. They remain readable through the allocation

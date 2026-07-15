@@ -11,6 +11,7 @@ jest.mock('@/features/aquaculture/services/aquacultureService', () => ({
     calibrateAllocation: jest.fn(),
     harvestProductionUnitAllocation: jest.fn(),
     harvestCycle: jest.fn(),
+    synchronize: jest.fn(),
   },
 }));
 
@@ -361,6 +362,123 @@ describe('services/offlineService', () => {
     expect(mockAquaculture.harvestProductionUnitAllocation.mock.calls[1][1].client_uuid).toBe(
       mockAquaculture.harvestProductionUnitAllocation.mock.calls[2][1].client_uuid,
     );
+  });
+
+  it.each(['pending', 'reconciled'] as const)(
+    'utilise le statut serveur %s pour une récolte globale offline',
+    async (reconciliationStatus) => {
+      const clientUuid = '00000000-0000-4000-8000-000000000021';
+      await offlineService.saveFinalHarvestOffline('', 'cycle-1', {
+        client_uuid: clientUuid,
+        cycle_id: 'cycle-1',
+        harvest_date: '2026-07-14',
+        final_harvested_at: '2026-07-14T17:00:00.000Z',
+        final_count: 300,
+        final_average_weight: 300,
+        total_harvested_weight: 90,
+        created_offline: true,
+      });
+      mockAquaculture.harvestCycle.mockResolvedValueOnce({
+        reconciliation_status: reconciliationStatus,
+        idempotent_replay: true,
+      } as any);
+
+      await expect(offlineService.syncOfflineFinalHarvests()).resolves.toEqual({
+        success: 1,
+        failed: 0,
+      });
+      expect(await offlineService.getOfflineFinalHarvests()).toEqual([
+        expect.objectContaining({
+          synced: true,
+          reconciliationStatus,
+          harvestData: expect.objectContaining({ client_uuid: clientUuid }),
+        }),
+      ]);
+    },
+  );
+
+  it('ne bloque pas une récolte avec un calibrage pending sans rapport', async () => {
+    await offlineService.saveCalibrationOperationOffline('allocation-other', {
+      client_uuid: '00000000-0000-4000-8000-000000000022',
+      source_allocation_id: 'allocation-other',
+      destination_production_unit_id: 'unit-other',
+      calibrated_at: '2026-07-14T08:00:00.000Z',
+      transferred_count: 10,
+    }, 'cycle-other');
+    mockAquaculture.calibrateAllocation.mockRejectedValue(new Error('offline'));
+
+    await expect(offlineService.syncRelevantCalibrationOperationsForHarvest({
+      cycleId: 'cycle-current',
+      allocationId: 'allocation-current',
+      productionUnitId: 'unit-current',
+      harvestedAt: '2026-07-14T17:00:00.000Z',
+    })).resolves.toEqual({ success: 0, failed: 0 });
+    expect(mockAquaculture.calibrateAllocation).not.toHaveBeenCalled();
+  });
+
+  it('signale uniquement l’échec d’un calibrage pertinent', async () => {
+    await offlineService.saveCalibrationOperationOffline('allocation-current', {
+      client_uuid: '00000000-0000-4000-8000-000000000023',
+      source_allocation_id: 'allocation-current',
+      calibrated_at: '2026-07-14T08:00:00.000Z',
+      transferred_count: 10,
+    }, 'cycle-current');
+    mockAquaculture.calibrateAllocation.mockRejectedValue(new Error('offline'));
+
+    await expect(offlineService.syncRelevantCalibrationOperationsForHarvest({
+      cycleId: 'cycle-current',
+      allocationId: 'allocation-current',
+      harvestedAt: '2026-07-14T17:00:00.000Z',
+    })).resolves.toEqual({ success: 0, failed: 1 });
+  });
+
+  it('ne rejoue pas une récolte globale acceptée pendant un bulk partial_success', async () => {
+    const acceptedHarvestUuid = '00000000-0000-4000-8000-000000000024';
+    const rejectedCalibrationUuid = '00000000-0000-4000-8000-000000000025';
+    await offlineService.saveFinalHarvestOffline('', 'cycle-1', {
+      client_uuid: acceptedHarvestUuid,
+      cycle_id: 'cycle-1',
+      harvest_date: '2026-07-14',
+      final_harvested_at: '2026-07-14T17:00:00.000Z',
+      final_count: 300,
+      final_average_weight: 300,
+      total_harvested_weight: 90,
+      created_offline: true,
+    });
+    await offlineService.saveCalibrationOperationOffline('allocation-1', {
+      client_uuid: rejectedCalibrationUuid,
+      source_allocation_id: 'allocation-1',
+      calibrated_at: '2026-07-14T08:00:00.000Z',
+      transferred_count: 10,
+    }, 'cycle-1');
+    mockAquaculture.synchronize.mockResolvedValueOnce({
+      status: 'partial_success',
+      accepted: {
+        calibration_operations: [],
+        final_harvests: [acceptedHarvestUuid],
+      },
+      items: [{
+        type: 'final_harvest',
+        client_uuid: acceptedHarvestUuid,
+        status: 'accepted',
+        reconciliation_status: 'pending',
+      }],
+      errors: [{ type: 'calibration_operation', error: 'invalid' }],
+      server_updates: { final_harvests: [] },
+    } as any);
+    const result = await offlineService.syncAllOfflineData();
+
+    expect(result.details.finalHarvests).toEqual({ success: 1, failed: 0 });
+    expect(result.details.calibrationOperations).toEqual({ success: 0, failed: 1 });
+    expect(mockAquaculture.harvestCycle).not.toHaveBeenCalled();
+    expect(mockAquaculture.calibrateAllocation).not.toHaveBeenCalled();
+    expect(await offlineService.getOfflineFinalHarvests()).toEqual([
+      expect.objectContaining({
+        synced: true,
+        reconciliationStatus: 'pending',
+        harvestData: expect.objectContaining({ client_uuid: acceptedHarvestUuid }),
+      }),
+    ]);
   });
 
   it('applique un delta serveur qui réconcilie une récolte déjà acceptée pending', async () => {

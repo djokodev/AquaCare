@@ -224,6 +224,10 @@ export interface PartialHarvestData {
 export interface CycleHarvestResponse {
   message: string;
   cycle: ProductionCycle;
+  final_harvest: FinalHarvestOperation | null;
+  final_harvests: FinalHarvestOperation[];
+  reconciliation_status: 'pending' | 'reconciled';
+  idempotent_replay: boolean;
 }
 
 export interface CycleUnitHarvestResponse {
@@ -535,6 +539,7 @@ export interface CycleUnitAllocation {
   final_biomass_kg?: number | null;
   final_harvest_reconciliation_status?: "pending" | "reconciled" | null;
   final_harvest_computed_count?: number | null;
+  session_started_at?: string | null;
   expected_survival_rate_pct?: number | null;
   cycle_name?: string;
   production_unit_name?: string;
@@ -755,6 +760,17 @@ export interface SyncResponse {
     final_harvests?: number;
   };
   errors: SyncError[];
+  accepted?: {
+    calibration_operations: string[];
+    final_harvests: string[];
+  };
+  items?: Array<{
+    type: 'calibration_operation' | 'final_harvest';
+    client_uuid: string;
+    status: 'accepted';
+    reconciliation_status?: 'pending' | 'reconciled';
+    operation_id?: string;
+  }>;
   server_updates: {
     cycles: ProductionCycle[];
     cycle_logs: CycleLog[];

@@ -8,7 +8,7 @@ from typing import Any
 
 from ..models import PartialHarvest, ProductionCycle
 from .analytics_service import AnalyticsService
-from .cycle_service import CycleCreatePayload, ProductionCycleService
+from .cycle_service import CycleCreatePayload, HarvestCycleResult, ProductionCycleService
 
 
 @dataclass(frozen=True)
@@ -54,7 +54,7 @@ class ProductionCycleApplicationService:
     def harvest_cycle(
         cycle: ProductionCycle,
         command: HarvestCycleCommand,
-    ) -> ProductionCycle:
+    ) -> HarvestCycleResult:
         """Finalise un cycle via la couche applicative."""
         return ProductionCycleService.harvest_cycle(
             cycle=cycle,

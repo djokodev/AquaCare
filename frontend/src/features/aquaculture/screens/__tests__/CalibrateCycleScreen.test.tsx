@@ -131,6 +131,7 @@ describe('CalibrateCycleScreen', () => {
     await waitFor(() => expect(offlineService.saveCalibrationOperationOffline).toHaveBeenCalledWith(
       'allocation-1',
       expect.objectContaining({ client_uuid: 'operation-uuid' }),
+      'cycle-1',
     ));
   });
 

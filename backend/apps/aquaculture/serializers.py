@@ -77,6 +77,7 @@ from .models import (
     ReportDispatchLog,
     SanitaryLog,
 )
+from .services.allocation_ledger_service import AllocationLedgerService
 from .services.cycle_service import ProductionCycleService
 from .services.farm_production_plan_service import FarmProductionPlanService
 from .services.production_unit_service import ProductionUnitLifecycleService
@@ -161,7 +162,15 @@ class ProductionUnitSerializer(serializers.ModelSerializer):
             if self.instance is not None:
                 duplicate = duplicate.exclude(pk=self.instance.pk)
             if duplicate.exists():
-                raise serializers.ValidationError({'name': _("Une unité portant ce nom existe déjà.")})
+                detail = _("Une unité portant ce nom existe déjà.")
+                raise serializers.ValidationError(
+                    {
+                        'code': 'duplicate_production_unit_name',
+                        'field': 'name',
+                        'detail': detail,
+                        'name': [detail],
+                    }
+                )
 
         try:
             validate_production_unit_dimensions(
@@ -203,6 +212,7 @@ class CycleUnitAllocationSerializer(serializers.ModelSerializer):
     survival_rate_pct = serializers.SerializerMethodField()
     final_harvest_reconciliation_status = serializers.SerializerMethodField()
     final_harvest_computed_count = serializers.SerializerMethodField()
+    session_started_at = serializers.SerializerMethodField()
 
     class Meta:
         model = CycleUnitAllocation
@@ -231,6 +241,7 @@ class CycleUnitAllocationSerializer(serializers.ModelSerializer):
             'final_biomass_kg',
             'final_harvest_reconciliation_status',
             'final_harvest_computed_count',
+            'session_started_at',
             'expected_survival_rate_pct',
             'survival_rate_pct',
             'created_at',
@@ -255,6 +266,7 @@ class CycleUnitAllocationSerializer(serializers.ModelSerializer):
             'final_biomass_kg',
             'final_harvest_reconciliation_status',
             'final_harvest_computed_count',
+            'session_started_at',
             'survival_rate_pct',
             'created_at',
             'updated_at',
@@ -270,6 +282,10 @@ class CycleUnitAllocationSerializer(serializers.ModelSerializer):
     def get_final_harvest_computed_count(self, obj):
         operation = getattr(obj, 'final_harvest_operation', None)
         return operation.computed_count_before_harvest if operation is not None else None
+
+    @extend_schema_field(serializers.DateTimeField(allow_null=True))
+    def get_session_started_at(self, obj):
+        return AllocationLedgerService.session_started_at(obj)
 
     def validate(self, attrs):
         cycle = attrs.get('cycle') or getattr(self.instance, 'cycle', None)
@@ -802,15 +818,24 @@ class CalibrationTankSerializer(serializers.ModelSerializer):
             return attrs
         farm = request.user.farm_profile
         name = attrs.get('name', getattr(self.instance, 'name', None))
+        client_uuid = attrs.get('client_uuid', getattr(self.instance, 'client_uuid', None))
         duplicate = ProductionUnit.objects.filter(
             farm_profile=farm,
             name__iexact=name,
         )
         if self.instance:
             duplicate = duplicate.exclude(pk=self.instance.pk)
-        if duplicate.exists():
+        if duplicate.exists() and not (
+            client_uuid and duplicate.filter(client_uuid=client_uuid).exists()
+        ):
+            detail = _('Une unité portant ce nom existe déjà dans cette ferme.')
             raise serializers.ValidationError(
-                {'name': [_('Une unité portant ce nom existe déjà dans cette ferme.')]}
+                {
+                    'code': 'duplicate_production_unit_name',
+                    'field': 'name',
+                    'detail': detail,
+                    'name': [detail],
+                }
             )
         if self.instance is not None:
             lifecycle_changes = dict(attrs)
@@ -1565,13 +1590,6 @@ class PartialHarvestResponseSerializer(serializers.Serializer):
     partial_harvest = PartialHarvestReadSerializer()
 
 
-class CycleHarvestResponseSerializer(serializers.Serializer):
-    """Reponse de recolte d'un cycle."""
-
-    message = serializers.CharField()
-    cycle = ProductionCycleSerializer()
-
-
 class CycleUnitAllocationHarvestResponseSerializer(serializers.Serializer):
     """Réponse d'une récolte complète d'une unité de production."""
 
@@ -1599,6 +1617,17 @@ class FinalHarvestOperationSerializer(serializers.ModelSerializer):
             'synced_at', 'created_at', 'updated_at',
         ]
         read_only_fields = fields
+
+
+class CycleHarvestResponseSerializer(serializers.Serializer):
+    """Réponse structurée d'une récolte globale de cycle."""
+
+    message = serializers.CharField()
+    cycle = ProductionCycleSerializer()
+    final_harvest = FinalHarvestOperationSerializer(allow_null=True)
+    final_harvests = FinalHarvestOperationSerializer(many=True)
+    reconciliation_status = serializers.ChoiceField(choices=['pending', 'reconciled'])
+    idempotent_replay = serializers.BooleanField()
 
 
 class CycleUnitAllocationPartialHarvestResponseSerializer(serializers.Serializer):
@@ -2038,6 +2067,8 @@ class SyncResponseSerializer(serializers.Serializer):
     timestamp = serializers.DateTimeField()
     processed = serializers.DictField()
     errors = serializers.ListField()
+    accepted = serializers.DictField()
+    items = serializers.ListField()
     server_updates = serializers.DictField()
 
 

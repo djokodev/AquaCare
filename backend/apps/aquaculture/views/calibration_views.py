@@ -1,6 +1,7 @@
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import IntegrityError, transaction
 from django.db.models import Q
+from django.utils.translation import gettext_lazy as _
 from rest_framework import permissions, serializers, viewsets
 
 from ..domain.exceptions import BusinessRuleViolation
@@ -19,27 +20,55 @@ class CalibrationTankViewSet(viewsets.ModelViewSet):
             farm_profile__user=self.request.user,
         )
 
+    @staticmethod
+    def _reuse_idempotent_instance(serializer, farm_profile, client_uuid):
+        if not client_uuid:
+            return False
+        existing = ProductionUnit.objects.filter(client_uuid=client_uuid).first()
+        if existing is None:
+            return False
+        try:
+            ProductionUnitLifecycleService.validate_idempotent_payload(
+                existing,
+                {
+                    **serializer.validated_data,
+                    'status': 'active',
+                    'purpose': ProductionUnit.PURPOSE_CALIBRATION,
+                    'unit_type': 'tank',
+                },
+                farm_profile,
+            )
+        except BusinessRuleViolation as exc:
+            raise serializers.ValidationError(
+                {
+                    'code': 'production_unit_client_uuid_conflict',
+                    'field': 'client_uuid',
+                    'detail': str(exc),
+                    'client_uuid': [str(exc)],
+                }
+            ) from exc
+        serializer.instance = existing
+        return True
+
+    @staticmethod
+    def _raise_django_validation_error(exc):
+        if 'uniq_production_unit_name_farm_ci' in str(exc):
+            detail = _('Une unité portant ce nom existe déjà dans cette ferme.')
+            raise serializers.ValidationError(
+                {
+                    'code': 'duplicate_production_unit_name',
+                    'field': 'name',
+                    'detail': detail,
+                    'name': [detail],
+                }
+            ) from exc
+        raise serializers.ValidationError(exc.message_dict or exc.messages) from exc
+
     def perform_create(self, serializer):
         farm_profile = self.request.user.farm_profile
         client_uuid = serializer.validated_data.get("client_uuid")
-        if client_uuid:
-            existing = ProductionUnit.objects.filter(client_uuid=client_uuid).first()
-            if existing:
-                try:
-                    ProductionUnitLifecycleService.validate_idempotent_payload(
-                        existing,
-                        {
-                            **serializer.validated_data,
-                            'status': 'active',
-                            'purpose': ProductionUnit.PURPOSE_CALIBRATION,
-                            'unit_type': 'tank',
-                        },
-                        farm_profile,
-                    )
-                except BusinessRuleViolation as exc:
-                    raise serializers.ValidationError({'detail': str(exc)}) from exc
-                serializer.instance = existing
-                return
+        if self._reuse_idempotent_instance(serializer, farm_profile, client_uuid):
+            return
         try:
             with transaction.atomic():
                 serializer.save(
@@ -50,27 +79,15 @@ class CalibrationTankViewSet(viewsets.ModelViewSet):
                     status='active',
                 )
         except DjangoValidationError as exc:
-            raise serializers.ValidationError(exc.message_dict or exc.messages) from exc
+            if self._reuse_idempotent_instance(serializer, farm_profile, client_uuid):
+                return
+            self._raise_django_validation_error(exc)
         except IntegrityError as exc:
-            existing = ProductionUnit.objects.filter(client_uuid=client_uuid).first() if client_uuid else None
-            if existing is None:
-                raise serializers.ValidationError(
-                    translate_production_unit_integrity_error(exc)
-                ) from exc
-            try:
-                ProductionUnitLifecycleService.validate_idempotent_payload(
-                    existing,
-                    {
-                        **serializer.validated_data,
-                        'status': 'active',
-                        'purpose': ProductionUnit.PURPOSE_CALIBRATION,
-                        'unit_type': 'tank',
-                    },
-                    farm_profile,
-                )
-            except BusinessRuleViolation as conflict:
-                raise serializers.ValidationError({'detail': str(conflict)}) from exc
-            serializer.instance = existing
+            if self._reuse_idempotent_instance(serializer, farm_profile, client_uuid):
+                return
+            raise serializers.ValidationError(
+                translate_production_unit_integrity_error(exc)
+            ) from exc
 
     @transaction.atomic
     def perform_update(self, serializer):

@@ -43,6 +43,18 @@ from ..services.integrity_error_service import translate_production_unit_integri
 from ..services.production_unit_service import ProductionUnitLifecycleService
 
 
+def _translate_production_unit_validation_error(exc):
+    if 'uniq_production_unit_name_farm_ci' in str(exc):
+        detail = _('Une unité portant ce nom existe déjà dans cette ferme.')
+        return {
+            'code': 'duplicate_production_unit_name',
+            'field': 'name',
+            'detail': detail,
+            'name': [detail],
+        }
+    return exc.message_dict or exc.messages
+
+
 class ProductionUnitViewSet(viewsets.ModelViewSet):
     """CRUD des unités de production d'une ferme."""
 
@@ -74,7 +86,9 @@ class ProductionUnitViewSet(viewsets.ModelViewSet):
             with transaction.atomic():
                 serializer.save(farm_profile=self.request.user.farm_profile)
         except DjangoValidationError as exc:
-            raise serializers.ValidationError(exc.message_dict or exc.messages) from exc
+            raise serializers.ValidationError(
+                _translate_production_unit_validation_error(exc)
+            ) from exc
         except IntegrityError as exc:
             raise serializers.ValidationError(translate_production_unit_integrity_error(exc)) from exc
 

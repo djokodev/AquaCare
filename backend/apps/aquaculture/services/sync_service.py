@@ -255,6 +255,14 @@ class SyncService(BaseService):
                 'final_harvests': 0,
             },
             'errors': [],
+            # ``processed`` counts accepted commands (including idempotent
+            # replays). ``accepted`` lets clients acknowledge only the exact
+            # offline items confirmed by a partial-success response.
+            'accepted': {
+                'calibration_operations': [],
+                'final_harvests': [],
+            },
+            'items': [],
             'server_updates': {},
             'device_id': sync_data.get('device_id') or sync_data.get('client_id', 'unknown'),
         }
@@ -988,13 +996,41 @@ class SyncService(BaseService):
 
             for _business_at, _kind_order, _client_order, event_type, operation_data in event_stream:
                 if event_type == 'final_harvest':
-                    allocation = CycleUnitAllocation.objects.filter(
-                        cycle__farm_profile__user=user,
-                    ).filter(
-                        models.Q(pk=operation_data.get('allocation_id'))
-                        | models.Q(client_uuid=operation_data.get('allocation_client_uuid'))
-                    ).first()
-                    if allocation is None:
+                    allocation_id = operation_data.get('allocation_id')
+                    allocation_client_uuid = operation_data.get('allocation_client_uuid')
+                    cycle_id = operation_data.get('cycle_id')
+                    cycle_client_uuid = operation_data.get('cycle_client_uuid')
+                    allocation = None
+                    cycle = None
+                    if allocation_id or allocation_client_uuid:
+                        allocation = CycleUnitAllocation.objects.filter(
+                            cycle__farm_profile__user=user,
+                        ).filter(
+                            models.Q(pk=allocation_id)
+                            | models.Q(client_uuid=allocation_client_uuid)
+                        ).first()
+                        if allocation is None:
+                            sync_result['errors'].append({
+                                'type': 'final_harvest',
+                                'client_uuid': str(operation_data.get('client_uuid')),
+                                'code': 'allocation_not_found',
+                            })
+                            continue
+                    elif cycle_id or cycle_client_uuid:
+                        cycle = ProductionCycle.objects.filter(
+                            farm_profile__user=user,
+                        ).filter(
+                            models.Q(pk=cycle_id)
+                            | models.Q(client_uuid=cycle_client_uuid)
+                        ).first()
+                        if cycle is None:
+                            sync_result['errors'].append({
+                                'type': 'final_harvest',
+                                'client_uuid': str(operation_data.get('client_uuid')),
+                                'code': 'cycle_not_found',
+                            })
+                            continue
+                    else:
                         sync_result['errors'].append({
                             'type': 'final_harvest',
                             'client_uuid': str(operation_data.get('client_uuid')),
@@ -1005,27 +1041,51 @@ class SyncService(BaseService):
                         harvest_date = operation_data['harvest_date']
                         if not isinstance(harvest_date, date):
                             harvest_date = date.fromisoformat(str(harvest_date))
-                        _cycle, _allocation, _operation, _created = (
-                            ProductionCycleService.harvest_cycle_unit_allocation(
-                                allocation=allocation,
-                                harvest_date=harvest_date,
-                                final_harvested_at=business_datetime(
-                                    operation_data['final_harvested_at']
-                                ),
-                                final_count=int(operation_data['final_count']),
-                                final_average_weight=Decimal(
-                                    str(operation_data['final_average_weight'])
-                                ),
-                                client_uuid=operation_data['client_uuid'],
-                                harvest_notes=operation_data.get('harvest_notes', ''),
-                                total_harvested_weight=Decimal(
-                                    str(operation_data['total_harvested_weight'])
-                                ),
-                                created_offline=operation_data.get('created_offline', True),
-                                allow_pending_reconciliation=True,
+                        common_harvest_data = {
+                            'harvest_date': harvest_date,
+                            'final_harvested_at': business_datetime(
+                                operation_data['final_harvested_at']
+                            ),
+                            'final_count': int(operation_data['final_count']),
+                            'final_average_weight': Decimal(
+                                str(operation_data['final_average_weight'])
+                            ),
+                            'client_uuid': _uuid.UUID(str(operation_data['client_uuid'])),
+                            'harvest_notes': operation_data.get('harvest_notes', ''),
+                            'total_harvested_weight': Decimal(
+                                str(operation_data['total_harvested_weight'])
+                            ),
+                            'created_offline': operation_data.get('created_offline', True),
+                            'allow_pending_reconciliation': True,
+                        }
+                        if allocation is not None:
+                            _cycle, _allocation, operation, _created = (
+                                ProductionCycleService.harvest_cycle_unit_allocation(
+                                    allocation=allocation,
+                                    **common_harvest_data,
+                                )
                             )
-                        )
+                            reconciliation_status = operation.reconciliation_status
+                            operation_ids = [str(operation.id)]
+                        else:
+                            harvest_result = ProductionCycleService.harvest_cycle(
+                                cycle=cycle,
+                                **common_harvest_data,
+                            )
+                            reconciliation_status = harvest_result.reconciliation_status
+                            operation_ids = [
+                                str(item.id) for item in harvest_result.operations
+                            ]
                         sync_result['processed']['final_harvests'] += 1
+                        client_uuid = str(operation_data.get('client_uuid'))
+                        sync_result['accepted']['final_harvests'].append(client_uuid)
+                        sync_result['items'].append({
+                            'type': 'final_harvest',
+                            'client_uuid': client_uuid,
+                            'status': 'accepted',
+                            'reconciliation_status': reconciliation_status,
+                            'operation_ids': operation_ids,
+                        })
                     except APIException as exc:
                         detail = exc.detail if isinstance(exc.detail, dict) else {'detail': exc.detail}
                         sync_result['errors'].append({
@@ -1068,7 +1128,7 @@ class SyncService(BaseService):
                     })
                     continue
                 try:
-                    CalibrationService.calibrate(
+                    calibration, _warnings, _created = CalibrationService.calibrate(
                         source_allocation=source,
                         destination_production_unit=tank,
                         user=user,
@@ -1085,6 +1145,14 @@ class SyncService(BaseService):
                         },
                     )
                     sync_result['processed']['calibration_operations'] += 1
+                    client_uuid = str(operation_data.get('client_uuid'))
+                    sync_result['accepted']['calibration_operations'].append(client_uuid)
+                    sync_result['items'].append({
+                        'type': 'calibration_operation',
+                        'client_uuid': client_uuid,
+                        'status': 'accepted',
+                        'operation_id': str(calibration.id),
+                    })
                 except (BusinessRuleViolation, IntegrityError, KeyError, ValidationError, ValueError) as exc:
                     sync_result['errors'].append({
                         'type': 'calibration_operation',

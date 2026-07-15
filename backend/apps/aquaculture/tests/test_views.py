@@ -8,6 +8,7 @@ permissions, validation et logique métier.
 from datetime import date, timedelta
 from decimal import Decimal
 from unittest.mock import patch
+from uuid import uuid4
 
 import pytest
 from aquaculture.models import (
@@ -22,6 +23,7 @@ from aquaculture.models import (
     SanitaryLog,
 )
 from aquaculture.services import ProductionCycleService
+from aquaculture.services.calibration_service import CalibrationService
 from django.core.cache import cache
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
@@ -39,6 +41,7 @@ def test_cycle_create_openapi_operation_is_deprecated():
     schema = SchemaGenerator().get_schema(request=None, public=True)
     create_operation = schema['paths']['/api/aquaculture/cycles/']['post']
     launch_operation = schema['paths']['/api/aquaculture/cycles/launch/']['post']
+    harvest_schema = schema['components']['schemas']['CycleHarvestResponse']
 
     assert create_operation['deprecated'] is True
     assert 'requestBody' not in create_operation
@@ -52,6 +55,14 @@ def test_cycle_create_openapi_operation_is_deprecated():
         'Initial setup',
         'Additional cycle',
     }
+    assert {
+        'message',
+        'cycle',
+        'final_harvest',
+        'final_harvests',
+        'reconciliation_status',
+        'idempotent_replay',
+    } <= set(harvest_schema['properties'])
 
 
 @pytest.fixture
@@ -222,6 +233,95 @@ class TestProductionCycleViewSet:
         assert production_cycle.status == 'harvested'
         assert production_cycle.final_count == 900
         assert production_cycle.final_average_weight == Decimal('280.00')
+
+    def test_global_harvest_retry_returns_pending_operation(self, auth_client, production_cycle):
+        """Le retry global identique rejoue l'événement sans le recréer."""
+        allocation = create_cycle_unit_allocation(production_cycle)
+        client_uuid = uuid4()
+        harvested_at = timezone.now() - timedelta(seconds=1)
+        url = reverse('aquaculture:production-cycle-harvest', kwargs={'pk': production_cycle.id})
+        data = {
+            'final_harvested_at': harvested_at.isoformat(),
+            'final_count': 850,
+            'final_average_weight': '280.00',
+            'harvest_notes': 'Constat offline',
+            'client_uuid': str(client_uuid),
+            'created_offline': True,
+            'allow_pending_reconciliation': True,
+        }
+
+        first = auth_client.post(url, data, format='json')
+        replay = auth_client.post(url, data, format='json')
+
+        assert first.status_code == status.HTTP_200_OK
+        assert first.data['reconciliation_status'] == 'pending'
+        assert first.data['idempotent_replay'] is False
+        assert first.data['final_harvest']['allocation_id'] == str(allocation.id)
+        assert len(first.data['final_harvests']) == 1
+        assert replay.status_code == status.HTTP_200_OK
+        assert replay.data['idempotent_replay'] is True
+        assert replay.data['final_harvest']['id'] == first.data['final_harvest']['id']
+
+        conflicting = {**data, 'final_count': 849}
+        conflict = auth_client.post(url, conflicting, format='json')
+        assert conflict.status_code == status.HTTP_409_CONFLICT
+        assert conflict.data['code'] == 'final_harvest_idempotency_conflict'
+
+        tank = ProductionUnit.objects.create(
+            farm_profile=production_cycle.farm_profile,
+            name='Bac de réconciliation globale',
+            unit_type='tank',
+            purpose=ProductionUnit.PURPOSE_CALIBRATION,
+            volume_m3=Decimal('3.00'),
+        )
+        CalibrationService.calibrate(
+            source_allocation=allocation,
+            destination_production_unit=tank,
+            user=production_cycle.farm_profile.user,
+            client_uuid=uuid4(),
+            calibrated_at=harvested_at - timedelta(minutes=1),
+            transferred_count=50,
+            transferred_average_weight_g=Decimal('100.00'),
+            created_offline=True,
+        )
+        reconciled_replay = auth_client.post(url, data, format='json')
+        assert reconciled_replay.status_code == status.HTTP_200_OK
+        assert reconciled_replay.data['reconciliation_status'] == 'reconciled'
+        assert reconciled_replay.data['final_harvest']['reconciliation_status'] == 'reconciled'
+        assert reconciled_replay.data['idempotent_replay'] is True
+
+    def test_global_harvest_multi_allocation_returns_all_operations(
+        self,
+        auth_client,
+        production_cycle,
+    ):
+        """Une commande globale multi-unité expose et rejoue tous ses enfants."""
+        first_allocation = create_cycle_unit_allocation(production_cycle, name='Bac 1')
+        second_allocation = create_cycle_unit_allocation(production_cycle, name='Bac 2')
+        harvested_at = timezone.now() - timedelta(seconds=1)
+        url = reverse('aquaculture:production-cycle-harvest', kwargs={'pk': production_cycle.id})
+        data = {
+            'final_harvested_at': harvested_at.isoformat(),
+            'final_count': 1800,
+            'final_average_weight': '280.00',
+            'client_uuid': str(uuid4()),
+        }
+
+        first = auth_client.post(url, data, format='json')
+        replay = auth_client.post(url, data, format='json')
+
+        assert first.status_code == status.HTTP_200_OK
+        assert first.data['final_harvest'] is None
+        assert first.data['reconciliation_status'] == 'reconciled'
+        assert {item['allocation_id'] for item in first.data['final_harvests']} == {
+            str(first_allocation.id),
+            str(second_allocation.id),
+        }
+        assert replay.status_code == status.HTTP_200_OK
+        assert replay.data['idempotent_replay'] is True
+        assert [item['id'] for item in replay.data['final_harvests']] == [
+            item['id'] for item in first.data['final_harvests']
+        ]
 
     def test_harvest_already_harvested_cycle(self, auth_client, production_cycle):
         """Test erreur récolte cycle déjà récolté."""

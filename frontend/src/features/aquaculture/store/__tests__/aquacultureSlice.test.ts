@@ -174,6 +174,10 @@ describe('features/aquaculture/store/aquacultureSlice', () => {
       {
         message: 'Cycle recolte avec succes',
         cycle: harvestedCycle,
+        final_harvest: null,
+        final_harvests: [],
+        reconciliation_status: 'reconciled',
+        idempotent_replay: false,
       },
       'request-id',
       {

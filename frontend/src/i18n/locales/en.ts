@@ -668,7 +668,7 @@
   harvestTimeHint: 'Enter the local time in 24-hour format.',
   harvestTimePlaceholder: '18:00',
   harvestDatetimeFuture: 'The harvest date and time cannot be in the future.',
-  harvestDatetimeBeforeSession: 'The harvest cannot be before the session starts.',
+  harvestDatetimeBeforeSession: 'The harvest cannot be earlier than the start of this session.',
   harvestDateInvalid: 'The harvest date or time is invalid.',
   finalHarvestSavedOffline: 'The harvest was saved on this device and will sync automatically.',
   finalHarvestPendingTitle: 'Reconciliation pending',
