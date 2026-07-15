@@ -203,7 +203,7 @@ jobs:
             echo "Concurrent PostgreSQL launch test was skipped"
             exit 1
           fi
-          calibration_output="$(pytest -n 0 apps/aquaculture/tests/services/test_calibration_service.py -q -k 'concurrent_')"
+          calibration_output="$(pytest -n 0 apps/aquaculture/tests/services/test_calibration_service.py -q -k 'concurrent_ or concurrent_global_harvest_and_calibration')"
           echo "$calibration_output"
           if echo "$calibration_output" | grep -qi skipped; then
             echo "Concurrent PostgreSQL calibration test was skipped"
@@ -239,9 +239,8 @@ jobs:
           fi
           retry_output="$(pytest -n 0 \
             apps/aquaculture/tests/test_views.py \
-            apps/aquaculture/tests/services/test_calibration_service.py \
             apps/aquaculture/tests/services/test_sync_service.py \
-            -q -k 'online_then_offline_retry or concurrent_global_harvest_and_calibration or partial_success_confirms_all_accepted_collections or global_harvest_child_operation_references')"
+            -q -k 'online_then_offline_retry or partial_success_confirms_all_accepted_collections or global_harvest_child_operation_references')"
           echo "$retry_output"
           if echo "$retry_output" | grep -qi skipped; then
             echo "Critical harvest retry, concurrency, partial-success, or child-reference test was skipped"
