@@ -10,10 +10,27 @@ import { confirmOrderReceipt, fetchOrders, fetchOrderStatistics } from '@/featur
 import { getOrderStatusLabelKey } from '@/features/commerce/utils/orderStatus';
 import { Order } from '@/types/commerce';
 import { RootStackParamList } from '@/navigation/MainNavigator';
-import { AppHeader, AppText, Badge, Button, Card, Divider, EmptyState, ErrorState, IconButton, InlineAlert, LoadingState } from '@/components/ui';
+import {
+  AppHeader,
+  AppText,
+  Badge,
+  Button,
+  Card,
+  DashboardHeroCard,
+  DashboardMetricCard,
+  DashboardSection,
+  Divider,
+  EmptyState,
+  ErrorState,
+  IconButton,
+  InlineAlert,
+  LoadingState,
+  formatDashboardCurrency,
+  formatDashboardNumber,
+} from '@/components/ui';
 import { colors, spacing } from '@/theme';
-import MetricCard from '@/features/main/components/MetricCard';
 import { getProductDisplayName } from '@/features/commerce/utils/productPresentation';
+import { useDashboardSyncStatus } from '@/hooks/useDashboardSyncStatus';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'OrdersHistory'>;
 
@@ -26,10 +43,13 @@ export default function OrdersHistoryScreen() {
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   const [confirmingOrderId, setConfirmingOrderId] = useState<string | null>(null);
   const confirmingOrderRef = useRef<string | null>(null);
+  const { lastSyncedAt, refreshLastSyncedAt } = useDashboardSyncStatus('orders');
+  const locale = i18n.language?.startsWith('fr') ? 'fr-FR' : 'en-US';
 
   const loadOrders = useCallback(async () => {
     await Promise.all([dispatch(fetchOrders()), dispatch(fetchOrderStatistics())]);
-  }, [dispatch]);
+    await refreshLastSyncedAt();
+  }, [dispatch, refreshLastSyncedAt]);
 
   useEffect(() => { void loadOrders(); }, [loadOrders]);
 
@@ -142,22 +162,45 @@ export default function OrdersHistoryScreen() {
     <View style={styles.listHeader}>
       {error && items.length > 0 ? <InlineAlert tone="error" message={error} /> : null}
       {statistics ? (
-        <Card variant="outlined" style={styles.statistics}>
-          <AppText variant="sectionTitle">{t('orderStatistics')}</AppText>
+        <DashboardSection title={t('orderStatistics')} lastSyncedAt={lastSyncedAt}>
+          <DashboardHeroCard
+            icon="wallet-outline"
+            label={t('totalSpent')}
+            value={formatDashboardCurrency(statistics.total_spent, locale)}
+            unit={t('dashboardDirectProductionCostUnit')}
+            helper={`${t('orderCount', { count: statistics.total_orders })} · ${t('orderedBagCount', { count: statistics.total_bags_ordered })}`}
+            unavailableLabel={t('dashboardDataUnavailable')}
+          />
           <View style={styles.metricGrid}>
-            <Metric value={statistics.total_orders} label={t('totalOrders')} />
-            <Metric value={Number(statistics.total_spent).toLocaleString()} label={t('totalSpent')} />
-            <Metric value={sacksToReceive} label={t('sacksToReceive')} />
-            <Metric value={statistics.total_bags_ordered} label={t('totalBags')} />
+            <DashboardMetricCard
+              icon="receipt-outline"
+              value={formatDashboardNumber(statistics.total_orders, locale, { maximumFractionDigits: 0 })}
+              label={t('totalOrders')}
+              unavailableLabel={t('dashboardDataUnavailable')}
+            />
+            <DashboardMetricCard
+              icon="time-outline"
+              value={formatDashboardNumber(sacksToReceive, locale, { maximumFractionDigits: 0 })}
+              label={t('sacksToReceive')}
+              tone="warning"
+              unavailableLabel={t('dashboardDataUnavailable')}
+            />
+            <DashboardMetricCard
+              icon="bag-handle-outline"
+              value={formatDashboardNumber(statistics.total_bags_ordered, locale, { maximumFractionDigits: 0 })}
+              label={t('totalBags')}
+              tone="info"
+              unavailableLabel={t('dashboardDataUnavailable')}
+            />
           </View>
-        </Card>
+        </DashboardSection>
       ) : null}
     </View>
   );
 
   return (
     <View style={styles.screen}>
-      <AppHeader title={t('ordersHistory')} subtitle={`${items.length} ${t(items.length > 1 ? 'orders' : 'order')}`} onBack={() => navigation.goBack()} backLabel={t('back')} />
+      <AppHeader title={t('ordersHistory')} subtitle={t('orderCount', { count: items.length })} onBack={() => navigation.goBack()} backLabel={t('back')} />
       {loading && !refreshing && items.length === 0 ? <LoadingState message={t('loading')} /> : error && items.length === 0 ? (
         <ErrorState title={error} actionLabel={t('retry')} onAction={loadOrders} />
       ) : (
@@ -179,12 +222,8 @@ function AmountRow({ label, value, strong = false }: { label: string; value: str
   return <View style={styles.rowBetween}><AppText variant={strong ? 'bodyStrong' : 'body'}>{label}</AppText><AppText variant={strong ? 'cardTitle' : 'bodyStrong'} color={strong ? 'link' : 'primary'}>{value}</AppText></View>;
 }
 
-function Metric({ value, label }: { value: string | number; label: string }) {
-  return <MetricCard value={value} label={label} />;
-}
-
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.surface.page },
+  screen: { flex: 1, backgroundColor: colors.surface.dashboard },
   content: { padding: spacing[4], gap: spacing[3] },
   flex: { flex: 1 },
   orderCard: { marginBottom: spacing[3], gap: spacing[3] },
@@ -192,7 +231,6 @@ const styles = StyleSheet.create({
   badges: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },
   details: { gap: spacing[3] },
   address: { backgroundColor: colors.surface.selected, gap: spacing[1] },
-  statistics: { marginBottom: spacing[4], gap: spacing[3] },
-  listHeader: { gap: spacing[3] },
+  listHeader: { gap: spacing[3], marginBottom: spacing[4] },
   metricGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },
 });

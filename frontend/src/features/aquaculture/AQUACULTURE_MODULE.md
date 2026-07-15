@@ -71,9 +71,12 @@ La logique produit reste alignee avec le backend:
 3. Le hub "Mes unites de production" liste les unites du cycle.
 4. Le dashboard d'une unite porte les actions et les donnees scopees a cette unite.
 
-The unit dashboard now starts directly with unit metrics and actions.
-The previous unit hero section was removed to keep the operational screen lightweight.
-Metric cards use static icons.
+Les dashboards cycle et unité utilisent désormais les composants partagés de
+`components/ui/dashboard`. Le cycle met en avant la valeur marchande et la
+progression backend ; l'unité met en avant sa valeur marchande calculée avec le
+même prix canonique. Les cartes restent statiques, accessibles et sans animation
+décorative. Les récupérations réseau réussies persistent un timestamp de fraîcheur
+par domaine sans modifier les files offline.
 
 ## Production unit integrity rule
 

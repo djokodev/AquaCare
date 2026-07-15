@@ -2,6 +2,7 @@
 import { AuthRequestError, authService } from '@/features/auth/services/authService';
 import { profileService } from '@/features/profile/services/profileService';
 import { sanitizeUserFacingErrorMessage } from '@/utils/errorParser';
+import { dashboardSyncService } from '@/services/dashboardSyncService';
 import {
   AuthErrorPayload,
   User,
@@ -163,6 +164,8 @@ export const logoutUser = createAsyncThunk<boolean, void, { rejectValue: AuthErr
       return true;
     } catch (error: unknown) {
       return rejectWithValue(getThunkErrorPayload(error));
+    } finally {
+      await dashboardSyncService.clear();
     }
   }
 );

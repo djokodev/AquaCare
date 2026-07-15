@@ -21,6 +21,10 @@ import {
   Badge,
   Button,
   Card,
+  DashboardHeroCard,
+  DashboardMetricCard,
+  DashboardSection,
+  DashboardStatus,
   Divider,
   EmptyState,
   ErrorState,
@@ -29,17 +33,19 @@ import {
   InteractiveCard,
   LoadingState,
   TextField,
+  formatDashboardCurrency,
+  formatDashboardNumber,
+  parseDashboardNumber,
 } from '@/components/ui';
 import { colors, spacing } from '@/theme';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
 import { fetchCycleFeedStatus } from '@/features/aquaculture/store/aquacultureSlice';
-import DashboardMetricCard from '@/features/main/components/MetricCard';
 import { RootStackParamList } from '@/navigation/MainNavigator';
 import { AppDispatch, RootState } from '@/store/store';
 import { CycleStore } from '@/types/aquaculture';
-import { formatCurrency, formatNumber } from '@/utils';
 import { sanitizeUserFacingErrorMessage } from '@/utils/errorParser';
 import { getOrderStatusLabelKey } from '@/features/commerce/utils/orderStatus';
+import { useDashboardSyncStatus } from '@/hooks/useDashboardSyncStatus';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'Store'>;
 
@@ -95,14 +101,6 @@ const generateClientUuid = (): string => {
   });
 };
 
-const toNumber = (value: string | number | null | undefined): number => {
-  if (typeof value === 'number') {
-    return Number.isFinite(value) ? value : 0;
-  }
-  const parsed = Number.parseFloat(String(value ?? '0'));
-  return Number.isFinite(parsed) ? parsed : 0;
-};
-
 export default function StoreScreen() {
   const { t, i18n } = useTranslation();
   const navigation = useNavigation<NavigationProp>();
@@ -125,6 +123,8 @@ export default function StoreScreen() {
   const [entryDate, setEntryDate] = useState(todayIsoDate());
   const [note, setNote] = useState('');
   const submissionLock = useRef(false);
+  const { lastSyncedAt, refreshLastSyncedAt } = useDashboardSyncStatus('store');
+  const locale = i18n.language?.startsWith('fr') ? 'fr-FR' : 'en-US';
   const storeNavigationParams = cycleId ? { cycleId, source: 'store' as const } : undefined;
 
   const loadStore = useCallback(async (preserveVisibleStore = false) => {
@@ -142,6 +142,7 @@ export default function StoreScreen() {
     try {
       const payload = await aquacultureService.getCycleStore(cycleId);
       setStore(payload);
+      await refreshLastSyncedAt();
     } catch (caughtError) {
       if (!preserveVisibleStore) {
         setStore(null);
@@ -150,7 +151,7 @@ export default function StoreScreen() {
     } finally {
       setLoading(false);
     }
-  }, [cycleId, t]);
+  }, [cycleId, refreshLastSyncedAt, t]);
 
   useFocusEffect(
     useCallback(() => {
@@ -234,10 +235,12 @@ export default function StoreScreen() {
     }
   };
 
-  const remainingToOrderValue =
-    cycleFeedStatus
-      ? formatNumber(cycleFeedStatus.bags_remaining_to_order, t('bags'), 0)
-      : '-';
+  const remainingToOrderValue = cycleFeedStatus
+    ? formatDashboardNumber(cycleFeedStatus.bags_remaining_to_order, locale, { maximumFractionDigits: 0 })
+    : null;
+  const availableStockKg = parseDashboardNumber(store?.summary.estimated_feed_remaining_kg);
+  const remainingBags = parseDashboardNumber(cycleFeedStatus?.bags_remaining_to_order);
+  const requiresReplenishment = availableStockKg === 0 && remainingBags !== null && remainingBags > 0;
 
   const actionRows = [
     { label: t('storeManualSubmit'), onPress: openManualModal },
@@ -278,15 +281,43 @@ export default function StoreScreen() {
           {error ? <InlineAlert tone="error" message={error} /> : null}
           {store ? (
             <>
-              <Card variant="outlined" style={styles.section}>
-                <AppText variant="sectionTitle">{t('storeStatusTitle')}</AppText>
+              <DashboardSection title={t('storeStatusTitle')} lastSyncedAt={lastSyncedAt}>
+                <DashboardHeroCard
+                  icon="bag-handle-outline"
+                  label={t('storeEstimatedNeedToFinish')}
+                  value={remainingToOrderValue}
+                  unit={t('bags')}
+                  unavailableLabel={t('dashboardDataUnavailable')}
+                />
                 <View style={styles.metrics}>
-                  <DashboardMetricCard value={formatNumber(toNumber(store.summary.estimated_feed_remaining_kg), t('kg'), 2)} label={t('storeFeedRemaining')} />
-                  <DashboardMetricCard value={formatNumber(toNumber(store.summary.feed_consumed_kg), t('kg'), 2)} label={t('storeFeedConsumed')} />
-                  <DashboardMetricCard value={formatCurrency(toNumber(store.summary.feed_expenses_fcfa))} label={t('storeFeedExpenses')} />
-                  <DashboardMetricCard value={remainingToOrderValue} label={t('storeNeedRemaining')} />
+                  <DashboardMetricCard
+                    icon="cube-outline"
+                    label={t('storeCurrentStock')}
+                    value={formatDashboardNumber(store.summary.estimated_feed_remaining_kg, locale, { maximumFractionDigits: 1 })}
+                    unit={t('kg')}
+                    tone="success"
+                    unavailableLabel={t('dashboardDataUnavailable')}
+                  />
+                  <DashboardMetricCard
+                    icon="nutrition-outline"
+                    label={t('storeFeedAlreadyConsumed')}
+                    value={formatDashboardNumber(store.summary.feed_consumed_kg, locale, { maximumFractionDigits: 1 })}
+                    unit={t('kg')}
+                    tone="info"
+                    unavailableLabel={t('dashboardDataUnavailable')}
+                  />
+                  <DashboardMetricCard
+                    icon="receipt-outline"
+                    label={t('storeRecordedFeedExpenses')}
+                    value={formatDashboardCurrency(store.summary.feed_expenses_fcfa, locale)}
+                    unit={t('dashboardDirectProductionCostUnit')}
+                    unavailableLabel={t('dashboardDataUnavailable')}
+                  />
                 </View>
-              </Card>
+                {requiresReplenishment ? (
+                  <DashboardStatus title={t('storeReplenishmentRequired')} tone="warning" />
+                ) : null}
+              </DashboardSection>
               {store.summary.stock_tracking_started_at ? (
                 <AppText variant="caption" color="muted" style={styles.tracking}>
                   {t('storeTrackingSince')}{' '}
@@ -298,7 +329,12 @@ export default function StoreScreen() {
           <Card variant="outlined" style={styles.section}>
             <View style={styles.sectionHeader}>
               <AppText variant="cardTitle">{t('storePendingOrdersTitle')}</AppText>
-              <Badge label={store ? formatNumber(store.summary.pending_orders_count, undefined, 0) : '0'} tone="info" />
+              <Badge
+                label={store
+                  ? formatDashboardNumber(store.summary.pending_orders_count, locale, { maximumFractionDigits: 0 })
+                  : '0'}
+                tone="info"
+              />
             </View>
             {store?.pending_orders.length ? store.pending_orders.map((order) => (
               <Card key={order.id} variant="outlined" style={styles.orderCard}>
@@ -307,7 +343,9 @@ export default function StoreScreen() {
                     <AppText variant="label">{order.order_number}</AppText>
                   </View>
                   <View style={styles.orderAmount}>
-                    <AppText variant="label" color="link">{formatCurrency(toNumber(order.total_fcfa))}</AppText>
+                    <AppText variant="label" color="link">
+                      {formatDashboardCurrency(order.total_fcfa, locale)} {t('dashboardDirectProductionCostUnit')}
+                    </AppText>
                     <Badge label={t(getOrderStatusLabelKey(order.status))} tone="info" />
                   </View>
                 </View>
@@ -360,7 +398,7 @@ export default function StoreScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.surface.page },
+  root: { flex: 1, backgroundColor: colors.surface.dashboard },
   content: { padding: spacing[4], paddingBottom: spacing[6], gap: spacing[4] },
   section: { gap: spacing[3] },
   metrics: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[3] },

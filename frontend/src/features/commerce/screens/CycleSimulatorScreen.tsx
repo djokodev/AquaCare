@@ -21,7 +21,7 @@ import { aggregatePhasesByName, DisplayPhase } from '../utils/aggregatePhases';
 import { AppHeader, AppText, Button, Card, Divider, InlineAlert, LoadingState, SegmentedControl, TextField } from '@/components/ui';
 import { colors, spacing } from '@/theme';
 import { getProductDisplayName } from '@/features/commerce/utils/productPresentation';
-import MetricCard from '@/features/main/components/MetricCard';
+import { DashboardMetricCard } from '@/components/ui';
 
 type NavigationProp = StackNavigationProp<RootStackParamList>;
 type ScreenRouteProp = RouteProp<RootStackParamList, 'CycleSimulator'>;
@@ -481,10 +481,10 @@ export default function CycleSimulatorScreen() {
             <AppText variant="sectionTitle">{t('simulationResults')}</AppText>
 
             <View style={styles.metricGrid}>
-              <MetricCard value={`${simulationResult.summary.total_feed_kg.toLocaleString()} kg`} label={t('totalFeed')} />
-              <MetricCard value={`${simulationResult.summary.total_cost_fcfa.toLocaleString()} FCFA`} label={t('totalCosts')} />
-              <MetricCard value={simulationResult.summary.estimated_fcr.toFixed(1)} label={t('estimatedFCR')} />
-              <MetricCard value={`${(simulationResult.summary.survival_rate * 100).toFixed(0)}%`} label={t('survivalRate')} />
+              <DashboardMetricCard value={`${simulationResult.summary.total_feed_kg.toLocaleString()} kg`} label={t('totalFeed')} unavailableLabel={t('dashboardDataUnavailable')} />
+              <DashboardMetricCard value={`${simulationResult.summary.total_cost_fcfa.toLocaleString()} FCFA`} label={t('totalCosts')} unavailableLabel={t('dashboardDataUnavailable')} />
+              <DashboardMetricCard value={simulationResult.summary.estimated_fcr.toFixed(1)} label={t('estimatedFCR')} unavailableLabel={t('dashboardDataUnavailable')} />
+              <DashboardMetricCard value={`${(simulationResult.summary.survival_rate * 100).toFixed(0)}%`} label={t('survivalRate')} unavailableLabel={t('dashboardDataUnavailable')} />
             </View>
 
             <Card variant="outlined" style={styles.resultCard}>

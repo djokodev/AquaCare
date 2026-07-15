@@ -20,7 +20,7 @@ import { RootStackParamList } from '@/navigation/MainNavigator';
 import { AppHeader, AppText, Badge, Button, Card, Divider, EmptyState, ErrorState, IconButton, InlineAlert, LoadingState } from '@/components/ui';
 import { colors, opacity, sizing, spacing } from '@/theme';
 import { getProductDisplayName } from '@/features/commerce/utils/productPresentation';
-import MetricCard from '@/features/main/components/MetricCard';
+import { DashboardMetricCard } from '@/components/ui';
 
 type NavigationProp = StackNavigationProp<RootStackParamList>;
 
@@ -278,10 +278,10 @@ export default function FeedingSuggestionsScreen() {
         </Pressable>
 
         <View style={styles.metricGrid}>
-          <MetricCard value={`${cycle.summary.total_needed_kg} kg`} label={t('totalNeeded')} />
-          <MetricCard value={cycle.summary.total_bags} label={t('totalBags')} />
-          <MetricCard value={`${cycle.summary.total_price.toLocaleString()} FCFA`} label={t('totalCost')} />
-          <MetricCard value={`${cycle.summary.coverage_days} ${t('days')}`} label={t('coverage')} />
+          <DashboardMetricCard value={`${cycle.summary.total_needed_kg} kg`} label={t('totalNeeded')} unavailableLabel={t('dashboardDataUnavailable')} />
+          <DashboardMetricCard value={cycle.summary.total_bags} label={t('totalBags')} unavailableLabel={t('dashboardDataUnavailable')} />
+          <DashboardMetricCard value={`${cycle.summary.total_price.toLocaleString()} FCFA`} label={t('totalCost')} unavailableLabel={t('dashboardDataUnavailable')} />
+          <DashboardMetricCard value={`${cycle.summary.coverage_days} ${t('days')}`} label={t('coverage')} unavailableLabel={t('dashboardDataUnavailable')} />
         </View>
 
         <Button label={t('addAllToCart')} iconLeft="cart" onPress={() => handleAddCycleToCart(cycle)} style={styles.buttonSpacing} />

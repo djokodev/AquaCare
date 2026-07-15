@@ -27,6 +27,7 @@ module.exports = {
         'aquacare-primary-light': tokens.colors.brand.light,
         'aquacare-primary-dark': tokens.colors.brand.dark,
         cream: tokens.colors.surface.page,
+        dashboard: tokens.colors.surface.dashboard,
         'gray-light': tokens.colors.text.muted,
         'gray-dark': tokens.colors.text.primary,
         error: tokens.colors.status.error,

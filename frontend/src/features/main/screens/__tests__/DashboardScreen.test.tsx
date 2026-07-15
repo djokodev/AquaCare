@@ -179,6 +179,11 @@ describe("features/main/screens/DashboardScreen", () => {
     mockGetCycleDashboard.mockResolvedValue({
       summary: {
         total_allocations: 3,
+        total_estimated_current_fish_count: 1800,
+        estimated_market_value_fcfa: '302400000.00',
+        direct_production_cost_fcfa: '225000.00',
+        cycle_progress_pct: 61,
+        days_remaining: 70,
       },
     });
     mockUseSelector.mockImplementation((selector: (state: any) => unknown) =>
@@ -284,7 +289,7 @@ describe("features/main/screens/DashboardScreen", () => {
 
     expect(getByText("Dashboard du cycle")).toBeTruthy();
     expect(getByText("dashboardEstimatedMarketValue")).toBeTruthy();
-    expect(getByText("dashboardFeedCostConsumed")).toBeTruthy();
+    expect(getByText("dashboardEstimatedCurrentFish")).toBeTruthy();
     expect(getByText("dashboardTimeRemainingCycle")).toBeTruthy();
     expect(getByText("dashboardDirectProductionCost")).toBeTruthy();
     expect(getByText("sessionActiveCycleLabel")).toBeTruthy();

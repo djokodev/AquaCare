@@ -103,6 +103,9 @@ Role:
 3. Fournir une base stable pour les allocations, les transferts et le contexte par unite dans les prochaines PRs.
 
 PR #63 ajoute aussi un dashboard opérationnel par allocation pour calculer les indicateurs de suivi à partir des logs unit-scoped.
+Le résumé unitaire expose désormais `estimated_market_value_fcfa`, calculé avec la
+biomasse de l'allocation et le prix prévisionnel canonique du cycle. La valeur reste
+`null` lorsqu'un des deux intrants est inconnu.
 
 ### CycleFeedStockEntry
 
@@ -291,6 +294,12 @@ Options:
 
 1. `cycle_id` scope session.
 2. `lightweight=true` pour ecrans de selection/saisie rapide.
+
+Le contrat `GET /api/aquaculture/cycles/{id}/dashboard/` ajoute au résumé
+`estimated_market_value_fcfa`, `direct_production_cost_fcfa`,
+`cycle_progress_pct` et `days_remaining`. Les estimations de valeur et la
+progression sont calculées dans le domaine backend ; `null` signale une donnée
+insuffisante et n'est jamais converti en zéro.
 
 ### 7. Sync Offline
 

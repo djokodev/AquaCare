@@ -2,6 +2,7 @@ import { apiService } from '@/services/api';
 import { API_CONFIG, API_ENDPOINTS } from '@/constants/api';
 import { normalizeFarmProfile } from '@/features/profile/services/farmProfileMapper';
 import logger from '@/utils/logger';
+import { dashboardSyncService } from '@/services/dashboardSyncService';
 import {
   ProductionCycle,
   CycleLog,
@@ -153,6 +154,7 @@ class AquacultureService {
         const queryString = query.toString();
         const params = queryString ? `?${queryString}` : '';
         const response = await apiService.get<DashboardData>(`${this.baseUrl}/dashboard/${params}`);
+        await dashboardSyncService.markSuccessful('cycle');
         return response.data;
       } catch (error) {
         // 401 deja gere par l'interceptor axios (refresh + auto-logout) — eviter de
@@ -188,6 +190,7 @@ class AquacultureService {
         const response = await apiService.get<CycleDashboard>(
           `${this.baseUrl}/cycles/${cycleId}/dashboard/`
         );
+        await dashboardSyncService.markSuccessful('cycle');
         return response.data;
       } catch (error) {
         if (!isUnauthorizedError(error)) {
@@ -211,6 +214,7 @@ class AquacultureService {
   async getCycleStore(cycleId: string): Promise<CycleStore> {
     try {
       const response = await apiService.get<CycleStore>(`${this.baseUrl}/cycles/${cycleId}/store/`);
+      await dashboardSyncService.markSuccessful('store');
       return response.data;
     } catch (error) {
       if (!isUnauthorizedError(error)) {
@@ -499,6 +503,7 @@ class AquacultureService {
       const response = await apiService.get<ProductionUnitDashboard>(
         `${this.baseUrl}/cycle-unit-allocations/${allocationId}/dashboard/`
       );
+      await dashboardSyncService.markSuccessful('unit');
       return response.data;
     } catch (error) {
       if (!isUnauthorizedError(error)) {

@@ -1,16 +1,19 @@
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useState } from 'react';
 import { RefreshControl, StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useDispatch } from 'react-redux';
 
 import {
-  AppText,
-  Card,
+  DashboardHeroCard,
+  DashboardMetricCard,
+  DashboardSection,
   EmptyState,
   ErrorState,
+  formatDashboardCurrency,
+  formatDashboardNumber,
   InlineAlert,
   LoadingState,
   Screen,
@@ -24,11 +27,11 @@ import {
 } from '@/features/aquaculture/store/aquacultureSlice';
 import QuickActionsPreview from '@/features/main/components/QuickActionsPreview';
 import QuickActionsSheet from '@/features/main/components/QuickActionsSheet';
-import MetricCard from '@/features/main/components/MetricCard';
 import { RootStackParamList } from '@/navigation/MainNavigator';
 import { AppDispatch } from '@/store/store';
 import { colors, spacing } from '@/theme';
 import type { ProductionUnitDashboard } from '@/types/aquaculture';
+import { useDashboardSyncStatus } from '@/hooks/useDashboardSyncStatus';
 
 type NavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -40,12 +43,6 @@ interface Props {
   navigation: NavigationProp;
   route: RouteType;
 }
-
-const formatCount = (value: number, locale: string): string =>
-  new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }).format(value);
-
-const formatKg = (value: number, locale: string): string =>
-  `${new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(value)} kg`;
 
 const coerceNumber = (value: string | number | null | undefined): number | null => {
   if (value === null || value === undefined) {
@@ -86,6 +83,7 @@ export default function ProductionUnitOverviewScreen({ navigation, route }: Prop
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [errorKey, setErrorKey] = useState<string | null>(null);
+  const { lastSyncedAt, refreshLastSyncedAt } = useDashboardSyncStatus('unit');
 
   const errorMessage = !hasUnitContext
     ? t('productionUnitContextIncompleteError')
@@ -117,6 +115,7 @@ export default function ProductionUnitOverviewScreen({ navigation, route }: Prop
         );
         setDashboard(result);
         setErrorKey(null);
+        await refreshLastSyncedAt();
       } catch {
         if (mode === 'initial') {
           setDashboard(null);
@@ -130,7 +129,7 @@ export default function ProductionUnitOverviewScreen({ navigation, route }: Prop
         }
       }
     },
-    [hasUnitContext, resolvedCycleUnitAllocationId],
+    [hasUnitContext, refreshLastSyncedAt, resolvedCycleUnitAllocationId],
   );
 
   useEffect(() => {
@@ -180,44 +179,6 @@ export default function ProductionUnitOverviewScreen({ navigation, route }: Prop
     navigation.setOptions({ title: unitName });
   }, [navigation, unitName]);
 
-  const metricCards = useMemo(
-    () => [
-      {
-        label: t('currentFish'),
-        value: summary ? formatCount(summary.estimated_current_fish_count, locale) : '-',
-        subtitle: undefined,
-      },
-      {
-        label: t('productionUnitCumulativeMortality'),
-        value: summary ? formatCount(summary.total_mortality_count, locale) : '-',
-        subtitle: undefined,
-      },
-      {
-        label: t('productionUnitConsumedFeed'),
-        value:
-          summary && coerceNumber(summary.total_feed_consumed_kg) !== null
-            ? formatKg(coerceNumber(summary.total_feed_consumed_kg) ?? 0, locale)
-            : '-',
-        subtitle:
-          summary?.latest_average_weight_g !== null &&
-          summary?.latest_average_weight_g !== undefined
-            ? `${t('averageWeight')}: ${new Intl.NumberFormat(locale, {
-                maximumFractionDigits: 1,
-              }).format(coerceNumber(summary.latest_average_weight_g) ?? 0)} g`
-            : undefined,
-      },
-      {
-        label: t('productionUnitEstimatedBiomass'),
-        value:
-          summary && coerceNumber(summary.estimated_current_biomass_kg) !== null
-            ? formatKg(coerceNumber(summary.estimated_current_biomass_kg) ?? 0, locale)
-            : '-',
-        subtitle: undefined,
-      },
-    ],
-    [locale, summary, t],
-  );
-
   if (loading && !dashboard) {
     return (
       <Screen style={styles.centered}>
@@ -261,19 +222,60 @@ export default function ProductionUnitOverviewScreen({ navigation, route }: Prop
         ),
       }}
     >
-      <Card variant="outlined" style={styles.metricsCard}>
-        <AppText variant="cardTitle">{t('productionUnitDashboardTitle')}</AppText>
+      <DashboardSection
+        title={t('productionUnitDashboardTitle')}
+        lastSyncedAt={lastSyncedAt}
+      >
+        <DashboardHeroCard
+          icon="cash-outline"
+          label={t('productionUnitEstimatedMarketValue')}
+          value={formatDashboardCurrency(summary.estimated_market_value_fcfa, locale)}
+          unit={t('dashboardDirectProductionCostUnit')}
+          helper={
+            summary.estimated_market_value_fcfa == null
+              ? coerceNumber(summary.estimated_current_biomass_kg) === null
+                ? t('dashboardAddWeighing')
+                : t('dashboardMissingSellingPrice')
+              : t('productionUnitMarketValueHelper')
+          }
+          unavailableLabel={t('dashboardCalculationUnavailable')}
+        />
         <View style={styles.grid}>
-          {metricCards.map((card) => (
-            <MetricCard
-              key={card.label}
-              value={card.value}
-              label={card.label}
-              subtitle={card.subtitle}
-            />
-          ))}
+          <DashboardMetricCard
+            icon="scale-outline"
+            label={t('productionUnitEstimatedBiomass')}
+            value={formatDashboardNumber(summary.estimated_current_biomass_kg, locale, { maximumFractionDigits: 1 })}
+            unit={t('kg')}
+            tone="success"
+            helper={coerceNumber(summary.estimated_current_biomass_kg) === null ? t('dashboardAddWeighing') : undefined}
+            unavailableLabel={t('dashboardDataUnavailable')}
+          />
+          <DashboardMetricCard
+            icon="fish-outline"
+            label={t('currentFish')}
+            value={formatDashboardNumber(summary.estimated_current_fish_count, locale, { maximumFractionDigits: 0 })}
+            unavailableLabel={t('dashboardDataUnavailable')}
+          />
+          <DashboardMetricCard
+            icon="remove-circle-outline"
+            label={t('productionUnitCumulativeMortality')}
+            value={formatDashboardNumber(summary.total_mortality_count, locale, { maximumFractionDigits: 0 })}
+            tone={summary.total_mortality_count === 0 ? 'success' : 'warning'}
+            helper={summary.total_mortality_count === 0
+              ? t('productionUnitNoMortality')
+              : t('productionUnitMortalityRecorded', { count: summary.total_mortality_count })}
+            unavailableLabel={t('dashboardDataUnavailable')}
+          />
+          <DashboardMetricCard
+            icon="nutrition-outline"
+            label={t('productionUnitConsumedFeed')}
+            value={formatDashboardNumber(summary.total_feed_consumed_kg, locale, { maximumFractionDigits: 1 })}
+            unit={t('kg')}
+            tone="info"
+            unavailableLabel={t('dashboardDataUnavailable')}
+          />
         </View>
-      </Card>
+      </DashboardSection>
 
       <QuickActionsPreview
         onOpenSheet={() => setActionsSheetVisible(true)}
@@ -323,7 +325,6 @@ export default function ProductionUnitOverviewScreen({ navigation, route }: Prop
 
 const styles = StyleSheet.create({
   centered: { justifyContent: 'center' },
-  content: { padding: spacing[5], gap: spacing[4] },
-  metricsCard: { gap: spacing[3] },
+  content: { padding: spacing[5], gap: spacing[4], backgroundColor: colors.surface.dashboard },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[3] },
 });

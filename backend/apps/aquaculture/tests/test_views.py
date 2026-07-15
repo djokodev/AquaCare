@@ -419,6 +419,9 @@ class TestProductionCycleViewSet:
 
     def test_cycle_dashboard_aggregates_unit_allocations(self, auth_client, production_cycle):
         """Le dashboard cycle doit agréger les métriques des unités de production."""
+        production_cycle.planned_selling_price_per_kg_fcfa = Decimal('2000')
+        production_cycle.planned_cycle_duration_days = 120
+        production_cycle.save(update_fields=['planned_selling_price_per_kg_fcfa', 'planned_cycle_duration_days'])
         allocation_a = create_cycle_unit_allocation(production_cycle, name='Bac 1', volume_m3='3.00')
         allocation_b = create_cycle_unit_allocation(production_cycle, name='Bac 2', volume_m3='4.00')
 
@@ -479,6 +482,10 @@ class TestProductionCycleViewSet:
         assert Decimal(str(response.data['summary']['mortality_rate_pct'])) == Decimal('0.83')
         assert Decimal(str(response.data['summary']['total_feed_consumed_kg'])) == Decimal('12.50')
         assert Decimal(str(response.data['summary']['estimated_current_biomass_kg'])) == Decimal('37.49')
+        assert Decimal(str(response.data['summary']['estimated_market_value_fcfa'])) == Decimal('74980.00')
+        assert Decimal(str(response.data['summary']['direct_production_cost_fcfa'])) == Decimal('15625.00')
+        assert response.data['summary']['cycle_progress_pct'] == 26
+        assert response.data['summary']['days_remaining'] == 89
         assert response.data['summary']['units_with_today_log_count'] == 1
         assert response.data['summary']['units_with_sanitary_issue_count'] == 1
         assert response.data['summary']['units_with_active_sanitary_issue_count'] == 1
@@ -775,6 +782,8 @@ class TestCycleUnitAllocationDashboardViewSet:
     """Tests pour le dashboard opérationnel d'une allocation de cycle."""
 
     def test_dashboard_with_logs(self, auth_client, production_cycle):
+        production_cycle.planned_selling_price_per_kg_fcfa = Decimal('2000')
+        production_cycle.save(update_fields=['planned_selling_price_per_kg_fcfa'])
         allocation = create_cycle_unit_allocation(production_cycle, name='Bac 1', volume_m3='3.00')
 
         CycleLog.objects.create(
@@ -813,6 +822,7 @@ class TestCycleUnitAllocationDashboardViewSet:
         assert Decimal(str(response.data['summary']['total_feed_consumed_kg'])) == Decimal('6.50')
         assert Decimal(str(response.data['summary']['latest_average_weight_g'])) == Decimal('20.00')
         assert Decimal(str(response.data['summary']['estimated_current_biomass_kg'])) == Decimal('17.84')
+        assert Decimal(str(response.data['summary']['estimated_market_value_fcfa'])) == Decimal('35680.00')
         assert response.data['summary']['last_daily_log_date'] == date.today().isoformat()
         assert response.data['summary']['days_since_last_log'] == 0
         assert response.data['summary']['has_today_daily_log'] is True

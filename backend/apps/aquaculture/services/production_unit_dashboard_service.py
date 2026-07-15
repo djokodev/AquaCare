@@ -8,6 +8,7 @@ from typing import Any
 
 from django.utils import timezone
 
+from ..domain.dashboard_metrics import estimate_market_value_fcfa
 from ..models import CycleLog, CycleUnitAllocation, SanitaryLog
 
 
@@ -112,6 +113,10 @@ class ProductionUnitDashboardService:
         estimated_current_biomass_kg = Decimal(str(estimated_current_biomass_kg)).quantize(
             ProductionUnitDashboardService.BIOMASS_QUANTIZE
         )
+        estimated_market_value_fcfa = estimate_market_value_fcfa(
+            estimated_current_biomass_kg,
+            allocation.cycle.planned_selling_price_per_kg_fcfa,
+        )
 
         last_daily_log_date = daily_logs[0].log_date if daily_logs else None
         today = timezone.localdate()
@@ -131,6 +136,7 @@ class ProductionUnitDashboardService:
             'total_feed_consumed_kg': total_feed_consumed_kg,
             'latest_average_weight_g': latest_average_weight_g,
             'estimated_current_biomass_kg': estimated_current_biomass_kg,
+            'estimated_market_value_fcfa': estimated_market_value_fcfa,
             'last_daily_log_date': last_daily_log_date,
             'days_since_last_log': days_since_last_log,
             'has_today_daily_log': has_today_daily_log,
