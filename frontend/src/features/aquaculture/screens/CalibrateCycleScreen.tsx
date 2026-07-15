@@ -187,7 +187,12 @@ export default function CalibrateCycleScreen({ route, navigation }: Props) {
     <Screen scroll>
       <View style={styles.content}>
         <AppText variant="screenTitle">{t('gradeFish')}</AppText>
-        <TextField label={t('sourceUnit')} value={route.params.sourceUnitName ?? source?.cycle_name ?? ''} editable={false} />
+        <TextField
+          label={t('sourceUnit')}
+          value={route.params.sourceUnitName ?? source?.cycle_name ?? ''}
+          editable={false}
+          style={styles.sourceUnitInput}
+        />
         {!sourceAllocationId ? <AppText color="error">{t('calibrationSourceRequired')}</AppText> : null}
         {!tanks.length ? (
           <>
@@ -232,4 +237,10 @@ export default function CalibrateCycleScreen({ route, navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({ content: { gap: spacing[4] } });
+const styles = StyleSheet.create({
+  content: { gap: spacing[4] },
+  sourceUnitInput: {
+    textAlign: 'center',
+    textAlignVertical: 'center',
+  },
+});

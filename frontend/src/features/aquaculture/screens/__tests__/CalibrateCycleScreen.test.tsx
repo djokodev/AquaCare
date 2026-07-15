@@ -1,5 +1,5 @@
 import React from 'react';
-import { Alert } from 'react-native';
+import { Alert, StyleSheet } from 'react-native';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 
 import CalibrateCycleScreen from '../CalibrateCycleScreen';
@@ -65,6 +65,17 @@ describe('CalibrateCycleScreen', () => {
       destination_allocation: { current_fish_count: 300 }, warnings: ['weight_difference'],
     } as any);
     jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
+  });
+
+  it('centre le nom de l unité source dans son champ', async () => {
+    const { getByLabelText, getByText } = render(
+      <CalibrateCycleScreen navigation={navigation} route={route} />,
+    );
+
+    await waitFor(() => expect(getByText('Bac tri')).toBeTruthy());
+    expect(StyleSheet.flatten(getByLabelText('sourceUnit').props.style)).toEqual(
+      expect.objectContaining({ textAlign: 'center', textAlignVertical: 'center' }),
+    );
   });
 
   it('soumet le formulaire complet depuis une allocation précise et affiche les valeurs serveur', async () => {
