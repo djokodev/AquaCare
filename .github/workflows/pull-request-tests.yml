@@ -127,7 +127,7 @@ jobs:
         run: npx tsc --noEmit
 
   postgresql-transactional-launch:
-    name: PostgreSQL Transactional Launch
+    name: PostgreSQL Transactional Launch and Calibration
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -201,6 +201,12 @@ jobs:
           echo "$concurrency_output"
           if echo "$concurrency_output" | grep -qi skipped; then
             echo "Concurrent PostgreSQL launch test was skipped"
+            exit 1
+          fi
+          calibration_output="$(pytest -n 0 apps/aquaculture/tests/services/test_calibration_service.py -q -k 'concurrent_')"
+          echo "$calibration_output"
+          if echo "$calibration_output" | grep -qi skipped; then
+            echo "Concurrent PostgreSQL calibration test was skipped"
             exit 1
           fi
 

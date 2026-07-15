@@ -4,6 +4,35 @@
 
 This file is the living memory of AquaCare. Update it when major product, technical, architecture, release, or business decisions change.
 
+## Calibration tanks and autonomous sessions
+
+A calibration tank is a permanent physical `ProductionUnit` (`unit_type=tank`,
+`purpose=calibration`). Its first live arrival opens an autonomous rearing session,
+represented by a `ProductionCycle(cycle_kind=calibration)` and one active allocation.
+The transfer is a ledger movement: source stock decreases and destination stock is
+then independent. Harvesting or closing the source never cascades to the destination.
+
+A partial harvest subtracts the actual harvested count and biomass, then replays the
+ledger. Harvesting the last active allocation closes the technical destination
+session in the same transaction, preserves its history and makes the physical tank
+available. A later arrival creates a new session rather than reopening the old one.
+
+Unit mutation and deletion rules are centralized across specialized and generic APIs
+and Django admin. Occupied calibration tanks protect volume, type, purpose and
+status; empty tanks with history cannot be deleted. Unit names are case-insensitively
+unique within a farm.
+
+Replay orders events by business timestamp, `created_at`, UUID. A backdated offline
+movement is accepted only when the complete timeline stays positive; if it becomes
+the first arrival, session dates and initial descriptive snapshots are updated.
+Transfers, harvests and replay re-aggregate cycle metrics. Reports expose incoming
+and outgoing movements and their origins separately from growth and mortality.
+
+Offline tanks and operations remain in `AsyncStorage`, merge with server data by
+`client_uuid`, and stay visible as pending. Local destinations use
+`destination_production_unit_client_uuid`; only server-confirmed items are marked as
+synchronized.
+
 ## Project snapshot
 
 AquaCare is a bilingual French and English aquaculture management mobile application for fish farmers in Cameroon. It is designed for intermittent connectivity and follows an offline-first approach.
