@@ -14,6 +14,7 @@ from aquaculture.serializers import CycleUnitAllocationSerializer, ProductionUni
 from django.core.exceptions import ValidationError
 from django.db.models.deletion import ProtectedError
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework import status
 
 
@@ -271,6 +272,68 @@ class TestProductionUnitSerializers:
 
 @pytest.mark.django_db
 class TestProductionUnitViews:
+    def test_occupied_unit_cannot_be_converted_to_calibration(
+        self, auth_client, production_cycle, farm_profile
+    ):
+        unit = ProductionUnit.objects.create(
+            farm_profile=farm_profile,
+            name='Bac production occupé',
+            unit_type='tank',
+            volume_m3=Decimal('4.00'),
+        )
+        CycleUnitAllocation.objects.create(
+            cycle=production_cycle,
+            production_unit=unit,
+            initial_fish_count=100,
+            current_fish_count=100,
+            initial_biomass_kg=Decimal('10.00'),
+            current_biomass_kg=Decimal('10.00'),
+        )
+
+        response = auth_client.patch(
+            reverse('aquaculture:production-unit-detail', args=[unit.id]),
+            {'purpose': ProductionUnit.PURPOSE_CALIBRATION},
+            format='json',
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        unit.refresh_from_db()
+        assert unit.purpose == ProductionUnit.PURPOSE_PRODUCTION
+
+    def test_unit_type_and_purpose_remain_immutable_after_session_history(
+        self, auth_client, production_cycle, farm_profile
+    ):
+        unit = ProductionUnit.objects.create(
+            farm_profile=farm_profile,
+            name='Bac avec historique',
+            unit_type='tank',
+            volume_m3=Decimal('4.00'),
+        )
+        CycleUnitAllocation.objects.create(
+            cycle=production_cycle,
+            production_unit=unit,
+            status=CycleUnitAllocation.STATUS_HARVESTED,
+            initial_fish_count=100,
+            current_fish_count=0,
+            initial_biomass_kg=Decimal('10.00'),
+            current_biomass_kg=Decimal('0.00'),
+            final_harvest_date=date.today(),
+            final_fish_count=100,
+            final_biomass_kg=Decimal('10.00'),
+            harvested_at=timezone.now(),
+        )
+
+        response = auth_client.patch(
+            reverse('aquaculture:production-unit-detail', args=[unit.id]),
+            {'purpose': ProductionUnit.PURPOSE_CALIBRATION, 'unit_type': 'pond'},
+            format='json',
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        unit.refresh_from_db()
+        assert unit.purpose == ProductionUnit.PURPOSE_PRODUCTION
+        assert unit.unit_type == 'tank'
+
     def test_list_only_returns_user_units(self, auth_client, farm_profile, user_factory):
         other_user = user_factory(phone_number='+237690777777', email='other-views@test.com')
         other_farm = other_user.farm_profile

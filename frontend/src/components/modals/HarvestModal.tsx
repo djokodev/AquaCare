@@ -10,6 +10,8 @@ import { CycleUnitAllocation, HarvestData, ProductionCycle } from '@/types/aquac
 import { getApiErrorMessage } from '@/utils/errorParser';
 import { AppText, Button, Card, FormField, IconButton, InlineAlert, TextField } from '@/components/ui';
 import { colors, radii, spacing } from '@/theme';
+import { offlineService } from '@/services/offlineService';
+import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
 
 type HarvestScope = 'cycle' | 'unit';
 
@@ -36,6 +38,45 @@ interface HarvestModalProps {
 const toNumber = (value: number | string | null | undefined): number => {
   const parsed = typeof value === 'number' ? value : Number(value ?? 0);
   return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const localHarvestDate = (value: Date): string => {
+  const offset = value.getTimezoneOffset() * 60_000;
+  return new Date(value.getTime() - offset).toISOString().slice(0, 10);
+};
+
+const localHarvestTime = (value: Date): string =>
+  `${String(value.getHours()).padStart(2, '0')}:${String(value.getMinutes()).padStart(2, '0')}`;
+
+const parseLocalHarvestDateTime = (localDate: string, localTime: string): Date | null => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(localDate) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(localTime)) {
+    return null;
+  }
+  const [year, month, day] = localDate.split('-').map(Number);
+  const [hour, minute] = localTime.split(':').map(Number);
+  const value = new Date(year, month - 1, day, hour, minute, 0, 0);
+  if (
+    Number.isNaN(value.getTime()) ||
+    value.getFullYear() !== year ||
+    value.getMonth() !== month - 1 ||
+    value.getDate() !== day ||
+    value.getHours() !== hour ||
+    value.getMinutes() !== minute
+  ) {
+    return null;
+  }
+  return value;
+};
+
+const toHarvestIso = (localDate: string, localTime: string): string | null =>
+  parseLocalHarvestDateTime(localDate, localTime)?.toISOString() ?? null;
+
+const createClientUuid = (): string => {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (char) => {
+    const random = Math.floor(Math.random() * 16);
+    return (char === 'x' ? random : (random & 0x3) | 0x8).toString(16);
+  });
 };
 
 const getAllocationInitialAverageWeight = (allocation: CycleUnitAllocation | null | undefined): number => {
@@ -79,12 +120,17 @@ export default function HarvestModal({
   const initialAverageWeight = isUnitScope ? getAllocationInitialAverageWeight(unitAllocation) : cycle?.initial_average_weight ?? 0;
   const availableAverageWeight = isUnitScope ? getAllocationCurrentAverageWeight(unitAllocation) : cycle?.current_average_weight ?? 0;
   const [loading, setLoading] = useState(false);
+  const [cycleAllocations, setCycleAllocations] = useState<CycleUnitAllocation[]>([]);
+  const [harvestTime, setHarvestTime] = useState(localHarvestTime(new Date()));
   const [formData, setFormData] = useState<HarvestData>({
-    harvest_date: new Date().toISOString().split('T')[0],
+    client_uuid: createClientUuid(),
+    harvest_date: localHarvestDate(new Date()),
+    final_harvested_at: new Date().toISOString(),
     final_count: availableFishCount,
     final_average_weight: availableAverageWeight,
     total_harvested_weight: 0,
     harvest_notes: '',
+    created_offline: false,
   });
 
   const harvestedThisYear = useMemo(() => {
@@ -103,13 +149,33 @@ export default function HarvestModal({
   useEffect(() => {
     if (!visible || (isUnitScope ? !unitAllocation : !cycle)) return;
     setFormData({
-      harvest_date: new Date().toISOString().split('T')[0],
+      client_uuid: createClientUuid(),
+      harvest_date: localHarvestDate(new Date()),
+      final_harvested_at: new Date().toISOString(),
       final_count: availableFishCount,
       final_average_weight: availableAverageWeight,
       total_harvested_weight: 0,
       harvest_notes: '',
+      created_offline: false,
     });
+    setHarvestTime(localHarvestTime(new Date()));
   }, [availableAverageWeight, availableFishCount, cycle, isUnitScope, unitAllocation, visible]);
+
+  useEffect(() => {
+    let active = true;
+    if (!visible || isUnitScope || !cycle) {
+      setCycleAllocations([]);
+      return () => { active = false; };
+    }
+    void aquacultureService.getCycleUnitAllocations(cycle.id)
+      .then((allocations) => {
+        if (active) setCycleAllocations(allocations);
+      })
+      .catch(() => {
+        if (active) setCycleAllocations([]);
+      });
+    return () => { active = false; };
+  }, [cycle, isUnitScope, visible]);
 
   const handleInputChange = (field: keyof HarvestData, value: string | number) => {
     setFormData((previous) => ({ ...previous, [field]: value }));
@@ -120,12 +186,35 @@ export default function HarvestModal({
       Alert.alert(t('error'), t('harvestDateRequired'));
       return false;
     }
-    if (formData.final_count <= 0) {
-      Alert.alert(t('error'), t('finalCountRequired'));
+    const harvestedAt = parseLocalHarvestDateTime(formData.harvest_date, harvestTime);
+    if (!harvestedAt) {
+      Alert.alert(t('error'), t('harvestDateInvalid'));
       return false;
     }
-    if (formData.final_count > availableFishCount) {
-      Alert.alert(t('error'), t('harvestCountExceedsAvailable'));
+    if (harvestedAt.getTime() > Date.now()) {
+      Alert.alert(t('error'), t('harvestDatetimeFuture'));
+      return false;
+    }
+    const activeSessionStarts = isUnitScope
+      ? [unitAllocation?.session_started_at]
+      : cycleAllocations
+        .filter((allocation) => allocation.status == null || allocation.status === 'active')
+        .map((allocation) => allocation.session_started_at);
+    const exactSessionStart = activeSessionStarts
+      .filter((value): value is string => Boolean(value))
+      .map((value) => new Date(value))
+      .filter((value) => !Number.isNaN(value.getTime()))
+      .sort((left, right) => right.getTime() - left.getTime())[0];
+    const legacySessionStart = cycle?.start_date
+      ? new Date(`${cycle.start_date}T00:00:00`)
+      : null;
+    const sessionStart = exactSessionStart ?? legacySessionStart;
+    if (sessionStart && harvestedAt < sessionStart) {
+      Alert.alert(t('error'), t('harvestDatetimeBeforeSession'));
+      return false;
+    }
+    if (formData.final_count <= 0) {
+      Alert.alert(t('error'), t('finalCountRequired'));
       return false;
     }
     if (formData.final_average_weight <= 0) {
@@ -138,21 +227,74 @@ export default function HarvestModal({
   const handleSubmit = async () => {
     if (loading || (isUnitScope && (!productionUnitContext || !unitAllocation)) || (!isUnitScope && !cycle) || !validateForm()) return;
     setLoading(true);
+    const finalHarvestedAt = toHarvestIso(formData.harvest_date, harvestTime);
+    if (!finalHarvestedAt) {
+      setLoading(false);
+      Alert.alert(t('error'), t('harvestDateInvalid'));
+      return;
+    }
+    const payload: HarvestData = {
+      ...formData,
+      allocation_id: productionUnitContext?.cycleUnitAllocationId,
+      cycle_id: cycle?.id ?? productionUnitContext?.cycleId,
+      final_harvested_at: finalHarvestedAt,
+    };
+    const saveLocally = async () => {
+      await offlineService.saveFinalHarvestOffline(
+        productionUnitContext?.cycleUnitAllocationId ?? '',
+        cycle?.id ?? productionUnitContext?.cycleId ?? '',
+        payload,
+      );
+      Alert.alert(t('success'), t('finalHarvestSavedOffline'), [
+        { text: t('ok'), onPress: onClose },
+      ]);
+    };
     try {
+      const online = await offlineService.isOnline();
+      if (!online) {
+        await saveLocally();
+        return;
+      }
+      const calibrationSync = await offlineService.syncRelevantCalibrationOperationsForHarvest({
+        cycleId: cycle?.id ?? productionUnitContext?.cycleId ?? '',
+        allocationId: productionUnitContext?.cycleUnitAllocationId,
+        productionUnitId: productionUnitContext?.productionUnitId,
+        harvestedAt: finalHarvestedAt,
+      });
+      if (calibrationSync.failed > 0) {
+        throw new Error(t('finalHarvestPendingMessage'));
+      }
       if (isUnitScope && productionUnitContext && unitAllocation) {
-        await dispatch(harvestCycleUnitAllocation({ allocationId: productionUnitContext.cycleUnitAllocationId, harvestData: formData })).unwrap();
-        Alert.alert(t('success'), t('productionUnitHarvestSuccess'), [{ text: t('ok'), onPress: () => { onSuccess?.(); onClose(); onUnitHarvestSuccess?.(); } }]);
+        const response = await dispatch(harvestCycleUnitAllocation({ allocationId: productionUnitContext.cycleUnitAllocationId, harvestData: payload })).unwrap();
+        if (response.final_harvest.reconciliation_status === 'pending') {
+          Alert.alert(t('finalHarvestPendingTitle'), t('finalHarvestPendingMessage'), [{ text: t('ok'), onPress: () => { onSuccess?.(); onClose(); onUnitHarvestSuccess?.(); } }]);
+        } else {
+          Alert.alert(t('success'), t('productionUnitHarvestSuccess'), [{ text: t('ok'), onPress: () => { onSuccess?.(); onClose(); onUnitHarvestSuccess?.(); } }]);
+        }
       } else if (cycle) {
-        await dispatch(harvestCycle({ id: cycle.id, harvestData: formData })).unwrap();
+        const response = await dispatch(harvestCycle({ id: cycle.id, harvestData: payload })).unwrap();
         const harvestedId = cycle.id;
-        Alert.alert(t('success'), t('harvestSuccess'), [
-          ...(hasMoreCycles ? [{ text: t('consolidationStartNextCycle', { num: harvestedThisYear + 2 }), onPress: () => { onSuccess?.(); onClose(); onNextCycle?.(harvestedId); } }] : []),
-          ...(onContactBuyer ? [{ text: t('buyerNetworkCTA'), onPress: () => { onSuccess?.(); onClose(); onContactBuyer(); } }] : []),
-          { text: t('ok'), onPress: () => { onSuccess?.(); onClose(); } },
-        ]);
+        if (response.reconciliation_status === 'pending') {
+          Alert.alert(t('finalHarvestPendingTitle'), t('finalHarvestPendingMessage'), [
+            { text: t('ok'), onPress: () => { onSuccess?.(); onClose(); } },
+          ]);
+        } else {
+          Alert.alert(t('success'), t('harvestSuccess'), [
+            ...(hasMoreCycles ? [{ text: t('consolidationStartNextCycle', { num: harvestedThisYear + 2 }), onPress: () => { onSuccess?.(); onClose(); onNextCycle?.(harvestedId); } }] : []),
+            ...(onContactBuyer ? [{ text: t('buyerNetworkCTA'), onPress: () => { onSuccess?.(); onClose(); onContactBuyer(); } }] : []),
+            { text: t('ok'), onPress: () => { onSuccess?.(); onClose(); } },
+          ]);
+        }
       }
     } catch (error: unknown) {
-      Alert.alert(t('error'), getApiErrorMessage(error, isUnitScope ? t('productionUnitHarvestError') : t('harvestError')));
+      Alert.alert(
+        t('finalHarvestSyncUnavailableTitle'),
+        getApiErrorMessage(error, isUnitScope ? t('productionUnitHarvestError') : t('harvestError')),
+        [
+          { text: t('cancel'), style: 'cancel' },
+          { text: t('saveOffline'), onPress: () => { void saveLocally(); } },
+        ],
+      );
     } finally {
       setLoading(false);
     }
@@ -192,6 +334,9 @@ export default function HarvestModal({
               <AppText variant="cardTitle">{t('harvestData')}</AppText>
               <FormField label={t('harvestDate')} required>
                 <TextField value={formData.harvest_date} onChangeText={(value) => handleInputChange('harvest_date', value)} placeholder={t('dateFormatPlaceholder')} accessibilityLabel={t('harvestDate')} />
+              </FormField>
+              <FormField label={t('harvestTime')} required hint={t('harvestTimeHint')}>
+                <TextField value={harvestTime} onChangeText={setHarvestTime} placeholder={t('harvestTimePlaceholder')} accessibilityLabel={t('harvestTime')} />
               </FormField>
               <FormField label={t('finalCount')} required>
                 <TextField value={String(formData.final_count)} onChangeText={(value) => handleInputChange('final_count', parseInt(value, 10) || 0)} keyboardType="numeric" placeholder={t('enterFinalCount')} accessibilityLabel={t('finalCount')} />

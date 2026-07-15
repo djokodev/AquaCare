@@ -6,6 +6,7 @@ import logging
 
 from accounts.models import FarmProfile
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db import IntegrityError
 from django.http import Http404
 from drf_spectacular.utils import OpenApiExample, OpenApiResponse, extend_schema
 from rest_framework import permissions, status
@@ -17,6 +18,7 @@ from ..services.cycle_launch_application_service import (
     CycleLaunchApplicationService,
     CycleLaunchIdempotencyConflict,
 )
+from ..services.integrity_error_service import translate_production_unit_integrity_error
 from ..throttles import AquacultureProductionPlanSetupThrottle
 
 logger = logging.getLogger(__name__)
@@ -141,6 +143,10 @@ class CycleLaunchView(APIView):
             )
         except DjangoValidationError as exc:
             _raise_drf_validation_error(exc)
+        except IntegrityError as exc:
+            from rest_framework.exceptions import ValidationError
+
+            raise ValidationError(translate_production_unit_integrity_error(exc)) from exc
 
         response_serializer = CycleLaunchResponseSerializer(
             {

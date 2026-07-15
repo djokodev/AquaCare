@@ -40,6 +40,11 @@ import {
   CycleLaunchRequest,
   CycleLaunchResponse,
   ReportScopeType,
+  CalibrationTank,
+  CalibrationOperation,
+  CalibrationRequest,
+  CalibrationResponse,
+  CreateCalibrationTankForm,
 } from '@/types/aquaculture';
 
 interface PaginatedResponse<T> {
@@ -84,6 +89,44 @@ class AquacultureService {
   private readonly baseUrl = '/aquaculture';
   private readonly inFlightDashboardRequests = new Map<string, Promise<DashboardData>>();
   private readonly inFlightCycleDashboardRequests = new Map<string, Promise<CycleDashboard>>();
+
+  async getCalibrationTanks(): Promise<CalibrationTank[]> {
+    const response = await apiService.get<ListResponse<CalibrationTank>>(`${this.baseUrl}/calibration-tanks/`);
+    return extractResults(response.data);
+  }
+
+  async getCalibrationTank(id: string): Promise<CalibrationTank> {
+    const response = await apiService.get<CalibrationTank>(`${this.baseUrl}/calibration-tanks/${id}/`);
+    return response.data;
+  }
+
+  async createCalibrationTank(payload: CreateCalibrationTankForm): Promise<CalibrationTank> {
+    const response = await apiService.post<CalibrationTank>(`${this.baseUrl}/calibration-tanks/`, payload);
+    return response.data;
+  }
+
+  async updateCalibrationTank(id: string, payload: Partial<CreateCalibrationTankForm>): Promise<CalibrationTank> {
+    const response = await apiService.patch<CalibrationTank>(`${this.baseUrl}/calibration-tanks/${id}/`, payload);
+    return response.data;
+  }
+
+  async deleteCalibrationTank(id: string): Promise<void> {
+    await apiService.delete(`${this.baseUrl}/calibration-tanks/${id}/`);
+  }
+
+  async getCalibrationOperations(tankId?: string): Promise<CalibrationOperation[]> {
+    const query = tankId ? `?unit_id=${encodeURIComponent(tankId)}` : '';
+    const response = await apiService.get<ListResponse<CalibrationOperation>>(`${this.baseUrl}/calibration-operations/${query}`);
+    return extractResults(response.data);
+  }
+
+  async calibrateAllocation(sourceAllocationId: string, payload: CalibrationRequest): Promise<CalibrationResponse> {
+    const response = await apiService.post<CalibrationResponse>(
+      `${this.baseUrl}/cycle-unit-allocations/${sourceAllocationId}/calibrate/`,
+      payload,
+    );
+    return response.data;
+  }
 
   // =================== DASHBOARD ===================
 
@@ -385,6 +428,7 @@ class AquacultureService {
   async getProductionUnits(params?: {
     status?: ProductionUnitStatus;
     unitType?: ProductionUnitType;
+    purpose?: 'production' | 'calibration';
   }): Promise<ProductionUnit[]> {
     try {
       const query = new URLSearchParams();
@@ -393,6 +437,9 @@ class AquacultureService {
       }
       if (params?.unitType) {
         query.append('unit_type', params.unitType);
+      }
+      if (params?.purpose) {
+        query.append('purpose', params.purpose);
       }
 
       const queryString = query.toString();
@@ -494,8 +541,14 @@ class AquacultureService {
     id: string,
     harvestData: {
       harvest_date: string;
+      final_harvested_at: string;
       final_count: number;
       final_average_weight: number;
+      client_uuid: string;
+      total_harvested_weight: number;
+      harvest_notes?: string;
+      created_offline: boolean;
+      allow_pending_reconciliation?: boolean;
     }
   ): Promise<CycleHarvestResponse> {
     try {
@@ -514,9 +567,14 @@ class AquacultureService {
     allocationId: string,
     harvestData: {
       harvest_date: string;
+      final_harvested_at: string;
       final_count: number;
       final_average_weight: number;
+      client_uuid: string;
+      total_harvested_weight: number;
       harvest_notes?: string;
+      created_offline: boolean;
+      allow_pending_reconciliation?: boolean;
     }
   ): Promise<CycleUnitHarvestResponse> {
     try {

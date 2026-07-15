@@ -42,6 +42,7 @@ from ..domain.production_units import (
     get_production_unit_dimension_value,
 )
 from ..models import (
+    CalibrationOperation,
     CycleLog,
     CycleUnitAllocation,
     PartialHarvest,
@@ -256,6 +257,52 @@ class PDFContext(TypedDict):
 
 
 class ReportService(BaseService):
+    @staticmethod
+    def _build_calibration_movements(
+        cycle: ProductionCycle,
+        *,
+        period_start: date | None = None,
+        period_end: date | None = None,
+    ) -> dict:
+        """Expose les entrées et sorties vivantes sans les assimiler à la croissance ou aux mortalités."""
+        operations = CalibrationOperation.objects.filter(
+            Q(source_allocation__cycle=cycle) | Q(destination_allocation__cycle=cycle)
+        ).select_related(
+            'source_allocation__cycle',
+            'source_allocation__production_unit',
+            'destination_allocation__cycle',
+            'destination_allocation__production_unit',
+        ).order_by('calibrated_at', 'created_at', 'id')
+        if period_start is not None:
+            operations = operations.filter(calibrated_at__date__gte=period_start)
+        if period_end is not None:
+            operations = operations.filter(calibrated_at__date__lte=period_end)
+        incoming = []
+        outgoing = []
+        for operation in operations:
+            item = {
+                'id': str(operation.id),
+                'client_uuid': str(operation.client_uuid),
+                'calibrated_at': operation.calibrated_at.isoformat(),
+                'count': operation.transferred_count,
+                'average_weight_g': ReportService._to_float(operation.transferred_average_weight_g),
+                'biomass_kg': ReportService._to_float(operation.transferred_biomass_kg),
+                'source_cycle_id': str(operation.source_allocation.cycle_id),
+                'source_unit': operation.source_allocation.production_unit.name,
+                'destination_cycle_id': str(operation.destination_allocation.cycle_id),
+                'destination_unit': operation.destination_allocation.production_unit.name,
+            }
+            (incoming if operation.destination_allocation.cycle_id == cycle.id else outgoing).append(item)
+        return {
+            'incoming': incoming,
+            'outgoing': outgoing,
+            'incoming_count': sum(item['count'] for item in incoming),
+            'outgoing_count': sum(item['count'] for item in outgoing),
+            'incoming_biomass_kg': round(sum(item['biomass_kg'] or 0 for item in incoming), 2),
+            'outgoing_biomass_kg': round(sum(item['biomass_kg'] or 0 for item in outgoing), 2),
+            'origins': sorted({item['source_unit'] for item in incoming}),
+        }
+
     """Service central des rapports de production."""
 
     @staticmethod
@@ -750,17 +797,9 @@ class ReportService(BaseService):
         summary["estimated_current_fish_count"] = stock_snapshot["estimated_current_fish_count"]
         summary["total_mortality_count"] = stock_snapshot["mortality_count"]
         summary["mortality_rate_pct"] = stock_snapshot["mortality_rate_pct"]
-        latest_weight = ReportService._resolve_latest_valid_weight_as_of(
-            cumulative_daily_logs if cumulative_daily_logs is not None else daily_logs,
-            period_end,
-        )
+        latest_weight = ReportService._to_float(stock_snapshot['estimated_current_average_weight_g'])
         total_feed = summary.get("total_feed_consumed_kg") or 0
-        current_count = summary.get("estimated_current_fish_count")
-        estimated_biomass = (
-            round(float(current_count or 0) * latest_weight / 1000, 2)
-            if latest_weight is not None and current_count is not None
-            else None
-        )
+        estimated_biomass = ReportService._to_float(stock_snapshot['estimated_current_biomass_kg'])
         plan_data = FarmProductionPlanService.get_plan_data(allocation.cycle.farm_profile)
         feed_price = (
             ReportService._to_float(plan_data["default_feed_price_per_kg"])
@@ -771,7 +810,7 @@ class ReportService(BaseService):
         feed_cost_consumed_fcfa = round(feed_consumed_kg * feed_price, 2)
         unit_fcr = ReportFcrService.calculate(
             feed_consumed_kg=feed_consumed_kg,
-            initial_biomass_kg=ReportService._to_float(allocation.initial_biomass_kg),
+            initial_biomass_kg=ReportService._to_float(stock_snapshot['initial_biomass_kg']),
             current_biomass_kg=ReportService._to_float(estimated_biomass),
             harvested_biomass_kg=ReportService._to_float(stock_snapshot["harvested_biomass_kg"]),
             harvest_data_complete=stock_snapshot["harvest_data_complete"],
@@ -793,10 +832,15 @@ class ReportService(BaseService):
         effective_selling_price = planned_price or ReportService._default_selling_price_for_species(
             allocation.cycle.species
         )
+        final_harvest = getattr(allocation, 'final_harvest_operation', None)
 
         return {
             "cycle": {
                 "id": str(cycle.id),
+                "cycle_kind": cycle.cycle_kind,
+                "calibration_movements": ReportService._build_calibration_movements(
+                    cycle, period_start=period_start, period_end=period_end
+                ),
                 "cycle_name": cycle.cycle_name,
                 "species": cycle.species,
                 "species_display": ReportService._report_species_display(cycle.species, language_code),
@@ -814,6 +858,7 @@ class ReportService(BaseService):
                 "production_unit_id": str(allocation.production_unit.id),
                 "production_unit_name": unit_name,
                 "production_unit_type": allocation.production_unit.unit_type,
+                "production_unit_purpose": allocation.production_unit.purpose,
                 "production_unit_type_display": ReportService._localized_display(
                     allocation.production_unit, "get_unit_type_display", language_code
                 ),
@@ -837,6 +882,21 @@ class ReportService(BaseService):
                 "planned_survival_rate_pct": ReportService._to_float(allocation.expected_survival_rate_pct),
                 "harvested_fish_count": stock_snapshot["harvested_fish_count"],
                 "harvested_biomass_kg": ReportService._to_float(stock_snapshot["harvested_biomass_kg"]),
+                "final_harvest_reconciliation_status": (
+                    final_harvest.reconciliation_status if final_harvest else None
+                ),
+                "final_harvest_computed_count": (
+                    final_harvest.computed_count_before_harvest if final_harvest else None
+                ),
+                "final_harvest_reconciliation_warning": (
+                    ReportService._pick_text(
+                        language_code,
+                        "Récolte enregistrée — réconciliation de stock en attente",
+                        "Harvest saved — stock reconciliation pending",
+                    )
+                    if final_harvest and final_harvest.reconciliation_status == 'pending'
+                    else None
+                ),
             },
             "dashboard_metrics": {
                 "estimated_market_value_fcfa": round(
@@ -1280,6 +1340,16 @@ class ReportService(BaseService):
                     ),
                     to_attr="cumulative_partial_harvests",
                 ),
+                Prefetch(
+                    "calibration_operations_in",
+                    queryset=CalibrationOperation.objects.filter(calibrated_at__date__lte=period_end),
+                    to_attr="report_incoming_calibrations",
+                ),
+                Prefetch(
+                    "calibration_operations_out",
+                    queryset=CalibrationOperation.objects.filter(calibrated_at__date__lte=period_end),
+                    to_attr="report_outgoing_calibrations",
+                ),
             )
         )
         global_period_sanitary_logs = list(
@@ -1521,6 +1591,10 @@ class ReportService(BaseService):
                     {
                         "cycle": {
                             "id": str(cycle.id),
+                            "cycle_kind": cycle.cycle_kind,
+                            "calibration_movements": ReportService._build_calibration_movements(
+                                cycle, period_start=period_start, period_end=period_end
+                            ),
                             "cycle_name": cycle.cycle_name,
                             "species": cycle.species,
                             "species_display": ReportService._report_species_display(
@@ -1998,7 +2072,17 @@ class ReportService(BaseService):
                             "-harvest_date", "-created_at"
                         ),
                         to_attr="cumulative_partial_harvests",
-                    )
+                    ),
+                    Prefetch(
+                        "calibration_operations_in",
+                        queryset=CalibrationOperation.objects.filter(calibrated_at__date__lte=period_end),
+                        to_attr="report_incoming_calibrations",
+                    ),
+                    Prefetch(
+                        "calibration_operations_out",
+                        queryset=CalibrationOperation.objects.filter(calibrated_at__date__lte=period_end),
+                        to_attr="report_outgoing_calibrations",
+                    ),
                 )
                 .filter(
                     id=scope_object_id,
@@ -2153,6 +2237,10 @@ class ReportService(BaseService):
                 {
                     "cycle": {
                         "id": str(cycle.id),
+                        "cycle_kind": cycle.cycle_kind,
+                        "calibration_movements": ReportService._build_calibration_movements(
+                            cycle, period_start=period_start, period_end=period_end
+                        ),
                         "cycle_name": cycle.cycle_name,
                         "species": cycle.species,
                         "species_display": ReportService._report_species_display(
@@ -2911,6 +2999,12 @@ class ReportService(BaseService):
                 "production_unit_information": "Production unit information",
                 "production_unit_details": "Production unit details",
                 "production_unit_details_unit": "Production unit details",
+                "calibration_movements": "Grading movements",
+                "movement_direction": "Direction",
+                "source": "Source",
+                "destination": "Destination",
+                "incoming": "Incoming",
+                "outgoing": "Outgoing",
                 "cycle": "Cycle",
                 "production_cycle": "Production cycle",
                 "cycle_status": "Cycle status",
@@ -3080,6 +3174,12 @@ class ReportService(BaseService):
             "production_unit_information": "Informations sur l'unité",
             "production_unit_details": "Détail des unités de production",
             "production_unit_details_unit": "Détail de l'unité de production",
+            "calibration_movements": "Mouvements de calibrage",
+            "movement_direction": "Sens",
+            "source": "Source",
+            "destination": "Destination",
+            "incoming": "Entrée",
+            "outgoing": "Sortie",
             "cycle": "Cycle",
             "production_cycle": "Cycle de production",
             "cycle_status": "État du cycle",

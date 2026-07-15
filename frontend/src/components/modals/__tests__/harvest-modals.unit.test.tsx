@@ -1,10 +1,13 @@
 import React from 'react';
 import { Alert, StyleSheet } from 'react-native';
-import { fireEvent, render } from '@testing-library/react-native';
+import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import { useDispatch, useSelector } from 'react-redux';
 
 import HarvestModal from '../HarvestModal';
 import PartialHarvestModal from '../PartialHarvestModal';
+import { harvestCycle } from '@/features/aquaculture/store/aquacultureSlice';
+import { offlineService } from '@/services/offlineService';
+import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
 
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 34, left: 0 }),
@@ -28,12 +31,30 @@ jest.mock('@/features/aquaculture/store/aquacultureSlice', () => ({
   createPartialHarvestForUnit: jest.fn(),
 }));
 
+jest.mock('@/services/offlineService', () => ({
+  offlineService: {
+    isOnline: jest.fn(),
+    syncRelevantCalibrationOperationsForHarvest: jest.fn(),
+    saveFinalHarvestOffline: jest.fn(),
+  },
+}));
+
+jest.mock('@/features/aquaculture/services/aquacultureService', () => ({
+  aquacultureService: {
+    getCycleUnitAllocations: jest.fn(),
+  },
+}));
+
 jest.mock('react-redux', () => ({
   useDispatch: jest.fn(),
   useSelector: jest.fn((selector) => selector(mockState)),
 }));
 
 jest.mock('react-i18next', () => ({
+  initReactI18next: {
+    type: '3rdParty',
+    init: jest.fn(),
+  },
   useTranslation: () => ({
     t: (key: string, options?: Record<string, unknown>) => {
       switch (key) {
@@ -85,6 +106,22 @@ jest.mock('react-i18next', () => ({
           return 'Count exceeds available fish';
         case 'harvestDateRequired':
           return 'Harvest date required';
+        case 'harvestDateInvalid':
+          return 'Harvest date or time is invalid';
+        case 'harvestDatetimeBeforeSession':
+          return 'The harvest cannot be earlier than the start of this session.';
+        case 'harvestTime':
+          return 'Harvest time';
+        case 'confirmHarvest':
+          return 'Confirm harvest';
+        case 'confirmUnitHarvest':
+          return 'Confirm unit harvest';
+        case 'finalHarvestPendingTitle':
+          return 'Pending reconciliation';
+        case 'finalHarvestPendingMessage':
+          return 'The harvest is saved, but some offline operations still need to sync before the final stock can be confirmed.';
+        case 'harvestSuccess':
+          return 'Cycle harvested successfully!';
         case 'fishAvailableInThisUnit':
           return 'Fish available in this unit';
         case 'thisActionWillCloseThisProductionUnit':
@@ -126,6 +163,9 @@ describe('components/modals harvest flows', () => {
     mockUseSelector.mockImplementation((selector: (state: typeof mockState) => unknown) =>
       selector(mockState)
     );
+    (offlineService.isOnline as jest.Mock).mockResolvedValue(true);
+    (offlineService.syncRelevantCalibrationOperationsForHarvest as jest.Mock).mockResolvedValue({ success: 0, failed: 0 });
+    (aquacultureService.getCycleUnitAllocations as jest.Mock).mockResolvedValue([]);
   });
 
   it('shows the unit name in the full harvest modal header', () => {
@@ -162,6 +202,164 @@ describe('components/modals harvest flows', () => {
     });
     expect(StyleSheet.flatten(getByLabelText('cancel').props.style)).toMatchObject({ flex: 1 });
     expect(StyleSheet.flatten(getByTestId('harvest-submit').props.style)).toMatchObject({ flex: 2 });
+  });
+
+  it('rejects an invalid local harvest date without dispatching', () => {
+    const dispatch = jest.fn();
+    mockUseDispatch.mockReturnValue(dispatch);
+    const { getByLabelText, getByTestId } = render(
+      <HarvestModal
+        visible
+        onClose={jest.fn()}
+        cycle={null}
+        scope="unit"
+        productionUnitContext={{
+          cycleId: 'cycle-1',
+          cycleUnitAllocationId: 'allocation-1',
+          productionUnitId: 'unit-1',
+          productionUnitName: 'Bac 1',
+        }}
+        unitAllocation={{
+          id: 'allocation-1',
+          cycle: 'cycle-1',
+          production_unit: 'unit-1',
+          initial_fish_count: 900,
+          current_fish_count: 900,
+          initial_biomass_kg: 9,
+          current_biomass_kg: 9,
+        } as never}
+      />
+    );
+
+    fireEvent.changeText(getByLabelText('Harvest date'), '2026-02-30');
+    fireEvent.press(getByTestId('harvest-submit'));
+
+    expect(Alert.alert).toHaveBeenCalledWith('Error', 'Harvest date or time is invalid');
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['pending', 'Pending reconciliation', 'The harvest is saved, but some offline operations still need to sync before the final stock can be confirmed.'],
+    ['reconciled', 'Success', 'Cycle harvested successfully!'],
+  ] as const)('uses the server %s status for a global online harvest', async (status, title, message) => {
+    const dispatch = jest.fn(() => ({
+      unwrap: jest.fn().mockResolvedValue({ reconciliation_status: status }),
+    }));
+    mockUseDispatch.mockReturnValue(dispatch);
+    (harvestCycle as unknown as jest.Mock).mockReturnValue({ type: 'harvest-cycle' });
+    const { getByTestId } = render(
+      <HarvestModal
+        visible
+        onClose={jest.fn()}
+        cycle={{
+          id: 'cycle-1',
+          cycle_name: 'Cycle 1',
+          start_date: '2020-01-01',
+          initial_count: 1000,
+          current_count: 900,
+          initial_average_weight: 10,
+          current_average_weight: 300,
+        } as never}
+      />
+    );
+
+    fireEvent.press(getByTestId('harvest-submit'));
+
+    await waitFor(() => expect(Alert.alert).toHaveBeenCalledWith(
+      title,
+      message,
+      expect.any(Array),
+    ));
+  });
+
+  it('validates the exact allocation session start and accepts its boundary', async () => {
+    const dispatch = jest.fn(() => ({
+      unwrap: jest.fn().mockResolvedValue({
+        final_harvest: { reconciliation_status: 'reconciled' },
+      }),
+    }));
+    mockUseDispatch.mockReturnValue(dispatch);
+    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const date = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`;
+    const { getByLabelText, getByTestId } = render(
+      <HarvestModal
+        visible
+        onClose={jest.fn()}
+        cycle={null}
+        scope="unit"
+        productionUnitContext={{
+          cycleId: 'cycle-1',
+          cycleUnitAllocationId: 'allocation-1',
+          productionUnitId: 'unit-1',
+          productionUnitName: 'Bac 1',
+        }}
+        unitAllocation={{
+          id: 'allocation-1',
+          cycle: 'cycle-1',
+          production_unit: 'unit-1',
+          initial_fish_count: 900,
+          current_fish_count: 900,
+          initial_biomass_kg: 9,
+          current_biomass_kg: 270,
+          session_started_at: new Date(
+            yesterday.getFullYear(),
+            yesterday.getMonth(),
+            yesterday.getDate(),
+            8,
+          ).toISOString(),
+        } as never}
+      />
+    );
+    fireEvent.changeText(getByLabelText('Harvest date'), date);
+    fireEvent.changeText(getByLabelText('Harvest time'), '07:59');
+    fireEvent.press(getByTestId('harvest-submit'));
+    expect(Alert.alert).toHaveBeenCalledWith(
+      'Error',
+      'The harvest cannot be earlier than the start of this session.',
+    );
+    dispatch.mockClear();
+
+    fireEvent.changeText(getByLabelText('Harvest time'), '08:00');
+    fireEvent.press(getByTestId('harvest-submit'));
+    await waitFor(() => expect(dispatch).toHaveBeenCalled());
+  });
+
+  it('keeps the harvest client UUID and offers offline save when a relevant calibration fails', async () => {
+    const dispatch = jest.fn();
+    mockUseDispatch.mockReturnValue(dispatch);
+    (offlineService.syncRelevantCalibrationOperationsForHarvest as jest.Mock).mockResolvedValue({
+      success: 0,
+      failed: 1,
+    });
+    const { getByTestId } = render(
+      <HarvestModal
+        visible
+        onClose={jest.fn()}
+        cycle={{
+          id: 'cycle-1',
+          cycle_name: 'Cycle 1',
+          start_date: '2020-01-01',
+          initial_count: 1000,
+          current_count: 900,
+          initial_average_weight: 10,
+          current_average_weight: 300,
+        } as never}
+      />
+    );
+
+    fireEvent.press(getByTestId('harvest-submit'));
+    await waitFor(() => expect(Alert.alert).toHaveBeenCalled());
+    expect(dispatch).not.toHaveBeenCalled();
+    const alertButtons = (Alert.alert as jest.Mock).mock.calls.at(-1)?.[2];
+    await alertButtons[1].onPress();
+    expect(offlineService.saveFinalHarvestOffline).toHaveBeenCalledWith(
+      '',
+      'cycle-1',
+      expect.objectContaining({
+        cycle_id: 'cycle-1',
+        client_uuid: expect.any(String),
+      }),
+    );
   });
 
   it('blocks a partial harvest that would empty the unit', () => {

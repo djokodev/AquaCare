@@ -14,7 +14,7 @@ Author: AquaCare Team
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from typing import TypedDict
 
@@ -749,6 +749,73 @@ class AnalyticsService(BaseService):
     # ============================================================================
 
     @staticmethod
+    def _build_allocation_survival_curve(cycle: ProductionCycle) -> list[dict]:
+        """Build a backward-compatible biological survival curve plus stock data."""
+        from .allocation_ledger_service import AllocationLedgerService
+
+        changes: dict[datetime, dict[str, int]] = {}
+        initial_introduced = 0
+        initial_present = 0
+        for allocation in cycle.unit_allocations.all():
+            replay = AllocationLedgerService.replay(allocation)
+            if cycle.cycle_kind != ProductionCycle.CYCLE_KIND_CALIBRATION:
+                initial_introduced += allocation.initial_fish_count
+                initial_present += allocation.initial_fish_count
+            for event_at, event_type, event in replay['events']:
+                bucket = changes.setdefault(
+                    event_at,
+                    {'introduced': 0, 'present_delta': 0, 'mortality': 0},
+                )
+                if event_type == 'incoming':
+                    bucket['introduced'] += event.transferred_count
+                    bucket['present_delta'] += event.transferred_count
+                elif event_type == 'outgoing':
+                    bucket['present_delta'] -= event.transferred_count
+                elif event_type == 'log':
+                    mortality = event.mortality_count or 0
+                    bucket['mortality'] += mortality
+                    bucket['present_delta'] -= mortality
+                elif event_type == 'partial_harvest':
+                    bucket['present_delta'] -= event.count_harvested
+                elif event_type == 'final_harvest':
+                    bucket['present_delta'] -= (
+                        getattr(event, 'declared_fish_count', None)
+                        or getattr(event, 'final_fish_count', 0)
+                        or 0
+                    )
+
+        introduced = initial_introduced
+        biological_survivors = initial_introduced
+        present = initial_present
+        points = []
+        for event_at in sorted(changes):
+            introduced += changes[event_at]['introduced']
+            biological_survivors += (
+                changes[event_at]['introduced'] - changes[event_at]['mortality']
+            )
+            present += changes[event_at]['present_delta']
+            biological_survivors = max(0, biological_survivors)
+            present = max(0, present)
+            stock_rate = float(present / introduced * 100) if introduced else 0.0
+            biological_rate = (
+                float(biological_survivors / introduced * 100)
+                if introduced else 0.0
+            )
+            points.append({
+                'date': timezone.localtime(event_at).date().isoformat(),
+                'event_at': event_at.isoformat(),
+                # count/rate are the historical public survival contract.
+                'count': biological_survivors,
+                'rate': biological_rate,
+                'biological_survival_count': biological_survivors,
+                'biological_survival_rate': biological_rate,
+                'stock_count': present,
+                'stock_remaining_rate': stock_rate,
+                'source': 'allocation_ledger',
+            })
+        return points
+
+    @staticmethod
     def update_cycle_metrics_data(cycle: ProductionCycle, new_log=None) -> None:
         """
         Met à jour l'objet CycleMetrics avec les dernières données analytiques.
@@ -794,7 +861,9 @@ class AnalyticsService(BaseService):
                     })
                     metrics.growth_curve_data = existing
 
-                if new_log.mortality_count and new_log.mortality_count > 0:
+                if cycle.unit_allocations.exists():
+                    metrics.survival_curve_data = AnalyticsService._build_allocation_survival_curve(cycle)
+                elif new_log.mortality_count and new_log.mortality_count > 0:
                     existing = list(metrics.survival_curve_data or [])
                     prev_count = existing[-1]['count'] if existing else cycle.initial_count
                     current_count = max(0, prev_count - new_log.mortality_count)
@@ -867,21 +936,24 @@ class AnalyticsService(BaseService):
                     })
                 metrics.growth_curve_data = growth_data
 
-                survival_data = []
-                current_count = cycle.initial_count
-                mortality_logs = (
-                    prefetched_buckets.mortality_logs
-                    if prefetched_buckets is not None
-                    else cycle.logs.filter(mortality_count__gt=0).order_by('log_date')
-                )
-                for log in mortality_logs:
-                    current_count = max(0, current_count - log.mortality_count)
-                    survival_rate = (current_count / cycle.initial_count * 100) if cycle.initial_count > 0 else 0
-                    survival_data.append({
-                        'date': log.log_date.isoformat(),
-                        'count': current_count,
-                        'rate': float(survival_rate)
-                    })
+                if cycle.unit_allocations.exists():
+                    survival_data = AnalyticsService._build_allocation_survival_curve(cycle)
+                else:
+                    survival_data = []
+                    current_count = cycle.initial_count
+                    mortality_logs = (
+                        prefetched_buckets.mortality_logs
+                        if prefetched_buckets is not None
+                        else cycle.logs.filter(mortality_count__gt=0).order_by('log_date')
+                    )
+                    for log in mortality_logs:
+                        current_count = max(0, current_count - log.mortality_count)
+                        survival_rate = (current_count / cycle.initial_count * 100) if cycle.initial_count > 0 else 0
+                        survival_data.append({
+                            'date': log.log_date.isoformat(),
+                            'count': current_count,
+                            'rate': float(survival_rate)
+                        })
                 metrics.survival_curve_data = survival_data
 
                 feed_data = []

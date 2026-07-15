@@ -174,15 +174,22 @@ describe('features/aquaculture/store/aquacultureSlice', () => {
       {
         message: 'Cycle recolte avec succes',
         cycle: harvestedCycle,
+        final_harvest: null,
+        final_harvests: [],
+        reconciliation_status: 'reconciled',
+        idempotent_replay: false,
       },
       'request-id',
       {
         id: 'cycle-1',
         harvestData: {
           harvest_date: '2026-05-01',
+          final_harvested_at: '2026-05-01T12:00:00+01:00',
           final_count: 850,
           final_average_weight: 250,
           total_harvested_weight: 212.5,
+          client_uuid: '00000000-0000-4000-8000-000000000001',
+          created_offline: false,
         },
       }
     );
@@ -345,6 +352,8 @@ describe('features/aquaculture/store/aquacultureSlice', () => {
         cycles: 1,
         cycle_logs: 1,
         sanitary_logs: 1,
+        calibration_tanks: 0,
+        calibration_operations: 0,
       },
       errors: [],
       server_updates: {

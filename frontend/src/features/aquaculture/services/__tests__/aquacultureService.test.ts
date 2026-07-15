@@ -284,20 +284,32 @@ describe('features/aquaculture/services/aquacultureService', () => {
     const harvestResponse: CycleHarvestResponse = {
       message: 'Cycle recolte avec succes',
       cycle: { ...cycle, status: 'harvested', end_date: '2026-05-01' },
+      final_harvest: null,
+      final_harvests: [],
+      reconciliation_status: 'reconciled',
+      idempotent_replay: false,
     };
     mockApi.post.mockResolvedValueOnce({ data: harvestResponse } as never);
 
     const result = await aquacultureService.harvestCycle('cycle-1', {
       harvest_date: '2026-05-01',
+      final_harvested_at: '2026-05-01T12:00:00+01:00',
       final_count: 850,
       final_average_weight: 250,
+      client_uuid: '00000000-0000-4000-8000-000000000001',
+      total_harvested_weight: 212.5,
+      created_offline: false,
     });
 
     expect(result).toEqual(harvestResponse);
     expect(mockApi.post).toHaveBeenCalledWith('/aquaculture/cycles/cycle-1/harvest/', {
       harvest_date: '2026-05-01',
+      final_harvested_at: '2026-05-01T12:00:00+01:00',
       final_count: 850,
       final_average_weight: 250,
+      client_uuid: '00000000-0000-4000-8000-000000000001',
+      total_harvested_weight: 212.5,
+      created_offline: false,
     });
   });
 

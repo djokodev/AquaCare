@@ -9,6 +9,7 @@ import { Notification as NotificationPayload } from "./notifications";
 
 export type Species = "tilapia" | "clarias";
 export type CycleStatus = "planned" | "active" | "harvested" | "cancelled";
+export type ProductionCycleKind = "standard" | "calibration";
 export type ReportType = "daily" | "weekly" | "monthly";
 export type ReportStatus = "draft" | "validated" | "pending";
 export type ReportScopeType = "cycle" | "unit";
@@ -42,8 +43,15 @@ export interface ProductionCycle {
   cycle_name: string;
   species: Species;
   pond_identifier: string;
-  pond_surface_m2: number;
+  pond_surface_m2?: number | null;
   pond_volume_m3?: number;
+  cycle_kind?: ProductionCycleKind;
+  cycle_kind_display?: string;
+  is_calibration_unit?: boolean;
+  total_stocked_count?: number;
+  total_stocked_biomass?: number;
+  total_transferred_out_count?: number;
+  total_transferred_out_biomass?: number;
   infrastructure_type?: string[];
 
   // Donnees initiales
@@ -113,6 +121,78 @@ export interface ProductionCycle {
   updated_at: string;
 }
 
+export interface CalibrationTank {
+  id: string;
+  client_uuid?: string;
+  farm_profile: string;
+  name: string;
+  volume_m3: number;
+  is_active: boolean;
+  is_occupied: boolean;
+  active_session?: ProductionCycle | null;
+  active_allocation?: CycleUnitAllocation | null;
+  allocations?: CycleUnitAllocation[];
+  pending_sync?: boolean;
+  created_offline?: boolean;
+  synced_at?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CalibrationOperation {
+  id: string;
+  client_uuid: string;
+  source_allocation: string;
+  destination_allocation: string;
+  source_cycle_name?: string;
+  source_unit_name?: string;
+  destination_cycle_name?: string;
+  destination_unit_name?: string;
+  calibrated_at: string;
+  transferred_count: number;
+  transferred_average_weight_g: number;
+  transferred_biomass_kg: number;
+  size_category?: 'small' | 'medium' | 'large' | 'other' | '';
+  notes?: string;
+  created_offline?: boolean;
+  pending_sync?: boolean;
+}
+
+export interface CalibrationRequest {
+  client_uuid: string;
+  source_allocation_id?: string;
+  source_allocation_client_uuid?: string;
+  destination_production_unit_id?: string;
+  destination_production_unit_client_uuid?: string;
+  calibrated_at: string;
+  transferred_count: number;
+  transferred_average_weight_g?: number;
+  sample_count?: number;
+  sample_total_weight_g?: number;
+  size_category?: 'small' | 'medium' | 'large' | 'other' | '';
+  notes?: string;
+  created_offline?: boolean;
+}
+
+export interface CalibrationResponse {
+  operation: CalibrationOperation;
+  source_allocation: CycleUnitAllocation;
+  destination_allocation: CycleUnitAllocation;
+  source_cycle: ProductionCycle;
+  destination_cycle: ProductionCycle;
+  destination_tank: CalibrationTank;
+  warnings: Array<'weight_difference' | 'high_density'>;
+  idempotent_replay: boolean;
+}
+
+export interface CreateCalibrationTankForm {
+  client_uuid?: string;
+  name: string;
+  volume_m3: number;
+  is_active?: boolean;
+  created_offline?: boolean;
+}
+
 export interface PartialHarvest {
   id: string;
   harvest_date: string;
@@ -144,12 +224,37 @@ export interface PartialHarvestData {
 export interface CycleHarvestResponse {
   message: string;
   cycle: ProductionCycle;
+  final_harvest: FinalHarvestOperation | null;
+  final_harvests: FinalHarvestOperation[];
+  reconciliation_status: 'pending' | 'reconciled';
+  idempotent_replay: boolean;
 }
 
 export interface CycleUnitHarvestResponse {
   message: string;
   cycle: ProductionCycle;
   cycle_unit_allocation: CycleUnitAllocation;
+  final_harvest: FinalHarvestOperation;
+  idempotent_replay: boolean;
+}
+
+export interface FinalHarvestOperation {
+  id: string;
+  client_uuid: string;
+  allocation_id: string;
+  cycle_id: string;
+  harvested_at: string;
+  declared_fish_count: number;
+  declared_average_weight_g: string;
+  declared_biomass_kg: string;
+  notes: string;
+  reconciliation_status: 'pending' | 'reconciled';
+  computed_count_before_harvest?: number | null;
+  computed_biomass_before_harvest_kg?: string | null;
+  created_offline: boolean;
+  synced_at?: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface CycleUnitPartialHarvestResponse {
@@ -293,6 +398,8 @@ export interface ProductionUnit {
   farm_profile: string;
   name: string;
   unit_type: ProductionUnitType;
+  purpose?: "production" | "calibration";
+  purpose_display?: string;
   volume_m3?: number | null;
   surface_m2?: number | null;
   status?: ProductionUnitStatus;
@@ -327,6 +434,12 @@ export interface CycleLaunchAllocationInput {
   fish_count: number;
 }
 
+export interface CycleLaunchCalibrationUnitInput {
+  client_uuid: string;
+  name: string;
+  volume_m3: number;
+}
+
 export interface CycleLaunchRequest {
   launch_uuid: string;
   launch_kind: "initial_setup" | "additional_cycle";
@@ -353,6 +466,7 @@ export interface CycleLaunchRequest {
   };
   production_units: CycleLaunchUnitInput[];
   allocations: CycleLaunchAllocationInput[];
+  calibration_units?: CycleLaunchCalibrationUnitInput[];
 }
 
 export interface CycleLaunchResponse {
@@ -417,11 +531,15 @@ export interface CycleUnitAllocation {
   status?: "active" | "harvested" | "inactive";
   status_display?: string;
   harvested_at?: string | null;
+  final_harvested_at?: string | null;
   final_harvest_date?: string | null;
   final_harvest_notes?: string | null;
   final_fish_count?: number | null;
   final_average_weight_g?: number | null;
   final_biomass_kg?: number | null;
+  final_harvest_reconciliation_status?: "pending" | "reconciled" | null;
+  final_harvest_computed_count?: number | null;
+  session_started_at?: string | null;
   expected_survival_rate_pct?: number | null;
   cycle_name?: string;
   production_unit_name?: string;
@@ -615,14 +733,21 @@ export interface SyncPayload {
   cycle_logs: Partial<CycleLog>[];
   sanitary_logs: Partial<SanitaryLog>[];
   new_cycles: CreateCycleForm[];
+  calibration_tanks?: CreateCalibrationTankForm[];
+  calibration_operations?: CalibrationRequest[];
+  final_harvests?: HarvestData[];
   last_sync?: string;
   device_id: string;
 }
 
 export interface SyncError {
-  type: "cycle" | "cycle_log" | "sanitary_log" | "general";
+  type: "cycle" | "cycle_log" | "sanitary_log" | "calibration_tank" | "calibration_operation" | "final_harvest" | "general";
   data?: unknown;
-  error: string;
+  client_uuid?: string | null;
+  code?: string;
+  detail?: string | Record<string, unknown>;
+  error?: string;
+  field?: string;
   errors?: Record<string, string[]>;
 }
 
@@ -634,13 +759,38 @@ export interface SyncResponse {
     cycle_logs: number;
     cycle_logs_updated?: number;
     sanitary_logs: number;
+    calibration_tanks: number;
+    calibration_operations: number;
+    final_harvests?: number;
   };
   errors: SyncError[];
+  accepted?: {
+    cycles: string[];
+    cycle_logs: string[];
+    sanitary_logs: string[];
+    calibration_tanks: string[];
+    calibration_operations: string[];
+    final_harvests: string[];
+  };
+  items?: Array<{
+    type: 'cycle' | 'cycle_log' | 'sanitary_log' | 'calibration_tank' |
+      'calibration_operation' | 'final_harvest';
+    client_uuid: string;
+    status: 'accepted';
+    server_id?: string;
+    reconciliation_status?: 'pending' | 'reconciled';
+    operation_id?: string;
+    operation_ids?: string[];
+    operation_client_uuids?: string[];
+  }>;
   server_updates: {
     cycles: ProductionCycle[];
     cycle_logs: CycleLog[];
     feeding_plans: FeedingPlan[];
     sanitary_logs?: SanitaryLog[];
+    calibration_tanks?: CalibrationTank[];
+    calibration_operations?: CalibrationOperation[];
+    final_harvests?: FinalHarvestOperation[];
     sync_timestamp?: string;
   };
   device_id?: string;
@@ -719,11 +869,18 @@ export interface SanitaryLogForm {
 }
 
 export interface HarvestData {
+  client_uuid: string;
+  allocation_id?: string;
+  allocation_client_uuid?: string;
+  cycle_id?: string;
   harvest_date: string;
+  final_harvested_at: string;
   final_count: number;
   final_average_weight: number;
   total_harvested_weight: number;
   harvest_notes?: string;
+  created_offline: boolean;
+  allow_pending_reconciliation?: boolean;
 }
 
 // =================== STATISTIQUES ===================

@@ -37,28 +37,32 @@ export default function SelectField({
   const selected = options.find((option) => option.value === value);
   return (
     <FormField label={label} required={required} error={error}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={label}
-        accessibilityState={{ disabled, expanded: visible }}
-        disabled={disabled}
-        onPress={() => setVisible(true)}
-        style={({ pressed }) => [
-          styles.field,
-          error && styles.error,
-          disabled && styles.disabled,
-          pressed && styles.pressed,
-        ]}
-      >
-        <AppText color={selected ? "primary" : "muted"} style={styles.value}>
-          {selected?.label ?? placeholder ?? t("selectOption")}
-        </AppText>
-        <Ionicons
-          name="chevron-down"
-          size={sizing.iconMedium}
-          color={colors.text.muted}
-        />
-      </Pressable>
+      <View style={[
+        styles.fieldContainer,
+        visible && styles.expanded,
+        error && styles.error,
+        disabled && styles.disabled,
+      ]}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={label}
+          accessibilityState={{ disabled, expanded: visible }}
+          disabled={disabled}
+          onPress={() => setVisible(true)}
+          style={({ pressed }) => [styles.pressable, pressed && styles.pressed]}
+        >
+          <View style={styles.fieldContent}>
+            <AppText variant="body" color={selected ? "primary" : "muted"} style={styles.value}>
+              {selected?.label ?? placeholder ?? t("selectOption")}
+            </AppText>
+            <Ionicons
+              name="chevron-down"
+              size={sizing.iconMedium}
+              color={colors.text.muted}
+            />
+          </View>
+        </Pressable>
+      </View>
       <SelectionModal
         visible={visible}
         title={label}
@@ -76,18 +80,20 @@ export default function SelectField({
   );
 }
 const styles = StyleSheet.create({
-  field: {
-    minHeight: sizing.controlMedium,
-    flexDirection: "row",
-    alignItems: "center",
+  fieldContainer: {
+    width: "100%",
+    height: sizing.inputHeight,
     borderWidth: 1,
-    borderColor: colors.border.default,
+    borderColor: colors.border.strong,
     borderRadius: radii.md,
     backgroundColor: colors.surface.card,
-    paddingHorizontal: spacing[3],
+    paddingHorizontal: spacing[4],
   },
-  value: { flex: 1 },
+  pressable: { height: "100%", justifyContent: "center" },
+  fieldContent: { height: "100%", flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  value: { flex: 1, minHeight: 24 },
+  expanded: { borderColor: colors.brand.primary, backgroundColor: colors.surface.selected },
   error: { borderColor: colors.status.error },
   disabled: { backgroundColor: colors.surface.disabled },
-  pressed: { opacity: 0.8 },
+  pressed: { opacity: 0.72 },
 });

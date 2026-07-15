@@ -75,8 +75,8 @@ class TestProductionCycleSerializer:
         }
         
         serializer = ProductionCycleSerializer(data=data)
-        assert not serializer.is_valid()
-        assert 'end_date' in serializer.errors
+        assert serializer.is_valid()
+        assert 'end_date' not in serializer.validated_data
 
     def test_excessive_fish_count_validation(self, farm_profile):
         """Test validation nombre de poissons excessif."""

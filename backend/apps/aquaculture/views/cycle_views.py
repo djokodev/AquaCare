@@ -12,20 +12,30 @@ from drf_spectacular.utils import (
     extend_schema,
     extend_schema_view,
 )
-from rest_framework import permissions, status, viewsets
+from rest_framework import permissions, serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 
-from ..domain.exceptions import FeedingPlanGenerationError
-from ..models import ProductionCycle
+from ..domain.exceptions import BusinessRuleViolation, FeedingPlanGenerationError
+from ..models import (
+    CalibrationOperation,
+    CycleUnitAllocation,
+    ProductionCycle,
+    ProductionUnit,
+)
 from ..serializers import (
+    CalibrationOperationSerializer,
+    CalibrationRequestSerializer,
+    CalibrationResponseSerializer,
+    CalibrationTankSerializer,
     CycleComparisonSerializer,
     CycleDashboardSerializer,
     CycleHarvestResponseSerializer,
     CycleStatisticsSerializer,
     CycleStoreManualStockSerializer,
     CycleStoreSerializer,
+    CycleUnitAllocationSerializer,
     HarvestSerializer,
     PartialHarvestReadSerializer,
     PartialHarvestResponseSerializer,
@@ -40,7 +50,9 @@ from ..services import (
     PartialHarvestCommand,
     ProductionCycleApplicationService,
 )
+from ..services.calibration_service import CalibrationService
 from ..services.cycle_feed_service import CycleFeedService
+from ..services.production_unit_service import ProductionUnitLifecycleService
 
 logger = logging.getLogger(__name__)
 
@@ -189,6 +201,101 @@ class ProductionCycleViewSet(viewsets.ModelViewSet):
 
         # Update serializer instance with created cycle
         serializer.instance = cycle
+
+    def perform_destroy(self, instance):
+        if instance.unit_allocations.exists() or instance.current_count > 0 or instance.current_biomass > 0:
+            raise serializers.ValidationError(
+                {'detail': _('Un cycle avec stock ou historique doit être clôturé par un service métier.')}
+            )
+        instance.delete()
+
+    @extend_schema(
+        summary="Adaptateur de calibrage depuis un cycle",
+        description=(
+            "Délègue à l'allocation active unique. Retourne source_allocation_required "
+            "lorsque le cycle possède plusieurs allocations actives."
+        ),
+        request=CalibrationRequestSerializer,
+        responses={200: CalibrationResponseSerializer, 201: CalibrationResponseSerializer, 400: OpenApiTypes.OBJECT},
+    )
+    @action(detail=True, methods=['post'], url_path='calibrate')
+    def calibrate(self, request, pk=None):
+        source = self.get_object()
+        serializer = CalibrationRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        allocation_query = source.unit_allocations.filter(status=CycleUnitAllocation.STATUS_ACTIVE)
+        source_allocation = None
+        if data.get('source_allocation_id'):
+            source_allocation = allocation_query.filter(pk=data['source_allocation_id']).first()
+        elif data.get('source_allocation_client_uuid'):
+            source_allocation = allocation_query.filter(client_uuid=data['source_allocation_client_uuid']).first()
+        elif allocation_query.count() == 1:
+            source_allocation = allocation_query.first()
+        elif allocation_query.count() > 1:
+            return Response(
+                {'code': 'source_allocation_required', 'detail': _('Sélectionnez l’unité source du calibrage.')},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if source_allocation is None:
+            return Response(
+                {'code': 'source_allocation_not_found', 'detail': _('Allocation source introuvable.')},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        tank_query = ProductionUnit.objects.filter(
+            farm_profile__user=request.user,
+            purpose=ProductionUnit.PURPOSE_CALIBRATION,
+        )
+        tank = (
+            tank_query.filter(pk=data['destination_production_unit_id']).first()
+            if data.get('destination_production_unit_id')
+            else tank_query.filter(client_uuid=data['destination_production_unit_client_uuid']).first()
+        )
+        if tank is None:
+            return Response({'detail': _('Bac de calibrage introuvable.')}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            operation, warnings, created = CalibrationService.calibrate(
+                source_allocation=source_allocation,
+                destination_production_unit=tank,
+                user=request.user,
+                **{
+                    key: value
+                    for key, value in data.items()
+                    if key not in {
+                        'source_allocation_id',
+                        'source_allocation_client_uuid',
+                        'destination_production_unit_id',
+                        'destination_production_unit_client_uuid',
+                    }
+                },
+            )
+        except BusinessRuleViolation as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        operation = CalibrationOperation.objects.select_related(
+            'source_allocation__cycle',
+            'source_allocation__production_unit',
+            'destination_allocation__cycle',
+            'destination_allocation__production_unit',
+        ).get(pk=operation.pk)
+        source_cycle = ProductionCycle.objects.for_api().get(pk=operation.source_allocation.cycle_id)
+        destination_cycle = ProductionCycle.objects.for_api().get(pk=operation.destination_allocation.cycle_id)
+        destination_tank = ProductionUnitLifecycleService.calibration_tanks_for_api().get(
+            pk=operation.destination_allocation.production_unit_id
+        )
+        payload = {
+            'operation': CalibrationOperationSerializer(operation).data,
+            'source_allocation': CycleUnitAllocationSerializer(operation.source_allocation).data,
+            'destination_allocation': CycleUnitAllocationSerializer(operation.destination_allocation).data,
+            'source_cycle': ProductionCycleSerializer(source_cycle, context={'request': request}).data,
+            'destination_cycle': ProductionCycleSerializer(destination_cycle, context={'request': request}).data,
+            'destination_tank': CalibrationTankSerializer(
+                destination_tank,
+                context={'request': request},
+            ).data,
+            'warnings': warnings,
+            'idempotent_replay': not created,
+        }
+        return Response(payload, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
     
     @extend_schema(
         summary="Finaliser un cycle (récolte)",
@@ -231,20 +338,34 @@ class ProductionCycleViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        harvested_cycle = ProductionCycleApplicationService.harvest_cycle(
+        harvest_result = ProductionCycleApplicationService.harvest_cycle(
             cycle=cycle,
             command=HarvestCycleCommand(
                 harvest_date=serializer.validated_data['harvest_date'],
+                final_harvested_at=serializer.validated_data['final_harvested_at'],
                 final_count=serializer.validated_data['final_count'],
                 final_average_weight=serializer.validated_data['final_average_weight'],
+                client_uuid=serializer.validated_data['client_uuid'],
                 harvest_notes=serializer.validated_data.get('harvest_notes', ''),
+                total_harvested_weight=serializer.validated_data.get(
+                    'total_harvested_weight'
+                ),
+                created_offline=serializer.validated_data['created_offline'],
+                allow_pending_reconciliation=serializer.validated_data[
+                    'allow_pending_reconciliation'
+                ],
             ),
         )
 
+        operations = harvest_result.operations
         response_serializer = CycleHarvestResponseSerializer(
             {
                 'message': _('Cycle récolté avec succès'),
-                'cycle': harvested_cycle,
+                'cycle': harvest_result.cycle,
+                'final_harvest': operations[0] if len(operations) == 1 else None,
+                'final_harvests': operations,
+                'reconciliation_status': harvest_result.reconciliation_status,
+                'idempotent_replay': harvest_result.idempotent_replay,
             },
             context={'request': request},
         )

@@ -22,7 +22,7 @@ import SlideIndicators from '../components/SlideIndicators';
 import OnboardingButton from '../components/OnboardingButton';
 import OnboardingService from '../services/onboardingService';
 import { OnboardingSlideData } from '../types/onboarding';
-import { AppText, Button } from '@/components/ui';
+import { AppText, Button, IconButton } from '@/components/ui';
 import { colors, sizing, spacing } from '@/theme';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -196,19 +196,29 @@ export default function OnboardingScreen({ onCompleted }: OnboardingScreenProps)
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       <View style={styles.container}>
-        {/* Header avec bouton "Ignorer" (slides 1-4 uniquement) */}
-        {!isLastSlide && (
-          <View style={styles.header}>
-            <Button label={t('onboardingSkip')} onPress={handleSkip} variant="ghost" disabled={isProcessing} fullWidth={false} />
+        <View style={styles.header}>
+          {currentIndex === 0 ? (
+            <Button
+              label={t('onboardingSkip')}
+              onPress={handleSkip}
+              variant="ghost"
+              disabled={isProcessing}
+              fullWidth={false}
+            />
+          ) : (
+            <IconButton
+              icon="arrow-back"
+              accessibilityLabel={t('onboardingBack')}
+              onPress={() => flatListRef.current?.scrollToIndex({ index: currentIndex - 1, animated: true })}
+              disabled={isProcessing}
+              variant="ghost"
+            />
+          )}
 
-            <AppText variant="helper" color="muted" style={styles.pageIndicator}>
-              {currentIndex + 1}/{SLIDES.length}
-            </AppText>
-          </View>
-        )}
-
-        {/* Espace réservé pour header sur dernier slide */}
-        {isLastSlide && <View style={styles.headerPlaceholder} />}
+          <AppText variant="helper" color="muted" style={styles.pageIndicator}>
+            {currentIndex + 1}/{SLIDES.length}
+          </AppText>
+        </View>
 
         {/* FlatList horizontal avec slides */}
         <FlatList
@@ -278,6 +288,7 @@ const styles = StyleSheet.create({
   footer: {
     paddingBottom: spacing[10],
     paddingTop: spacing[5],
+    paddingHorizontal: spacing[4],
     alignItems: 'center',
     backgroundColor: colors.surface.card,
   },

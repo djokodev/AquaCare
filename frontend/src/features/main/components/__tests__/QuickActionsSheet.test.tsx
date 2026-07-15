@@ -54,6 +54,8 @@ describe('features/main/components/QuickActionsSheet', () => {
     expect(getByText('productionUnitLogHistoryAction')).toBeTruthy();
     expect(getByText('feedingPlan')).toBeTruthy();
     expect(getByText('productionUnitReportAction')).toBeTruthy();
+    expect(getByText('gradeFish')).toBeTruthy();
+    expect(queryByText('calibrationTanksTitle')).toBeNull();
     expect(queryByText('dailyLog')).toBeNull();
     expect(queryByText('sanitaryLog')).toBeNull();
     expect(queryByText('notifications')).toBeNull();
@@ -61,6 +63,30 @@ describe('features/main/components/QuickActionsSheet', () => {
     expect(queryByText('productCatalog')).toBeNull();
     expect(queryByText('cart')).toBeNull();
     expect(queryByText('ordersHistory')).toBeNull();
+  });
+
+  it('ouvre le calibrage avec la source unitaire précise', () => {
+    const { getByText } = render(
+      <QuickActionsSheet
+        visible
+        onClose={jest.fn()}
+        unreadCount={0}
+        navigation={navigation}
+        scope="unit"
+        productionUnitContext={productionUnitContext}
+      />
+    );
+
+    fireEvent.press(getByText('gradeFish'));
+    act(() => jest.runAllTimers());
+
+    expect(navigation.navigate).toHaveBeenCalledWith('CalibrateCycle', {
+      sourceCycleId: 'cycle-1',
+      sourceCycleUnitAllocationId: 'allocation-1',
+      sourceUnitName: 'Bac 1',
+      sourceCurrentCount: undefined,
+      sourceCurrentBiomassKg: undefined,
+    });
   });
 
   it('navigue vers FeedingPlan avec le contexte unitaire', () => {

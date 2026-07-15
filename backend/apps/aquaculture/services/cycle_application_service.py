@@ -8,7 +8,7 @@ from typing import Any
 
 from ..models import PartialHarvest, ProductionCycle
 from .analytics_service import AnalyticsService
-from .cycle_service import CycleCreatePayload, ProductionCycleService
+from .cycle_service import CycleCreatePayload, HarvestCycleResult, ProductionCycleService
 
 
 @dataclass(frozen=True)
@@ -18,7 +18,12 @@ class HarvestCycleCommand:
     harvest_date: Any
     final_count: int
     final_average_weight: Decimal
+    final_harvested_at: Any
+    client_uuid: Any
     harvest_notes: str = ""
+    total_harvested_weight: Decimal | None = None
+    created_offline: bool = False
+    allow_pending_reconciliation: bool = False
 
 
 @dataclass(frozen=True)
@@ -49,14 +54,19 @@ class ProductionCycleApplicationService:
     def harvest_cycle(
         cycle: ProductionCycle,
         command: HarvestCycleCommand,
-    ) -> ProductionCycle:
+    ) -> HarvestCycleResult:
         """Finalise un cycle via la couche applicative."""
         return ProductionCycleService.harvest_cycle(
             cycle=cycle,
             harvest_date=command.harvest_date,
+            final_harvested_at=command.final_harvested_at,
             final_count=command.final_count,
             final_average_weight=command.final_average_weight,
+            client_uuid=command.client_uuid,
             harvest_notes=command.harvest_notes,
+            total_harvested_weight=command.total_harvested_weight,
+            created_offline=command.created_offline,
+            allow_pending_reconciliation=command.allow_pending_reconciliation,
         )
 
     @staticmethod
@@ -97,14 +107,19 @@ class ProductionCycleApplicationService:
     def harvest_cycle_unit_allocation(
         allocation,
         command: HarvestCycleCommand,
-    ) -> tuple[ProductionCycle, Any]:
+    ) -> tuple[ProductionCycle, Any, Any, bool]:
         """Finalise une allocation d'unité via la couche applicative."""
         return ProductionCycleService.harvest_cycle_unit_allocation(
             allocation=allocation,
             harvest_date=command.harvest_date,
+            final_harvested_at=command.final_harvested_at,
             final_count=command.final_count,
             final_average_weight=command.final_average_weight,
+            client_uuid=command.client_uuid,
             harvest_notes=command.harvest_notes,
+            total_harvested_weight=command.total_harvested_weight,
+            created_offline=command.created_offline,
+            allow_pending_reconciliation=command.allow_pending_reconciliation,
         )
 
     @staticmethod

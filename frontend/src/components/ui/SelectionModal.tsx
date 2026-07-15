@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -17,6 +17,9 @@ export interface SelectionOption {
   label: string;
   disabled?: boolean;
 }
+
+const SELECTION_CONFIRMATION_DELAY_MS = 280;
+
 interface SelectionModalProps {
   visible: boolean;
   title: string;
@@ -39,12 +42,44 @@ export function SelectionModal({
   emptyLabel,
   loading = false,
 }: SelectionModalProps) {
+  const [pendingSelection, setPendingSelection] = useState<string | undefined>();
+  const confirmationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const cancelPendingSelection = () => {
+    if (confirmationTimeoutRef.current) {
+      clearTimeout(confirmationTimeoutRef.current);
+      confirmationTimeoutRef.current = null;
+    }
+    setPendingSelection(undefined);
+  };
+
+  const handleClose = () => {
+    cancelPendingSelection();
+    onClose();
+  };
+
+  const handleSelect = (value: string) => {
+    if (pendingSelection) return;
+
+    setPendingSelection(value);
+    confirmationTimeoutRef.current = setTimeout(() => {
+      confirmationTimeoutRef.current = null;
+      setPendingSelection(undefined);
+      onSelect(value);
+    }, SELECTION_CONFIRMATION_DELAY_MS);
+  };
+
+  useEffect(() => () => cancelPendingSelection(), []);
+
+  const displayedSelectedValue = pendingSelection ?? selectedValue;
+  const isConfirmingSelection = pendingSelection !== undefined;
+
   return (
     <Modal
       visible={visible}
       transparent
       animationType="slide"
-      onRequestClose={onClose}
+      onRequestClose={handleClose}
     >
       <View style={styles.overlay}>
         <SafeAreaView style={styles.sheet}>
@@ -55,7 +90,7 @@ export function SelectionModal({
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={closeLabel}
-              onPress={onClose}
+              onPress={handleClose}
               style={styles.close}
             >
               <Ionicons name="close" size={24} color={colors.text.primary} />
@@ -67,46 +102,50 @@ export function SelectionModal({
               <ActivityIndicator color={colors.brand.primary} />
             </View>
           ) : (
-            <FlatList
-              data={options}
-              keyExtractor={(item) => item.value}
-              ListEmptyComponent={
-                <View style={styles.state}>
-                  <AppText color="muted">{emptyLabel}</AppText>
-                </View>
-              }
-              renderItem={({ item }) => {
-                const selected = item.value === selectedValue;
-                return (
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={item.label}
-                    accessibilityState={{ selected, disabled: item.disabled }}
-                    disabled={item.disabled}
-                    onPress={() => onSelect(item.value)}
-                    style={({ pressed }) => [
-                      styles.option,
-                      selected && styles.selected,
-                      (pressed || item.disabled) && {
-                        opacity: item.disabled ? 0.5 : 0.8,
-                      },
-                    ]}
-                  >
-                    <AppText color={selected ? "link" : "primary"}>
-                      {item.label}
-                    </AppText>
-                    {selected ? (
-                      <Ionicons
-                        name="checkmark"
-                        size={20}
-                        color={colors.brand.primary}
-                      />
-                    ) : null}
-                  </Pressable>
-                );
-              }}
-              ItemSeparatorComponent={Divider}
-            />
+            <View style={styles.optionsContainer}>
+              <FlatList
+                data={options}
+                keyExtractor={(item) => item.value}
+                contentContainerStyle={styles.listContent}
+                ListEmptyComponent={
+                  <View style={styles.state}>
+                    <AppText color="muted">{emptyLabel}</AppText>
+                  </View>
+                }
+                renderItem={({ item }) => {
+                  const selected = item.value === displayedSelectedValue;
+                  return (
+                    <View style={[styles.optionSurface, selected && styles.selected]}>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={item.label}
+                        accessibilityState={{ selected, disabled: item.disabled }}
+                        disabled={item.disabled || isConfirmingSelection}
+                        onPress={() => handleSelect(item.value)}
+                        style={({ pressed }) => [
+                          styles.optionPressable,
+                          (pressed || item.disabled) && {
+                            opacity: item.disabled ? 0.5 : 0.72,
+                          },
+                        ]}
+                      >
+                        <View style={styles.optionContent}>
+                          <AppText variant="body" color={selected ? "link" : "primary"}>
+                            {item.label}
+                          </AppText>
+                          <Ionicons
+                            name={selected ? "checkmark-circle" : "ellipse-outline"}
+                            size={22}
+                            color={selected ? colors.brand.primary : colors.border.strong}
+                          />
+                        </View>
+                      </Pressable>
+                    </View>
+                  );
+                }}
+                ItemSeparatorComponent={() => <View style={styles.optionGap} />}
+              />
+            </View>
           )}
         </SafeAreaView>
       </View>
@@ -124,7 +163,13 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface.card,
     borderTopLeftRadius: radii.xxl,
     borderTopRightRadius: radii.xxl,
+    overflow: "hidden",
     ...shadows.large,
+  },
+  optionsContainer: {
+    paddingHorizontal: spacing[5],
+    paddingBottom: spacing[5],
+    flexShrink: 1,
   },
   header: {
     minHeight: 64,
@@ -139,15 +184,20 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  option: {
-    minHeight: 52,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: spacing[5],
-    paddingVertical: spacing[3],
+  optionSurface: {
+    width: "100%",
+    height: 64,
+    paddingHorizontal: spacing[4],
+    borderWidth: 1,
+    borderColor: colors.border.subtle,
+    borderRadius: radii.md,
+    backgroundColor: colors.surface.page,
   },
-  selected: { backgroundColor: colors.surface.selected },
+  optionPressable: { height: "100%", justifyContent: "center" },
+  optionContent: { height: "100%", flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  listContent: { paddingBottom: spacing[3] },
+  optionGap: { height: spacing[2] },
+  selected: { backgroundColor: colors.surface.selected, borderColor: colors.brand.primary },
   state: {
     minHeight: 144,
     alignItems: "center",

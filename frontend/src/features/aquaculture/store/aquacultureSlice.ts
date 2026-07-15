@@ -346,6 +346,8 @@ export const synchronizeData = createAsyncThunk(
           cycles: syncResult.details.newCycles.success,
           cycle_logs: syncResult.details.cycleLogs.success,
           sanitary_logs: syncResult.details.sanitaryLogs.success,
+          calibration_tanks: syncResult.details.calibrationTanks?.success ?? 0,
+          calibration_operations: syncResult.details.calibrationOperations?.success ?? 0,
         },
         errors:
           syncResult.failed > 0

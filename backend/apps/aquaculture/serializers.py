@@ -16,13 +16,19 @@ Architecture offline-first avec sérialiseurs bulk pour synchronisation mobile.
 """
 from __future__ import annotations
 
+import uuid
 from datetime import date, timedelta
 from decimal import Decimal
 from typing import Any, cast
 
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db.models import Sum
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
-from notifications.serializers import NotificationSerializer as GlobalNotificationSerializer
+from drf_spectacular.utils import extend_schema_field
+from notifications.serializers import (
+    NotificationSerializer as GlobalNotificationSerializer,
+)
 from rest_framework import serializers
 from rest_framework.request import Request
 
@@ -49,6 +55,7 @@ from .domain.cycle_duration import (
     get_default_cycle_duration_days,
     validate_cycle_duration_days,
 )
+from .domain.exceptions import BusinessRuleViolation
 from .domain.feed_phase_calculator import get_feed_phase
 from .domain.production_units import (
     normalize_production_unit_type,
@@ -56,10 +63,12 @@ from .domain.production_units import (
     validate_production_unit_dimensions,
 )
 from .models import (
+    CalibrationOperation,
     CycleLog,
     CycleMetrics,
     CycleUnitAllocation,
     FeedingPlan,
+    FinalHarvestOperation,
     NutritionalGuide,
     PartialHarvest,
     ProductionCycle,
@@ -68,8 +77,10 @@ from .models import (
     ReportDispatchLog,
     SanitaryLog,
 )
+from .services.allocation_ledger_service import AllocationLedgerService
 from .services.cycle_service import ProductionCycleService
 from .services.farm_production_plan_service import FarmProductionPlanService
+from .services.production_unit_service import ProductionUnitLifecycleService
 
 
 class ProductionUnitTypeField(serializers.ChoiceField):
@@ -88,6 +99,7 @@ class ProductionUnitSerializer(serializers.ModelSerializer):
     unit_type = ProductionUnitTypeField(choices=[choice[0] for choice in ProductionUnit.UNIT_TYPE_CHOICES])
     farm_name = serializers.CharField(source='farm_profile.farm_name', read_only=True)
     unit_type_display = serializers.CharField(source='get_unit_type_display', read_only=True)
+    purpose_display = serializers.CharField(source='get_purpose_display', read_only=True)
     recommended_capacity = serializers.SerializerMethodField()
     capacity_density_unit = serializers.SerializerMethodField()
     display_dimension = serializers.SerializerMethodField()
@@ -96,11 +108,14 @@ class ProductionUnitSerializer(serializers.ModelSerializer):
         model = ProductionUnit
         fields = [
             'id',
+            'client_uuid',
             'farm_profile',
             'farm_name',
             'name',
             'unit_type',
             'unit_type_display',
+            'purpose',
+            'purpose_display',
             'volume_m3',
             'surface_m2',
             'display_dimension',
@@ -115,6 +130,7 @@ class ProductionUnitSerializer(serializers.ModelSerializer):
             'farm_profile',
             'farm_name',
             'unit_type_display',
+            'purpose_display',
             'display_dimension',
             'capacity_density_unit',
             'recommended_capacity',
@@ -135,6 +151,26 @@ class ProductionUnitSerializer(serializers.ModelSerializer):
         unit_type = attrs.get('unit_type') or getattr(self.instance, 'unit_type', None)
         volume_m3 = attrs.get('volume_m3') if 'volume_m3' in attrs else getattr(self.instance, 'volume_m3', None)
         surface_m2 = attrs.get('surface_m2') if 'surface_m2' in attrs else getattr(self.instance, 'surface_m2', None)
+        request = self.context.get('request')
+        name = attrs.get('name', getattr(self.instance, 'name', None))
+
+        if request is not None and name:
+            duplicate = ProductionUnit.objects.filter(
+                farm_profile=request.user.farm_profile,
+                name__iexact=name.strip(),
+            )
+            if self.instance is not None:
+                duplicate = duplicate.exclude(pk=self.instance.pk)
+            if duplicate.exists():
+                detail = _("Une unité portant ce nom existe déjà.")
+                raise serializers.ValidationError(
+                    {
+                        'code': 'duplicate_production_unit_name',
+                        'field': 'name',
+                        'detail': detail,
+                        'name': [detail],
+                    }
+                )
 
         try:
             validate_production_unit_dimensions(
@@ -144,6 +180,12 @@ class ProductionUnitSerializer(serializers.ModelSerializer):
             )
         except DjangoValidationError as exc:
             raise serializers.ValidationError(exc.message_dict or exc.messages)
+
+        if self.instance is not None:
+            try:
+                ProductionUnitLifecycleService.validate_update(self.instance, attrs)
+            except BusinessRuleViolation as exc:
+                raise serializers.ValidationError({'detail': str(exc)}) from exc
 
         return attrs
 
@@ -168,6 +210,9 @@ class CycleUnitAllocationSerializer(serializers.ModelSerializer):
     )
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     survival_rate_pct = serializers.SerializerMethodField()
+    final_harvest_reconciliation_status = serializers.SerializerMethodField()
+    final_harvest_computed_count = serializers.SerializerMethodField()
+    session_started_at = serializers.SerializerMethodField()
 
     class Meta:
         model = CycleUnitAllocation
@@ -188,11 +233,15 @@ class CycleUnitAllocationSerializer(serializers.ModelSerializer):
             'status',
             'status_display',
             'harvested_at',
+            'final_harvested_at',
             'final_harvest_date',
             'final_harvest_notes',
             'final_fish_count',
             'final_average_weight_g',
             'final_biomass_kg',
+            'final_harvest_reconciliation_status',
+            'final_harvest_computed_count',
+            'session_started_at',
             'expected_survival_rate_pct',
             'survival_rate_pct',
             'created_at',
@@ -209,11 +258,15 @@ class CycleUnitAllocationSerializer(serializers.ModelSerializer):
             'status',
             'status_display',
             'harvested_at',
+            'final_harvested_at',
             'final_harvest_date',
             'final_harvest_notes',
             'final_fish_count',
             'final_average_weight_g',
             'final_biomass_kg',
+            'final_harvest_reconciliation_status',
+            'final_harvest_computed_count',
+            'session_started_at',
             'survival_rate_pct',
             'created_at',
             'updated_at',
@@ -221,6 +274,18 @@ class CycleUnitAllocationSerializer(serializers.ModelSerializer):
 
     def get_survival_rate_pct(self, obj):
         return float(obj.survival_rate_pct) if obj.survival_rate_pct is not None else None
+
+    def get_final_harvest_reconciliation_status(self, obj):
+        operation = getattr(obj, 'final_harvest_operation', None)
+        return operation.reconciliation_status if operation is not None else None
+
+    def get_final_harvest_computed_count(self, obj):
+        operation = getattr(obj, 'final_harvest_operation', None)
+        return operation.computed_count_before_harvest if operation is not None else None
+
+    @extend_schema_field(serializers.DateTimeField(allow_null=True))
+    def get_session_started_at(self, obj):
+        return AllocationLedgerService.session_started_at(obj)
 
     def validate(self, attrs):
         cycle = attrs.get('cycle') or getattr(self.instance, 'cycle', None)
@@ -312,11 +377,20 @@ class ProductionCycleSerializer(serializers.ModelSerializer):
     species_display = serializers.CharField(source='get_species_display', read_only=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     farm_name = serializers.CharField(source='farm_profile.farm_name', read_only=True)
+    cycle_kind_display = serializers.CharField(source='get_cycle_kind_display', read_only=True)
+    is_calibration_unit = serializers.BooleanField(read_only=True)
+    total_stocked_count = serializers.SerializerMethodField()
+    total_stocked_biomass = serializers.SerializerMethodField()
+    total_transferred_out_count = serializers.SerializerMethodField()
+    total_transferred_out_biomass = serializers.SerializerMethodField()
 
     class Meta:
         model = ProductionCycle
         fields = [
             'id', 'client_uuid', 'farm_profile', 'cycle_name', 'species', 'species_display',
+            'cycle_kind', 'cycle_kind_display', 'is_calibration_unit',
+            'total_stocked_count', 'total_stocked_biomass', 'total_transferred_out_count',
+            'total_transferred_out_biomass',
             'pond_identifier', 'pond_surface_m2', 'pond_volume_m3', 'infrastructure_type',
             'start_date', 'initial_count', 'initial_average_weight', 'initial_biomass',
             'target_harvest_weight_g', 'planned_cycle_duration_days', 'planned_harvest_date', 'planned_feed_bags',
@@ -337,7 +411,8 @@ class ProductionCycleSerializer(serializers.ModelSerializer):
         read_only_fields = [
             'id', 'farm_profile', 'initial_biomass', 'current_count', 'current_average_weight',
             'current_biomass', 'total_feed_consumed', 'survival_rate', 'fcr',
-            'synced_at', 'created_at', 'updated_at'
+            'cycle_kind', 'status', 'end_date', 'final_count', 'final_average_weight',
+            'final_biomass', 'synced_at', 'created_at', 'updated_at'
         ]
         extra_kwargs = {
             'client_uuid': {'validators': []},
@@ -348,6 +423,55 @@ class ProductionCycleSerializer(serializers.ModelSerializer):
     def get_days_active(self, obj):
         """Calcule les jours depuis le début du cycle."""
         return obj.days_active()
+
+    def get_total_stocked_count(self, obj):
+        incoming = self._calibration_totals(obj)['in_count']
+        return incoming if obj.cycle_kind == 'calibration' else obj.initial_count + incoming
+
+    def get_total_stocked_biomass(self, obj):
+        incoming = self._calibration_totals(obj)['in_biomass']
+        return incoming if obj.cycle_kind == 'calibration' else obj.initial_biomass + incoming
+
+    def get_total_transferred_out_count(self, obj):
+        return self._calibration_totals(obj)['out_count']
+
+    def get_total_transferred_out_biomass(self, obj):
+        return self._calibration_totals(obj)['out_biomass']
+
+    @staticmethod
+    def _calibration_totals(obj):
+        """Never silently report zero merely because a caller omitted for_api()."""
+        cached = getattr(obj, '_serializer_calibration_totals', None)
+        if cached is not None:
+            return cached
+        annotated_fields = (
+            'calibration_in_count',
+            'calibration_in_biomass',
+            'calibration_out_count',
+            'calibration_out_biomass',
+        )
+        if all(hasattr(obj, field) for field in annotated_fields):
+            totals = {
+                'in_count': obj.calibration_in_count,
+                'in_biomass': obj.calibration_in_biomass,
+                'out_count': obj.calibration_out_count,
+                'out_biomass': obj.calibration_out_biomass,
+            }
+        else:
+            incoming = CalibrationOperation.objects.filter(
+                destination_allocation__cycle_id=obj.pk,
+            ).aggregate(count=Sum('transferred_count'), biomass=Sum('transferred_biomass_kg'))
+            outgoing = CalibrationOperation.objects.filter(
+                source_allocation__cycle_id=obj.pk,
+            ).aggregate(count=Sum('transferred_count'), biomass=Sum('transferred_biomass_kg'))
+            totals = {
+                'in_count': incoming['count'] or 0,
+                'in_biomass': incoming['biomass'] or Decimal('0'),
+                'out_count': outgoing['count'] or 0,
+                'out_biomass': outgoing['biomass'] or Decimal('0'),
+            }
+        obj._serializer_calibration_totals = totals
+        return totals
 
     def get_current_density_kg_m3(self, obj):
         """Calcule la densité d'élevage actuelle."""
@@ -362,6 +486,7 @@ class ProductionCycleSerializer(serializers.ModelSerializer):
         if hasattr(obj, 'metrics') and obj.metrics and obj.metrics.daily_growth_rate:
             return float(obj.metrics.daily_growth_rate)
         return None
+
 
     def get_specific_growth_rate(self, obj):
         """
@@ -631,6 +756,154 @@ class ProductionCycleSerializer(serializers.ModelSerializer):
         return super().create(validated_data)
 
 
+class CalibrationTankSerializer(serializers.ModelSerializer):
+    """Façade API des ProductionUnit dédiées au calibrage."""
+
+    is_occupied = serializers.SerializerMethodField()
+    active_session = serializers.SerializerMethodField()
+    active_allocation = serializers.SerializerMethodField()
+    allocations = serializers.SerializerMethodField()
+    is_active = serializers.BooleanField(required=False)
+    pending_sync = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ProductionUnit
+        fields = [
+            'id', 'client_uuid', 'farm_profile', 'name', 'volume_m3', 'is_active', 'is_occupied',
+            'active_session', 'active_allocation', 'allocations', 'pending_sync', 'created_offline', 'synced_at',
+            'created_at', 'updated_at',
+        ]
+        read_only_fields = [
+            'id', 'farm_profile', 'is_occupied', 'active_session', 'active_allocation', 'allocations', 'pending_sync',
+            'synced_at', 'created_at', 'updated_at',
+        ]
+        extra_kwargs = {'client_uuid': {'validators': []}}
+
+    @extend_schema_field(serializers.BooleanField)
+    def get_is_occupied(self, obj) -> bool:
+        return any(allocation.status == CycleUnitAllocation.STATUS_ACTIVE for allocation in obj.cycle_allocations.all())
+
+    @extend_schema_field(ProductionCycleSerializer)
+    def get_active_session(self, obj):
+        allocation = next(
+            (
+                item
+                for item in obj.cycle_allocations.all()
+                if item.status == CycleUnitAllocation.STATUS_ACTIVE
+            ),
+            None,
+        )
+        cycle = allocation.cycle if allocation else None
+        return ProductionCycleSerializer(cycle, context=self.context).data if cycle else None
+
+    @extend_schema_field(CycleUnitAllocationSerializer)
+    def get_active_allocation(self, obj):
+        allocation = next(
+            (item for item in obj.cycle_allocations.all() if item.status == CycleUnitAllocation.STATUS_ACTIVE),
+            None,
+        )
+        return CycleUnitAllocationSerializer(allocation, context=self.context).data if allocation else None
+
+    @extend_schema_field(CycleUnitAllocationSerializer(many=True))
+    def get_allocations(self, obj):
+        return CycleUnitAllocationSerializer(obj.cycle_allocations.all(), many=True, context=self.context).data
+
+    @extend_schema_field(serializers.BooleanField)
+    def get_pending_sync(self, obj) -> bool:
+        return obj.created_offline and obj.synced_at is None
+
+    def validate(self, attrs):
+        request = self.context.get('request')
+        if request is None:
+            return attrs
+        farm = request.user.farm_profile
+        name = attrs.get('name', getattr(self.instance, 'name', None))
+        client_uuid = attrs.get('client_uuid', getattr(self.instance, 'client_uuid', None))
+        duplicate = ProductionUnit.objects.filter(
+            farm_profile=farm,
+            name__iexact=name,
+        )
+        if self.instance:
+            duplicate = duplicate.exclude(pk=self.instance.pk)
+        if duplicate.exists() and not (
+            client_uuid and duplicate.filter(client_uuid=client_uuid).exists()
+        ):
+            detail = _('Une unité portant ce nom existe déjà dans cette ferme.')
+            raise serializers.ValidationError(
+                {
+                    'code': 'duplicate_production_unit_name',
+                    'field': 'name',
+                    'detail': detail,
+                    'name': [detail],
+                }
+            )
+        if self.instance is not None:
+            lifecycle_changes = dict(attrs)
+            if 'is_active' in lifecycle_changes:
+                lifecycle_changes['status'] = 'active' if lifecycle_changes.pop('is_active') else 'inactive'
+            try:
+                ProductionUnitLifecycleService.validate_update(self.instance, lifecycle_changes)
+            except BusinessRuleViolation as exc:
+                raise serializers.ValidationError({'detail': str(exc)}) from exc
+        return attrs
+
+
+class CalibrationOperationSerializer(serializers.ModelSerializer):
+    source_cycle_name = serializers.CharField(source='source_allocation.cycle.cycle_name', read_only=True)
+    source_unit_name = serializers.CharField(source='source_allocation.production_unit.name', read_only=True)
+    destination_cycle_name = serializers.CharField(source='destination_allocation.cycle.cycle_name', read_only=True)
+    destination_unit_name = serializers.CharField(source='destination_allocation.production_unit.name', read_only=True)
+
+    class Meta:
+        model = CalibrationOperation
+        fields = '__all__'
+        read_only_fields = [field.name for field in CalibrationOperation._meta.fields]
+
+
+class CalibrationRequestSerializer(serializers.Serializer):
+    client_uuid = serializers.UUIDField()
+    source_allocation_id = serializers.UUIDField(required=False)
+    source_allocation_client_uuid = serializers.UUIDField(required=False)
+    destination_production_unit_id = serializers.UUIDField(required=False)
+    destination_production_unit_client_uuid = serializers.UUIDField(required=False)
+    calibrated_at = serializers.DateTimeField()
+    transferred_count = serializers.IntegerField(min_value=1)
+    transferred_average_weight_g = serializers.DecimalField(max_digits=8, decimal_places=2, required=False)
+    sample_count = serializers.IntegerField(min_value=1, required=False)
+    sample_total_weight_g = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
+    size_category = serializers.ChoiceField(choices=CalibrationOperation.SIZE_CHOICES, required=False, allow_blank=True)
+    notes = serializers.CharField(max_length=1000, required=False, allow_blank=True)
+    created_offline = serializers.BooleanField(required=False, default=False)
+
+    def validate(self, attrs):
+        if not attrs.get('destination_production_unit_id') and not attrs.get(
+            'destination_production_unit_client_uuid'
+        ):
+            raise serializers.ValidationError({'destination_production_unit_id': _('Un bac destination est requis.')})
+        if attrs.get('sample_count') and attrs['sample_count'] > attrs['transferred_count']:
+            raise serializers.ValidationError({'sample_count': _("L'échantillon ne peut pas dépasser le transfert.")})
+        if attrs.get('transferred_average_weight_g') is None and not (
+            attrs.get('sample_count') and attrs.get('sample_total_weight_g')
+        ):
+            raise serializers.ValidationError(_('Indiquez un poids moyen ou un échantillon complet.'))
+        return attrs
+
+
+class CalibrationResponseSerializer(serializers.Serializer):
+    """Réponse canonique après un calibrage ou son rejeu idempotent."""
+
+    operation = CalibrationOperationSerializer()
+    source_allocation = CycleUnitAllocationSerializer()
+    destination_allocation = CycleUnitAllocationSerializer()
+    source_cycle = ProductionCycleSerializer()
+    destination_cycle = ProductionCycleSerializer()
+    destination_tank = CalibrationTankSerializer()
+    warnings = serializers.ListField(
+        child=serializers.ChoiceField(choices=['weight_difference', 'high_density'])
+    )
+    idempotent_replay = serializers.BooleanField()
+
+
 class CycleLogSerializer(serializers.ModelSerializer):
     """
     Sérialiseur pour les logs quotidiens de cycle avec validation pour synchronisation offline.
@@ -790,6 +1063,7 @@ class CycleLogSyncSerializer(CycleLogSerializer):
     """
     class Meta(CycleLogSerializer.Meta):
         list_serializer_class = BulkCycleLogSerializer
+        extra_kwargs = {'client_uuid': {'validators': []}}
 
 
 class BulkCycleLogRequestSerializer(serializers.Serializer):
@@ -1151,7 +1425,14 @@ class HarvestSerializer(serializers.Serializer):
     """
     Sérialiseur pour les données de récolte d'un cycle.
     """
-    harvest_date = serializers.DateField(help_text="Date de récolte du cycle")
+    harvest_date = serializers.DateField(
+        required=False,
+        help_text="Date de récolte du cycle, compatible avec les anciens clients",
+    )
+    final_harvested_at = serializers.DateTimeField(
+        required=False,
+        help_text="Datetime métier avec timezone de la récolte finale",
+    )
     final_count = serializers.IntegerField(min_value=0, help_text="Nombre final de poissons récoltés")
     final_average_weight = serializers.DecimalField(
         max_digits=6,
@@ -1172,6 +1453,9 @@ class HarvestSerializer(serializers.Serializer):
         allow_blank=True,
         help_text="Notes sur la récolte"
     )
+    client_uuid = serializers.UUIDField(default=uuid.uuid4)
+    created_offline = serializers.BooleanField(default=False)
+    allow_pending_reconciliation = serializers.BooleanField(default=False)
 
     def validate_harvest_date(self, value):
         """Valide que la date de récolte est raisonnable."""
@@ -1181,6 +1465,36 @@ class HarvestSerializer(serializers.Serializer):
         if value > date.today():
             raise serializers.ValidationError(_("Date de récolte ne peut être dans le futur"))
         return value
+
+    def validate(self, attrs):
+        harvest_date = attrs.get('harvest_date')
+        final_harvested_at = attrs.get('final_harvested_at')
+        if final_harvested_at is None:
+            if harvest_date is None:
+                raise serializers.ValidationError({
+                    'final_harvested_at': _("La date et l'heure métier de récolte sont requises."),
+                })
+            # Legacy clients remain usable only for a harvest recorded today.  A
+            # server timestamp must never fabricate the time of a backdated event.
+            if harvest_date != timezone.localdate():
+                raise serializers.ValidationError({
+                    'final_harvested_at': _(
+                        "La date et l'heure métier sont requises pour une récolte antidatée."
+                    ),
+                })
+            final_harvested_at = timezone.now()
+            attrs['final_harvested_at'] = final_harvested_at
+        if timezone.is_naive(final_harvested_at):
+            raise serializers.ValidationError({
+                'final_harvested_at': _("Le datetime de récolte doit inclure un fuseau horaire."),
+            })
+        local_harvest_date = timezone.localtime(final_harvested_at).date()
+        if harvest_date is not None and harvest_date != local_harvest_date:
+            raise serializers.ValidationError({
+                'harvest_date': _("La date de récolte doit correspondre au datetime métier."),
+            })
+        attrs['harvest_date'] = local_harvest_date
+        return attrs
 
 
 class PartialHarvestSerializer(serializers.Serializer):
@@ -1276,19 +1590,44 @@ class PartialHarvestResponseSerializer(serializers.Serializer):
     partial_harvest = PartialHarvestReadSerializer()
 
 
-class CycleHarvestResponseSerializer(serializers.Serializer):
-    """Reponse de recolte d'un cycle."""
-
-    message = serializers.CharField()
-    cycle = ProductionCycleSerializer()
-
-
 class CycleUnitAllocationHarvestResponseSerializer(serializers.Serializer):
     """Réponse d'une récolte complète d'une unité de production."""
 
     message = serializers.CharField()
     cycle = ProductionCycleSerializer()
     cycle_unit_allocation = CycleUnitAllocationSerializer()
+    final_harvest = serializers.DictField()
+    idempotent_replay = serializers.BooleanField()
+
+
+class FinalHarvestOperationSerializer(serializers.ModelSerializer):
+    """Contrat de lecture et de delta-sync d'une récolte finale."""
+
+    cycle_id = serializers.UUIDField(source='allocation.cycle_id', read_only=True)
+    allocation_id = serializers.UUIDField(read_only=True)
+
+    class Meta:
+        model = FinalHarvestOperation
+        fields = [
+            'id', 'client_uuid', 'allocation_id', 'cycle_id', 'harvested_at',
+            'declared_fish_count', 'declared_average_weight_g',
+            'declared_biomass_kg', 'notes', 'reconciliation_status',
+            'computed_count_before_harvest',
+            'computed_biomass_before_harvest_kg', 'created_offline',
+            'synced_at', 'created_at', 'updated_at',
+        ]
+        read_only_fields = fields
+
+
+class CycleHarvestResponseSerializer(serializers.Serializer):
+    """Réponse structurée d'une récolte globale de cycle."""
+
+    message = serializers.CharField()
+    cycle = ProductionCycleSerializer()
+    final_harvest = FinalHarvestOperationSerializer(allow_null=True)
+    final_harvests = FinalHarvestOperationSerializer(many=True)
+    reconciliation_status = serializers.ChoiceField(choices=['pending', 'reconciled'])
+    idempotent_replay = serializers.BooleanField()
 
 
 class CycleUnitAllocationPartialHarvestResponseSerializer(serializers.Serializer):
@@ -1354,6 +1693,12 @@ class ProductionUnitDashboardSummarySerializer(serializers.Serializer):
     """Indicateurs opérationnels d'une allocation de cycle par unité."""
 
     estimated_current_fish_count = serializers.IntegerField()
+    final_harvest_reconciliation_status = serializers.ChoiceField(
+        choices=['pending', 'reconciled'],
+        required=False,
+        allow_null=True,
+    )
+    final_harvest_computed_count = serializers.IntegerField(required=False, allow_null=True)
     total_mortality_count = serializers.IntegerField()
     mortality_rate_pct = serializers.DecimalField(max_digits=6, decimal_places=2)
     total_feed_consumed_kg = serializers.DecimalField(max_digits=12, decimal_places=2)
@@ -1697,6 +2042,12 @@ class SyncRequestSerializer(serializers.Serializer):
     cycle_logs = CycleLogSyncSerializer(many=True, required=False)
     sanitary_logs = SanitaryLogSerializer(many=True, required=False)
     new_cycles = ProductionCycleSerializer(many=True, required=False)
+    calibration_tanks = CalibrationTankSerializer(many=True, required=False)
+    calibration_operations = CalibrationRequestSerializer(many=True, required=False)
+    final_harvests = serializers.ListField(
+        child=serializers.DictField(),
+        required=False,
+    )
     last_sync = serializers.DateTimeField(required=False)
     device_id = serializers.CharField(max_length=100, required=False)
     client_id = serializers.CharField(max_length=100, required=False, write_only=True)
@@ -1708,6 +2059,46 @@ class SyncRequestSerializer(serializers.Serializer):
         return attrs
 
 
+class SyncAcceptedSerializer(serializers.Serializer):
+    """UUID clients explicitement confirmés par collection."""
+
+    cycles = serializers.ListField(child=serializers.UUIDField())
+    cycle_logs = serializers.ListField(child=serializers.UUIDField())
+    sanitary_logs = serializers.ListField(child=serializers.UUIDField())
+    calibration_tanks = serializers.ListField(child=serializers.UUIDField())
+    calibration_operations = serializers.ListField(child=serializers.UUIDField())
+    final_harvests = serializers.ListField(child=serializers.UUIDField())
+
+
+class SyncAcceptedItemSerializer(serializers.Serializer):
+    """Résultat accepté par item pour les réponses partielles."""
+
+    type = serializers.ChoiceField(choices=[
+        'cycle',
+        'cycle_log',
+        'sanitary_log',
+        'calibration_tank',
+        'calibration_operation',
+        'final_harvest',
+    ])
+    client_uuid = serializers.UUIDField()
+    status = serializers.ChoiceField(choices=['accepted'])
+    server_id = serializers.UUIDField(required=False)
+    operation_id = serializers.UUIDField(required=False)
+    operation_ids = serializers.ListField(
+        child=serializers.UUIDField(),
+        required=False,
+    )
+    operation_client_uuids = serializers.ListField(
+        child=serializers.UUIDField(),
+        required=False,
+    )
+    reconciliation_status = serializers.ChoiceField(
+        choices=['pending', 'reconciled'],
+        required=False,
+    )
+
+
 class SyncResponseSerializer(serializers.Serializer):
     """
     Sérialiseur pour les réponses de synchronisation.
@@ -1716,6 +2107,8 @@ class SyncResponseSerializer(serializers.Serializer):
     timestamp = serializers.DateTimeField()
     processed = serializers.DictField()
     errors = serializers.ListField()
+    accepted = SyncAcceptedSerializer()
+    items = SyncAcceptedItemSerializer(many=True)
     server_updates = serializers.DictField()
 
 

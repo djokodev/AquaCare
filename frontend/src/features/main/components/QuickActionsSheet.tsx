@@ -49,6 +49,8 @@ interface QuickActionsSheetProps {
     cycleUnitAllocationId: string;
     productionUnitId: string;
     productionUnitName: string;
+    currentFishCount?: number;
+    currentBiomassKg?: number;
   };
 
   /**
@@ -220,6 +222,21 @@ export default function QuickActionsSheet({
             productionUnitName: unitContext.productionUnitName,
           },
         },
+        {
+          id: 'calibrateUnit',
+          labelKey: 'gradeFish',
+          icon: 'git-compare-outline',
+          iconColor: AQUACARE_COLORS.INFO,
+          route: 'CalibrateCycle',
+          category: 'aquaculture',
+          params: {
+            sourceCycleId: unitContext.cycleId,
+            sourceCycleUnitAllocationId: unitContext.cycleUnitAllocationId,
+            sourceUnitName: unitContext.productionUnitName,
+            sourceCurrentCount: unitContext.currentFishCount,
+            sourceCurrentBiomassKg: unitContext.currentBiomassKg,
+          },
+        },
         ...(onPartialHarvestUnit
           ? [{
               id: 'partialHarvestUnit',
@@ -247,6 +264,10 @@ export default function QuickActionsSheet({
 
     if (!hasValidCycleContext(cycleContext)) {
       return [
+        {
+          id: 'calibrationTanks', labelKey: 'calibrationTanksTitle', icon: 'cube-outline',
+          iconColor: AQUACARE_COLORS.GREEN_PRIMARY, route: 'CalibrationTanks', category: 'aquaculture',
+        },
         {
           id: 'dailyLog',
           labelKey: 'dailyLog',
@@ -277,6 +298,10 @@ export default function QuickActionsSheet({
 
     if (hideGlobalCycleOperationalActions) {
       return [
+        {
+          id: 'calibrationTanks', labelKey: 'calibrationTanksTitle', icon: 'cube-outline',
+          iconColor: AQUACARE_COLORS.GREEN_PRIMARY, route: 'CalibrationTanks', category: 'aquaculture',
+        },
         {
           id: 'notifications',
           labelKey: 'notifications',
@@ -313,6 +338,10 @@ export default function QuickActionsSheet({
     }
 
     return [
+      {
+        id: 'calibrationTanks', labelKey: 'calibrationTanksTitle', icon: 'cube-outline',
+        iconColor: AQUACARE_COLORS.GREEN_PRIMARY, route: 'CalibrationTanks', category: 'aquaculture',
+      },
       {
         id: 'dailyLog',
         labelKey: 'dailyLog',

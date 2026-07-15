@@ -241,7 +241,7 @@ describe('CartScreen', () => {
     expect(mockDispatch).toHaveBeenCalledWith(expect.objectContaining({ type: 'clearCart' }));
   });
 
-  it('change la methode de livraison et le point de retrait', () => {
+  it('change la methode de livraison et le point de retrait', async () => {
     mockState = populatedCartState(product);
     const { getByLabelText, getByText } = render(<CartScreen />);
 
@@ -252,7 +252,9 @@ describe('CartScreen', () => {
     const pickupScreen = render(<CartScreen />);
     fireEvent.press(pickupScreen.getByLabelText('selectPickupPoint'));
     fireEvent.press(pickupScreen.getByText('Ndokoti'));
-    expect(mockDispatch).toHaveBeenCalledWith(expect.objectContaining({ type: 'setPickupLocation' }));
+    await waitFor(() => {
+      expect(mockDispatch).toHaveBeenCalledWith(expect.objectContaining({ type: 'setPickupLocation' }));
+    });
     expect(getByText('homeDelivery')).toBeTruthy();
   });
 

@@ -34,6 +34,9 @@ import ReportsScreen from '@/features/aquaculture/screens/ReportsScreen';
 import SanitaryLogScreen from '@/features/aquaculture/screens/SanitaryLogScreen';
 import StatisticsScreen from '@/features/aquaculture/screens/StatisticsScreen';
 import StoreScreen from '@/features/aquaculture/screens/StoreScreen';
+import CalibrationTanksScreen from '@/features/aquaculture/screens/CalibrationTanksScreen';
+import CalibrationTankDetailScreen from '@/features/aquaculture/screens/CalibrationTankDetailScreen';
+import CalibrateCycleScreen from '@/features/aquaculture/screens/CalibrateCycleScreen';
 
 // Commerce Screens
 import CartScreen from '@/features/commerce/screens/CartScreen';
@@ -180,6 +183,15 @@ export type RootStackParamList = {
     cycleUnitAllocationId?: string;
     productionUnitId: string;
     productionUnitName?: string;
+  };
+  CalibrationTanks: undefined;
+  CalibrationTankDetail: { tankId: string };
+  CalibrateCycle: {
+    sourceCycleId: string;
+    sourceCycleUnitAllocationId?: string;
+    sourceUnitName?: string;
+    sourceCurrentCount?: number;
+    sourceCurrentBiomassKg?: number;
   };
 };
 
@@ -411,6 +423,9 @@ export default function MainNavigator() {
           title: t('productionUnitDashboardTitle'),
         }}
       />
+      <RootStack.Screen name="CalibrationTanks" component={CalibrationTanksScreen} options={{ headerShown: true, title: t('calibrationTanksTitle') }} />
+      <RootStack.Screen name="CalibrationTankDetail" component={CalibrationTankDetailScreen} options={{ headerShown: true, title: t('calibrationTank') }} />
+      <RootStack.Screen name="CalibrateCycle" component={CalibrateCycleScreen} options={{ headerShown: true, title: t('gradeFish') }} />
       {/* Chat/Support Screens */}
       <RootStack.Screen
         name="Chat"

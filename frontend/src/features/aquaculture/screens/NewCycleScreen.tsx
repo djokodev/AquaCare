@@ -52,7 +52,7 @@ import {
   getProductionUnitDisplayDimension,
 } from "@/features/aquaculture/utils/productionUnits";
 import { createClientUuid } from "@/utils/clientUuid";
-import type { ProductionUnit } from "@/types/aquaculture";
+import type { CycleLaunchCalibrationUnitInput, ProductionUnit } from "@/types/aquaculture";
 
 const SPECIES_OPTIONS = [
   { value: "clarias", labelKey: "clarias", durationDays: 120 },
@@ -105,6 +105,9 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
   const [loadingUnits, setLoadingUnits] = useState(true);
   const [unitsLoadError, setUnitsLoadError] = useState(false);
   const [launchRequestId] = useState(() => createClientUuid());
+  const [calibrationUnits, setCalibrationUnits] = useState<CycleLaunchCalibrationUnitInput[]>([]);
+  const [calibrationName, setCalibrationName] = useState("");
+  const [calibrationVolume, setCalibrationVolume] = useState("");
 
   const handleGoBack = () => {
     if (navigation.canGoBack?.()) {
@@ -177,7 +180,7 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
       try {
         setLoadingUnits(true);
         setAvailableUnits(
-          await aquacultureService.getProductionUnits({ status: "active" }),
+          await aquacultureService.getProductionUnits({ status: "active", purpose: "production" }),
         );
         setUnitsLoadError(false);
       } catch {
@@ -196,6 +199,7 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
     formData,
     selectedUnits,
     allocationsByUnitId,
+    calibrationUnits,
   });
   const isFormValid = validationErrorKey === null;
 
@@ -218,6 +222,7 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
       formData,
       selectedUnits,
       allocationsByUnitId,
+      calibrationUnits,
     });
     if (currentValidationError) {
       Alert.alert(t("error"), t(currentValidationError));
@@ -232,6 +237,7 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
           selectedUnits,
           allocationsByUnitId,
           launchUuid: launchRequestId,
+          calibrationUnits,
         }),
       );
       dispatch(fetchDashboardData({ lightweight: true }));
@@ -283,6 +289,27 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
     <AppText variant="caption" color="link">{label}</AppText>
   );
 
+  const addCalibrationUnit = () => {
+    const volume = Number(calibrationVolume.replace(",", "."));
+    const normalizedName = calibrationName.trim().toLocaleLowerCase();
+    if (
+      !normalizedName ||
+      !Number.isFinite(volume) ||
+      volume <= 0 ||
+      calibrationUnits.some((unit) => unit.name.toLocaleLowerCase() === normalizedName)
+    ) {
+      Alert.alert(t("error"), t("calibrationLaunchUnitsInvalid"));
+      return;
+    }
+    setCalibrationUnits((current) => [...current, {
+      client_uuid: createClientUuid(),
+      name: calibrationName.trim(),
+      volume_m3: volume,
+    }]);
+    setCalibrationName("");
+    setCalibrationVolume("");
+  };
+
   return (
     <View style={{ flex: 1 }}>
       <AppHeader title={t("newCycleTitle")} onBack={handleGoBack} backLabel={t("back")} />
@@ -296,6 +323,20 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
               options={SPECIES_OPTIONS.map(({ value, labelKey }) => ({ value, label: t(labelKey) }))}
               onChange={applyEconomicDefaults}
             />
+          </View>
+          <View style={{ gap: spacing[3] }}>
+            <AppText variant="sectionTitle">{t("prepareCalibrationTanks")}</AppText>
+            <AppText color="muted">{t("prepareCalibrationTanksDescription")}</AppText>
+            <TextField testID="newCycleCalibrationName" label={t("calibrationTankName")} value={calibrationName} onChangeText={setCalibrationName} />
+            <TextField testID="newCycleCalibrationVolume" label={t("calibrationTankVolume")} value={calibrationVolume} onChangeText={setCalibrationVolume} keyboardType="decimal-pad" />
+            <Button testID="newCycleAddCalibrationUnit" label={t("addCalibrationTankToCycleLaunch")} variant="outline" onPress={addCalibrationUnit} disabled={!calibrationName.trim() || !calibrationVolume} />
+            {calibrationUnits.map((unit) => (
+              <Card key={unit.client_uuid} variant="outlined">
+                <AppText variant="cardTitle">{unit.name}</AppText>
+                <AppText>{t("calibrationTankVolumeValue", { volume: unit.volume_m3 })}</AppText>
+                <Button label={t("remove")} variant="outline" onPress={() => setCalibrationUnits((current) => current.filter((item) => item.client_uuid !== unit.client_uuid))} />
+              </Card>
+            ))}
           </View>
           <View style={{ gap: spacing[3] }}>
             <AppText variant="sectionTitle">{t("newCycleSelectUnitsTitle")}</AppText>

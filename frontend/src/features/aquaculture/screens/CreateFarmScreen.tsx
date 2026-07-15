@@ -190,7 +190,10 @@ export default function CreateFarmScreen({ navigation }: Props) {
     survivalRate: '95',
     productionUnits: [],
     productionUnitAllocations: [],
+    calibrationUnits: [],
   });
+  const [calibrationName, setCalibrationName] = useState('');
+  const [calibrationVolume, setCalibrationVolume] = useState('');
   const [singleUnitDraft, setSingleUnitDraft] = useState<UnitDraftState>(getDefaultSingleDraft());
   const [bulkUnitDraft, setBulkUnitDraft] = useState<BulkUnitDraftState>(getDefaultBulkDraft());
   const [singleUnitErrors, setSingleUnitErrors] = useState<ProductionUnitDraftErrors>({});
@@ -363,6 +366,7 @@ export default function CreateFarmScreen({ navigation }: Props) {
       survivalRate: t('createFarmSurvivalRateLabel'),
       productionUnits: t('createFarmProductionUnitsSectionTitle'),
       productionUnitAllocations: t('createFarmProductionUnitAllocationSectionTitle'),
+      calibrationUnits: t('prepareCalibrationTanks'),
     };
 
     return labelByField[field];
@@ -706,6 +710,30 @@ export default function CreateFarmScreen({ navigation }: Props) {
       Alert.alert(t('error'), errorMessage);
     }
   }
+
+  const addCalibrationUnit = () => {
+    const volume = Number(calibrationVolume.replace(',', '.'));
+    const normalizedName = calibrationName.trim().toLocaleLowerCase();
+    if (
+      !normalizedName ||
+      !Number.isFinite(volume) ||
+      volume <= 0 ||
+      (form.calibrationUnits ?? []).some((unit) => unit.name.toLocaleLowerCase() === normalizedName)
+    ) {
+      Alert.alert(t('error'), t('calibrationLaunchUnitsInvalid'));
+      return;
+    }
+    setForm((current) => ({
+      ...current,
+      calibrationUnits: [...(current.calibrationUnits ?? []), {
+        client_uuid: createClientUuid(),
+        name: calibrationName.trim(),
+        volume_m3: volume,
+      }],
+    }));
+    setCalibrationName('');
+    setCalibrationVolume('');
+  };
 
   const singleDraftUsesSurface = singleUnitDraft.unit_type === 'pond';
   const bulkDraftUsesSurface = bulkUnitDraft.unit_type === 'pond';
@@ -1189,6 +1217,48 @@ export default function CreateFarmScreen({ navigation }: Props) {
         onChangeText={v => setField('survivalRate', v)}
       />
 
+      <Card variant="outlined" style={styles.calibrationPreparationCard}>
+        <AppText variant="cardTitle">{t('prepareCalibrationTanks')}</AppText>
+        <AppText color="muted">{t('prepareCalibrationTanksDescription')}</AppText>
+        <TextField
+          testID="createFarmCalibrationName"
+          label={t('calibrationTankName')}
+          value={calibrationName}
+          onChangeText={setCalibrationName}
+        />
+        <TextField
+          testID="createFarmCalibrationVolume"
+          label={t('calibrationTankVolume')}
+          value={calibrationVolume}
+          onChangeText={setCalibrationVolume}
+          keyboardType="decimal-pad"
+        />
+        <Button
+          testID="createFarmAddCalibrationUnit"
+          label={t('addCalibrationTankToCycleLaunch')}
+          variant="outline"
+          iconLeft="cube-outline"
+          onPress={addCalibrationUnit}
+          disabled={!calibrationName.trim() || !calibrationVolume}
+        />
+        {(form.calibrationUnits ?? []).map((unit) => (
+          <Card key={unit.client_uuid} variant="outlined">
+            <AppText variant="bodyStrong">{unit.name}</AppText>
+            <AppText>{t('calibrationTankVolumeValue', { volume: unit.volume_m3 })}</AppText>
+            <Button
+              label={t('remove')}
+              variant="outline"
+              onPress={() => setForm((current) => ({
+                ...current,
+                calibrationUnits: (current.calibrationUnits ?? []).filter(
+                  (item) => item.client_uuid !== unit.client_uuid
+                ),
+              }))}
+            />
+          </Card>
+        ))}
+      </Card>
+
       {/* CTA */}
       <Button
         testID="createFarmSimulateButton"
@@ -1292,6 +1362,10 @@ const styles = StyleSheet.create({
   simulateButton: {
     marginTop: spacing[3],
     backgroundColor: colors.brand.primary,
+  },
+  calibrationPreparationCard: {
+    marginTop: spacing[5],
+    gap: spacing[3],
   },
   sectionTitle: {
     flexDirection: 'row',

@@ -17,6 +17,7 @@ from aquaculture.services.cycle_launch_application_service import (
 from aquaculture.services.cycle_service import ProductionCycleService
 from django.db import connection
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.translation import override
 from rest_framework import status
 
@@ -138,6 +139,42 @@ def test_cycle_launch_creates_complete_aggregate_and_replays(auth_client, farm_p
 
 
 @pytest.mark.django_db
+def test_cycle_launch_creates_empty_calibration_units_atomically(auth_client, farm_profile):
+    payload = launch_payload()
+    tank_uuid = str(uuid4())
+    payload['calibration_units'] = [
+        {'client_uuid': tank_uuid, 'name': 'Bac de tri A', 'volume_m3': '10.00'},
+    ]
+
+    response = auth_client.post(
+        reverse('aquaculture:production_cycle_launch'),
+        payload,
+        format='json',
+    )
+
+    assert response.status_code == status.HTTP_201_CREATED
+    tank = ProductionUnit.objects.get(client_uuid=tank_uuid)
+    assert tank.farm_profile == farm_profile
+    assert tank.unit_type == 'tank'
+    assert tank.purpose == ProductionUnit.PURPOSE_CALIBRATION
+    assert tank.cycle_allocations.count() == 0
+    assert ProductionUnit.objects.filter(purpose=ProductionUnit.PURPOSE_PRODUCTION).count() == 2
+
+    invalid = launch_payload()
+    invalid['calibration_units'] = [
+        {'client_uuid': str(uuid4()), 'name': 'Doublon', 'volume_m3': '10.00'},
+        {'client_uuid': str(uuid4()), 'name': 'DOUBLON', 'volume_m3': '8.00'},
+    ]
+    rejected = auth_client.post(
+        reverse('aquaculture:production_cycle_launch'),
+        invalid,
+        format='json',
+    )
+    assert rejected.status_code == status.HTTP_400_BAD_REQUEST
+    assert ProductionCycle.objects.count() == 1
+
+
+@pytest.mark.django_db
 def test_cycle_launch_rolls_back_plan_cycle_units_and_allocations(
     auth_client,
     farm_profile,
@@ -179,6 +216,8 @@ def test_additional_cycle_reuses_existing_units_and_preserves_setup(auth_client,
     ProductionCycleService.harvest_cycle(
         initial_cycle,
         harvest_date=date.today(),
+        final_harvested_at=timezone.now(),
+        client_uuid=uuid4(),
         final_count=2000,
         final_average_weight=Decimal("400"),
     )
@@ -411,6 +450,8 @@ def test_harvested_allocation_can_reuse_its_production_unit(auth_client, farm_pr
     ProductionCycleService.harvest_cycle_unit_allocation(
         allocation,
         harvest_date=date.today(),
+        final_harvested_at=timezone.now(),
+        client_uuid=uuid4(),
         final_count=1200,
         final_average_weight=Decimal("400"),
     )
@@ -436,6 +477,8 @@ def test_harvested_cycle_can_reuse_its_production_units(auth_client, farm_profil
     ProductionCycleService.harvest_cycle(
         initial_cycle,
         harvest_date=date.today(),
+        final_harvested_at=timezone.now(),
+        client_uuid=uuid4(),
         final_count=2000,
         final_average_weight=Decimal("400"),
     )
@@ -611,6 +654,8 @@ def test_additional_cycle_preserves_custom_name_and_hashes_it(
     ProductionCycleService.harvest_cycle(
         ProductionCycle.objects.get(farm_profile=farm_profile),
         harvest_date=date.today(),
+        final_harvested_at=timezone.now(),
+        client_uuid=uuid4(),
         final_count=2000,
         final_average_weight=Decimal("400"),
     )
@@ -769,6 +814,8 @@ def test_additional_cycle_payload_change_returns_idempotency_conflict(auth_clien
     ProductionCycleService.harvest_cycle(
         ProductionCycle.objects.get(farm_profile=farm_profile),
         harvest_date=date.today(),
+        final_harvested_at=timezone.now(),
+        client_uuid=uuid4(),
         final_count=2000,
         final_average_weight=Decimal("400"),
     )
@@ -810,6 +857,8 @@ def test_additional_cycle_rolls_back_cycle_and_allocations(
     ProductionCycleService.harvest_cycle(
         ProductionCycle.objects.get(farm_profile=farm_profile),
         harvest_date=date.today(),
+        final_harvested_at=timezone.now(),
+        client_uuid=uuid4(),
         final_count=2000,
         final_average_weight=Decimal("400"),
     )
@@ -880,7 +929,7 @@ def test_cycle_launch_rejects_invalid_structure(auth_client, mutation):
     connection.vendor != "postgresql",
     reason="Concurrent row-lock verification requires PostgreSQL",
 )
-def test_concurrent_identical_launches_create_one_aggregate(farm_profile):
+def test_concurrent_name_identical_launches_create_one_aggregate(farm_profile):
     serializer = CycleLaunchRequestSerializer(data=launch_payload())
     assert serializer.is_valid(), serializer.errors
     user = farm_profile.user

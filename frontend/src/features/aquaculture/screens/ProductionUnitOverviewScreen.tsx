@@ -165,6 +165,8 @@ export default function ProductionUnitOverviewScreen({ navigation, route }: Prop
         cycleUnitAllocationId: resolvedCycleUnitAllocationId,
         productionUnitId,
         productionUnitName: unitName,
+        currentFishCount: allocation?.current_fish_count,
+        currentBiomassKg: allocation?.current_biomass_kg ?? undefined,
       }
     : undefined;
 

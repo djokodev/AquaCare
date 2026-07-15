@@ -122,6 +122,7 @@ class ProductionUnitDashboardService:
 
         active_sanitary_issues_count = sum(1 for log in sanitary_logs if not log.resolved)
         last_sanitary_event_date = sanitary_logs[0].event_date if sanitary_logs else None
+        final_harvest = getattr(allocation, 'final_harvest_operation', None)
 
         return {
             'estimated_current_fish_count': estimated_current_fish_count,
@@ -136,4 +137,10 @@ class ProductionUnitDashboardService:
             'active_sanitary_issues_count': active_sanitary_issues_count,
             'last_sanitary_event_date': last_sanitary_event_date,
             'has_unresolved_sanitary_issue': active_sanitary_issues_count > 0,
+            'final_harvest_reconciliation_status': (
+                final_harvest.reconciliation_status if final_harvest else None
+            ),
+            'final_harvest_computed_count': (
+                final_harvest.computed_count_before_harvest if final_harvest else None
+            ),
         }

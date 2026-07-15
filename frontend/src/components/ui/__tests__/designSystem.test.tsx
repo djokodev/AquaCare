@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render } from '@testing-library/react-native';
+import { act, fireEvent, render } from '@testing-library/react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { StyleSheet } from 'react-native';
 import { Button, Card, EmptyState, ErrorState, IconButton, InteractiveCard, SelectionModal, TextField } from '..';
@@ -49,11 +49,14 @@ describe('shared design system components', () => {
   });
 
   it('renders form feedback, selectable cards, states, and a selection modal', () => {
+    jest.useFakeTimers();
     const onSelect = jest.fn(); const onClose = jest.fn(); const onRetry = jest.fn();
     const { getByLabelText, getByText } = render(<><TextField label="Farm name" required hint="Hint" error="Error" value="" onChangeText={jest.fn()} /><Card variant="selected"><TextField label="Nested" value="" onChangeText={jest.fn()} /></Card><EmptyState title="Empty" actionLabel="Create" onAction={onRetry} /><ErrorState title="Error state" actionLabel="Retry" onAction={onRetry} /><SelectionModal visible title="Choose" closeLabel="Close" emptyLabel="Empty options" options={[{ value: 'one', label: 'One' }]} onSelect={onSelect} onClose={onClose} /></>);
     expect(getByText('Error')).toBeTruthy();
     fireEvent.press(getByText('Create')); fireEvent.press(getByText('Retry')); fireEvent.press(getByLabelText('One'));
+    act(() => jest.advanceTimersByTime(280));
     expect(onRetry).toHaveBeenCalledTimes(2); expect(onSelect).toHaveBeenCalledWith('one');
+    jest.useRealTimers();
   });
 
   it('applies the outlined visual surface to interactive cards', () => {

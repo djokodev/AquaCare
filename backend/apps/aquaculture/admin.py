@@ -20,17 +20,22 @@ from common.admin_mixins import (
 )
 from django.contrib import admin, messages
 from django.contrib.admin.models import CHANGE
+from django.core.exceptions import ValidationError
+from django.db import IntegrityError
 from django.db.models import Avg, Count, Sum
 from django.http import HttpResponse, HttpResponseRedirect
 from django.urls import reverse
 from django.utils.html import escape, format_html, mark_safe
 from django.utils.translation import gettext_lazy as _
 
+from .domain.exceptions import BusinessRuleViolation
 from .models import (
+    CalibrationOperation,
     CycleLog,
     CycleMetrics,
     CycleUnitAllocation,
     FeedingPlan,
+    FinalHarvestOperation,
     NutritionalGuide,
     ProductionCycle,
     ProductionReport,
@@ -38,6 +43,8 @@ from .models import (
     ReportDispatchLog,
     SanitaryLog,
 )
+from .services.integrity_error_service import translate_production_unit_integrity_error
+from .services.production_unit_service import ProductionUnitLifecycleService
 
 logger = logging.getLogger(__name__)
 
@@ -151,6 +158,65 @@ class SanitaryLogInline(admin.TabularInline):
     readonly_fields = fields
 
     def has_add_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(CalibrationOperation)
+class CalibrationOperationAdmin(AquacultureSecuredAdmin):
+    """Historique strictement immuable des mouvements de calibrage."""
+
+    list_display = (
+        'calibrated_at',
+        'source_allocation',
+        'destination_allocation',
+        'transferred_count',
+        'transferred_biomass_kg',
+    )
+    readonly_fields = [field.name for field in CalibrationOperation._meta.fields]
+    list_select_related = (
+        'source_allocation__cycle',
+        'source_allocation__production_unit',
+        'destination_allocation__cycle',
+        'destination_allocation__production_unit',
+    )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(FinalHarvestOperation)
+class FinalHarvestOperationAdmin(AquacultureSecuredAdmin):
+    """Expose les constats de récolte finale sans permettre leur mutation."""
+
+    list_display = (
+        'harvested_at',
+        'allocation',
+        'declared_fish_count',
+        'declared_biomass_kg',
+        'reconciliation_status',
+        'created_offline',
+    )
+    list_filter = ('reconciliation_status', 'created_offline')
+    readonly_fields = [field.name for field in FinalHarvestOperation._meta.fields]
+    list_select_related = (
+        'allocation__cycle',
+        'allocation__production_unit',
+        'created_by',
+    )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
         return False
 
 
@@ -500,6 +566,30 @@ class ProductionUnitAdmin(AquacultureSecuredAdmin):
 
     def get_queryset(self, request):
         return super().get_queryset(request).select_related('farm_profile', 'farm_profile__user')
+
+    def save_model(self, request, obj, form, change):
+        if change:
+            current = ProductionUnit.objects.get(pk=obj.pk)
+            payload = {field: getattr(obj, field) for field in form.changed_data}
+            try:
+                ProductionUnitLifecycleService.validate_update(current, payload)
+            except BusinessRuleViolation as exc:
+                raise ValidationError(str(exc)) from exc
+        try:
+            super().save_model(request, obj, form, change)
+        except IntegrityError as exc:
+            error = translate_production_unit_integrity_error(exc)
+            raise ValidationError(error) from exc
+
+    def delete_model(self, request, obj):
+        try:
+            ProductionUnitLifecycleService.delete(obj)
+        except BusinessRuleViolation as exc:
+            raise ValidationError(str(exc)) from exc
+
+    def delete_queryset(self, request, queryset):
+        for unit in queryset:
+            self.delete_model(request, unit)
 
     def farm_display(self, obj):
         url = reverse('admin:accounts_farmprofile_change', args=[obj.farm_profile.id])
