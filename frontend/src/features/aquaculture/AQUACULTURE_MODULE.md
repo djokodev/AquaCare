@@ -80,6 +80,9 @@ l'orchestration complète du dashboard concerné ; une récupération API partie
 peut donc pas annoncer une synchronisation globale. Le dashboard d'unité expose
 également la disponibilité et la provenance de sa biomasse pour distinguer une
 valeur zéro métier d'une valeur par défaut inconnue.
+Le résumé cycle expose aussi `biomass_data_available` et
+`units_missing_biomass_data_count` ; la biomasse et la valeur marchande globales
+sont nulles dès qu'une unité ne fournit pas une biomasse fiable.
 
 ## Production unit integrity rule
 

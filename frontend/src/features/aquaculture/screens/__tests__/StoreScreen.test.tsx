@@ -229,9 +229,9 @@ describe('StoreScreen', () => {
     const { getByText, queryByText } = render(<StoreScreen />);
 
     await waitFor(() => {
-      expect(getByText('storeEstimatedNeedToFinish')).toBeTruthy();
-      expect(getByText('—')).toBeTruthy();
+      expect(getByText('storeContextMismatch')).toBeTruthy();
     });
+    expect(queryByText('storeEstimatedNeedToFinish')).toBeNull();
     expect(queryByText('storeReplenishmentRequired')).toBeNull();
   });
 

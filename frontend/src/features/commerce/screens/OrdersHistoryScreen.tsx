@@ -8,7 +8,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { AppDispatch, RootState } from '@/store/store';
 import { confirmOrderReceipt, fetchOrders, fetchOrderStatistics } from '@/features/commerce/store/commerceSlice';
 import { getOrderStatusLabelKey } from '@/features/commerce/utils/orderStatus';
-import { Order } from '@/types/commerce';
+import { Order, OrderStatistics } from '@/types/commerce';
 import { RootStackParamList } from '@/navigation/MainNavigator';
 import {
   AppHeader,
@@ -39,33 +39,58 @@ export default function OrdersHistoryScreen() {
   const { t, i18n } = useTranslation();
   const navigation = useNavigation<NavigationProp>();
   const dispatch = useDispatch<AppDispatch>();
-  const { items, statistics, loading, error } = useSelector((state: RootState) => state.commerce.orders);
+  const { items, statistics } = useSelector((state: RootState) => state.commerce.orders);
   const [refreshing, setRefreshing] = useState(false);
+  const [dashboardLoading, setDashboardLoading] = useState(true);
+  const [dashboardRefreshing, setDashboardRefreshing] = useState(false);
+  const [dashboardError, setDashboardError] = useState<string | null>(null);
+  const [displayItems, setDisplayItems] = useState<Order[]>(items);
+  const [displayStatistics, setDisplayStatistics] = useState<OrderStatistics | null>(statistics);
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   const [confirmingOrderId, setConfirmingOrderId] = useState<string | null>(null);
   const confirmingOrderRef = useRef<string | null>(null);
   const { lastSyncedAt, refreshLastSyncedAt } = useDashboardSyncStatus('orders');
   const locale = i18n.language?.startsWith('fr') ? 'fr-FR' : 'en-US';
 
-  const loadOrders = useCallback(async () => {
-    await Promise.all([
-      dispatch(fetchOrders()).unwrap(),
-      dispatch(fetchOrderStatistics()).unwrap(),
-    ]);
-    await dashboardSyncService.markSuccessful('orders');
-    await refreshLastSyncedAt();
-  }, [dispatch, refreshLastSyncedAt]);
+  const loadOrders = useCallback(async (mode: 'initial' | 'refresh' = 'initial') => {
+    if (mode === 'refresh') {
+      setDashboardRefreshing(true);
+    } else {
+      setDashboardLoading(true);
+    }
+    setDashboardError(null);
+    try {
+      const [ordersResult, statisticsResult] = await Promise.allSettled([
+        dispatch(fetchOrders()).unwrap(),
+        dispatch(fetchOrderStatistics()).unwrap(),
+      ]);
+      if (ordersResult.status !== 'fulfilled' || statisticsResult.status !== 'fulfilled') {
+        throw new Error(t('ordersDashboardLoadError'));
+      }
+      setDisplayItems(ordersResult.value);
+      setDisplayStatistics(statisticsResult.value);
+      await dashboardSyncService.markSuccessful('orders');
+      await refreshLastSyncedAt();
+      return true;
+    } catch {
+      setDashboardError(t('ordersDashboardLoadError'));
+      return false;
+    } finally {
+      setDashboardLoading(false);
+      setDashboardRefreshing(false);
+    }
+  }, [dispatch, refreshLastSyncedAt, t]);
 
-  useEffect(() => { void loadOrders().catch(() => undefined); }, [loadOrders]);
+  useEffect(() => { void loadOrders(); }, [loadOrders]);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
-    try { await loadOrders(); } finally { setRefreshing(false); }
+    try { await loadOrders('refresh'); } finally { setRefreshing(false); }
   }, [loadOrders]);
 
   const sacksToReceive = useMemo(
-    () => items.reduce((sum, order) => order.status === 'received' ? sum : sum + order.total_bags, 0),
-    [items]
+    () => displayItems.reduce((sum, order) => order.status === 'received' ? sum : sum + order.total_bags, 0),
+    [displayItems]
   );
 
   const formatDateTime = useCallback((value: string) => {
@@ -83,7 +108,9 @@ export default function OrdersHistoryScreen() {
           confirmingOrderRef.current = order.id;
           setConfirmingOrderId(order.id);
           await dispatch(confirmOrderReceipt(order.id)).unwrap();
-          await loadOrders();
+          if (!await loadOrders('refresh')) {
+            throw new Error('orders refresh failed');
+          }
           Alert.alert(t('success'), t('confirmReceiptSuccess'));
         } catch { Alert.alert(t('error'), t('confirmReceiptError')); }
         finally {
@@ -165,32 +192,33 @@ export default function OrdersHistoryScreen() {
 
   const listHeader = (
     <View style={styles.listHeader}>
-      {error && items.length > 0 ? <InlineAlert tone="error" message={error} /> : null}
-      {statistics ? (
+      {dashboardError && displayItems.length > 0 ? <InlineAlert tone="error" message={dashboardError} /> : null}
+      {displayStatistics ? (
         <DashboardSection title={t('orderStatistics')} lastSyncedAt={lastSyncedAt}>
           <DashboardHeroCard
             label={t('totalSpent')}
-            value={formatDashboardCurrency(statistics.total_spent, locale)}
+            value={formatDashboardCurrency(displayStatistics.total_spent, locale)}
             unit={t('dashboardDirectProductionCostUnit')}
-            helper={`${t('orderCount', { count: statistics.total_orders })} · ${t('orderedBagCount', { count: statistics.total_bags_ordered })}`}
             unavailableLabel={t('dashboardDataUnavailable')}
           />
           <View style={styles.metricGrid}>
             <DashboardMetricCard
-              value={formatDashboardNumber(statistics.total_orders, locale, { maximumFractionDigits: 0 })}
+              value={formatDashboardNumber(displayStatistics.total_orders, locale, { maximumFractionDigits: 0 })}
               label={t('totalOrders')}
+              tone="neutral"
               unavailableLabel={t('dashboardDataUnavailable')}
             />
             <DashboardMetricCard
               value={formatDashboardNumber(sacksToReceive, locale, { maximumFractionDigits: 0 })}
               label={t('sacksToReceive')}
-              tone="warning"
+              tone="attention"
               unavailableLabel={t('dashboardDataUnavailable')}
             />
             <DashboardMetricCard
-              value={formatDashboardNumber(statistics.total_bags_ordered, locale, { maximumFractionDigits: 0 })}
+              value={formatDashboardNumber(displayStatistics.total_bags_ordered, locale, { maximumFractionDigits: 0 })}
               label={t('totalBags')}
               tone="info"
+              layout="fullWidthCompact"
               unavailableLabel={t('dashboardDataUnavailable')}
             />
           </View>
@@ -201,18 +229,18 @@ export default function OrdersHistoryScreen() {
 
   return (
     <View style={styles.screen}>
-      <AppHeader title={t('ordersHistory')} subtitle={t('orderCount', { count: items.length })} onBack={() => navigation.goBack()} backLabel={t('back')} />
-      {loading && !refreshing && items.length === 0 ? <LoadingState message={t('loading')} /> : error && items.length === 0 ? (
-        <ErrorState title={error} actionLabel={t('retry')} onAction={loadOrders} />
+      <AppHeader title={t('ordersHistory')} subtitle={t('orderCount', { count: displayItems.length })} onBack={() => navigation.goBack()} backLabel={t('back')} />
+      {dashboardLoading && displayItems.length === 0 ? <LoadingState message={t('loading')} /> : dashboardError && displayItems.length === 0 ? (
+        <ErrorState title={dashboardError} actionLabel={t('retry')} onAction={() => void loadOrders('refresh')} />
       ) : (
         <FlatList
-          data={items}
+          data={displayItems}
           renderItem={renderOrder}
           keyExtractor={(item) => item.id}
           ListHeaderComponent={listHeader}
           ListEmptyComponent={<EmptyState title={t('noOrdersYet')} message={t('noOrdersDescription')} actionLabel={t('browseCatalog')} onAction={() => navigation.navigate('ProductCatalog')} />}
           contentContainerStyle={styles.content}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} colors={[colors.brand.primary]} tintColor={colors.brand.primary} />}
+          refreshControl={<RefreshControl refreshing={refreshing || dashboardRefreshing} onRefresh={handleRefresh} colors={[colors.brand.primary]} tintColor={colors.brand.primary} />}
         />
       )}
     </View>

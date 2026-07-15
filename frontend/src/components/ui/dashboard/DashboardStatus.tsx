@@ -4,12 +4,12 @@ import { StyleSheet, View } from 'react-native';
 import { AppText } from '@/components/ui/AppText';
 import { Card } from '@/components/ui/Card';
 import { colors, spacing } from '@/theme';
-import type { DashboardTone } from './DashboardMetricCard';
+export type DashboardStatusTone = 'success' | 'warning' | 'error' | 'info';
 
 interface DashboardStatusProps {
   title: string;
   description?: string;
-  tone?: Exclude<DashboardTone, 'default'>;
+  tone?: DashboardStatusTone;
 }
 
 const toneStyles = {

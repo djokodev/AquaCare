@@ -85,6 +85,20 @@ def test_resolve_biomass_data_distinguishes_missing_zero_and_measured_values():
         initial_biomass_kg=Decimal('10'),
         latest_average_weight_g=Decimal('20'),
     ) == (Decimal('18.00'), True, 'latest_weighing')
+    assert resolve_biomass_data(
+        allocation_status='active',
+        current_fish_count=900,
+        current_biomass_kg=Decimal('10'),
+        initial_biomass_kg=Decimal('10'),
+        latest_average_weight_g=None,
+    ) == (Decimal('10.00'), True, 'initial_stocking')
+    assert resolve_biomass_data(
+        allocation_status='active',
+        current_fish_count=900,
+        current_biomass_kg=Decimal('12.345'),
+        initial_biomass_kg=Decimal('10'),
+        latest_average_weight_g=None,
+    ) == (Decimal('12.35'), True, 'allocation_current')
 
 
 def test_direct_production_cost_excludes_other_operational_costs():

@@ -482,6 +482,8 @@ class TestProductionCycleViewSet:
         assert Decimal(str(response.data['summary']['mortality_rate_pct'])) == Decimal('0.83')
         assert Decimal(str(response.data['summary']['total_feed_consumed_kg'])) == Decimal('12.50')
         assert Decimal(str(response.data['summary']['estimated_current_biomass_kg'])) == Decimal('37.49')
+        assert response.data['summary']['biomass_data_available'] is True
+        assert response.data['summary']['units_missing_biomass_data_count'] == 0
         assert Decimal(str(response.data['summary']['estimated_market_value_fcfa'])) == Decimal('74980.00')
         assert Decimal(str(response.data['summary']['direct_production_cost_fcfa'])) == Decimal('15625.00')
         assert response.data['summary']['cycle_progress_pct'] == 26

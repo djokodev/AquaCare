@@ -310,6 +310,14 @@ Le contrat du dashboard d'allocation ajoute `biomass_data_available` et
 pour une allocation active sans pesée ou preuve d'une valeur courante calculée.
 Une allocation récoltée retourne explicitement zéro avec la source `harvested`.
 
+Le résumé du dashboard de cycle agrège les résumés unitaires déjà résolus :
+`total_estimated_current_fish_count` et `estimated_current_biomass_kg` ne lisent
+pas directement l'état mutable de l'allocation. `biomass_data_available` indique
+si toutes les unités ont une biomasse fiable et
+`units_missing_biomass_data_count` détaille les unités incomplètes. Si une unité
+est incomplète (ou si un prix de vente manque), la biomasse et la valeur marchande
+globales restent `null` plutôt que de présenter une somme partielle.
+
 ### 7. Sync Offline
 
 Endpoint:

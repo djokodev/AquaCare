@@ -47,7 +47,7 @@ describe('dashboard cards', () => {
         value={0}
         unit="kg"
         helper="Measured today"
-        tone="success"
+        tone="aqua"
         unavailableLabel="Unavailable"
       />,
     );

@@ -3,18 +3,20 @@ import { StyleSheet, View } from 'react-native';
 
 import { AppText } from '@/components/ui/AppText';
 import { colors, radii, spacing } from '@/theme';
+import { formatDashboardPercent } from './formatters';
 
 interface DashboardProgressProps {
   value: number | null | undefined;
   label: string;
   unavailableLabel: string;
+  locale?: string;
 }
 
-export function DashboardProgress({ value, label, unavailableLabel }: DashboardProgressProps) {
+export function DashboardProgress({ value, label, unavailableLabel, locale = 'en-US' }: DashboardProgressProps) {
   const isAvailable = typeof value === 'number' && Number.isFinite(value);
   const clampedValue = isAvailable ? Math.min(Math.max(value, 0), 100) : 0;
   const accessibilityLabel = isAvailable
-    ? `${label}, ${Math.round(clampedValue)}%`
+    ? `${label}, ${formatDashboardPercent(clampedValue, locale)}`
     : `${label}, ${unavailableLabel}`;
 
   return (
@@ -28,7 +30,7 @@ export function DashboardProgress({ value, label, unavailableLabel }: DashboardP
       <View style={styles.labelRow}>
         <AppText variant="label">{label}</AppText>
         <AppText variant="label" color={isAvailable ? 'link' : 'muted'}>
-          {isAvailable ? `${Math.round(clampedValue)}%` : '—'}
+          {isAvailable ? formatDashboardPercent(clampedValue, locale) : '—'}
         </AppText>
       </View>
       <View style={styles.track}>

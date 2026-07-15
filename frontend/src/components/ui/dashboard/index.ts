@@ -1,12 +1,14 @@
 export { DashboardHeroCard } from './DashboardHeroCard';
-export { DashboardMetricCard, type DashboardTone } from './DashboardMetricCard';
+export { DashboardDataNotice } from './DashboardDataNotice';
+export { DashboardMetricCard, type DashboardMetricTone } from './DashboardMetricCard';
 export { DashboardProgress } from './DashboardProgress';
 export { DashboardSection } from './DashboardSection';
-export { DashboardStatus } from './DashboardStatus';
+export { DashboardStatus, type DashboardStatusTone } from './DashboardStatus';
 export { DashboardSyncStatus } from './DashboardSyncStatus';
 export {
   DASHBOARD_UNAVAILABLE_VALUE,
   formatDashboardCurrency,
+  formatDashboardPercent,
   formatDashboardNumber,
   parseDashboardNumber,
   type DashboardNumericValue,

@@ -119,8 +119,6 @@ export default function DashboardScreen({ navigation }: any) {
   const [cycleDashboardError, setCycleDashboardError] = useState<string | null>(null);
   const cycleDashboardRequestRef = useRef(0);
   const [refreshing, setRefreshing] = useState(false);
-  const { lastSyncedAt, refreshLastSyncedAt } =
-    useDashboardSyncStatus("cycle");
 
   const { dashboardData, cycles, loading, error, currentCycle } = useSelector(
     (state: RootState) => state.aquaculture,
@@ -203,6 +201,8 @@ export default function DashboardScreen({ navigation }: any) {
     primaryCycleHasProductionUnits || (currentCycleUnitCount ?? 0) > 0;
   const locale = i18n.language?.startsWith("fr") ? "fr-FR" : "en-US";
   const primaryActiveCycleId = primaryActiveCycle?.id ?? null;
+  const { lastSyncedAt, refreshLastSyncedAt } =
+    useDashboardSyncStatus("cycle", primaryActiveCycleId);
   const loadCurrentCycleDashboard = useCallback(async (mode: "initial" | "refresh" = "initial") => {
     const requestId = cycleDashboardRequestRef.current + 1;
     cycleDashboardRequestRef.current = requestId;
@@ -230,7 +230,7 @@ export default function DashboardScreen({ navigation }: any) {
       }
       setCurrentCycleDashboard(cycleDashboard);
       setCurrentCycleUnitCount(cycleDashboard.summary.total_allocations);
-      await dashboardSyncService.markSuccessful("cycle");
+      await dashboardSyncService.markSuccessful("cycle", primaryActiveCycleId);
       await refreshLastSyncedAt();
       return true;
     } catch {
@@ -470,12 +470,15 @@ export default function DashboardScreen({ navigation }: any) {
                   unit={t("dashboardDirectProductionCostUnit")}
                   helper={
                     cycleSummary?.estimated_market_value_fcfa == null
-                      ? t("dashboardMissingSellingPrice")
+                      ? cycleSummary?.biomass_data_available === false
+                        ? t("dashboardWeighingRequired")
+                        : t("dashboardMissingSellingPrice")
                       : undefined
                   }
                   unavailableLabel={t("dashboardCalculationUnavailable")}
                   progress={cycleSummary?.cycle_progress_pct}
                   progressLabel={t("dashboardCycleProgress")}
+                  locale={locale}
                 />
                 <View style={styles.dashboardGrid}>
                   <DashboardMetricCard
@@ -494,7 +497,7 @@ export default function DashboardScreen({ navigation }: any) {
                       locale,
                       { maximumFractionDigits: 0 },
                     )}
-                    tone="success"
+                    tone="slate"
                     unavailableLabel={t("dashboardDataUnavailable")}
                   />
                   <DashboardMetricCard
@@ -506,6 +509,7 @@ export default function DashboardScreen({ navigation }: any) {
                     )}
                     unit={t("days")}
                     tone="info"
+                    layout="fullWidthCompact"
                     unavailableLabel={t("dashboardDataUnavailable")}
                   />
                 </View>

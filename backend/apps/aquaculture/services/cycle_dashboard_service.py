@@ -101,6 +101,8 @@ class CycleDashboardService:
         total_mortality_count = 0
         total_feed_consumed_kg = CycleDashboardService.ZERO_DECIMAL
         total_estimated_current_biomass_kg = CycleDashboardService.ZERO_DECIMAL
+        units_missing_biomass_data_count = 0
+        unit_market_values: list[Decimal] = []
         units_with_today_log_count = 0
         units_with_active_sanitary_issue_count = 0
         units_missing_today_log_count = 0
@@ -120,12 +122,16 @@ class CycleDashboardService:
 
             summary = payload['summary']
             total_initial_fish_count += allocation.initial_fish_count
-            total_estimated_current_fish_count += allocation.current_fish_count
+            total_estimated_current_fish_count += summary['estimated_current_fish_count']
             total_mortality_count += summary['total_mortality_count']
             total_feed_consumed_kg += summary['total_feed_consumed_kg'] or CycleDashboardService.ZERO_DECIMAL
-            total_estimated_current_biomass_kg += (
-                Decimal(str(allocation.current_biomass_kg or CycleDashboardService.ZERO_DECIMAL))
-            )
+            unit_biomass = summary['estimated_current_biomass_kg']
+            if summary['biomass_data_available'] and unit_biomass is not None:
+                total_estimated_current_biomass_kg += Decimal(str(unit_biomass))
+            else:
+                units_missing_biomass_data_count += 1
+            if summary['estimated_market_value_fcfa'] is not None:
+                unit_market_values.append(Decimal(str(summary['estimated_market_value_fcfa'])))
 
             if summary['has_today_daily_log']:
                 units_with_today_log_count += 1
@@ -152,11 +158,20 @@ class CycleDashboardService:
                 Decimal(total_mortality_count) / Decimal(total_initial_fish_count) * Decimal('100')
             ).quantize(CycleDashboardService.BIOMASS_QUANTIZE)
 
+        biomass_data_available = units_missing_biomass_data_count == 0
+        aggregated_biomass = total_estimated_current_biomass_kg if biomass_data_available else None
         business_metrics = CycleDashboardService._build_business_metrics(
             cycle,
-            biomass_kg=total_estimated_current_biomass_kg,
+            biomass_kg=aggregated_biomass,
             feed_consumed_kg=total_feed_consumed_kg,
         )
+        if biomass_data_available and len(unit_market_values) == len(unit_allocations):
+            business_metrics['estimated_market_value_fcfa'] = sum(
+                unit_market_values,
+                CycleDashboardService.ZERO_DECIMAL,
+            ).quantize(CycleDashboardService.BIOMASS_QUANTIZE)
+        else:
+            business_metrics['estimated_market_value_fcfa'] = None
         return {
             'cycle': cycle,
             'summary': {
@@ -166,13 +181,16 @@ class CycleDashboardService:
                 'total_mortality_count': total_mortality_count,
                 'mortality_rate_pct': mortality_rate_pct,
                 'total_feed_consumed_kg': total_feed_consumed_kg.quantize(CycleDashboardService.BIOMASS_QUANTIZE),
-                'estimated_current_biomass_kg': total_estimated_current_biomass_kg.quantize(
-                    CycleDashboardService.BIOMASS_QUANTIZE
+                'estimated_current_biomass_kg': (
+                    aggregated_biomass.quantize(CycleDashboardService.BIOMASS_QUANTIZE)
+                    if aggregated_biomass is not None else None
                 ),
+                'biomass_data_available': biomass_data_available,
                 'units_with_today_log_count': units_with_today_log_count,
                 'units_with_sanitary_issue_count': units_with_active_sanitary_issue_count,
                 'units_with_active_sanitary_issue_count': units_with_active_sanitary_issue_count,
                 'units_missing_today_log_count': units_missing_today_log_count,
+                'units_missing_biomass_data_count': units_missing_biomass_data_count,
                 'last_daily_log_date': last_daily_log_date,
                 'last_sanitary_event_date': last_sanitary_event_date,
                 'has_allocations': True,
@@ -230,10 +248,12 @@ class CycleDashboardService:
                 'units_with_sanitary_issue_count': active_sanitary_issues_count,
                 'units_with_active_sanitary_issue_count': active_sanitary_issues_count,
                 'units_missing_today_log_count': 0,
+                'units_missing_biomass_data_count': 0,
                 'last_daily_log_date': daily_logs[0].log_date if daily_logs else None,
                 'last_sanitary_event_date': sanitary_logs[0].event_date if sanitary_logs else None,
                 'has_allocations': False,
                 'data_source': 'legacy_cycle',
+                'biomass_data_available': estimated_biomass is not None,
                 **business_metrics,
             },
             'allocations': [],

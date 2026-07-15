@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   ScrollView,
@@ -42,7 +42,7 @@ import { aquacultureService } from '@/features/aquaculture/services/aquacultureS
 import { fetchCycleFeedStatus } from '@/features/aquaculture/store/aquacultureSlice';
 import { RootStackParamList } from '@/navigation/MainNavigator';
 import { AppDispatch, RootState } from '@/store/store';
-import { CycleStore } from '@/types/aquaculture';
+import { CycleFeedStatus, CycleStore } from '@/types/aquaculture';
 import { sanitizeUserFacingErrorMessage } from '@/utils/errorParser';
 import { getOrderStatusLabelKey } from '@/features/commerce/utils/orderStatus';
 import { useDashboardSyncStatus } from '@/hooks/useDashboardSyncStatus';
@@ -108,11 +108,11 @@ export default function StoreScreen() {
   const route = useRoute<RouteProp<RootStackParamList, 'Store'>>();
   const dispatch = useDispatch<AppDispatch>();
   const currentCycle = useSelector((state: RootState) => state.aquaculture.currentCycle);
-  const cycleFeedStatus = useSelector((state: RootState) => state.aquaculture.cycleFeedStatus.data);
 
   const cycleId = route.params?.cycleId || currentCycle?.id || null;
 
   const [store, setStore] = useState<CycleStore | null>(null);
+  const [validatedFeedStatus, setValidatedFeedStatus] = useState<CycleFeedStatus | null>(null);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -124,13 +124,17 @@ export default function StoreScreen() {
   const [entryDate, setEntryDate] = useState(todayIsoDate());
   const [note, setNote] = useState('');
   const submissionLock = useRef(false);
-  const { lastSyncedAt, refreshLastSyncedAt } = useDashboardSyncStatus('store');
+  const loadRequestRef = useRef(0);
+  const { lastSyncedAt, refreshLastSyncedAt } = useDashboardSyncStatus('store', cycleId);
   const locale = i18n.language?.startsWith('fr') ? 'fr-FR' : 'en-US';
   const storeNavigationParams = cycleId ? { cycleId, source: 'store' as const } : undefined;
 
   const loadStore = useCallback(async (preserveVisibleStore = false) => {
+    const requestId = loadRequestRef.current + 1;
+    loadRequestRef.current = requestId;
     if (!cycleId) {
       setStore(null);
+      setValidatedFeedStatus(null);
       setError(t('storeNoCycleSelected'));
       setLoading(false);
       setRefreshing(false);
@@ -139,24 +143,50 @@ export default function StoreScreen() {
 
     setLoading(true);
     setError(null);
-
     try {
-      const [payload] = await Promise.all([
+      const [storeResult, feedResult] = await Promise.allSettled([
         aquacultureService.getCycleStore(cycleId),
         dispatch(fetchCycleFeedStatus(cycleId)).unwrap(),
       ]);
+
+      if (requestId !== loadRequestRef.current) {
+        return;
+      }
+      if (storeResult.status !== 'fulfilled' || feedResult.status !== 'fulfilled') {
+        const failure = storeResult.status === 'rejected'
+          ? storeResult.reason
+          : feedResult.status === 'rejected'
+            ? feedResult.reason
+            : new Error(t('storeLoadError'));
+        throw failure;
+      }
+      const payload = storeResult.value;
+      const feedStatus = feedResult.value;
+      if (payload.cycle_id !== cycleId || feedStatus.cycle_id !== cycleId) {
+        throw new Error(t('storeContextMismatch'));
+      }
       setStore(payload);
-      await dashboardSyncService.markSuccessful('store');
+      setValidatedFeedStatus(feedStatus);
+      await dashboardSyncService.markSuccessful('store', cycleId);
       await refreshLastSyncedAt();
     } catch (caughtError) {
-      if (!preserveVisibleStore) {
+      if (!preserveVisibleStore && requestId === loadRequestRef.current) {
         setStore(null);
+        setValidatedFeedStatus(null);
       }
       setError(extractErrorMessage(caughtError, t('storeLoadError')));
     } finally {
-      setLoading(false);
+      if (requestId === loadRequestRef.current) {
+        setLoading(false);
+      }
     }
-  }, [cycleId, refreshLastSyncedAt, t]);
+  }, [cycleId, dispatch, refreshLastSyncedAt, t]);
+
+  useEffect(() => {
+    setStore(null);
+    setValidatedFeedStatus(null);
+    setError(null);
+  }, [cycleId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -234,7 +264,7 @@ export default function StoreScreen() {
     }
   };
 
-  const currentCycleFeedStatus = cycleFeedStatus?.cycle_id === cycleId ? cycleFeedStatus : null;
+  const currentCycleFeedStatus = validatedFeedStatus?.cycle_id === cycleId ? validatedFeedStatus : null;
   const remainingToOrderValue = currentCycleFeedStatus
     ? formatDashboardNumber(currentCycleFeedStatus.bags_remaining_to_order, locale, { maximumFractionDigits: 0 })
     : null;
@@ -293,7 +323,7 @@ export default function StoreScreen() {
                     label={t('storeCurrentStock')}
                     value={formatDashboardNumber(store.summary.estimated_feed_remaining_kg, locale, { maximumFractionDigits: 1 })}
                     unit={t('kg')}
-                    tone="success"
+                    tone="aqua"
                     unavailableLabel={t('dashboardDataUnavailable')}
                   />
                   <DashboardMetricCard
@@ -307,6 +337,8 @@ export default function StoreScreen() {
                     label={t('storeRecordedFeedExpenses')}
                     value={formatDashboardCurrency(store.summary.feed_expenses_fcfa, locale)}
                     unit={t('dashboardDirectProductionCostUnit')}
+                    tone="attention"
+                    layout="fullWidthCompact"
                     unavailableLabel={t('dashboardDataUnavailable')}
                   />
                 </View>

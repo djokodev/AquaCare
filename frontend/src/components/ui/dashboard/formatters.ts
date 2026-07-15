@@ -31,3 +31,13 @@ export function formatDashboardCurrency(
     minimumFractionDigits: 0,
   });
 }
+
+export function formatDashboardPercent(value: DashboardNumericValue, locale: string): string {
+  const parsed = parseDashboardNumber(value);
+  if (parsed === null) return DASHBOARD_UNAVAILABLE_VALUE;
+  const formatted = new Intl.NumberFormat(locale, {
+    maximumFractionDigits: 0,
+    minimumFractionDigits: 0,
+  }).format(parsed);
+  return locale.toLowerCase().startsWith('fr') ? `${formatted}\u00a0%` : `${formatted}%`;
+}

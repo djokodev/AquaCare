@@ -16,6 +16,7 @@ interface DashboardHeroCardProps {
   accessibilityLabel?: string;
   progress?: number | null;
   progressLabel?: string;
+  locale?: string;
 }
 
 export function DashboardHeroCard({
@@ -27,6 +28,7 @@ export function DashboardHeroCard({
   accessibilityLabel,
   progress,
   progressLabel,
+  locale = 'en-US',
 }: DashboardHeroCardProps) {
   const unavailable = value === null || value === undefined || value === '' || value === DASHBOARD_UNAVAILABLE_VALUE ||
     (typeof value === 'number' && !Number.isFinite(value));
@@ -46,7 +48,7 @@ export function DashboardHeroCard({
         {unavailable && !helper ? <AppText variant="helper" color="muted">{unavailableLabel}</AppText> : null}
       </View>
       {progressLabel ? (
-        <DashboardProgress value={progress} label={progressLabel} unavailableLabel={unavailableLabel} />
+        <DashboardProgress value={progress} label={progressLabel} unavailableLabel={unavailableLabel} locale={locale} />
       ) : null}
     </Card>
   );

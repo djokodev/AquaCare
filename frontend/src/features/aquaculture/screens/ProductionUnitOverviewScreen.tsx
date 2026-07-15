@@ -7,6 +7,7 @@ import { useDispatch } from 'react-redux';
 
 import {
   DashboardHeroCard,
+  DashboardDataNotice,
   DashboardMetricCard,
   DashboardSection,
   EmptyState,
@@ -74,7 +75,7 @@ export default function ProductionUnitOverviewScreen({ navigation, route }: Prop
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [errorKey, setErrorKey] = useState<string | null>(null);
-  const { lastSyncedAt, refreshLastSyncedAt } = useDashboardSyncStatus('unit');
+  const { lastSyncedAt, refreshLastSyncedAt } = useDashboardSyncStatus('unit', resolvedCycleUnitAllocationId);
 
   const errorMessage = !hasUnitContext
     ? t('productionUnitContextIncompleteError')
@@ -106,7 +107,7 @@ export default function ProductionUnitOverviewScreen({ navigation, route }: Prop
         );
         setDashboard(result);
         setErrorKey(null);
-        await dashboardSyncService.markSuccessful('unit');
+        await dashboardSyncService.markSuccessful('unit', resolvedCycleUnitAllocationId);
         await refreshLastSyncedAt();
       } catch {
         if (mode === 'initial') {
@@ -226,9 +227,9 @@ export default function ProductionUnitOverviewScreen({ navigation, route }: Prop
           helper={
             summary.estimated_market_value_fcfa == null
               ? !biomassAvailable
-                ? t('dashboardAddWeighing')
+                ? t('dashboardWeighingRequired')
                 : t('dashboardMissingSellingPrice')
-              : t('productionUnitMarketValueHelper')
+              : undefined
           }
           unavailableLabel={t('dashboardCalculationUnavailable')}
         />
@@ -237,23 +238,23 @@ export default function ProductionUnitOverviewScreen({ navigation, route }: Prop
             label={t('productionUnitEstimatedBiomass')}
             value={formatDashboardNumber(summary.estimated_current_biomass_kg, locale, { maximumFractionDigits: 1 })}
             unit={t('kg')}
-            tone="success"
-            helper={!biomassAvailable ? t('dashboardAddWeighing') : undefined}
+            tone="aqua"
+            showUnavailableLabel={false}
             unavailableLabel={t('dashboardDataUnavailable')}
           />
           <DashboardMetricCard
             label={t('currentFish')}
             value={formatDashboardNumber(summary.estimated_current_fish_count, locale, { maximumFractionDigits: 0 })}
             unavailableLabel={t('dashboardDataUnavailable')}
+            tone="neutral"
+            showUnavailableLabel={false}
           />
           <DashboardMetricCard
             label={t('productionUnitCumulativeMortality')}
             value={formatDashboardNumber(summary.total_mortality_count, locale, { maximumFractionDigits: 0 })}
-            tone={summary.total_mortality_count === 0 ? 'success' : 'warning'}
-            helper={summary.total_mortality_count === 0
-              ? t('productionUnitNoMortality')
-              : t('productionUnitMortalityRecorded', { count: summary.total_mortality_count })}
+            tone={summary.total_mortality_count === 0 ? 'slate' : 'attention'}
             unavailableLabel={t('dashboardDataUnavailable')}
+            showUnavailableLabel={false}
           />
           <DashboardMetricCard
             label={t('productionUnitConsumedFeed')}
@@ -261,8 +262,22 @@ export default function ProductionUnitOverviewScreen({ navigation, route }: Prop
             unit={t('kg')}
             tone="info"
             unavailableLabel={t('dashboardDataUnavailable')}
+            showUnavailableLabel={false}
           />
         </View>
+        {!biomassAvailable ? (
+          <DashboardDataNotice
+            title={t('dashboardWeighingRequired')}
+            description={t('dashboardWeighingRequiredDescription')}
+            actionLabel={t('dashboardAddWeighingAction')}
+            onAction={() => navigation.navigate('DailyLog', {
+              cycleId,
+              cycleUnitAllocationId: resolvedCycleUnitAllocationId,
+              productionUnitId,
+              productionUnitName: unitName,
+            })}
+          />
+        ) : null}
       </DashboardSection>
 
       <QuickActionsPreview
