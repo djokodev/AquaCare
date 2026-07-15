@@ -240,7 +240,9 @@ export default function CalibrateCycleScreen({ route, navigation }: Props) {
 const styles = StyleSheet.create({
   content: { gap: spacing[4] },
   sourceUnitInput: {
-    textAlign: 'center',
+    alignSelf: 'stretch',
+    includeFontPadding: false,
+    textAlign: 'left',
     textAlignVertical: 'center',
   },
 });

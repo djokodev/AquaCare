@@ -67,14 +67,19 @@ describe('CalibrateCycleScreen', () => {
     jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
   });
 
-  it('centre le nom de l unité source dans son champ', async () => {
+  it('garde le nom de l unité source à gauche et le centre verticalement', async () => {
     const { getByLabelText, getByText } = render(
       <CalibrateCycleScreen navigation={navigation} route={route} />,
     );
 
     await waitFor(() => expect(getByText('Bac tri')).toBeTruthy());
     expect(StyleSheet.flatten(getByLabelText('sourceUnit').props.style)).toEqual(
-      expect.objectContaining({ textAlign: 'center', textAlignVertical: 'center' }),
+      expect.objectContaining({
+        alignSelf: 'stretch',
+        includeFontPadding: false,
+        textAlign: 'left',
+        textAlignVertical: 'center',
+      }),
     );
   });
 
