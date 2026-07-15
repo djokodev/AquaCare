@@ -40,10 +40,12 @@ export function DashboardSyncStatus({ lastSyncedAt }: DashboardSyncStatusProps) 
       return t('dashboardSyncNow');
     }
     if (elapsed < HOUR_MS) {
-      return t('dashboardSyncMinutesAgo', { count: Math.floor(elapsed / MINUTE_MS) });
+      const count = Math.floor(elapsed / MINUTE_MS);
+      return t(count === 1 ? 'dashboardSyncMinutesAgo_one' : 'dashboardSyncMinutesAgo_other', { count });
     }
     if (elapsed < DAY_MS) {
-      return t('dashboardSyncHoursAgo', { count: Math.floor(elapsed / HOUR_MS) });
+      const count = Math.floor(elapsed / HOUR_MS);
+      return t(count === 1 ? 'dashboardSyncHoursAgo_one' : 'dashboardSyncHoursAgo_other', { count });
     }
     if (elapsed < 2 * DAY_MS) {
       return t('dashboardSyncYesterday');

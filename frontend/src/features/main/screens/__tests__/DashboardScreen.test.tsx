@@ -289,10 +289,10 @@ describe("features/main/screens/DashboardScreen", () => {
 
     expect(getByText("Dashboard du cycle")).toBeTruthy();
     expect(getByText("dashboardEstimatedMarketValue")).toBeTruthy();
-    expect(getByText("dashboardEstimatedCurrentFish")).toBeTruthy();
+    expect(getByText("currentFish")).toBeTruthy();
     expect(getByText("dashboardTimeRemainingCycle")).toBeTruthy();
     expect(getByText("dashboardDirectProductionCost")).toBeTruthy();
-    expect(getByText("sessionActiveCycleLabel")).toBeTruthy();
+    expect(queryByText("sessionActiveCycleLabel")).toBeNull();
     expect(getByText("Cycle A")).toBeTruthy();
     expect(queryByText("Cycle A #1")).toBeNull();
     expect(queryByText("Cycle B #2")).toBeNull();
@@ -358,7 +358,7 @@ describe("features/main/screens/DashboardScreen", () => {
 
     const sessionCard = getByTestId("session-active-cycle-card");
 
-    expect(getByText("sessionActiveCycleLabel")).toBeTruthy();
+    expect(queryByText("sessionActiveCycleLabel")).toBeNull();
     expect(getByText("Cycle A")).toBeTruthy();
     expect(queryByText("changeSessionCycle")).toBeNull();
 
@@ -468,9 +468,9 @@ describe("features/main/screens/DashboardScreen", () => {
       expect(getByText("Dashboard du cycle")).toBeTruthy();
       expect(getByText("dashboardEstimatedMarketValue")).toBeTruthy();
       expect(getByText("dashboardDirectProductionCost")).toBeTruthy();
-      expect(getByText("dashboardEstimatedCurrentFish")).toBeTruthy();
+      expect(getByText("currentFish")).toBeTruthy();
       expect(getByText("dashboardTimeRemainingCycle")).toBeTruthy();
-      expect(getByText("sessionActiveCycleLabel")).toBeTruthy();
+      expect(queryByText("sessionActiveCycleLabel")).toBeNull();
       expect(getByText("Cycle Unit")).toBeTruthy();
       expect(getByText("productionUnitsDashboardCta")).toBeTruthy();
       expect(getByText("reportCycleTitle")).toBeTruthy();

@@ -438,7 +438,7 @@ export default function DashboardScreen({ navigation }: any) {
                     unavailableLabel={t("dashboardDataUnavailable")}
                   />
                   <DashboardMetricCard
-                    label={t("dashboardEstimatedCurrentFish")}
+                    label={t("currentFish")}
                     value={formatDashboardNumber(
                       cycleSummary?.total_estimated_current_fish_count,
                       locale,
@@ -479,14 +479,7 @@ export default function DashboardScreen({ navigation }: any) {
                 style={styles.sessionCard}
               >
                 <View className="flex-1 mr-3">
-                  <AppText
-                    className={`text-xs font-semibold uppercase tracking-wide ${
-                      canSwitchCycle ? "text-gray-light" : "text-gray-light/80"
-                    }`}
-                  >
-                    {t("sessionActiveCycleLabel")}
-                  </AppText>
-                  <AppText variant="bodyStrong" style={{ marginTop: 4 }}>
+                  <AppText variant="bodyStrong">
                     {sessionCycle.cycle_name}
                   </AppText>
                   {canSwitchCycle ? (
@@ -515,9 +508,6 @@ export default function DashboardScreen({ navigation }: any) {
                 variant="outlined"
                 style={[styles.sessionCard, styles.inactiveSessionCard]}
               >
-                <AppText variant="overline" color="muted">
-                  {t("sessionActiveCycleLabel")}
-                </AppText>
                 <AppText variant="bodyStrong" style={styles.sessionName}>
                   {sessionCycle.cycle_name}
                 </AppText>
@@ -696,5 +686,5 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface.disabled,
     borderColor: colors.border.default,
   },
-  sessionName: { marginTop: spacing[1] },
+  sessionName: {},
 });
