@@ -80,31 +80,34 @@ export function SelectionModal({
                 renderItem={({ item }) => {
                   const selected = item.value === selectedValue;
                   return (
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel={item.label}
-                      accessibilityState={{ selected, disabled: item.disabled }}
-                      disabled={item.disabled}
-                      onPress={() => onSelect(item.value)}
-                      style={({ pressed }) => [
-                      styles.option,
-                        selected && styles.selected,
-                        (pressed || item.disabled) && {
-                          opacity: item.disabled ? 0.5 : 0.8,
-                        },
-                      ]}
-                    >
-                      <View style={styles.optionContent}>
-                        <AppText variant="body" color={selected ? "link" : "primary"}>
-                          {item.label}
-                        </AppText>
-                        <Ionicons
-                          name={selected ? "checkmark-circle" : "chevron-forward"}
-                          size={20}
-                          color={selected ? colors.brand.primary : colors.text.muted}
-                        />
-                      </View>
-                    </Pressable>
+                    <View style={[styles.optionSurface, selected && styles.selected]}>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={item.label}
+                        accessibilityState={{ selected, disabled: item.disabled }}
+                        disabled={item.disabled}
+                        onPress={() => onSelect(item.value)}
+                        style={({ pressed }) => [
+                          styles.optionPressable,
+                          (pressed || item.disabled) && {
+                            opacity: item.disabled ? 0.5 : 0.72,
+                          },
+                        ]}
+                      >
+                        <View style={styles.optionContent}>
+                          <AppText variant="body" color={selected ? "link" : "primary"}>
+                            {item.label}
+                          </AppText>
+                          {selected ? (
+                            <Ionicons
+                              name="checkmark-circle"
+                              size={20}
+                              color={colors.brand.primary}
+                            />
+                          ) : null}
+                        </View>
+                      </Pressable>
+                    </View>
                   );
                 }}
                 ItemSeparatorComponent={() => <View style={styles.optionGap} />}
@@ -148,19 +151,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  option: {
+  optionSurface: {
     width: "100%",
     minHeight: 64,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: spacing[4],
-    paddingVertical: spacing[3],
     borderWidth: 1,
     borderColor: colors.border.subtle,
     borderRadius: radii.md,
     backgroundColor: colors.surface.page,
   },
+  optionPressable: { flex: 1, justifyContent: "center", paddingHorizontal: spacing[4], paddingVertical: spacing[3] },
   optionContent: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   listContent: { paddingBottom: spacing[3] },
   optionGap: { height: spacing[2] },
