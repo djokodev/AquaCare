@@ -36,6 +36,37 @@ def create_source_allocation(cycle):
 
 @pytest.mark.django_db
 class TestCalibrationApi:
+    def test_name_collisions_are_business_errors_across_both_facades(self, auth_client):
+        generic = auth_client.post(
+            reverse('aquaculture:production-unit-list'),
+            {'name': 'Unite partagee', 'unit_type': 'tank', 'volume_m3': '8.00'},
+            format='json',
+        )
+        assert generic.status_code == 201
+
+        calibration_collision = auth_client.post(
+            reverse('aquaculture:calibration-tank-list'),
+            {'name': 'UNITE PARTAGEE', 'volume_m3': '8.00'},
+            format='json',
+        )
+        assert calibration_collision.status_code == 400
+        assert 'name' in calibration_collision.data
+
+        calibration = auth_client.post(
+            reverse('aquaculture:calibration-tank-list'),
+            {'name': 'Bac reserve', 'volume_m3': '8.00'},
+            format='json',
+        )
+        assert calibration.status_code == 201
+
+        generic_collision = auth_client.post(
+            reverse('aquaculture:production-unit-list'),
+            {'name': 'BAC RESERVE', 'unit_type': 'tank', 'volume_m3': '8.00'},
+            format='json',
+        )
+        assert generic_collision.status_code == 400
+        assert 'name' in generic_collision.data
+
     def test_tank_crud_is_scoped_and_uses_production_unit(self, auth_client):
         client_uuid = uuid.uuid4()
         response = auth_client.post(
@@ -96,7 +127,20 @@ class TestCalibrationApi:
         assert str(response.data['destination_tank']['id']) == str(tank_response.data['id'])
         assert response.data['source_allocation']['current_fish_count'] == 800
         assert response.data['destination_allocation']['current_fish_count'] == 200
+        assert response.data['destination_cycle']['total_stocked_count'] == 200
+        assert response.data['source_cycle']['total_transferred_out_count'] == 200
+        assert response.data['destination_tank']['active_session']['total_stocked_count'] == 200
         assert CalibrationOperation.objects.count() == 1
+
+        tank_detail = auth_client.get(
+            reverse('aquaculture:calibration-tank-detail', args=[tank_response.data['id']]),
+        )
+        assert tank_detail.status_code == 200
+        assert tank_detail.data['active_session']['total_stocked_count'] == 200
+
+        tank_list = auth_client.get(reverse('aquaculture:calibration-tank-list'))
+        assert tank_list.status_code == 200
+        assert tank_list.data['results'][0]['active_session']['total_stocked_count'] == 200
 
         replay = auth_client.post(
             reverse('aquaculture:cycle-unit-allocation-calibrate', args=[source.id]),
@@ -106,6 +150,34 @@ class TestCalibrationApi:
         assert replay.status_code == 200
         assert replay.data['idempotent_replay'] is True
         assert CalibrationOperation.objects.count() == 1
+
+        destination_allocation_id = response.data['destination_allocation']['id']
+        partial = auth_client.post(
+            reverse(
+                'aquaculture:cycle-unit-allocation-partial-harvest',
+                args=[destination_allocation_id],
+            ),
+            {
+                'harvest_date': timezone.localdate().isoformat(),
+                'count_harvested': 10,
+                'average_weight_g': '300.00',
+            },
+            format='json',
+        )
+        assert partial.status_code == 200
+        assert partial.data['cycle']['total_stocked_count'] == 200
+
+        harvested = auth_client.post(
+            reverse('aquaculture:cycle-unit-allocation-harvest', args=[destination_allocation_id]),
+            {
+                'harvest_date': timezone.localdate().isoformat(),
+                'final_count': 190,
+                'final_average_weight': '300.00',
+            },
+            format='json',
+        )
+        assert harvested.status_code == 200
+        assert harvested.data['cycle']['total_stocked_count'] == 200
 
     def test_offline_sync_resolves_client_uuids_and_returns_calibration_updates(
         self,
@@ -143,6 +215,9 @@ class TestCalibrationApi:
         assert response.data['processed']['calibration_operations'] == 1
         assert len(response.data['server_updates']['calibration_tanks']) == 1
         assert len(response.data['server_updates']['calibration_operations']) == 1
+        assert response.data['server_updates']['calibration_tanks'][0]['active_session'][
+            'total_stocked_count'
+        ] == 100
         assert CalibrationOperation.objects.get(client_uuid=operation_client_uuid).created_offline is True
 
         second_device = auth_client.post(
@@ -153,6 +228,9 @@ class TestCalibrationApi:
         assert second_device.status_code == 200
         assert len(second_device.data['server_updates']['calibration_tanks']) == 1
         assert len(second_device.data['server_updates']['calibration_operations']) == 1
+        assert second_device.data['server_updates']['calibration_tanks'][0]['active_session'][
+            'total_stocked_count'
+        ] == 100
 
     def test_offline_sync_keeps_missing_source_as_structured_error(self, auth_client):
         tank_client_uuid = uuid.uuid4()

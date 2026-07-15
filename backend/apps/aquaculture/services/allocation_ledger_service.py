@@ -26,6 +26,28 @@ class AllocationLedgerService:
         )
 
     @classmethod
+    def session_started_at(cls, allocation: CycleUnitAllocation) -> datetime:
+        """Return the first real arrival, falling back only for legacy empty sessions."""
+        arrivals = list(allocation.calibration_operations_in.all())
+        if arrivals:
+            return min(operation.calibrated_at for operation in arrivals)
+        return cls._at(allocation.cycle.start_date, time.min)
+
+    @classmethod
+    def session_closed_at(cls, allocation: CycleUnitAllocation) -> datetime | None:
+        """Return the business closure datetime used by session interval resolution."""
+        if allocation.status != CycleUnitAllocation.STATUS_HARVESTED:
+            return None
+        if allocation.final_harvest_date is None:
+            raise BusinessRuleViolation(_("Une session récoltée doit avoir une date de clôture."))
+        recorded_at = allocation.harvested_at or cls._at(allocation.final_harvest_date, time.max)
+        local_recorded_at = timezone.localtime(recorded_at)
+        return cls._at(
+            allocation.final_harvest_date,
+            local_recorded_at.time().replace(tzinfo=None),
+        )
+
+    @classmethod
     def replay(
         cls,
         allocation: CycleUnitAllocation,
@@ -68,10 +90,9 @@ class AllocationLedgerService:
             allocation.status == CycleUnitAllocation.STATUS_HARVESTED
             and allocation.final_harvest_date is not None
         ):
-            harvested_at = allocation.harvested_at or cls._at(allocation.final_harvest_date, time.max)
-            local_harvested_at = timezone.localtime(harvested_at)
+            harvested_at = cls.session_closed_at(allocation)
             events.append((
-                cls._at(allocation.final_harvest_date, local_harvested_at.time().replace(tzinfo=None)),
+                harvested_at,
                 harvested_at,
                 str(allocation.id),
                 'final_harvest',

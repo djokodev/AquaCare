@@ -14,6 +14,7 @@ from ..domain.calibration import WEIGHT_DIFFERENCE_WARNING_THRESHOLD, biomass_fo
 from ..domain.exceptions import BusinessRuleViolation
 from ..models import CalibrationOperation, CycleUnitAllocation, ProductionCycle, ProductionUnit
 from ..tasks import invalidate_dashboard_cache
+from .allocation_ledger_service import AllocationLedgerService
 from .cycle_service import ProductionCycleService
 
 
@@ -87,34 +88,17 @@ class CalibrationService:
         destination_sessions = list(
             CycleUnitAllocation.objects.select_for_update()
             .select_related('cycle', 'production_unit')
+            .prefetch_related('calibration_operations_in')
             .filter(production_unit=destination_unit)
             .order_by('cycle__start_date', 'created_at')
         )
-        movement_date = calibrated_at.date()
-        destination = next(
-            (
-                session
-                for session in destination_sessions
-                if session.cycle.start_date <= movement_date
-                and (
-                    session.status == CycleUnitAllocation.STATUS_ACTIVE
-                    or session.final_harvest_date is None
-                    or movement_date < session.final_harvest_date
-                )
-            ),
-            None,
+        destination = cls._resolve_destination_session(
+            destination_sessions,
+            calibrated_at=calibrated_at,
         )
         if destination is not None and destination.cycle.species != source.cycle.species:
             raise BusinessRuleViolation(_('Le bac contient déjà une autre espèce.'))
         if destination is None:
-            future_session = next(
-                (session for session in destination_sessions if session.cycle.start_date > movement_date),
-                None,
-            )
-            if future_session is not None:
-                raise BusinessRuleViolation(
-                    _('La date du calibrage chevauche une session ultérieure de ce bac.')
-                )
             destination = cls._create_destination_allocation(
                 source=source,
                 destination_unit=destination_unit,
@@ -204,6 +188,75 @@ class CalibrationService:
         )
         transaction.on_commit(lambda: invalidate_dashboard_cache(str(user.id)))
         return operation, warnings, True
+
+    @staticmethod
+    def _resolve_destination_session(destination_sessions, *, calibrated_at):
+        """Resolve the unique technical session containing the business datetime."""
+        intervals = []
+        for session in destination_sessions:
+            started_at = AllocationLedgerService.session_started_at(session)
+            closed_at = AllocationLedgerService.session_closed_at(session)
+            if closed_at is not None and closed_at <= started_at:
+                raise BusinessRuleViolation(
+                    _('La chronologie des sessions de ce bac est invalide.')
+                )
+            intervals.append((started_at, closed_at, session))
+
+        intervals.sort(key=lambda item: (item[0], str(item[2].pk)))
+        for current, following in zip(intervals, intervals[1:], strict=False):
+            current_closed_at = current[1]
+            if current_closed_at is None or current_closed_at > following[0]:
+                raise BusinessRuleViolation(
+                    _('Deux sessions de ce bac se chevauchent.')
+                )
+
+        matches = [
+            session
+            for started_at, closed_at, session in intervals
+            if started_at <= calibrated_at and (closed_at is None or calibrated_at < closed_at)
+        ]
+        if len(matches) > 1:
+            raise BusinessRuleViolation(_('Plusieurs sessions correspondent à ce calibrage.'))
+        if matches:
+            return matches[0]
+
+        active_sessions = [
+            (started_at, session)
+            for started_at, closed_at, session in intervals
+            if closed_at is None
+        ]
+        if len(active_sessions) > 1:
+            raise BusinessRuleViolation(_('Ce bac possède plusieurs sessions actives.'))
+        if active_sessions:
+            active_started_at, active_session = active_sessions[0]
+            previous_closures = [
+                closed_at
+                for _started_at, closed_at, _session in intervals
+                if closed_at is not None and closed_at <= active_started_at
+            ]
+            previous_closed_at = max(previous_closures, default=None)
+            if previous_closed_at is None or previous_closed_at <= calibrated_at:
+                return active_session
+
+        future_sessions = [
+            (started_at, session)
+            for started_at, _closed_at, session in intervals
+            if started_at > calibrated_at
+        ]
+        if future_sessions:
+            future_started_at, future_session = min(future_sessions, key=lambda item: item[0])
+            previous_closures = [
+                closed_at
+                for _started_at, closed_at, _session in intervals
+                if closed_at is not None and closed_at <= future_started_at
+            ]
+            previous_closed_at = max(previous_closures, default=None)
+            if previous_closed_at is None or previous_closed_at <= calibrated_at:
+                return future_session
+            raise BusinessRuleViolation(
+                _('La date du calibrage chevauche une session antérieure de ce bac.')
+            )
+        return None
 
     @staticmethod
     def _find_existing(client_uuid):

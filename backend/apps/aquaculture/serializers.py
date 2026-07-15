@@ -21,6 +21,7 @@ from decimal import Decimal
 from typing import Any, cast
 
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db.models import Sum
 from django.utils.translation import gettext_lazy as _
 from drf_spectacular.utils import extend_schema_field
 from notifications.serializers import (
@@ -389,18 +390,53 @@ class ProductionCycleSerializer(serializers.ModelSerializer):
         return obj.days_active()
 
     def get_total_stocked_count(self, obj):
-        incoming = getattr(obj, 'calibration_in_count', 0)
+        incoming = self._calibration_totals(obj)['in_count']
         return incoming if obj.cycle_kind == 'calibration' else obj.initial_count + incoming
 
     def get_total_stocked_biomass(self, obj):
-        incoming = getattr(obj, 'calibration_in_biomass', Decimal('0'))
+        incoming = self._calibration_totals(obj)['in_biomass']
         return incoming if obj.cycle_kind == 'calibration' else obj.initial_biomass + incoming
 
     def get_total_transferred_out_count(self, obj):
-        return getattr(obj, 'calibration_out_count', 0)
+        return self._calibration_totals(obj)['out_count']
 
     def get_total_transferred_out_biomass(self, obj):
-        return getattr(obj, 'calibration_out_biomass', Decimal('0'))
+        return self._calibration_totals(obj)['out_biomass']
+
+    @staticmethod
+    def _calibration_totals(obj):
+        """Never silently report zero merely because a caller omitted for_api()."""
+        cached = getattr(obj, '_serializer_calibration_totals', None)
+        if cached is not None:
+            return cached
+        annotated_fields = (
+            'calibration_in_count',
+            'calibration_in_biomass',
+            'calibration_out_count',
+            'calibration_out_biomass',
+        )
+        if all(hasattr(obj, field) for field in annotated_fields):
+            totals = {
+                'in_count': obj.calibration_in_count,
+                'in_biomass': obj.calibration_in_biomass,
+                'out_count': obj.calibration_out_count,
+                'out_biomass': obj.calibration_out_biomass,
+            }
+        else:
+            incoming = CalibrationOperation.objects.filter(
+                destination_allocation__cycle_id=obj.pk,
+            ).aggregate(count=Sum('transferred_count'), biomass=Sum('transferred_biomass_kg'))
+            outgoing = CalibrationOperation.objects.filter(
+                source_allocation__cycle_id=obj.pk,
+            ).aggregate(count=Sum('transferred_count'), biomass=Sum('transferred_biomass_kg'))
+            totals = {
+                'in_count': incoming['count'] or 0,
+                'in_biomass': incoming['biomass'] or Decimal('0'),
+                'out_count': outgoing['count'] or 0,
+                'out_biomass': outgoing['biomass'] or Decimal('0'),
+            }
+        obj._serializer_calibration_totals = totals
+        return totals
 
     def get_current_density_kg_m3(self, obj):
         """Calcule la densité d'élevage actuelle."""

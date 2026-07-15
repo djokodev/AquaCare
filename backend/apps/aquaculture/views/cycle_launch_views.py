@@ -6,7 +6,9 @@ import logging
 
 from accounts.models import FarmProfile
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db import IntegrityError
 from django.http import Http404
+from django.utils.translation import gettext_lazy as _
 from drf_spectacular.utils import OpenApiExample, OpenApiResponse, extend_schema
 from rest_framework import permissions, status
 from rest_framework.response import Response
@@ -141,6 +143,12 @@ class CycleLaunchView(APIView):
             )
         except DjangoValidationError as exc:
             _raise_drf_validation_error(exc)
+        except IntegrityError as exc:
+            from rest_framework.exceptions import ValidationError
+
+            raise ValidationError({
+                'name': _('Une unité portant ce nom existe déjà dans cette ferme.')
+            }) from exc
 
         response_serializer = CycleLaunchResponseSerializer(
             {

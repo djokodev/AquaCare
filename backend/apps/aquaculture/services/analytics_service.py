@@ -14,7 +14,7 @@ Author: AquaCare Team
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from typing import TypedDict
 
@@ -750,34 +750,59 @@ class AnalyticsService(BaseService):
 
     @staticmethod
     def _build_allocation_survival_curve(cycle: ProductionCycle) -> list[dict]:
-        """Build biological survival points from the same ledger used by stock and reports."""
+        """Build the legacy curve as present stock, with biological survival explicit."""
         from .allocation_ledger_service import AllocationLedgerService
 
-        changes: dict[date, dict[str, int]] = {}
+        changes: dict[datetime, dict[str, int]] = {}
         initial_introduced = 0
+        initial_present = 0
         for allocation in cycle.unit_allocations.all():
             replay = AllocationLedgerService.replay(allocation)
             if cycle.cycle_kind != ProductionCycle.CYCLE_KIND_CALIBRATION:
                 initial_introduced += allocation.initial_fish_count
+                initial_present += allocation.initial_fish_count
             for event_at, event_type, event in replay['events']:
-                event_date = timezone.localtime(event_at).date()
-                bucket = changes.setdefault(event_date, {'introduced': 0, 'mortality': 0})
+                bucket = changes.setdefault(
+                    event_at,
+                    {'introduced': 0, 'present_delta': 0, 'mortality': 0},
+                )
                 if event_type == 'incoming':
                     bucket['introduced'] += event.transferred_count
+                    bucket['present_delta'] += event.transferred_count
+                elif event_type == 'outgoing':
+                    bucket['present_delta'] -= event.transferred_count
                 elif event_type == 'log':
-                    bucket['mortality'] += event.mortality_count or 0
+                    mortality = event.mortality_count or 0
+                    bucket['mortality'] += mortality
+                    bucket['present_delta'] -= mortality
+                elif event_type == 'partial_harvest':
+                    bucket['present_delta'] -= event.count_harvested
+                elif event_type == 'final_harvest':
+                    bucket['present_delta'] -= event.final_fish_count or 0
 
         introduced = initial_introduced
-        survivors = initial_introduced
+        biological_survivors = initial_introduced
+        present = initial_present
         points = []
-        for event_date in sorted(changes):
-            introduced += changes[event_date]['introduced']
-            survivors += changes[event_date]['introduced'] - changes[event_date]['mortality']
-            survivors = max(0, survivors)
+        for event_at in sorted(changes):
+            introduced += changes[event_at]['introduced']
+            biological_survivors += (
+                changes[event_at]['introduced'] - changes[event_at]['mortality']
+            )
+            present += changes[event_at]['present_delta']
+            biological_survivors = max(0, biological_survivors)
+            present = max(0, present)
+            stock_rate = float(present / introduced * 100) if introduced else 0.0
             points.append({
-                'date': event_date.isoformat(),
-                'count': survivors,
-                'rate': float(survivors / introduced * 100) if introduced else 0.0,
+                'date': timezone.localtime(event_at).date().isoformat(),
+                'event_at': event_at.isoformat(),
+                'count': present,
+                'rate': stock_rate,
+                'stock_remaining_rate': stock_rate,
+                'biological_survival_rate': (
+                    float(biological_survivors / introduced * 100)
+                    if introduced else 0.0
+                ),
                 'source': 'allocation_ledger',
             })
         return points

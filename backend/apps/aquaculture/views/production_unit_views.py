@@ -1,7 +1,8 @@
 """
 ViewSets DRF pour les unités de production et leurs allocations de cycle.
 """
-from django.db import transaction
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db import IntegrityError, transaction
 from django.utils.translation import gettext_lazy as _
 from drf_spectacular.utils import extend_schema
 from rest_framework import permissions, serializers, status, viewsets
@@ -67,7 +68,15 @@ class ProductionUnitViewSet(viewsets.ModelViewSet):
         return queryset
 
     def perform_create(self, serializer):
-        serializer.save(farm_profile=self.request.user.farm_profile)
+        try:
+            with transaction.atomic():
+                serializer.save(farm_profile=self.request.user.farm_profile)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(exc.message_dict or exc.messages) from exc
+        except IntegrityError as exc:
+            raise serializers.ValidationError(
+                {'name': _('Une unité portant ce nom existe déjà dans cette ferme.')}
+            ) from exc
 
     @transaction.atomic
     def perform_update(self, serializer):
@@ -77,7 +86,14 @@ class ProductionUnitViewSet(viewsets.ModelViewSet):
         except BusinessRuleViolation as exc:
             raise serializers.ValidationError({'detail': str(exc)}) from exc
         serializer.instance = locked
-        serializer.save()
+        try:
+            serializer.save()
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(exc.message_dict or exc.messages) from exc
+        except IntegrityError as exc:
+            raise serializers.ValidationError(
+                {'name': _('Une unité portant ce nom existe déjà dans cette ferme.')}
+            ) from exc
 
     def perform_destroy(self, instance):
         try:

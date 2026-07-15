@@ -21,6 +21,7 @@ from common.admin_mixins import (
 from django.contrib import admin, messages
 from django.contrib.admin.models import CHANGE
 from django.core.exceptions import ValidationError
+from django.db import IntegrityError
 from django.db.models import Avg, Count, Sum
 from django.http import HttpResponse, HttpResponseRedirect
 from django.urls import reverse
@@ -542,7 +543,12 @@ class ProductionUnitAdmin(AquacultureSecuredAdmin):
                 ProductionUnitLifecycleService.validate_update(current, payload)
             except BusinessRuleViolation as exc:
                 raise ValidationError(str(exc)) from exc
-        super().save_model(request, obj, form, change)
+        try:
+            super().save_model(request, obj, form, change)
+        except IntegrityError as exc:
+            raise ValidationError(
+                _("Une unité portant ce nom existe déjà dans cette ferme.")
+            ) from exc
 
     def delete_model(self, request, obj):
         try:

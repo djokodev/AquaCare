@@ -3,13 +3,17 @@ Tests unitaires pour AnalyticsService.
 
 Coverage cible : >60%
 """
+import uuid
 from datetime import date, timedelta
 from decimal import Decimal
 
 import pytest
-from aquaculture.models import CycleMetrics
+from aquaculture.models import CycleMetrics, CycleUnitAllocation, ProductionUnit
 from aquaculture.services.analytics_service import AnalyticsService
+from aquaculture.services.calibration_service import CalibrationService
+from aquaculture.services.cycle_service import ProductionCycleService
 from aquaculture.services.log_service import CycleLogService
+from django.utils import timezone
 
 from tests.fixtures.factories import ProductionCycleFactory
 
@@ -84,6 +88,84 @@ class TestAnalyticsServiceUpdateMetrics:
 
         metrics = CycleMetrics.objects.get(cycle=cycle)
         assert metrics.growth_curve_data == []
+
+    def test_allocation_curve_replays_transfers_and_harvests(self):
+        cycle = ProductionCycleFactory(
+            initial_count=1000,
+            initial_average_weight=Decimal('100.00'),
+            initial_biomass=Decimal('100.00'),
+            current_count=1000,
+            current_average_weight=Decimal('100.00'),
+            current_biomass=Decimal('100.00'),
+            start_date=date.today() - timedelta(days=1),
+        )
+        source_unit = ProductionUnit.objects.create(
+            farm_profile=cycle.farm_profile,
+            name='Unité analytics source',
+            unit_type='tank',
+            volume_m3=Decimal('10.00'),
+        )
+        source = CycleUnitAllocation.objects.create(
+            cycle=cycle,
+            production_unit=source_unit,
+            initial_fish_count=1000,
+            current_fish_count=1000,
+            initial_biomass_kg=Decimal('100.00'),
+            current_biomass_kg=Decimal('100.00'),
+        )
+        tank = ProductionUnit.objects.create(
+            farm_profile=cycle.farm_profile,
+            name='Bac analytics destination',
+            unit_type='tank',
+            purpose=ProductionUnit.PURPOSE_CALIBRATION,
+            volume_m3=Decimal('10.00'),
+        )
+        calibrated_at = timezone.now() - timedelta(hours=2)
+        first, _, _ = CalibrationService.calibrate(
+            source_allocation=source,
+            destination_production_unit=tank,
+            user=cycle.farm_profile.user,
+            client_uuid=uuid.uuid4(),
+            calibrated_at=calibrated_at,
+            transferred_count=200,
+            transferred_average_weight_g=Decimal('150.00'),
+        )
+
+        source_curve = AnalyticsService._build_allocation_survival_curve(cycle)
+        destination_curve = AnalyticsService._build_allocation_survival_curve(
+            first.destination_allocation.cycle
+        )
+        assert source_curve[-1]['count'] == 800
+        assert source_curve[-1]['biological_survival_rate'] == 100.0
+        assert destination_curve[-1]['count'] == 200
+
+        CalibrationService.calibrate(
+            source_allocation=source,
+            destination_production_unit=tank,
+            user=cycle.farm_profile.user,
+            client_uuid=uuid.uuid4(),
+            calibrated_at=calibrated_at + timedelta(minutes=10),
+            transferred_count=100,
+            transferred_average_weight_g=Decimal('150.00'),
+        )
+        _, destination, _ = ProductionCycleService.partial_harvest_cycle_unit_allocation(
+            first.destination_allocation,
+            harvest_date=timezone.localdate(),
+            count_harvested=50,
+            average_weight_g=Decimal('250.00'),
+        )
+        curve_after_partial = AnalyticsService._build_allocation_survival_curve(destination.cycle)
+        assert [point['count'] for point in curve_after_partial][-3:] == [200, 300, 250]
+
+        ProductionCycleService.harvest_cycle_unit_allocation(
+            destination,
+            harvest_date=timezone.localdate(),
+            final_count=250,
+            final_average_weight=Decimal('300.00'),
+        )
+        final_curve = AnalyticsService._build_allocation_survival_curve(destination.cycle)
+        assert final_curve[-1]['count'] == 0
+        assert final_curve[-1]['biological_survival_rate'] == 100.0
 
 
 @pytest.mark.django_db

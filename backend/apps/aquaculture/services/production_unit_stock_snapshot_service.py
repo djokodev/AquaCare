@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from typing import Any
 
 from ..models import CycleUnitAllocation, PartialHarvest
@@ -16,7 +16,7 @@ class ProductionUnitStockSnapshotService:
     def build_as_of(
         *,
         allocation: CycleUnitAllocation,
-        as_of_date: date,
+        as_of_date: date | datetime,
         daily_logs: list[Any] | None = None,
         partial_harvests: list[PartialHarvest] | None = None,
     ) -> dict[str, Any]:

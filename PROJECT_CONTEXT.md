@@ -22,9 +22,11 @@ and Django admin. Occupied calibration tanks protect volume, type, purpose and
 status; empty tanks with history cannot be deleted. Unit names are case-insensitively
 unique within a farm.
 
-Replay orders events by business timestamp, `created_at`, UUID. A backdated offline
-movement is accepted only when the complete timeline stays positive; if it becomes
-the first arrival, session dates and initial descriptive snapshots are updated.
+Replay orders events by business timestamp, `created_at`, UUID. Session resolution
+uses the first arrival datetime as its inclusive lower bound and the final-harvest
+business datetime as its exclusive upper bound. A backdated offline movement is
+accepted only when the complete timeline stays coherent; otherwise the transaction
+is rolled back.
 Transfers, harvests and replay re-aggregate cycle metrics. Reports expose incoming
 and outgoing movements and their origins separately from growth and mortality.
 
@@ -68,7 +70,15 @@ Allocation stock is replayed in deterministic business-time order from incoming 
 
 Cycle launch optionally accepts `calibration_units`; these physical units are created atomically but remain empty and unallocated. Bulk sync normalizes UUID, datetime and decimal values, resolves allocations and units by server ID or client UUID, returns per-item errors, and always includes calibration server updates during full sync. The mobile queue marks only confirmed items as synchronized and includes calibration tanks and operations in unit fallback results.
 
-Migration `aquaculture.0032_calibration_allocations` replaces the unmerged experimental 0032/0033 migrations. Local branches that applied the old versions must migrate aquaculture back to 0031 before applying the new 0032. The migration uses a two-second lock timeout, concurrent indexes on existing tables and a two-phase check constraint. No production migration is performed from a development workspace.
+Migration `aquaculture.0032_calibration_allocations` creates the calibration ledger,
+adds the unit purpose and sync fields, audits duplicate active allocations, then adds
+the single-active-allocation index. It also creates the calibration lookup and
+movement indexes and installs the calibration-unit check constraint with PostgreSQL
+`NOT VALID`, followed by `VALIDATE CONSTRAINT`. Migration
+`aquaculture.0033_global_production_unit_name` audits legacy names, removes the
+temporary calibration-only name constraint and adds global case-insensitive name
+uniqueness per farm. These migrations currently use regular index creation: they do
+not use `CONCURRENTLY`, and they do not set a PostgreSQL `lock_timeout`.
 
 Confirmed movements cannot be edited or deleted. Mixing species, transferring an entire source allocation and redistributing historical costs remain out of scope.
 

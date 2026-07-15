@@ -1,3 +1,4 @@
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.utils.translation import gettext_lazy as _
@@ -48,7 +49,7 @@ class CalibrationTankViewSet(viewsets.ModelViewSet):
                     surface_m2=None,
                     status='active',
                 )
-        except IntegrityError as exc:
+        except (DjangoValidationError, IntegrityError) as exc:
             existing = ProductionUnit.objects.filter(client_uuid=client_uuid).first() if client_uuid else None
             if existing is None:
                 conflicting_name = ProductionUnit.objects.filter(
@@ -88,7 +89,14 @@ class CalibrationTankViewSet(viewsets.ModelViewSet):
         except BusinessRuleViolation as exc:
             raise serializers.ValidationError({'detail': str(exc)}) from exc
         serializer.instance = instance
-        serializer.save(status=changes['status'])
+        try:
+            serializer.save(status=changes['status'])
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(exc.message_dict or exc.messages) from exc
+        except IntegrityError as exc:
+            raise serializers.ValidationError(
+                {'name': _('Une unité portant ce nom existe déjà dans cette ferme.')}
+            ) from exc
 
     def perform_destroy(self, instance):
         try:
