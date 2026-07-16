@@ -1337,7 +1337,6 @@ export const fr = {
   appInfoEnvironment: 'Environnement',
   appInfoApiUrl: 'API',
   appInfoVersion: 'Version',
-  stagingBannerText: 'BUILD DE TEST — STAGING',
 
   // ── Flux "Créer mon élevage" ─────────────────────────────────────────────
   createFarmTitle: 'Créer un nouveau cycle',
@@ -1659,7 +1658,6 @@ export const fr = {
   feedPhasesEmpty: 'Aucune phase d\'alimentation disponible pour ce cycle.',
   feedPhaseAddedToCart: 'Ajouté au panier',
   appName: 'AquaCare',
-  stagingBuild: '⚠ VERSION DE TEST — STAGING',
   validationRequiredMessage: 'Ce champ est obligatoire.',
   designSystemGallery: 'Galerie du design system',
   designSystemGalleryHint: 'Prévisualiser les composants AquaCare.',

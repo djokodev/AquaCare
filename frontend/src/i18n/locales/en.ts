@@ -1338,7 +1338,6 @@
   appInfoEnvironment: 'Environment',
   appInfoApiUrl: 'API',
   appInfoVersion: 'Version',
-  stagingBannerText: 'TEST BUILD — STAGING',
 
   // ── Create Farm flow ──────────────────────────────────────────────────────
   createFarmTitle: 'Create a new cycle',
@@ -1658,7 +1657,6 @@
   feedPhasesEmpty: 'No feeding phases available for this cycle.',
   feedPhaseAddedToCart: 'Added to cart',
   appName: 'AquaCare',
-  stagingBuild: '⚠ TEST BUILD — STAGING',
   validationRequiredMessage: 'This field is required.',
   designSystemGallery: 'Design system gallery',
   designSystemGalleryHint: 'Preview AquaCare components.',
