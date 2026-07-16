@@ -253,6 +253,42 @@ describe('features/aquaculture/screens/CreateFarmScreen', () => {
     alertSpy.mockRestore();
   });
 
+  it('signale visuellement la limite d alevins avant la simulation', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    const { getAllByText, getByPlaceholderText, getByText, queryByText } = render(
+      <CreateFarmScreen navigation={navigation} />
+    );
+
+    fireEvent.press(getByText('createFarmSpeciesTilapia'));
+    fireEvent.press(getAllByText('productionUnitTypeTank')[0]);
+    fireEvent.changeText(getByPlaceholderText('createFarmUnitNamePlaceholder'), 'Bac 1');
+    fireEvent.changeText(getByPlaceholderText('createFarmUnitVolumePlaceholder'), '3');
+    fireEvent.press(getByText('+ createFarmAddUnitBtn'));
+    fireEvent.changeText(
+      getByPlaceholderText('createFarmFingerlingsCountPlaceholderMax'),
+      '1000001'
+    );
+
+    expect(getByText('createFarmFishCountLimitError')).toBeTruthy();
+    expect(queryByText('createFarmCapacityOver')).toBeNull();
+    expect(queryByText('createFarmStockingDensityError')).toBeNull();
+
+    fireEvent.press(getByText('createFarmSimulateBtn'));
+
+    await waitFor(() => {
+      expect(alertSpy).toHaveBeenCalledWith(
+        'error',
+        'createFarmFingerlingsCountLabel : createFarmFishCountLimitError'
+      );
+      expect(navigation.navigate).not.toHaveBeenCalledWith(
+        'CycleSimulation',
+        expect.anything()
+      );
+    });
+
+    alertSpy.mockRestore();
+  });
+
   it('ajoute une unite puis ouvre la simulation avec les unites en etat', async () => {
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     mockSimulationSuccess();

@@ -1449,6 +1449,7 @@
   createFarmPositiveNumberError: 'Enter a number greater than 0.',
   createFarmNonNegativeNumberError: 'Enter a number greater than or equal to 0.',
   createFarmPositiveIntegerError: 'Enter a whole number greater than 0.',
+  createFarmFishCountLimitError: 'AquaCare currently supports up to {{max}} fingerlings per cycle.',
   createFarmInvalidDateError: 'Enter a valid date in YYYY-MM-DD format.',
   createFarmHarvestWeightRangeError: 'Target weight must be between 50 g and 5000 g.',
   createFarmSurvivalRateRangeError: 'Survival rate must be between 1% and 100%.',

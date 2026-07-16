@@ -1448,6 +1448,7 @@ export const fr = {
   createFarmPositiveNumberError: 'Saisissez un nombre supérieur à 0.',
   createFarmNonNegativeNumberError: 'Saisissez un nombre positif ou égal à 0.',
   createFarmPositiveIntegerError: 'Saisissez un nombre entier supérieur à 0.',
+  createFarmFishCountLimitError: 'AquaCare prend actuellement en charge jusqu’à {{max}} alevins par cycle.',
   createFarmInvalidDateError: 'Saisissez une date valide au format AAAA-MM-JJ.',
   createFarmHarvestWeightRangeError: 'Le poids cible doit être compris entre 50 g et 5000 g.',
   createFarmSurvivalRateRangeError: 'Le taux de survie doit être compris entre 1 % et 100 %.',

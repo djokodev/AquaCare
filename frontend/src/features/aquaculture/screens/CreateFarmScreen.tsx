@@ -30,6 +30,7 @@ import {
   TextField,
 } from '@/components/ui';
 import { colors, radii, sizing, spacing } from '@/theme';
+import { INPUT_LIMITS } from '@/domain/aquaculture/constants';
 import { RootStackParamList } from '@/navigation/MainNavigator';
 import { AppDispatch, RootState } from '@/store/store';
 import { runCycleSimulation } from '@/features/aquaculture/store/farmSetupSlice';
@@ -204,6 +205,12 @@ export default function CreateFarmScreen({ navigation }: Props) {
   const [isCycleDurationCustomized, setIsCycleDurationCustomized] = useState(false);
   const formErrors = useMemo(() => validateFarmSetupForm(form), [form]);
   const cycleDurationErrorKey = formErrors.cycleDuration;
+  const fingerlingsCountLimitError =
+    formErrors.fingerlingsCount === 'createFarmFishCountLimitError'
+      ? t('createFarmFishCountLimitError', {
+          max: formatNumber(INPUT_LIMITS.fishCount.max),
+        })
+      : undefined;
   const cycleDurationAccessibilityText = cycleDurationErrorKey
     ? t(cycleDurationErrorKey === 'required' ? 'required' : cycleDurationErrorKey)
     : form.cycleDuration
@@ -485,6 +492,12 @@ export default function CreateFarmScreen({ navigation }: Props) {
       return `${fieldLabel} : ${t('createFarmFingerlingsCoherenceError', {
         count: fingerlingsCoherence.count,
         max: formatNumber(fingerlingsCoherence.maxCycle),
+      })}`;
+    }
+
+    if (errorCode === 'createFarmFishCountLimitError') {
+      return `${fieldLabel} : ${t('createFarmFishCountLimitError', {
+        max: formatNumber(INPUT_LIMITS.fishCount.max),
       })}`;
     }
 
@@ -995,13 +1008,34 @@ export default function CreateFarmScreen({ navigation }: Props) {
 
       <FieldLabel label={t('createFarmFingerlingsCountLabel')} required />
       <TextField
-        error={fingerlingsCoherence?.level === 'error' ? t('error') : undefined}
+        error={
+          fingerlingsCountLimitError ??
+          (fingerlingsCoherence?.level === 'error' ? t('error') : undefined)
+        }
         keyboardType="numeric"
         placeholder={fingerlingsCountPlaceholder}
         value={form.fingerlingsCount}
         onChangeText={v => setField('fingerlingsCount', sanitizePositiveIntegerInput(v))}
+        accessibilityState={
+          {
+            invalid: Boolean(
+              fingerlingsCountLimitError || fingerlingsCoherence?.level === 'error'
+            ),
+          } as AccessibilityState
+        }
+        accessibilityLiveRegion="polite"
       />
-      {stockingDensityCheck && (
+      {fingerlingsCountLimitError && (
+        <AppText
+          variant="helper"
+          color="error"
+          style={styles.inlineError}
+          accessibilityLiveRegion="polite"
+        >
+          {fingerlingsCountLimitError}
+        </AppText>
+      )}
+      {!fingerlingsCountLimitError && stockingDensityCheck && (
         <View style={[
           styles.coherenceBadge,
           stockingDensityCheck.isOk ? styles.coherenceBadgeOk : styles.coherenceBadgeError,
@@ -1025,7 +1059,7 @@ export default function CreateFarmScreen({ navigation }: Props) {
           </AppText>
         </View>
       )}
-      {fingerlingsCoherence && (
+      {!fingerlingsCountLimitError && fingerlingsCoherence && (
         <View style={[
           styles.coherenceBadge,
           fingerlingsCapacityStatus?.level === 'ok' && styles.coherenceBadgeOk,
