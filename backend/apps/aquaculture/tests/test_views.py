@@ -2981,7 +2981,7 @@ class TestProductionReportViewSet:
             current_biomass=Decimal('11.13'),
             status='active',
         )
-        report_day = timezone.localdate() - timedelta(days=1)
+        report_day = timezone.localdate()
         CycleLog.objects.create(
             cycle=selected_cycle,
             log_date=report_day,

@@ -187,7 +187,7 @@ describe('features/aquaculture/screens/CycleSimulationScreen', () => {
     });
   });
 
-  it('redirige vers le hub des unites en production quand le cycle cree contient des unites', async () => {
+  it('redirige vers le dashboard du cycle nouvellement lancé', async () => {
     let functionCallCount = 0;
     mockDispatch.mockImplementation((action: unknown) => {
       if (typeof action === 'function') {
@@ -282,19 +282,18 @@ describe('features/aquaculture/screens/CycleSimulationScreen', () => {
       );
       expect(mockDispatch).toHaveBeenCalledWith(setCurrentCycle(createdProductionCycle));
       expect(navigation.reset).toHaveBeenCalledWith({
-        index: 1,
+        index: 0,
         routes: [
-          { name: 'MainTabs' },
           {
-            name: 'ProductionUnitsHub',
-            params: { cycleId: createdProductionCycle.id },
+            name: 'MainTabs',
+            params: { screen: 'Dashboard' },
           },
         ],
       });
     });
   }, 10000);
 
-  it('conserve la navigation legacy quand aucune unite de production n est persistee', async () => {
+  it('redirige aussi vers le dashboard sans unite de production persistee', async () => {
     let functionCallCount = 0;
     mockDispatch.mockImplementation((action: unknown) => {
       if (typeof action === 'function') {
@@ -337,10 +336,9 @@ describe('features/aquaculture/screens/CycleSimulationScreen', () => {
     await waitFor(() => {
       expect(mockDispatch).toHaveBeenCalledWith(setCurrentCycle(createdProductionCycle));
       expect(navigation.reset).toHaveBeenCalledWith({
-        index: 1,
+        index: 0,
         routes: [
-          { name: 'MainTabs' },
-          { name: 'ProductionUnitsHub', params: { cycleId: createdProductionCycle.id } },
+          { name: 'MainTabs', params: { screen: 'Dashboard' } },
         ],
       });
     });
@@ -596,6 +594,50 @@ describe('features/aquaculture/screens/CycleSimulationScreen', () => {
       expect(getText(/10 productionUnitDensityFingerlingsPerSquareMeter/)).toBeTruthy();
       expect(getText(/299,3 kg/)).toBeTruthy();
       expect(getText(/399 kg/)).toBeTruthy();
+    });
+  });
+
+  it('regroupe les bacs identiques dans un seul resume lisible', async () => {
+    mockDispatch.mockImplementation((action: unknown) => {
+      if (typeof action === 'function') {
+        return {
+          type: runCycleSimulation.fulfilled.type,
+          payload: {
+            ...currentResult,
+            initial_fish_count_per_cycle: 180_000,
+            cycles_breakdown: [
+              { ...currentResult.cycles_breakdown[0], initial_fish_count: 180_000 },
+            ],
+          },
+        };
+      }
+
+      return action;
+    });
+
+    const route = buildRoute({
+      fingerlingsCount: '180000',
+      productionUnits: [1, 2, 3].map((index) => ({
+        local_id: `unit-${index}`,
+        name: `Bac ${index}`,
+        unit_type: 'tank',
+        volume_m3: '200',
+      })),
+      productionUnitAllocations: [1, 2, 3].map((index) => ({
+        production_unit_local_id: `unit-${index}`,
+        fish_count: '60000',
+      })),
+    });
+
+    const { getAllByText, getByText, queryByText } = render(
+      <CycleSimulationScreen navigation={navigation} route={route} />
+    );
+
+    await waitFor(() => {
+      expect(getByText('Bac 1 → Bac 2 → Bac 3')).toBeTruthy();
+      expect(getByText('60,000 productionUnitFingerlingsUnit')).toBeTruthy();
+      expect(getAllByText('300 productionUnitDensityFingerlingsPerCubicMeter')).toHaveLength(2);
+      expect(queryByText('simulationAllocationByUnitDescription')).toBeNull();
     });
   });
 });

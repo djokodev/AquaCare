@@ -184,6 +184,98 @@ class TestReportApplicationService:
         }
         mock_dispatch.assert_called_once_with(report)
 
+    def test_daily_report_defaults_to_current_cycle_day(self):
+        user = UserFactory()
+        farm_profile = FarmProfileFactory(user=user)
+        cycle = ProductionCycleFactory(
+            farm_profile=farm_profile,
+            status="active",
+            start_date=date(2026, 7, 16),
+        )
+
+        with patch.object(timezone, "localdate", return_value=date(2026, 7, 16)), patch.object(
+            ReportApplicationService, "_dispatch_generation"
+        ):
+            report = ReportApplicationService.request_report_generation(
+                user,
+                GenerateReportCommand(report_type="daily", cycle_id=str(cycle.id)),
+            )
+
+        assert report.period_start == date(2026, 7, 16)
+        assert report.period_end == date(2026, 7, 16)
+
+    def test_repeated_daily_generation_reuses_the_same_logical_report(self):
+        user = UserFactory()
+        farm_profile = FarmProfileFactory(user=user)
+        cycle = ProductionCycleFactory(
+            farm_profile=farm_profile,
+            status="active",
+            start_date=date(2026, 7, 16),
+        )
+        command = GenerateReportCommand(
+            report_type="daily",
+            reference_date=date(2026, 7, 16),
+            cycle_id=str(cycle.id),
+        )
+
+        with patch.object(ReportApplicationService, "_dispatch_generation") as mock_dispatch:
+            first_report = ReportApplicationService.request_report_generation(user, command)
+            second_report = ReportApplicationService.request_report_generation(user, command)
+
+        assert second_report.id == first_report.id
+        assert ProductionReport.objects.filter(farm_profile=farm_profile).count() == 1
+        assert mock_dispatch.call_count == 2
+
+    def test_weekly_report_is_unavailable_before_cycle_day_seven(self):
+        user = UserFactory()
+        farm_profile = FarmProfileFactory(user=user)
+        cycle = ProductionCycleFactory(
+            farm_profile=farm_profile,
+            status="active",
+            start_date=date(2026, 7, 16),
+        )
+
+        with patch.object(timezone, "localdate", return_value=date(2026, 7, 19)):
+            with pytest.raises(InvalidReportPeriodError, match="disponible dans 3 jours"):
+                ReportApplicationService.request_report_generation(
+                    user,
+                    GenerateReportCommand(report_type="weekly", cycle_id=str(cycle.id)),
+                )
+
+    @pytest.mark.parametrize(
+        ("report_type", "reference_date", "expected_start", "expected_end"),
+        [
+            ("weekly", date(2026, 7, 22), date(2026, 7, 16), date(2026, 7, 22)),
+            ("weekly", date(2026, 7, 29), date(2026, 7, 23), date(2026, 7, 29)),
+            ("monthly", date(2026, 8, 14), date(2026, 7, 16), date(2026, 8, 14)),
+        ],
+    )
+    def test_cycle_period_report_uses_latest_complete_block(
+        self,
+        report_type,
+        reference_date,
+        expected_start,
+        expected_end,
+    ):
+        user = UserFactory()
+        farm_profile = FarmProfileFactory(user=user)
+        cycle = ProductionCycleFactory(
+            farm_profile=farm_profile,
+            status="active",
+            start_date=date(2026, 7, 16),
+        )
+
+        with patch.object(timezone, "localdate", return_value=reference_date), patch.object(
+            ReportApplicationService, "_dispatch_generation"
+        ):
+            report = ReportApplicationService.request_report_generation(
+                user,
+                GenerateReportCommand(report_type=report_type, cycle_id=str(cycle.id)),
+            )
+
+        assert report.period_start == expected_start
+        assert report.period_end == expected_end
+
     def test_request_report_generation_supports_unit_scope(self):
         user = UserFactory()
         farm_profile = FarmProfileFactory(user=user)

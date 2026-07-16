@@ -278,6 +278,32 @@ export const getProductionUnitDisplayName = (
   unit: Pick<ProductionUnitDraft, 'name'>
 ): string => toProductionUnitString(unit.name);
 
+export const normalizeProductionUnitName = (name?: string | null): string =>
+  toProductionUnitString(name)
+    .normalize('NFKC')
+    .replace(/\s+/g, ' ')
+    .toLocaleLowerCase();
+
+export const hasDuplicateProductionUnitNames = (
+  units: Array<Pick<ProductionUnitDraft, 'name'>>
+): boolean => {
+  const names = new Set<string>();
+
+  return units.some((unit) => {
+    const normalizedName = normalizeProductionUnitName(unit.name);
+    if (!normalizedName) {
+      return false;
+    }
+
+    if (names.has(normalizedName)) {
+      return true;
+    }
+
+    names.add(normalizedName);
+    return false;
+  });
+};
+
 export const getTotalProductionUnitsCapacity = (
   units: ProductionUnitDimensionSource[]
 ): number | null => {

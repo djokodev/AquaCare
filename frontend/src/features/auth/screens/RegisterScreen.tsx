@@ -115,9 +115,6 @@ export default function RegisterScreen({ navigation }: Props) {
             resizeMode="contain"
             accessibilityLabel={t('appName')}
           />
-          <AppText variant="body" color="muted" style={styles.centered}>
-            {t("createAccount")}
-          </AppText>
         </View>
 
         <Card variant="elevated" style={styles.card}>
@@ -282,7 +279,6 @@ const styles = StyleSheet.create({
   content: { padding: spacing[5], paddingTop: spacing[10] + spacing[2] },
   hero: { alignItems: "center", gap: spacing[2], marginBottom: spacing[8] },
   logo: { width: 220, height: 96 },
-  centered: { textAlign: "center" },
   card: { gap: spacing[4] },
   footer: {
     flexDirection: "row",

@@ -1,0 +1,12 @@
+{% extends "admin/delete_selected_confirmation.html" %}
+{% load i18n %}
+
+{% block content %}
+  <ul class="messagelist">
+    <li class="warning">
+      <strong>{% translate "Attention : suppression métier irréversible." %}</strong>
+      {% translate "Chaque journal sélectionné modifiera l'historique des effectifs et de la biomasse. Les indicateurs des cycles seront recalculés, les rapports existants peuvent devenir obsolètes, et les récoltes finales affectées peuvent repasser en réconciliation en attente. Cette action est réservée au super-administrateur." %}
+    </li>
+  </ul>
+  {{ block.super }}
+{% endblock %}

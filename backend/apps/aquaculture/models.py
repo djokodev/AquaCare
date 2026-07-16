@@ -26,6 +26,7 @@ from .constants import (
     CYCLE_STATUS_CHOICES,
     DEFAULT_FEED_PRICE_PER_KG,
     GROWTH_STAGES,
+    MAX_INITIAL_FISH_COUNT,
     SANITARY_EVENT_TYPES,
     SPECIES_CHOICES,
 )
@@ -896,7 +897,7 @@ class ProductionCycle(models.Model):
 
     initial_count = models.PositiveIntegerField(
         verbose_name=_("Nombre initial de poissons"),
-        validators=[MinValueValidator(1), MaxValueValidator(100000)]
+        validators=[MinValueValidator(1), MaxValueValidator(MAX_INITIAL_FISH_COUNT)]
     )
 
     initial_average_weight = models.DecimalField(

@@ -1,4 +1,5 @@
 import React from 'react';
+import { Alert } from 'react-native';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 
 import ReportsScreen from '../ReportsScreen';
@@ -42,6 +43,14 @@ jest.mock('react-i18next', () => ({
   }),
 }));
 
+jest.mock('@/features/aquaculture/utils/reportPeriods', () => {
+  const actual = jest.requireActual('@/features/aquaculture/utils/reportPeriods');
+  return {
+    ...actual,
+    getLocalDateISO: () => '2026-07-16',
+  };
+});
+
 describe('features/aquaculture/screens/ReportsScreen', () => {
   const navigation = {
     navigate: jest.fn(),
@@ -59,10 +68,14 @@ describe('features/aquaculture/screens/ReportsScreen', () => {
     mockUseSelector.mockImplementation((selector: (state: any) => unknown) =>
       selector({
         aquaculture: {
-          currentCycle: { id: 'cycle-1' },
+          currentCycle: { id: 'cycle-1', start_date: '2026-01-01' },
         },
       })
     );
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
   it('affiche un rapport cycle et genere avec le contexte cycle', async () => {
@@ -106,6 +119,7 @@ describe('features/aquaculture/screens/ReportsScreen', () => {
         report_type: 'weekly',
         scope_type: 'cycle',
         cycle_id: 'cycle-1',
+        reference_date: '2026-07-16',
       });
     });
   });
@@ -135,8 +149,57 @@ describe('features/aquaculture/screens/ReportsScreen', () => {
         report_type: reportType,
         scope_type: 'cycle',
         cycle_id: 'cycle-1',
+        reference_date: '2026-07-16',
       }));
     }
+  });
+
+  it('autorise le journalier mais bloque les périodes incomplètes au jour 4', async () => {
+    mockUseSelector.mockImplementation((selector: (state: any) => unknown) =>
+      selector({
+        aquaculture: {
+          currentCycle: { id: 'cycle-1', start_date: '2026-07-13' },
+          dashboardData: { active_cycles: [] },
+        },
+      })
+    );
+    mockGetReports.mockResolvedValue([]);
+    mockGenerateReport.mockResolvedValue({ id: 'daily-report' });
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+
+    const { getByRole, getByText, queryByText } = render(
+      <ReportsScreen
+        navigation={navigation}
+        route={{ key: 'Reports', name: 'Reports', params: { scope: 'cycle', cycleId: 'cycle-1' } } as any}
+      />
+    );
+
+    await waitFor(() => expect(getByText('reportGenerationDaily')).toBeTruthy());
+
+    expect(queryByText('reportWeeklyUnavailableHint')).toBeNull();
+    expect(queryByText('reportMonthlyUnavailableHint')).toBeNull();
+    expect(queryByText('generateFirstReportHint')).toBeNull();
+
+    expect(getByRole('button', { name: 'reportGenerationDaily' }).props.accessibilityState.disabled).toBe(false);
+    expect(getByRole('button', { name: 'reportGenerationWeekly' }).props.accessibilityState.disabled).toBe(false);
+    expect(getByRole('button', { name: 'reportGenerationMonthly' }).props.accessibilityState.disabled).toBe(false);
+
+    fireEvent.press(getByText('reportGenerationWeekly'));
+    expect(alertSpy).toHaveBeenCalledWith(
+      'reportUnavailableTitle',
+      'reportWeeklyUnavailableHint'
+    );
+    expect(mockGenerateReport).not.toHaveBeenCalled();
+
+    fireEvent.press(getByRole('button', { name: 'reportGenerationDaily' }));
+    await waitFor(() => {
+      expect(mockGenerateReport).toHaveBeenCalledWith({
+        report_type: 'daily',
+        scope_type: 'cycle',
+        cycle_id: 'cycle-1',
+        reference_date: '2026-07-16',
+      });
+    });
   });
 
   it('affiche un rapport unité et genere avec le contexte unitaire', async () => {
@@ -152,6 +215,7 @@ describe('features/aquaculture/screens/ReportsScreen', () => {
       {
         id: 'allocation-1',
         cycle: 'cycle-1',
+        cycle_start_date: '2026-01-01',
         production_unit: 'unit-1',
         production_unit_name: 'Bac 1',
         production_unit_type: 'tank',
@@ -192,6 +256,7 @@ describe('features/aquaculture/screens/ReportsScreen', () => {
         scope_type: 'unit',
         cycle_id: 'cycle-1',
         cycle_unit_allocation_id: 'allocation-1',
+        reference_date: '2026-07-16',
       });
     });
   });
@@ -233,6 +298,7 @@ describe('features/aquaculture/screens/ReportsScreen', () => {
       {
         id: 'allocation-2',
         cycle: 'cycle-1',
+        cycle_start_date: '2026-01-01',
         production_unit: 'unit-2',
         production_unit_name: 'Bassin B',
         production_unit_type: 'pond',
@@ -259,6 +325,7 @@ describe('features/aquaculture/screens/ReportsScreen', () => {
         scope_type: 'unit',
         cycle_id: 'cycle-1',
         cycle_unit_allocation_id: 'allocation-2',
+        reference_date: '2026-07-16',
       });
     });
   });
@@ -332,6 +399,7 @@ describe('features/aquaculture/screens/ReportsScreen', () => {
         ? [{
             id: 'allocation-a1',
             cycle: 'cycle-a',
+            cycle_start_date: '2026-01-01',
             production_unit: 'unit-a1',
             production_unit_name: 'Bassin A1',
             production_unit_type: 'tank',
@@ -341,6 +409,7 @@ describe('features/aquaculture/screens/ReportsScreen', () => {
         : [{
             id: 'allocation-b1',
             cycle: 'cycle-b',
+            cycle_start_date: '2026-01-01',
             production_unit: 'unit-b1',
             production_unit_name: 'Bassin B1',
             production_unit_type: 'pond',
@@ -381,6 +450,7 @@ describe('features/aquaculture/screens/ReportsScreen', () => {
         report_type: 'daily',
         scope_type: 'cycle',
         cycle_id: 'cycle-b',
+        reference_date: '2026-07-16',
       });
       expect(mockGenerateReport).not.toHaveBeenCalledWith(expect.objectContaining({
         cycle_unit_allocation_id: 'allocation-a1',
@@ -394,6 +464,7 @@ describe('features/aquaculture/screens/ReportsScreen', () => {
       {
         id: 'allocation-b1',
         cycle: 'cycle-b',
+        cycle_start_date: '2026-01-01',
         production_unit: 'unit-b1',
         production_unit_name: 'Bassin B1',
         production_unit_type: 'pond',
@@ -423,6 +494,7 @@ describe('features/aquaculture/screens/ReportsScreen', () => {
         scope_type: 'unit',
         cycle_id: 'cycle-b',
         cycle_unit_allocation_id: 'allocation-b1',
+        reference_date: '2026-07-16',
       });
     });
   });

@@ -99,6 +99,15 @@ describe('farmSetupForm', () => {
     expect(errors.fingerlingsCount).toBe('createFarmPositiveIntegerError');
   });
 
+  it('refuse un effectif supérieur à la limite prise en charge', () => {
+    const errors = validateFarmSetupForm({
+      ...baseForm,
+      fingerlingsCount: '1000001',
+    });
+
+    expect(errors.fingerlingsCount).toBe('createFarmFishCountLimitError');
+  });
+
   it('exige le volume pour les infrastructures hors etang', () => {
     const errors = validateFarmSetupForm({
       ...baseForm,

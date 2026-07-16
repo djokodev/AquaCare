@@ -20,6 +20,27 @@ from tests.fixtures.factories import FarmProfileFactory, ProductionCycleFactory,
 
 
 @pytest.mark.parametrize(
+    ("report_type", "cycle_start", "reference", "expected"),
+    [
+        ("daily", date(2026, 7, 16), date(2026, 7, 16), (date(2026, 7, 16), date(2026, 7, 16))),
+        ("weekly", date(2026, 7, 16), date(2026, 7, 19), None),
+        ("weekly", date(2026, 7, 16), date(2026, 7, 22), (date(2026, 7, 16), date(2026, 7, 22))),
+        ("weekly", date(2026, 7, 16), date(2026, 7, 23), (date(2026, 7, 16), date(2026, 7, 22))),
+        ("weekly", date(2026, 7, 16), date(2026, 7, 29), (date(2026, 7, 23), date(2026, 7, 29))),
+        ("monthly", date(2026, 7, 16), date(2026, 8, 13), None),
+        ("monthly", date(2026, 7, 16), date(2026, 8, 14), (date(2026, 7, 16), date(2026, 8, 14))),
+        ("monthly", date(2026, 7, 16), date(2026, 9, 13), (date(2026, 8, 15), date(2026, 9, 13))),
+    ],
+)
+def test_build_cycle_report_period_bounds(report_type, cycle_start, reference, expected):
+    assert ReportService.build_cycle_report_period_bounds(
+        report_type,
+        cycle_start,
+        reference,
+    ) == expected
+
+
+@pytest.mark.parametrize(
     ("cycle_name", "language_code", "expected"),
     [
         ("Cycle Clarias normal", "fr", "Clarias normal"),
@@ -180,7 +201,8 @@ class TestReportServiceEmailFormatting:
         assert daily_subject.startswith("Rapport journalier du ")
         assert weekly_subject.startswith("Rapport hebdomadaire du ")
         assert " au " in weekly_subject
-        assert monthly_subject.startswith("Rapport mensuel de ")
+        assert monthly_subject.startswith("Rapport mensuel du ")
+        assert " au " in monthly_subject
         assert "[AquaCare]" not in daily_subject
         assert "->" not in daily_subject
 

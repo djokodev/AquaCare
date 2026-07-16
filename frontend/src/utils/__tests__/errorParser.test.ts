@@ -75,6 +75,29 @@ describe('utils/errorParser', () => {
     expect(parsed.details).toEqual([]);
   });
 
+  it('parseApiError expose les champs imbriques des erreurs de lancement', () => {
+    const parsed = parseApiError({
+      response: {
+        status: 400,
+        data: {
+          cycle: {
+            initial_count: ['Assurez-vous que cette valeur est inférieure ou égale à 100000.'],
+          },
+        },
+      },
+    });
+
+    expect(parsed.details).toEqual([
+      {
+        field: 'cycle.initial_count',
+        messages: ['Assurez-vous que cette valeur est inférieure ou égale à 100000.'],
+      },
+    ]);
+    expect(formatErrorForDisplay(parsed)).toContain(
+      '• Nombre initial de poissons : Assurez-vous que cette valeur est inférieure ou égale à 100000.'
+    );
+  });
+
   it('getApiErrorMessage extrait les formats DRF et legacy sans JSON brut', () => {
     expect(getApiErrorMessage('Erreur déjà normalisée')).toBe('Erreur déjà normalisée');
     expect(getApiErrorMessage({ response: { data: { detail: 'Cycle non trouvé' } } })).toBe('Cycle non trouvé');

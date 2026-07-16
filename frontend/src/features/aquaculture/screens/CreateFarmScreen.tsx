@@ -30,6 +30,7 @@ import {
   TextField,
 } from '@/components/ui';
 import { colors, radii, sizing, spacing } from '@/theme';
+import { INPUT_LIMITS } from '@/domain/aquaculture/constants';
 import { RootStackParamList } from '@/navigation/MainNavigator';
 import { AppDispatch, RootState } from '@/store/store';
 import { runCycleSimulation } from '@/features/aquaculture/store/farmSetupSlice';
@@ -56,6 +57,7 @@ import {
   getProductionUnitDisplayDimension,
   getProductionUnitsCompatibilitySummary,
   getTotalProductionUnitsCapacity,
+  hasDuplicateProductionUnitNames,
   normalizeProductionUnitType,
   suggestProductionUnitFishAllocations,
   validateProductionUnitDraft,
@@ -116,7 +118,7 @@ interface BulkUnitDraftState {
   surface_m2: string;
 }
 
-type BulkUnitDraftErrors = Partial<Record<'count', string>> & ProductionUnitDraftErrors;
+type BulkUnitDraftErrors = Partial<Record<'count' | 'base_name', string>> & ProductionUnitDraftErrors;
 
 const getDefaultSingleDraft = (): UnitDraftState => ({
   name: '',
@@ -201,9 +203,16 @@ export default function CreateFarmScreen({ navigation }: Props) {
   const [editingUnitId, setEditingUnitId] = useState<string | null>(null);
   const [singleFormOffsetY, setSingleFormOffsetY] = useState(0);
   const [allocationMode, setAllocationMode] = useState<'auto' | 'manual'>('auto');
+  const [fingerlingsCountMode, setFingerlingsCountMode] = useState<'auto' | 'manual'>('auto');
   const [isCycleDurationCustomized, setIsCycleDurationCustomized] = useState(false);
   const formErrors = useMemo(() => validateFarmSetupForm(form), [form]);
   const cycleDurationErrorKey = formErrors.cycleDuration;
+  const fingerlingsCountLimitError =
+    formErrors.fingerlingsCount === 'createFarmFishCountLimitError'
+      ? t('createFarmFishCountLimitError', {
+          max: formatNumber(INPUT_LIMITS.fishCount.max),
+        })
+      : undefined;
   const cycleDurationAccessibilityText = cycleDurationErrorKey
     ? t(cycleDurationErrorKey === 'required' ? 'required' : cycleDurationErrorKey)
     : form.cycleDuration
@@ -294,6 +303,21 @@ export default function CreateFarmScreen({ navigation }: Props) {
   const totalRecommendedCapacity = useMemo(() => {
     return getTotalProductionUnitsCapacity(form.productionUnits);
   }, [form.productionUnits]);
+
+  useEffect(() => {
+    if (fingerlingsCountMode === 'manual') {
+      return;
+    }
+
+    const nextFishCount = totalRecommendedCapacity !== null
+      ? String(Math.floor(totalRecommendedCapacity))
+      : '';
+    setForm((prev) =>
+      prev.fingerlingsCount === nextFishCount
+        ? prev
+        : { ...prev, fingerlingsCount: nextFishCount }
+    );
+  }, [fingerlingsCountMode, totalRecommendedCapacity]);
 
   const recommendedAllocations = useMemo(() => {
     return suggestProductionUnitFishAllocations({
@@ -422,13 +446,25 @@ export default function CreateFarmScreen({ navigation }: Props) {
       };
     }
 
-    return validateProductionUnitDraft({
+    const validationErrors = validateProductionUnitDraft({
       local_id: editingUnitId ?? 'draft-unit',
       name: draft.name.trim(),
       unit_type: draft.unit_type,
       volume_m3: draft.unit_type === 'pond' ? '' : draft.volume_m3.trim(),
       surface_m2: draft.unit_type === 'pond' ? draft.surface_m2.trim() : '',
     });
+
+    const otherUnits = form.productionUnits.filter(
+      (unit) => unit.local_id !== editingUnitId
+    );
+    if (
+      !validationErrors.name &&
+      hasDuplicateProductionUnitNames([...otherUnits, { name: draft.name }])
+    ) {
+      validationErrors.name = 'createFarmProductionUnitDuplicateNameError';
+    }
+
+    return validationErrors;
   };
 
   const validateBulkUnitDraft = (): BulkUnitDraftErrors => {
@@ -453,9 +489,25 @@ export default function CreateFarmScreen({ navigation }: Props) {
     });
     delete validationErrors.name;
 
+    const nextIndex = getUnitsOfTypeCount(bulkUnitDraft.unit_type) + 1;
+    const prefix = bulkUnitDraft.base_name.trim() || t(getUnitTypeLabelKey(bulkUnitDraft.unit_type));
+    const candidateUnits = createIdenticalProductionUnitDrafts({
+      unitType: bulkUnitDraft.unit_type,
+      count: Number.isInteger(count) && count > 0 ? count : 0,
+      namePrefix: prefix,
+      volumeM3: bulkUnitDraft.volume_m3.trim(),
+      surfaceM2: bulkUnitDraft.surface_m2.trim(),
+      startIndex: nextIndex,
+    });
+    const baseNameError = candidateUnits.length > 0 &&
+      hasDuplicateProductionUnitNames([...form.productionUnits, ...candidateUnits])
+      ? 'createFarmProductionUnitDuplicateNameError'
+      : undefined;
+
     return {
       ...validationErrors,
       count: countError,
+      base_name: baseNameError,
     };
   };
 
@@ -485,6 +537,12 @@ export default function CreateFarmScreen({ navigation }: Props) {
       return `${fieldLabel} : ${t('createFarmFingerlingsCoherenceError', {
         count: fingerlingsCoherence.count,
         max: formatNumber(fingerlingsCoherence.maxCycle),
+      })}`;
+    }
+
+    if (errorCode === 'createFarmFishCountLimitError') {
+      return `${fieldLabel} : ${t('createFarmFishCountLimitError', {
+        max: formatNumber(INPUT_LIMITS.fishCount.max),
       })}`;
     }
 
@@ -786,14 +844,16 @@ export default function CreateFarmScreen({ navigation }: Props) {
         <AppText variant="cardTitle" style={styles.formCardTitle}>
           {editingUnitId ? t('createFarmEditUnitTitle') : t('createFarmAddUnitTitle')}
         </AppText>
-        <AppText variant="helper" color="muted" style={styles.formCardDescription}>{t('createFarmAddUnitDescription')}</AppText>
 
         <FieldLabel label={t('createFarmUnitNameLabel')} required />
         <TextField
           error={singleUnitErrors.name ? t(singleUnitErrors.name) : undefined}
           placeholder={t('createFarmUnitNamePlaceholder')}
           value={singleUnitDraft.name}
-          onChangeText={(value) => setSingleUnitDraft((prev) => ({ ...prev, name: value }))}
+          onChangeText={(value) => {
+            setSingleUnitDraft((prev) => ({ ...prev, name: value }));
+            setSingleUnitErrors((prev) => ({ ...prev, name: undefined }));
+          }}
         />
         {singleUnitErrors.name && <AppText variant="helper" color="error" style={styles.inlineError}>{t(singleUnitErrors.name)}</AppText>}
 
@@ -858,7 +918,6 @@ export default function CreateFarmScreen({ navigation }: Props) {
 
       <View style={styles.formCard}>
         <AppText variant="cardTitle" style={styles.formCardTitle}>{t('createFarmAddUnitsIdenticalTitle')}</AppText>
-        <AppText variant="helper" color="muted" style={styles.formCardDescription}>{t('createFarmAddUnitsIdenticalDescription')}</AppText>
 
         <FieldLabel label={t('createFarmUnitTypeLabel')} required />
         <View style={styles.chipRow}>
@@ -891,10 +950,19 @@ export default function CreateFarmScreen({ navigation }: Props) {
 
         <FieldLabel label={t('createFarmUnitBaseNameLabel')} />
         <TextField
+          error={bulkUnitErrors.base_name ? t(bulkUnitErrors.base_name) : undefined}
           placeholder={t('createFarmUnitBaseNamePlaceholder')}
           value={bulkUnitDraft.base_name}
-          onChangeText={(value) => setBulkUnitDraft((prev) => ({ ...prev, base_name: value }))}
+          onChangeText={(value) => {
+            setBulkUnitDraft((prev) => ({ ...prev, base_name: value }));
+            setBulkUnitErrors((prev) => ({ ...prev, base_name: undefined }));
+          }}
         />
+        {bulkUnitErrors.base_name && (
+          <AppText variant="helper" color="error" style={styles.inlineError}>
+            {t(bulkUnitErrors.base_name)}
+          </AppText>
+        )}
 
         {bulkUnitDraft.unit_type ? (
           bulkDraftUsesSurface ? (
@@ -995,13 +1063,37 @@ export default function CreateFarmScreen({ navigation }: Props) {
 
       <FieldLabel label={t('createFarmFingerlingsCountLabel')} required />
       <TextField
-        error={fingerlingsCoherence?.level === 'error' ? t('error') : undefined}
+        error={
+          fingerlingsCountLimitError ??
+          (fingerlingsCoherence?.level === 'error' ? t('error') : undefined)
+        }
         keyboardType="numeric"
         placeholder={fingerlingsCountPlaceholder}
         value={form.fingerlingsCount}
-        onChangeText={v => setField('fingerlingsCount', sanitizePositiveIntegerInput(v))}
+        onChangeText={v => {
+          setFingerlingsCountMode('manual');
+          setField('fingerlingsCount', sanitizePositiveIntegerInput(v));
+        }}
+        accessibilityState={
+          {
+            invalid: Boolean(
+              fingerlingsCountLimitError || fingerlingsCoherence?.level === 'error'
+            ),
+          } as AccessibilityState
+        }
+        accessibilityLiveRegion="polite"
       />
-      {stockingDensityCheck && (
+      {fingerlingsCountLimitError && (
+        <AppText
+          variant="helper"
+          color="error"
+          style={styles.inlineError}
+          accessibilityLiveRegion="polite"
+        >
+          {fingerlingsCountLimitError}
+        </AppText>
+      )}
+      {!fingerlingsCountLimitError && stockingDensityCheck && (
         <View style={[
           styles.coherenceBadge,
           stockingDensityCheck.isOk ? styles.coherenceBadgeOk : styles.coherenceBadgeError,
@@ -1025,7 +1117,7 @@ export default function CreateFarmScreen({ navigation }: Props) {
           </AppText>
         </View>
       )}
-      {fingerlingsCoherence && (
+      {!fingerlingsCountLimitError && fingerlingsCoherence && (
         <View style={[
           styles.coherenceBadge,
           fingerlingsCapacityStatus?.level === 'ok' && styles.coherenceBadgeOk,
@@ -1051,13 +1143,7 @@ export default function CreateFarmScreen({ navigation }: Props) {
 
       {form.productionUnits.length > 0 && (
         <>
-          <SectionTitle
-            label={t('createFarmProductionUnitAllocationSectionTitle')}
-            icon="layers-outline"
-          />
-          <AppText variant="helper" color="muted" style={styles.sectionDescription}>
-            {t('createFarmProductionUnitAllocationSectionDescription')}
-          </AppText>
+          <SectionTitle label={t('createFarmProductionUnitAllocationSectionTitle')} />
 
           {allocationValidation?.global_error && (
             <View style={styles.allocationNoticeBadge}>
@@ -1237,14 +1323,23 @@ export default function CreateFarmScreen({ navigation }: Props) {
           testID="createFarmAddCalibrationUnit"
           label={t('addCalibrationTankToCycleLaunch')}
           variant="outline"
-          iconLeft="cube-outline"
           onPress={addCalibrationUnit}
           disabled={!calibrationName.trim() || !calibrationVolume}
         />
         {(form.calibrationUnits ?? []).map((unit) => (
           <Card key={unit.client_uuid} variant="outlined">
-            <AppText variant="bodyStrong">{unit.name}</AppText>
-            <AppText>{t('calibrationTankVolumeValue', { volume: unit.volume_m3 })}</AppText>
+            <View style={styles.calibrationUnitSummary}>
+              <AppText
+                variant="bodyStrong"
+                style={styles.calibrationUnitName}
+                numberOfLines={1}
+              >
+                {unit.name}
+              </AppText>
+              <AppText style={styles.calibrationUnitVolume}>
+                {t('calibrationTankVolumeValue', { volume: unit.volume_m3 })}
+              </AppText>
+            </View>
             <Button
               label={t('remove')}
               variant="outline"
@@ -1276,10 +1371,9 @@ export default function CreateFarmScreen({ navigation }: Props) {
 
 // ── Sub-components ───────────────────────────────────────────────────────────
 
-function SectionTitle({ label, icon }: { label: string; icon: string }) {
+function SectionTitle({ label }: { label: string }) {
   return (
     <View style={styles.sectionTitle}>
-      <Ionicons name={icon as keyof typeof Ionicons.glyphMap} size={18} color={colors.brand.primary} />
       <AppText variant="sectionTitle">{label}</AppText>
     </View>
   );
@@ -1367,6 +1461,19 @@ const styles = StyleSheet.create({
     marginTop: spacing[5],
     gap: spacing[3],
   },
+  calibrationUnitSummary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing[3],
+  },
+  calibrationUnitName: {
+    flex: 1,
+  },
+  calibrationUnitVolume: {
+    flexShrink: 0,
+    textAlign: 'right',
+  },
   sectionTitle: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1377,12 +1484,6 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border.subtle,
     paddingBottom: 8,
   },
-  sectionDescription: {
-    marginBottom: 12,
-    fontSize: 13,
-    lineHeight: 18,
-    color: colors.text.muted,
-  },
   noticeBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1392,8 +1493,6 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 10,
     backgroundColor: colors.status.warningSurface,
-    borderLeftWidth: 3,
-    borderLeftColor: colors.status.warning,
   },
   noticeText: {
     flex: 1,
@@ -1413,13 +1512,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     color: colors.text.primary,
-  },
-  formCardDescription: {
-    marginTop: 4,
-    marginBottom: 8,
-    fontSize: 12,
-    lineHeight: 17,
-    color: colors.text.muted,
   },
   inlineError: {
     marginTop: 6,
@@ -1490,19 +1582,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 8,
-    borderLeftWidth: 3,
   },
   coherenceBadgeOk: {
     backgroundColor: colors.status.successSurface,
-    borderLeftColor: colors.brand.primary,
   },
   coherenceBadgeWarn: {
     backgroundColor: colors.status.warningSurface,
-    borderLeftColor: colors.status.warning,
   },
   coherenceBadgeError: {
     backgroundColor: colors.status.errorSurface,
-    borderLeftColor: colors.status.error,
   },
   coherenceText: {
     fontSize: 12,
@@ -1535,8 +1623,6 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 10,
     backgroundColor: colors.status.errorSurface,
-    borderLeftWidth: 3,
-    borderLeftColor: colors.status.error,
   },
   allocationNoticeText: {
     flex: 1,

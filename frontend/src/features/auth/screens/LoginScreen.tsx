@@ -122,8 +122,8 @@ export default function LoginScreen({ navigation }: Props) {
           <SegmentedControl
             value={isPhoneMode ? "phone" : "login"}
             options={[
-              { value: "login", label: t("loginName") },
-              { value: "phone", label: t("phoneNumber") },
+              { value: "login", label: t("loginNameLabel") },
+              { value: "phone", label: t("loginPhoneLabel") },
             ]}
             onChange={(next) => {
               if ((next === "phone") !== isPhoneMode) toggleMode();
@@ -132,7 +132,7 @@ export default function LoginScreen({ navigation }: Props) {
 
           {!isPhoneMode ? (
             <TextField
-              label={t("loginName")}
+              label={t("loginNameLabel")}
               value={formData.loginName}
               onChangeText={(value) => updateField("loginName", value)}
               placeholder={t("placeholderLoginName")}

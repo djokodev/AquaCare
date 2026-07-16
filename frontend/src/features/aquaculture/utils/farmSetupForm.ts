@@ -19,6 +19,7 @@ import type {
   FarmSetupData,
 } from '@/features/aquaculture/types/farmSetup';
 import type { CycleLaunchCalibrationUnitInput } from '@/types/aquaculture';
+import { INPUT_LIMITS } from '@/domain/aquaculture/constants';
 
 export type FarmSetupSpecies = 'tilapia' | 'clarias' | 'autre';
 export type FarmSetupInfraType = 'etang' | 'cage_flottante' | 'bac_hors_sol' | 'bac_en_sol';
@@ -380,6 +381,8 @@ export const validateFarmSetupForm = (
     errors.fingerlingsCount = 'required';
   } else if (fingerlingsCount === null || fingerlingsCount <= 0) {
     errors.fingerlingsCount = 'createFarmPositiveIntegerError';
+  } else if (fingerlingsCount > INPUT_LIMITS.fishCount.max) {
+    errors.fingerlingsCount = 'createFarmFishCountLimitError';
   } else {
     const capacityCount = getInfrastructureCapacityCount(form);
     if (capacityCount !== null && fingerlingsCount > capacityCount) {

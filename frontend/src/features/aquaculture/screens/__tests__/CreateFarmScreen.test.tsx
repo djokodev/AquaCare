@@ -253,6 +253,42 @@ describe('features/aquaculture/screens/CreateFarmScreen', () => {
     alertSpy.mockRestore();
   });
 
+  it('signale visuellement la limite d alevins avant la simulation', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    const { getAllByText, getByPlaceholderText, getByText, queryByText } = render(
+      <CreateFarmScreen navigation={navigation} />
+    );
+
+    fireEvent.press(getByText('createFarmSpeciesTilapia'));
+    fireEvent.press(getAllByText('productionUnitTypeTank')[0]);
+    fireEvent.changeText(getByPlaceholderText('createFarmUnitNamePlaceholder'), 'Bac 1');
+    fireEvent.changeText(getByPlaceholderText('createFarmUnitVolumePlaceholder'), '3');
+    fireEvent.press(getByText('+ createFarmAddUnitBtn'));
+    fireEvent.changeText(
+      getByPlaceholderText('createFarmFingerlingsCountPlaceholderMax'),
+      '1000001'
+    );
+
+    expect(getByText('createFarmFishCountLimitError')).toBeTruthy();
+    expect(queryByText('createFarmCapacityOver')).toBeNull();
+    expect(queryByText('createFarmStockingDensityError')).toBeNull();
+
+    fireEvent.press(getByText('createFarmSimulateBtn'));
+
+    await waitFor(() => {
+      expect(alertSpy).toHaveBeenCalledWith(
+        'error',
+        'createFarmFingerlingsCountLabel : createFarmFishCountLimitError'
+      );
+      expect(navigation.navigate).not.toHaveBeenCalledWith(
+        'CycleSimulation',
+        expect.anything()
+      );
+    });
+
+    alertSpy.mockRestore();
+  });
+
   it('ajoute une unite puis ouvre la simulation avec les unites en etat', async () => {
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     mockSimulationSuccess();
@@ -372,6 +408,49 @@ describe('features/aquaculture/screens/CreateFarmScreen', () => {
     expect(getByPlaceholderText('createFarmBulkUnitCountPlaceholder').props.value).toBe('');
     expect(queryByPlaceholderText('createFarmUnitVolumePlaceholder')).toBeNull();
     expect(getAllByText('createFarmNoUnitTypeSelected').length).toBeGreaterThan(0);
+  });
+
+  it('refuse un ajout en lot qui créerait un nom déjà utilisé', () => {
+    const { getAllByText, getByPlaceholderText, getByText, queryByText } = render(
+      <CreateFarmScreen navigation={navigation} />
+    );
+
+    fireEvent.press(getAllByText('productionUnitTypePond')[0]);
+    fireEvent.changeText(getByPlaceholderText('createFarmUnitNamePlaceholder'), 'Bac 1');
+    fireEvent.changeText(getByPlaceholderText('createFarmUnitSurfacePlaceholder'), '120');
+    fireEvent.press(getByText('+ createFarmAddUnitBtn'));
+
+    fireEvent.press(getAllByText('productionUnitTypeTank')[1]);
+    fireEvent.changeText(getByPlaceholderText('createFarmBulkUnitCountPlaceholder'), '2');
+    fireEvent.changeText(getByPlaceholderText('createFarmUnitVolumePlaceholder'), '200');
+    fireEvent.changeText(getByPlaceholderText('createFarmUnitBaseNamePlaceholder'), 'Bac');
+    fireEvent.press(getByText('+ createFarmAddUnitsIdenticalBtn'));
+
+    expect(getByText('createFarmProductionUnitDuplicateNameError')).toBeTruthy();
+    expect(queryByText('Bac 2')).toBeNull();
+  });
+
+  it('propose automatiquement le total et la répartition à pleine capacité', async () => {
+    const { getAllByDisplayValue, getAllByText, getByPlaceholderText, getByText } = render(
+      <CreateFarmScreen navigation={navigation} />
+    );
+
+    fireEvent.press(getAllByText('productionUnitTypePond')[0]);
+    fireEvent.changeText(getByPlaceholderText('createFarmUnitNamePlaceholder'), 'Étang 1');
+    fireEvent.changeText(getByPlaceholderText('createFarmUnitSurfacePlaceholder'), '120');
+    fireEvent.press(getByText('+ createFarmAddUnitBtn'));
+
+    fireEvent.press(getAllByText('productionUnitTypeTank')[1]);
+    fireEvent.changeText(getByPlaceholderText('createFarmBulkUnitCountPlaceholder'), '2');
+    fireEvent.changeText(getByPlaceholderText('createFarmUnitVolumePlaceholder'), '200');
+    fireEvent.changeText(getByPlaceholderText('createFarmUnitBaseNamePlaceholder'), 'Bac');
+    fireEvent.press(getByText('+ createFarmAddUnitsIdenticalBtn'));
+
+    await waitFor(() => {
+      expect(getByPlaceholderText('createFarmFingerlingsCountPlaceholderMax').props.value).toBe('121200');
+      expect(getAllByDisplayValue('1200')).toHaveLength(1);
+      expect(getAllByDisplayValue('60000')).toHaveLength(2);
+    });
   });
 
   it('permet la simulation meme si le formulaire bulk a ete touche apres ajout', async () => {

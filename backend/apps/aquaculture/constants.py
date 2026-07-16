@@ -12,6 +12,10 @@ DEFAULT_FEED_PRICE_PER_KG = Decimal('1250')
 MAX_STOCKING_DENSITY_POND_PER_M2 = 10
 MAX_STOCKING_DENSITY_TANK_PER_M3 = 300
 
+# Shared upper bound for a production cycle. Keep aligned with the frontend
+# `INPUT_LIMITS.fishCount` value.
+MAX_INITIAL_FISH_COUNT = 1_000_000
+
 # Water temperature valid range for log entries (°C)
 LOG_TEMPERATURE_MIN = 15
 LOG_TEMPERATURE_MAX = 40

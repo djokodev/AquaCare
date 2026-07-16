@@ -39,7 +39,7 @@ class MissingReportEmailError(ValueError):
 
 
 class InvalidReportPeriodError(InvalidReportScopeError):
-    """La période demandée n'est pas encore terminée."""
+    """La période demandée n'est pas disponible pour le cycle."""
 
 
 @dataclass(frozen=True)
@@ -159,21 +159,6 @@ class ReportApplicationService:
                 _("Le cycle est introuvable, inaccessible ou inactif.")
             )
         return cycle
-
-    @staticmethod
-    def _ensure_period_covers_cycle(
-        cycle: ProductionCycle,
-        period_end: date,
-        language_code: str = "fr",
-    ) -> None:
-        if period_end < cycle.start_date:
-            raise InvalidReportPeriodError(
-                ReportService._pick_text(
-                    language_code,
-                    "La période sélectionnée est antérieure au démarrage du cycle.",
-                    "The selected period is before the cycle start date.",
-                )
-            )
 
     @staticmethod
     def _ensure_unit_scope(
@@ -307,17 +292,6 @@ class ReportApplicationService:
     @staticmethod
     def request_report_generation(user, command: GenerateReportCommand) -> ProductionReport:
         """Cree ou recharge un rapport en attente puis declenche la generation async."""
-        if command.reference_date is None:
-            period_start, period_end = ReportService.build_completed_period_bounds(command.report_type)
-        else:
-            period_start, period_end = ReportService.build_period_bounds(
-                command.report_type,
-                command.reference_date,
-            )
-            if period_end > timezone.localdate():
-                raise InvalidReportPeriodError(
-                    _("La période demandée doit être entièrement terminée avant de générer le rapport.")
-                )
         if command.scope and command.scope_type and command.scope != command.scope_type:
             raise InvalidReportScopeError(_("Les portées fournies sont incohérentes."))
         scope = command.scope_type or command.scope or "cycle"
@@ -330,24 +304,61 @@ class ReportApplicationService:
             cycle_id=cycle_id,
             cycle_unit_allocation_id=cycle_unit_allocation_id,
         )
+        language_code = ReportService._resolve_language_code(user)
+        reference_date = command.reference_date or timezone.localdate()
+        if reference_date > timezone.localdate():
+            raise InvalidReportPeriodError(
+                ReportService._pick_text(
+                    language_code,
+                    "La date du rapport ne peut pas être dans le futur.",
+                    "The report date cannot be in the future.",
+                )
+            )
+        if reference_date < resolved_scope.cycle.start_date:
+            raise InvalidReportPeriodError(
+                ReportService._pick_text(
+                    language_code,
+                    "La période sélectionnée est antérieure au démarrage du cycle.",
+                    "The selected period is before the cycle start date.",
+                )
+            )
+
+        period_bounds = ReportService.build_cycle_report_period_bounds(
+            command.report_type,
+            resolved_scope.cycle.start_date,
+            reference_date,
+        )
+        if period_bounds is None:
+            required_days = ReportService.get_cycle_report_period_length(command.report_type)
+            cycle_day = (reference_date - resolved_scope.cycle.start_date).days + 1
+            remaining_days = required_days - cycle_day
+            report_label = ReportService._pick_text(
+                language_code,
+                "hebdomadaire" if command.report_type == "weekly" else "mensuel",
+                "weekly" if command.report_type == "weekly" else "monthly",
+            )
+            day_label = ReportService._pick_text(
+                language_code,
+                "jour" if remaining_days == 1 else "jours",
+                "day" if remaining_days == 1 else "days",
+            )
+            raise InvalidReportPeriodError(
+                ReportService._pick_text(
+                    language_code,
+                    f"Le rapport {report_label} nécessite {required_days} jours de cycle. "
+                    f"Il sera disponible dans {remaining_days} {day_label}.",
+                    f"The {report_label} report requires {required_days} cycle days. "
+                    f"It will be available in {remaining_days} {day_label}.",
+                )
+            )
+        period_start, period_end = period_bounds
+
         if scope == "unit":
             allocation = resolved_scope.allocation
             assert allocation is not None
-            ReportApplicationService._ensure_period_covers_cycle(
-                resolved_scope.cycle,
-                period_end,
-                ReportService._resolve_language_code(user),
-            )
             cycle_id = str(resolved_scope.cycle.id)
             cycle_unit_allocation_id = str(allocation.id)
-        else:
-            ReportApplicationService._ensure_period_covers_cycle(
-                resolved_scope.cycle,
-                period_end,
-                ReportService._resolve_language_code(user),
-            )
 
-        language_code = ReportService._resolve_language_code(user)
         scope_label = ReportService._resolve_scope_label(scope, language_code)
 
         report, _created = ProductionReport.objects.get_or_create(
