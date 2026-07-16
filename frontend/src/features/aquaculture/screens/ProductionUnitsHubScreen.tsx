@@ -6,6 +6,7 @@ import { RefreshControl, StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
 import {
+  AppHeader,
   AppText,
   Card,
   EmptyState,
@@ -141,67 +142,89 @@ export default function ProductionUnitsHubScreen({ navigation, route }: Props) {
 
   if (loading && !dashboard) {
     return (
-      <Screen style={styles.centered}>
-        <LoadingState message={t('productionUnitsLoading')} />
-      </Screen>
+      <View style={styles.root}>
+        <AppHeader
+          title={t('productionUnitsHubTitle')}
+          onBack={() => navigation.goBack()}
+          backLabel={t('back')}
+        />
+        <Screen style={styles.centered}>
+          <LoadingState message={t('productionUnitsLoading')} />
+        </Screen>
+      </View>
     );
   }
 
   if (errorMessage && !dashboard) {
     return (
-      <Screen style={styles.centered}>
-        <ErrorState
-          message={errorMessage}
-          actionLabel={t('retry')}
-          onAction={() => void loadDashboard('refresh')}
+      <View style={styles.root}>
+        <AppHeader
+          title={t('productionUnitsHubTitle')}
+          onBack={() => navigation.goBack()}
+          backLabel={t('back')}
         />
-      </Screen>
+        <Screen style={styles.centered}>
+          <ErrorState
+            message={errorMessage}
+            actionLabel={t('retry')}
+            onAction={() => void loadDashboard('refresh')}
+          />
+        </Screen>
+      </View>
     );
   }
 
   return (
-    <Screen
-      scroll
-      testID="production-units-hub-scroll"
-      style={styles.content}
-      scrollProps={{
-        refreshControl: (
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={() => void loadDashboard('refresh')}
-            colors={[colors.brand.primary]}
-            tintColor={colors.brand.primary}
-          />
-        ),
-      }}
-    >
-      <AppText variant="label">{t('productionUnitsCount', { count: totalAllocations })}</AppText>
-
-      {errorMessage ? <InlineAlert tone="error" message={errorMessage} /> : null}
-
-      <View style={styles.cards}>
-        {allocations.length > 0 ? (
-          allocations.map((entry) => (
-            <UnitCard
-              key={entry.allocation.id}
-              allocation={entry.allocation}
-              locale={locale}
-              t={t}
-              onOpen={() => handleOpenUnit(entry.allocation)}
+    <View style={styles.root}>
+      <AppHeader
+        title={t('productionUnitsHubTitle')}
+        onBack={() => navigation.goBack()}
+        backLabel={t('back')}
+      />
+      <Screen
+        scroll
+        testID="production-units-hub-scroll"
+        style={styles.content}
+        scrollProps={{
+          refreshControl: (
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => void loadDashboard('refresh')}
+              colors={[colors.brand.primary]}
+              tintColor={colors.brand.primary}
             />
-          ))
-        ) : (
-          <EmptyState
-            title={t('productionUnitsEmptyTitle')}
-            message={t('productionUnitsEmptyDescription')}
-          />
-        )}
-      </View>
-    </Screen>
+          ),
+        }}
+      >
+        <AppText variant="label">{t('productionUnitsCount', { count: totalAllocations })}</AppText>
+
+        {errorMessage ? <InlineAlert tone="error" message={errorMessage} /> : null}
+
+        <View style={styles.cards}>
+          {allocations.length > 0 ? (
+            allocations.map((entry) => (
+              <UnitCard
+                key={entry.allocation.id}
+                allocation={entry.allocation}
+                locale={locale}
+                t={t}
+                onOpen={() => handleOpenUnit(entry.allocation)}
+              />
+            ))
+          ) : (
+            <EmptyState
+              title={t('productionUnitsEmptyTitle')}
+              message={t('productionUnitsEmptyDescription')}
+            />
+          )}
+        </View>
+      </Screen>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: colors.surface.page },
   centered: { justifyContent: 'center' },
   content: { padding: spacing[5], gap: spacing[4] },
   cards: { gap: spacing[3] },

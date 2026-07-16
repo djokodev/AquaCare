@@ -11,7 +11,6 @@ import {
   Alert,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { Ionicons } from '@expo/vector-icons';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RouteProp } from '@react-navigation/native';
 import { useDispatch, useSelector } from 'react-redux';
@@ -55,7 +54,7 @@ import {
 } from '@/features/aquaculture/services/firstCycleLaunchService';
 import { parseApiError } from '@/utils/errorParser';
 import { formatAquacultureErrorWithAction } from '@/features/aquaculture/utils/aquacultureErrorPresenter';
-import { colors, spacing } from '@/theme';
+import { spacing } from '@/theme';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'CycleSimulation'>;
 type RouteType = RouteProp<RootStackParamList, 'CycleSimulation'>;
@@ -195,12 +194,11 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
       dispatch(setCurrentCycle(launchResult.productionCycle));
 
       navigation.reset({
-        index: 1,
+        index: 0,
         routes: [
-          { name: 'MainTabs' },
           {
-            name: 'ProductionUnitsHub',
-            params: { cycleId: launchResult.productionCycle.id },
+            name: 'MainTabs',
+            params: { screen: 'Dashboard' },
           },
         ],
       });
@@ -246,7 +244,6 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
   return (
     <Screen scroll style={styles.content}>
       <View style={styles.header}>
-        <Ionicons name="analytics-outline" size={32} color={colors.brand.primary} />
         <AppText variant="cardTitle" style={styles.title}>{t('simulationSubtitle')}</AppText>
       </View>
 
@@ -453,7 +450,7 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
         />
       </Card>
 
-      <InlineAlert tone="info" message={t('simulationOtherCostsInfo')} />
+      <InlineAlert tone="info" message={t('simulationOtherCostsInfo')} compact />
 
       <Button
         label={t('simulationModifyBtn')}
@@ -506,7 +503,7 @@ const metricStyles = StyleSheet.create({
 const styles = StyleSheet.create({
   centered: { justifyContent: 'center' },
   content: { padding: spacing[4], gap: spacing[3] },
-  header: { alignItems: 'center', paddingVertical: spacing[3], gap: spacing[2] },
+  header: { alignItems: 'center', paddingVertical: spacing[3] },
   title: { textAlign: 'center' },
   card: { gap: spacing[2] },
   allocationSummaryList: { gap: spacing[2], marginTop: spacing[2] },

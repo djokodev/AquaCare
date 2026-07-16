@@ -7,6 +7,16 @@ import ProductionUnitsHubScreen from '../ProductionUnitsHubScreen';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
 import { colors } from '@/theme';
 
+jest.mock('react-native-safe-area-context', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+  return {
+    SafeAreaView: ({ children, ...props }: any) => <View {...props}>{children}</View>,
+    SafeAreaProvider: ({ children }: any) => <View>{children}</View>,
+    useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
+  };
+});
+
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string, options?: Record<string, unknown>) =>
@@ -27,6 +37,7 @@ describe('features/aquaculture/screens/ProductionUnitsHubScreen', () => {
   const mockGetCycleDashboard = aquacultureService.getCycleDashboard as jest.Mock;
   const navigation = {
     navigate: jest.fn(),
+    goBack: jest.fn(),
   } as any;
 
   const route = {
@@ -166,7 +177,7 @@ describe('features/aquaculture/screens/ProductionUnitsHubScreen', () => {
     );
 
     await waitFor(() => {
-      expect(queryByText('productionUnitsHubTitle')).toBeNull();
+      expect(getByText('productionUnitsHubTitle')).toBeTruthy();
       expect(queryByText('productionUnitsActiveCycleLabel')).toBeNull();
       expect(queryByText('productionUnitsHubSubtitle')).toBeNull();
       expect(getByText('3 unités')).toBeTruthy();
@@ -240,7 +251,7 @@ describe('features/aquaculture/screens/ProductionUnitsHubScreen', () => {
     await waitFor(() => {
       expect(queryByText('productionUnitsHubSubtitle')).toBeNull();
       expect(getByText('0 unités')).toBeTruthy();
-      expect(queryByText('productionUnitsHubTitle')).toBeNull();
+      expect(getByText('productionUnitsHubTitle')).toBeTruthy();
     });
   });
 

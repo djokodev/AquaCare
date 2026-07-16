@@ -187,7 +187,7 @@ describe('features/aquaculture/screens/CycleSimulationScreen', () => {
     });
   });
 
-  it('redirige vers le hub des unites en production quand le cycle cree contient des unites', async () => {
+  it('redirige vers le dashboard du cycle nouvellement lancé', async () => {
     let functionCallCount = 0;
     mockDispatch.mockImplementation((action: unknown) => {
       if (typeof action === 'function') {
@@ -282,19 +282,18 @@ describe('features/aquaculture/screens/CycleSimulationScreen', () => {
       );
       expect(mockDispatch).toHaveBeenCalledWith(setCurrentCycle(createdProductionCycle));
       expect(navigation.reset).toHaveBeenCalledWith({
-        index: 1,
+        index: 0,
         routes: [
-          { name: 'MainTabs' },
           {
-            name: 'ProductionUnitsHub',
-            params: { cycleId: createdProductionCycle.id },
+            name: 'MainTabs',
+            params: { screen: 'Dashboard' },
           },
         ],
       });
     });
   }, 10000);
 
-  it('conserve la navigation legacy quand aucune unite de production n est persistee', async () => {
+  it('redirige aussi vers le dashboard sans unite de production persistee', async () => {
     let functionCallCount = 0;
     mockDispatch.mockImplementation((action: unknown) => {
       if (typeof action === 'function') {
@@ -337,10 +336,9 @@ describe('features/aquaculture/screens/CycleSimulationScreen', () => {
     await waitFor(() => {
       expect(mockDispatch).toHaveBeenCalledWith(setCurrentCycle(createdProductionCycle));
       expect(navigation.reset).toHaveBeenCalledWith({
-        index: 1,
+        index: 0,
         routes: [
-          { name: 'MainTabs' },
-          { name: 'ProductionUnitsHub', params: { cycleId: createdProductionCycle.id } },
+          { name: 'MainTabs', params: { screen: 'Dashboard' } },
         ],
       });
     });

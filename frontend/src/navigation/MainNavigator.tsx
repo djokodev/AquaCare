@@ -404,13 +404,6 @@ export default function MainNavigator() {
       <RootStack.Screen
         name="ProductionUnitsHub"
         component={ProductionUnitsHubScreen}
-        options={{
-          headerShown: true,
-          headerStyle: { backgroundColor: colors.brand.primary },
-          headerTintColor: colors.text.inverse,
-          headerTitleStyle: { fontWeight: 'bold' },
-          title: t('productionUnitsHubTitle'),
-        }}
       />
       <RootStack.Screen
         name="ProductionUnitOverview"

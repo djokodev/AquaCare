@@ -10,6 +10,10 @@ import { CycleUnitAllocation, ProductionReport, ReportScopeType, ReportType } fr
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
 import { parseApiError } from '@/utils/errorParser';
 import { formatAquacultureErrorWithAction } from '@/features/aquaculture/utils/aquacultureErrorPresenter';
+import {
+  getCycleReportAvailability,
+  getLocalDateISO,
+} from '@/features/aquaculture/utils/reportPeriods';
 import { formatDate, formatDateTime } from '@/utils';
 import { RootState } from '@/store/store';
 import logger from '@/utils/logger';
@@ -29,6 +33,9 @@ const REPORT_TYPES: ReportType[] = ['daily', 'weekly', 'monthly'];
 export default function ReportsScreen({ navigation, route }: ReportsScreenProps) {
   const { t, i18n } = useTranslation();
   const currentCycle = useSelector((state: RootState) => state.aquaculture.currentCycle);
+  const activeCycles = useSelector(
+    (state: RootState) => state.aquaculture.dashboardData?.active_cycles ?? []
+  );
   const routeParams = route.params;
 
   const resolvedCycleId = routeParams?.cycleId ?? currentCycle?.id ?? undefined;
@@ -44,6 +51,31 @@ export default function ReportsScreen({ navigation, route }: ReportsScreenProps)
   const selectedAllocation = useMemo(
     () => allocations.find((allocation) => allocation.id === selectedAllocationId) ?? null,
     [allocations, selectedAllocationId]
+  );
+  const resolvedCycle = useMemo(
+    () => (
+      currentCycle?.id === resolvedCycleId
+        ? currentCycle
+        : activeCycles.find((cycle) => cycle.id === resolvedCycleId) ?? null
+    ),
+    [activeCycles, currentCycle, resolvedCycleId]
+  );
+  const cycleStartDate = resolvedCycle?.start_date
+    ?? selectedAllocation?.cycle_start_date
+    ?? allocations[0]?.cycle_start_date;
+  const reportReferenceDate = getLocalDateISO();
+  const reportAvailability = useMemo(
+    () => new Map(
+      REPORT_TYPES.map((reportType) => [
+        reportType,
+        getCycleReportAvailability({
+          reportType,
+          cycleStartDate,
+          referenceDate: reportReferenceDate,
+        }),
+      ])
+    ),
+    [cycleStartDate, reportReferenceDate]
   );
   const reportScope: ReportScopeType = selectedScope === 'unit' && selectedAllocation ? 'unit' : 'cycle';
   const resolvedCycleUnitAllocationId = selectedAllocation?.id;
@@ -225,10 +257,6 @@ export default function ReportsScreen({ navigation, route }: ReportsScreenProps)
     if (report.report_type === 'daily') {
       return formatDate(report.period_start, locale);
     }
-    if (report.report_type === 'monthly') {
-      const monthDate = new Date(`${report.period_start}T12:00:00`);
-      return monthDate.toLocaleDateString(locale, { month: 'long', year: 'numeric' });
-    }
     return `${formatDate(report.period_start, locale)} – ${formatDate(report.period_end, locale)}`;
   }, [i18n?.language]);
 
@@ -239,7 +267,24 @@ export default function ReportsScreen({ navigation, route }: ReportsScreenProps)
       setError(scopeError);
       return;
     }
+    const availability = reportAvailability.get(reportType);
+    if (!availability?.available) {
+      if (availability && reportType !== 'daily') {
+        setInfoMessage(null);
+        Alert.alert(
+          t('reportUnavailableTitle'),
+          t(
+            reportType === 'weekly'
+              ? 'reportWeeklyUnavailableHint'
+              : 'reportMonthlyUnavailableHint',
+            { count: availability.daysRemaining }
+          )
+        );
+      }
+      return;
+    }
     try {
+      setError(null);
       setGeneratingType(reportType);
       setInfoMessage(null);
       const payload = reportScope === 'unit'
@@ -248,11 +293,13 @@ export default function ReportsScreen({ navigation, route }: ReportsScreenProps)
             scope_type: 'unit' as const,
             cycle_id: resolvedCycleId as string,
             cycle_unit_allocation_id: resolvedCycleUnitAllocationId as string,
+            reference_date: reportReferenceDate,
           }
         : {
             report_type: reportType,
             scope_type: 'cycle' as const,
             cycle_id: resolvedCycleId as string,
+            reference_date: reportReferenceDate,
           };
       await aquacultureService.generateReport(payload);
       setInfoMessage(t('reportGenerating'));
@@ -436,23 +483,37 @@ export default function ReportsScreen({ navigation, route }: ReportsScreenProps)
             <AppText variant="sectionTitle">{t('generateReport')}</AppText>
 
             <View style={{ flexDirection: 'row', gap: spacing[2] }}>
-              {REPORT_TYPES.map((reportType) => (
-                <Button
-                  key={reportType}
-                  variant="outline"
-                  size="small"
-                  fullWidth={false}
-                  onPress={() => handleGenerateReport(reportType)}
-                  disabled={Boolean(generatingType)}
-                  loading={generatingType === reportType}
-                  label={reportType === 'daily'
-                    ? t('reportGenerationDaily')
-                    : reportType === 'weekly'
-                      ? t('reportGenerationWeekly')
-                      : t('reportGenerationMonthly')}
-                />
-              ))}
+              {REPORT_TYPES.map((reportType) => {
+                const availability = reportAvailability.get(reportType);
+                const unavailableHint = availability && !availability.available && reportType !== 'daily'
+                  ? t(
+                      reportType === 'weekly'
+                        ? 'reportWeeklyUnavailableHint'
+                        : 'reportMonthlyUnavailableHint',
+                      { count: availability.daysRemaining }
+                    )
+                  : undefined;
+
+                return (
+                  <Button
+                    key={reportType}
+                    variant="outline"
+                    size="small"
+                    fullWidth={false}
+                    onPress={() => handleGenerateReport(reportType)}
+                    disabled={Boolean(generatingType)}
+                    loading={generatingType === reportType}
+                    accessibilityHint={unavailableHint}
+                    label={reportType === 'daily'
+                      ? t('reportGenerationDaily')
+                      : reportType === 'weekly'
+                        ? t('reportGenerationWeekly')
+                        : t('reportGenerationMonthly')}
+                  />
+                );
+              })}
             </View>
+
           </>
         ) : (
           <InlineAlert tone="warning" message={scopeError} />
@@ -478,12 +539,12 @@ export default function ReportsScreen({ navigation, route }: ReportsScreenProps)
         />
       </View>
     ),
-    [allocationError, allocationLoading, allocations, canGenerateReports, error, generatingType, handleGenerateReport, infoMessage, reportScope, scopeError, selectedAllocationId, selectedType, t]
+    [allocationError, allocationLoading, allocations, canGenerateReports, error, generatingType, handleGenerateReport, infoMessage, reportAvailability, reportScope, scopeError, selectedAllocationId, selectedType, t]
   );
 
   const renderEmptyState = useCallback(
     () => (
-      <EmptyState title={t('noReportsYet')} message={t('generateFirstReportHint')} />
+      <EmptyState title={t('noReportsYet')} />
     ),
     [t]
   );

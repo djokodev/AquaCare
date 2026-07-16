@@ -8,6 +8,8 @@ import {
   getProductionUnitsDensityPreview,
   getProductionUnitsCompatibilitySummary,
   getTotalProductionUnitsCapacity,
+  hasDuplicateProductionUnitNames,
+  normalizeProductionUnitName,
   normalizeProductionUnitType,
   suggestProductionUnitFishAllocations,
   validateProductionUnitDraft,
@@ -67,6 +69,22 @@ describe('productionUnits', () => {
       expect.objectContaining({ name: 'Bac 3', unit_type: 'tank', volume_m3: '3' }),
     ]);
     expect(getTotalProductionUnitsCapacity(drafts)).toBe(2700);
+  });
+
+  it('normalise les noms avant de détecter les doublons', () => {
+    expect(normalizeProductionUnitName('  Bac   1 ')).toBe('bac 1');
+    expect(
+      hasDuplicateProductionUnitNames([
+        { name: 'Bac 1' },
+        { name: '  BAC   1 ' },
+      ])
+    ).toBe(true);
+    expect(
+      hasDuplicateProductionUnitNames([
+        { name: 'Bac 1' },
+        { name: 'Bac 2' },
+      ])
+    ).toBe(false);
   });
 
   it('normalise la compatibilité legacy pour un mix bac et etang', () => {

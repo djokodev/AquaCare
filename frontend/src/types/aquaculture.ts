@@ -542,6 +542,7 @@ export interface CycleUnitAllocation {
   session_started_at?: string | null;
   expected_survival_rate_pct?: number | null;
   cycle_name?: string;
+  cycle_start_date?: string;
   production_unit_name?: string;
   production_unit_type?: ProductionUnitType;
   production_unit_display_dimension?: string | null;

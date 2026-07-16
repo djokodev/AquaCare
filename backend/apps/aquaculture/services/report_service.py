@@ -471,6 +471,46 @@ class ReportService(BaseService):
         return ReportService.build_period_bounds(report_type, reference)
 
     @staticmethod
+    def get_cycle_report_period_length(report_type: str) -> int:
+        """Return the number of cycle days required for a manual report."""
+        if report_type == "daily":
+            return 1
+        if report_type == "weekly":
+            return 7
+        if report_type == "monthly":
+            return 30
+        raise ValueError(f"Type de rapport non supporté: {report_type}")
+
+    @staticmethod
+    def build_cycle_report_period_bounds(
+        report_type: str,
+        cycle_start_date: date,
+        reference_date: date,
+    ) -> tuple[date, date] | None:
+        """Build the latest complete cycle-relative period available on a date.
+
+        Daily reports cover the reference day. Weekly and monthly reports use
+        non-overlapping blocks of 7 and 30 cycle days respectively. The last
+        day is included, so the first weekly report is available on cycle day
+        7 and the first monthly report on cycle day 30.
+        """
+        if reference_date < cycle_start_date:
+            return None
+        if report_type == "daily":
+            return reference_date, reference_date
+
+        period_length = ReportService.get_cycle_report_period_length(report_type)
+        cycle_day = (reference_date - cycle_start_date).days + 1
+        completed_period_count = cycle_day // period_length
+        if completed_period_count < 1:
+            return None
+
+        period_index = completed_period_count - 1
+        period_start = cycle_start_date + timedelta(days=period_index * period_length)
+        period_end = period_start + timedelta(days=period_length - 1)
+        return period_start, period_end
+
+    @staticmethod
     def generate_for_farm(
         farm_profile: FarmProfile,
         report_type: str,
@@ -2779,7 +2819,7 @@ class ReportService(BaseService):
                 f"on {day_label}",
             )
 
-        if report_type == "weekly":
+        if report_type in {"weekly", "monthly"}:
             start_label = ReportService._format_natural_date(period_start, language_code)
             end_label = ReportService._format_natural_date(period_end, language_code)
             return ReportService._pick_text(
@@ -2788,13 +2828,7 @@ class ReportService(BaseService):
                 f"from {start_label} to {end_label}",
             )
 
-        with override(language_code):
-            month_label = date_format(period_start, format="F Y", use_l10n=True)
-        return ReportService._pick_text(
-            language_code,
-            f"mois de {month_label}",
-            f"month of {month_label}",
-        )
+        raise ValueError(f"Unsupported report type: {report_type}")
 
     @staticmethod
     def _extract_cycle_names(report: ProductionReport) -> list[str]:
@@ -2903,24 +2937,22 @@ class ReportService(BaseService):
             )
             return f"{subject} - {scope_name}" if scope_name else subject
 
-        if report.report_type == "weekly":
+        if report.report_type in {"weekly", "monthly"}:
             start_label = ReportService._format_natural_date(report.period_start, language_code)
             end_label = ReportService._format_natural_date(report.period_end, language_code)
+            report_type_label = ReportService._pick_text(
+                language_code,
+                "hebdomadaire" if report.report_type == "weekly" else "mensuel",
+                "Weekly" if report.report_type == "weekly" else "Monthly",
+            )
             subject = ReportService._pick_text(
                 language_code,
-                f"Rapport hebdomadaire du {start_label} au {end_label}",
-                f"Weekly report from {start_label} to {end_label}",
+                f"Rapport {report_type_label} du {start_label} au {end_label}",
+                f"{report_type_label} report from {start_label} to {end_label}",
             )
             return f"{subject} - {scope_name}" if scope_name else subject
 
-        with override(language_code):
-            month_label = date_format(report.period_start, format="F Y", use_l10n=True)
-        subject = ReportService._pick_text(
-            language_code,
-            f"Rapport mensuel de {month_label}",
-            f"Monthly report for {month_label}",
-        )
-        return f"{subject} - {scope_name}" if scope_name else subject
+        raise ValueError(f"Unsupported report type: {report.report_type}")
 
     @staticmethod
     def _build_email_body(report: ProductionReport, language_code: str) -> str:

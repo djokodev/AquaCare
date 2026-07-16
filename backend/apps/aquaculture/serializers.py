@@ -195,6 +195,7 @@ class CycleUnitAllocationSerializer(serializers.ModelSerializer):
     """Sérialiseur des allocations de cycle par unité de production."""
 
     cycle_name = serializers.CharField(source='cycle.cycle_name', read_only=True)
+    cycle_start_date = serializers.DateField(source='cycle.start_date', read_only=True)
     production_unit_name = serializers.CharField(source='production_unit.name', read_only=True)
     production_unit_type = serializers.CharField(source='production_unit.unit_type', read_only=True)
     production_unit_display_dimension = serializers.CharField(
@@ -221,6 +222,7 @@ class CycleUnitAllocationSerializer(serializers.ModelSerializer):
             'id',
             'cycle',
             'cycle_name',
+            'cycle_start_date',
             'production_unit',
             'production_unit_name',
             'production_unit_type',
@@ -251,6 +253,7 @@ class CycleUnitAllocationSerializer(serializers.ModelSerializer):
         read_only_fields = [
             'id',
             'cycle_name',
+            'cycle_start_date',
             'production_unit_name',
             'production_unit_type',
             'production_unit_display_dimension',
