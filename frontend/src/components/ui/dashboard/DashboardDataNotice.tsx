@@ -16,13 +16,15 @@ interface DashboardDataNoticeProps {
 export function DashboardDataNotice({ title, description, actionLabel, onAction }: DashboardDataNoticeProps) {
   return (
     <Card variant="outlined" style={styles.card} testID="dashboard-data-notice">
-      <View
-        accessible
-        accessibilityLabel={`${title}. ${description}`}
-        style={styles.content}
-      >
-        <AppText variant="bodyStrong">{title}</AppText>
-        <AppText variant="helper" color="muted">{description}</AppText>
+      <View style={styles.content}>
+        <View
+          accessible
+          accessibilityLabel={`${title}. ${description}`}
+          testID="dashboard-data-notice-copy"
+        >
+          <AppText variant="bodyStrong">{title}</AppText>
+          <AppText variant="helper" color="muted">{description}</AppText>
+        </View>
         {actionLabel && onAction ? (
           <Button label={actionLabel} variant="outline" size="small" fullWidth={false} onPress={onAction} />
         ) : null}

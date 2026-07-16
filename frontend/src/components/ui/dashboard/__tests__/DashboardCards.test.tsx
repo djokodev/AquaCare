@@ -125,11 +125,14 @@ describe('dashboard cards', () => {
 
   it('renders an accessible data notice CTA and invokes it', () => {
     const onAction = jest.fn();
-    const { getByLabelText, getByText } = render(
+    const { getByLabelText, getByRole, getByTestId } = render(
       <DashboardDataNotice title="Weighing required" description="Add a weighing." actionLabel="Add weighing" onAction={onAction} />,
     );
-    expect(getByLabelText('Weighing required. Add a weighing.')).toBeTruthy();
-    fireEvent.press(getByText('Add weighing'));
+    const copy = getByLabelText('Weighing required. Add a weighing.');
+    const button = getByRole('button', { name: 'Add weighing' });
+    expect(copy).toBe(getByTestId('dashboard-data-notice-copy'));
+    expect(copy).not.toContainElement(button);
+    fireEvent.press(button);
     expect(onAction).toHaveBeenCalledTimes(1);
   });
 
