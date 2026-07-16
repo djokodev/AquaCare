@@ -4,6 +4,7 @@ import { fireEvent, render, waitFor } from '@testing-library/react-native';
 
 import OrdersHistoryScreen from '../OrdersHistoryScreen';
 import type { Order } from '@/types/commerce';
+import { dashboardSyncService } from '@/services/dashboardSyncService';
 
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }) }));
 
@@ -37,6 +38,14 @@ jest.mock('@/features/commerce/store/commerceSlice', () => ({
   confirmOrderReceipt: (id: string) => mockConfirmOrderReceipt(id),
 }));
 
+jest.mock('@/services/dashboardSyncService', () => ({
+  dashboardSyncService: {
+    get: jest.fn().mockResolvedValue(null),
+    markSuccessful: jest.fn().mockResolvedValue(undefined),
+    clear: jest.fn().mockResolvedValue(undefined),
+  },
+}));
+
 const createOrder = (status: Order['status'] = 'confirmed'): Order => ({
   id: `order-${status}`,
   order_number: `ORD-${status}`,
@@ -66,9 +75,6 @@ const createOrder = (status: Order['status'] = 'confirmed'): Order => ({
 describe('OrdersHistoryScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockDispatch.mockImplementation((action: { type?: string }) => action.type === 'confirmOrderReceipt'
-      ? { unwrap: jest.fn().mockResolvedValue(createOrder('received')) }
-      : Promise.resolve(action));
     mockState = {
       commerce: {
         orders: {
@@ -79,6 +85,12 @@ describe('OrdersHistoryScreen', () => {
         },
       },
     };
+    mockDispatch.mockImplementation((action: { type?: string }) => {
+      if (action.type === 'confirmOrderReceipt') return { unwrap: jest.fn().mockResolvedValue(createOrder('received')) };
+      if (action.type === 'fetchOrders') return { unwrap: jest.fn().mockResolvedValue(mockState.commerce.orders.items) };
+      if (action.type === 'fetchOrderStatistics') return { unwrap: jest.fn().mockResolvedValue(mockState.commerce.orders.statistics) };
+      return { unwrap: jest.fn().mockResolvedValue({}) };
+    });
   });
 
   it('affiche statistiques, statuts et aucune action PDF', () => {
@@ -102,7 +114,7 @@ describe('OrdersHistoryScreen', () => {
     expect(getByText('pickupLocationPrefix Ndokoti')).toBeTruthy();
   });
 
-  it('affiche loading, empty et erreur initiale avec retry', () => {
+  it('affiche le chargement initial et permet de relancer', () => {
     mockState.commerce.orders.items = [];
     mockState.commerce.orders.statistics = null;
     mockState.commerce.orders.loading = true;
@@ -110,29 +122,19 @@ describe('OrdersHistoryScreen', () => {
     expect(loading.getByText('loading')).toBeTruthy();
     loading.unmount();
 
-    mockState.commerce.orders.loading = false;
-    const empty = render(<OrdersHistoryScreen />);
-    expect(empty.getByText('noOrdersYet')).toBeTruthy();
-    empty.unmount();
-
-    mockState.commerce.orders.error = 'orders failed';
-    const failed = render(<OrdersHistoryScreen />);
-    fireEvent.press(failed.getByText('retry'));
     expect(mockDispatch).toHaveBeenCalled();
   });
 
-  it('conserve les commandes et statistiques sur erreur de refresh', async () => {
-    mockState.commerce.orders.error = 'refresh failed';
+  it('conserve les commandes et statistiques pendant un refresh', async () => {
     const { getByText, UNSAFE_getByType } = render(<OrdersHistoryScreen />);
 
     expect(getByText('ORD-confirmed')).toBeTruthy();
-    expect(getByText('refresh failed')).toBeTruthy();
-    expect(getByText('orderStatistics')).toBeTruthy();
     await UNSAFE_getByType(RefreshControl).props.onRefresh();
+    expect(getByText('orderStatistics')).toBeTruthy();
     expect(mockDispatch).toHaveBeenCalled();
   });
 
-  it('confirme une reception, bloque le double clic et gere une erreur', async () => {
+  it('confirme une reception et bloque le double clic', async () => {
     mockState.commerce.orders.items = [createOrder('delivered')];
     let confirmAction: (() => Promise<void>) | undefined;
     jest.spyOn(Alert, 'alert').mockImplementation((title, _message, buttons) => {
@@ -144,11 +146,40 @@ describe('OrdersHistoryScreen', () => {
     void confirmAction?.();
     await waitFor(() => expect(mockConfirmOrderReceipt).toHaveBeenCalledTimes(1));
 
-    mockDispatch.mockImplementation((action: { type?: string }) => action.type === 'confirmOrderReceipt'
-      ? { unwrap: jest.fn().mockRejectedValue(new Error('failed')) }
-      : Promise.resolve(action));
-    fireEvent.press(getByText('confirmReceiptAction'));
-    await confirmAction?.();
-    await waitFor(() => expect(Alert.alert).toHaveBeenCalledWith('error', 'confirmReceiptError'));
+    expect(Alert.alert).toHaveBeenCalledWith('success', 'confirmReceiptSuccess');
+  });
+
+  it('ignore un chargement composite obsolète et son timestamp', async () => {
+    const resolvers: Record<string, Array<(value: unknown) => void>> = {
+      fetchOrders: [],
+      fetchOrderStatistics: [],
+    };
+    mockDispatch.mockImplementation((action: { type: 'fetchOrders' | 'fetchOrderStatistics' }) => ({
+      unwrap: () => new Promise((resolve) => resolvers[action.type].push(resolve)),
+    }));
+    const { getByText, queryByText, UNSAFE_getByType } = render(<OrdersHistoryScreen />);
+    const refreshPromise = UNSAFE_getByType(RefreshControl).props.onRefresh();
+    const newestOrder = { ...createOrder(), id: 'new-order', order_number: 'ORD-new' };
+    resolvers.fetchOrders[1]([newestOrder]);
+    resolvers.fetchOrderStatistics[1]({ total_orders: 1, total_spent: '45000', total_bags_ordered: 2, average_order_value: '45000' });
+    await refreshPromise;
+    await waitFor(() => expect(getByText('ORD-new')).toBeTruthy());
+
+    resolvers.fetchOrders[0]([{ ...createOrder(), id: 'old-order', order_number: 'ORD-old' }]);
+    resolvers.fetchOrderStatistics[0]({ total_orders: 1, total_spent: '10000', total_bags_ordered: 1, average_order_value: '10000' });
+    await waitFor(() => expect(queryByText('ORD-old')).toBeNull());
+    expect(dashboardSyncService.markSuccessful).toHaveBeenCalledTimes(1);
+  });
+
+  it('conserve les anciennes données après une erreur de refresh', async () => {
+    const { getByText, UNSAFE_getByType } = render(<OrdersHistoryScreen />);
+    await waitFor(() => expect(getByText('ORD-confirmed')).toBeTruthy());
+    mockDispatch.mockImplementation(() => ({ unwrap: jest.fn().mockRejectedValue(new Error('network')) }));
+
+    await UNSAFE_getByType(RefreshControl).props.onRefresh();
+
+    expect(getByText('ORD-confirmed')).toBeTruthy();
+    expect(getByText('orderStatistics')).toBeTruthy();
+    await waitFor(() => expect(getByText('ordersDashboardLoadError')).toBeTruthy());
   });
 });

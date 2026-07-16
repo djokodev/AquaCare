@@ -1714,6 +1714,18 @@ class ProductionUnitDashboardSummarySerializer(serializers.Serializer):
         required=False,
         allow_null=True,
     )
+    biomass_data_available = serializers.BooleanField()
+    biomass_source = serializers.ChoiceField(
+        choices=['latest_weighing', 'allocation_current', 'initial_stocking', 'harvested'],
+        required=False,
+        allow_null=True,
+    )
+    estimated_market_value_fcfa = serializers.DecimalField(
+        max_digits=16,
+        decimal_places=2,
+        required=False,
+        allow_null=True,
+    )
     last_daily_log_date = serializers.DateField(required=False, allow_null=True)
     days_since_last_log = serializers.IntegerField(required=False, allow_null=True)
     has_today_daily_log = serializers.BooleanField()
@@ -1740,11 +1752,27 @@ class CycleDashboardSummarySerializer(serializers.Serializer):
     total_mortality_count = serializers.IntegerField()
     mortality_rate_pct = serializers.DecimalField(max_digits=6, decimal_places=2)
     total_feed_consumed_kg = serializers.DecimalField(max_digits=12, decimal_places=2)
-    estimated_current_biomass_kg = serializers.DecimalField(max_digits=12, decimal_places=2)
+    estimated_current_biomass_kg = serializers.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        required=False,
+        allow_null=True,
+    )
+    biomass_data_available = serializers.BooleanField()
+    estimated_market_value_fcfa = serializers.DecimalField(
+        max_digits=16,
+        decimal_places=2,
+        required=False,
+        allow_null=True,
+    )
+    direct_production_cost_fcfa = serializers.DecimalField(max_digits=16, decimal_places=2)
+    cycle_progress_pct = serializers.IntegerField(required=False, allow_null=True)
+    days_remaining = serializers.IntegerField(required=False, allow_null=True)
     units_with_today_log_count = serializers.IntegerField()
     units_with_sanitary_issue_count = serializers.IntegerField()
     units_with_active_sanitary_issue_count = serializers.IntegerField()
     units_missing_today_log_count = serializers.IntegerField()
+    units_missing_biomass_data_count = serializers.IntegerField()
     last_daily_log_date = serializers.DateField(required=False, allow_null=True)
     last_sanitary_event_date = serializers.DateField(required=False, allow_null=True)
     has_allocations = serializers.BooleanField()

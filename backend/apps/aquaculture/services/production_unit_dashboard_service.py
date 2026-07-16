@@ -8,6 +8,7 @@ from typing import Any
 
 from django.utils import timezone
 
+from ..domain.dashboard_metrics import estimate_market_value_fcfa, resolve_biomass_data
 from ..models import CycleLog, CycleUnitAllocation, SanitaryLog
 
 
@@ -67,15 +68,9 @@ class ProductionUnitDashboardService:
     ) -> dict[str, Any]:
         total_mortality_count = sum((log.mortality_count or 0) for log in daily_logs)
         estimated_current_fish_count = allocation.current_fish_count
-        estimated_current_biomass_kg = (
-            allocation.current_biomass_kg
-            if allocation.current_biomass_kg is not None
-            else allocation.initial_biomass_kg
-        )
-
+        current_biomass_kg = allocation.current_biomass_kg
         if allocation.status == CycleUnitAllocation.STATUS_HARVESTED:
             estimated_current_fish_count = 0
-            estimated_current_biomass_kg = ProductionUnitDashboardService.ZERO_DECIMAL
 
         mortality_rate_pct = ProductionUnitDashboardService.ZERO_DECIMAL
         if allocation.initial_fish_count > 0:
@@ -99,18 +94,23 @@ class ProductionUnitDashboardService:
             None,
         )
 
-        if estimated_current_biomass_kg is None:
-            if latest_average_weight_g is not None:
-                estimated_current_biomass_kg = (
-                    Decimal(estimated_current_fish_count)
-                    * Decimal(latest_average_weight_g)
-                    / Decimal('1000')
-                )
-            else:
-                estimated_current_biomass_kg = ProductionUnitDashboardService.ZERO_DECIMAL
-
-        estimated_current_biomass_kg = Decimal(str(estimated_current_biomass_kg)).quantize(
-            ProductionUnitDashboardService.BIOMASS_QUANTIZE
+        estimated_current_biomass_kg, biomass_data_available, biomass_source = resolve_biomass_data(
+            allocation_status=allocation.status,
+            current_fish_count=estimated_current_fish_count,
+            current_biomass_kg=(
+                Decimal(str(current_biomass_kg)) if current_biomass_kg is not None else None
+            ),
+            initial_biomass_kg=(
+                Decimal(str(allocation.initial_biomass_kg))
+                if allocation.initial_biomass_kg is not None else None
+            ),
+            latest_average_weight_g=(
+                Decimal(str(latest_average_weight_g)) if latest_average_weight_g is not None else None
+            ),
+        )
+        estimated_market_value_fcfa = estimate_market_value_fcfa(
+            estimated_current_biomass_kg,
+            allocation.cycle.planned_selling_price_per_kg_fcfa,
         )
 
         last_daily_log_date = daily_logs[0].log_date if daily_logs else None
@@ -131,6 +131,9 @@ class ProductionUnitDashboardService:
             'total_feed_consumed_kg': total_feed_consumed_kg,
             'latest_average_weight_g': latest_average_weight_g,
             'estimated_current_biomass_kg': estimated_current_biomass_kg,
+            'biomass_data_available': biomass_data_available,
+            'biomass_source': biomass_source,
+            'estimated_market_value_fcfa': estimated_market_value_fcfa,
             'last_daily_log_date': last_daily_log_date,
             'days_since_last_log': days_since_last_log,
             'has_today_daily_log': has_today_daily_log,

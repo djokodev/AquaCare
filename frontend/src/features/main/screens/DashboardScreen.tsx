@@ -1,5 +1,6 @@
 ﻿import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { useFocusEffect } from "@react-navigation/native";
+import { useRef } from "react";
 import {
   View,
   ScrollView,
@@ -30,22 +31,26 @@ import PartialHarvestHistoryModal from "@/components/modals/PartialHarvestHistor
 import DashboardHeader from "../components/DashboardHeader";
 import QuickActionsPreview from "../components/QuickActionsPreview";
 import QuickActionsSheet from "../components/QuickActionsSheet";
-import { ProductionCycle } from "@/types/aquaculture";
-import { formatNumber, formatCurrency } from "@/utils";
+import { CycleDashboard, ProductionCycle } from "@/types/aquaculture";
 import { useAuth } from "@/hooks/useAuth";
 import { aquacultureService } from "@/features/aquaculture/services/aquacultureService";
-
-import MetricCard from "../components/MetricCard";
 import {
   AppText,
   Button,
   Card,
+  DashboardHeroCard,
+  DashboardMetricCard,
+  DashboardSection,
   ErrorState,
+  formatDashboardCurrency,
+  formatDashboardNumber,
+  InlineAlert,
   InteractiveCard,
   LoadingState,
 } from "@/components/ui";
 import { colors, spacing } from "@/theme";
-import { calculateDashboardBusinessMetrics } from "../utils/dashboardCalculations";
+import { useDashboardSyncStatus } from "@/hooks/useDashboardSyncStatus";
+import { dashboardSyncService } from "@/services/dashboardSyncService";
 
 interface DashboardActionCardProps {
   label: string;
@@ -86,7 +91,7 @@ function DashboardActionCard({
 }
 
 export default function DashboardScreen({ navigation }: any) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { displayName, loadFarmProfile } = useAuth();
   const dispatch = useDispatch<AppDispatch>();
 
@@ -107,6 +112,12 @@ export default function DashboardScreen({ navigation }: any) {
   const [currentCycleUnitCount, setCurrentCycleUnitCount] = useState<
     number | null
   >(null);
+  const [currentCycleDashboard, setCurrentCycleDashboard] =
+    useState<CycleDashboard | null>(null);
+  const [cycleDashboardLoading, setCycleDashboardLoading] = useState(false);
+  const [cycleDashboardRefreshing, setCycleDashboardRefreshing] = useState(false);
+  const [cycleDashboardError, setCycleDashboardError] = useState<string | null>(null);
+  const cycleDashboardRequestRef = useRef(0);
   const [refreshing, setRefreshing] = useState(false);
 
   const { dashboardData, cycles, loading, error, currentCycle } = useSelector(
@@ -188,126 +199,78 @@ export default function DashboardScreen({ navigation }: any) {
   );
   const cycleHasProductionUnits =
     primaryCycleHasProductionUnits || (currentCycleUnitCount ?? 0) > 0;
-  const dashboardBusinessMetrics = useMemo(
-    () => calculateDashboardBusinessMetrics(activeCycles, currentCycleInList),
-    [activeCycles, currentCycleInList],
-  );
+  const locale = i18n.language?.startsWith("fr") ? "fr-FR" : "en-US";
+  const primaryActiveCycleId = primaryActiveCycle?.id ?? null;
+  const { lastSyncedAt, refreshLastSyncedAt } =
+    useDashboardSyncStatus("cycle", primaryActiveCycleId);
+  const loadCurrentCycleDashboard = useCallback(async (mode: "initial" | "refresh" = "initial") => {
+    const requestId = cycleDashboardRequestRef.current + 1;
+    cycleDashboardRequestRef.current = requestId;
+
+    if (!primaryActiveCycleId) {
+      setCurrentCycleDashboard(null);
+      setCurrentCycleUnitCount(null);
+      setCycleDashboardError(null);
+      setCycleDashboardLoading(false);
+      setCycleDashboardRefreshing(false);
+      return false;
+    }
+
+    setCycleDashboardError(null);
+    if (mode === "refresh") {
+      setCycleDashboardRefreshing(true);
+    } else {
+      setCycleDashboardLoading(true);
+    }
+
+    try {
+      const cycleDashboard = await aquacultureService.getCycleDashboard(primaryActiveCycleId);
+      if (requestId !== cycleDashboardRequestRef.current) {
+        return false;
+      }
+      setCurrentCycleDashboard(cycleDashboard);
+      setCurrentCycleUnitCount(cycleDashboard.summary.total_allocations);
+      await dashboardSyncService.markSuccessful("cycle", primaryActiveCycleId);
+      await refreshLastSyncedAt();
+      return true;
+    } catch {
+      if (requestId === cycleDashboardRequestRef.current) {
+        setCycleDashboardError("cycleDashboardLoadError");
+      }
+      return false;
+    } finally {
+      if (requestId === cycleDashboardRequestRef.current) {
+        setCycleDashboardLoading(false);
+        setCycleDashboardRefreshing(false);
+      }
+    }
+  }, [primaryActiveCycleId, refreshLastSyncedAt]);
+
   useEffect(() => {
-    let cancelled = false;
+    setCurrentCycleDashboard(null);
     setCurrentCycleUnitCount(null);
-
-    const loadCurrentCycleUnitCount = async () => {
-      if (!primaryActiveCycle) {
-        return;
-      }
-
-      try {
-        const cycleDashboard = await aquacultureService.getCycleDashboard(
-          primaryActiveCycle.id,
-        );
-
-        if (!cancelled) {
-          setCurrentCycleUnitCount(cycleDashboard.summary.total_allocations);
-        }
-      } catch {
-        if (!cancelled) {
-          setCurrentCycleUnitCount(null);
-        }
-      }
-    };
-
-    void loadCurrentCycleUnitCount();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [primaryActiveCycle?.id]);
+    setCycleDashboardError(null);
+    void loadCurrentCycleDashboard();
+  }, [loadCurrentCycleDashboard, primaryActiveCycleId]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     void Promise.all([
       loadFarmProfile(),
       dispatch(fetchDashboardData(undefined)),
+      loadCurrentCycleDashboard("refresh"),
       dispatch(fetchProductionCycles()),
       dispatch(fetchNotifications({ cycleId: currentCycle?.id })),
       dispatch(fetchOrders()),
     ]).finally(() => {
       setRefreshing(false);
     });
-  }, [currentCycle?.id, dispatch, loadFarmProfile]);
+  }, [currentCycle?.id, dispatch, loadCurrentCycleDashboard, loadFarmProfile]);
 
-  const dashboardMetricCards = useMemo(() => {
-    if (primaryCycleHasProductionUnits) {
-      return [
-        {
-          value: formatCurrency(
-            dashboardBusinessMetrics.estimatedMarketValueFcfa,
-          ),
-          label: t("dashboardEstimatedMarketValue"),
-        },
-        {
-          value: formatCurrency(
-            dashboardBusinessMetrics.directProductionCostFcfa,
-          ),
-          label: t("dashboardDirectProductionCost"),
-        },
-        {
-          value: formatNumber(
-            dashboardData?.total_fish_count ?? 0,
-            undefined,
-            0,
-          ),
-          label: t("dashboardEstimatedCurrentFish"),
-        },
-        {
-          value:
-            dashboardBusinessMetrics.timeRemainingDays === null
-              ? "-"
-              : formatNumber(
-                  dashboardBusinessMetrics.timeRemainingDays,
-                  t("days"),
-                  0,
-                ),
-          label: t("dashboardTimeRemainingCycle"),
-        },
-      ];
-    }
-
-    return [
-      {
-        value: formatCurrency(
-          dashboardBusinessMetrics.estimatedMarketValueFcfa,
-        ),
-        label: t("dashboardEstimatedMarketValue"),
-      },
-      {
-        value: formatCurrency(dashboardBusinessMetrics.feedCostConsumedFcfa),
-        label: t("dashboardFeedCostConsumed"),
-      },
-      {
-        value:
-          dashboardBusinessMetrics.timeRemainingDays === null
-            ? "-"
-            : formatNumber(
-                dashboardBusinessMetrics.timeRemainingDays,
-                t("days"),
-                0,
-              ),
-        label: t("dashboardTimeRemainingCycle"),
-      },
-      {
-        value: formatCurrency(
-          dashboardBusinessMetrics.directProductionCostFcfa,
-        ),
-        label: t("dashboardDirectProductionCost"),
-      },
-    ];
-  }, [
-    dashboardBusinessMetrics,
-    dashboardData?.total_fish_count,
-    primaryCycleHasProductionUnits,
-    t,
-  ]);
+  const cycleSummary = currentCycleDashboard?.summary;
+  const cycleDashboardInitialLoading = Boolean(
+    primaryActiveCycleId && !cycleSummary && !cycleDashboardError,
+  );
 
   useEffect(() => {
     if (availableSessionCycles.length === 0) {
@@ -437,10 +400,10 @@ export default function DashboardScreen({ navigation }: any) {
   if (error && !dashboardData) {
     return (
       <ScrollView
-        className="flex-1 bg-cream"
+        className="flex-1 bg-dashboard"
         refreshControl={
           <RefreshControl
-            refreshing={refreshing || loading.dashboard}
+            refreshing={refreshing || loading.dashboard || cycleDashboardRefreshing}
             onRefresh={onRefresh}
           />
         }
@@ -462,11 +425,11 @@ export default function DashboardScreen({ navigation }: any) {
   }
 
   return (
-    <View className="flex-1 bg-cream">
+    <View style={styles.dashboardRoot}>
       <ScrollView
         refreshControl={
           <RefreshControl
-            refreshing={refreshing || loading.dashboard}
+            refreshing={refreshing || loading.dashboard || cycleDashboardRefreshing}
             onRefresh={onRefresh}
           />
         }
@@ -477,30 +440,84 @@ export default function DashboardScreen({ navigation }: any) {
           onNotificationsPress={handleNotificationsPress}
           onSettingsPress={handleSettingsPress}
         />
-        <View className="px-5 py-5">
-          <Card variant="outlined" style={{ marginBottom: 16 }}>
-            <AppText variant="cardTitle" style={{ marginBottom: 12 }}>
-              {t("cycleDashboardTitle")}
-            </AppText>
-            {loading.dashboard && !dashboardData ? (
+        <View style={styles.dashboardSectionContainer}>
+          <DashboardSection
+            title={t("cycleDashboardTitle")}
+            lastSyncedAt={lastSyncedAt}
+          >
+            {(cycleDashboardLoading || cycleDashboardInitialLoading) && !cycleSummary ? (
               <LoadingState
-                message={t("loadingData", {
-                  defaultValue: "Chargement des données...",
-                })}
+                message={t("cycleDashboardLoading")}
                 compact
               />
+            ) : cycleDashboardError && !cycleSummary ? (
+              <ErrorState
+                message={t(cycleDashboardError)}
+                actionLabel={t("retry")}
+                onAction={() => void loadCurrentCycleDashboard("refresh")}
+              />
             ) : (
-              <View className="flex-row flex-wrap gap-3">
-                {dashboardMetricCards.map((card) => (
-                  <MetricCard
-                    key={card.label}
-                    value={card.value}
-                    label={card.label}
+              <>
+                {cycleDashboardError ? (
+                  <InlineAlert tone="error" message={t(cycleDashboardError)} />
+                ) : null}
+                <DashboardHeroCard
+                  label={t("dashboardEstimatedMarketValue")}
+                  value={formatDashboardCurrency(
+                    cycleSummary?.estimated_market_value_fcfa,
+                    locale,
+                  )}
+                  unit={t("dashboardDirectProductionCostUnit")}
+                  helper={
+                    cycleSummary?.estimated_market_value_fcfa == null
+                      ? cycleSummary?.biomass_data_available === false
+                        ? t("dashboardUnitsMissingWeighing", {
+                            count: cycleSummary.units_missing_biomass_data_count,
+                          })
+                        : t("dashboardMissingSellingPrice")
+                      : undefined
+                  }
+                  unavailableLabel={t("dashboardCalculationUnavailable")}
+                  progress={cycleSummary?.cycle_progress_pct}
+                  progressLabel={t("dashboardCycleProgress")}
+                  locale={locale}
+                />
+                <View style={styles.dashboardGrid}>
+                  <DashboardMetricCard
+                    label={t("dashboardDirectProductionCost")}
+                    value={formatDashboardCurrency(
+                      cycleSummary?.direct_production_cost_fcfa,
+                      locale,
+                    )}
+                    unit={t("dashboardDirectProductionCostUnit")}
+                    unavailableLabel={t("dashboardDataUnavailable")}
                   />
-                ))}
-              </View>
+                  <DashboardMetricCard
+                    label={t("currentFish")}
+                    value={formatDashboardNumber(
+                      cycleSummary?.total_estimated_current_fish_count,
+                      locale,
+                      { maximumFractionDigits: 0 },
+                    )}
+                    tone="slate"
+                    unavailableLabel={t("dashboardDataUnavailable")}
+                  />
+                  <DashboardMetricCard
+                    label={t("dashboardTimeRemainingCycle")}
+                    value={formatDashboardNumber(
+                      cycleSummary?.days_remaining,
+                      locale,
+                      { maximumFractionDigits: 0 },
+                    )}
+                    unit={t("days")}
+                    tone="info"
+                    layout="fullWidthCompact"
+                    unavailableLabel={t("dashboardDataUnavailable")}
+                  />
+                </View>
+              </>
             )}
-          </Card>
+          </DashboardSection>
         </View>
 
         {sessionCycle ? (
@@ -518,14 +535,7 @@ export default function DashboardScreen({ navigation }: any) {
                 style={styles.sessionCard}
               >
                 <View className="flex-1 mr-3">
-                  <AppText
-                    className={`text-xs font-semibold uppercase tracking-wide ${
-                      canSwitchCycle ? "text-gray-light" : "text-gray-light/80"
-                    }`}
-                  >
-                    {t("sessionActiveCycleLabel")}
-                  </AppText>
-                  <AppText variant="bodyStrong" style={{ marginTop: 4 }}>
+                  <AppText variant="bodyStrong">
                     {sessionCycle.cycle_name}
                   </AppText>
                   {canSwitchCycle ? (
@@ -554,9 +564,6 @@ export default function DashboardScreen({ navigation }: any) {
                 variant="outlined"
                 style={[styles.sessionCard, styles.inactiveSessionCard]}
               >
-                <AppText variant="overline" color="muted">
-                  {t("sessionActiveCycleLabel")}
-                </AppText>
                 <AppText variant="bodyStrong" style={styles.sessionName}>
                   {sessionCycle.cycle_name}
                 </AppText>
@@ -723,6 +730,9 @@ export default function DashboardScreen({ navigation }: any) {
 }
 
 const styles = StyleSheet.create({
+  dashboardRoot: { flex: 1, backgroundColor: colors.surface.dashboard },
+  dashboardSectionContainer: { paddingHorizontal: spacing[5], paddingVertical: spacing[5] },
+  dashboardGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing[3] },
   sessionCard: { marginBottom: spacing[1] },
   actionCard: {
     marginTop: spacing[3],
@@ -732,5 +742,5 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface.disabled,
     borderColor: colors.border.default,
   },
-  sessionName: { marginTop: spacing[1] },
+  sessionName: {},
 });

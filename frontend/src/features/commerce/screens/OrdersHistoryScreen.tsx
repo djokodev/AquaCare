@@ -8,39 +8,96 @@ import { useDispatch, useSelector } from 'react-redux';
 import { AppDispatch, RootState } from '@/store/store';
 import { confirmOrderReceipt, fetchOrders, fetchOrderStatistics } from '@/features/commerce/store/commerceSlice';
 import { getOrderStatusLabelKey } from '@/features/commerce/utils/orderStatus';
-import { Order } from '@/types/commerce';
+import { Order, OrderStatistics } from '@/types/commerce';
 import { RootStackParamList } from '@/navigation/MainNavigator';
-import { AppHeader, AppText, Badge, Button, Card, Divider, EmptyState, ErrorState, IconButton, InlineAlert, LoadingState } from '@/components/ui';
+import {
+  AppHeader,
+  AppText,
+  Badge,
+  Button,
+  Card,
+  DashboardHeroCard,
+  DashboardMetricCard,
+  DashboardSection,
+  Divider,
+  EmptyState,
+  ErrorState,
+  IconButton,
+  InlineAlert,
+  LoadingState,
+  formatDashboardCurrency,
+  formatDashboardNumber,
+} from '@/components/ui';
 import { colors, spacing } from '@/theme';
-import MetricCard from '@/features/main/components/MetricCard';
 import { getProductDisplayName } from '@/features/commerce/utils/productPresentation';
+import { useDashboardSyncStatus } from '@/hooks/useDashboardSyncStatus';
+import { dashboardSyncService } from '@/services/dashboardSyncService';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'OrdersHistory'>;
+type OrdersLoadResult = 'success' | 'error' | 'stale';
 
 export default function OrdersHistoryScreen() {
   const { t, i18n } = useTranslation();
   const navigation = useNavigation<NavigationProp>();
   const dispatch = useDispatch<AppDispatch>();
-  const { items, statistics, loading, error } = useSelector((state: RootState) => state.commerce.orders);
-  const [refreshing, setRefreshing] = useState(false);
+  const { items, statistics } = useSelector((state: RootState) => state.commerce.orders);
+  const [dashboardLoading, setDashboardLoading] = useState(true);
+  const [dashboardRefreshing, setDashboardRefreshing] = useState(false);
+  const [dashboardError, setDashboardError] = useState<string | null>(null);
+  const [displayItems, setDisplayItems] = useState<Order[]>(items);
+  const [displayStatistics, setDisplayStatistics] = useState<OrderStatistics | null>(statistics);
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   const [confirmingOrderId, setConfirmingOrderId] = useState<string | null>(null);
   const confirmingOrderRef = useRef<string | null>(null);
+  const loadRequestRef = useRef(0);
+  const { lastSyncedAt, refreshLastSyncedAt } = useDashboardSyncStatus('orders');
+  const locale = i18n.language?.startsWith('fr') ? 'fr-FR' : 'en-US';
 
-  const loadOrders = useCallback(async () => {
-    await Promise.all([dispatch(fetchOrders()), dispatch(fetchOrderStatistics())]);
-  }, [dispatch]);
+  const loadOrders = useCallback(async (mode: 'initial' | 'refresh' = 'initial'): Promise<OrdersLoadResult> => {
+    const requestId = loadRequestRef.current + 1;
+    loadRequestRef.current = requestId;
+    if (mode === 'refresh') {
+      setDashboardRefreshing(true);
+    } else {
+      setDashboardLoading(true);
+    }
+    setDashboardError(null);
+    try {
+      const [ordersResult, statisticsResult] = await Promise.allSettled([
+        dispatch(fetchOrders()).unwrap(),
+        dispatch(fetchOrderStatistics()).unwrap(),
+      ]);
+      if (ordersResult.status !== 'fulfilled' || statisticsResult.status !== 'fulfilled') {
+        throw new Error(t('ordersDashboardLoadError'));
+      }
+      if (requestId !== loadRequestRef.current) return 'stale';
+      setDisplayItems(ordersResult.value);
+      setDisplayStatistics(statisticsResult.value);
+      await dashboardSyncService.markSuccessful('orders');
+      if (requestId !== loadRequestRef.current) return 'stale';
+      await refreshLastSyncedAt();
+      return requestId === loadRequestRef.current ? 'success' : 'stale';
+    } catch {
+      if (requestId !== loadRequestRef.current) return 'stale';
+      setDashboardError(t('ordersDashboardLoadError'));
+      return 'error';
+    } finally {
+      if (requestId === loadRequestRef.current) {
+        setDashboardLoading(false);
+        setDashboardRefreshing(false);
+      }
+    }
+  }, [dispatch, refreshLastSyncedAt, t]);
 
   useEffect(() => { void loadOrders(); }, [loadOrders]);
 
   const handleRefresh = useCallback(async () => {
-    setRefreshing(true);
-    try { await loadOrders(); } finally { setRefreshing(false); }
+    await loadOrders('refresh');
   }, [loadOrders]);
 
   const sacksToReceive = useMemo(
-    () => items.reduce((sum, order) => order.status === 'received' ? sum : sum + order.total_bags, 0),
-    [items]
+    () => displayItems.reduce((sum, order) => order.status === 'received' ? sum : sum + order.total_bags, 0),
+    [displayItems]
   );
 
   const formatDateTime = useCallback((value: string) => {
@@ -58,7 +115,11 @@ export default function OrdersHistoryScreen() {
           confirmingOrderRef.current = order.id;
           setConfirmingOrderId(order.id);
           await dispatch(confirmOrderReceipt(order.id)).unwrap();
-          await loadOrders();
+          const refreshResult = await loadOrders('refresh');
+          if (refreshResult === 'stale') return;
+          if (refreshResult === 'error') {
+            throw new Error('orders refresh failed');
+          }
           Alert.alert(t('success'), t('confirmReceiptSuccess'));
         } catch { Alert.alert(t('error'), t('confirmReceiptError')); }
         finally {
@@ -140,35 +201,55 @@ export default function OrdersHistoryScreen() {
 
   const listHeader = (
     <View style={styles.listHeader}>
-      {error && items.length > 0 ? <InlineAlert tone="error" message={error} /> : null}
-      {statistics ? (
-        <Card variant="outlined" style={styles.statistics}>
-          <AppText variant="sectionTitle">{t('orderStatistics')}</AppText>
+      {dashboardError && displayItems.length > 0 ? <InlineAlert tone="error" message={dashboardError} /> : null}
+      {displayStatistics ? (
+        <DashboardSection title={t('orderStatistics')} lastSyncedAt={lastSyncedAt}>
+          <DashboardHeroCard
+            label={t('totalSpent')}
+            value={formatDashboardCurrency(displayStatistics.total_spent, locale)}
+            unit={t('dashboardDirectProductionCostUnit')}
+            unavailableLabel={t('dashboardDataUnavailable')}
+          />
           <View style={styles.metricGrid}>
-            <Metric value={statistics.total_orders} label={t('totalOrders')} />
-            <Metric value={Number(statistics.total_spent).toLocaleString()} label={t('totalSpent')} />
-            <Metric value={sacksToReceive} label={t('sacksToReceive')} />
-            <Metric value={statistics.total_bags_ordered} label={t('totalBags')} />
+            <DashboardMetricCard
+              value={formatDashboardNumber(displayStatistics.total_orders, locale, { maximumFractionDigits: 0 })}
+              label={t('totalOrders')}
+              tone="neutral"
+              unavailableLabel={t('dashboardDataUnavailable')}
+            />
+            <DashboardMetricCard
+              value={formatDashboardNumber(sacksToReceive, locale, { maximumFractionDigits: 0 })}
+              label={t('sacksToReceive')}
+              tone="attention"
+              unavailableLabel={t('dashboardDataUnavailable')}
+            />
+            <DashboardMetricCard
+              value={formatDashboardNumber(displayStatistics.total_bags_ordered, locale, { maximumFractionDigits: 0 })}
+              label={t('totalBags')}
+              tone="info"
+              layout="fullWidthCompact"
+              unavailableLabel={t('dashboardDataUnavailable')}
+            />
           </View>
-        </Card>
+        </DashboardSection>
       ) : null}
     </View>
   );
 
   return (
     <View style={styles.screen}>
-      <AppHeader title={t('ordersHistory')} subtitle={`${items.length} ${t(items.length > 1 ? 'orders' : 'order')}`} onBack={() => navigation.goBack()} backLabel={t('back')} />
-      {loading && !refreshing && items.length === 0 ? <LoadingState message={t('loading')} /> : error && items.length === 0 ? (
-        <ErrorState title={error} actionLabel={t('retry')} onAction={loadOrders} />
+      <AppHeader title={t('ordersHistory')} subtitle={t('orderCount', { count: displayItems.length })} onBack={() => navigation.goBack()} backLabel={t('back')} />
+      {dashboardLoading && displayItems.length === 0 ? <LoadingState message={t('loading')} /> : dashboardError && displayItems.length === 0 ? (
+        <ErrorState title={dashboardError} actionLabel={t('retry')} onAction={() => void loadOrders('refresh')} />
       ) : (
         <FlatList
-          data={items}
+          data={displayItems}
           renderItem={renderOrder}
           keyExtractor={(item) => item.id}
           ListHeaderComponent={listHeader}
           ListEmptyComponent={<EmptyState title={t('noOrdersYet')} message={t('noOrdersDescription')} actionLabel={t('browseCatalog')} onAction={() => navigation.navigate('ProductCatalog')} />}
           contentContainerStyle={styles.content}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} colors={[colors.brand.primary]} tintColor={colors.brand.primary} />}
+          refreshControl={<RefreshControl refreshing={dashboardRefreshing} onRefresh={handleRefresh} colors={[colors.brand.primary]} tintColor={colors.brand.primary} />}
         />
       )}
     </View>
@@ -179,12 +260,8 @@ function AmountRow({ label, value, strong = false }: { label: string; value: str
   return <View style={styles.rowBetween}><AppText variant={strong ? 'bodyStrong' : 'body'}>{label}</AppText><AppText variant={strong ? 'cardTitle' : 'bodyStrong'} color={strong ? 'link' : 'primary'}>{value}</AppText></View>;
 }
 
-function Metric({ value, label }: { value: string | number; label: string }) {
-  return <MetricCard value={value} label={label} />;
-}
-
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.surface.page },
+  screen: { flex: 1, backgroundColor: colors.surface.dashboard },
   content: { padding: spacing[4], gap: spacing[3] },
   flex: { flex: 1 },
   orderCard: { marginBottom: spacing[3], gap: spacing[3] },
@@ -192,7 +269,6 @@ const styles = StyleSheet.create({
   badges: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },
   details: { gap: spacing[3] },
   address: { backgroundColor: colors.surface.selected, gap: spacing[1] },
-  statistics: { marginBottom: spacing[4], gap: spacing[3] },
-  listHeader: { gap: spacing[3] },
+  listHeader: { gap: spacing[3], marginBottom: spacing[4] },
   metricGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },
 });

@@ -12,3 +12,4 @@ export { MultilineTextField } from './MultilineTextField';
 export { SelectionModal, type SelectionOption } from './SelectionModal';
 export { SegmentedControl, type SegmentedControlOption } from './SegmentedControl';
 export { LoadingState, EmptyState, ErrorState, InlineAlert } from './States';
+export * from './dashboard';

@@ -4,6 +4,7 @@ import { useDispatch } from 'react-redux';
 
 import ProductionUnitOverviewScreen from '../ProductionUnitOverviewScreen';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
+import { dashboardSyncService } from '@/services/dashboardSyncService';
 
 let harvestModalProps: any = null;
 
@@ -15,6 +16,14 @@ jest.mock('@/features/aquaculture/services/aquacultureService', () => ({
 
 jest.mock('react-redux', () => ({
   useDispatch: jest.fn(),
+}));
+
+jest.mock('@/services/dashboardSyncService', () => ({
+  dashboardSyncService: {
+    get: jest.fn().mockResolvedValue(null),
+    markSuccessful: jest.fn().mockResolvedValue(undefined),
+    clear: jest.fn().mockResolvedValue(undefined),
+  },
 }));
 
 jest.mock('@/components/modals/HarvestModal', () => ({
@@ -86,6 +95,9 @@ describe('features/aquaculture/screens/ProductionUnitOverviewScreen', () => {
         total_feed_consumed_kg: '6.50',
         latest_average_weight_g: '20.00',
         estimated_current_biomass_kg: '17.84',
+        biomass_data_available: true,
+        biomass_source: 'latest_weighing',
+        estimated_market_value_fcfa: '35680.00',
         last_daily_log_date: '2026-06-28',
         days_since_last_log: 0,
         has_today_daily_log: true,
@@ -294,5 +306,62 @@ describe('features/aquaculture/screens/ProductionUnitOverviewScreen', () => {
     });
 
     expect(mockGetProductionUnitDashboard).not.toHaveBeenCalled();
+  });
+
+  it('ignore une réponse obsolète après un changement d unité', async () => {
+    let resolveFirst: (value: unknown) => void = () => undefined;
+    let resolveSecond: (value: unknown) => void = () => undefined;
+    mockGetProductionUnitDashboard
+      .mockReturnValueOnce(new Promise((resolve) => { resolveFirst = resolve; }))
+      .mockReturnValueOnce(new Promise((resolve) => { resolveSecond = resolve; }));
+    const buildPayload = (allocationId: string, fishCount: number) => ({
+      allocation: {
+        id: allocationId,
+        cycle: 'cycle-1',
+        cycle_name: 'Cycle Silure',
+        production_unit: `unit-${allocationId}`,
+        production_unit_name: allocationId,
+        production_unit_type: 'tank',
+        production_unit_display_dimension: '3 m³',
+      },
+      summary: {
+        estimated_current_fish_count: fishCount,
+        total_mortality_count: 0,
+        mortality_rate_pct: '0.00',
+        total_feed_consumed_kg: '0.00',
+        latest_average_weight_g: null,
+        estimated_current_biomass_kg: null,
+        biomass_data_available: false,
+        biomass_source: null,
+        estimated_market_value_fcfa: null,
+        last_daily_log_date: null,
+        days_since_last_log: null,
+        has_today_daily_log: false,
+        active_sanitary_issues_count: 0,
+        last_sanitary_event_date: null,
+        has_unresolved_sanitary_issue: false,
+      },
+      recent_daily_logs: [],
+      recent_sanitary_logs: [],
+    });
+    const { getByText, queryByText, rerender } = render(
+      <ProductionUnitOverviewScreen navigation={navigation} route={route} />,
+    );
+    const secondRoute = {
+      params: {
+        cycleId: 'cycle-1',
+        allocationId: 'allocation-2',
+        productionUnitId: 'unit-2',
+        productionUnitName: 'Bac 2',
+      },
+    } as any;
+
+    rerender(<ProductionUnitOverviewScreen navigation={navigation} route={secondRoute} />);
+    resolveSecond(buildPayload('allocation-2', 1500));
+    await waitFor(() => expect(getByText('1\u202f500')).toBeTruthy());
+    resolveFirst(buildPayload('allocation-1', 2700));
+    await waitFor(() => expect(queryByText('2\u202f700')).toBeNull());
+    expect(dashboardSyncService.markSuccessful).toHaveBeenCalledTimes(1);
+    expect(dashboardSyncService.markSuccessful).toHaveBeenCalledWith('unit', 'allocation-2');
   });
 });

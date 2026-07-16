@@ -1,0 +1,63 @@
+import React from 'react';
+import { StyleSheet, View } from 'react-native';
+
+import { AppText } from '@/components/ui/AppText';
+import { Card } from '@/components/ui/Card';
+import { colors, spacing } from '@/theme';
+import { DashboardProgress } from './DashboardProgress';
+import { DASHBOARD_UNAVAILABLE_VALUE } from './formatters';
+
+interface DashboardHeroCardProps {
+  label: string;
+  value: string | number | null | undefined;
+  unit?: string;
+  helper?: string;
+  unavailableLabel: string;
+  accessibilityLabel?: string;
+  progress?: number | null;
+  progressLabel?: string;
+  locale?: string;
+}
+
+export function DashboardHeroCard({
+  label,
+  value,
+  unit,
+  helper,
+  unavailableLabel,
+  accessibilityLabel,
+  progress,
+  progressLabel,
+  locale = 'en-US',
+}: DashboardHeroCardProps) {
+  const unavailable = value === null || value === undefined || value === '' || value === DASHBOARD_UNAVAILABLE_VALUE ||
+    (typeof value === 'number' && !Number.isFinite(value));
+  const displayValue = unavailable ? '—' : String(value);
+  const announcement = accessibilityLabel ??
+    `${label}, ${unavailable ? unavailableLabel : `${displayValue}${unit ? ` ${unit}` : ''}`}`;
+
+  return (
+    <Card variant="outlined" style={styles.card} testID="dashboard-hero-card">
+      <View accessible accessibilityLabel={announcement} style={styles.header}>
+        <AppText variant="overline" color="link" style={styles.label}>{label}</AppText>
+        <View style={styles.valueRow}>
+          <AppText variant="display" style={styles.value}>{displayValue}</AppText>
+          {!unavailable && unit ? <AppText variant="bodyStrong" color="link">{unit}</AppText> : null}
+        </View>
+        {helper ? <AppText variant="helper" color="muted">{helper}</AppText> : null}
+        {unavailable && !helper ? <AppText variant="helper" color="muted">{unavailableLabel}</AppText> : null}
+      </View>
+      {progressLabel ? (
+        <DashboardProgress value={progress} label={progressLabel} unavailableLabel={unavailableLabel} locale={locale} />
+      ) : null}
+    </Card>
+  );
+}
+
+const styles = StyleSheet.create({
+  card: { width: '100%', gap: spacing[4], backgroundColor: colors.brand.subtle, borderColor: colors.brand.light },
+  header: { gap: spacing[2] },
+  label: { flex: 1 },
+  valueRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', gap: spacing[2] },
+  value: { flexShrink: 1 },
+});

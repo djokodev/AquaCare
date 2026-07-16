@@ -90,6 +90,9 @@ describe('StoreScreen', () => {
         },
       },
     };
+    mockDispatch.mockImplementation(() => ({
+      unwrap: jest.fn().mockResolvedValue(mockState.aquaculture.cycleFeedStatus.data),
+    }));
     mockGetCycleStore.mockResolvedValue({
       cycle_id: 'cycle-1',
       summary: {
@@ -144,9 +147,9 @@ describe('StoreScreen', () => {
 
     await waitFor(() => {
       expect(getByText('storeTitle')).toBeTruthy();
-      expect(getByText('storeFeedRemaining')).toBeTruthy();
-      expect(getByText('8 bags')).toBeTruthy();
-      expect(getByText('storeNeedRemaining')).toBeTruthy();
+      expect(getByText('storeCurrentStock')).toBeTruthy();
+      expect(getByText('8')).toBeTruthy();
+      expect(getByText('storeEstimatedNeedToFinish')).toBeTruthy();
       expect(getByText('ORD-001')).toBeTruthy();
     });
 
@@ -198,6 +201,38 @@ describe('StoreScreen', () => {
         })
       );
     });
+  });
+
+  it('recommande un réapprovisionnement seulement avec un stock explicitement nul', async () => {
+    mockGetCycleStore.mockResolvedValueOnce({
+      cycle_id: 'cycle-1',
+      summary: {
+        manual_feed_kg: '0.00', received_order_feed_kg: '0.00', total_feed_added_kg: '0.00',
+        feed_consumed_kg: '0.00', estimated_feed_remaining_kg: '0.00', feed_expenses_fcfa: '0.00',
+        pending_orders_count: 0, pending_order_amount_fcfa: '0.00', pending_order_feed_kg: '0.00',
+        stock_tracking_started_at: '2026-06-01',
+      },
+      status: 'low', pending_orders: [], stock_tracking_started_at: '2026-06-01',
+    });
+    const { getByText } = render(<StoreScreen />);
+    await waitFor(() => expect(getByText('storeReplenishmentRequired')).toBeTruthy());
+  });
+
+  it('ignore le statut alimentaire d un autre cycle', async () => {
+    mockRouteParams = { cycleId: 'cycle-2' };
+    mockState.aquaculture.currentCycle = { id: 'cycle-2', cycle_name: 'Cycle B' };
+    mockState.aquaculture.cycleFeedStatus.data = {
+      ...mockState.aquaculture.cycleFeedStatus.data,
+      cycle_id: 'cycle-1',
+      bags_remaining_to_order: 8,
+    };
+    const { getByText, queryByText } = render(<StoreScreen />);
+
+    await waitFor(() => {
+      expect(getByText('storeContextMismatch')).toBeTruthy();
+    });
+    expect(queryByText('storeEstimatedNeedToFinish')).toBeNull();
+    expect(queryByText('storeReplenishmentRequired')).toBeNull();
   });
 
   it('affiche un etat vide quand aucun stock n est encore declare', async () => {
