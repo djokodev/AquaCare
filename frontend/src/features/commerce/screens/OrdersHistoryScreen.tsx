@@ -34,13 +34,13 @@ import { useDashboardSyncStatus } from '@/hooks/useDashboardSyncStatus';
 import { dashboardSyncService } from '@/services/dashboardSyncService';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'OrdersHistory'>;
+type OrdersLoadResult = 'success' | 'error' | 'stale';
 
 export default function OrdersHistoryScreen() {
   const { t, i18n } = useTranslation();
   const navigation = useNavigation<NavigationProp>();
   const dispatch = useDispatch<AppDispatch>();
   const { items, statistics } = useSelector((state: RootState) => state.commerce.orders);
-  const [refreshing, setRefreshing] = useState(false);
   const [dashboardLoading, setDashboardLoading] = useState(true);
   const [dashboardRefreshing, setDashboardRefreshing] = useState(false);
   const [dashboardError, setDashboardError] = useState<string | null>(null);
@@ -49,10 +49,13 @@ export default function OrdersHistoryScreen() {
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   const [confirmingOrderId, setConfirmingOrderId] = useState<string | null>(null);
   const confirmingOrderRef = useRef<string | null>(null);
+  const loadRequestRef = useRef(0);
   const { lastSyncedAt, refreshLastSyncedAt } = useDashboardSyncStatus('orders');
   const locale = i18n.language?.startsWith('fr') ? 'fr-FR' : 'en-US';
 
-  const loadOrders = useCallback(async (mode: 'initial' | 'refresh' = 'initial') => {
+  const loadOrders = useCallback(async (mode: 'initial' | 'refresh' = 'initial'): Promise<OrdersLoadResult> => {
+    const requestId = loadRequestRef.current + 1;
+    loadRequestRef.current = requestId;
     if (mode === 'refresh') {
       setDashboardRefreshing(true);
     } else {
@@ -67,25 +70,29 @@ export default function OrdersHistoryScreen() {
       if (ordersResult.status !== 'fulfilled' || statisticsResult.status !== 'fulfilled') {
         throw new Error(t('ordersDashboardLoadError'));
       }
+      if (requestId !== loadRequestRef.current) return 'stale';
       setDisplayItems(ordersResult.value);
       setDisplayStatistics(statisticsResult.value);
       await dashboardSyncService.markSuccessful('orders');
+      if (requestId !== loadRequestRef.current) return 'stale';
       await refreshLastSyncedAt();
-      return true;
+      return requestId === loadRequestRef.current ? 'success' : 'stale';
     } catch {
+      if (requestId !== loadRequestRef.current) return 'stale';
       setDashboardError(t('ordersDashboardLoadError'));
-      return false;
+      return 'error';
     } finally {
-      setDashboardLoading(false);
-      setDashboardRefreshing(false);
+      if (requestId === loadRequestRef.current) {
+        setDashboardLoading(false);
+        setDashboardRefreshing(false);
+      }
     }
   }, [dispatch, refreshLastSyncedAt, t]);
 
   useEffect(() => { void loadOrders(); }, [loadOrders]);
 
   const handleRefresh = useCallback(async () => {
-    setRefreshing(true);
-    try { await loadOrders('refresh'); } finally { setRefreshing(false); }
+    await loadOrders('refresh');
   }, [loadOrders]);
 
   const sacksToReceive = useMemo(
@@ -108,7 +115,9 @@ export default function OrdersHistoryScreen() {
           confirmingOrderRef.current = order.id;
           setConfirmingOrderId(order.id);
           await dispatch(confirmOrderReceipt(order.id)).unwrap();
-          if (!await loadOrders('refresh')) {
+          const refreshResult = await loadOrders('refresh');
+          if (refreshResult === 'stale') return;
+          if (refreshResult === 'error') {
             throw new Error('orders refresh failed');
           }
           Alert.alert(t('success'), t('confirmReceiptSuccess'));
@@ -240,7 +249,7 @@ export default function OrdersHistoryScreen() {
           ListHeaderComponent={listHeader}
           ListEmptyComponent={<EmptyState title={t('noOrdersYet')} message={t('noOrdersDescription')} actionLabel={t('browseCatalog')} onAction={() => navigation.navigate('ProductCatalog')} />}
           contentContainerStyle={styles.content}
-          refreshControl={<RefreshControl refreshing={refreshing || dashboardRefreshing} onRefresh={handleRefresh} colors={[colors.brand.primary]} tintColor={colors.brand.primary} />}
+          refreshControl={<RefreshControl refreshing={dashboardRefreshing} onRefresh={handleRefresh} colors={[colors.brand.primary]} tintColor={colors.brand.primary} />}
         />
       )}
     </View>

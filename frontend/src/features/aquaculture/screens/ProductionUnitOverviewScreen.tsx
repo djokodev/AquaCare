@@ -1,6 +1,6 @@
 import { RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import React, { useCallback, useEffect, useLayoutEffect, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { RefreshControl, StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useDispatch } from 'react-redux';
@@ -75,6 +75,7 @@ export default function ProductionUnitOverviewScreen({ navigation, route }: Prop
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [errorKey, setErrorKey] = useState<string | null>(null);
+  const loadRequestRef = useRef(0);
   const { lastSyncedAt, refreshLastSyncedAt } = useDashboardSyncStatus('unit', resolvedCycleUnitAllocationId);
 
   const errorMessage = !hasUnitContext
@@ -85,12 +86,13 @@ export default function ProductionUnitOverviewScreen({ navigation, route }: Prop
 
   const loadDashboard = useCallback(
     async (mode: 'initial' | 'refresh' = 'initial') => {
+      const requestId = loadRequestRef.current + 1;
+      loadRequestRef.current = requestId;
       if (!hasUnitContext) {
-        setDashboard(null);
-        if (mode === 'refresh') {
-          setRefreshing(false);
-        } else {
-          setLoading(false);
+        if (requestId === loadRequestRef.current) {
+          setDashboard(null);
+          if (mode === 'refresh') setRefreshing(false);
+          else setLoading(false);
         }
         return;
       }
@@ -105,20 +107,22 @@ export default function ProductionUnitOverviewScreen({ navigation, route }: Prop
         const result = await aquacultureService.getProductionUnitDashboard(
           resolvedCycleUnitAllocationId,
         );
+        if (requestId !== loadRequestRef.current) return;
         setDashboard(result);
         setErrorKey(null);
         await dashboardSyncService.markSuccessful('unit', resolvedCycleUnitAllocationId);
+        if (requestId !== loadRequestRef.current) return;
         await refreshLastSyncedAt();
       } catch {
+        if (requestId !== loadRequestRef.current) return;
         if (mode === 'initial') {
           setDashboard(null);
         }
         setErrorKey('productionUnitDashboardLoadError');
       } finally {
-        if (mode === 'refresh') {
-          setRefreshing(false);
-        } else {
-          setLoading(false);
+        if (requestId === loadRequestRef.current) {
+          if (mode === 'refresh') setRefreshing(false);
+          else setLoading(false);
         }
       }
     },
@@ -126,15 +130,18 @@ export default function ProductionUnitOverviewScreen({ navigation, route }: Prop
   );
 
   useEffect(() => {
+    loadRequestRef.current += 1;
+    setDashboard(null);
+    setErrorKey(null);
+    setRefreshing(false);
     if (!hasUnitContext) {
-      setDashboard(null);
       setLoading(false);
-      setRefreshing(false);
       return;
     }
 
+    setLoading(true);
     void loadDashboard();
-  }, [hasUnitContext, loadDashboard]);
+  }, [hasUnitContext, loadDashboard, resolvedCycleUnitAllocationId]);
 
   useEffect(() => {
     if (!hasUnitContext || typeof navigation.addListener !== 'function') {

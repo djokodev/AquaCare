@@ -471,7 +471,9 @@ export default function DashboardScreen({ navigation }: any) {
                   helper={
                     cycleSummary?.estimated_market_value_fcfa == null
                       ? cycleSummary?.biomass_data_available === false
-                        ? t("dashboardWeighingRequired")
+                        ? t("dashboardUnitsMissingWeighing", {
+                            count: cycleSummary.units_missing_biomass_data_count,
+                          })
                         : t("dashboardMissingSellingPrice")
                       : undefined
                   }

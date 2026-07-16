@@ -6,7 +6,6 @@ from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Literal
 
-
 MONEY_QUANTIZE = Decimal("0.01")
 BiomassSource = Literal['latest_weighing', 'allocation_current', 'initial_stocking', 'harvested']
 

@@ -15,8 +15,12 @@ interface DashboardDataNoticeProps {
 
 export function DashboardDataNotice({ title, description, actionLabel, onAction }: DashboardDataNoticeProps) {
   return (
-    <Card variant="outlined" style={styles.card}>
-      <View style={styles.content}>
+    <Card variant="outlined" style={styles.card} testID="dashboard-data-notice">
+      <View
+        accessible
+        accessibilityLabel={`${title}. ${description}`}
+        style={styles.content}
+      >
         <AppText variant="bodyStrong">{title}</AppText>
         <AppText variant="helper" color="muted">{description}</AppText>
         {actionLabel && onAction ? (

@@ -33,6 +33,11 @@ jest.mock("react-i18next", () => ({
       if (key === "productionUnitsCount") {
         return `${options?.count} unités`;
       }
+      if (key === "dashboardUnitsMissingWeighing") {
+        return options?.count === 1
+          ? "1 unité sans pesée"
+          : `${options?.count} unités sans pesée`;
+      }
       return key;
     },
     i18n: {
@@ -488,5 +493,49 @@ describe("features/main/screens/DashboardScreen", () => {
     });
 
     expect(mockGetCycleDashboard).toHaveBeenCalledWith("cycle-unit");
+  });
+
+  it.each([
+    [1, "1 unité sans pesée"],
+    [2, "2 unités sans pesée"],
+  ])("affiche le compteur de pesées manquantes pour %p unité(s)", async (count, expected) => {
+    mockGetCycleDashboard.mockResolvedValueOnce({
+      summary: {
+        total_allocations: 3,
+        total_estimated_current_fish_count: 2700,
+        estimated_market_value_fcfa: null,
+        estimated_current_biomass_kg: null,
+        biomass_data_available: false,
+        units_missing_biomass_data_count: count,
+        direct_production_cost_fcfa: '225000.00',
+        cycle_progress_pct: 61,
+        days_remaining: 70,
+      },
+    });
+
+    const { getByText } = render(<DashboardScreen navigation={navigation} />);
+
+    await waitFor(() => expect(getByText(expected)).toBeTruthy());
+    expect(getByText('2\u202f700')).toBeTruthy();
+  });
+
+  it("priorise le prix manquant lorsque toutes les biomasses sont disponibles", async () => {
+    mockGetCycleDashboard.mockResolvedValueOnce({
+      summary: {
+        total_allocations: 3,
+        total_estimated_current_fish_count: 2700,
+        estimated_market_value_fcfa: null,
+        estimated_current_biomass_kg: '120.00',
+        biomass_data_available: true,
+        units_missing_biomass_data_count: 0,
+        direct_production_cost_fcfa: '225000.00',
+        cycle_progress_pct: 61,
+        days_remaining: 70,
+      },
+    });
+
+    const { getByText, queryByText } = render(<DashboardScreen navigation={navigation} />);
+    await waitFor(() => expect(getByText('dashboardMissingSellingPrice')).toBeTruthy());
+    expect(queryByText('1 unité sans pesée')).toBeNull();
   });
 });

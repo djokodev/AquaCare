@@ -19,11 +19,35 @@ describe('dashboard formatters', () => {
     },
   );
 
-  it('localizes French and English integers and decimals', () => {
-    expect(formatDashboardNumber(2700, 'fr-FR')).toMatch(/2[\s\u202f]700/u);
-    expect(formatDashboardNumber(2700, 'en-US')).toBe('2,700');
-    expect(formatDashboardNumber(12.5, 'fr-FR')).toBe('12,5');
-    expect(formatDashboardNumber(12.5, 'en-US')).toBe('12.5');
+  it.each([
+    [999, '999'],
+    [1000, '1\u202f000'],
+    [1500, '1\u202f500'],
+    [2700, '2\u202f700'],
+    [282500, '282\u202f500'],
+    [1_250_000_000, '1\u202f250\u202f000\u202f000'],
+    [12.5, '12,5'],
+    [-1500, '-1\u202f500'],
+  ])('formats %p deterministically in French as %s', (value, expected) => {
+    expect(formatDashboardNumber(value, 'fr-FR')).toBe(expected);
+  });
+
+  it.each([
+    [999, '999'],
+    [1000, '1,000'],
+    [1500, '1,500'],
+    [2700, '2,700'],
+    [282500, '282,500'],
+    [1_250_000_000, '1,250,000,000'],
+    [12.5, '12.5'],
+    [-1500, '-1,500'],
+  ])('formats %p deterministically in English as %s', (value, expected) => {
+    expect(formatDashboardNumber(value, 'en-US')).toBe(expected);
+  });
+
+  it('formats numeric strings deterministically', () => {
+    expect(formatDashboardNumber('2700', 'fr-FR')).toBe('2\u202f700');
+    expect(formatDashboardNumber('12.5', 'en-US')).toBe('12.5');
   });
 
   it('handles long and unexpected negative amounts', () => {

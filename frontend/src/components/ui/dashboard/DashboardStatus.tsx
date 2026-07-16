@@ -22,7 +22,7 @@ const toneStyles = {
 export function DashboardStatus({ title, description, tone = 'info' }: DashboardStatusProps) {
   const selectedTone = toneStyles[tone];
   return (
-    <Card variant="outlined" style={[styles.card, { backgroundColor: selectedTone.surface }]}>
+    <Card variant="outlined" style={[styles.card, { backgroundColor: selectedTone.surface }]} testID="dashboard-status">
       <View accessible accessibilityLabel={description ? `${title}. ${description}` : title} style={styles.copy}>
         <AppText variant="bodyStrong">{title}</AppText>
         {description ? <AppText variant="helper" color="muted">{description}</AppText> : null}
@@ -32,6 +32,6 @@ export function DashboardStatus({ title, description, tone = 'info' }: Dashboard
 }
 
 const styles = StyleSheet.create({
-  card: { gap: spacing[1] },
+  card: { gap: spacing[1], paddingVertical: spacing[3], paddingHorizontal: spacing[4] },
   copy: { flex: 1, gap: spacing[1] },
 });

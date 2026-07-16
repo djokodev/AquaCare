@@ -19,7 +19,17 @@ export function formatDashboardNumber(
   if (parsed === null) {
     return DASHBOARD_UNAVAILABLE_VALUE;
   }
-  return new Intl.NumberFormat(locale, options).format(parsed);
+  const formatter = new Intl.NumberFormat(locale, { ...options, useGrouping: false });
+  const formatted = formatter.format(parsed);
+  const match = formatted.match(/^([^\d]*)(\d+)(.*)$/);
+  if (!match) return formatted;
+  const [, prefix, integer, suffix] = match;
+  if (integer.length < 4 || options.useGrouping === false) {
+    return formatted;
+  }
+  const separator = locale.toLowerCase().startsWith('fr') ? '\u202f' : ',';
+  const groupedInteger = integer.replace(/\B(?=(\d{3})+(?!\d))/g, separator);
+  return `${prefix}${groupedInteger}${suffix}`;
 }
 
 export function formatDashboardCurrency(

@@ -496,6 +496,92 @@ class TestProductionCycleViewSet:
         assert response.data['summary']['last_sanitary_event_date'] == (date.today() - timedelta(days=1)).isoformat()
         assert len(response.data['allocations']) == 2
         assert response.data['allocations'][0]['allocation']['production_unit_name'] in {'Bac 1', 'Bac 2'}
+        unit_market_value = sum(
+            Decimal(str(item['summary']['estimated_market_value_fcfa']))
+            for item in response.data['allocations']
+        )
+        assert Decimal(str(response.data['summary']['estimated_market_value_fcfa'])) == unit_market_value
+
+    def test_cycle_dashboard_invalidates_partial_biomass_aggregation(self, auth_client, production_cycle):
+        """Une unité sans biomasse rend les agrégats biomasse et valeur indisponibles."""
+        create_cycle_unit_allocation(production_cycle, name='Bac fiable')
+        missing = create_cycle_unit_allocation(production_cycle, name='Bac sans pesée')
+        missing.initial_biomass_kg = Decimal('0.00')
+        missing.current_biomass_kg = Decimal('0.00')
+        missing.save(update_fields=['initial_biomass_kg', 'current_biomass_kg'])
+
+        response = auth_client.get(
+            reverse('aquaculture:production-cycle-dashboard', kwargs={'pk': production_cycle.id})
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data['summary']['biomass_data_available'] is False
+        assert response.data['summary']['units_missing_biomass_data_count'] == 1
+        assert response.data['summary']['estimated_current_biomass_kg'] is None
+        assert response.data['summary']['estimated_market_value_fcfa'] is None
+
+    def test_cycle_dashboard_counts_multiple_missing_biomasses(self, auth_client, production_cycle):
+        """Le compteur reflète exactement toutes les unités sans biomasse fiable."""
+        for name in ('Bac sans pesée 1', 'Bac sans pesée 2'):
+            allocation = create_cycle_unit_allocation(production_cycle, name=name)
+            allocation.initial_biomass_kg = Decimal('0.00')
+            allocation.current_biomass_kg = Decimal('0.00')
+            allocation.save(update_fields=['initial_biomass_kg', 'current_biomass_kg'])
+
+        response = auth_client.get(
+            reverse('aquaculture:production-cycle-dashboard', kwargs={'pk': production_cycle.id})
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data['summary']['biomass_data_available'] is False
+        assert response.data['summary']['units_missing_biomass_data_count'] == 2
+        assert response.data['summary']['estimated_current_biomass_kg'] is None
+        assert response.data['summary']['estimated_market_value_fcfa'] is None
+
+    def test_cycle_dashboard_accepts_harvested_unit_as_reliable_zero(self, auth_client, production_cycle):
+        """Une unité récoltée contribue avec des zéros fiables sans bloquer le cycle."""
+        production_cycle.planned_selling_price_per_kg_fcfa = Decimal('2000.00')
+        production_cycle.save(update_fields=['planned_selling_price_per_kg_fcfa'])
+        active = create_cycle_unit_allocation(production_cycle, name='Bac actif')
+        harvested = create_cycle_unit_allocation(production_cycle, name='Bac récolté')
+        harvested.status = 'harvested'
+        harvested.current_fish_count = 777
+        harvested.current_biomass_kg = Decimal('123.00')
+        harvested.save(update_fields=['status', 'current_fish_count', 'current_biomass_kg'])
+
+        response = auth_client.get(
+            reverse('aquaculture:production-cycle-dashboard', kwargs={'pk': production_cycle.id})
+        )
+
+        harvested_payload = next(
+            item for item in response.data['allocations']
+            if item['allocation']['id'] == str(harvested.id)
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data['summary']['total_estimated_current_fish_count'] == active.current_fish_count
+        assert response.data['summary']['biomass_data_available'] is True
+        assert response.data['summary']['units_missing_biomass_data_count'] == 0
+        assert Decimal(str(response.data['summary']['estimated_current_biomass_kg'])) == Decimal('9.00')
+        assert harvested_payload['summary']['estimated_current_fish_count'] == 0
+        assert Decimal(str(harvested_payload['summary']['estimated_current_biomass_kg'])) == Decimal('0.00')
+        assert Decimal(str(harvested_payload['summary']['estimated_market_value_fcfa'])) == Decimal('0.00')
+
+    def test_cycle_dashboard_keeps_biomass_when_selling_price_is_missing(self, auth_client, production_cycle):
+        """Un prix absent masque seulement la valeur marchande, pas la biomasse."""
+        production_cycle.planned_selling_price_per_kg_fcfa = None
+        production_cycle.save(update_fields=['planned_selling_price_per_kg_fcfa'])
+        create_cycle_unit_allocation(production_cycle, name='Bac 1')
+        create_cycle_unit_allocation(production_cycle, name='Bac 2')
+
+        response = auth_client.get(
+            reverse('aquaculture:production-cycle-dashboard', kwargs={'pk': production_cycle.id})
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data['summary']['biomass_data_available'] is True
+        assert response.data['summary']['units_missing_biomass_data_count'] == 0
+        assert Decimal(str(response.data['summary']['estimated_current_biomass_kg'])) == Decimal('18.00')
+        assert response.data['summary']['estimated_market_value_fcfa'] is None
 
     def test_cycle_dashboard_ignores_global_logs_with_units(self, auth_client, production_cycle):
         """Le dashboard cycle ne doit pas additionner les logs legacy quand des unités existent."""
