@@ -43,6 +43,9 @@ from .models import (
     ReportDispatchLog,
     SanitaryLog,
 )
+from .services.administrative_log_deletion_service import (
+    AdministrativeLogDeletionService,
+)
 from .services.integrity_error_service import translate_production_unit_integrity_error
 from .services.production_unit_service import ProductionUnitLifecycleService
 
@@ -693,6 +696,10 @@ class CycleUnitAllocationAdmin(AquacultureSecuredAdmin):
 @admin.register(CycleLog)
 class CycleLogAdmin(AquacultureSecuredAdmin):
     """Administration securisee des journaux de cycle."""
+    delete_confirmation_template = 'admin/aquaculture/cyclelog/delete_confirmation.html'
+    delete_selected_confirmation_template = (
+        'admin/aquaculture/cyclelog/delete_selected_confirmation.html'
+    )
     list_display = [
         'id_short',
         'farm_display',
@@ -732,6 +739,49 @@ class CycleLogAdmin(AquacultureSecuredAdmin):
             'cycle__farm_profile',
             'cycle_unit_allocation__production_unit',
         )
+
+    def delete_model(self, request, obj):
+        result = AdministrativeLogDeletionService.delete(obj)
+        if result.final_harvest_requires_reconciliation:
+            messages.warning(
+                request,
+                _(
+                    "Le journal a été supprimé. La récolte finale associée doit "
+                    "maintenant être réconciliée avec l'effectif recalculé."
+                ),
+            )
+        if result.cycle_requires_ledger_review:
+            messages.warning(
+                request,
+                _(
+                    "Le journal a été supprimé, mais la chronologie existante du "
+                    "cycle reste incohérente et doit être vérifiée manuellement."
+                ),
+            )
+
+    def delete_queryset(self, request, queryset):
+        affected_harvests = 0
+        cycles_requiring_review = 0
+        for cycle_log in queryset.select_related('cycle_unit_allocation'):
+            result = AdministrativeLogDeletionService.delete(cycle_log)
+            affected_harvests += int(result.final_harvest_requires_reconciliation)
+            cycles_requiring_review += int(result.cycle_requires_ledger_review)
+        if affected_harvests:
+            messages.warning(
+                request,
+                _(
+                    "%(count)s récolte(s) finale(s) doivent être réconciliées "
+                    "après la suppression des journaux."
+                ) % {'count': affected_harvests},
+            )
+        if cycles_requiring_review:
+            messages.warning(
+                request,
+                _(
+                    "%(count)s cycle(s) conservent une chronologie incohérente "
+                    "qui doit être vérifiée manuellement."
+                ) % {'count': cycles_requiring_review},
+            )
 
     fieldsets = (
         (_('Informations de base'), {

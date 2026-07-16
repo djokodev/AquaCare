@@ -200,6 +200,9 @@ def recalculate_cycle_on_log_delete(sender, instance, **kwargs):
     PROTECTION : Évite le recalcul si le cycle est en cours de suppression
     (cas de suppression CASCADE depuis ProductionCycle).
     """
+    if getattr(instance, "_skip_automatic_metrics_recalculation", False):
+        return
+
     try:
         cycle = instance.cycle
 
