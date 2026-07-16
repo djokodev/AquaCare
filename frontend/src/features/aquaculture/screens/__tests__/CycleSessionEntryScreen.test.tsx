@@ -86,7 +86,7 @@ describe('features/aquaculture/screens/CycleSessionEntryScreen', () => {
     });
   };
 
-  it('affiche le CTA "Créer mon premier cycle" si 0 cycles actifs', async () => {
+  it('affiche un accueil minimal si aucun cycle actif', async () => {
     mockDashboardDispatchResult(
       fetchDashboardData.fulfilled(
         {
@@ -105,12 +105,20 @@ describe('features/aquaculture/screens/CycleSessionEntryScreen', () => {
       )
     );
 
-    const { getByText } = render(<CycleSessionEntryScreen navigation={navigation} route={route} />);
+    const { getByLabelText, getByTestId, getByText, queryByText } = render(
+      <CycleSessionEntryScreen navigation={navigation} route={route} />,
+    );
 
     await waitFor(() => {
       expect(mockDispatch).toHaveBeenCalledWith(clearCurrentCycle());
       expect(getByText('welcomeScreenCta')).toBeTruthy();
+      expect(getByText('welcomeScreenInspiration')).toBeTruthy();
+      expect(getByLabelText('appName')).toBeTruthy();
+      expect(queryByText('sessionCycleTitle')).toBeNull();
     });
+
+    fireEvent.press(getByTestId('welcome-start-farm'));
+    expect(navigation.replace).toHaveBeenCalledWith('CreateFarm');
   });
 
   it('affiche le chargement puis une erreur relançable', async () => {

@@ -145,6 +145,7 @@ export const fr = {
   welcomeScreenTitle: 'Bienvenue sur AquaCare',
   welcomeScreenSubtitle: 'Votre assistant piscicole intelligent',
   welcomeScreenBody: 'Suivez vos cycles, optimisez votre alimentation et maximisez votre rentabilité — tout en un seul endroit.',
+  welcomeScreenInspiration: 'Chaque grand élevage commence par un premier cycle.',
   welcomeScreenCta: 'Commencer mon élevage',
   welcomeScreenFeature1: 'Simulation de rentabilité',
   welcomeScreenFeature2: 'Suivi de vos cycles',

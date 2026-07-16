@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Image, StyleSheet, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { useDispatch, useSelector } from 'react-redux';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -8,8 +9,6 @@ import {
   AppHeader,
   AppText,
   Button,
-  Card,
-  EmptyState,
   ErrorState,
   LoadingState,
   Screen,
@@ -166,22 +165,29 @@ export default function CycleSessionEntryScreen({ navigation, route }: Props) {
 
   if (activeCycles.length === 0) {
     return (
-      <View style={styles.root}>
-        {header}
-        <Screen style={styles.stateScreen}>
-          <Card variant="elevated" style={styles.welcomeCard}>
-            <EmptyState
-              title={t('welcomeScreenTitle')}
-              message={t('sessionNoCyclesHint')}
-              actionLabel={t('welcomeScreenCta')}
-              onAction={() => navigation.replace('CreateFarm')}
-            />
-            <AppText variant="caption" color="muted" style={styles.welcomeBody}>
-              {t('welcomeScreenBody')}
-            </AppText>
-          </Card>
-        </Screen>
-      </View>
+      <SafeAreaView style={styles.welcomeRoot} edges={['top', 'right', 'bottom', 'left']}>
+        <View style={styles.welcomeContent}>
+          <Image
+            source={require('../../../../assets/brand/aquacare-logo.png')}
+            style={styles.welcomeLogo}
+            resizeMode="contain"
+            accessibilityLabel={t('appName')}
+          />
+          <AppText
+            variant="sectionTitle"
+            color="secondary"
+            style={styles.welcomeMessage}
+          >
+            {t('welcomeScreenInspiration')}
+          </AppText>
+          <Button
+            label={t('welcomeScreenCta')}
+            onPress={() => navigation.replace('CreateFarm')}
+            size="large"
+            testID="welcome-start-farm"
+          />
+        </View>
+      </SafeAreaView>
     );
   }
 
@@ -211,8 +217,23 @@ export default function CycleSessionEntryScreen({ navigation, route }: Props) {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.surface.page },
   stateScreen: { justifyContent: 'center' },
-  welcomeCard: { gap: spacing[3] },
-  welcomeBody: { textAlign: 'center' },
+  welcomeRoot: { flex: 1, backgroundColor: colors.surface.card },
+  welcomeContent: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: spacing[6],
+  },
+  welcomeLogo: {
+    width: 220,
+    height: 96,
+    marginBottom: spacing[10],
+  },
+  welcomeMessage: {
+    maxWidth: 320,
+    marginBottom: spacing[10],
+    textAlign: 'center',
+  },
   pickerScreen: { paddingBottom: 0 },
   footer: {
     borderTopWidth: 1,

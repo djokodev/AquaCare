@@ -146,6 +146,7 @@
   welcomeScreenTitle: 'Welcome to AquaCare',
   welcomeScreenSubtitle: 'Your smart fish farming assistant',
   welcomeScreenBody: 'Track your cycles, optimize your feeding, and maximize your profitability — all in one place.',
+  welcomeScreenInspiration: 'Every thriving farm starts with a first cycle.',
   welcomeScreenCta: 'Start my farm',
   welcomeScreenFeature1: 'Profitability simulation',
   welcomeScreenFeature2: 'Cycle tracking',
