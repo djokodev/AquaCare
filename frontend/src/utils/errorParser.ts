@@ -156,6 +156,41 @@ const getFirstApiMessage = (data: unknown): string | undefined => {
   return undefined;
 };
 
+const collectValidationDetails = (
+  fieldPath: string,
+  value: unknown
+): ApiErrorDetails[] => {
+  if (Array.isArray(value)) {
+    const directMessages = value.flatMap((item) =>
+      item && typeof item === 'object' ? [] : toDisplayMessages(item)
+    );
+    const nestedDetails = value.flatMap((item, index) =>
+      item && typeof item === 'object'
+        ? collectValidationDetails(`${fieldPath}.${index + 1}`, item)
+        : []
+    );
+    return [
+      ...(directMessages.length > 0 ? [{ field: fieldPath, messages: directMessages }] : []),
+      ...nestedDetails,
+    ];
+  }
+
+  if (value && typeof value === 'object') {
+    const entries = Object.entries(value as Record<string, unknown>).filter(
+      ([field]) => !META_FIELDS.has(field)
+    );
+    const nestedDetails = entries.flatMap(([field, nestedValue]) =>
+      collectValidationDetails(`${fieldPath}.${field}`, nestedValue)
+    );
+    if (nestedDetails.length > 0) {
+      return nestedDetails;
+    }
+  }
+
+  const messages = toDisplayMessages(value);
+  return messages.length > 0 ? [{ field: fieldPath, messages }] : [];
+};
+
 /**
  * Parse les erreurs API Django REST Framework.
  *
@@ -208,13 +243,7 @@ export const parseApiError = (error: unknown): ParsedApiError => {
       if (META_FIELDS.has(field) || field === 'detail' || field === 'message' || field === 'error') {
         return;
       }
-      const messages = toDisplayMessages(fieldErrors);
-      if (messages.length > 0) {
-        details.push({
-          field,
-          messages,
-        });
-      }
+      details.push(...collectValidationDetails(field, fieldErrors));
     });
 
     return {
@@ -391,7 +420,8 @@ const getFieldLabel = (field: string): string => {
     detail: 'Détail',
   };
 
-  return fieldLabels[field] || field.replace(/_/g, ' ');
+  const leafField = field.split('.').at(-1) ?? field;
+  return fieldLabels[leafField] || leafField.replace(/_/g, ' ');
 };
 
 /**

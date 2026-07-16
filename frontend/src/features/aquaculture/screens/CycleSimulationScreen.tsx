@@ -48,6 +48,7 @@ import {
   getProductionUnitsDensityPreview,
   validateProductionUnitFishAllocations,
 } from '@/features/aquaculture/utils/productionUnits';
+import { groupProductionUnitAllocationSummaries } from '@/features/aquaculture/utils/allocationSummary';
 import {
   FirstCycleLaunchError,
   launchFirstCycle,
@@ -131,15 +132,13 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
       formData.survivalRate,
     ]
   );
-  const productionUnitAllocationById = useMemo(
+  const productionUnitAllocationGroups = useMemo(
     () =>
-      new Map(
-        (formData.productionUnitAllocations ?? []).map((allocation) => [
-          allocation.production_unit_local_id,
-          allocation.fish_count,
-        ] as const)
+      groupProductionUnitAllocationSummaries(
+        formData.productionUnits ?? [],
+        productionUnitAllocationsPreview?.unit_statuses ?? []
       ),
-    [formData.productionUnitAllocations]
+    [formData.productionUnits, productionUnitAllocationsPreview?.unit_statuses]
   );
   const hasProductionUnitAllocations = (formData.productionUnitAllocations ?? []).length > 0;
 
@@ -388,7 +387,6 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
       {formData.productionUnitAllocations?.length ? (
         <Card variant="elevated" style={styles.card}>
           <AppText variant="bodyStrong">{t('simulationAllocationByUnitTitle')}</AppText>
-          <AppText variant="helper" color="muted">{t('simulationAllocationByUnitDescription')}</AppText>
           {productionUnitAllocationsPreview?.global_error && (
             <InlineAlert
               tone="error"
@@ -396,36 +394,29 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
             />
           )}
           <View style={styles.allocationSummaryList}>
-            {formData.productionUnits.map((unit, index) => {
-              const status = productionUnitAllocationsPreview?.unit_statuses[index];
-              const rawAllocation = productionUnitAllocationById.get(unit.local_id);
-              const parsedAllocation =
-                status?.fish_count ?? (rawAllocation && rawAllocation.trim() ? Number(rawAllocation) : null);
+            {productionUnitAllocationGroups.map((group, index) => {
               const densityLabel =
-                status?.density !== null && status?.density !== undefined && status.density_unit
-                  ? `${formatDensity(status.density)} ${t(
-                      status.density_unit === 'm2'
+                group.density !== null && group.densityUnit
+                  ? `${formatDensity(group.density)} ${t(
+                      group.densityUnit === 'm2'
                         ? 'productionUnitDensityFingerlingsPerSquareMeter'
                         : 'productionUnitDensityFingerlingsPerCubicMeter'
                     )}`
-                  : null;
-              const allocationLabel =
-                parsedAllocation !== null && Number.isFinite(parsedAllocation)
-                  ? `${parsedAllocation} ${t('productionUnitFingerlingsUnit')}`
-                  : `— ${t('productionUnitFingerlingsUnit')}`;
-              const productionLabel =
-                status?.estimated_production_kg !== null && status?.estimated_production_kg !== undefined
-                  ? ` · ${formatKgValue(status.estimated_production_kg)} kg`
-                  : '';
+                  : '—';
+              const allocationLabel = group.fishCount !== null
+                ? `${new Intl.NumberFormat(densityLocale).format(group.fishCount)} ${t('productionUnitFingerlingsUnit')}`
+                : `— ${t('productionUnitFingerlingsUnit')}`;
+              const productionLabel = group.estimatedProductionKg !== null
+                ? `${formatKgValue(group.estimatedProductionKg)} kg`
+                : '—';
 
               return (
-                <View key={unit.local_id} style={styles.allocationSummaryRow}>
-                  <AppText variant="label" style={styles.allocationSummaryLabel}>{unit.name}</AppText>
-                  <AppText variant="helper" color="muted" style={styles.allocationSummaryValue}>
-                    {allocationLabel}
-                    {densityLabel ? ` · ${densityLabel}` : ''}
-                    {productionLabel}
-                  </AppText>
+                <View key={group.unitNames.join('|')} style={styles.allocationGroup}>
+                  {index > 0 ? <Divider /> : null}
+                  <AppText variant="label">{group.unitNames.join(' → ')}</AppText>
+                  <MetricRow label={t('simulationFingerlingsCount')} value={allocationLabel} />
+                  <MetricRow label={t('simulationDensity')} value={densityLabel} />
+                  <MetricRow label={t('simulationCycleProduction')} value={productionLabel} />
                 </View>
               );
             })}
@@ -462,9 +453,7 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
         />
       </Card>
 
-      <AppText variant="helper" color="muted">
-        {t('simulationOtherCostsInfo')}
-      </AppText>
+      <InlineAlert tone="info" message={t('simulationOtherCostsInfo')} />
 
       <Button
         label={t('simulationModifyBtn')}
@@ -521,7 +510,5 @@ const styles = StyleSheet.create({
   title: { textAlign: 'center' },
   card: { gap: spacing[2] },
   allocationSummaryList: { gap: spacing[2], marginTop: spacing[2] },
-  allocationSummaryRow: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing[3] },
-  allocationSummaryLabel: { flex: 1 },
-  allocationSummaryValue: { flex: 1, textAlign: 'right' },
+  allocationGroup: { gap: spacing[1] },
 });

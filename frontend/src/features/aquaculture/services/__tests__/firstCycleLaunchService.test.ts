@@ -130,6 +130,55 @@ describe("features/aquaculture/services/firstCycleLaunchService", () => {
     ).toBe(formData.launchRequestId);
   });
 
+  it("transmet le lancement de trois bacs de 200 m³ totalisant 180 000 alevins", async () => {
+    const largeFarmUnits = [1, 2, 3].map((index) => ({
+      local_id: `unit-${index}`,
+      name: `Bac ${index}`,
+      unit_type: "tank" as const,
+      volume_m3: "200",
+      surface_m2: "",
+    }));
+    const largeFarmAllocations = [1, 2, 3].map((index) => ({
+      production_unit_local_id: `unit-${index}`,
+      fish_count: "60000",
+    }));
+
+    await launchFirstCycle({
+      formData: {
+        ...formData,
+        fingerlingsCount: "180000",
+        productionUnits: largeFarmUnits,
+        productionUnitAllocations: largeFarmAllocations,
+      },
+      simulationResult: {
+        ...simulationResult,
+        annual_production_target_kg: 64800,
+        cycles_breakdown: [
+          {
+            ...simulationResult.cycles_breakdown[0],
+            initial_fish_count: 180000,
+          },
+        ],
+      },
+      defaultPondIdentifier: "Bassin principal",
+    });
+
+    expect(mockAquaculture.launchProductionCycle).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cycle: expect.objectContaining({ initial_count: 180000 }),
+        production_units: expect.arrayContaining([
+          expect.objectContaining({ name: "Bac 1", volume_m3: 200 }),
+          expect.objectContaining({ name: "Bac 2", volume_m3: 200 }),
+          expect.objectContaining({ name: "Bac 3", volume_m3: 200 }),
+        ]),
+        allocations: largeFarmAllocations.map((allocation) => ({
+          ...allocation,
+          fish_count: 60000,
+        })),
+      })
+    );
+  });
+
   it("bloque un lancement sans unité réelle", async () => {
     await expect(
       launchFirstCycle({

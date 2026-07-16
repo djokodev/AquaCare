@@ -139,6 +139,52 @@ def test_cycle_launch_creates_complete_aggregate_and_replays(auth_client, farm_p
 
 
 @pytest.mark.django_db
+def test_cycle_launch_accepts_three_200m3_tanks_at_recommended_density(
+    auth_client,
+    farm_profile,
+):
+    payload = launch_payload()
+    payload["production_plan"]["annual_production_target_kg"] = "64800.00"
+    payload["cycle"].update(
+        {
+            "initial_count": 180_000,
+            "fingerlings_cost_fcfa": "9000000.00",
+        }
+    )
+    payload["production_units"] = [
+        {
+            "local_id": f"production-unit-{index}",
+            "source": "new",
+            "name": f"Bac {index}",
+            "unit_type": "tank",
+            "volume_m3": "200",
+        }
+        for index in range(1, 4)
+    ]
+    payload["allocations"] = [
+        {
+            "production_unit_local_id": f"production-unit-{index}",
+            "fish_count": 60_000,
+        }
+        for index in range(1, 4)
+    ]
+
+    response = auth_client.post(
+        reverse("aquaculture:production_cycle_launch"),
+        payload,
+        format="json",
+    )
+
+    assert response.status_code == status.HTTP_201_CREATED, response.data
+    assert response.data["production_cycle"]["initial_count"] == 180_000
+    assert len(response.data["production_units"]) == 3
+    assert sum(
+        allocation["initial_fish_count"]
+        for allocation in response.data["cycle_unit_allocations"]
+    ) == 180_000
+
+
+@pytest.mark.django_db
 def test_cycle_launch_creates_empty_calibration_units_atomically(auth_client, farm_profile):
     payload = launch_payload()
     tank_uuid = str(uuid4())

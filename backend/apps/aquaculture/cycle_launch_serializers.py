@@ -9,6 +9,7 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
 
+from .constants import MAX_INITIAL_FISH_COUNT
 from .domain.cycle_duration import MAX_CYCLE_DURATION_DAYS, MIN_CYCLE_DURATION_DAYS
 from .domain.production_units import (
     normalize_production_unit_type,
@@ -54,7 +55,10 @@ class CycleLaunchCycleSerializer(serializers.Serializer):
     )
     species = serializers.ChoiceField(choices=["tilapia", "clarias"])
     start_date = serializers.DateField()
-    initial_count = serializers.IntegerField(min_value=1, max_value=100000)
+    initial_count = serializers.IntegerField(
+        min_value=1,
+        max_value=MAX_INITIAL_FISH_COUNT,
+    )
     initial_average_weight = serializers.DecimalField(
         max_digits=6,
         decimal_places=2,

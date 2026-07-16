@@ -43,6 +43,7 @@ from .constants import (
     LOG_TEMPERATURE_MAX,
     LOG_TEMPERATURE_MIN,
     MAX_GENERATION_WEEKS,
+    MAX_INITIAL_FISH_COUNT,
     SPECIES_CHOICES,
 )
 from .domain.calculators import AquacultureCalculator
@@ -628,7 +629,7 @@ class ProductionCycleSerializer(serializers.ModelSerializer):
                 })
 
         # Validate reasonable fish count
-        if attrs.get('initial_count', 0) > 100000:
+        if attrs.get('initial_count', 0) > MAX_INITIAL_FISH_COUNT:
             raise serializers.ValidationError({
                 'initial_count': _("Le nombre initial de poissons semble trop élevé")
             })

@@ -598,4 +598,48 @@ describe('features/aquaculture/screens/CycleSimulationScreen', () => {
       expect(getText(/399 kg/)).toBeTruthy();
     });
   });
+
+  it('regroupe les bacs identiques dans un seul resume lisible', async () => {
+    mockDispatch.mockImplementation((action: unknown) => {
+      if (typeof action === 'function') {
+        return {
+          type: runCycleSimulation.fulfilled.type,
+          payload: {
+            ...currentResult,
+            initial_fish_count_per_cycle: 180_000,
+            cycles_breakdown: [
+              { ...currentResult.cycles_breakdown[0], initial_fish_count: 180_000 },
+            ],
+          },
+        };
+      }
+
+      return action;
+    });
+
+    const route = buildRoute({
+      fingerlingsCount: '180000',
+      productionUnits: [1, 2, 3].map((index) => ({
+        local_id: `unit-${index}`,
+        name: `Bac ${index}`,
+        unit_type: 'tank',
+        volume_m3: '200',
+      })),
+      productionUnitAllocations: [1, 2, 3].map((index) => ({
+        production_unit_local_id: `unit-${index}`,
+        fish_count: '60000',
+      })),
+    });
+
+    const { getAllByText, getByText, queryByText } = render(
+      <CycleSimulationScreen navigation={navigation} route={route} />
+    );
+
+    await waitFor(() => {
+      expect(getByText('Bac 1 → Bac 2 → Bac 3')).toBeTruthy();
+      expect(getByText('60,000 productionUnitFingerlingsUnit')).toBeTruthy();
+      expect(getAllByText('300 productionUnitDensityFingerlingsPerCubicMeter')).toHaveLength(2);
+      expect(queryByText('simulationAllocationByUnitDescription')).toBeNull();
+    });
+  });
 });
