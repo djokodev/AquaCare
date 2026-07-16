@@ -36,5 +36,11 @@
 
 - Run tests before deployment.
 - Confirm migrations are intentional.
+- Audit legacy data against new constraints before deploying a migration that
+  introduces stricter uniqueness or validation rules.
+- Treat a failed migration as a failed release and keep the previously healthy
+  application revision serving traffic.
 - Verify the health endpoint after rollout.
+- Route the container health check through Django so it verifies the API,
+  PostgreSQL, and Redis instead of returning a static proxy response.
 - Back up production data before any schema change or destructive migration.
