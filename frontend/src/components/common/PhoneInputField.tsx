@@ -1,5 +1,5 @@
 import React from "react";
-import { StyleSheet, TextInput, View } from "react-native";
+import { Platform, StyleSheet, TextInput, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { formatCameroonPhone } from "@/utils/phoneFormatter";
 import { AppText, FormField } from "@/components/ui";
@@ -78,14 +78,14 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    height: typography.body.lineHeight,
+    height: sizing.inputHeight - spacing[3],
     ...typography.body,
     color: colors.text.primary,
-    paddingVertical: 0,
     paddingTop: 0,
     paddingBottom: 0,
     textAlignVertical: "center",
-    transform: [{ translateY: -3 }],
+    includeFontPadding: false,
+    ...Platform.select({ ios: { transform: [{ translateY: -3 }] }, default: {} }),
   },
   error: { borderColor: colors.status.error },
 });

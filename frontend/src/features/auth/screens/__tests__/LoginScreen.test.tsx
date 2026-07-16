@@ -56,7 +56,7 @@ describe('features/auth/screens/LoginScreen', () => {
     mockLogin.mockResolvedValueOnce({} as any);
     const { getAllByText, getByPlaceholderText, getByText } = render(<LoginScreen navigation={mockNavigation} />);
 
-    fireEvent.press(getAllByText('phoneNumber')[0]);
+    fireEvent.press(getAllByText('loginPhoneLabel')[0]);
     fireEvent.changeText(getByPlaceholderText('placeholderPhoneExample'), '670000000');
     fireEvent.changeText(getByPlaceholderText('********'), 'password123');
     fireEvent.press(getByText('signIn'));

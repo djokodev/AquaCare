@@ -18,6 +18,8 @@ export const fr = {
   password: 'Mot de passe',
   confirmPassword: 'Confirmer le mot de passe',
   loginName: "Nom d'affichage",
+  loginNameLabel: 'Nom',
+  loginPhoneLabel: 'Téléphone',
   firstName: 'Prénom',
   lastName: 'Nom',
   businessName: "Nom de l'entreprise",
@@ -82,6 +84,8 @@ export const fr = {
   haveAccount: "Déjà un compte ? ",
   phoneHint: "Saisissez votre numéro sans l'indicatif",
   createAccount: "Créez votre compte AQUACARE",
+  showPassword: 'Afficher le mot de passe',
+  hidePassword: 'Masquer le mot de passe',
   hello: "Bonjour",
   welcome: "Bienvenue dans",
   goodMorning: "Bonjour",
@@ -1292,7 +1296,7 @@ export const fr = {
   errorBoundaryRetry: 'Réessayer',
 
   // Auth Placeholders
-  placeholderLoginName: 'Jean Farmer ou AquaFerme SARL',
+  placeholderLoginName: 'Djoko Christian',
   placeholderPhoneExample: '652260368',
   whatsAppHint: 'Renseignez votre numéro WhatsApp',
   infrastructureType: "Type d'infrastructure",

@@ -19,6 +19,8 @@
   password: 'Password',
   confirmPassword: 'Confirm Password',
   loginName: 'Display Name',
+  loginNameLabel: 'Name',
+  loginPhoneLabel: 'Phone',
   firstName: 'First Name',
   lastName: 'Last Name',
   businessName: 'Business Name',
@@ -83,6 +85,8 @@
   haveAccount: "Already have an account? ",
   phoneHint: "Enter your number without country code",
   createAccount: "Create your AQUACARE account",
+  showPassword: 'Show password',
+  hidePassword: 'Hide password',
   hello: "Hello",
   welcome: "Welcome to",
   goodMorning: "Good morning",
@@ -1293,7 +1297,7 @@
   errorBoundaryRetry: 'Try again',
 
   // Auth Placeholders
-  placeholderLoginName: 'Jean Farmer or AquaFerme SARL',
+  placeholderLoginName: 'Djoko Christian',
   placeholderPhoneExample: '652260368',
   whatsAppHint: 'Enter your WhatsApp number',
   infrastructureType: 'Infrastructure Type',
