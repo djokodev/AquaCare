@@ -185,23 +185,6 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
   async function handleLaunchFirstCycle() {
     if (!currentResult) return;
 
-    const continueToAdditionalCycle = () => navigation.replace('NewCycle');
-    const showAdditionalCycleRedirect = () => {
-      Alert.alert(
-        t('additionalCycleRequiredTitle'),
-        t('additionalCycleRequiredMessage'),
-        [
-          { text: t('cancel'), style: 'cancel' },
-          { text: t('additionalCycleContinue'), onPress: continueToAdditionalCycle },
-        ]
-      );
-    };
-
-    if (requiresAdditionalCycleFlow) {
-      showAdditionalCycleRedirect();
-      return;
-    }
-
     setLaunching(true);
 
     try {
@@ -209,6 +192,7 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
         formData,
         simulationResult: currentResult,
         defaultPondIdentifier: t('simulationDefaultPondIdentifier'),
+        launchKind: requiresAdditionalCycleFlow ? 'additional_cycle' : 'initial_setup',
       });
       dispatch(addCreatedProductionCycle(launchResult.productionCycle));
       dispatch(setFarmProfile(launchResult.farmProfile));
@@ -231,11 +215,6 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
       }
 
       const parsedError = parseApiError(err);
-      if (parsedError.code === 'cycle_launch_mode_conflict') {
-        showAdditionalCycleRedirect();
-        return;
-      }
-
       Alert.alert(t('error'), formatAquacultureErrorWithAction(parsedError, t));
     } finally {
       setLaunching(false);

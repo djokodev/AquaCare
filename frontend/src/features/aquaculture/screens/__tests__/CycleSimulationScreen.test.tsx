@@ -345,8 +345,7 @@ describe('features/aquaculture/screens/CycleSimulationScreen', () => {
     });
   });
 
-  it('affiche le CTA de lancement adapte quand un cycle existe deja', async () => {
-    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined as never);
+  it('lance le cycle additionnel directement quand un cycle existe deja', async () => {
     (useSelector as unknown as jest.Mock).mockImplementation((selector: (state: any) => unknown) =>
       selector({
         auth: { farmProfile: { farm_setup_completed: true } },
@@ -358,6 +357,15 @@ describe('features/aquaculture/screens/CycleSimulationScreen', () => {
       })
     );
 
+    mockLaunchFirstCycle.mockResolvedValue({
+      farmProfile: { id: 'farm-profile-1' },
+      productionCycle: createdProductionCycle,
+      productionUnitIdByLocalId: {},
+      productionUnits: [],
+      cycleUnitAllocations: [],
+      idempotentReplay: false,
+    });
+
     const route = buildRoute();
     const { getByText } = render(<CycleSimulationScreen navigation={navigation} route={route} />);
 
@@ -367,21 +375,20 @@ describe('features/aquaculture/screens/CycleSimulationScreen', () => {
 
     fireEvent.press(getByText('simulationLaunchAdditionalBtn'));
 
-    expect(mockLaunchFirstCycle).not.toHaveBeenCalled();
-    expect(alertSpy).toHaveBeenCalledWith(
-      'additionalCycleRequiredTitle',
-      'additionalCycleRequiredMessage',
-      expect.any(Array),
-    );
-
-    const buttons = alertSpy.mock.calls[0][2];
-    const continueButton = buttons?.find(
-      (button) => button.text === 'additionalCycleContinue',
-    );
-    continueButton?.onPress?.();
-
-    expect(navigation.replace).toHaveBeenCalledWith('NewCycle');
-    alertSpy.mockRestore();
+    await waitFor(() => {
+      expect(mockLaunchFirstCycle).toHaveBeenCalledWith(
+        expect.objectContaining({
+          launchKind: 'additional_cycle',
+        })
+      );
+      expect(mockDispatch).toHaveBeenCalledWith(setCurrentCycle(createdProductionCycle));
+      expect(navigation.reset).toHaveBeenCalledWith({
+        index: 0,
+        routes: [
+          { name: 'MainTabs', params: { screen: 'Dashboard' } },
+        ],
+      });
+    });
   });
 
   it('affiche un message lisible si la persistance du cycle echoue', async () => {
