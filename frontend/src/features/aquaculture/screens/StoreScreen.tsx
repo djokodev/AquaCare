@@ -12,7 +12,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp, useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { useDispatch, useSelector } from 'react-redux';
+import { useSelector } from 'react-redux';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -39,11 +39,11 @@ import {
 } from '@/components/ui';
 import { colors, spacing } from '@/theme';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
-import { fetchCycleFeedStatus } from '@/features/aquaculture/store/aquacultureSlice';
 import { RootStackParamList } from '@/navigation/MainNavigator';
-import { AppDispatch, RootState } from '@/store/store';
-import { CycleFeedStatus, CycleStore } from '@/types/aquaculture';
+import { RootState } from '@/store/store';
+import { CycleStore } from '@/types/aquaculture';
 import { sanitizeUserFacingErrorMessage } from '@/utils/errorParser';
+import { parseLocalizedNumber } from '@/utils/localizedNumber';
 import { getOrderStatusLabelKey } from '@/features/commerce/utils/orderStatus';
 import { useDashboardSyncStatus } from '@/hooks/useDashboardSyncStatus';
 import { dashboardSyncService } from '@/services/dashboardSyncService';
@@ -106,19 +106,18 @@ export default function StoreScreen() {
   const { t, i18n } = useTranslation();
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<RouteProp<RootStackParamList, 'Store'>>();
-  const dispatch = useDispatch<AppDispatch>();
   const currentCycle = useSelector((state: RootState) => state.aquaculture.currentCycle);
 
   const cycleId = route.params?.cycleId || currentCycle?.id || null;
 
   const [store, setStore] = useState<CycleStore | null>(null);
-  const [validatedFeedStatus, setValidatedFeedStatus] = useState<CycleFeedStatus | null>(null);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [manualModalVisible, setManualModalVisible] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [label, setLabel] = useState('');
+  const [feedSizeMm, setFeedSizeMm] = useState('');
   const [quantityKg, setQuantityKg] = useState('');
   const [totalCostFcfa, setTotalCostFcfa] = useState('');
   const [entryDate, setEntryDate] = useState(todayIsoDate());
@@ -134,7 +133,6 @@ export default function StoreScreen() {
     loadRequestRef.current = requestId;
     if (!cycleId) {
       setStore(null);
-      setValidatedFeedStatus(null);
       setError(t('storeNoCycleSelected'));
       setLoading(false);
       setRefreshing(false);
@@ -144,35 +142,20 @@ export default function StoreScreen() {
     setLoading(true);
     setError(null);
     try {
-      const [storeResult, feedResult] = await Promise.allSettled([
-        aquacultureService.getCycleStore(cycleId),
-        dispatch(fetchCycleFeedStatus(cycleId)).unwrap(),
-      ]);
+      const payload = await aquacultureService.getCycleStore(cycleId);
 
       if (requestId !== loadRequestRef.current) {
         return;
       }
-      if (storeResult.status !== 'fulfilled' || feedResult.status !== 'fulfilled') {
-        const failure = storeResult.status === 'rejected'
-          ? storeResult.reason
-          : feedResult.status === 'rejected'
-            ? feedResult.reason
-            : new Error(t('storeLoadError'));
-        throw failure;
-      }
-      const payload = storeResult.value;
-      const feedStatus = feedResult.value;
-      if (payload.cycle_id !== cycleId || feedStatus.cycle_id !== cycleId) {
+      if (payload.cycle_id !== cycleId) {
         throw new Error(t('storeContextMismatch'));
       }
       setStore(payload);
-      setValidatedFeedStatus(feedStatus);
       await dashboardSyncService.markSuccessful('store', cycleId);
       await refreshLastSyncedAt();
     } catch (caughtError) {
       if (!preserveVisibleStore && requestId === loadRequestRef.current) {
         setStore(null);
-        setValidatedFeedStatus(null);
       }
       setError(extractErrorMessage(caughtError, t('storeLoadError')));
     } finally {
@@ -180,18 +163,17 @@ export default function StoreScreen() {
         setLoading(false);
       }
     }
-  }, [cycleId, dispatch, refreshLastSyncedAt, t]);
+  }, [cycleId, refreshLastSyncedAt, t]);
 
   useEffect(() => {
     setStore(null);
-    setValidatedFeedStatus(null);
     setError(null);
   }, [cycleId]);
 
   useFocusEffect(
     useCallback(() => {
       void loadStore();
-    }, [loadStore, cycleId, dispatch])
+    }, [loadStore, cycleId])
   );
 
   const handleRefresh = async () => {
@@ -208,6 +190,7 @@ export default function StoreScreen() {
 
   const openManualModal = () => {
     setLabel('');
+    setFeedSizeMm('');
     setQuantityKg('');
     setTotalCostFcfa('');
     setEntryDate(todayIsoDate());
@@ -236,7 +219,15 @@ export default function StoreScreen() {
       return;
     }
 
-    if (!label.trim() || !quantityKg.trim() || !totalCostFcfa.trim() || !entryDate.trim()) {
+    const parsedFeedSize = parseLocalizedNumber(feedSizeMm);
+    const parsedQuantity = parseLocalizedNumber(quantityKg);
+    const parsedTotalCost = parseLocalizedNumber(totalCostFcfa);
+    const invalidFeedSize = parsedFeedSize.kind !== 'valid'
+      || parsedFeedSize.value < 0.1
+      || parsedFeedSize.value > 20;
+    const invalidQuantity = parsedQuantity.kind !== 'valid' || parsedQuantity.value <= 0;
+    const invalidTotalCost = parsedTotalCost.kind !== 'valid' || parsedTotalCost.value < 0;
+    if (!label.trim() || invalidFeedSize || invalidQuantity || invalidTotalCost || !entryDate.trim()) {
       Alert.alert(t('error'), t('storeManualValidationError'));
       return;
     }
@@ -246,8 +237,9 @@ export default function StoreScreen() {
       setSubmitting(true);
       await aquacultureService.declareCycleStoreManualStock(cycleId, {
         label: label.trim(),
-        quantity_kg: quantityKg.trim(),
-        total_cost_fcfa: totalCostFcfa.trim(),
+        feed_size_mm: String(parsedFeedSize.value),
+        quantity_kg: String(parsedQuantity.value),
+        total_cost_fcfa: String(parsedTotalCost.value),
         entry_date: entryDate.trim(),
         note: note.trim(),
         client_uuid: generateClientUuid(),
@@ -264,13 +256,8 @@ export default function StoreScreen() {
     }
   };
 
-  const currentCycleFeedStatus = validatedFeedStatus?.cycle_id === cycleId ? validatedFeedStatus : null;
-  const remainingToOrderValue = currentCycleFeedStatus
-    ? formatDashboardNumber(currentCycleFeedStatus.bags_remaining_to_order, locale, { maximumFractionDigits: 0 })
-    : null;
-  const availableStockKg = parseDashboardNumber(store?.summary.estimated_feed_remaining_kg);
-  const remainingBags = parseDashboardNumber(currentCycleFeedStatus?.bags_remaining_to_order);
-  const requiresReplenishment = availableStockKg === 0 && remainingBags !== null && remainingBags > 0;
+  const feedToSecureKg = parseDashboardNumber(store?.summary.feed_to_secure_kg);
+  const requiresReplenishment = feedToSecureKg !== null && feedToSecureKg > 0;
 
   const actionRows = [
     { label: t('storeManualSubmit'), onPress: openManualModal },
@@ -314,8 +301,8 @@ export default function StoreScreen() {
               <DashboardSection title={t('storeStatusTitle')} lastSyncedAt={lastSyncedAt}>
                 <DashboardHeroCard
                   label={t('storeEstimatedNeedToFinish')}
-                  value={remainingToOrderValue}
-                  unit={t('bags')}
+                  value={formatDashboardNumber(store.summary.feed_to_secure_kg, locale, { maximumFractionDigits: 1 })}
+                  unit={t('kg')}
                   unavailableLabel={t('dashboardDataUnavailable')}
                 />
                 <View style={styles.metrics}>
@@ -352,6 +339,26 @@ export default function StoreScreen() {
                   {new Date(store.summary.stock_tracking_started_at).toLocaleDateString(i18n.language?.startsWith('fr') ? 'fr-FR' : 'en-US')}
                 </AppText>
               ) : null}
+              <Card variant="outlined" style={styles.section}>
+                <AppText variant="cardTitle">{t('storeStockByFeedTitle')}</AppText>
+                {(store.stock_items ?? []).length ? (store.stock_items ?? []).map((item) => (
+                  <View key={`${item.label}-${item.feed_size_mm ?? 'legacy'}`} style={styles.stockItem}>
+                    <View style={styles.flex}>
+                      <AppText variant="label">{item.label}</AppText>
+                      <AppText variant="helper" color="muted">
+                        {item.feed_size_mm
+                          ? t('storeFeedSizeValue', { size: formatDashboardNumber(item.feed_size_mm, locale) })
+                          : t('storeFeedSizeUnknown')}
+                      </AppText>
+                    </View>
+                    <AppText variant="bodyStrong" color="link">
+                      {formatDashboardNumber(item.quantity_available_kg, locale, { maximumFractionDigits: 2 })} {t('kg')}
+                    </AppText>
+                  </View>
+                )) : (
+                  <AppText variant="body" color="muted">{t('storeStockByFeedEmpty')}</AppText>
+                )}
+              </Card>
             </>
           ) : null}
           <Card variant="outlined" style={styles.section}>
@@ -404,6 +411,7 @@ export default function StoreScreen() {
               <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
                 <View style={styles.form}>
                   <TextField label={t('storeManualLabel')} value={label} onChangeText={setLabel} placeholder={t('storeManualLabelPlaceholder')} />
+                  <TextField label={t('storeManualFeedSize')} value={feedSizeMm} onChangeText={setFeedSizeMm} keyboardType="decimal-pad" placeholder={t('storeManualFeedSizePlaceholder')} />
                   <View style={styles.formRow}>
                     <View style={styles.flex}><TextField label={t('storeManualQuantity')} value={quantityKg} onChangeText={setQuantityKg} keyboardType="decimal-pad" placeholder={t('storeManualQuantityPlaceholder')} /></View>
                     <View style={styles.flex}><TextField label={t('storeManualTotalCost')} value={totalCostFcfa} onChangeText={setTotalCostFcfa} keyboardType="decimal-pad" placeholder={t('storeManualTotalCostPlaceholder')} /></View>
@@ -435,6 +443,7 @@ const styles = StyleSheet.create({
   orderCard: { padding: spacing[3] },
   orderHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing[3] },
   orderAmount: { alignItems: 'flex-end', gap: spacing[1] },
+  stockItem: { flexDirection: 'row', alignItems: 'center', gap: spacing[3], paddingVertical: spacing[2] },
   actionList: { gap: spacing[3] },
   flex: { flex: 1 },
   modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: colors.overlay.default },

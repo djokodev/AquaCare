@@ -74,7 +74,7 @@ class CycleFeedService:
         Returns:
             CycleFeedStatusResult avec tous les compteurs de suivi.
         """
-        total_feed_needed_kg = CycleFeedService._compute_total_feed_needed_kg(cycle)
+        total_feed_needed_kg = CycleFeedService.compute_total_feed_needed_kg(cycle)
         total_bags_needed = math.ceil(total_feed_needed_kg / BAG_WEIGHT_KG) if total_feed_needed_kg else 0
 
         bags_by_product, total_bags_ordered = CycleFeedService._compute_ordered_bags(cycle)
@@ -144,7 +144,7 @@ class CycleFeedService:
         return {"feeding_phases": sim["feeding_phases"]}
 
     @staticmethod
-    def _compute_total_feed_needed_kg(cycle: ProductionCycle) -> float:
+    def compute_total_feed_needed_kg(cycle: ProductionCycle) -> float:
         """
         Calcule le total kg d'aliment nécessaire.
 

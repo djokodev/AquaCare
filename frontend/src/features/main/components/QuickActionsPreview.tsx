@@ -147,15 +147,7 @@ export default function QuickActionsPreview({
     const actions: SuggestedAction[] = [];
 
     // Suggestion 1 : Basée sur l'état des cycles
-    if (hasActiveCycles && !hideGlobalCycleOperationalActions) {
-      // Si cycles actifs → prioriser saisie quotidienne
-      actions.push({
-        icon: "create",
-        color: colors.brand.light,
-        label: t("dailyLogCompact"),
-        route: "DailyLog",
-      });
-    } else if (hasActiveCycles) {
+    if (hasActiveCycles) {
       actions.push({
         icon: "document-text-outline",
         color: colors.legacy.blue,
@@ -189,7 +181,7 @@ export default function QuickActionsPreview({
         label: `${t("notifications")} (${unreadCount})`,
         route: "Notifications",
       });
-    } else if (!hideGlobalCycleOperationalActions || !hasActiveCycles) {
+    } else if (!hasActiveCycles) {
       actions.push({
         icon: "document-text-outline",
         color: colors.legacy.blue,

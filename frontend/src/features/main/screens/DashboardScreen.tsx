@@ -674,7 +674,7 @@ export default function DashboardScreen({ navigation }: any) {
                 <DashboardActionCard
                   testID="dashboard-action-create-cycle"
                   label={t("createNewCycleDashboardTitle")}
-                  onPress={() => navigation.navigate("CreateFarm")}
+                  onPress={() => navigation.navigate("NewCycle")}
                 />
               </>
             )}

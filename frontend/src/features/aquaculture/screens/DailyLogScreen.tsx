@@ -1,19 +1,29 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, Alert } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Alert, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { useSelector, useDispatch } from 'react-redux';
-import { RootState, AppDispatch } from '@/store/store';
-import { fetchDashboardData, setCurrentCycle } from '@/features/aquaculture/store/aquacultureSlice';
-import { DailyLogForm } from '@/types/aquaculture';
+import { useDispatch, useSelector } from 'react-redux';
+
+import { AppDispatch, RootState } from '@/store/store';
+import { fetchDashboardData } from '@/features/aquaculture/store/aquacultureSlice';
+import { CycleLog, CycleStore, DailyLogForm } from '@/types/aquaculture';
 import { RootStackParamList } from '@/navigation/MainNavigator';
 import { estimateAverageWeight } from '@/domain/aquaculture/estimators';
-import { calculateStockValue, calculateEstimatedBiomass } from '@/constants/aquaculture';
+import { calculateEstimatedBiomass, calculateStockValue } from '@/constants/aquaculture';
 import SuccessRewardModal from '@/components/modals/SuccessRewardModal';
-import CycleSelector from '@/components/common/CycleSelector';
-import { AppHeader, AppText, Button, Card, Screen, TextField } from '@/components/ui';
+import {
+  AppHeader,
+  AppText,
+  Button,
+  Card,
+  EmptyState,
+  InlineAlert,
+  LoadingState,
+  Screen,
+  TextField,
+} from '@/components/ui';
 import { colors, spacing } from '@/theme';
 import { getApiErrorMessage, parseApiError } from '@/utils/errorParser';
 import { formatAquacultureErrorWithAction } from '@/features/aquaculture/utils/aquacultureErrorPresenter';
@@ -21,9 +31,11 @@ import {
   createCycleLogWithOfflineFallback,
   runSilentOfflineSync,
 } from '@/features/aquaculture/services/aquacultureWorkflowService';
+import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
+import FeedingTimesField from '@/features/aquaculture/components/FeedingTimesField';
+import { formatEditableNumber, parseLocalizedNumber } from '@/utils/localizedNumber';
 
 interface DailyLogData {
-  cycle_id: string;
   mortality_count: string;
   mortality_reason: string;
   feed_quantity: string;
@@ -33,11 +45,21 @@ interface DailyLogData {
   water_temperature: string;
   ph_level: string;
   ammonia_level: string;
-  feeding_times: string;
   sample_count: string;
   sample_total_weight: string;
   observations: string;
 }
+
+type DailyLogField = keyof DailyLogData | 'feeding_status' | 'feeding_times' | 'feed_stock_item' | 'scope';
+type FormErrors = Partial<Record<DailyLogField, string>>;
+type FeedingStatus = 'fed' | 'not_fed' | null;
+
+const FEED_STOCK_ERROR_CODES = new Set([
+  'feed_stock_not_started',
+  'feed_log_before_stock_tracking',
+  'insufficient_feed_stock',
+  'feed_stock_item_unavailable',
+]);
 
 type DailyLogScreenNavigationProp = StackNavigationProp<RootStackParamList, 'DailyLog'>;
 type DailyLogScreenRouteProp = RouteProp<RootStackParamList, 'DailyLog'>;
@@ -47,43 +69,62 @@ interface DailyLogScreenProps {
   route?: DailyLogScreenRouteProp;
 }
 
+const EMPTY_FORM: DailyLogData = {
+  mortality_count: '',
+  mortality_reason: '',
+  feed_quantity: '',
+  feed_type: '',
+  feed_size_mm: '',
+  dissolved_oxygen: '',
+  water_temperature: '',
+  ph_level: '',
+  ammonia_level: '',
+  sample_count: '',
+  sample_total_weight: '',
+  observations: '',
+};
+
+const getLocalIsoDate = (): string => {
+  const now = new Date();
+  const offset = now.getTimezoneOffset() * 60_000;
+  return new Date(now.getTime() - offset).toISOString().slice(0, 10);
+};
+
+const parseOptionalDecimal = (value: string): number | null => {
+  const result = parseLocalizedNumber(value);
+  return result.kind === 'valid' ? result.value : null;
+};
+
+const parseOptionalInteger = (value: string): number | null => {
+  const trimmed = value.trim();
+  if (!/^\d+$/.test(trimmed)) {
+    return null;
+  }
+  return Number(trimmed);
+};
 
 export default function DailyLogScreen({ navigation, route }: DailyLogScreenProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const dispatch = useDispatch<AppDispatch>();
-  const { dashboardData, currentCycle } = useSelector((state: RootState) => state.aquaculture);
-  const activeCycles = dashboardData?.active_cycles || [];
+  const { dashboardData } = useSelector((state: RootState) => state.aquaculture);
   const routeParams = route?.params;
-  const routeCycleId = routeParams?.cycleId;
-  const unitAllocationId = routeParams?.cycleUnitAllocationId;
+  const cycleId = routeParams?.cycleId || '';
+  const unitAllocationId = routeParams?.cycleUnitAllocationId || '';
   const unitName = routeParams?.productionUnitName || t('productionUnitsUnknownUnit');
-  const sessionScopedCycles = routeCycleId
-    ? activeCycles.filter((cycle) => cycle.id === routeCycleId)
-    : currentCycle?.id
-      ? activeCycles.filter((cycle) => cycle.id === currentCycle.id)
-    : activeCycles;
+  const selectedCycle = dashboardData?.active_cycles?.find((cycle) => cycle.id === cycleId) || null;
+  const useComma = i18n.language?.startsWith('fr') ?? false;
 
-  const [selectedCycle, setSelectedCycle] = useState<string>(routeCycleId || '');
-  const selectedCycleData =
-    sessionScopedCycles.find((cycle) => cycle.id === selectedCycle) || sessionScopedCycles[0] || null;
-  const [formData, setFormData] = useState<DailyLogData>({
-    cycle_id: routeCycleId || '',
-    mortality_count: '',
-    mortality_reason: '',
-    feed_quantity: '',
-    feed_type: '',
-    feed_size_mm: '',
-    dissolved_oxygen: '',
-    water_temperature: '',
-    ph_level: '',
-    ammonia_level: '',
-    feeding_times: '',
-    sample_count: '',
-    sample_total_weight: '',
-    observations: '',
-  });
+  const [formData, setFormData] = useState<DailyLogData>(EMPTY_FORM);
+  const [feedingStatus, setFeedingStatus] = useState<FeedingStatus>(null);
+  const [feedingTimes, setFeedingTimes] = useState<string[]>([]);
+  const [store, setStore] = useState<CycleStore | null>(null);
+  const [existingLog, setExistingLog] = useState<CycleLog | null>(null);
+  const [loadingContext, setLoadingContext] = useState(Boolean(cycleId && unitAllocationId));
+  const [contextError, setContextError] = useState(false);
+  const [touched, setTouched] = useState<Partial<Record<DailyLogField, boolean>>>({});
+  const [serverErrors, setServerErrors] = useState<FormErrors>({});
+  const [submitted, setSubmitted] = useState(false);
   const [saving, setSaving] = useState(false);
-
   const [rewardModalVisible, setRewardModalVisible] = useState(false);
   const [rewardData, setRewardData] = useState({
     averageWeight: 0,
@@ -97,371 +138,587 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
       await runSilentOfflineSync();
       dispatch(fetchDashboardData({ lightweight: true }));
     };
-    bootstrap();
+    void bootstrap();
   }, [dispatch]);
 
   useEffect(() => {
-    if (sessionScopedCycles.length === 0) {
+    if (!cycleId || !unitAllocationId) {
+      setLoadingContext(false);
       return;
     }
 
-    const preferredCycle = routeCycleId
-      ? sessionScopedCycles.find((cycle) => cycle.id === routeCycleId) || sessionScopedCycles[0]
-      : sessionScopedCycles[0];
+    let active = true;
+    const loadContext = async () => {
+      setLoadingContext(true);
+      setContextError(false);
+      const [logsResult, storeResult] = await Promise.allSettled([
+        aquacultureService.getCycleLogs(cycleId, { cycleUnitAllocationId: unitAllocationId }),
+        aquacultureService.getCycleStore(cycleId),
+      ]);
+      if (!active) {
+        return;
+      }
 
-    if (selectedCycle !== preferredCycle.id) {
-      setSelectedCycle(preferredCycle.id);
-      setFormData((prev) => ({ ...prev, cycle_id: preferredCycle.id }));
-    }
-  }, [routeCycleId, sessionScopedCycles, selectedCycle]);
+      if (storeResult.status === 'fulfilled') {
+        setStore(storeResult.value);
+      } else {
+        setStore(null);
+        setContextError(true);
+      }
 
-  const parseOptionalNumber = (value: string): number | undefined => {
-    if (!value.trim()) {
-      return undefined;
-    }
-    const parsed = Number.parseFloat(value);
-    return Number.isFinite(parsed) ? parsed : undefined;
-  };
-
-  const parseOptionalInteger = (value: string): number | undefined => {
-    if (!value.trim()) {
-      return undefined;
-    }
-    const parsed = Number.parseInt(value, 10);
-    return Number.isFinite(parsed) ? parsed : undefined;
-  };
-
-  const parseFeedingTimes = (value: string): { valid: string[]; invalidCount: number } => {
-    const rawValues = value
-      .split(',')
-      .map((item) => item.trim())
-      .filter(Boolean);
-
-    if (rawValues.length === 0) {
-      return { valid: [], invalidCount: 0 };
-    }
-
-    const TIME_REGEX = /^([01]\d|2[0-3]):([0-5]\d)$/;
-    const valid = rawValues.filter((item) => TIME_REGEX.test(item));
-    return {
-      valid,
-      invalidCount: rawValues.length - valid.length,
+      if (logsResult.status === 'fulfilled') {
+        const todayLog = logsResult.value.find((log) => log.log_date === getLocalIsoDate()) || null;
+        setExistingLog(todayLog);
+        if (todayLog) {
+          setFormData({
+            mortality_count: String(todayLog.mortality_count ?? 0),
+            mortality_reason: todayLog.mortality_reason ?? '',
+            feed_quantity: formatEditableNumber(todayLog.feed_quantity, useComma),
+            feed_type: todayLog.feed_type ?? '',
+            feed_size_mm: formatEditableNumber(todayLog.feed_size_mm, useComma),
+            dissolved_oxygen: formatEditableNumber(todayLog.dissolved_oxygen, useComma),
+            water_temperature: formatEditableNumber(todayLog.water_temperature, useComma),
+            ph_level: formatEditableNumber(todayLog.ph_level, useComma),
+            ammonia_level: formatEditableNumber(todayLog.ammonia_level, useComma),
+            sample_count: todayLog.sample_count === undefined ? '' : String(todayLog.sample_count),
+            sample_total_weight: formatEditableNumber(todayLog.sample_total_weight, useComma),
+            observations: todayLog.observations ?? '',
+          });
+          const wasFed = Number(todayLog.feed_quantity ?? 0) > 0 || (todayLog.feeding_times?.length ?? 0) > 0;
+          setFeedingStatus(wasFed ? 'fed' : 'not_fed');
+          setFeedingTimes(todayLog.feeding_times ?? []);
+        }
+      } else {
+        setContextError(true);
+      }
+      setLoadingContext(false);
     };
+
+    void loadContext();
+    return () => {
+      active = false;
+    };
+  }, [cycleId, unitAllocationId, useComma]);
+
+  const selectedStockItem = useMemo(() => store?.stock_items?.find((item) => (
+    item.label.trim().toLocaleLowerCase() === formData.feed_type.trim().toLocaleLowerCase()
+      && (item.feed_size_mm === null
+        ? !formData.feed_size_mm.trim()
+        : Number(item.feed_size_mm) === Number(parseOptionalDecimal(formData.feed_size_mm)))
+  )) ?? null, [formData.feed_size_mm, formData.feed_type, store?.stock_items]);
+
+  const availableFeedKg = useMemo(() => {
+    if (!selectedStockItem) {
+      return null;
+    }
+    const remaining = Number(selectedStockItem.quantity_available_kg);
+    const previousMatchesSelection = existingLog
+      && (existingLog.feed_type ?? '').trim().toLocaleLowerCase() === selectedStockItem.label.trim().toLocaleLowerCase()
+      && (selectedStockItem.feed_size_mm === null
+        ? existingLog.feed_size_mm == null
+        : Number(existingLog.feed_size_mm) === Number(selectedStockItem.feed_size_mm));
+    const previous = previousMatchesSelection ? Number(existingLog?.feed_quantity ?? 0) : 0;
+    return Math.max(0, remaining + previous);
+  }, [existingLog, selectedStockItem]);
+  const totalAvailableFeedKg = store
+    ? Math.max(0, Number(store.summary.estimated_feed_remaining_kg))
+    : null;
+
+  const validationErrors = useMemo<FormErrors>(() => {
+    const errors: FormErrors = {};
+    const mortality = parseOptionalInteger(formData.mortality_count);
+    if (!formData.mortality_count.trim()) {
+      errors.mortality_count = t('fieldRequired');
+    } else if (mortality === null) {
+      errors.mortality_count = t('wholeNumberRequired');
+    }
+    if ((mortality ?? 0) > 0 && !formData.mortality_reason.trim()) {
+      errors.mortality_reason = t('mortalityReasonRequired');
+    }
+
+    if (!feedingStatus) {
+      errors.feeding_status = t('feedingStatusRequired');
+    }
+
+    if (feedingStatus === 'fed') {
+      const quantity = parseLocalizedNumber(formData.feed_quantity);
+      if (quantity.kind === 'empty') {
+        errors.feed_quantity = t('fieldRequired');
+      } else if (quantity.kind === 'invalid' || quantity.value < 0.01) {
+        errors.feed_quantity = t('feedQuantityMinimum');
+      } else if (!store) {
+        errors.feed_quantity = t('feedStockUnavailable');
+      } else if (store.status === 'not_started') {
+        errors.feed_quantity = t('feedStockRequired');
+      } else if (!selectedStockItem) {
+        errors.feed_stock_item = t('feedStockItemRequired');
+      } else if (availableFeedKg !== null && quantity.value > availableFeedKg) {
+        errors.feed_quantity = t('feedStockInsufficient', { available: availableFeedKg.toFixed(2) });
+      }
+      if (feedingTimes.length === 0) {
+        errors.feeding_times = t('feedingTimeRequired');
+      }
+    }
+
+    const decimalRanges: Array<[keyof DailyLogData, number, number]> = [
+      ['water_temperature', 0, 50],
+      ['dissolved_oxygen', 0, 20],
+      ['ph_level', 0, 14],
+      ['ammonia_level', 0, Number.POSITIVE_INFINITY],
+    ];
+    decimalRanges.forEach(([field, minimum, maximum]) => {
+      const value = formData[field];
+      if (!value.trim()) {
+        return;
+      }
+      const parsed = parseLocalizedNumber(value);
+      if (parsed.kind !== 'valid' || parsed.value < minimum || parsed.value > maximum) {
+        errors[field] = t('invalidMeasurement');
+      }
+    });
+
+    const hasSampleCount = Boolean(formData.sample_count.trim());
+    const hasSampleWeight = Boolean(formData.sample_total_weight.trim());
+    if (hasSampleCount !== hasSampleWeight) {
+      errors.sample_count = t('samplingPairRequired');
+      errors.sample_total_weight = t('samplingPairRequired');
+    } else if (hasSampleCount && hasSampleWeight) {
+      const count = parseOptionalInteger(formData.sample_count);
+      const weight = parseLocalizedNumber(formData.sample_total_weight);
+      if (count === null || count < 5) {
+        errors.sample_count = t('sampleCountTooLow', { min: 5 });
+      }
+      if (weight.kind !== 'valid' || weight.value < 0.1) {
+        errors.sample_total_weight = t('sampleWeightInvalid');
+      }
+    }
+
+    return errors;
+  }, [availableFeedKg, feedingStatus, feedingTimes.length, formData, selectedStockItem, store, t]);
+
+  const visibleError = (field: DailyLogField): string | undefined =>
+    submitted || touched[field] ? serverErrors[field] ?? validationErrors[field] : undefined;
+
+  const updateField = (field: keyof DailyLogData, value: string) => {
+    setTouched((previous) => ({ ...previous, [field]: true }));
+    setServerErrors((previous) => ({ ...previous, [field]: undefined }));
+    setFormData((previous) => ({ ...previous, [field]: value }));
+  };
+
+  const selectFeedingStatus = (status: Exclude<FeedingStatus, null>) => {
+    setTouched((previous) => ({ ...previous, feeding_status: true }));
+    setServerErrors((previous) => ({
+      ...previous,
+      feeding_status: undefined,
+      feed_quantity: undefined,
+      feed_type: undefined,
+      feed_size_mm: undefined,
+      feed_stock_item: undefined,
+      feeding_times: undefined,
+    }));
+    setFeedingStatus(status);
+    if (status === 'not_fed') {
+      setFormData((previous) => ({
+        ...previous,
+        feed_quantity: '',
+        feed_type: '',
+        feed_size_mm: '',
+      }));
+      setFeedingTimes([]);
+    }
   };
 
   const handleSave = async () => {
-    if (!selectedCycle) {
-      Alert.alert(t('error'), t('noCycleSelected'));
+    setSubmitted(true);
+    if (!cycleId || !unitAllocationId || Object.keys(validationErrors).length > 0) {
       return;
     }
 
+    const mortalityCount = parseOptionalInteger(formData.mortality_count) ?? 0;
+    const sampleCount = parseOptionalInteger(formData.sample_count);
+    const sampleWeight = parseOptionalDecimal(formData.sample_total_weight);
+    const feedQuantity = feedingStatus === 'fed' ? parseOptionalDecimal(formData.feed_quantity) : null;
+
+    const logData: DailyLogForm = {
+      log_date: getLocalIsoDate(),
+      cycle_unit_allocation: unitAllocationId,
+      mortality_count: mortalityCount,
+      mortality_reason: formData.mortality_reason.trim(),
+      sample_count: sampleCount,
+      sample_total_weight: sampleWeight,
+      feed_quantity: feedQuantity,
+      feed_type: feedingStatus === 'fed' ? formData.feed_type.trim() : '',
+      feed_size_mm: feedingStatus === 'fed' ? parseOptionalDecimal(formData.feed_size_mm) : null,
+      feeding_times: feedingStatus === 'fed' ? feedingTimes : [],
+      water_temperature: parseOptionalDecimal(formData.water_temperature),
+      dissolved_oxygen: parseOptionalDecimal(formData.dissolved_oxygen),
+      ph_level: parseOptionalDecimal(formData.ph_level),
+      ammonia_level: parseOptionalDecimal(formData.ammonia_level),
+      observations: formData.observations.trim(),
+    };
+
     setSaving(true);
     try {
-      const sampleCount = parseOptionalInteger(formData.sample_count);
-      const sampleWeight = parseOptionalNumber(formData.sample_total_weight);
-      const hasSampleCount = formData.sample_count.trim().length > 0;
-      const hasSampleWeight = formData.sample_total_weight.trim().length > 0;
+      const creationResult = await createCycleLogWithOfflineFallback(cycleId, logData);
+      dispatch(fetchDashboardData({ lightweight: true }));
 
-      if (hasSampleCount !== hasSampleWeight) {
-        Alert.alert(t('error'), t('samplingPairRequired'));
-        setSaving(false);
-        return;
-      }
-
-      if (sampleCount !== undefined && sampleCount < 5) {
-        Alert.alert(t('error'), t('sampleCountTooLow', { min: 5 }));
-        setSaving(false);
-        return;
-      }
-
-      const mortalityCount = parseOptionalInteger(formData.mortality_count);
-      const feedQuantity = parseOptionalNumber(formData.feed_quantity);
-      const feedSize = parseOptionalNumber(formData.feed_size_mm);
-      const waterTemperature = parseOptionalNumber(formData.water_temperature);
-      const dissolvedOxygen = parseOptionalNumber(formData.dissolved_oxygen);
-      const phLevel = parseOptionalNumber(formData.ph_level);
-      const ammoniaLevel = parseOptionalNumber(formData.ammonia_level);
-      const { valid: feedingTimes, invalidCount } = parseFeedingTimes(formData.feeding_times);
-
-      if (invalidCount > 0) {
-        Alert.alert(t('warning'), t('feedingTimesInvalidIgnored'));
-      }
-
-      const logData: DailyLogForm = {
-        log_date: new Date().toISOString().split('T')[0],
-        ...(unitAllocationId ? { cycle_unit_allocation: unitAllocationId } : {}),
-        mortality_count: mortalityCount,
-        mortality_reason: formData.mortality_reason.trim() || undefined,
-        sample_count: sampleCount,
-        sample_total_weight: sampleWeight,
-        feed_quantity: feedQuantity,
-        feed_type: formData.feed_type.trim() || undefined,
-        feed_size_mm: feedSize,
-        feeding_times: feedingTimes.length > 0 ? feedingTimes : undefined,
-        water_temperature: waterTemperature,
-        dissolved_oxygen: dissolvedOxygen,
-        ph_level: phLevel,
-        ammonia_level: ammoniaLevel,
-        observations: formData.observations.trim() || undefined,
-      };
-
-      try {
-        const creationResult = await createCycleLogWithOfflineFallback(selectedCycle, logData);
-        dispatch(fetchDashboardData({ lightweight: true }));
-
-        const currentCycle = sessionScopedCycles.find((cycle) => cycle.id === selectedCycle);
-        if (sampleCount && sampleWeight && currentCycle) {
-          const avgWeight = sampleWeight / sampleCount;
-          const mortality = mortalityCount || 0;
-          const remainingFish = (currentCycle.current_count || 0) - mortality;
-          const biomass = calculateEstimatedBiomass(remainingFish, avgWeight);
-          const value = calculateStockValue(biomass);
-
-          setRewardData({
-            averageWeight: avgWeight,
-            fishCount: remainingFish,
-            estimatedBiomass: biomass,
-            stockValue: value,
-          });
-          setRewardModalVisible(true);
-        } else {
-          const successKey = creationResult.mode === 'online' ? 'recordSaved' : 'recordSavedOffline';
-          Alert.alert(t('success'), t(successKey), [{ text: t('ok'), onPress: () => navigation.goBack() }]);
-        }
-      } catch (apiError: unknown) {
-        throw apiError;
+      if (sampleCount && sampleWeight && selectedCycle) {
+        const averageWeight = sampleWeight / sampleCount;
+        const remainingFish = (selectedCycle.current_count || 0) - mortalityCount;
+        const biomass = calculateEstimatedBiomass(remainingFish, averageWeight);
+        setRewardData({
+          averageWeight,
+          fishCount: remainingFish,
+          estimatedBiomass: biomass,
+          stockValue: calculateStockValue(biomass),
+        });
+        setRewardModalVisible(true);
+      } else {
+        const successKey = creationResult.mode === 'online' ? 'recordSaved' : 'recordSavedOffline';
+        Alert.alert(t('success'), t(successKey), [{ text: t('ok'), onPress: () => navigation.goBack() }]);
       }
     } catch (error: unknown) {
       const parsedError = parseApiError(error);
+      const rawError = parsedError.rawError && typeof parsedError.rawError === 'object'
+        ? parsedError.rawError as Record<string, unknown>
+        : {};
+      if (parsedError.code && FEED_STOCK_ERROR_CODES.has(parsedError.code)) {
+        const message = parsedError.code === 'insufficient_feed_stock'
+          ? t('feedStockInsufficient', { available: String(rawError.available_feed_kg ?? '0') })
+          : parsedError.code === 'feed_stock_item_unavailable'
+            ? t('feedStockItemRequired')
+          : parsedError.code === 'feed_log_before_stock_tracking'
+            ? t('feedLogBeforeStockTracking')
+            : t('feedStockRequired');
+        const field = parsedError.code === 'feed_stock_item_unavailable'
+          ? 'feed_stock_item'
+          : 'feed_quantity';
+        setServerErrors({ [field]: message });
+        setTouched((previous) => ({ ...previous, [field]: true }));
+        return;
+      }
+      const backendFieldErrors = parsedError.details.reduce<FormErrors>((result, detail) => {
+        const field = detail.field.split('.').at(-1) as DailyLogField;
+        if (field in EMPTY_FORM || field === 'feeding_times') {
+          result[field] = detail.messages[0];
+        }
+        return result;
+      }, {});
+      if (Object.keys(backendFieldErrors).length > 0) {
+        setServerErrors(backendFieldErrors);
+        setTouched((previous) => ({ ...previous, ...Object.fromEntries(Object.keys(backendFieldErrors).map((key) => [key, true])) }));
+        return;
+      }
       const fallbackMessage = getApiErrorMessage(error, t('recordSaveError'));
-      const actionableMessage =
-        parsedError.status > 0 || parsedError.details.length > 0
-          ? formatAquacultureErrorWithAction(parsedError, t)
-          : fallbackMessage;
+      const actionableMessage = parsedError.status > 0
+        ? formatAquacultureErrorWithAction(parsedError, t)
+        : fallbackMessage;
       Alert.alert(t('error'), actionableMessage);
     } finally {
       setSaving(false);
     }
   };
 
-  const handleCloseRewardModal = () => {
-    setRewardModalVisible(false);
-    navigation.goBack();
-  };
-
-  if (sessionScopedCycles.length === 0) {
+  if (!cycleId || !unitAllocationId) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.surface.page }}>
         <AppHeader title={t('dailyLogTitle')} onBack={() => navigation.goBack()} backLabel={t('back')} />
-        <Screen style={{ alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing[5] }}>
-          <Ionicons name="fish-outline" size={64} color={colors.text.muted} />
-          <AppText variant="cardTitle" style={{ marginTop: spacing[4] }}>{t('noActiveCycles')}</AppText>
-          <AppText variant="body" color="muted" style={{ marginTop: spacing[2], marginBottom: spacing[6], textAlign: 'center' }}>{t('createCycleToStart')}</AppText>
-          <Button label={t('createCycle')} onPress={() => navigation.navigate('CreateFarm')} fullWidth={false} />
+        <Screen style={{ justifyContent: 'center' }}>
+          <EmptyState
+            title={t('dailyLogUnitRequiredTitle')}
+            message={t('dailyLogUnitRequiredMessage')}
+            actionLabel={cycleId ? t('chooseProductionUnit') : undefined}
+            onAction={cycleId ? () => navigation.navigate('ProductionUnitsHub', { cycleId }) : undefined}
+          />
         </Screen>
       </View>
     );
   }
 
+  if (loadingContext) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.surface.page }}>
+        <AppHeader title={t('dailyLogTitle')} onBack={() => navigation.goBack()} backLabel={t('back')} />
+        <Screen><LoadingState message={t('loading')} /></Screen>
+      </View>
+    );
+  }
+
+  const stockTone = store?.status === 'ok' ? 'success' : store?.status === 'low' ? 'warning' : 'error';
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.surface.page }}>
       <AppHeader title={t('dailyLogTitle')} onBack={() => navigation.goBack()} backLabel={t('back')} />
       <Screen scroll>
-
-      <View style={{ gap: spacing[5] }}>
-        {unitAllocationId ? (
+        <View style={{ gap: spacing[5] }}>
           <Card variant="outlined">
             <AppText variant="label" color="link" style={{ marginBottom: spacing[1] }}>
-              {selectedCycleData?.cycle_name || t('sessionCycleNotSelected')}
+              {selectedCycle?.cycle_name || t('sessionCycleNotSelected')}
             </AppText>
             <AppText variant="body" color="muted">{t('dailyLogUnitContextLabel', { unitName })}</AppText>
+            {existingLog ? (
+              <AppText variant="helper" color="link" style={{ marginTop: spacing[2] }}>
+                {t('dailyLogUpdatingToday')}
+              </AppText>
+            ) : null}
           </Card>
-        ) : (
-          <CycleSelector
-            cycles={sessionScopedCycles}
-            selectedCycleId={selectedCycle}
-            onSelectCycle={(cycleId) => {
-              setSelectedCycle(cycleId);
-              setFormData((prev) => ({ ...prev, cycle_id: cycleId }));
-              const cycle = sessionScopedCycles.find((item) => item.id === cycleId);
-              if (cycle) {
-                dispatch(setCurrentCycle(cycle));
-              }
-            }}
-          />
-        )}
 
-        <Card>
-          <AppText variant="sectionTitle" style={{ marginBottom: spacing[4] }}>{t('dailyRecommendedSection')}</AppText>
+          {contextError ? <InlineAlert tone="warning" message={t('dailyLogContextLoadError')} /> : null}
 
-          <View style={{ flexDirection: 'row', gap: spacing[3] }}>
-            <View style={{ flex: 1 }}>
-              <TextField
-                label={t('mortality')}
-                value={formData.mortality_count}
-                onChangeText={(value) => setFormData((prev) => ({ ...prev, mortality_count: value }))}
-                placeholder={t('mortalityPlaceholder')}
-                keyboardType="numeric"
-              />
+          <Card>
+            <AppText variant="sectionTitle" style={{ marginBottom: spacing[4] }}>{t('dailyRecommendedSection')}</AppText>
+
+            <View style={{ flexDirection: 'row', gap: spacing[3] }}>
+              <View style={{ flex: 1 }}>
+                <TextField
+                  required
+                  label={t('mortality')}
+                  value={formData.mortality_count}
+                  onChangeText={(value) => updateField('mortality_count', value)}
+                  placeholder={t('mortalityPlaceholder')}
+                  keyboardType="number-pad"
+                  error={visibleError('mortality_count')}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <TextField
+                  required={(parseOptionalInteger(formData.mortality_count) ?? 0) > 0}
+                  label={t('mortalityReason')}
+                  value={formData.mortality_reason}
+                  onChangeText={(value) => updateField('mortality_reason', value)}
+                  placeholder={t('mortalityReasonPlaceholder')}
+                  error={visibleError('mortality_reason')}
+                />
+              </View>
             </View>
 
-            <View style={{ flex: 1 }}>
-              <TextField
-                label={t('mortalityReason')}
-                value={formData.mortality_reason}
-                onChangeText={(value) => setFormData((prev) => ({ ...prev, mortality_reason: value }))}
-                placeholder={t('mortalityReasonPlaceholder')}
+            <AppText variant="label" style={{ marginBottom: spacing[2] }}>
+              {t('feedingStatus')} <AppText variant="label" color="error">*</AppText>
+            </AppText>
+            <View style={{ flexDirection: 'row', gap: spacing[3], marginBottom: spacing[2] }}>
+              <Button
+                label={t('feedingDone')}
+                onPress={() => selectFeedingStatus('fed')}
+                variant={feedingStatus === 'fed' ? 'primary' : 'outline'}
+                fullWidth={false}
+                containerStyle={{ flex: 1 }}
+              />
+              <Button
+                label={t('feedingNotDone')}
+                onPress={() => selectFeedingStatus('not_fed')}
+                variant={feedingStatus === 'not_fed' ? 'primary' : 'outline'}
+                fullWidth={false}
+                containerStyle={{ flex: 1 }}
               />
             </View>
-          </View>
+            {visibleError('feeding_status') ? (
+              <AppText variant="helper" color="error" style={{ marginBottom: spacing[4] }}>
+                {visibleError('feeding_status')}
+              </AppText>
+            ) : null}
 
-          <View style={{ flexDirection: 'row', gap: spacing[3] }}>
-            <View style={{ flex: 1 }}>
-              <TextField
-                label={t('feedQuantity')}
-                value={formData.feed_quantity}
-                onChangeText={(value) => setFormData((prev) => ({ ...prev, feed_quantity: value }))}
-                placeholder={t('feedQuantityPlaceholder')}
-                keyboardType="numeric"
-              />
+            {feedingStatus === 'fed' ? (
+              <>
+                <InlineAlert
+                  tone={stockTone}
+                  message={store
+                    ? t('feedStockAvailable', { available: (availableFeedKg ?? totalAvailableFeedKg ?? 0).toFixed(2) })
+                    : t('feedStockUnavailable')}
+                />
+                {store?.status === 'not_started' || (totalAvailableFeedKg ?? 0) <= 0 ? (
+                  <Button
+                    label={t('declareFeedStock')}
+                    onPress={() => navigation.navigate('Store', { cycleId })}
+                    variant="outline"
+                    size="small"
+                    containerStyle={{ marginTop: spacing[2], marginBottom: spacing[4] }}
+                  />
+                ) : <View style={{ height: spacing[4] }} />}
+
+                <AppText variant="label" style={{ marginBottom: spacing[2] }}>
+                  {t('feedStockItem')} <AppText variant="label" color="error">*</AppText>
+                </AppText>
+                <View style={{ gap: spacing[2], marginBottom: spacing[2] }}>
+                  {store?.stock_items?.filter((item) => Number(item.quantity_available_kg) > 0 || (
+                    (existingLog?.feed_type ?? '').trim().toLocaleLowerCase() === item.label.trim().toLocaleLowerCase()
+                  )).map((item) => {
+                    const selected = selectedStockItem === item;
+                    const optionLabel = item.feed_size_mm
+                      ? t('feedStockItemOption', {
+                        label: item.label,
+                        size: item.feed_size_mm,
+                        available: item.quantity_available_kg,
+                      })
+                      : t('feedStockItemOptionWithoutSize', {
+                        label: item.label,
+                        available: item.quantity_available_kg,
+                      });
+                    return (
+                      <Button
+                        key={`${item.label}-${item.feed_size_mm ?? 'legacy'}`}
+                        label={optionLabel}
+                        variant={selected ? 'primary' : 'outline'}
+                        onPress={() => {
+                          setTouched((previous) => ({ ...previous, feed_stock_item: true }));
+                          setServerErrors((previous) => ({ ...previous, feed_stock_item: undefined }));
+                          setFormData((previous) => ({
+                            ...previous,
+                            feed_type: item.label,
+                            feed_size_mm: item.feed_size_mm ?? '',
+                          }));
+                        }}
+                      />
+                    );
+                  })}
+                </View>
+                {visibleError('feed_stock_item') ? (
+                  <AppText variant="helper" color="error" style={{ marginBottom: spacing[3] }}>
+                    {visibleError('feed_stock_item')}
+                  </AppText>
+                ) : null}
+
+                <TextField
+                  required
+                  label={t('feedQuantity')}
+                  value={formData.feed_quantity}
+                  onChangeText={(value) => updateField('feed_quantity', value)}
+                  placeholder={t('feedQuantityPlaceholder')}
+                  keyboardType="decimal-pad"
+                  error={visibleError('feed_quantity')}
+                />
+
+                <FeedingTimesField
+                  required
+                  value={feedingTimes}
+                  onChange={(value) => {
+                    setTouched((previous) => ({ ...previous, feeding_times: true }));
+                    setServerErrors((previous) => ({ ...previous, feeding_times: undefined }));
+                    setFeedingTimes(value);
+                  }}
+                  error={visibleError('feeding_times')}
+                />
+              </>
+            ) : null}
+
+            <View style={{ flexDirection: 'row', gap: spacing[3] }}>
+              <View style={{ flex: 1 }}>
+                <TextField
+                  label={t('waterTemperatureUnit')}
+                  value={formData.water_temperature}
+                  onChangeText={(value) => updateField('water_temperature', value)}
+                  placeholder={t('waterTemperaturePlaceholder')}
+                  keyboardType="decimal-pad"
+                  error={visibleError('water_temperature')}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <TextField
+                  label={t('dissolvedOxygenShort')}
+                  value={formData.dissolved_oxygen}
+                  onChangeText={(value) => updateField('dissolved_oxygen', value)}
+                  placeholder={t('dissolvedOxygenPlaceholder')}
+                  keyboardType="decimal-pad"
+                  error={visibleError('dissolved_oxygen')}
+                />
+              </View>
             </View>
 
-            <View style={{ flex: 1 }}>
-              <TextField
-                label={t('feedType')}
-                value={formData.feed_type}
-                onChangeText={(value) => setFormData((prev) => ({ ...prev, feed_type: value }))}
-                placeholder={t('feedTypePlaceholder')}
-              />
-            </View>
-          </View>
-
-          <View>
-            <TextField
-              label={t('feedSizeMm')}
-              value={formData.feed_size_mm}
-              onChangeText={(value) => setFormData((prev) => ({ ...prev, feed_size_mm: value }))}
-              placeholder={t('feedSizeMmPlaceholder')}
-              keyboardType="numeric"
-            />
-          </View>
-
-          <View style={{ flexDirection: 'row', gap: spacing[3] }}>
-            <View style={{ flex: 1 }}>
-              <TextField
-                label={t('waterTemperatureUnit')}
-                value={formData.water_temperature}
-                onChangeText={(value) => setFormData((prev) => ({ ...prev, water_temperature: value }))}
-                placeholder={t('waterTemperaturePlaceholder')}
-                keyboardType="numeric"
-              />
-            </View>
-          </View>
-
-          <TextField
-            label={t('dissolvedOxygen')}
-            value={formData.dissolved_oxygen}
-            onChangeText={(value) => setFormData((prev) => ({ ...prev, dissolved_oxygen: value }))}
-            placeholder={t('dissolvedOxygenPlaceholder')}
-            keyboardType="numeric"
-          />
-
-          <View style={{ flexDirection: 'row', gap: spacing[3] }}>
-            <View style={{ flex: 1 }}>
-              <TextField
-                label={t('phLevel')}
-                value={formData.ph_level}
-                onChangeText={(value) => setFormData((prev) => ({ ...prev, ph_level: value }))}
-                placeholder={t('phLevelPlaceholder')}
-                keyboardType="numeric"
-              />
+            <View style={{ flexDirection: 'row', gap: spacing[3] }}>
+              <View style={{ flex: 1 }}>
+                <TextField
+                  label={t('phLevel')}
+                  value={formData.ph_level}
+                  onChangeText={(value) => updateField('ph_level', value)}
+                  placeholder={t('phLevelPlaceholder')}
+                  keyboardType="decimal-pad"
+                  error={visibleError('ph_level')}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <TextField
+                  label={t('ammoniaLevel')}
+                  value={formData.ammonia_level}
+                  onChangeText={(value) => updateField('ammonia_level', value)}
+                  placeholder={t('ammoniaLevelPlaceholder')}
+                  keyboardType="decimal-pad"
+                  error={visibleError('ammonia_level')}
+                />
+              </View>
             </View>
 
-            <View style={{ flex: 1 }}>
-              <TextField
-                label={t('ammoniaLevel')}
-                value={formData.ammonia_level}
-                onChangeText={(value) => setFormData((prev) => ({ ...prev, ammonia_level: value }))}
-                placeholder={t('ammoniaLevelPlaceholder')}
-                keyboardType="numeric"
-              />
-            </View>
-          </View>
-
-          <View>
-            <TextField
-              label={t('feedingTimes')}
-              value={formData.feeding_times}
-              onChangeText={(value) => setFormData((prev) => ({ ...prev, feeding_times: value }))}
-              placeholder={t('feedingTimesPlaceholder')}
-            />
-          </View>
-
-          <View>
             <TextField
               label={t('observations')}
               value={formData.observations}
-              onChangeText={(value) => setFormData((prev) => ({ ...prev, observations: value }))}
+              onChangeText={(value) => updateField('observations', value)}
               placeholder={t('observationsPlaceholder')}
               multiline
               numberOfLines={4}
             />
-          </View>
 
-          <AppText variant="sectionTitle" style={{ marginTop: spacing[1], marginBottom: spacing[4] }}>{t('weeklyRecommendedSection')}</AppText>
-
-          <View style={{ flexDirection: 'row', gap: spacing[3] }}>
-            <View style={{ flex: 1 }}>
-              <TextField
-                label={t('sampleCount')}
-                value={formData.sample_count}
-                onChangeText={(value) => setFormData((prev) => ({ ...prev, sample_count: value }))}
-                placeholder={t('exampleAffectedCount')}
-                keyboardType="numeric"
-              />
+            <AppText variant="sectionTitle" style={{ marginTop: spacing[1], marginBottom: spacing[4] }}>
+              {t('weeklyRecommendedSection')}
+            </AppText>
+            <View style={{ flexDirection: 'row', gap: spacing[3] }}>
+              <View style={{ flex: 1 }}>
+                <TextField
+                  label={t('sampleCount')}
+                  value={formData.sample_count}
+                  onChangeText={(value) => updateField('sample_count', value)}
+                  placeholder={t('exampleAffectedCount')}
+                  keyboardType="number-pad"
+                  error={visibleError('sample_count')}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <TextField
+                  label={t('sampleWeight')}
+                  value={formData.sample_total_weight}
+                  onChangeText={(value) => updateField('sample_total_weight', value)}
+                  placeholder={t('sampleWeightPlaceholder')}
+                  keyboardType="decimal-pad"
+                  error={visibleError('sample_total_weight')}
+                />
+              </View>
             </View>
+          </Card>
 
-            <View style={{ flex: 1 }}>
-              <TextField
-                label={t('sampleWeight')}
-                value={formData.sample_total_weight}
-                onChangeText={(value) => setFormData((prev) => ({ ...prev, sample_total_weight: value }))}
-                placeholder={t('sampleWeightPlaceholder')}
-                keyboardType="numeric"
-              />
-            </View>
-          </View>
-        </Card>
-
-        {formData.sample_count && formData.sample_total_weight && (() => {
-          const sampleWeight = parseOptionalNumber(formData.sample_total_weight) || 0;
-          const sampleCount = parseOptionalInteger(formData.sample_count) || 0;
-          const avgWeight = estimateAverageWeight(sampleWeight, sampleCount);
-
-          return (
+          {formData.sample_count && formData.sample_total_weight && !validationErrors.sample_count && !validationErrors.sample_total_weight ? (
             <View>
               <AppText variant="sectionTitle" style={{ marginBottom: spacing[4] }}>{t('autoCalculations')}</AppText>
               <Card variant="outlined">
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                   <AppText variant="caption" color="muted">{t('averageWeight')} :</AppText>
-                  <AppText variant="caption" color="link">{avgWeight.toFixed(1)} g</AppText>
+                  <AppText variant="caption" color="link">
+                    {estimateAverageWeight(
+                      parseOptionalDecimal(formData.sample_total_weight) ?? 0,
+                      parseOptionalInteger(formData.sample_count) ?? 0,
+                    ).toFixed(1)} g
+                  </AppText>
                 </View>
               </Card>
             </View>
-          );
-        })()}
+          ) : null}
 
-        <Button label={t('save')} onPress={handleSave} disabled={saving} loading={saving} iconLeft="checkmark" />
-      </View>
+          <Button
+            label={existingLog ? t('updateTodayEntry') : t('save')}
+            onPress={handleSave}
+            disabled={saving}
+            loading={saving}
+            iconLeft="checkmark"
+          />
+        </View>
 
-      <SuccessRewardModal
-        visible={rewardModalVisible}
-        onClose={handleCloseRewardModal}
-        averageWeight={rewardData.averageWeight}
-        fishCount={rewardData.fishCount}
-        estimatedBiomass={rewardData.estimatedBiomass}
-        stockValue={rewardData.stockValue}
-      />
+        <SuccessRewardModal
+          visible={rewardModalVisible}
+          onClose={() => {
+            setRewardModalVisible(false);
+            navigation.goBack();
+          }}
+          averageWeight={rewardData.averageWeight}
+          fishCount={rewardData.fishCount}
+          estimatedBiomass={rewardData.estimatedBiomass}
+          stockValue={rewardData.stockValue}
+        />
       </Screen>
     </View>
   );

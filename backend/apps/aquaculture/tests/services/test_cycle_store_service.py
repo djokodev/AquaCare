@@ -4,11 +4,13 @@ from uuid import uuid4
 
 import pytest
 from accounts.models import FarmProfile, User
+from aquaculture.domain.exceptions import FeedStockValidationError
 from aquaculture.models import CycleFeedStockEntry, CycleLog, CycleUnitAllocation, ProductionCycle, ProductionUnit
 from aquaculture.services.cycle_store_application_service import (
     CycleStoreApplicationService,
     DeclareManualStockCommand,
 )
+from aquaculture.services.cycle_store_service import CycleStoreService
 from commerce.models import Order, OrderItem, Product
 from django.utils import timezone
 
@@ -102,6 +104,127 @@ def _create_order(
 
 @pytest.mark.django_db
 class TestCycleStoreService:
+    def test_manual_stock_and_pending_orders_reduce_feed_left_to_secure(self, monkeypatch):
+        user = _create_user('+237690100097')
+        farm = _create_farm(user, 'Ferme besoin restant')
+        cycle = _create_cycle(farm)
+        product = _create_product('DIBAQ Tilapia 3MM 20KG')
+        _create_order(
+            user=user,
+            farm_profile=farm,
+            cycle=cycle,
+            product=product,
+            quantity=3,
+            status='confirmed',
+        )
+        CycleStoreApplicationService.declare_manual_stock(
+            user=user,
+            cycle=cycle,
+            command=DeclareManualStockCommand(
+                label='Starter local',
+                quantity_kg=Decimal('50.00'),
+                feed_size_mm=Decimal('2.00'),
+                total_cost_fcfa=Decimal('50000.00'),
+                entry_date=timezone.localdate(),
+            ),
+        )
+        monkeypatch.setattr(
+            'aquaculture.services.cycle_feed_service.CycleFeedService.compute_total_feed_needed_kg',
+            lambda _cycle: 300.0,
+        )
+
+        payload = CycleStoreApplicationService.get_store(cycle)
+
+        assert payload['summary']['total_feed_needed_kg'] == '300.00'
+        assert payload['summary']['secured_feed_kg'] == '110.00'
+        assert payload['summary']['feed_to_secure_kg'] == '190.00'
+
+    def test_daily_feed_must_use_matching_stock_identity(self):
+        user = _create_user('+237690100096')
+        farm = _create_farm(user, 'Ferme stock typé')
+        cycle = _create_cycle(farm)
+        CycleStoreApplicationService.declare_manual_stock(
+            user=user,
+            cycle=cycle,
+            command=DeclareManualStockCommand(
+                label='Starter local',
+                quantity_kg=Decimal('20.00'),
+                feed_size_mm=Decimal('2.00'),
+                total_cost_fcfa=Decimal('20000.00'),
+                entry_date=timezone.localdate(),
+            ),
+        )
+
+        with pytest.raises(FeedStockValidationError) as exc_info:
+            CycleStoreService.validate_daily_feed_quantity(
+                cycle=cycle,
+                feed_quantity=Decimal('5.00'),
+                feed_type='Grossissement local',
+                feed_size_mm=Decimal('4.00'),
+                log_date=timezone.localdate(),
+            )
+
+        assert exc_info.value.detail['code'] == 'feed_stock_item_unavailable'
+
+    def test_daily_feed_requires_declared_or_received_stock(self):
+        user = _create_user('+237690100099')
+        farm = _create_farm(user, 'Ferme sans stock')
+        cycle = _create_cycle(farm)
+
+        with pytest.raises(FeedStockValidationError) as exc_info:
+            CycleStoreService.validate_daily_feed_quantity(
+                cycle=cycle,
+                feed_quantity=Decimal('16.80'),
+                log_date=timezone.localdate(),
+            )
+
+        assert exc_info.value.detail['code'] == 'feed_stock_not_started'
+
+    def test_daily_feed_replacement_restores_previous_quantity_before_validation(self):
+        user = _create_user('+237690100098')
+        farm = _create_farm(user, 'Ferme remplacement ration')
+        cycle = _create_cycle(farm)
+        CycleStoreApplicationService.declare_manual_stock(
+            user=user,
+            cycle=cycle,
+            command=DeclareManualStockCommand(
+                label='Stock du jour',
+                quantity_kg=Decimal('20.00'),
+                feed_size_mm=Decimal('2.00'),
+                total_cost_fcfa=Decimal('10000.00'),
+                entry_date=timezone.localdate(),
+            ),
+        )
+        existing = CycleLog.objects.create(
+            cycle=cycle,
+            log_date=timezone.localdate(),
+            feed_quantity=Decimal('16.80'),
+            feed_type='Stock du jour',
+            feed_size_mm=Decimal('2.00'),
+        )
+
+        CycleStoreService.validate_daily_feed_quantity(
+            cycle=cycle,
+            feed_quantity=Decimal('18.00'),
+            log_date=timezone.localdate(),
+            existing_log=existing,
+            feed_type='Stock du jour',
+            feed_size_mm=Decimal('2.00'),
+        )
+
+        with pytest.raises(FeedStockValidationError) as exc_info:
+            CycleStoreService.validate_daily_feed_quantity(
+                cycle=cycle,
+                feed_quantity=Decimal('20.01'),
+                log_date=timezone.localdate(),
+                existing_log=existing,
+                feed_type='Stock du jour',
+                feed_size_mm=Decimal('2.00'),
+            )
+
+        assert exc_info.value.detail['code'] == 'insufficient_feed_stock'
+        assert exc_info.value.detail['available_feed_kg'] == '20.00'
+
     def test_manual_stock_declaration_is_idempotent(self):
         user = _create_user('+237690100001')
         farm = _create_farm(user, 'Ferme Magasin')
@@ -111,6 +234,7 @@ class TestCycleStoreService:
         command = DeclareManualStockCommand(
             label='Aliment starter 20kg',
             quantity_kg=Decimal('50.00'),
+            feed_size_mm=Decimal('2.00'),
             total_cost_fcfa=Decimal('75000.00'),
             entry_date=timezone.localdate(),
             note='Premier stock',
@@ -151,6 +275,7 @@ class TestCycleStoreService:
                 command=DeclareManualStockCommand(
                     label='Aliment starter 20kg',
                     quantity_kg=Decimal('10.00'),
+                    feed_size_mm=Decimal('2.00'),
                     total_cost_fcfa=Decimal('15000.00'),
                     entry_date=timezone.localdate(),
                 ),
@@ -176,6 +301,7 @@ class TestCycleStoreService:
             command=DeclareManualStockCommand(
                 label='Aliment starter 20kg',
                 quantity_kg=Decimal('50.00'),
+                feed_size_mm=Decimal('2.00'),
                 total_cost_fcfa=Decimal('75000.00'),
                 entry_date=timezone.localdate(),
             ),
@@ -258,6 +384,7 @@ class TestCycleStoreService:
             command=DeclareManualStockCommand(
                 label='Aliment starter 20kg',
                 quantity_kg=Decimal('100.00'),
+                feed_size_mm=Decimal('2.00'),
                 total_cost_fcfa=Decimal('150000.00'),
                 entry_date=stock_date,
             ),
@@ -299,6 +426,7 @@ class TestCycleStoreService:
             command=DeclareManualStockCommand(
                 label='Aliment starter 20kg',
                 quantity_kg=Decimal('25.00'),
+                feed_size_mm=Decimal('2.00'),
                 total_cost_fcfa=Decimal('37500.00'),
                 entry_date=timezone.localdate() - timedelta(days=1),
             ),

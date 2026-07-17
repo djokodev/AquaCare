@@ -269,14 +269,6 @@ export default function QuickActionsSheet({
           iconColor: AQUACARE_COLORS.GREEN_PRIMARY, route: 'CalibrationTanks', category: 'aquaculture',
         },
         {
-          id: 'dailyLog',
-          labelKey: 'dailyLog',
-          icon: 'create',
-          iconColor: AQUACARE_COLORS.GREEN_LIGHT,
-          route: 'DailyLog',
-          category: 'aquaculture',
-        },
-        {
           id: 'sanitaryLog',
           labelKey: 'sanitaryLog',
           icon: 'warning-outline',
@@ -341,14 +333,6 @@ export default function QuickActionsSheet({
       {
         id: 'calibrationTanks', labelKey: 'calibrationTanksTitle', icon: 'cube-outline',
         iconColor: AQUACARE_COLORS.GREEN_PRIMARY, route: 'CalibrationTanks', category: 'aquaculture',
-      },
-      {
-        id: 'dailyLog',
-        labelKey: 'dailyLog',
-        icon: 'create',
-        iconColor: AQUACARE_COLORS.GREEN_LIGHT,
-        route: 'DailyLog',
-        category: 'aquaculture',
       },
       {
         id: 'sanitaryLog',

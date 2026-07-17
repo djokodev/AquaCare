@@ -5,6 +5,7 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Any
 
+from django.db import models
 from django.db.models import Prefetch
 from django.utils import timezone
 
@@ -15,7 +16,7 @@ from ..domain.dashboard_metrics import (
     calculate_cycle_progress_pct,
     estimate_market_value_fcfa,
 )
-from ..models import CycleLog, CycleUnitAllocation, ProductionCycle, SanitaryLog
+from ..models import CalibrationOperation, CycleLog, CycleUnitAllocation, ProductionCycle, SanitaryLog
 from .farm_production_plan_service import FarmProductionPlanService
 from .production_unit_dashboard_service import ProductionUnitDashboardService
 
@@ -63,8 +64,16 @@ class CycleDashboardService:
     @staticmethod
     def build_dashboard_payload(cycle: ProductionCycle) -> dict[str, Any]:
         """Retourne le dashboard global du cycle courant."""
+        related_calibration_cycle_ids = CycleDashboardService._linked_calibration_cycle_ids(cycle)
         unit_allocations = list(
-            cycle.unit_allocations.select_related('production_unit', 'cycle')
+            CycleUnitAllocation.objects.filter(
+                models.Q(cycle=cycle)
+                | models.Q(
+                    cycle_id__in=related_calibration_cycle_ids,
+                    status=CycleUnitAllocation.STATUS_ACTIVE,
+                )
+            )
+            .select_related('production_unit', 'cycle')
             .prefetch_related(
                 Prefetch(
                     'daily_logs',
@@ -89,6 +98,27 @@ class CycleDashboardService:
             return CycleDashboardService._build_unit_dashboard_payload(cycle, unit_allocations)
 
         return CycleDashboardService._build_legacy_dashboard_payload(cycle)
+
+    @staticmethod
+    def _linked_calibration_cycle_ids(cycle: ProductionCycle) -> set:
+        """Suit les transferts pour rattacher les sessions techniques au cycle racine."""
+        if cycle.cycle_kind != ProductionCycle.CYCLE_KIND_STANDARD:
+            return set()
+
+        visited_cycle_ids = {cycle.pk}
+        calibration_cycle_ids = set()
+        frontier = {cycle.pk}
+        while frontier:
+            destination_cycle_ids = set(
+                CalibrationOperation.objects.filter(
+                    source_allocation__cycle_id__in=frontier,
+                    destination_allocation__cycle__cycle_kind=ProductionCycle.CYCLE_KIND_CALIBRATION,
+                ).values_list('destination_allocation__cycle_id', flat=True)
+            )
+            frontier = destination_cycle_ids - visited_cycle_ids
+            visited_cycle_ids.update(frontier)
+            calibration_cycle_ids.update(frontier)
+        return calibration_cycle_ids
 
     @staticmethod
     def _build_unit_dashboard_payload(

@@ -281,21 +281,21 @@ export interface CycleLog {
   mortality_reason?: string;
 
   // Donnees de croissance (echantillonnage)
-  sample_count?: number;
-  sample_total_weight?: number;
-  average_weight?: number;
+  sample_count?: number | null;
+  sample_total_weight?: number | null;
+  average_weight?: number | null;
 
   // Alimentation
-  feed_quantity?: number;
+  feed_quantity?: number | null;
   feed_type?: string;
-  feed_size_mm?: number;
+  feed_size_mm?: number | null;
   feeding_times?: string[];
 
   // Parametres environnementaux
-  water_temperature?: number;
-  dissolved_oxygen?: number;
-  ph_level?: number;
-  ammonia_level?: number;
+  water_temperature?: number | null;
+  dissolved_oxygen?: number | null;
+  ph_level?: number | null;
+  ammonia_level?: number | null;
 
   // Observations
   observations?: string;
@@ -842,16 +842,16 @@ export interface DailyLogForm {
   log_date: string;
   mortality_count?: number;
   mortality_reason?: string;
-  sample_count?: number;
-  sample_total_weight?: number;
-  feed_quantity?: number;
+  sample_count?: number | null;
+  sample_total_weight?: number | null;
+  feed_quantity?: number | null;
   feed_type?: string;
-  feed_size_mm?: number;
+  feed_size_mm?: number | null;
   feeding_times?: string[];
-  water_temperature?: number;
-  dissolved_oxygen?: number;
-  ph_level?: number;
-  ammonia_level?: number;
+  water_temperature?: number | null;
+  dissolved_oxygen?: number | null;
+  ph_level?: number | null;
+  ammonia_level?: number | null;
   observations?: string;
   created_offline?: boolean;
 }
@@ -997,19 +997,33 @@ export interface CycleStoreSummary {
   pending_orders_count: number;
   pending_order_amount_fcfa: string;
   pending_order_feed_kg: string;
+  total_feed_needed_kg: string;
+  feed_need_remaining_kg: string;
+  secured_feed_kg: string;
+  feed_to_secure_kg: string;
   stock_tracking_started_at: string | null;
+}
+
+export interface CycleStoreStockItem {
+  label: string;
+  feed_size_mm: string | null;
+  quantity_added_kg: string;
+  quantity_consumed_kg: string;
+  quantity_available_kg: string;
 }
 
 export interface CycleStore {
   cycle_id: string;
   summary: CycleStoreSummary;
   status: CycleStoreStatus;
+  stock_items: CycleStoreStockItem[];
   pending_orders: CycleStorePendingOrder[];
   stock_tracking_started_at: string | null;
 }
 
 export interface CycleStoreManualStockPayload {
   label: string;
+  feed_size_mm: string;
   quantity_kg: string;
   total_cost_fcfa: string;
   entry_date: string;

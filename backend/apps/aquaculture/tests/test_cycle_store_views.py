@@ -102,6 +102,7 @@ class TestCycleStoreViews:
             url,
             {
                 'label': 'Aliment starter 20kg',
+                'feed_size_mm': '2.00',
                 'quantity_kg': '60.00',
                 'total_cost_fcfa': '90000.00',
                 'entry_date': timezone.localdate().isoformat(),
@@ -115,6 +116,7 @@ class TestCycleStoreViews:
         assert response.data['summary']['manual_feed_kg'] == '60.00'
         assert response.data['summary']['estimated_feed_remaining_kg'] == '60.00'
         assert response.data['status'] == 'ok'
+        assert response.data['stock_items'][0]['feed_size_mm'] == '2.00'
         assert cycle.feed_stock_entries.count() == 1
 
     def test_store_is_hidden_from_other_users(self, authenticated_user, user_factory):

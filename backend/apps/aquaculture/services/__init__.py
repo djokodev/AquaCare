@@ -82,6 +82,7 @@ from .sync_service import SyncService
 __all__ = [
     'BaseService',
     'ProductionCycleService',
+    'HarvestCycleResult',
     'ProductionCycleApplicationService',
     'HarvestCycleCommand',
     'PartialHarvestCommand',

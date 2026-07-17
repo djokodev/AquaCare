@@ -43,6 +43,14 @@ from .domain.production_units import (
 class ProductionCycleQuerySet(models.QuerySet):
     """QuerySet optimisé pour les cycles de production."""
 
+    def user_visible(self):
+        """Cycles métier affichables dans les sélecteurs utilisateur.
+
+        Les sessions de calibrage restent des agrégats techniques autonomes pour
+        leur ledger, mais sont exposées comme unités du cycle source.
+        """
+        return self.filter(cycle_kind=ProductionCycle.CYCLE_KIND_STANDARD)
+
     def for_api(self):
         incoming = CalibrationOperation.objects.filter(destination_allocation__cycle=OuterRef('pk')).values(
             'destination_allocation__cycle'
@@ -719,6 +727,15 @@ class CycleFeedStockEntry(models.Model):
     label = models.CharField(
         max_length=200,
         verbose_name=_("Nom de l'aliment"),
+    )
+    feed_size_mm = models.DecimalField(
+        max_digits=4,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal('0.1')), MaxValueValidator(Decimal('20.0'))],
+        verbose_name=_("Granulométrie (mm)"),
+        help_text=_("Diamètre des granulés de cette entrée de stock"),
     )
     quantity_kg = models.DecimalField(
         max_digits=12,

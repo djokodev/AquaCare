@@ -10,6 +10,7 @@ from django.db import transaction
 from ..models import CycleLog, ProductionCycle
 from .analytics_service import AnalyticsService
 from .cycle_service import ProductionCycleService
+from .cycle_store_service import CycleStoreService
 from .log_service import BulkLogResult, CycleLogPayload, CycleLogService
 
 
@@ -57,9 +58,23 @@ class CycleLogApplicationService:
             **existing_log_filter,
         ).first()
 
+        CycleStoreService.validate_daily_feed_quantity(
+            cycle=cycle,
+            feed_quantity=validated_data.get("feed_quantity"),
+            log_date=log_date,
+            cycle_unit_allocation=cycle_unit_allocation,
+            existing_log=existing_log,
+            feed_type=validated_data.get("feed_type"),
+            feed_size_mm=validated_data.get("feed_size_mm"),
+        )
+
         if existing_log:
             for field_name, field_value in validated_data.items():
+                if field_name == "client_uuid" and existing_log.client_uuid:
+                    continue
                 setattr(existing_log, field_name, field_value)
+            if not validated_data.get("sample_count") or not validated_data.get("sample_total_weight"):
+                existing_log.average_weight = None
             existing_log.save()
             ProductionCycleService.recalculate_all_metrics(cycle)
             CycleLogApplicationService._refresh_cycles_and_cache(

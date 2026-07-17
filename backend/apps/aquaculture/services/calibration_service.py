@@ -106,6 +106,10 @@ class CalibrationService:
         )
         if destination is not None and destination.cycle.species != source.cycle.species:
             raise BusinessRuleViolation(_('Le bac contient déjà une autre espèce.'))
+        if destination is not None and cls._root_cycle_id(destination) != cls._root_cycle_id(source):
+            raise BusinessRuleViolation(_(
+                'Ce bac de calibrage est déjà rattaché à un autre cycle.'
+            ))
         if destination is None:
             destination = cls._create_destination_allocation(
                 source=source,
@@ -403,6 +407,26 @@ class CalibrationService:
             current_biomass_kg=Decimal('0'),
             expected_survival_rate_pct=source.expected_survival_rate_pct,
         )
+
+    @staticmethod
+    def _root_cycle_id(allocation):
+        """Résout le cycle utilisateur racine d'une chaîne de calibrages."""
+        current = allocation
+        visited_allocation_ids = set()
+        while current.cycle.cycle_kind == ProductionCycle.CYCLE_KIND_CALIBRATION:
+            if current.pk in visited_allocation_ids:
+                raise BusinessRuleViolation(_('La chaîne de calibrage contient une boucle invalide.'))
+            visited_allocation_ids.add(current.pk)
+            first_arrival = (
+                CalibrationOperation.objects.select_related('source_allocation__cycle')
+                .filter(destination_allocation=current)
+                .order_by('calibrated_at', 'created_at')
+                .first()
+            )
+            if first_arrival is None:
+                raise BusinessRuleViolation(_('Le cycle source du bac de calibrage est introuvable.'))
+            current = first_arrival.source_allocation
+        return current.cycle_id
 
     @staticmethod
     def _validate_replay(

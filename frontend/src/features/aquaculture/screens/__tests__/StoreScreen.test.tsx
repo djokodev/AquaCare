@@ -10,10 +10,6 @@ const mockGoBack = jest.fn();
 const mockDispatch = jest.fn();
 const mockGetCycleStore = jest.fn();
 const mockDeclareCycleStoreManualStock = jest.fn();
-const mockFetchCycleFeedStatus = jest.fn((cycleId: string) => ({
-  type: 'aquaculture/fetchCycleFeedStatus',
-  payload: cycleId,
-}));
 const mockT = (key: string) => key;
 let mockState: any;
 let mockRouteParams: { cycleId?: string };
@@ -33,10 +29,6 @@ jest.mock('@react-navigation/native', () => ({
 jest.mock('react-redux', () => ({
   useDispatch: () => mockDispatch,
   useSelector: (selector: any) => selector(mockState),
-}));
-
-jest.mock('@/features/aquaculture/store/aquacultureSlice', () => ({
-  fetchCycleFeedStatus: (cycleId: string) => mockFetchCycleFeedStatus(cycleId),
 }));
 
 jest.mock('@/features/aquaculture/services/aquacultureService', () => ({
@@ -105,8 +97,13 @@ describe('StoreScreen', () => {
         pending_orders_count: 1,
         pending_order_amount_fcfa: '30000.00',
         pending_order_feed_kg: '20.00',
+        total_feed_needed_kg: '600.00',
+        feed_need_remaining_kg: '590.00',
+        secured_feed_kg: '80.00',
+        feed_to_secure_kg: '510.00',
         stock_tracking_started_at: '2026-06-01',
       },
+      stock_items: [{ label: 'Aliment starter 20kg', feed_size_mm: '2.00', quantity_added_kg: '70.00', quantity_consumed_kg: '10.00', quantity_available_kg: '60.00' }],
       status: 'ok',
       pending_orders: [
         {
@@ -134,8 +131,13 @@ describe('StoreScreen', () => {
         pending_orders_count: 1,
         pending_order_amount_fcfa: '30000.00',
         pending_order_feed_kg: '20.00',
+        total_feed_needed_kg: '600.00',
+        feed_need_remaining_kg: '590.00',
+        secured_feed_kg: '105.00',
+        feed_to_secure_kg: '485.00',
         stock_tracking_started_at: '2026-06-01',
       },
+      stock_items: [{ label: 'Aliment starter 20kg', feed_size_mm: '2.00', quantity_added_kg: '95.00', quantity_consumed_kg: '10.00', quantity_available_kg: '85.00' }],
       status: 'ok',
       pending_orders: [],
       stock_tracking_started_at: '2026-06-01',
@@ -148,12 +150,10 @@ describe('StoreScreen', () => {
     await waitFor(() => {
       expect(getByText('storeTitle')).toBeTruthy();
       expect(getByText('storeCurrentStock')).toBeTruthy();
-      expect(getByText('8')).toBeTruthy();
+      expect(getByText('510')).toBeTruthy();
       expect(getByText('storeEstimatedNeedToFinish')).toBeTruthy();
       expect(getByText('ORD-001')).toBeTruthy();
     });
-
-    expect(mockFetchCycleFeedStatus).toHaveBeenCalledWith('cycle-1');
 
     fireEvent.press(getByText('storeViewProducts'));
     expect(mockNavigate).toHaveBeenCalledWith('ProductCatalog', {
@@ -181,8 +181,9 @@ describe('StoreScreen', () => {
     fireEvent.press(getByText('storeManualSubmit'));
 
     fireEvent.changeText(getByPlaceholderText('storeManualLabelPlaceholder'), 'Aliment starter 20kg');
-    fireEvent.changeText(getByPlaceholderText('storeManualQuantityPlaceholder'), '75.00');
-    fireEvent.changeText(getByPlaceholderText('storeManualTotalCostPlaceholder'), '90000.00');
+    fireEvent.changeText(getByPlaceholderText('storeManualFeedSizePlaceholder'), '2,5');
+    fireEvent.changeText(getByPlaceholderText('storeManualQuantityPlaceholder'), '75,5');
+    fireEvent.changeText(getByPlaceholderText('storeManualTotalCostPlaceholder'), '90000,5');
     fireEvent.changeText(getByPlaceholderText('storeManualDatePlaceholder'), '2026-06-29');
     fireEvent.changeText(getByPlaceholderText('storeManualNotePlaceholder'), 'Premier dépôt');
 
@@ -193,8 +194,9 @@ describe('StoreScreen', () => {
         'cycle-1',
         expect.objectContaining({
           label: 'Aliment starter 20kg',
-          quantity_kg: '75.00',
-          total_cost_fcfa: '90000.00',
+          feed_size_mm: '2.5',
+          quantity_kg: '75.5',
+          total_cost_fcfa: '90000.5',
           entry_date: '2026-06-29',
           note: 'Premier dépôt',
           created_offline: false,
@@ -210,9 +212,10 @@ describe('StoreScreen', () => {
         manual_feed_kg: '0.00', received_order_feed_kg: '0.00', total_feed_added_kg: '0.00',
         feed_consumed_kg: '0.00', estimated_feed_remaining_kg: '0.00', feed_expenses_fcfa: '0.00',
         pending_orders_count: 0, pending_order_amount_fcfa: '0.00', pending_order_feed_kg: '0.00',
-        stock_tracking_started_at: '2026-06-01',
+        total_feed_needed_kg: '600.00', feed_need_remaining_kg: '600.00', secured_feed_kg: '0.00', feed_to_secure_kg: '600.00', stock_tracking_started_at: '2026-06-01',
       },
       status: 'low', pending_orders: [], stock_tracking_started_at: '2026-06-01',
+      stock_items: [],
     });
     const { getByText } = render(<StoreScreen />);
     await waitFor(() => expect(getByText('storeReplenishmentRequired')).toBeTruthy());
@@ -286,6 +289,7 @@ describe('StoreScreen', () => {
     await waitFor(() => expect(getAllByText('storeManualSubmit')).toHaveLength(1));
     fireEvent.press(getAllByText('storeManualSubmit')[0]);
     fireEvent.changeText(getByPlaceholderText('storeManualLabelPlaceholder'), 'Aliment starter');
+    fireEvent.changeText(getByPlaceholderText('storeManualFeedSizePlaceholder'), '2');
     fireEvent.changeText(getByPlaceholderText('storeManualQuantityPlaceholder'), '50');
     fireEvent.changeText(getByPlaceholderText('storeManualTotalCostPlaceholder'), '75000');
     fireEvent.changeText(getByPlaceholderText('storeManualDatePlaceholder'), '2026-07-14');
@@ -307,7 +311,6 @@ describe('StoreScreen', () => {
     await waitFor(() => expect(getByText('network refresh failed')).toBeTruthy());
     expect(getByText('ORD-001')).toBeTruthy();
     expect(mockGetCycleStore).toHaveBeenCalledTimes(2);
-    expect(mockFetchCycleFeedStatus).toHaveBeenCalledTimes(2);
   });
 
   it('permet un retry après une erreur initiale', async () => {

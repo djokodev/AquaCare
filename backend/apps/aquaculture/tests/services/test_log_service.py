@@ -8,7 +8,7 @@ from decimal import Decimal
 
 import pytest
 from aquaculture.domain.exceptions import BusinessRuleViolation, InsufficientFishCountError, InvalidDateRangeError
-from aquaculture.models import CycleLog, CycleUnitAllocation, ProductionUnit
+from aquaculture.models import CycleFeedStockEntry, CycleLog, CycleUnitAllocation, ProductionUnit
 from aquaculture.services.log_service import CycleLogService
 
 from tests.fixtures.factories import ProductionCycleFactory, UserFactory
@@ -41,10 +41,21 @@ class TestCycleLogServiceCreateLog:
             current_count=5000,
             current_biomass=Decimal('75.00')
         )
+        CycleFeedStockEntry.objects.create(
+            cycle=cycle,
+            source='manual',
+            label='Stock test',
+            feed_size_mm=Decimal('2.00'),
+            quantity_kg=Decimal('20.00'),
+            total_cost_fcfa=Decimal('10000.00'),
+            entry_date=date.today(),
+        )
         log_data = {
             'log_date': date.today(),
             'mortality_count': 10,
             'feed_quantity': Decimal('5.0'),
+            'feed_type': 'Stock test',
+            'feed_size_mm': Decimal('2.0'),
             'water_temperature': Decimal('28.5'),
             'ph_level': Decimal('7.2'),
             'dissolved_oxygen': Decimal('6.5'),

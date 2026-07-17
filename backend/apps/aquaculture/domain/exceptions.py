@@ -229,6 +229,22 @@ class InvalidLogDataException(BusinessRuleViolation):
     default_code = 'invalid_log_data'
 
 
+class FeedStockValidationError(BusinessRuleViolation):
+    """La ration déclarée n'est pas couverte par le stock applicatif."""
+
+    default_code = 'feed_stock_validation_error'
+
+    def __init__(self, *, code: str, detail, available_feed_kg=None):
+        payload = {
+            'code': code,
+            'detail': detail,
+            'field': 'feed_quantity',
+        }
+        if available_feed_kg is not None:
+            payload['available_feed_kg'] = str(available_feed_kg)
+        super().__init__(payload)
+
+
 class CycleNotFoundException(AquacultureBusinessException):
     """
     Cycle de production introuvable.

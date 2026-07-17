@@ -1816,7 +1816,21 @@ class CycleStoreSummarySerializer(serializers.Serializer):
     pending_orders_count = serializers.IntegerField()
     pending_order_amount_fcfa = serializers.CharField()
     pending_order_feed_kg = serializers.CharField()
+    total_feed_needed_kg = serializers.CharField()
+    feed_need_remaining_kg = serializers.CharField()
+    secured_feed_kg = serializers.CharField()
+    feed_to_secure_kg = serializers.CharField()
     stock_tracking_started_at = serializers.DateField(required=False, allow_null=True)
+
+
+class CycleStoreStockItemSerializer(serializers.Serializer):
+    """Stock disponible regroupé par aliment et granulométrie."""
+
+    label = serializers.CharField()
+    feed_size_mm = serializers.CharField(required=False, allow_null=True)
+    quantity_added_kg = serializers.CharField()
+    quantity_consumed_kg = serializers.CharField()
+    quantity_available_kg = serializers.CharField()
 
 
 class CycleStoreSerializer(serializers.Serializer):
@@ -1825,6 +1839,7 @@ class CycleStoreSerializer(serializers.Serializer):
     cycle_id = serializers.UUIDField()
     summary = CycleStoreSummarySerializer()
     status = serializers.CharField()
+    stock_items = CycleStoreStockItemSerializer(many=True)
     pending_orders = CycleStorePendingOrderSerializer(many=True)
     stock_tracking_started_at = serializers.DateField(required=False, allow_null=True)
 
@@ -1833,6 +1848,12 @@ class CycleStoreManualStockSerializer(serializers.Serializer):
     """Sérialiseur de création manuelle du stock du Magasin."""
 
     label = serializers.CharField(max_length=200)
+    feed_size_mm = serializers.DecimalField(
+        max_digits=4,
+        decimal_places=2,
+        min_value=Decimal('0.1'),
+        max_value=Decimal('20'),
+    )
     quantity_kg = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=Decimal('0.01'))
     total_cost_fcfa = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=Decimal('0'))
     entry_date = serializers.DateField()
