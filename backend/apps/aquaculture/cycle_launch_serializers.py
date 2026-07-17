@@ -217,14 +217,14 @@ class CycleLaunchRequestSerializer(serializers.Serializer):
                 {"production_plan": _("Le plan de production est obligatoire pour le setup initial.")}
             )
 
-        expected_source = "new" if launch_kind == "initial_setup" else "existing"
-        invalid_sources = [
-            unit["local_id"] for unit in units if unit["source"] != expected_source
-        ]
-        if invalid_sources:
-            raise serializers.ValidationError(
-                {"production_units": _("Le type d'unité ne correspond pas au mode de lancement.")}
-            )
+        if launch_kind == "initial_setup":
+            invalid_sources = [
+                unit["local_id"] for unit in units if unit["source"] != "new"
+            ]
+            if invalid_sources:
+                raise serializers.ValidationError(
+                    {"production_units": _("Le type d'unité ne correspond pas au mode de lancement.")}
+                )
 
         local_ids = [unit["local_id"] for unit in units]
         duplicate_unit_ids = sorted({local_id for local_id in local_ids if local_ids.count(local_id) > 1})

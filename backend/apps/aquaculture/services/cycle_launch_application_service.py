@@ -206,14 +206,19 @@ class CycleLaunchApplicationService:
             raise CycleLaunchIdempotencyConflict()
 
     @classmethod
-    def _resolve_existing_units(
+    def _resolve_existing_units_from_payload(
         cls,
         farm_profile: FarmProfile,
         payload: dict[str, Any],
         *,
         require_active: bool,
     ) -> list[ProductionUnit]:
-        requested_ids = [unit["production_unit_id"] for unit in payload["production_units"]]
+        existing_unit_payloads = [
+            unit for unit in payload["production_units"] if unit["source"] == "existing"
+        ]
+        if not existing_unit_payloads:
+            return []
+        requested_ids = [unit["production_unit_id"] for unit in existing_unit_payloads]
         units_by_id = {
             unit.id: unit
             for unit in ProductionUnit.objects.for_api()
@@ -232,6 +237,8 @@ class CycleLaunchApplicationService:
     def _validate_existing_unit_availability(
         units: list[ProductionUnit],
     ) -> None:
+        if not units:
+            return
         occupied_unit_ids = set(
             CycleUnitAllocation.objects.select_for_update()
             .filter(
@@ -249,15 +256,19 @@ class CycleLaunchApplicationService:
         payload: dict[str, Any],
         units: list[ProductionUnit],
     ) -> None:
-        units_by_local_id = {
-            unit_data["local_id"]: unit
-            for unit_data, unit in zip(payload["production_units"], units)
+        if not units:
+            return
+        local_id_by_unit_id = {
+            unit_data["production_unit_id"]: unit_data["local_id"]
+            for unit_data in payload["production_units"]
+            if unit_data["source"] == "existing"
         }
         allocations_by_local_id = {
             allocation["production_unit_local_id"]: allocation
             for allocation in payload["allocations"]
         }
-        for local_id, unit in units_by_local_id.items():
+        for unit in units:
+            local_id = local_id_by_unit_id[unit.id]
             try:
                 validate_production_unit_capacity(
                     unit_type=unit.unit_type,
@@ -271,40 +282,26 @@ class CycleLaunchApplicationService:
                 raise CycleLaunchUnitCapacityExceeded() from exc
 
     @classmethod
-    def _resolve_new_units_for_replay(
+    def _resolve_units_for_replay(
         cls,
         farm_profile: FarmProfile,
         payload: dict[str, Any],
     ) -> list[ProductionUnit]:
-        requested_ids = [
-            derive_unit_client_uuid(payload["launch_uuid"], unit["local_id"])
-            for unit in payload["production_units"]
-        ]
-        units_by_client_uuid = {
-            unit.client_uuid: unit
-            for unit in ProductionUnit.objects.for_api()
-            .select_for_update()
-            .filter(farm_profile=farm_profile, client_uuid__in=requested_ids)
-        }
-        if len(units_by_client_uuid) != len(requested_ids):
-            raise CycleLaunchIdempotencyConflict()
-        return [units_by_client_uuid[client_uuid] for client_uuid in requested_ids]
-
-    @staticmethod
-    def _unit_specs_from_existing(
-        payload: dict[str, Any],
-        units: list[ProductionUnit],
-    ) -> list[dict[str, Any]]:
-        return [
-            {
-                "local_id": source["local_id"],
-                "name": unit.name,
-                "unit_type": unit.unit_type,
-                "volume_m3": unit.volume_m3,
-                "surface_m2": unit.surface_m2,
-            }
-            for source, unit in zip(payload["production_units"], units)
-        ]
+        units: list[ProductionUnit] = []
+        for unit_data in payload["production_units"]:
+            if unit_data["source"] == "existing":
+                unit = ProductionUnit.objects.for_api().select_for_update().filter(
+                    farm_profile=farm_profile, id=unit_data["production_unit_id"]
+                ).first()
+            else:
+                client_uuid = derive_unit_client_uuid(payload["launch_uuid"], unit_data["local_id"])
+                unit = ProductionUnit.objects.for_api().select_for_update().filter(
+                    farm_profile=farm_profile, client_uuid=client_uuid
+                ).first()
+            if not unit:
+                raise CycleLaunchIdempotencyConflict()
+            units.append(unit)
+        return units
 
     @classmethod
     def _build_result(
@@ -367,11 +364,7 @@ class CycleLaunchApplicationService:
         existing_cycle = cls._load_existing_cycle(payload["launch_uuid"])
         if existing_cycle:
             cls._validate_existing_cycle(existing_cycle, farm_profile, payload_hash)
-            replay_units = (
-                cls._resolve_existing_units(farm_profile, payload, require_active=False)
-                if payload["launch_kind"] == "additional_cycle"
-                else cls._resolve_new_units_for_replay(farm_profile, payload)
-            )
+            replay_units = cls._resolve_units_for_replay(farm_profile, payload)
             replay_farm = FarmProfile.objects.select_related(
                 "user", "production_plan"
             ).get(pk=farm_profile.pk)
@@ -393,7 +386,6 @@ class CycleLaunchApplicationService:
                 farm_profile,
                 cls._build_setup_data(payload),
             )
-            production_units: list[ProductionUnit] = []
             unit_specs = payload["production_units"]
         else:
             if not plan.setup_completed:
@@ -401,14 +393,34 @@ class CycleLaunchApplicationService:
                     detail=_("La ferme doit être configurée avant de lancer un cycle supplémentaire.")
                 )
             updated_farm = farm_profile
-            production_units = cls._resolve_existing_units(
+            existing_units = cls._resolve_existing_units_from_payload(
                 farm_profile,
                 payload,
                 require_active=True,
             )
-            cls._validate_existing_unit_availability(production_units)
-            cls._validate_existing_unit_capacities(payload, production_units)
-            unit_specs = cls._unit_specs_from_existing(payload, production_units)
+            cls._validate_existing_unit_availability(existing_units)
+            cls._validate_existing_unit_capacities(payload, existing_units)
+
+            existing_units_by_id = {u.id: u for u in existing_units}
+            unit_specs = []
+            for unit_data in payload["production_units"]:
+                if unit_data["source"] == "existing":
+                    u = existing_units_by_id[unit_data["production_unit_id"]]
+                    unit_specs.append({
+                        "local_id": unit_data["local_id"],
+                        "name": u.name,
+                        "unit_type": u.unit_type,
+                        "volume_m3": u.volume_m3,
+                        "surface_m2": u.surface_m2,
+                    })
+                else:
+                    unit_specs.append({
+                        "local_id": unit_data["local_id"],
+                        "name": unit_data["name"],
+                        "unit_type": unit_data["unit_type"],
+                        "volume_m3": unit_data.get("volume_m3"),
+                        "surface_m2": unit_data.get("surface_m2"),
+                    })
 
         cycle_data = cls._build_cycle_data(payload, payload_hash, unit_specs)
         try:
@@ -418,11 +430,7 @@ class CycleLaunchApplicationService:
             existing_cycle = cls._load_existing_cycle(payload["launch_uuid"])
             if existing_cycle:
                 cls._validate_existing_cycle(existing_cycle, updated_farm, payload_hash)
-                replay_units = (
-                    cls._resolve_existing_units(farm_profile, payload, require_active=False)
-                    if payload["launch_kind"] == "additional_cycle"
-                    else cls._resolve_new_units_for_replay(farm_profile, payload)
-                )
+                replay_units = cls._resolve_units_for_replay(updated_farm, payload)
                 replay_farm = FarmProfile.objects.select_related(
                     "user", "production_plan"
                 ).get(pk=updated_farm.pk)
@@ -435,6 +443,7 @@ class CycleLaunchApplicationService:
                 )
             raise
 
+        production_units: list[ProductionUnit] = []
         if payload["launch_kind"] == "initial_setup":
             for unit_data in payload["production_units"]:
                 production_units.append(
@@ -450,6 +459,25 @@ class CycleLaunchApplicationService:
                         status="active",
                     )
                 )
+        else:
+            existing_units_by_id = {u.id: u for u in existing_units}
+            for unit_data in payload["production_units"]:
+                if unit_data["source"] == "existing":
+                    production_units.append(existing_units_by_id[unit_data["production_unit_id"]])
+                else:
+                    production_units.append(
+                        ProductionUnit.objects.create(
+                            client_uuid=derive_unit_client_uuid(
+                                payload["launch_uuid"], unit_data["local_id"]
+                            ),
+                            farm_profile=updated_farm,
+                            name=unit_data["name"],
+                            unit_type=normalize_production_unit_type(unit_data["unit_type"]),
+                            volume_m3=unit_data.get("volume_m3"),
+                            surface_m2=unit_data.get("surface_m2"),
+                            status="active",
+                        )
+                    )
 
         for calibration_unit in payload.get('calibration_units', []):
             existing_calibration_unit = ProductionUnit.objects.filter(

@@ -39,6 +39,7 @@ interface LaunchFirstCycleParams {
   formData: FarmSetupFormState;
   simulationResult: CycleSimulationResult;
   defaultPondIdentifier: string;
+  launchKind?: "initial_setup" | "additional_cycle";
 }
 
 const toFiniteNumber = (value?: string | number | null): number | undefined => {
@@ -143,7 +144,7 @@ const buildLaunchUnit = (
 export const launchFirstCycle = async (
   params: LaunchFirstCycleParams,
 ): Promise<FirstCycleLaunchResult> => {
-  const { formData, simulationResult } = params;
+  const { formData, simulationResult, launchKind = "initial_setup" } = params;
   const firstCycle = simulationResult.cycles_breakdown[0];
   if (!firstCycle) {
     throw new FirstCycleLaunchError("simulationErrorRetry");
@@ -189,15 +190,19 @@ export const launchFirstCycle = async (
 
   const payload: CycleLaunchRequest = {
     launch_uuid: launchUuid,
-    launch_kind: "initial_setup",
-    production_plan: {
-      annual_production_target_kg: simulationResult.annual_production_target_kg,
-      num_cycles_per_year: simulationResult.num_cycles,
-      fingerlings_cost_per_unit_fcfa:
-        plan.fingerlings_cost_per_unit_fcfa ?? fingerlingsPrice,
-      planned_selling_price_per_kg_fcfa:
-        plan.planned_selling_price_per_kg_fcfa ?? sellingPrice,
-    },
+    launch_kind: launchKind,
+    ...(launchKind === "initial_setup"
+      ? {
+          production_plan: {
+            annual_production_target_kg: simulationResult.annual_production_target_kg,
+            num_cycles_per_year: simulationResult.num_cycles,
+            fingerlings_cost_per_unit_fcfa:
+              plan.fingerlings_cost_per_unit_fcfa ?? fingerlingsPrice,
+            planned_selling_price_per_kg_fcfa:
+              plan.planned_selling_price_per_kg_fcfa ?? sellingPrice,
+          },
+        }
+      : {}),
     cycle: {
       species: formData.species === "clarias" ? "clarias" : "tilapia",
       start_date: firstCycle.start_date_estimate,
