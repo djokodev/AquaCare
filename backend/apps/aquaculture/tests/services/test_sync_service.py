@@ -65,6 +65,38 @@ class TestSyncServicePullData:
         assert 'cycles' in updates
         assert isinstance(updates['cycles'], list)
 
+    def test_get_cycles_for_sync_hides_internal_calibration_sessions(self):
+        """Le cycle technique voyage via le bac/opération, pas comme cycle sélectionnable."""
+        from tests.fixtures.factories import FarmProfileFactory
+
+        user = UserFactory()
+        farm = FarmProfileFactory(user=user)
+        cycle = ProductionCycleFactory(farm_profile=farm, status='active')
+        source = create_cycle_unit_allocation(cycle)
+        tank = ProductionUnit.objects.create(
+            farm_profile=farm,
+            name='Bac calibrage 1',
+            unit_type='tank',
+            purpose=ProductionUnit.PURPOSE_CALIBRATION,
+            volume_m3=Decimal('10.00'),
+        )
+        operation, _, _ = CalibrationService.calibrate(
+            source_allocation=source,
+            destination_production_unit=tank,
+            user=user,
+            client_uuid=uuid4(),
+            calibrated_at=timezone.now().replace(second=0, microsecond=0),
+            transferred_count=100,
+            transferred_average_weight_g=Decimal('10.00'),
+        )
+
+        updates = SyncService.get_server_updates(user, include_calibration=True)
+
+        assert [row['id'] for row in updates['cycles']] == [str(cycle.id)]
+        assert updates['calibration_tanks'][0]['active_session']['id'] == str(
+            operation.destination_allocation.cycle_id
+        )
+
     def test_get_logs_since_date(self):
         """Test récupération logs depuis date."""
         from tests.fixtures.factories import FarmProfileFactory

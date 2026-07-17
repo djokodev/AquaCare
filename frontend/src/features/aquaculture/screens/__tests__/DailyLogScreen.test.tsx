@@ -1,11 +1,11 @@
 import React from 'react';
-import { Alert } from 'react-native';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
-import DailyLogScreen from '../DailyLogScreen';
 import { useDispatch, useSelector } from 'react-redux';
+
+import DailyLogScreen from '../DailyLogScreen';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
 import { offlineService } from '@/services/offlineService';
-import { ProductionCycle } from '@/types/aquaculture';
+import { CycleStore, ProductionCycle } from '@/types/aquaculture';
 
 jest.mock('react-native-safe-area-context', () => {
   const React = require('react');
@@ -16,14 +16,13 @@ jest.mock('react-native-safe-area-context', () => {
   };
 });
 
-jest.mock('react-redux', () => ({
-  useDispatch: jest.fn(),
-  useSelector: jest.fn(),
-}));
+jest.mock('react-redux', () => ({ useDispatch: jest.fn(), useSelector: jest.fn() }));
 
 jest.mock('@/features/aquaculture/services/aquacultureService', () => ({
   aquacultureService: {
     createCycleLog: jest.fn(),
+    getCycleLogs: jest.fn(),
+    getCycleStore: jest.fn(),
   },
 }));
 
@@ -35,9 +34,22 @@ jest.mock('@/services/offlineService', () => ({
   },
 }));
 
-jest.mock('@/components/modals/SuccessRewardModal', () => ({
+jest.mock('@/components/modals/SuccessRewardModal', () => ({ __esModule: true, default: () => null }));
+
+jest.mock('@/features/aquaculture/components/FeedingTimesField', () => ({
   __esModule: true,
-  default: () => null,
+  default: ({ onChange, error }: { onChange: (value: string[]) => void; error?: string }) => {
+    const React = require('react');
+    const { Pressable, Text } = require('react-native');
+    return (
+      <>
+        <Pressable accessibilityRole="button" onPress={() => onChange(['08:00', '12:30'])}>
+          <Text>mock-add-time</Text>
+        </Pressable>
+        {error ? <Text>{error}</Text> : null}
+      </>
+    );
+  },
 }));
 
 describe('features/aquaculture/screens/DailyLogScreen', () => {
@@ -45,10 +57,7 @@ describe('features/aquaculture/screens/DailyLogScreen', () => {
   const mockUseSelector = useSelector as unknown as jest.Mock;
   const mockService = aquacultureService as jest.Mocked<typeof aquacultureService>;
   const mockOffline = offlineService as jest.Mocked<typeof offlineService>;
-  const navigation = {
-    goBack: jest.fn(),
-    navigate: jest.fn(),
-  } as any;
+  const navigation = { goBack: jest.fn(), navigate: jest.fn() } as any;
   const route = {
     params: {
       cycleId: 'cycle-1',
@@ -64,7 +73,6 @@ describe('features/aquaculture/screens/DailyLogScreen', () => {
     cycle_name: 'Cycle 1',
     species: 'tilapia',
     pond_identifier: 'P1',
-    pond_surface_m2: 100,
     start_date: '2026-01-01',
     initial_count: 1000,
     initial_average_weight: 10,
@@ -78,22 +86,45 @@ describe('features/aquaculture/screens/DailyLogScreen', () => {
     updated_at: '2026-01-02T00:00:00Z',
   };
 
-  const setSelectorCycles = (cycles: ProductionCycle[], currentCycle?: ProductionCycle) => {
-    mockUseSelector.mockImplementation((selector: (state: any) => unknown) =>
-      selector({
-        aquaculture: {
-          dashboardData: {
-            active_cycles: cycles,
-          },
-          currentCycle,
-        },
-      })
-    );
+  const store: CycleStore = {
+    cycle_id: 'cycle-1',
+    status: 'ok',
+    summary: {
+      manual_feed_kg: '50.00',
+      received_order_feed_kg: '0.00',
+      total_feed_added_kg: '50.00',
+      feed_consumed_kg: '0.00',
+      estimated_feed_remaining_kg: '50.00',
+      feed_expenses_fcfa: '25000.00',
+      pending_orders_count: 0,
+      pending_order_amount_fcfa: '0.00',
+      pending_order_feed_kg: '0.00',
+      total_feed_needed_kg: '500.00',
+      feed_need_remaining_kg: '370.00',
+      secured_feed_kg: '50.00',
+      feed_to_secure_kg: '320.00',
+      stock_tracking_started_at: '2026-01-01',
+    },
+    stock_items: [{
+      label: 'Dibaq',
+      feed_size_mm: '2.50',
+      quantity_added_kg: '50.00',
+      quantity_consumed_kg: '0.00',
+      quantity_available_kg: '50.00',
+    }],
+    pending_orders: [],
+    stock_tracking_started_at: '2026-01-01',
   };
 
   beforeEach(() => {
     jest.clearAllMocks();
     (useDispatch as unknown as jest.Mock).mockReturnValue(mockDispatch);
+    mockUseSelector.mockImplementation((selector: (state: any) => unknown) => selector({
+      aquaculture: { dashboardData: { active_cycles: [activeCycle] } },
+    }));
+    mockService.getCycleLogs.mockResolvedValue([]);
+    mockService.getCycleStore.mockResolvedValue(store);
+    mockService.createCycleLog.mockResolvedValue({ id: 'log-1' } as any);
     mockOffline.hasAnyPendingSync.mockResolvedValue(false);
     mockOffline.syncAllOfflineData.mockResolvedValue({
       success: 0,
@@ -106,194 +137,185 @@ describe('features/aquaculture/screens/DailyLogScreen', () => {
     });
   });
 
-  it('affiche un etat vide sans cycle actif', () => {
-    setSelectorCycles([]);
+  it('refuse la saisie globale et renvoie vers le choix d une unité', () => {
+    const { getByText } = render(
+      <DailyLogScreen navigation={navigation} route={{ params: { cycleId: 'cycle-1' } } as any} />
+    );
 
-    const { getByText } = render(<DailyLogScreen navigation={navigation} />);
-
-    expect(getByText('noActiveCycles')).toBeTruthy();
-    fireEvent.press(getByText('createCycle'));
-    expect(navigation.navigate).toHaveBeenCalledWith('CreateFarm');
-  });
-
-  it('valide sample_count minimum quand sample_total_weight est renseigne', async () => {
-    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
-    setSelectorCycles([activeCycle]);
-
-    const { getByText, getByPlaceholderText } = render(<DailyLogScreen navigation={navigation} />);
-
-    fireEvent.changeText(getByPlaceholderText('exampleAffectedCount'), '3');
-    fireEvent.changeText(getByPlaceholderText('sampleWeightPlaceholder'), '150');
-    fireEvent.press(getByText('save'));
-
-    expect(alertSpy).toHaveBeenCalledWith('error', 'sampleCountTooLow');
+    expect(getByText('dailyLogUnitRequiredTitle')).toBeTruthy();
+    fireEvent.press(getByText('chooseProductionUnit'));
+    expect(navigation.navigate).toHaveBeenCalledWith('ProductionUnitsHub', { cycleId: 'cycle-1' });
     expect(mockService.createCycleLog).not.toHaveBeenCalled();
-    alertSpy.mockRestore();
   });
 
-  it('utilise currentCycle comme selection par defaut', async () => {
-    const otherCycle = {
-      ...activeCycle,
-      id: 'cycle-2',
-      cycle_name: 'Cycle 2',
-      pond_identifier: 'P2',
-    };
-    setSelectorCycles([activeCycle, otherCycle], otherCycle);
-    mockService.createCycleLog.mockResolvedValueOnce({ id: 'log-2' } as any);
-
-    const { getByText } = render(<DailyLogScreen navigation={navigation} />);
-    fireEvent.press(getByText('save'));
-
-    await waitFor(() => {
-      expect(mockService.createCycleLog).toHaveBeenCalledWith(
-        'cycle-2',
-        expect.objectContaining({
-          log_date: expect.any(String),
-        })
-      );
-    });
-  });
-
-  it('valide la paire echantillonnage si sample_total_weight est fourni seul', () => {
-    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
-    setSelectorCycles([activeCycle]);
-
-    const { getByText, getByPlaceholderText } = render(<DailyLogScreen navigation={navigation} />);
-
-    fireEvent.changeText(getByPlaceholderText('sampleWeightPlaceholder'), '250');
-    fireEvent.press(getByText('save'));
-
-    expect(alertSpy).toHaveBeenCalledWith('error', 'samplingPairRequired');
-    alertSpy.mockRestore();
-  });
-
-  it('valide la paire echantillonnage si sample_count est fourni seul', () => {
-    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
-    setSelectorCycles([activeCycle]);
-
-    const { getByText, getByPlaceholderText } = render(<DailyLogScreen navigation={navigation} />);
-
-    fireEvent.changeText(getByPlaceholderText('exampleAffectedCount'), '20');
-    fireEvent.press(getByText('save'));
-
-    expect(alertSpy).toHaveBeenCalledWith('error', 'samplingPairRequired');
-    alertSpy.mockRestore();
-  });
-
-  it('cree un log online puis affiche succes', async () => {
-    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
-    setSelectorCycles([activeCycle]);
-    mockService.createCycleLog.mockResolvedValueOnce({ id: 'log-1' } as any);
-
-    const { getByText } = render(<DailyLogScreen navigation={navigation} />);
-
-    fireEvent.press(getByText('save'));
-
-    await waitFor(() => {
-      expect(mockService.createCycleLog).toHaveBeenCalledWith(
-        'cycle-1',
-        expect.objectContaining({
-          log_date: expect.any(String),
-        })
-      );
-    });
-
-    expect(alertSpy).toHaveBeenCalledWith(
-      'success',
-      'recordSaved',
-      expect.any(Array)
+  it('enregistre explicitement une journée sans nourrissage', async () => {
+    const { getByText, getByPlaceholderText } = render(
+      <DailyLogScreen navigation={navigation} route={route} />
     );
-    alertSpy.mockRestore();
-  });
+    await waitFor(() => expect(getByText('Cycle 1')).toBeTruthy());
 
-  it('affiche le contexte d unité et envoie cycle_unit_allocation', async () => {
-    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
-    setSelectorCycles([activeCycle]);
-    mockService.createCycleLog.mockResolvedValueOnce({ id: 'log-unit' } as any);
-
-    const { getByText, queryByText } = render(<DailyLogScreen navigation={navigation} route={route} />);
-
-    expect(getByText('Cycle 1')).toBeTruthy();
-    expect(getByText('dailyLogUnitContextLabel')).toBeTruthy();
-    expect(queryByText('productionUnitLogContextTitle')).toBeNull();
-    expect(queryByText('cycleSelection')).toBeNull();
-
+    fireEvent.changeText(getByPlaceholderText('mortalityPlaceholder'), '0');
+    fireEvent.press(getByText('feedingNotDone'));
     fireEvent.press(getByText('save'));
 
-    await waitFor(() => {
-      expect(mockService.createCycleLog).toHaveBeenCalledWith(
-        'cycle-1',
-        expect.objectContaining({
-          cycle_unit_allocation: 'allocation-1',
-          log_date: expect.any(String),
-        })
-      );
-    });
-
-    alertSpy.mockRestore();
+    await waitFor(() => expect(mockService.createCycleLog).toHaveBeenCalledWith(
+      'cycle-1',
+      expect.objectContaining({
+        cycle_unit_allocation: 'allocation-1',
+        mortality_count: 0,
+        feed_quantity: null,
+        feeding_times: [],
+      })
+    ));
   });
 
-  it('envoie les nouveaux champs et ignore les horaires invalides', async () => {
-    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
-    setSelectorCycles([activeCycle]);
-    mockService.createCycleLog.mockResolvedValueOnce({ id: 'log-extended' } as any);
-
-    const { getByText, getByPlaceholderText } = render(<DailyLogScreen navigation={navigation} />);
-
-    fireEvent.changeText(getByPlaceholderText('mortalityPlaceholder'), '4');
-    fireEvent.changeText(getByPlaceholderText('mortalityReasonPlaceholder'), 'Stress');
-    fireEvent.changeText(getByPlaceholderText('feedQuantityPlaceholder'), '12.5');
-    fireEvent.changeText(getByPlaceholderText('feedTypePlaceholder'), 'Dibaq');
-    fireEvent.changeText(getByPlaceholderText('feedSizeMmPlaceholder'), '2.5');
-    fireEvent.changeText(getByPlaceholderText('dissolvedOxygenPlaceholder'), '6.4');
-    fireEvent.changeText(getByPlaceholderText('ammoniaLevelPlaceholder'), '0.2');
-    fireEvent.changeText(getByPlaceholderText('feedingTimesPlaceholder'), '08:00,99:99,12:30');
-    fireEvent.press(getByText('save'));
-
-    await waitFor(() => {
-      expect(mockService.createCycleLog).toHaveBeenCalledWith(
-        'cycle-1',
-        expect.objectContaining({
-          mortality_count: 4,
-          mortality_reason: 'Stress',
-          feed_quantity: 12.5,
-          feed_type: 'Dibaq',
-          feed_size_mm: 2.5,
-          dissolved_oxygen: 6.4,
-          ammonia_level: 0.2,
-          feeding_times: ['08:00', '12:30'],
-        })
-      );
-    });
-
-    expect(alertSpy).toHaveBeenCalledWith('warning', 'feedingTimesInvalidIgnored');
-    alertSpy.mockRestore();
-  });
-
-  it('sauvegarde offline sur erreur reseau', async () => {
-    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
-    setSelectorCycles([activeCycle]);
-    mockService.createCycleLog.mockRejectedValueOnce({ message: 'Network Error' });
-    mockOffline.saveCycleLogOffline.mockResolvedValueOnce('offline-log-1');
-
-    const { getByText } = render(<DailyLogScreen navigation={navigation} />);
-
-    fireEvent.press(getByText('save'));
-
-    await waitFor(() => {
-      expect(mockOffline.saveCycleLogOffline).toHaveBeenCalledWith(
-        'cycle-1',
-        expect.objectContaining({
-          log_date: expect.any(String),
-        })
-      );
-    });
-
-    expect(alertSpy).toHaveBeenCalledWith(
-      'success',
-      'recordSavedOffline',
-      expect.any(Array)
+  it('conserve les décimales saisies avec une virgule', async () => {
+    const { getByText, getByPlaceholderText } = render(
+      <DailyLogScreen navigation={navigation} route={route} />
     );
-    alertSpy.mockRestore();
+    await waitFor(() => expect(getByText('Cycle 1')).toBeTruthy());
+
+    fireEvent.changeText(getByPlaceholderText('mortalityPlaceholder'), '0');
+    fireEvent.press(getByText('feedingDone'));
+    fireEvent.press(getByText('feedStockItemOption'));
+    fireEvent.changeText(getByPlaceholderText('feedQuantityPlaceholder'), '16,8');
+    fireEvent.changeText(getByPlaceholderText('phLevelPlaceholder'), '7,2');
+    fireEvent.changeText(getByPlaceholderText('ammoniaLevelPlaceholder'), '0,2');
+    fireEvent.press(getByText('mock-add-time'));
+    fireEvent.press(getByText('save'));
+
+    await waitFor(() => expect(mockService.createCycleLog).toHaveBeenCalledWith(
+      'cycle-1',
+      expect.objectContaining({
+        feed_quantity: 16.8,
+        feed_size_mm: 2.5,
+        ph_level: 7.2,
+        ammonia_level: 0.2,
+        feeding_times: ['08:00', '12:30'],
+      })
+    ));
+  });
+
+  it('affiche une erreur dans le champ avant tout appel API', async () => {
+    const { getByText, getByPlaceholderText } = render(
+      <DailyLogScreen navigation={navigation} route={route} />
+    );
+    await waitFor(() => expect(getByText('Cycle 1')).toBeTruthy());
+
+    fireEvent.changeText(getByPlaceholderText('mortalityPlaceholder'), '0');
+    fireEvent.press(getByText('feedingDone'));
+    fireEvent.changeText(getByPlaceholderText('feedQuantityPlaceholder'), '0');
+
+    expect(getByText('feedQuantityMinimum')).toBeTruthy();
+    expect(mockService.createCycleLog).not.toHaveBeenCalled();
+  });
+
+  it('bloque une ration quand aucun stock n est déclaré', async () => {
+    mockService.getCycleStore.mockResolvedValue({
+      ...store,
+      status: 'not_started',
+      stock_tracking_started_at: null,
+      summary: {
+        ...store.summary,
+        estimated_feed_remaining_kg: '0.00',
+        stock_tracking_started_at: null,
+      },
+    });
+    const { getByText, getByPlaceholderText } = render(
+      <DailyLogScreen navigation={navigation} route={route} />
+    );
+    await waitFor(() => expect(getByText('Cycle 1')).toBeTruthy());
+
+    fireEvent.changeText(getByPlaceholderText('mortalityPlaceholder'), '0');
+    fireEvent.press(getByText('feedingDone'));
+    fireEvent.changeText(getByPlaceholderText('feedQuantityPlaceholder'), '5');
+
+    expect(getByText('feedStockRequired')).toBeTruthy();
+    expect(getByText('declareFeedStock')).toBeTruthy();
+    expect(mockService.createCycleLog).not.toHaveBeenCalled();
+  });
+
+  it('préremplit puis remplace la saisie existante du jour', async () => {
+    const today = new Date();
+    const offset = today.getTimezoneOffset() * 60_000;
+    const localDate = new Date(today.getTime() - offset).toISOString().slice(0, 10);
+    mockService.getCycleLogs.mockResolvedValue([{
+      id: 'existing-log',
+      cycle: 'cycle-1',
+      cycle_unit_allocation: 'allocation-1',
+      log_date: localDate,
+      mortality_count: 0,
+      feed_quantity: 16.8,
+      feed_type: 'Dibaq',
+      feed_size_mm: 2.5,
+      feeding_times: ['08:00'],
+      created_offline: false,
+      created_at: `${localDate}T08:00:00Z`,
+    }]);
+    mockService.getCycleStore.mockResolvedValue({
+      ...store,
+      summary: { ...store.summary, estimated_feed_remaining_kg: '3.20', feed_consumed_kg: '16.80' },
+    });
+
+    const { getByText, getByDisplayValue } = render(
+      <DailyLogScreen navigation={navigation} route={route} />
+    );
+
+    await waitFor(() => expect(getByText('dailyLogUpdatingToday')).toBeTruthy());
+    expect(getByDisplayValue('16,8')).toBeTruthy();
+    expect(getByText('updateTodayEntry')).toBeTruthy();
+    expect(getByText('feedStockAvailable')).toBeTruthy();
+  });
+
+  it('affiche une validation serveur sous le champ concerné', async () => {
+    mockService.createCycleLog.mockRejectedValue({
+      response: {
+        status: 400,
+        data: { feed_quantity: ['Le stock a changé. Saisissez une ration plus faible.'] },
+      },
+    });
+    const { getByText, getByPlaceholderText } = render(
+      <DailyLogScreen navigation={navigation} route={route} />
+    );
+    await waitFor(() => expect(getByText('Cycle 1')).toBeTruthy());
+
+    fireEvent.changeText(getByPlaceholderText('mortalityPlaceholder'), '0');
+    fireEvent.press(getByText('feedingDone'));
+    fireEvent.press(getByText('feedStockItemOption'));
+    fireEvent.changeText(getByPlaceholderText('feedQuantityPlaceholder'), '5');
+    fireEvent.press(getByText('mock-add-time'));
+    fireEvent.press(getByText('save'));
+
+    await waitFor(() => expect(
+      getByText('Le stock a changé. Saisissez une ration plus faible.'),
+    ).toBeTruthy());
+  });
+
+  it('traduit une erreur métier de stock renvoyée après une vérification concurrente', async () => {
+    mockService.createCycleLog.mockRejectedValue({
+      response: {
+        status: 400,
+        data: {
+          code: 'insufficient_feed_stock',
+          field: 'feed_quantity',
+          detail: 'Backend message',
+          available_feed_kg: '3.20',
+        },
+      },
+    });
+    const { getByText, getByPlaceholderText, queryByText } = render(
+      <DailyLogScreen navigation={navigation} route={route} />
+    );
+    await waitFor(() => expect(getByText('Cycle 1')).toBeTruthy());
+
+    fireEvent.changeText(getByPlaceholderText('mortalityPlaceholder'), '0');
+    fireEvent.press(getByText('feedingDone'));
+    fireEvent.press(getByText('feedStockItemOption'));
+    fireEvent.changeText(getByPlaceholderText('feedQuantityPlaceholder'), '5');
+    fireEvent.press(getByText('mock-add-time'));
+    fireEvent.press(getByText('save'));
+
+    await waitFor(() => expect(getByText('feedStockInsufficient')).toBeTruthy());
+    expect(queryByText('Backend message')).toBeNull();
   });
 });

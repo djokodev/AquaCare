@@ -292,6 +292,7 @@ class CycleLogService(BaseService):
                     cycle_unit_allocation=log_data.get('cycle_unit_allocation'),
                     user=user,
                 )
+                CycleLogService._validate_log_business_rules(cycle, log_data, user=user)
 
                 # Déduplication par client_uuid
                 client_uuid = log_data.get('client_uuid')
@@ -480,6 +481,19 @@ class CycleLogService(BaseService):
             user=user,
         )
 
+        if 'feed_quantity' in update_data:
+            from .cycle_store_service import CycleStoreService
+
+            CycleStoreService.validate_daily_feed_quantity(
+                cycle=cycle,
+                feed_quantity=update_data.get('feed_quantity'),
+                log_date=update_data.get('log_date') or log.log_date,
+                cycle_unit_allocation=cycle_unit_allocation,
+                existing_log=log,
+                feed_type=update_data.get('feed_type', log.feed_type),
+                feed_size_mm=update_data.get('feed_size_mm', log.feed_size_mm),
+            )
+
         # Validation des nouvelles données si mortalité modifiée
         if 'mortality_count' in update_data:
             new_mortality = update_data['mortality_count']
@@ -640,6 +654,18 @@ class CycleLogService(BaseService):
 
         # Validation paramètres environnementaux
         CycleLogService._validate_environmental_parameters(log_data)
+
+        if log_date:
+            from .cycle_store_service import CycleStoreService
+
+            CycleStoreService.validate_daily_feed_quantity(
+                cycle=cycle,
+                feed_quantity=log_data.get('feed_quantity'),
+                log_date=log_date,
+                cycle_unit_allocation=cycle_unit_allocation,
+                feed_type=log_data.get('feed_type'),
+                feed_size_mm=log_data.get('feed_size_mm'),
+            )
 
     @staticmethod
     def _validate_environmental_parameters(log_data: CycleLogPayload) -> None:

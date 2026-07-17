@@ -77,9 +77,11 @@ describe('CalibrateCycleScreen', () => {
       expect.objectContaining({
         alignSelf: 'stretch',
         includeFontPadding: false,
-        paddingBottom: 4,
+        paddingTop: 0,
+        paddingBottom: 0,
         textAlign: 'left',
         textAlignVertical: 'center',
+        transform: [{ translateY: 0 }],
       }),
     );
   });

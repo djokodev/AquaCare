@@ -215,6 +215,70 @@ describe('features/aquaculture/screens/ProductionUnitsHubScreen', () => {
     });
   });
 
+  it('ouvre un bac de calibrage avec son cycle technique interne', async () => {
+    mockGetCycleDashboard.mockResolvedValue({
+      cycle: { id: 'cycle-1', cycle_name: 'Cycle actif' },
+      summary: {
+        total_allocations: 1,
+        total_estimated_current_fish_count: 500,
+        total_mortality_count: 0,
+        total_feed_consumed_kg: '0.00',
+        estimated_current_biomass_kg: '2.50',
+        units_with_sanitary_issue_count: 0,
+        units_missing_today_log_count: 1,
+        has_allocations: true,
+        data_source: 'unit_allocations',
+      },
+      allocations: [{
+        allocation: {
+          id: 'calibration-allocation-1',
+          cycle: 'technical-calibration-cycle-1',
+          production_unit: 'calibration-unit-1',
+          production_unit_name: 'Bac calibrage 1',
+          production_unit_type: 'tank',
+          production_unit_display_dimension: '10 m³',
+          initial_fish_count: 0,
+          current_fish_count: 500,
+          created_at: '2026-07-17T00:00:00Z',
+          updated_at: '2026-07-17T00:00:00Z',
+        },
+        summary: {
+          estimated_current_fish_count: 500,
+          total_mortality_count: 0,
+          mortality_rate_pct: '0.00',
+          total_feed_consumed_kg: '0.00',
+          latest_average_weight_g: '5.00',
+          estimated_current_biomass_kg: '2.50',
+          biomass_data_available: true,
+          biomass_source: 'allocation_current',
+          estimated_market_value_fcfa: '5000.00',
+          last_daily_log_date: null,
+          days_since_last_log: null,
+          has_today_daily_log: false,
+          active_sanitary_issues_count: 0,
+          last_sanitary_event_date: null,
+          has_unresolved_sanitary_issue: false,
+        },
+        recent_daily_logs: [],
+        recent_sanitary_logs: [],
+      }],
+    });
+
+    const { getByText } = render(
+      <ProductionUnitsHubScreen navigation={navigation} route={route} />
+    );
+    await waitFor(() => expect(getByText('Bac calibrage 1')).toBeTruthy());
+
+    fireEvent.press(getByText('productionUnitsOpenUnit'));
+
+    expect(navigation.navigate).toHaveBeenCalledWith('ProductionUnitOverview', {
+      cycleId: 'technical-calibration-cycle-1',
+      allocationId: 'calibration-allocation-1',
+      productionUnitId: 'calibration-unit-1',
+      productionUnitName: 'Bac calibrage 1',
+    });
+  });
+
   it('affiche un loading initial avant de charger le dashboard', async () => {
     let resolveDashboard: (value: unknown) => void = () => undefined;
     mockGetCycleDashboard.mockReturnValueOnce(

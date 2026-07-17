@@ -145,6 +145,42 @@ class TestCalibrationService:
         assert destination.current_fish_count == 300
         assert destination.current_biomass_kg == Decimal('42.00')
 
+    def test_active_calibration_tank_cannot_mix_two_user_cycles(self, production_cycle):
+        from tests.fixtures.factories import ProductionCycleFactory
+
+        first_source = self.setup_source(production_cycle)
+        tank = self.create_tank(first_source)
+        self.calibrate(first_source, tank, transferred_count=100)
+        second_cycle = ProductionCycleFactory(
+            farm_profile=production_cycle.farm_profile,
+            species=production_cycle.species,
+            status='active',
+        )
+        second_cycle.initial_count = 1000
+        second_cycle.initial_average_weight = Decimal('100.00')
+        second_cycle.initial_biomass = Decimal('100.00')
+        second_cycle.current_count = 1000
+        second_cycle.current_average_weight = Decimal('100.00')
+        second_cycle.current_biomass = Decimal('100.00')
+        second_cycle.save()
+        second_unit = ProductionUnit.objects.create(
+            farm_profile=second_cycle.farm_profile,
+            name='Cage source secondaire',
+            unit_type='cage',
+            volume_m3=Decimal('10.00'),
+        )
+        second_source = CycleUnitAllocation.objects.create(
+            cycle=second_cycle,
+            production_unit=second_unit,
+            initial_fish_count=1000,
+            current_fish_count=1000,
+            initial_biomass_kg=Decimal('100.00'),
+            current_biomass_kg=Decimal('100.00'),
+        )
+
+        with pytest.raises(BusinessRuleViolation, match='autre cycle'):
+            self.calibrate(second_source, tank, transferred_count=100)
+
     def test_client_uuid_is_idempotent_and_conflicting_payload_is_rejected(self, production_cycle):
         source = self.setup_source(production_cycle)
         tank = self.create_tank(source)

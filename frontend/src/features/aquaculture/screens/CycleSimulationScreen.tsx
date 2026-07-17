@@ -97,13 +97,17 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
     (s: RootState) => s.farmSetup.cycleSimulation
   );
   const aquacultureState = useSelector((s: RootState) => s.aquaculture);
+  const farmSetupCompleted = useSelector(
+    (s: RootState) => s.auth?.farmProfile?.farm_setup_completed === true
+  );
   const { currentCycle, dashboardData } = aquacultureState ?? {};
   const [launching, setLaunching] = useState(false);
   const [currentResult, setCurrentResult] = useState<CycleSimulationResult | null>(
     cycleSimulationResult
   );
   const hasExistingCycle = Boolean(currentCycle || (dashboardData?.active_cycles?.length ?? 0) > 0);
-  const launchButtonLabel = hasExistingCycle
+  const requiresAdditionalCycleFlow = farmSetupCompleted || hasExistingCycle;
+  const launchButtonLabel = requiresAdditionalCycleFlow
     ? t('simulationLaunchAdditionalBtn')
     : t('simulationLaunchBtn');
   const productionUnitsDensityPreview = useMemo(
@@ -180,6 +184,24 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
 
   async function handleLaunchFirstCycle() {
     if (!currentResult) return;
+
+    const continueToAdditionalCycle = () => navigation.replace('NewCycle');
+    const showAdditionalCycleRedirect = () => {
+      Alert.alert(
+        t('additionalCycleRequiredTitle'),
+        t('additionalCycleRequiredMessage'),
+        [
+          { text: t('cancel'), style: 'cancel' },
+          { text: t('additionalCycleContinue'), onPress: continueToAdditionalCycle },
+        ]
+      );
+    };
+
+    if (requiresAdditionalCycleFlow) {
+      showAdditionalCycleRedirect();
+      return;
+    }
+
     setLaunching(true);
 
     try {
@@ -208,7 +230,13 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
         return;
       }
 
-      Alert.alert(t('error'), formatAquacultureErrorWithAction(parseApiError(err), t));
+      const parsedError = parseApiError(err);
+      if (parsedError.code === 'cycle_launch_mode_conflict') {
+        showAdditionalCycleRedirect();
+        return;
+      }
+
+      Alert.alert(t('error'), formatAquacultureErrorWithAction(parsedError, t));
     } finally {
       setLaunching(false);
     }

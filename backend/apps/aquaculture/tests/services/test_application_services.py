@@ -9,7 +9,13 @@ from uuid import uuid4
 
 import pytest
 from aquaculture.domain.exceptions import FeedingPlanGenerationError
-from aquaculture.models import CycleLog, CycleUnitAllocation, ProductionCycle, ProductionUnit
+from aquaculture.models import (
+    CycleFeedStockEntry,
+    CycleLog,
+    CycleUnitAllocation,
+    ProductionCycle,
+    ProductionUnit,
+)
 from aquaculture.services import (
     CycleLogApplicationService,
     DashboardApplicationService,
@@ -41,6 +47,15 @@ def create_cycle_unit_allocation(cycle, name='Bac 1'):
 @pytest.mark.django_db
 class TestCycleLogApplicationService:
     def test_create_or_update_log_updates_existing_log(self, authenticated_user, production_cycle):
+        CycleFeedStockEntry.objects.create(
+            cycle=production_cycle,
+            source='manual',
+            label='Stock test',
+            feed_size_mm=Decimal('2.00'),
+            quantity_kg=Decimal('20.00'),
+            total_cost_fcfa=Decimal('10000.00'),
+            entry_date=date.today(),
+        )
         existing_log = CycleLog.objects.create(
             cycle=production_cycle,
             log_date=date.today(),
@@ -54,6 +69,8 @@ class TestCycleLogApplicationService:
                 "log_date": date.today(),
                 "mortality_count": 5,
                 "feed_quantity": Decimal("2.5"),
+                "feed_type": "Stock test",
+                "feed_size_mm": Decimal("2.0"),
             },
         )
 
@@ -115,6 +132,47 @@ class TestCycleLogApplicationService:
         assert result.created is False
         assert result.log.id == existing_log.id
         assert existing_log.mortality_count == 5
+
+    def test_create_or_update_log_replaces_nullable_snapshot_fields(
+        self,
+        authenticated_user,
+        production_cycle,
+    ):
+        allocation = create_cycle_unit_allocation(production_cycle, 'Bac snapshot')
+        original_client_uuid = uuid4()
+        existing_log = CycleLog.objects.create(
+            cycle=production_cycle,
+            cycle_unit_allocation=allocation,
+            client_uuid=original_client_uuid,
+            log_date=date.today(),
+            mortality_count=2,
+            sample_count=20,
+            sample_total_weight=Decimal('1000.00'),
+            average_weight=Decimal('50.00'),
+            water_temperature=Decimal('28.00'),
+        )
+
+        result = CycleLogApplicationService.create_or_update_log(
+            user=authenticated_user,
+            validated_data={
+                "cycle": production_cycle,
+                "cycle_unit_allocation": allocation,
+                "client_uuid": uuid4(),
+                "log_date": date.today(),
+                "mortality_count": 0,
+                "sample_count": None,
+                "sample_total_weight": None,
+                "water_temperature": None,
+            },
+        )
+
+        existing_log.refresh_from_db()
+        assert result.created is False
+        assert existing_log.client_uuid == original_client_uuid
+        assert existing_log.sample_count is None
+        assert existing_log.sample_total_weight is None
+        assert existing_log.average_weight is None
+        assert existing_log.water_temperature is None
 
     def test_update_log_triggers_analytics_and_cache_invalidation(
         self,

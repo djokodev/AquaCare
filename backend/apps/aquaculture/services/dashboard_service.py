@@ -32,6 +32,7 @@ class DashboardService:
     """Construit les données agrégées du dashboard aquaculture."""
 
     CACHE_TTL_SECONDS = 60
+    CACHE_VERSION = 'v2-user-cycles'
 
     @staticmethod
     def build_dashboard_data(
@@ -45,9 +46,9 @@ class DashboardService:
 
         Returns None if cycle_id is provided but not found (caller should return 400).
         """
-        cache_key = f"dashboard:{user.id}"
+        cache_key = f"dashboard:{DashboardService.CACHE_VERSION}:{user.id}"
         if cycle_id:
-            cache_key = f"dashboard:{user.id}:{cycle_id}"
+            cache_key = f"{cache_key}:{cycle_id}"
         if lightweight:
             cache_key = f"{cache_key}:lite"
         cached = cache.get(cache_key)
@@ -60,7 +61,7 @@ class DashboardService:
         active_cycles_query = ProductionCycle.objects.filter(
             farm_profile__user=user,
             status='active',
-        )
+        ).user_visible()
 
         if lightweight:
             active_cycles = active_cycles_query.for_api()

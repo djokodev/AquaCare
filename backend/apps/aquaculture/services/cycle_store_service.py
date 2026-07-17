@@ -12,7 +12,9 @@ from commerce.models import Order, OrderItem
 from django.db import transaction
 from django.db.models import Sum
 from django.utils import timezone
+from django.utils.translation import gettext_lazy as _
 
+from ..domain.exceptions import FeedStockValidationError
 from ..models import CycleFeedStockEntry, CycleLog, ProductionCycle
 from .base import BaseService
 
@@ -44,13 +46,26 @@ class CycleStoreSummary(TypedDict):
     pending_orders_count: int
     pending_order_amount_fcfa: str
     pending_order_feed_kg: str
+    total_feed_needed_kg: str
+    feed_need_remaining_kg: str
+    secured_feed_kg: str
+    feed_to_secure_kg: str
     stock_tracking_started_at: date | None
+
+
+class CycleStoreStockItem(TypedDict):
+    label: str
+    feed_size_mm: str | None
+    quantity_added_kg: str
+    quantity_consumed_kg: str
+    quantity_available_kg: str
 
 
 class CycleStorePayload(TypedDict):
     cycle_id: str
     summary: CycleStoreSummary
     status: str
+    stock_items: list[CycleStoreStockItem]
     pending_orders: list[CycleStorePendingOrder]
     stock_tracking_started_at: date | None
 
@@ -124,6 +139,108 @@ class CycleStoreService(BaseService):
         return CycleStoreService._to_decimal(result['total'])
 
     @staticmethod
+    def _normalize_feed_label(value: str | None) -> str:
+        return ' '.join((value or '').strip().casefold().split())
+
+    @staticmethod
+    def _normalize_feed_size(value: Any) -> Decimal | None:
+        if value in (None, ''):
+            return None
+        return CycleStoreService._to_decimal(value).quantize(Decimal('0.01'))
+
+    @staticmethod
+    def _entry_feed_size(entry: CycleFeedStockEntry) -> Decimal | None:
+        if entry.feed_size_mm is not None:
+            return CycleStoreService._normalize_feed_size(entry.feed_size_mm)
+        product = getattr(entry, 'product', None)
+        return CycleStoreService._normalize_feed_size(
+            getattr(product, 'pellet_size_mm', None)
+        )
+
+    @staticmethod
+    def _feed_identity(label: str | None, feed_size_mm: Any) -> tuple[str, Decimal | None]:
+        return (
+            CycleStoreService._normalize_feed_label(label),
+            CycleStoreService._normalize_feed_size(feed_size_mm),
+        )
+
+    @staticmethod
+    def _get_consumption_queryset(cycle: ProductionCycle, since_date=None):
+        if cycle.unit_allocations.exists():
+            queryset = CycleLog.objects.filter(
+                cycle=cycle,
+                cycle_unit_allocation__isnull=False,
+            )
+        else:
+            queryset = CycleLog.objects.filter(
+                cycle=cycle,
+                cycle_unit_allocation__isnull=True,
+            )
+        if since_date is not None:
+            queryset = queryset.filter(log_date__gte=since_date)
+        return queryset
+
+    @staticmethod
+    def _build_stock_items(
+        *,
+        cycle: ProductionCycle,
+        entries: list[CycleFeedStockEntry],
+        stock_tracking_started_at: date | None,
+    ) -> list[CycleStoreStockItem]:
+        grouped: dict[tuple[str, Decimal | None], dict[str, Any]] = {}
+        for entry in entries:
+            size = CycleStoreService._entry_feed_size(entry)
+            identity = CycleStoreService._feed_identity(entry.label, size)
+            item = grouped.setdefault(
+                identity,
+                {
+                    'label': entry.label.strip(),
+                    'feed_size_mm': size,
+                    'quantity_added_kg': ZERO_DECIMAL,
+                    'quantity_consumed_kg': ZERO_DECIMAL,
+                },
+            )
+            item['quantity_added_kg'] += entry.quantity_kg
+
+        if stock_tracking_started_at is not None:
+            logs = CycleStoreService._get_consumption_queryset(
+                cycle,
+                stock_tracking_started_at,
+            ).exclude(feed_quantity__isnull=True)
+            for log in logs.only('feed_quantity', 'feed_type', 'feed_size_mm'):
+                identity = CycleStoreService._feed_identity(log.feed_type, log.feed_size_mm)
+                if identity in grouped:
+                    grouped[identity]['quantity_consumed_kg'] += CycleStoreService._to_decimal(
+                        log.feed_quantity
+                    )
+
+        result: list[CycleStoreStockItem] = []
+        for item in grouped.values():
+            available = max(
+                item['quantity_added_kg'] - item['quantity_consumed_kg'],
+                ZERO_DECIMAL,
+            )
+            result.append({
+                'label': item['label'],
+                'feed_size_mm': (
+                    str(CycleStoreService._quantize(item['feed_size_mm']))
+                    if item['feed_size_mm'] is not None
+                    else None
+                ),
+                'quantity_added_kg': str(
+                    CycleStoreService._quantize(item['quantity_added_kg'])
+                ),
+                'quantity_consumed_kg': str(
+                    CycleStoreService._quantize(item['quantity_consumed_kg'])
+                ),
+                'quantity_available_kg': str(CycleStoreService._quantize(available)),
+            })
+        return sorted(
+            result,
+            key=lambda item: (item['label'].casefold(), item['feed_size_mm'] or ''),
+        )
+
+    @staticmethod
     def _format_pending_order(order: Order) -> CycleStorePendingOrder:
         estimated_feed_kg = CycleStoreService._calculate_pending_order_feed_kg(order)
         return {
@@ -170,6 +287,26 @@ class CycleStoreService(BaseService):
             (CycleStoreService._calculate_pending_order_feed_kg(order) for order in pending_orders),
             ZERO_DECIMAL,
         )
+        from .cycle_feed_service import CycleFeedService
+
+        total_feed_needed_kg = CycleStoreService._to_decimal(
+            CycleFeedService.compute_total_feed_needed_kg(cycle)
+        )
+        total_cycle_feed_consumed_kg = CycleStoreService._to_decimal(
+            cycle.total_feed_consumed
+        )
+        feed_need_remaining_kg = max(
+            total_feed_needed_kg - total_cycle_feed_consumed_kg,
+            ZERO_DECIMAL,
+        )
+        available_stock_kg = max(estimated_feed_remaining_kg, ZERO_DECIMAL)
+        secured_feed_kg = available_stock_kg + pending_order_feed_kg
+        feed_to_secure_kg = max(feed_need_remaining_kg - secured_feed_kg, ZERO_DECIMAL)
+        stock_items = CycleStoreService._build_stock_items(
+            cycle=cycle,
+            entries=entries,
+            stock_tracking_started_at=stock_tracking_started_at,
+        )
 
         pending_orders_count = len(pending_orders)
         if not entries:
@@ -193,12 +330,106 @@ class CycleStoreService(BaseService):
                 'pending_orders_count': pending_orders_count,
                 'pending_order_amount_fcfa': str(CycleStoreService._quantize(pending_order_amount_fcfa)),
                 'pending_order_feed_kg': str(CycleStoreService._quantize(pending_order_feed_kg)),
+                'total_feed_needed_kg': str(CycleStoreService._quantize(total_feed_needed_kg)),
+                'feed_need_remaining_kg': str(CycleStoreService._quantize(feed_need_remaining_kg)),
+                'secured_feed_kg': str(CycleStoreService._quantize(secured_feed_kg)),
+                'feed_to_secure_kg': str(CycleStoreService._quantize(feed_to_secure_kg)),
                 'stock_tracking_started_at': stock_tracking_started_at,
             },
             'status': status,
+            'stock_items': stock_items,
             'pending_orders': [CycleStoreService._format_pending_order(order) for order in pending_orders],
             'stock_tracking_started_at': stock_tracking_started_at,
         }
+
+    @staticmethod
+    def validate_daily_feed_quantity(
+        *,
+        cycle: ProductionCycle,
+        feed_quantity: Decimal | None,
+        log_date: date,
+        cycle_unit_allocation=None,
+        existing_log: CycleLog | None = None,
+        feed_type: str | None = None,
+        feed_size_mm: Decimal | None = None,
+    ) -> None:
+        """Valide une ration contre le stock connu, y compris lors d'un upsert."""
+        quantity = CycleStoreService._to_decimal(feed_quantity)
+        if quantity <= ZERO_DECIMAL:
+            return
+
+        payload = CycleStoreService.get_store_payload(cycle)
+        tracking_started_at = payload['stock_tracking_started_at']
+        if tracking_started_at is None:
+            raise FeedStockValidationError(
+                code='feed_stock_not_started',
+                detail=_(
+                    "Déclarez d'abord votre stock d'aliment avant d'enregistrer une ration."
+                ),
+            )
+        if log_date < tracking_started_at:
+            raise FeedStockValidationError(
+                code='feed_log_before_stock_tracking',
+                detail=_(
+                    "Cette ration précède le début du suivi du stock d'aliment."
+                ),
+            )
+
+        if existing_log is None:
+            scope = {
+                'cycle': cycle,
+                'log_date': log_date,
+            }
+            if cycle_unit_allocation is None:
+                scope['cycle_unit_allocation__isnull'] = True
+            else:
+                scope['cycle_unit_allocation'] = cycle_unit_allocation
+            existing_log = CycleLog.objects.filter(**scope).first()
+
+        remaining = CycleStoreService._to_decimal(
+            payload['summary']['estimated_feed_remaining_kg']
+        )
+        previous_quantity = ZERO_DECIMAL
+        if (
+            existing_log is not None
+            and existing_log.feed_quantity is not None
+            and existing_log.log_date >= tracking_started_at
+        ):
+            previous_quantity = existing_log.feed_quantity
+
+        available_for_replacement = remaining + previous_quantity
+        requested_identity = CycleStoreService._feed_identity(feed_type, feed_size_mm)
+        stock_item = next(
+            (
+                item for item in payload['stock_items']
+                if CycleStoreService._feed_identity(
+                    item['label'], item['feed_size_mm']
+                ) == requested_identity
+            ),
+            None,
+        )
+        if stock_item is None:
+            raise FeedStockValidationError(
+                code='feed_stock_item_unavailable',
+                detail=_("Sélectionnez un aliment disponible dans votre stock."),
+            )
+        item_available = CycleStoreService._to_decimal(stock_item['quantity_available_kg'])
+        if existing_log is not None and CycleStoreService._feed_identity(
+            existing_log.feed_type,
+            existing_log.feed_size_mm,
+        ) == requested_identity:
+            item_available += previous_quantity
+        available_for_replacement = min(available_for_replacement, item_available)
+        if quantity > available_for_replacement:
+            raise FeedStockValidationError(
+                code='insufficient_feed_stock',
+                detail=_(
+                    "Stock insuffisant pour cette ration. Disponible : %(available)s kg."
+                ) % {'available': CycleStoreService._quantize(max(available_for_replacement, ZERO_DECIMAL))},
+                available_feed_kg=CycleStoreService._quantize(
+                    max(available_for_replacement, ZERO_DECIMAL)
+                ),
+            )
 
     @staticmethod
     @transaction.atomic
@@ -208,6 +439,7 @@ class CycleStoreService(BaseService):
         cycle: ProductionCycle,
         label: str,
         quantity_kg: Decimal,
+        feed_size_mm: Decimal,
         total_cost_fcfa: Decimal,
         entry_date,
         note: str = '',
@@ -218,11 +450,13 @@ class CycleStoreService(BaseService):
         CycleStoreService._ensure_cycle_owner(cycle, user)
 
         if quantity_kg <= ZERO_DECIMAL:
-            raise ValueError("La quantité doit être strictement positive.")
+            raise ValueError(_("La quantité doit être strictement positive."))
         if total_cost_fcfa < ZERO_DECIMAL:
-            raise ValueError("Le montant doit être positif ou nul.")
+            raise ValueError(_("Le montant doit être positif ou nul."))
         if not label or not label.strip():
-            raise ValueError("Le nom de l'aliment est requis.")
+            raise ValueError(_("Le nom de l'aliment est requis."))
+        if feed_size_mm < Decimal('0.1') or feed_size_mm > Decimal('20'):
+            raise ValueError(_("La granulométrie doit être comprise entre 0,1 et 20 mm."))
 
         cycle = ProductionCycle.objects.select_for_update().get(id=cycle.id)
         existing_entry = None
@@ -242,6 +476,7 @@ class CycleStoreService(BaseService):
             cycle=cycle,
             source=CycleFeedStockEntry.SOURCE_MANUAL,
             label=label.strip(),
+            feed_size_mm=CycleStoreService._normalize_feed_size(feed_size_mm),
             quantity_kg=CycleStoreService._to_decimal(quantity_kg),
             total_cost_fcfa=CycleStoreService._to_decimal(total_cost_fcfa),
             entry_date=entry_date,
@@ -294,6 +529,10 @@ class CycleStoreService(BaseService):
                 cycle=cycle,
                 source=CycleFeedStockEntry.SOURCE_ORDER,
                 label=order_item.product.name,
+                feed_size_mm=(
+                    order_item.product_pellet_size_mm_snapshot
+                    or order_item.product.pellet_size_mm
+                ),
                 quantity_kg=CycleStoreService._calculate_order_item_feed_kg(order_item),
                 total_cost_fcfa=CycleStoreService._to_decimal(order_item.line_total),
                 entry_date=timezone.localdate(),

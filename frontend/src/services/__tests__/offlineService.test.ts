@@ -79,6 +79,41 @@ describe('services/offlineService', () => {
     expect(savedLog.logData.sample_total_weight).toBe(2800);
   });
 
+  it('remplace la saisie offline non synchronisee du meme jour et de la meme unite', async () => {
+    const firstId = await offlineService.saveCycleLogOffline('cycle-1', {
+      log_date: '2026-07-17',
+      cycle_unit_allocation: 'allocation-1',
+      client_uuid: 'daily-log-1',
+      feed_quantity: 12.5,
+    } as any);
+
+    const replacementId = await offlineService.saveCycleLogOffline('cycle-1', {
+      log_date: '2026-07-17',
+      cycle_unit_allocation: 'allocation-1',
+      client_uuid: 'daily-log-2',
+      feed_quantity: 16.8,
+    } as any);
+
+    const logs = await offlineService.getOfflineCycleLogs();
+    expect(logs).toHaveLength(1);
+    expect(replacementId).toBe(firstId);
+    expect(logs[0].logData.client_uuid).toBe('daily-log-1');
+    expect(logs[0].logData.feed_quantity).toBe(16.8);
+  });
+
+  it('conserve des saisies offline separees pour deux unites', async () => {
+    await offlineService.saveCycleLogOffline('cycle-1', {
+      log_date: '2026-07-17',
+      cycle_unit_allocation: 'allocation-1',
+    } as any);
+    await offlineService.saveCycleLogOffline('cycle-1', {
+      log_date: '2026-07-17',
+      cycle_unit_allocation: 'allocation-2',
+    } as any);
+
+    expect(await offlineService.getOfflineCycleLogs()).toHaveLength(2);
+  });
+
   it('syncOfflineLogs synchronise succes/erreurs et met last_sync', async () => {
     await offlineService.saveCycleLogOffline('cycle-1', { log_date: '2026-02-20', mortality_count: 1 } as any);
     await offlineService.saveCycleLogOffline('cycle-2', { log_date: '2026-02-20', mortality_count: 3 } as any);
@@ -520,8 +555,14 @@ describe('services/offlineService', () => {
   it('marque uniquement les UUID acceptés pour les six files en partial_success', async () => {
     await offlineService.saveNewCycleOffline({ client_uuid: 'cycle-ok' } as any);
     await offlineService.saveNewCycleOffline({ client_uuid: 'cycle-ko' } as any);
-    await offlineService.saveCycleLogOffline('cycle-1', { client_uuid: 'log-ok' } as any);
-    await offlineService.saveCycleLogOffline('cycle-1', { client_uuid: 'log-ko' } as any);
+    await offlineService.saveCycleLogOffline('cycle-1', {
+      client_uuid: 'log-ok',
+      cycle_unit_allocation: 'allocation-1',
+    } as any);
+    await offlineService.saveCycleLogOffline('cycle-1', {
+      client_uuid: 'log-ko',
+      cycle_unit_allocation: 'allocation-2',
+    } as any);
     await offlineService.saveSanitaryLogOffline('cycle-1', { client_uuid: 'sanitary-ok' } as any);
     await offlineService.saveSanitaryLogOffline('cycle-1', { client_uuid: 'sanitary-ko' } as any);
     await offlineService.saveCalibrationTankOffline({ client_uuid: 'tank-ok', name: 'OK', volume_m3: 5 });

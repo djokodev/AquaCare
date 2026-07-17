@@ -131,13 +131,13 @@ export default function ProductionUnitsHubScreen({ navigation, route }: Props) {
   const handleOpenUnit = useCallback(
     (allocation: CycleUnitAllocation) => {
       navigation.navigate('ProductionUnitOverview', {
-        cycleId,
+        cycleId: allocation.cycle,
         allocationId: allocation.id,
         productionUnitId: allocation.production_unit,
         productionUnitName: allocation.production_unit_name?.trim() || t('productionUnitsUnknownUnit'),
       });
     },
-    [cycleId, navigation, t],
+    [navigation, t],
   );
 
   if (loading && !dashboard) {

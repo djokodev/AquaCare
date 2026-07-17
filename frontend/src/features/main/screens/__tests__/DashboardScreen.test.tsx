@@ -413,7 +413,7 @@ describe("features/main/screens/DashboardScreen", () => {
 
     fireEvent.press(getByText("createNewCycleDashboardTitle"));
 
-    expect(navigation.navigate).toHaveBeenCalledWith("CreateFarm");
+    expect(navigation.navigate).toHaveBeenCalledWith("NewCycle");
   });
 
   it("affiche un CTA vers les unites en production pour le cycle actif", async () => {

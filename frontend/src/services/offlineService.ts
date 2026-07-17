@@ -311,22 +311,36 @@ class OfflineService {
 
   async saveCycleLogOffline(cycleId: string, logData: DailyLogForm): Promise<string> {
     try {
-      const logId = this.generateOfflineId();
+      const logDate = logData.log_date || this.today();
+      const allocationId = logData.cycle_unit_allocation ?? null;
+      const existingLogs = await this.getOfflineCycleLogs();
+      const existingIndex = existingLogs.findIndex((log) =>
+        !log.synced &&
+        log.cycleId === cycleId &&
+        log.logData.log_date === logDate &&
+        (log.logData.cycle_unit_allocation ?? null) === allocationId,
+      );
+      const existingLog = existingIndex >= 0 ? existingLogs[existingIndex] : undefined;
+      const logId = existingLog?.id ?? this.generateOfflineId();
       const offlineLog: OfflineCycleLog = {
         id: logId,
         cycleId,
         logData: {
           ...logData,
-          log_date: logData.log_date || this.today(),
-          client_uuid: logData.client_uuid ?? this.generateClientUUID(),
+          log_date: logDate,
+          client_uuid: existingLog?.logData.client_uuid ?? logData.client_uuid ?? this.generateClientUUID(),
           created_offline: true,
         },
         timestamp: Date.now(),
         synced: false,
       };
 
-      const existingLogs = await this.getOfflineCycleLogs();
-      await this.persist(STORAGE_KEYS.OFFLINE_CYCLE_LOGS, [...existingLogs, offlineLog]);
+      if (existingIndex >= 0) {
+        existingLogs[existingIndex] = offlineLog;
+        await this.persist(STORAGE_KEYS.OFFLINE_CYCLE_LOGS, existingLogs);
+      } else {
+        await this.persist(STORAGE_KEYS.OFFLINE_CYCLE_LOGS, [...existingLogs, offlineLog]);
+      }
 
       logger.log('Log sauvegarde offline:', logId);
       return logId;

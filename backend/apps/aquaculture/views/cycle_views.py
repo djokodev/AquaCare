@@ -179,6 +179,9 @@ class ProductionCycleViewSet(viewsets.ModelViewSet):
         else:
             queryset = queryset.for_api()
 
+        if self.action == 'list':
+            queryset = queryset.user_visible()
+
         # Filtrage par status si spécifié dans les query parameters
         status_filter = self.request.query_params.get('status', None)
         if status_filter:
@@ -472,6 +475,7 @@ class ProductionCycleViewSet(viewsets.ModelViewSet):
                 "Déclaration manuelle",
                 value={
                     'label': 'Aliment starter 25kg',
+                    'feed_size_mm': '2.00',
                     'quantity_kg': '50.00',
                     'total_cost_fcfa': '75000.00',
                     'entry_date': '2026-06-29',
@@ -495,6 +499,7 @@ class ProductionCycleViewSet(viewsets.ModelViewSet):
                 cycle=cycle,
                 command=DeclareManualStockCommand(
                     label=serializer.validated_data['label'],
+                    feed_size_mm=serializer.validated_data['feed_size_mm'],
                     quantity_kg=serializer.validated_data['quantity_kg'],
                     total_cost_fcfa=serializer.validated_data['total_cost_fcfa'],
                     entry_date=serializer.validated_data['entry_date'],

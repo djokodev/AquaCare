@@ -246,8 +246,10 @@ const styles = StyleSheet.create({
   sourceUnitInput: {
     alignSelf: 'stretch',
     includeFontPadding: false,
-    paddingBottom: spacing[1],
+    paddingTop: 0,
+    paddingBottom: 0,
     textAlign: 'left',
     textAlignVertical: 'center',
+    transform: [{ translateY: 0 }],
   },
 });

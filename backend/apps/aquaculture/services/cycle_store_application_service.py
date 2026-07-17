@@ -16,6 +16,7 @@ class DeclareManualStockCommand:
 
     label: str
     quantity_kg: Decimal
+    feed_size_mm: Decimal
     total_cost_fcfa: Decimal
     entry_date: Any
     note: str = ''
@@ -44,6 +45,7 @@ class CycleStoreApplicationService:
             cycle=cycle,
             label=command.label,
             quantity_kg=command.quantity_kg,
+            feed_size_mm=command.feed_size_mm,
             total_cost_fcfa=command.total_cost_fcfa,
             entry_date=command.entry_date,
             note=command.note,

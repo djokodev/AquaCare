@@ -777,7 +777,7 @@ class SyncService(BaseService):
         # Get updated cycles (changed since last_sync)
         cycles_query = ProductionCycle.objects.for_api().filter(
             farm_profile__user=user
-        ).select_related(
+        ).user_visible().select_related(
             'farm_profile__user',
             'farm_profile__production_plan',
             'metrics',

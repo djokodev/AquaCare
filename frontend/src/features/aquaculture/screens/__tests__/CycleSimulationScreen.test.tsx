@@ -50,6 +50,7 @@ describe('features/aquaculture/screens/CycleSimulationScreen', () => {
   const createdProductionCycle = { id: 'cycle-1' } as unknown as ProductionCycle;
   const navigation = {
     goBack: jest.fn(),
+    replace: jest.fn(),
     reset: jest.fn(),
   } as any;
 
@@ -345,8 +346,10 @@ describe('features/aquaculture/screens/CycleSimulationScreen', () => {
   });
 
   it('affiche le CTA de lancement adapte quand un cycle existe deja', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined as never);
     (useSelector as unknown as jest.Mock).mockImplementation((selector: (state: any) => unknown) =>
       selector({
+        auth: { farmProfile: { farm_setup_completed: true } },
         aquaculture: {
           currentCycle: { id: 'cycle-existing' },
           dashboardData: { active_cycles: [{ id: 'cycle-existing' }] },
@@ -361,6 +364,24 @@ describe('features/aquaculture/screens/CycleSimulationScreen', () => {
     await waitFor(() => {
       expect(getByText('simulationLaunchAdditionalBtn')).toBeTruthy();
     });
+
+    fireEvent.press(getByText('simulationLaunchAdditionalBtn'));
+
+    expect(mockLaunchFirstCycle).not.toHaveBeenCalled();
+    expect(alertSpy).toHaveBeenCalledWith(
+      'additionalCycleRequiredTitle',
+      'additionalCycleRequiredMessage',
+      expect.any(Array),
+    );
+
+    const buttons = alertSpy.mock.calls[0][2];
+    const continueButton = buttons?.find(
+      (button) => button.text === 'additionalCycleContinue',
+    );
+    continueButton?.onPress?.();
+
+    expect(navigation.replace).toHaveBeenCalledWith('NewCycle');
+    alertSpy.mockRestore();
   });
 
   it('affiche un message lisible si la persistance du cycle echoue', async () => {

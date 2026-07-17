@@ -12,6 +12,7 @@ from uuid import uuid4
 
 import pytest
 from aquaculture.models import (
+    CycleFeedStockEntry,
     CycleLog,
     CycleUnitAllocation,
     FeedingPlan,
@@ -501,6 +502,66 @@ class TestProductionCycleViewSet:
             for item in response.data['allocations']
         )
         assert Decimal(str(response.data['summary']['estimated_market_value_fcfa'])) == unit_market_value
+
+    def test_cycle_dashboard_includes_linked_calibration_unit(self, auth_client, production_cycle):
+        """Le bac de calibrage reste une unité métier du cycle source."""
+        source = create_cycle_unit_allocation(production_cycle, name='Bac 1', volume_m3='10.00')
+        tank = ProductionUnit.objects.create(
+            farm_profile=production_cycle.farm_profile,
+            name='Bac calibrage 1',
+            unit_type='tank',
+            purpose=ProductionUnit.PURPOSE_CALIBRATION,
+            volume_m3=Decimal('10.00'),
+        )
+        operation, _, _ = CalibrationService.calibrate(
+            source_allocation=source,
+            destination_production_unit=tank,
+            user=production_cycle.farm_profile.user,
+            client_uuid=uuid4(),
+            calibrated_at=timezone.now().replace(second=0, microsecond=0),
+            transferred_count=200,
+            transferred_average_weight_g=Decimal('10.00'),
+        )
+
+        response = auth_client.get(
+            reverse('aquaculture:production-cycle-dashboard', kwargs={'pk': production_cycle.id})
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data['summary']['total_allocations'] == 2
+        assert response.data['summary']['total_estimated_current_fish_count'] == 900
+        allocations = {
+            item['allocation']['production_unit_name']: item['allocation']
+            for item in response.data['allocations']
+        }
+        assert set(allocations) == {'Bac 1', 'Bac calibrage 1'}
+        assert str(allocations['Bac calibrage 1']['cycle']) == str(operation.destination_allocation.cycle_id)
+
+    def test_cycle_list_hides_internal_calibration_sessions(self, auth_client, production_cycle):
+        """Changer de cycle ne doit proposer que les cycles utilisateur."""
+        source = create_cycle_unit_allocation(production_cycle, name='Bac source', volume_m3='10.00')
+        tank = ProductionUnit.objects.create(
+            farm_profile=production_cycle.farm_profile,
+            name='Bac calibrage 1',
+            unit_type='tank',
+            purpose=ProductionUnit.PURPOSE_CALIBRATION,
+            volume_m3=Decimal('10.00'),
+        )
+        CalibrationService.calibrate(
+            source_allocation=source,
+            destination_production_unit=tank,
+            user=production_cycle.farm_profile.user,
+            client_uuid=uuid4(),
+            calibrated_at=timezone.now().replace(second=0, microsecond=0),
+            transferred_count=100,
+            transferred_average_weight_g=Decimal('10.00'),
+        )
+
+        response = auth_client.get(reverse('aquaculture:production-cycle-list'))
+
+        assert response.status_code == status.HTTP_200_OK
+        cycle_rows = response.data.get('results', response.data)
+        assert [row['id'] for row in cycle_rows] == [str(production_cycle.id)]
 
     def test_cycle_dashboard_invalidates_partial_biomass_aggregation(self, auth_client, production_cycle):
         """Une unité sans biomasse rend les agrégats biomasse et valeur indisponibles."""
@@ -1463,12 +1524,23 @@ class TestCycleLogViewSet:
 
     def test_create_cycle_log(self, auth_client, production_cycle):
         """Test création log quotidien."""
+        CycleFeedStockEntry.objects.create(
+            cycle=production_cycle,
+            source='manual',
+            label='Dibaq 2mm',
+            feed_size_mm=Decimal('2.50'),
+            quantity_kg=Decimal('20.00'),
+            total_cost_fcfa=Decimal('10000.00'),
+            entry_date=date.today(),
+        )
         url = reverse('aquaculture:cycle-log-list')
         data = {
             'cycle': str(production_cycle.id),
             'log_date': date.today().isoformat(),
             'mortality_count': 3,
             'feed_quantity': '2.5',
+            'feed_type': 'Dibaq 2mm',
+            'feed_size_mm': '2.5',
             'water_temperature': '29.0',
             'ph_level': '7.1',
             'observations': 'Bon comportement général',
@@ -1479,6 +1551,43 @@ class TestCycleLogViewSet:
         assert response.status_code == status.HTTP_201_CREATED
         assert response.data['mortality_count'] == 3
         assert float(response.data['feed_quantity']) == 2.5
+
+    def test_create_cycle_log_rejects_feed_without_declared_stock(
+        self,
+        auth_client,
+        production_cycle,
+        farm_profile,
+    ):
+        unit = ProductionUnit.objects.create(
+            farm_profile=farm_profile,
+            name='Bac sans stock',
+            unit_type='tank',
+            volume_m3=Decimal('3.00'),
+        )
+        allocation = CycleUnitAllocation.objects.create(
+            cycle=production_cycle,
+            production_unit=unit,
+            initial_fish_count=500,
+            current_fish_count=500,
+            initial_biomass_kg=Decimal('5.00'),
+            current_biomass_kg=Decimal('5.00'),
+        )
+
+        response = auth_client.post(
+            reverse('aquaculture:cycle-log-list'),
+            {
+                'cycle': str(production_cycle.id),
+                'cycle_unit_allocation': str(allocation.id),
+                'log_date': date.today().isoformat(),
+                'mortality_count': 0,
+                'feed_quantity': '16.8',
+            },
+            format='json',
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.data['code'] == 'feed_stock_not_started'
+        assert response.data['field'] == 'feed_quantity'
 
     def test_create_cycle_log_without_allocation_keeps_legacy_flow(self, auth_client, production_cycle):
         """Le payload legacy sans allocation reste accepté."""
@@ -1496,6 +1605,15 @@ class TestCycleLogViewSet:
 
     def test_create_cycle_log_with_allocation(self, auth_client, production_cycle, farm_profile):
         """Test création log quotidien rattaché à une allocation."""
+        CycleFeedStockEntry.objects.create(
+            cycle=production_cycle,
+            source='manual',
+            label='Stock test',
+            feed_size_mm=Decimal('2.00'),
+            quantity_kg=Decimal('20.00'),
+            total_cost_fcfa=Decimal('10000.00'),
+            entry_date=date.today(),
+        )
         unit = ProductionUnit.objects.create(
             farm_profile=farm_profile,
             name='Bac 1',
@@ -1518,6 +1636,8 @@ class TestCycleLogViewSet:
             'log_date': date.today().isoformat(),
             'mortality_count': 3,
             'feed_quantity': '2.5',
+            'feed_type': 'Stock test',
+            'feed_size_mm': '2.0',
             'water_temperature': '29.0',
             'ph_level': '7.1',
             'observations': 'Bon comportement général',
@@ -1690,6 +1810,15 @@ class TestCycleLogViewSet:
 
     def test_create_cycle_log_with_environment_and_feeding_times(self, auth_client, production_cycle):
         """Le endpoint accepte les champs environnementaux et feeding_times."""
+        CycleFeedStockEntry.objects.create(
+            cycle=production_cycle,
+            source='manual',
+            label='Dibaq 2mm',
+            feed_size_mm=Decimal('2.50'),
+            quantity_kg=Decimal('20.00'),
+            total_cost_fcfa=Decimal('10000.00'),
+            entry_date=date.today(),
+        )
         url = reverse('aquaculture:cycle-log-list')
         data = {
             'cycle': str(production_cycle.id),
@@ -1719,6 +1848,16 @@ class TestCycleLogViewSet:
         """Test création bulk de logs (synchronisation)."""
         import uuid
 
+        CycleFeedStockEntry.objects.create(
+            cycle=production_cycle,
+            source='manual',
+            label='Stock test',
+            feed_size_mm=Decimal('2.00'),
+            quantity_kg=Decimal('20.00'),
+            total_cost_fcfa=Decimal('10000.00'),
+            entry_date=date.today() - timedelta(days=1),
+        )
+
         url = reverse('aquaculture:cycle-log-bulk-create')
         data = {
             'logs': [
@@ -1735,6 +1874,8 @@ class TestCycleLogViewSet:
                     'log_date': date.today().isoformat(),
                     'mortality_count': 1,
                     'feed_quantity': '2.0',
+                    'feed_type': 'Stock test',
+                    'feed_size_mm': '2.0',
                     'created_offline': True,
                 },
             ]
@@ -2561,6 +2702,32 @@ class TestDashboardView:
         assert response.data['active_cycles_count'] == 1
         assert response.data['total_fish_count'] > 0
         assert len(response.data['recent_logs']) > 0
+
+    def test_dashboard_does_not_expose_calibration_session_as_cycle(self, auth_client, production_cycle):
+        source = create_cycle_unit_allocation(production_cycle, name='Bac source', volume_m3='10.00')
+        tank = ProductionUnit.objects.create(
+            farm_profile=production_cycle.farm_profile,
+            name='Bac calibrage 1',
+            unit_type='tank',
+            purpose=ProductionUnit.PURPOSE_CALIBRATION,
+            volume_m3=Decimal('10.00'),
+        )
+        CalibrationService.calibrate(
+            source_allocation=source,
+            destination_production_unit=tank,
+            user=production_cycle.farm_profile.user,
+            client_uuid=uuid4(),
+            calibrated_at=timezone.now().replace(second=0, microsecond=0),
+            transferred_count=100,
+            transferred_average_weight_g=Decimal('10.00'),
+        )
+        cache.clear()
+
+        response = auth_client.get(reverse('aquaculture:dashboard'), {'lightweight': 'true'})
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data['active_cycles_count'] == 1
+        assert [row['id'] for row in response.data['active_cycles']] == [str(production_cycle.id)]
 
     def test_dashboard_uses_six_queries(self, authenticated_client, production_cycle, django_assert_num_queries):
         """Le dashboard doit rester sur un budget de requêtes stable."""
