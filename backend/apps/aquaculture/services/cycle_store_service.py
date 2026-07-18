@@ -92,8 +92,9 @@ class CycleStoreService(BaseService):
 
     @staticmethod
     def _can_import_order_item(order_item: OrderItem) -> bool:
-        product = order_item.product
-        package_weight = getattr(product, 'package_weight_kg', None)
+        package_weight = order_item.product_package_weight_kg_snapshot
+        if package_weight is None:
+            package_weight = getattr(order_item.product, 'package_weight_kg', None)
         if package_weight is None:
             return False
         try:
@@ -103,10 +104,12 @@ class CycleStoreService(BaseService):
 
     @staticmethod
     def _calculate_order_item_feed_kg(order_item: OrderItem) -> Decimal:
-        product = order_item.product
         if not CycleStoreService._can_import_order_item(order_item):
             return ZERO_DECIMAL
-        return CycleStoreService._to_decimal(product.package_weight_kg) * CycleStoreService._to_decimal(
+        package_weight = order_item.product_package_weight_kg_snapshot
+        if package_weight is None:
+            package_weight = order_item.product.package_weight_kg
+        return CycleStoreService._to_decimal(package_weight) * CycleStoreService._to_decimal(
             order_item.quantity
         )
 
@@ -528,10 +531,11 @@ class CycleStoreService(BaseService):
             entry = CycleFeedStockEntry.objects.create(
                 cycle=cycle,
                 source=CycleFeedStockEntry.SOURCE_ORDER,
-                label=order_item.product.name,
+                label=order_item.product_name or order_item.product.name,
                 feed_size_mm=(
                     order_item.product_pellet_size_mm_snapshot
-                    or order_item.product.pellet_size_mm
+                    if order_item.product_pellet_size_mm_snapshot is not None
+                    else order_item.product.pellet_size_mm
                 ),
                 quantity_kg=CycleStoreService._calculate_order_item_feed_kg(order_item),
                 total_cost_fcfa=CycleStoreService._to_decimal(order_item.line_total),

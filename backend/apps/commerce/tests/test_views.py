@@ -373,6 +373,56 @@ class TestOrderViewSet:
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert "message" in response.data
 
+    def test_confirm_receipt_pickup_ready_for_pickup(self, authenticated_client, test_farm, test_product):
+        create_response = authenticated_client.post("/api/commerce/orders/", {
+            "items": [{"product_id": str(test_product.id), "quantity": 1}],
+            "delivery_method": "pickup",
+            "pickup_location": "ndogpasi",
+        }, format="json")
+        order_id = create_response.data["id"]
+        Order.objects.filter(id=order_id).update(status="ready_for_pickup")
+
+        response = authenticated_client.post(f"/api/commerce/orders/{order_id}/confirm_receipt/")
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["status"] == "received"
+        assert response.data["received_at"] is not None
+
+    def test_confirm_receipt_received_replay_returns_200(self, authenticated_client, test_farm, test_product):
+        create_response = authenticated_client.post("/api/commerce/orders/", {
+            "items": [{"product_id": str(test_product.id), "quantity": 1}],
+            "delivery_method": "home",
+        }, format="json")
+        order_id = create_response.data["id"]
+        Order.objects.filter(id=order_id).update(status="received")
+
+        response = authenticated_client.post(f"/api/commerce/orders/{order_id}/confirm_receipt/")
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["status"] == "received"
+
+    def test_confirm_receipt_rejects_another_owner(
+        self, api_client, authenticated_client, test_farm, test_product
+    ):
+        create_response = authenticated_client.post("/api/commerce/orders/", {
+            "items": [{"product_id": str(test_product.id), "quantity": 1}],
+            "delivery_method": "home",
+        }, format="json")
+        order_id = create_response.data["id"]
+        Order.objects.filter(id=order_id).update(status="delivered")
+        other_user = User.objects.create_user(
+            phone_number="+237100200301",
+            password="testpass123",
+            first_name="Other",
+            last_name="Owner",
+            age_group="26_35",
+        )
+        api_client.force_authenticate(user=other_user)
+
+        response = api_client.post(f"/api/commerce/orders/{order_id}/confirm_receipt/")
+
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
     def test_order_mutation_methods_are_blocked(self, authenticated_client, test_farm, test_product):
         create_response = authenticated_client.post("/api/commerce/orders/", {
             "items": [{"product_id": str(test_product.id), "quantity": 1}],

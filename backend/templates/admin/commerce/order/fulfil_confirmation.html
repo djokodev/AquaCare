@@ -1,0 +1,57 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block content %}
+  <div id="content-main">
+    <h1>{{ action_label }}</h1>
+    <p>{% trans "Vérifiez les informations avant de confirmer cette action logistique." %}</p>
+
+    <fieldset class="module aligned">
+      <div class="form-row"><strong>{% trans "Commande" %}</strong> : {{ order.order_number }}</div>
+      <div class="form-row"><strong>{% trans "Ferme" %}</strong> : {{ order.farm_profile.farm_name }}</div>
+      <div class="form-row"><strong>{% trans "Client" %}</strong> : {{ order.user.display_name }}</div>
+      <div class="form-row">
+        <strong>{% trans "Cycle" %}</strong> :
+        {% if order.production_cycle %}{{ order.production_cycle }}{% else %}{% trans "Aucun cycle associé" %}{% endif %}
+      </div>
+      <div class="form-row">
+        <strong>{% trans "Mode et destination" %}</strong> :
+        {{ order.get_delivery_method_display }}
+        {% if order.pickup_location %}— {{ order.get_pickup_location_display }}{% else %}— {{ order.delivery_full_address }}{% endif %}
+      </div>
+      <div class="form-row"><strong>{% trans "Nombre de sacs" %}</strong> : {{ order.total_bags }}</div>
+      <div class="form-row"><strong>{% trans "Total" %}</strong> : {{ order.total|floatformat:0 }} FCFA</div>
+    </fieldset>
+
+    <h2>{% trans "Articles" %}</h2>
+    <table>
+      <thead><tr><th>{% trans "Produit" %}</th><th>{% trans "Quantité" %}</th><th>{% trans "Total" %}</th></tr></thead>
+      <tbody>
+        {% for item in items %}
+          <tr><td>{{ item.product_name }}</td><td>{{ item.quantity }}</td><td>{{ item.line_total|floatformat:0 }} FCFA</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <p class="messagelist warning">
+      {% if order.delivery_method == "home" %}
+        {% trans "Le client sera invité à confirmer la réception de la commande." %}
+      {% else %}
+        {% trans "Le client sera invité à confirmer le retrait de la commande." %}
+      {% endif %}
+    </p>
+    {% if not order.production_cycle %}
+      <p class="errornote">
+        {% trans "Aucun cycle associé — cette commande ne générera pas d'entrée automatique dans un magasin de cycle." %}
+      </p>
+    {% endif %}
+
+    <form method="post">
+      {% csrf_token %}
+      <div class="submit-row">
+        <input type="submit" class="default" value="{{ action_label }}">
+        <a href="{% url 'admin:commerce_order_change' order.pk %}" class="button cancel-link">{% trans "Annuler" %}</a>
+      </div>
+    </form>
+  </div>
+{% endblock %}

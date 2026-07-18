@@ -44,7 +44,13 @@ import { RootState } from '@/store/store';
 import { CycleStore } from '@/types/aquaculture';
 import { sanitizeUserFacingErrorMessage } from '@/utils/errorParser';
 import { parseLocalizedNumber } from '@/utils/localizedNumber';
-import { getOrderStatusLabelKey } from '@/features/commerce/utils/orderStatus';
+import commerceApi from '@/features/commerce/services/commerceApi';
+import {
+  canConfirmOrderReceipt,
+  getOrderReceiptActionLabelKey,
+  getOrderStatusLabelKey,
+  getOrderStatusTone,
+} from '@/features/commerce/utils/orderStatus';
 import { useDashboardSyncStatus } from '@/hooks/useDashboardSyncStatus';
 import { dashboardSyncService } from '@/services/dashboardSyncService';
 
@@ -116,6 +122,7 @@ export default function StoreScreen() {
   const [error, setError] = useState<string | null>(null);
   const [manualModalVisible, setManualModalVisible] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [confirmingOrderId, setConfirmingOrderId] = useState<string | null>(null);
   const [label, setLabel] = useState('');
   const [feedSizeMm, setFeedSizeMm] = useState('');
   const [quantityKg, setQuantityKg] = useState('');
@@ -123,6 +130,7 @@ export default function StoreScreen() {
   const [entryDate, setEntryDate] = useState(todayIsoDate());
   const [note, setNote] = useState('');
   const submissionLock = useRef(false);
+  const confirmationLock = useRef(false);
   const loadRequestRef = useRef(0);
   const { lastSyncedAt, refreshLastSyncedAt } = useDashboardSyncStatus('store', cycleId);
   const locale = i18n.language?.startsWith('fr') ? 'fr-FR' : 'en-US';
@@ -256,6 +264,37 @@ export default function StoreScreen() {
     }
   };
 
+  const handleConfirmPendingOrder = useCallback((order: CycleStore['pending_orders'][number]) => {
+    const isPickup = order.delivery_method === 'pickup';
+    const title = t(isPickup ? 'confirmPickupTitle' : 'confirmReceiptTitle');
+    const message = `${t(
+      isPickup ? 'confirmPickupMessage' : 'confirmReceiptMessage',
+      { orderNumber: order.order_number },
+    )}\n\n${t('confirmOrderCycleStockMessage')}`;
+
+    Alert.alert(title, message, [
+      { text: t('cancel'), style: 'cancel' },
+      {
+        text: t('confirm'),
+        onPress: async () => {
+          if (confirmationLock.current) return;
+          try {
+            confirmationLock.current = true;
+            setConfirmingOrderId(order.id);
+            await commerceApi.confirmOrderReceipt(order.id);
+            await loadStore(true);
+            Alert.alert(t('success'), t(isPickup ? 'confirmPickupSuccess' : 'confirmReceiptSuccess'));
+          } catch (caughtError) {
+            Alert.alert(t('error'), extractErrorMessage(caughtError, t('confirmReceiptError')));
+          } finally {
+            confirmationLock.current = false;
+            setConfirmingOrderId(null);
+          }
+        },
+      },
+    ]);
+  }, [loadStore, t]);
+
   const feedToSecureKg = parseDashboardNumber(store?.summary.feed_to_secure_kg);
   const requiresReplenishment = feedToSecureKg !== null && feedToSecureKg > 0;
 
@@ -381,9 +420,25 @@ export default function StoreScreen() {
                     <AppText variant="label" color="link">
                       {formatDashboardCurrency(order.total_fcfa, locale)} {t('dashboardDirectProductionCostUnit')}
                     </AppText>
-                    <Badge label={t(getOrderStatusLabelKey(order.status))} tone="info" />
+                    <Badge
+                      label={t(getOrderStatusLabelKey(order.status, order.delivery_method))}
+                      tone={getOrderStatusTone(order)}
+                    />
                   </View>
                 </View>
+                {canConfirmOrderReceipt(order) ? (
+                  <View style={styles.pendingOrderAction}>
+                    <AppText variant="helper" color="warning">
+                      {t('orderConfirmationPendingHelp')}
+                    </AppText>
+                    <Button
+                      label={t(getOrderReceiptActionLabelKey(order))}
+                      loading={confirmingOrderId === order.id}
+                      disabled={Boolean(confirmingOrderId) && confirmingOrderId !== order.id}
+                      onPress={() => handleConfirmPendingOrder(order)}
+                    />
+                  </View>
+                ) : null}
               </Card>
             )) : <EmptyState compact title={t('storePendingOrdersEmptyTitle')} message={t('storePendingOrdersEmptyDescription')} />}
           </Card>
@@ -442,6 +497,7 @@ const styles = StyleSheet.create({
   sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   orderCard: { padding: spacing[3] },
   orderHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing[3] },
+  pendingOrderAction: { marginTop: spacing[3], gap: spacing[2] },
   orderAmount: { alignItems: 'flex-end', gap: spacing[1] },
   stockItem: { flexDirection: 'row', alignItems: 'center', gap: spacing[3], paddingVertical: spacing[2] },
   actionList: { gap: spacing[3] },

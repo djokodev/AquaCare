@@ -4,6 +4,7 @@
  */
 
 import { Notification as NotificationPayload } from "./notifications";
+import type { DeliveryMethod, OrderStatus } from "./commerce";
 
 // =================== TYPES DE BASE ===================
 
@@ -979,8 +980,8 @@ export type CycleStoreStatus = "not_started" | "low" | "check_stock" | "ok";
 export interface CycleStorePendingOrder {
   id: string;
   order_number: string;
-  status: string;
-  delivery_method: string;
+  status: OrderStatus;
+  delivery_method: DeliveryMethod;
   total_bags: number;
   total_fcfa: string;
   estimated_feed_kg: string;

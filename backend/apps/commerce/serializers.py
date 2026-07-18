@@ -76,6 +76,8 @@ class OrderSerializer(serializers.ModelSerializer):
         model = Order
         fields = [
             'id', 'order_number', 'status',
+            'delivered_at', 'delivered_by',
+            'ready_for_pickup_at', 'ready_for_pickup_by', 'received_at',
             'user', 'user_name', 'farm_profile', 'farm_name',
             'production_cycle_id',
             'delivery_method', 'pickup_location',
@@ -89,6 +91,8 @@ class OrderSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = [
             'id', 'order_number', 'status', 'user', 'farm_profile',
+            'delivered_at', 'delivered_by',
+            'ready_for_pickup_at', 'ready_for_pickup_by', 'received_at',
             'subtotal', 'delivery_fee', 'total',
             'created_at', 'updated_at', 'synced_at'
         ]

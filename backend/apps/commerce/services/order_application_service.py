@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 from ..domain.validators import DeliveryMethod, OrderItemPayload
 from ..models import Order
-from .order_service import OrderService
+from .order_service import OperatorOrderTransitionResult, OrderService
 
 if TYPE_CHECKING:
     from accounts.models import User
@@ -63,6 +63,14 @@ class OrderApplicationService:
     def confirm_order_receipt(order: Order, user: User) -> Order:
         """Execute le use case de confirmation de reception."""
         return OrderService.confirm_order_receipt(order, user)
+
+    @staticmethod
+    def mark_order_ready_for_customer_confirmation(
+        order: Order,
+        operator: User,
+    ) -> OperatorOrderTransitionResult:
+        """Exécute la transition logistique réservée aux opérateurs Commerce."""
+        return OrderService.mark_order_ready_for_customer_confirmation(order, operator)
 
     @staticmethod
     def preview_delivery_fee(

@@ -4,13 +4,15 @@ Coverage: ProductService, OrderService, FeedingSuggestionService.
 """
 from datetime import timedelta
 from decimal import Decimal
+from unittest.mock import patch
 from uuid import uuid4
 
 import pytest
 from accounts.models import FarmProfile, User
 from aquaculture.models import CycleFeedStockEntry, CycleLog, ProductionCycle
+from aquaculture.services.cycle_store_application_service import CycleStoreApplicationService
 from commerce.domain.exceptions import InvalidOrderError, ProductNotAvailableError, ProductNotFoundError
-from commerce.models import Product
+from commerce.models import Order, Product
 from commerce.services import (
     CatalogApplicationService,
     CreateOrderCommand,
@@ -23,6 +25,7 @@ from commerce.services import (
     RecommendedProductQuery,
 )
 from commerce.services.pdf_service import OrderDocumentService
+from django.contrib.auth.models import Group
 from django.utils import timezone
 
 
@@ -575,6 +578,309 @@ class TestOrderService:
 
         with pytest.raises(InvalidOrderError):
             OrderService.confirm_order_receipt(order, test_user)
+
+    @pytest.fixture
+    def commerce_operator(self):
+        operator = User.objects.create_user(
+            phone_number="+237111222334",
+            password="testpass123",
+            first_name="Commerce",
+            last_name="Operator",
+            age_group="26_35",
+            is_staff=True,
+        )
+        group, _ = Group.objects.get_or_create(name="aquacare_commerce")
+        operator.groups.add(group)
+        return operator
+
+    @staticmethod
+    def _create_cycle(test_farm):
+        return ProductionCycle.objects.create(
+            farm_profile=test_farm,
+            cycle_name="Cycle Workflow",
+            species="tilapia",
+            pond_identifier=f"Pond-{uuid4().hex[:6]}",
+            pond_surface_m2=Decimal("120.0"),
+            start_date=timezone.now().date(),
+            initial_count=1000,
+            initial_average_weight=Decimal("5.0"),
+            initial_biomass=Decimal("5.0"),
+            current_count=950,
+            current_average_weight=Decimal("50.0"),
+            current_biomass=Decimal("47.5"),
+            status="active",
+        )
+
+    def test_operator_transition_home_is_audited_and_idempotent(
+        self,
+        test_user,
+        test_farm,
+        test_product,
+        commerce_operator,
+        django_capture_on_commit_callbacks,
+    ):
+        order = OrderService.create_order(
+            user=test_user,
+            items_data=[{"product_id": str(test_product.id), "quantity": 1}],
+            delivery_method="home",
+        )
+
+        with patch.object(OrderService, "_notify_order_ready_for_customer_confirmation") as notify:
+            with django_capture_on_commit_callbacks(execute=True):
+                first = OrderService.mark_order_ready_for_customer_confirmation(order, commerce_operator)
+            with django_capture_on_commit_callbacks(execute=True):
+                replay = OrderService.mark_order_ready_for_customer_confirmation(order, commerce_operator)
+
+        assert first.transitioned is True
+        assert replay.transitioned is False
+        assert first.order.status == "delivered"
+        assert first.order.delivered_at is not None
+        assert first.order.delivered_by_id == commerce_operator.id
+        notify.assert_called_once()
+
+    def test_operator_transition_pickup_uses_ready_for_pickup(
+        self, test_user, test_farm, test_product, commerce_operator
+    ):
+        order = OrderService.create_order(
+            user=test_user,
+            items_data=[{"product_id": str(test_product.id), "quantity": 1}],
+            delivery_method="pickup",
+            pickup_location="ndogpasi",
+        )
+
+        result = OrderService.mark_order_ready_for_customer_confirmation(order, commerce_operator)
+
+        assert result.order.status == "ready_for_pickup"
+        assert result.order.ready_for_pickup_at is not None
+        assert result.order.ready_for_pickup_by_id == commerce_operator.id
+
+    def test_non_commerce_actor_cannot_transition_order(
+        self, test_user, test_farm, test_product
+    ):
+        order = OrderService.create_order(
+            user=test_user,
+            items_data=[{"product_id": str(test_product.id), "quantity": 1}],
+            delivery_method="home",
+        )
+
+        with pytest.raises(InvalidOrderError, match="autorisé"):
+            OrderService.mark_order_ready_for_customer_confirmation(order, test_user)
+
+    def test_received_order_is_terminal_for_operator(
+        self, test_user, test_farm, test_product, commerce_operator
+    ):
+        order = OrderService.create_order(
+            user=test_user,
+            items_data=[{"product_id": str(test_product.id), "quantity": 1}],
+            delivery_method="home",
+        )
+        Order.objects.filter(pk=order.pk).update(status="received")
+
+        with pytest.raises(InvalidOrderError, match="ne peut plus"):
+            OrderService.mark_order_ready_for_customer_confirmation(order, commerce_operator)
+
+    def test_pickup_notification_contains_navigation_metadata(
+        self, test_user, test_farm, test_product
+    ):
+        test_user.language_preference = "en"
+        test_user.save(update_fields=["language_preference"])
+        order = OrderService.create_order(
+            user=test_user,
+            items_data=[{"product_id": str(test_product.id), "quantity": 1}],
+            delivery_method="pickup",
+            pickup_location="ndogpasi",
+        )
+
+        with patch("notifications.services.NotificationService.create_notification") as create_notification:
+            OrderService._notify_order_ready_for_customer_confirmation(order)
+
+        kwargs = create_notification.call_args.kwargs
+        assert kwargs["notification_type"] == "order_ready_for_pickup"
+        assert kwargs["title"] == "Order ready for pickup"
+        assert kwargs["channels"] == ["in_app", "push"]
+        assert kwargs["metadata"] == {
+            "order_id": str(order.id),
+            "order_number": order.order_number,
+            "delivery_method": "pickup",
+            "pickup_location": "ndogpasi",
+            "production_cycle_id": None,
+            "action": "confirm_receipt",
+        }
+
+    def test_home_notification_is_localized_and_contains_navigation_metadata(
+        self, test_user, test_farm, test_product
+    ):
+        order = OrderService.create_order(
+            user=test_user,
+            items_data=[{"product_id": str(test_product.id), "quantity": 1}],
+            delivery_method="home",
+        )
+
+        with patch("notifications.services.NotificationService.create_notification") as create_notification:
+            OrderService._notify_order_ready_for_customer_confirmation(order)
+
+        kwargs = create_notification.call_args.kwargs
+        assert kwargs["notification_type"] == "order_delivered"
+        assert kwargs["title"] == "Commande livrée"
+        assert order.order_number in kwargs["message"]
+        assert kwargs["channels"] == ["in_app", "push"]
+        assert kwargs["metadata"]["order_id"] == str(order.id)
+        assert kwargs["metadata"]["action"] == "confirm_receipt"
+
+    def test_notification_failure_does_not_roll_back_operator_transition(
+        self,
+        test_user,
+        test_farm,
+        test_product,
+        commerce_operator,
+        django_capture_on_commit_callbacks,
+        caplog,
+    ):
+        order = OrderService.create_order(
+            user=test_user,
+            items_data=[{"product_id": str(test_product.id), "quantity": 1}],
+            delivery_method="home",
+        )
+
+        with patch(
+            "notifications.services.NotificationService.create_notification",
+            side_effect=RuntimeError("push unavailable"),
+        ), django_capture_on_commit_callbacks(execute=True):
+            result = OrderService.mark_order_ready_for_customer_confirmation(
+                order,
+                commerce_operator,
+            )
+
+        result.order.refresh_from_db()
+        assert result.order.status == "delivered"
+        assert "notification failed" in caplog.text
+
+    @pytest.mark.parametrize(
+        ("delivery_method", "intermediate_status"),
+        [("home", "delivered"), ("pickup", "ready_for_pickup")],
+    )
+    def test_customer_confirmation_supports_both_fulfilment_methods(
+        self,
+        test_user,
+        test_farm,
+        test_product,
+        delivery_method,
+        intermediate_status,
+    ):
+        order = OrderService.create_order(
+            user=test_user,
+            items_data=[{"product_id": str(test_product.id), "quantity": 1}],
+            delivery_method=delivery_method,
+            pickup_location="ndogpasi" if delivery_method == "pickup" else None,
+        )
+        Order.objects.filter(pk=order.pk).update(status=intermediate_status)
+
+        updated = OrderService.confirm_order_receipt(order, test_user)
+
+        assert updated.status == "received"
+        assert updated.received_at is not None
+
+    def test_customer_confirmation_rejects_method_status_mismatch(
+        self, test_user, test_farm, test_product
+    ):
+        order = OrderService.create_order(
+            user=test_user,
+            items_data=[{"product_id": str(test_product.id), "quantity": 1}],
+            delivery_method="pickup",
+            pickup_location="ndogpasi",
+        )
+        Order.objects.filter(pk=order.pk).update(status="delivered")
+
+        with pytest.raises(InvalidOrderError):
+            OrderService.confirm_order_receipt(order, test_user)
+
+    def test_customer_confirmation_requires_order_owner(
+        self, test_user, test_farm, test_product
+    ):
+        order = OrderService.create_order(
+            user=test_user,
+            items_data=[{"product_id": str(test_product.id), "quantity": 1}],
+            delivery_method="home",
+        )
+        Order.objects.filter(pk=order.pk).update(status="delivered")
+        other_user = User.objects.create_user(
+            phone_number="+237111222336",
+            password="testpass123",
+            first_name="Other",
+            last_name="Owner",
+            age_group="26_35",
+        )
+
+        with pytest.raises(InvalidOrderError, match="accès"):
+            OrderService.confirm_order_receipt(order, other_user)
+
+    def test_confirmation_rolls_back_when_stock_import_fails(
+        self, test_user, test_farm, test_product
+    ):
+        order = OrderService.create_order(
+            user=test_user,
+            items_data=[{"product_id": str(test_product.id), "quantity": 1}],
+            delivery_method="home",
+        )
+        Order.objects.filter(pk=order.pk).update(status="delivered")
+
+        with patch.object(
+            CycleStoreApplicationService,
+            "import_received_order",
+            side_effect=RuntimeError("stock unavailable"),
+        ), pytest.raises(RuntimeError, match="stock unavailable"):
+            OrderService.confirm_order_receipt(order, test_user)
+
+        order.refresh_from_db()
+        assert order.status == "delivered"
+        assert order.received_at is None
+
+    def test_received_replay_repairs_snapshot_stock_without_duplicates(
+        self, test_user, test_farm, test_product
+    ):
+        cycle = self._create_cycle(test_farm)
+        test_product.package_weight_kg = 15
+        test_product.name = "Nom catalogue initial"
+        test_product.pellet_size_mm = Decimal("2.00")
+        test_product.save(update_fields=["package_weight_kg", "name", "pellet_size_mm"])
+        order = OrderService.create_order(
+            user=test_user,
+            items_data=[{"product_id": str(test_product.id), "quantity": 10}],
+            delivery_method="home",
+            production_cycle_id=str(cycle.id),
+        )
+        Order.objects.filter(pk=order.pk).update(status="delivered")
+        test_product.package_weight_kg = 20
+        test_product.name = "Nom catalogue modifié"
+        test_product.pellet_size_mm = Decimal("4.00")
+        test_product.save(update_fields=["package_weight_kg", "name", "pellet_size_mm"])
+
+        first = OrderService.confirm_order_receipt(order, test_user)
+        replay = OrderService.confirm_order_receipt(first, test_user)
+
+        assert replay.status == "received"
+        assert CycleFeedStockEntry.objects.filter(order=order).count() == 1
+        entry = CycleFeedStockEntry.objects.get(order=order)
+        assert entry.quantity_kg == Decimal("150.00")
+        assert entry.label == "Nom catalogue initial"
+        assert entry.feed_size_mm == Decimal("2.00")
+        assert entry.total_cost_fcfa == order.items.get().line_total
+
+    def test_received_order_without_cycle_is_idempotent(
+        self, test_user, test_farm, test_product
+    ):
+        order = OrderService.create_order(
+            user=test_user,
+            items_data=[{"product_id": str(test_product.id), "quantity": 1}],
+            delivery_method="home",
+        )
+        Order.objects.filter(pk=order.pk).update(status="delivered")
+
+        first = OrderService.confirm_order_receipt(order, test_user)
+        replay = OrderService.confirm_order_receipt(first, test_user)
+
+        assert replay.status == "received"
+        assert CycleFeedStockEntry.objects.filter(order=order).count() == 0
 
 
 @pytest.mark.django_db

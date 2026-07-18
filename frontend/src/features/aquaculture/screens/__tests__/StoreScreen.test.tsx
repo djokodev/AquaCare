@@ -10,6 +10,7 @@ const mockGoBack = jest.fn();
 const mockDispatch = jest.fn();
 const mockGetCycleStore = jest.fn();
 const mockDeclareCycleStoreManualStock = jest.fn();
+const mockConfirmOrderReceipt = jest.fn();
 const mockT = (key: string) => key;
 let mockState: any;
 let mockRouteParams: { cycleId?: string };
@@ -35,6 +36,13 @@ jest.mock('@/features/aquaculture/services/aquacultureService', () => ({
   aquacultureService: {
     getCycleStore: (...args: unknown[]) => mockGetCycleStore(...args),
     declareCycleStoreManualStock: (...args: unknown[]) => mockDeclareCycleStoreManualStock(...args),
+  },
+}));
+
+jest.mock('@/features/commerce/services/commerceApi', () => ({
+  __esModule: true,
+  default: {
+    confirmOrderReceipt: (...args: unknown[]) => mockConfirmOrderReceipt(...args),
   },
 }));
 
@@ -142,6 +150,7 @@ describe('StoreScreen', () => {
       pending_orders: [],
       stock_tracking_started_at: '2026-06-01',
     });
+    mockConfirmOrderReceipt.mockResolvedValue({ status: 'received' });
   });
 
   it('affiche le stock du cycle et ouvre les actions du Magasin', async () => {
@@ -311,6 +320,41 @@ describe('StoreScreen', () => {
     await waitFor(() => expect(getByText('network refresh failed')).toBeTruthy());
     expect(getByText('ORD-001')).toBeTruthy();
     expect(mockGetCycleStore).toHaveBeenCalledTimes(2);
+  });
+
+  it('confirme un retrait prêt et recharge le magasin sans double clic', async () => {
+    const initialPayload = await mockGetCycleStore();
+    mockGetCycleStore.mockClear();
+    mockGetCycleStore.mockResolvedValueOnce({
+      ...initialPayload,
+      pending_orders: [{
+        id: 'order-ready',
+        order_number: 'ORD-READY',
+        status: 'ready_for_pickup',
+        delivery_method: 'pickup',
+        total_bags: 1,
+        total_fcfa: '30000.00',
+        estimated_feed_kg: '20.00',
+        created_at: '2026-06-10T08:00:00.000Z',
+      }],
+    }).mockResolvedValueOnce({
+      ...initialPayload,
+      summary: { ...initialPayload.summary, pending_orders_count: 0 },
+      pending_orders: [],
+    });
+    let confirmAction: (() => Promise<void>) | undefined;
+    jest.spyOn(Alert, 'alert').mockImplementation((title, _message, buttons) => {
+      if (title === 'confirmPickupTitle') confirmAction = buttons?.[1]?.onPress as () => Promise<void>;
+    });
+    const { getByText, queryByText } = render(<StoreScreen />);
+
+    await waitFor(() => expect(getByText('confirmPickupAction')).toBeTruthy());
+    fireEvent.press(getByText('confirmPickupAction'));
+    void confirmAction?.();
+    void confirmAction?.();
+
+    await waitFor(() => expect(mockConfirmOrderReceipt).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(queryByText('ORD-READY')).toBeNull());
   });
 
   it('permet un retry après une erreur initiale', async () => {

@@ -22,6 +22,7 @@ NOTIFICATION_TYPES = [
     ('order_confirmed', _('Commande confirmée')),
     ('order_shipped', _('Commande expédiée')),
     ('order_delivered', _('Commande livrée')),
+    ('order_ready_for_pickup', _('Commande prête au retrait')),
     ('order_cancelled', _('Commande annulée')),
     ('payment_received', _('Paiement reçu')),
     ('delivery_scheduled', _('Livraison programmée')),
@@ -88,6 +89,8 @@ DEFAULT_CHANNELS_BY_TYPE = {
     # Commerce - confirmations importantes
     'order_confirmed': ['in_app', 'email'],
     'order_shipped': ['in_app', 'push'],
+    'order_delivered': ['in_app', 'push'],
+    'order_ready_for_pickup': ['in_app', 'push'],
     'payment_received': ['in_app', 'email'],
     'order_cancelled': ['in_app', 'email'],
 

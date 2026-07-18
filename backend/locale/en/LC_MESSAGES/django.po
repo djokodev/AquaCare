@@ -666,3 +666,46 @@ msgstr "The recommended capacity of the production unit has been exceeded."
 
 msgid "La capacité de cette unité de production ne peut pas être déterminée."
 msgstr "The capacity of this production unit cannot be determined."
+
+# Order fulfilment workflow
+msgid "Commandée"
+msgstr "Ordered"
+
+msgid "Livrée — confirmation attendue"
+msgstr "Delivered — confirmation pending"
+
+msgid "Prête au retrait"
+msgstr "Ready for pickup"
+
+msgid "Réception confirmée"
+msgstr "Receipt confirmed"
+
+msgid "Retrait confirmé"
+msgstr "Pickup confirmed"
+
+msgid "Marquer comme livrée"
+msgstr "Mark as delivered"
+
+msgid "Marquer comme prête au retrait"
+msgstr "Mark as ready for pickup"
+
+msgid "Confirmer la réception"
+msgstr "Confirm receipt"
+
+msgid "Confirmer le retrait"
+msgstr "Confirm pickup"
+
+msgid "Commande prête au retrait"
+msgstr "Order ready for pickup"
+
+msgid "Aucun cycle associé"
+msgstr "No associated cycle"
+
+msgid "Aucun cycle associé — cette commande ne générera pas d'entrée automatique dans un magasin de cycle."
+msgstr "No associated cycle — this order will not automatically create an entry in a cycle store."
+
+msgid "Article commandé"
+msgstr "Order item"
+
+msgid "Articles commandés"
+msgstr "Order items"

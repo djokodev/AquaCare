@@ -32,6 +32,11 @@ import DashboardHeader from "../components/DashboardHeader";
 import QuickActionsPreview from "../components/QuickActionsPreview";
 import QuickActionsSheet from "../components/QuickActionsSheet";
 import { CycleDashboard, ProductionCycle } from "@/types/aquaculture";
+import type { Order } from "@/types/commerce";
+import {
+  canConfirmOrderReceipt,
+  getOrderReceiptActionLabelKey,
+} from "@/features/commerce/utils/orderStatus";
 import { useAuth } from "@/hooks/useAuth";
 import { aquacultureService } from "@/features/aquaculture/services/aquacultureService";
 import {
@@ -109,6 +114,7 @@ export default function DashboardScreen({ navigation }: any) {
   const [confirmingOrderId, setConfirmingOrderId] = useState<string | null>(
     null,
   );
+  const confirmationLock = useRef(false);
   const [currentCycleUnitCount, setCurrentCycleUnitCount] = useState<
     number | null
   >(null);
@@ -170,7 +176,7 @@ export default function DashboardScreen({ navigation }: any) {
   };
 
   const pendingDeliveryConfirmations = useMemo(
-    () => ordersList.filter((order) => order.status === "delivered"),
+    () => ordersList.filter(canConfirmOrderReceipt),
     [ordersList],
   );
 
@@ -369,26 +375,37 @@ export default function DashboardScreen({ navigation }: any) {
     });
   };
 
-  const handleConfirmOrderReceipt = (orderId: string, orderNumber: string) => {
+  const handleConfirmOrderReceipt = (order: Order) => {
+    const isPickup = order.delivery_method === "pickup";
     Alert.alert(
-      t("confirmReceiptTitle"),
-      t("confirmReceiptMessage", { orderNumber }),
+      t(isPickup ? "confirmPickupTitle" : "confirmReceiptTitle"),
+      t(isPickup ? "confirmPickupMessage" : "confirmReceiptMessage", {
+        orderNumber: order.order_number,
+      }),
       [
         { text: t("cancel"), style: "cancel" },
         {
           text: t("confirm"),
           onPress: async () => {
+            if (confirmationLock.current) return;
             try {
-              setConfirmingOrderId(orderId);
-              await dispatch(confirmOrderReceipt(orderId)).unwrap();
+              confirmationLock.current = true;
+              setConfirmingOrderId(order.id);
+              await dispatch(confirmOrderReceipt(order.id)).unwrap();
               await Promise.all([
                 dispatch(fetchOrders()),
                 dispatch(fetchOrderStatistics()),
               ]);
-              Alert.alert(t("success"), t("confirmReceiptSuccess"));
-            } catch {
-              Alert.alert(t("error"), t("confirmReceiptError"));
+              Alert.alert(t("success"), t(isPickup ? "confirmPickupSuccess" : "confirmReceiptSuccess"));
+            } catch (caughtError) {
+              Alert.alert(
+                t("error"),
+                typeof caughtError === "string" && caughtError.trim()
+                  ? caughtError
+                  : t("confirmReceiptError"),
+              );
             } finally {
+              confirmationLock.current = false;
               setConfirmingOrderId(null);
             }
           },
@@ -622,15 +639,12 @@ export default function DashboardScreen({ navigation }: any) {
                         </AppText>
                       </View>
                       <Button
-                        label={t("confirmReceiptAction")}
+                        label={t(getOrderReceiptActionLabelKey(order))}
                         size="small"
                         fullWidth={false}
                         loading={isConfirming}
                         onPress={() =>
-                          handleConfirmOrderReceipt(
-                            order.id,
-                            order.order_number,
-                          )
+                          handleConfirmOrderReceipt(order)
                         }
                       />
                     </View>

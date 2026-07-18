@@ -57,7 +57,7 @@ export interface DeliveryFeePreview {
 }
 
 // Orders
-export type OrderStatus = 'confirmed' | 'delivered' | 'received';
+export type OrderStatus = 'confirmed' | 'delivered' | 'ready_for_pickup' | 'received';
 
 export interface OrderItem {
   id: string;
@@ -74,11 +74,16 @@ export interface Order {
   id: string;
   order_number: string;
   status: OrderStatus;
+  delivered_at?: string | null;
+  delivered_by?: string | null;
+  ready_for_pickup_at?: string | null;
+  ready_for_pickup_by?: string | null;
+  received_at?: string | null;
   user: string;
   user_name: string;
   farm_profile: string;
   farm_name: string;
-  production_cycle_id?: string;
+  production_cycle_id?: string | null;
   delivery_method: DeliveryMethod;
   pickup_location?: PickupLocation;
   delivery_name: string;

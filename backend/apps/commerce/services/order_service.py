@@ -88,6 +88,14 @@ class CalculatedOrderAmounts:
     total: Decimal
 
 
+@dataclass(frozen=True)
+class OperatorOrderTransitionResult:
+    """Résultat explicite d'une transition opérateur, y compris lors d'un replay."""
+
+    order: Order
+    transitioned: bool
+
+
 class OrderService(BaseCommerceService):
     """
     Service de gestion des commandes AquaCare.
@@ -461,6 +469,112 @@ class OrderService(BaseCommerceService):
         )
 
     @staticmethod
+    def _is_commerce_operator(user: User) -> bool:
+        return bool(
+            user.is_superuser
+            or user.groups.filter(name='aquacare_commerce').exists()
+        )
+
+    @staticmethod
+    def _notify_order_ready_for_customer_confirmation(order: Order) -> None:
+        """Notifie le client après commit sans invalider la transition en cas de panne."""
+        try:
+            from notifications.services import NotificationService
+
+            language = getattr(order.user, 'language_preference', 'fr')
+            is_english = str(language).lower().startswith('en')
+            metadata = {
+                'order_id': str(order.id),
+                'order_number': order.order_number,
+                'delivery_method': order.delivery_method,
+                'pickup_location': order.pickup_location or None,
+                'production_cycle_id': (
+                    str(order.production_cycle_id) if order.production_cycle_id else None
+                ),
+                'action': 'confirm_receipt',
+            }
+            if order.delivery_method == 'home':
+                title = 'Order delivered' if is_english else 'Commande livrée'
+                message = (
+                    f'Order {order.order_number} was marked as delivered. '
+                    'Please confirm that you received it.'
+                    if is_english
+                    else f'La commande {order.order_number} a été déclarée livrée. '
+                    'Veuillez confirmer sa réception.'
+                )
+                notification_type = 'order_delivered'
+            else:
+                pickup_location = (
+                    order.pickup_location_display_en_snapshot
+                    if is_english
+                    else order.pickup_location_display_fr_snapshot
+                ) or order.get_pickup_location_display()
+                title = 'Order ready for pickup' if is_english else 'Commande prête au retrait'
+                message = (
+                    f'Order {order.order_number} is ready at {pickup_location}. '
+                    'Please confirm after collecting it.'
+                    if is_english
+                    else f'La commande {order.order_number} est prête à {pickup_location}. '
+                    'Veuillez confirmer après son retrait.'
+                )
+                notification_type = 'order_ready_for_pickup'
+
+            NotificationService.create_notification(
+                user=order.user,
+                notification_type=notification_type,
+                title=title,
+                message=message,
+                content_object=order,
+                metadata=metadata,
+                channels=['in_app', 'push'],
+                send_immediately=True,
+            )
+        except Exception:
+            logger.exception(
+                'Order fulfilment notification failed after transition, order=%s',
+                order.id,
+            )
+
+    @staticmethod
+    @transaction.atomic
+    def mark_order_ready_for_customer_confirmation(
+        order: Order,
+        operator: User,
+    ) -> OperatorOrderTransitionResult:
+        """Effectue la transition logistique home ou pickup de façon idempotente."""
+        if not OrderService._is_commerce_operator(operator):
+            raise InvalidOrderError("Vous n'êtes pas autorisé à effectuer cette action")
+
+        # Lock only the order row. ``with_details()`` includes nullable outer joins
+        # (cycle and audit actors), which PostgreSQL cannot combine with FOR UPDATE.
+        locked_order = Order.objects.select_for_update().get(pk=order.pk)
+        expected_status = 'delivered' if locked_order.delivery_method == 'home' else 'ready_for_pickup'
+
+        if locked_order.status == expected_status:
+            return OperatorOrderTransitionResult(order=locked_order, transitioned=False)
+        if locked_order.status == 'received':
+            raise InvalidOrderError('Une commande reçue ne peut plus être modifiée')
+        if locked_order.status != 'confirmed':
+            raise InvalidOrderError('Cette transition logistique est incohérente avec la commande')
+
+        transitioned_at = timezone.now()
+        locked_order.status = expected_status
+        update_fields = ['status', 'updated_at']
+        if locked_order.delivery_method == 'home':
+            locked_order.delivered_at = transitioned_at
+            locked_order.delivered_by = operator
+            update_fields.extend(['delivered_at', 'delivered_by'])
+        else:
+            locked_order.ready_for_pickup_at = transitioned_at
+            locked_order.ready_for_pickup_by = operator
+            update_fields.extend(['ready_for_pickup_at', 'ready_for_pickup_by'])
+        locked_order.save(update_fields=update_fields)
+        transaction.on_commit(
+            lambda: OrderService._notify_order_ready_for_customer_confirmation(locked_order)
+        )
+        return OperatorOrderTransitionResult(order=locked_order, transitioned=True)
+
+    @staticmethod
     @transaction.atomic
     def confirm_order_receipt(order: Order, user: User) -> Order:
         """
@@ -470,20 +584,34 @@ class OrderService(BaseCommerceService):
         - La commande doit appartenir à l'utilisateur.
         - Seule une commande 'delivered' peut passer à 'received'.
         """
-        if order.user_id != user.id:
+        # Keep the row lock scoped to the order itself: PostgreSQL rejects
+        # FOR UPDATE when ``with_details()`` adds nullable outer joins.
+        locked_order = Order.objects.select_for_update().get(pk=order.pk)
+
+        if locked_order.user_id != user.id:
             raise InvalidOrderError("Vous n'avez pas accès à cette commande")
 
-        if order.status == 'received':
-            raise InvalidOrderError("Cette commande est déjà confirmée comme reçue")
+        if locked_order.status == 'received':
+            CycleStoreApplicationService.import_received_order(locked_order)
+            return Order.objects.with_details().get(pk=locked_order.pk)
 
-        if order.status != 'delivered':
-            raise InvalidOrderError("Seules les commandes livrées peuvent être confirmées")
+        allowed_status = (
+            locked_order.delivery_method == 'home' and locked_order.status == 'delivered'
+        ) or (
+            locked_order.delivery_method == 'pickup'
+            and locked_order.status == 'ready_for_pickup'
+        )
+        if not allowed_status:
+            raise InvalidOrderError(
+                "Cette commande n'est pas prête pour la confirmation du client"
+            )
 
-        order.status = 'received'
-        order.save(update_fields=['status', 'updated_at'])
-        CycleStoreApplicationService.import_received_order(order)
+        locked_order.status = 'received'
+        locked_order.received_at = timezone.now()
+        locked_order.save(update_fields=['status', 'received_at', 'updated_at'])
+        CycleStoreApplicationService.import_received_order(locked_order)
 
-        return Order.objects.with_details().get(pk=order.pk)
+        return Order.objects.with_details().get(pk=locked_order.pk)
 
     @staticmethod
     def generate_order_number() -> str:

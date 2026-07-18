@@ -149,3 +149,46 @@ msgstr "La capacité recommandée de l'unité de production est dépassée."
 
 msgid "La capacité de cette unité de production ne peut pas être déterminée."
 msgstr "La capacité de cette unité de production ne peut pas être déterminée."
+
+# Workflow de traitement des commandes
+msgid "Commandée"
+msgstr "Commandée"
+
+msgid "Livrée — confirmation attendue"
+msgstr "Livrée — confirmation attendue"
+
+msgid "Prête au retrait"
+msgstr "Prête au retrait"
+
+msgid "Réception confirmée"
+msgstr "Réception confirmée"
+
+msgid "Retrait confirmé"
+msgstr "Retrait confirmé"
+
+msgid "Marquer comme livrée"
+msgstr "Marquer comme livrée"
+
+msgid "Marquer comme prête au retrait"
+msgstr "Marquer comme prête au retrait"
+
+msgid "Confirmer la réception"
+msgstr "Confirmer la réception"
+
+msgid "Confirmer le retrait"
+msgstr "Confirmer le retrait"
+
+msgid "Commande prête au retrait"
+msgstr "Commande prête au retrait"
+
+msgid "Aucun cycle associé"
+msgstr "Aucun cycle associé"
+
+msgid "Aucun cycle associé — cette commande ne générera pas d'entrée automatique dans un magasin de cycle."
+msgstr "Aucun cycle associé — cette commande ne générera pas d'entrée automatique dans un magasin de cycle."
+
+msgid "Article commandé"
+msgstr "Article commandé"
+
+msgid "Articles commandés"
+msgstr "Articles commandés"

@@ -316,6 +316,28 @@ class TestCycleStoreService:
         assert payload['summary']['estimated_feed_remaining_kg'] == '50.00'
         assert payload['pending_orders'][0]['order_number'] == pending_order.order_number
 
+    def test_pending_order_weight_uses_order_snapshot_after_catalogue_change(self):
+        user = _create_user('+237690100014')
+        farm = _create_farm(user, 'Ferme Snapshot')
+        cycle = _create_cycle(farm)
+        product = _create_product('Sac historique 15kg', package_weight_kg=15)
+        order = _create_order(
+            user=user,
+            farm_profile=farm,
+            cycle=cycle,
+            product=product,
+            quantity=10,
+            status='confirmed',
+        )
+        order.items.update(product_package_weight_kg_snapshot=15)
+        product.package_weight_kg = 20
+        product.save(update_fields=['package_weight_kg'])
+
+        payload = CycleStoreApplicationService.get_store(cycle)
+
+        assert payload['summary']['pending_order_feed_kg'] == '150.00'
+        assert payload['pending_orders'][0]['estimated_feed_kg'] == '150.00'
+
     def test_import_received_order_skips_inconvertible_items_and_is_idempotent(self):
         user = _create_user('+237690100005')
         farm = _create_farm(user, 'Ferme Import')

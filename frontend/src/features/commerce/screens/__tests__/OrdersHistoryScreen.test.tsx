@@ -50,7 +50,7 @@ const createOrder = (status: Order['status'] = 'confirmed'): Order => ({
   id: `order-${status}`,
   order_number: `ORD-${status}`,
   status,
-  delivery_method: 'pickup',
+  delivery_method: status === 'delivered' ? 'home' : 'pickup',
   pickup_location: 'ndokoti',
   subtotal: '30000',
   delivery_fee: '0',
@@ -99,8 +99,8 @@ describe('OrdersHistoryScreen', () => {
 
     expect(getByText('orderStatistics')).toBeTruthy();
     expect(getByText('orderStatusConfirmed')).toBeTruthy();
-    expect(getByText('orderStatusDelivered')).toBeTruthy();
-    expect(getByText('orderStatusReceived')).toBeTruthy();
+    expect(getByText('orderStatusDeliveredHome')).toBeTruthy();
+    expect(getByText('orderStatusPickupConfirmed')).toBeTruthy();
     expect(queryByText(/pdf|download|télécharger/i)).toBeNull();
   });
 
@@ -147,6 +147,23 @@ describe('OrdersHistoryScreen', () => {
     await waitFor(() => expect(mockConfirmOrderReceipt).toHaveBeenCalledTimes(1));
 
     expect(Alert.alert).toHaveBeenCalledWith('success', 'confirmReceiptSuccess');
+  });
+
+  it('confirme un retrait uniquement quand la commande est prête', async () => {
+    mockState.commerce.orders.items = [createOrder('ready_for_pickup')];
+    let confirmAction: (() => Promise<void>) | undefined;
+    jest.spyOn(Alert, 'alert').mockImplementation((title, _message, buttons) => {
+      if (title === 'confirmPickupTitle') confirmAction = buttons?.[1]?.onPress as () => Promise<void>;
+    });
+    const { getByText, queryByText } = render(<OrdersHistoryScreen />);
+
+    expect(getByText('confirmPickupAction')).toBeTruthy();
+    expect(queryByText('confirmReceiptAction')).toBeNull();
+    fireEvent.press(getByText('confirmPickupAction'));
+    await confirmAction?.();
+
+    await waitFor(() => expect(mockConfirmOrderReceipt).toHaveBeenCalledTimes(1));
+    expect(Alert.alert).toHaveBeenCalledWith('success', 'confirmPickupSuccess');
   });
 
   it('ignore un chargement composite obsolète et son timestamp', async () => {

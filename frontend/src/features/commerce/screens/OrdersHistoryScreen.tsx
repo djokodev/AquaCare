@@ -7,7 +7,12 @@ import { useDispatch, useSelector } from 'react-redux';
 
 import { AppDispatch, RootState } from '@/store/store';
 import { confirmOrderReceipt, fetchOrders, fetchOrderStatistics } from '@/features/commerce/store/commerceSlice';
-import { getOrderStatusLabelKey } from '@/features/commerce/utils/orderStatus';
+import {
+  canConfirmOrderReceipt,
+  getOrderReceiptActionLabelKey,
+  getOrderStatusLabelKey,
+  getOrderStatusTone,
+} from '@/features/commerce/utils/orderStatus';
 import { Order, OrderStatistics } from '@/types/commerce';
 import { RootStackParamList } from '@/navigation/MainNavigator';
 import {
@@ -107,21 +112,33 @@ export default function OrdersHistoryScreen() {
   }, [i18n.language]);
 
   const handleConfirmReceipt = useCallback((order: Order) => {
-    Alert.alert(t('confirmReceiptTitle'), t('confirmReceiptMessage', { orderNumber: order.order_number }), [
+    const isPickup = order.delivery_method === 'pickup';
+    const titleKey = isPickup ? 'confirmPickupTitle' : 'confirmReceiptTitle';
+    const messageKey = isPickup ? 'confirmPickupMessage' : 'confirmReceiptMessage';
+    const cycleMessage = order.production_cycle_id ? `\n\n${t('confirmOrderCycleStockMessage')}` : '';
+    Alert.alert(t(titleKey), `${t(messageKey, { orderNumber: order.order_number })}${cycleMessage}`, [
       { text: t('cancel'), style: 'cancel' },
       { text: t('confirm'), onPress: async () => {
         if (confirmingOrderRef.current) return;
         try {
           confirmingOrderRef.current = order.id;
           setConfirmingOrderId(order.id);
-          await dispatch(confirmOrderReceipt(order.id)).unwrap();
+          const updatedOrder = await dispatch(confirmOrderReceipt(order.id)).unwrap();
+          setDisplayItems((current) => current.map((item) => (
+            item.id === updatedOrder.id ? updatedOrder : item
+          )));
           const refreshResult = await loadOrders('refresh');
           if (refreshResult === 'stale') return;
           if (refreshResult === 'error') {
-            throw new Error('orders refresh failed');
+            setDashboardError(t('ordersDashboardLoadError'));
           }
-          Alert.alert(t('success'), t('confirmReceiptSuccess'));
-        } catch { Alert.alert(t('error'), t('confirmReceiptError')); }
+          Alert.alert(t('success'), t(isPickup ? 'confirmPickupSuccess' : 'confirmReceiptSuccess'));
+        } catch (caughtError) {
+          const message = typeof caughtError === 'string' && caughtError.trim()
+            ? caughtError
+            : t('confirmReceiptError');
+          Alert.alert(t('error'), message);
+        }
         finally {
           confirmingOrderRef.current = null;
           setConfirmingOrderId(null);
@@ -149,7 +166,10 @@ export default function OrdersHistoryScreen() {
           />
         </View>
         <View style={styles.rowBetween}>
-          <Badge label={t(getOrderStatusLabelKey(order.status))} tone={order.status === 'received' ? 'success' : 'info'} />
+          <Badge
+            label={t(getOrderStatusLabelKey(order.status, order.delivery_method))}
+            tone={getOrderStatusTone(order)}
+          />
           <AppText variant="sectionTitle" color="link">{Number(order.total).toLocaleString()} FCFA</AppText>
         </View>
         <View style={styles.badges}>
@@ -157,8 +177,16 @@ export default function OrdersHistoryScreen() {
           <Badge label={t(order.delivery_method === 'home' ? 'homeDelivery' : 'pickupStore')} />
           {order.is_free_delivery ? <Badge label={t('free')} tone="success" /> : null}
         </View>
-        {order.status === 'delivered' ? (
-          <Button label={t('confirmReceiptAction')} loading={confirmingOrderId === order.id} onPress={() => handleConfirmReceipt(order)} />
+        {canConfirmOrderReceipt(order) ? (
+          <View style={styles.confirmationAction}>
+            <AppText variant="helper" color="warning">{t('orderConfirmationPendingHelp')}</AppText>
+            <Button
+              label={t(getOrderReceiptActionLabelKey(order))}
+              loading={confirmingOrderId === order.id}
+              disabled={Boolean(confirmingOrderId) && confirmingOrderId !== order.id}
+              onPress={() => handleConfirmReceipt(order)}
+            />
+          </View>
         ) : null}
 
         {expanded ? (
@@ -267,6 +295,7 @@ const styles = StyleSheet.create({
   orderCard: { marginBottom: spacing[3], gap: spacing[3] },
   rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing[3] },
   badges: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },
+  confirmationAction: { gap: spacing[2] },
   details: { gap: spacing[3] },
   address: { backgroundColor: colors.surface.selected, gap: spacing[1] },
   listHeader: { gap: spacing[3], marginBottom: spacing[4] },
