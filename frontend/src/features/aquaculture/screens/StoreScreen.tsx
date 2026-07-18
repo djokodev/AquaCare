@@ -97,6 +97,8 @@ const extractErrorMessage = (error: unknown, fallback: string): string => {
 
 const todayIsoDate = () => new Date().toISOString().slice(0, 10);
 
+type StoreLoadResult = 'success' | 'error' | 'stale';
+
 const generateClientUuid = (): string => {
   if (typeof globalThis.crypto?.randomUUID === 'function') {
     return globalThis.crypto.randomUUID();
@@ -136,7 +138,7 @@ export default function StoreScreen() {
   const locale = i18n.language?.startsWith('fr') ? 'fr-FR' : 'en-US';
   const storeNavigationParams = cycleId ? { cycleId, source: 'store' as const } : undefined;
 
-  const loadStore = useCallback(async (preserveVisibleStore = false) => {
+  const loadStore = useCallback(async (preserveVisibleStore = false): Promise<StoreLoadResult> => {
     const requestId = loadRequestRef.current + 1;
     loadRequestRef.current = requestId;
     if (!cycleId) {
@@ -144,7 +146,7 @@ export default function StoreScreen() {
       setError(t('storeNoCycleSelected'));
       setLoading(false);
       setRefreshing(false);
-      return;
+      return 'error';
     }
 
     setLoading(true);
@@ -153,7 +155,7 @@ export default function StoreScreen() {
       const payload = await aquacultureService.getCycleStore(cycleId);
 
       if (requestId !== loadRequestRef.current) {
-        return;
+        return 'stale';
       }
       if (payload.cycle_id !== cycleId) {
         throw new Error(t('storeContextMismatch'));
@@ -161,11 +163,13 @@ export default function StoreScreen() {
       setStore(payload);
       await dashboardSyncService.markSuccessful('store', cycleId);
       await refreshLastSyncedAt();
+      return 'success';
     } catch (caughtError) {
       if (!preserveVisibleStore && requestId === loadRequestRef.current) {
         setStore(null);
       }
       setError(extractErrorMessage(caughtError, t('storeLoadError')));
+      return 'error';
     } finally {
       if (requestId === loadRequestRef.current) {
         setLoading(false);
@@ -281,9 +285,26 @@ export default function StoreScreen() {
           try {
             confirmationLock.current = true;
             setConfirmingOrderId(order.id);
-            await commerceApi.confirmOrderReceipt(order.id);
-            await loadStore(true);
-            Alert.alert(t('success'), t(isPickup ? 'confirmPickupSuccess' : 'confirmReceiptSuccess'));
+            const updatedOrder = await commerceApi.confirmOrderReceipt(order.id);
+            setStore((currentStore) => currentStore ? {
+              ...currentStore,
+              pending_orders: currentStore.pending_orders.filter(
+                (pendingOrder) => pendingOrder.id !== updatedOrder.id,
+              ),
+              summary: {
+                ...currentStore.summary,
+                pending_orders_count: Math.max(0, currentStore.summary.pending_orders_count - 1),
+              },
+            } : currentStore);
+            const refreshResult = await loadStore(true);
+            if (refreshResult === 'success') {
+              Alert.alert(t('success'), t(isPickup ? 'confirmPickupSuccess' : 'confirmReceiptSuccess'));
+            } else {
+              Alert.alert(
+                t('success'),
+                `${t(isPickup ? 'confirmPickupSuccess' : 'confirmReceiptSuccess')}\n\n${t('storeRefreshAfterConfirmationError')}`,
+              );
+            }
           } catch (caughtError) {
             Alert.alert(t('error'), extractErrorMessage(caughtError, t('confirmReceiptError')));
           } finally {

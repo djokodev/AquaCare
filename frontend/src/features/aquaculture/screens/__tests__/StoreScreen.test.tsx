@@ -357,6 +357,46 @@ describe('StoreScreen', () => {
     await waitFor(() => expect(queryByText('ORD-READY')).toBeNull());
   });
 
+  it('conserve la confirmation si le refresh du magasin échoue', async () => {
+    const initialPayload = await mockGetCycleStore();
+    mockGetCycleStore.mockClear();
+    mockGetCycleStore.mockResolvedValueOnce({
+      ...initialPayload,
+      pending_orders: [{
+        id: 'order-confirmed',
+        order_number: 'ORD-CONFIRMED',
+        status: 'delivered',
+        delivery_method: 'home',
+        total_bags: 1,
+        total_fcfa: '30000.00',
+        estimated_feed_kg: '20.00',
+        created_at: '2026-06-10T08:00:00.000Z',
+      }],
+    }).mockRejectedValueOnce(new Error('refresh unavailable'));
+    mockConfirmOrderReceipt.mockResolvedValueOnce({
+      id: 'order-confirmed',
+      status: 'received',
+    });
+    let confirmAction: (() => Promise<void>) | undefined;
+    jest.spyOn(Alert, 'alert').mockImplementation((title, _message, buttons) => {
+      if (title === 'confirmReceiptTitle') confirmAction = buttons?.[1]?.onPress as () => Promise<void>;
+    });
+    const { getByText, queryByText } = render(<StoreScreen />);
+
+    await waitFor(() => expect(getByText('confirmReceiptAction')).toBeTruthy());
+    fireEvent.press(getByText('confirmReceiptAction'));
+    await confirmAction?.();
+
+    await waitFor(() => {
+      expect(mockConfirmOrderReceipt).toHaveBeenCalledWith('order-confirmed');
+      expect(queryByText('ORD-CONFIRMED')).toBeNull();
+    });
+    expect(Alert.alert).toHaveBeenLastCalledWith(
+      'success',
+      'confirmReceiptSuccess\n\nstoreRefreshAfterConfirmationError',
+    );
+  });
+
   it('permet un retry après une erreur initiale', async () => {
     mockGetCycleStore.mockRejectedValue(new Error('initial failure'));
     const { getByText } = render(<StoreScreen />);

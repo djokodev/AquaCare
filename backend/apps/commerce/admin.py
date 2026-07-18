@@ -29,6 +29,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.html import escape, format_html, mark_safe
 from django.utils.translation import gettext_lazy as _
+from django.utils.translation import ngettext
 
 from .domain.exceptions import InvalidOrderError
 from .models import Order, OrderItem, Product
@@ -195,16 +196,16 @@ class ProductAdmin(CommerceSecuredAdmin):
         available_badge = (
             '<span style="display:inline-block; min-width:110px; text-align:center; '
             'white-space:nowrap; background-color: #10b981; color: white; '
-            'padding: 4px 10px; border-radius: 6px;">Disponible</span>'
+            'padding: 4px 10px; border-radius: 6px;">{}</span>'
         )
         unavailable_badge = (
             '<span style="display:inline-block; min-width:120px; text-align:center; '
             'white-space:nowrap; background-color: #ef4444; color: white; '
-            'padding: 4px 10px; border-radius: 6px;">Indisponible</span>'
+            'padding: 4px 10px; border-radius: 6px;">{}</span>'
         )
         if obj.is_available:
-            return format_html(available_badge)
-        return format_html(unavailable_badge)
+            return format_html(available_badge, _('Disponible'))
+        return format_html(unavailable_badge, _('Indisponible'))
     availability_badge.short_description = _('Disponibilite')
 
 
@@ -328,12 +329,12 @@ class OrderAdmin(CommerceSecuredAdmin):
         """Ouvre le bon de commande PDF directement dans le navigateur."""
         order = self.get_object(request, object_id)
         if order is None:
-            return HttpResponse("Commande introuvable.", status=404)
+            return HttpResponse(_("Commande introuvable."), status=404)
         language_code = self._document_language(request)
         if language_code is None:
-            return HttpResponse("Langue invalide.", status=400)
+            return HttpResponse(_("Langue invalide."), status=400)
         if not self.has_order_document_permission(request, order):
-            return HttpResponse("Accès refusé.", status=403)
+            return HttpResponse(_("Accès refusé."), status=403)
         try:
             pdf_bytes = generate_order_pdf(order, language_code)
             response = HttpResponse(pdf_bytes, content_type='application/pdf')
@@ -347,18 +348,21 @@ class OrderAdmin(CommerceSecuredAdmin):
                 object_id,
                 exc_info=exc,
             )
-            return HttpResponse("Erreur interne lors de la génération du PDF.", status=500)
+            return HttpResponse(
+                _("Erreur interne lors de la génération du PDF."),
+                status=500,
+            )
 
     def download_pdf_view(self, request, object_id):
         """Télécharge le bon de commande PDF."""
         order = self.get_object(request, object_id)
         if order is None:
-            return HttpResponse("Commande introuvable.", status=404)
+            return HttpResponse(_("Commande introuvable."), status=404)
         language_code = self._document_language(request)
         if language_code is None:
-            return HttpResponse("Langue invalide.", status=400)
+            return HttpResponse(_("Langue invalide."), status=400)
         if not self.has_order_document_permission(request, order):
-            return HttpResponse("Accès refusé.", status=403)
+            return HttpResponse(_("Accès refusé."), status=403)
         try:
             pdf_bytes = generate_order_pdf(order, language_code)
             response = HttpResponse(pdf_bytes, content_type='application/pdf')
@@ -373,7 +377,10 @@ class OrderAdmin(CommerceSecuredAdmin):
                 exc_info=exc,
             )
             messages.error(request, _("Erreur interne lors de la génération du PDF."))
-            return HttpResponse("Erreur interne lors de la génération du PDF.", status=500)
+            return HttpResponse(
+                _("Erreur interne lors de la génération du PDF."),
+                status=500,
+            )
 
     def get_search_fields(self, request):
         """Retire phone_number de la recherche pour non-commerce."""
@@ -596,15 +603,15 @@ class OrderAdmin(CommerceSecuredAdmin):
         download_url = reverse('admin:commerce_order_download_pdf', args=[obj.pk])
         return format_html(
             '<div style="display:flex;flex-wrap:wrap;gap:8px">'
-            '<a class="button" href="{}?language=fr" target="_blank">Visualiser FR</a>'
-            '<a class="button" href="{}?language=fr">Télécharger FR</a>'
-            '<a class="button" href="{}?language=en" target="_blank">View EN</a>'
-            '<a class="button" href="{}?language=en">Download EN</a>'
+            '<a class="button" href="{}?language=fr" target="_blank">{}</a>'
+            '<a class="button" href="{}?language=fr">{}</a>'
+            '<a class="button" href="{}?language=en" target="_blank">{}</a>'
+            '<a class="button" href="{}?language=en">{}</a>'
             '</div>',
-            view_url,
-            download_url,
-            view_url,
-            download_url,
+            view_url, _('Visualiser FR'),
+            download_url, _('Télécharger FR'),
+            view_url, _('View EN'),
+            download_url, _('Download EN'),
         )
     documents_display.short_description = _('Documents')
 
@@ -664,11 +671,13 @@ class OrderAdmin(CommerceSecuredAdmin):
             '</tr>'
             for item in items
         )
-        return mark_safe(
+        return format_html(
             '<table style="width:100%;border-collapse:collapse">'
-            '<thead><tr><th>Produit</th><th>Quantité</th>'
-            '<th>Prix unitaire</th><th>Total</th></tr></thead>'
-            f'<tbody>{rows}</tbody></table>'
+            '<thead><tr><th>{}</th><th>{}</th>'
+            '<th>{}</th><th>{}</th></tr></thead>'
+            '<tbody>{}</tbody></table>',
+            _('Produit'), _('Quantité'), _('Prix unitaire'), _('Total'),
+            mark_safe(rows),
         )
     items_summary_display.short_description = _('Articles commandés')
 
@@ -679,9 +688,9 @@ class OrderAdmin(CommerceSecuredAdmin):
 
         order_number = escape(str(obj.order_number or '—'))
         status_labels = {
-            'confirmed': ('Confirmée', '#2563eb'),
-            'delivered': ('Livrée', '#f59e0b'),
-            'received': ('Reçue', '#059669'),
+            'confirmed': (_('Confirmée'), '#2563eb'),
+            'delivered': (_('Livrée'), '#f59e0b'),
+            'received': (_('Reçue'), '#059669'),
         }
         status_label, status_color = status_labels.get(obj.status, (escape(str(obj.status)), '#6b7280'))
 
@@ -720,11 +729,12 @@ class OrderAdmin(CommerceSecuredAdmin):
                 items_html = '<table style="width:100%;border-collapse:collapse;font-size:13px;">'
                 items_html += (
                     '<tr style="background:#f3f4f6;">'
-                    '<th style="padding:6px 10px;text-align:left;border-bottom:1px solid #e5e7eb;">Produit</th>'
-                    '<th style="padding:6px 10px;text-align:center;border-bottom:1px solid #e5e7eb;">Qté (sacs)</th>'
-                    '<th style="padding:6px 10px;text-align:right;border-bottom:1px solid #e5e7eb;">Prix unit.</th>'
-                    '<th style="padding:6px 10px;text-align:right;border-bottom:1px solid #e5e7eb;">Total</th>'
+                    '<th style="padding:6px 10px;text-align:left;border-bottom:1px solid #e5e7eb;">{}</th>'
+                    '<th style="padding:6px 10px;text-align:center;border-bottom:1px solid #e5e7eb;">{}</th>'
+                    '<th style="padding:6px 10px;text-align:right;border-bottom:1px solid #e5e7eb;">{}</th>'
+                    '<th style="padding:6px 10px;text-align:right;border-bottom:1px solid #e5e7eb;">{}</th>'
                     '</tr>'
+                    .format(_('Produit'), _('Qté (sacs)'), _('Prix unit.'), _('Total'))
                 )
                 for item in items:
                     product_name = escape(str(item.product_name or '—'))
@@ -741,9 +751,15 @@ class OrderAdmin(CommerceSecuredAdmin):
                     )
                 items_html += '</table>'
             else:
-                items_html = '<em style="color:#6b7280;font-size:13px;">Aucun article.</em>'
+                items_html = (
+                    '<em style="color:#6b7280;font-size:13px;">{}</em>'
+                    .format(_('Aucun article.'))
+                )
         except Exception:
-            items_html = '<em style="color:#6b7280;">Articles non disponibles.</em>'
+            items_html = (
+                '<em style="color:#6b7280;">{}</em>'
+                .format(_('Articles non disponibles.'))
+            )
 
         card_wrapper_open = (
             '<div style="font-family:sans-serif;max-width:780px;'
@@ -762,7 +778,7 @@ class OrderAdmin(CommerceSecuredAdmin):
             [
                 card_wrapper_open,
                 card_header,
-                f"<strong>Commande #{order_number}</strong>",
+                f"<strong>{escape(str(_('Commande #')))}{order_number}</strong>",
                 status_badge,
                 "</div>",
                 '<div style="border-bottom:1px solid #e5e7eb;">',
@@ -770,20 +786,23 @@ class OrderAdmin(CommerceSecuredAdmin):
                 "</div>",
                 '<div style="display:flex;border-bottom:1px solid #e5e7eb;">',
                 '<div style="flex:1;padding:10px 16px;border-right:1px solid #e5e7eb;">',
-                '<div style="font-size:12px;color:#6b7280;">Sous-total</div>',
+                f'<div style="font-size:12px;color:#6b7280;">{escape(str(_("Sous-total")))}</div>',
                 f'<div style="font-weight:bold;">{escape(subtotal)} FCFA</div>',
                 "</div>",
                 '<div style="flex:1;padding:10px 16px;border-right:1px solid #e5e7eb;">',
-                '<div style="font-size:12px;color:#6b7280;">Livraison</div>',
+                f'<div style="font-size:12px;color:#6b7280;">{escape(str(_("Livraison")))}</div>',
                 f'<div style="font-weight:bold;">{escape(delivery_fee)} FCFA</div>',
                 "</div>",
                 '<div style="flex:1;padding:10px 16px;border-right:1px solid #e5e7eb;">',
-                '<div style="font-size:12px;color:#6b7280;">Total</div>',
+                f'<div style="font-size:12px;color:#6b7280;">{escape(str(_("Total")))}</div>',
                 f'<div style="font-weight:bold;color:#059669;font-size:16px;">{escape(total)} FCFA</div>',
                 "</div>",
                 '<div style="flex:1;padding:10px 16px;">',
-                '<div style="font-size:12px;color:#6b7280;">Sacs commandés</div>',
-                f'<div style="font-weight:bold;">{escape(bags)} sacs</div>',
+                f'<div style="font-size:12px;color:#6b7280;">{escape(str(_("Sacs commandés")))}</div>',
+                (
+                    f'<div style="font-weight:bold;">{escape(bags)} '
+                    f'{escape(str(ngettext("sac", "sacs", obj.total_bags or 0)))}</div>'
+                ),
                 "</div>",
                 "</div>",
                 '<div style="padding:10px 16px;font-size:13px;background:#f9fafb;">',
@@ -814,24 +833,27 @@ class OrderAdmin(CommerceSecuredAdmin):
             'text-decoration:none;font-weight:bold;font-size:13px;'
         )
         return format_html(
-            '<a href="{}?language=fr" target="_blank" style="{}background:#3b82f6;color:white;">Visualiser FR</a>'
+            '<a href="{}?language=fr" target="_blank" style="{}background:#3b82f6;color:white;">{}</a>'
             '&nbsp;&nbsp;'
-            '<a href="{}?language=fr" style="{}background:#059669;color:white;">Télécharger FR</a>'
+            '<a href="{}?language=fr" style="{}background:#059669;color:white;">{}</a>'
             '&nbsp;&nbsp;'
-            '<a href="{}?language=en" target="_blank" style="{}background:#3b82f6;color:white;">Visualiser EN</a>'
+            '<a href="{}?language=en" target="_blank" style="{}background:#3b82f6;color:white;">{}</a>'
             '&nbsp;&nbsp;'
-            '<a href="{}?language=en" style="{}background:#059669;color:white;">Télécharger EN</a>',
-            view_url, btn_base, download_url, btn_base,
-            view_url, btn_base, download_url, btn_base,
+            '<a href="{}?language=en" style="{}background:#059669;color:white;">{}</a>',
+            view_url, btn_base, _('Visualiser FR'),
+            download_url, btn_base, _('Télécharger FR'),
+            view_url, btn_base, _('Visualiser EN'),
+            download_url, btn_base, _('Télécharger EN'),
         )
     pdf_download_link.short_description = _('Bon de commande PDF')
 
     def user_link(self, obj):
         """Lien vers utilisateur."""
         return format_html(
-            '<a href="/admin/accounts/user/{}/change/">{}</a><br><small>Tel: ***</small>',
+            '<a href="/admin/accounts/user/{}/change/">{}</a><br><small>{}: ***</small>',
             obj.user.id,
-            obj.user.full_name
+            obj.user.full_name,
+            _('Tel'),
         )
     user_link.short_description = _('Client')
 
@@ -889,11 +911,13 @@ class OrderAdmin(CommerceSecuredAdmin):
 
     def total_bags_display(self, obj):
         """Nombre total de sacs."""
+        bag_count = getattr(obj, 'admin_total_bags', obj.total_bags)
         return format_html(
-            '<strong>{}</strong> sacs',
-            getattr(obj, 'admin_total_bags', obj.total_bags)
+            '<strong>{}</strong> {}',
+            bag_count,
+            ngettext('sac', 'sacs', bag_count),
         )
-    total_bags_display.short_description = _('Quantite')
+    total_bags_display.short_description = _('Quantité')
 
     def total_display(self, obj):
         """Affichage formate du total."""
@@ -911,7 +935,7 @@ class OrderAdmin(CommerceSecuredAdmin):
         """Genere PDF pour commandes selectionnees (max 10). Commerce only."""
         # Verifier permission
         if not self.has_order_document_permission(request):
-            return HttpResponse("Accès refusé.", status=403)
+            return HttpResponse(_("Accès refusé."), status=403)
 
         count = queryset.count()
 

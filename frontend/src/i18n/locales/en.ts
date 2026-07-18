@@ -1161,6 +1161,7 @@
   confirmReceiptSuccess: 'Receipt confirmed successfully.',
   confirmPickupSuccess: 'Pickup confirmed successfully.',
   confirmReceiptError: 'Unable to confirm receipt right now.',
+  storeRefreshAfterConfirmationError: 'The confirmation was recorded, but store data will be refreshed later.',
   ordersPendingConfirmationTitle: '{{count}} order(s) to confirm',
   ordersPendingConfirmationDescription: 'Quickly confirm orders already delivered.',
   productNotFound: 'Product not found',

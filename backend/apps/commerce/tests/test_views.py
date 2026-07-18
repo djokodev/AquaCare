@@ -9,6 +9,7 @@ import pytest
 from accounts.models import FarmProfile, User
 from aquaculture.models import ProductionCycle
 from commerce.models import Order, Product
+from commerce.serializers import OrderSerializer
 from rest_framework import status
 from rest_framework.test import APIClient
 
@@ -328,6 +329,14 @@ class TestOrderViewSet:
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert response.data["message"] == "Cycle de production introuvable ou inaccessible"
+
+    def test_mobile_order_serializer_keeps_fulfilment_actors_out_of_public_payload(self):
+        fields = set(OrderSerializer().fields)
+
+        assert "delivered_by" not in fields
+        assert "ready_for_pickup_by" not in fields
+        assert "delivered_at" in fields
+        assert "ready_for_pickup_at" in fields
 
     def test_list_user_orders(self, authenticated_client, test_farm, test_product):
         authenticated_client.post("/api/commerce/orders/", {

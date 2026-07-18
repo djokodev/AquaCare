@@ -1160,6 +1160,7 @@ export const fr = {
   confirmReceiptSuccess: 'Réception confirmée avec succès.',
   confirmPickupSuccess: 'Retrait confirmé avec succès.',
   confirmReceiptError: 'Impossible de confirmer la réception pour le moment.',
+  storeRefreshAfterConfirmationError: 'La confirmation est enregistrée, mais les données du magasin seront actualisées ultérieurement.',
   ordersPendingConfirmationTitle: '{{count}} commande(s) à confirmer',
   ordersPendingConfirmationDescription: 'Confirmez rapidement les commandes déjà livrées.',
   productNotFound: 'Produit introuvable',

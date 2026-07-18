@@ -434,6 +434,13 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
     ),
     confirm_receipt=extend_schema(
         summary="Confirmer la reception d'une commande",
+        description=(
+            "Confirme la réception par le propriétaire. Pour une livraison à domicile, "
+            "la transition est delivered -> received ; pour un retrait, ready_for_pickup "
+            "-> received. La requête est idempotente : une commande déjà reçue renvoie "
+            "la représentation courante. La confirmation déclenche la synchronisation "
+            "du stock du cycle lorsqu'un cycle est associé."
+        ),
         responses={
             200: OrderSerializer,
             400: OpenApiResponse(description="Transition de statut invalide"),
@@ -591,10 +598,12 @@ class OrderViewSet(
     @action(detail=True, methods=['post'])
     def confirm_receipt(self, request: Request, pk: str | None = None) -> Response:
         """
-        Confirme la réception d'une commande livrée.
+        Confirme la réception d'une commande livrée ou prête au retrait.
 
         Règle métier:
-        - Transition autorisée uniquement: delivered -> received
+        - domicile: delivered -> received
+        - retrait: ready_for_pickup -> received
+        - replay idempotent si la commande est déjà reçue
         """
         order = self.get_object()
         try:

@@ -365,7 +365,8 @@ class CalibrationService:
             raise BusinessRuleViolation(_('Le nombre de poissons transférés doit être positif.'))
         if transferred_average_weight_g <= 0:
             raise BusinessRuleViolation(_('Le poids moyen transféré doit être positif.'))
-        if calibrated_at.date() < source.cycle.start_date or calibrated_at > timezone.now() + timedelta(minutes=10):
+        calibrated_local_date = timezone.localtime(calibrated_at).date()
+        if calibrated_local_date < source.cycle.start_date or calibrated_at > timezone.now() + timedelta(minutes=10):
             raise BusinessRuleViolation(_('La date du calibrage est invalide.'))
 
     @staticmethod
@@ -373,13 +374,16 @@ class CalibrationService:
         first_biomass = biomass_for(first_count, first_average_weight_g)
         cycle = ProductionCycle.objects.create(
             farm_profile=source.cycle.farm_profile,
-            cycle_name=f'{destination_unit.name} - Calibration {calibrated_at.date().isoformat()}',
+            cycle_name=(
+                f'{destination_unit.name} - Calibration '
+                f'{timezone.localtime(calibrated_at).date().isoformat()}'
+            ),
             species=source.cycle.species,
             pond_identifier=destination_unit.name,
             pond_volume_m3=destination_unit.volume_m3,
             pond_surface_m2=None,
             infrastructure_type=['bac_calibrage'],
-            start_date=calibrated_at.date(),
+            start_date=timezone.localtime(calibrated_at).date(),
             initial_count=first_count,
             initial_average_weight=first_average_weight_g,
             initial_biomass=first_biomass,

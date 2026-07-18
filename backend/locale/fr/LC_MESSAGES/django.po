@@ -6,189 +6,5421 @@ msgid ""
 msgstr ""
 "Project-Id-Version: AquaCare 1.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-08-19 14:00+0000\n"
+"POT-Creation-Date: 2026-07-19 00:02+0100\n"
 "PO-Revision-Date: 2025-08-19 14:00+0000\n"
 "Last-Translator: AquaCare Team\n"
-"Language: fr\n"
 "Language-Team: French\n"
+"Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n > 1);\n"
 
-# === AQUACULTURE MODULE TRANSLATIONS ===
-# Note: Most field labels are already in French in the code
-# Only translating messages that need actual translation
+#: apps/accounts/admin.py:130 apps/accounts/admin.py:445
+#: apps/aquaculture/admin.py:270 apps/aquaculture/admin.py:558
+#: apps/aquaculture/admin.py:787 apps/aquaculture/admin.py:922
+#: apps/aquaculture/admin.py:1054
+msgid "Informations de base"
+msgstr ""
 
-# API Error Messages (already in French in code)
-# These msgid/msgstr pairs are kept for completeness but text is the same
-msgid "Ce cycle a déjà été récolté"
-msgstr "Ce cycle a déjà été récolté"
+#: apps/accounts/admin.py:133
+msgid "Informations personnelles"
+msgstr ""
 
-msgid "Cycle récolté avec succès"
+#: apps/accounts/admin.py:139
+msgid "Activite aquacole"
+msgstr ""
+
+#: apps/accounts/admin.py:142
+msgid "Localisation"
+msgstr ""
+
+#: apps/accounts/admin.py:146
+msgid "Entreprise"
+msgstr ""
+
+#: apps/accounts/admin.py:150
+msgid "Personne physique"
+msgstr ""
+
+#: apps/accounts/admin.py:154
+msgid "Permissions"
+msgstr ""
+
+#: apps/accounts/admin.py:157
+msgid "Seul le superuser peut modifier ces champs."
+msgstr ""
+
+#: apps/accounts/admin.py:159
+msgid "Dates importantes"
+msgstr ""
+
+#: apps/accounts/admin.py:166
+#, fuzzy
+#| msgid "L'unité de l'allocation est obligatoire."
+msgid "Informations obligatoires"
+msgstr "L'unité de l'allocation est obligatoire."
+
+#: apps/accounts/admin.py:170
+msgid "Informations complementaires"
+msgstr ""
+
+#: apps/accounts/admin.py:174
+msgid "Permissions (admin seulement)"
+msgstr ""
+
+#: apps/accounts/admin.py:177
+msgid "Cocher \"is_staff\" pour donner acces a l'admin."
+msgstr ""
+
+#: apps/accounts/admin.py:332
+msgid "Elevation vers superuser non autorisee."
+msgstr ""
+
+#: apps/accounts/admin.py:335
+msgid "Promotion vers staff non autorisee."
+msgstr ""
+
+#: apps/accounts/admin.py:356
+msgid "Role"
+msgstr ""
+
+#: apps/accounts/admin.py:375 apps/accounts/admin.py:448
+msgid "Certification"
+msgstr ""
+
+#: apps/accounts/admin.py:380
+msgid "Verifier les telephones selectionnes"
+msgstr ""
+
+#: apps/accounts/admin.py:388
+msgid "Vous n'avez pas la permission de verifier les utilisateurs."
+msgstr ""
+
+#: apps/accounts/admin.py:394
+#, python-brace-format
+msgid "{count} utilisateur(s) verifie(s)."
+msgstr ""
+
+#: apps/accounts/admin.py:396
+msgid "Certifier les fermes selectionnees"
+msgstr ""
+
+#: apps/accounts/admin.py:407
+#, python-brace-format
+msgid "{count} ferme(s) certifiee(s)."
+msgstr ""
+
+#: apps/accounts/admin.py:408
+msgid "Vous n'avez pas la permission de certifier les fermes."
+msgstr ""
+
+#: apps/accounts/admin.py:411
+msgid "Suspendre les certifications"
+msgstr ""
+
+#: apps/accounts/admin.py:422
+#, python-brace-format
+msgid "{count} certification(s) suspendue(s)."
+msgstr ""
+
+#: apps/accounts/admin.py:423
+msgid "Vous n'avez pas la permission de suspendre les certifications."
+msgstr ""
+
+#: apps/accounts/admin.py:452
+msgid "Informations techniques"
+msgstr ""
+
+#: apps/accounts/admin.py:456 apps/aquaculture/models.py:355
+msgid "Production"
+msgstr ""
+
+#: apps/accounts/admin.py:460
+msgid "Localisation GPS"
+msgstr ""
+
+#: apps/accounts/admin.py:484
+msgid "Proprietaire"
+msgstr ""
+
+#: apps/accounts/admin.py:492 apps/farm_gps/apps.py:7
+msgid "GPS"
+msgstr ""
+
+#: apps/accounts/apps.py:16
+msgid "Comptes Utilisateurs"
+msgstr ""
+
+#: apps/accounts/domain/account_invariants.py:38
+msgid "Le nom de l'entreprise est requis pour les comptes entreprise."
+msgstr ""
+
+#: apps/accounts/domain/account_invariants.py:40
+msgid "Le statut juridique est requis pour les entreprises."
+msgstr ""
+
+#: apps/accounts/domain/account_invariants.py:42
+msgid "Le nom du promoteur est requis pour les entreprises."
+msgstr ""
+
+#: apps/accounts/domain/account_invariants.py:44
+msgid "La classe d'âge ne s'applique qu'aux personnes physiques."
+msgstr ""
+
+#: apps/accounts/domain/account_invariants.py:48
+msgid "Le prénom est requis pour les comptes individuels."
+msgstr ""
+
+#: apps/accounts/domain/account_invariants.py:50
+msgid "Le nom est requis pour les comptes individuels."
+msgstr ""
+
+#: apps/accounts/domain/account_invariants.py:52
+msgid "La classe d'âge est requise pour les personnes physiques."
+msgstr ""
+
+#: apps/accounts/domain/account_invariants.py:54
+msgid "Le nom d'entreprise ne s'applique qu'aux entreprises."
+msgstr ""
+
+#: apps/accounts/domain/account_invariants.py:56
+msgid "Le statut juridique ne s'applique qu'aux entreprises."
+msgstr ""
+
+#: apps/accounts/domain/account_invariants.py:58
+msgid "Le nom du promoteur ne s'applique qu'aux entreprises."
+msgstr ""
+
+#: apps/accounts/domain/account_invariants.py:64
+msgid "La région est requise si le département est spécifié."
+msgstr ""
+
+#: apps/accounts/domain/account_invariants.py:68
+msgid "Le département est requis si l'arrondissement est spécifié."
+msgstr ""
+
+#: apps/accounts/domain/account_invariants.py:70
+msgid "La région est requise si l'arrondissement est spécifié."
+msgstr ""
+
+#: apps/accounts/domain/farm_profile_rules.py:33
+#: apps/accounts/serializers.py:273
+msgid "Le nom de la ferme ne peut pas être vide."
+msgstr ""
+
+#: apps/accounts/domain/farm_profile_rules.py:35
+msgid "La longitude est requise si la latitude est renseignée."
+msgstr ""
+
+#: apps/accounts/domain/farm_profile_rules.py:37
+msgid "La latitude est requise si la longitude est renseignée."
+msgstr ""
+
+#: apps/accounts/domain/farm_profile_rules.py:40
+msgid "Le nombre de bassins doit être supérieur à 0 si il y a une production."
+msgstr ""
+
+#: apps/accounts/managers.py:64
+msgid "Le numéro de téléphone doit être fourni"
+msgstr ""
+
+#: apps/accounts/managers.py:134
+msgid "Les superutilisateurs doivent avoir is_staff=True."
+msgstr ""
+
+#: apps/accounts/managers.py:136
+msgid "Les superutilisateurs doivent avoir is_superuser=True."
+msgstr ""
+
+#: apps/accounts/middleware.py:176
+msgid "Trop de tentatives de connexion. Veuillez patienter."
+msgstr ""
+
+#: apps/accounts/models.py:33 apps/accounts/models.py:315
+msgid "Identifiant unique UUID pour la synchronisation mobile"
+msgstr ""
+
+#: apps/accounts/models.py:37
+msgid "Numéro de téléphone"
+msgstr ""
+
+#: apps/accounts/models.py:41
+msgid "Format : +237XXXXXXXXX ou format international"
+msgstr ""
+
+#: apps/accounts/models.py:45
+msgid "Type de compte"
+msgstr ""
+
+#: apps/accounts/models.py:49
+msgid "Type d'utilisateur : personne physique ou entreprise"
+msgstr ""
+
+#: apps/accounts/models.py:53
+msgid "Nom de l'entreprise"
+msgstr ""
+
+#: apps/accounts/models.py:57
+msgid "Nom de l'entreprise pour les comptes de type \"company\""
+msgstr ""
+
+#: apps/accounts/models.py:60
+msgid "Nom entreprise normalisé"
+msgstr ""
+
+#: apps/accounts/models.py:64 apps/accounts/models.py:172
+#: apps/accounts/models.py:179
+msgid "Valeur technique pour les recherches de connexion indexées"
+msgstr ""
+
+#: apps/accounts/models.py:68
+msgid "Téléphone vérifié"
+msgstr ""
+
+#: apps/accounts/models.py:70
+msgid "Indique si le numéro de téléphone a été vérifié par SMS"
+msgstr ""
+
+#: apps/accounts/models.py:74
+msgid "Langue préférée"
+msgstr ""
+
+#: apps/accounts/models.py:78
+msgid "Langue d'interface préférée de l'utilisateur"
+msgstr ""
+
+#: apps/accounts/models.py:82
+msgid "Type d'activité"
+msgstr ""
+
+#: apps/accounts/models.py:87
+msgid "Maillon d'activité : producteur d'alevins, poisson de table, etc."
+msgstr ""
+
+#: apps/accounts/models.py:91 apps/commerce/models.py:343
+msgid "Région"
+msgstr ""
+
+#: apps/accounts/models.py:96
+msgid "Région du Cameroun"
+msgstr ""
+
+#: apps/accounts/models.py:100
+msgid "Département"
+msgstr ""
+
+#: apps/accounts/models.py:104
+msgid "Département dans la région choisie"
+msgstr ""
+
+#: apps/accounts/models.py:108
+msgid "Arrondissement"
+msgstr ""
+
+#: apps/accounts/models.py:112
+msgid "Arrondissement dans le département"
+msgstr ""
+
+#: apps/accounts/models.py:116 apps/commerce/models.py:348
+msgid "Ville"
+msgstr ""
+
+#: apps/accounts/models.py:120
+msgid "Ville dans l'arrondissement"
+msgstr ""
+
+#: apps/accounts/models.py:124
+msgid "Quartier"
+msgstr ""
+
+#: apps/accounts/models.py:128
+msgid "Quartier ou localité spécifique"
+msgstr ""
+
+#: apps/accounts/models.py:132
+msgid "Statut juridique"
+msgstr ""
+
+#: apps/accounts/models.py:137
+msgid "Statut juridique de l'entreprise (SARL, SCOOP, etc.)"
+msgstr ""
+
+#: apps/accounts/models.py:141
+msgid "Nom du promoteur"
+msgstr ""
+
+#: apps/accounts/models.py:145
+msgid "Nom du promoteur ou dirigeant de l'entreprise"
+msgstr ""
+
+#: apps/accounts/models.py:149
+msgid "Classe d'âge"
+msgstr ""
+
+#: apps/accounts/models.py:154
+msgid "Tranche d'âge de la personne"
+msgstr ""
+
+#: apps/accounts/models.py:158
+msgid "Zone d'intervention"
+msgstr ""
+
+#: apps/accounts/models.py:162
+msgid "Zone géographique d'intervention de l'activité"
+msgstr ""
+
+#: apps/accounts/models.py:168
+msgid "Prénom normalisé"
+msgstr ""
+
+#: apps/accounts/models.py:175
+msgid "Nom normalisé"
+msgstr ""
+
+#: apps/accounts/models.py:190 apps/accounts/models.py:322
+#: apps/chat/admin.py:136 apps/chat/models.py:65 apps/chat/models.py:139
+#: apps/notifications/admin.py:201 apps/notifications/admin.py:295
+#: apps/notifications/admin.py:363 apps/notifications/admin.py:474
+#: apps/notifications/models.py:58 apps/notifications/models.py:221
+#: apps/notifications/models.py:457
+msgid "Utilisateur"
+msgstr ""
+
+#: apps/accounts/models.py:191
+msgid "Utilisateurs"
+msgstr ""
+
+#: apps/accounts/models.py:305
+msgid "En attente"
+msgstr ""
+
+#: apps/accounts/models.py:306
+msgid "Certifiée"
+msgstr ""
+
+#: apps/accounts/models.py:307
+msgid "Suspendue"
+msgstr ""
+
+#: apps/accounts/models.py:308
+msgid "Rejetée"
+msgstr ""
+
+#: apps/accounts/models.py:323
+msgid "Utilisateur propriétaire de cette ferme"
+msgstr ""
+
+#: apps/accounts/models.py:329
+msgid "Nom de la ferme"
+msgstr ""
+
+#: apps/accounts/models.py:331
+msgid "Nom commercial ou descriptif de l'exploitation"
+msgstr ""
+
+#: apps/accounts/models.py:335
+msgid "Statut de certification"
+msgstr ""
+
+#: apps/accounts/models.py:339
+msgid "Statut de certification géré par les administrateurs"
+msgstr ""
+
+#: apps/accounts/models.py:343
+msgid "Nombre total de bassins"
+msgstr ""
+
+#: apps/accounts/models.py:345
+msgid "Nombre total de bassins d'élevage disponibles"
+msgstr ""
+
+#: apps/accounts/models.py:349
+msgid "Superficie totale (m²)"
+msgstr ""
+
+#: apps/accounts/models.py:354
+msgid "Superficie totale de l'exploitation en mètres carrés"
+msgstr ""
+
+#: apps/accounts/models.py:358
+msgid "Source d'eau"
+msgstr ""
+
+#: apps/accounts/models.py:361
+msgid "Principale source d'approvisionnement en eau"
+msgstr ""
+
+#: apps/accounts/models.py:365
+msgid "Espèce principale"
+msgstr ""
+
+#: apps/accounts/models.py:368
+msgid "Principale espèce de poisson élevée"
+msgstr ""
+
+#: apps/accounts/models.py:372
+msgid "Production annuelle (kg)"
+msgstr ""
+
+#: apps/accounts/models.py:375
+msgid "Production annuelle estimée en kilogrammes"
+msgstr ""
+
+#: apps/accounts/models.py:379
+msgid "Latitude GPS"
+msgstr ""
+
+#: apps/accounts/models.py:384
+msgid "Coordonnée GPS latitude de la ferme (WGS84)"
+msgstr ""
+
+#: apps/accounts/models.py:388
+msgid "Longitude GPS"
+msgstr ""
+
+#: apps/accounts/models.py:393
+msgid "Coordonnée GPS longitude de la ferme (WGS84)"
+msgstr ""
+
+#: apps/accounts/models.py:397
+msgid "Adresse GPS"
+msgstr ""
+
+#: apps/accounts/models.py:400
+msgid "Adresse lisible issue du reverse geocoding (ex: Mbalmayo, Centre)"
+msgstr ""
+
+#: apps/accounts/models.py:404 apps/aquaculture/models.py:320
+#: apps/chat/models.py:72 apps/chat/models.py:254
+msgid "Date de création"
+msgstr ""
+
+#: apps/accounts/models.py:406
+msgid "Date de création automatique du profil"
+msgstr ""
+
+#: apps/accounts/models.py:410 apps/aquaculture/models.py:321
+msgid "Dernière modification"
+msgstr ""
+
+#: apps/accounts/models.py:412
+msgid "Date de dernière modification du profil"
+msgstr ""
+
+#: apps/accounts/models.py:416 apps/aquaculture/models.py:2149
+msgid "Supprimé"
+msgstr ""
+
+#: apps/accounts/models.py:418
+msgid "Marqueur de suppression pour la synchronisation mobile"
+msgstr ""
+
+#: apps/accounts/models.py:423 apps/aquaculture/models.py:238
+#: apps/aquaculture/models.py:371 apps/aquaculture/models.py:869
+#: apps/aquaculture/models.py:2062
+msgid "Profil de ferme"
+msgstr ""
+
+#: apps/accounts/models.py:424
+msgid "Profils de fermes"
+msgstr ""
+
+#: apps/accounts/serializers.py:77
+msgid "Les mots de passe ne correspondent pas."
+msgstr ""
+
+#: apps/accounts/serializers.py:91
+msgid ""
+"Un compte existe déjà avec ce numéro de téléphone. Connectez-vous ou "
+"utilisez un autre numéro."
+msgstr ""
+
+#: apps/accounts/serializers.py:116
+msgid "Une erreur inattendue s'est produite. Veuillez réessayer."
+msgstr ""
+
+#: apps/accounts/serializers.py:145
+#: apps/accounts/services/auth_application_service.py:94
+msgid "Veuillez fournir soit le nom de connexion soit le numéro de téléphone."
+msgstr ""
+
+#: apps/accounts/serializers.py:149
+#: apps/accounts/services/auth_application_service.py:108
+msgid "Le mot de passe est requis."
+msgstr ""
+
+#: apps/accounts/serializers.py:278
+msgid "La superficie totale ne peut pas être négative."
+msgstr ""
+
+#: apps/accounts/serializers.py:283
+#: apps/aquaculture/services/farm_production_plan_service.py:142
+msgid "Le prix d'aliment par défaut doit être supérieur à 0."
+msgstr ""
+
+#: apps/accounts/serializers.py:288
+msgid "La latitude doit être comprise entre -90 et 90."
+msgstr ""
+
+#: apps/accounts/serializers.py:293
+msgid "La longitude doit être comprise entre -180 et 180."
+msgstr ""
+
+#: apps/accounts/serializers.py:360
+#: apps/aquaculture/production_plan_serializers.py:190
+msgid "La production cible doit être supérieure à 0."
+msgstr ""
+
+#: apps/accounts/serializers.py:367
+#: apps/aquaculture/production_plan_serializers.py:195
+msgid "Le nombre d'unités doit être supérieur à 0."
+msgstr ""
+
+#: apps/accounts/serializers.py:374
+#: apps/aquaculture/production_plan_serializers.py:200
+msgid "Le volume par unité doit être supérieur à 0."
+msgstr ""
+
+#: apps/accounts/serializers.py:381
+#: apps/aquaculture/production_plan_serializers.py:205
+msgid "La surface par unité doit être supérieure à 0."
+msgstr ""
+
+#: apps/accounts/serializers.py:388
+#: apps/aquaculture/production_plan_serializers.py:210
+msgid "Le coût par alevin ne peut pas être négatif."
+msgstr ""
+
+#: apps/accounts/serializers.py:395
+#: apps/aquaculture/production_plan_serializers.py:215
+msgid "Le prix de vente prévu doit être supérieur à 0."
+msgstr ""
+
+#: apps/accounts/serializers.py:643
+msgid "Confirmation explicite requise."
+msgstr ""
+
+#: apps/accounts/serializers.py:651
+msgid "Token invalide ou compte désactivé."
+msgstr ""
+
+#: apps/accounts/services/auth_application_service.py:130
+msgid ""
+"Plusieurs comptes correspondent à ce nom de connexion. Utilisez plutôt votre "
+"numéro de téléphone."
+msgstr ""
+
+#: apps/accounts/services/auth_application_service.py:149
+msgid "Aucun compte n'est associé à ce numéro de téléphone."
+msgstr ""
+
+#: apps/accounts/services/auth_application_service.py:153
+msgid "Aucun compte n'est associé à ce nom de connexion."
+msgstr ""
+
+#: apps/accounts/services/auth_application_service.py:168
+msgid "Ce compte a été désactivé. Contactez AquaCare pour obtenir de l'aide."
+msgstr ""
+
+#: apps/accounts/services/auth_application_service.py:181
+msgid "Mot de passe incorrect."
+msgstr ""
+
+#: apps/accounts/services/profile_mutation_service.py:57
+msgid "Ce compte est desactive."
+msgstr ""
+
+#: apps/accounts/validators.py:55
+msgid "Le numéro de téléphone est requis."
+msgstr ""
+
+#: apps/accounts/validators.py:67
+msgid ""
+"Format de numéro invalide. Formats acceptés : +237XXXXXXXXX (Cameroun) ou "
+"+XXX format international."
+msgstr ""
+
+#: apps/accounts/views.py:165
+#, fuzzy
+#| msgid "Cycle récolté avec succès"
+msgid "Compte créé avec succès"
 msgstr "Cycle récolté avec succès"
 
-msgid "Cycle non trouvé"
-msgstr "Cycle non trouvé"
+#: apps/accounts/views.py:260
+msgid "Connexion réussie"
+msgstr ""
 
-msgid "Paramètre species requis"
-msgstr "Paramètre species requis"
+#: apps/accounts/views.py:414
+msgid "Déconnexion réussie"
+msgstr ""
 
-msgid "Aucune donnée environnementale disponible"
-msgstr "Aucune donnée environnementale disponible"
+#: apps/accounts/views.py:433
+msgid "Token invalide"
+msgstr ""
 
-msgid "Données insuffisantes"
+#: apps/accounts/views.py:621
+#, fuzzy
+#| msgid "Cycle récolté avec succès"
+msgid "Compte supprimé avec succès."
+msgstr "Cycle récolté avec succès"
+
+#: apps/aquaculture/admin.py:273
+msgid "Bassin et infrastructure"
+msgstr ""
+
+#: apps/aquaculture/admin.py:276
+#, fuzzy
+#| msgid "Données insuffisantes"
+msgid "Donnees initiales"
 msgstr "Données insuffisantes"
 
-msgid "Excellent"
-msgstr "Excellent"
+#: apps/aquaculture/admin.py:282
+msgid "Donnees actuelles"
+msgstr ""
 
-msgid "Bon"
-msgstr "Bon"
+#: apps/aquaculture/admin.py:289
+msgid "Recolte"
+msgstr ""
 
-msgid "Moyen"
-msgstr "Moyen"
+#: apps/aquaculture/admin.py:295 apps/aquaculture/admin.py:940
+#: apps/aquaculture/admin.py:1070 apps/aquaculture/admin.py:1123
+#: apps/commerce/admin.py:113
+msgid "Metadonnees"
+msgstr ""
 
-msgid "À améliorer"
-msgstr "À améliorer"
+#: apps/aquaculture/admin.py:336 apps/aquaculture/admin.py:600
+#: apps/aquaculture/admin.py:679 apps/aquaculture/admin.py:825
+#: apps/aquaculture/admin.py:956 apps/aquaculture/admin.py:1340
+#: apps/commerce/admin.py:863 apps/commerce/admin.py:1061
+#: apps/commerce/models.py:249 apps/farm_gps/admin.py:38
+#: templates/admin/commerce/order/fulfil_confirmation.html:11
+msgid "Ferme"
+msgstr ""
 
-msgid "Améliorer le suivi sanitaire et la qualité de l'eau"
-msgstr "Améliorer le suivi sanitaire et la qualité de l'eau"
+#: apps/aquaculture/admin.py:342 apps/aquaculture/admin.py:1132
+#: apps/commerce/admin.py:184
+msgid "Espece"
+msgstr ""
 
-msgid "Optimiser l'alimentation et réduire le gaspillage"
-msgstr "Optimiser l'alimentation et réduire le gaspillage"
+#: apps/aquaculture/admin.py:358 apps/aquaculture/admin.py:616
+#: apps/aquaculture/admin.py:1366 apps/aquaculture/models.py:410
+#: apps/aquaculture/models.py:564 apps/aquaculture/models.py:1062
+#: apps/aquaculture/models.py:2090 apps/aquaculture/models.py:2223
+#: apps/commerce/admin.py:889 apps/commerce/models.py:273
+msgid "Statut"
+msgstr ""
 
-msgid "Performance conforme aux cycles précédents"
-msgstr "Performance conforme aux cycles précédents"
+#: apps/aquaculture/admin.py:364
+msgid "Jours actifs"
+msgstr ""
 
-# Notifications
-msgid "Nourrissage - %(cycle_name)s"
-msgstr "Nourrissage - %(cycle_name)s"
+#: apps/aquaculture/admin.py:371 apps/aquaculture/admin.py:659
+msgid "Biomasse"
+msgstr ""
 
-msgid "Donnez %(amount).1f kg d'aliment ce matin"
-msgstr "Donnez %(amount).1f kg d'aliment ce matin"
+#: apps/aquaculture/admin.py:389
+msgid "Taux survie"
+msgstr ""
 
-msgid "Donnez %(amount).1f kg d'aliment ce soir"
-msgstr "Donnez %(amount).1f kg d'aliment ce soir"
+#: apps/aquaculture/admin.py:407
+msgid "FCR"
+msgstr ""
 
-msgid "The cycle duration must be between 30 and 365 days."
-msgstr "La durée du cycle doit être comprise entre 30 et 365 jours."
+#: apps/aquaculture/admin.py:429
+msgid "Performance"
+msgstr ""
 
-msgid "The estimated harvest date must match the cycle duration."
-msgstr "La date prévisionnelle de récolte doit correspondre à la durée du cycle."
+#: apps/aquaculture/admin.py:434 apps/aquaculture/admin.py:869
+#: apps/aquaculture/admin.py:1030 apps/aquaculture/admin.py:1090
+#: apps/aquaculture/admin.py:1147 apps/aquaculture/admin.py:1175
+#: apps/aquaculture/admin.py:1336 apps/aquaculture/admin.py:1667
+#: apps/chat/models.py:58 apps/chat/models.py:155
+msgid "ID"
+msgstr ""
+
+#: apps/aquaculture/admin.py:438
+msgid "Exporter selection en CSV"
+msgstr ""
+
+#: apps/aquaculture/admin.py:443
+msgid "Vous n'avez pas la permission d'exporter."
+msgstr ""
+
+#: apps/aquaculture/admin.py:487
+msgid "Generer rapport performance"
+msgstr ""
+
+#: apps/aquaculture/admin.py:492
+msgid "Vous n'avez pas la permission de generer des rapports."
+msgstr ""
+
+#: apps/aquaculture/admin.py:514
+#, fuzzy
+#| msgid "Marquer comme livrée"
+msgid "Marquer comme termine"
+msgstr "Marquer comme livrée"
+
+#: apps/aquaculture/admin.py:519
+msgid "Vous n'avez pas la permission de terminer des cycles."
+msgstr ""
+
+#: apps/aquaculture/admin.py:531
+#, python-brace-format
+msgid "{} cycle(s) marque(s) comme termine(s)."
+msgstr ""
+
+#: apps/aquaculture/admin.py:561
+msgid "Dimensions"
+msgstr ""
+
+#: apps/aquaculture/admin.py:564 apps/aquaculture/admin.py:662
+#: apps/aquaculture/admin.py:1236 apps/aquaculture/models.py:2237
+#: apps/notifications/models.py:104
+msgid "Métadonnées"
+msgstr ""
+
+#: apps/aquaculture/admin.py:604 apps/aquaculture/admin.py:979
+#: apps/aquaculture/admin.py:1355
+msgid "Type"
+msgstr ""
+
+#: apps/aquaculture/admin.py:608
+msgid "Dimension"
+msgstr ""
+
+#: apps/aquaculture/admin.py:612
+msgid "Capacité conseillée"
+msgstr ""
+
+#: apps/aquaculture/admin.py:650 apps/aquaculture/admin.py:834
+#: apps/aquaculture/admin.py:964
+msgid "Allocation"
+msgstr ""
+
+#: apps/aquaculture/admin.py:684 apps/aquaculture/admin.py:818
+#: apps/aquaculture/admin.py:950 apps/aquaculture/admin.py:1080
+#: apps/aquaculture/admin.py:1170 apps/aquaculture/models.py:2030
+#: templates/admin/commerce/order/fulfil_confirmation.html:14
+msgid "Cycle"
+msgstr ""
+
+#: apps/aquaculture/admin.py:689 apps/aquaculture/admin.py:842
+#: apps/aquaculture/admin.py:972 apps/aquaculture/models.py:2031
+msgid "Unité"
+msgstr ""
+
+#: apps/aquaculture/admin.py:693
+msgid "Survie"
+msgstr ""
+
+#: apps/aquaculture/admin.py:749
+msgid ""
+"Le journal a été supprimé. La récolte finale associée doit maintenant être "
+"réconciliée avec l'effectif recalculé."
+msgstr ""
+
+#: apps/aquaculture/admin.py:757
+msgid ""
+"Le journal a été supprimé, mais la chronologie existante du cycle reste "
+"incohérente et doit être vérifiée manuellement."
+msgstr ""
+
+#: apps/aquaculture/admin.py:773
+#, python-format
+msgid ""
+"%(count)s récolte(s) finale(s) doivent être réconciliées après la "
+"suppression des journaux."
+msgstr ""
+
+#: apps/aquaculture/admin.py:781
+#, python-format
+msgid ""
+"%(count)s cycle(s) conservent une chronologie incohérente qui doit être "
+"vérifiée manuellement."
+msgstr ""
+
+#: apps/aquaculture/admin.py:790
+msgid "Donnees de mortalite"
+msgstr ""
+
+#: apps/aquaculture/admin.py:793
+#, fuzzy
+#| msgid "Données insuffisantes"
+msgid "Donnees de croissance"
+msgstr "Données insuffisantes"
+
+#: apps/aquaculture/admin.py:796
+msgid "Alimentation"
+msgstr ""
+
+#: apps/aquaculture/admin.py:799
+msgid "Parametres environnementaux"
+msgstr ""
+
+#: apps/aquaculture/admin.py:805 apps/aquaculture/models.py:1416
+msgid "Observations"
+msgstr ""
+
+#: apps/aquaculture/admin.py:808
+msgid "Synchronisation"
+msgstr ""
+
+#: apps/aquaculture/admin.py:864
+msgid "Temperature"
+msgstr ""
+
+#: apps/aquaculture/admin.py:925
+msgid "Details de l evenement"
+msgstr ""
+
+#: apps/aquaculture/admin.py:928
+msgid "Traitement"
+msgstr ""
+
+#: apps/aquaculture/admin.py:934
+msgid "Documentation"
+msgstr ""
+
+#: apps/aquaculture/admin.py:937
+msgid "Suivi"
+msgstr ""
+
+#: apps/aquaculture/admin.py:998
+msgid "Statut resolution"
+msgstr ""
+
+#: apps/aquaculture/admin.py:1008 apps/aquaculture/models.py:1684
+msgid "Photo"
+msgstr ""
+
+#: apps/aquaculture/admin.py:1025
+msgid "Eleveur"
+msgstr ""
+
+#: apps/aquaculture/admin.py:1057
+msgid "Parametres du cycle"
+msgstr ""
+
+#: apps/aquaculture/admin.py:1060
+msgid "Plan d alimentation"
+msgstr ""
+
+#: apps/aquaculture/admin.py:1065
+msgid "Specifications de l aliment"
+msgstr ""
+
+#: apps/aquaculture/admin.py:1085
+msgid "Periode"
+msgstr ""
+
+#: apps/aquaculture/admin.py:1105 apps/commerce/admin.py:101
+msgid "Classification"
+msgstr ""
+
+#: apps/aquaculture/admin.py:1108 apps/aquaculture/admin.py:1142
+msgid "Plage de poids"
+msgstr ""
+
+#: apps/aquaculture/admin.py:1111
+msgid "Recommandations nutritionnelles"
+msgstr ""
+
+#: apps/aquaculture/admin.py:1117 apps/aquaculture/models.py:1900
+#, fuzzy
+#| msgid "Articles commandés"
+msgid "Produits recommandés"
+msgstr "Articles commandés"
+
+#: apps/aquaculture/admin.py:1120 apps/aquaculture/models.py:1813
+msgid "Notes"
+msgstr ""
+
+#: apps/aquaculture/admin.py:1137
+msgid "Stade"
+msgstr ""
+
+#: apps/aquaculture/admin.py:1211 apps/aquaculture/models.py:2208
+msgid "Rapport"
+msgstr ""
+
+#: apps/aquaculture/admin.py:1214
+msgid "Aperçu du contenu"
+msgstr ""
+
+#: apps/aquaculture/admin.py:1217 apps/aquaculture/admin.py:1389
+msgid "PDF"
+msgstr ""
+
+#: apps/aquaculture/admin.py:1220
+msgid "Validation"
+msgstr ""
+
+#: apps/aquaculture/admin.py:1224
+msgid "Diffusion Email"
+msgstr ""
+
+#: apps/aquaculture/admin.py:1228 apps/aquaculture/models.py:2195
+msgid "WhatsApp"
+msgstr ""
+
+#: apps/aquaculture/admin.py:1232
+#, fuzzy
+#| msgid "Données insuffisantes"
+msgid "Données JSON brutes"
+msgstr "Données insuffisantes"
+
+#: apps/aquaculture/admin.py:1327 apps/aquaculture/admin.py:1561
+#: apps/commerce/admin.py:351 apps/commerce/admin.py:378
+#: apps/commerce/admin.py:380 apps/commerce/admin.py:971
+msgid "Erreur interne lors de la génération du PDF."
+msgstr ""
+
+#: apps/aquaculture/admin.py:1344
+msgid "Période"
+msgstr ""
+
+#: apps/aquaculture/admin.py:1531
+msgid "Aperçu du rapport"
+msgstr ""
+
+#: apps/aquaculture/admin.py:1535
+msgid "Télécharger PDF(s) sélectionnés"
+msgstr ""
+
+#: apps/aquaculture/admin.py:1539 apps/aquaculture/admin.py:1594
+#: apps/commerce/admin.py:336 apps/commerce/admin.py:364
+#: apps/commerce/admin.py:934
+msgid "Accès refusé."
+msgstr ""
+
+#: apps/aquaculture/admin.py:1586 apps/commerce/admin.py:1010
+msgid "Erreur interne lors de la génération de l'archive ZIP."
+msgstr ""
+
+#: apps/aquaculture/admin.py:1588
+msgid "Régénérer rapport(s) — nouveau PDF"
+msgstr ""
+
+#: apps/aquaculture/admin.py:1610
+#, python-format
+msgid "Rapport %(report)s : échec de régénération."
+msgstr ""
+
+#: apps/aquaculture/admin.py:1615
+#, python-brace-format
+msgid "{} rapport(s) régénéré(s)."
+msgstr ""
+
+#: apps/aquaculture/admin.py:1617
+msgid "Valider rapport(s)"
+msgstr ""
+
+#: apps/aquaculture/admin.py:1621
+msgid "Seul le superuser peut valider les rapports."
+msgstr ""
+
+#: apps/aquaculture/admin.py:1637
+#, python-format
+msgid "Rapport %(report)s : échec de validation."
+msgstr ""
+
+#: apps/aquaculture/admin.py:1642
+#, python-brace-format
+msgid "{} rapport(s) validé(s)."
+msgstr ""
+
+#: apps/aquaculture/apps.py:10
+msgid "Production Aquacole"
+msgstr ""
 
 # Transactional cycle launch
+#: apps/aquaculture/cycle_launch_serializers.py:131
 msgid "L'identifiant local de l'unité est obligatoire."
 msgstr "L'identifiant local de l'unité est obligatoire."
 
-msgid "Le nom de l'unité est obligatoire."
-msgstr "Le nom de l'unité est obligatoire."
-
-msgid "L'unité de l'allocation est obligatoire."
-msgstr "L'unité de l'allocation est obligatoire."
-
-msgid "Chaque unité doit avoir un identifiant local unique."
-msgstr "Chaque unité doit avoir un identifiant local unique."
-
-msgid "Chaque unité doit avoir exactement une allocation."
-msgstr "Chaque unité doit avoir exactement une allocation."
-
-msgid "Une allocation référence une unité inconnue."
-msgstr "Une allocation référence une unité inconnue."
-
-msgid "L'espèce du plan doit correspondre à celle du cycle."
-msgstr "L'espèce du plan doit correspondre à celle du cycle."
-
-msgid "La somme des allocations doit correspondre à l'effectif initial du cycle."
-msgstr "La somme des allocations doit correspondre à l'effectif initial du cycle."
-
-msgid "La capacité recommandée de l'unité est dépassée."
-msgstr "La capacité recommandée de l'unité est dépassée."
-
-msgid "Ce lancement existe déjà avec un contenu différent ou appartient à une autre ferme."
-msgstr "Ce lancement existe déjà avec un contenu différent ou appartient à une autre ferme."
-
-msgid "L'effectif courant du cycle ne correspond pas aux allocations."
-msgstr "L'effectif courant du cycle ne correspond pas aux allocations."
-
-msgid "Un nouveau cycle doit être lancé avec au moins une unité de production."
-msgstr "Un nouveau cycle doit être lancé avec au moins une unité de production."
-
+#: apps/aquaculture/cycle_launch_serializers.py:138
 msgid "Une unité existante ne peut pas contenir des champs de création."
 msgstr "Une unité existante ne peut pas contenir des champs de création."
 
+#: apps/aquaculture/cycle_launch_serializers.py:142
 msgid "L'identifiant de l'unité existante est obligatoire."
 msgstr "L'identifiant de l'unité existante est obligatoire."
 
+#: apps/aquaculture/cycle_launch_serializers.py:148
 msgid "Une nouvelle unité ne peut pas référencer une unité existante."
 msgstr "Une nouvelle unité ne peut pas référencer une unité existante."
 
-msgid "Une même unité ne peut être sélectionnée deux fois."
-msgstr "Une même unité ne peut être sélectionnée deux fois."
+#: apps/aquaculture/cycle_launch_serializers.py:153
+msgid "Le nom de l'unité est obligatoire."
+msgstr "Le nom de l'unité est obligatoire."
 
-msgid "Le mode de lancement ne correspond pas à l'état de configuration de la ferme."
-msgstr "Le mode de lancement ne correspond pas à l'état de configuration de la ferme."
+#: apps/aquaculture/cycle_launch_serializers.py:178
+msgid "L'unité de l'allocation est obligatoire."
+msgstr "L'unité de l'allocation est obligatoire."
 
+#: apps/aquaculture/cycle_launch_serializers.py:212
+#, fuzzy
+#| msgid "Chaque unité doit avoir un identifiant local unique."
+msgid "Chaque bac de calibrage doit avoir un nom unique."
+msgstr "Chaque unité doit avoir un identifiant local unique."
+
+#: apps/aquaculture/cycle_launch_serializers.py:217
 msgid "Le plan de production est obligatoire pour le setup initial."
 msgstr "Le plan de production est obligatoire pour le setup initial."
 
-msgid "La configuration de la ferme est déjà terminée."
-msgstr "La configuration de la ferme est déjà terminée."
+#: apps/aquaculture/cycle_launch_serializers.py:226
+#, fuzzy
+#| msgid ""
+#| "Le mode de lancement ne correspond pas à l'état de configuration de la "
+#| "ferme."
+msgid "Le type d'unité ne correspond pas au mode de lancement."
+msgstr ""
+"Le mode de lancement ne correspond pas à l'état de configuration de la ferme."
 
-msgid "La ferme doit être configurée avant de lancer un cycle supplémentaire."
-msgstr "La ferme doit être configurée avant de lancer un cycle supplémentaire."
+#: apps/aquaculture/cycle_launch_serializers.py:233
+msgid "Chaque unité doit avoir un identifiant local unique."
+msgstr "Chaque unité doit avoir un identifiant local unique."
 
-msgid "L'unité de production sélectionnée est inactive."
-msgstr "L'unité de production sélectionnée est inactive."
+#: apps/aquaculture/cycle_launch_serializers.py:243
+#: apps/aquaculture/cycle_launch_serializers.py:254
+msgid "Chaque unité doit avoir exactement une allocation."
+msgstr "Chaque unité doit avoir exactement une allocation."
 
-msgid "Cette unité de production est déjà utilisée par un autre cycle actif."
-msgstr "Cette unité de production est déjà utilisée par un autre cycle actif."
+#: apps/aquaculture/cycle_launch_serializers.py:250
+msgid "Une allocation référence une unité inconnue."
+msgstr "Une allocation référence une unité inconnue."
 
-msgid "La capacité recommandée de l'unité de production est dépassée."
-msgstr "La capacité recommandée de l'unité de production est dépassée."
+#: apps/aquaculture/cycle_launch_serializers.py:259
+msgid "L'espèce du plan doit correspondre à celle du cycle."
+msgstr "L'espèce du plan doit correspondre à celle du cycle."
 
+#: apps/aquaculture/cycle_launch_serializers.py:265
+msgid ""
+"La somme des allocations doit correspondre à l'effectif initial du cycle."
+msgstr ""
+"La somme des allocations doit correspondre à l'effectif initial du cycle."
+
+#: apps/aquaculture/cycle_launch_serializers.py:272
+msgid "Une même unité ne peut être sélectionnée deux fois."
+msgstr "Une même unité ne peut être sélectionnée deux fois."
+
+#: apps/aquaculture/domain/cycle_duration.py:12
+msgid "The cycle duration must be between 30 and 365 days."
+msgstr "La durée du cycle doit être comprise entre 30 et 365 jours."
+
+#: apps/aquaculture/domain/cycle_duration.py:15
+msgid "The estimated harvest date must match the cycle duration."
+msgstr ""
+"La date prévisionnelle de récolte doit correspondre à la durée du cycle."
+
+#: apps/aquaculture/domain/exceptions.py:28
+msgid "Une erreur métier s'est produite."
+msgstr ""
+
+#: apps/aquaculture/domain/exceptions.py:41
+msgid "Règle métier violée."
+msgstr ""
+
+#: apps/aquaculture/domain/exceptions.py:54
+msgid "Cette opération nécessite un cycle actif."
+msgstr ""
+
+# === AQUACULTURE MODULE TRANSLATIONS ===
+# Note: Most field labels are already in French in the code
+# Only translating messages that need actual translation
+# API Error Messages (already in French in code)
+# These msgid/msgstr pairs are kept for completeness but text is the same
+#: apps/aquaculture/domain/exceptions.py:62
+#, fuzzy
+#| msgid "Ce cycle a déjà été récolté"
+msgid "Ce cycle a déjà été récolté."
+msgstr "Ce cycle a déjà été récolté"
+
+#: apps/aquaculture/domain/exceptions.py:74
+msgid "La densité d'élevage dépasse les limites recommandées."
+msgstr ""
+
+#: apps/aquaculture/domain/exceptions.py:87
+msgid "Les données de récolte sont invalides."
+msgstr ""
+
+#: apps/aquaculture/domain/exceptions.py:100
+msgid "Le stock physique déclaré ne correspond pas encore au ledger serveur."
+msgstr ""
+
+#: apps/aquaculture/domain/exceptions.py:117
+msgid "Cet UUID correspond à une autre récolte finale."
+msgstr ""
+
+#: apps/aquaculture/domain/exceptions.py:130
+msgid "Cette allocation possède déjà une récolte finale."
+msgstr ""
+
+#: apps/aquaculture/domain/exceptions.py:143
+msgid ""
+"Cette récolte doit être déclarée unité par unité afin de réconcilier chaque "
+"stock physique."
+msgstr ""
+
+#: apps/aquaculture/domain/exceptions.py:153
+msgid "Le nombre de poissons spécifié dépasse l'effectif disponible."
+msgstr ""
+
+#: apps/aquaculture/domain/exceptions.py:166
+msgid "La plage de dates est invalide."
+msgstr ""
+
+#: apps/aquaculture/domain/exceptions.py:180
+msgid "Conflit de synchronisation détecté."
+msgstr ""
+
+#: apps/aquaculture/domain/exceptions.py:193
+msgid "Intégrité des données compromise."
+msgstr ""
+
+#: apps/aquaculture/domain/exceptions.py:206
+msgid "Impossible de générer le plan d'alimentation."
+msgstr ""
+
+#: apps/aquaculture/domain/exceptions.py:214
+msgid "Impossible de créer la notification."
+msgstr ""
+
+#: apps/aquaculture/domain/exceptions.py:228
+msgid "Les données du log sont invalides."
+msgstr ""
+
+#: apps/aquaculture/domain/exceptions.py:253
+msgid "Cycle de production introuvable."
+msgstr ""
+
+#: apps/aquaculture/domain/exceptions.py:262
+msgid "Un log existe déjà pour cette date."
+msgstr ""
+
+#: apps/aquaculture/domain/exceptions.py:275
+msgid "Les données sanitaires sont invalides."
+msgstr ""
+
+#: apps/aquaculture/domain/exceptions.py:284
+msgid "Log sanitaire introuvable."
+msgstr ""
+
+#: apps/aquaculture/domain/exceptions.py:297
+msgid "Les données de synchronisation sont invalides."
+msgstr ""
+
+#: apps/aquaculture/domain/farm_setup_rules.py:42
+msgid "L'espèce est requise."
+msgstr ""
+
+#: apps/aquaculture/domain/farm_setup_rules.py:43
+msgid "Le type d'infrastructure est requis."
+msgstr ""
+
+#: apps/aquaculture/domain/farm_setup_rules.py:44
+#, fuzzy
+#| msgid "Le nom de l'unité est obligatoire."
+msgid "Le nombre d'unités est requis."
+msgstr "Le nom de l'unité est obligatoire."
+
+#: apps/aquaculture/domain/farm_setup_rules.py:45
+msgid "La production cible est requise."
+msgstr ""
+
+#: apps/aquaculture/domain/farm_setup_rules.py:46
+msgid "Le nombre de cycles par an est requis."
+msgstr ""
+
+#: apps/aquaculture/domain/farm_setup_rules.py:55
+msgid "La surface par unité est requise pour les étangs."
+msgstr ""
+
+#: apps/aquaculture/domain/farm_setup_rules.py:57
+msgid "Le volume par unité est requis pour ce type d'infrastructure."
+msgstr ""
+
+#: apps/aquaculture/domain/production_units.py:45
+msgid "poissons/m²"
+msgstr ""
+
+#: apps/aquaculture/domain/production_units.py:51
+msgid "poissons/m³"
+msgstr ""
+
+#: apps/aquaculture/domain/production_units.py:150
+#: apps/aquaculture/services/cycle_launch_application_service.py:84
 msgid "La capacité de cette unité de production ne peut pas être déterminée."
 msgstr "La capacité de cette unité de production ne peut pas être déterminée."
 
+#: apps/aquaculture/domain/production_units.py:155
+#: apps/aquaculture/services/cycle_launch_application_service.py:75
+msgid "La capacité recommandée de l'unité de production est dépassée."
+msgstr "La capacité recommandée de l'unité de production est dépassée."
+
+#: apps/aquaculture/domain/production_units.py:172
+#, fuzzy
+#| msgid "L'unité de l'allocation est obligatoire."
+msgid "Le type d'unité de production est obligatoire"
+msgstr "L'unité de l'allocation est obligatoire."
+
+#: apps/aquaculture/domain/production_units.py:174
+#, fuzzy
+#| msgid "L'unité de production sélectionnée est inactive."
+msgid "Type d'unité de production invalide"
+msgstr "L'unité de production sélectionnée est inactive."
+
+#: apps/aquaculture/domain/production_units.py:177
+msgid "Le volume doit être strictement positif"
+msgstr ""
+
+#: apps/aquaculture/domain/production_units.py:180
+msgid "La surface doit être strictement positive"
+msgstr ""
+
+#: apps/aquaculture/domain/production_units.py:183
+msgid "Un bac ou une cage doit avoir un volume positif"
+msgstr ""
+
+#: apps/aquaculture/domain/production_units.py:186
+msgid "Un étang doit avoir une surface positive"
+msgstr ""
+
+#: apps/aquaculture/domain/production_units.py:204
+msgid "L'effectif initial doit être supérieur ou égal à 0"
+msgstr ""
+
+#: apps/aquaculture/domain/production_units.py:207
+msgid "L'effectif actuel doit être supérieur ou égal à 0"
+msgstr ""
+
+#: apps/aquaculture/domain/production_units.py:210
+msgid "La biomasse initiale doit être supérieure ou égale à 0"
+msgstr ""
+
+#: apps/aquaculture/domain/production_units.py:213
+msgid "La biomasse actuelle doit être supérieure ou égale à 0"
+msgstr ""
+
+#: apps/aquaculture/domain/production_units.py:219
+#: apps/aquaculture/serializers.py:655
+#: apps/aquaculture/services/cycle_service.py:1554
+msgid "Le taux de survie prévisionnel doit être compris entre 0 et 100"
+msgstr ""
+
+#: apps/aquaculture/domain/validators.py:28 apps/aquaculture/serializers.py:631
+msgid "La date de fin doit être après la date de début"
+msgstr ""
+
+#: apps/aquaculture/domain/validators.py:41
+#, python-format
+msgid ""
+"Durée de cycle trop courte pour %(species)s: %(days)d jours (minimum: "
+"%(min)d)"
+msgstr ""
+
+#: apps/aquaculture/domain/validators.py:50
+#, python-format
+msgid ""
+"Durée de cycle trop longue pour %(species)s: %(days)d jours (maximum: "
+"%(max)d)"
+msgstr ""
+
+#: apps/aquaculture/domain/validators.py:86
+#, python-format
+msgid ""
+"Densité de mise en charge trop élevée: %(density).1f poissons/m² (maximum "
+"recommandé: %(max_density)s)"
+msgstr ""
+
+#: apps/aquaculture/domain/validators.py:100
+#, python-format
+msgid ""
+"Densité de mise en charge trop élevée: %(density).1f poissons/m³ (maximum "
+"recommandé: %(max_density)s)"
+msgstr ""
+
+#: apps/aquaculture/domain/validators.py:135
+#, python-format
+msgid "Température trop basse: %(temp)s°C (minimum: %(min)s°C)"
+msgstr ""
+
+#: apps/aquaculture/domain/validators.py:142
+#, python-format
+msgid "Température trop élevée: %(temp)s°C (maximum: %(max)s°C)"
+msgstr ""
+
+#: apps/aquaculture/domain/validators.py:151
+#, python-format
+msgid "pH trop bas: %(ph)s (minimum: %(min)s)"
+msgstr ""
+
+#: apps/aquaculture/domain/validators.py:158
+#, python-format
+msgid "pH trop élevé: %(ph)s (maximum: %(max)s)"
+msgstr ""
+
+#: apps/aquaculture/domain/validators.py:167
+#, python-format
+msgid "Oxygène dissous insuffisant: %(oxygen)s mg/L (minimum: %(min)s mg/L)"
+msgstr ""
+
+#: apps/aquaculture/domain/validators.py:176
+#, python-format
+msgid "Niveau d'ammoniac trop élevé: %(ammonia)s ppm (maximum: 0.5 ppm)"
+msgstr ""
+
+#: apps/aquaculture/domain/validators.py:211
+#, python-format
+msgid ""
+"Quantité d'aliment excessive: %(rate).1f%% de la biomasse (maximum "
+"recommandé: 15%%)"
+msgstr ""
+
+#: apps/aquaculture/domain/validators.py:223
+#, python-format
+msgid "Quantité par poisson excessive: %(amount).1f g/poisson/jour"
+msgstr ""
+
+#: apps/aquaculture/domain/validators.py:247
+#, python-format
+msgid "Échantillon trop petit: %(count)d poissons (minimum recommandé: 20)"
+msgstr ""
+
+#: apps/aquaculture/domain/validators.py:253
+msgid "Le poids total de l'échantillon doit être positif"
+msgstr ""
+
+#: apps/aquaculture/domain/validators.py:261
+#, python-format
+msgid "Poids moyen trop faible: %(weight).1f g (minimum: 0.5g)"
+msgstr ""
+
+#: apps/aquaculture/domain/validators.py:268
+#, python-format
+msgid "Poids moyen trop élevé: %(weight).1f g (maximum: 2000g)"
+msgstr ""
+
+#: apps/aquaculture/domain/validators.py:278
+#, python-format
+msgid "Incohérence dans les données d'échantillonnage (écart > 10%%)"
+msgstr ""
+
+#: apps/aquaculture/domain/validators.py:299
+msgid "Le nombre de morts ne peut être négatif"
+msgstr ""
+
+#: apps/aquaculture/domain/validators.py:303
+#, python-format
+msgid "Nombre de morts (%(dead)d) supérieur à l'effectif actuel (%(current)d)"
+msgstr ""
+
+#: apps/aquaculture/domain/validators.py:315
+#, python-format
+msgid ""
+"Mortalité journalière excessive: %(rate).1f%% (>10%% nécessite investigation)"
+msgstr ""
+
+#: apps/aquaculture/domain/validators.py:335
+#, python-format
+msgid ""
+"Date du log (%(log_date)s) antérieure au début du cycle (%(start_date)s)"
+msgstr ""
+
+#: apps/aquaculture/domain/validators.py:343
+#, python-format
+msgid "Date du log (%(log_date)s) postérieure à la fin du cycle (%(end_date)s)"
+msgstr ""
+
+#: apps/aquaculture/domain/validators.py:352
+msgid "La date du log ne peut être dans le futur"
+msgstr ""
+
+#: apps/aquaculture/domain/validators.py:359
+msgid "Date du log trop ancienne (plus de 2 ans)"
+msgstr ""
+
+#: apps/aquaculture/domain/validators.py:380
+msgid "La surface du bassin doit être positive"
+msgstr ""
+
+#: apps/aquaculture/domain/validators.py:384
+#, python-format
+msgid "Surface trop petite: %(surface)s m² (minimum recommandé: 10 m²)"
+msgstr ""
+
+#: apps/aquaculture/domain/validators.py:391
+#, python-format
+msgid "Surface très importante: %(surface)s m² (vérifiez la saisie)"
+msgstr ""
+
+#: apps/aquaculture/domain/validators.py:398
+msgid "Le volume du bassin doit être positif"
+msgstr ""
+
+#: apps/aquaculture/domain/validators.py:405
+#, python-format
+msgid "Profondeur calculée trop faible: %(depth).1f m (minimum: 0.5m)"
+msgstr ""
+
+#: apps/aquaculture/domain/validators.py:412
+#, python-format
+msgid "Profondeur calculée importante: %(depth).1f m (vérifiez les dimensions)"
+msgstr ""
+
+#: apps/aquaculture/domain/validators.py:420
+#, python-format
+msgid "Profondeur trop faible: %(depth)s m (minimum recommandé: 0.5m)"
+msgstr ""
+
+#: apps/aquaculture/domain/validators.py:427
+#, python-format
+msgid "Profondeur importante: %(depth)s m (maximum recommandé: 3m)"
+msgstr ""
+
+#: apps/aquaculture/domain/validators.py:459
+#, python-format
+msgid "Perte de poids importante: -%(loss).1f g/jour (vérifiez les données)"
+msgstr ""
+
+#: apps/aquaculture/domain/validators.py:471
+#, python-format
+msgid "Gain de poids exceptionnel: +%(gain).1f g/jour (vérifiez les données)"
+msgstr ""
+
+#: apps/aquaculture/domain/validators.py:503
+msgid "L'allocation de cycle par unité est introuvable"
+msgstr ""
+
+#: apps/aquaculture/domain/validators.py:511
+msgid "L'allocation doit appartenir au même cycle que le log"
+msgstr ""
+
+#: apps/aquaculture/domain/validators.py:524
+msgid "L'allocation ne vous appartient pas"
+msgstr ""
+
+#: apps/aquaculture/domain/value_objects.py:51
+msgid "La biomasse ne peut être négative"
+msgstr ""
+
+#: apps/aquaculture/domain/value_objects.py:53
+msgid "Le nombre de poissons ne peut être négatif"
+msgstr ""
+
+#: apps/aquaculture/domain/value_objects.py:55
+msgid "Le poids moyen ne peut être négatif"
+msgstr ""
+
+#: apps/aquaculture/domain/value_objects.py:63
+#, python-format
+msgid "Incohérence biomasse : kg=%(kg)s, calculé=%(expected)s"
+msgstr ""
+
+#: apps/aquaculture/domain/value_objects.py:183
+msgid "Le FCR ne peut être négatif"
+msgstr ""
+
+#: apps/aquaculture/domain/value_objects.py:185
+msgid "L'aliment consommé ne peut être négatif"
+msgstr ""
+
+#: apps/aquaculture/domain/value_objects.py:187
+msgid "Le gain de poids ne peut être négatif"
+msgstr ""
+
+#: apps/aquaculture/domain/value_objects.py:196
+#, python-format
+msgid "Incohérence FCR : value=%(value)s, calculé=%(expected)s"
+msgstr ""
+
+#: apps/aquaculture/domain/value_objects.py:286
+msgid "Le taux de survie doit être entre 0 et 100"
+msgstr ""
+
+#: apps/aquaculture/domain/value_objects.py:288
+msgid "L'effectif initial ne peut être négatif"
+msgstr ""
+
+#: apps/aquaculture/domain/value_objects.py:290
+msgid "L'effectif actuel ne peut être négatif"
+msgstr ""
+
+#: apps/aquaculture/domain/value_objects.py:292
+msgid "L'effectif actuel ne peut dépasser l'effectif initial"
+msgstr ""
+
+#: apps/aquaculture/domain/value_objects.py:386
+msgid "La température ne peut être négative"
+msgstr ""
+
+#: apps/aquaculture/domain/value_objects.py:388
+msgid "Le pH doit être entre 0 et 14"
+msgstr ""
+
+#: apps/aquaculture/domain/value_objects.py:390
+msgid "L'oxygène dissous ne peut être négatif"
+msgstr ""
+
+#: apps/aquaculture/domain/value_objects.py:392
+msgid "Le niveau d'ammoniac ne peut être négatif"
+msgstr ""
+
+#: apps/aquaculture/domain/value_objects.py:491
+msgid "Le poids initial ne peut être négatif"
+msgstr ""
+
+#: apps/aquaculture/domain/value_objects.py:493
+msgid "Le poids actuel ne peut être négatif"
+msgstr ""
+
+#: apps/aquaculture/domain/value_objects.py:495
+msgid "Le nombre de jours ne peut être négatif"
+msgstr ""
+
+#: apps/aquaculture/models.py:217 apps/aquaculture/models.py:342
+msgid "Étang"
+msgstr ""
+
+#: apps/aquaculture/models.py:218
+msgid "Cage flottante"
+msgstr ""
+
+#: apps/aquaculture/models.py:219
+msgid "Bac hors sol"
+msgstr ""
+
+#: apps/aquaculture/models.py:220
+msgid "Bac en sol"
+msgstr ""
+
+#: apps/aquaculture/models.py:225
+msgid "Autre espèce"
+msgstr ""
+
+#: apps/aquaculture/models.py:229
+msgid "2 cycles par an"
+msgstr ""
+
+#: apps/aquaculture/models.py:230
+msgid "3 cycles par an"
+msgstr ""
+
+#: apps/aquaculture/models.py:239
+msgid "Ferme propriétaire de ces paramètres de production"
+msgstr ""
+
+#: apps/aquaculture/models.py:242
+msgid "Production cible annuelle (kg)"
+msgstr ""
+
+#: apps/aquaculture/models.py:247
+msgid "Objectif de production annuelle en kg"
+msgstr ""
+
+#: apps/aquaculture/models.py:250
+msgid "Nombre de cycles par an"
+msgstr ""
+
+#: apps/aquaculture/models.py:254
+msgid "2 ou 3 cycles par an"
+msgstr ""
+
+#: apps/aquaculture/models.py:257
+msgid "Type d'infrastructure"
+msgstr ""
+
+#: apps/aquaculture/models.py:261
+msgid "Type principal d'infrastructure d'élevage"
+msgstr ""
+
+#: apps/aquaculture/models.py:264
+msgid "Nombre d'unités (bacs/étangs)"
+msgstr ""
+
+#: apps/aquaculture/models.py:267
+msgid "Nombre de bacs, étangs ou cages"
+msgstr ""
+
+#: apps/aquaculture/models.py:270
+msgid "Volume par unité (m³)"
+msgstr ""
+
+#: apps/aquaculture/models.py:275
+msgid "Volume de chaque bac ou cage en m³"
+msgstr ""
+
+#: apps/aquaculture/models.py:278
+msgid "Surface par unité (m²)"
+msgstr ""
+
+#: apps/aquaculture/models.py:283
+msgid "Surface de chaque étang en m²"
+msgstr ""
+
+#: apps/aquaculture/models.py:286
+msgid "Espèce principale (setup)"
+msgstr ""
+
+#: apps/aquaculture/models.py:290
+msgid "Espèce choisie lors du flux de création d'élevage"
+msgstr ""
+
+#: apps/aquaculture/models.py:293
+msgid "Coût par alevin (FCFA)"
+msgstr ""
+
+#: apps/aquaculture/models.py:298
+msgid "Prix unitaire d'un alevin en FCFA"
+msgstr ""
+
+#: apps/aquaculture/models.py:301
+msgid "Prix de vente estimé (FCFA/kg)"
+msgstr ""
+
+#: apps/aquaculture/models.py:306
+msgid "Prix de vente prévu du poisson en FCFA/kg"
+msgstr ""
+
+#: apps/aquaculture/models.py:309
+msgid "Configuration élevage complétée"
+msgstr ""
+
+#: apps/aquaculture/models.py:311
+msgid "True quand l'utilisateur a terminé le flux Créer mon élevage"
+msgstr ""
+
+#: apps/aquaculture/models.py:314
+msgid "Prix aliment par défaut (FCFA/kg)"
+msgstr ""
+
+#: apps/aquaculture/models.py:318
+msgid "Prix unitaire de l'aliment en FCFA par kg"
+msgstr ""
+
+#: apps/aquaculture/models.py:326
+msgid "Plan de production ferme"
+msgstr ""
+
+#: apps/aquaculture/models.py:327
+msgid "Plans de production ferme"
+msgstr ""
+
+#: apps/aquaculture/models.py:341
+msgid "Bac"
+msgstr ""
+
+#: apps/aquaculture/models.py:343
+msgid "Cage"
+msgstr ""
+
+#: apps/aquaculture/models.py:347 apps/aquaculture/models.py:511
+#: apps/aquaculture/models.py:1563 apps/notifications/models.py:494
+msgid "Actif"
+msgstr ""
+
+#: apps/aquaculture/models.py:348 apps/aquaculture/models.py:513
+msgid "Inactif"
+msgstr ""
+
+#: apps/aquaculture/models.py:349
+msgid "Archivé"
+msgstr ""
+
+#: apps/aquaculture/models.py:356 apps/aquaculture/models.py:842
+msgid "Calibration"
+msgstr ""
+
+#: apps/aquaculture/models.py:364 apps/aquaculture/models.py:521
+#: apps/aquaculture/models.py:713 apps/aquaculture/models.py:854
+#: apps/aquaculture/models.py:1285 apps/aquaculture/models.py:1619
+#: apps/aquaculture/models.py:1759 apps/chat/models.py:163
+#: apps/commerce/models.py:230
+msgid "UUID client"
+msgstr ""
+
+#: apps/aquaculture/models.py:365 apps/aquaculture/models.py:522
+msgid "UUID généré côté mobile ou dérivé du lancement pour déduplication"
+msgstr ""
+
+#: apps/aquaculture/models.py:375
+msgid "Nom de l'unité"
+msgstr ""
+
+#: apps/aquaculture/models.py:376
+msgid "Ex: Bac 1, Étang principal, Cage A"
+msgstr ""
+
+#: apps/aquaculture/models.py:381
+msgid "Type d'unité"
+msgstr ""
+
+#: apps/aquaculture/models.py:388
+msgid "Usage de l'unité"
+msgstr ""
+
+#: apps/aquaculture/models.py:396
+msgid "Volume (m³)"
+msgstr ""
+
+#: apps/aquaculture/models.py:404
+msgid "Surface (m²)"
+msgstr ""
+
+#: apps/aquaculture/models.py:412 apps/commerce/models.py:394
+msgid "Créée hors ligne"
+msgstr ""
+
+#: apps/aquaculture/models.py:413 apps/commerce/models.py:399
+msgid "Synchronisée le"
+msgstr ""
+
+#: apps/aquaculture/models.py:422 apps/aquaculture/models.py:534
+msgid "Unité de production"
+msgstr ""
+
+#: apps/aquaculture/models.py:423
+msgid "Unités de production"
+msgstr ""
+
+#: apps/aquaculture/models.py:487
+msgid "Un bac de calibrage doit être de type bac."
+msgstr ""
+
+#: apps/aquaculture/models.py:489
+#: apps/aquaculture/services/calibration_service.py:361
+msgid "Le volume du bac de calibrage doit être positif."
+msgstr ""
+
+#: apps/aquaculture/models.py:491
+msgid "La surface ne s'applique pas à un bac de calibrage."
+msgstr ""
+
+#: apps/aquaculture/models.py:512
+msgid "Récolté"
+msgstr ""
+
+#: apps/aquaculture/models.py:528 apps/aquaculture/models.py:720
+#: apps/aquaculture/models.py:827 apps/aquaculture/models.py:1293
+#: apps/aquaculture/models.py:1488 apps/aquaculture/models.py:1627
+#: apps/aquaculture/models.py:1767 apps/aquaculture/models.py:1955
+#: apps/commerce/models.py:259
+msgid "Cycle de production"
+msgstr ""
+
+#: apps/aquaculture/models.py:539
+msgid "Effectif initial"
+msgstr ""
+
+#: apps/aquaculture/models.py:544 apps/aquaculture/models.py:993
+msgid "Effectif actuel"
+msgstr ""
+
+#: apps/aquaculture/models.py:551 apps/aquaculture/models.py:930
+msgid "Biomasse initiale (kg)"
+msgstr ""
+
+#: apps/aquaculture/models.py:558 apps/aquaculture/models.py:1004
+msgid "Biomasse actuelle (kg)"
+msgstr ""
+
+#: apps/aquaculture/models.py:569
+msgid "Récoltée le"
+msgstr ""
+
+#: apps/aquaculture/models.py:574
+msgid "Récolte finale effectuée le"
+msgstr ""
+
+#: apps/aquaculture/models.py:575
+msgid "Instant métier auquel la récolte finale a physiquement eu lieu."
+msgstr ""
+
+#: apps/aquaculture/models.py:580
+msgid "Date métier de récolte"
+msgstr ""
+
+#: apps/aquaculture/models.py:585
+msgid "Notes de récolte finale"
+msgstr ""
+
+#: apps/aquaculture/models.py:590 apps/aquaculture/models.py:1022
+msgid "Nombre final de poissons"
+msgstr ""
+
+#: apps/aquaculture/models.py:597 apps/aquaculture/models.py:1029
+msgid "Poids moyen final (g)"
+msgstr ""
+
+#: apps/aquaculture/models.py:604 apps/aquaculture/models.py:1036
+msgid "Biomasse finale (kg)"
+msgstr ""
+
+#: apps/aquaculture/models.py:612 apps/aquaculture/models.py:966
+msgid "Taux de survie prévisionnel (%)"
+msgstr ""
+
+#: apps/aquaculture/models.py:622 apps/aquaculture/models.py:1302
+#: apps/aquaculture/models.py:1496 apps/aquaculture/models.py:1636
+msgid "Allocation de cycle par unité"
+msgstr ""
+
+#: apps/aquaculture/models.py:623
+msgid "Allocations de cycle par unité"
+msgstr ""
+
+#: apps/aquaculture/models.py:668
+msgid "L'unité de production doit appartenir à la même ferme que le cycle"
+msgstr ""
+
+#: apps/aquaculture/models.py:692
+msgid "La projection de récolte finale doit rester identique à son opération."
+msgstr ""
+
+#: apps/aquaculture/models.py:704
+msgid "Manuel"
+msgstr ""
+
 # Workflow de traitement des commandes
-msgid "Commandée"
+#: apps/aquaculture/models.py:705 apps/aquaculture/models.py:774
+#: apps/commerce/admin.py:538 apps/commerce/admin.py:1057
+#: apps/commerce/models.py:211 apps/commerce/models.py:497
+#: templates/admin/commerce/order/fulfil_confirmation.html:10
+#, fuzzy
+#| msgid "Commandée"
+msgid "Commande"
 msgstr "Commandée"
 
-msgid "Livrée — confirmation attendue"
+#: apps/aquaculture/models.py:714 apps/aquaculture/models.py:855
+#: apps/aquaculture/models.py:1286 apps/aquaculture/models.py:1620
+#: apps/aquaculture/models.py:1760
+msgid "UUID généré côté mobile pour déduplication"
+msgstr ""
+
+#: apps/aquaculture/models.py:725
+msgid "Source"
+msgstr ""
+
+#: apps/aquaculture/models.py:729
+msgid "Nom de l'aliment"
+msgstr ""
+
+#: apps/aquaculture/models.py:737
+msgid "Granulométrie (mm)"
+msgstr ""
+
+#: apps/aquaculture/models.py:738
+msgid "Diamètre des granulés de cette entrée de stock"
+msgstr ""
+
+#: apps/aquaculture/models.py:744
+msgid "Quantité (kg)"
+msgstr ""
+
+#: apps/aquaculture/models.py:751
+msgid "Montant total (FCFA)"
+msgstr ""
+
+#: apps/aquaculture/models.py:754
+msgid "Date d'entrée"
+msgstr ""
+
+#: apps/aquaculture/models.py:758
+msgid "Note"
+msgstr ""
+
+#: apps/aquaculture/models.py:766 apps/commerce/admin.py:678
+#: apps/commerce/admin.py:736 apps/commerce/models.py:58
+#: apps/commerce/models.py:503
+#: templates/admin/commerce/order/fulfil_confirmation.html:28
+msgid "Produit"
+msgstr ""
+
+#: apps/aquaculture/models.py:782
+#, fuzzy
+#| msgid "Article commandé"
+msgid "Article de commande"
+msgstr "Article commandé"
+
+#: apps/aquaculture/models.py:786 apps/aquaculture/models.py:1069
+#: apps/aquaculture/models.py:1423 apps/aquaculture/models.py:1708
+#: apps/aquaculture/models.py:1819
+msgid "Créé hors ligne"
+msgstr ""
+
+#: apps/aquaculture/models.py:791 apps/aquaculture/models.py:1074
+#: apps/aquaculture/models.py:1428 apps/aquaculture/models.py:1713
+#: apps/aquaculture/models.py:1824
+msgid "Synchronisé le"
+msgstr ""
+
+#: apps/aquaculture/models.py:802
+msgid "Entrée de stock du cycle"
+msgstr ""
+
+#: apps/aquaculture/models.py:803
+msgid "Entrées de stock du cycle"
+msgstr ""
+
+#: apps/aquaculture/models.py:828
+msgid "Cycles de production"
+msgstr ""
+
+#: apps/aquaculture/models.py:841
+msgid "Standard"
+msgstr ""
+
+#: apps/aquaculture/models.py:862
+msgid "Empreinte du lancement"
+msgstr ""
+
+#: apps/aquaculture/models.py:863
+msgid "Empreinte SHA-256 du payload de lancement transactionnel"
+msgstr ""
+
+#: apps/aquaculture/models.py:873
+msgid "Nom du cycle"
+msgstr ""
+
+#: apps/aquaculture/models.py:874
+msgid "Ex: 'Cycle Tilapia Q1 2024'"
+msgstr ""
+
+#: apps/aquaculture/models.py:880 apps/aquaculture/models.py:1857
+msgid "Espèce"
+msgstr ""
+
+#: apps/aquaculture/models.py:884
+msgid "Identifiant du bassin"
+msgstr ""
+
+#: apps/aquaculture/models.py:885
+msgid "Ex: 'Bassin A', 'Étang 1'"
+msgstr ""
+
+#: apps/aquaculture/models.py:893
+msgid "Surface du bassin (m²)"
+msgstr ""
+
+#: apps/aquaculture/models.py:894 apps/aquaculture/models.py:903
+msgid "Optionnel - au moins surface OU volume requis"
+msgstr ""
+
+#: apps/aquaculture/models.py:902
+msgid "Volume du bassin (m³)"
+msgstr ""
+
+#: apps/aquaculture/models.py:908
+msgid "Types d'infrastructure"
+msgstr ""
+
+#: apps/aquaculture/models.py:909
+msgid "Ex: ['etang', 'cage_flottante', 'bac_hors_sol']"
+msgstr ""
+
+#: apps/aquaculture/models.py:913 apps/aquaculture/models.py:1557
+msgid "Date de début"
+msgstr ""
+
+#: apps/aquaculture/models.py:916
+msgid "Nombre initial de poissons"
+msgstr ""
+
+#: apps/aquaculture/models.py:924
+msgid "Poids moyen initial (g)"
+msgstr ""
+
+#: apps/aquaculture/models.py:925
+msgid "8-15g typiquement pour alevins"
+msgstr ""
+
+#: apps/aquaculture/models.py:931
+msgid "Calculé automatiquement"
+msgstr ""
+
+#: apps/aquaculture/models.py:941
+msgid "Poids cible récolte (g)"
+msgstr ""
+
+#: apps/aquaculture/models.py:942
+msgid "Poids moyen cible utilisé pour la projection économique"
+msgstr ""
+
+#: apps/aquaculture/models.py:948
+msgid "Durée prévisionnelle du cycle (jours)"
+msgstr ""
+
+#: apps/aquaculture/models.py:953
+msgid "Date prévisionnelle de récolte"
+msgstr ""
+
+#: apps/aquaculture/models.py:958
+msgid "Nombre de sacs d'aliments planifiés (simulation)"
+msgstr ""
+
+#: apps/aquaculture/models.py:974
+msgid "Prix de vente prévisionnel (FCFA/kg)"
+msgstr ""
+
+#: apps/aquaculture/models.py:981
+msgid "Coût alevins (FCFA)"
+msgstr ""
+
+#: apps/aquaculture/models.py:988
+msgid "Autres charges opérationnelles (FCFA)"
+msgstr ""
+
+#: apps/aquaculture/models.py:994
+msgid "Mis à jour après chaque mortalité"
+msgstr ""
+
+#: apps/aquaculture/models.py:999
+msgid "Poids moyen actuel (g)"
+msgstr ""
+
+#: apps/aquaculture/models.py:1010
+msgid "Aliment total consommé (kg)"
+msgstr ""
+
+#: apps/aquaculture/models.py:1017
+msgid "Date de récolte"
+msgstr ""
+
+#: apps/aquaculture/models.py:1046
+msgid "Taux de survie (%)"
+msgstr ""
+
+#: apps/aquaculture/models.py:1054
+msgid "Indice de consommation (FCR)"
+msgstr ""
+
+#: apps/aquaculture/models.py:1055
+msgid "Feed Conversion Ratio"
+msgstr ""
+
+#: apps/aquaculture/models.py:1115
+msgid "Petit"
+msgstr ""
+
+#: apps/aquaculture/models.py:1115
+#: apps/aquaculture/services/analytics_service.py:702
+msgid "Moyen"
+msgstr "Moyen"
+
+#: apps/aquaculture/models.py:1115
+msgid "Grand"
+msgstr ""
+
+#: apps/aquaculture/models.py:1115
+msgid "Autre"
+msgstr ""
+
+#: apps/aquaculture/models.py:1168
+msgid "Réconciliée"
+msgstr ""
+
+#: apps/aquaculture/models.py:1169
+#, fuzzy
+#| msgid "Livrée — confirmation attendue"
+msgid "Réconciliation en attente"
 msgstr "Livrée — confirmation attendue"
 
-msgid "Prête au retrait"
-msgstr "Prête au retrait"
+#: apps/aquaculture/models.py:1240
+msgid "Une récolte finale confirmée ne peut pas être modifiée."
+msgstr ""
 
-msgid "Réception confirmée"
-msgstr "Réception confirmée"
+#: apps/aquaculture/models.py:1258
+msgid "Journal quotidien"
+msgstr ""
 
-msgid "Retrait confirmé"
-msgstr "Retrait confirmé"
+#: apps/aquaculture/models.py:1259
+msgid "Journaux quotidiens"
+msgstr ""
 
+#: apps/aquaculture/models.py:1305
+msgid "Date du log"
+msgstr ""
+
+#: apps/aquaculture/models.py:1307
+msgid "Heure de saisie"
+msgstr ""
+
+#: apps/aquaculture/models.py:1312
+msgid "Nombre de morts"
+msgstr ""
+
+#: apps/aquaculture/models.py:1313
+msgid "Poissons morts observés ce jour"
+msgstr ""
+
+#: apps/aquaculture/models.py:1318
+msgid "Cause de mortalité"
+msgstr ""
+
+#: apps/aquaculture/models.py:1319
+msgid "Si connue"
+msgstr ""
+
+#: apps/aquaculture/models.py:1327
+msgid "Nombre de poissons pesés"
+msgstr ""
+
+#: apps/aquaculture/models.py:1328
+msgid "Minimum 20 recommandé pour échantillonnage"
+msgstr ""
+
+#: apps/aquaculture/models.py:1336
+msgid "Poids total échantillon (g)"
+msgstr ""
+
+#: apps/aquaculture/models.py:1344 apps/aquaculture/models.py:1511
+#: apps/aquaculture/models.py:1790
+msgid "Poids moyen (g)"
+msgstr ""
+
+#: apps/aquaculture/models.py:1345
+msgid "Calculé automatiquement ou saisi manuellement"
+msgstr ""
+
+#: apps/aquaculture/models.py:1355
+msgid "Quantité d'aliment (kg)"
+msgstr ""
+
+#: apps/aquaculture/models.py:1360
+msgid "Type d'aliment"
+msgstr ""
+
+#: apps/aquaculture/models.py:1361
+msgid "Référence produit AquaCare"
+msgstr ""
+
+#: apps/aquaculture/models.py:1369
+msgid "Taille d'aliment (mm)"
+msgstr ""
+
+#: apps/aquaculture/models.py:1370
+msgid "Diamètre des granulés distribués"
+msgstr ""
+
+#: apps/aquaculture/models.py:1375
+msgid "Heures de nourrissage"
+msgstr ""
+
+#: apps/aquaculture/models.py:1376
+msgid "Liste des heures de distribution"
+msgstr ""
+
+#: apps/aquaculture/models.py:1386
+msgid "Température de l'eau (°C)"
+msgstr ""
+
+#: apps/aquaculture/models.py:1394
+msgid "Oxygène dissous (mg/L)"
+msgstr ""
+
+#: apps/aquaculture/models.py:1402
+msgid "pH"
+msgstr ""
+
+#: apps/aquaculture/models.py:1410
+msgid "Niveau d'ammoniac (ppm)"
+msgstr ""
+
+#: apps/aquaculture/models.py:1417
+msgid "Notes et remarques diverses"
+msgstr ""
+
+#: apps/aquaculture/models.py:1460
+msgid "Plan d'alimentation"
+msgstr ""
+
+#: apps/aquaculture/models.py:1461
+msgid "Plans d'alimentation"
+msgstr ""
+
+#: apps/aquaculture/models.py:1500
+msgid "Numéro de semaine"
+msgstr ""
+
+#: apps/aquaculture/models.py:1501
+msgid "Semaine depuis le début du cycle"
+msgstr ""
+
+#: apps/aquaculture/models.py:1506
+msgid "Effectif estimé"
+msgstr ""
+
+#: apps/aquaculture/models.py:1516
+msgid "Biomasse (kg)"
+msgstr ""
+
+#: apps/aquaculture/models.py:1523
+msgid "Quantité journalière (kg)"
+msgstr ""
+
+#: apps/aquaculture/models.py:1528
+msgid "Taux d'alimentation (% biomasse)"
+msgstr ""
+
+#: apps/aquaculture/models.py:1533 apps/aquaculture/models.py:1890
+msgid "Repas par jour"
+msgstr ""
+
+#: apps/aquaculture/models.py:1538
+msgid "Quantité par repas (kg)"
+msgstr ""
+
+#: apps/aquaculture/models.py:1544
+msgid "Type d'aliment recommandé"
+msgstr ""
+
+#: apps/aquaculture/models.py:1549 apps/aquaculture/models.py:1895
+msgid "Taille granulés (mm)"
+msgstr ""
+
+#: apps/aquaculture/models.py:1553
+msgid "% protéines"
+msgstr ""
+
+#: apps/aquaculture/models.py:1558
+msgid "Date de fin"
+msgstr ""
+
+#: apps/aquaculture/models.py:1572
+msgid "Température utilisée (°C)"
+msgstr ""
+
+#: apps/aquaculture/models.py:1576
+msgid "Température de référence utilisée"
+msgstr ""
+
+#: apps/aquaculture/models.py:1577
+msgid "True si aucune saisie journalière disponible au moment de la génération"
+msgstr ""
+
+#: apps/aquaculture/models.py:1583
+msgid "Source des données de rationnement"
+msgstr ""
+
+#: apps/aquaculture/models.py:1603
+msgid "Journal sanitaire"
+msgstr ""
+
+#: apps/aquaculture/models.py:1604 apps/common/models.py:28
+msgid "Journaux sanitaires"
+msgstr ""
+
+#: apps/aquaculture/models.py:1639
+msgid "Date de l'événement"
+msgstr ""
+
+#: apps/aquaculture/models.py:1644
+msgid "Type d'événement"
+msgstr ""
+
+#: apps/aquaculture/models.py:1649
+msgid "Symptômes observés"
+msgstr ""
+
+#: apps/aquaculture/models.py:1650
+msgid "Description détaillée des symptômes"
+msgstr ""
+
+#: apps/aquaculture/models.py:1655
+msgid "Nombre de poissons affectés"
+msgstr ""
+
+#: apps/aquaculture/models.py:1661
+msgid "Traitement appliqué"
+msgstr ""
+
+#: apps/aquaculture/models.py:1666
+msgid "Médicament utilisé"
+msgstr ""
+
+#: apps/aquaculture/models.py:1671
+msgid "Dosage"
+msgstr ""
+
+#: apps/aquaculture/models.py:1676
+msgid "Durée du traitement (jours)"
+msgstr ""
+
+#: apps/aquaculture/models.py:1685
+msgid "Compressée automatiquement côté mobile"
+msgstr ""
+
+#: apps/aquaculture/models.py:1691
+msgid "Résolu"
+msgstr ""
+
+#: apps/aquaculture/models.py:1696
+msgid "Date de résolution"
+msgstr ""
+
+#: apps/aquaculture/models.py:1702
+msgid "Notes additionnelles"
+msgstr ""
+
+#: apps/aquaculture/models.py:1744
+msgid "Récolte partielle"
+msgstr ""
+
+#: apps/aquaculture/models.py:1745
+msgid "Récoltes partielles"
+msgstr ""
+
+#: apps/aquaculture/models.py:1776
+msgid "Allocation d'unité de production"
+msgstr ""
+
+#: apps/aquaculture/models.py:1779
+msgid "Date de récolte partielle"
+msgstr ""
+
+#: apps/aquaculture/models.py:1783
+msgid "Nombre de poissons récoltés"
+msgstr ""
+
+#: apps/aquaculture/models.py:1796
+msgid "Poids total récolté (kg)"
+msgstr ""
+
+#: apps/aquaculture/models.py:1797
+msgid "Calculé automatiquement : count × poids / 1000"
+msgstr ""
+
+#: apps/aquaculture/models.py:1806
+msgid "Prix de vente (FCFA/kg)"
+msgstr ""
+
+#: apps/aquaculture/models.py:1851
+msgid "Guide nutritionnel"
+msgstr ""
+
+#: apps/aquaculture/models.py:1852
+msgid "Guides nutritionnels"
+msgstr ""
+
+#: apps/aquaculture/models.py:1862
+msgid "Stade de croissance"
+msgstr ""
+
+#: apps/aquaculture/models.py:1869
+msgid "Poids minimum (g)"
+msgstr ""
+
+#: apps/aquaculture/models.py:1874
+msgid "Poids maximum (g)"
+msgstr ""
+
+#: apps/aquaculture/models.py:1882
+msgid "Taux d'alimentation (% biomasse/jour)"
+msgstr ""
+
+#: apps/aquaculture/models.py:1886
+msgid "Besoin en protéines (%)"
+msgstr ""
+
+#: apps/aquaculture/models.py:1901
+msgid "Liste des références produits (ex: ['DIBAQ Catfish 2mm'])"
+msgstr ""
+
+#: apps/aquaculture/models.py:1908
+msgid "FCR attendu"
+msgstr ""
+
+#: apps/aquaculture/models.py:1916
+msgid "Source des données"
+msgstr ""
+
+#: apps/aquaculture/models.py:1921
+msgid "Taux par température (%)"
+msgstr ""
+
+#: apps/aquaculture/models.py:1922
+msgid "Dict {temp_c: taux_pct_biomasse} ex: {'26': 5.3, '28': 4.8}"
+msgstr ""
+
+#: apps/aquaculture/models.py:1926
+msgid "Température de référence (°C)"
+msgstr ""
+
+#: apps/aquaculture/models.py:1927
+msgid "Température utilisée pour feeding_rate_percentage"
+msgstr ""
+
+#: apps/aquaculture/models.py:1932
+msgid "Notes d'alimentation"
+msgstr ""
+
+#: apps/aquaculture/models.py:1948
+msgid "Métrique de cycle"
+msgstr ""
+
+#: apps/aquaculture/models.py:1949
+msgid "Métriques de cycles"
+msgstr ""
+
+#: apps/aquaculture/models.py:1961
+msgid "Données courbe de croissance"
+msgstr ""
+
+#: apps/aquaculture/models.py:1962
+msgid "Format: [{'date': 'YYYY-MM-DD', 'weight': float}, ...]"
+msgstr ""
+
+#: apps/aquaculture/models.py:1969
+msgid "Taux de croissance journalier (g/jour)"
+msgstr ""
+
+#: apps/aquaculture/models.py:1976
+msgid "Taux de croissance spécifique (%/jour)"
+msgstr ""
+
+#: apps/aquaculture/models.py:1981
+msgid "Données courbe de survie"
+msgstr ""
+
+#: apps/aquaculture/models.py:1982
+msgid "Format: [{'date': 'YYYY-MM-DD', 'count': int}, ...]"
+msgstr ""
+
+#: apps/aquaculture/models.py:1989
+msgid "Taux de mortalité hebdomadaire (%)"
+msgstr ""
+
+#: apps/aquaculture/models.py:1994
+msgid "Données alimentation cumulée"
+msgstr ""
+
+#: apps/aquaculture/models.py:1995
+msgid "Format: [{'date': 'YYYY-MM-DD', 'total_feed': float}, ...]"
+msgstr ""
+
+#: apps/aquaculture/models.py:2003
+msgid "Alimentation journalière moyenne (kg)"
+msgstr ""
+
+#: apps/aquaculture/models.py:2012
+msgid "Score de performance (0-100)"
+msgstr ""
+
+#: apps/aquaculture/models.py:2035
+msgid "Journalier"
+msgstr ""
+
+#: apps/aquaculture/models.py:2036
+msgid "Hebdomadaire"
+msgstr ""
+
+#: apps/aquaculture/models.py:2037
+msgid "Mensuel"
+msgstr ""
+
+#: apps/aquaculture/models.py:2041
+msgid "En cours de génération"
+msgstr ""
+
+#: apps/aquaculture/models.py:2042
+msgid "Brouillon"
+msgstr ""
+
+#: apps/aquaculture/models.py:2043
+msgid "Validé"
+msgstr ""
+
+#: apps/aquaculture/models.py:2047
+msgid "Non envoyé"
+msgstr ""
+
+#: apps/aquaculture/models.py:2048
+msgid "Envoyé"
+msgstr ""
+
+#: apps/aquaculture/models.py:2049 apps/aquaculture/models.py:2200
+msgid "Échec"
+msgstr ""
+
+#: apps/aquaculture/models.py:2053
+msgid "Non partagé"
+msgstr ""
+
+#: apps/aquaculture/models.py:2054
+msgid "Partagé"
+msgstr ""
+
+#: apps/aquaculture/models.py:2068
+msgid "Type de rapport"
+msgstr ""
+
+#: apps/aquaculture/models.py:2074
+msgid "Portée du rapport"
+msgstr ""
+
+#: apps/aquaculture/models.py:2075
+msgid "Cycle ou unité de production ciblée"
+msgstr ""
+
+#: apps/aquaculture/models.py:2080
+msgid "UUID du contexte de rapport"
+msgstr ""
+
+#: apps/aquaculture/models.py:2081
+msgid "UUID du cycle ou de l'allocation ciblée"
+msgstr ""
+
+#: apps/aquaculture/models.py:2083
+msgid "Début période"
+msgstr ""
+
+#: apps/aquaculture/models.py:2084
+msgid "Fin période"
+msgstr ""
+
+#: apps/aquaculture/models.py:2096
+msgid "Données du rapport"
+msgstr ""
+
+#: apps/aquaculture/models.py:2097
+msgid "Snapshot des données utilisées pour la génération"
+msgstr ""
+
+#: apps/aquaculture/models.py:2103
+msgid "Fichier PDF"
+msgstr ""
+
+#: apps/aquaculture/models.py:2109
+msgid "Généré le"
+msgstr ""
+
+#: apps/aquaculture/models.py:2114
+msgid "Validé le"
+msgstr ""
+
+#: apps/aquaculture/models.py:2122
+msgid "Validé par"
+msgstr ""
+
+#: apps/aquaculture/models.py:2129
+msgid "Statut email"
+msgstr ""
+
+#: apps/aquaculture/models.py:2134 apps/notifications/models.py:146
+msgid "Email envoyé le"
+msgstr ""
+
+#: apps/aquaculture/models.py:2141
+msgid "Statut WhatsApp"
+msgstr ""
+
+#: apps/aquaculture/models.py:2146
+msgid "Partagé sur WhatsApp le"
+msgstr ""
+
+#: apps/aquaculture/models.py:2150
+msgid "Supprimé le"
+msgstr ""
+
+#: apps/aquaculture/models.py:2152 apps/aquaculture/models.py:2247
+#: apps/commerce/models.py:147 apps/notifications/models.py:504
+msgid "Créé le"
+msgstr ""
+
+#: apps/aquaculture/models.py:2153
+msgid "Mis à jour le"
+msgstr ""
+
+#: apps/aquaculture/models.py:2159
+msgid "Rapport de production"
+msgstr ""
+
+#: apps/aquaculture/models.py:2160 apps/common/models.py:30
+msgid "Rapports de production"
+msgstr ""
+
+#: apps/aquaculture/models.py:2194 apps/notifications/constants.py:59
+msgid "Email"
+msgstr ""
+
+#: apps/aquaculture/models.py:2199
+msgid "Succès"
+msgstr ""
+
+#: apps/aquaculture/models.py:2213
+msgid "Canal"
+msgstr ""
+
+#: apps/aquaculture/models.py:2218
+msgid "Destinataire"
+msgstr ""
+
+#: apps/aquaculture/models.py:2228
+msgid "Code erreur"
+msgstr ""
+
+#: apps/aquaculture/models.py:2232
+msgid "Message erreur"
+msgstr ""
+
+#: apps/aquaculture/models.py:2245
+msgid "Action effectuée par"
+msgstr ""
+
+#: apps/aquaculture/models.py:2252
+msgid "Journal d'envoi de rapport"
+msgstr ""
+
+#: apps/aquaculture/models.py:2253
+msgid "Journaux d'envoi de rapports"
+msgstr ""
+
+#: apps/aquaculture/serializers.py:166
+msgid "Une unité portant ce nom existe déjà."
+msgstr ""
+
+#: apps/aquaculture/serializers.py:302
+msgid "Ce cycle n'appartient pas à votre ferme"
+msgstr ""
+
+#: apps/aquaculture/serializers.py:307
+msgid "Cette unité n'appartient pas à votre ferme"
+msgstr ""
+
+#: apps/aquaculture/serializers.py:312
+msgid "L'unité doit appartenir à la même ferme que le cycle"
+msgstr ""
+
+#: apps/aquaculture/serializers.py:637
+msgid "Le nombre initial de poissons semble trop élevé"
+msgstr ""
+
+#: apps/aquaculture/serializers.py:644
+msgid "Le poids cible doit être supérieur au poids moyen initial"
+msgstr ""
+
+#: apps/aquaculture/serializers.py:664
+msgid "Le prix de vente prévisionnel doit être strictement positif"
+msgstr ""
+
+#: apps/aquaculture/serializers.py:675
+msgid "Veuillez renseigner au moins la surface OU le volume du bassin"
+msgstr ""
+
+#: apps/aquaculture/serializers.py:696
+#, python-format
+msgid "Densité initiale trop élevée (max %(max_density)s poissons/m²)"
+msgstr ""
+
+#: apps/aquaculture/serializers.py:705
+#, python-format
+msgid "Densité initiale trop élevée (max %(max_density)s poissons/m³)"
+msgstr ""
+
+#: apps/aquaculture/serializers.py:742
+#: apps/aquaculture/services/cycle_service.py:1577
+msgid "La date prévisionnelle de récolte doit être après la date de début"
+msgstr ""
+
+#: apps/aquaculture/serializers.py:835
+#: apps/aquaculture/services/integrity_error_service.py:36
+#: apps/aquaculture/views/calibration_views.py:56
+#: apps/aquaculture/views/production_unit_views.py:48
+msgid "Une unité portant ce nom existe déjà dans cette ferme."
+msgstr ""
+
+#: apps/aquaculture/serializers.py:886
+msgid "Un bac destination est requis."
+msgstr ""
+
+#: apps/aquaculture/serializers.py:888
+msgid "L'échantillon ne peut pas dépasser le transfert."
+msgstr ""
+
+#: apps/aquaculture/serializers.py:892
+msgid "Indiquez un poids moyen ou un échantillon complet."
+msgstr ""
+
+#: apps/aquaculture/serializers.py:1035
+msgid "Le nombre de morts ne peut dépasser l'effectif actuel"
+msgstr ""
+
+#: apps/aquaculture/serializers.py:1043
+msgid "Température hors plage normale (15-40°C)"
+msgstr ""
+
+#: apps/aquaculture/serializers.py:1163
+#, python-format
+msgid "Plan d'alimentation de %(unit_name)s"
+msgstr ""
+
+#: apps/aquaculture/serializers.py:1164
+msgid "Plan d'alimentation de l'unité"
+msgstr ""
+
+#: apps/aquaculture/serializers.py:1191
+msgid "L'allocation doit appartenir au même cycle que le plan"
+msgstr ""
+
+#: apps/aquaculture/serializers.py:1206
+msgid "Le cycle ou l'allocation de cycle par unité est requis"
+msgstr ""
+
+#: apps/aquaculture/serializers.py:1213
+msgid "La période doit être exactement 7 jours"
+msgstr ""
+
+#: apps/aquaculture/serializers.py:1318
+msgid "Format photo non supporté. Utilisez JPEG, PNG ou WEBP."
+msgstr ""
+
+#: apps/aquaculture/serializers.py:1323
+msgid "La photo dépasse la taille maximale de 5MB."
+msgstr ""
+
+#: apps/aquaculture/serializers.py:1345
+#, fuzzy
+#| msgid "Cycle non trouvé"
+msgid "Cycle non autorisé"
+msgstr "Cycle non trouvé"
+
+#: apps/aquaculture/serializers.py:1362
+msgid "La date de l'événement ne peut pas être avant le début du cycle"
+msgstr ""
+
+#: apps/aquaculture/serializers.py:1366
+msgid "La date de l'événement ne peut pas être dans le futur"
+msgstr ""
+
+#: apps/aquaculture/serializers.py:1376
+msgid "La date de résolution ne peut être avant l'événement"
+msgstr ""
+
+#: apps/aquaculture/serializers.py:1468 apps/aquaculture/serializers.py:1546
+msgid "Date de récolte trop ancienne"
+msgstr ""
+
+#: apps/aquaculture/serializers.py:1470
+#: apps/aquaculture/services/cycle_service.py:1011
+msgid "Date de récolte ne peut être dans le futur"
+msgstr ""
+
+#: apps/aquaculture/serializers.py:1479
+msgid "La date et l'heure métier de récolte sont requises."
+msgstr ""
+
+#: apps/aquaculture/serializers.py:1486
+msgid "La date et l'heure métier sont requises pour une récolte antidatée."
+msgstr ""
+
+#: apps/aquaculture/serializers.py:1493
+#: apps/aquaculture/services/cycle_service.py:1014
+msgid "Le datetime de récolte doit inclure un fuseau horaire."
+msgstr ""
+
+#: apps/aquaculture/serializers.py:1498
+#: apps/aquaculture/services/cycle_service.py:1018
+msgid "La date de récolte doit correspondre au datetime métier."
+msgstr ""
+
+#: apps/aquaculture/serializers.py:1548
+msgid "Date de récolte trop éloignée dans le futur"
+msgstr ""
+
+#: apps/aquaculture/serializers.py:2043
+#: apps/aquaculture/views/report_views.py:194
+msgid "scope_type et scope doivent désigner la même portée."
+msgstr ""
+
+#: apps/aquaculture/serializers.py:2052
+msgid "L'allocation de cycle est requise pour un rapport d'unité."
+msgstr ""
+
+#: apps/aquaculture/serializers.py:2061
+#: apps/aquaculture/services/report_application_service.py:146
+msgid "Le cycle est obligatoire pour générer ce rapport."
+msgstr ""
+
+#: apps/aquaculture/serializers.py:2066
+msgid "Une allocation ne peut pas être fournie pour un rapport de cycle."
+msgstr ""
+
+#: apps/aquaculture/serializers.py:2073
+#: apps/aquaculture/services/report_service.py:2097
+#: apps/aquaculture/views/report_views.py:197
+msgid "Portée de rapport inconnue."
+msgstr ""
+
+#: apps/aquaculture/services/allocation_ledger_service.py:48
+msgid "Une session récoltée doit avoir une date de clôture."
+msgstr ""
+
+#: apps/aquaculture/services/allocation_ledger_service.py:167
+msgid ""
+"Un calibrage doit laisser un effectif et une biomasse strictement positifs "
+"dans la source."
+msgstr ""
+
+#: apps/aquaculture/services/allocation_ledger_service.py:198
+msgid ""
+"Une opération antidatée invalide l'effectif de la récolte finale enregistrée."
+msgstr ""
+
+#: apps/aquaculture/services/allocation_ledger_service.py:209
+msgid "La chronologie de l'allocation produit un stock négatif."
+msgstr ""
+
+#: apps/aquaculture/services/analytics_service.py:408
+msgid "Aucune donnée environnementale disponible"
+msgstr "Aucune donnée environnementale disponible"
+
+#: apps/aquaculture/services/analytics_service.py:459
+msgid "Niveau d'ammoniaque élevé (>1.0 mg/L)"
+msgstr ""
+
+#: apps/aquaculture/services/analytics_service.py:688
+msgid "Données insuffisantes"
+msgstr "Données insuffisantes"
+
+#: apps/aquaculture/services/analytics_service.py:698
+msgid "Excellent"
+msgstr "Excellent"
+
+#: apps/aquaculture/services/analytics_service.py:700
+msgid "Bon"
+msgstr "Bon"
+
+#: apps/aquaculture/services/analytics_service.py:704
+msgid "À améliorer"
+msgstr "À améliorer"
+
+#: apps/aquaculture/services/analytics_service.py:729
+msgid "Améliorer le suivi sanitaire et la qualité de l'eau"
+msgstr "Améliorer le suivi sanitaire et la qualité de l'eau"
+
+#: apps/aquaculture/services/analytics_service.py:731
+msgid "Excellente gestion sanitaire, maintenir les pratiques actuelles"
+msgstr ""
+
+#: apps/aquaculture/services/analytics_service.py:737
+msgid "Optimiser l'alimentation et réduire le gaspillage"
+msgstr "Optimiser l'alimentation et réduire le gaspillage"
+
+#: apps/aquaculture/services/analytics_service.py:739
+msgid "Excellente efficacité alimentaire, stratégie optimale"
+msgstr ""
+
+#: apps/aquaculture/services/analytics_service.py:743
+msgid "Performance conforme aux cycles précédents"
+msgstr "Performance conforme aux cycles précédents"
+
+#: apps/aquaculture/services/analytics_service.py:1061
+msgid "Alerte param?tres environnementaux"
+msgstr ""
+
+#: apps/aquaculture/services/base.py:87
+msgid ", "
+msgstr ""
+
+#: apps/aquaculture/services/calibration_service.py:108
+msgid "Le bac contient déjà une autre espèce."
+msgstr ""
+
+#: apps/aquaculture/services/calibration_service.py:111
+#, fuzzy
+#| msgid ""
+#| "Cette unité de production est déjà utilisée par un autre cycle actif."
+msgid "Ce bac de calibrage est déjà rattaché à un autre cycle."
+msgstr "Cette unité de production est déjà utilisée par un autre cycle actif."
+
+#: apps/aquaculture/services/calibration_service.py:138
+msgid "La biomasse transférée doit être positive."
+msgstr ""
+
+#: apps/aquaculture/services/calibration_service.py:202
+msgid "Calibrage effectué"
+msgstr ""
+
+#: apps/aquaculture/services/calibration_service.py:204
+#, python-format
+msgid ""
+"%(count)s poissons ont été transférés de %(source)s vers %(tank)s. Le bac "
+"contient maintenant %(total)s poissons."
+msgstr ""
+
+#: apps/aquaculture/services/calibration_service.py:232
+msgid ""
+"La session historique de ce bac ne peut pas être résolue sans heure de "
+"récolte métier."
+msgstr ""
+
+#: apps/aquaculture/services/calibration_service.py:236
+msgid "La chronologie des sessions de ce bac est invalide."
+msgstr ""
+
+#: apps/aquaculture/services/calibration_service.py:243
+msgid ""
+"Un calibrage ne peut pas avoir lieu exactement à l’heure de récolte finale."
+msgstr ""
+
+#: apps/aquaculture/services/calibration_service.py:249
+msgid "Deux sessions de ce bac se chevauchent."
+msgstr ""
+
+#: apps/aquaculture/services/calibration_service.py:258
+msgid "Plusieurs sessions correspondent à ce calibrage."
+msgstr ""
+
+#: apps/aquaculture/services/calibration_service.py:268
+msgid "Ce bac possède plusieurs sessions actives."
+msgstr ""
+
+#: apps/aquaculture/services/calibration_service.py:296
+msgid "La date du calibrage chevauche une session antérieure de ce bac."
+msgstr ""
+
+#: apps/aquaculture/services/calibration_service.py:322
+msgid "Les données d’échantillonnage sont invalides."
+msgstr ""
+
+#: apps/aquaculture/services/calibration_service.py:329
+msgid "Le poids moyen et l’échantillon sont incohérents."
+msgstr ""
+
+#: apps/aquaculture/services/calibration_service.py:332
+#: apps/aquaculture/services/calibration_service.py:367
+msgid "Le poids moyen transféré doit être positif."
+msgstr ""
+
+#: apps/aquaculture/services/calibration_service.py:343
+msgid "La source et le bac doivent appartenir à votre ferme."
+msgstr ""
+
+#: apps/aquaculture/services/calibration_service.py:348
+msgid ""
+"La session source historique ne peut pas être résolue sans heure de récolte "
+"métier."
+msgstr ""
+
+#: apps/aquaculture/services/calibration_service.py:352
+msgid "Le calibrage doit être strictement antérieur à la clôture de la source."
+msgstr ""
+
+#: apps/aquaculture/services/calibration_service.py:355
+#, fuzzy
+#| msgid "L'unité de l'allocation est obligatoire."
+msgid "Cette allocation source est inactive."
+msgstr "L'unité de l'allocation est obligatoire."
+
+#: apps/aquaculture/services/calibration_service.py:357
+msgid "Les unités source et destination doivent être actives."
+msgstr ""
+
+#: apps/aquaculture/services/calibration_service.py:359
+msgid "La destination doit être un bac de calibrage."
+msgstr ""
+
+#: apps/aquaculture/services/calibration_service.py:363
+msgid "La source et la destination doivent être différentes."
+msgstr ""
+
+#: apps/aquaculture/services/calibration_service.py:365
+msgid "Le nombre de poissons transférés doit être positif."
+msgstr ""
+
+#: apps/aquaculture/services/calibration_service.py:369
+msgid "La date du calibrage est invalide."
+msgstr ""
+
+#: apps/aquaculture/services/calibration_service.py:418
+msgid "La chaîne de calibrage contient une boucle invalide."
+msgstr ""
+
+#: apps/aquaculture/services/calibration_service.py:427
+msgid "Le cycle source du bac de calibrage est introuvable."
+msgstr ""
+
+#: apps/aquaculture/services/calibration_service.py:453
+msgid "Cet UUID correspond à un autre calibrage."
+msgstr ""
+
+#: apps/aquaculture/services/cycle_launch_application_service.py:40
+msgid ""
+"Ce lancement existe déjà avec un contenu différent ou appartient à une autre "
+"ferme."
+msgstr ""
+"Ce lancement existe déjà avec un contenu différent ou appartient à une autre "
+"ferme."
+
+#: apps/aquaculture/services/cycle_launch_application_service.py:49
+msgid ""
+"Le mode de lancement ne correspond pas à l'état de configuration de la ferme."
+msgstr ""
+"Le mode de lancement ne correspond pas à l'état de configuration de la ferme."
+
+#: apps/aquaculture/services/cycle_launch_application_service.py:57
+msgid "L'unité de production sélectionnée est inactive."
+msgstr "L'unité de production sélectionnée est inactive."
+
+#: apps/aquaculture/services/cycle_launch_application_service.py:66
+msgid "Cette unité de production est déjà utilisée par un autre cycle actif."
+msgstr "Cette unité de production est déjà utilisée par un autre cycle actif."
+
+#: apps/aquaculture/services/cycle_launch_application_service.py:383
+msgid "La configuration de la ferme est déjà terminée."
+msgstr "La configuration de la ferme est déjà terminée."
+
+#: apps/aquaculture/services/cycle_launch_application_service.py:393
+msgid "La ferme doit être configurée avant de lancer un cycle supplémentaire."
+msgstr "La ferme doit être configurée avant de lancer un cycle supplémentaire."
+
+#: apps/aquaculture/services/cycle_launch_application_service.py:548
+msgid "L'effectif courant du cycle ne correspond pas aux allocations."
+msgstr "L'effectif courant du cycle ne correspond pas aux allocations."
+
+#: apps/aquaculture/services/cycle_service.py:189
+#: apps/aquaculture/services/cycle_service.py:777
+#: apps/aquaculture/services/cycle_service.py:884
+#: apps/aquaculture/services/log_service.py:545
+#: apps/aquaculture/services/sanitary_service.py:88
+msgid ""
+"Conflit de synchronisation : ce client_uuid appartient à un autre "
+"utilisateur."
+msgstr ""
+
+# === AQUACULTURE MODULE TRANSLATIONS ===
+# Note: Most field labels are already in French in the code
+# Only translating messages that need actual translation
+# API Error Messages (already in French in code)
+# These msgid/msgstr pairs are kept for completeness but text is the same
+#: apps/aquaculture/services/cycle_service.py:301
+#, fuzzy, python-format
+#| msgid "Ce cycle a déjà été récolté"
+msgid "Ce cycle a déjà été récolté le %(date)s"
+msgstr "Ce cycle a déjà été récolté"
+
+#: apps/aquaculture/services/cycle_service.py:306
+#, python-format
+msgid ""
+"Seuls les cycles actifs peuvent être récoltés (statut actuel: %(status)s)"
+msgstr ""
+
+#: apps/aquaculture/services/cycle_service.py:319
+msgid "Un UUID client est requis pour rendre la récolte finale idempotente."
+msgstr ""
+
+#: apps/aquaculture/services/cycle_service.py:757
+#, python-format
+msgid ""
+"Seuls les cycles actifs peuvent faire l'objet d'une récolte partielle "
+"(statut actuel: %(status)s)"
+msgstr ""
+
+#: apps/aquaculture/services/cycle_service.py:764
+msgid ""
+"La récolte partielle globale est indisponible pour les cycles avec unités de "
+"production. Utilisez la récolte partielle au niveau des unités."
+msgstr ""
+
+#: apps/aquaculture/services/cycle_service.py:781
+#: apps/aquaculture/services/cycle_service.py:888
+#: apps/aquaculture/services/log_service.py:552
+#: apps/aquaculture/services/sanitary_service.py:92
+#, fuzzy
+#| msgid ""
+#| "Cette unité de production est déjà utilisée par un autre cycle actif."
+msgid ""
+"Conflit de synchronisation : ce client_uuid est déjà lié à un autre cycle."
+msgstr "Cette unité de production est déjà utilisée par un autre cycle actif."
+
+#: apps/aquaculture/services/cycle_service.py:813
+msgid ""
+"Une récolte partielle doit laisser un effectif et une biomasse strictement "
+"positifs."
+msgstr ""
+
+#: apps/aquaculture/services/cycle_service.py:867
+#: apps/aquaculture/services/cycle_service.py:993
+#, python-format
+msgid ""
+"Seuls les cycles actifs peuvent être récoltés via une unité (statut actuel: "
+"%(status)s)"
+msgstr ""
+
+#: apps/aquaculture/services/cycle_service.py:873
+#: apps/aquaculture/services/cycle_service.py:999
+#, fuzzy
+#| msgid ""
+#| "Cette unité de production est déjà utilisée par un autre cycle actif."
+msgid "Cette unité de production doit être active pour être récoltée."
+msgstr "Cette unité de production est déjà utilisée par un autre cycle actif."
+
+#: apps/aquaculture/services/cycle_service.py:892
+msgid ""
+"Conflit de synchronisation : ce client_uuid est déjà lié à une autre unité."
+msgstr ""
+
+#: apps/aquaculture/services/cycle_service.py:908
+msgid "La biomasse récoltée doit rester inférieure à la biomasse disponible."
+msgstr ""
+
+#: apps/aquaculture/services/cycle_service.py:1004
+#: apps/aquaculture/services/cycle_service.py:1654
+#, python-format
+msgid ""
+"Date de récolte (%(harvest)s) ne peut être avant le début du cycle "
+"(%(start)s)"
+msgstr ""
+
+#: apps/aquaculture/services/cycle_service.py:1021
+msgid "Le datetime de récolte ne peut être dans le futur."
+msgstr ""
+
+#: apps/aquaculture/services/cycle_service.py:1025
+msgid "Le datetime de récolte ne peut être avant le début de la session."
+msgstr ""
+
+#: apps/aquaculture/services/cycle_service.py:1029
+msgid "Nombre final de poissons invalide"
+msgstr ""
+
+#: apps/aquaculture/services/cycle_service.py:1032
+msgid "Le nombre final doit être strictement positif."
+msgstr ""
+
+#: apps/aquaculture/services/cycle_service.py:1038
+#: apps/aquaculture/services/cycle_service.py:1675
+#, python-format
+msgid ""
+"Poids moyen final (%(final).1fg) anormalement inférieur au poids actuel "
+"(%(current).1fg)"
+msgstr ""
+
+#: apps/aquaculture/services/cycle_service.py:1050
+#, python-format
+msgid ""
+"Poids moyen final trop faible (%(weight)s g). Minimum pour %(species)s : "
+"%(min)s g"
+msgstr ""
+
+#: apps/aquaculture/services/cycle_service.py:1501
+#, python-format
+msgid ""
+"Densité initiale trop élevée (%(density).0f poissons/m²). Maximum "
+"recommandé : %(max_allowed)s poissons/m²."
+msgstr ""
+
+#: apps/aquaculture/services/cycle_service.py:1512
+#, python-format
+msgid ""
+"Densité initiale trop élevée (%(density).0f poissons/m³). Maximum "
+"recommandé : %(max_allowed)s poissons/m³."
+msgstr ""
+
+#: apps/aquaculture/services/cycle_service.py:1536
+msgid "La date de début ne peut pas être plus de 30 jours dans le futur"
+msgstr ""
+
+#: apps/aquaculture/services/cycle_service.py:1541
+msgid "Le poids cible de récolte doit être supérieur au poids moyen initial"
+msgstr ""
+
+#: apps/aquaculture/services/cycle_service.py:1559
+msgid "Le prix de vente prévisionnel (FCFA/kg) doit être strictement positif"
+msgstr ""
+
+#: apps/aquaculture/services/cycle_service.py:1564
+msgid "Le coût des alevins ne peut pas être négatif"
+msgstr ""
+
+#: apps/aquaculture/services/cycle_service.py:1569
+msgid "Les autres charges opérationnelles ne peuvent pas être négatives"
+msgstr ""
+
+#: apps/aquaculture/services/cycle_service.py:1630
+#, fuzzy
+#| msgid "L'espèce du plan doit correspondre à celle du cycle."
+msgid "La date prévisionnelle de récolte doit correspondre à la durée du cycle"
+msgstr "L'espèce du plan doit correspondre à celle du cycle."
+
+#: apps/aquaculture/services/cycle_service.py:1662
+#: apps/aquaculture/services/cycle_service.py:1756
+msgid "Date de récolte ne peut être plus de 7 jours dans le futur"
+msgstr ""
+
+#: apps/aquaculture/services/cycle_service.py:1668
+#, python-format
+msgid ""
+"Effectif final (%(final)d) ne peut dépasser l'effectif actuel (%(current)d)"
+msgstr ""
+
+#: apps/aquaculture/services/cycle_service.py:1687
+#, python-format
+msgid ""
+"Poids moyen final (%(weight).1fg) inférieur au minimum commercial pour "
+"%(species)s (%(min)dg)"
+msgstr ""
+
+#: apps/aquaculture/services/cycle_service.py:1698
+msgid "Données de récolte invalides : "
+msgstr ""
+
+#: apps/aquaculture/services/cycle_service.py:1721
+#, python-format
+msgid "Nombre à récolter (%(n)d) supérieur à l'effectif disponible (%(c)d)"
+msgstr ""
+
+#: apps/aquaculture/services/cycle_service.py:1726
+msgid ""
+"Cette quantité viderait l'unité. Utilisez la récolte complète de l'unité."
+msgstr ""
+
+#: apps/aquaculture/services/cycle_service.py:1737
+#, python-format
+msgid ""
+"Poids moyen (%(weight).1fg) inférieur au minimum commercial pour %(species)s "
+"(%(min)dg)"
+msgstr ""
+
+#: apps/aquaculture/services/cycle_service.py:1749
+#, python-format
+msgid "Date de récolte (%(h)s) antérieure au début du cycle (%(s)s)"
+msgstr ""
+
+#: apps/aquaculture/services/cycle_store_service.py:370
+msgid "Déclarez d'abord votre stock d'aliment avant d'enregistrer une ration."
+msgstr ""
+
+#: apps/aquaculture/services/cycle_store_service.py:377
+msgid "Cette ration précède le début du suivi du stock d'aliment."
+msgstr ""
+
+#: apps/aquaculture/services/cycle_store_service.py:417
+msgid "Sélectionnez un aliment disponible dans votre stock."
+msgstr ""
+
+#: apps/aquaculture/services/cycle_store_service.py:430
+#, python-format
+msgid "Stock insuffisant pour cette ration. Disponible : %(available)s kg."
+msgstr ""
+
+#: apps/aquaculture/services/cycle_store_service.py:456
+msgid "La quantité doit être strictement positive."
+msgstr ""
+
+#: apps/aquaculture/services/cycle_store_service.py:458
+msgid "Le montant doit être positif ou nul."
+msgstr ""
+
+#: apps/aquaculture/services/cycle_store_service.py:460
+#, fuzzy
+#| msgid "Le nom de l'unité est obligatoire."
+msgid "Le nom de l'aliment est requis."
+msgstr "Le nom de l'unité est obligatoire."
+
+#: apps/aquaculture/services/cycle_store_service.py:462
+msgid "La granulométrie doit être comprise entre 0,1 et 20 mm."
+msgstr ""
+
+#: apps/aquaculture/services/feeding_application_service.py:18
+msgid "Cycle non trouvé"
+msgstr "Cycle non trouvé"
+
+#: apps/aquaculture/services/feeding_application_service.py:43
+#, fuzzy
+#| msgid ""
+#| "Un nouveau cycle doit être lancé avec au moins une unité de production."
+msgid "Le plan d'alimentation doit être généré depuis une unité de production."
+msgstr ""
+"Un nouveau cycle doit être lancé avec au moins une unité de production."
+
+#: apps/aquaculture/services/feeding_application_service.py:57
+msgid ""
+"L'allocation de cycle par unité est introuvable ou ne vous appartient pas."
+msgstr ""
+
+#: apps/aquaculture/services/feeding_application_service.py:62
+msgid "L'allocation ne correspond pas au cycle demandé."
+msgstr ""
+
+#: apps/aquaculture/services/feeding_application_service.py:67
+#: apps/aquaculture/services/feeding_service.py:82
+#: apps/aquaculture/services/feeding_service.py:345
+#: apps/aquaculture/services/feeding_service.py:454
+msgid "Impossible de générer des plans pour un cycle non actif"
+msgstr ""
+
+# Notifications
+#: apps/aquaculture/services/feeding_service.py:727
+#, fuzzy, python-format
+#| msgid "Nourrissage - %(cycle_name)s"
+msgid "Nourrissage %(scope_name)s dans 30min"
+msgstr "Nourrissage - %(cycle_name)s"
+
+#: apps/aquaculture/services/feeding_service.py:730
+#, fuzzy, python-format
+#| msgid "Donnez %(amount).1f kg d'aliment ce soir"
+msgid "Préparez %(amount).1f kg d'aliment pour %(scope_name)s."
+msgstr "Donnez %(amount).1f kg d'aliment ce soir"
+
+# Notifications
+#: apps/aquaculture/services/feeding_service.py:750
+#, fuzzy, python-format
+#| msgid "Nourrissage - %(cycle_name)s"
+msgid "Nourrissage %(scope_name)s dans 15min"
+msgstr "Nourrissage - %(cycle_name)s"
+
+#: apps/aquaculture/services/feeding_service.py:753
+#, fuzzy, python-format
+#| msgid "Donnez %(amount).1f kg d'aliment ce soir"
+msgid "Donnez %(amount).1f kg d'aliment maintenant pour %(scope_name)s."
+msgstr "Donnez %(amount).1f kg d'aliment ce soir"
+
+#: apps/aquaculture/services/final_harvest_service.py:154
+msgid "Une opération antidatée invalide une récolte déjà réconciliée."
+msgstr ""
+
+#: apps/aquaculture/services/final_harvest_service.py:163
+msgid ""
+"Cette opération ne rapproche pas le ledger de la récolte physique déclarée."
+msgstr ""
+
+#: apps/aquaculture/services/final_harvest_service.py:191
+msgid "La projection de récolte finale de l’allocation est incohérente."
+msgstr ""
+
+#: apps/aquaculture/services/integrity_error_service.py:48
+msgid "Cet UUID client est déjà associé à une autre unité."
+msgstr ""
+
+#: apps/aquaculture/services/integrity_error_service.py:60
+msgid "Les données du bac de calibrage sont invalides."
+msgstr ""
+
+#: apps/aquaculture/services/integrity_error_service.py:67
+#, fuzzy
+#| msgid ""
+#| "Cette unité de production est déjà utilisée par un autre cycle actif."
+msgid "Cette unité est déjà occupée par une allocation active."
+msgstr "Cette unité de production est déjà utilisée par un autre cycle actif."
+
+#: apps/aquaculture/services/integrity_error_service.py:76
+msgid "Un conflit d’intégrité empêche cette opération. Réessayez."
+msgstr ""
+
+#: apps/aquaculture/services/log_service.py:176
+#, python-format
+msgid ""
+"Un log existe déjà pour cette date (%(date)s). Modifiez le log existant ou "
+"choisissez une autre date."
+msgstr ""
+
+#: apps/aquaculture/services/log_service.py:395
+msgid "Un log existe déjà pour cette date dans ce batch."
+msgstr ""
+
+#: apps/aquaculture/services/log_service.py:504
+#, python-format
+msgid ""
+"Mortalité (%(mortality)d) ne peut dépasser l'effectif initial (%(initial)d)"
+msgstr ""
+
+#: apps/aquaculture/services/log_service.py:608
+#, python-format
+msgid ""
+"Date du log (%(log_date)s) ne peut être avant le début du cycle (%(start)s)"
+msgstr ""
+
+#: apps/aquaculture/services/log_service.py:614
+#, python-format
+msgid "Date du log (%(log_date)s) ne peut être après la fin du cycle (%(end)s)"
+msgstr ""
+
+#: apps/aquaculture/services/log_service.py:625
+#, python-format
+msgid ""
+"Mortalité (%(mortality)d) ne peut dépasser l'effectif actuel (%(current)d)"
+msgstr ""
+
+#: apps/aquaculture/services/log_service.py:646
+#, python-format
+msgid ""
+"Poids moyen (%(average).2fg) incohérent avec l'échantillon (calculé: "
+"%(calculated).2fg, écart: %(tolerance).1f%%)"
+msgstr ""
+
+#: apps/aquaculture/services/production_unit_service.py:52
+msgid "Une unité occupée ne peut pas changer de volume, type, usage ou statut."
+msgstr ""
+
+#: apps/aquaculture/services/production_unit_service.py:56
+msgid "Le type et l'usage d'une unité ayant un historique sont immuables."
+msgstr ""
+
+#: apps/aquaculture/services/production_unit_service.py:71
+msgid ""
+"Une unité de calibrage doit être un bac avec un volume positif et sans "
+"surface."
+msgstr ""
+
+#: apps/aquaculture/services/production_unit_service.py:77
+msgid ""
+"Une unité ayant une session de calibrage ne peut pas devenir une unité de "
+"production."
+msgstr ""
+
+#: apps/aquaculture/services/production_unit_service.py:89
+msgid "Un bac occupé ne peut pas être supprimé."
+msgstr ""
+
+#: apps/aquaculture/services/production_unit_service.py:91
+msgid "Un bac ayant un historique ne peut pas être supprimé."
+msgstr ""
+
+#: apps/aquaculture/services/production_unit_service.py:107
+#, fuzzy
+#| msgid ""
+#| "Ce lancement existe déjà avec un contenu différent ou appartient à une "
+#| "autre ferme."
+msgid "Cet UUID client appartient à une autre ferme."
+msgstr ""
+"Ce lancement existe déjà avec un contenu différent ou appartient à une autre "
+"ferme."
+
+#: apps/aquaculture/services/production_unit_service.py:119
+msgid "Cet UUID client correspond à un autre bac de calibrage."
+msgstr ""
+
+#: apps/aquaculture/services/report_application_service.py:159
+msgid "Le cycle est introuvable, inaccessible ou inactif."
+msgstr ""
+
+#: apps/aquaculture/services/report_application_service.py:172
+#: apps/aquaculture/services/report_service.py:2102
+msgid "Contexte d'unité incomplet."
+msgstr ""
+
+#: apps/aquaculture/services/report_application_service.py:191
+msgid "Allocation d'unité introuvable ou inaccessible."
+msgstr ""
+
+#: apps/aquaculture/services/report_application_service.py:296
+msgid "Les portées fournies sont incohérentes."
+msgstr ""
+
+#: apps/aquaculture/services/report_application_service.py:436
+msgid "La portée historique du rapport est introuvable ou inaccessible."
+msgstr ""
+
+#: apps/aquaculture/services/report_service.py:629
+msgid "Aucune adresse email renseignée pour ce compte."
+msgstr ""
+
+#: apps/aquaculture/services/report_service.py:2134
+msgid "Allocation de cycle introuvable ou inaccessible."
+msgstr ""
+
+#: apps/aquaculture/services/report_service.py:2161
+#: apps/aquaculture/services/report_service.py:2185
+#: apps/aquaculture/views/dashboard_views.py:72
+msgid "Cycle de session introuvable ou inactif."
+msgstr ""
+
+#: apps/aquaculture/services/sanitary_service.py:351
+#, python-format
+msgid "Problème résolu, %(cycle_name)s"
+msgstr ""
+
+#: apps/aquaculture/services/sanitary_service.py:353
+#, python-format
+msgid "Le problème %(event_type)s du %(event_date)s a été marqué comme résolu."
+msgstr ""
+
+#: apps/aquaculture/services/sanitary_service.py:441
+msgid "Aucun problème sanitaire enregistré. Continuez le bon travail !"
+msgstr ""
+
+#: apps/aquaculture/services/sanitary_service.py:518
+#, python-format
+msgid "🚨 Alerte sanitaire, %(cycle_name)s"
+msgstr ""
+
+#: apps/aquaculture/services/sanitary_service.py:519
+#, python-format
+msgid "Problème %(event_type)s détecté. Intervention recommandée rapidement."
+msgstr ""
+
+#: apps/aquaculture/services/sanitary_service.py:524
+#, python-format
+msgid "⚠️ Attention sanitaire, %(cycle_name)s"
+msgstr ""
+
+#: apps/aquaculture/services/sanitary_service.py:525
+#, python-format
+msgid "Problème %(event_type)s signalé. Surveillance recommandée."
+msgstr ""
+
+#: apps/aquaculture/services/sanitary_service.py:530
+#, python-format
+msgid "📋 Événement sanitaire, %(cycle_name)s"
+msgstr ""
+
+#: apps/aquaculture/services/sanitary_service.py:531
+#, python-format
+msgid "Événement %(event_type)s enregistré."
+msgstr ""
+
+#: apps/aquaculture/services/sanitary_service.py:562
+#, python-format
+msgid "ALERTE CRITIQUE, %(cycle_name)s"
+msgstr ""
+
+#: apps/aquaculture/services/sanitary_service.py:564
+#, python-format
+msgid ""
+"%(percentage).1f%% de l'effectif affecté (%(count)d poissons).\n"
+"Type: %(event_type)s\n"
+"ACTION URGENTE :\n"
+"1. Isoler les poissons malades si possible\n"
+"2. Vérifier la qualité de l'eau\n"
+"3. Contacter le support AquaCare\n"
+"4. Suspendre l'alimentation si besoin"
+msgstr ""
+
+#: apps/aquaculture/services/sanitary_service.py:661
+#, python-format
+msgid ""
+"⚠️ %(count)d problème(s) sanitaire(s) actif(s). Résolvez-les et marquez-les "
+"comme résolus après traitement."
+msgstr ""
+
+#: apps/aquaculture/services/sanitary_service.py:668
+msgid ""
+"🦠 Maladie détectée : Isolez les poissons malades, vérifiez la qualité de "
+"l'eau et contactez un vétérinaire aquacole si nécessaire."
+msgstr ""
+
+#: apps/aquaculture/services/sanitary_service.py:674
+msgid ""
+"💧 Problèmes de qualité d'eau récurrents : Augmentez la fréquence de "
+"renouvellement et vérifiez le système de filtration/aération."
+msgstr ""
+
+#: apps/aquaculture/services/sanitary_service.py:680
+msgid ""
+"☠️ Mortalité anormale enregistrée : Surveillez étroitement la température, "
+"l'oxygène dissous et réduisez l'alimentation temporairement."
+msgstr ""
+
+#: apps/aquaculture/services/sanitary_service.py:686
+msgid "✅ Excellente santé du cycle ! Maintenez ces bonnes pratiques."
+msgstr ""
+
+#: apps/aquaculture/services/sanitary_service.py:688
+msgid "👍 Santé correcte. Restez vigilant et anticipez les problèmes."
+msgstr ""
+
+#: apps/aquaculture/services/sanitary_service.py:690
+msgid "⚠️ Santé préoccupante. Renforcez la surveillance et le suivi sanitaire."
+msgstr ""
+
+#: apps/aquaculture/services/sanitary_service.py:693
+msgid ""
+"🚨 Santé critique. Intervention urgente requise. Contactez le support "
+"technique AquaCare immédiatement."
+msgstr ""
+
+#: apps/aquaculture/services/sanitary_service.py:700
+msgid ""
+"💡 Conseil : Effectuez des observations quotidiennes pour détecter "
+"précocement les signes de maladie (comportement, appétit, aspect)."
+msgstr ""
+
+#: apps/aquaculture/views/cycle_views.py:164
+msgid "Un nouveau cycle doit être lancé avec au moins une unité de production."
+msgstr ""
+"Un nouveau cycle doit être lancé avec au moins une unité de production."
+
+#: apps/aquaculture/views/cycle_views.py:211
+msgid ""
+"Un cycle avec stock ou historique doit être clôturé par un service métier."
+msgstr ""
+
+#: apps/aquaculture/views/cycle_views.py:240
+msgid "Sélectionnez l’unité source du calibrage."
+msgstr ""
+
+#: apps/aquaculture/views/cycle_views.py:245
+msgid "Allocation source introuvable."
+msgstr ""
+
+#: apps/aquaculture/views/cycle_views.py:258
+#: apps/aquaculture/views/production_unit_views.py:172
+msgid "Bac de calibrage introuvable."
+msgstr ""
+
+#: apps/aquaculture/views/cycle_views.py:366
+msgid "Cycle récolté avec succès"
+msgstr "Cycle récolté avec succès"
+
+#: apps/aquaculture/views/cycle_views.py:608
+msgid "Impossible de calculer les phases d'alimentation pour ce cycle."
+msgstr ""
+
+#: apps/aquaculture/views/cycle_views.py:676
+#: apps/aquaculture/views/production_unit_views.py:286
+#, fuzzy
+#| msgid "Cycle récolté avec succès"
+msgid "Récolte partielle enregistrée avec succès"
+msgstr "Cycle récolté avec succès"
+
+#: apps/aquaculture/views/log_views.py:179
+msgid ""
+"Conflit de synchronisation detecte pendant l'enregistrement du journal. "
+"Veuillez reessayer."
+msgstr ""
+
+#: apps/aquaculture/views/log_views.py:261
+msgid "Le champ 'logs' doit être une liste."
+msgstr ""
+
+#: apps/aquaculture/views/log_views.py:266
+#, python-format
+msgid "Trop d'éléments dans 'logs' (maximum %(max)s par requête)."
+msgstr ""
+
+#: apps/aquaculture/views/production_unit_views.py:248
+#, fuzzy
+#| msgid "Cycle récolté avec succès"
+msgid "Unité récoltée avec succès"
+msgstr "Cycle récolté avec succès"
+
+#: apps/aquaculture/views/report_views.py:163
+msgid "Identifiant UUID invalide."
+msgstr ""
+
+#: apps/aquaculture/views/report_views.py:205
+msgid "Contexte d’unité incomplet."
+msgstr ""
+
+#: apps/aquaculture/views/report_views.py:220
+msgid "Contexte de cycle incomplet."
+msgstr ""
+
+#: apps/aquaculture/views/report_views.py:446
+msgid ""
+"Le rapport est en cours de génération. Réessayez dans quelques instants."
+msgstr ""
+
+#: apps/aquaculture/views/report_views.py:450
+msgid "Le PDF est en cours de génération. Réessayez dans quelques instants."
+msgstr ""
+
+#: apps/aquaculture/views/report_views.py:464
+msgid ""
+"Le fichier PDF est introuvable. Régénération lancée, réessayez dans quelques "
+"instants."
+msgstr ""
+
+#: apps/chat/admin.py:141 apps/chat/models.py:267
+msgid "Messages"
+msgstr ""
+
+#: apps/chat/admin.py:253 apps/chat/admin.py:255
+msgid "Administration"
+msgstr ""
+
+#: apps/chat/admin.py:256
+msgid "Inconnu"
+msgstr ""
+
+#: apps/chat/admin.py:257
+msgid "Expediteur"
+msgstr ""
+
+#: apps/chat/admin.py:266
+msgid "Media"
+msgstr ""
+
+#: apps/chat/admin.py:278
+msgid "Ouvrir la video"
+msgstr ""
+
+#: apps/chat/admin.py:279
+msgid "Aucun media"
+msgstr ""
+
+#: apps/chat/admin.py:280
+msgid "Apercu media"
+msgstr ""
+
+#: apps/chat/admin.py:287 apps/chat/models.py:198
+msgid "Contenu"
+msgstr ""
+
+#: apps/chat/admin.py:306
+msgid "Vous n'avez pas acces a la boite de support."
+msgstr ""
+
+#: apps/chat/admin.py:329
+msgid "Vous n'avez pas la permission de repondre."
+msgstr ""
+
+#: apps/chat/admin.py:335
+msgid "Le contenu du message est requis."
+msgstr ""
+
+#: apps/chat/admin.py:341
+msgid "Reponse envoyee."
+msgstr ""
+
+#: apps/chat/admin.py:348
+msgid "Erreur interne lors de l'envoi de la réponse."
+msgstr ""
+
+#: apps/chat/apps.py:11
+msgid "Support Client"
+msgstr ""
+
+#: apps/chat/models.py:66
+msgid "Utilisateur propriétaire de cette conversation (unique)"
+msgstr ""
+
+#: apps/chat/models.py:77 apps/chat/models.py:259
+msgid "Date de modification"
+msgstr ""
+
+#: apps/chat/models.py:82
+msgid "Dernier message à"
+msgstr ""
+
+#: apps/chat/models.py:83
+msgid "Timestamp du dernier message (pour tri)"
+msgstr ""
+
+#: apps/chat/models.py:89
+msgid "Messages non lus (utilisateur)"
+msgstr ""
+
+#: apps/chat/models.py:90
+msgid "Nombre de messages admin/système non lus par l'utilisateur"
+msgstr ""
+
+#: apps/chat/models.py:95
+msgid "Messages non lus (admin)"
+msgstr ""
+
+#: apps/chat/models.py:96
+msgid "Nombre de messages utilisateur non lus par l'administration"
+msgstr ""
+
+#: apps/chat/models.py:102
+msgid "Conversation active"
+msgstr ""
+
+#: apps/chat/models.py:103
+msgid "Désactiver pour archiver la conversation"
+msgstr ""
+
+#: apps/chat/models.py:110 apps/chat/models.py:175
+msgid "Conversation"
+msgstr ""
+
+#: apps/chat/models.py:111
+msgid "Conversations"
+msgstr ""
+
+#: apps/chat/models.py:140
+msgid "Administrateur"
+msgstr ""
+
+#: apps/chat/models.py:141
+msgid "Système"
+msgstr ""
+
+#: apps/chat/models.py:145
+msgid "Aucun média"
+msgstr ""
+
+#: apps/chat/models.py:146
+msgid "Image"
+msgstr ""
+
+#: apps/chat/models.py:147
+msgid "Vidéo"
+msgstr ""
+
+#: apps/chat/models.py:165
+msgid ""
+"UUID généré côté mobile pour déduplication offline. Constraint UNIQUE "
+"empêche les doublons lors de la synchronisation."
+msgstr ""
+
+#: apps/chat/models.py:181
+msgid "Type d'expéditeur"
+msgstr ""
+
+#: apps/chat/models.py:182
+msgid "Qui a envoyé le message"
+msgstr ""
+
+#: apps/chat/models.py:191
+msgid "Utilisateur expéditeur"
+msgstr ""
+
+#: apps/chat/models.py:192
+msgid "Utilisateur admin qui a envoyé le message (si sender_type=admin)"
+msgstr ""
+
+#: apps/chat/models.py:199
+msgid "Texte du message (max 5000 caractères)"
+msgstr ""
+
+#: apps/chat/models.py:207
+msgid "Type de média"
+msgstr ""
+
+#: apps/chat/models.py:219
+msgid "Fichier média"
+msgstr ""
+
+#: apps/chat/models.py:220
+msgid "Image ou vidéo attachée (formats: JPG, PNG, WebP, MP4, MOV)"
+msgstr ""
+
+#: apps/chat/models.py:226
+msgid "Message lu"
+msgstr ""
+
+#: apps/chat/models.py:227
+msgid "Indique si le destinataire a lu le message"
+msgstr ""
+
+#: apps/chat/models.py:233
+msgid "Lu à"
+msgstr ""
+
+#: apps/chat/models.py:234
+msgid "Timestamp de lecture du message"
+msgstr ""
+
+#: apps/chat/models.py:240
+msgid "Créé offline"
+msgstr ""
+
+#: apps/chat/models.py:241
+msgid "Indique si le message a été créé hors connexion sur le mobile"
+msgstr ""
+
+#: apps/chat/models.py:247
+msgid "Synchronisé à"
+msgstr ""
+
+#: apps/chat/models.py:248
+msgid "Timestamp de synchronisation avec le serveur"
+msgstr ""
+
+#: apps/chat/models.py:266 apps/notifications/models.py:97
+msgid "Message"
+msgstr ""
+
+#: apps/chat/templates/admin/chat/conversation/change_list.html:7
+msgid "Ouvrir l'inbox support"
+msgstr ""
+
+#: apps/chat/views.py:123
+msgid "Conversation introuvable."
+msgstr ""
+
+#: apps/chat/views.py:132
+msgid "Contenu du message invalide."
+msgstr ""
+
+#: apps/chat/views.py:142
+msgid ""
+"Conflit de synchronisation détecté. Veuillez actualiser la conversation."
+msgstr ""
+
+#: apps/chat/views.py:153
+msgid "Fichier média trop volumineux."
+msgstr ""
+
+#: apps/chat/views.py:155
+msgid "Format de média non pris en charge."
+msgstr ""
+
+#: apps/commerce/admin.py:98
+msgid "Identification"
+msgstr "Identification"
+
+#: apps/commerce/admin.py:104
+msgid "Caracteristiques techniques"
+msgstr "Caractéristiques techniques"
+
+#: apps/commerce/admin.py:107
+msgid "Conditionnement & Prix"
+msgstr "Conditionnement & Prix"
+
+#: apps/commerce/admin.py:110 apps/commerce/admin.py:208
+msgid "Disponibilite"
+msgstr "Disponibilité"
+
+#: apps/commerce/admin.py:165 apps/commerce/models.py:75
+msgid "Marque"
+msgstr "Marque"
+
+#: apps/commerce/admin.py:190
+msgid "Prix"
+msgstr "Prix"
+
+#: apps/commerce/admin.py:206 apps/commerce/models.py:140
+msgid "Disponible"
+msgstr "Disponible"
+
+#: apps/commerce/admin.py:207
+msgid "Indisponible"
+msgstr "Indisponible"
+
+#: apps/commerce/admin.py:247
+msgid "Résumé de commande"
+msgstr "Résumé de commande"
+
+#: apps/commerce/admin.py:250
+msgid "Workflow et statut"
+msgstr "Workflow et statut"
+
+#: apps/commerce/admin.py:253
+msgid "Ferme, client et cycle"
+msgstr "Ferme, client et cycle"
+
+#: apps/commerce/admin.py:256
+msgid "Livraison ou retrait"
+msgstr "Livraison ou retrait"
+
+#: apps/commerce/admin.py:263
+#: templates/admin/commerce/order/fulfil_confirmation.html:26
+msgid "Articles"
+msgstr "Articles"
+
+#: apps/commerce/admin.py:266
+msgid "Montants"
+msgstr "Montants"
+
+#: apps/commerce/admin.py:272 apps/commerce/admin.py:596
+#: apps/commerce/admin.py:615
+msgid "Documents"
+msgstr "Documents"
+
+#: apps/commerce/admin.py:275
+msgid "Synchronisation et métadonnées"
+msgstr "Synchronisation et métadonnées"
+
+#: apps/commerce/admin.py:331 apps/commerce/admin.py:359
+#: apps/commerce/admin.py:476
+msgid "Commande introuvable."
+msgstr "Commande introuvable."
+
+#: apps/commerce/admin.py:334 apps/commerce/admin.py:362
+msgid "Langue invalide."
+msgstr "Langue invalide."
+
+#: apps/commerce/admin.py:480
+msgid "Cette commande ne nécessite plus cette action."
+msgstr "Cette commande ne nécessite plus cette action."
+
+#: apps/commerce/admin.py:484 apps/commerce/admin.py:574
 msgid "Marquer comme livrée"
 msgstr "Marquer comme livrée"
 
+#: apps/commerce/admin.py:486 apps/commerce/admin.py:576
 msgid "Marquer comme prête au retrait"
 msgstr "Marquer comme prête au retrait"
 
-msgid "Confirmer la réception"
-msgstr "Confirmer la réception"
+#: apps/commerce/admin.py:501
+msgid "Transition logistique effectuée via le service métier."
+msgstr "Transition logistique effectuée via le service métier."
 
-msgid "Confirmer le retrait"
-msgstr "Confirmer le retrait"
+#: apps/commerce/admin.py:506
+#, python-brace-format
+msgid ""
+"La commande {} a été mise à jour. La notification client a été traitée selon "
+"ses préférences."
+msgstr ""
+"La commande {} a été mise à jour. La notification client a été traitée selon "
+"ses préférences."
 
-msgid "Commande prête au retrait"
-msgstr "Commande prête au retrait"
+#: apps/commerce/admin.py:513
+#, python-brace-format
+msgid "La commande {} était déjà dans cet état."
+msgstr "La commande {} était déjà dans cet état."
 
+#: apps/commerce/admin.py:542
+#: templates/admin/commerce/order/fulfil_confirmation.html:15
 msgid "Aucun cycle associé"
 msgstr "Aucun cycle associé"
 
-msgid "Aucun cycle associé — cette commande ne générera pas d'entrée automatique dans un magasin de cycle."
-msgstr "Aucun cycle associé — cette commande ne générera pas d'entrée automatique dans un magasin de cycle."
+#: apps/commerce/admin.py:548
+msgid "Ferme / cycle"
+msgstr "Ferme / cycle"
 
+#: apps/commerce/admin.py:554
+msgid "Retrait"
+msgstr "Retrait"
+
+#: apps/commerce/admin.py:555
+msgid "Point non renseigné"
+msgstr "Point non renseigné"
+
+#: apps/commerce/admin.py:560
+msgid "Domicile"
+msgstr "Domicile"
+
+#: apps/commerce/admin.py:561
+msgid "Destination non renseignée"
+msgstr "Destination non renseignée"
+
+#: apps/commerce/admin.py:563 apps/commerce/admin.py:792
+#: apps/commerce/admin.py:906
+msgid "Livraison"
+msgstr "Livraison"
+
+#: apps/commerce/admin.py:567 apps/commerce/models.py:407
+#: apps/notifications/models.py:169
+msgid "Créée le"
+msgstr "Créée le"
+
+#: apps/commerce/admin.py:580
+msgid "Action"
+msgstr "Action"
+
+#: apps/commerce/admin.py:584
+msgid "Action opérateur"
+msgstr "Action opérateur"
+
+#: apps/commerce/admin.py:610 apps/commerce/admin.py:839
+msgid "Visualiser FR"
+msgstr "Visualiser FR"
+
+#: apps/commerce/admin.py:611 apps/commerce/admin.py:840
+msgid "Télécharger FR"
+msgstr "Télécharger FR"
+
+#: apps/commerce/admin.py:612
+msgid "View EN"
+msgstr "View EN"
+
+#: apps/commerce/admin.py:613
+msgid "Download EN"
+msgstr "Download EN"
+
+#: apps/commerce/admin.py:619
+msgid "Cycle associé : {}"
+msgstr "Cycle associé : {}"
+
+#: apps/commerce/admin.py:623
+#: templates/admin/commerce/order/fulfil_confirmation.html:45
+msgid ""
+"Aucun cycle associé — cette commande ne générera pas d'entrée automatique "
+"dans un magasin de cycle."
+msgstr ""
+"Aucun cycle associé — cette commande ne générera pas d'entrée automatique "
+"dans un magasin de cycle."
+
+#: apps/commerce/admin.py:627
+msgid "Magasin du cycle"
+msgstr "Magasin du cycle"
+
+#: apps/commerce/admin.py:632 apps/commerce/models.py:280
+msgid "Livrée le"
+msgstr "Livrée le"
+
+#: apps/commerce/admin.py:632 apps/commerce/models.py:295
+msgid "Prête au retrait le"
+msgstr "Prête au retrait le"
+
+#: apps/commerce/admin.py:636 apps/commerce/models.py:310
+msgid "Réception confirmée le"
+msgstr "Réception confirmée le"
+
+#: apps/commerce/admin.py:638
+msgid "Retrait confirmé le"
+msgstr "Retrait confirmé le"
+
+# Workflow de traitement des commandes
+#: apps/commerce/admin.py:641
+msgid "Commandée le"
+msgstr "Commandée le"
+
+#: apps/commerce/admin.py:643
+msgid "Opérateur"
+msgstr "Opérateur"
+
+#: apps/commerce/admin.py:658
+msgid "Historique du workflow"
+msgstr "Historique du workflow"
+
+#: apps/commerce/admin.py:663 apps/commerce/admin.py:755
+msgid "Aucun article."
+msgstr "Aucun article."
+
+#: apps/commerce/admin.py:678 apps/commerce/admin.py:916
+#: apps/commerce/models.py:521
+#: templates/admin/commerce/order/fulfil_confirmation.html:28
+msgid "Quantité"
+msgstr "Quantité"
+
+#: apps/commerce/admin.py:678 apps/commerce/admin.py:1067
+msgid "Prix unitaire"
+msgstr "Prix unitaire"
+
+#: apps/commerce/admin.py:678 apps/commerce/admin.py:736
+#: apps/commerce/admin.py:796 apps/commerce/admin.py:925
+#: apps/commerce/admin.py:1076
+#: templates/admin/commerce/order/fulfil_confirmation.html:23
+#: templates/admin/commerce/order/fulfil_confirmation.html:28
+msgid "Total"
+msgstr "Total"
+
+#: apps/commerce/admin.py:681 apps/commerce/models.py:480
+msgid "Articles commandés"
+msgstr "Articles commandés"
+
+#: apps/commerce/admin.py:690
+msgid "Confirmée"
+msgstr "Confirmée"
+
+#: apps/commerce/admin.py:691
+msgid "Livrée"
+msgstr "Livrée"
+
+#: apps/commerce/admin.py:692
+msgid "Reçue"
+msgstr "Reçue"
+
+#: apps/commerce/admin.py:736
+msgid "Qté (sacs)"
+msgstr "Qté (sacs)"
+
+#: apps/commerce/admin.py:736
+msgid "Prix unit."
+msgstr "Prix unit."
+
+#: apps/commerce/admin.py:760
+msgid "Articles non disponibles."
+msgstr "Articles non disponibles."
+
+# Workflow de traitement des commandes
+#: apps/commerce/admin.py:780
+msgid "Commande #"
+msgstr "Commande #"
+
+#: apps/commerce/admin.py:788
+msgid "Sous-total"
+msgstr "Sous-total"
+
+#: apps/commerce/admin.py:800
+msgid "Sacs commandés"
+msgstr "Sacs commandés"
+
+#: apps/commerce/admin.py:801 apps/commerce/admin.py:914
+msgid "sac"
+msgid_plural "sacs"
+msgstr[0] "sac"
+msgstr[1] "sacs"
+
+#: apps/commerce/admin.py:819
+msgid "Aperçu de la commande"
+msgstr "Aperçu de la commande"
+
+#: apps/commerce/admin.py:841
+msgid "Visualiser EN"
+msgstr "Visualiser EN"
+
+#: apps/commerce/admin.py:842
+msgid "Télécharger EN"
+msgstr "Télécharger EN"
+
+#: apps/commerce/admin.py:844
+msgid "Bon de commande PDF"
+msgstr "Bon de commande PDF"
+
+#: apps/commerce/admin.py:852
+msgid "Tel"
+msgstr "Tél"
+
+#: apps/commerce/admin.py:854 apps/commerce/models.py:242
+#: templates/admin/commerce/order/fulfil_confirmation.html:12
+msgid "Client"
+msgstr "Client"
+
+# Workflow de traitement des commandes
+#: apps/commerce/admin.py:874 apps/commerce/constants.py:34
+msgid "Commandée"
+msgstr "Commandée"
+
+#: apps/commerce/admin.py:875 apps/commerce/constants.py:35
+msgid "Livrée — confirmation attendue"
+msgstr "Livrée — confirmation attendue"
+
+#: apps/commerce/admin.py:876 apps/commerce/constants.py:36
+msgid "Prête au retrait"
+msgstr "Prête au retrait"
+
+#: apps/commerce/admin.py:878 apps/commerce/constants.py:37
+msgid "Réception confirmée"
+msgstr "Réception confirmée"
+
+#: apps/commerce/admin.py:880
+msgid "Retrait confirmé"
+msgstr "Retrait confirmé"
+
+#: apps/commerce/admin.py:941
+msgid ""
+"Selection limitee a 10 commandes maximum. Veuillez reduire votre selection."
+msgstr "Sélection limitée à 10 commandes maximum. Veuillez réduire votre sélection."
+
+#: apps/commerce/admin.py:959
+#, python-brace-format
+msgid "PDF genere avec succes pour commande {}"
+msgstr "PDF généré avec succès pour la commande {}"
+
+#: apps/commerce/admin.py:999
+#, python-brace-format
+msgid "{} PDFs generes avec succes et archives dans un ZIP"
+msgstr "{} PDF générés avec succès et archivés dans un ZIP"
+
+#: apps/commerce/admin.py:1013
+msgid "Générer les bons de commande en français"
+msgstr "Générer les bons de commande en français"
+
+#: apps/commerce/admin.py:1017
+msgid "Generate purchase orders in English"
+msgstr "Générer les bons de commande en anglais"
+
+#: apps/commerce/apps.py:8
+msgid "Commerce"
+msgstr ""
+
+#: apps/commerce/constants.py:8
+msgid "Tilapia"
+msgstr ""
+
+#: apps/commerce/constants.py:9
+msgid "Silure (Catfish)"
+msgstr ""
+
+#: apps/commerce/constants.py:11
+msgid "Mixte (Tilapia + Catfish)"
+msgstr ""
+
+#: apps/commerce/constants.py:16
+msgid "Alevinage"
+msgstr ""
+
+#: apps/commerce/constants.py:17
+msgid "Pré-grossissement"
+msgstr ""
+
+#: apps/commerce/constants.py:18
+msgid "Grossissement"
+msgstr ""
+
+#: apps/commerce/constants.py:20
+msgid "Larves"
+msgstr ""
+
+#: apps/commerce/constants.py:21
+msgid "Juvénile"
+msgstr ""
+
+#: apps/commerce/constants.py:22
+msgid "Croissance"
+msgstr ""
+
+#: apps/commerce/constants.py:23
+msgid "Engraissement"
+msgstr ""
+
+#: apps/commerce/constants.py:24
+msgid "Finition"
+msgstr ""
+
+#: apps/commerce/constants.py:29
+msgid "DIBAQ"
+msgstr ""
+
+#: apps/commerce/constants.py:42
+msgid "Livraison à domicile"
+msgstr "Livraison à domicile"
+
+#: apps/commerce/constants.py:43
+msgid "Retrait en magasin"
+msgstr "Retrait en magasin"
+
+#: apps/commerce/constants.py:48
+msgid "Marché Ndokoti"
+msgstr "Marché Ndokoti"
+
+#: apps/commerce/constants.py:49
+msgid "Marché Ndogpasi"
+msgstr "Marché Ndogpasi"
+
+#: apps/commerce/models.py:59
+msgid "Produits"
+msgstr ""
+
+#: apps/commerce/models.py:70 apps/commerce/models.py:225
+msgid "Identifiant unique UUID pour synchronisation mobile"
+msgstr ""
+
+#: apps/commerce/models.py:78
+#, fuzzy
+#| msgid "Marquer comme livrée"
+msgid "Marque de l'aliment"
+msgstr "Marquer comme livrée"
+
+#: apps/commerce/models.py:81
+msgid "Nom commercial"
+msgstr ""
+
+#: apps/commerce/models.py:83
+msgid "Ex: CLARIAS FLOAT 3MM, TIL-PRO SANA 2MM"
+msgstr ""
+
+#: apps/commerce/models.py:88
+msgid "Espèce cible"
+msgstr ""
+
+#: apps/commerce/models.py:91
+msgid "Espèce de poisson visée"
+msgstr ""
+
+#: apps/commerce/models.py:94
+msgid "Phase d'élevage"
+msgstr ""
+
+#: apps/commerce/models.py:99
+msgid "Phase de croissance du poisson (optionnel si non-vérifié)"
+msgstr ""
+
+#: apps/commerce/models.py:104
+msgid "Taille granulé (mm)"
+msgstr ""
+
+#: apps/commerce/models.py:108
+msgid "Diamètre du granulé en millimètres"
+msgstr ""
+
+#: apps/commerce/models.py:111
+msgid "Taux de protéines (%)"
+msgstr ""
+
+#: apps/commerce/models.py:115
+msgid "Pourcentage de protéines brutes (optionnel si non-vérifié)"
+msgstr ""
+
+#: apps/commerce/models.py:118
+msgid "Taux de lipides (%)"
+msgstr ""
+
+#: apps/commerce/models.py:122
+msgid "Pourcentage de matières grasses (optionnel si non-vérifié)"
+msgstr ""
+
+#: apps/commerce/models.py:127
+msgid "Poids conditionnement (kg)"
+msgstr ""
+
+#: apps/commerce/models.py:128
+msgid "Poids d'un sac en kilogrammes"
+msgstr ""
+
+#: apps/commerce/models.py:131
+msgid "Prix par sac (FCFA)"
+msgstr ""
+
+#: apps/commerce/models.py:135
+msgid "Prix unitaire d'un sac en Francs CFA"
+msgstr ""
+
+#: apps/commerce/models.py:142
+msgid "Si False, produit retiré temporairement du catalogue"
+msgstr ""
+
+#: apps/commerce/models.py:151
+msgid "Modifié le"
+msgstr ""
+
+#: apps/commerce/models.py:167
+msgid "La taille du granulé doit être supérieure à 0"
+msgstr ""
+
+#: apps/commerce/models.py:171
+msgid "Le taux de protéines doit être entre 20% et 50%"
+msgstr ""
+
+#: apps/commerce/models.py:175
+msgid "Le taux de lipides doit être entre 1% et 20%"
+msgstr ""
+
+#: apps/commerce/models.py:179
+msgid "Le poids du conditionnement doit être supérieur à 0"
+msgstr ""
+
+#: apps/commerce/models.py:183
+msgid "Le prix doit être supérieur à 0"
+msgstr ""
+
+# Workflow de traitement des commandes
+#: apps/commerce/models.py:212 apps/common/models.py:29
+#, fuzzy
+#| msgid "Commandée"
+msgid "Commandes"
+msgstr "Commandée"
+
+#: apps/commerce/models.py:234
+msgid "UUID généré côté mobile pour déduplication lors de la sync"
+msgstr ""
+
+#: apps/commerce/models.py:243
+msgid "Aquaculteur ayant passé la commande"
+msgstr ""
+
+#: apps/commerce/models.py:250
+msgid "Ferme associée à la commande"
+msgstr ""
+
+#: apps/commerce/models.py:260
+msgid "Cycle de production pour lequel cette commande est passée"
+msgstr ""
+
+#: apps/commerce/models.py:265
+msgid "Numéro de commande"
+msgstr "Numéro de commande"
+
+#: apps/commerce/models.py:268
+msgid "Format: ORD-YYYYMMDD-XXXX (généré automatiquement)"
+msgstr "Format: ORD-YYYYMMDD-XXXX (généré automatiquement)"
+
+#: apps/commerce/models.py:277
+msgid "Statut de la commande"
+msgstr "Statut de la commande"
+
+#: apps/commerce/models.py:283
+msgid "Date à laquelle la livraison à domicile a été déclarée"
+msgstr ""
+
+#: apps/commerce/models.py:291
+msgid "Livrée par"
+msgstr ""
+
+#: apps/commerce/models.py:292
+msgid "Opérateur ayant déclaré la livraison à domicile"
+msgstr ""
+
+#: apps/commerce/models.py:298
+msgid "Date à laquelle la commande a été déclarée prête au retrait"
+msgstr ""
+
+#: apps/commerce/models.py:306
+#, fuzzy
+#| msgid "Prête au retrait"
+msgid "Prête au retrait par"
+msgstr "Prête au retrait"
+
+#: apps/commerce/models.py:307
+#, fuzzy
+#| msgid "Marquer comme prête au retrait"
+msgid "Opérateur ayant déclaré la commande prête au retrait"
+msgstr "Marquer comme prête au retrait"
+
+#: apps/commerce/models.py:313
+msgid "Date à laquelle le client a confirmé la réception ou le retrait"
+msgstr ""
+
+#: apps/commerce/models.py:318
+msgid "Mode de livraison"
+msgstr ""
+
+#: apps/commerce/models.py:321
+msgid "Livraison à domicile ou retrait en magasin"
+msgstr ""
+
+#: apps/commerce/models.py:324
+#, fuzzy
+#| msgid "Confirmer le retrait"
+msgid "Point de retrait"
+msgstr "Confirmer le retrait"
+
+#: apps/commerce/models.py:328
+msgid "Marché Ndokoti ou Ndogpasi (si retrait)"
+msgstr ""
+
+#: apps/commerce/models.py:333
+msgid "Nom destinataire"
+msgstr ""
+
+#: apps/commerce/models.py:335
+msgid "Nom complet du destinataire"
+msgstr ""
+
+#: apps/commerce/models.py:338
+msgid "Téléphone destinataire"
+msgstr ""
+
+#: apps/commerce/models.py:340
+msgid "Numéro de téléphone pour contact livraison"
+msgstr ""
+
+#: apps/commerce/models.py:345
+msgid "Région Cameroun (ex: Littoral, Centre)"
+msgstr ""
+
+#: apps/commerce/models.py:350
+msgid "Ville de livraison"
+msgstr ""
+
+#: apps/commerce/models.py:353
+msgid "Adresse complète"
+msgstr ""
+
+#: apps/commerce/models.py:354
+msgid "Adresse complète de livraison (région, département, ville, quartier)"
+msgstr ""
+
+#: apps/commerce/models.py:356
+msgid "Nom de ferme figé"
+msgstr ""
+
+#: apps/commerce/models.py:357
+msgid "Version documentaire"
+msgstr ""
+
+#: apps/commerce/models.py:358
+msgid "Émetteur figé"
+msgstr ""
+
+#: apps/commerce/models.py:359
+msgid "Partenaire figé"
+msgstr ""
+
+#: apps/commerce/models.py:360
+msgid "Nom du cycle figé"
+msgstr ""
+
+#: apps/commerce/models.py:362
+msgid "Libellé français du point de retrait figé"
+msgstr ""
+
+#: apps/commerce/models.py:365
+msgid "Libellé anglais du point de retrait figé"
+msgstr ""
+
+#: apps/commerce/models.py:370
+msgid "Sous-total (FCFA)"
+msgstr ""
+
+#: apps/commerce/models.py:374
+msgid "Somme des articles avant frais de livraison"
+msgstr ""
+
+#: apps/commerce/models.py:377
+msgid "Frais de livraison (FCFA)"
+msgstr ""
+
+#: apps/commerce/models.py:382
+msgid "Frais de livraison calculés automatiquement"
+msgstr ""
+
+#: apps/commerce/models.py:385
+msgid "Total (FCFA)"
+msgstr ""
+
+#: apps/commerce/models.py:389
+msgid "Montant total = sous-total + frais de livraison"
+msgstr ""
+
+#: apps/commerce/models.py:396
+msgid "True si commande créée en mode offline mobile"
+msgstr ""
+
+#: apps/commerce/models.py:402
+msgid "Date/heure de synchronisation avec le serveur"
+msgstr ""
+
+#: apps/commerce/models.py:411 apps/notifications/models.py:173
+msgid "Modifiée le"
+msgstr ""
+
+#: apps/commerce/models.py:428
+msgid "L'adresse complète est requise pour la livraison à domicile"
+msgstr ""
+
+#: apps/commerce/models.py:433
+msgid "Le lieu de retrait est requis pour le retrait en magasin"
+msgstr ""
+
+#: apps/commerce/models.py:447
+msgid "Le sous-total doit être positif"
+msgstr ""
+
+#: apps/commerce/models.py:450
+msgid "Les frais de livraison doivent être positifs"
+msgstr ""
+
+#: apps/commerce/models.py:453
+msgid "Le total doit être strictement positif"
+msgstr ""
+
+#: apps/commerce/models.py:479
 msgid "Article commandé"
 msgstr "Article commandé"
 
-msgid "Articles commandés"
+#: apps/commerce/models.py:498
+#, fuzzy
+#| msgid "Commande prête au retrait"
+msgid "Commande parente"
+msgstr "Commande prête au retrait"
+
+#: apps/commerce/models.py:504
+msgid "Référence produit (lien vers catalogue)"
+msgstr ""
+
+#: apps/commerce/models.py:509
+msgid "Nom produit"
+msgstr ""
+
+#: apps/commerce/models.py:511
+msgid "Nom du produit au moment de la commande"
+msgstr ""
+
+#: apps/commerce/models.py:514
+msgid "Prix unitaire (FCFA)"
+msgstr ""
+
+#: apps/commerce/models.py:518
+msgid "Prix du sac au moment de la commande"
+msgstr ""
+
+#: apps/commerce/models.py:523
+#, fuzzy
+#| msgid "Articles commandés"
+msgid "Nombre de sacs commandés"
 msgstr "Articles commandés"
+
+#: apps/commerce/models.py:526
+msgid "Total ligne (FCFA)"
+msgstr ""
+
+#: apps/commerce/models.py:530
+msgid "Total de la ligne = prix unitaire × quantité"
+msgstr ""
+
+#: apps/commerce/models.py:532
+#, fuzzy
+#| msgid "Marquer comme livrée"
+msgid "Marque figée"
+msgstr "Marquer comme livrée"
+
+#: apps/commerce/models.py:533
+msgid "Espèce figée"
+msgstr ""
+
+#: apps/commerce/models.py:534
+msgid "Phase figée"
+msgstr ""
+
+#: apps/commerce/models.py:536
+msgid "Granulométrie figée (mm)"
+msgstr ""
+
+#: apps/commerce/models.py:539
+msgid "Poids conditionnement figé (kg)"
+msgstr ""
+
+#: apps/common/admin_mixins.py:161 apps/common/admin_mixins.py:162
+msgid "Elevation de privileges non autorisee."
+msgstr ""
+
+#: apps/common/admin_mixins.py:166 apps/common/admin_mixins.py:167
+msgid "Vous ne pouvez pas promouvoir un utilisateur en staff."
+msgstr ""
+
+#: apps/common/admin_mixins.py:293
+msgid "Telephone"
+msgstr ""
+
+#: apps/common/apps.py:14
+#, fuzzy
+#| msgid "Articles commandés"
+msgid "Utilitaires communs"
+msgstr "Articles commandés"
+
+#: apps/common/models.py:27
+msgid "Logs de cycle"
+msgstr ""
+
+#: apps/common/models.py:31
+msgid "Journaux d'envoi"
+msgstr ""
+
+#: apps/common/models.py:43
+msgid "Utilisateur admin"
+msgstr ""
+
+#: apps/common/models.py:48
+msgid "Section"
+msgstr ""
+
+#: apps/common/models.py:52
+msgid "Dernière consultation"
+msgstr ""
+
+#: apps/common/models.py:58
+msgid "État de vue admin"
+msgstr ""
+
+#: apps/common/models.py:59
+msgid "États de vue admin"
+msgstr ""
+
+#: apps/farm_gps/admin.py:41
+msgid "Coordonnées GPS"
+msgstr ""
+
+#: apps/farm_gps/admin.py:60
+msgid "Propriétaire"
+msgstr ""
+
+#: apps/farm_gps/admin.py:65
+msgid "Téléphone"
+msgstr ""
+
+#: apps/farm_gps/admin.py:75
+msgid "Coordonnées"
+msgstr ""
+
+#: apps/farm_gps/admin.py:81
+msgid "Capturé le"
+msgstr ""
+
+#: apps/farm_gps/models.py:14
+msgid "Ferme géolocalisée"
+msgstr ""
+
+#: apps/farm_gps/models.py:15
+msgid "Fermes géolocalisées"
+msgstr ""
+
+#: apps/notifications/admin.py:137
+msgid "Informations principales"
+msgstr ""
+
+#: apps/notifications/admin.py:147
+msgid "Liaison objet"
+msgstr ""
+
+#: apps/notifications/admin.py:151
+msgid "Metadonnees et canaux"
+msgstr ""
+
+#: apps/notifications/admin.py:154
+msgid "Planification"
+msgstr ""
+
+#: apps/notifications/admin.py:157 apps/notifications/admin.py:416
+#: apps/notifications/admin.py:464
+msgid "Etat"
+msgstr ""
+
+#: apps/notifications/admin.py:164
+msgid "Email tracking"
+msgstr ""
+
+#: apps/notifications/admin.py:168
+msgid "Push tracking"
+msgstr ""
+
+#: apps/notifications/admin.py:172 apps/notifications/admin.py:354
+#: apps/notifications/admin.py:422
+msgid "Audit"
+msgstr ""
+
+#: apps/notifications/admin.py:208 apps/notifications/models.py:94
+msgid "Titre"
+msgstr ""
+
+#: apps/notifications/admin.py:232
+msgid "Canaux"
+msgstr ""
+
+#: apps/notifications/admin.py:234
+#, fuzzy
+#| msgid "Marquer comme livrée"
+msgid "Marquer comme lu"
+msgstr "Marquer comme livrée"
+
+#: apps/notifications/admin.py:239 apps/notifications/admin.py:255
+msgid "Vous n'avez pas la permission de modifier les notifications."
+msgstr ""
+
+#: apps/notifications/admin.py:248
+#, python-brace-format
+msgid "{} notification(s) marquee(s) comme lue(s)."
+msgstr ""
+
+#: apps/notifications/admin.py:250
+#, fuzzy
+#| msgid "Marquer comme livrée"
+msgid "Marquer comme envoye"
+msgstr "Marquer comme livrée"
+
+#: apps/notifications/admin.py:264
+#, python-brace-format
+msgid "{} notification(s) marquee(s) comme envoyee(s)."
+msgstr ""
+
+#: apps/notifications/admin.py:298
+msgid "Canaux globaux"
+msgstr ""
+
+#: apps/notifications/admin.py:305
+msgid "Preferences Aquaculture"
+msgstr ""
+
+#: apps/notifications/admin.py:316
+msgid "Preferences Commerce"
+msgstr ""
+
+#: apps/notifications/admin.py:326
+msgid "Preferences Support"
+msgstr ""
+
+#: apps/notifications/admin.py:333
+msgid "Preferences Chat"
+msgstr ""
+
+#: apps/notifications/admin.py:340
+msgid "Preferences Systeme"
+msgstr ""
+
+#: apps/notifications/admin.py:347
+msgid "Configuration Email"
+msgstr ""
+
+#: apps/notifications/admin.py:403 apps/notifications/admin.py:458
+msgid "Token"
+msgstr ""
+
+#: apps/notifications/admin.py:409 apps/notifications/admin.py:461
+msgid "Device Info"
+msgstr ""
+
+#: apps/notifications/admin.py:476
+msgid "Activer les tokens"
+msgstr ""
+
+#: apps/notifications/admin.py:481 apps/notifications/admin.py:496
+msgid "Vous n'avez pas la permission de modifier les tokens."
+msgstr ""
+
+#: apps/notifications/admin.py:489
+#, python-brace-format
+msgid "{} token(s) active(s)."
+msgstr ""
+
+#: apps/notifications/admin.py:491
+msgid "Desactiver les tokens"
+msgstr ""
+
+#: apps/notifications/admin.py:504
+#, python-brace-format
+msgid "{} token(s) desactive(s)."
+msgstr ""
+
+#: apps/notifications/apps.py:14 apps/notifications/models.py:181
+msgid "Notifications"
+msgstr ""
+
+#: apps/notifications/constants.py:11
+msgid "Rappel nourrissage"
+msgstr ""
+
+#: apps/notifications/constants.py:12
+msgid "Rappel échantillonnage"
+msgstr ""
+
+#: apps/notifications/constants.py:13
+msgid "Rappel traitement"
+msgstr ""
+
+#: apps/notifications/constants.py:14
+msgid "Étape du cycle"
+msgstr ""
+
+#: apps/notifications/constants.py:15
+msgid "Alerte mortalité"
+msgstr ""
+
+#: apps/notifications/constants.py:16
+msgid "Alerte croissance"
+msgstr ""
+
+#: apps/notifications/constants.py:17
+msgid "Alerte qualité eau"
+msgstr ""
+
+#: apps/notifications/constants.py:18
+msgid "Rappel récolte"
+msgstr ""
+
+#: apps/notifications/constants.py:19
+msgid "Alerte générale"
+msgstr ""
+
+# Workflow de traitement des commandes
+#: apps/notifications/constants.py:22
+#, fuzzy
+#| msgid "Commandée"
+msgid "Commande confirmée"
+msgstr "Commandée"
+
+# Workflow de traitement des commandes
+#: apps/notifications/constants.py:23
+#, fuzzy
+#| msgid "Commandée"
+msgid "Commande expédiée"
+msgstr "Commandée"
+
+# Workflow de traitement des commandes
+#: apps/notifications/constants.py:24
+#, fuzzy
+#| msgid "Commandée"
+msgid "Commande livrée"
+msgstr "Commandée"
+
+#: apps/notifications/constants.py:25
+msgid "Commande prête au retrait"
+msgstr "Commande prête au retrait"
+
+# Workflow de traitement des commandes
+#: apps/notifications/constants.py:26
+#, fuzzy
+#| msgid "Commandée"
+msgid "Commande annulée"
+msgstr "Commandée"
+
+#: apps/notifications/constants.py:27
+msgid "Paiement reçu"
+msgstr ""
+
+#: apps/notifications/constants.py:28
+msgid "Livraison programmée"
+msgstr ""
+
+#: apps/notifications/constants.py:29
+msgid "Recommandation produit"
+msgstr ""
+
+#: apps/notifications/constants.py:30
+msgid "Stock faible"
+msgstr ""
+
+#: apps/notifications/constants.py:31
+msgid "Baisse de prix"
+msgstr ""
+
+#: apps/notifications/constants.py:34
+msgid "Ticket créé"
+msgstr ""
+
+#: apps/notifications/constants.py:35
+msgid "Réponse ticket"
+msgstr ""
+
+#: apps/notifications/constants.py:36
+msgid "Ticket résolu"
+msgstr ""
+
+#: apps/notifications/constants.py:37
+msgid "Ticket réouvert"
+msgstr ""
+
+#: apps/notifications/constants.py:38
+msgid "Ticket assigné"
+msgstr ""
+
+#: apps/notifications/constants.py:41
+msgid "Nouveau message"
+msgstr ""
+
+#: apps/notifications/constants.py:42
+msgid "Réponse message"
+msgstr ""
+
+#: apps/notifications/constants.py:43
+msgid "Mention"
+msgstr ""
+
+#: apps/notifications/constants.py:44
+msgid "Invitation chat"
+msgstr ""
+
+#: apps/notifications/constants.py:45
+msgid "Groupe créé"
+msgstr ""
+
+#: apps/notifications/constants.py:48
+msgid "Mise à jour système"
+msgstr ""
+
+#: apps/notifications/constants.py:49 apps/notifications/models.py:315
+msgid "Sécurité compte"
+msgstr ""
+
+#: apps/notifications/constants.py:50
+msgid "Maintenance"
+msgstr ""
+
+#: apps/notifications/constants.py:51
+msgid "Bienvenue"
+msgstr ""
+
+#: apps/notifications/constants.py:52
+msgid "Réinitialisation mot de passe"
+msgstr ""
+
+#: apps/notifications/constants.py:53
+msgid "Vérification email"
+msgstr ""
+
+#: apps/notifications/constants.py:58
+msgid "In-app"
+msgstr ""
+
+#: apps/notifications/constants.py:60
+msgid "Push notification"
+msgstr ""
+
+#: apps/notifications/constants.py:61
+msgid "SMS"
+msgstr ""
+
+#: apps/notifications/constants.py:66
+msgid "Instant"
+msgstr ""
+
+#: apps/notifications/constants.py:67
+msgid "Quotidien (résumé)"
+msgstr ""
+
+#: apps/notifications/constants.py:68
+msgid "Hebdomadaire (résumé)"
+msgstr ""
+
+#: apps/notifications/constants.py:69
+msgid "Jamais"
+msgstr ""
+
+#: apps/notifications/constants.py:74
+msgid "Basse"
+msgstr ""
+
+#: apps/notifications/constants.py:75
+#, fuzzy
+#| msgid "Moyen"
+msgid "Moyenne"
+msgstr "Moyen"
+
+#: apps/notifications/constants.py:76
+msgid "Haute"
+msgstr ""
+
+#: apps/notifications/constants.py:77
+msgid "Urgente"
+msgstr ""
+
+#: apps/notifications/models.py:67
+msgid "Type de contenu"
+msgstr ""
+
+#: apps/notifications/models.py:72
+msgid "ID de l'objet"
+msgstr ""
+
+#: apps/notifications/models.py:80
+msgid "Type de notification"
+msgstr ""
+
+#: apps/notifications/models.py:88
+msgid "Priorité"
+msgstr ""
+
+#: apps/notifications/models.py:105
+msgid "Données contextuelles supplémentaires"
+msgstr ""
+
+#: apps/notifications/models.py:112
+msgid "Canaux de diffusion"
+msgstr ""
+
+#: apps/notifications/models.py:113
+msgid "Ex: ['in_app', 'email', 'push']"
+msgstr ""
+
+#: apps/notifications/models.py:118
+msgid "Programmée pour"
+msgstr ""
+
+#: apps/notifications/models.py:119
+msgid "Date/heure d'affichage de la notification"
+msgstr ""
+
+#: apps/notifications/models.py:124
+msgid "Envoyée le"
+msgstr ""
+
+#: apps/notifications/models.py:130
+msgid "Envoyée"
+msgstr ""
+
+#: apps/notifications/models.py:134
+msgid "Lue"
+msgstr ""
+
+#: apps/notifications/models.py:139
+msgid "Lue le"
+msgstr ""
+
+#: apps/notifications/models.py:151
+msgid "Erreur email"
+msgstr ""
+
+#: apps/notifications/models.py:158
+msgid "Push envoyé le"
+msgstr ""
+
+#: apps/notifications/models.py:163
+msgid "Erreur push"
+msgstr ""
+
+#: apps/notifications/models.py:180
+msgid "Notification"
+msgstr ""
+
+#: apps/notifications/models.py:227
+msgid "Notifications in-app activées"
+msgstr ""
+
+#: apps/notifications/models.py:231
+msgid "Notifications email activées"
+msgstr ""
+
+#: apps/notifications/models.py:235
+msgid "Notifications push activées"
+msgstr ""
+
+#: apps/notifications/models.py:241
+msgid "Rappels nourrissage"
+msgstr ""
+
+#: apps/notifications/models.py:245
+msgid "Rappels échantillonnage"
+msgstr ""
+
+#: apps/notifications/models.py:249
+msgid "Alertes sanitaires"
+msgstr ""
+
+#: apps/notifications/models.py:253
+msgid "Étapes du cycle"
+msgstr ""
+
+#: apps/notifications/models.py:257
+msgid "Alertes mortalité"
+msgstr ""
+
+#: apps/notifications/models.py:261
+msgid "Alertes qualité eau"
+msgstr ""
+
+#: apps/notifications/models.py:267
+msgid "Confirmations de commande"
+msgstr ""
+
+#: apps/notifications/models.py:271
+msgid "Mises à jour statut commande"
+msgstr ""
+
+#: apps/notifications/models.py:275
+msgid "Notifications de livraison"
+msgstr ""
+
+#: apps/notifications/models.py:279
+msgid "Recommandations produits"
+msgstr ""
+
+#: apps/notifications/models.py:280 apps/notifications/models.py:285
+msgid "Marketing opt-in"
+msgstr ""
+
+#: apps/notifications/models.py:284
+msgid "Alertes de prix"
+msgstr ""
+
+#: apps/notifications/models.py:291
+msgid "Mises à jour tickets"
+msgstr ""
+
+#: apps/notifications/models.py:295
+msgid "Messages support"
+msgstr ""
+
+#: apps/notifications/models.py:301
+msgid "Messages chat"
+msgstr ""
+
+#: apps/notifications/models.py:305
+msgid "Mentions chat"
+msgstr ""
+
+#: apps/notifications/models.py:311
+msgid "Alertes système"
+msgstr ""
+
+#: apps/notifications/models.py:323
+msgid "Fréquence email"
+msgstr ""
+
+#: apps/notifications/models.py:330
+msgid "Début heures silencieuses"
+msgstr ""
+
+#: apps/notifications/models.py:331
+msgid "Ex: 22:00"
+msgstr ""
+
+#: apps/notifications/models.py:336
+msgid "Fin heures silencieuses"
+msgstr ""
+
+#: apps/notifications/models.py:337
+msgid "Ex: 07:00"
+msgstr ""
+
+#: apps/notifications/models.py:343
+msgid "Créées le"
+msgstr ""
+
+#: apps/notifications/models.py:347
+msgid "Modifiées le"
+msgstr ""
+
+#: apps/notifications/models.py:351 apps/notifications/models.py:352
+msgid "Préférences de notifications"
+msgstr ""
+
+#: apps/notifications/models.py:464
+msgid "Token Expo Push"
+msgstr ""
+
+#: apps/notifications/models.py:470
+msgid "ID Device"
+msgstr ""
+
+#: apps/notifications/models.py:471
+msgid "Identifiant unique du device"
+msgstr ""
+
+#: apps/notifications/models.py:477
+msgid "Nom du device"
+msgstr ""
+
+#: apps/notifications/models.py:478
+msgid "Ex: iPhone 13, Samsung Galaxy S21"
+msgstr ""
+
+#: apps/notifications/models.py:488
+msgid "Plateforme"
+msgstr ""
+
+#: apps/notifications/models.py:498
+msgid "Dernière utilisation"
+msgstr ""
+
+#: apps/notifications/models.py:509
+msgid "Token Push"
+msgstr ""
+
+#: apps/notifications/models.py:510
+msgid "Tokens Push"
+msgstr ""
+
+#: aquacare_api/settings/jazzmin.py:20
+msgid "Bienvenue sur AquaCare Administration"
+msgstr ""
+
+#: aquacare_api/settings/jazzmin.py:31
+msgid "Accueil"
+msgstr ""
+
+#: aquacare_api/settings/jazzmin.py:32
+msgid "Messagerie Support"
+msgstr ""
+
+#: templates/admin/aquaculture/cyclelog/delete_confirmation.html:7
+#: templates/admin/aquaculture/cyclelog/delete_selected_confirmation.html:7
+msgid "Attention : suppression métier irréversible."
+msgstr ""
+
+#: templates/admin/aquaculture/cyclelog/delete_confirmation.html:8
+msgid ""
+"Les effectifs, la biomasse et les indicateurs du cycle seront recalculés. "
+"Les rapports déjà générés peuvent devenir obsolètes et devront être "
+"régénérés. Une récolte finale existante peut repasser en réconciliation en "
+"attente. Cette action est réservée au super-administrateur et restera "
+"visible dans le journal d’administration."
+msgstr ""
+
+#: templates/admin/aquaculture/cyclelog/delete_selected_confirmation.html:8
+msgid ""
+"Chaque journal sélectionné modifiera l'historique des effectifs et de la "
+"biomasse. Les indicateurs des cycles seront recalculés, les rapports "
+"existants peuvent devenir obsolètes, et les récoltes finales affectées "
+"peuvent repasser en réconciliation en attente. Cette action est réservée au "
+"super-administrateur."
+msgstr ""
+
+#: templates/admin/commerce/order/fulfil_confirmation.html:7
+msgid "Vérifiez les informations avant de confirmer cette action logistique."
+msgstr "Vérifiez les informations avant de confirmer cette action logistique."
+
+#: templates/admin/commerce/order/fulfil_confirmation.html:18
+msgid "Mode et destination"
+msgstr "Mode et destination"
+
+#: templates/admin/commerce/order/fulfil_confirmation.html:22
+msgid "Nombre de sacs"
+msgstr "Nombre de sacs"
+
+#: templates/admin/commerce/order/fulfil_confirmation.html:38
+msgid "Le client sera invité à confirmer la réception de la commande."
+msgstr "Le client sera invité à confirmer la réception de la commande."
+
+#: templates/admin/commerce/order/fulfil_confirmation.html:40
+msgid "Le client sera invité à confirmer le retrait de la commande."
+msgstr "Le client sera invité à confirmer le retrait de la commande."
+
+#: templates/admin/commerce/order/fulfil_confirmation.html:53
+msgid "Annuler"
+msgstr "Annuler"
+
+#~ msgid "Paramètre species requis"
+#~ msgstr "Paramètre species requis"
+
+#~ msgid "Donnez %(amount).1f kg d'aliment ce matin"
+#~ msgstr "Donnez %(amount).1f kg d'aliment ce matin"
+
+#~ msgid "La capacité recommandée de l'unité est dépassée."
+#~ msgstr "La capacité recommandée de l'unité est dépassée."
