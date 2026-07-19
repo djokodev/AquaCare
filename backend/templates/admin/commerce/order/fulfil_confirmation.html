@@ -1,8 +1,50 @@
 {% extends "admin/base_site.html" %}
 {% load i18n %}
 
+{% block extrastyle %}
+  {{ block.super }}
+  <style>
+    /* Jazzmin's dark-mode module colors can make this light confirmation panel unreadable. */
+    #content-main.order-fulfil-confirmation,
+    #content-main.order-fulfil-confirmation .module,
+    #content-main.order-fulfil-confirmation .form-row,
+    #content-main.order-fulfil-confirmation h2,
+    #content-main.order-fulfil-confirmation table,
+    #content-main.order-fulfil-confirmation th,
+    #content-main.order-fulfil-confirmation td {
+      color: #1f2937 !important;
+    }
+
+    #content-main.order-fulfil-confirmation .module,
+    #content-main.order-fulfil-confirmation th,
+    #content-main.order-fulfil-confirmation td {
+      background: #ffffff !important;
+    }
+
+    #content-main.order-fulfil-confirmation strong,
+    #content-main.order-fulfil-confirmation h2,
+    #content-main.order-fulfil-confirmation th {
+      color: #111827 !important;
+    }
+
+    #content-main.order-fulfil-confirmation .messagelist.warning {
+      color: #92400e !important;
+      background: #fff7ed !important;
+    }
+
+    #content-main.order-fulfil-confirmation .errornote {
+      color: #991b1b !important;
+      background: #fef2f2 !important;
+    }
+
+    #content-main.order-fulfil-confirmation a.cancel-link {
+      color: #047857 !important;
+    }
+  </style>
+{% endblock %}
+
 {% block content %}
-  <div id="content-main">
+  <div id="content-main" class="order-fulfil-confirmation">
     <h1>{{ action_label }}</h1>
     <p>{% trans "Vérifiez les informations avant de confirmer cette action logistique." %}</p>
 
