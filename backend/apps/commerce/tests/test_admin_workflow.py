@@ -7,8 +7,10 @@ from commerce.models import Order, OrderItem, Product
 from commerce.services.order_service import OrderService
 from django.contrib import admin
 from django.contrib.auth.models import Group
+from django.core.exceptions import PermissionDenied
 from django.http import HttpResponse
 from django.middleware.csrf import CsrfViewMiddleware, _get_new_csrf_string
+from django.template.loader import render_to_string
 from django.test import Client, RequestFactory
 from django.urls import resolve, reverse
 
@@ -65,6 +67,12 @@ def test_admin_fulfil_get_is_read_only_and_post_transitions_with_csrf(workflow_o
     workflow_order.refresh_from_db()
 
     assert get_response.status_code == 200
+    rendered = get_response.render().content.decode()
+    assert 'class="col-12 order-fulfil-confirmation"' in rendered
+    assert 'class="aq-confirmation-card"' in rendered
+    assert workflow_order.order_number in rendered
+    assert "aq-confirmation-table" in rendered
+    assert "Annuler" in rendered
     assert workflow_order.status == "confirmed"
 
     client = Client(enforce_csrf_checks=True)
@@ -136,6 +144,78 @@ def test_admin_workflow_action_visibility_follows_rbac(superuser):
     assert "workflow_action_link" in order_admin.get_list_display(superuser_request)
 
 
+@pytest.mark.django_db
+def test_order_change_view_is_immutable_and_hides_save_controls(workflow_order, superuser):
+    url = reverse("admin:commerce_order_change", args=[workflow_order.pk])
+    before_updated_at = workflow_order.updated_at
+
+    request = RequestFactory().get(url)
+    request.user = superuser
+    response = OrderAdmin(Order, admin.site).change_view(request, str(workflow_order.pk))
+    assert response.status_code == 200
+    # Jazzmin's submit_row derives all Save controls from these permissions.
+    assert response.context_data["has_change_permission"] is False
+    assert response.context_data["has_view_permission"] is True
+    assert response.context_data["has_editable_inline_admin_formsets"] is False
+    submit_html = render_to_string(
+        "admin/submit_line.html",
+        response.context_data,
+        request=request,
+    )
+    assert 'name="_save"' not in submit_html
+    assert 'name="_continue"' not in submit_html
+    assert 'name="_addanother"' not in submit_html
+
+    client = Client()
+    client.force_login(superuser)
+    post_response = client.post(url, {"status": "received"})
+    workflow_order.refresh_from_db()
+
+    assert post_response.status_code == 403
+    assert workflow_order.status == "confirmed"
+    assert workflow_order.updated_at == before_updated_at
+
+
+@pytest.mark.django_db
+def test_workflow_action_remains_available_to_commerce_but_not_manager(workflow_order):
+    commerce = User.objects.create_user(
+        phone_number="+237699100006",
+        password="testpass123",
+        first_name="Commerce",
+        last_name="Operator",
+        age_group="26_35",
+        is_staff=True,
+    )
+    manager = User.objects.create_user(
+        phone_number="+237699100007",
+        password="testpass123",
+        first_name="Read",
+        last_name="Manager",
+        age_group="26_35",
+        is_staff=True,
+    )
+    commerce_group, _ = Group.objects.get_or_create(name="aquacare_commerce")
+    manager_group, _ = Group.objects.get_or_create(name="aquacare_managers")
+    commerce.groups.add(commerce_group)
+    manager.groups.add(manager_group)
+    url = reverse("admin:commerce_order_fulfil", args=[workflow_order.pk])
+
+    order_admin = OrderAdmin(Order, admin.site)
+    commerce_request = RequestFactory().get(url)
+    commerce_request.user = commerce
+    commerce_response = order_admin.fulfil_order_view(
+        commerce_request,
+        str(workflow_order.pk),
+    )
+    assert commerce_response.status_code == 200
+    assert "Marquer comme livrée" in commerce_response.render().content.decode()
+
+    manager_request = RequestFactory().get(url)
+    manager_request.user = manager
+    with pytest.raises(PermissionDenied):
+        order_admin.fulfil_order_view(manager_request, str(workflow_order.pk))
+
+
 def test_order_and_order_item_admin_are_immutable():
     order_admin = OrderAdmin(Order, admin.site)
     item_admin = OrderItemAdmin(OrderItem, admin.site)
@@ -144,5 +224,7 @@ def test_order_and_order_item_admin_are_immutable():
 
     assert "status" in order_admin.readonly_fields
     assert "delivery_method" in order_admin.readonly_fields
+    assert order_admin.has_change_permission(request) is False
+    assert order_admin.has_view_permission(request) is True
     assert order_admin.has_delete_permission(request) is False
     assert item_admin.has_delete_permission(request) is False

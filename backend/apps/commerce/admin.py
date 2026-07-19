@@ -439,12 +439,12 @@ class OrderAdmin(CommerceSecuredAdmin):
         return False
 
     def has_change_permission(self, request, obj=None):
-        """Commerce operators peuvent modifier le statut des commandes."""
-        if request.user.is_superuser:
-            return True
-        return request.user.groups.filter(
-            name=RBACConstants.GROUP_COMMERCE
-        ).exists()
+        """Les commandes sont immuables dans la change view standard.
+
+        Les transitions de fulfilment passent exclusivement par
+        ``fulfil_order_view`` et ``has_workflow_permission``.
+        """
+        return False
 
     def has_delete_permission(self, request, obj=None):
         """Les commandes historiques ne sont jamais supprimables dans l'admin."""

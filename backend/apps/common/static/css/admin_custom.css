@@ -465,6 +465,98 @@ form[action=""] input[name="q"],
     text-decoration: underline !important;
 }
 
+/* --- Commerce orders changelist --- */
+body.app-commerce.model-order.change-list #changelist .card-body.table-responsive {
+    overflow-x: auto;
+}
+
+body.app-commerce.model-order.change-list #result_list {
+    width: 100%;
+    table-layout: fixed;
+}
+
+body.app-commerce.model-order.change-list #result_list th,
+body.app-commerce.model-order.change-list #result_list td {
+    min-width: 0;
+    padding: 0.55rem 0.6rem;
+    vertical-align: top;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
+body.app-commerce.model-order.change-list #result_list th.column-order_column,
+body.app-commerce.model-order.change-list #result_list td.field-order_column {
+    width: 12%;
+}
+
+body.app-commerce.model-order.change-list #result_list th.column-farm_cycle_column,
+body.app-commerce.model-order.change-list #result_list td.field-farm_cycle_column {
+    width: 16%;
+}
+
+body.app-commerce.model-order.change-list #result_list th.column-status_badge,
+body.app-commerce.model-order.change-list #result_list td.field-status_badge {
+    width: 15%;
+}
+
+body.app-commerce.model-order.change-list #result_list th.column-delivery_summary,
+body.app-commerce.model-order.change-list #result_list td.field-delivery_summary {
+    width: 13%;
+}
+
+body.app-commerce.model-order.change-list #result_list th.column-total_bags_display,
+body.app-commerce.model-order.change-list #result_list td.field-total_bags_display {
+    width: 7%;
+}
+
+body.app-commerce.model-order.change-list #result_list th.column-total_display,
+body.app-commerce.model-order.change-list #result_list td.field-total_display {
+    width: 9%;
+}
+
+body.app-commerce.model-order.change-list #result_list th.column-created_at_compact,
+body.app-commerce.model-order.change-list #result_list td.field-created_at_compact {
+    width: 11%;
+}
+
+body.app-commerce.model-order.change-list #result_list th.column-workflow_action_link,
+body.app-commerce.model-order.change-list #result_list td.field-workflow_action_link {
+    width: 11%;
+}
+
+body.app-commerce.model-order.change-list #result_list th.column-documents_compact,
+body.app-commerce.model-order.change-list #result_list td.field-documents_compact {
+    width: 6%;
+}
+
+body.app-commerce.model-order.change-list #result_list td.field-workflow_action_link .button {
+    display: inline-block;
+    max-width: 100%;
+    white-space: normal;
+    line-height: 1.25;
+}
+
+body.app-commerce.model-order.change-list #result_list td.field-documents_compact {
+    font-size: 0.85rem;
+    white-space: nowrap;
+}
+
+/* Navigation de date Jazzmin : le bouton secondaire doit rester lisible
+   sur le fond clair de la zone de contenu. */
+body.app-commerce.model-order.change-list .date-hierarchy a.btn-secondary,
+body.app-commerce.model-order.change-list .date-hierarchy a.btn-outline-secondary {
+    color: var(--text-dark) !important;
+    background-color: transparent !important;
+    border-color: #64748b !important;
+}
+
+body.app-commerce.model-order.change-list .date-hierarchy a.btn-secondary:hover,
+body.app-commerce.model-order.change-list .date-hierarchy a.btn-outline-secondary:hover {
+    color: #ffffff !important;
+    background-color: #64748b !important;
+    border-color: #64748b !important;
+}
+
 /* Compteur d'elements */
 .paginator,
 .dataTables_info,
