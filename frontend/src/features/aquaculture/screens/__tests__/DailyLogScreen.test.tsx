@@ -88,6 +88,10 @@ describe('features/aquaculture/screens/DailyLogScreen', () => {
 
   const store: CycleStore = {
     cycle_id: 'cycle-1',
+    calculation_status: 'available',
+    calculation_source: 'current_cycle_reforecast',
+    calculated_at: '2026-07-20T00:00:00Z',
+    calculation_warnings: [],
     status: 'ok',
     summary: {
       manual_feed_kg: '50.00',

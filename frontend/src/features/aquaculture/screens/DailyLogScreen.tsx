@@ -204,7 +204,7 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
   }, [cycleId, unitAllocationId, useComma]);
 
   const selectedStockItem = useMemo(() => store?.stock_items?.find((item) => (
-    item.feed_reference_id !== null && item.feed_reference_id === formData.feed_reference
+    (item.feed_reference_id ?? item.feed_reference_client_uuid) === formData.feed_reference
   )) ?? null, [formData.feed_reference, formData.feed_size_mm, formData.feed_type, store?.stock_items]);
 
   const availableFeedKg = useMemo(() => {
@@ -351,7 +351,10 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
       feed_quantity: feedQuantity,
       feed_type: feedingStatus === 'fed' ? formData.feed_type.trim() : '',
       feed_size_mm: feedingStatus === 'fed' ? parseOptionalDecimal(formData.feed_size_mm) : null,
-      feed_reference: feedingStatus === 'fed' ? formData.feed_reference : null,
+      feed_reference: feedingStatus === 'fed' ? selectedStockItem?.feed_reference_id ?? null : null,
+      feed_reference_client_uuid: feedingStatus === 'fed'
+        ? selectedStockItem?.feed_reference_client_uuid ?? null
+        : null,
       feeding_times: feedingStatus === 'fed' ? feedingTimes : [],
       water_temperature: parseOptionalDecimal(formData.water_temperature),
       dissolved_oxygen: parseOptionalDecimal(formData.dissolved_oxygen),
@@ -542,7 +545,7 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
                   {t('feedStockItem')} <AppText variant="label" color="error">*</AppText>
                 </AppText>
                 <View style={{ gap: spacing[2], marginBottom: spacing[2] }}>
-                  {store?.stock_items?.filter((item) => item.feed_reference_id && (Number(item.quantity_available_kg) > 0 || (
+                  {store?.stock_items?.filter((item) => (item.feed_reference_id || item.feed_reference_client_uuid) && (Number(item.quantity_available_kg) > 0 || (
                     (existingLog?.feed_type ?? '').trim().toLocaleLowerCase() === item.label.trim().toLocaleLowerCase()
                   ))).map((item) => {
                     const selected = selectedStockItem === item;
@@ -558,8 +561,8 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
                       });
                     return (
                       <Button
-                        key={`${item.label}-${item.feed_size_mm ?? 'legacy'}`}
-                        label={optionLabel}
+                        key={item.feed_reference_id ?? item.feed_reference_client_uuid ?? `${item.label}-${item.feed_size_mm}`}
+                        label={item.pending_sync ? `${optionLabel} · ${t('pendingSync')}` : optionLabel}
                         variant={selected ? 'primary' : 'outline'}
                         onPress={() => {
                           setTouched((previous) => ({ ...previous, feed_stock_item: true }));
@@ -568,7 +571,7 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
                             ...previous,
                             feed_type: item.label,
                             feed_size_mm: item.feed_size_mm ?? '',
-                            feed_reference: item.feed_reference_id ?? '',
+                            feed_reference: item.feed_reference_id ?? item.feed_reference_client_uuid ?? '',
                           }));
                         }}
                       />

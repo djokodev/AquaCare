@@ -16,7 +16,7 @@ class Migration(migrations.Migration):
             name='CycleFeedPlan',
             fields=[
                 ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
-                ('version', models.PositiveSmallIntegerField(default=1, verbose_name='Version')),
+                ('version', models.PositiveSmallIntegerField(default=2, verbose_name='Version')),
                 ('parameters', models.JSONField(default=dict, verbose_name='Paramètres de simulation')),
                 ('phases', models.JSONField(default=list, verbose_name='Phases alimentaires')),
                 ('total_feed_kg', models.DecimalField(decimal_places=2, max_digits=14, verbose_name='Aliment total planifié (kg)')),

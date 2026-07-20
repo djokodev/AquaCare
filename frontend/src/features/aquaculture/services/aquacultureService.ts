@@ -14,6 +14,7 @@ import {
   CycleStoreManualStockPayload,
   CycleFeedRecommendation,
   FarmFeedReference,
+  FarmFeedReferenceCreatePayload,
   ExternalFeedPayload,
   ProductionReport,
   ReportScope,
@@ -246,17 +247,7 @@ class AquacultureService {
     return extractResults(response.data);
   }
 
-  async createFarmFeedReference(payload: {
-    farm_profile: string;
-    source: 'aquacare_catalog' | 'external';
-    catalog_product?: string;
-    name?: string;
-    species?: 'tilapia' | 'clarias';
-    pellet_size_mm?: string;
-    brand?: string;
-    client_uuid?: string;
-    created_offline?: boolean;
-  }): Promise<FarmFeedReference> {
+  async createFarmFeedReference(payload: FarmFeedReferenceCreatePayload): Promise<FarmFeedReference> {
     const response = await apiService.post<FarmFeedReference>(
       `${this.baseUrl}/feed-references/`,
       payload

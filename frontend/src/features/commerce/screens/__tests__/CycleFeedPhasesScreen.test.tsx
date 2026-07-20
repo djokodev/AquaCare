@@ -17,13 +17,20 @@ jest.mock('react-redux', () => ({
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }) }));
 
 const phase = {
+  phase_id: 'phase-001',
+  sequence: 1,
+  phase_status: 'current' as const,
   phase_name: 'alevinage',
   days_range: [1, 30] as [number, number],
-  weight_range_g: [5, 50] as [number, number],
-  pellet_size_mm: 2,
+  planned_days_range: [1, 30] as [number, number],
+  weight_range_g: ['5.00', '50.00'] as [string, string],
+  planned_weight_range_g: ['5.00', '50.00'] as [string, string],
+  pellet_size_mm: '2.00',
   duration_days: 30,
-  total_consumption_kg: 40,
-  daily_avg_kg: 1.3,
+  planned_duration_days: 30,
+  planned_consumption_kg: '40.00',
+  actual_consumed_kg: '0.00',
+  estimated_remaining_need_kg: '40.00',
   remaining_need_kg: '40.00',
   consumed_kg: '0.00',
   allocated_stock_kg: '0.00',
@@ -32,8 +39,8 @@ const phase = {
   surplus_kg: '0.00',
   product_available: true,
   total_bags: 2,
-  total_price: 40000,
-  products: [{ product_id: 'p1', product_name: 'Starter', package_weight_kg: 20, quantity_bags: 2, total_kg: 40, unit_price: 20000, total_price: 40000, brand: 'dibaq', species: 'tilapia' as const, pellet_size_mm: 2 }],
+  total_price: '40000.00',
+  products: [{ product_id: 'p1', product_name: 'Starter', package_weight_kg: '20.00', quantity_bags: 2, total_kg: '40.00', unit_price: '20000.00', total_price: '40000.00', brand: 'dibaq', species: 'tilapia' as const, pellet_size_mm: '2.00' }],
 };
 
 const recommendation = (feeding_phases: Array<typeof phase>) => ({
@@ -75,7 +82,21 @@ describe('CycleFeedPhasesScreen', () => {
     const { findByText, getByText } = render(<CycleFeedPhasesScreen {...props} />);
     await findByText('Starter');
     fireEvent.press(getByText(/feedPhaseOrderAllBtn/));
+    fireEvent.press(getByText(/feedPhaseOrderAllBtn/));
     expect(mockNavigate).toHaveBeenCalledWith('Cart', { cycleId: 'cycle-1' });
+    expect(mockDispatch).toHaveBeenCalledTimes(1);
+  });
+
+  it('affiche les avertissements structurés sans exposer une clé backend brute', async () => {
+    jest.spyOn(aquacultureService, 'getCycleFeedPhases').mockResolvedValue({
+      ...recommendation([phase]),
+      status: 'incomplete',
+      warnings: ['unclassified_consumption'],
+    });
+    const { findByText, queryByText } = render(<CycleFeedPhasesScreen {...props} />);
+
+    expect(await findByText('feedWarning_unclassified_consumption')).toBeTruthy();
+    expect(queryByText('unclassified_consumption')).toBeNull();
   });
 
   it('affiche une erreur puis permet de relancer', async () => {

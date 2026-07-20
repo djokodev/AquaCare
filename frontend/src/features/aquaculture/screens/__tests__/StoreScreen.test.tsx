@@ -10,6 +10,7 @@ const mockGoBack = jest.fn();
 const mockDispatch = jest.fn();
 const mockGetCycleStore = jest.fn();
 const mockDeclareCycleStoreManualStock = jest.fn();
+const mockCreateFarmFeedReference = jest.fn();
 const mockConfirmOrderReceipt = jest.fn();
 const mockT = (key: string) => key;
 let mockState: any;
@@ -36,6 +37,8 @@ jest.mock('@/features/aquaculture/services/aquacultureService', () => ({
   aquacultureService: {
     getCycleStore: (...args: unknown[]) => mockGetCycleStore(...args),
     declareCycleStoreManualStock: (...args: unknown[]) => mockDeclareCycleStoreManualStock(...args),
+    createFarmFeedReference: (...args: unknown[]) => mockCreateFarmFeedReference(...args),
+    getFarmFeedReferences: jest.fn().mockResolvedValue([]),
   },
 }));
 
@@ -69,6 +72,8 @@ describe('StoreScreen', () => {
         currentCycle: {
           id: 'cycle-1',
           cycle_name: 'Cycle Magasin',
+          farm_profile: 'farm-1',
+          species: 'tilapia',
         },
         cycleFeedStatus: {
           data: {
@@ -95,6 +100,10 @@ describe('StoreScreen', () => {
     }));
     mockGetCycleStore.mockResolvedValue({
       cycle_id: 'cycle-1',
+      calculation_status: 'available',
+      calculation_source: 'current_cycle_reforecast:cycle_current_weight',
+      calculated_at: '2026-07-20T00:00:00Z',
+      calculation_warnings: [],
       summary: {
         manual_feed_kg: '50.00',
         received_order_feed_kg: '20.00',
@@ -110,6 +119,7 @@ describe('StoreScreen', () => {
         secured_feed_kg: '80.00',
         feed_to_secure_kg: '510.00',
         stock_tracking_started_at: '2026-06-01',
+        unclassified_stock_kg: '0.00',
       },
       stock_items: [{ label: 'Aliment starter 20kg', feed_size_mm: '2.00', quantity_added_kg: '70.00', quantity_consumed_kg: '10.00', quantity_available_kg: '60.00' }],
       status: 'ok',
@@ -126,6 +136,7 @@ describe('StoreScreen', () => {
         },
       ],
       stock_tracking_started_at: '2026-06-01',
+      unclassified_entries: [],
     });
     mockDeclareCycleStoreManualStock.mockResolvedValue({
       cycle_id: 'cycle-1',
@@ -150,6 +161,7 @@ describe('StoreScreen', () => {
       pending_orders: [],
       stock_tracking_started_at: '2026-06-01',
     });
+    mockCreateFarmFeedReference.mockResolvedValue({ id: 'feed-server-1' });
     mockConfirmOrderReceipt.mockResolvedValue({ status: 'received' });
   });
 
@@ -202,11 +214,7 @@ describe('StoreScreen', () => {
       expect(mockDeclareCycleStoreManualStock).toHaveBeenCalledWith(
         'cycle-1',
         expect.objectContaining({
-          external_feed: expect.objectContaining({
-            name: 'Aliment starter 20kg',
-            pellet_size_mm: '2.5',
-            species: 'tilapia',
-          }),
+          feed_reference_id: 'feed-server-1',
           quantity_kg: '75.5',
           total_cost_fcfa: '90000.5',
           entry_date: '2026-06-29',
@@ -231,6 +239,24 @@ describe('StoreScreen', () => {
     });
     const { getByText } = render(<StoreScreen />);
     await waitFor(() => expect(getByText('storeReplenishmentRequired')).toBeTruthy());
+  });
+
+  it('n affiche jamais un besoin couvert lorsque le calcul est indisponible', async () => {
+    mockGetCycleStore.mockResolvedValueOnce({
+      ...(await mockGetCycleStore()),
+      calculation_status: 'unavailable',
+      calculation_warnings: ['target_weight_unavailable'],
+      summary: {
+        ...(await mockGetCycleStore()).summary,
+        feed_to_secure_kg: null,
+        total_feed_needed_kg: null,
+      },
+    });
+
+    const { findByText, queryByText } = render(<StoreScreen />);
+
+    expect(await findByText('feedEstimateUnavailable')).toBeTruthy();
+    expect(queryByText('storeNeedCoveredTitle')).toBeNull();
   });
 
   it('ignore le statut alimentaire d un autre cycle', async () => {
@@ -309,7 +335,7 @@ describe('StoreScreen', () => {
     fireEvent.press(getAllByText('storeManualSubmit')[1]);
     fireEvent.press(getAllByText('storeManualSubmit')[1]);
 
-    expect(mockDeclareCycleStoreManualStock).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(mockDeclareCycleStoreManualStock).toHaveBeenCalledTimes(1));
     resolveSubmission?.();
   });
 

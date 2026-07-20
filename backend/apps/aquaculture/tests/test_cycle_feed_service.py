@@ -13,7 +13,7 @@ from decimal import Decimal
 
 import pytest
 from aquaculture.models import CycleFeedStockEntry, FeedingPlan, ProductionCycle
-from aquaculture.services.cycle_feed_service import BAG_WEIGHT_KG, CycleFeedService
+from aquaculture.services.cycle_feed_service import CycleFeedService
 from commerce.models import Order, OrderItem, Product
 
 
@@ -23,12 +23,15 @@ class TestCycleFeedServiceNoFeedingPlans:
 
     def test_all_counters_zero(self, production_cycle):
         FeedingPlan.objects.filter(cycle=production_cycle).delete()
+        production_cycle.initial_count = 0
+        production_cycle.current_count = 0
+        production_cycle.save(update_fields=['initial_count', 'current_count'])
 
         result = CycleFeedService.get_feed_status(production_cycle)
 
-        assert result["total_bags_needed"] == 0
+        assert result["total_bags_needed"] is None
         assert result["total_bags_ordered"] == 0
-        assert result["bags_remaining_to_order"] == 0
+        assert result["bags_remaining_to_order"] is None
         assert result["bags_by_product"] == []
 
     def test_consumed_cost_ignores_zero_valued_stock_entries(self, production_cycle):
@@ -89,7 +92,7 @@ class TestCycleFeedServiceOrders:
             name="DIBAQ Tilapia 2mm",
             species="tilapia",
             pellet_size_mm=Decimal("2.00"),
-            package_weight_kg=BAG_WEIGHT_KG,
+            package_weight_kg=15,
             price_per_package=Decimal("15000.00"),
         )
 
@@ -149,7 +152,7 @@ class TestCycleFeedServiceOrders:
 
         result = CycleFeedService.get_feed_status(production_cycle)
 
-        assert result["bags_remaining_to_order"] == 0
+        assert result["bags_remaining_to_order"] is None
 
     def test_orders_not_linked_to_cycle_excluded(self, authenticated_user, farm_profile, production_cycle):
         """Les commandes sans production_cycle ne doivent pas être comptées."""

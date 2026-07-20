@@ -16,7 +16,6 @@ class FarmFeedReferenceViewSet(
     mixins.ListModelMixin,
     mixins.RetrieveModelMixin,
     mixins.CreateModelMixin,
-    mixins.UpdateModelMixin,
     viewsets.GenericViewSet,
 ):
     """Références AquaCare et externes propres aux fermes de l'utilisateur."""
@@ -47,9 +46,3 @@ class FarmFeedReferenceViewSet(
         except ValueError as exc:
             raise ValidationError({'detail': str(exc)}) from exc
         return Response(FarmFeedReferenceSerializer(reference).data, status=status.HTTP_201_CREATED)
-
-    def update(self, request, *args, **kwargs):
-        reference = self.get_object()
-        if reference.source != FarmFeedReference.SOURCE_EXTERNAL:
-            raise PermissionDenied(_('Un produit AquaCare ne peut pas être modifié ici.'))
-        return super().update(request, *args, **kwargs)

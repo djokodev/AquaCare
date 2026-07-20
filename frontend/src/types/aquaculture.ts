@@ -850,6 +850,7 @@ export interface DailyLogForm {
   feed_type?: string;
   feed_size_mm?: number | null;
   feed_reference?: string | null;
+  feed_reference_client_uuid?: string | null;
   feeding_times?: string[];
   water_temperature?: number | null;
   dissolved_oxygen?: number | null;
@@ -938,34 +939,41 @@ export interface CycleStatistics {
 export interface FeedPhaseProduct {
   product_id: string;
   product_name: string;
-  package_weight_kg: number;
+  package_weight_kg: string;
   quantity_bags: number;
-  total_kg: number;
-  unit_price: number;
-  total_price: number;
+  total_kg: string;
+  unit_price: string;
+  total_price: string;
   brand: string;
   species: 'tilapia' | 'catfish';
-  pellet_size_mm: number;
+  pellet_size_mm: string;
 }
 
 export interface FeedPhase {
+  phase_id: string;
+  sequence: number;
+  phase_status: 'past' | 'current' | 'future';
   phase_name: string;
   days_range: [number, number];
-  weight_range_g: [number, number];
-  pellet_size_mm: number;
+  planned_days_range: [number, number];
+  weight_range_g: [string, string];
+  planned_weight_range_g: [string, string];
+  pellet_size_mm: string;
   duration_days: number;
-  total_consumption_kg?: number;
-  daily_avg_kg?: number;
-  remaining_need_kg: string;
-  consumed_kg: string;
-  allocated_stock_kg: string;
-  allocated_pending_kg: string;
-  shortfall_kg: string;
-  surplus_kg: string;
+  planned_duration_days: number;
+  planned_consumption_kg: string;
+  actual_consumed_kg: string | null;
+  estimated_remaining_need_kg: string | null;
+  remaining_need_kg: string | null;
+  consumed_kg: string | null;
+  allocated_stock_kg: string | null;
+  allocated_pending_kg: string | null;
+  shortfall_kg: string | null;
+  surplus_kg: string | null;
   product_available: boolean;
   products: FeedPhaseProduct[];
-  total_bags: number;
-  total_price: number;
+  total_bags: number | null;
+  total_price: string | null;
 }
 
 export interface FeedProductStatus {
@@ -1009,16 +1017,17 @@ export interface CycleStoreSummary {
   pending_orders_count: number;
   pending_order_amount_fcfa: string;
   pending_order_feed_kg: string;
-  total_feed_needed_kg: string;
-  feed_need_remaining_kg: string;
-  secured_feed_kg: string;
-  feed_to_secure_kg: string;
+  total_feed_needed_kg: string | null;
+  feed_need_remaining_kg: string | null;
+  secured_feed_kg: string | null;
+  feed_to_secure_kg: string | null;
   stock_tracking_started_at: string | null;
   unclassified_stock_kg: string;
 }
 
 export interface CycleStoreStockItem {
   feed_reference_id: string | null;
+  feed_reference_client_uuid?: string | null;
   source: "aquacare_catalog" | "external" | null;
   species: Species | null;
   label: string;
@@ -1026,10 +1035,15 @@ export interface CycleStoreStockItem {
   quantity_added_kg: string;
   quantity_consumed_kg: string;
   quantity_available_kg: string;
+  pending_sync?: boolean;
 }
 
 export interface CycleStore {
   cycle_id: string;
+  calculation_status: 'available' | 'incomplete' | 'unavailable';
+  calculation_source: string;
+  calculated_at: string;
+  calculation_warnings: string[];
   summary: CycleStoreSummary;
   status: CycleStoreStatus;
   stock_items: CycleStoreStockItem[];
@@ -1062,8 +1076,21 @@ export interface ExternalFeedPayload {
   created_offline?: boolean;
 }
 
+export interface FarmFeedReferenceCreatePayload {
+  farm_profile: string;
+  source: 'aquacare_catalog' | 'external';
+  catalog_product?: string;
+  name?: string;
+  species?: Species;
+  pellet_size_mm?: string;
+  brand?: string;
+  client_uuid: string;
+  created_offline?: boolean;
+}
+
 export interface CycleStoreManualStockPayload {
   feed_reference_id?: string;
+  feed_reference_client_uuid?: string;
   external_feed?: ExternalFeedPayload;
   quantity_kg: string;
   total_cost_fcfa: string;

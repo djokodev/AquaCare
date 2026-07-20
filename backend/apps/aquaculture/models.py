@@ -778,8 +778,17 @@ class FarmFeedReference(models.Model):
         ordering = ['name', 'pellet_size_mm']
         constraints = [
             models.UniqueConstraint(
+                condition=Q(source='external'),
                 fields=['farm_profile', 'normalized_name', 'species', 'pellet_size_mm'],
-                name='aq_farm_feed_identity_uniq',
+                name='aq_external_feed_identity_uniq',
+            ),
+            models.UniqueConstraint(
+                condition=Q(source='aquacare_catalog'),
+                fields=[
+                    'farm_profile', 'catalog_product', 'normalized_name',
+                    'species', 'pellet_size_mm',
+                ],
+                name='aq_catalog_feed_identity_uniq',
             ),
             models.CheckConstraint(
                 condition=(
@@ -946,7 +955,7 @@ class CycleFeedPlan(models.Model):
         related_name='feed_plan_snapshot',
         verbose_name=_('Cycle de production'),
     )
-    version = models.PositiveSmallIntegerField(default=1, verbose_name=_('Version'))
+    version = models.PositiveSmallIntegerField(default=2, verbose_name=_('Version'))
     parameters = models.JSONField(default=dict, verbose_name=_('Paramètres de simulation'))
     phases = models.JSONField(default=list, verbose_name=_('Phases alimentaires'))
     total_feed_kg = models.DecimalField(max_digits=14, decimal_places=2, verbose_name=_('Aliment total planifié (kg)'))
@@ -960,6 +969,38 @@ class CycleFeedPlan(models.Model):
 
     def __str__(self):
         return f'{self.cycle.cycle_name} · v{self.version}'
+
+
+class CycleFeedStockAdjustment(models.Model):
+    """Ajustement immuable conservant un reliquat physique historique."""
+
+    REASON_LEGACY_CONSUMPTION = 'legacy_consumption'
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    stock_entry = models.OneToOneField(
+        CycleFeedStockEntry,
+        on_delete=models.CASCADE,
+        related_name='historical_adjustment',
+        verbose_name=_('Entrée de stock'),
+    )
+    quantity_kg = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal('0.01'))],
+        verbose_name=_('Quantité déjà consommée (kg)'),
+    )
+    reason = models.CharField(
+        max_length=32,
+        default=REASON_LEGACY_CONSUMPTION,
+        editable=False,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        app_label = 'aquaculture'
+        db_table = 'aquaculture_cycle_feed_stock_adjustment'
+        verbose_name = _('Ajustement historique du stock')
+        verbose_name_plural = _('Ajustements historiques du stock')
 
 
 class ProductionCycle(models.Model):

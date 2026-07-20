@@ -1,13 +1,23 @@
+from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 from decimal import Decimal
+from threading import Barrier
 from uuid import uuid4
 
 import pytest
 from accounts.models import FarmProfile
-from aquaculture.models import CycleFeedStockEntry, FarmFeedReference, ProductionCycle
+from aquaculture.models import (
+    CycleFeedPlan,
+    CycleFeedStockAdjustment,
+    CycleFeedStockEntry,
+    CycleLog,
+    FarmFeedReference,
+    ProductionCycle,
+)
 from aquaculture.services.cycle_feed_recommendation_service import CycleFeedRecommendationService
 from aquaculture.services.cycle_store_application_service import CycleStoreApplicationService
 from commerce.models import Order, OrderItem, Product
+from django.db import close_old_connections, connection
 from django.urls import reverse
 from django.utils import timezone
 
@@ -31,6 +41,38 @@ def create_cycle(user, *, species='tilapia'):
         planned_harvest_date=timezone.localdate() + timedelta(days=100),
         status='active',
     )
+
+
+def create_plan(cycle, simulation):
+    return CycleFeedPlan.objects.create(
+        cycle=cycle,
+        version=2,
+        parameters=CycleFeedRecommendationService._json_safe(simulation.get('parameters', {})),
+        phases=CycleFeedRecommendationService._json_safe(simulation.get('feeding_phases', [])),
+        total_feed_kg=Decimal(str(simulation['summary']['total_feed_kg'])),
+    )
+
+
+@pytest.mark.skipif(connection.vendor != 'postgresql', reason='Nécessite PostgreSQL.')
+@pytest.mark.django_db(transaction=True)
+def test_concurrent_legacy_plan_backfill_creates_one_snapshot(authenticated_user):
+    cycle = create_cycle(authenticated_user)
+    barrier = Barrier(2)
+
+    def ensure_plan():
+        close_old_connections()
+        try:
+            local_cycle = ProductionCycle.objects.get(pk=cycle.pk)
+            barrier.wait(timeout=5)
+            return CycleFeedRecommendationService.ensure_plan(local_cycle).id
+        finally:
+            close_old_connections()
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        ids = list(executor.map(lambda _: ensure_plan(), range(2)))
+
+    assert ids[0] == ids[1]
+    assert CycleFeedPlan.objects.filter(cycle=cycle).count() == 1
 
 
 @pytest.mark.django_db
@@ -75,6 +117,51 @@ def test_external_feed_requires_name_species_and_pellet_size(auth_client, authen
 
 
 @pytest.mark.django_db
+def test_external_feed_replay_with_different_payload_conflicts(auth_client, authenticated_user):
+    cycle = create_cycle(authenticated_user)
+    client_uuid = uuid4()
+    url = reverse('aquaculture:feed-reference-list')
+    payload = {
+        'farm_profile': str(cycle.farm_profile_id),
+        'source': 'external',
+        'name': 'Aliment stable',
+        'species': 'tilapia',
+        'pellet_size_mm': '2.00',
+        'client_uuid': str(client_uuid),
+    }
+    assert auth_client.post(url, payload, format='json').status_code == 201
+
+    response = auth_client.post(
+        url,
+        {**payload, 'pellet_size_mm': '3.00'},
+        format='json',
+    )
+
+    assert response.status_code == 409
+    assert response.data['code'] == 'feed_reference_idempotency_conflict'
+
+
+@pytest.mark.django_db
+def test_feed_reference_identity_cannot_be_patched(auth_client, authenticated_user):
+    cycle = create_cycle(authenticated_user)
+    reference = FarmFeedReference.objects.create(
+        farm_profile=cycle.farm_profile,
+        source='external',
+        name='Identité immuable',
+        species='tilapia',
+        pellet_size_mm=Decimal('2.00'),
+    )
+
+    response = auth_client.patch(
+        reverse('aquaculture:feed-reference-detail', args=[reference.id]),
+        {'pellet_size_mm': '3.00'},
+        format='json',
+    )
+
+    assert response.status_code == 405
+
+
+@pytest.mark.django_db
 def test_classifying_legacy_stock_preserves_quantity_cost_and_date(authenticated_user):
     cycle = create_cycle(authenticated_user)
     entry_date = timezone.localdate() - timedelta(days=2)
@@ -106,6 +193,90 @@ def test_classifying_legacy_stock_preserves_quantity_cost_and_date(authenticated
     assert entry.quantity_kg == Decimal('110')
     assert entry.total_cost_fcfa == Decimal('88000')
     assert entry.entry_date == entry_date
+
+
+@pytest.mark.django_db
+def test_classifying_legacy_stock_preserves_physical_remainder(authenticated_user):
+    cycle = create_cycle(authenticated_user)
+    entry_date = timezone.localdate() - timedelta(days=2)
+    entry = CycleFeedStockEntry.objects.create(
+        cycle=cycle,
+        source='manual',
+        label='Ancien aliment 2 mm',
+        feed_size_mm=Decimal('2.00'),
+        quantity_kg=Decimal('110.00'),
+        total_cost_fcfa=Decimal('88000.00'),
+        entry_date=entry_date,
+    )
+    CycleLog.objects.create(
+        cycle=cycle,
+        log_date=entry_date + timedelta(days=1),
+        feed_quantity=Decimal('30.00'),
+        feed_type='Ancien aliment 2 mm',
+        feed_size_mm=Decimal('2.00'),
+    )
+    reference = FarmFeedReference.objects.create(
+        farm_profile=cycle.farm_profile,
+        source='external',
+        name='Aliment identifié',
+        species=cycle.species,
+        pellet_size_mm=Decimal('2.00'),
+    )
+
+    before = CycleStoreApplicationService.get_store(cycle)
+    CycleStoreApplicationService.classify_legacy_stock(
+        user=authenticated_user,
+        cycle=cycle,
+        entry_id=entry.id,
+        feed_reference_id=reference.id,
+    )
+    after = CycleStoreApplicationService.get_store(cycle)
+
+    assert before['summary']['estimated_feed_remaining_kg'] == '80.00'
+    assert after['summary']['estimated_feed_remaining_kg'] == '80.00'
+    assert after['stock_items'][0]['quantity_available_kg'] == '80.00'
+    assert CycleFeedStockAdjustment.objects.get(stock_entry=entry).quantity_kg == Decimal('30.00')
+
+
+@pytest.mark.django_db
+def test_classifying_ambiguous_legacy_stock_is_refused(authenticated_user):
+    cycle = create_cycle(authenticated_user)
+    entry_date = timezone.localdate() - timedelta(days=2)
+    entries = [
+        CycleFeedStockEntry.objects.create(
+            cycle=cycle,
+            source='manual',
+            label='Même aliment',
+            feed_size_mm=Decimal('2.00'),
+            quantity_kg=Decimal('50.00'),
+            entry_date=entry_date,
+        )
+        for _ in range(2)
+    ]
+    CycleLog.objects.create(
+        cycle=cycle,
+        log_date=entry_date + timedelta(days=1),
+        feed_quantity=Decimal('10.00'),
+        feed_type='Même aliment',
+        feed_size_mm=Decimal('2.00'),
+    )
+    reference = FarmFeedReference.objects.create(
+        farm_profile=cycle.farm_profile,
+        source='external',
+        name='Même aliment identifié',
+        species=cycle.species,
+        pellet_size_mm=Decimal('2.00'),
+    )
+
+    with pytest.raises(ValueError, match='Plusieurs stocks historiques'):
+        CycleStoreApplicationService.classify_legacy_stock(
+            user=authenticated_user,
+            cycle=cycle,
+            entry_id=entries[0].id,
+            feed_reference_id=reference.id,
+        )
+
+    assert all(entry.feed_reference_id is None for entry in entries)
 
 
 @pytest.mark.django_db
@@ -175,10 +346,11 @@ def test_recommendation_allocates_external_stock_and_pending_order(
             'total_consumption_kg': Decimal('40'),
         }],
     }
+    create_plan(cycle, simulation)
     monkeypatch.setattr(
         CycleFeedRecommendationService,
-        '_simulation',
-        classmethod(lambda cls, target_cycle, current: simulation),
+        '_current_simulation',
+        classmethod(lambda cls, target_cycle, current_weight: (simulation, [])),
     )
 
     result = CycleFeedRecommendationService.build(cycle)
@@ -210,10 +382,11 @@ def test_unclassified_stock_is_not_allocated(authenticated_user, monkeypatch):
             'pellet_size_mm': 2, 'duration_days': 10, 'total_consumption_kg': Decimal('40'),
         }],
     }
+    create_plan(cycle, simulation)
     monkeypatch.setattr(
         CycleFeedRecommendationService,
-        '_simulation',
-        classmethod(lambda cls, target_cycle, current: simulation),
+        '_current_simulation',
+        classmethod(lambda cls, target_cycle, current_weight: (simulation, [])),
     )
 
     result = CycleFeedRecommendationService.build(cycle)
@@ -233,14 +406,202 @@ def test_target_weight_reached_returns_covered_zero_need(authenticated_user, mon
         'summary': {'total_feed_kg': Decimal('80')},
         'feeding_phases': [],
     }
-    monkeypatch.setattr(
-        CycleFeedRecommendationService,
-        '_simulation',
-        classmethod(lambda cls, target_cycle, current: {} if current else initial_simulation),
-    )
+    create_plan(cycle, initial_simulation)
 
     result = CycleFeedRecommendationService.build(cycle)
 
     assert result['status'] == 'available'
     assert result['summary']['estimated_remaining_need_kg'] == '0.00'
     assert result['summary']['feed_to_order_kg'] == '0.00'
+
+
+@pytest.mark.django_db
+def test_phase_ids_and_past_phase_stay_stable_after_weighing(authenticated_user, monkeypatch):
+    cycle = create_cycle(authenticated_user)
+    simulation = {
+        'parameters': {'species': 'tilapia'},
+        'summary': {'total_feed_kg': '90.00'},
+        'feeding_phases': [
+            {
+                'phase_name': f'phase_{index}',
+                'days_range': [start, start + 9],
+                'weight_range_g': weights,
+                'pellet_size_mm': size,
+                'duration_days': 10,
+                'total_consumption_kg': '30.00',
+            }
+            for index, (start, weights, size) in enumerate(
+                [(1, [10, 50], 1), (11, [51, 150], 2), (21, [151, 400], 3)],
+                start=1,
+            )
+        ],
+    }
+    plan = create_plan(cycle, simulation)
+    monkeypatch.setattr(
+        CycleFeedRecommendationService,
+        '_current_simulation',
+        classmethod(lambda cls, target_cycle, current_weight: (simulation, [])),
+    )
+
+    before = CycleFeedRecommendationService.build(cycle)
+    cycle.current_average_weight = Decimal('180.00')
+    cycle.save(update_fields=['current_average_weight'])
+    after = CycleFeedRecommendationService.build(cycle)
+
+    assert [phase['phase_id'] for phase in before['feeding_phases']] == [
+        phase['phase_id'] for phase in after['feeding_phases']
+    ]
+    assert after['feeding_phases'][0]['phase_status'] == 'past'
+    assert after['feeding_phases'][0]['planned_consumption_kg'] == '30.00'
+    plan.refresh_from_db()
+    assert plan.phases == CycleFeedRecommendationService._json_safe(simulation['feeding_phases'])
+
+
+@pytest.mark.django_db
+def test_same_pellet_size_consumption_is_allocated_once_chronologically(
+    authenticated_user,
+    monkeypatch,
+):
+    cycle = create_cycle(authenticated_user)
+    cycle.start_date = timezone.localdate() - timedelta(days=15)
+    cycle.current_average_weight = Decimal('120.00')
+    cycle.save(update_fields=['start_date', 'current_average_weight'])
+    simulation = {
+        'parameters': {'species': 'tilapia'},
+        'summary': {'total_feed_kg': '40.00'},
+        'feeding_phases': [
+            {
+                'phase_name': 'starter_a', 'days_range': [1, 10], 'weight_range_g': [10, 80],
+                'pellet_size_mm': 2, 'duration_days': 10, 'total_consumption_kg': '20.00',
+            },
+            {
+                'phase_name': 'starter_b', 'days_range': [11, 20], 'weight_range_g': [81, 160],
+                'pellet_size_mm': 2, 'duration_days': 10, 'total_consumption_kg': '20.00',
+            },
+        ],
+    }
+    create_plan(cycle, simulation)
+    reference = FarmFeedReference.objects.create(
+        farm_profile=cycle.farm_profile,
+        source='external',
+        name='Feed 2 mm',
+        species=cycle.species,
+        pellet_size_mm=Decimal('2.00'),
+    )
+    CycleLog.objects.create(
+        cycle=cycle,
+        log_date=cycle.start_date + timedelta(days=4),
+        feed_quantity=Decimal('3.00'),
+        feed_reference=reference,
+        feed_type=reference.name,
+        feed_size_mm=reference.pellet_size_mm,
+    )
+    CycleLog.objects.create(
+        cycle=cycle,
+        log_date=cycle.start_date + timedelta(days=14),
+        feed_quantity=Decimal('4.00'),
+        feed_reference=reference,
+        feed_type=reference.name,
+        feed_size_mm=reference.pellet_size_mm,
+    )
+    monkeypatch.setattr(
+        CycleFeedRecommendationService,
+        '_current_simulation',
+        classmethod(lambda cls, target_cycle, current_weight: (simulation, [])),
+    )
+
+    result = CycleFeedRecommendationService.build(cycle)
+    actual = [Decimal(phase['actual_consumed_kg']) for phase in result['feeding_phases']]
+
+    assert actual == [Decimal('3.00'), Decimal('4.00')]
+    assert sum(actual) == Decimal('7.00')
+
+
+@pytest.mark.django_db
+def test_unclassified_consumption_is_kept_outside_phases(authenticated_user, monkeypatch):
+    cycle = create_cycle(authenticated_user)
+    simulation = {
+        'parameters': {'species': 'tilapia'},
+        'summary': {'total_feed_kg': '20.00'},
+        'feeding_phases': [{
+            'phase_name': 'starter', 'days_range': [1, 30], 'weight_range_g': [10, 100],
+            'pellet_size_mm': 2, 'duration_days': 30, 'total_consumption_kg': '20.00',
+        }],
+    }
+    create_plan(cycle, simulation)
+    CycleLog.objects.create(
+        cycle=cycle,
+        log_date=timezone.localdate(),
+        feed_quantity=Decimal('5.00'),
+        feed_type='Legacy 2 mm',
+        feed_size_mm=Decimal('2.00'),
+    )
+    monkeypatch.setattr(
+        CycleFeedRecommendationService,
+        '_current_simulation',
+        classmethod(lambda cls, target_cycle, current_weight: (simulation, [])),
+    )
+
+    result = CycleFeedRecommendationService.build(cycle)
+
+    assert result['feeding_phases'][0]['actual_consumed_kg'] == '0.00'
+    assert result['summary']['unclassified_consumption_kg'] == '5.00'
+    assert 'unclassified_consumption' in result['warnings']
+
+
+@pytest.mark.django_db
+def test_elapsed_harvest_date_never_forces_one_day_simulation(authenticated_user):
+    cycle = create_cycle(authenticated_user)
+    simulation = {
+        'parameters': {'species': 'tilapia'},
+        'summary': {'total_feed_kg': '20.00'},
+        'feeding_phases': [{
+            'phase_name': 'starter', 'days_range': [1, 30], 'weight_range_g': [10, 400],
+            'pellet_size_mm': 2, 'duration_days': 30, 'total_consumption_kg': '20.00',
+        }],
+    }
+    create_plan(cycle, simulation)
+    cycle.planned_harvest_date = timezone.localdate() - timedelta(days=1)
+    cycle.current_average_weight = Decimal('100.00')
+    cycle.save(update_fields=['planned_harvest_date', 'current_average_weight'])
+
+    result = CycleFeedRecommendationService.build(cycle)
+
+    assert result['status'] == 'unavailable'
+    assert result['summary']['feed_to_order_kg'] is None
+    assert 'planned_harvest_date_elapsed' in result['warnings']
+
+
+@pytest.mark.django_db
+def test_exact_fifteen_kg_package_recommends_four_bags_for_52_kg(
+    authenticated_user,
+    monkeypatch,
+):
+    cycle = create_cycle(authenticated_user)
+    Product.objects.create(
+        brand='dibaq',
+        name='Exact 2 mm 15 kg',
+        species='tilapia',
+        pellet_size_mm=Decimal('2.00'),
+        package_weight_kg=15,
+        price_per_package=Decimal('23500.00'),
+    )
+    simulation = {
+        'parameters': {'species': 'tilapia'},
+        'summary': {'total_feed_kg': '52.00'},
+        'feeding_phases': [{
+            'phase_name': 'starter', 'days_range': [1, 100], 'weight_range_g': [10, 400],
+            'pellet_size_mm': 2, 'duration_days': 100, 'total_consumption_kg': '52.00',
+        }],
+    }
+    create_plan(cycle, simulation)
+    monkeypatch.setattr(
+        CycleFeedRecommendationService,
+        '_current_simulation',
+        classmethod(lambda cls, target_cycle, current_weight: (simulation, [])),
+    )
+
+    result = CycleFeedRecommendationService.build(cycle)
+
+    assert result['feeding_phases'][0]['total_bags'] == 4
+    assert result['feeding_phases'][0]['products'][0]['total_kg'] == '60.00'

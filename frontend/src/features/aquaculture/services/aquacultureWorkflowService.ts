@@ -1,6 +1,16 @@
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
 import { offlineService } from '@/services/offlineService';
-import { CycleLog, CreateCycleForm, DailyLogForm, ProductionCycle, SanitaryLog, SanitaryLogForm } from '@/types/aquaculture';
+import {
+  CycleLog,
+  CreateCycleForm,
+  CycleStore,
+  CycleStoreManualStockPayload,
+  DailyLogForm,
+  FarmFeedReferenceCreatePayload,
+  ProductionCycle,
+  SanitaryLog,
+  SanitaryLogForm,
+} from '@/types/aquaculture';
 import { isNetworkError } from '@/utils/errorParser';
 import logger from '@/utils/logger';
 
@@ -59,6 +69,17 @@ export const createCycleLogWithOfflineFallback = async (
   cycleId: string,
   logData: DailyLogForm
 ): Promise<OnlineOrOffline<CycleLog>> => {
+  if (logData.feed_reference_client_uuid) {
+    const pendingStocks = await offlineService.getOfflineStockDeclarations();
+    const hasPendingDependency = pendingStocks.some(
+      (item) => !item.synced && item.cycleId === cycleId
+        && item.feedReferenceClientUuid === logData.feed_reference_client_uuid,
+    );
+    if (hasPendingDependency) {
+      await offlineService.saveCycleLogOffline(cycleId, logData);
+      return { mode: 'offline' };
+    }
+  }
   try {
     const createdLog = await aquacultureService.createCycleLog(cycleId, logData);
     return { mode: 'online', data: createdLog };
@@ -68,6 +89,41 @@ export const createCycleLogWithOfflineFallback = async (
       return { mode: 'offline' };
     }
     throw error;
+  }
+};
+
+export const declareManualStockWithOfflineFallback = async (
+  cycleId: string,
+  stockPayload: CycleStoreManualStockPayload,
+  feedReferencePayload?: FarmFeedReferenceCreatePayload,
+): Promise<OnlineOrOffline<CycleStore>> => {
+  let resolvedStockPayload = { ...stockPayload };
+  if (feedReferencePayload) {
+    try {
+      const reference = await aquacultureService.createFarmFeedReference(feedReferencePayload);
+      resolvedStockPayload = {
+        ...resolvedStockPayload,
+        feed_reference_id: reference.id,
+        feed_reference_client_uuid: feedReferencePayload.client_uuid,
+      };
+    } catch (error: unknown) {
+      if (!isNetworkError(error)) throw error;
+      await offlineService.saveFeedReferenceOffline(feedReferencePayload);
+      await offlineService.saveStockDeclarationOffline(cycleId, {
+        ...resolvedStockPayload,
+        feed_reference_client_uuid: feedReferencePayload.client_uuid,
+      });
+      return { mode: 'offline' };
+    }
+  }
+
+  try {
+    const store = await aquacultureService.declareCycleStoreManualStock(cycleId, resolvedStockPayload);
+    return { mode: 'online', data: store };
+  } catch (error: unknown) {
+    if (!isNetworkError(error)) throw error;
+    await offlineService.saveStockDeclarationOffline(cycleId, resolvedStockPayload);
+    return { mode: 'offline' };
   }
 };
 

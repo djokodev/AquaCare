@@ -14,61 +14,46 @@ def normalize_name(value):
 def backfill_feed_references(apps, schema_editor):
     FeedReference = apps.get_model('aquaculture', 'FarmFeedReference')
     StockEntry = apps.get_model('aquaculture', 'CycleFeedStockEntry')
-    CycleLog = apps.get_model('aquaculture', 'CycleLog')
 
-    references = {}
-    entries = StockEntry.objects.select_related('cycle', 'product').filter(feed_size_mm__isnull=False)
-    for entry in entries.iterator():
-        product = entry.product
-        name = product.name if product else entry.label
-        key = (entry.cycle.farm_profile_id, normalize_name(name), entry.cycle.species, entry.feed_size_mm)
-        reference = references.get(key)
-        if reference is None:
-            reference, _ = FeedReference.objects.get_or_create(
-                farm_profile_id=entry.cycle.farm_profile_id,
-                normalized_name=key[1],
-                species=entry.cycle.species,
-                pellet_size_mm=entry.feed_size_mm,
-                defaults={
-                    'source': 'aquacare_catalog' if product else 'external',
-                    'catalog_product_id': product.id if product else None,
-                    'name': name.strip(),
-                    'brand': product.brand if product else '',
-                    'protein_percentage': product.protein_percentage if product else None,
-                    'lipid_percentage': product.lipid_percentage if product else None,
-                    'package_weight_kg': product.package_weight_kg if product else None,
-                },
-            )
-            references[key] = reference
-        StockEntry.objects.filter(pk=entry.pk).update(feed_reference_id=reference.id)
-
-    logs = CycleLog.objects.select_related('cycle').filter(
-        feed_quantity__isnull=False,
-        feed_size_mm__isnull=False,
+    entries = StockEntry.objects.select_related(
+        'cycle',
+        'order_item',
+        'order_item__order',
+    ).filter(
+        source='order',
+        order_item__isnull=False,
     )
-    for log in logs.iterator():
-        if not (log.feed_type or '').strip():
+    for entry in entries.iterator():
+        item = entry.order_item
+        order = item.order
+        species = 'clarias' if item.product_species_snapshot == 'catfish' else item.product_species_snapshot
+        name = (item.product_name or '').strip()
+        pellet_size = item.product_pellet_size_mm_snapshot
+        package_weight = item.product_package_weight_kg_snapshot
+        is_certain = all((
+            order.production_cycle_id == entry.cycle_id,
+            order.farm_profile_id == entry.cycle.farm_profile_id,
+            name,
+            species == entry.cycle.species,
+            pellet_size is not None,
+            package_weight is not None and package_weight > 0,
+        ))
+        if not is_certain:
             continue
-        key = (
-            log.cycle.farm_profile_id,
-            normalize_name(log.feed_type),
-            log.cycle.species,
-            log.feed_size_mm,
+        reference, _ = FeedReference.objects.get_or_create(
+            farm_profile_id=entry.cycle.farm_profile_id,
+            source='aquacare_catalog',
+            catalog_product_id=item.product_id,
+            normalized_name=normalize_name(name),
+            species=species,
+            pellet_size_mm=pellet_size,
+            defaults={
+                'name': name,
+                'brand': item.product_brand_snapshot or '',
+                'package_weight_kg': package_weight,
+            },
         )
-        reference = references.get(key)
-        if reference is None:
-            reference, _ = FeedReference.objects.get_or_create(
-                farm_profile_id=log.cycle.farm_profile_id,
-                normalized_name=key[1],
-                species=log.cycle.species,
-                pellet_size_mm=log.feed_size_mm,
-                defaults={
-                    'source': 'external',
-                    'name': (log.feed_type or '').strip(),
-                },
-            )
-            references[key] = reference
-        CycleLog.objects.filter(pk=log.pk).update(feed_reference_id=reference.id)
+        StockEntry.objects.filter(pk=entry.pk).update(feed_reference_id=reference.id)
 
 
 class Migration(migrations.Migration):
@@ -122,6 +107,10 @@ class Migration(migrations.Migration):
             model_name='farmfeedreference',
             index=models.Index(fields=['farm_profile', 'species', 'pellet_size_mm'], name='aq_farm_feed_lookup_idx'),
         ),
+        # Le forward ne supprime ni ne réécrit les snapshots : il rattache uniquement
+        # les entrées certaines. Au rollback, les FK sont supprimées par les
+        # opérations inverses, donc aucun reverse de données supplémentaire n'est
+        # nécessaire.
         migrations.RunPython(backfill_feed_references, reverse_code=migrations.RunPython.noop),
         migrations.AddConstraint(
             model_name='farmfeedreference',

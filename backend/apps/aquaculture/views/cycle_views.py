@@ -504,6 +504,7 @@ class ProductionCycleViewSet(viewsets.ModelViewSet):
                 cycle=cycle,
                 command=DeclareManualStockCommand(
                     feed_reference_id=serializer.validated_data.get('feed_reference_id'),
+                    feed_reference_client_uuid=serializer.validated_data.get('feed_reference_client_uuid'),
                     external_feed=serializer.validated_data.get('external_feed'),
                     label=serializer.validated_data.get('label', ''),
                     feed_size_mm=serializer.validated_data.get('feed_size_mm'),
@@ -656,9 +657,9 @@ class ProductionCycleViewSet(viewsets.ModelViewSet):
         GET /api/aquaculture/cycles/{id}/feed-status/
 
         Délègue à CycleFeedService le calcul du statut des aliments :
-        - bags_needed  : issu des FeedingPlans du cycle (agrégation SQL)
-        - bags_ordered : commandes liées à ce cycle (Order.production_cycle)
-        - bags_consumed: total_feed_consumed / 25 kg
+        - besoin futur : moteur de recommandation par phase ;
+        - sacs proposés : vrais conditionnements des produits compatibles ;
+        - commandes et consommation : données réelles liées au cycle.
         """
         cycle = self.get_object()
         result = CycleFeedService.get_feed_status(cycle)

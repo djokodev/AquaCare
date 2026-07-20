@@ -29,6 +29,8 @@ import { getProductDisplayName } from '@/features/commerce/utils/productPresenta
 type Props = StackScreenProps<RootStackParamList, 'CycleFeedPhases'>;
 
 function buildProductForCart(product: FeedPhaseProduct): Product {
+  const packageWeight = Number(product.package_weight_kg);
+  const unitPrice = Number(product.unit_price);
   return {
     id: product.product_id,
     brand: product.brand as ProductBrand,
@@ -38,9 +40,9 @@ function buildProductForCart(product: FeedPhaseProduct): Product {
     pellet_size_mm: String(product.pellet_size_mm),
     protein_percentage: null,
     lipid_percentage: null,
-    package_weight_kg: product.package_weight_kg,
-    price_per_package: String(Math.round(product.unit_price)),
-    price_per_kg: String(Math.round(product.unit_price / (product.package_weight_kg || 1))),
+    package_weight_kg: Number.isFinite(packageWeight) ? packageWeight : 0,
+    price_per_package: product.unit_price,
+    price_per_kg: String(packageWeight > 0 && Number.isFinite(unitPrice) ? unitPrice / packageWeight : 0),
     is_available: true,
     created_at: '',
     updated_at: '',
@@ -55,7 +57,14 @@ function phaseLabel(phase: FeedPhase, phases: FeedPhase[], translate: (key: stri
 }
 
 const quantityKey = (phase: FeedPhase, product: FeedPhaseProduct): string =>
-  `${phase.phase_name}-${phase.pellet_size_mm}-${product.product_id}`;
+  `${phase.phase_id}-${product.product_id}`;
+
+const calculationSourceKey = (source: string): string => {
+  if (source.startsWith('current_cycle_reforecast:')) return 'feedCalculationSource_current_cycle_reforecast';
+  if (source === 'cycle_progress') return 'feedCalculationSource_cycle_progress';
+  if (source === 'legacy_backfill') return 'feedCalculationSource_legacy_backfill';
+  return 'feedCalculationSource_cycle_launch';
+};
 
 export default function CycleFeedPhasesScreen({ navigation, route }: Props) {
   const { t } = useTranslation();
@@ -69,6 +78,7 @@ export default function CycleFeedPhasesScreen({ navigation, route }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [quantities, setQuantities] = useState<Record<string, number>>({});
+  const [submittedScopes, setSubmittedScopes] = useState<Record<string, boolean>>({});
 
   const loadPhases = useCallback(async () => {
     try {
@@ -84,6 +94,7 @@ export default function CycleFeedPhasesScreen({ navigation, route }: Props) {
         })
       );
       setQuantities(initialQuantities);
+      setSubmittedScopes({});
     } catch {
       setError('feedPhasesLoadError');
     } finally {
@@ -104,6 +115,7 @@ export default function CycleFeedPhasesScreen({ navigation, route }: Props) {
 
   const addPhaseToCart = useCallback(
     (phase: FeedPhase) => {
+      if (submittedScopes[phase.phase_id] || recommendation?.status === 'unavailable') return;
       phase.products.forEach((product) => {
         const quantity = quantities[quantityKey(phase, product)] ?? product.quantity_bags;
         if (quantity > 0) dispatch(
@@ -118,12 +130,14 @@ export default function CycleFeedPhasesScreen({ navigation, route }: Props) {
           })
         );
       });
+      setSubmittedScopes((current) => ({ ...current, [phase.phase_id]: true }));
       Alert.alert(t('success'), t('feedPhaseAddedToCart'), [{ text: t('ok') }]);
     },
-    [dispatch, phases, quantities, t]
+    [dispatch, phases, quantities, recommendation?.status, submittedScopes, t]
   );
 
   const handleOrderAll = useCallback(() => {
+    if (submittedScopes.all || recommendation?.status === 'unavailable') return;
     phases.forEach((phase) =>
       phase.products.forEach((product) => {
         const quantity = quantities[quantityKey(phase, product)] ?? product.quantity_bags;
@@ -140,8 +154,9 @@ export default function CycleFeedPhasesScreen({ navigation, route }: Props) {
         );
       })
     );
+    setSubmittedScopes((current) => ({ ...current, all: true }));
     navigation.navigate('Cart', { cycleId });
-  }, [cycleId, dispatch, navigation, phases, quantities]);
+  }, [cycleId, dispatch, navigation, phases, quantities, recommendation?.status, submittedScopes.all]);
 
   const totalBags = useMemo(
     () => phases.reduce(
@@ -181,22 +196,34 @@ export default function CycleFeedPhasesScreen({ navigation, route }: Props) {
       ) : (
         <>
           <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-            <InlineAlert
-              compact
-              message={t('feedRecommendationSummary', {
-                need: recommendation?.summary.estimated_remaining_need_kg ?? '0',
-                stock: recommendation?.summary.compatible_stock_kg ?? '0',
-                pending: recommendation?.summary.pending_order_kg ?? '0',
-                order: recommendation?.summary.feed_to_order_kg ?? '0',
-              })}
-              tone={recommendation?.status === 'incomplete' ? 'warning' : 'info'}
-            />
-            {recommendation ? (
-              <AppText variant="caption" color="muted">
-                {t('feedRecommendationCalculatedAt', {
-                  date: new Date(recommendation.calculated_at).toLocaleString(),
+            {recommendation?.status === 'unavailable' ? (
+              <InlineAlert compact message={t('feedEstimateUnavailable')} tone="warning" />
+            ) : (
+              <InlineAlert
+                compact
+                message={t('feedRecommendationSummary', {
+                  need: recommendation?.summary.estimated_remaining_need_kg,
+                  stock: recommendation?.summary.compatible_stock_kg,
+                  pending: recommendation?.summary.pending_order_kg,
+                  order: recommendation?.summary.feed_to_order_kg,
                 })}
-              </AppText>
+                tone={recommendation?.status === 'incomplete' ? 'warning' : 'info'}
+              />
+            )}
+            {recommendation ? (
+              <>
+                <AppText variant="caption" color="muted">
+                  {t('feedRecommendationCalculatedAt', {
+                    date: new Date(recommendation.calculated_at).toLocaleString(),
+                  })}
+                </AppText>
+                <AppText variant="caption" color="muted">
+                  {t('feedRecommendationSource', { source: t(calculationSourceKey(recommendation.source)) })}
+                </AppText>
+                {recommendation.warnings.map((warning) => (
+                  <InlineAlert key={warning} compact tone="warning" message={t(`feedWarning_${warning}`)} />
+                ))}
+              </>
             ) : null}
             {phases.map((phase, phaseIndex) => (
               <Card key={`${phase.phase_name}-${phaseIndex}`} variant="outlined" style={styles.phaseCard}>
@@ -204,7 +231,7 @@ export default function CycleFeedPhasesScreen({ navigation, route }: Props) {
                   <AppText variant="sectionTitle" style={styles.flex}>
                     {phaseLabel(phase, phases, t)}
                   </AppText>
-                  <Badge label={`${phase.total_bags} ${t('bags')}`} tone="success" />
+                  {phase.total_bags !== null ? <Badge label={`${phase.total_bags} ${t('bags')}`} tone="success" /> : null}
                 </View>
                 <AppText color="muted" style={styles.phaseMeta}>
                   {phase.duration_days} {t('days')} · {t('feedPhasePellet', { size: phase.pellet_size_mm })}
@@ -212,6 +239,7 @@ export default function CycleFeedPhasesScreen({ navigation, route }: Props) {
                 <AppText variant="body" color="muted">
                   {t('feedPhaseCoverage', {
                     need: phase.remaining_need_kg,
+                    consumed: phase.actual_consumed_kg,
                     stock: phase.allocated_stock_kg,
                     pending: phase.allocated_pending_kg,
                     shortfall: phase.shortfall_kg,
@@ -232,10 +260,12 @@ export default function CycleFeedPhasesScreen({ navigation, route }: Props) {
                         <View style={styles.flex}>
                           <AppText variant="bodyStrong" numberOfLines={1}>{getProductDisplayName(product.product_name, t('catfish'))}</AppText>
                           <AppText variant="caption" color="muted">
-                            {product.package_weight_kg}kg · {Math.round(product.unit_price).toLocaleString()} FCFA/{t('bag')}
-                          </AppText>
-                          {Number(phase.surplus_kg) > 0 ? (
-                            <AppText variant="caption" color="muted">{t('feedPhaseSurplus', { surplus: phase.surplus_kg })}</AppText>
+                          {product.package_weight_kg}kg · {Number(product.unit_price).toLocaleString()} FCFA/{t('bag')}
+                        </AppText>
+                          {Math.max(0, quantity * Number(product.package_weight_kg) - Number(phase.shortfall_kg ?? 0)) > 0 ? (
+                            <AppText variant="caption" color="muted">{t('feedPhaseSurplus', {
+                              surplus: Math.max(0, quantity * Number(product.package_weight_kg) - Number(phase.shortfall_kg ?? 0)).toFixed(2),
+                            })}</AppText>
                           ) : null}
                         </View>
                         <View style={styles.quantityRow}>
@@ -263,6 +293,7 @@ export default function CycleFeedPhasesScreen({ navigation, route }: Props) {
                     label={t('feedPhaseOrderBtn')}
                     iconLeft="cart-outline"
                     onPress={() => addPhaseToCart(phase)}
+                    disabled={Boolean(submittedScopes[phase.phase_id]) || recommendation?.status === 'unavailable'}
                     style={styles.phaseButton}
                   />
                 ) : null}
@@ -274,7 +305,7 @@ export default function CycleFeedPhasesScreen({ navigation, route }: Props) {
               label={`${t('feedPhaseOrderAllBtn')} · ${totalBags} ${t('bags')}`}
               iconLeft="cart"
               onPress={handleOrderAll}
-              disabled={totalBags <= 0}
+              disabled={totalBags <= 0 || Boolean(submittedScopes.all) || recommendation?.status === 'unavailable'}
             />
           </View>
         </>

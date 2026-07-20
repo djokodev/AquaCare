@@ -1,8 +1,9 @@
 from datetime import timedelta
 from decimal import Decimal
+from uuid import uuid4
 
 import pytest
-from aquaculture.models import ProductionCycle
+from aquaculture.models import CycleFeedStockEntry, FarmFeedReference, ProductionCycle
 from commerce.models import Order, OrderItem, Product
 from django.urls import reverse
 from django.utils import timezone
@@ -134,3 +135,102 @@ class TestCycleStoreViews:
         response = other_client.get(url)
 
         assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_manual_stock_resolves_offline_feed_reference_by_client_uuid(
+        self, auth_client, authenticated_user, farm_profile,
+    ):
+        cycle = _create_cycle(authenticated_user)
+        reference = FarmFeedReference.objects.create(
+            farm_profile=cycle.farm_profile,
+            client_uuid=uuid4(),
+            source='external',
+            name='Aliment offline',
+            species='tilapia',
+            pellet_size_mm=Decimal('2.00'),
+        )
+
+        response = auth_client.post(
+            reverse('aquaculture:production-cycle-store-manual-stock', kwargs={'pk': cycle.id}),
+            {
+                'feed_reference_client_uuid': str(reference.client_uuid),
+                'quantity_kg': '50.00',
+                'total_cost_fcfa': '50000.00',
+                'entry_date': timezone.localdate().isoformat(),
+                'client_uuid': str(uuid4()),
+                'created_offline': True,
+            },
+            format='json',
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert cycle.feed_stock_entries.get().feed_reference_id == reference.id
+
+    def test_manual_stock_rejects_mismatched_id_and_client_uuid(
+        self, auth_client, authenticated_user, farm_profile,
+    ):
+        cycle = _create_cycle(authenticated_user)
+        references = [
+            FarmFeedReference.objects.create(
+                farm_profile=cycle.farm_profile,
+                client_uuid=uuid4(),
+                source='external',
+                name=f'Aliment {index}',
+                species='tilapia',
+                pellet_size_mm=Decimal(f'{index + 2}.00'),
+            )
+            for index in range(2)
+        ]
+
+        response = auth_client.post(
+            reverse('aquaculture:production-cycle-store-manual-stock', kwargs={'pk': cycle.id}),
+            {
+                'feed_reference_id': str(references[0].id),
+                'feed_reference_client_uuid': str(references[1].client_uuid),
+                'quantity_kg': '50.00',
+                'total_cost_fcfa': '50000.00',
+                'entry_date': timezone.localdate().isoformat(),
+            },
+            format='json',
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert CycleFeedStockEntry.objects.filter(cycle=cycle).count() == 0
+
+    def test_cycle_log_resolves_feed_reference_by_client_uuid(
+        self, auth_client, authenticated_user, farm_profile,
+    ):
+        cycle = _create_cycle(authenticated_user)
+        reference = FarmFeedReference.objects.create(
+            farm_profile=cycle.farm_profile,
+            client_uuid=uuid4(),
+            source='external',
+            name='Ration offline',
+            species='tilapia',
+            pellet_size_mm=Decimal('2.00'),
+        )
+        CycleFeedStockEntry.objects.create(
+            cycle=cycle,
+            feed_reference=reference,
+            source='manual',
+            label=reference.name,
+            feed_size_mm=reference.pellet_size_mm,
+            quantity_kg=Decimal('50.00'),
+            total_cost_fcfa=Decimal('50000.00'),
+            entry_date=timezone.localdate(),
+        )
+
+        response = auth_client.post(
+            reverse('aquaculture:cycle-log-list'),
+            {
+                'cycle': str(cycle.id),
+                'log_date': timezone.localdate().isoformat(),
+                'feed_quantity': '5.00',
+                'feed_reference_client_uuid': str(reference.client_uuid),
+                'client_uuid': str(uuid4()),
+                'created_offline': True,
+            },
+            format='json',
+        )
+
+        assert response.status_code == status.HTTP_201_CREATED
+        assert response.data['feed_reference'] == reference.id

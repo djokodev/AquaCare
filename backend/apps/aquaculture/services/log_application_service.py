@@ -64,8 +64,7 @@ class CycleLogApplicationService:
             log_date=log_date,
             cycle_unit_allocation=cycle_unit_allocation,
             existing_log=existing_log,
-            feed_type=validated_data.get("feed_type"),
-            feed_size_mm=validated_data.get("feed_size_mm"),
+            feed_reference=validated_data.get("feed_reference"),
         )
 
         if existing_log:

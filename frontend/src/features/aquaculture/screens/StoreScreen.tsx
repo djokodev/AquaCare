@@ -54,6 +54,8 @@ import {
 } from '@/features/commerce/utils/orderStatus';
 import { useDashboardSyncStatus } from '@/hooks/useDashboardSyncStatus';
 import { dashboardSyncService } from '@/services/dashboardSyncService';
+import { offlineService } from '@/services/offlineService';
+import { declareManualStockWithOfflineFallback } from '@/features/aquaculture/services/aquacultureWorkflowService';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'Store'>;
 
@@ -140,12 +142,67 @@ export default function StoreScreen() {
   const [selectedFeedReferenceId, setSelectedFeedReferenceId] = useState<string | null>(null);
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
   const [classificationEntryId, setClassificationEntryId] = useState<string | null>(null);
+  const [pendingStockCount, setPendingStockCount] = useState(0);
   const submissionLock = useRef(false);
   const confirmationLock = useRef(false);
   const loadRequestRef = useRef(0);
+  const serverStoreRef = useRef<CycleStore | null>(null);
   const { lastSyncedAt, refreshLastSyncedAt } = useDashboardSyncStatus('store', cycleId);
   const locale = i18n.language?.startsWith('fr') ? 'fr-FR' : 'en-US';
   const storeNavigationParams = cycleId ? { cycleId, source: 'store' as const } : undefined;
+
+  const applyPendingStockProjection = useCallback(async (serverStore: CycleStore): Promise<CycleStore> => {
+    if (!cycleId) return serverStore;
+    const [stockDeclarations, localReferences] = await Promise.all([
+      offlineService.getOfflineStockDeclarations(),
+      offlineService.getOfflineFeedReferences(),
+    ]);
+    const pending = stockDeclarations.filter((item) => item.cycleId === cycleId && !item.synced);
+    setPendingStockCount(pending.length);
+    if (pending.length === 0) return serverStore;
+
+    let pendingQuantity = 0;
+    let pendingCost = 0;
+    const pendingItems = pending.map((item) => {
+      const quantity = Number(item.payload.quantity_kg);
+      pendingQuantity += Number.isFinite(quantity) ? quantity : 0;
+      const cost = Number(item.payload.total_cost_fcfa);
+      pendingCost += Number.isFinite(cost) ? cost : 0;
+      const localReference = localReferences.find(
+        (reference) => reference.clientUuid === item.feedReferenceClientUuid,
+      );
+      return {
+        feed_reference_id: item.payload.feed_reference_id ?? null,
+        feed_reference_client_uuid: item.feedReferenceClientUuid ?? null,
+        source: localReference?.payload.source ?? null,
+        species: localReference?.payload.species ?? selectedCycle?.species ?? null,
+        label: localReference?.payload.name ?? t('storePendingStockLabel'),
+        feed_size_mm: localReference?.payload.pellet_size_mm ?? null,
+        quantity_added_kg: item.payload.quantity_kg,
+        quantity_consumed_kg: '0.00',
+        quantity_available_kg: item.payload.quantity_kg,
+        pending_sync: true,
+      } satisfies CycleStore['stock_items'][number];
+    });
+    const available = Number(serverStore.summary.estimated_feed_remaining_kg) + pendingQuantity;
+    const feedToSecure = serverStore.summary.feed_to_secure_kg === null
+      ? null
+      : Math.max(0, Number(serverStore.summary.feed_to_secure_kg) - pendingQuantity).toFixed(2);
+    return {
+      ...serverStore,
+      calculation_status: 'incomplete',
+      calculation_warnings: [...serverStore.calculation_warnings, 'offline_stock_pending'],
+      summary: {
+        ...serverStore.summary,
+        manual_feed_kg: (Number(serverStore.summary.manual_feed_kg) + pendingQuantity).toFixed(2),
+        total_feed_added_kg: (Number(serverStore.summary.total_feed_added_kg) + pendingQuantity).toFixed(2),
+        estimated_feed_remaining_kg: available.toFixed(2),
+        feed_expenses_fcfa: (Number(serverStore.summary.feed_expenses_fcfa) + pendingCost).toFixed(2),
+        feed_to_secure_kg: feedToSecure,
+      },
+      stock_items: [...serverStore.stock_items, ...pendingItems],
+    };
+  }, [cycleId, selectedCycle?.species, t]);
 
   const loadStore = useCallback(async (preserveVisibleStore = false): Promise<StoreLoadResult> => {
     const requestId = loadRequestRef.current + 1;
@@ -169,7 +226,8 @@ export default function StoreScreen() {
       if (payload.cycle_id !== cycleId) {
         throw new Error(t('storeContextMismatch'));
       }
-      setStore(payload);
+      serverStoreRef.current = payload;
+      setStore(await applyPendingStockProjection(payload));
       await dashboardSyncService.markSuccessful('store', cycleId);
       await refreshLastSyncedAt();
       return 'success';
@@ -184,7 +242,7 @@ export default function StoreScreen() {
         setLoading(false);
       }
     }
-  }, [cycleId, refreshLastSyncedAt, t]);
+  }, [applyPendingStockProjection, cycleId, refreshLastSyncedAt, t]);
 
   useEffect(() => {
     setStore(null);
@@ -211,14 +269,31 @@ export default function StoreScreen() {
 
   const loadFeedChoices = useCallback(async () => {
     if (!selectedCycle?.farm_profile) return;
+    const localReferences = (await offlineService.getOfflineFeedReferences())
+      .filter((item) => !item.synced && item.payload.farm_profile === selectedCycle.farm_profile)
+      .map((item): FarmFeedReference => ({
+        id: item.clientUuid,
+        client_uuid: item.clientUuid,
+        farm_profile: item.payload.farm_profile,
+        source: item.payload.source,
+        catalog_product_id: item.payload.catalog_product ?? null,
+        name: item.payload.name ?? t('storePendingStockLabel'),
+        species: item.payload.species ?? selectedCycle.species,
+        pellet_size_mm: item.payload.pellet_size_mm ?? '',
+        brand: item.payload.brand ?? '',
+        protein_percentage: null,
+        lipid_percentage: null,
+        package_weight_kg: null,
+      }));
     try {
       const [references, catalogProducts] = await Promise.all([
         aquacultureService.getFarmFeedReferences(selectedCycle.farm_profile),
         commerceApi.getProducts({ species: selectedCycle.species === 'clarias' ? 'catfish' : 'tilapia' }),
       ]);
-      setFeedReferences(references);
+      setFeedReferences([...references, ...localReferences]);
       setProducts(catalogProducts);
     } catch (caughtError) {
+      setFeedReferences(localReferences);
       Alert.alert(t('error'), extractErrorMessage(caughtError, t('storeFeedChoicesLoadError')));
     }
   }, [selectedCycle?.farm_profile, selectedCycle?.species, t]);
@@ -282,49 +357,66 @@ export default function StoreScreen() {
     try {
       submissionLock.current = true;
       setSubmitting(true);
-      let referenceId = selectedFeedReferenceId;
-      if (!referenceId && feedMode === 'catalog' && selectedProductId && selectedCycle) {
-        const reference = await aquacultureService.createFarmFeedReference({
+      const feedReferenceClientUuid = generateClientUuid();
+      const stockClientUuid = generateClientUuid();
+      const selectedReference = feedReferences.find((reference) => reference.id === selectedFeedReferenceId);
+      const selectedReferenceIsLocal = Boolean(
+        selectedReference?.client_uuid && selectedReference.id === selectedReference.client_uuid,
+      );
+      const feedReferencePayload = !selectedFeedReferenceId && selectedCycle
+        ? feedMode === 'catalog' && selectedProductId
+          ? {
           farm_profile: selectedCycle.farm_profile,
-          source: 'aquacare_catalog',
+          source: 'aquacare_catalog' as const,
           catalog_product: selectedProductId,
-          client_uuid: generateClientUuid(),
-        });
-        referenceId = reference.id;
-      }
+          client_uuid: feedReferenceClientUuid,
+          created_offline: true,
+        }
+          : parsedFeedSize.kind === 'valid'
+            ? {
+              farm_profile: selectedCycle.farm_profile,
+              source: 'external' as const,
+              name: label.trim(),
+              species: selectedCycle.species,
+              pellet_size_mm: String(parsedFeedSize.value),
+              client_uuid: feedReferenceClientUuid,
+              created_offline: true,
+            }
+            : undefined
+        : undefined;
+      let referenceId = selectedFeedReferenceId;
       if (classificationEntryId) {
-        if (!referenceId && selectedCycle && parsedFeedSize.kind === 'valid') {
+        if (!referenceId && feedReferencePayload) {
           const reference = await aquacultureService.createFarmFeedReference({
-            farm_profile: selectedCycle.farm_profile,
-            source: 'external',
-            name: label.trim(),
-            species: selectedCycle.species,
-            pellet_size_mm: String(parsedFeedSize.value),
-            client_uuid: generateClientUuid(),
+            ...feedReferencePayload,
           });
           referenceId = reference.id;
         }
         if (!referenceId) throw new Error(t('storeManualValidationError'));
         await aquacultureService.classifyCycleStoreEntry(cycleId, classificationEntryId, referenceId);
       } else {
-        await aquacultureService.declareCycleStoreManualStock(cycleId, {
+        const result = await declareManualStockWithOfflineFallback(cycleId, {
           ...(referenceId
-            ? { feed_reference_id: referenceId }
-            : {
-              external_feed: {
-                name: label.trim(),
-                species: selectedCycle?.species ?? 'tilapia',
-                pellet_size_mm: String(parsedFeedSize.kind === 'valid' ? parsedFeedSize.value : ''),
-                client_uuid: generateClientUuid(),
-              },
-            }),
+            ? selectedReferenceIsLocal
+              ? { feed_reference_client_uuid: selectedReference?.client_uuid ?? referenceId }
+              : { feed_reference_id: referenceId }
+            : {}),
           quantity_kg: String(parsedQuantity.kind === 'valid' ? parsedQuantity.value : 0),
           total_cost_fcfa: String(parsedTotalCost.kind === 'valid' ? parsedTotalCost.value : 0),
           entry_date: entryDate.trim(),
           note: note.trim(),
-          client_uuid: generateClientUuid(),
+          client_uuid: stockClientUuid,
           created_offline: false,
-        });
+        }, feedReferencePayload);
+        if (result.mode === 'online') {
+          serverStoreRef.current = result.data;
+          setStore(result.data);
+        } else if (serverStoreRef.current ?? store) {
+          setStore(await applyPendingStockProjection((serverStoreRef.current ?? store)!));
+        }
+        setManualModalVisible(false);
+        Alert.alert(t('success'), t(result.mode === 'online' ? 'storeManualSubmitSuccess' : 'storeManualSubmitOfflineSuccess'));
+        return;
       }
       setManualModalVisible(false);
       await loadStore();
@@ -385,7 +477,7 @@ export default function StoreScreen() {
     ]);
   }, [loadStore, t]);
 
-  const feedToSecureKg = parseDashboardNumber(store?.summary.feed_to_secure_kg);
+  const feedToSecureKg = parseDashboardNumber(store?.summary.feed_to_secure_kg ?? null);
   const requiresReplenishment = feedToSecureKg !== null && feedToSecureKg > 0;
 
   const actionRows = [
@@ -428,8 +520,10 @@ export default function StoreScreen() {
           {store ? (
             <>
               <DashboardSection title={t('storeStatusTitle')} lastSyncedAt={lastSyncedAt}>
-                {Number(store.summary.feed_to_secure_kg) <= 0 && Number(store.summary.unclassified_stock_kg) <= 0 ? (
+                {store.calculation_status === 'available' && Number(store.summary.feed_to_secure_kg) <= 0 && Number(store.summary.unclassified_stock_kg) <= 0 ? (
                   <InlineAlert tone="success" message={`${t('storeNeedCoveredTitle')}\n${t('storeNeedCoveredDescription')}`} />
+                ) : store.calculation_status === 'unavailable' ? (
+                  <InlineAlert tone="warning" message={t('feedEstimateUnavailable')} />
                 ) : (
                   <DashboardHeroCard
                     label={t('storeEstimatedNeedToFinish')}
@@ -465,6 +559,9 @@ export default function StoreScreen() {
                 {requiresReplenishment ? (
                   <DashboardStatus title={t('storeReplenishmentRequired')} tone="warning" />
                 ) : null}
+                {pendingStockCount > 0 ? (
+                  <InlineAlert tone="info" message={t('storePendingSyncMessage', { count: pendingStockCount })} />
+                ) : null}
               </DashboardSection>
               {store.unclassified_entries?.map((entry) => (
                 <Card key={entry.id} variant="outlined" style={styles.section}>
@@ -491,7 +588,7 @@ export default function StoreScreen() {
                 tone="info"
               />
             </View>
-            {store?.pending_orders.length ? store.pending_orders.map((order) => (
+                {store?.pending_orders.length ? store.pending_orders.map((order) => (
               <Card key={order.id} variant="outlined" style={styles.orderCard}>
                 <View style={styles.orderHeader}>
                   <View style={styles.flex}>

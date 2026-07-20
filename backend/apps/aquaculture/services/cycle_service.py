@@ -217,6 +217,12 @@ class ProductionCycleService(BaseService):
         # 4. Création du cycle
         cycle = ProductionCycle.objects.create(**cycle_data_complete)
 
+        # Le plan initial est un snapshot métier du lancement, jamais un effet
+        # de bord normal d'un GET ultérieur.
+        from .cycle_feed_recommendation_service import CycleFeedRecommendationService
+
+        CycleFeedRecommendationService.create_initial_plan(cycle, source='cycle_launch')
+
         ProductionCycleService.log_operation(
             "cycle_created",
             {"cycle_id": str(cycle.id), "initial_biomass": float(initial_biomass)},

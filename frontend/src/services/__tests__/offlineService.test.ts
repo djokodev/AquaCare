@@ -12,6 +12,8 @@ jest.mock('@/features/aquaculture/services/aquacultureService', () => ({
     harvestProductionUnitAllocation: jest.fn(),
     harvestCycle: jest.fn(),
     synchronize: jest.fn(),
+    createFarmFeedReference: jest.fn(),
+    declareCycleStoreManualStock: jest.fn(),
   },
 }));
 
@@ -77,6 +79,94 @@ describe('services/offlineService', () => {
     expect(savedLog.logData.feeding_times).toEqual(['08:00', '12:00', '16:00']);
     expect(savedLog.logData.sample_count).toBe(25);
     expect(savedLog.logData.sample_total_weight).toBe(2800);
+  });
+
+  it('synchronise aliment, stock puis journal et rejoue sans doublon', async () => {
+    const calls: string[] = [];
+    const feedClientUuid = '11111111-1111-4111-8111-111111111111';
+    await offlineService.saveFeedReferenceOffline({
+      farm_profile: 'farm-1',
+      source: 'external',
+      name: 'Aliment local',
+      species: 'tilapia',
+      pellet_size_mm: '2.00',
+      client_uuid: feedClientUuid,
+    });
+    await offlineService.saveStockDeclarationOffline('cycle-1', {
+      feed_reference_client_uuid: feedClientUuid,
+      quantity_kg: '50.00',
+      total_cost_fcfa: '50000.00',
+      entry_date: '2026-07-20',
+      client_uuid: '22222222-2222-4222-8222-222222222222',
+    });
+    await offlineService.saveCycleLogOffline('cycle-1', {
+      log_date: '2026-07-20',
+      feed_quantity: 5,
+      feed_reference_client_uuid: feedClientUuid,
+      client_uuid: '33333333-3333-4333-8333-333333333333',
+    });
+    mockAquaculture.createFarmFeedReference.mockImplementation(async () => {
+      calls.push('reference');
+      return { id: 'server-feed-1' } as any;
+    });
+    mockAquaculture.declareCycleStoreManualStock.mockImplementation(async () => {
+      calls.push('stock');
+      return { cycle_id: 'cycle-1' } as any;
+    });
+    mockAquaculture.createCycleLog.mockImplementation(async () => {
+      calls.push('log');
+      return { id: 'server-log-1' } as any;
+    });
+
+    const first = await offlineService.syncAllOfflineData();
+    const second = await offlineService.syncAllOfflineData();
+
+    expect(first.success).toBe(3);
+    expect(first.failed).toBe(0);
+    expect(calls).toEqual(['reference', 'stock', 'log']);
+    expect(second.success).toBe(0);
+    expect(mockAquaculture.createFarmFeedReference).toHaveBeenCalledTimes(1);
+  });
+
+  it('reprend au stock sans recréer la référence après une coupure', async () => {
+    const feedClientUuid = '44444444-4444-4444-8444-444444444444';
+    await offlineService.saveFeedReferenceOffline({
+      farm_profile: 'farm-1', source: 'external', name: 'Starter externe', species: 'tilapia',
+      pellet_size_mm: '2.00', client_uuid: feedClientUuid,
+    });
+    await offlineService.saveStockDeclarationOffline('cycle-1', {
+      feed_reference_client_uuid: feedClientUuid,
+      quantity_kg: '50.00', total_cost_fcfa: '50000.00', entry_date: '2026-07-20',
+      client_uuid: '55555555-5555-4555-8555-555555555555',
+    });
+    await offlineService.saveCycleLogOffline('cycle-1', {
+      log_date: '2026-07-20', feed_quantity: 5, feed_reference_client_uuid: feedClientUuid,
+      client_uuid: '66666666-6666-4666-8666-666666666666',
+    });
+    mockAquaculture.createFarmFeedReference.mockResolvedValue({ id: 'server-feed-1' } as any);
+    mockAquaculture.declareCycleStoreManualStock
+      .mockRejectedValueOnce(new Error('network'))
+      .mockResolvedValueOnce({ cycle_id: 'cycle-1' } as any);
+    mockAquaculture.createCycleLog.mockResolvedValue({ id: 'server-log-1' } as any);
+
+    await offlineService.syncAllOfflineData();
+    expect(mockAquaculture.createCycleLog).not.toHaveBeenCalled();
+    await offlineService.syncAllOfflineData();
+
+    expect(mockAquaculture.createFarmFeedReference).toHaveBeenCalledTimes(1);
+    expect(mockAquaculture.declareCycleStoreManualStock).toHaveBeenCalledTimes(2);
+    expect(mockAquaculture.createCycleLog).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuse un replay local avec le même client_uuid et une autre identité', async () => {
+    const payload = {
+      farm_profile: 'farm-1', source: 'external' as const, name: 'Stable', species: 'tilapia' as const,
+      pellet_size_mm: '2.00', client_uuid: '77777777-7777-4777-8777-777777777777',
+    };
+    await offlineService.saveFeedReferenceOffline(payload);
+
+    await expect(offlineService.saveFeedReferenceOffline({ ...payload, pellet_size_mm: '3.00' }))
+      .rejects.toThrow('feed_reference_idempotency_conflict');
   });
 
   it('remplace la saisie offline non synchronisee du meme jour et de la meme unite', async () => {

@@ -449,7 +449,7 @@ class TestCycleLogSyncSerializer:
                 'mortality_count': 2,
                 'created_offline': True
             },
-            # Doublon du premier (même client_uuid)
+            # Replay incompatible du premier (même client_uuid, autre payload)
             {
                 'cycle': production_cycle.id,
                 'client_uuid': client_uuid_1,
@@ -467,9 +467,9 @@ class TestCycleLogSyncSerializer:
         # Devrait avoir créé 2 logs (1 dédupliqué)
         assert len(logs) == 2
         
-        # Vérifier que le premier log a été mis à jour
+        # Un replay incompatible ne réécrit jamais l'objet déjà accepté.
         updated_log = CycleLog.objects.get(client_uuid=client_uuid_1)
-        assert updated_log.mortality_count == 5  # Valeur mise à jour
+        assert updated_log.mortality_count == 3
 
 
 @pytest.mark.django_db

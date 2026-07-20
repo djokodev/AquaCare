@@ -43,6 +43,7 @@ Le Magasin de cycle est la source de verite frontend pour les stocks d'aliments 
 3. Les commandes en attente restent affichees separement et ne comptent pas dans le stock.
 4. Le dashboard du cycle expose un resume du Magasin sous "Mes unites de production".
 5. L'ecran `StoreScreen` permet de consulter le stock, les commandes en attente et de declarer un stock manuel.
+   Les aliments externes, les déclarations de stock et les rations peuvent être mis en file hors ligne. La synchronisation envoie toujours la référence, puis le stock, puis le journal ; les lignes locales restent marquées en attente jusqu'à leur acceptation serveur.
 
 ## Production units end-to-end flow
 

@@ -5,7 +5,14 @@ from uuid import uuid4
 import pytest
 from accounts.models import FarmProfile, User
 from aquaculture.domain.exceptions import FeedStockValidationError
-from aquaculture.models import CycleFeedStockEntry, CycleLog, CycleUnitAllocation, ProductionCycle, ProductionUnit
+from aquaculture.models import (
+    CycleFeedStockEntry,
+    CycleLog,
+    CycleUnitAllocation,
+    FarmFeedReference,
+    ProductionCycle,
+    ProductionUnit,
+)
 from aquaculture.services.cycle_store_application_service import (
     CycleStoreApplicationService,
     DeclareManualStockCommand,
@@ -128,16 +135,12 @@ class TestCycleStoreService:
                 entry_date=timezone.localdate(),
             ),
         )
-        monkeypatch.setattr(
-            'aquaculture.services.cycle_feed_service.CycleFeedService.compute_total_feed_needed_kg',
-            lambda _cycle: 300.0,
-        )
-
         payload = CycleStoreApplicationService.get_store(cycle)
 
-        assert payload['summary']['total_feed_needed_kg'] == '300.00'
-        assert payload['summary']['secured_feed_kg'] == '110.00'
-        assert payload['summary']['feed_to_secure_kg'] == '190.00'
+        assert payload['calculation_status'] == 'unavailable'
+        assert payload['summary']['total_feed_needed_kg'] is None
+        assert payload['summary']['secured_feed_kg'] is None
+        assert payload['summary']['feed_to_secure_kg'] is None
 
     def test_daily_feed_must_use_matching_stock_identity(self):
         user = _create_user('+237690100096')
@@ -159,8 +162,13 @@ class TestCycleStoreService:
             CycleStoreService.validate_daily_feed_quantity(
                 cycle=cycle,
                 feed_quantity=Decimal('5.00'),
-                feed_type='Grossissement local',
-                feed_size_mm=Decimal('4.00'),
+                feed_reference=FarmFeedReference.objects.create(
+                    farm_profile=farm,
+                    source=FarmFeedReference.SOURCE_EXTERNAL,
+                    name='Grossissement local',
+                    species=cycle.species,
+                    pellet_size_mm=Decimal('4.00'),
+                ),
                 log_date=timezone.localdate(),
             )
 
@@ -178,13 +186,13 @@ class TestCycleStoreService:
                 log_date=timezone.localdate(),
             )
 
-        assert exc_info.value.detail['code'] == 'feed_stock_not_started'
+        assert exc_info.value.detail['code'] == 'feed_reference_required'
 
     def test_daily_feed_replacement_restores_previous_quantity_before_validation(self):
         user = _create_user('+237690100098')
         farm = _create_farm(user, 'Ferme remplacement ration')
         cycle = _create_cycle(farm)
-        CycleStoreApplicationService.declare_manual_stock(
+        entry = CycleStoreApplicationService.declare_manual_stock(
             user=user,
             cycle=cycle,
             command=DeclareManualStockCommand(
@@ -201,6 +209,7 @@ class TestCycleStoreService:
             feed_quantity=Decimal('16.80'),
             feed_type='Stock du jour',
             feed_size_mm=Decimal('2.00'),
+            feed_reference=entry.feed_reference,
         )
 
         CycleStoreService.validate_daily_feed_quantity(
@@ -208,8 +217,7 @@ class TestCycleStoreService:
             feed_quantity=Decimal('18.00'),
             log_date=timezone.localdate(),
             existing_log=existing,
-            feed_type='Stock du jour',
-            feed_size_mm=Decimal('2.00'),
+            feed_reference=entry.feed_reference,
         )
 
         with pytest.raises(FeedStockValidationError) as exc_info:
@@ -218,8 +226,7 @@ class TestCycleStoreService:
                 feed_quantity=Decimal('20.01'),
                 log_date=timezone.localdate(),
                 existing_log=existing,
-                feed_type='Stock du jour',
-                feed_size_mm=Decimal('2.00'),
+                feed_reference=entry.feed_reference,
             )
 
         assert exc_info.value.detail['code'] == 'insufficient_feed_stock'
