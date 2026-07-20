@@ -11,6 +11,7 @@ import pytest
 from aquaculture.models import (
     CycleLog,
     CycleUnitAllocation,
+    FarmFeedReference,
     FeedingPlan,
     NutritionalGuide,
     ProductionCycle,
@@ -211,6 +212,13 @@ class TestCycleLogSerializer:
 
     def test_valid_log_creation(self, production_cycle):
         """Test création log valide."""
+        feed = FarmFeedReference.objects.create(
+            farm_profile=production_cycle.farm_profile,
+            source='external',
+            name='Aliment test 2,5 mm',
+            species=production_cycle.species,
+            pellet_size_mm=Decimal('2.50'),
+        )
         data = {
             'cycle': production_cycle.id,
             'log_date': date.today(),
@@ -218,6 +226,7 @@ class TestCycleLogSerializer:
             'feed_quantity': Decimal('2.50'),
             'water_temperature': Decimal('28.0'),
             'feed_size_mm': Decimal('2.5'),
+            'feed_reference': feed.id,
             'ph_level': Decimal('7.2'),
             'observations': 'Poissons actifs, bonne appétence'
         }
@@ -259,6 +268,13 @@ class TestCycleLogSerializer:
             initial_biomass_kg=Decimal('5.00'),
             current_biomass_kg=Decimal('5.00'),
         )
+        feed = FarmFeedReference.objects.create(
+            farm_profile=production_cycle.farm_profile,
+            source='external',
+            name='Aliment allocation',
+            species=production_cycle.species,
+            pellet_size_mm=Decimal('2.50'),
+        )
 
         data = {
             'cycle': production_cycle.id,
@@ -266,6 +282,7 @@ class TestCycleLogSerializer:
             'log_date': date.today(),
             'mortality_count': 5,
             'feed_quantity': Decimal('2.50'),
+            'feed_reference': feed.id,
             'water_temperature': Decimal('28.0'),
             'observations': 'Poissons actifs, bonne appétence',
         }

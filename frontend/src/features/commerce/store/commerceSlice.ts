@@ -229,14 +229,28 @@ const commerceSlice = createSlice({
     resetFilters: (state) => {
       state.products.filters = {};
     },
-    addToCart: (state, action: PayloadAction<{ product: Product; quantity: number }>) => {
-      const { product, quantity } = action.payload;
+    addToCart: (state, action: PayloadAction<{
+      product: Product;
+      quantity: number;
+      recommendation?: { phase_name: string; pellet_size_mm: string; suggested_bags: number };
+    }>) => {
+      const { product, quantity, recommendation } = action.payload;
       const existingItem = state.cart.items.find((item) => item.product.id === product.id);
 
       if (existingItem) {
         existingItem.quantity += quantity;
+        if (recommendation) {
+          existingItem.recommendation_breakdown = [
+            ...(existingItem.recommendation_breakdown ?? []),
+            recommendation,
+          ];
+        }
       } else {
-        state.cart.items.push({ product, quantity });
+        state.cart.items.push({
+          product,
+          quantity,
+          recommendation_breakdown: recommendation ? [recommendation] : undefined,
+        });
       }
 
       state.cart.deliveryPreview = null;

@@ -542,7 +542,7 @@ class OrderAdmin(CommerceSecuredAdmin):
     def farm_cycle_column(self, obj):
         cycle_name = obj.production_cycle.cycle_name if obj.production_cycle else _('Aucun cycle associé')
         return format_html(
-            '<strong>{}</strong><br><small style="color:#6b7280">{}</small>',
+            '<strong>{}</strong><small class="order-secondary"> · {}</small>',
             obj.farm_profile.farm_name,
             cycle_name,
         )
@@ -551,13 +551,13 @@ class OrderAdmin(CommerceSecuredAdmin):
     def delivery_summary(self, obj):
         if obj.delivery_method == 'pickup':
             return format_html(
-                '<strong>{}</strong><br><small>{}</small>',
+                '<strong>{}</strong><small class="order-secondary"> · {}</small>',
                 _('Retrait'),
                 obj.get_pickup_location_display() if obj.pickup_location else _('Point non renseigné'),
             )
         destination = ', '.join(part for part in (obj.delivery_city, obj.delivery_region) if part)
         return format_html(
-            '<strong>{}</strong><br><small>{}</small>',
+            '<strong>{}</strong><small class="order-secondary"> · {}</small>',
             _('Domicile'),
             destination or _('Destination non renseignée'),
         )

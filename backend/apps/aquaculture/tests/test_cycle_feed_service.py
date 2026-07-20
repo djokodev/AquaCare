@@ -50,7 +50,7 @@ class TestCycleFeedServiceNoFeedingPlans:
 
 @pytest.mark.django_db
 class TestCycleFeedServiceFeedingPlans:
-    """Calcul des sacs nécessaires depuis les FeedingPlans."""
+    """Les plans hebdomadaires ne remplacent pas le besoin complet du cycle."""
 
     def _create_feeding_plan(self, cycle: ProductionCycle, week: int, daily_kg: float) -> FeedingPlan:
         start = date.today() + timedelta(weeks=week - 1)
@@ -71,36 +71,12 @@ class TestCycleFeedServiceFeedingPlans:
             end_date=start + timedelta(days=6),
         )
 
-    @pytest.mark.parametrize(
-        "daily_kg,weeks,expected_bags",
-        [
-            # ceil(daily_kg × 7 days × weeks / 25 kg)
-            (5.0, 2, 3),  # 70 kg → ceil(70/25) = 3
-            (5.0, 4, 6),  # 140 kg → ceil(140/25) = 6
-            (3.57, 1, 1),  # 24.99 kg → ceil(24.99/25) = 1
-            (4.0, 1, 2),  # 28 kg → ceil(28/25) = 2
-        ],
-    )
-    def test_bags_needed_calculation(self, production_cycle, daily_kg, weeks, expected_bags):
-        """total_bags_needed = ceil(sum(daily × 7) / 25)."""
+    def test_partial_weekly_plans_do_not_become_cycle_total(self, production_cycle):
         FeedingPlan.objects.filter(cycle=production_cycle).delete()
-        for week in range(1, weeks + 1):
-            self._create_feeding_plan(production_cycle, week, daily_kg)
-
-        result = CycleFeedService.get_feed_status(production_cycle)
-
-        assert result["total_bags_needed"] == expected_bags
-
-    def test_total_feed_needed_kg_uses_sql_aggregation(self, production_cycle):
-        """Le total kg doit correspondre à sum(daily × 7) pour toutes les semaines."""
-        FeedingPlan.objects.filter(cycle=production_cycle).delete()
+        before = CycleFeedService.compute_total_feed_needed_kg(production_cycle)
         self._create_feeding_plan(production_cycle, 1, 5.0)
         self._create_feeding_plan(production_cycle, 2, 3.0)
-        # semaine 1 : 5 × 7 = 35 kg, semaine 2 : 3 × 7 = 21 kg → total = 56 kg
-
-        result = CycleFeedService.get_feed_status(production_cycle)
-
-        assert result["total_feed_needed_kg"] == pytest.approx(56.0)
+        assert CycleFeedService.compute_total_feed_needed_kg(production_cycle) == before
 
 
 @pytest.mark.django_db

@@ -41,7 +41,8 @@ import { colors, spacing } from '@/theme';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
 import { RootStackParamList } from '@/navigation/MainNavigator';
 import { RootState } from '@/store/store';
-import { CycleStore } from '@/types/aquaculture';
+import { CycleStore, FarmFeedReference } from '@/types/aquaculture';
+import { Product } from '@/types/commerce';
 import { sanitizeUserFacingErrorMessage } from '@/utils/errorParser';
 import { parseLocalizedNumber } from '@/utils/localizedNumber';
 import commerceApi from '@/features/commerce/services/commerceApi';
@@ -115,8 +116,10 @@ export default function StoreScreen() {
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<RouteProp<RootStackParamList, 'Store'>>();
   const currentCycle = useSelector((state: RootState) => state.aquaculture.currentCycle);
+  const cycles = useSelector((state: RootState) => state.aquaculture.cycles) ?? [];
 
   const cycleId = route.params?.cycleId || currentCycle?.id || null;
+  const selectedCycle = cycles.find((cycle) => cycle.id === cycleId) ?? currentCycle;
 
   const [store, setStore] = useState<CycleStore | null>(null);
   const [loading, setLoading] = useState(false);
@@ -131,6 +134,12 @@ export default function StoreScreen() {
   const [totalCostFcfa, setTotalCostFcfa] = useState('');
   const [entryDate, setEntryDate] = useState(todayIsoDate());
   const [note, setNote] = useState('');
+  const [feedMode, setFeedMode] = useState<'catalog' | 'external'>('external');
+  const [feedReferences, setFeedReferences] = useState<FarmFeedReference[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [selectedFeedReferenceId, setSelectedFeedReferenceId] = useState<string | null>(null);
+  const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
+  const [classificationEntryId, setClassificationEntryId] = useState<string | null>(null);
   const submissionLock = useRef(false);
   const confirmationLock = useRef(false);
   const loadRequestRef = useRef(0);
@@ -200,6 +209,20 @@ export default function StoreScreen() {
     }
   };
 
+  const loadFeedChoices = useCallback(async () => {
+    if (!selectedCycle?.farm_profile) return;
+    try {
+      const [references, catalogProducts] = await Promise.all([
+        aquacultureService.getFarmFeedReferences(selectedCycle.farm_profile),
+        commerceApi.getProducts({ species: selectedCycle.species === 'clarias' ? 'catfish' : 'tilapia' }),
+      ]);
+      setFeedReferences(references);
+      setProducts(catalogProducts);
+    } catch (caughtError) {
+      Alert.alert(t('error'), extractErrorMessage(caughtError, t('storeFeedChoicesLoadError')));
+    }
+  }, [selectedCycle?.farm_profile, selectedCycle?.species, t]);
+
   const openManualModal = () => {
     setLabel('');
     setFeedSizeMm('');
@@ -207,7 +230,17 @@ export default function StoreScreen() {
     setTotalCostFcfa('');
     setEntryDate(todayIsoDate());
     setNote('');
+    setFeedMode('external');
+    setSelectedFeedReferenceId(null);
+    setSelectedProductId(null);
+    setClassificationEntryId(null);
     setManualModalVisible(true);
+    void loadFeedChoices();
+  };
+
+  const openClassificationModal = (entryId: string) => {
+    openManualModal();
+    setClassificationEntryId(entryId);
   };
 
   const handleOpenProducts = () => navigation.navigate('ProductCatalog', storeNavigationParams);
@@ -237,9 +270,11 @@ export default function StoreScreen() {
     const invalidFeedSize = parsedFeedSize.kind !== 'valid'
       || parsedFeedSize.value < 0.1
       || parsedFeedSize.value > 20;
-    const invalidQuantity = parsedQuantity.kind !== 'valid' || parsedQuantity.value <= 0;
-    const invalidTotalCost = parsedTotalCost.kind !== 'valid' || parsedTotalCost.value < 0;
-    if (!label.trim() || invalidFeedSize || invalidQuantity || invalidTotalCost || !entryDate.trim()) {
+    const invalidQuantity = !classificationEntryId && (parsedQuantity.kind !== 'valid' || parsedQuantity.value <= 0);
+    const invalidTotalCost = !classificationEntryId && (parsedTotalCost.kind !== 'valid' || parsedTotalCost.value < 0);
+    const needsExternalData = feedMode === 'external' && !selectedFeedReferenceId;
+    const invalidReference = feedMode === 'catalog' ? !selectedProductId : needsExternalData && (!label.trim() || invalidFeedSize);
+    if (invalidReference || invalidQuantity || invalidTotalCost || (!classificationEntryId && !entryDate.trim())) {
       Alert.alert(t('error'), t('storeManualValidationError'));
       return;
     }
@@ -247,16 +282,50 @@ export default function StoreScreen() {
     try {
       submissionLock.current = true;
       setSubmitting(true);
-      await aquacultureService.declareCycleStoreManualStock(cycleId, {
-        label: label.trim(),
-        feed_size_mm: String(parsedFeedSize.value),
-        quantity_kg: String(parsedQuantity.value),
-        total_cost_fcfa: String(parsedTotalCost.value),
-        entry_date: entryDate.trim(),
-        note: note.trim(),
-        client_uuid: generateClientUuid(),
-        created_offline: false,
-      });
+      let referenceId = selectedFeedReferenceId;
+      if (!referenceId && feedMode === 'catalog' && selectedProductId && selectedCycle) {
+        const reference = await aquacultureService.createFarmFeedReference({
+          farm_profile: selectedCycle.farm_profile,
+          source: 'aquacare_catalog',
+          catalog_product: selectedProductId,
+          client_uuid: generateClientUuid(),
+        });
+        referenceId = reference.id;
+      }
+      if (classificationEntryId) {
+        if (!referenceId && selectedCycle && parsedFeedSize.kind === 'valid') {
+          const reference = await aquacultureService.createFarmFeedReference({
+            farm_profile: selectedCycle.farm_profile,
+            source: 'external',
+            name: label.trim(),
+            species: selectedCycle.species,
+            pellet_size_mm: String(parsedFeedSize.value),
+            client_uuid: generateClientUuid(),
+          });
+          referenceId = reference.id;
+        }
+        if (!referenceId) throw new Error(t('storeManualValidationError'));
+        await aquacultureService.classifyCycleStoreEntry(cycleId, classificationEntryId, referenceId);
+      } else {
+        await aquacultureService.declareCycleStoreManualStock(cycleId, {
+          ...(referenceId
+            ? { feed_reference_id: referenceId }
+            : {
+              external_feed: {
+                name: label.trim(),
+                species: selectedCycle?.species ?? 'tilapia',
+                pellet_size_mm: String(parsedFeedSize.kind === 'valid' ? parsedFeedSize.value : ''),
+                client_uuid: generateClientUuid(),
+              },
+            }),
+          quantity_kg: String(parsedQuantity.kind === 'valid' ? parsedQuantity.value : 0),
+          total_cost_fcfa: String(parsedTotalCost.kind === 'valid' ? parsedTotalCost.value : 0),
+          entry_date: entryDate.trim(),
+          note: note.trim(),
+          client_uuid: generateClientUuid(),
+          created_offline: false,
+        });
+      }
       setManualModalVisible(false);
       await loadStore();
       Alert.alert(t('success'), t('storeManualSubmitSuccess'));
@@ -359,12 +428,16 @@ export default function StoreScreen() {
           {store ? (
             <>
               <DashboardSection title={t('storeStatusTitle')} lastSyncedAt={lastSyncedAt}>
-                <DashboardHeroCard
-                  label={t('storeEstimatedNeedToFinish')}
-                  value={formatDashboardNumber(store.summary.feed_to_secure_kg, locale, { maximumFractionDigits: 1 })}
-                  unit={t('kg')}
-                  unavailableLabel={t('dashboardDataUnavailable')}
-                />
+                {Number(store.summary.feed_to_secure_kg) <= 0 && Number(store.summary.unclassified_stock_kg) <= 0 ? (
+                  <InlineAlert tone="success" message={`${t('storeNeedCoveredTitle')}\n${t('storeNeedCoveredDescription')}`} />
+                ) : (
+                  <DashboardHeroCard
+                    label={t('storeEstimatedNeedToFinish')}
+                    value={formatDashboardNumber(store.summary.feed_to_secure_kg, locale, { maximumFractionDigits: 1 })}
+                    unit={t('kg')}
+                    unavailableLabel={t('dashboardDataUnavailable')}
+                  />
+                )}
                 <View style={styles.metrics}>
                   <DashboardMetricCard
                     label={t('storeCurrentStock')}
@@ -393,32 +466,19 @@ export default function StoreScreen() {
                   <DashboardStatus title={t('storeReplenishmentRequired')} tone="warning" />
                 ) : null}
               </DashboardSection>
-              {store.summary.stock_tracking_started_at ? (
-                <AppText variant="caption" color="muted" style={styles.tracking}>
-                  {t('storeTrackingSince')}{' '}
-                  {new Date(store.summary.stock_tracking_started_at).toLocaleDateString(i18n.language?.startsWith('fr') ? 'fr-FR' : 'en-US')}
-                </AppText>
-              ) : null}
-              <Card variant="outlined" style={styles.section}>
-                <AppText variant="cardTitle">{t('storeStockByFeedTitle')}</AppText>
-                {(store.stock_items ?? []).length ? (store.stock_items ?? []).map((item) => (
-                  <View key={`${item.label}-${item.feed_size_mm ?? 'legacy'}`} style={styles.stockItem}>
-                    <View style={styles.flex}>
-                      <AppText variant="label">{item.label}</AppText>
-                      <AppText variant="helper" color="muted">
-                        {item.feed_size_mm
-                          ? t('storeFeedSizeValue', { size: formatDashboardNumber(item.feed_size_mm, locale) })
-                          : t('storeFeedSizeUnknown')}
-                      </AppText>
-                    </View>
-                    <AppText variant="bodyStrong" color="link">
-                      {formatDashboardNumber(item.quantity_available_kg, locale, { maximumFractionDigits: 2 })} {t('kg')}
-                    </AppText>
-                  </View>
-                )) : (
-                  <AppText variant="body" color="muted">{t('storeStockByFeedEmpty')}</AppText>
-                )}
-              </Card>
+              {store.unclassified_entries?.map((entry) => (
+                <Card key={entry.id} variant="outlined" style={styles.section}>
+                  <InlineAlert
+                    tone="warning"
+                    message={t('storeUnclassifiedStockMessage', { quantity: entry.quantity_kg, name: entry.label })}
+                  />
+                  <Button
+                    label={t('storeClassifyStockAction')}
+                    variant="outline"
+                    onPress={() => openClassificationModal(entry.id)}
+                  />
+                </Card>
+              ))}
             </>
           ) : null}
           <Card variant="outlined" style={styles.section}>
@@ -486,14 +546,59 @@ export default function StoreScreen() {
               </View>
               <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
                 <View style={styles.form}>
-                  <TextField label={t('storeManualLabel')} value={label} onChangeText={setLabel} placeholder={t('storeManualLabelPlaceholder')} />
-                  <TextField label={t('storeManualFeedSize')} value={feedSizeMm} onChangeText={setFeedSizeMm} keyboardType="decimal-pad" placeholder={t('storeManualFeedSizePlaceholder')} />
                   <View style={styles.formRow}>
-                    <View style={styles.flex}><TextField label={t('storeManualQuantity')} value={quantityKg} onChangeText={setQuantityKg} keyboardType="decimal-pad" placeholder={t('storeManualQuantityPlaceholder')} /></View>
-                    <View style={styles.flex}><TextField label={t('storeManualTotalCost')} value={totalCostFcfa} onChangeText={setTotalCostFcfa} keyboardType="decimal-pad" placeholder={t('storeManualTotalCostPlaceholder')} /></View>
+                    <View style={styles.flex}>
+                      <Button
+                        label={t('storeAquacareFeed')}
+                        variant={feedMode === 'catalog' ? 'primary' : 'outline'}
+                        onPress={() => { setFeedMode('catalog'); setSelectedFeedReferenceId(null); }}
+                      />
+                    </View>
+                    <View style={styles.flex}>
+                      <Button
+                        label={t('storeExternalFeed')}
+                        variant={feedMode === 'external' ? 'primary' : 'outline'}
+                        onPress={() => { setFeedMode('external'); setSelectedProductId(null); }}
+                      />
+                    </View>
                   </View>
-                  <TextField label={t('storeManualDate')} value={entryDate} onChangeText={setEntryDate} placeholder={t('storeManualDatePlaceholder')} />
-                  <TextField label={t('storeManualNote')} value={note} onChangeText={setNote} placeholder={t('storeManualNotePlaceholder')} multiline textAlignVertical="top" />
+                  {feedMode === 'catalog' ? products.map((product) => (
+                    <Button
+                      key={product.id}
+                      label={`${product.name} · ${product.pellet_size_mm} mm`}
+                      variant={selectedProductId === product.id ? 'primary' : 'outline'}
+                      onPress={() => setSelectedProductId(product.id)}
+                    />
+                  )) : (
+                    <>
+                      {feedReferences.filter((reference) => reference.source === 'external').map((reference) => (
+                        <Button
+                          key={reference.id}
+                          label={`${reference.name} · ${reference.pellet_size_mm} mm`}
+                          variant={selectedFeedReferenceId === reference.id ? 'primary' : 'outline'}
+                          onPress={() => {
+                            setSelectedFeedReferenceId(reference.id);
+                            setLabel(reference.name);
+                            setFeedSizeMm(reference.pellet_size_mm);
+                          }}
+                        />
+                      ))}
+                      <Divider />
+                      <AppText variant="label">{t('storeCreateExternalFeed')}</AppText>
+                      <TextField label={t('storeManualLabel')} value={label} onChangeText={(value) => { setLabel(value); setSelectedFeedReferenceId(null); }} placeholder={t('storeManualLabelPlaceholder')} />
+                      <TextField label={t('storeManualFeedSize')} value={feedSizeMm} onChangeText={(value) => { setFeedSizeMm(value); setSelectedFeedReferenceId(null); }} keyboardType="decimal-pad" placeholder={t('storeManualFeedSizePlaceholder')} />
+                    </>
+                  )}
+                  {!classificationEntryId ? (
+                    <>
+                      <View style={styles.formRow}>
+                        <View style={styles.flex}><TextField label={t('storeManualQuantity')} value={quantityKg} onChangeText={setQuantityKg} keyboardType="decimal-pad" placeholder={t('storeManualQuantityPlaceholder')} /></View>
+                        <View style={styles.flex}><TextField label={t('storeManualTotalCost')} value={totalCostFcfa} onChangeText={setTotalCostFcfa} keyboardType="decimal-pad" placeholder={t('storeManualTotalCostPlaceholder')} /></View>
+                      </View>
+                      <TextField label={t('storeManualDate')} value={entryDate} onChangeText={setEntryDate} placeholder={t('storeManualDatePlaceholder')} />
+                      <TextField label={t('storeManualNote')} value={note} onChangeText={setNote} placeholder={t('storeManualNotePlaceholder')} multiline textAlignVertical="top" />
+                    </>
+                  ) : null}
                   <Divider />
                   <View style={styles.formActions}>
                     <Button label={t('storeManualSubmit')} onPress={handleSubmitManualStock} loading={submitting} disabled={submitting} />

@@ -33,9 +33,9 @@ function buildProductForCart(product: FeedPhaseProduct): Product {
     id: product.product_id,
     brand: product.brand as ProductBrand,
     name: product.product_name,
-    species: 'tilapia',
+    species: product.species,
     phase: null,
-    pellet_size_mm: '',
+    pellet_size_mm: String(product.pellet_size_mm),
     protein_percentage: null,
     lipid_percentage: null,
     package_weight_kg: product.package_weight_kg,
@@ -54,6 +54,9 @@ function phaseLabel(phase: FeedPhase, phases: FeedPhase[], translate: (key: stri
     : base;
 }
 
+const quantityKey = (phase: FeedPhase, product: FeedPhaseProduct): string =>
+  `${phase.phase_name}-${phase.pellet_size_mm}-${product.product_id}`;
+
 export default function CycleFeedPhasesScreen({ navigation, route }: Props) {
   const { t } = useTranslation();
   const dispatch = useDispatch<AppDispatch>();
@@ -62,6 +65,7 @@ export default function CycleFeedPhasesScreen({ navigation, route }: Props) {
     state.commerce.cart.items.reduce((sum, item) => sum + item.quantity, 0)
   );
   const [phases, setPhases] = useState<FeedPhase[]>([]);
+  const [recommendation, setRecommendation] = useState<Awaited<ReturnType<typeof aquacultureService.getCycleFeedPhases>> | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [quantities, setQuantities] = useState<Record<string, number>>({});
@@ -71,11 +75,12 @@ export default function CycleFeedPhasesScreen({ navigation, route }: Props) {
       setLoading(true);
       setError(null);
       const result = await aquacultureService.getCycleFeedPhases(cycleId);
+      setRecommendation(result);
       setPhases(result.feeding_phases);
       const initialQuantities: Record<string, number> = {};
       result.feeding_phases.forEach((phase) =>
         phase.products.forEach((product) => {
-          initialQuantities[product.product_id] = product.quantity_bags;
+          initialQuantities[quantityKey(phase, product)] = product.quantity_bags;
         })
       );
       setQuantities(initialQuantities);
@@ -90,43 +95,64 @@ export default function CycleFeedPhasesScreen({ navigation, route }: Props) {
     void loadPhases();
   }, [loadPhases]);
 
-  const handleQuantityChange = useCallback((productId: string, delta: number) => {
+  const handleQuantityChange = useCallback((key: string, delta: number) => {
     setQuantities((current) => ({
       ...current,
-      [productId]: Math.max(1, (current[productId] ?? 1) + delta),
+      [key]: Math.max(0, (current[key] ?? 0) + delta),
     }));
   }, []);
 
   const addPhaseToCart = useCallback(
     (phase: FeedPhase) => {
-      phase.products.forEach((product) =>
-        dispatch(
+      phase.products.forEach((product) => {
+        const quantity = quantities[quantityKey(phase, product)] ?? product.quantity_bags;
+        if (quantity > 0) dispatch(
           addToCart({
             product: buildProductForCart(product),
-            quantity: quantities[product.product_id] ?? product.quantity_bags,
+            quantity,
+            recommendation: {
+              phase_name: phaseLabel(phase, phases, t),
+              pellet_size_mm: String(phase.pellet_size_mm),
+              suggested_bags: quantity,
+            },
           })
-        )
-      );
+        );
+      });
       Alert.alert(t('success'), t('feedPhaseAddedToCart'), [{ text: t('ok') }]);
     },
-    [dispatch, quantities, t]
+    [dispatch, phases, quantities, t]
   );
 
   const handleOrderAll = useCallback(() => {
     phases.forEach((phase) =>
-      phase.products.forEach((product) =>
-        dispatch(
+      phase.products.forEach((product) => {
+        const quantity = quantities[quantityKey(phase, product)] ?? product.quantity_bags;
+        if (quantity > 0) dispatch(
           addToCart({
             product: buildProductForCart(product),
-            quantity: quantities[product.product_id] ?? product.quantity_bags,
+            quantity,
+            recommendation: {
+              phase_name: phaseLabel(phase, phases, t),
+              pellet_size_mm: String(phase.pellet_size_mm),
+              suggested_bags: quantity,
+            },
           })
-        )
-      )
+        );
+      })
     );
     navigation.navigate('Cart', { cycleId });
   }, [cycleId, dispatch, navigation, phases, quantities]);
 
-  const totalBags = useMemo(() => phases.reduce((sum, phase) => sum + phase.total_bags, 0), [phases]);
+  const totalBags = useMemo(
+    () => phases.reduce(
+      (sum, phase) => sum + phase.products.reduce(
+        (phaseSum, product) => phaseSum + (quantities[quantityKey(phase, product)] ?? product.quantity_bags),
+        0
+      ),
+      0
+    ),
+    [phases, quantities]
+  );
 
   return (
     <View style={styles.screen}>
@@ -151,11 +177,27 @@ export default function CycleFeedPhasesScreen({ navigation, route }: Props) {
       ) : error ? (
         <ErrorState title={t(error)} actionLabel={t('retry')} onAction={loadPhases} />
       ) : phases.length === 0 ? (
-        <EmptyState title={t('feedPhasesEmpty')} />
+        <EmptyState title={t(recommendation?.status === 'unavailable' ? 'feedEstimateUnavailable' : 'feedPhasesEmpty')} />
       ) : (
         <>
           <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-            <InlineAlert compact message={t('feedPhasesSubtitle')} tone="info" />
+            <InlineAlert
+              compact
+              message={t('feedRecommendationSummary', {
+                need: recommendation?.summary.estimated_remaining_need_kg ?? '0',
+                stock: recommendation?.summary.compatible_stock_kg ?? '0',
+                pending: recommendation?.summary.pending_order_kg ?? '0',
+                order: recommendation?.summary.feed_to_order_kg ?? '0',
+              })}
+              tone={recommendation?.status === 'incomplete' ? 'warning' : 'info'}
+            />
+            {recommendation ? (
+              <AppText variant="caption" color="muted">
+                {t('feedRecommendationCalculatedAt', {
+                  date: new Date(recommendation.calculated_at).toLocaleString(),
+                })}
+              </AppText>
+            ) : null}
             {phases.map((phase, phaseIndex) => (
               <Card key={`${phase.phase_name}-${phaseIndex}`} variant="outlined" style={styles.phaseCard}>
                 <View style={styles.rowBetween}>
@@ -167,9 +209,22 @@ export default function CycleFeedPhasesScreen({ navigation, route }: Props) {
                 <AppText color="muted" style={styles.phaseMeta}>
                   {phase.duration_days} {t('days')} · {t('feedPhasePellet', { size: phase.pellet_size_mm })}
                 </AppText>
+                <AppText variant="body" color="muted">
+                  {t('feedPhaseCoverage', {
+                    need: phase.remaining_need_kg,
+                    stock: phase.allocated_stock_kg,
+                    pending: phase.allocated_pending_kg,
+                    shortfall: phase.shortfall_kg,
+                  })}
+                </AppText>
+
+                {!phase.product_available && Number(phase.shortfall_kg) > 0 ? (
+                  <InlineAlert compact tone="warning" message={t('feedPhaseNoExactProduct')} />
+                ) : null}
 
                 {phase.products.map((product) => {
-                  const quantity = quantities[product.product_id] ?? product.quantity_bags;
+                  const key = quantityKey(phase, product);
+                  const quantity = quantities[key] ?? product.quantity_bags;
                   return (
                     <View key={product.product_id}>
                       <Divider />
@@ -179,33 +234,38 @@ export default function CycleFeedPhasesScreen({ navigation, route }: Props) {
                           <AppText variant="caption" color="muted">
                             {product.package_weight_kg}kg · {Math.round(product.unit_price).toLocaleString()} FCFA/{t('bag')}
                           </AppText>
+                          {Number(phase.surplus_kg) > 0 ? (
+                            <AppText variant="caption" color="muted">{t('feedPhaseSurplus', { surplus: phase.surplus_kg })}</AppText>
+                          ) : null}
                         </View>
                         <View style={styles.quantityRow}>
                           <IconButton
                             icon="remove"
                             accessibilityLabel={t('decreaseQuantity')}
                             variant="surface"
-                            disabled={quantity <= 1}
-                            onPress={() => handleQuantityChange(product.product_id, -1)}
+                            disabled={quantity <= 0}
+                            onPress={() => handleQuantityChange(key, -1)}
                           />
                           <AppText variant="bodyStrong" style={styles.quantity}>{quantity}</AppText>
                           <IconButton
                             icon="add"
                             accessibilityLabel={t('increaseQuantity')}
                             variant="surface"
-                            onPress={() => handleQuantityChange(product.product_id, 1)}
+                            onPress={() => handleQuantityChange(key, 1)}
                           />
                         </View>
                       </View>
                     </View>
                   );
                 })}
-                <Button
-                  label={t('feedPhaseOrderBtn')}
-                  iconLeft="cart-outline"
-                  onPress={() => addPhaseToCart(phase)}
-                  style={styles.phaseButton}
-                />
+                {phase.products.length ? (
+                  <Button
+                    label={t('feedPhaseOrderBtn')}
+                    iconLeft="cart-outline"
+                    onPress={() => addPhaseToCart(phase)}
+                    style={styles.phaseButton}
+                  />
+                ) : null}
               </Card>
             ))}
           </ScrollView>
@@ -214,6 +274,7 @@ export default function CycleFeedPhasesScreen({ navigation, route }: Props) {
               label={`${t('feedPhaseOrderAllBtn')} · ${totalBags} ${t('bags')}`}
               iconLeft="cart"
               onPress={handleOrderAll}
+              disabled={totalBags <= 0}
             />
           </View>
         </>

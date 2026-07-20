@@ -43,6 +43,11 @@ export interface ProductFilters {
 export interface CartItem {
   product: Product;
   quantity: number;
+  recommendation_breakdown?: Array<{
+    phase_name: string;
+    pellet_size_mm: string;
+    suggested_bags: number;
+  }>;
 }
 
 export type DeliveryMethod = 'home' | 'pickup';

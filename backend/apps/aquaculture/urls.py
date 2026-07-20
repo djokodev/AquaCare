@@ -12,6 +12,7 @@ from .views import (
     CycleLogViewSet,
     CycleUnitAllocationViewSet,
     DashboardView,
+    FarmFeedReferenceViewSet,
     FeedingPlanViewSet,
     NutritionalGuideViewSet,
     ProductionCycleViewSet,
@@ -30,6 +31,7 @@ router = DefaultRouter()
 router.register(r'cycles', ProductionCycleViewSet, basename='production-cycle')
 router.register(r'cycle-logs', CycleLogViewSet, basename='cycle-log')
 router.register(r'feeding-plans', FeedingPlanViewSet, basename='feeding-plan')
+router.register(r'feed-references', FarmFeedReferenceViewSet, basename='feed-reference')
 router.register(r'sanitary-logs', SanitaryLogViewSet, basename='sanitary-log')
 router.register(r'nutritional-guides', NutritionalGuideViewSet, basename='nutritional-guide')
 router.register(r'production-units', ProductionUnitViewSet, basename='production-unit')

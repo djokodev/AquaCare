@@ -21,6 +21,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from typing import Any, cast
 
+from commerce.models import Product
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db.models import Sum
 from django.utils import timezone
@@ -68,6 +69,7 @@ from .models import (
     CycleLog,
     CycleMetrics,
     CycleUnitAllocation,
+    FarmFeedReference,
     FeedingPlan,
     FinalHarvestOperation,
     NutritionalGuide,
@@ -935,7 +937,7 @@ class CycleLogSerializer(serializers.ModelSerializer):
             'log_date', 'log_time',
             'mortality_count', 'mortality_reason', 'sample_count',
             'sample_total_weight', 'average_weight', 'calculated_average_weight',
-            'feed_quantity', 'feed_type', 'feed_size_mm', 'feeding_times',
+            'feed_quantity', 'feed_type', 'feed_size_mm', 'feed_reference', 'feeding_times',
             'water_temperature', 'dissolved_oxygen', 'ph_level', 'ammonia_level',
             'observations', 'created_offline', 'synced_at', 'created_at'
         ]
@@ -994,6 +996,23 @@ class CycleLogSerializer(serializers.ModelSerializer):
         log_date = attrs.get('log_date')
         request = self.context.get('request')
         request_user = getattr(request, 'user', None)
+
+        effective_cycle = cycle or getattr(self.instance, 'cycle', None)
+        feed_quantity = attrs.get('feed_quantity', getattr(self.instance, 'feed_quantity', None))
+        feed_reference = attrs.get('feed_reference', getattr(self.instance, 'feed_reference', None))
+        if feed_quantity is not None and feed_quantity > 0:
+            if feed_reference is None:
+                raise serializers.ValidationError({'feed_reference': _('Sélectionnez l’aliment distribué.')})
+            if effective_cycle and feed_reference.farm_profile_id != effective_cycle.farm_profile_id:
+                raise serializers.ValidationError({'feed_reference': _('Cet aliment appartient à une autre ferme.')})
+            if effective_cycle and feed_reference.species != effective_cycle.species:
+                raise serializers.ValidationError(
+                    {'feed_reference': _('Cet aliment ne correspond pas à l’espèce du cycle.')}
+                )
+            attrs['feed_type'] = feed_reference.name
+            attrs['feed_size_mm'] = feed_reference.pellet_size_mm
+        elif feed_quantity in (None, 0):
+            attrs['feed_reference'] = None
 
         # Validate log date within cycle period (shared domain validator)
         if cycle and log_date:
@@ -1821,16 +1840,131 @@ class CycleStoreSummarySerializer(serializers.Serializer):
     secured_feed_kg = serializers.CharField()
     feed_to_secure_kg = serializers.CharField()
     stock_tracking_started_at = serializers.DateField(required=False, allow_null=True)
+    unclassified_stock_kg = serializers.CharField()
 
 
 class CycleStoreStockItemSerializer(serializers.Serializer):
     """Stock disponible regroupé par aliment et granulométrie."""
 
+    feed_reference_id = serializers.UUIDField(required=False, allow_null=True)
+    source = serializers.CharField(required=False, allow_null=True)
+    species = serializers.CharField(required=False, allow_null=True)
     label = serializers.CharField()
     feed_size_mm = serializers.CharField(required=False, allow_null=True)
     quantity_added_kg = serializers.CharField()
     quantity_consumed_kg = serializers.CharField()
     quantity_available_kg = serializers.CharField()
+
+
+class CycleStoreUnclassifiedEntrySerializer(serializers.Serializer):
+    """Ancienne entrée de stock nécessitant une classification humaine."""
+
+    id = serializers.UUIDField()
+    label = serializers.CharField()
+    quantity_kg = serializers.CharField()
+
+
+class CycleFeedRecommendationProductSerializer(serializers.Serializer):
+    """Produit Commerce exact proposé pour le déficit d'une phase."""
+
+    product_id = serializers.UUIDField()
+    product_name = serializers.CharField()
+    package_weight_kg = serializers.FloatField()
+    quantity_bags = serializers.IntegerField()
+    total_kg = serializers.FloatField()
+    unit_price = serializers.FloatField()
+    total_price = serializers.FloatField()
+    brand = serializers.CharField()
+    species = serializers.CharField()
+    pellet_size_mm = serializers.FloatField()
+
+
+class CycleFeedRecommendationPhaseSerializer(serializers.Serializer):
+    """Couverture et déficit calculés pour une phase future."""
+
+    phase_name = serializers.CharField()
+    days_range = serializers.ListField(child=serializers.IntegerField())
+    weight_range_g = serializers.ListField(child=serializers.FloatField())
+    pellet_size_mm = serializers.FloatField()
+    duration_days = serializers.IntegerField()
+    remaining_need_kg = serializers.CharField()
+    consumed_kg = serializers.CharField()
+    allocated_stock_kg = serializers.CharField()
+    allocated_pending_kg = serializers.CharField()
+    shortfall_kg = serializers.CharField()
+    surplus_kg = serializers.CharField()
+    products = CycleFeedRecommendationProductSerializer(many=True)
+    total_bags = serializers.IntegerField()
+    total_price = serializers.FloatField()
+    product_available = serializers.BooleanField()
+
+
+class CycleFeedRecommendationSummarySerializer(serializers.Serializer):
+    """Totaux du recalcul alimentaire courant."""
+
+    planned_total_feed_kg = serializers.CharField(required=False)
+    estimated_remaining_need_kg = serializers.CharField(required=False)
+    compatible_stock_kg = serializers.CharField(required=False)
+    pending_order_kg = serializers.CharField(required=False)
+    feed_to_order_kg = serializers.CharField(required=False)
+    unclassified_stock_kg = serializers.CharField(required=False)
+
+
+class CycleFeedRecommendationSerializer(serializers.Serializer):
+    """Contrat public de recommandation alimentaire par phase."""
+
+    cycle_id = serializers.UUIDField()
+    status = serializers.ChoiceField(choices=['available', 'incomplete', 'unavailable'])
+    source = serializers.CharField()
+    calculated_at = serializers.DateTimeField()
+    summary = CycleFeedRecommendationSummarySerializer()
+    feeding_phases = CycleFeedRecommendationPhaseSerializer(many=True)
+    warnings = serializers.ListField(child=serializers.CharField())
+
+
+class FarmFeedReferenceSerializer(serializers.ModelSerializer):
+    catalog_product_id = serializers.UUIDField(source='catalog_product.id', read_only=True, allow_null=True)
+
+    class Meta:
+        model = FarmFeedReference
+        fields = [
+            'id', 'client_uuid', 'farm_profile', 'source', 'catalog_product_id', 'name',
+            'species', 'pellet_size_mm', 'brand', 'protein_percentage', 'lipid_percentage',
+            'package_weight_kg', 'created_offline', 'synced_at', 'created_at', 'updated_at',
+        ]
+        read_only_fields = [
+            'id', 'client_uuid', 'farm_profile', 'source', 'catalog_product_id',
+            'synced_at', 'created_at', 'updated_at',
+        ]
+
+
+class FarmFeedReferenceCreateSerializer(serializers.Serializer):
+    farm_profile = serializers.UUIDField()
+    source = serializers.ChoiceField(choices=FarmFeedReference.SOURCE_CHOICES)
+    catalog_product = serializers.PrimaryKeyRelatedField(
+        queryset=Product.objects.all(),
+        required=False,
+        allow_null=True,
+    )
+    name = serializers.CharField(max_length=200, required=False, allow_blank=True)
+    species = serializers.ChoiceField(choices=SPECIES_CHOICES, required=False)
+    pellet_size_mm = serializers.DecimalField(
+        max_digits=4, decimal_places=2, min_value=Decimal('0.1'), max_value=Decimal('20'), required=False,
+    )
+    brand = serializers.CharField(max_length=100, required=False, allow_blank=True)
+    protein_percentage = serializers.DecimalField(
+        max_digits=5, decimal_places=2, min_value=Decimal('0'), max_value=Decimal('100'),
+        required=False, allow_null=True,
+    )
+    lipid_percentage = serializers.DecimalField(
+        max_digits=5, decimal_places=2, min_value=Decimal('0'), max_value=Decimal('100'),
+        required=False, allow_null=True,
+    )
+    package_weight_kg = serializers.DecimalField(
+        max_digits=8, decimal_places=2, min_value=Decimal('0.01'), required=False, allow_null=True,
+    )
+    client_uuid = serializers.UUIDField(required=False, allow_null=True)
+    created_offline = serializers.BooleanField(required=False, default=False)
 
 
 class CycleStoreSerializer(serializers.Serializer):
@@ -1842,17 +1976,39 @@ class CycleStoreSerializer(serializers.Serializer):
     stock_items = CycleStoreStockItemSerializer(many=True)
     pending_orders = CycleStorePendingOrderSerializer(many=True)
     stock_tracking_started_at = serializers.DateField(required=False, allow_null=True)
+    unclassified_entries = CycleStoreUnclassifiedEntrySerializer(many=True, required=False)
 
 
 class CycleStoreManualStockSerializer(serializers.Serializer):
     """Sérialiseur de création manuelle du stock du Magasin."""
 
-    label = serializers.CharField(max_length=200)
+    class ExternalFeedSerializer(serializers.Serializer):
+        name = serializers.CharField(max_length=200)
+        species = serializers.ChoiceField(choices=SPECIES_CHOICES)
+        pellet_size_mm = serializers.DecimalField(
+            max_digits=4, decimal_places=2, min_value=Decimal('0.1'), max_value=Decimal('20'),
+        )
+        brand = serializers.CharField(max_length=100, required=False, allow_blank=True)
+        protein_percentage = serializers.DecimalField(
+            max_digits=5, decimal_places=2, min_value=Decimal('0'), max_value=Decimal('100'),
+            required=False, allow_null=True,
+        )
+        lipid_percentage = serializers.DecimalField(
+            max_digits=5, decimal_places=2, min_value=Decimal('0'), max_value=Decimal('100'),
+            required=False, allow_null=True,
+        )
+        package_weight_kg = serializers.DecimalField(
+            max_digits=8, decimal_places=2, min_value=Decimal('0.01'), required=False, allow_null=True,
+        )
+        client_uuid = serializers.UUIDField(required=False, allow_null=True)
+        created_offline = serializers.BooleanField(required=False, default=False)
+
+    feed_reference_id = serializers.UUIDField(required=False, allow_null=True)
+    external_feed = ExternalFeedSerializer(required=False, allow_null=True)
+    label = serializers.CharField(max_length=200, required=False, allow_blank=True, write_only=True)
     feed_size_mm = serializers.DecimalField(
-        max_digits=4,
-        decimal_places=2,
-        min_value=Decimal('0.1'),
-        max_value=Decimal('20'),
+        max_digits=4, decimal_places=2, min_value=Decimal('0.1'), max_value=Decimal('20'),
+        required=False, allow_null=True, write_only=True,
     )
     quantity_kg = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=Decimal('0.01'))
     total_cost_fcfa = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=Decimal('0'))
@@ -1860,6 +2016,22 @@ class CycleStoreManualStockSerializer(serializers.Serializer):
     note = serializers.CharField(required=False, allow_blank=True, allow_null=True, default='')
     client_uuid = serializers.UUIDField(required=False, allow_null=True)
     created_offline = serializers.BooleanField(required=False, default=False)
+
+    def validate(self, attrs):
+        legacy_external = bool(attrs.get('label')) and attrs.get('feed_size_mm') is not None
+        supplied_modes = sum(bool(value) for value in (
+            attrs.get('feed_reference_id'), attrs.get('external_feed'), legacy_external,
+        ))
+        if supplied_modes != 1:
+            raise serializers.ValidationError(
+                _('Fournissez soit une référence aliment, soit un nouvel aliment externe.')
+            )
+        return attrs
+
+
+class CycleStoreClassificationSerializer(serializers.Serializer):
+    entry_id = serializers.UUIDField()
+    feed_reference_id = serializers.UUIDField()
 
 
 class DashboardQuerySerializer(serializers.Serializer):
@@ -2170,3 +2342,6 @@ class SyncValidationErrorResponseSerializer(serializers.Serializer):
 
     status = serializers.CharField()
     errors = serializers.ListField()
+    feed_reference_id = serializers.UUIDField(required=False, allow_null=True)
+    source = serializers.CharField(required=False, allow_null=True)
+    species = serializers.CharField(required=False, allow_null=True)

@@ -15,7 +15,7 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from ..domain.exceptions import FeedStockValidationError
-from ..models import CycleFeedStockEntry, CycleLog, ProductionCycle
+from ..models import CycleFeedStockEntry, CycleLog, FarmFeedReference, ProductionCycle
 from .base import BaseService
 
 logger = logging.getLogger(__name__)
@@ -51,9 +51,13 @@ class CycleStoreSummary(TypedDict):
     secured_feed_kg: str
     feed_to_secure_kg: str
     stock_tracking_started_at: date | None
+    unclassified_stock_kg: str
 
 
 class CycleStoreStockItem(TypedDict):
+    feed_reference_id: str | None
+    source: str | None
+    species: str | None
     label: str
     feed_size_mm: str | None
     quantity_added_kg: str
@@ -68,6 +72,7 @@ class CycleStorePayload(TypedDict):
     stock_items: list[CycleStoreStockItem]
     pending_orders: list[CycleStorePendingOrder]
     stock_tracking_started_at: date | None
+    unclassified_entries: list[dict[str, str]]
 
 
 class CycleStoreService(BaseService):
@@ -190,13 +195,20 @@ class CycleStoreService(BaseService):
         entries: list[CycleFeedStockEntry],
         stock_tracking_started_at: date | None,
     ) -> list[CycleStoreStockItem]:
-        grouped: dict[tuple[str, Decimal | None], dict[str, Any]] = {}
+        grouped: dict[Any, dict[str, Any]] = {}
         for entry in entries:
             size = CycleStoreService._entry_feed_size(entry)
-            identity = CycleStoreService._feed_identity(entry.label, size)
+            identity = (
+                ('reference', entry.feed_reference_id)
+                if entry.feed_reference_id
+                else ('legacy', *CycleStoreService._feed_identity(entry.label, size))
+            )
             item = grouped.setdefault(
                 identity,
                 {
+                    'feed_reference_id': str(entry.feed_reference_id) if entry.feed_reference_id else None,
+                    'source': entry.feed_reference.source if entry.feed_reference_id else None,
+                    'species': entry.feed_reference.species if entry.feed_reference_id else None,
                     'label': entry.label.strip(),
                     'feed_size_mm': size,
                     'quantity_added_kg': ZERO_DECIMAL,
@@ -210,8 +222,12 @@ class CycleStoreService(BaseService):
                 cycle,
                 stock_tracking_started_at,
             ).exclude(feed_quantity__isnull=True)
-            for log in logs.only('feed_quantity', 'feed_type', 'feed_size_mm'):
-                identity = CycleStoreService._feed_identity(log.feed_type, log.feed_size_mm)
+            for log in logs.only('feed_quantity', 'feed_type', 'feed_size_mm', 'feed_reference_id'):
+                identity = (
+                    ('reference', log.feed_reference_id)
+                    if log.feed_reference_id
+                    else ('legacy', *CycleStoreService._feed_identity(log.feed_type, log.feed_size_mm))
+                )
                 if identity in grouped:
                     grouped[identity]['quantity_consumed_kg'] += CycleStoreService._to_decimal(
                         log.feed_quantity
@@ -224,6 +240,9 @@ class CycleStoreService(BaseService):
                 ZERO_DECIMAL,
             )
             result.append({
+                'feed_reference_id': item['feed_reference_id'],
+                'source': item['source'],
+                'species': item['species'],
                 'label': item['label'],
                 'feed_size_mm': (
                     str(CycleStoreService._quantize(item['feed_size_mm']))
@@ -269,8 +288,10 @@ class CycleStoreService(BaseService):
         entries = list(cycle.feed_stock_entries.for_api().order_by('entry_date', 'created_at'))
         pending_orders = list(
             Order.objects.with_details()
-            .filter(production_cycle=cycle)
-            .exclude(status='received')
+            .filter(
+                production_cycle=cycle,
+                status__in=['confirmed', 'ready_for_pickup', 'delivered'],
+            )
             .order_by('-created_at')
         )
 
@@ -282,8 +303,8 @@ class CycleStoreService(BaseService):
         received_order_feed_kg = sum((entry.quantity_kg for entry in received_entries), ZERO_DECIMAL)
         total_feed_added_kg = manual_feed_kg + received_order_feed_kg
         feed_expenses_fcfa = sum((entry.total_cost_fcfa for entry in entries), ZERO_DECIMAL)
-        feed_consumed_kg = CycleStoreService._calculate_feed_consumed_kg(cycle, stock_tracking_started_at)
-        estimated_feed_remaining_kg = total_feed_added_kg - feed_consumed_kg
+        stock_feed_consumed_kg = CycleStoreService._calculate_feed_consumed_kg(cycle, stock_tracking_started_at)
+        estimated_feed_remaining_kg = total_feed_added_kg - stock_feed_consumed_kg
 
         pending_order_amount_fcfa = sum((order.total for order in pending_orders), ZERO_DECIMAL)
         pending_order_feed_kg = sum(
@@ -310,6 +331,24 @@ class CycleStoreService(BaseService):
             entries=entries,
             stock_tracking_started_at=stock_tracking_started_at,
         )
+        from .cycle_feed_recommendation_service import CycleFeedRecommendationService
+
+        recommendation = CycleFeedRecommendationService.build(cycle)
+        recommendation_summary = recommendation.get('summary') or {}
+        if recommendation_summary:
+            total_feed_needed_kg = CycleStoreService._to_decimal(
+                recommendation_summary['planned_total_feed_kg']
+            )
+            feed_need_remaining_kg = CycleStoreService._to_decimal(
+                recommendation_summary['estimated_remaining_need_kg']
+            )
+            secured_feed_kg = (
+                CycleStoreService._to_decimal(recommendation_summary['compatible_stock_kg'])
+                + CycleStoreService._to_decimal(recommendation_summary['pending_order_kg'])
+            )
+            feed_to_secure_kg = CycleStoreService._to_decimal(recommendation_summary['feed_to_order_kg'])
+        unclassified_entries = [entry for entry in entries if entry.feed_reference_id is None]
+        unclassified_stock_kg = sum((entry.quantity_kg for entry in unclassified_entries), ZERO_DECIMAL)
 
         pending_orders_count = len(pending_orders)
         if not entries:
@@ -327,7 +366,7 @@ class CycleStoreService(BaseService):
                 'manual_feed_kg': str(CycleStoreService._quantize(manual_feed_kg)),
                 'received_order_feed_kg': str(CycleStoreService._quantize(received_order_feed_kg)),
                 'total_feed_added_kg': str(CycleStoreService._quantize(total_feed_added_kg)),
-                'feed_consumed_kg': str(CycleStoreService._quantize(feed_consumed_kg)),
+                'feed_consumed_kg': str(CycleStoreService._quantize(total_cycle_feed_consumed_kg)),
                 'estimated_feed_remaining_kg': str(CycleStoreService._quantize(estimated_feed_remaining_kg)),
                 'feed_expenses_fcfa': str(CycleStoreService._quantize(feed_expenses_fcfa)),
                 'pending_orders_count': pending_orders_count,
@@ -338,11 +377,20 @@ class CycleStoreService(BaseService):
                 'secured_feed_kg': str(CycleStoreService._quantize(secured_feed_kg)),
                 'feed_to_secure_kg': str(CycleStoreService._quantize(feed_to_secure_kg)),
                 'stock_tracking_started_at': stock_tracking_started_at,
+                'unclassified_stock_kg': str(CycleStoreService._quantize(unclassified_stock_kg)),
             },
             'status': status,
             'stock_items': stock_items,
             'pending_orders': [CycleStoreService._format_pending_order(order) for order in pending_orders],
             'stock_tracking_started_at': stock_tracking_started_at,
+            'unclassified_entries': [
+                {
+                    'id': str(entry.id),
+                    'label': entry.label,
+                    'quantity_kg': str(CycleStoreService._quantize(entry.quantity_kg)),
+                }
+                for entry in unclassified_entries
+            ],
         }
 
     @staticmethod
@@ -440,9 +488,8 @@ class CycleStoreService(BaseService):
         *,
         user: User,
         cycle: ProductionCycle,
-        label: str,
+        feed_reference: FarmFeedReference,
         quantity_kg: Decimal,
-        feed_size_mm: Decimal,
         total_cost_fcfa: Decimal,
         entry_date,
         note: str = '',
@@ -456,10 +503,10 @@ class CycleStoreService(BaseService):
             raise ValueError(_("La quantité doit être strictement positive."))
         if total_cost_fcfa < ZERO_DECIMAL:
             raise ValueError(_("Le montant doit être positif ou nul."))
-        if not label or not label.strip():
-            raise ValueError(_("Le nom de l'aliment est requis."))
-        if feed_size_mm < Decimal('0.1') or feed_size_mm > Decimal('20'):
-            raise ValueError(_("La granulométrie doit être comprise entre 0,1 et 20 mm."))
+        if feed_reference.farm_profile_id != cycle.farm_profile_id:
+            raise PermissionError(_('Cet aliment appartient à une autre ferme.'))
+        if feed_reference.species != cycle.species:
+            raise ValueError(_('Cet aliment ne correspond pas à l’espèce du cycle.'))
 
         cycle = ProductionCycle.objects.select_for_update().get(id=cycle.id)
         existing_entry = None
@@ -477,13 +524,15 @@ class CycleStoreService(BaseService):
 
         entry = CycleFeedStockEntry.objects.create(
             cycle=cycle,
+            feed_reference=feed_reference,
             source=CycleFeedStockEntry.SOURCE_MANUAL,
-            label=label.strip(),
-            feed_size_mm=CycleStoreService._normalize_feed_size(feed_size_mm),
+            label=feed_reference.name,
+            feed_size_mm=feed_reference.pellet_size_mm,
             quantity_kg=CycleStoreService._to_decimal(quantity_kg),
             total_cost_fcfa=CycleStoreService._to_decimal(total_cost_fcfa),
             entry_date=entry_date,
             note=note.strip(),
+            product=feed_reference.catalog_product,
             client_uuid=client_uuid,
             created_offline=created_offline,
             synced_at=None if created_offline else timezone.now(),
@@ -500,6 +549,25 @@ class CycleStoreService(BaseService):
 
     @staticmethod
     @transaction.atomic
+    def classify_legacy_stock(*, user: User, cycle: ProductionCycle, entry_id, feed_reference) -> CycleFeedStockEntry:
+        """Associe explicitement une ancienne entrée ambiguë à un aliment connu."""
+        CycleStoreService._ensure_cycle_owner(cycle, user)
+        entry = CycleFeedStockEntry.objects.select_for_update().filter(pk=entry_id, cycle=cycle).first()
+        if entry is None:
+            raise ValueError(_('Entrée de stock introuvable.'))
+        if entry.feed_reference_id is not None:
+            raise ValueError(_('Cette entrée de stock est déjà classifiée.'))
+        if feed_reference.farm_profile_id != cycle.farm_profile_id or feed_reference.species != cycle.species:
+            raise ValueError(_('Cet aliment n’est pas compatible avec le cycle.'))
+        entry.feed_reference = feed_reference
+        entry.label = feed_reference.name
+        entry.feed_size_mm = feed_reference.pellet_size_mm
+        entry.product = feed_reference.catalog_product
+        entry.save(update_fields=['feed_reference', 'label', 'feed_size_mm', 'product', 'updated_at'])
+        return entry
+
+    @staticmethod
+    @transaction.atomic
     def import_received_order(order: Order) -> list[CycleFeedStockEntry]:
         """Importe automatiquement les aliments d'une commande reçue."""
         if order.production_cycle_id is None:
@@ -509,7 +577,7 @@ class CycleStoreService(BaseService):
 
         cycle = ProductionCycle.objects.select_for_update().get(id=order.production_cycle_id)
         if order.farm_profile_id != cycle.farm_profile_id:
-            raise PermissionError("La commande ne correspond pas au cycle indiqué.")
+            raise PermissionError(_("La commande ne correspond pas au cycle indiqué."))
 
         created_entries: list[CycleFeedStockEntry] = []
         order_items = order.items.select_related('product').all()
@@ -528,8 +596,21 @@ class CycleStoreService(BaseService):
             if existing_entry:
                 continue
 
+            from .feed_reference_service import FeedReferenceService
+
+            feed_reference = FeedReferenceService.create(
+                user=order.user,
+                farm_profile=cycle.farm_profile,
+                data={
+                    'source': FarmFeedReference.SOURCE_CATALOG,
+                    'catalog_product': order_item.product,
+                    'created_offline': False,
+                },
+            )
+
             entry = CycleFeedStockEntry.objects.create(
                 cycle=cycle,
+                feed_reference=feed_reference,
                 source=CycleFeedStockEntry.SOURCE_ORDER,
                 label=order_item.product_name or order_item.product.name,
                 feed_size_mm=(

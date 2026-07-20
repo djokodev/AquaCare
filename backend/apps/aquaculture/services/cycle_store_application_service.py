@@ -6,19 +6,25 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any
 
+from django.db import transaction
+from django.utils.translation import gettext_lazy as _
+
 from ..models import CycleFeedStockEntry, ProductionCycle
 from .cycle_store_service import CycleStorePayload, CycleStoreService
+from .feed_reference_service import FeedReferenceService
 
 
 @dataclass(frozen=True)
 class DeclareManualStockCommand:
     """Commande applicative de déclaration manuelle de stock."""
 
-    label: str
     quantity_kg: Decimal
-    feed_size_mm: Decimal
     total_cost_fcfa: Decimal
     entry_date: Any
+    feed_reference_id: Any = None
+    external_feed: dict[str, Any] | None = None
+    label: str = ''
+    feed_size_mm: Decimal | None = None
     note: str = ''
     client_uuid: Any = None
     created_offline: bool = False
@@ -33,6 +39,7 @@ class CycleStoreApplicationService:
         return CycleStoreService.get_store_payload(cycle)
 
     @staticmethod
+    @transaction.atomic
     def declare_manual_stock(
         *,
         user,
@@ -40,12 +47,31 @@ class CycleStoreApplicationService:
         command: DeclareManualStockCommand,
     ) -> CycleFeedStockEntry:
         """Enregistre une déclaration manuelle de stock."""
+        if command.feed_reference_id:
+            feed_reference = FeedReferenceService.get_owned(
+                user=user,
+                reference_id=command.feed_reference_id,
+            )
+        elif command.external_feed or (command.label and command.feed_size_mm is not None):
+            feed_reference = FeedReferenceService.create(
+                user=user,
+                farm_profile=cycle.farm_profile,
+                data={
+                    **(command.external_feed or {
+                        'name': command.label,
+                        'species': cycle.species,
+                        'pellet_size_mm': command.feed_size_mm,
+                    }),
+                    'source': 'external',
+                },
+            )
+        else:
+            raise ValueError(_('Une référence aliment est requise.'))
         return CycleStoreService.declare_manual_stock(
             user=user,
             cycle=cycle,
-            label=command.label,
+            feed_reference=feed_reference,
             quantity_kg=command.quantity_kg,
-            feed_size_mm=command.feed_size_mm,
             total_cost_fcfa=command.total_cost_fcfa,
             entry_date=command.entry_date,
             note=command.note,
@@ -57,3 +83,13 @@ class CycleStoreApplicationService:
     def import_received_order(order) -> list[CycleFeedStockEntry]:
         """Importe automatiquement les items alimentaires d'une commande reçue."""
         return CycleStoreService.import_received_order(order)
+
+    @staticmethod
+    def classify_legacy_stock(*, user, cycle, entry_id, feed_reference_id):
+        feed_reference = FeedReferenceService.get_owned(user=user, reference_id=feed_reference_id)
+        return CycleStoreService.classify_legacy_stock(
+            user=user,
+            cycle=cycle,
+            entry_id=entry_id,
+            feed_reference=feed_reference,
+        )

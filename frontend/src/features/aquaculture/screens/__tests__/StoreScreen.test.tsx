@@ -202,8 +202,11 @@ describe('StoreScreen', () => {
       expect(mockDeclareCycleStoreManualStock).toHaveBeenCalledWith(
         'cycle-1',
         expect.objectContaining({
-          label: 'Aliment starter 20kg',
-          feed_size_mm: '2.5',
+          external_feed: expect.objectContaining({
+            name: 'Aliment starter 20kg',
+            pellet_size_mm: '2.5',
+            species: 'tilapia',
+          }),
           quantity_kg: '75.5',
           total_cost_fcfa: '90000.5',
           entry_date: '2026-06-29',

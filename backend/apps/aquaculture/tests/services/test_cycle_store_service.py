@@ -462,6 +462,8 @@ class TestCycleStoreService:
 
         payload = CycleStoreApplicationService.get_store(cycle)
 
-        assert payload['summary']['feed_consumed_kg'] == '5.00'
+        # L'indicateur affiche toute la consommation du cycle, tandis que le
+        # stock physique ne déduit que les rations postérieures à son suivi.
+        assert payload['summary']['feed_consumed_kg'] == '75.00'
         assert payload['summary']['estimated_feed_remaining_kg'] == '20.00'
         assert payload['stock_tracking_started_at'] == timezone.localdate() - timedelta(days=1)

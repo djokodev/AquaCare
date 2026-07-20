@@ -18,9 +18,8 @@ from datetime import date
 from typing import Any, TypedDict
 
 from aquaculture.constants import DEFAULT_EXPECTED_SURVIVAL_RATE_PCT
-from aquaculture.models import FeedingPlan, ProductionCycle
+from aquaculture.models import ProductionCycle
 from commerce.models import OrderItem
-from django.db.models import Sum
 
 BAG_WEIGHT_KG = 25  # Poids standard d'un sac DIBAQ (kg)
 DAYS_PER_WEEK = 7
@@ -125,23 +124,9 @@ class CycleFeedService:
         La view ne porte aucune règle métier : les paramètres par défaut et
         l'appel commerce restent centralisés ici.
         """
-        if not cycle.initial_count or not cycle.target_harvest_weight_g:
-            return {"feeding_phases": []}
+        from .cycle_feed_recommendation_service import CycleFeedRecommendationService  # noqa: PLC0415
 
-        from commerce.services.cycle_simulation_service import CycleSimulationService  # noqa: PLC0415
-
-        survival_rate = float(cycle.expected_survival_rate_pct or DEFAULT_EXPECTED_SURVIVAL_RATE_PCT) / 100
-        sim = CycleSimulationService.simulate_cycle(
-            species=cycle.species,
-            initial_fish_count=cycle.initial_count,
-            target_weight_g=float(cycle.target_harvest_weight_g),
-            cycle_duration_days=cycle.planned_cycle_duration_days or 180,
-            survival_rate=survival_rate,
-            selling_price_per_kg_fcfa=float(cycle.planned_selling_price_per_kg_fcfa or 2800),
-            fingerlings_cost_fcfa=float(cycle.fingerlings_cost_fcfa or 0),
-            other_costs_fcfa=float(cycle.other_operational_costs_fcfa or 0),
-        )
-        return {"feeding_phases": sim["feeding_phases"]}
+        return CycleFeedRecommendationService.build(cycle)
 
     @staticmethod
     def compute_total_feed_needed_kg(cycle: ProductionCycle) -> float:
@@ -153,15 +138,10 @@ class CycleFeedService:
         2. Fallback sur planned_feed_bags × BAG_WEIGHT_KG (valeur issue de la simulation)
         3. Estimation depuis les paramètres du cycle (FCR conservateur 1.5)
         """
-        result = FeedingPlan.objects.filter(cycle=cycle).aggregate(total=Sum("daily_feed_amount"))
-        daily_total = float(result["total"] or 0)
-        if daily_total > 0:
-            return daily_total * DAYS_PER_WEEK
+        from .cycle_feed_recommendation_service import CycleFeedRecommendationService  # noqa: PLC0415
 
-        if cycle.planned_feed_bags:
-            return float(cycle.planned_feed_bags) * BAG_WEIGHT_KG
-
-        return CycleFeedService._estimate_feed_from_cycle_params(cycle)
+        plan = CycleFeedRecommendationService.ensure_plan(cycle)
+        return float(plan.total_feed_kg) if plan else 0.0
 
     @staticmethod
     def _estimate_feed_from_cycle_params(cycle: ProductionCycle) -> float:

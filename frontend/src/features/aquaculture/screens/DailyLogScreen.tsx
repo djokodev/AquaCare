@@ -41,6 +41,7 @@ interface DailyLogData {
   feed_quantity: string;
   feed_type: string;
   feed_size_mm: string;
+  feed_reference: string;
   dissolved_oxygen: string;
   water_temperature: string;
   ph_level: string;
@@ -75,6 +76,7 @@ const EMPTY_FORM: DailyLogData = {
   feed_quantity: '',
   feed_type: '',
   feed_size_mm: '',
+  feed_reference: '',
   dissolved_oxygen: '',
   water_temperature: '',
   ph_level: '',
@@ -176,6 +178,7 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
             feed_quantity: formatEditableNumber(todayLog.feed_quantity, useComma),
             feed_type: todayLog.feed_type ?? '',
             feed_size_mm: formatEditableNumber(todayLog.feed_size_mm, useComma),
+            feed_reference: todayLog.feed_reference ?? '',
             dissolved_oxygen: formatEditableNumber(todayLog.dissolved_oxygen, useComma),
             water_temperature: formatEditableNumber(todayLog.water_temperature, useComma),
             ph_level: formatEditableNumber(todayLog.ph_level, useComma),
@@ -201,11 +204,8 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
   }, [cycleId, unitAllocationId, useComma]);
 
   const selectedStockItem = useMemo(() => store?.stock_items?.find((item) => (
-    item.label.trim().toLocaleLowerCase() === formData.feed_type.trim().toLocaleLowerCase()
-      && (item.feed_size_mm === null
-        ? !formData.feed_size_mm.trim()
-        : Number(item.feed_size_mm) === Number(parseOptionalDecimal(formData.feed_size_mm)))
-  )) ?? null, [formData.feed_size_mm, formData.feed_type, store?.stock_items]);
+    item.feed_reference_id !== null && item.feed_reference_id === formData.feed_reference
+  )) ?? null, [formData.feed_reference, formData.feed_size_mm, formData.feed_type, store?.stock_items]);
 
   const availableFeedKg = useMemo(() => {
     if (!selectedStockItem) {
@@ -313,6 +313,7 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
       feed_quantity: undefined,
       feed_type: undefined,
       feed_size_mm: undefined,
+      feed_reference: undefined,
       feed_stock_item: undefined,
       feeding_times: undefined,
     }));
@@ -323,6 +324,7 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
         feed_quantity: '',
         feed_type: '',
         feed_size_mm: '',
+        feed_reference: '',
       }));
       setFeedingTimes([]);
     }
@@ -349,6 +351,7 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
       feed_quantity: feedQuantity,
       feed_type: feedingStatus === 'fed' ? formData.feed_type.trim() : '',
       feed_size_mm: feedingStatus === 'fed' ? parseOptionalDecimal(formData.feed_size_mm) : null,
+      feed_reference: feedingStatus === 'fed' ? formData.feed_reference : null,
       feeding_times: feedingStatus === 'fed' ? feedingTimes : [],
       water_temperature: parseOptionalDecimal(formData.water_temperature),
       dissolved_oxygen: parseOptionalDecimal(formData.dissolved_oxygen),
@@ -539,9 +542,9 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
                   {t('feedStockItem')} <AppText variant="label" color="error">*</AppText>
                 </AppText>
                 <View style={{ gap: spacing[2], marginBottom: spacing[2] }}>
-                  {store?.stock_items?.filter((item) => Number(item.quantity_available_kg) > 0 || (
+                  {store?.stock_items?.filter((item) => item.feed_reference_id && (Number(item.quantity_available_kg) > 0 || (
                     (existingLog?.feed_type ?? '').trim().toLocaleLowerCase() === item.label.trim().toLocaleLowerCase()
-                  )).map((item) => {
+                  ))).map((item) => {
                     const selected = selectedStockItem === item;
                     const optionLabel = item.feed_size_mm
                       ? t('feedStockItemOption', {
@@ -565,6 +568,7 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
                             ...previous,
                             feed_type: item.label,
                             feed_size_mm: item.feed_size_mm ?? '',
+                            feed_reference: item.feed_reference_id ?? '',
                           }));
                         }}
                       />

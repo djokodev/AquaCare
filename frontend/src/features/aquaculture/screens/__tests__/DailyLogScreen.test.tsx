@@ -104,8 +104,12 @@ describe('features/aquaculture/screens/DailyLogScreen', () => {
       secured_feed_kg: '50.00',
       feed_to_secure_kg: '320.00',
       stock_tracking_started_at: '2026-01-01',
+      unclassified_stock_kg: '0.00',
     },
     stock_items: [{
+      feed_reference_id: 'feed-1',
+      source: 'external',
+      species: 'tilapia',
       label: 'Dibaq',
       feed_size_mm: '2.50',
       quantity_added_kg: '50.00',
@@ -114,6 +118,7 @@ describe('features/aquaculture/screens/DailyLogScreen', () => {
     }],
     pending_orders: [],
     stock_tracking_started_at: '2026-01-01',
+    unclassified_entries: [],
   };
 
   beforeEach(() => {

@@ -247,6 +247,15 @@ export default function CartScreen() {
               {product.pellet_size_mm}mm · {product.package_weight_kg}kg
               {product.protein_percentage ? ` · ${product.protein_percentage}% ${t('protein')}` : ''}
             </AppText>
+            {item.recommendation_breakdown?.length ? (
+              <AppText variant="caption" color="muted">
+                {t('feedRecommendationBreakdown', {
+                  phases: item.recommendation_breakdown
+                    .map((entry) => `${entry.phase_name}: ${entry.suggested_bags}`)
+                    .join(' · '),
+                })}
+              </AppText>
+            ) : null}
           </View>
           <IconButton icon="trash-outline" accessibilityLabel={`${t('remove')} ${product.name}`} variant="danger" onPress={() => handleRemoveItem(product.id, product.name)} />
         </View>

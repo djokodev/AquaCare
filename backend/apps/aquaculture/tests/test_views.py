@@ -12,9 +12,11 @@ from uuid import uuid4
 
 import pytest
 from aquaculture.models import (
+    CycleFeedPlan,
     CycleFeedStockEntry,
     CycleLog,
     CycleUnitAllocation,
+    FarmFeedReference,
     FeedingPlan,
     FinalHarvestOperation,
     NutritionalGuide,
@@ -1524,8 +1526,13 @@ class TestCycleLogViewSet:
 
     def test_create_cycle_log(self, auth_client, production_cycle):
         """Test création log quotidien."""
+        feed = FarmFeedReference.objects.create(
+            farm_profile=production_cycle.farm_profile, source='external', name='Dibaq 2mm',
+            species=production_cycle.species, pellet_size_mm=Decimal('2.50'),
+        )
         CycleFeedStockEntry.objects.create(
             cycle=production_cycle,
+            feed_reference=feed,
             source='manual',
             label='Dibaq 2mm',
             feed_size_mm=Decimal('2.50'),
@@ -1541,6 +1548,7 @@ class TestCycleLogViewSet:
             'feed_quantity': '2.5',
             'feed_type': 'Dibaq 2mm',
             'feed_size_mm': '2.5',
+            'feed_reference': str(feed.id),
             'water_temperature': '29.0',
             'ph_level': '7.1',
             'observations': 'Bon comportement général',
@@ -1581,6 +1589,13 @@ class TestCycleLogViewSet:
                 'log_date': date.today().isoformat(),
                 'mortality_count': 0,
                 'feed_quantity': '16.8',
+                'feed_reference': str(FarmFeedReference.objects.create(
+                    farm_profile=production_cycle.farm_profile,
+                    source='external',
+                    name='Aliment sans stock',
+                    species=production_cycle.species,
+                    pellet_size_mm=Decimal('2.00'),
+                ).id),
             },
             format='json',
         )
@@ -1605,8 +1620,13 @@ class TestCycleLogViewSet:
 
     def test_create_cycle_log_with_allocation(self, auth_client, production_cycle, farm_profile):
         """Test création log quotidien rattaché à une allocation."""
+        feed = FarmFeedReference.objects.create(
+            farm_profile=production_cycle.farm_profile, source='external', name='Stock test',
+            species=production_cycle.species, pellet_size_mm=Decimal('2.00'),
+        )
         CycleFeedStockEntry.objects.create(
             cycle=production_cycle,
+            feed_reference=feed,
             source='manual',
             label='Stock test',
             feed_size_mm=Decimal('2.00'),
@@ -1638,6 +1658,7 @@ class TestCycleLogViewSet:
             'feed_quantity': '2.5',
             'feed_type': 'Stock test',
             'feed_size_mm': '2.0',
+            'feed_reference': str(feed.id),
             'water_temperature': '29.0',
             'ph_level': '7.1',
             'observations': 'Bon comportement général',
@@ -1810,8 +1831,13 @@ class TestCycleLogViewSet:
 
     def test_create_cycle_log_with_environment_and_feeding_times(self, auth_client, production_cycle):
         """Le endpoint accepte les champs environnementaux et feeding_times."""
+        feed = FarmFeedReference.objects.create(
+            farm_profile=production_cycle.farm_profile, source='external', name='Dibaq 2mm',
+            species=production_cycle.species, pellet_size_mm=Decimal('2.50'),
+        )
         CycleFeedStockEntry.objects.create(
             cycle=production_cycle,
+            feed_reference=feed,
             source='manual',
             label='Dibaq 2mm',
             feed_size_mm=Decimal('2.50'),
@@ -1828,6 +1854,7 @@ class TestCycleLogViewSet:
             'feed_quantity': '3.2',
             'feed_type': 'Dibaq 2mm',
             'feed_size_mm': '2.5',
+            'feed_reference': str(feed.id),
             'feeding_times': ['08:00', '12:30', '16:00'],
             'water_temperature': '28.4',
             'dissolved_oxygen': '6.3',
@@ -1848,8 +1875,13 @@ class TestCycleLogViewSet:
         """Test création bulk de logs (synchronisation)."""
         import uuid
 
+        feed = FarmFeedReference.objects.create(
+            farm_profile=production_cycle.farm_profile, source='external', name='Stock test',
+            species=production_cycle.species, pellet_size_mm=Decimal('2.00'),
+        )
         CycleFeedStockEntry.objects.create(
             cycle=production_cycle,
+            feed_reference=feed,
             source='manual',
             label='Stock test',
             feed_size_mm=Decimal('2.00'),
@@ -1876,6 +1908,7 @@ class TestCycleLogViewSet:
                     'feed_quantity': '2.0',
                     'feed_type': 'Stock test',
                     'feed_size_mm': '2.0',
+                    'feed_reference': str(feed.id),
                     'created_offline': True,
                 },
             ]
@@ -3658,7 +3691,7 @@ class TestCycleFeedStatus:
         assert response.data['bags_remaining_to_order'] == 0
 
     def test_feed_status_with_feeding_plans(self, auth_client, production_cycle):
-        """Cycle avec FeedingPlan → total_bags_needed calculé correctement."""
+        """Le statut utilise le plan persistant complet, pas les semaines partielles."""
         from decimal import Decimal
 
         FeedingPlan.objects.filter(cycle=production_cycle).delete()
@@ -3683,6 +3716,12 @@ class TestCycleFeedStatus:
                 start_date=start + timedelta(weeks=week - 1),
                 end_date=start + timedelta(weeks=week) - timedelta(days=1),
             )
+        CycleFeedPlan.objects.create(
+            cycle=production_cycle,
+            parameters={'source': 'simulation'},
+            phases=[],
+            total_feed_kg=Decimal('70.00'),
+        )
 
         response = auth_client.get(self._url(production_cycle.id))
 
@@ -3719,6 +3758,12 @@ class TestCycleFeedStatus:
                 start_date=start + timedelta(weeks=week - 1),
                 end_date=start + timedelta(weeks=week) - timedelta(days=1),
             )
+        CycleFeedPlan.objects.create(
+            cycle=production_cycle,
+            parameters={'source': 'simulation'},
+            phases=[],
+            total_feed_kg=Decimal('140.00'),
+        )
 
         product = Product.objects.create(
             brand='dibaq',
