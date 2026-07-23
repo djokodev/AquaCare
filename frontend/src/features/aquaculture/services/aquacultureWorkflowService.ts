@@ -81,7 +81,10 @@ export const createCycleLogWithOfflineFallback = async (
     }
   }
   try {
-    const createdLog = await aquacultureService.createCycleLog(cycleId, logData);
+    const createdLog = await aquacultureService.createCycleLog(cycleId, {
+      ...logData,
+      created_offline: false,
+    });
     return { mode: 'online', data: createdLog };
   } catch (error: unknown) {
     if (isNetworkError(error)) {
@@ -100,7 +103,10 @@ export const declareManualStockWithOfflineFallback = async (
   let resolvedStockPayload = { ...stockPayload };
   if (feedReferencePayload) {
     try {
-      const reference = await aquacultureService.createFarmFeedReference(feedReferencePayload);
+      const reference = await aquacultureService.createFarmFeedReference({
+        ...feedReferencePayload,
+        created_offline: false,
+      });
       resolvedStockPayload = {
         ...resolvedStockPayload,
         feed_reference_id: reference.id,
@@ -118,7 +124,10 @@ export const declareManualStockWithOfflineFallback = async (
   }
 
   try {
-    const store = await aquacultureService.declareCycleStoreManualStock(cycleId, resolvedStockPayload);
+    const store = await aquacultureService.declareCycleStoreManualStock(cycleId, {
+      ...resolvedStockPayload,
+      created_offline: false,
+    });
     return { mode: 'online', data: store };
   } catch (error: unknown) {
     if (!isNetworkError(error)) throw error;

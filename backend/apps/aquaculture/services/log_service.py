@@ -26,6 +26,7 @@ from django.utils.translation import gettext_lazy as _
 from ..constants import SAMPLING_TOLERANCE
 from ..domain.exceptions import (
     BusinessRuleViolation,
+    CycleLogCycleImmutableError,
     CycleLogIdempotencyConflict,
     InsufficientFishCountError,
     InvalidDateRangeError,
@@ -538,11 +539,15 @@ class CycleLogService(BaseService):
 
         from aquaculture.domain.validators import validate_cycle_unit_allocation_context
 
-        cycle = update_data.get('cycle') or locked_cycle
-        cycle_unit_allocation = update_data.get('cycle_unit_allocation') or getattr(
-            log,
-            'cycle_unit_allocation',
-            None,
+        requested_cycle = update_data.get('cycle') if 'cycle' in update_data else locked_cycle
+        requested_cycle_id = getattr(requested_cycle, 'id', requested_cycle)
+        if str(requested_cycle_id) != str(locked_cycle.id):
+            raise CycleLogCycleImmutableError()
+        cycle = locked_cycle
+        cycle_unit_allocation = (
+            update_data['cycle_unit_allocation']
+            if 'cycle_unit_allocation' in update_data
+            else getattr(log, 'cycle_unit_allocation', None)
         )
         validate_cycle_unit_allocation_context(
             cycle=cycle,
@@ -550,26 +555,45 @@ class CycleLogService(BaseService):
             user=user,
         )
 
-        if {'feed_quantity', 'feed_reference'} & update_data.keys():
-            from .cycle_store_service import CycleStoreService
+        from .cycle_store_service import CycleStoreService
 
-            feed_reference = update_data.get('feed_reference', log.feed_reference)
-            feed_quantity = update_data.get('feed_quantity', log.feed_quantity)
-            CycleStoreService.validate_daily_feed_quantity(
-                cycle=cycle,
-                feed_quantity=feed_quantity,
-                log_date=update_data.get('log_date') or log.log_date,
-                cycle_unit_allocation=cycle_unit_allocation,
-                existing_log=log,
-                feed_reference=feed_reference,
+        # Reconstitue la valeur finale avant toute écriture. Toute modification
+        # qui peut changer la compatibilité du stock repasse par le même ledger.
+        feed_reference = update_data.get('feed_reference', log.feed_reference)
+        feed_quantity = update_data.get('feed_quantity', log.feed_quantity)
+        final_log_date = update_data.get('log_date', log.log_date)
+        if isinstance(final_log_date, str):
+            final_log_date = date.fromisoformat(final_log_date)
+        final_values = {
+            field: update_data.get(field, getattr(log, field))
+            for field in (
+                'log_date', 'mortality_count', 'sample_count', 'sample_total_weight',
+                'average_weight', 'feed_quantity', 'cycle_unit_allocation',
             )
-            if feed_reference is not None and Decimal(str(feed_quantity or 0)) > 0:
-                update_data['feed_type'] = feed_reference.name
-                update_data['feed_size_mm'] = feed_reference.pellet_size_mm
-            elif Decimal(str(feed_quantity or 0)) <= 0:
-                update_data['feed_reference'] = None
-                update_data['feed_type'] = ''
-                update_data['feed_size_mm'] = None
+        }
+        final_values['feed_reference'] = feed_reference
+        if feed_reference is not None and Decimal(str(feed_quantity or 0)) > 0:
+            update_data['feed_type'] = feed_reference.name
+            update_data['feed_size_mm'] = feed_reference.pellet_size_mm
+        elif Decimal(str(feed_quantity or 0)) <= 0:
+            update_data['feed_reference'] = None
+            update_data['feed_type'] = ''
+            update_data['feed_size_mm'] = None
+
+        CycleLogService._validate_log_business_rules(
+            cycle,
+            final_values,
+            user=user,
+            existing_log=log,
+        )
+        CycleStoreService.validate_daily_feed_quantity(
+            cycle=cycle,
+            feed_quantity=feed_quantity,
+            log_date=final_log_date,
+            cycle_unit_allocation=cycle_unit_allocation,
+            existing_log=log,
+            feed_reference=feed_reference,
+        )
 
         # Validation des nouvelles données si mortalité modifiée
         if 'mortality_count' in update_data:

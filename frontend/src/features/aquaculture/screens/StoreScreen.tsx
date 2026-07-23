@@ -56,6 +56,7 @@ import { useDashboardSyncStatus } from '@/hooks/useDashboardSyncStatus';
 import { dashboardSyncService } from '@/services/dashboardSyncService';
 import { offlineService } from '@/services/offlineService';
 import { declareManualStockWithOfflineFallback } from '@/features/aquaculture/services/aquacultureWorkflowService';
+import { projectOfflineStore } from '@/features/aquaculture/services/offlineStoreProjection';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'Store'>;
 
@@ -153,56 +154,10 @@ export default function StoreScreen() {
 
   const applyPendingStockProjection = useCallback(async (serverStore: CycleStore): Promise<CycleStore> => {
     if (!cycleId) return serverStore;
-    const [stockDeclarations, localReferences] = await Promise.all([
-      offlineService.getOfflineStockDeclarations(),
-      offlineService.getOfflineFeedReferences(),
-    ]);
-    const pending = stockDeclarations.filter((item) => item.cycleId === cycleId && !item.synced);
-    setPendingStockCount(pending.length);
-    if (pending.length === 0) return serverStore;
-
-    let pendingQuantity = 0;
-    let pendingCost = 0;
-    const pendingItems = pending.map((item) => {
-      const quantity = Number(item.payload.quantity_kg);
-      pendingQuantity += Number.isFinite(quantity) ? quantity : 0;
-      const cost = Number(item.payload.total_cost_fcfa);
-      pendingCost += Number.isFinite(cost) ? cost : 0;
-      const localReference = localReferences.find(
-        (reference) => reference.clientUuid === item.feedReferenceClientUuid,
-      );
-      return {
-        feed_reference_id: item.payload.feed_reference_id ?? null,
-        feed_reference_client_uuid: item.feedReferenceClientUuid ?? null,
-        source: localReference?.payload.source ?? null,
-        species: localReference?.payload.species ?? selectedCycle?.species ?? null,
-        label: localReference?.payload.name ?? t('storePendingStockLabel'),
-        feed_size_mm: localReference?.payload.pellet_size_mm ?? null,
-        quantity_added_kg: item.payload.quantity_kg,
-        quantity_consumed_kg: '0.00',
-        quantity_available_kg: item.payload.quantity_kg,
-        pending_sync: true,
-      } satisfies CycleStore['stock_items'][number];
-    });
-    const available = Number(serverStore.summary.estimated_feed_remaining_kg) + pendingQuantity;
-    const feedToSecure = serverStore.summary.feed_to_secure_kg === null
-      ? null
-      : Math.max(0, Number(serverStore.summary.feed_to_secure_kg) - pendingQuantity).toFixed(2);
-    return {
-      ...serverStore,
-      calculation_status: 'incomplete',
-      calculation_warnings: [...serverStore.calculation_warnings, 'offline_stock_pending'],
-      summary: {
-        ...serverStore.summary,
-        manual_feed_kg: (Number(serverStore.summary.manual_feed_kg) + pendingQuantity).toFixed(2),
-        total_feed_added_kg: (Number(serverStore.summary.total_feed_added_kg) + pendingQuantity).toFixed(2),
-        estimated_feed_remaining_kg: available.toFixed(2),
-        feed_expenses_fcfa: (Number(serverStore.summary.feed_expenses_fcfa) + pendingCost).toFixed(2),
-        feed_to_secure_kg: feedToSecure,
-      },
-      stock_items: [...serverStore.stock_items, ...pendingItems],
-    };
-  }, [cycleId, selectedCycle?.species, t]);
+    const projection = await projectOfflineStore(cycleId, serverStore, t('storePendingStockLabel'));
+    setPendingStockCount(projection.pendingStockCount);
+    return projection.store;
+  }, [cycleId, t]);
 
   const loadStore = useCallback(async (preserveVisibleStore = false): Promise<StoreLoadResult> => {
     const requestId = loadRequestRef.current + 1;
@@ -370,7 +325,7 @@ export default function StoreScreen() {
           source: 'aquacare_catalog' as const,
           catalog_product: selectedProductId,
           client_uuid: feedReferenceClientUuid,
-          created_offline: true,
+          created_offline: false,
         }
           : parsedFeedSize.kind === 'valid'
             ? {
@@ -380,7 +335,7 @@ export default function StoreScreen() {
               species: selectedCycle.species,
               pellet_size_mm: String(parsedFeedSize.value),
               client_uuid: feedReferenceClientUuid,
-              created_offline: true,
+              created_offline: false,
             }
             : undefined
         : undefined;
@@ -569,6 +524,13 @@ export default function StoreScreen() {
                     tone="warning"
                     message={t('storeUnclassifiedStockMessage', { quantity: entry.quantity_kg, name: entry.label })}
                   />
+                  <AppText variant="helper">
+                    {t('storeUnclassifiedStockBreakdown', {
+                      added: entry.quantity_added_kg,
+                      consumed: entry.historical_consumption_kg,
+                      available: entry.quantity_available_kg,
+                    })}
+                  </AppText>
                   <Button
                     label={t('storeClassifyStockAction')}
                     variant="outline"

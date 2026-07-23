@@ -952,7 +952,7 @@ export interface FeedPhaseProduct {
 export interface FeedPhase {
   phase_id: string;
   sequence: number;
-  phase_status: 'past' | 'current' | 'future';
+  phase_status: 'past' | 'current' | 'future' | 'unknown';
   phase_name: string;
   days_range: [number, number];
   planned_days_range: [number, number];
@@ -1049,7 +1049,14 @@ export interface CycleStore {
   stock_items: CycleStoreStockItem[];
   pending_orders: CycleStorePendingOrder[];
   stock_tracking_started_at: string | null;
-  unclassified_entries: Array<{ id: string; label: string; quantity_kg: string }>;
+  unclassified_entries: Array<{
+    id: string;
+    label: string;
+    quantity_kg: string;
+    quantity_added_kg: string;
+    historical_consumption_kg: string;
+    quantity_available_kg: string;
+  }>;
 }
 
 export interface FarmFeedReference {

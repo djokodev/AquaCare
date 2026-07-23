@@ -999,6 +999,16 @@ class CycleLogSerializer(serializers.ModelSerializer):
         request = self.context.get('request')
         request_user = getattr(request, 'user', None)
 
+        if self.instance is not None and 'cycle' in attrs:
+            requested_cycle = attrs['cycle']
+            if str(requested_cycle.id) != str(self.instance.cycle_id):
+                raise serializers.ValidationError({
+                    'cycle': {
+                        'code': 'cycle_immutable',
+                        'detail': _('Le cycle d’un journal existant ne peut pas être modifié.'),
+                    }
+                })
+
         effective_cycle = cycle or getattr(self.instance, 'cycle', None)
         feed_quantity = attrs.get('feed_quantity', getattr(self.instance, 'feed_quantity', None))
         feed_reference = attrs.get('feed_reference', getattr(self.instance, 'feed_reference', None))
@@ -1886,6 +1896,9 @@ class CycleStoreUnclassifiedEntrySerializer(serializers.Serializer):
     id = serializers.UUIDField()
     label = serializers.CharField()
     quantity_kg = serializers.CharField()
+    quantity_added_kg = serializers.CharField()
+    historical_consumption_kg = serializers.CharField()
+    quantity_available_kg = serializers.CharField()
 
 
 class CycleFeedRecommendationProductSerializer(serializers.Serializer):
@@ -1909,7 +1922,7 @@ class CycleFeedRecommendationPhaseSerializer(serializers.Serializer):
     phase_name = serializers.CharField()
     phase_id = serializers.CharField()
     sequence = serializers.IntegerField()
-    phase_status = serializers.ChoiceField(choices=['past', 'current', 'future'])
+    phase_status = serializers.ChoiceField(choices=['past', 'current', 'future', 'unknown'])
     planned_days_range = serializers.ListField(child=serializers.IntegerField())
     planned_weight_range_g = serializers.ListField(child=serializers.CharField())
     planned_consumption_kg = serializers.CharField()

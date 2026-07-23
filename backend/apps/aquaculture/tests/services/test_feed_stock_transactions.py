@@ -9,6 +9,7 @@ from uuid import uuid4
 import pytest
 from aquaculture.domain.exceptions import FeedStockValidationError
 from aquaculture.models import (
+    CycleFeedStockAdjustment,
     CycleFeedStockEntry,
     CycleLog,
     CycleUnitAllocation,
@@ -196,6 +197,57 @@ def test_replaying_same_classification_is_idempotent():
 
     assert first.id == second.id
     assert second.feed_reference_id == reference.id
+
+
+@pytest.mark.django_db
+def test_classification_adjustment_is_used_by_display_and_validation():
+    cycle = ProductionCycleFactory(start_date=date.today())
+    reference = _feed_reference(cycle, name='Dibaq historique')
+    entry = CycleFeedStockEntry.objects.create(
+        cycle=cycle,
+        source=CycleFeedStockEntry.SOURCE_MANUAL,
+        label=reference.name,
+        feed_size_mm=reference.pellet_size_mm,
+        quantity_kg=Decimal('110.00'),
+        total_cost_fcfa=Decimal('100000.00'),
+        entry_date=date.today(),
+    )
+    CycleLog.objects.create(
+        cycle=cycle,
+        log_date=date.today(),
+        feed_quantity=Decimal('30.00'),
+        feed_type=reference.name,
+        feed_size_mm=reference.pellet_size_mm,
+    )
+
+    CycleStoreService.classify_legacy_stock(
+        user=cycle.farm_profile.user,
+        cycle=cycle,
+        entry_id=entry.id,
+        feed_reference=reference,
+    )
+
+    assert CycleFeedStockAdjustment.objects.get(stock_entry=entry).quantity_kg == Decimal('30.00')
+    item = next(
+        item
+        for item in CycleStoreService.get_store_payload(cycle)['stock_items']
+        if item['feed_reference_id'] == str(reference.id)
+    )
+    assert item['quantity_available_kg'] == '80.00'
+    CycleStoreService.validate_daily_feed_quantity(
+        cycle=cycle,
+        feed_quantity=Decimal('80.00'),
+        log_date=date.today(),
+        feed_reference=reference,
+    )
+    with pytest.raises(FeedStockValidationError) as exc_info:
+        CycleStoreService.validate_daily_feed_quantity(
+            cycle=cycle,
+            feed_quantity=Decimal('80.01'),
+            log_date=date.today(),
+            feed_reference=reference,
+        )
+    assert exc_info.value.detail['available_feed_kg'] == '80.00'
 
 
 @pytest.mark.skipif(connection.vendor != "postgresql", reason="Verrou PostgreSQL requis")

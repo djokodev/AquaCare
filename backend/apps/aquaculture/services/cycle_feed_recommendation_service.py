@@ -320,7 +320,7 @@ class CycleFeedRecommendationService:
             'feeding_phases': [
                 {
                     **phase,
-                    'phase_status': 'past',
+                    'phase_status': 'unknown',
                     'planned_consumption_kg': phase['planned_consumption_kg'],
                     'actual_consumed_kg': None,
                     'estimated_remaining_need_kg': None,
@@ -342,6 +342,22 @@ class CycleFeedRecommendationService:
             ],
             'warnings': warnings or ['feed_estimate_unavailable'],
         }
+
+    @staticmethod
+    @transaction.atomic
+    def _record_phase_progression(
+        plan: CycleFeedPlan,
+        *,
+        current_index: int,
+        phase_count: int,
+    ) -> CycleFeedPlan:
+        """Persiste uniquement une progression de phase monotone."""
+        locked_plan = CycleFeedPlan.objects.select_for_update().get(pk=plan.pk)
+        reached = min(max(current_index + 1, 0), phase_count)
+        if reached > locked_plan.highest_reached_phase_sequence:
+            locked_plan.highest_reached_phase_sequence = reached
+            locked_plan.save(update_fields=['highest_reached_phase_sequence'])
+        return locked_plan
 
     @classmethod
     def build(cls, cycle: ProductionCycle) -> dict[str, Any]:
@@ -367,15 +383,24 @@ class CycleFeedRecommendationService:
             return cls._unavailable_payload(cycle, phases, plan, ['feed_estimate_unavailable'])
 
         current_index = cls._current_phase_index(phases, current_weight)
+        plan = cls._record_phase_progression(
+            plan,
+            current_index=current_index,
+            phase_count=len(phases),
+        )
+        progression_index = max(
+            current_index,
+            max(plan.highest_reached_phase_sequence - 1, 0),
+        )
         actual_by_phase, unclassified_consumption = cls._actual_consumption_by_phase(
             cycle,
             phases,
-            current_index,
+            progression_index,
         )
         future_needs = (
             [ZERO_DECIMAL for _ in phases]
             if target_reached
-            else cls._future_need_by_phase(phases, current_index, simulation)
+            else cls._future_need_by_phase(phases, progression_index, simulation)
         )
 
         entries = list(cycle.feed_stock_entries.for_api().order_by('entry_date', 'created_at'))
@@ -440,7 +465,11 @@ class CycleFeedRecommendationService:
         total_shortfall = ZERO_DECIMAL
         catalog_species = cls._catalog_species(cycle.species)
         for index, phase in enumerate(phases):
-            phase_status = 'past' if index < current_index else ('current' if index == current_index else 'future')
+            phase_status = (
+                'past' if index < plan.highest_reached_phase_sequence - 1
+                else 'current' if index == plan.highest_reached_phase_sequence - 1
+                else 'future'
+            )
             size = cls._decimal(phase['pellet_size_mm'])
             required = future_needs[index]
             allocated_stock = min(stock_by_size.get(size, ZERO_DECIMAL), required)

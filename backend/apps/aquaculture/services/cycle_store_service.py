@@ -212,6 +212,53 @@ class CycleStoreService(BaseService):
         return queryset
 
     @staticmethod
+    def get_available_feed_quantity(
+        *,
+        cycle: ProductionCycle,
+        feed_reference: FarmFeedReference,
+        log_date: date | None = None,
+        existing_log: CycleLog | None = None,
+        reserved_feed_kg: Decimal = ZERO_DECIMAL,
+    ) -> tuple[Decimal, date | None]:
+        """Retourne la disponibilité canonique d'une référence dans le ledger.
+
+        Les ajustements de classification représentent une consommation antérieure
+        au rattachement de l'entrée et doivent être déduits partout, pas seulement
+        dans le résumé du Magasin.
+        """
+        entries = CycleFeedStockEntry.objects.filter(
+            cycle=cycle,
+            feed_reference=feed_reference,
+        )
+        tracking_started_at = entries.order_by('entry_date').values_list(
+            'entry_date', flat=True
+        ).first()
+        if tracking_started_at is None:
+            return ZERO_DECIMAL, None
+
+        added = CycleStoreService._to_decimal(
+            entries.aggregate(total=Sum('quantity_kg'))['total']
+        )
+        historical_consumed = CycleStoreService._to_decimal(
+            CycleFeedStockAdjustment.objects.filter(
+                stock_entry__in=entries,
+            ).aggregate(total=Sum('quantity_kg'))['total']
+        )
+        consumptions = CycleStoreService._get_consumption_queryset(
+            cycle,
+            tracking_started_at,
+        ).filter(feed_reference=feed_reference)
+        if existing_log is not None:
+            consumptions = consumptions.exclude(pk=existing_log.pk)
+        consumed = CycleStoreService._to_decimal(
+            consumptions.aggregate(total=Sum('feed_quantity'))['total']
+        )
+        available = added - historical_consumed - consumed - CycleStoreService._to_decimal(
+            reserved_feed_kg
+        )
+        return CycleStoreService._quantize(available), tracking_started_at
+
+    @staticmethod
     def _build_stock_items(
         *,
         cycle: ProductionCycle,
@@ -242,6 +289,7 @@ class CycleStoreService(BaseService):
                     'feed_size_mm': size,
                     'quantity_added_kg': ZERO_DECIMAL,
                     'quantity_consumed_kg': ZERO_DECIMAL,
+                    '_feed_reference': entry.feed_reference if entry.feed_reference_id else None,
                 },
             )
             item['quantity_added_kg'] += entry.quantity_kg
@@ -265,6 +313,12 @@ class CycleStoreService(BaseService):
 
         result: list[CycleStoreStockItem] = []
         for item in grouped.values():
+            if item['_feed_reference'] is not None:
+                available, _tracking_date = CycleStoreService.get_available_feed_quantity(
+                    cycle=cycle,
+                    feed_reference=item['_feed_reference'],
+                )
+                item['quantity_consumed_kg'] = item['quantity_added_kg'] - available
             available = item['quantity_added_kg'] - item['quantity_consumed_kg']
             result.append({
                 'feed_reference_id': item['feed_reference_id'],
@@ -440,6 +494,9 @@ class CycleStoreService(BaseService):
                     'id': str(entry.id),
                     'label': entry.label,
                     'quantity_kg': str(CycleStoreService._quantize(entry.quantity_kg)),
+                    'quantity_added_kg': str(CycleStoreService._quantize(entry.quantity_kg)),
+                    'historical_consumption_kg': '0.00',
+                    'quantity_available_kg': str(CycleStoreService._quantize(entry.quantity_kg)),
                 }
                 for entry in unclassified_entries
             ],
@@ -506,19 +563,13 @@ class CycleStoreService(BaseService):
                 feed_reference_id=feed_reference.id,
             )
 
-        added = CycleStoreService._to_decimal(
-            stock_entries.aggregate(total=Sum('quantity_kg'))['total']
+        available, _tracking_date = CycleStoreService.get_available_feed_quantity(
+            cycle=cycle,
+            feed_reference=feed_reference,
+            log_date=log_date,
+            existing_log=existing_log,
+            reserved_feed_kg=reserved_feed_kg,
         )
-        consumptions = CycleStoreService._get_consumption_queryset(
-            cycle,
-            tracking_started_at,
-        ).filter(feed_reference=feed_reference)
-        if existing_log is not None:
-            consumptions = consumptions.exclude(pk=existing_log.pk)
-        consumed = CycleStoreService._to_decimal(
-            consumptions.aggregate(total=Sum('feed_quantity'))['total']
-        )
-        available = added - consumed - CycleStoreService._to_decimal(reserved_feed_kg)
         if available < ZERO_DECIMAL:
             raise FeedStockValidationError(
                 code='insufficient_feed_stock',

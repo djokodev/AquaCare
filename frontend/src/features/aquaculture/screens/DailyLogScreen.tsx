@@ -34,6 +34,7 @@ import {
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
 import FeedingTimesField from '@/features/aquaculture/components/FeedingTimesField';
 import { formatEditableNumber, parseLocalizedNumber } from '@/utils/localizedNumber';
+import { projectOfflineStore } from '@/features/aquaculture/services/offlineStoreProjection';
 
 interface DailyLogData {
   mortality_count: string;
@@ -161,12 +162,18 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
         return;
       }
 
-      if (storeResult.status === 'fulfilled') {
-        setStore(storeResult.value);
-      } else {
-        setStore(null);
+      const serverStore = storeResult.status === 'fulfilled' ? storeResult.value : null;
+      setStore(serverStore);
+      if (storeResult.status === 'rejected' && !serverStore?.stock_items?.length) {
         setContextError(true);
       }
+      void projectOfflineStore(cycleId, serverStore, t('storePendingStockLabel'))
+        .then((projection) => {
+          if (active) setStore(projection.store);
+        })
+        .catch((projectionError) => {
+          if (__DEV__) console.warn('offline store projection unavailable', projectionError);
+        });
 
       if (logsResult.status === 'fulfilled') {
         const todayLog = logsResult.value.find((log) => log.log_date === getLocalIsoDate()) || null;

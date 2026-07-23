@@ -1704,6 +1704,7 @@
   storeNeedCoveredTitle: 'Feed requirement covered',
   storeNeedCoveredDescription: 'Your stock and orders cover the current cycle estimate.',
   storeUnclassifiedStockMessage: '{{quantity}} kg of “{{name}}” must be identified before the recommendation can be trusted.',
+  storeUnclassifiedStockBreakdown: 'Added: {{added}} kg · historical consumption: {{consumed}} kg · available: {{available}} kg.',
   storeClassifyStockAction: 'Identify this feed',
   storeTrackingSince: 'Tracking started on',
   myFeedTitle: 'Feed products',

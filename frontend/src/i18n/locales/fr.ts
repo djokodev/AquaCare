@@ -1705,6 +1705,7 @@ export const fr = {
   storeNeedCoveredTitle: 'Besoin en aliments couvert',
   storeNeedCoveredDescription: 'Votre stock et vos commandes couvrent l’estimation actuelle du cycle.',
   storeUnclassifiedStockMessage: '{{quantity}} kg de « {{name}} » doivent être identifiés avant de fiabiliser la recommandation.',
+  storeUnclassifiedStockBreakdown: 'Ajouté : {{added}} kg · consommé historiquement : {{consumed}} kg · disponible : {{available}} kg.',
   storeClassifyStockAction: 'Identifier cet aliment',
   storeTrackingSince: 'Suivi démarré le',
   myFeedTitle: 'Aliments',

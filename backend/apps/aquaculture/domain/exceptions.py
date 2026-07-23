@@ -42,6 +42,13 @@ class BusinessRuleViolation(AquacultureBusinessException):
     default_code = 'business_rule_violation'
 
 
+class CycleLogCycleImmutableError(BusinessRuleViolation):
+    """Un journal existant reste attaché à son cycle d'origine."""
+
+    default_detail = _('Le cycle d’un journal existant ne peut pas être modifié.')
+    default_code = 'cycle_immutable'
+
+
 class CycleNotActiveError(AquacultureBusinessException):
     """
     Tentative d'opération sur un cycle non actif.

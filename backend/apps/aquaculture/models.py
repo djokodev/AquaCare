@@ -959,6 +959,11 @@ class CycleFeedPlan(models.Model):
     parameters = models.JSONField(default=dict, verbose_name=_('Paramètres de simulation'))
     phases = models.JSONField(default=list, verbose_name=_('Phases alimentaires'))
     total_feed_kg = models.DecimalField(max_digits=14, decimal_places=2, verbose_name=_('Aliment total planifié (kg)'))
+    highest_reached_phase_sequence = models.PositiveSmallIntegerField(
+        default=0,
+        db_default=0,
+        verbose_name=_('Dernière phase atteinte'),
+    )
     generated_at = models.DateTimeField(auto_now_add=True, verbose_name=_('Calculé le'))
 
     class Meta:

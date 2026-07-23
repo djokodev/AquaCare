@@ -16,7 +16,7 @@ import {
 } from '@/types/aquaculture';
 import logger from '@/utils/logger';
 
-interface OfflineCycleLog {
+export interface OfflineCycleLog {
   id: string;
   cycleId: string;
   logData: DailyLogForm;

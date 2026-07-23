@@ -7,6 +7,7 @@ from typing import Any
 
 from django.db import transaction
 
+from ..domain.exceptions import CycleLogCycleImmutableError
 from ..models import CycleLog, ProductionCycle
 from .analytics_service import AnalyticsService
 from .cycle_service import ProductionCycleService
@@ -107,6 +108,8 @@ class CycleLogApplicationService:
 
         # Interdire un changement de cycle vers un cycle d'un autre utilisateur.
         target_cycle = validated_data.get("cycle")
+        if target_cycle is not None and target_cycle.id != log.cycle_id:
+            raise CycleLogCycleImmutableError()
         if target_cycle and target_cycle.farm_profile.user_id != user.id:
             raise UnauthorizedCycleAccessError("Cycle non autorise.")
 
